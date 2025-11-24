@@ -23,6 +23,7 @@ import { RenameSessionModal } from './components/RenameSessionModal';
 import { RenameGroupModal } from './components/RenameGroupModal';
 import { ConfirmModal } from './components/ConfirmModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
+import { MainPanel } from './components/MainPanel';
 
 // Import custom hooks
 import { useSettings, useSessionManager, useFileExplorer } from './hooks';
@@ -109,6 +110,7 @@ export default function MaestroConsole() {
   const [settingsTab, setSettingsTab] = useState<'general' | 'shortcuts' | 'theme' | 'network'>('general');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
+  const [logViewerOpen, setLogViewerOpen] = useState(false);
   const [createGroupModalOpen, setCreateGroupModalOpen] = useState(false);
   const [newGroupName, setNewGroupName] = useState('');
   const [newGroupEmoji, setNewGroupEmoji] = useState('📂');
@@ -164,6 +166,9 @@ export default function MaestroConsole() {
   const [fontSize, setFontSizeState] = useState(14); // Base font size in px
   const [customFonts, setCustomFonts] = useState<string[]>([]);
 
+  // Logging Config
+  const [logLevel, setLogLevelState] = useState('info');
+
   // Wrapper functions that persist to electron-store
   const setLlmProviderPersist = (value: LLMProvider) => {
     setLlmProvider(value);
@@ -205,6 +210,11 @@ export default function MaestroConsole() {
     window.maestro.settings.set('fontSize', value);
   };
 
+  const setLogLevel = async (value: string) => {
+    setLogLevelState(value);
+    await window.maestro.logger.setLogLevel(value);
+  };
+
   // Load settings from electron-store on mount
   useEffect(() => {
     const loadSettings = async () => {
@@ -222,6 +232,7 @@ export default function MaestroConsole() {
       const savedRightPanelWidth = await window.maestro.settings.get('rightPanelWidth');
       const savedMarkdownRawMode = await window.maestro.settings.get('markdownRawMode');
       const savedShortcuts = await window.maestro.settings.get('shortcuts');
+      const savedLogLevel = await window.maestro.logger.getLogLevel();
 
       if (savedEnterToSend !== undefined) setEnterToSendState(savedEnterToSend);
       if (savedLlmProvider !== undefined) setLlmProvider(savedLlmProvider);
@@ -236,6 +247,7 @@ export default function MaestroConsole() {
       if (savedLeftSidebarWidth !== undefined) setLeftSidebarWidthState(savedLeftSidebarWidth);
       if (savedRightPanelWidth !== undefined) setRightPanelWidthState(savedRightPanelWidth);
       if (savedMarkdownRawMode !== undefined) setMarkdownRawModeState(savedMarkdownRawMode);
+      if (savedLogLevel !== undefined) setLogLevelState(savedLogLevel);
 
       // Merge saved shortcuts with defaults (in case new shortcuts were added)
       if (savedShortcuts !== undefined) {
@@ -1383,6 +1395,7 @@ export default function MaestroConsole() {
           setSettingsTab={setSettingsTab}
           setShortcutsHelpOpen={setShortcutsHelpOpen}
           setAboutModalOpen={setAboutModalOpen}
+          setLogViewerOpen={setLogViewerOpen}
           setActiveRightTab={setActiveRightTab}
         />
       )}
@@ -1509,145 +1522,49 @@ export default function MaestroConsole() {
       </ErrorBoundary>
 
       {/* --- CENTER WORKSPACE --- */}
-      {!activeSession ? (
-        <>
-          <div
-            className="flex-1 flex flex-col items-center justify-center min-w-0 relative opacity-30"
-            style={{ backgroundColor: theme.colors.bgMain }}
-          >
-            <Wand2 className="w-16 h-16 mb-4" style={{ color: theme.colors.textDim }} />
-            <p className="text-sm" style={{ color: theme.colors.textDim }}>No agents. Create one to get started.</p>
-          </div>
-          <div
-            className="w-96 border-l opacity-30"
-            style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.border }}
-          />
-        </>
-      ) : (
-        <>
-          <ErrorBoundary>
-            <div
-              className={`flex-1 flex flex-col min-w-0 relative ${activeFocus === 'main' ? 'ring-1 ring-inset z-10' : ''}`}
-              style={{ backgroundColor: theme.colors.bgMain, ringColor: theme.colors.accent }}
-              onClick={() => setActiveFocus('main')}
-            >
-            {/* Top Bar */}
-            <div className="h-16 border-b flex items-center justify-between px-6 shrink-0" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2 text-sm font-medium">
-                  {(activeSession.inputMode === 'terminal' ? (activeSession.shellCwd || activeSession.cwd) : activeSession.cwd).split('/').pop() || '/'} /
-                <span className={`text-xs px-2 py-0.5 rounded-full border ${activeSession.isGitRepo ? 'border-orange-500/30 text-orange-500 bg-orange-500/10' : 'border-blue-500/30 text-blue-500 bg-blue-500/10'}`}>
-                  {activeSession.isGitRepo ? 'GIT' : 'LOCAL'}
-                </span>
-              </div>
-              
-              <div className="relative group">
-                 <button 
-                   onClick={() => toggleTunnel(activeSessionId)}
-                   className={`flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${activeSession.tunnelActive ? 'bg-green-500/20 text-green-500' : 'text-gray-500 hover:bg-gray-800'}`}
-                 >
-                   <Radio className={`w-3 h-3 ${activeSession.tunnelActive ? 'animate-pulse' : ''}`} />
-                   {activeSession.tunnelActive ? 'LIVE' : 'OFFLINE'}
-                 </button>
-                 {activeSession.tunnelActive && (
-                   <div className="absolute top-full left-0 mt-2 w-64 bg-black border border-gray-700 rounded p-3 shadow-xl z-50 opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none">
-                      <div className="text-[10px] uppercase font-bold text-gray-500 mb-2">Public Endpoint</div>
-                      <div className="flex items-center gap-1 text-xs text-green-400 font-mono mb-2 select-all">
-                         <ExternalLink className="w-3 h-3" /> {activeSession.tunnelUrl}
-                      </div>
-                      <div className="text-[10px] uppercase font-bold text-gray-500 mb-2">Local Address</div>
-                      <div className="flex items-center gap-1 text-xs text-gray-300 font-mono select-all">
-                         <Wifi className="w-3 h-3" /> http://192.168.1.42:{activeSession.port}
-                      </div>
-                   </div>
-                 )}
-              </div>
-           </div>
-           <div className="flex items-center gap-3">
-              <div className="flex flex-col items-end mr-2">
-                <span className="text-[10px] font-bold uppercase" style={{ color: theme.colors.textDim }}>Context Window</span>
-                <div className="w-24 h-1.5 rounded-full mt-1 overflow-hidden" style={{ backgroundColor: theme.colors.border }}>
-                  <div 
-                    className="h-full transition-all duration-500 ease-out" 
-                    style={{ 
-                      width: `${activeSession.contextUsage}%`, 
-                      backgroundColor: getContextColor(activeSession.contextUsage, theme) 
-                    }} 
-                  />
-                </div>
-              </div>
-
-              <button onClick={() => setAboutModalOpen(true)} className="p-2 rounded hover:bg-white/5" title="About Maestro">
-                <Info className="w-4 h-4" />
-              </button>
-              {!rightPanelOpen && (
-                <button onClick={() => setRightPanelOpen(true)} className="p-2 rounded hover:bg-white/5" title={`Show right panel (${shortcuts.toggleRightPanel.keys.join('+').replace('Meta', 'Cmd')})`}>
-                  <Columns className="w-4 h-4" />
-                </button>
-              )}
-           </div>
-        </div>
-
-        {/* Logs Area */}
-        <TerminalOutput
-          session={activeSession}
-          theme={theme}
-          activeFocus={activeFocus}
-          outputSearchOpen={outputSearchOpen}
-          outputSearchQuery={outputSearchQuery}
-          setOutputSearchOpen={setOutputSearchOpen}
-          setOutputSearchQuery={setOutputSearchQuery}
-          setActiveFocus={setActiveFocus}
-          setLightboxImage={setLightboxImage}
-          inputRef={inputRef}
-          logsEndRef={logsEndRef}
-        />
-
-        {/* Input Area */}
-        <InputArea
-          session={activeSession}
-          theme={theme}
-          inputValue={inputValue}
-          setInputValue={setInputValue}
-          enterToSend={enterToSend}
-          setEnterToSend={setEnterToSend}
-          stagedImages={stagedImages}
-          setStagedImages={setStagedImages}
-          setLightboxImage={setLightboxImage}
-          commandHistoryOpen={commandHistoryOpen}
-          setCommandHistoryOpen={setCommandHistoryOpen}
-          commandHistoryFilter={commandHistoryFilter}
-          setCommandHistoryFilter={setCommandHistoryFilter}
-          commandHistorySelectedIndex={commandHistorySelectedIndex}
-          setCommandHistorySelectedIndex={setCommandHistorySelectedIndex}
-          inputRef={inputRef}
-          handleInputKeyDown={handleInputKeyDown}
-          handlePaste={handlePaste}
-          handleDrop={handleDrop}
-          toggleInputMode={toggleInputMode}
-          processInput={processInput}
-        />
-
-        {/* File Preview Overlay */}
-        {previewFile && (
-          <FilePreview
-            file={previewFile}
-            onClose={() => {
-              setPreviewFile(null);
-              setTimeout(() => {
-                if (fileTreeContainerRef.current) {
-                  fileTreeContainerRef.current.focus();
-                }
-              }, 0);
-            }}
-            theme={theme}
-            markdownRawMode={markdownRawMode}
-            setMarkdownRawMode={setMarkdownRawMode}
-            shortcuts={shortcuts}
-          />
-        )}
-      </div>
-          </ErrorBoundary>
+      <MainPanel
+        logViewerOpen={logViewerOpen}
+        activeSession={activeSession}
+        theme={theme}
+        activeFocus={activeFocus}
+        outputSearchOpen={outputSearchOpen}
+        outputSearchQuery={outputSearchQuery}
+        inputValue={inputValue}
+        enterToSend={enterToSend}
+        stagedImages={stagedImages}
+        commandHistoryOpen={commandHistoryOpen}
+        commandHistoryFilter={commandHistoryFilter}
+        commandHistorySelectedIndex={commandHistorySelectedIndex}
+        previewFile={previewFile}
+        markdownRawMode={markdownRawMode}
+        shortcuts={shortcuts}
+        rightPanelOpen={rightPanelOpen}
+        setLogViewerOpen={setLogViewerOpen}
+        setActiveFocus={setActiveFocus}
+        setOutputSearchOpen={setOutputSearchOpen}
+        setOutputSearchQuery={setOutputSearchQuery}
+        setInputValue={setInputValue}
+        setEnterToSend={setEnterToSend}
+        setStagedImages={setStagedImages}
+        setLightboxImage={setLightboxImage}
+        setCommandHistoryOpen={setCommandHistoryOpen}
+        setCommandHistoryFilter={setCommandHistoryFilter}
+        setCommandHistorySelectedIndex={setCommandHistorySelectedIndex}
+        setPreviewFile={setPreviewFile}
+        setMarkdownRawMode={setMarkdownRawMode}
+        setAboutModalOpen={setAboutModalOpen}
+        setRightPanelOpen={setRightPanelOpen}
+        inputRef={inputRef}
+        logsEndRef={logsEndRef}
+        fileTreeContainerRef={fileTreeContainerRef}
+        toggleTunnel={toggleTunnel}
+        toggleInputMode={toggleInputMode}
+        processInput={processInput}
+        handleInputKeyDown={handleInputKeyDown}
+        handlePaste={handlePaste}
+        handleDrop={handleDrop}
+        getContextColor={getContextColor}
+      />
 
       {/* --- RIGHT PANEL --- */}
       <ErrorBoundary>
@@ -1682,8 +1599,6 @@ export default function MaestroConsole() {
           updateScratchPadState={updateScratchPadState}
         />
       </ErrorBoundary>
-        </>
-      )}
 
       {/* Old settings modal removed - using new SettingsModal component below */}
 
@@ -1722,6 +1637,8 @@ export default function MaestroConsole() {
         setFontFamily={setFontFamily}
         fontSize={fontSize}
         setFontSize={setFontSize}
+        logLevel={logLevel}
+        setLogLevel={setLogLevel}
         initialTab={settingsTab}
       />
     </div>

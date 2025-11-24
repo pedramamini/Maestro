@@ -39,6 +39,7 @@ interface QuickActionsModalProps {
   setSettingsTab: (tab: string) => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   setAboutModalOpen: (open: boolean) => void;
+  setLogViewerOpen: (open: boolean) => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -49,7 +50,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     setCreateGroupModalOpen, setNewGroupName, setMoveSessionToNewGroup,
     setLeftSidebarOpen, setRightPanelOpen, setActiveRightTab, toggleInputMode,
     deleteSession, addNewSession, setSettingsModalOpen, setSettingsTab,
-    setShortcutsHelpOpen, setAboutModalOpen
+    setShortcutsHelpOpen, setAboutModalOpen, setLogViewerOpen
   } = props;
 
   const [search, setSearch] = useState('');
@@ -152,6 +153,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     { id: 'settings', label: 'Settings', action: () => { setSettingsModalOpen(true); setQuickActionOpen(false); } },
     { id: 'theme', label: 'Change Theme', action: () => { setSettingsModalOpen(true); setSettingsTab('theme'); setQuickActionOpen(false); } },
     { id: 'shortcuts', label: 'View Shortcuts', shortcut: shortcuts.help, action: () => { setShortcutsHelpOpen(true); setQuickActionOpen(false); } },
+    { id: 'logs', label: 'View System Logs', action: () => { setLogViewerOpen(true); setQuickActionOpen(false); } },
     { id: 'devtools', label: 'Toggle JavaScript Console', action: () => { window.maestro.devtools.toggle(); setQuickActionOpen(false); } },
     { id: 'about', label: 'About Maestro', action: () => { setAboutModalOpen(true); setQuickActionOpen(false); } },
     { id: 'goToFiles', label: 'Go to Files Tab', action: () => { setRightPanelOpen(true); setActiveRightTab('files'); setQuickActionOpen(false); } },

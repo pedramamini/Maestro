@@ -1,3 +1,7 @@
+# Tests
+do-wishlist.sh
+do-housekeeping.sh
+
 # Dependencies
 node_modules/
 

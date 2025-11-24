@@ -65,10 +65,13 @@ Maestro uses Electron's main/renderer architecture with strict context isolation
 - `preload.ts` - Secure IPC bridge via contextBridge (no direct Node.js exposure to renderer)
 
 **Renderer Process (`src/renderer/`)** - React frontend with no direct Node.js access
-- `App.tsx` - Main UI component (being refactored - currently 2,988 lines)
+- `App.tsx` - Main UI coordinator (~1,650 lines, continuously being refactored)
 - `main.tsx` - Renderer entry point
 - `components/` - React components (modals, panels, UI elements)
-  - `SessionList.tsx` - Left sidebar component (extracted from App.tsx)
+  - `SessionList.tsx` - Left sidebar with sessions and groups
+  - `MainPanel.tsx` - Center workspace (terminal, log viewer, input)
+  - `RightPanel.tsx` - Right sidebar (files, history, scratchpad)
+  - `LogViewer.tsx` - System logs viewer with filtering and search
   - `SettingsModal.tsx`, `NewInstanceModal.tsx`, `Scratchpad.tsx`, `FilePreview.tsx` - Other UI components
 - `hooks/` - Custom React hooks for reusable state logic
   - `useSettings.ts` - Settings management and persistence
@@ -339,10 +342,25 @@ The main application is structured in three columns:
 
 ### Key Components
 
+#### MainPanel (`src/renderer/components/MainPanel.tsx`)
+- Center workspace container that handles three states:
+  - LogViewer when system logs are open
+  - Empty state when no session is active
+  - Normal session view (top bar, terminal output, input area, file preview)
+- Encapsulates all main panel UI logic outside of App.tsx
+
+#### LogViewer (`src/renderer/components/LogViewer.tsx`)
+- System logs viewer accessible via Cmd+K → "View System Logs"
+- Color-coded log levels (Debug, Info, Warn, Error)
+- Searchable with `/` key, filterable by log level
+- Export logs to file, clear all logs
+- Keyboard navigation (arrows to scroll, Cmd+arrows to jump)
+
 #### SettingsModal (`src/renderer/components/SettingsModal.tsx`)
 - Tabbed interface: General, LLM, Shortcuts, Themes, Network
 - All settings changes should use wrapper functions for persistence
 - Includes LLM test functionality to verify API connectivity
+- Log level selector with color-coded buttons (defaults to "info")
 
 #### Scratchpad (`src/renderer/components/Scratchpad.tsx`)
 - Edit/Preview mode toggle (Command-E to switch)
@@ -437,6 +455,45 @@ Sessions persist scroll positions, expanded states, and UI state per-session.
 - All code is TypeScript with strict mode enabled
 - Interface definitions for all data structures
 - Type exports via `preload.ts` for renderer types
+
+### Component Extraction Pattern
+
+**Principle**: Keep App.tsx minimal by extracting UI sections into dedicated components.
+
+When adding new features that would add significant complexity to App.tsx:
+
+1. **Create a new component** in `src/renderer/components/` that encapsulates the entire UI section
+2. **Pass only necessary props** - state, setters, refs, and callback functions
+3. **Handle all conditional logic** within the component (e.g., empty states, different views)
+4. **Keep App.tsx as a coordinator** - it should orchestrate state and wire components together, not contain UI logic
+
+**Example - MainPanel component:**
+```typescript
+// App.tsx - Minimal integration
+<MainPanel
+  logViewerOpen={logViewerOpen}
+  activeSession={activeSession}
+  theme={theme}
+  // ... other props
+  setLogViewerOpen={setLogViewerOpen}
+  toggleInputMode={toggleInputMode}
+  // ... other handlers
+/>
+
+// MainPanel.tsx - Contains all UI logic
+export function MainPanel(props: MainPanelProps) {
+  // Handles: log viewer, empty state, normal session view
+  if (logViewerOpen) return <LogViewer ... />;
+  if (!activeSession) return <EmptyState ... />;
+  return <SessionView ... />;
+}
+```
+
+**Benefits:**
+- App.tsx stays manageable and readable
+- Components are self-contained and testable
+- Changes to UI sections don't bloat App.tsx
+- Easier code review and maintenance
 
 ### Commit Message Format
 
@@ -878,6 +935,9 @@ Currently no test suite implemented. When adding tests, use the `test` script in
 
 ## Recent Features Added
 
+- **System Log Viewer** - Cmd+K → "View System Logs" for internal logging with color-coded levels, search, and export
+- **Structured Logging** - Configurable log levels (Debug, Info, Warn, Error) with persistence and UI controls
+- **Component Extraction** - MainPanel component to keep App.tsx minimal and maintainable
 - **Output Search/Filter** - Press `/` in output window to filter logs
 - **Scratchpad Command-E** - Toggle between Edit and Preview modes
 - **File Preview Focus** - Arrow keys scroll, Escape returns to file tree
