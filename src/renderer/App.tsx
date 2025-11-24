@@ -12,6 +12,8 @@ import { Scratchpad } from './components/Scratchpad';
 import { FilePreview } from './components/FilePreview';
 import { SessionList } from './components/SessionList';
 import { RightPanel } from './components/RightPanel';
+import { TerminalOutput } from './components/TerminalOutput';
+import { InputArea } from './components/InputArea';
 import data from '@emoji-mart/data';
 import Picker from '@emoji-mart/react';
 
@@ -1415,7 +1417,6 @@ export default function MaestroConsole() {
   };
 
   // --- RENDER ---
-  const activeLogs = activeSession ? (activeSession.inputMode === 'ai' ? activeSession.aiLogs : activeSession.shellLogs) : [];
 
   // Recursive File Tree Renderer
   // Check if file should be opened in external app
@@ -2457,277 +2458,44 @@ export default function MaestroConsole() {
         </div>
 
         {/* Logs Area */}
-        <div
-          ref={terminalOutputRef}
-          tabIndex={0}
-          className="flex-1 overflow-y-auto p-6 space-y-4 transition-colors outline-none relative"
-          style={{ backgroundColor: activeSession.inputMode === 'ai' ? theme.colors.bgMain : theme.colors.bgActivity }}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-              inputRef.current?.focus();
-              setActiveFocus('main');
-            }
-          }}
-        >
-           {/* Output Search */}
-           {outputSearchOpen && (
-             <div className="sticky top-0 z-10 pb-4">
-               <input
-                 type="text"
-                 value={outputSearchQuery}
-                 onChange={(e) => setOutputSearchQuery(e.target.value)}
-                 onKeyDown={(e) => {
-                   if (e.key === 'Escape') {
-                     e.stopPropagation();
-                     setOutputSearchOpen(false);
-                     setOutputSearchQuery('');
-                     terminalOutputRef.current?.focus();
-                   }
-                 }}
-                 placeholder="Filter output... (Esc to close)"
-                 className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm"
-                 style={{ borderColor: theme.colors.accent, color: theme.colors.textMain, backgroundColor: theme.colors.bgSidebar }}
-                 autoFocus
-               />
-             </div>
-           )}
-           {activeLogs.filter(log => {
-             if (!outputSearchQuery) return true;
-             return log.text.toLowerCase().includes(outputSearchQuery.toLowerCase());
-           }).map(log => (
-             <div key={log.id} className={`flex gap-4 group ${log.source === 'user' ? 'flex-row-reverse' : ''}`}>
-                <div className="w-12 shrink-0 text-[10px] opacity-40 pt-2 font-mono text-center">
-                  {new Date(log.timestamp).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'})}
-                </div>
-                <div className={`max-w-[80%] p-4 rounded-xl border ${log.source === 'user' ? 'rounded-tr-none' : 'rounded-tl-none'}`}
-                     style={{ 
-                       backgroundColor: log.source === 'user' ? theme.colors.bgActivity : 'transparent',
-                       borderColor: theme.colors.border 
-                     }}>
-                   {log.images && log.images.length > 0 && (
-                     <div className="flex gap-2 mb-2 overflow-x-auto">
-                        {log.images.map((img, idx) => (
-                          <img key={idx} src={img} className="h-20 rounded border cursor-zoom-in" onClick={() => setLightboxImage(img)} />
-                        ))}
-                     </div>
-                   )}
-                   <div className="whitespace-pre-wrap text-sm">{log.text}</div>
-                </div>
-             </div>
-           ))}
-           {activeSession.state === 'busy' && (
-             <div className="flex items-center justify-center gap-2 text-xs opacity-50 animate-pulse py-4">
-               <Activity className="w-4 h-4" />
-               {activeSession.inputMode === 'ai' ? 'Claude is thinking...' : 'Executing shell command...'}
-             </div>
-           )}
-           <div ref={logsEndRef} />
-        </div>
+        <TerminalOutput
+          session={activeSession}
+          theme={theme}
+          activeFocus={activeFocus}
+          outputSearchOpen={outputSearchOpen}
+          outputSearchQuery={outputSearchQuery}
+          setOutputSearchOpen={setOutputSearchOpen}
+          setOutputSearchQuery={setOutputSearchQuery}
+          setActiveFocus={setActiveFocus}
+          setLightboxImage={setLightboxImage}
+          inputRef={inputRef}
+          logsEndRef={logsEndRef}
+        />
 
-        {/* Input Area (Expanded & Updated) */}
-        <div className="relative p-4 border-t" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}>
-           {stagedImages.length > 0 && (
-             <div className="flex gap-2 mb-3 pb-2 overflow-x-auto overflow-y-visible">
-                {stagedImages.map((img, idx) => (
-                  <div key={idx} className="relative group">
-                    <img
-                      src={img}
-                      className="h-16 rounded border cursor-pointer hover:opacity-80 transition-opacity"
-                      style={{ borderColor: theme.colors.border }}
-                      onClick={() => setLightboxImage(img)}
-                    />
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        setStagedImages(p => p.filter((_, i) => i !== idx));
-                      }}
-                      className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors opacity-90 hover:opacity-100"
-                    >
-                      <X className="w-3 h-3" />
-                    </button>
-                  </div>
-                ))}
-             </div>
-           )}
-
-           {/* Command History Modal */}
-           {commandHistoryOpen && (
-             <div
-               className="absolute bottom-full left-0 right-0 mb-2 border rounded-lg shadow-2xl max-h-64 overflow-hidden"
-               style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.border }}
-               onKeyDown={(e) => {
-                 const history = activeSession.commandHistory || [];
-                 const filtered = history.filter(cmd =>
-                   cmd.toLowerCase().includes(commandHistoryFilter.toLowerCase())
-                 ).reverse().slice(0, 5);
-
-                 if (e.key === 'ArrowDown') {
-                   e.preventDefault();
-                   setCommandHistorySelectedIndex(Math.min(commandHistorySelectedIndex + 1, filtered.length - 1));
-                 } else if (e.key === 'ArrowUp') {
-                   e.preventDefault();
-                   setCommandHistorySelectedIndex(Math.max(commandHistorySelectedIndex - 1, 0));
-                 } else if (e.key === 'Enter') {
-                   e.preventDefault();
-                   if (filtered[commandHistorySelectedIndex]) {
-                     setInputValue(filtered[commandHistorySelectedIndex]);
-                     setCommandHistoryOpen(false);
-                     setCommandHistoryFilter('');
-                     inputRef.current?.focus();
-                   }
-                 } else if (e.key === 'Escape') {
-                   e.preventDefault();
-                   setCommandHistoryOpen(false);
-                   setCommandHistoryFilter('');
-                   inputRef.current?.focus();
-                 }
-               }}
-             >
-               <div className="p-2">
-                 <input
-                   autoFocus
-                   type="text"
-                   className="w-full bg-transparent outline-none text-sm p-2 border-b"
-                   style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-                   placeholder="Filter commands..."
-                   value={commandHistoryFilter}
-                   onChange={(e) => {
-                     setCommandHistoryFilter(e.target.value);
-                     setCommandHistorySelectedIndex(0);
-                   }}
-                 />
-               </div>
-               <div className="max-h-48 overflow-y-auto">
-                 {(activeSession.commandHistory || [])
-                   .filter(cmd => cmd.toLowerCase().includes(commandHistoryFilter.toLowerCase()))
-                   .reverse()
-                   .slice(0, 5)
-                   .map((cmd, idx) => (
-                     <div
-                       key={idx}
-                       className={`px-3 py-2 cursor-pointer text-sm font-mono ${idx === commandHistorySelectedIndex ? 'ring-1 ring-inset' : ''}`}
-                       style={{
-                         backgroundColor: idx === commandHistorySelectedIndex ? theme.colors.bgActivity : 'transparent',
-                         ringColor: theme.colors.accent,
-                         color: theme.colors.textMain
-                       }}
-                       onClick={() => {
-                         setInputValue(cmd);
-                         setCommandHistoryOpen(false);
-                         setCommandHistoryFilter('');
-                         inputRef.current?.focus();
-                       }}
-                       onMouseEnter={() => setCommandHistorySelectedIndex(idx)}
-                     >
-                       {cmd}
-                     </div>
-                   ))}
-                 {(activeSession.commandHistory || []).filter(cmd =>
-                   cmd.toLowerCase().includes(commandHistoryFilter.toLowerCase())
-                 ).length === 0 && (
-                   <div className="px-3 py-4 text-center text-sm opacity-50">No matching commands</div>
-                 )}
-               </div>
-             </div>
-           )}
-
-           <div className="flex gap-3">
-             <div className="flex-1 relative border rounded-lg bg-opacity-50 flex flex-col" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}>
-               <textarea
-                ref={inputRef}
-                className="w-full bg-transparent text-sm outline-none p-3 resize-none min-h-[2.5rem] max-h-[8rem] scrollbar-thin"
-                style={{ color: theme.colors.textMain }}
-                placeholder={activeSession.inputMode === 'terminal' ? "Run shell command..." : "Ask Claude..."}
-                value={inputValue}
-                onChange={e => {
-                  setInputValue(e.target.value);
-                  // Auto-grow logic
-                  e.target.style.height = 'auto';
-                  e.target.style.height = `${Math.min(e.target.scrollHeight, 128)}px`;
-                }}
-                onKeyDown={handleInputKeyDown}
-                onPaste={handlePaste}
-                onDrop={handleDrop}
-                onDragOver={e => e.preventDefault()}
-                rows={1}
-               />
-
-               <div className="flex justify-between items-center px-2 pb-2">
-                  <div className="flex gap-1 items-center">
-                    {activeSession.inputMode === 'terminal' && (
-                      <div className="text-[10px] font-mono opacity-50 px-2" style={{ color: theme.colors.textDim }}>
-                        {activeSession.cwd?.replace(/^\/Users\/[^\/]+/, '~') || '~'}
-                      </div>
-                    )}
-                    {activeSession.inputMode === 'ai' && (
-                      <button
-                        onClick={() => document.getElementById('image-file-input')?.click()}
-                        className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-                        title="Attach Image"
-                      >
-                        <ImageIcon className="w-4 h-4"/>
-                      </button>
-                    )}
-                    <input
-                      id="image-file-input"
-                      type="file"
-                      accept="image/*"
-                      multiple
-                      className="hidden"
-                      onChange={(e) => {
-                        const files = Array.from(e.target.files || []);
-                        files.forEach(file => {
-                          const reader = new FileReader();
-                          reader.onload = (event) => {
-                            if (event.target?.result) {
-                              setStagedImages(prev => [...prev, event.target!.result as string]);
-                            }
-                          };
-                          reader.readAsDataURL(file);
-                        });
-                        e.target.value = '';
-                      }}
-                    />
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button
-                      onClick={() => setEnterToSend(!enterToSend)}
-                      className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 px-2 py-1 rounded hover:bg-white/5"
-                      title={enterToSend ? "Switch to Meta+Enter to send" : "Switch to Enter to send"}
-                    >
-                      <Keyboard className="w-3 h-3" />
-                      {enterToSend ? 'Enter' : '⌘ + Enter'}
-                    </button>
-                  </div>
-               </div>
-             </div>
-
-             {/* Mode Toggle & Send Button - Right Side */}
-             <div className="flex flex-col gap-2">
-               <button
-                 onClick={toggleInputMode}
-                 className="p-2 rounded border transition-all"
-                 style={{
-                   backgroundColor: activeSession.inputMode === 'terminal' ? theme.colors.bgActivity : theme.colors.accentDim,
-                   borderColor: theme.colors.border,
-                   color: activeSession.inputMode === 'terminal' ? theme.colors.textDim : theme.colors.accentText
-                 }}
-                 title="Toggle Mode (Cmd+J)"
-               >
-                 {activeSession.inputMode === 'terminal' ? <Terminal className="w-4 h-4" /> : <Cpu className="w-4 h-4" />}
-               </button>
-               <button
-                 onClick={processInput}
-                 className="p-2 rounded-md text-white hover:opacity-90 shadow-sm transition-all"
-                 style={{ backgroundColor: theme.colors.accent }}
-               >
-                 <ArrowUp className="w-4 h-4" />
-               </button>
-             </div>
-           </div>
-        </div>
+        {/* Input Area */}
+        <InputArea
+          session={activeSession}
+          theme={theme}
+          inputValue={inputValue}
+          setInputValue={setInputValue}
+          enterToSend={enterToSend}
+          setEnterToSend={setEnterToSend}
+          stagedImages={stagedImages}
+          setStagedImages={setStagedImages}
+          setLightboxImage={setLightboxImage}
+          commandHistoryOpen={commandHistoryOpen}
+          setCommandHistoryOpen={setCommandHistoryOpen}
+          commandHistoryFilter={commandHistoryFilter}
+          setCommandHistoryFilter={setCommandHistoryFilter}
+          commandHistorySelectedIndex={commandHistorySelectedIndex}
+          setCommandHistorySelectedIndex={setCommandHistorySelectedIndex}
+          inputRef={inputRef}
+          handleInputKeyDown={handleInputKeyDown}
+          handlePaste={handlePaste}
+          handleDrop={handleDrop}
+          toggleInputMode={toggleInputMode}
+          processInput={processInput}
+        />
 
         {/* File Preview Overlay */}
         {previewFile && (
