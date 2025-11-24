@@ -22,6 +22,7 @@ import { CreateGroupModal } from './components/CreateGroupModal';
 import { RenameSessionModal } from './components/RenameSessionModal';
 import { RenameGroupModal } from './components/RenameGroupModal';
 import { ConfirmModal } from './components/ConfirmModal';
+import { ErrorBoundary } from './components/ErrorBoundary';
 
 // Import custom hooks
 import { useSettings, useSessionManager, useFileExplorer } from './hooks';
@@ -1468,42 +1469,44 @@ export default function MaestroConsole() {
       )}
 
       {/* --- LEFT SIDEBAR --- */}
-      <SessionList
-        theme={theme}
-        sessions={sessions}
-        groups={groups}
-        sortedSessions={sortedSessions}
-        activeSessionId={activeSessionId}
-        leftSidebarOpen={leftSidebarOpen}
-        leftSidebarWidthState={leftSidebarWidthState}
-        activeFocus={activeFocus}
-        selectedSidebarIndex={selectedSidebarIndex}
-        editingGroupId={editingGroupId}
-        editingSessionId={editingSessionId}
-        draggingSessionId={draggingSessionId}
-        anyTunnelActive={anyTunnelActive}
-        shortcuts={shortcuts}
-        setActiveFocus={setActiveFocus}
-        setActiveSessionId={setActiveSessionId}
-        setLeftSidebarOpen={setLeftSidebarOpen}
-        setLeftSidebarWidthState={setLeftSidebarWidthState}
-        setShortcutsHelpOpen={setShortcutsHelpOpen}
-        setSettingsModalOpen={setSettingsModalOpen}
-        setSettingsTab={setSettingsTab}
-        toggleGroup={toggleGroup}
-        handleDragStart={handleDragStart}
-        handleDragOver={handleDragOver}
-        handleDropOnGroup={handleDropOnGroup}
-        handleDropOnUngrouped={handleDropOnUngrouped}
-        finishRenamingGroup={finishRenamingGroup}
-        finishRenamingSession={finishRenamingSession}
-        startRenamingGroup={startRenamingGroup}
-        startRenamingSession={startRenamingSession}
-        showConfirmation={showConfirmation}
-        setGroups={setGroups}
-        createNewGroup={createNewGroup}
-        addNewSession={addNewSession}
-      />
+      <ErrorBoundary>
+        <SessionList
+          theme={theme}
+          sessions={sessions}
+          groups={groups}
+          sortedSessions={sortedSessions}
+          activeSessionId={activeSessionId}
+          leftSidebarOpen={leftSidebarOpen}
+          leftSidebarWidthState={leftSidebarWidthState}
+          activeFocus={activeFocus}
+          selectedSidebarIndex={selectedSidebarIndex}
+          editingGroupId={editingGroupId}
+          editingSessionId={editingSessionId}
+          draggingSessionId={draggingSessionId}
+          anyTunnelActive={anyTunnelActive}
+          shortcuts={shortcuts}
+          setActiveFocus={setActiveFocus}
+          setActiveSessionId={setActiveSessionId}
+          setLeftSidebarOpen={setLeftSidebarOpen}
+          setLeftSidebarWidthState={setLeftSidebarWidthState}
+          setShortcutsHelpOpen={setShortcutsHelpOpen}
+          setSettingsModalOpen={setSettingsModalOpen}
+          setSettingsTab={setSettingsTab}
+          toggleGroup={toggleGroup}
+          handleDragStart={handleDragStart}
+          handleDragOver={handleDragOver}
+          handleDropOnGroup={handleDropOnGroup}
+          handleDropOnUngrouped={handleDropOnUngrouped}
+          finishRenamingGroup={finishRenamingGroup}
+          finishRenamingSession={finishRenamingSession}
+          startRenamingGroup={startRenamingGroup}
+          startRenamingSession={startRenamingSession}
+          showConfirmation={showConfirmation}
+          setGroups={setGroups}
+          createNewGroup={createNewGroup}
+          addNewSession={addNewSession}
+        />
+      </ErrorBoundary>
 
       {/* --- CENTER WORKSPACE --- */}
       {!activeSession ? (
@@ -1522,11 +1525,12 @@ export default function MaestroConsole() {
         </>
       ) : (
         <>
-          <div
-            className={`flex-1 flex flex-col min-w-0 relative ${activeFocus === 'main' ? 'ring-1 ring-inset z-10' : ''}`}
-            style={{ backgroundColor: theme.colors.bgMain, ringColor: theme.colors.accent }}
-            onClick={() => setActiveFocus('main')}
-          >
+          <ErrorBoundary>
+            <div
+              className={`flex-1 flex flex-col min-w-0 relative ${activeFocus === 'main' ? 'ring-1 ring-inset z-10' : ''}`}
+              style={{ backgroundColor: theme.colors.bgMain, ringColor: theme.colors.accent }}
+              onClick={() => setActiveFocus('main')}
+            >
             {/* Top Bar */}
             <div className="h-16 border-b flex items-center justify-between px-6 shrink-0" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}>
               <div className="flex items-center gap-4">
@@ -1643,38 +1647,41 @@ export default function MaestroConsole() {
           />
         )}
       </div>
+          </ErrorBoundary>
 
       {/* --- RIGHT PANEL --- */}
-      <RightPanel
-        session={activeSession}
-        theme={theme}
-        shortcuts={shortcuts}
-        rightPanelOpen={rightPanelOpen}
-        setRightPanelOpen={setRightPanelOpen}
-        rightPanelWidth={rightPanelWidthState}
-        setRightPanelWidthState={setRightPanelWidthState}
-        activeRightTab={activeRightTab}
-        setActiveRightTab={setActiveRightTab}
-        activeFocus={activeFocus}
-        setActiveFocus={setActiveFocus}
-        fileTreeFilter={fileTreeFilter}
-        setFileTreeFilter={setFileTreeFilter}
-        fileTreeFilterOpen={fileTreeFilterOpen}
-        setFileTreeFilterOpen={setFileTreeFilterOpen}
-        filteredFileTree={filteredFileTree}
-        selectedFileIndex={selectedFileIndex}
-        setSelectedFileIndex={setSelectedFileIndex}
-        previewFile={previewFile}
-        fileTreeContainerRef={fileTreeContainerRef}
-        toggleFolder={toggleFolder}
-        handleFileClick={handleFileClick}
-        expandAllFolders={expandAllFolders}
-        collapseAllFolders={collapseAllFolders}
-        updateSessionWorkingDirectory={updateSessionWorkingDirectory}
-        setSessions={setSessions}
-        updateScratchPad={updateScratchPad}
-        updateScratchPadState={updateScratchPadState}
-      />
+      <ErrorBoundary>
+        <RightPanel
+          session={activeSession}
+          theme={theme}
+          shortcuts={shortcuts}
+          rightPanelOpen={rightPanelOpen}
+          setRightPanelOpen={setRightPanelOpen}
+          rightPanelWidth={rightPanelWidthState}
+          setRightPanelWidthState={setRightPanelWidthState}
+          activeRightTab={activeRightTab}
+          setActiveRightTab={setActiveRightTab}
+          activeFocus={activeFocus}
+          setActiveFocus={setActiveFocus}
+          fileTreeFilter={fileTreeFilter}
+          setFileTreeFilter={setFileTreeFilter}
+          fileTreeFilterOpen={fileTreeFilterOpen}
+          setFileTreeFilterOpen={setFileTreeFilterOpen}
+          filteredFileTree={filteredFileTree}
+          selectedFileIndex={selectedFileIndex}
+          setSelectedFileIndex={setSelectedFileIndex}
+          previewFile={previewFile}
+          fileTreeContainerRef={fileTreeContainerRef}
+          toggleFolder={toggleFolder}
+          handleFileClick={handleFileClick}
+          expandAllFolders={expandAllFolders}
+          collapseAllFolders={collapseAllFolders}
+          updateSessionWorkingDirectory={updateSessionWorkingDirectory}
+          setSessions={setSessions}
+          updateScratchPad={updateScratchPad}
+          updateScratchPadState={updateScratchPadState}
+        />
+      </ErrorBoundary>
         </>
       )}
 
