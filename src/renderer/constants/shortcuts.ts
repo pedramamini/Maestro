@@ -7,6 +7,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
   cycleNext: { id: 'cycleNext', label: 'Next Agent', keys: ['Meta', 'Shift', '}'] },
   newInstance: { id: 'newInstance', label: 'New Agent', keys: ['Meta', 'n'] },
   killInstance: { id: 'killInstance', label: 'Kill Agent', keys: ['Meta', 'Shift', 'Backspace'] },
+  moveToGroup: { id: 'moveToGroup', label: 'Move Session to Group', keys: ['Meta', 'Shift', 'm'] },
   toggleMode: { id: 'toggleMode', label: 'Switch AI/Shell Mode', keys: ['Meta', 'j'] },
   quickAction: { id: 'quickAction', label: 'Quick Actions', keys: ['Meta', 'k'] },
   help: { id: 'help', label: 'Show Shortcuts', keys: ['Meta', '/'] },

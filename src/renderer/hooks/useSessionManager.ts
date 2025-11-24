@@ -227,8 +227,8 @@ export function useSessionManager(): UseSessionManagerReturn {
         cwd: workingDir,
         fullPath: workingDir,
         isGitRepo,
-        aiLogs: [{ id: generateId(), timestamp: Date.now(), source: 'system', text: isClaudeBatchMode ? 'Claude Code ready (batch mode - will spawn on first message)' : `${name} ready.` }],
-        shellLogs: [{ id: generateId(), timestamp: Date.now(), source: 'system', text: 'Shell Session Ready.' }],
+        aiLogs: [],  // Start with clean AI Terminal (no superfluous messages)
+        shellLogs: [],  // Start with clean Command Terminal (no superfluous messages)
         workLog: [],
         scratchPadContent: '',
         contextUsage: 0,

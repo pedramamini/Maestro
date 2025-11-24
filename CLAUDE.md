@@ -2,9 +2,28 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Standardized Vernacular
+
+To maintain consistency in code, comments, and documentation, use these terms:
+
+### UI Components
+- **Left Bar** - The left sidebar containing session list and groups (`SessionList.tsx`)
+- **Right Bar** - The right sidebar with Files, History, and Scratchpad tabs (`RightPanel.tsx`)
+- **Main Window** - The center workspace area (`MainPanel.tsx`)
+  - **AI Terminal** - The main window when in AI mode (for interacting with AI agents)
+  - **Command Terminal** - The main window when in terminal/shell mode (for running shell commands)
+  - **System Log Viewer** - Special view in main window for system logs (`LogViewer.tsx`)
+
+### Session States
+Session status indicators use color-coding:
+- **Green** - Ready and waiting (idle state)
+- **Yellow** - Agent is thinking (busy state)
+- **Red** - No connection with agent (error state)
+- **Pulsing Orange** - Attempting to establish connection (connecting state)
+
 ## Project Overview
 
-Maestro is a unified, highly-responsive Electron desktop application for managing multiple AI coding assistants (Claude Code, Aider, OpenCode, etc.) simultaneously. It provides a Linear/Superhuman-level responsive interface with keyboard-first navigation, dual-mode input (terminal vs AI), and remote web access capabilities.
+Maestro is a unified, highly-responsive Electron desktop application for managing multiple AI coding assistants (Claude Code, Aider, OpenCode, etc.) simultaneously. It provides a Linear/Superhuman-level responsive interface with keyboard-first navigation, dual-mode input (Command Terminal vs AI Terminal), and remote web access capabilities.
 
 ## Development Commands
 
@@ -68,10 +87,10 @@ Maestro uses Electron's main/renderer architecture with strict context isolation
 - `App.tsx` - Main UI coordinator (~1,650 lines, continuously being refactored)
 - `main.tsx` - Renderer entry point
 - `components/` - React components (modals, panels, UI elements)
-  - `SessionList.tsx` - Left sidebar with sessions and groups
-  - `MainPanel.tsx` - Center workspace (terminal, log viewer, input)
-  - `RightPanel.tsx` - Right sidebar (files, history, scratchpad)
-  - `LogViewer.tsx` - System logs viewer with filtering and search
+  - `SessionList.tsx` - Left Bar with sessions and groups
+  - `MainPanel.tsx` - Main Window (AI Terminal, Command Terminal, System Log Viewer)
+  - `RightPanel.tsx` - Right Bar (files, history, scratchpad)
+  - `LogViewer.tsx` - System Log Viewer with filtering and search
   - `SettingsModal.tsx`, `NewInstanceModal.tsx`, `Scratchpad.tsx`, `FilePreview.tsx` - Other UI components
 - `hooks/` - Custom React hooks for reusable state logic
   - `useSettings.ts` - Settings management and persistence
@@ -98,7 +117,7 @@ All process operations go through IPC handlers in `src/main/index.ts`:
 - `process:spawn` - Start a new process
 - `process:write` - Send data to stdin
 - `process:kill` - Terminate a process
-- `process:resize` - Resize PTY terminal (terminal mode only)
+- `process:resize` - Resize PTY terminal (Command Terminal only)
 
 Events are emitted back to renderer via:
 - `process:data` - Stdout/stderr output

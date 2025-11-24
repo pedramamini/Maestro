@@ -4,11 +4,30 @@
 
 Maestro is a desktop application built with Electron that allows you to run and manage multiple AI coding tools (Claude Code, Aider, OpenCode, etc.) in parallel with a Linear/Superhuman-level responsive interface.
 
+## UI Overview
+
+Maestro features a three-panel layout:
+
+- **Left Bar** - Session list with grouping, filtering, and organization
+- **Main Window** - Center workspace with two modes:
+  - **AI Terminal** - Interact with AI coding assistants (Claude Code, Aider, etc.)
+  - **Command Terminal** - Execute shell commands and scripts
+  - **System Log Viewer** - View system logs and debugging information
+- **Right Bar** - File explorer, command history, and scratchpad
+
+### Session Status Indicators
+
+Each session shows a color-coded status indicator:
+- 🟢 **Green** - Ready and waiting
+- 🟡 **Yellow** - Agent is thinking
+- 🔴 **Red** - No connection with agent
+- 🟠 **Pulsing Orange** - Attempting to establish connection
+
 ## Features
 
-- 🚀 **Multi-Instance Management** - Run multiple AI assistants and terminal sessions simultaneously
+- 🚀 **Multi-Instance Management** - Run multiple AI assistants and Command Terminal sessions simultaneously
 - 🎨 **Beautiful UI** - Obsidian-inspired themes with keyboard-first navigation
-- 🔄 **Dual-Mode Input** - Switch between terminal and AI interaction modes seamlessly
+- 🔄 **Dual-Mode Input** - Switch between Command Terminal and AI Terminal seamlessly
 - ⚡ **Slash Commands** - Extensible command system with autocomplete (`/clear` to clear output)
 - 🌐 **Remote Access** - Built-in web server with optional ngrok/Cloudflare tunneling
 - 🎯 **Git Integration** - Automatic git status, diff tracking, and workspace detection
@@ -209,9 +228,10 @@ This architecture enables seamless switching between AI and terminal modes witho
 | Toggle Right Panel | `⌘\` | `Ctrl+\` |
 | New Agent | `⌘N` | `Ctrl+N` |
 | Kill Agent | `⌘⇧⌫` | `Ctrl+Shift+Backspace` |
+| Move Session to Group | `⌘⇧M` | `Ctrl+Shift+M` |
 | Previous Agent | `⌘⇧{` | `Ctrl+Shift+{` |
 | Next Agent | `⌘⇧}` | `Ctrl+Shift+}` |
-| Switch AI/Shell Mode | `⌘J` | `Ctrl+J` |
+| Switch AI/Command Terminal | `⌘J` | `Ctrl+J` |
 | Show Shortcuts Help | `⌘/` | `Ctrl+/` |
 | Open Settings | `⌘,` | `Ctrl+,` |
 | Cycle Focus Areas | `Tab` | `Tab` |
@@ -280,7 +300,7 @@ Maestro includes an extensible slash command system with autocomplete. Commands 
 
 | Command | Description |
 |---------|-------------|
-| `/clear` | Clear the output history for the current mode (AI or terminal) |
+| `/clear` | Clear the output history for the current mode (AI Terminal or Command Terminal) |
 
 ### Using Slash Commands
 

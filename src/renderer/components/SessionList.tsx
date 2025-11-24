@@ -265,8 +265,15 @@ export function SessionList(props: SessionListProps) {
                             </div>
                           </div>
                           <div
-                            className={`w-2 h-2 rounded-full ml-2 ${session.state === 'busy' ? 'animate-pulse' : ''}`}
+                            className={`w-2 h-2 rounded-full ml-2 ${session.state === 'connecting' ? 'animate-pulse' : ''}`}
                             style={{ backgroundColor: getStatusColor(session.state, theme) }}
+                            title={
+                              session.state === 'idle' ? 'Ready and waiting' :
+                              session.state === 'busy' ? 'Agent is thinking' :
+                              session.state === 'connecting' ? 'Attempting to establish connection' :
+                              session.state === 'error' ? 'No connection with agent' :
+                              'Waiting for input'
+                            }
                           />
                         </div>
                       );

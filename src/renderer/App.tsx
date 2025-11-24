@@ -118,6 +118,7 @@ export default function MaestroConsole() {
   const [shortcutsHelpOpen, setShortcutsHelpOpen] = useState(false);
   const [shortcutsSearchQuery, setShortcutsSearchQuery] = useState('');
   const [quickActionOpen, setQuickActionOpen] = useState(false);
+  const [quickActionInitialMode, setQuickActionInitialMode] = useState<'main' | 'move-to-group'>('main');
   const [settingsTab, setSettingsTab] = useState<'general' | 'shortcuts' | 'theme' | 'network'>('general');
   const [lightboxImage, setLightboxImage] = useState<string | null>(null);
   const [aboutModalOpen, setAboutModalOpen] = useState(false);
@@ -396,30 +397,14 @@ export default function MaestroConsole() {
       const aiSuccess = aiSpawnResult.success && (isClaudeBatchMode || aiSpawnResult.pid > 0);
 
       if (aiSuccess && terminalSpawnResult.success && terminalSpawnResult.pid > 0) {
-        // Add restoration messages to both log arrays
-        const aiRestorationLog: LogEntry = {
-          id: generateId(),
-          timestamp: Date.now(),
-          source: 'system',
-          text: isClaudeBatchMode
-            ? 'Claude Code ready (batch mode - will spawn on first message)'
-            : 'AI agent restored after app restart'
-        };
-
-        const terminalRestorationLog: LogEntry = {
-          id: generateId(),
-          timestamp: Date.now(),
-          source: 'system',
-          text: 'Terminal restored after app restart'
-        };
-
+        // Session restored - no superfluous messages added to AI Terminal or Command Terminal
         return {
           ...correctedSession,
           aiPid: aiSpawnResult.pid,
           terminalPid: terminalSpawnResult.pid,
           state: 'idle' as SessionState,
-          aiLogs: [...correctedSession.aiLogs, aiRestorationLog],
-          shellLogs: [...correctedSession.shellLogs, terminalRestorationLog]
+          aiLogs: correctedSession.aiLogs,  // Preserve existing AI Terminal logs
+          shellLogs: correctedSession.shellLogs  // Preserve existing Command Terminal logs
         };
       } else {
         // Process spawn failed
@@ -914,6 +899,12 @@ export default function MaestroConsole() {
       else if (isShortcut(e, 'toggleRightPanel')) setRightPanelOpen(p => !p);
       else if (isShortcut(e, 'newInstance')) addNewSession();
       else if (isShortcut(e, 'killInstance')) deleteSession(activeSessionId);
+      else if (isShortcut(e, 'moveToGroup')) {
+        if (activeSession) {
+          setQuickActionInitialMode('move-to-group');
+          setQuickActionOpen(true);
+        }
+      }
       else if (isShortcut(e, 'cyclePrev')) {
         // If right panel is focused, cycle through tabs; otherwise cycle sessions
         if (activeFocus === 'right') {
@@ -949,7 +940,10 @@ export default function MaestroConsole() {
         }
       }
       else if (isShortcut(e, 'toggleMode')) toggleInputMode();
-      else if (isShortcut(e, 'quickAction')) setQuickActionOpen(true);
+      else if (isShortcut(e, 'quickAction')) {
+        setQuickActionInitialMode('main');
+        setQuickActionOpen(true);
+      }
       else if (isShortcut(e, 'help')) setShortcutsHelpOpen(true);
       else if (isShortcut(e, 'settings')) { setSettingsModalOpen(true); setSettingsTab('general'); }
       else if (isShortcut(e, 'goToFiles')) { setRightPanelOpen(true); setActiveRightTab('files'); setActiveFocus('right'); }
@@ -1923,6 +1917,7 @@ export default function MaestroConsole() {
           groups={groups}
           setGroups={setGroups}
           shortcuts={shortcuts}
+          initialMode={quickActionInitialMode}
           setQuickActionOpen={setQuickActionOpen}
           setActiveSessionId={setActiveSessionId}
           addNewSession={addNewSession}

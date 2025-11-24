@@ -18,6 +18,7 @@ interface QuickActionsModalProps {
   groups: Group[];
   setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
   shortcuts: Record<string, Shortcut>;
+  initialMode?: 'main' | 'move-to-group';
   setQuickActionOpen: (open: boolean) => void;
   setActiveSessionId: (id: string) => void;
   setRenameInstanceModalOpen: (open: boolean) => void;
@@ -46,6 +47,7 @@ interface QuickActionsModalProps {
 export function QuickActionsModal(props: QuickActionsModalProps) {
   const {
     theme, sessions, setSessions, activeSessionId, groups, setGroups, shortcuts,
+    initialMode = 'main',
     setQuickActionOpen, setActiveSessionId, setRenameInstanceModalOpen, setRenameInstanceValue,
     setRenameGroupModalOpen, setRenameGroupId, setRenameGroupValue, setRenameGroupEmoji,
     setCreateGroupModalOpen, setNewGroupName, setMoveSessionToNewGroup,
@@ -56,7 +58,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 
   const [search, setSearch] = useState('');
   const [selectedIndex, setSelectedIndex] = useState(0);
-  const [mode, setMode] = useState<'main' | 'move-to-group'>('main');
+  const [mode, setMode] = useState<'main' | 'move-to-group'>(initialMode);
   const [renamingSession, setRenamingSession] = useState(false);
   const [renameValue, setRenameValue] = useState('');
   const [firstVisibleIndex, setFirstVisibleIndex] = useState(0);

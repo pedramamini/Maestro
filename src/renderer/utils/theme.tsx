@@ -10,10 +10,18 @@ export const getContextColor = (usage: number, theme: Theme): string => {
 };
 
 // Get color based on session state
+// Status indicator colors:
+// - Green: ready and waiting (idle)
+// - Yellow: agent is thinking (busy, waiting_input)
+// - Red: no connection with agent (error)
+// - Pulsing orange: attempting to establish connection (connecting)
 export const getStatusColor = (state: SessionState, theme: Theme): string => {
   switch (state) {
-    case 'busy': return theme.colors.error;
-    case 'waiting_input': return theme.colors.warning;
+    case 'idle': return theme.colors.success;      // Green - ready and waiting
+    case 'busy': return theme.colors.warning;      // Yellow - agent is thinking
+    case 'waiting_input': return theme.colors.warning; // Yellow - waiting for input
+    case 'error': return theme.colors.error;       // Red - no connection
+    case 'connecting': return '#ff8800';           // Orange - attempting to connect
     default: return theme.colors.success;
   }
 };

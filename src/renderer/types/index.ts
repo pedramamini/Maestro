@@ -1,7 +1,7 @@
 // Type definitions for Maestro renderer
 
 export type ToolType = 'claude' | 'aider' | 'opencode' | 'terminal';
-export type SessionState = 'idle' | 'busy' | 'waiting_input';
+export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
 export type RightPanelTab = 'files' | 'history' | 'scratchpad';
 export type ScratchPadMode = 'raw' | 'preview' | 'wysiwyg';
