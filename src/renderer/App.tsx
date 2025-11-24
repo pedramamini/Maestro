@@ -55,13 +55,19 @@ export default function MaestroConsole() {
   
   // Input State
   const [inputValue, setInputValue] = useState('');
-  const [enterToSend, setEnterToSendState] = useState(true);
+  const [enterToSendAI, setEnterToSendAIState] = useState(false); // AI mode defaults to Command+Enter
+  const [enterToSendTerminal, setEnterToSendTerminalState] = useState(true); // Terminal defaults to Enter
   const [slashCommandOpen, setSlashCommandOpen] = useState(false);
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
 
-  const setEnterToSend = (value: boolean) => {
-    setEnterToSendState(value);
-    window.maestro.settings.set('enterToSend', value);
+  const setEnterToSendAI = (value: boolean) => {
+    setEnterToSendAIState(value);
+    window.maestro.settings.set('enterToSendAI', value);
+  };
+
+  const setEnterToSendTerminal = (value: boolean) => {
+    setEnterToSendTerminalState(value);
+    window.maestro.settings.set('enterToSendTerminal', value);
   };
   
   // UI State
@@ -243,7 +249,11 @@ export default function MaestroConsole() {
   // Load settings from electron-store on mount
   useEffect(() => {
     const loadSettings = async () => {
-      const savedEnterToSend = await window.maestro.settings.get('enterToSend');
+      // Migration: check for old enterToSend setting
+      const oldEnterToSend = await window.maestro.settings.get('enterToSend');
+      const savedEnterToSendAI = await window.maestro.settings.get('enterToSendAI');
+      const savedEnterToSendTerminal = await window.maestro.settings.get('enterToSendTerminal');
+
       const savedLlmProvider = await window.maestro.settings.get('llmProvider');
       const savedModelSlug = await window.maestro.settings.get('modelSlug');
       const savedApiKey = await window.maestro.settings.get('apiKey');
@@ -262,7 +272,17 @@ export default function MaestroConsole() {
       const savedLogLevel = await window.maestro.logger.getLogLevel();
       const savedMaxOutputLines = await window.maestro.settings.get('maxOutputLines');
 
-      if (savedEnterToSend !== undefined) setEnterToSendState(savedEnterToSend);
+      // Migration: if old setting exists but new ones don't, migrate
+      if (oldEnterToSend !== undefined && savedEnterToSendAI === undefined && savedEnterToSendTerminal === undefined) {
+        setEnterToSendAIState(oldEnterToSend);
+        setEnterToSendTerminalState(oldEnterToSend);
+        window.maestro.settings.set('enterToSendAI', oldEnterToSend);
+        window.maestro.settings.set('enterToSendTerminal', oldEnterToSend);
+      } else {
+        if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI);
+        if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal);
+      }
+
       if (savedLlmProvider !== undefined) setLlmProvider(savedLlmProvider);
       if (savedModelSlug !== undefined) setModelSlug(savedModelSlug);
       if (savedApiKey !== undefined) setApiKey(savedApiKey);
@@ -1538,10 +1558,13 @@ export default function MaestroConsole() {
     }
 
     if (e.key === 'Enter') {
-      if (enterToSend && !e.shiftKey && !e.metaKey) {
+      // Use the appropriate setting based on input mode
+      const currentEnterToSend = activeSession.inputMode === 'terminal' ? enterToSendTerminal : enterToSendAI;
+
+      if (currentEnterToSend && !e.shiftKey && !e.metaKey) {
         e.preventDefault();
         processInput();
-      } else if (!enterToSend && (e.metaKey || e.ctrlKey)) {
+      } else if (!currentEnterToSend && (e.metaKey || e.ctrlKey)) {
         e.preventDefault();
         processInput();
       }
@@ -2043,7 +2066,8 @@ export default function MaestroConsole() {
         outputSearchOpen={outputSearchOpen}
         outputSearchQuery={outputSearchQuery}
         inputValue={inputValue}
-        enterToSend={enterToSend}
+        enterToSendAI={enterToSendAI}
+        enterToSendTerminal={enterToSendTerminal}
         stagedImages={stagedImages}
         commandHistoryOpen={commandHistoryOpen}
         commandHistoryFilter={commandHistoryFilter}
@@ -2061,7 +2085,8 @@ export default function MaestroConsole() {
         setOutputSearchOpen={setOutputSearchOpen}
         setOutputSearchQuery={setOutputSearchQuery}
         setInputValue={setInputValue}
-        setEnterToSend={setEnterToSend}
+        setEnterToSendAI={setEnterToSendAI}
+        setEnterToSendTerminal={setEnterToSendTerminal}
         setStagedImages={setStagedImages}
         setLightboxImage={setLightboxImage}
         setCommandHistoryOpen={setCommandHistoryOpen}
@@ -2156,6 +2181,10 @@ export default function MaestroConsole() {
         setDefaultAgent={setDefaultAgentPersist}
         defaultShell={defaultShell}
         setDefaultShell={setDefaultShellPersist}
+        enterToSendAI={enterToSendAI}
+        setEnterToSendAI={setEnterToSendAI}
+        enterToSendTerminal={enterToSendTerminal}
+        setEnterToSendTerminal={setEnterToSendTerminal}
         fontFamily={fontFamily}
         setFontFamily={setFontFamily}
         fontSize={fontSize}

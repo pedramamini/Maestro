@@ -823,7 +823,8 @@ if (savedMySetting !== undefined) setMySettingState(savedMySetting);
 - `defaultAgent` - Default AI agent selection
 - `defaultShell` - Default terminal shell (zsh, bash, sh, fish, tcsh)
 - `fontFamily`, `fontSize`, `customFonts` - UI font settings
-- `enterToSend` - Input behavior (Enter vs Command-Enter to send)
+- `enterToSendAI` - Input behavior for AI mode (Enter vs Command+Enter to send, defaults to Command+Enter)
+- `enterToSendTerminal` - Input behavior for Terminal mode (Enter vs Command+Enter to send, defaults to Enter)
 - `activeThemeId` - Selected theme
 
 ## Development Phases
@@ -969,6 +970,12 @@ Currently no test suite implemented. When adding tests, use the `test` script in
 
 ## Recent Features Added
 
+- **Per-Mode Input Send Behavior** - Separate Enter-to-send settings for AI and Terminal modes (PED-SEND-CONFIG)
+  - AI mode defaults to Command+Enter to send (Enter creates new line)
+  - Terminal mode defaults to Enter to send (Shift+Enter creates new line)
+  - Each mode's behavior is configurable independently in Settings → General → Input Send Behavior
+  - Settings persist globally across all sessions and restarts
+  - Allows users to optimize input behavior for different interaction patterns
 - **Global Error Catching** - All uncaught exceptions and unhandled promise rejections are now captured and logged to System Logs (PED-CATCH-ERRORS)
   - Main process: Captures Node.js uncaught exceptions and unhandled rejections
   - Renderer process: Captures window errors and unhandled promise rejections

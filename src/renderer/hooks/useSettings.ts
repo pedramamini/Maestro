@@ -36,8 +36,10 @@ export interface UseSettingsReturn {
   // UI settings
   activeThemeId: ThemeId;
   setActiveThemeId: (value: ThemeId) => void;
-  enterToSend: boolean;
-  setEnterToSend: (value: boolean) => void;
+  enterToSendAI: boolean;
+  setEnterToSendAI: (value: boolean) => void;
+  enterToSendTerminal: boolean;
+  setEnterToSendTerminal: (value: boolean) => void;
   leftSidebarWidth: number;
   rightPanelWidth: number;
   markdownRawMode: boolean;
@@ -81,7 +83,8 @@ export function useSettings(): UseSettingsReturn {
 
   // UI Config
   const [activeThemeId, setActiveThemeIdState] = useState<ThemeId>('dracula');
-  const [enterToSend, setEnterToSendState] = useState(true);
+  const [enterToSendAI, setEnterToSendAIState] = useState(false); // AI mode defaults to Command+Enter
+  const [enterToSendTerminal, setEnterToSendTerminalState] = useState(true); // Terminal defaults to Enter
   const [leftSidebarWidth, setLeftSidebarWidthState] = useState(256);
   const [rightPanelWidth, setRightPanelWidthState] = useState(384);
   const [markdownRawMode, setMarkdownRawModeState] = useState(false);
@@ -151,9 +154,14 @@ export function useSettings(): UseSettingsReturn {
     window.maestro.settings.set('activeThemeId', value);
   };
 
-  const setEnterToSend = (value: boolean) => {
-    setEnterToSendState(value);
-    window.maestro.settings.set('enterToSend', value);
+  const setEnterToSendAI = (value: boolean) => {
+    setEnterToSendAIState(value);
+    window.maestro.settings.set('enterToSendAI', value);
+  };
+
+  const setEnterToSendTerminal = (value: boolean) => {
+    setEnterToSendTerminalState(value);
+    window.maestro.settings.set('enterToSendTerminal', value);
   };
 
   const setLeftSidebarWidth = (width: number) => {
@@ -189,7 +197,11 @@ export function useSettings(): UseSettingsReturn {
   // Load settings from electron-store on mount
   useEffect(() => {
     const loadSettings = async () => {
-      const savedEnterToSend = await window.maestro.settings.get('enterToSend');
+      // Migration: check for old enterToSend setting
+      const oldEnterToSend = await window.maestro.settings.get('enterToSend');
+      const savedEnterToSendAI = await window.maestro.settings.get('enterToSendAI');
+      const savedEnterToSendTerminal = await window.maestro.settings.get('enterToSendTerminal');
+
       const savedLlmProvider = await window.maestro.settings.get('llmProvider');
       const savedModelSlug = await window.maestro.settings.get('modelSlug');
       const savedApiKey = await window.maestro.settings.get('apiKey');
@@ -208,7 +220,17 @@ export function useSettings(): UseSettingsReturn {
       const savedLogLevel = await window.maestro.logger.getLogLevel();
       const savedMaxOutputLines = await window.maestro.settings.get('maxOutputLines');
 
-      if (savedEnterToSend !== undefined) setEnterToSendState(savedEnterToSend);
+      // Migration: if old setting exists but new ones don't, migrate
+      if (oldEnterToSend !== undefined && savedEnterToSendAI === undefined && savedEnterToSendTerminal === undefined) {
+        setEnterToSendAIState(oldEnterToSend);
+        setEnterToSendTerminalState(oldEnterToSend);
+        window.maestro.settings.set('enterToSendAI', oldEnterToSend);
+        window.maestro.settings.set('enterToSendTerminal', oldEnterToSend);
+      } else {
+        if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI);
+        if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal);
+      }
+
       if (savedLlmProvider !== undefined) setLlmProviderState(savedLlmProvider);
       if (savedModelSlug !== undefined) setModelSlugState(savedModelSlug);
       if (savedApiKey !== undefined) setApiKeyState(savedApiKey);
@@ -262,8 +284,10 @@ export function useSettings(): UseSettingsReturn {
     setCustomFonts,
     activeThemeId,
     setActiveThemeId,
-    enterToSend,
-    setEnterToSend,
+    enterToSendAI,
+    setEnterToSendAI,
+    enterToSendTerminal,
+    setEnterToSendTerminal,
     leftSidebarWidth,
     rightPanelWidth,
     markdownRawMode,

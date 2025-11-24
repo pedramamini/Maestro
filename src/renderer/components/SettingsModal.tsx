@@ -35,6 +35,10 @@ interface SettingsModalProps {
   setMaxOutputLines: (lines: number) => void;
   defaultShell: string;
   setDefaultShell: (shell: string) => void;
+  enterToSendAI: boolean;
+  setEnterToSendAI: (value: boolean) => void;
+  enterToSendTerminal: boolean;
+  setEnterToSendTerminal: (value: boolean) => void;
   initialTab?: 'general' | 'llm' | 'shortcuts' | 'theme' | 'network';
 }
 
@@ -946,6 +950,63 @@ export function SettingsModal(props: SettingsModalProps) {
                 <p className="text-xs opacity-50 mt-2">
                   Choose which shell to use for terminal sessions. Only available shells are shown.
                 </p>
+              </div>
+
+              {/* Input Behavior Settings */}
+              <div>
+                <label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+                  <Keyboard className="w-3 h-3" />
+                  Input Send Behavior
+                </label>
+                <p className="text-xs opacity-50 mb-3">
+                  Configure how to send messages in each mode. Choose between Enter or Command+Enter for each input type.
+                </p>
+
+                {/* AI Mode Setting */}
+                <div className="mb-4 p-3 rounded border" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">AI Interaction Mode</label>
+                    <button
+                      onClick={() => props.setEnterToSendAI(!props.enterToSendAI)}
+                      className="px-3 py-1.5 rounded text-xs font-mono transition-all"
+                      style={{
+                        backgroundColor: props.enterToSendAI ? theme.colors.accentDim : theme.colors.bgActivity,
+                        color: theme.colors.textMain,
+                        border: `1px solid ${theme.colors.border}`
+                      }}
+                    >
+                      {props.enterToSendAI ? 'Enter' : '⌘ + Enter'}
+                    </button>
+                  </div>
+                  <p className="text-xs opacity-50">
+                    {props.enterToSendAI
+                      ? 'Press Enter to send. Use Shift+Enter for new line.'
+                      : 'Press Command+Enter to send. Enter creates new line.'}
+                  </p>
+                </div>
+
+                {/* Terminal Mode Setting */}
+                <div className="p-3 rounded border" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}>
+                  <div className="flex items-center justify-between mb-2">
+                    <label className="text-sm font-medium">Terminal Mode</label>
+                    <button
+                      onClick={() => props.setEnterToSendTerminal(!props.enterToSendTerminal)}
+                      className="px-3 py-1.5 rounded text-xs font-mono transition-all"
+                      style={{
+                        backgroundColor: props.enterToSendTerminal ? theme.colors.accentDim : theme.colors.bgActivity,
+                        color: theme.colors.textMain,
+                        border: `1px solid ${theme.colors.border}`
+                      }}
+                    >
+                      {props.enterToSendTerminal ? 'Enter' : '⌘ + Enter'}
+                    </button>
+                  </div>
+                  <p className="text-xs opacity-50">
+                    {props.enterToSendTerminal
+                      ? 'Press Enter to send. Use Shift+Enter for new line.'
+                      : 'Press Command+Enter to send. Enter creates new line.'}
+                  </p>
+                </div>
               </div>
             </div>
           )}

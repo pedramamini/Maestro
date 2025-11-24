@@ -21,7 +21,8 @@ interface MainPanelProps {
   outputSearchOpen: boolean;
   outputSearchQuery: string;
   inputValue: string;
-  enterToSend: boolean;
+  enterToSendAI: boolean;
+  enterToSendTerminal: boolean;
   stagedImages: string[];
   commandHistoryOpen: boolean;
   commandHistoryFilter: string;
@@ -41,7 +42,8 @@ interface MainPanelProps {
   setOutputSearchOpen: (open: boolean) => void;
   setOutputSearchQuery: (query: string) => void;
   setInputValue: (value: string) => void;
-  setEnterToSend: (value: boolean) => void;
+  setEnterToSendAI: (value: boolean) => void;
+  setEnterToSendTerminal: (value: boolean) => void;
   setStagedImages: (images: string[]) => void;
   setLightboxImage: (image: string | null) => void;
   setCommandHistoryOpen: (open: boolean) => void;
@@ -74,11 +76,11 @@ interface MainPanelProps {
 export function MainPanel(props: MainPanelProps) {
   const {
     logViewerOpen, activeSession, theme, activeFocus, outputSearchOpen, outputSearchQuery,
-    inputValue, enterToSend, stagedImages, commandHistoryOpen, commandHistoryFilter,
+    inputValue, enterToSendAI, enterToSendTerminal, stagedImages, commandHistoryOpen, commandHistoryFilter,
     commandHistorySelectedIndex, slashCommandOpen, slashCommands, selectedSlashCommandIndex,
     previewFile, markdownRawMode, shortcuts, rightPanelOpen, maxOutputLines,
     setLogViewerOpen, setActiveFocus, setOutputSearchOpen, setOutputSearchQuery,
-    setInputValue, setEnterToSend, setStagedImages, setLightboxImage, setCommandHistoryOpen,
+    setInputValue, setEnterToSendAI, setEnterToSendTerminal, setStagedImages, setLightboxImage, setCommandHistoryOpen,
     setCommandHistoryFilter, setCommandHistorySelectedIndex, setSlashCommandOpen,
     setSelectedSlashCommandIndex, setPreviewFile, setMarkdownRawMode,
     setAboutModalOpen, setRightPanelOpen, inputRef, logsEndRef, terminalOutputRef,
@@ -203,8 +205,8 @@ export function MainPanel(props: MainPanelProps) {
             theme={theme}
             inputValue={inputValue}
             setInputValue={setInputValue}
-            enterToSend={enterToSend}
-            setEnterToSend={setEnterToSend}
+            enterToSend={activeSession.inputMode === 'terminal' ? enterToSendTerminal : enterToSendAI}
+            setEnterToSend={activeSession.inputMode === 'terminal' ? setEnterToSendTerminal : setEnterToSendAI}
             stagedImages={stagedImages}
             setStagedImages={setStagedImages}
             setLightboxImage={setLightboxImage}
