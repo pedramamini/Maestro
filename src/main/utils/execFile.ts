@@ -3,6 +3,9 @@ import { promisify } from 'util';
 
 const execFileAsync = promisify(execFile);
 
+// Maximum buffer size for command output (10MB)
+const EXEC_MAX_BUFFER = 10 * 1024 * 1024;
+
 export interface ExecResult {
   stdout: string;
   stderr: string;
@@ -22,7 +25,7 @@ export async function execFileNoThrow(
     const { stdout, stderr } = await execFileAsync(command, args, {
       cwd,
       encoding: 'utf8',
-      maxBuffer: 10 * 1024 * 1024, // 10MB buffer
+      maxBuffer: EXEC_MAX_BUFFER,
     });
 
     return {
