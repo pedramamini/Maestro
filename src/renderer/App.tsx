@@ -1045,18 +1045,6 @@ export default function MaestroConsole() {
     }
   }, [activeSessionId, activeSession?.fileExplorerScrollPos]);
 
-  // Handle Escape key for About modal
-  useEffect(() => {
-    const handleEscape = (e: KeyboardEvent) => {
-      if (e.key === 'Escape' && aboutModalOpen) {
-        setAboutModalOpen(false);
-      }
-    };
-
-    window.addEventListener('keydown', handleEscape);
-    return () => window.removeEventListener('keydown', handleEscape);
-  }, [aboutModalOpen]);
-
   // Reset shortcuts search when modal closes
   useEffect(() => {
     if (!shortcutsHelpOpen) {
