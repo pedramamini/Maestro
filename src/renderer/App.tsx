@@ -1,7 +1,4 @@
 import React, { useState, useEffect, useRef, useMemo } from 'react';
-import {
-  ChevronRight, ChevronDown, Folder
-} from 'lucide-react';
 import { NewInstanceModal } from './components/NewInstanceModal';
 import { SettingsModal } from './components/SettingsModal';
 import { SessionList } from './components/SessionList';
@@ -21,7 +18,7 @@ import { ProcessMonitor } from './components/ProcessMonitor';
 import { GitDiffViewer } from './components/GitDiffViewer';
 
 // Import custom hooks
-import { useSettings, useSessionManager, useFileExplorer } from './hooks';
+import { useSettings } from './hooks';
 
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
@@ -31,20 +28,43 @@ import { gitService } from './services/git';
 
 // Import types and constants
 import type {
-  ToolType, SessionState, FileChangeType, RightPanelTab, ScratchPadMode,
-  ThemeId, FocusArea, LLMProvider, Theme, Shortcut, FileArtifact,
-  LogEntry, WorkLogItem, Session, Group
+  ToolType, SessionState, RightPanelTab,
+  ThemeId, FocusArea, LogEntry, Session, Group
 } from './types';
 import { THEMES } from './constants/themes';
-import { DEFAULT_SHORTCUTS } from './constants/shortcuts';
 import { generateId } from './utils/ids';
-import { getContextColor, getFileIcon } from './utils/theme';
+import { getContextColor } from './utils/theme';
 import { fuzzyMatch } from './utils/search';
 import { shouldOpenExternally, loadFileTree, getAllFolderPaths, flattenTree } from './utils/fileExplorer';
 
 export default function MaestroConsole() {
   // --- LAYER STACK (for blocking shortcuts when modals are open) ---
   const { hasOpenLayers, hasOpenModal } = useLayerStack();
+
+  // --- SETTINGS (from useSettings hook) ---
+  const settings = useSettings();
+  const {
+    llmProvider, setLlmProvider,
+    modelSlug, setModelSlug,
+    apiKey, setApiKey,
+    tunnelProvider, setTunnelProvider,
+    tunnelApiKey, setTunnelApiKey,
+    defaultAgent, setDefaultAgent,
+    defaultShell, setDefaultShell,
+    fontFamily, setFontFamily,
+    fontSize, setFontSize,
+    activeThemeId, setActiveThemeId,
+    enterToSendAI, setEnterToSendAI,
+    enterToSendTerminal, setEnterToSendTerminal,
+    leftSidebarWidth, setLeftSidebarWidth,
+    rightPanelWidth, setRightPanelWidth,
+    markdownRawMode, setMarkdownRawMode,
+    terminalWidth, setTerminalWidth,
+    logLevel, setLogLevel,
+    maxLogBuffer, setMaxLogBuffer,
+    maxOutputLines, setMaxOutputLines,
+    shortcuts, setShortcuts,
+  } = settings;
 
   // --- STATE ---
   const [sessions, setSessions] = useState<Session[]>([]);
@@ -54,48 +74,17 @@ export default function MaestroConsole() {
   const initialLoadComplete = useRef(false);
 
   const [activeSessionId, setActiveSessionId] = useState<string>(sessions[0]?.id || 's1');
-  
+
   // Input State
   const [inputValue, setInputValue] = useState('');
-  const [enterToSendAI, setEnterToSendAIState] = useState(false); // AI mode defaults to Command+Enter
-  const [enterToSendTerminal, setEnterToSendTerminalState] = useState(true); // Terminal defaults to Enter
   const [slashCommandOpen, setSlashCommandOpen] = useState(false);
   const [selectedSlashCommandIndex, setSelectedSlashCommandIndex] = useState(0);
 
-  const setEnterToSendAI = (value: boolean) => {
-    setEnterToSendAIState(value);
-    window.maestro.settings.set('enterToSendAI', value);
-  };
-
-  const setEnterToSendTerminal = (value: boolean) => {
-    setEnterToSendTerminalState(value);
-    window.maestro.settings.set('enterToSendTerminal', value);
-  };
-  
   // UI State
   const [leftSidebarOpen, setLeftSidebarOpen] = useState(true);
   const [rightPanelOpen, setRightPanelOpen] = useState(true);
   const [activeRightTab, setActiveRightTab] = useState<RightPanelTab>('files');
   const [activeFocus, setActiveFocus] = useState<FocusArea>('main');
-  const [leftSidebarWidthState, setLeftSidebarWidthState] = useState(256); // 256px = w-64
-  const [rightPanelWidthState, setRightPanelWidthState] = useState(384); // 384px = w-96
-  const [markdownRawMode, setMarkdownRawModeState] = useState(false);
-
-  // Wrapper functions for persisting panel widths and markdown mode
-  const setLeftSidebarWidth = (width: number) => {
-    setLeftSidebarWidthState(width);
-    window.maestro.settings.set('leftSidebarWidth', width);
-  };
-
-  const setRightPanelWidth = (width: number) => {
-    setRightPanelWidthState(width);
-    window.maestro.settings.set('rightPanelWidth', width);
-  };
-
-  const setMarkdownRawMode = (value: boolean) => {
-    setMarkdownRawModeState(value);
-    window.maestro.settings.set('markdownRawMode', value);
-  };
 
   // File Explorer State
   const [previewFile, setPreviewFile] = useState<{name: string; content: string; path: string} | null>(null);
@@ -159,175 +148,6 @@ export default function MaestroConsole() {
 
   // Images Staging
   const [stagedImages, setStagedImages] = useState<string[]>([]);
-
-  // Configuration State (Simulating ~/.maestro/settings)
-  const [activeThemeId, setActiveThemeIdState] = useState<ThemeId>('dracula');
-  const [shortcuts, setShortcuts] = useState<Record<string, Shortcut>>(DEFAULT_SHORTCUTS);
-  
-  // LLM Config
-  const [llmProvider, setLlmProvider] = useState<LLMProvider>('openrouter');
-  const [modelSlug, setModelSlug] = useState('anthropic/claude-3.5-sonnet');
-  const [apiKey, setApiKey] = useState('');
-  
-  // Tunnel Config
-  const [tunnelProvider, setTunnelProvider] = useState('ngrok');
-  const [tunnelApiKey, setTunnelApiKey] = useState('');
-
-  // Agent Config
-  const [defaultAgent, setDefaultAgent] = useState('claude-code');
-  const [defaultShell, setDefaultShell] = useState('zsh');
-
-  // Font Config
-  const [fontFamily, setFontFamilyState] = useState('Roboto Mono, Menlo, "Courier New", monospace');
-  const [fontSize, setFontSizeState] = useState(14); // Base font size in px
-  const [customFonts, setCustomFonts] = useState<string[]>([]);
-
-  // Terminal Config
-  const [terminalWidth, setTerminalWidthState] = useState(100); // Terminal columns
-
-  // Logging Config
-  const [logLevel, setLogLevelState] = useState('info');
-  const [maxLogBuffer, setMaxLogBufferState] = useState(5000);
-
-  // Output Config
-  const [maxOutputLines, setMaxOutputLinesState] = useState(25);
-
-  // Wrapper functions that persist to electron-store
-  const setActiveThemeId = (value: ThemeId) => {
-    setActiveThemeIdState(value);
-    window.maestro.settings.set('activeThemeId', value);
-  };
-
-  const setLlmProviderPersist = (value: LLMProvider) => {
-    setLlmProvider(value);
-    window.maestro.settings.set('llmProvider', value);
-  };
-
-  const setModelSlugPersist = (value: string) => {
-    setModelSlug(value);
-    window.maestro.settings.set('modelSlug', value);
-  };
-
-  const setApiKeyPersist = (value: string) => {
-    setApiKey(value);
-    window.maestro.settings.set('apiKey', value);
-  };
-
-  const setTunnelProviderPersist = (value: string) => {
-    setTunnelProvider(value);
-    window.maestro.settings.set('tunnelProvider', value);
-  };
-
-  const setTunnelApiKeyPersist = (value: string) => {
-    setTunnelApiKey(value);
-    window.maestro.settings.set('tunnelApiKey', value);
-  };
-
-  const setDefaultAgentPersist = (value: string) => {
-    setDefaultAgent(value);
-    window.maestro.settings.set('defaultAgent', value);
-  };
-
-  const setDefaultShellPersist = (value: string) => {
-    setDefaultShell(value);
-    window.maestro.settings.set('defaultShell', value);
-  };
-
-  const setFontFamily = (value: string) => {
-    setFontFamilyState(value);
-    window.maestro.settings.set('fontFamily', value);
-  };
-
-  const setFontSize = (value: number) => {
-    setFontSizeState(value);
-    window.maestro.settings.set('fontSize', value);
-  };
-
-  const setTerminalWidth = (value: number) => {
-    setTerminalWidthState(value);
-    window.maestro.settings.set('terminalWidth', value);
-  };
-
-  const setLogLevel = async (value: string) => {
-    setLogLevelState(value);
-    await window.maestro.logger.setLogLevel(value);
-  };
-
-  const setMaxLogBuffer = async (value: number) => {
-    setMaxLogBufferState(value);
-    await window.maestro.logger.setMaxLogBuffer(value);
-  };
-
-  const setMaxOutputLines = (value: number) => {
-    setMaxOutputLinesState(value);
-    window.maestro.settings.set('maxOutputLines', value);
-  };
-
-  // Load settings from electron-store on mount
-  useEffect(() => {
-    const loadSettings = async () => {
-      // Migration: check for old enterToSend setting
-      const oldEnterToSend = await window.maestro.settings.get('enterToSend');
-      const savedEnterToSendAI = await window.maestro.settings.get('enterToSendAI');
-      const savedEnterToSendTerminal = await window.maestro.settings.get('enterToSendTerminal');
-
-      const savedActiveThemeId = await window.maestro.settings.get('activeThemeId');
-      const savedLlmProvider = await window.maestro.settings.get('llmProvider');
-      const savedModelSlug = await window.maestro.settings.get('modelSlug');
-      const savedApiKey = await window.maestro.settings.get('apiKey');
-      const savedTunnelProvider = await window.maestro.settings.get('tunnelProvider');
-      const savedTunnelApiKey = await window.maestro.settings.get('tunnelApiKey');
-      const savedDefaultAgent = await window.maestro.settings.get('defaultAgent');
-      const savedDefaultShell = await window.maestro.settings.get('defaultShell');
-      const savedFontSize = await window.maestro.settings.get('fontSize');
-      const savedFontFamily = await window.maestro.settings.get('fontFamily');
-      const savedCustomFonts = await window.maestro.settings.get('customFonts');
-      const savedTerminalWidth = await window.maestro.settings.get('terminalWidth');
-      const savedLeftSidebarWidth = await window.maestro.settings.get('leftSidebarWidth');
-      const savedRightPanelWidth = await window.maestro.settings.get('rightPanelWidth');
-      const savedMarkdownRawMode = await window.maestro.settings.get('markdownRawMode');
-      const savedShortcuts = await window.maestro.settings.get('shortcuts');
-      const savedLogLevel = await window.maestro.logger.getLogLevel();
-      const savedMaxLogBuffer = await window.maestro.logger.getMaxLogBuffer();
-      const savedMaxOutputLines = await window.maestro.settings.get('maxOutputLines');
-
-      // Migration: if old setting exists but new ones don't, migrate
-      if (oldEnterToSend !== undefined && savedEnterToSendAI === undefined && savedEnterToSendTerminal === undefined) {
-        setEnterToSendAIState(oldEnterToSend);
-        setEnterToSendTerminalState(oldEnterToSend);
-        window.maestro.settings.set('enterToSendAI', oldEnterToSend);
-        window.maestro.settings.set('enterToSendTerminal', oldEnterToSend);
-      } else {
-        if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI);
-        if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal);
-      }
-
-      if (savedActiveThemeId !== undefined) setActiveThemeIdState(savedActiveThemeId);
-      if (savedLlmProvider !== undefined) setLlmProvider(savedLlmProvider);
-      if (savedModelSlug !== undefined) setModelSlug(savedModelSlug);
-      if (savedApiKey !== undefined) setApiKey(savedApiKey);
-      if (savedTunnelProvider !== undefined) setTunnelProvider(savedTunnelProvider);
-      if (savedTunnelApiKey !== undefined) setTunnelApiKey(savedTunnelApiKey);
-      if (savedDefaultAgent !== undefined) setDefaultAgent(savedDefaultAgent);
-      if (savedDefaultShell !== undefined) setDefaultShell(savedDefaultShell);
-      if (savedFontSize !== undefined) setFontSizeState(savedFontSize);
-      if (savedFontFamily !== undefined) setFontFamilyState(savedFontFamily);
-      if (savedCustomFonts !== undefined) setCustomFonts(savedCustomFonts);
-      if (savedTerminalWidth !== undefined) setTerminalWidthState(savedTerminalWidth);
-      if (savedLeftSidebarWidth !== undefined) setLeftSidebarWidthState(savedLeftSidebarWidth);
-      if (savedRightPanelWidth !== undefined) setRightPanelWidthState(savedRightPanelWidth);
-      if (savedMarkdownRawMode !== undefined) setMarkdownRawModeState(savedMarkdownRawMode);
-      if (savedLogLevel !== undefined) setLogLevelState(savedLogLevel);
-      if (savedMaxLogBuffer !== undefined) setMaxLogBufferState(savedMaxLogBuffer);
-      if (savedMaxOutputLines !== undefined) setMaxOutputLinesState(savedMaxOutputLines);
-
-      // Merge saved shortcuts with defaults (in case new shortcuts were added)
-      if (savedShortcuts !== undefined) {
-        setShortcuts({ ...DEFAULT_SHORTCUTS, ...savedShortcuts });
-      }
-    };
-    loadSettings();
-  }, []);
 
   // Restore focus when LogViewer closes to ensure global hotkeys work
   useEffect(() => {
@@ -481,6 +301,10 @@ export default function MaestroConsole() {
             savedSessions.map(s => restoreSession(s))
           );
           setSessions(restoredSessions);
+          // Set active session to first session if current activeSessionId is invalid
+          if (restoredSessions.length > 0 && !restoredSessions.find(s => s.id === activeSessionId)) {
+            setActiveSessionId(restoredSessions[0].id);
+          }
         } else {
           // Try to migrate from localStorage
           try {
@@ -492,6 +316,10 @@ export default function MaestroConsole() {
                 parsed.map((s: Session) => restoreSession(s))
               );
               setSessions(restoredSessions);
+              // Set active session to first session if current activeSessionId is invalid
+              if (restoredSessions.length > 0 && !restoredSessions.find(s => s.id === activeSessionId)) {
+                setActiveSessionId(restoredSessions[0].id);
+              }
               // Save to electron-store for future
               await window.maestro.sessions.setAll(restoredSessions);
               // Clean up localStorage
@@ -541,16 +369,6 @@ export default function MaestroConsole() {
     };
     loadSessionsAndGroups();
   }, []);
-
-  // Apply font size to HTML root element so rem-based Tailwind classes scale
-  useEffect(() => {
-    document.documentElement.style.fontSize = `${fontSize}px`;
-  }, [fontSize]);
-
-  // Persist shortcuts when they change
-  useEffect(() => {
-    window.maestro.settings.set('shortcuts', shortcuts);
-  }, [shortcuts]);
 
   // Set up process event listeners for real-time output
   useEffect(() => {
@@ -684,11 +502,89 @@ export default function MaestroConsole() {
       }));
     });
 
+    // Handle stderr from runCommand (separate from stdout)
+    const unsubscribeStderr = window.maestro.process.onStderr((sessionId: string, data: string) => {
+      console.log('[onStderr] Received stderr for session:', sessionId, 'Data:', data);
+
+      // Parse sessionId (runCommand uses the format "{id}-terminal")
+      let actualSessionId: string;
+      if (sessionId.endsWith('-terminal')) {
+        actualSessionId = sessionId.slice(0, -9);
+      } else {
+        actualSessionId = sessionId;
+      }
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== actualSessionId) return s;
+
+        const existingLogs = s.shellLogs;
+        const lastLog = existingLogs[existingLogs.length - 1];
+        const now = Date.now();
+
+        // Group consecutive stderr outputs within 500ms into the same log entry
+        const shouldGroup = lastLog &&
+                           lastLog.source === 'stderr' &&
+                           (now - lastLog.timestamp) < 500;
+
+        if (shouldGroup) {
+          const updatedLogs = [...existingLogs];
+          updatedLogs[updatedLogs.length - 1] = {
+            ...lastLog,
+            text: lastLog.text + data
+          };
+          return { ...s, shellLogs: updatedLogs };
+        } else {
+          const newLog: LogEntry = {
+            id: generateId(),
+            timestamp: now,
+            source: 'stderr',
+            text: data
+          };
+          return { ...s, shellLogs: [...existingLogs, newLog] };
+        }
+      }));
+    });
+
+    // Handle command exit from runCommand (separate from PTY exit)
+    const unsubscribeCommandExit = window.maestro.process.onCommandExit((sessionId: string, code: number) => {
+      console.log('[onCommandExit] Command exited for session:', sessionId, 'Code:', code);
+
+      let actualSessionId: string;
+      if (sessionId.endsWith('-terminal')) {
+        actualSessionId = sessionId.slice(0, -9);
+      } else {
+        actualSessionId = sessionId;
+      }
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== actualSessionId) return s;
+
+        // Only show exit code if non-zero (error)
+        if (code !== 0) {
+          const exitLog: LogEntry = {
+            id: generateId(),
+            timestamp: Date.now(),
+            source: 'system',
+            text: `Command exited with code ${code}`
+          };
+          return {
+            ...s,
+            state: 'idle' as SessionState,
+            shellLogs: [...s.shellLogs, exitLog]
+          };
+        }
+
+        return { ...s, state: 'idle' as SessionState };
+      }));
+    });
+
     // Cleanup listeners on unmount
     return () => {
       unsubscribeData();
       unsubscribeExit();
       unsubscribeSessionId();
+      unsubscribeStderr();
+      unsubscribeCommandExit();
     };
   }, []);
 
@@ -697,6 +593,7 @@ export default function MaestroConsole() {
   const inputRef = useRef<HTMLTextAreaElement>(null);
   const terminalOutputRef = useRef<HTMLDivElement>(null);
   const fileTreeContainerRef = useRef<HTMLDivElement>(null);
+  const fileTreeFilterInputRef = useRef<HTMLInputElement>(null);
 
   // Keyboard navigation state
   const [selectedSidebarIndex, setSelectedSidebarIndex] = useState(0);
@@ -1615,10 +1512,31 @@ export default function MaestroConsole() {
           }));
         }
       })();
+    } else if (currentMode === 'terminal') {
+      // Terminal mode: Use runCommand for clean stdout/stderr capture (no PTY echoes/prompts)
+      window.maestro.process.runCommand({
+        sessionId: targetSessionId,
+        command: capturedInputValue,
+        cwd: activeSession.shellCwd || activeSession.cwd
+      }).catch(error => {
+        console.error('Failed to run command:', error);
+        setSessions(prev => prev.map(s => {
+          if (s.id !== activeSessionId) return s;
+          return {
+            ...s,
+            state: 'idle',
+            shellLogs: [...s.shellLogs, {
+              id: generateId(),
+              timestamp: Date.now(),
+              source: 'system',
+              text: `Error: Failed to run command - ${error.message}`
+            }]
+          };
+        }));
+      });
     } else if (targetPid > 0) {
-      // Interactive mode: Write to stdin
-      const dataToSend = currentMode === 'terminal' ? capturedInputValue + '\n' : capturedInputValue;
-      window.maestro.process.write(targetSessionId, dataToSend).catch(error => {
+      // AI mode: Write to stdin
+      window.maestro.process.write(targetSessionId, capturedInputValue).catch(error => {
         console.error('Failed to write to process:', error);
         setSessions(prev => prev.map(s => {
           if (s.id !== activeSessionId) return s;
@@ -2037,66 +1955,6 @@ export default function MaestroConsole() {
     return () => window.removeEventListener('keydown', handleFileExplorerKeys);
   }, [activeFocus, activeRightTab, flatFileList, selectedFileIndex, activeSession?.fileExplorerExpanded, activeSessionId, setSessions, toggleFolder, handleFileClick]);
 
-  const renderTree = (nodes: any[], currentPath = '', depth = 0, globalIndex = { value: 0 }) => {
-    const expandedSet = new Set(activeSession?.fileExplorerExpanded || []);
-    return nodes.map((node, idx) => {
-      const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
-      const change = activeSession?.changedFiles.find(f => f.path.includes(node.name));
-      const isFolder = node.type === 'folder';
-      const isExpanded = expandedSet.has(fullPath);
-      const isSelected = previewFile?.path === fullPath;
-      const currentIndex = globalIndex.value;
-      const isKeyboardSelected = activeFocus === 'right' && activeRightTab === 'files' && currentIndex === selectedFileIndex;
-      globalIndex.value++;
-
-      return (
-        <div key={idx} className={depth > 0 ? "ml-3 border-l pl-2" : ""} style={{ borderColor: theme.colors.border }}>
-          <div
-            data-file-index={currentIndex}
-            className={`flex items-center gap-2 py-1 text-xs cursor-pointer hover:bg-white/5 px-2 rounded transition-colors border-l-2 ${isSelected ? 'bg-white/10' : ''}`}
-            style={{
-              color: change ? theme.colors.textMain : theme.colors.textDim,
-              borderLeftColor: isKeyboardSelected ? theme.colors.accent : 'transparent',
-              backgroundColor: isKeyboardSelected ? theme.colors.bgActivity : (isSelected ? 'rgba(255,255,255,0.1)' : 'transparent')
-            }}
-            onClick={() => {
-              if (isFolder) {
-                toggleFolder(fullPath, activeSessionId, setSessions);
-              } else {
-                // Single click on file: just select it and focus the file tree
-                setSelectedFileIndex(currentIndex);
-                setActiveFocus('right');
-              }
-            }}
-            onDoubleClick={() => {
-              if (!isFolder) {
-                handleFileClick(node, fullPath);
-              }
-            }}
-          >
-            {isFolder && (
-              isExpanded ? <ChevronDown className="w-3 h-3" /> : <ChevronRight className="w-3 h-3" />
-            )}
-            {isFolder ? <Folder className="w-3.5 h-3.5" style={{ color: theme.colors.accentText }} /> : getFileIcon(change?.type, theme)}
-            <span className={change ? 'font-medium' : ''}>{node.name}</span>
-            {change && (
-              <span
-                className="ml-auto text-[9px] px-1 rounded uppercase"
-                style={{
-                  backgroundColor: change.type === 'added' ? theme.colors.success + '20' : change.type === 'deleted' ? theme.colors.error + '20' : theme.colors.warning + '20',
-                  color: change.type === 'added' ? theme.colors.success : change.type === 'deleted' ? theme.colors.error : theme.colors.warning
-                }}
-              >
-                {change.type}
-              </span>
-            )}
-          </div>
-          {isFolder && isExpanded && node.children && renderTree(node.children, fullPath, depth + 1, globalIndex)}
-        </div>
-      );
-    });
-  };
-
   return (
       <div className="flex h-screen w-full font-mono overflow-hidden transition-colors duration-300 pt-10"
            style={{
@@ -2261,7 +2119,7 @@ export default function MaestroConsole() {
           sortedSessions={sortedSessions}
           activeSessionId={activeSessionId}
           leftSidebarOpen={leftSidebarOpen}
-          leftSidebarWidthState={leftSidebarWidthState}
+          leftSidebarWidthState={leftSidebarWidth}
           activeFocus={activeFocus}
           selectedSidebarIndex={selectedSidebarIndex}
           editingGroupId={editingGroupId}
@@ -2272,7 +2130,7 @@ export default function MaestroConsole() {
           setActiveFocus={setActiveFocus}
           setActiveSessionId={setActiveSessionId}
           setLeftSidebarOpen={setLeftSidebarOpen}
-          setLeftSidebarWidthState={setLeftSidebarWidthState}
+          setLeftSidebarWidthState={setLeftSidebarWidth}
           setShortcutsHelpOpen={setShortcutsHelpOpen}
           setSettingsModalOpen={setSettingsModalOpen}
           setSettingsTab={setSettingsTab}
@@ -2318,6 +2176,7 @@ export default function MaestroConsole() {
         rightPanelOpen={rightPanelOpen}
         maxOutputLines={maxOutputLines}
         gitDiffPreview={gitDiffPreview}
+        fileTreeFilterOpen={fileTreeFilterOpen}
         setGitDiffPreview={setGitDiffPreview}
         setLogViewerOpen={setLogViewerOpen}
         setActiveFocus={setActiveFocus}
@@ -2341,6 +2200,7 @@ export default function MaestroConsole() {
         logsEndRef={logsEndRef}
         terminalOutputRef={terminalOutputRef}
         fileTreeContainerRef={fileTreeContainerRef}
+        fileTreeFilterInputRef={fileTreeFilterInputRef}
         toggleTunnel={toggleTunnel}
         toggleInputMode={toggleInputMode}
         processInput={processInput}
@@ -2360,8 +2220,8 @@ export default function MaestroConsole() {
           shortcuts={shortcuts}
           rightPanelOpen={rightPanelOpen}
           setRightPanelOpen={setRightPanelOpen}
-          rightPanelWidth={rightPanelWidthState}
-          setRightPanelWidthState={setRightPanelWidthState}
+          rightPanelWidth={rightPanelWidth}
+          setRightPanelWidthState={setRightPanelWidth}
           activeRightTab={activeRightTab}
           setActiveRightTab={setActiveRightTab}
           activeFocus={activeFocus}
@@ -2375,6 +2235,7 @@ export default function MaestroConsole() {
           setSelectedFileIndex={setSelectedFileIndex}
           previewFile={previewFile}
           fileTreeContainerRef={fileTreeContainerRef}
+          fileTreeFilterInputRef={fileTreeFilterInputRef}
           toggleFolder={toggleFolder}
           handleFileClick={handleFileClick}
           expandAllFolders={expandAllFolders}
@@ -2406,21 +2267,21 @@ export default function MaestroConsole() {
         activeThemeId={activeThemeId}
         setActiveThemeId={setActiveThemeId}
         llmProvider={llmProvider}
-        setLlmProvider={setLlmProviderPersist}
+        setLlmProvider={setLlmProvider}
         modelSlug={modelSlug}
-        setModelSlug={setModelSlugPersist}
+        setModelSlug={setModelSlug}
         apiKey={apiKey}
-        setApiKey={setApiKeyPersist}
+        setApiKey={setApiKey}
         tunnelProvider={tunnelProvider}
-        setTunnelProvider={setTunnelProviderPersist}
+        setTunnelProvider={setTunnelProvider}
         tunnelApiKey={tunnelApiKey}
-        setTunnelApiKey={setTunnelApiKeyPersist}
+        setTunnelApiKey={setTunnelApiKey}
         shortcuts={shortcuts}
         setShortcuts={setShortcuts}
         defaultAgent={defaultAgent}
-        setDefaultAgent={setDefaultAgentPersist}
+        setDefaultAgent={setDefaultAgent}
         defaultShell={defaultShell}
-        setDefaultShell={setDefaultShellPersist}
+        setDefaultShell={setDefaultShell}
         enterToSendAI={enterToSendAI}
         setEnterToSendAI={setEnterToSendAI}
         enterToSendTerminal={enterToSendTerminal}

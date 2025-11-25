@@ -35,6 +35,7 @@ interface RightPanelProps {
   setSelectedFileIndex: (index: number) => void;
   previewFile: {name: string; content: string; path: string} | null;
   fileTreeContainerRef: React.RefObject<HTMLDivElement>;
+  fileTreeFilterInputRef: React.RefObject<HTMLInputElement>;
 
   // File explorer handlers
   toggleFolder: (path: string, activeSessionId: string, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => void;
@@ -60,7 +61,7 @@ export function RightPanel(props: RightPanelProps) {
     setRightPanelWidthState, activeRightTab, setActiveRightTab, activeFocus, setActiveFocus,
     fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, previewFile, fileTreeContainerRef,
-    toggleFolder, handleFileClick, expandAllFolders, collapseAllFolders,
+    fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders, collapseAllFolders,
     updateSessionWorkingDirectory, setSessions, updateScratchPad, updateScratchPadState
   } = props;
 
@@ -171,6 +172,7 @@ export function RightPanel(props: RightPanelProps) {
             previewFile={previewFile}
             setActiveFocus={setActiveFocus}
             fileTreeContainerRef={fileTreeContainerRef}
+            fileTreeFilterInputRef={fileTreeFilterInputRef}
             toggleFolder={toggleFolder}
             handleFileClick={handleFileClick}
             expandAllFolders={expandAllFolders}

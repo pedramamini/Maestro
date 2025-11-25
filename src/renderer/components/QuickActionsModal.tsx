@@ -197,7 +197,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     { id: 'toggleRight', label: 'Toggle Right Panel', shortcut: shortcuts.toggleRightPanel, action: () => setRightPanelOpen(p => !p) },
     ...(activeSession ? [{ id: 'switchMode', label: 'Switch AI/Shell Mode', shortcut: shortcuts.toggleMode, action: toggleInputMode }] : []),
     ...(activeSession ? [{ id: 'kill', label: 'Kill Current Agent', shortcut: shortcuts.killInstance, action: () => deleteSession(activeSessionId) }] : []),
-    { id: 'settings', label: 'Settings', action: () => { setSettingsModalOpen(true); setQuickActionOpen(false); } },
+    { id: 'settings', label: 'Settings', shortcut: shortcuts.settings, action: () => { setSettingsModalOpen(true); setQuickActionOpen(false); } },
     { id: 'theme', label: 'Change Theme', action: () => { setSettingsModalOpen(true); setSettingsTab('theme'); setQuickActionOpen(false); } },
     { id: 'shortcuts', label: 'View Shortcuts', shortcut: shortcuts.help, action: () => { setShortcutsHelpOpen(true); setQuickActionOpen(false); } },
     { id: 'logs', label: 'View System Logs', action: () => { setLogViewerOpen(true); setQuickActionOpen(false); } },

@@ -62,6 +62,10 @@ contextBridge.exposeInMainWorld('maestro', {
     resize: (sessionId: string, cols: number, rows: number) =>
       ipcRenderer.invoke('process:resize', sessionId, cols, rows),
 
+    // Run a single command and capture only stdout/stderr (no PTY echo/prompts)
+    runCommand: (config: { sessionId: string; command: string; cwd: string; shell?: string }) =>
+      ipcRenderer.invoke('process:runCommand', config),
+
     // Event listeners
     onData: (callback: (sessionId: string, data: string) => void) => {
       const handler = (_: any, sessionId: string, data: string) => callback(sessionId, data);
@@ -77,6 +81,18 @@ contextBridge.exposeInMainWorld('maestro', {
       const handler = (_: any, sessionId: string, claudeSessionId: string) => callback(sessionId, claudeSessionId);
       ipcRenderer.on('process:session-id', handler);
       return () => ipcRenderer.removeListener('process:session-id', handler);
+    },
+    // Stderr listener for runCommand (separate stream)
+    onStderr: (callback: (sessionId: string, data: string) => void) => {
+      const handler = (_: any, sessionId: string, data: string) => callback(sessionId, data);
+      ipcRenderer.on('process:stderr', handler);
+      return () => ipcRenderer.removeListener('process:stderr', handler);
+    },
+    // Command exit listener for runCommand (separate from PTY exit)
+    onCommandExit: (callback: (sessionId: string, code: number) => void) => {
+      const handler = (_: any, sessionId: string, code: number) => callback(sessionId, code);
+      ipcRenderer.on('process:command-exit', handler);
+      return () => ipcRenderer.removeListener('process:command-exit', handler);
     },
   },
 
@@ -174,9 +190,12 @@ export interface MaestroAPI {
     interrupt: (sessionId: string) => Promise<boolean>;
     kill: (sessionId: string) => Promise<boolean>;
     resize: (sessionId: string, cols: number, rows: number) => Promise<boolean>;
+    runCommand: (config: { sessionId: string; command: string; cwd: string; shell?: string }) => Promise<{ exitCode: number }>;
     onData: (callback: (sessionId: string, data: string) => void) => () => void;
     onExit: (callback: (sessionId: string, code: number) => void) => () => void;
     onSessionId: (callback: (sessionId: string, claudeSessionId: string) => void) => () => void;
+    onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
+    onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
   };
   git: {
     status: (cwd: string) => Promise<string>;

@@ -39,13 +39,12 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
   const {
     session, theme, fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, activeFocus, activeRightTab,
-    previewFile, setActiveFocus, fileTreeContainerRef, toggleFolder, handleFileClick, expandAllFolders,
+    previewFile, setActiveFocus, fileTreeContainerRef, fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders,
     collapseAllFolders, updateSessionWorkingDirectory, setSessions
   } = props;
 
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
-  const filterInputRef = useRef<HTMLInputElement>(null);
 
   // Register layer when filter is open
   useEffect(() => {
@@ -95,7 +94,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
         <div key={idx} className={depth > 0 ? "ml-3 border-l pl-2" : ""} style={{ borderColor: theme.colors.border }}>
           <div
             data-file-index={currentIndex}
-            className={`flex items-center gap-2 py-1 text-xs cursor-pointer hover:bg-white/5 px-2 rounded transition-colors border-l-2 ${isSelected ? 'bg-white/10' : ''}`}
+            className={`flex items-center gap-2 py-1 text-xs cursor-pointer hover:bg-white/5 px-2 rounded transition-colors border-l-2 select-none ${isSelected ? 'bg-white/10' : ''}`}
             style={{
               color: change ? theme.colors.textMain : theme.colors.textDim,
               borderLeftColor: isKeyboardSelected ? theme.colors.accent : 'transparent',
@@ -144,7 +143,7 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
       {fileTreeFilterOpen && (
         <div className="mb-3 pt-4">
           <input
-            ref={filterInputRef}
+            ref={fileTreeFilterInputRef}
             autoFocus
             type="text"
             placeholder="Filter files..."

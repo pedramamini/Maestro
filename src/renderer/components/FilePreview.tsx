@@ -409,6 +409,8 @@ export function FilePreview({ file, onClose, theme, markdownRawMode, setMarkdown
                   e.stopPropagation();
                   setSearchOpen(false);
                   setSearchQuery('');
+                  // Refocus container so keyboard navigation still works
+                  containerRef.current?.focus();
                 }
               }}
               placeholder="Search in file... (Esc to close)"

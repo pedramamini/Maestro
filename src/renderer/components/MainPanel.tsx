@@ -38,6 +38,7 @@ interface MainPanelProps {
   rightPanelOpen: boolean;
   maxOutputLines: number;
   gitDiffPreview: string | null;
+  fileTreeFilterOpen: boolean;
 
   // Setters
   setGitDiffPreview: (preview: string | null) => void;
@@ -65,6 +66,7 @@ interface MainPanelProps {
   logsEndRef: React.RefObject<HTMLDivElement>;
   terminalOutputRef: React.RefObject<HTMLDivElement>;
   fileTreeContainerRef: React.RefObject<HTMLDivElement>;
+  fileTreeFilterInputRef: React.RefObject<HTMLInputElement>;
 
   // Functions
   toggleTunnel: (sessionId: string) => void;
@@ -84,12 +86,12 @@ export function MainPanel(props: MainPanelProps) {
     inputValue, enterToSendAI, enterToSendTerminal, stagedImages, commandHistoryOpen, commandHistoryFilter,
     commandHistorySelectedIndex, slashCommandOpen, slashCommands, selectedSlashCommandIndex,
     previewFile, markdownRawMode, shortcuts, rightPanelOpen, maxOutputLines, gitDiffPreview,
-    setGitDiffPreview, setLogViewerOpen, setActiveFocus, setOutputSearchOpen, setOutputSearchQuery,
+    fileTreeFilterOpen, setGitDiffPreview, setLogViewerOpen, setActiveFocus, setOutputSearchOpen, setOutputSearchQuery,
     setInputValue, setEnterToSendAI, setEnterToSendTerminal, setStagedImages, setLightboxImage, setCommandHistoryOpen,
     setCommandHistoryFilter, setCommandHistorySelectedIndex, setSlashCommandOpen,
     setSelectedSlashCommandIndex, setPreviewFile, setMarkdownRawMode,
     setAboutModalOpen, setRightPanelOpen, inputRef, logsEndRef, terminalOutputRef,
-    fileTreeContainerRef, toggleTunnel, toggleInputMode, processInput, handleInterrupt,
+    fileTreeContainerRef, fileTreeFilterInputRef, toggleTunnel, toggleInputMode, processInput, handleInterrupt,
     handleInputKeyDown, handlePaste, handleDrop, getContextColor, setActiveSessionId
   } = props;
 
@@ -271,7 +273,10 @@ export function MainPanel(props: MainPanelProps) {
                   setPreviewFile(null);
                   setActiveFocus('right');
                   setTimeout(() => {
-                    if (fileTreeContainerRef.current) {
+                    // If file tree filter is open, focus it; otherwise focus the file tree container
+                    if (fileTreeFilterOpen && fileTreeFilterInputRef.current) {
+                      fileTreeFilterInputRef.current.focus();
+                    } else if (fileTreeContainerRef.current) {
                       fileTreeContainerRef.current.focus();
                     }
                   }, 0);

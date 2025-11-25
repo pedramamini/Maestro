@@ -69,6 +69,7 @@ export function SettingsModal(props: SettingsModalProps) {
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
   const shortcutsFilterRef = useRef<HTMLInputElement>(null);
+  const themePickerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     if (isOpen) {
@@ -144,6 +145,14 @@ export function SettingsModal(props: SettingsModalProps) {
 
     window.addEventListener('keydown', handleTabNavigation);
     return () => window.removeEventListener('keydown', handleTabNavigation);
+  }, [isOpen, activeTab]);
+
+  // Focus theme picker when theme tab becomes active
+  useEffect(() => {
+    if (isOpen && activeTab === 'theme') {
+      const timer = setTimeout(() => themePickerRef.current?.focus(), 50);
+      return () => clearTimeout(timer);
+    }
   }, [isOpen, activeTab]);
 
   // Auto-focus shortcuts filter when switching to shortcuts tab
@@ -403,91 +412,76 @@ export function SettingsModal(props: SettingsModalProps) {
 
   if (!isOpen) return null;
 
-  const ThemePicker = () => {
-    const themePickerRef = React.useRef<HTMLDivElement>(null);
+  // Group themes by mode for the ThemePicker
+  const groupedThemes = Object.values(themes).reduce((acc: Record<string, Theme[]>, t: Theme) => {
+    if (!acc[t.mode]) acc[t.mode] = [];
+    acc[t.mode].push(t);
+    return acc;
+  }, {} as Record<string, Theme[]>);
 
-    const grouped = Object.values(themes).reduce((acc: Record<string, Theme[]>, t: Theme) => {
-      if (!acc[t.mode]) acc[t.mode] = [];
-      acc[t.mode].push(t);
-      return acc;
-    }, {} as Record<string, Theme[]>);
+  const handleThemePickerKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Tab') {
+      e.preventDefault();
+      e.stopPropagation();
+      // Create ordered array: dark themes first (left-to-right, top-to-bottom), then light themes
+      const allThemes = [...(groupedThemes['dark'] || []), ...(groupedThemes['light'] || [])];
+      const currentIndex = allThemes.findIndex((t: Theme) => t.id === props.activeThemeId);
 
-    // Ensure focus when theme tab becomes active
-    React.useEffect(() => {
-      if (activeTab === 'theme') {
-        const timer = setTimeout(() => themePickerRef.current?.focus(), 50);
-        return () => clearTimeout(timer);
+      if (e.shiftKey) {
+        // Shift+Tab: go backwards
+        const prevIndex = currentIndex === 0 ? allThemes.length - 1 : currentIndex - 1;
+        props.setActiveThemeId(allThemes[prevIndex].id);
+      } else {
+        // Tab: go forward
+        const nextIndex = (currentIndex + 1) % allThemes.length;
+        props.setActiveThemeId(allThemes[nextIndex].id);
       }
-    }, [activeTab]);
-
-    const handleThemePickerKeyDown = (e: React.KeyboardEvent) => {
-      if (e.key === 'Tab') {
-        e.preventDefault();
-        e.stopPropagation();
-        // Create ordered array: dark themes first (left-to-right, top-to-bottom), then light themes
-        const allThemes = [...(grouped['dark'] || []), ...(grouped['light'] || [])];
-        const currentIndex = allThemes.findIndex((t: Theme) => t.id === props.activeThemeId);
-
-        if (e.shiftKey) {
-          // Shift+Tab: go backwards
-          const prevIndex = currentIndex === 0 ? allThemes.length - 1 : currentIndex - 1;
-          props.setActiveThemeId(allThemes[prevIndex].id);
-        } else {
-          // Tab: go forward
-          const nextIndex = (currentIndex + 1) % allThemes.length;
-          props.setActiveThemeId(allThemes[nextIndex].id);
-        }
-      }
-    };
-
-    return (
-      <div
-        ref={(el) => {
-          themePickerRef.current = el;
-          if (el && activeTab === 'theme') {
-            setTimeout(() => el.focus(), 100);
-          }
-        }}
-        className="space-y-6 outline-none"
-        tabIndex={0}
-        onKeyDown={handleThemePickerKeyDown}
-      >
-        {['dark', 'light'].map(mode => (
-          <div key={mode}>
-            <div className="text-xs font-bold uppercase mb-3 flex items-center gap-2" style={{ color: theme.colors.textDim }}>
-              {mode === 'dark' ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
-              {mode} Mode
-            </div>
-            <div className="grid grid-cols-2 gap-3">
-              {grouped[mode]?.map((t: Theme) => (
-                <button
-                  key={t.id}
-                  onClick={() => props.setActiveThemeId(t.id)}
-                  className={`p-3 rounded-lg border text-left transition-all ${props.activeThemeId === t.id ? 'ring-2' : ''}`}
-                  style={{
-                    borderColor: theme.colors.border,
-                    backgroundColor: t.colors.bgSidebar,
-                    ringColor: theme.colors.accent
-                  }}
-                  tabIndex={-1}
-                >
-                  <div className="flex justify-between items-center mb-2">
-                    <span className="text-sm font-bold" style={{ color: t.colors.textMain }}>{t.name}</span>
-                    {props.activeThemeId === t.id && <Check className="w-4 h-4" style={{ color: theme.colors.accent }} />}
-                  </div>
-                  <div className="flex h-3 rounded overflow-hidden">
-                    <div className="flex-1" style={{ backgroundColor: t.colors.bgMain }} />
-                    <div className="flex-1" style={{ backgroundColor: t.colors.bgActivity }} />
-                    <div className="flex-1" style={{ backgroundColor: t.colors.accent }} />
-                  </div>
-                </button>
-              ))}
-            </div>
-          </div>
-        ))}
-      </div>
-    );
+    }
   };
+
+  // Theme picker JSX (not a separate component to avoid remount issues)
+  const themePickerContent = (
+    <div
+      ref={themePickerRef}
+      className="space-y-6 outline-none"
+      tabIndex={0}
+      onKeyDown={handleThemePickerKeyDown}
+    >
+      {['dark', 'light'].map(mode => (
+        <div key={mode}>
+          <div className="text-xs font-bold uppercase mb-3 flex items-center gap-2" style={{ color: theme.colors.textDim }}>
+            {mode === 'dark' ? <Moon className="w-3 h-3" /> : <Sun className="w-3 h-3" />}
+            {mode} Mode
+          </div>
+          <div className="grid grid-cols-2 gap-3">
+            {groupedThemes[mode]?.map((t: Theme) => (
+              <button
+                key={t.id}
+                onClick={() => props.setActiveThemeId(t.id)}
+                className={`p-3 rounded-lg border text-left transition-all ${props.activeThemeId === t.id ? 'ring-2' : ''}`}
+                style={{
+                  borderColor: theme.colors.border,
+                  backgroundColor: t.colors.bgSidebar,
+                  ringColor: theme.colors.accent
+                }}
+                tabIndex={-1}
+              >
+                <div className="flex justify-between items-center mb-2">
+                  <span className="text-sm font-bold" style={{ color: t.colors.textMain }}>{t.name}</span>
+                  {props.activeThemeId === t.id && <Check className="w-4 h-4" style={{ color: theme.colors.accent }} />}
+                </div>
+                <div className="flex h-3 rounded overflow-hidden">
+                  <div className="flex-1" style={{ backgroundColor: t.colors.bgMain }} />
+                  <div className="flex-1" style={{ backgroundColor: t.colors.bgActivity }} />
+                  <div className="flex-1" style={{ backgroundColor: t.colors.accent }} />
+                </div>
+              </button>
+            ))}
+          </div>
+        </div>
+      ))}
+    </div>
+  );
 
   return (
     <div
@@ -1312,7 +1306,7 @@ export function SettingsModal(props: SettingsModalProps) {
             );
           })()}
 
-          {activeTab === 'theme' && <ThemePicker />}
+          {activeTab === 'theme' && themePickerContent}
         </div>
       </div>
     </div>

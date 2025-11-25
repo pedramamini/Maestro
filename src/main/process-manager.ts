@@ -358,4 +358,82 @@ export class ProcessManager extends EventEmitter {
   get(sessionId: string): ManagedProcess | undefined {
     return this.processes.get(sessionId);
   }
+
+  /**
+   * Run a single command and capture stdout/stderr cleanly
+   * This does NOT use PTY - it spawns the command directly via shell -c
+   * and captures only the command output without prompts or echoes.
+   *
+   * @param sessionId - Session ID for event emission
+   * @param command - The shell command to execute
+   * @param cwd - Working directory
+   * @param shell - Shell to use (default: bash)
+   * @returns Promise that resolves when command completes
+   */
+  runCommand(
+    sessionId: string,
+    command: string,
+    cwd: string,
+    shell: string = 'bash'
+  ): Promise<{ exitCode: number }> {
+    return new Promise((resolve) => {
+      console.log('[ProcessManager] runCommand():', { sessionId, command, cwd, shell });
+
+      // Build shell-specific args to ensure user's config files are sourced
+      // This ensures PATH, aliases, and functions are available
+      let shellArgs: string[];
+      const shellName = shell.split('/').pop() || shell; // Get shell name from path
+
+      if (shellName === 'fish') {
+        // Fish uses different syntax - it auto-sources config.fish
+        // Use -c for command execution (fish doesn't use -i -l the same way)
+        shellArgs = ['-c', command];
+      } else {
+        // POSIX-compatible shells (bash, zsh, sh, tcsh, etc.)
+        // -i: interactive mode (sources .bashrc/.zshrc)
+        // -l: login mode (sources .bash_profile/.zprofile)
+        // -c: execute the command string
+        shellArgs = ['-i', '-l', '-c', command];
+      }
+
+      const childProcess = spawn(shell, shellArgs, {
+        cwd,
+        env: process.env,
+        shell: false, // Don't wrap in another shell layer
+      });
+
+      let stdoutBuffer = '';
+      let stderrBuffer = '';
+
+      // Handle stdout - emit data events for real-time streaming
+      childProcess.stdout?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        stdoutBuffer += output;
+        // Emit immediately for real-time display
+        this.emit('data', sessionId, output);
+      });
+
+      // Handle stderr - emit with [stderr] prefix for differentiation
+      childProcess.stderr?.on('data', (data: Buffer) => {
+        const output = data.toString();
+        stderrBuffer += output;
+        // Emit stderr with prefix so renderer can style it differently
+        this.emit('stderr', sessionId, output);
+      });
+
+      // Handle process exit
+      childProcess.on('exit', (code) => {
+        console.log('[ProcessManager] runCommand exit:', { sessionId, exitCode: code });
+        this.emit('command-exit', sessionId, code || 0);
+        resolve({ exitCode: code || 0 });
+      });
+
+      // Handle errors
+      childProcess.on('error', (error) => {
+        console.error('[ProcessManager] runCommand error:', error);
+        this.emit('stderr', sessionId, `Error: ${error.message}`);
+        resolve({ exitCode: 1 });
+      });
+    });
+  }
 }

@@ -47,9 +47,15 @@ export interface UseSettingsReturn {
   setRightPanelWidth: (value: number) => void;
   setMarkdownRawMode: (value: boolean) => void;
 
+  // Terminal settings
+  terminalWidth: number;
+  setTerminalWidth: (value: number) => void;
+
   // Logging settings
   logLevel: string;
   setLogLevel: (value: string) => void;
+  maxLogBuffer: number;
+  setMaxLogBuffer: (value: number) => void;
 
   // Output settings
   maxOutputLines: number;
@@ -89,8 +95,12 @@ export function useSettings(): UseSettingsReturn {
   const [rightPanelWidth, setRightPanelWidthState] = useState(384);
   const [markdownRawMode, setMarkdownRawModeState] = useState(false);
 
+  // Terminal Config
+  const [terminalWidth, setTerminalWidthState] = useState(100);
+
   // Logging Config
   const [logLevel, setLogLevelState] = useState('info');
+  const [maxLogBuffer, setMaxLogBufferState] = useState(5000);
 
   // Output Config
   const [maxOutputLines, setMaxOutputLinesState] = useState(25);
@@ -184,9 +194,19 @@ export function useSettings(): UseSettingsReturn {
     window.maestro.settings.set('shortcuts', value);
   };
 
+  const setTerminalWidth = (value: number) => {
+    setTerminalWidthState(value);
+    window.maestro.settings.set('terminalWidth', value);
+  };
+
   const setLogLevel = async (value: string) => {
     setLogLevelState(value);
     await window.maestro.logger.setLogLevel(value);
+  };
+
+  const setMaxLogBuffer = async (value: number) => {
+    setMaxLogBufferState(value);
+    await window.maestro.logger.setMaxLogBuffer(value);
   };
 
   const setMaxOutputLines = (value: number) => {
@@ -217,7 +237,9 @@ export function useSettings(): UseSettingsReturn {
       const savedMarkdownRawMode = await window.maestro.settings.get('markdownRawMode');
       const savedShortcuts = await window.maestro.settings.get('shortcuts');
       const savedActiveThemeId = await window.maestro.settings.get('activeThemeId');
+      const savedTerminalWidth = await window.maestro.settings.get('terminalWidth');
       const savedLogLevel = await window.maestro.logger.getLogLevel();
+      const savedMaxLogBuffer = await window.maestro.logger.getMaxLogBuffer();
       const savedMaxOutputLines = await window.maestro.settings.get('maxOutputLines');
 
       // Migration: if old setting exists but new ones don't, migrate
@@ -245,7 +267,9 @@ export function useSettings(): UseSettingsReturn {
       if (savedRightPanelWidth !== undefined) setRightPanelWidthState(savedRightPanelWidth);
       if (savedMarkdownRawMode !== undefined) setMarkdownRawModeState(savedMarkdownRawMode);
       if (savedActiveThemeId !== undefined) setActiveThemeIdState(savedActiveThemeId);
+      if (savedTerminalWidth !== undefined) setTerminalWidthState(savedTerminalWidth);
       if (savedLogLevel !== undefined) setLogLevelState(savedLogLevel);
+      if (savedMaxLogBuffer !== undefined) setMaxLogBufferState(savedMaxLogBuffer);
       if (savedMaxOutputLines !== undefined) setMaxOutputLinesState(savedMaxOutputLines);
 
       // Merge saved shortcuts with defaults (in case new shortcuts were added)
@@ -294,8 +318,12 @@ export function useSettings(): UseSettingsReturn {
     setLeftSidebarWidth,
     setRightPanelWidth,
     setMarkdownRawMode,
+    terminalWidth,
+    setTerminalWidth,
     logLevel,
     setLogLevel,
+    maxLogBuffer,
+    setMaxLogBuffer,
     maxOutputLines,
     setMaxOutputLines,
     shortcuts,

@@ -406,9 +406,13 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
         const processedText = processLogText(textToProcess, isTerminal && log.source !== 'user');
 
         // Separate stdout and stderr for terminal output
-        const separated = isTerminal && log.source !== 'user'
-          ? separateStdoutStderr(processedText)
-          : { stdout: processedText, stderr: '' };
+        // If log.source is 'stderr', treat entire text as stderr
+        // If log.source is 'stdout', use heuristic separation for legacy compatibility
+        const separated = log.source === 'stderr'
+          ? { stdout: '', stderr: processedText }
+          : (isTerminal && log.source !== 'user')
+            ? separateStdoutStderr(processedText)
+            : { stdout: processedText, stderr: '' };
 
         // Apply local filter if active for this log entry
         const localFilterQuery = localFilters.get(log.id) || '';
@@ -471,8 +475,10 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
                  style={{
                    backgroundColor: log.source === 'user'
                      ? `color-mix(in srgb, ${theme.colors.accent} 15%, ${theme.colors.bgActivity})`
-                     : 'transparent',
-                   borderColor: theme.colors.border
+                     : log.source === 'stderr'
+                       ? `color-mix(in srgb, ${theme.colors.error} 8%, ${theme.colors.bgActivity})`
+                       : 'transparent',
+                   borderColor: log.source === 'stderr' ? theme.colors.error : theme.colors.border
                  }}>
               {/* Local filter icon for system output only */}
               {log.source !== 'user' && isTerminal && (

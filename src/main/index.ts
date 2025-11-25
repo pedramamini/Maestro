@@ -335,6 +335,32 @@ function setupIpcHandlers() {
     return processManager.resize(sessionId, cols, rows);
   });
 
+  // Run a single command and capture only stdout/stderr (no PTY echo/prompts)
+  ipcMain.handle('process:runCommand', async (_, config: {
+    sessionId: string;
+    command: string;
+    cwd: string;
+    shell?: string;
+  }) => {
+    if (!processManager) throw new Error('Process manager not initialized');
+
+    // Get the shell from settings if not provided
+    const shell = config.shell || store.get('defaultShell', 'bash');
+
+    logger.debug(`Running command: ${config.command}`, 'ProcessManager', {
+      sessionId: config.sessionId,
+      cwd: config.cwd,
+      shell
+    });
+
+    return processManager.runCommand(
+      config.sessionId,
+      config.command,
+      config.cwd,
+      shell
+    );
+  });
+
   // Git operations
   ipcMain.handle('git:status', async (_, cwd: string) => {
     const result = await execFileNoThrow('git', ['status', '--porcelain'], cwd);
@@ -630,6 +656,16 @@ function setupProcessListeners() {
 
     processManager.on('session-id', (sessionId: string, claudeSessionId: string) => {
       mainWindow?.webContents.send('process:session-id', sessionId, claudeSessionId);
+    });
+
+    // Handle stderr separately from runCommand (for clean command execution)
+    processManager.on('stderr', (sessionId: string, data: string) => {
+      mainWindow?.webContents.send('process:stderr', sessionId, data);
+    });
+
+    // Handle command exit (from runCommand - separate from PTY exit)
+    processManager.on('command-exit', (sessionId: string, code: number) => {
+      mainWindow?.webContents.send('process:command-exit', sessionId, code);
     });
   }
 }
