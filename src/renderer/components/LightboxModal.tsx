@@ -1,4 +1,5 @@
-import React, { useEffect, useRef } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
+import { Copy, Check } from 'lucide-react';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 
@@ -15,6 +16,27 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate }: Ligh
   const canNavigate = stagedImages.length > 1;
   const layerIdRef = useRef<string>();
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
+  const [copied, setCopied] = useState(false);
+
+  const copyImageToClipboard = async () => {
+    try {
+      // Convert data URL to blob
+      const response = await fetch(image);
+      const blob = await response.blob();
+
+      // Write to clipboard
+      await navigator.clipboard.write([
+        new ClipboardItem({
+          [blob.type]: blob
+        })
+      ]);
+
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy image to clipboard:', err);
+    }
+  };
 
   // Register layer on mount
   useEffect(() => {
@@ -85,6 +107,15 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate }: Ligh
         </button>
       )}
       <img src={image} className="max-w-[90%] max-h-[90%] rounded shadow-2xl" onClick={(e) => e.stopPropagation()} />
+      {/* Copy to clipboard button */}
+      <button
+        onClick={(e) => { e.stopPropagation(); copyImageToClipboard(); }}
+        className="absolute top-4 right-4 bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors flex items-center gap-2"
+        title="Copy image to clipboard"
+      >
+        {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
+        {copied && <span className="text-sm">Copied!</span>}
+      </button>
       {canNavigate && currentIndex < stagedImages.length - 1 && (
         <button
           onClick={(e) => { e.stopPropagation(); goToNext(); }}
