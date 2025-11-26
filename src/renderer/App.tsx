@@ -924,9 +924,10 @@ export default function MaestroConsole() {
     }
   }, [groups]);
 
-  // Set CSS variable for accent color (for scrollbar styling)
+  // Set CSS variables for theme colors (for scrollbar styling)
   useEffect(() => {
     document.documentElement.style.setProperty('--accent-color', theme.colors.accent);
+    document.documentElement.style.setProperty('--highlight-color', theme.colors.accent);
   }, [theme.colors.accent]);
 
   // Add scroll listeners to highlight scrollbars during active scrolling
