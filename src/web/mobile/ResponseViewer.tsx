@@ -6,6 +6,7 @@
  * - Full-screen overlay for immersive reading
  * - Displays the complete response text with proper formatting
  * - Syntax highlighting for code blocks (task 1.33)
+ * - Copy button for each code block with visual feedback (task 1.34)
  * - Monospace font for code readability
  * - Swipe down to dismiss (task 1.35)
  * - Share/copy functionality (task 1.31)
@@ -210,6 +211,24 @@ export function ResponseViewer({
   const [touchStart, setTouchStart] = useState<number | null>(null);
   const [touchDelta, setTouchDelta] = useState(0);
   const [isDragging, setIsDragging] = useState(false);
+  // Track which code block was recently copied (by index) for visual feedback
+  const [copiedIndex, setCopiedIndex] = useState<number | null>(null);
+
+  // Copy code block content to clipboard
+  const copyCodeBlock = useCallback(async (content: string, index: number) => {
+    try {
+      await navigator.clipboard.writeText(content);
+      setCopiedIndex(index);
+      triggerHaptic(HAPTIC_PATTERNS.success);
+      // Reset the copied state after 2 seconds
+      setTimeout(() => {
+        setCopiedIndex((current) => (current === index ? null : current));
+      }, 2000);
+    } catch (err) {
+      console.error('Failed to copy code:', err);
+      triggerHaptic(HAPTIC_PATTERNS.error);
+    }
+  }, []);
 
   // Select syntax highlighting style based on theme mode
   const syntaxStyle = isDark ? vscDarkPlus : vs;
@@ -447,6 +466,7 @@ export function ResponseViewer({
             <div style={{ display: 'flex', flexDirection: 'column', gap: '12px' }}>
               {parsedSegments.map((segment, index) => {
                 if (segment.type === 'code') {
+                  const isCopied = copiedIndex === index;
                   return (
                     <div
                       key={index}
@@ -456,13 +476,21 @@ export function ResponseViewer({
                         border: `1px solid ${colors.border}`,
                       }}
                     >
-                      {/* Language label */}
-                      {segment.language && segment.language !== 'text' && (
-                        <div
+                      {/* Code block header with language label and copy button */}
+                      <div
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          justifyContent: 'space-between',
+                          padding: '4px 8px 4px 12px',
+                          backgroundColor: colors.bgActivity,
+                          borderBottom: `1px solid ${colors.border}`,
+                          minHeight: '28px',
+                        }}
+                      >
+                        {/* Language label */}
+                        <span
                           style={{
-                            padding: '4px 12px',
-                            backgroundColor: colors.bgActivity,
-                            borderBottom: `1px solid ${colors.border}`,
                             fontSize: '11px',
                             fontWeight: 500,
                             color: colors.textDim,
@@ -470,9 +498,67 @@ export function ResponseViewer({
                             letterSpacing: '0.5px',
                           }}
                         >
-                          {segment.language}
-                        </div>
-                      )}
+                          {segment.language && segment.language !== 'text'
+                            ? segment.language
+                            : 'code'}
+                        </span>
+                        {/* Copy button */}
+                        <button
+                          onClick={() => copyCodeBlock(segment.content, index)}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            gap: '4px',
+                            padding: '4px 8px',
+                            borderRadius: '4px',
+                            border: 'none',
+                            backgroundColor: isCopied
+                              ? `${colors.success}20`
+                              : 'transparent',
+                            color: isCopied ? colors.success : colors.textDim,
+                            fontSize: '11px',
+                            fontWeight: 500,
+                            cursor: 'pointer',
+                            transition: 'all 0.2s ease',
+                          }}
+                          aria-label={isCopied ? 'Copied!' : 'Copy code'}
+                        >
+                          {isCopied ? (
+                            <>
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <polyline points="20 6 9 17 4 12" />
+                              </svg>
+                              Copied
+                            </>
+                          ) : (
+                            <>
+                              <svg
+                                width="14"
+                                height="14"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                stroke="currentColor"
+                                strokeWidth="2"
+                                strokeLinecap="round"
+                                strokeLinejoin="round"
+                              >
+                                <rect x="9" y="9" width="13" height="13" rx="2" ry="2" />
+                                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1" />
+                              </svg>
+                              Copy
+                            </>
+                          )}
+                        </button>
+                      </div>
                       <SyntaxHighlighter
                         language={segment.language || 'text'}
                         style={syntaxStyle}
