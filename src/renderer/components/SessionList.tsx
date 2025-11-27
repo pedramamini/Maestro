@@ -520,8 +520,13 @@ export function SessionList(props: SessionListProps) {
                           {/* AI Status Indicator */}
                           <div
                             className={`w-2 h-2 rounded-full ${session.state === 'connecting' ? 'animate-pulse' : ''}`}
-                            style={{ backgroundColor: getStatusColor(session.state, theme) }}
+                            style={
+                              session.toolType === 'claude' && !session.claudeSessionId
+                                ? { border: `1.5px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
+                                : { backgroundColor: getStatusColor(session.state, theme) }
+                            }
                             title={
+                              session.toolType === 'claude' && !session.claudeSessionId ? 'No active Claude session' :
                               session.state === 'idle' ? 'Ready and waiting' :
                               session.state === 'busy' ? 'Agent is thinking' :
                               session.state === 'connecting' ? 'Attempting to establish connection' :
@@ -688,8 +693,13 @@ export function SessionList(props: SessionListProps) {
                             {/* AI Status Indicator */}
                             <div
                               className={`w-2 h-2 rounded-full ${session.state === 'connecting' ? 'animate-pulse' : ''}`}
-                              style={{ backgroundColor: getStatusColor(session.state, theme) }}
+                              style={
+                                session.toolType === 'claude' && !session.claudeSessionId
+                                  ? { border: `1.5px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
+                                  : { backgroundColor: getStatusColor(session.state, theme) }
+                              }
                               title={
+                                session.toolType === 'claude' && !session.claudeSessionId ? 'No active Claude session' :
                                 session.state === 'idle' ? 'Ready and waiting' :
                                 session.state === 'busy' ? 'Agent is thinking' :
                                 session.state === 'connecting' ? 'Attempting to establish connection' :
@@ -712,8 +722,12 @@ export function SessionList(props: SessionListProps) {
                       <div
                         key={s.id}
                         className="flex-1 rounded-full"
-                        style={{ backgroundColor: getStatusColor(s.state, theme) }}
-                        title={`${s.name}: ${s.state}`}
+                        style={
+                          s.toolType === 'claude' && !s.claudeSessionId
+                            ? { border: `1px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
+                            : { backgroundColor: getStatusColor(s.state, theme) }
+                        }
+                        title={`${s.name}: ${s.toolType === 'claude' && !s.claudeSessionId ? 'No active Claude session' : s.state}`}
                       />
                     ))}
                   </div>
@@ -849,7 +863,12 @@ export function SessionList(props: SessionListProps) {
                     {/* AI Status Indicator */}
                     <div
                       className={`w-2 h-2 rounded-full ${session.state === 'busy' ? 'animate-pulse' : ''}`}
-                      style={{ backgroundColor: getStatusColor(session.state, theme) }}
+                      style={
+                        session.toolType === 'claude' && !session.claudeSessionId
+                          ? { border: `1.5px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
+                          : { backgroundColor: getStatusColor(session.state, theme) }
+                      }
+                      title={session.toolType === 'claude' && !session.claudeSessionId ? 'No active Claude session' : undefined}
                     />
                   </div>
                 </div>
@@ -871,7 +890,12 @@ export function SessionList(props: SessionListProps) {
             >
               <div
                 className={`w-3 h-3 rounded-full ${session.state === 'busy' ? 'animate-pulse' : ''}`}
-                style={{ backgroundColor: getStatusColor(session.state, theme) }}
+                style={
+                  session.toolType === 'claude' && !session.claudeSessionId
+                    ? { border: `1.5px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
+                    : { backgroundColor: getStatusColor(session.state, theme) }
+                }
+                title={session.toolType === 'claude' && !session.claudeSessionId ? 'No active Claude session' : undefined}
               />
 
               {/* Hover Tooltip for Skinny Mode */}
