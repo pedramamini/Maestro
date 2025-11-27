@@ -46,65 +46,96 @@ const ActivityGraph: React.FC<ActivityGraphProps> = ({ entries, theme }) => {
   const totalAuto = useMemo(() => hourlyData.reduce((sum, h) => sum + h.auto, 0), [hourlyData]);
   const totalUser = useMemo(() => hourlyData.reduce((sum, h) => sum + h.user, 0), [hourlyData]);
 
+  // Hour labels positioned at: 24 (start), 16, 8, 0 (end/now)
+  const hourLabels = [
+    { hour: 24, index: 0 },
+    { hour: 16, index: 8 },
+    { hour: 8, index: 16 },
+    { hour: 0, index: 23 }
+  ];
+
   return (
     <div
-      className="flex items-end gap-px h-6 flex-1 min-w-0"
+      className="flex-1 min-w-0 flex flex-col"
       title={`Last 24h: ${totalAuto} auto, ${totalUser} user`}
     >
-      {hourlyData.map((hour, index) => {
-        const total = hour.auto + hour.user;
-        const heightPercent = total > 0 ? (total / maxValue) * 100 : 0;
-        const autoPercent = total > 0 ? (hour.auto / total) * 100 : 0;
+      {/* Graph container with border */}
+      <div
+        className="flex items-end gap-px h-6 rounded border px-1 pt-1"
+        style={{ borderColor: theme.colors.border }}
+      >
+        {hourlyData.map((hour, index) => {
+          const total = hour.auto + hour.user;
+          const heightPercent = total > 0 ? (total / maxValue) * 100 : 0;
+          const autoPercent = total > 0 ? (hour.auto / total) * 100 : 0;
 
-        return (
-          <div
-            key={index}
-            className="flex-1 min-w-0 flex flex-col justify-end rounded-t-sm overflow-hidden"
-            style={{
-              height: '100%',
-              opacity: total > 0 ? 1 : 0.15
-            }}
-          >
+          return (
             <div
-              className="w-full rounded-t-sm overflow-hidden transition-all"
+              key={index}
+              className="flex-1 min-w-0 flex flex-col justify-end rounded-t-sm overflow-hidden"
               style={{
-                height: `${Math.max(heightPercent, total > 0 ? 15 : 8)}%`,
-                minHeight: total > 0 ? '3px' : '1px'
+                height: '100%',
+                opacity: total > 0 ? 1 : 0.15
               }}
             >
-              {/* User portion (bottom) */}
-              {hour.user > 0 && (
-                <div
-                  style={{
-                    height: `${100 - autoPercent}%`,
-                    backgroundColor: theme.colors.accent,
-                    minHeight: '1px'
-                  }}
-                />
-              )}
-              {/* Auto portion (top) */}
-              {hour.auto > 0 && (
-                <div
-                  style={{
-                    height: `${autoPercent}%`,
-                    backgroundColor: theme.colors.warning,
-                    minHeight: '1px'
-                  }}
-                />
-              )}
-              {/* Empty bar placeholder */}
-              {total === 0 && (
-                <div
-                  style={{
-                    height: '100%',
-                    backgroundColor: theme.colors.border
-                  }}
-                />
-              )}
+              <div
+                className="w-full rounded-t-sm overflow-hidden transition-all"
+                style={{
+                  height: `${Math.max(heightPercent, total > 0 ? 15 : 8)}%`,
+                  minHeight: total > 0 ? '3px' : '1px'
+                }}
+              >
+                {/* User portion (bottom) */}
+                {hour.user > 0 && (
+                  <div
+                    style={{
+                      height: `${100 - autoPercent}%`,
+                      backgroundColor: theme.colors.accent,
+                      minHeight: '1px'
+                    }}
+                  />
+                )}
+                {/* Auto portion (top) */}
+                {hour.auto > 0 && (
+                  <div
+                    style={{
+                      height: `${autoPercent}%`,
+                      backgroundColor: theme.colors.warning,
+                      minHeight: '1px'
+                    }}
+                  />
+                )}
+                {/* Empty bar placeholder */}
+                {total === 0 && (
+                  <div
+                    style={{
+                      height: '100%',
+                      backgroundColor: theme.colors.border
+                    }}
+                  />
+                )}
+              </div>
             </div>
-          </div>
-        );
-      })}
+          );
+        })}
+      </div>
+      {/* Hour labels below */}
+      <div className="relative h-3 mt-0.5">
+        {hourLabels.map(({ hour, index }) => (
+          <span
+            key={hour}
+            className="absolute text-[8px] font-mono"
+            style={{
+              color: theme.colors.textDim,
+              left: index === 0 ? '0' : index === 23 ? 'auto' : `${(index / 23) * 100}%`,
+              right: index === 23 ? '0' : 'auto',
+              transform: index > 0 && index < 23 ? 'translateX(-50%)' : 'none'
+            }}
+          >
+            {hour}h
+          </span>
+        ))}
+      </div>
     </div>
   );
 };
