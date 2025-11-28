@@ -781,15 +781,6 @@ export function Scratchpad({
           onChange={handleFileSelect}
           className="hidden"
         />
-        {/* Help button */}
-        <button
-          onClick={() => setHelpModalOpen(true)}
-          className="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-white/10"
-          style={{ color: theme.colors.textDim }}
-          title="Learn about Auto Runner"
-        >
-          <HelpCircle className="w-4 h-4" />
-        </button>
         {/* Run / Stop button */}
         {isLocked ? (
           <button
@@ -826,6 +817,15 @@ export function Scratchpad({
             Run
           </button>
         )}
+        {/* Help button */}
+        <button
+          onClick={() => setHelpModalOpen(true)}
+          className="flex items-center justify-center w-8 h-8 rounded-full transition-colors hover:bg-white/10"
+          style={{ color: theme.colors.textDim }}
+          title="Learn about Auto Runner"
+        >
+          <HelpCircle className="w-4 h-4" />
+        </button>
       </div>
 
       {/* Attached Images Preview (edit mode) */}

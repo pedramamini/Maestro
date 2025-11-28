@@ -106,6 +106,7 @@ export function SessionList(props: SessionListProps) {
   const [menuOpen, setMenuOpen] = useState(false);
   const [liveOverlayOpen, setLiveOverlayOpen] = useState(false);
   const [urlCopied, setUrlCopied] = useState(false);
+  const [tooltipPosition, setTooltipPosition] = useState<{ x: number; y: number } | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const liveOverlayRef = useRef<HTMLDivElement>(null);
 
@@ -644,6 +645,8 @@ export function SessionList(props: SessionListProps) {
                           ? { border: `1px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
                           : { backgroundColor: getStatusColor(s.state, theme) }
                       }
+                      onMouseEnter={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
+                      onMouseLeave={() => setTooltipPosition(null)}
                       onClick={(e) => {
                         e.stopPropagation();
                         setActiveSessionId(s.id);
@@ -651,9 +654,11 @@ export function SessionList(props: SessionListProps) {
                     >
                       {/* Hover Tooltip for Collapsed Bookmark Indicator */}
                       <div
-                        className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded px-3 py-2 z-[100] opacity-0 group-hover/indicator:opacity-100 pointer-events-none transition-opacity shadow-xl"
+                        className="fixed rounded px-3 py-2 z-[100] opacity-0 group-hover/indicator:opacity-100 pointer-events-none transition-opacity shadow-xl"
                         style={{
                           minWidth: '240px',
+                          left: `${leftSidebarWidthState + 8}px`,
+                          top: tooltipPosition ? `${tooltipPosition.y}px` : undefined,
                           backgroundColor: theme.colors.bgSidebar,
                           border: `1px solid ${theme.colors.border}`
                         }}
@@ -913,6 +918,8 @@ export function SessionList(props: SessionListProps) {
                             ? { border: `1px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
                             : { backgroundColor: getStatusColor(s.state, theme) }
                         }
+                        onMouseEnter={(e) => setTooltipPosition({ x: e.clientX, y: e.clientY })}
+                        onMouseLeave={() => setTooltipPosition(null)}
                         onClick={(e) => {
                           e.stopPropagation();
                           setActiveSessionId(s.id);
@@ -920,9 +927,11 @@ export function SessionList(props: SessionListProps) {
                       >
                         {/* Hover Tooltip for Collapsed Group Indicator */}
                         <div
-                          className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 rounded px-3 py-2 z-[100] opacity-0 group-hover/indicator:opacity-100 pointer-events-none transition-opacity shadow-xl"
+                          className="fixed rounded px-3 py-2 z-[100] opacity-0 group-hover/indicator:opacity-100 pointer-events-none transition-opacity shadow-xl"
                           style={{
                             minWidth: '240px',
+                            left: `${leftSidebarWidthState + 8}px`,
+                            top: tooltipPosition ? `${tooltipPosition.y}px` : undefined,
                             backgroundColor: theme.colors.bgSidebar,
                             border: `1px solid ${theme.colors.border}`
                           }}
