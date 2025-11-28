@@ -637,53 +637,6 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
                  ? theme.colors.accent + '40'
                  : log.source === 'stderr' ? theme.colors.error : theme.colors.border
              }}>
-          {/* Delete button for user commands */}
-          {log.source === 'user' && isTerminal && onDeleteLog && (
-            <div className="absolute top-2 right-2 flex items-center gap-2">
-              {deleteConfirmLogIdRef.current === log.id ? (
-                <div className="flex items-center gap-2 p-1 rounded border" style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.error }}>
-                  <span className="text-xs px-1" style={{ color: theme.colors.error }}>Delete?</span>
-                  <button
-                    onClick={() => {
-                      const nextIndex = onDeleteLog(log.id);
-                      setDeleteConfirmLogId(null);
-                      setDeleteConfirmTrigger(t => t + 1);
-                      // Scroll to the next user command after deletion
-                      if (nextIndex !== null && nextIndex >= 0) {
-                        setTimeout(() => {
-                          virtuosoRef.current?.scrollToIndex({
-                            index: nextIndex,
-                            align: 'start',
-                            behavior: 'auto'
-                          });
-                        }, 50);
-                      }
-                    }}
-                    className="px-2 py-0.5 rounded text-xs font-medium hover:opacity-80"
-                    style={{ backgroundColor: theme.colors.error, color: '#fff' }}
-                  >
-                    Yes
-                  </button>
-                  <button
-                    onClick={() => { setDeleteConfirmLogId(null); setDeleteConfirmTrigger(t => t + 1); }}
-                    className="px-2 py-0.5 rounded text-xs hover:opacity-80"
-                    style={{ color: theme.colors.textDim }}
-                  >
-                    No
-                  </button>
-                </div>
-              ) : (
-                <button
-                  onClick={() => { setDeleteConfirmLogId(log.id); setDeleteConfirmTrigger(t => t + 1); }}
-                  className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
-                  style={{ color: theme.colors.textDim }}
-                  title="Delete command and output"
-                >
-                  <Trash2 className="w-3.5 h-3.5" />
-                </button>
-              )}
-            </div>
-          )}
           {/* Local filter icon for system output only */}
           {log.source !== 'user' && isTerminal && (
             <div className="absolute top-2 right-2 flex items-center gap-2">
@@ -974,6 +927,51 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
             >
               <Copy className="w-3.5 h-3.5" />
             </button>
+            {/* Delete button for user commands in terminal mode */}
+            {log.source === 'user' && isTerminal && onDeleteLog && (
+              deleteConfirmLogIdRef.current === log.id ? (
+                <div className="flex items-center gap-1 p-1 rounded border" style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.error }}>
+                  <span className="text-xs px-1" style={{ color: theme.colors.error }}>Delete?</span>
+                  <button
+                    onClick={() => {
+                      const nextIndex = onDeleteLog(log.id);
+                      setDeleteConfirmLogId(null);
+                      setDeleteConfirmTrigger(t => t + 1);
+                      // Scroll to the next user command after deletion
+                      if (nextIndex !== null && nextIndex >= 0) {
+                        setTimeout(() => {
+                          virtuosoRef.current?.scrollToIndex({
+                            index: nextIndex,
+                            align: 'start',
+                            behavior: 'auto'
+                          });
+                        }, 50);
+                      }
+                    }}
+                    className="px-2 py-0.5 rounded text-xs font-medium hover:opacity-80"
+                    style={{ backgroundColor: theme.colors.error, color: '#fff' }}
+                  >
+                    Yes
+                  </button>
+                  <button
+                    onClick={() => { setDeleteConfirmLogId(null); setDeleteConfirmTrigger(t => t + 1); }}
+                    className="px-2 py-0.5 rounded text-xs hover:opacity-80"
+                    style={{ color: theme.colors.textDim }}
+                  >
+                    No
+                  </button>
+                </div>
+              ) : (
+                <button
+                  onClick={() => { setDeleteConfirmLogId(log.id); setDeleteConfirmTrigger(t => t + 1); }}
+                  className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
+                  style={{ color: theme.colors.textDim }}
+                  title="Delete command and output"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              )
+            )}
           </div>
         </div>
       </div>
