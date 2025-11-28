@@ -1,14 +1,22 @@
 /**
  * Maestro Web Interface Entry Point
  *
- * This is the main entry point for the web interface.
- * It detects the device type and renders the appropriate interface.
+ * Remote control interface for mobile/tablet devices.
+ * Provides session monitoring and command input from anywhere on your network.
  */
 
 import React, { StrictMode, lazy, Suspense, useEffect, useState, createContext, useContext } from 'react';
 import { createRoot } from 'react-dom/client';
 import { ThemeProvider } from './components/ThemeProvider';
 import { registerServiceWorker, isOffline } from './utils/serviceWorker';
+import {
+  getMaestroConfig,
+  isDashboardMode,
+  isSessionMode,
+  getCurrentSessionId,
+  getDashboardUrl,
+  getSessionUrl,
+} from './utils/config';
 import './index.css';
 
 /**
@@ -28,45 +36,53 @@ export function useOfflineStatus(): boolean {
   return useContext(OfflineContext).isOffline;
 }
 
-// Lazy load mobile and desktop apps for code splitting
-// Using webpackChunkName magic comments for Vite compatibility
-// This creates separate bundles that are only loaded based on device type
-const MobileApp = lazy(() =>
-  import(/* webpackChunkName: "mobile" */ './mobile').catch(() => ({
-    default: () => <PlaceholderApp type="mobile" />,
-  }))
-);
+/**
+ * Context for Maestro mode (dashboard vs session)
+ */
+interface MaestroModeContextValue {
+  /** Whether we're viewing the dashboard (all live sessions) */
+  isDashboard: boolean;
+  /** Whether we're viewing a specific session */
+  isSession: boolean;
+  /** Current session ID (if in session mode) */
+  sessionId: string | null;
+  /** Security token for API/WS calls */
+  securityToken: string;
+  /** Navigate to dashboard */
+  goToDashboard: () => void;
+  /** Navigate to a specific session */
+  goToSession: (sessionId: string) => void;
+}
 
-const DesktopApp = lazy(() =>
-  import(/* webpackChunkName: "desktop" */ './desktop/App').catch(() => ({
-    default: () => <PlaceholderApp type="desktop" />,
-  }))
-);
+const MaestroModeContext = createContext<MaestroModeContextValue>({
+  isDashboard: true,
+  isSession: false,
+  sessionId: null,
+  securityToken: '',
+  goToDashboard: () => {},
+  goToSession: () => {},
+});
 
 /**
- * Detect if the device is mobile based on screen size and touch capability
+ * Hook to access Maestro mode context
  */
-function isMobileDevice(): boolean {
-  // Check for touch capability
-  const hasTouch = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
-
-  // Check screen width (768px is a common breakpoint)
-  const isSmallScreen = window.innerWidth < 768;
-
-  // Check user agent for mobile indicators
-  const mobileUserAgent = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(
-    navigator.userAgent
-  );
-
-  // Consider mobile if small screen OR (has touch AND mobile user agent)
-  return isSmallScreen || (hasTouch && mobileUserAgent);
+export function useMaestroMode(): MaestroModeContextValue {
+  return useContext(MaestroModeContext);
 }
+
+// Lazy load the web app
+// Both mobile and desktop use the same remote control interface
+const WebApp = lazy(() =>
+  import(/* webpackChunkName: "mobile" */ './mobile').catch(() => ({
+    default: () => <PlaceholderApp />,
+  }))
+);
 
 /**
  * Placeholder component shown while the actual app loads
- * or if the app module hasn't been created yet
+ * or if there's an error loading the app module
  */
-function PlaceholderApp({ type }: { type: 'mobile' | 'desktop' }) {
+function PlaceholderApp() {
   return (
     <div
       style={{
@@ -83,7 +99,7 @@ function PlaceholderApp({ type }: { type: 'mobile' | 'desktop' }) {
     >
       <h1 style={{ marginBottom: '16px', fontSize: '24px' }}>Maestro Web</h1>
       <p style={{ marginBottom: '8px', color: 'var(--color-text-muted)' }}>
-        {type === 'mobile' ? 'Mobile' : 'Desktop'} interface coming soon
+        Remote control interface
       </p>
       <p style={{ fontSize: '14px', color: 'var(--color-text-muted)' }}>
         Connect to your Maestro desktop app to get started
@@ -121,21 +137,27 @@ function LoadingFallback() {
 }
 
 /**
- * Main App component that routes to mobile or desktop
+ * Main App component - renders the remote control interface
  */
 function App() {
-  const [isMobile, setIsMobile] = useState(isMobileDevice);
   const [offline, setOffline] = useState(isOffline());
 
-  // Re-check on resize (for responsive design testing)
-  useEffect(() => {
-    const handleResize = () => {
-      setIsMobile(isMobileDevice());
-    };
+  // Get config on mount
+  const config = getMaestroConfig();
 
-    window.addEventListener('resize', handleResize);
-    return () => window.removeEventListener('resize', handleResize);
-  }, []);
+  // Mode context value
+  const modeContextValue: MaestroModeContextValue = {
+    isDashboard: isDashboardMode(),
+    isSession: isSessionMode(),
+    sessionId: getCurrentSessionId(),
+    securityToken: config.securityToken,
+    goToDashboard: () => {
+      window.location.href = getDashboardUrl();
+    },
+    goToSession: (sessionId: string) => {
+      window.location.href = getSessionUrl(sessionId);
+    },
+  };
 
   // Register service worker for offline capability
   useEffect(() => {
@@ -154,20 +176,27 @@ function App() {
     });
   }, []);
 
+  // Log mode info on mount
+  useEffect(() => {
+    console.log('[App] Mode:', modeContextValue.isDashboard ? 'dashboard' : `session:${modeContextValue.sessionId}`);
+  }, []);
+
   return (
-    <OfflineContext.Provider value={{ isOffline: offline }}>
-      {/*
-        Enable useDevicePreference to respect the device's dark/light mode preference.
-        When no theme is provided from the desktop app via WebSocket, the web interface
-        will automatically use a dark or light theme based on the user's device settings.
-        Once the desktop app sends a theme, it will override the device preference.
-      */}
-      <ThemeProvider useDevicePreference>
-        <Suspense fallback={<LoadingFallback />}>
-          {isMobile ? <MobileApp /> : <DesktopApp />}
-        </Suspense>
-      </ThemeProvider>
-    </OfflineContext.Provider>
+    <MaestroModeContext.Provider value={modeContextValue}>
+      <OfflineContext.Provider value={{ isOffline: offline }}>
+        {/*
+          Enable useDevicePreference to respect the device's dark/light mode preference.
+          When no theme is provided from the desktop app via WebSocket, the web interface
+          will automatically use a dark or light theme based on the user's device settings.
+          Once the desktop app sends a theme, it will override the device preference.
+        */}
+        <ThemeProvider useDevicePreference>
+          <Suspense fallback={<LoadingFallback />}>
+            <WebApp />
+          </Suspense>
+        </ThemeProvider>
+      </OfflineContext.Provider>
+    </MaestroModeContext.Provider>
   );
 }
 

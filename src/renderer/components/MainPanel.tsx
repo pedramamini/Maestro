@@ -7,6 +7,7 @@ import { FilePreview } from './FilePreview';
 import { ErrorBoundary } from './ErrorBoundary';
 import { GitStatusWidget } from './GitStatusWidget';
 import { AgentSessionsBrowser } from './AgentSessionsBrowser';
+import { QRCode } from './QRCode';
 import { gitService } from '../services/git';
 import { formatActiveTime } from '../utils/theme';
 import type { Session, Theme, Shortcut, FocusArea, BatchRunState } from '../types';
@@ -86,7 +87,7 @@ interface MainPanelProps {
   fileTreeFilterInputRef: React.RefObject<HTMLInputElement>;
 
   // Functions
-  toggleTunnel: (sessionId: string) => void;
+  toggleLive: (sessionId: string) => void;
   toggleInputMode: () => void;
   processInput: () => void;
   handleInterrupt: () => void;
@@ -123,7 +124,7 @@ export function MainPanel(props: MainPanelProps) {
     setCommandHistoryFilter, setCommandHistorySelectedIndex, setSlashCommandOpen,
     setSelectedSlashCommandIndex, setPreviewFile, setMarkdownRawMode,
     setAboutModalOpen, setRightPanelOpen, setGitLogOpen, inputRef, logsEndRef, terminalOutputRef,
-    fileTreeContainerRef, fileTreeFilterInputRef, toggleTunnel, toggleInputMode, processInput, handleInterrupt,
+    fileTreeContainerRef, fileTreeFilterInputRef, toggleLive, toggleInputMode, processInput, handleInterrupt,
     handleInputKeyDown, handlePaste, handleDrop, getContextColor, setActiveSessionId,
     batchRunState, onStopBatchRun, showConfirmation, onRemoveQueuedMessage
   } = props;
@@ -499,17 +500,17 @@ export function MainPanel(props: MainPanelProps) {
 
               <div
                 className="relative"
-                onMouseEnter={() => activeSession.tunnelActive && setTunnelTooltipOpen(true)}
+                onMouseEnter={() => activeSession.isLive && setTunnelTooltipOpen(true)}
                 onMouseLeave={() => setTunnelTooltipOpen(false)}
               >
                 <button
-                  onClick={() => toggleTunnel(activeSession.id)}
-                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${activeSession.tunnelActive ? 'bg-green-500/20 text-green-500' : 'text-gray-500 hover:bg-gray-800'}`}
+                  onClick={() => toggleLive(activeSession.id)}
+                  className={`flex items-center gap-2 px-2 py-1 rounded text-xs transition-colors ${activeSession.isLive ? 'bg-green-500/20 text-green-500' : 'text-gray-500 hover:bg-gray-800'}`}
                 >
-                  <Radio className={`w-3 h-3 ${activeSession.tunnelActive ? 'animate-pulse' : ''}`} />
-                  {activeSession.tunnelActive ? 'LIVE' : 'OFFLINE'}
+                  <Radio className={`w-3 h-3 ${activeSession.isLive ? 'animate-pulse' : ''}`} />
+                  {activeSession.isLive ? 'LIVE' : 'OFFLINE'}
                 </button>
-                {activeSession.tunnelActive && tunnelTooltipOpen && activeSession.tunnelUrl && (
+                {activeSession.isLive && tunnelTooltipOpen && activeSession.liveUrl && (
                   <div className="absolute top-full left-0 pt-2 w-80 z-50">
                     <div
                       className="rounded p-3 shadow-xl"
@@ -522,12 +523,12 @@ export function MainPanel(props: MainPanelProps) {
                     <div className="flex items-center justify-between gap-2 mb-3">
                       <div className="flex items-center gap-1 text-xs text-green-400 font-mono select-all flex-1 overflow-hidden">
                         <ExternalLink className="w-3 h-3 shrink-0" />
-                        <span className="truncate">{activeSession.tunnelUrl}</span>
+                        <span className="truncate">{activeSession.liveUrl}</span>
                       </div>
                       <button
                         onClick={(e) => {
                           e.stopPropagation();
-                          copyToClipboard(activeSession.tunnelUrl || '');
+                          copyToClipboard(activeSession.liveUrl || '');
                         }}
                         className="p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
                         title="Copy URL"
@@ -535,19 +536,11 @@ export function MainPanel(props: MainPanelProps) {
                         <Copy className="w-3 h-3" style={{ color: theme.colors.textDim }} />
                       </button>
                     </div>
-                    {activeSession.tunnelPort && (
-                      <>
-                        <div className="text-[10px] uppercase font-bold mb-2" style={{ color: theme.colors.textDim }}>Port</div>
-                        <div className="text-xs font-mono mb-3" style={{ color: theme.colors.textMain }}>
-                          {activeSession.tunnelPort}
-                        </div>
-                      </>
-                    )}
                     <button
                       onClick={(e) => {
                         e.stopPropagation();
-                        if (activeSession.tunnelUrl) {
-                          window.maestro.shell.openExternal(activeSession.tunnelUrl);
+                        if (activeSession.liveUrl) {
+                          window.maestro.shell.openExternal(activeSession.liveUrl);
                         }
                       }}
                       className="w-full py-2 rounded text-sm font-medium transition-colors hover:opacity-90"
@@ -558,6 +551,19 @@ export function MainPanel(props: MainPanelProps) {
                     >
                       Open in Browser
                     </button>
+                    {/* QR Code for mobile access */}
+                    <div className="mt-3 pt-3 border-t flex flex-col items-center" style={{ borderColor: theme.colors.border }}>
+                      <div className="text-[10px] uppercase font-bold mb-2" style={{ color: theme.colors.textDim }}>Scan with Mobile</div>
+                      <div className="p-2 rounded" style={{ backgroundColor: 'white' }}>
+                        <QRCode
+                          value={activeSession.liveUrl}
+                          size={120}
+                          bgColor="#FFFFFF"
+                          fgColor="#000000"
+                          alt="Scan to open on mobile"
+                        />
+                      </div>
+                    </div>
                     </div>
                   </div>
                 )}

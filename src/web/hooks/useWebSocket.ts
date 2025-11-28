@@ -2,11 +2,15 @@
  * useWebSocket hook for Maestro web interface
  *
  * Provides WebSocket connection management for the web interface,
- * handling connection, reconnection, authentication, and message handling.
+ * handling connection, reconnection, and message handling.
+ *
+ * Note: Authentication is handled via URL path (security token in URL),
+ * so no separate auth handshake is needed.
  */
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import type { Theme } from '../../shared/theme-types';
+import { buildWebSocketUrl as buildWsUrl, getCurrentSessionId } from '../utils/config';
 
 /**
  * WebSocket connection states
@@ -267,27 +271,17 @@ const DEFAULT_OPTIONS: Required<Omit<UseWebSocketOptions, 'handlers' | 'token'>>
 };
 
 /**
- * Build the WebSocket URL from the current location
+ * Build the WebSocket URL using the config
+ * The security token is in the URL path, not as a query param
  */
-function buildWebSocketUrl(baseUrl?: string, token?: string): string {
+function buildWebSocketUrl(baseUrl?: string, sessionId?: string): string {
   if (baseUrl) {
-    const url = new URL(baseUrl);
-    if (token) {
-      url.searchParams.set('token', token);
-    }
-    return url.toString();
+    return baseUrl;
   }
 
-  // Build URL from current location
-  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-  const host = window.location.host;
-  let url = `${protocol}//${host}/ws/web`;
-
-  if (token) {
-    url += `?token=${encodeURIComponent(token)}`;
-  }
-
-  return url;
+  // Use config to build the URL with security token in path
+  // If sessionId is provided, subscribe to that session's updates
+  return buildWsUrl(sessionId || getCurrentSessionId() || undefined);
 }
 
 /**
@@ -513,8 +507,8 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     }
     clearTimers();
 
-    // Build the URL
-    const url = buildWebSocketUrl(baseUrl, token);
+    // Build the URL using config (token is in URL path, not query param)
+    const url = buildWebSocketUrl(baseUrl);
 
     setState('connecting');
     handlersRef.current?.onConnectionChange?.('connecting');
@@ -555,7 +549,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
       setState('disconnected');
       handlersRef.current?.onConnectionChange?.('disconnected');
     }
-  }, [baseUrl, token, clearTimers, handleMessage, attemptReconnect]);
+  }, [baseUrl, clearTimers, handleMessage, attemptReconnect]);
 
   /**
    * Connect to the WebSocket server

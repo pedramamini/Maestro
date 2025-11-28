@@ -250,7 +250,9 @@ export default function MaestroConsole() {
           ...correctedSession,
           aiPid: -1,
           terminalPid: -1,
-          state: 'error' as SessionState
+          state: 'error' as SessionState,
+          isLive: false,
+          liveUrl: undefined
         };
       }
 
@@ -261,7 +263,9 @@ export default function MaestroConsole() {
           ...correctedSession,
           aiPid: -1,
           terminalPid: -1,
-          state: 'error' as SessionState
+          state: 'error' as SessionState,
+          isLive: false,
+          liveUrl: undefined
         };
       }
 
@@ -306,6 +310,8 @@ export default function MaestroConsole() {
           terminalPid: terminalSpawnResult.pid,
           state: 'idle' as SessionState,
           isGitRepo,  // Update Git status
+          isLive: false,  // Always start offline on app restart
+          liveUrl: undefined,  // Clear any stale URL
           aiLogs: correctedSession.aiLogs,  // Preserve existing AI Terminal logs
           shellLogs: correctedSession.shellLogs,  // Preserve existing Command Terminal logs
           messageQueue: correctedSession.messageQueue || [],  // Ensure backwards compatibility
@@ -318,7 +324,9 @@ export default function MaestroConsole() {
           ...session,
           aiPid: -1,
           terminalPid: -1,
-          state: 'error' as SessionState
+          state: 'error' as SessionState,
+          isLive: false,
+          liveUrl: undefined
         };
       }
     } catch (error) {
@@ -327,7 +335,9 @@ export default function MaestroConsole() {
         ...session,
         aiPid: -1,
         terminalPid: -1,
-        state: 'error' as SessionState
+        state: 'error' as SessionState,
+        isLive: false,
+        liveUrl: undefined
       };
     }
   };
@@ -848,7 +858,7 @@ export default function MaestroConsole() {
     [sessions, activeSessionId]
   );
   const theme = THEMES[activeThemeId];
-  const anyTunnelActive = sessions.some(s => s.tunnelActive);
+  const anyLive = sessions.some(s => s.isLive);
 
   // Combine built-in slash commands with custom AI commands for autocomplete
   const allSlashCommands = useMemo(() => {
@@ -1785,7 +1795,7 @@ export default function MaestroConsole() {
         aiPid: aiSpawnResult.pid,
         terminalPid: terminalSpawnResult.pid,
         port: 3000 + Math.floor(Math.random() * 100),
-        tunnelActive: false,
+        isLive: false,
         changedFiles: [],
         fileTree: [],
         fileExplorerExpanded: [],
@@ -1813,44 +1823,27 @@ export default function MaestroConsole() {
     }));
   };
 
-  const toggleTunnel = async (sessId: string) => {
+  const toggleLive = async (sessId: string) => {
     const session = sessions.find(s => s.id === sessId);
     if (!session) return;
 
-    if (session.tunnelActive) {
-      // Stop the tunnel
-      try {
-        await window.maestro.tunnel.stop(sessId);
-        setSessions(prev => prev.map(s => {
-          if (s.id !== sessId) return s;
-          return {
-            ...s,
-            tunnelActive: false,
-            tunnelUrl: undefined,
-            tunnelPort: undefined,
-            tunnelUuid: undefined
-          };
-        }));
-      } catch (error) {
-        console.error('Failed to stop tunnel:', error);
-      }
-    } else {
-      // Start the tunnel
-      try {
-        const result = await window.maestro.tunnel.start(sessId);
-        setSessions(prev => prev.map(s => {
-          if (s.id !== sessId) return s;
-          return {
-            ...s,
-            tunnelActive: true,
-            tunnelUrl: result.url,
-            tunnelPort: result.port,
-            tunnelUuid: result.uuid
-          };
-        }));
-      } catch (error) {
-        console.error('Failed to start tunnel:', error);
-      }
+    console.log('[toggleLive] Session ID:', sessId);
+    console.log('[toggleLive] Claude Session ID:', session.claudeSessionId);
+
+    try {
+      // Toggle live mode - the API handles both enabling and disabling
+      const result = await window.maestro.live.toggle(sessId, session.claudeSessionId);
+      console.log('[toggleLive] Result:', result);
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessId) return s;
+        return {
+          ...s,
+          isLive: result.live,
+          liveUrl: result.url || undefined
+        };
+      }));
+    } catch (error) {
+      console.error('Failed to toggle live mode:', error);
     }
   };
 
@@ -3148,7 +3141,7 @@ export default function MaestroConsole() {
           editingGroupId={editingGroupId}
           editingSessionId={editingSessionId}
           draggingSessionId={draggingSessionId}
-          anyTunnelActive={anyTunnelActive}
+          anyLive={anyLive}
           shortcuts={shortcuts}
           setActiveFocus={setActiveFocus}
           setActiveSessionId={setActiveSessionId}
@@ -3288,7 +3281,7 @@ export default function MaestroConsole() {
         terminalOutputRef={terminalOutputRef}
         fileTreeContainerRef={fileTreeContainerRef}
         fileTreeFilterInputRef={fileTreeFilterInputRef}
-        toggleTunnel={toggleTunnel}
+        toggleLive={toggleLive}
         toggleInputMode={toggleInputMode}
         processInput={processInput}
         handleInterrupt={handleInterrupt}

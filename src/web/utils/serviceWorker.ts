@@ -62,9 +62,17 @@ export async function registerServiceWorker(
   }
 
   try {
+    // Get security token from config for absolute path
+    const config = (window as unknown as { __MAESTRO_CONFIG__?: { securityToken?: string } }).__MAESTRO_CONFIG__;
+    const token = config?.securityToken;
+
+    // Use absolute path with token prefix if available
+    const swPath = token ? `/${token}/sw.js` : './sw.js';
+    const swScope = token ? `/${token}/` : './';
+
     // Register the service worker
-    const registration = await navigator.serviceWorker.register('./sw.js', {
-      scope: './',
+    const registration = await navigator.serviceWorker.register(swPath, {
+      scope: swScope,
     });
 
     console.log('[SW] Service worker registered:', registration.scope);

@@ -30,7 +30,7 @@ Node.js backend with full system access:
 |------|---------|
 | `index.ts` | App entry, IPC handlers, window management |
 | `process-manager.ts` | PTY and child process spawning |
-| `web-server.ts` | Fastify HTTP/WebSocket server (port 8000) |
+| `web-server.ts` | Fastify HTTP/WebSocket server for mobile remote control |
 | `agent-detector.ts` | Auto-detect CLI tools via PATH |
 | `preload.ts` | Secure IPC bridge via contextBridge |
 | `utils/execFile.ts` | Safe command execution utility |
@@ -272,7 +272,6 @@ Manages all application settings with automatic persistence.
 
 **What it manages:**
 - LLM settings (provider, model, API key)
-- Tunnel settings
 - Agent settings (default agent)
 - Shell settings (default shell)
 - Font settings (family, size, custom fonts)
@@ -284,7 +283,6 @@ Manages all application settings with automatic persistence.
 
 **Current Persistent Settings:**
 - `llmProvider`, `modelSlug`, `apiKey`
-- `tunnelProvider`, `tunnelApiKey`
 - `defaultAgent`, `defaultShell`
 - `fontFamily`, `fontSize`, `customFonts`
 - `activeThemeId`

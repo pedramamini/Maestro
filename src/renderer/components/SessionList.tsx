@@ -36,7 +36,7 @@ interface SessionListProps {
   editingGroupId: string | null;
   editingSessionId: string | null;
   draggingSessionId: string | null;
-  anyTunnelActive: boolean;
+  anyLive: boolean;
   shortcuts: Record<string, Shortcut>;
 
   // Handlers
@@ -73,7 +73,7 @@ export function SessionList(props: SessionListProps) {
   const {
     theme, sessions, groups, sortedSessions, activeSessionId, leftSidebarOpen,
     leftSidebarWidthState, activeFocus, selectedSidebarIndex, editingGroupId,
-    editingSessionId, draggingSessionId, anyTunnelActive, shortcuts,
+    editingSessionId, draggingSessionId, anyLive, shortcuts,
     setActiveFocus, setActiveSessionId, setLeftSidebarOpen, setLeftSidebarWidthState,
     setShortcutsHelpOpen, setSettingsModalOpen, setSettingsTab, setAboutModalOpen, setLogViewerOpen, setProcessMonitorOpen, toggleGroup,
     handleDragStart, handleDragOver, handleDropOnGroup, handleDropOnUngrouped,
@@ -233,12 +233,12 @@ export function SessionList(props: SessionListProps) {
               <h1 className="font-bold tracking-widest text-lg" style={{ color: theme.colors.textMain }}>MAESTRO</h1>
               <div
                 className="ml-2 relative cursor-help"
-                onMouseEnter={() => anyTunnelActive && setGlobeTooltipOpen(true)}
+                onMouseEnter={() => anyLive && setGlobeTooltipOpen(true)}
                 onMouseLeave={() => setGlobeTooltipOpen(false)}
-                title={anyTunnelActive ? "Index Active" : "No Public Tunnels"}
+                title={anyLive ? "Live Sessions Active" : "No Live Sessions"}
               >
-                <Globe className={`w-3 h-3 ${anyTunnelActive ? 'text-green-500 animate-pulse' : 'opacity-30'}`} />
-                {anyTunnelActive && globeTooltipOpen && (
+                <Globe className={`w-3 h-3 ${anyLive ? 'text-green-500 animate-pulse' : 'opacity-30'}`} />
+                {anyLive && globeTooltipOpen && (
                   <div className="absolute top-full left-0 pt-2 z-50" style={{ minWidth: '320px' }}>
                     <div
                       className="rounded shadow-xl overflow-hidden"
@@ -251,7 +251,7 @@ export function SessionList(props: SessionListProps) {
                         <div className="text-[10px] uppercase font-bold" style={{ color: theme.colors.textDim }}>Live Agents</div>
                       </div>
                       <div className="max-h-64 overflow-y-auto">
-                        {sessions.filter(s => s.tunnelActive).map(session => {
+                        {sessions.filter(s => s.isLive).map(session => {
                           const group = groups.find(g => g.id === session.groupId);
                           return (
                             <div
@@ -285,13 +285,13 @@ export function SessionList(props: SessionListProps) {
                                   <Network className="w-2.5 h-2.5" />
                                   localhost:{session.port}
                                 </button>
-                                {session.tunnelUrl && (
+                                {session.liveUrl && (
                                   <button
-                                    onClick={() => window.maestro.shell.openExternal(session.tunnelUrl!)}
+                                    onClick={() => window.maestro.shell.openExternal(session.liveUrl!)}
                                     className="flex items-center gap-1 text-[10px] font-mono hover:underline text-green-400"
                                   >
                                     <Globe className="w-2.5 h-2.5" />
-                                    {session.tunnelUrl.replace('https://', '')}
+                                    {session.liveUrl.replace(/^https?:\/\//, '')}
                                   </button>
                                 )}
                               </div>

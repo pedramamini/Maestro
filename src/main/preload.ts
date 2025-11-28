@@ -133,19 +133,16 @@ contextBridge.exposeInMainWorld('maestro', {
   // Web Server API
   webserver: {
     getUrl: () => ipcRenderer.invoke('webserver:getUrl'),
-    // Authentication management
-    getAuthConfig: () => ipcRenderer.invoke('webserver:getAuthConfig'),
-    setAuthEnabled: (enabled: boolean) => ipcRenderer.invoke('webserver:setAuthEnabled', enabled),
-    generateNewToken: () => ipcRenderer.invoke('webserver:generateNewToken'),
-    setAuthToken: (token: string | null) => ipcRenderer.invoke('webserver:setAuthToken', token),
     getConnectedClients: () => ipcRenderer.invoke('webserver:getConnectedClients'),
   },
 
-  // Tunnel API - per-session local web server
-  tunnel: {
-    start: (sessionId: string) => ipcRenderer.invoke('tunnel:start', sessionId),
-    stop: (sessionId: string) => ipcRenderer.invoke('tunnel:stop', sessionId),
-    getStatus: (sessionId: string) => ipcRenderer.invoke('tunnel:getStatus', sessionId),
+  // Live Session API - toggle sessions as live/offline in web interface
+  live: {
+    toggle: (sessionId: string, claudeSessionId?: string) =>
+      ipcRenderer.invoke('live:toggle', sessionId, claudeSessionId),
+    getStatus: (sessionId: string) => ipcRenderer.invoke('live:getStatus', sessionId),
+    getDashboardUrl: () => ipcRenderer.invoke('live:getDashboardUrl'),
+    getLiveSessions: () => ipcRenderer.invoke('live:getLiveSessions'),
   },
 
   // Agent API

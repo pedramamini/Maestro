@@ -3,7 +3,6 @@ import path from 'path';
 import fs from 'fs/promises';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
-import { SessionWebServerManager } from './session-web-server';
 import { AgentDetector } from './agent-detector';
 import { execFileNoThrow } from './utils/execFile';
 import { logger } from './utils/logger';
@@ -163,7 +162,6 @@ const claudeSessionOriginsStore = new Store<ClaudeSessionOriginsData>({
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
-let sessionWebServerManager: SessionWebServerManager | null = null;
 let agentDetector: AgentDetector | null = null;
 
 function createWindow() {
@@ -282,17 +280,8 @@ app.whenReady().then(() => {
   // Initialize core services
   logger.info('Initializing core services', 'Startup');
   processManager = new ProcessManager();
-  webServer = new WebServer(8000);
+  webServer = new WebServer(); // Random port with auto-generated security token
   agentDetector = new AgentDetector();
-
-  // Initialize web server auth from stored settings
-  const webAuthEnabled = store.get('webAuthEnabled', false);
-  const webAuthToken = store.get('webAuthToken', null);
-  webServer.setAuthConfig({
-    enabled: webAuthEnabled,
-    token: webAuthToken,
-  });
-  logger.info(`Web server auth initialized: enabled=${webAuthEnabled}`, 'WebServer');
 
   // Set up callback for web server to fetch sessions list
   webServer.setGetSessionsCallback(() => {
@@ -371,41 +360,46 @@ app.whenReady().then(() => {
   });
 
   // Set up callback for web server to write commands to sessions
+  // Note: Process IDs have -ai or -terminal suffix based on session's inputMode
   webServer.setWriteToSessionCallback((sessionId: string, data: string) => {
-    if (!processManager) return false;
-    return processManager.write(sessionId, data);
+    if (!processManager) {
+      console.log('[writeToSession] processManager is null');
+      return false;
+    }
+
+    // Get the session's current inputMode to determine which process to write to
+    const sessions = sessionsStore.get('sessions', []);
+    const session = sessions.find((s: any) => s.id === sessionId);
+    if (!session) {
+      console.log(`[writeToSession] Session ${sessionId} not found`);
+      return false;
+    }
+
+    // Append -ai or -terminal suffix based on inputMode
+    const targetSessionId = session.inputMode === 'ai' ? `${sessionId}-ai` : `${sessionId}-terminal`;
+    console.log(`[writeToSession] Writing to ${targetSessionId} (inputMode=${session.inputMode})`);
+
+    const result = processManager.write(targetSessionId, data);
+    console.log(`[writeToSession] Write result: ${result}`);
+    return result;
   });
 
   // Set up callback for web server to interrupt sessions
+  // Note: Interrupts go to the AI process (the one that's typically "busy")
   webServer.setInterruptSessionCallback((sessionId: string) => {
     if (!processManager) return false;
-    return processManager.interrupt(sessionId);
+
+    // Get session's inputMode to determine which process to interrupt
+    const sessions = sessionsStore.get('sessions', []);
+    const session = sessions.find((s: any) => s.id === sessionId);
+    if (!session) return false;
+
+    // Interrupt the process based on current inputMode
+    const targetSessionId = session.inputMode === 'ai' ? `${sessionId}-ai` : `${sessionId}-terminal`;
+    console.log(`[interrupt] Interrupting ${targetSessionId}`);
+    return processManager.interrupt(targetSessionId);
   });
 
-  // Initialize session web server manager with callbacks
-  sessionWebServerManager = new SessionWebServerManager(
-    // getSessionData callback - fetch session from store
-    (sessionId: string) => {
-      const sessions = sessionsStore.get('sessions', []);
-      const session = sessions.find((s: any) => s.id === sessionId);
-      if (!session) return null;
-      return {
-        id: session.id,
-        name: session.name,
-        toolType: session.toolType,
-        state: session.state,
-        inputMode: session.inputMode,
-        cwd: session.cwd,
-        aiLogs: session.aiLogs || [],
-        shellLogs: session.shellLogs || [],
-      };
-    },
-    // writeToSession callback - write to process
-    (sessionId: string, data: string) => {
-      if (!processManager) return false;
-      return processManager.write(sessionId, data);
-    }
-  );
   logger.info('Core services initialized', 'Startup');
 
   // Set up IPC handlers
@@ -420,9 +414,13 @@ app.whenReady().then(() => {
   logger.info('Creating main window', 'Startup');
   createWindow();
 
-  // Start web server for remote access
-  logger.info('Starting web server on port 8000', 'WebServer');
-  webServer.start();
+  // Start web server for remote access (random port with security token)
+  logger.info('Starting web server', 'WebServer');
+  webServer.start().then(({ port, url }) => {
+    logger.info(`Web server running at ${url} (port ${port})`, 'WebServer');
+  }).catch((error) => {
+    logger.error(`Failed to start web server: ${error}`, 'WebServer');
+  });
 
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) {
@@ -442,10 +440,8 @@ app.on('before-quit', async () => {
   // Clean up all running processes
   logger.info('Killing all running processes', 'Shutdown');
   processManager?.killAll();
-  logger.info('Stopping session web servers', 'Shutdown');
-  await sessionWebServerManager?.stopAll();
   logger.info('Stopping web server', 'Shutdown');
-  webServer?.stop();
+  await webServer?.stop();
   logger.info('Shutdown complete', 'Shutdown');
 });
 
@@ -805,87 +801,70 @@ function setupIpcHandlers() {
     }
   });
 
-  // Tunnel management - per-session local web server
-  ipcMain.handle('tunnel:start', async (_, sessionId: string) => {
-    if (!sessionWebServerManager) {
-      throw new Error('Session web server manager not initialized');
+  // Live session management - toggle sessions as live/offline in web interface
+  ipcMain.handle('live:toggle', async (_, sessionId: string, claudeSessionId?: string) => {
+    if (!webServer) {
+      throw new Error('Web server not initialized');
     }
-    logger.info(`Starting tunnel for session ${sessionId}`, 'Tunnel');
-    const result = await sessionWebServerManager.startServer(sessionId);
-    logger.info(`Tunnel started for session ${sessionId}: ${result.url}`, 'Tunnel');
-    return result;
+
+    // Ensure web server is running before allowing live toggle
+    if (!webServer.isActive()) {
+      logger.warn('Web server not yet started, waiting...', 'Live');
+      // Wait for server to start (with timeout)
+      const startTime = Date.now();
+      while (!webServer.isActive() && Date.now() - startTime < 5000) {
+        await new Promise(resolve => setTimeout(resolve, 100));
+      }
+      if (!webServer.isActive()) {
+        throw new Error('Web server failed to start');
+      }
+    }
+
+    const isLive = webServer.isSessionLive(sessionId);
+
+    if (isLive) {
+      // Turn off live mode
+      webServer.setSessionOffline(sessionId);
+      logger.info(`Session ${sessionId} is now offline`, 'Live');
+      return { live: false, url: null };
+    } else {
+      // Turn on live mode
+      logger.info(`Enabling live mode for session ${sessionId} (claude: ${claudeSessionId || 'none'})`, 'Live');
+      webServer.setSessionLive(sessionId, claudeSessionId);
+      const url = webServer.getSessionUrl(sessionId);
+      logger.info(`Session ${sessionId} is now live at ${url}`, 'Live');
+      return { live: true, url };
+    }
   });
 
-  ipcMain.handle('tunnel:stop', async (_, sessionId: string) => {
-    if (!sessionWebServerManager) {
-      throw new Error('Session web server manager not initialized');
+  ipcMain.handle('live:getStatus', async (_, sessionId: string) => {
+    if (!webServer) {
+      return { live: false, url: null };
     }
-    logger.info(`Stopping tunnel for session ${sessionId}`, 'Tunnel');
-    await sessionWebServerManager.stopServer(sessionId);
-    logger.info(`Tunnel stopped for session ${sessionId}`, 'Tunnel');
-    return true;
+    const isLive = webServer.isSessionLive(sessionId);
+    return {
+      live: isLive,
+      url: isLive ? webServer.getSessionUrl(sessionId) : null,
+    };
   });
 
-  ipcMain.handle('tunnel:getStatus', async (_, sessionId: string) => {
-    if (!sessionWebServerManager) {
-      return { active: false };
+  ipcMain.handle('live:getDashboardUrl', async () => {
+    if (!webServer) {
+      return null;
     }
-    return sessionWebServerManager.getStatus(sessionId);
+    return webServer.getSecureUrl();
+  });
+
+  ipcMain.handle('live:getLiveSessions', async () => {
+    if (!webServer) {
+      return [];
+    }
+    return webServer.getLiveSessions();
   });
 
   // Web server management
   ipcMain.handle('webserver:getUrl', async () => {
-    return webServer?.getUrl();
-  });
-
-  // Web server authentication management
-  ipcMain.handle('webserver:getAuthConfig', async () => {
-    return webServer?.getAuthConfig() || { enabled: false, token: null };
-  });
-
-  ipcMain.handle('webserver:setAuthEnabled', async (_, enabled: boolean) => {
-    if (!webServer) throw new Error('Web server not initialized');
-
-    const currentConfig = webServer.getAuthConfig();
-    let token = currentConfig.token;
-
-    // Generate a new token if enabling auth and no token exists
-    if (enabled && !token) {
-      const { WebServer } = await import('./web-server');
-      token = WebServer.generateToken();
-      store.set('webAuthToken', token);
-    }
-
-    webServer.setAuthConfig({ enabled, token });
-    store.set('webAuthEnabled', enabled);
-
-    logger.info(`Web server auth ${enabled ? 'enabled' : 'disabled'}`, 'WebServer');
-    return { enabled, token };
-  });
-
-  ipcMain.handle('webserver:generateNewToken', async () => {
-    if (!webServer) throw new Error('Web server not initialized');
-
-    const { WebServer } = await import('./web-server');
-    const newToken = WebServer.generateToken();
-    const currentConfig = webServer.getAuthConfig();
-
-    webServer.setAuthConfig({ ...currentConfig, token: newToken });
-    store.set('webAuthToken', newToken);
-
-    logger.info('Generated new web auth token', 'WebServer');
-    return newToken;
-  });
-
-  ipcMain.handle('webserver:setAuthToken', async (_, token: string | null) => {
-    if (!webServer) throw new Error('Web server not initialized');
-
-    const currentConfig = webServer.getAuthConfig();
-    webServer.setAuthConfig({ ...currentConfig, token });
-    store.set('webAuthToken', token);
-
-    logger.info('Updated web auth token', 'WebServer');
-    return true;
+    return webServer?.getSecureUrl();
   });
 
   ipcMain.handle('webserver:getConnectedClients', async () => {

@@ -122,10 +122,9 @@ export interface Session {
   aiPid: number;
   terminalPid: number;
   port: number;
-  tunnelActive: boolean;
-  tunnelUrl?: string;
-  tunnelPort?: number;
-  tunnelUuid?: string;
+  // Live mode - makes session accessible via web interface
+  isLive: boolean;
+  liveUrl?: string;
   changedFiles: FileArtifact[];
   isGitRepo: boolean;
   // File Explorer per-session state

@@ -5,10 +5,13 @@ import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import { FastifyInstance, FastifyRequest, FastifyReply } from 'fastify';
 import { WebSocket } from 'ws';
-import crypto from 'crypto';
+import { randomUUID } from 'crypto';
 import path from 'path';
 import { existsSync, readFileSync } from 'fs';
 import type { Theme } from '../shared/theme-types';
+import { getLocalIpAddress } from './utils/networkUtils';
+
+const GITHUB_REDIRECT_URL = 'https://github.com/pedramamini/Maestro';
 
 // Types for web client messages
 interface WebClientMessage {
@@ -21,13 +24,14 @@ interface WebClient {
   socket: WebSocket;
   id: string;
   connectedAt: number;
-  authenticated: boolean;
+  subscribedSessionId?: string; // Which session this client is viewing (if any)
 }
 
-// Authentication configuration
-export interface WebAuthConfig {
-  enabled: boolean;
-  token: string | null;
+// Live session info
+interface LiveSessionInfo {
+  sessionId: string;
+  claudeSessionId?: string;
+  enabledAt: number;
 }
 
 // Rate limiting configuration
@@ -45,29 +49,23 @@ export interface RateLimitConfig {
 /**
  * WebServer - HTTP and WebSocket server for remote access
  *
- * STATUS: Partial implementation (Phase 6 - Remote Access & Tunneling)
+ * Architecture:
+ * - Single server on random port
+ * - Security token (UUID) generated at startup, required in all URLs
+ * - Routes: /$TOKEN/ (dashboard), /$TOKEN/session/:id (session view)
+ * - Live sessions: Only sessions marked as "live" appear in dashboard
+ * - WebSocket: Real-time updates for session state, logs, theme
  *
- * Current functionality:
- * - Health check endpoint (/health) - WORKING
- * - WebSocket echo endpoint (/ws) - PLACEHOLDER (echoes messages for connectivity testing)
- * - Session list endpoint (/api/sessions) - WORKING (returns actual session data)
- * - Session detail endpoint (/api/session/:id) - WORKING (returns detailed session info)
- * - Session send endpoint (/api/session/:id/send) - WORKING (sends commands to session)
- * - Session interrupt endpoint (/api/session/:id/interrupt) - WORKING (sends SIGINT to session)
- * - Theme endpoint (/api/theme) - WORKING (returns current theme configuration)
- * - Web interface WebSocket (/ws/web) - WORKING (real-time updates, authentication)
- * - Authentication (token-based) - WORKING
- * - Rate limiting - WORKING
+ * URL Structure:
+ *   http://localhost:PORT/$TOKEN/                  → Dashboard (all live sessions)
+ *   http://localhost:PORT/$TOKEN/session/$UUID     → Single session view
+ *   http://localhost:PORT/$TOKEN/api/*             → REST API
+ *   http://localhost:PORT/$TOKEN/ws                → WebSocket
  *
- * Phase 6 implementation plan:
- * - Integrate with ProcessManager to expose real session data
- * - Implement real-time session state broadcasting via WebSocket
- * - Stream process output to connected clients
- * - Handle input commands from remote clients
- * - Support mobile/tablet responsive UI
- * - Integrate with ngrok tunneling for public access
- *
- * See PRD.md Phase 6 for full requirements.
+ * Security:
+ * - Token regenerated on each app restart
+ * - Invalid/missing token redirects to GitHub
+ * - No access without knowing the token
  */
 // Usage stats type for session cost/token tracking
 export interface SessionUsageStats {
@@ -152,7 +150,6 @@ export class WebServer {
   private isRunning: boolean = false;
   private webClients: Map<string, WebClient> = new Map();
   private clientIdCounter: number = 0;
-  private authConfig: WebAuthConfig = { enabled: false, token: null };
   private rateLimitConfig: RateLimitConfig = { ...DEFAULT_RATE_LIMIT_CONFIG };
   private getSessionsCallback: GetSessionsCallback | null = null;
   private getSessionDetailCallback: GetSessionDetailCallback | null = null;
@@ -161,7 +158,17 @@ export class WebServer {
   private interruptSessionCallback: InterruptSessionCallback | null = null;
   private webAssetsPath: string | null = null;
 
-  constructor(port: number = 8000) {
+  // Security token - regenerated on each app startup
+  private securityToken: string;
+
+  // Local IP address for generating URLs (detected at startup)
+  private localIpAddress: string = 'localhost';
+
+  // Live sessions - only these appear in the web interface
+  private liveSessions: Map<string, LiveSessionInfo> = new Map();
+
+  constructor(port: number = 0) {
+    // Use port 0 to let OS assign a random available port
     this.port = port;
     this.server = Fastify({
       logger: {
@@ -169,11 +176,14 @@ export class WebServer {
       },
     });
 
+    // Generate a new security token (UUID v4)
+    this.securityToken = randomUUID();
+    console.log(`Web server security token generated: ${this.securityToken}`);
+
     // Determine web assets path (production vs development)
     this.webAssetsPath = this.resolveWebAssetsPath();
 
-    this.setupMiddleware();
-    this.setupRoutes();
+    // Note: setupMiddleware and setupRoutes are called in start() to handle async properly
   }
 
   /**
@@ -205,9 +215,9 @@ export class WebServer {
 
   /**
    * Serve the index.html file for SPA routes
-   * Rewrites asset paths to work from the /web prefix
+   * Rewrites asset paths to include the security token
    */
-  private serveIndexHtml(reply: FastifyReply): void {
+  private serveIndexHtml(reply: FastifyReply, sessionId?: string): void {
     if (!this.webAssetsPath) {
       reply.code(503).send({
         error: 'Service Unavailable',
@@ -229,8 +239,22 @@ export class WebServer {
       // Read and transform the HTML to fix asset paths
       let html = readFileSync(indexPath, 'utf-8');
 
-      // Transform relative asset paths (./assets/) to use the /web/assets/ prefix
-      html = html.replace(/\.\/assets\//g, '/web/assets/');
+      // Transform relative paths to use the token-prefixed absolute paths
+      html = html.replace(/\.\/assets\//g, `/${this.securityToken}/assets/`);
+      html = html.replace(/\.\/manifest\.json/g, `/${this.securityToken}/manifest.json`);
+      html = html.replace(/\.\/icons\//g, `/${this.securityToken}/icons/`);
+      html = html.replace(/\.\/sw\.js/g, `/${this.securityToken}/sw.js`);
+
+      // Inject config for the React app to know the token and session context
+      const configScript = `<script>
+        window.__MAESTRO_CONFIG__ = {
+          securityToken: "${this.securityToken}",
+          sessionId: ${sessionId ? `"${sessionId}"` : 'null'},
+          apiBase: "/${this.securityToken}/api",
+          wsUrl: "/${this.securityToken}/ws"
+        };
+      </script>`;
+      html = html.replace('</head>', `${configScript}</head>`);
 
       reply.type('text/html').send(html);
     } catch (err) {
@@ -240,6 +264,89 @@ export class WebServer {
         message: 'Failed to serve web interface.',
       });
     }
+  }
+
+  // ============ Live Session Management ============
+
+  /**
+   * Mark a session as live (visible in web interface)
+   */
+  setSessionLive(sessionId: string, claudeSessionId?: string): void {
+    this.liveSessions.set(sessionId, {
+      sessionId,
+      claudeSessionId,
+      enabledAt: Date.now(),
+    });
+    console.log(`Session ${sessionId} marked as live (total: ${this.liveSessions.size})`);
+
+    // Broadcast to all connected clients
+    this.broadcastToWebClients({
+      type: 'session_live',
+      sessionId,
+      claudeSessionId,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Mark a session as offline (no longer visible in web interface)
+   */
+  setSessionOffline(sessionId: string): void {
+    const wasLive = this.liveSessions.delete(sessionId);
+    if (wasLive) {
+      console.log(`Session ${sessionId} marked as offline (remaining: ${this.liveSessions.size})`);
+
+      // Broadcast to all connected clients
+      this.broadcastToWebClients({
+        type: 'session_offline',
+        sessionId,
+        timestamp: Date.now(),
+      });
+    }
+  }
+
+  /**
+   * Check if a session is currently live
+   */
+  isSessionLive(sessionId: string): boolean {
+    return this.liveSessions.has(sessionId);
+  }
+
+  /**
+   * Get all live session IDs
+   */
+  getLiveSessions(): LiveSessionInfo[] {
+    return Array.from(this.liveSessions.values());
+  }
+
+  /**
+   * Get the security token (for constructing URLs)
+   */
+  getSecurityToken(): string {
+    return this.securityToken;
+  }
+
+  /**
+   * Get the full secure URL (with token)
+   * Uses the detected local IP address for LAN accessibility
+   */
+  getSecureUrl(): string {
+    return `http://${this.localIpAddress}:${this.port}/${this.securityToken}`;
+  }
+
+  /**
+   * Get URL for a specific session
+   * Uses the detected local IP address for LAN accessibility
+   */
+  getSessionUrl(sessionId: string): string {
+    return `http://${this.localIpAddress}:${this.port}/${this.securityToken}/session/${sessionId}`;
+  }
+
+  /**
+   * Validate the security token from a request
+   */
+  private validateToken(token: string): boolean {
+    return token === this.securityToken;
   }
 
   /**
@@ -283,21 +390,6 @@ export class WebServer {
   }
 
   /**
-   * Set the authentication configuration
-   */
-  setAuthConfig(config: WebAuthConfig) {
-    this.authConfig = config;
-    console.log(`Web server auth ${config.enabled ? 'enabled' : 'disabled'}`);
-  }
-
-  /**
-   * Get the current authentication configuration
-   */
-  getAuthConfig(): WebAuthConfig {
-    return { ...this.authConfig };
-  }
-
-  /**
    * Set the rate limiting configuration
    */
   setRateLimitConfig(config: Partial<RateLimitConfig>) {
@@ -312,62 +404,6 @@ export class WebServer {
     return { ...this.rateLimitConfig };
   }
 
-  /**
-   * Generate a new random authentication token
-   */
-  static generateToken(): string {
-    // Generate a 6-character alphanumeric PIN (easy to type on mobile)
-    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // Exclude confusing chars like 0/O, 1/I/L
-    let token = '';
-    const bytes = crypto.randomBytes(6);
-    for (let i = 0; i < 6; i++) {
-      token += chars[bytes[i] % chars.length];
-    }
-    return token;
-  }
-
-  /**
-   * Validate an authentication token
-   */
-  validateToken(token: string): boolean {
-    if (!this.authConfig.enabled || !this.authConfig.token) {
-      return true; // Auth disabled, all tokens valid
-    }
-    return token.toUpperCase() === this.authConfig.token.toUpperCase();
-  }
-
-  /**
-   * Authentication hook for protected REST API routes
-   * Used as a preHandler for routes that require authentication
-   *
-   * Usage: this.server.get('/protected', { preHandler: this.authenticateRequest.bind(this) }, handler)
-   */
-  authenticateRequest = async (request: FastifyRequest, reply: FastifyReply) => {
-    if (!this.authConfig.enabled || !this.authConfig.token) {
-      return; // Auth disabled, allow all
-    }
-
-    // Check for token in Authorization header (Bearer token) or X-Auth-Token header
-    const authHeader = request.headers.authorization;
-    const xAuthToken = request.headers['x-auth-token'] as string | undefined;
-
-    let token: string | null = null;
-
-    if (authHeader?.startsWith('Bearer ')) {
-      token = authHeader.slice(7);
-    } else if (xAuthToken) {
-      token = xAuthToken;
-    }
-
-    if (!token || !this.validateToken(token)) {
-      reply.code(401).send({
-        error: 'Unauthorized',
-        message: 'Valid authentication token required. Provide token via Authorization header (Bearer <token>) or X-Auth-Token header.'
-      });
-      return reply;
-    }
-  };
-
   private async setupMiddleware() {
     // Enable CORS for web access
     await this.server.register(cors, {
@@ -378,88 +414,138 @@ export class WebServer {
     await this.server.register(websocket);
 
     // Enable rate limiting for web interface endpoints to prevent abuse
-    // Rate limiting is applied globally but can be overridden per-route
     await this.server.register(rateLimit, {
-      global: false, // Don't apply to all routes by default (we'll apply selectively)
+      global: false,
       max: this.rateLimitConfig.max,
       timeWindow: this.rateLimitConfig.timeWindow,
-      // Custom error response
-      errorResponseBuilder: (
-        _request: FastifyRequest,
-        context: { statusCode: number; ban: boolean; after: string; max: number; ttl: number }
-      ) => {
+      errorResponseBuilder: (_request: FastifyRequest, context) => {
         return {
           statusCode: 429,
           error: 'Too Many Requests',
-          message: `Rate limit exceeded. You can make ${context.max} requests per ${context.after}. Try again later.`,
+          message: `Rate limit exceeded. Try again later.`,
           retryAfter: context.after,
         };
       },
-      // Allow list function to skip rate limiting for certain requests
       allowList: (request: FastifyRequest) => {
-        // Skip rate limiting if disabled
         if (!this.rateLimitConfig.enabled) return true;
-        // Allow health checks without rate limiting
         if (request.url === '/health') return true;
         return false;
       },
-      // Use IP address as the rate limit key
       keyGenerator: (request: FastifyRequest) => {
-        // Use X-Forwarded-For if available (for proxied requests), otherwise use IP
-        const forwarded = request.headers['x-forwarded-for'];
-        if (forwarded) {
-          const ip = Array.isArray(forwarded) ? forwarded[0] : forwarded.split(',')[0].trim();
-          return ip;
-        }
         return request.ip;
       },
     });
 
-    // Serve static web assets if the build directory exists
+    // Register static file serving for web assets
     if (this.webAssetsPath) {
-      await this.server.register(fastifyStatic, {
-        root: this.webAssetsPath,
-        prefix: '/web/assets/',
-        decorateReply: false, // Don't decorate reply to avoid conflicts
-      });
-      console.log(`Serving web assets from ${this.webAssetsPath}`);
+      const assetsPath = path.join(this.webAssetsPath, 'assets');
+      if (existsSync(assetsPath)) {
+        await this.server.register(fastifyStatic, {
+          root: assetsPath,
+          prefix: `/${this.securityToken}/assets/`,
+          decorateReply: false,
+        });
+      }
+
+      // Register icons directory
+      const iconsPath = path.join(this.webAssetsPath, 'icons');
+      if (existsSync(iconsPath)) {
+        await this.server.register(fastifyStatic, {
+          root: iconsPath,
+          prefix: `/${this.securityToken}/icons/`,
+          decorateReply: false,
+        });
+      }
     }
   }
 
   private setupRoutes() {
-    // Health check
+    const token = this.securityToken;
+
+    // Root path - redirect to GitHub (no access without token)
+    this.server.get('/', async (_request, reply) => {
+      return reply.redirect(302, GITHUB_REDIRECT_URL);
+    });
+
+    // Health check (no auth required)
     this.server.get('/health', async () => {
       return { status: 'ok', timestamp: Date.now() };
     });
 
-    // WebSocket endpoint for real-time updates
-    // NOTE: This is a placeholder implementation for Phase 6 (Remote Access & Tunneling)
-    // Current behavior: Echoes messages back to test connectivity
-    // Future implementation (Phase 6):
-    // - Broadcast session state changes to all connected clients
-    // - Stream process output in real-time
-    // - Handle input commands from remote clients
-    // - Implement authentication and authorization
-    // - Support multiple simultaneous connections
-    this.server.get('/ws', { websocket: true }, (connection) => {
-      connection.socket.on('message', (message) => {
-        // PLACEHOLDER: Echo back for testing connectivity only
-        connection.socket.send(JSON.stringify({
-          type: 'echo',
-          data: message.toString(),
-        }));
-      });
-
-      connection.socket.send(JSON.stringify({
-        type: 'connected',
-        message: 'Connected to Maestro WebSocket',
-      }));
+    // PWA manifest.json
+    this.server.get(`/${token}/manifest.json`, async (_request, reply) => {
+      if (!this.webAssetsPath) {
+        return reply.code(404).send({ error: 'Not Found' });
+      }
+      const manifestPath = path.join(this.webAssetsPath, 'manifest.json');
+      if (!existsSync(manifestPath)) {
+        return reply.code(404).send({ error: 'Not Found' });
+      }
+      return reply.type('application/json').send(readFileSync(manifestPath, 'utf-8'));
     });
 
-    // Session list endpoint - returns all sessions with their current states
-    // Rate limited using GET rate limit config
-    this.server.get('/api/sessions', {
-      preHandler: this.authenticateRequest.bind(this),
+    // PWA service worker
+    this.server.get(`/${token}/sw.js`, async (_request, reply) => {
+      if (!this.webAssetsPath) {
+        return reply.code(404).send({ error: 'Not Found' });
+      }
+      const swPath = path.join(this.webAssetsPath, 'sw.js');
+      if (!existsSync(swPath)) {
+        return reply.code(404).send({ error: 'Not Found' });
+      }
+      return reply.type('application/javascript').send(readFileSync(swPath, 'utf-8'));
+    });
+
+    // Dashboard - list all live sessions
+    this.server.get(`/${token}`, async (_request, reply) => {
+      this.serveIndexHtml(reply);
+    });
+
+    // Dashboard with trailing slash
+    this.server.get(`/${token}/`, async (_request, reply) => {
+      this.serveIndexHtml(reply);
+    });
+
+    // Single session view
+    this.server.get(`/${token}/session/:sessionId`, async (request, reply) => {
+      const { sessionId } = request.params as { sessionId: string };
+
+      // Check if session is live
+      if (!this.isSessionLive(sessionId)) {
+        return reply.code(404).send({
+          error: 'Session not found',
+          message: 'This session is not currently live. Enable "Live" mode in the desktop app.',
+        });
+      }
+
+      this.serveIndexHtml(reply, sessionId);
+    });
+
+    // Catch-all for invalid tokens - redirect to GitHub
+    this.server.get('/:token', async (request, reply) => {
+      const { token: reqToken } = request.params as { token: string };
+      if (!this.validateToken(reqToken)) {
+        return reply.redirect(302, GITHUB_REDIRECT_URL);
+      }
+      // Valid token but no specific route - serve dashboard
+      this.serveIndexHtml(reply);
+    });
+
+    // API Routes - all under /$TOKEN/api/*
+    this.setupApiRoutes();
+
+    // WebSocket route
+    this.setupWebSocketRoute();
+  }
+
+  /**
+   * Setup API routes under /$TOKEN/api/*
+   */
+  private setupApiRoutes() {
+    const token = this.securityToken;
+
+    // Get all live sessions
+    this.server.get(`/${token}/api/sessions`, {
       config: {
         rateLimit: {
           max: this.rateLimitConfig.max,
@@ -467,18 +553,28 @@ export class WebServer {
         },
       },
     }, async () => {
+      // Only return live sessions with their details
       const sessions = this.getSessionsCallback ? this.getSessionsCallback() : [];
+
+      // Filter to only live sessions and enrich with live info
+      const liveSessionData = sessions.filter(s => this.isSessionLive(s.id)).map(s => {
+        const liveInfo = this.liveSessions.get(s.id);
+        return {
+          ...s,
+          claudeSessionId: liveInfo?.claudeSessionId,
+          liveEnabledAt: liveInfo?.enabledAt,
+        };
+      });
+
       return {
-        sessions,
-        count: sessions.length,
+        sessions: liveSessionData,
+        count: liveSessionData.length,
         timestamp: Date.now(),
       };
     });
 
-    // Session detail endpoint - returns detailed information for a specific session
-    // Rate limited using GET rate limit config
-    this.server.get('/api/session/:id', {
-      preHandler: this.authenticateRequest.bind(this),
+    // Session detail endpoint
+    this.server.get(`/${token}/api/session/:id`, {
       config: {
         rateLimit: {
           max: this.rateLimitConfig.max,
@@ -488,36 +584,45 @@ export class WebServer {
     }, async (request, reply) => {
       const { id } = request.params as { id: string };
 
+      // Must be a live session
+      if (!this.isSessionLive(id)) {
+        return reply.code(404).send({
+          error: 'Not Found',
+          message: 'Session not live',
+          timestamp: Date.now(),
+        });
+      }
+
       if (!this.getSessionDetailCallback) {
-        reply.code(503).send({
+        return reply.code(503).send({
           error: 'Service Unavailable',
           message: 'Session detail service not configured',
           timestamp: Date.now(),
         });
-        return;
       }
 
       const session = this.getSessionDetailCallback(id);
-
       if (!session) {
-        reply.code(404).send({
+        return reply.code(404).send({
           error: 'Not Found',
           message: `Session with id '${id}' not found`,
           timestamp: Date.now(),
         });
-        return;
       }
 
+      const liveInfo = this.liveSessions.get(id);
       return {
-        session,
+        session: {
+          ...session,
+          claudeSessionId: liveInfo?.claudeSessionId,
+          liveEnabledAt: liveInfo?.enabledAt,
+        },
         timestamp: Date.now(),
       };
     });
 
-    // Send command to session endpoint - sends input to a specific session
-    // Rate limited using POST rate limit config (more restrictive)
-    this.server.post('/api/session/:id/send', {
-      preHandler: this.authenticateRequest.bind(this),
+    // Send command to session
+    this.server.post(`/${token}/api/session/:id/send`, {
       config: {
         rateLimit: {
           max: this.rateLimitConfig.maxPost,
@@ -529,49 +634,37 @@ export class WebServer {
       const body = request.body as { command?: string } | undefined;
       const command = body?.command;
 
-      // Validate command is provided
+      if (!this.isSessionLive(id)) {
+        return reply.code(404).send({
+          error: 'Not Found',
+          message: 'Session not live',
+          timestamp: Date.now(),
+        });
+      }
+
       if (!command || typeof command !== 'string') {
-        reply.code(400).send({
+        return reply.code(400).send({
           error: 'Bad Request',
           message: 'Command is required and must be a string',
           timestamp: Date.now(),
         });
-        return;
       }
 
-      // Check if write callback is configured
       if (!this.writeToSessionCallback) {
-        reply.code(503).send({
+        return reply.code(503).send({
           error: 'Service Unavailable',
           message: 'Session write service not configured',
           timestamp: Date.now(),
         });
-        return;
       }
 
-      // Check if session exists first
-      if (this.getSessionDetailCallback) {
-        const session = this.getSessionDetailCallback(id);
-        if (!session) {
-          reply.code(404).send({
-            error: 'Not Found',
-            message: `Session with id '${id}' not found`,
-            timestamp: Date.now(),
-          });
-          return;
-        }
-      }
-
-      // Write the command to the session (add newline to execute)
       const success = this.writeToSessionCallback(id, command + '\n');
-
       if (!success) {
-        reply.code(500).send({
+        return reply.code(500).send({
           error: 'Internal Server Error',
           message: 'Failed to send command to session',
           timestamp: Date.now(),
         });
-        return;
       }
 
       return {
@@ -582,10 +675,8 @@ export class WebServer {
       };
     });
 
-    // Theme endpoint - returns the current theme configuration
-    // Rate limited using GET rate limit config
-    this.server.get('/api/theme', {
-      preHandler: this.authenticateRequest.bind(this),
+    // Theme endpoint
+    this.server.get(`/${token}/api/theme`, {
       config: {
         rateLimit: {
           max: this.rateLimitConfig.max,
@@ -594,23 +685,20 @@ export class WebServer {
       },
     }, async (_request, reply) => {
       if (!this.getThemeCallback) {
-        reply.code(503).send({
+        return reply.code(503).send({
           error: 'Service Unavailable',
           message: 'Theme service not configured',
           timestamp: Date.now(),
         });
-        return;
       }
 
       const theme = this.getThemeCallback();
-
       if (!theme) {
-        reply.code(404).send({
+        return reply.code(404).send({
           error: 'Not Found',
           message: 'No theme currently configured',
           timestamp: Date.now(),
         });
-        return;
       }
 
       return {
@@ -619,10 +707,8 @@ export class WebServer {
       };
     });
 
-    // Interrupt session endpoint - sends SIGINT/Ctrl+C to a specific session
-    // Rate limited using POST rate limit config (more restrictive)
-    this.server.post('/api/session/:id/interrupt', {
-      preHandler: this.authenticateRequest.bind(this),
+    // Interrupt session
+    this.server.post(`/${token}/api/session/:id/interrupt`, {
       config: {
         rateLimit: {
           max: this.rateLimitConfig.maxPost,
@@ -632,34 +718,25 @@ export class WebServer {
     }, async (request, reply) => {
       const { id } = request.params as { id: string };
 
-      // Check if interrupt callback is configured
+      if (!this.isSessionLive(id)) {
+        return reply.code(404).send({
+          error: 'Not Found',
+          message: 'Session not live',
+          timestamp: Date.now(),
+        });
+      }
+
       if (!this.interruptSessionCallback) {
-        reply.code(503).send({
+        return reply.code(503).send({
           error: 'Service Unavailable',
           message: 'Session interrupt service not configured',
           timestamp: Date.now(),
         });
-        return;
       }
 
-      // Check if session exists first
-      if (this.getSessionDetailCallback) {
-        const session = this.getSessionDetailCallback(id);
-        if (!session) {
-          reply.code(404).send({
-            error: 'Not Found',
-            message: `Session with id '${id}' not found`,
-            timestamp: Date.now(),
-          });
-          return;
-        }
-      }
-
-      // Send interrupt signal to the session
       const success = this.interruptSessionCallback(id);
-
       if (!success) {
-        reply.code(500).send({
+        return reply.code(500).send({
           error: 'Internal Server Error',
           message: 'Failed to interrupt session',
           timestamp: Date.now(),
@@ -674,243 +751,76 @@ export class WebServer {
         timestamp: Date.now(),
       };
     });
-
-    // Setup web interface routes under /web/* namespace
-    this.setupWebInterfaceRoutes();
   }
 
   /**
-   * Setup routes for the web interface under /web/* namespace
-   *
-   * This namespace is dedicated to the new web interface that provides:
-   * - Desktop Web: Full-featured collaborative interface for hackathons/team coding
-   * - Mobile Web: Lightweight remote control for sending commands from phone
-   *
-   * Future routes planned:
-   * - /web/desktop - Desktop web interface entry point
-   * - /web/mobile - Mobile web interface entry point
-   * - /web/api/* - REST API endpoints for web clients
-   * - /ws/web - WebSocket endpoint for real-time updates to web clients
-   *
-   * Rate limiting is applied to all web interface endpoints to prevent abuse.
+   * Setup WebSocket route under /$TOKEN/ws
    */
-  private setupWebInterfaceRoutes() {
-    // Rate limit configuration for GET endpoints
-    const getRateLimitConfig = {
-      config: {
-        rateLimit: {
-          max: this.rateLimitConfig.max,
-          timeWindow: this.rateLimitConfig.timeWindow,
-        },
-      },
-    };
+  private setupWebSocketRoute() {
+    const token = this.securityToken;
 
-    // Rate limit configuration for POST endpoints (more restrictive)
-    const postRateLimitConfig = {
-      config: {
-        rateLimit: {
-          max: this.rateLimitConfig.maxPost,
-          timeWindow: this.rateLimitConfig.timeWindow,
-        },
-      },
-    };
-
-    // Web interface root - returns info about available interfaces
-    this.server.get('/web', getRateLimitConfig, async () => {
-      return {
-        name: 'Maestro Web Interface',
-        version: '1.0.0',
-        interfaces: {
-          desktop: '/web/desktop',
-          mobile: '/web/mobile',
-        },
-        api: '/web/api',
-        websocket: '/ws/web',
-        timestamp: Date.now(),
-      };
-    });
-
-    // Desktop web interface entry point - serves the SPA
-    this.server.get('/web/desktop', getRateLimitConfig, async (_request, reply) => {
-      this.serveIndexHtml(reply);
-    });
-
-    // Desktop web interface with wildcard for client-side routing
-    this.server.get('/web/desktop/*', getRateLimitConfig, async (_request, reply) => {
-      this.serveIndexHtml(reply);
-    });
-
-    // Mobile web interface entry point - serves the SPA
-    this.server.get('/web/mobile', getRateLimitConfig, async (_request, reply) => {
-      this.serveIndexHtml(reply);
-    });
-
-    // Mobile web interface with wildcard for client-side routing
-    this.server.get('/web/mobile/*', getRateLimitConfig, async (_request, reply) => {
-      this.serveIndexHtml(reply);
-    });
-
-    // Web API namespace root
-    this.server.get('/web/api', getRateLimitConfig, async () => {
-      return {
-        name: 'Maestro Web API',
-        version: '1.0.0',
-        endpoints: {
-          sessions: '/web/api/sessions',
-          theme: '/web/api/theme',
-          rateLimit: '/web/api/rate-limit',
-        },
-        timestamp: Date.now(),
-      };
-    });
-
-    // Rate limit status endpoint - allows clients to check current limits
-    this.server.get('/web/api/rate-limit', getRateLimitConfig, async () => {
-      return {
-        enabled: this.rateLimitConfig.enabled,
-        limits: {
-          get: {
-            max: this.rateLimitConfig.max,
-            timeWindowMs: this.rateLimitConfig.timeWindow,
-            timeWindowDescription: `${this.rateLimitConfig.timeWindow / 1000} seconds`,
-          },
-          post: {
-            max: this.rateLimitConfig.maxPost,
-            timeWindowMs: this.rateLimitConfig.timeWindow,
-            timeWindowDescription: `${this.rateLimitConfig.timeWindow / 1000} seconds`,
-          },
-        },
-        timestamp: Date.now(),
-      };
-    });
-
-    // WebSocket endpoint for web interface clients
-    // This provides real-time updates for session state, theme changes, and log streaming
-    // Authentication: If auth is enabled, client must send { type: 'auth', token: '<token>' } first
-    this.server.get('/ws/web', { websocket: true }, (connection, request) => {
+    this.server.get(`/${token}/ws`, { websocket: true }, (connection, request) => {
       const clientId = `web-client-${++this.clientIdCounter}`;
 
-      // Check if auth is required
-      const authRequired = this.authConfig.enabled && this.authConfig.token;
-
-      // Check for token in query string (allows direct connection with ?token=XXX)
+      // Extract sessionId from query string if provided (for session-specific subscriptions)
       const url = new URL(request.url || '', `http://${request.headers.host || 'localhost'}`);
-      const queryToken = url.searchParams.get('token');
-      const initiallyAuthenticated = queryToken ? this.validateToken(queryToken) : !authRequired;
+      const sessionId = url.searchParams.get('sessionId') || undefined;
 
       const client: WebClient = {
         socket: connection.socket,
         id: clientId,
         connectedAt: Date.now(),
-        authenticated: initiallyAuthenticated,
+        subscribedSessionId: sessionId,
       };
 
       this.webClients.set(clientId, client);
-      console.log(`Web client connected: ${clientId} (authenticated: ${client.authenticated}, total: ${this.webClients.size})`);
+      console.log(`Web client connected: ${clientId} (session: ${sessionId || 'dashboard'}, total: ${this.webClients.size})`);
 
-      if (client.authenticated) {
-        // Send connection confirmation with client ID
+      // Send connection confirmation
+      connection.socket.send(JSON.stringify({
+        type: 'connected',
+        clientId,
+        message: 'Connected to Maestro Web Interface',
+        subscribedSessionId: sessionId,
+        timestamp: Date.now(),
+      }));
+
+      // Send initial live sessions list
+      if (this.getSessionsCallback) {
+        const allSessions = this.getSessionsCallback();
+        const liveSessions = allSessions.filter(s => this.isSessionLive(s.id)).map(s => {
+          const liveInfo = this.liveSessions.get(s.id);
+          return {
+            ...s,
+            claudeSessionId: liveInfo?.claudeSessionId,
+            liveEnabledAt: liveInfo?.enabledAt,
+          };
+        });
         connection.socket.send(JSON.stringify({
-          type: 'connected',
-          clientId,
-          message: 'Connected to Maestro Web Interface',
-          authenticated: true,
-          timestamp: Date.now(),
-        }));
-
-        // Send initial sessions list to newly connected client
-        if (this.getSessionsCallback) {
-          const sessions = this.getSessionsCallback();
-          connection.socket.send(JSON.stringify({
-            type: 'sessions_list',
-            sessions,
-            timestamp: Date.now(),
-          }));
-        }
-
-        // Send current theme to newly connected client
-        if (this.getThemeCallback) {
-          const theme = this.getThemeCallback();
-          if (theme) {
-            connection.socket.send(JSON.stringify({
-              type: 'theme',
-              theme,
-              timestamp: Date.now(),
-            }));
-          }
-        }
-      } else {
-        // Send auth required message
-        connection.socket.send(JSON.stringify({
-          type: 'auth_required',
-          clientId,
-          message: 'Authentication required. Send { type: "auth", token: "<token>" } to authenticate.',
+          type: 'sessions_list',
+          sessions: liveSessions,
           timestamp: Date.now(),
         }));
       }
 
-      // Handle incoming messages from web clients
+      // Send current theme
+      if (this.getThemeCallback) {
+        const theme = this.getThemeCallback();
+        if (theme) {
+          connection.socket.send(JSON.stringify({
+            type: 'theme',
+            theme,
+            timestamp: Date.now(),
+          }));
+        }
+      }
+
+      // Handle incoming messages
       connection.socket.on('message', (message) => {
         try {
           const data = JSON.parse(message.toString()) as WebClientMessage;
-
-          // Handle authentication message
-          if (data.type === 'auth') {
-            const token = data.token as string;
-            if (this.validateToken(token || '')) {
-              client.authenticated = true;
-              connection.socket.send(JSON.stringify({
-                type: 'auth_success',
-                clientId,
-                message: 'Authentication successful',
-                timestamp: Date.now(),
-              }));
-              console.log(`Web client authenticated: ${clientId}`);
-
-              // Send initial sessions list to newly authenticated client
-              if (this.getSessionsCallback) {
-                const sessions = this.getSessionsCallback();
-                connection.socket.send(JSON.stringify({
-                  type: 'sessions_list',
-                  sessions,
-                  timestamp: Date.now(),
-                }));
-              }
-
-              // Send current theme to newly authenticated client
-              if (this.getThemeCallback) {
-                const theme = this.getThemeCallback();
-                if (theme) {
-                  connection.socket.send(JSON.stringify({
-                    type: 'theme',
-                    theme,
-                    timestamp: Date.now(),
-                  }));
-                }
-              }
-            } else {
-              connection.socket.send(JSON.stringify({
-                type: 'auth_failed',
-                message: 'Invalid authentication token',
-                timestamp: Date.now(),
-              }));
-              console.log(`Web client auth failed: ${clientId}`);
-            }
-            return;
-          }
-
-          // Reject messages from unauthenticated clients (except auth messages)
-          if (!client.authenticated) {
-            connection.socket.send(JSON.stringify({
-              type: 'error',
-              message: 'Not authenticated. Send { type: "auth", token: "<token>" } first.',
-            }));
-            return;
-          }
-
           this.handleWebClientMessage(clientId, data);
         } catch {
-          // Send error for invalid JSON
           connection.socket.send(JSON.stringify({
             type: 'error',
             message: 'Invalid message format',
@@ -918,7 +828,7 @@ export class WebServer {
         }
       });
 
-      // Handle client disconnection
+      // Handle disconnection
       connection.socket.on('close', () => {
         this.webClients.delete(clientId);
         console.log(`Web client disconnected: ${clientId} (total: ${this.webClients.size})`);
@@ -929,34 +839,6 @@ export class WebServer {
         console.error(`Web client error (${clientId}):`, error);
         this.webClients.delete(clientId);
       });
-    });
-
-    // Authentication status endpoint - allows checking if auth is enabled
-    this.server.get('/web/api/auth/status', getRateLimitConfig, async () => {
-      return {
-        enabled: this.authConfig.enabled,
-        timestamp: Date.now(),
-      };
-    });
-
-    // Authentication verification endpoint - checks if a token is valid
-    // Uses more restrictive POST rate limit to prevent brute force attacks
-    this.server.post('/web/api/auth/verify', postRateLimitConfig, async (request) => {
-      const body = request.body as { token?: string } | undefined;
-      const token = body?.token;
-
-      if (!token) {
-        return {
-          valid: false,
-          message: 'No token provided',
-        };
-      }
-
-      const valid = this.validateToken(token);
-      return {
-        valid,
-        message: valid ? 'Token is valid' : 'Invalid token',
-      };
     });
   }
 
@@ -977,17 +859,112 @@ export class WebServer {
         break;
 
       case 'subscribe':
-        // Placeholder for subscription handling (sessions, theme, etc.)
-        // Will be implemented in future tasks
+        // Update client's session subscription
+        if (message.sessionId) {
+          client.subscribedSessionId = message.sessionId as string;
+        }
         client.socket.send(JSON.stringify({
           type: 'subscribed',
-          topic: message.topic,
+          sessionId: message.sessionId,
           timestamp: Date.now(),
         }));
         break;
 
+      case 'send_command': {
+        // Send a command to a session (AI or terminal)
+        const sessionId = message.sessionId as string;
+        const command = message.command as string;
+
+        if (!sessionId || !command) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId or command',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        // Check if session is live
+        if (!this.isSessionLive(sessionId)) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Session is not live',
+            sessionId,
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        // Write command to session
+        if (this.writeToSessionCallback) {
+          const success = this.writeToSessionCallback(sessionId, command + '\n');
+          client.socket.send(JSON.stringify({
+            type: 'command_result',
+            success,
+            sessionId,
+            timestamp: Date.now(),
+          }));
+          console.log(`[WebSocket] Command sent to session ${sessionId}: ${success ? 'success' : 'failed'}`);
+        } else {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Write callback not configured',
+            timestamp: Date.now(),
+          }));
+        }
+        break;
+      }
+
+      case 'switch_mode': {
+        // Switch session input mode between AI and terminal
+        const sessionId = message.sessionId as string;
+        const mode = message.mode as 'ai' | 'terminal';
+
+        if (!sessionId || !mode) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId or mode',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        // Mode switching is handled by the main process
+        // We just acknowledge the request - the actual switch happens via IPC
+        client.socket.send(JSON.stringify({
+          type: 'mode_switch_requested',
+          sessionId,
+          mode,
+          timestamp: Date.now(),
+        }));
+        console.log(`[WebSocket] Mode switch requested for session ${sessionId}: ${mode}`);
+        break;
+      }
+
+      case 'get_sessions': {
+        // Request updated sessions list
+        if (this.getSessionsCallback) {
+          const allSessions = this.getSessionsCallback();
+          const liveSessions = allSessions.filter(s => this.isSessionLive(s.id)).map(s => {
+            const liveInfo = this.liveSessions.get(s.id);
+            return {
+              ...s,
+              claudeSessionId: liveInfo?.claudeSessionId,
+              liveEnabledAt: liveInfo?.enabledAt,
+            };
+          });
+          client.socket.send(JSON.stringify({
+            type: 'sessions_list',
+            sessions: liveSessions,
+            timestamp: Date.now(),
+          }));
+        }
+        break;
+      }
+
       default:
         // Echo unknown message types for debugging
+        console.log(`[WebSocket] Unknown message type: ${message.type}`);
         client.socket.send(JSON.stringify({
           type: 'echo',
           originalType: message.type,
@@ -1002,7 +979,20 @@ export class WebServer {
   broadcastToWebClients(message: object) {
     const data = JSON.stringify(message);
     for (const client of this.webClients.values()) {
-      if (client.socket.readyState === WebSocket.OPEN && client.authenticated) {
+      if (client.socket.readyState === WebSocket.OPEN) {
+        client.socket.send(data);
+      }
+    }
+  }
+
+  /**
+   * Broadcast a message to clients subscribed to a specific session
+   */
+  broadcastToSessionClients(sessionId: string, message: object) {
+    const data = JSON.stringify(message);
+    for (const client of this.webClients.values()) {
+      if (client.socket.readyState === WebSocket.OPEN &&
+          (client.subscribedSessionId === sessionId || !client.subscribedSessionId)) {
         client.socket.send(data);
       }
     }
@@ -1100,16 +1090,39 @@ export class WebServer {
     return this.webClients.size;
   }
 
-  async start() {
+  async start(): Promise<{ port: number; token: string; url: string }> {
     if (this.isRunning) {
-      console.log('Web server already running');
-      return;
+      return {
+        port: this.port,
+        token: this.securityToken,
+        url: this.getSecureUrl(),
+      };
     }
 
     try {
+      // Detect local IP address for LAN accessibility
+      this.localIpAddress = await getLocalIpAddress();
+      console.log(`Web server using IP address: ${this.localIpAddress}`);
+
+      // Setup middleware and routes (must be done before listen)
+      await this.setupMiddleware();
+      this.setupRoutes();
+
       await this.server.listen({ port: this.port, host: '0.0.0.0' });
+
+      // Get the actual port (important when using port 0 for random assignment)
+      const address = this.server.server.address();
+      if (address && typeof address === 'object') {
+        this.port = address.port;
+      }
+
       this.isRunning = true;
-      console.log(`Maestro web server running on http://localhost:${this.port}`);
+
+      return {
+        port: this.port,
+        token: this.securityToken,
+        url: this.getSecureUrl(),
+      };
     } catch (error) {
       console.error('Failed to start web server:', error);
       throw error;
@@ -1119,6 +1132,11 @@ export class WebServer {
   async stop() {
     if (!this.isRunning) {
       return;
+    }
+
+    // Mark all live sessions as offline
+    for (const sessionId of this.liveSessions.keys()) {
+      this.setSessionOffline(sessionId);
     }
 
     try {
@@ -1131,7 +1149,15 @@ export class WebServer {
   }
 
   getUrl(): string {
-    return `http://localhost:${this.port}`;
+    return `http://${this.localIpAddress}:${this.port}`;
+  }
+
+  getPort(): number {
+    return this.port;
+  }
+
+  isActive(): boolean {
+    return this.isRunning;
   }
 
   getServer(): FastifyInstance {

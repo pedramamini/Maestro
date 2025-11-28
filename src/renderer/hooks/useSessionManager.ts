@@ -18,7 +18,7 @@ export interface UseSessionManagerReturn {
   createNewSession: (agentId: string, workingDir: string, name: string) => void;
   deleteSession: (id: string, showConfirmation: (message: string, onConfirm: () => void) => void) => void;
   toggleInputMode: () => void;
-  toggleTunnel: (sessId: string, tunnelProvider: string) => void;
+  toggleLive: (sessId: string) => void;
   updateScratchPad: (content: string) => void;
   updateScratchPadState: (state: {
     mode: 'edit' | 'preview';
@@ -237,7 +237,7 @@ export function useSessionManager(): UseSessionManagerReturn {
         aiPid: aiSpawnResult.pid,
         terminalPid: terminalSpawnResult.pid,
         port: 3000 + Math.floor(Math.random() * 100),
-        tunnelActive: false,
+        isLive: false,
         changedFiles: [],
         fileTree: [],
         fileExplorerExpanded: [],
@@ -289,14 +289,15 @@ export function useSessionManager(): UseSessionManagerReturn {
     }));
   };
 
-  const toggleTunnel = (sessId: string, tunnelProvider: string) => {
+  const toggleLive = (sessId: string) => {
+    // Live toggle is handled in App.tsx via IPC
+    // This is just a stub for the interface
     setSessions(prev => prev.map(s => {
       if (s.id !== sessId) return s;
-      const isActive = !s.tunnelActive;
       return {
         ...s,
-        tunnelActive: isActive,
-        tunnelUrl: isActive ? `https://${generateId()}.${tunnelProvider === 'ngrok' ? 'ngrok.io' : 'trycloudflare.com'}` : undefined
+        isLive: !s.isLive,
+        liveUrl: undefined
       };
     }));
   };
@@ -405,7 +406,7 @@ export function useSessionManager(): UseSessionManagerReturn {
     createNewSession,
     deleteSession,
     toggleInputMode,
-    toggleTunnel,
+    toggleLive,
     updateScratchPad,
     updateScratchPadState,
     startRenamingSession,

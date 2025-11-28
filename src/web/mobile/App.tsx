@@ -1,10 +1,8 @@
 /**
- * Maestro Mobile Web App
+ * Maestro Web Remote Control
  *
- * Lightweight remote control interface for mobile devices.
+ * Lightweight interface for controlling sessions from mobile/tablet devices.
  * Focused on quick command input and session monitoring.
- *
- * Phase 1 implementation will expand this component.
  */
 
 import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react';
@@ -17,7 +15,7 @@ import { useOfflineQueue } from '../hooks/useOfflineQueue';
 import { Badge, type BadgeVariant } from '../components/Badge';
 import { PullToRefreshIndicator } from '../components/PullToRefresh';
 import { usePullToRefresh } from '../hooks/usePullToRefresh';
-import { useOfflineStatus } from '../main';
+import { useOfflineStatus, useMaestroMode } from '../main';
 import { triggerHaptic, HAPTIC_PATTERNS } from './index';
 import { SessionPillBar } from './SessionPillBar';
 import { AllSessionsView } from './AllSessionsView';
@@ -74,7 +72,7 @@ const CONNECTION_STATUS_CONFIG: Record<WebSocketState | 'offline', ConnectionSta
 
 /**
  * Header component for the mobile app
- * Displays app title and connection status indicator
+ * Displays app title (clickable to go to dashboard) and connection status indicator
  */
 interface MobileHeaderProps {
   connectionState: WebSocketState;
@@ -84,6 +82,8 @@ interface MobileHeaderProps {
 
 function MobileHeader({ connectionState, isOffline, onRetry }: MobileHeaderProps) {
   const colors = useThemeColors();
+  const { isDashboard, isSession, sessionId, goToDashboard } = useMaestroMode();
+
   // Show offline status if device is offline, otherwise show connection state
   const effectiveState = isOffline ? 'offline' : connectionState;
   const statusConfig = CONNECTION_STATUS_CONFIG[effectiveState];
@@ -101,16 +101,46 @@ function MobileHeader({ connectionState, isOffline, onRetry }: MobileHeaderProps
         minHeight: '56px',
       }}
     >
-      <h1
+      <div
         style={{
-          fontSize: '18px',
-          fontWeight: 600,
-          margin: 0,
-          color: colors.textMain,
+          display: 'flex',
+          alignItems: 'center',
+          gap: '8px',
         }}
       >
-        Maestro
-      </h1>
+        {/* Maestro logo/title - clickable to go to dashboard */}
+        <h1
+          onClick={isSession ? goToDashboard : undefined}
+          style={{
+            fontSize: '18px',
+            fontWeight: 600,
+            margin: 0,
+            color: colors.textMain,
+            cursor: isSession ? 'pointer' : 'default',
+          }}
+          title={isSession ? 'Go to dashboard' : undefined}
+        >
+          Maestro
+        </h1>
+
+        {/* Show back arrow when in session mode */}
+        {isSession && (
+          <span
+            onClick={goToDashboard}
+            style={{
+              fontSize: '12px',
+              color: colors.textDim,
+              cursor: 'pointer',
+              padding: '4px 8px',
+              borderRadius: '4px',
+              backgroundColor: colors.bgMain,
+            }}
+          >
+            ← All Sessions
+          </span>
+        )}
+      </div>
+
       <div
         style={{
           display: 'flex',
@@ -270,78 +300,82 @@ export default function MobileApp() {
     }
   }, [notificationPermission, showNotification, getFirstLineOfResponse, addUnreadResponse, markAllResponsesRead]);
 
+  // Memoize handlers to prevent unnecessary re-renders
+  const wsHandlers = useMemo(() => ({
+    onConnectionChange: (newState: WebSocketState) => {
+      console.log('[Mobile] Connection state:', newState);
+    },
+    onError: (err: string) => {
+      console.error('[Mobile] WebSocket error:', err);
+    },
+    onSessionsUpdate: (newSessions: Session[]) => {
+      console.log('[Mobile] Sessions updated:', newSessions.length);
+
+      // Update previous states map for all sessions
+      newSessions.forEach(s => {
+        previousSessionStatesRef.current.set(s.id, s.state);
+      });
+
+      setSessions(newSessions);
+      // Auto-select first session if none selected
+      setActiveSessionId(prev => {
+        if (!prev && newSessions.length > 0) {
+          return newSessions[0].id;
+        }
+        return prev;
+      });
+    },
+    onSessionStateChange: (sessionId: string, state: string, additionalData?: Partial<Session>) => {
+      // Check if this is a busy -> idle transition (AI response completed)
+      const previousState = previousSessionStatesRef.current.get(sessionId);
+      const isResponseComplete = previousState === 'busy' && state === 'idle';
+
+      // Update the previous state
+      previousSessionStatesRef.current.set(sessionId, state);
+
+      setSessions(prev => {
+        const updatedSessions = prev.map(s =>
+          s.id === sessionId
+            ? { ...s, state, ...additionalData }
+            : s
+        );
+
+        // Show notification if response completed and app is backgrounded
+        if (isResponseComplete) {
+          const session = updatedSessions.find(s => s.id === sessionId);
+          if (session) {
+            // Get the response from additionalData or the updated session
+            const response = (additionalData as any)?.lastResponse || (session as any).lastResponse;
+            showResponseNotification(session, response);
+          }
+        }
+
+        return updatedSessions;
+      });
+    },
+    onSessionAdded: (session: Session) => {
+      // Track state for new session
+      previousSessionStatesRef.current.set(session.id, session.state);
+
+      setSessions(prev => {
+        if (prev.some(s => s.id === session.id)) return prev;
+        return [...prev, session];
+      });
+    },
+    onSessionRemoved: (sessionId: string) => {
+      // Clean up state tracking
+      previousSessionStatesRef.current.delete(sessionId);
+
+      setSessions(prev => prev.filter(s => s.id !== sessionId));
+      setActiveSessionId(prev => prev === sessionId ? null : prev);
+    },
+  }), [showResponseNotification]);
+
   const { state: connectionState, connect, send, error, reconnectAttempts } = useWebSocket({
     autoReconnect: true,
     maxReconnectAttempts: 10,
     reconnectDelay: 2000,
-    handlers: {
-      onConnectionChange: (newState) => {
-        console.log('[Mobile] Connection state:', newState);
-      },
-      onError: (err) => {
-        console.error('[Mobile] WebSocket error:', err);
-      },
-      onSessionsUpdate: (newSessions) => {
-        console.log('[Mobile] Sessions updated:', newSessions.length);
-
-        // Update previous states map for all sessions
-        newSessions.forEach(s => {
-          previousSessionStatesRef.current.set(s.id, s.state);
-        });
-
-        setSessions(newSessions as Session[]);
-        // Auto-select first session if none selected
-        if (!activeSessionId && newSessions.length > 0) {
-          setActiveSessionId(newSessions[0].id);
-        }
-      },
-      onSessionStateChange: (sessionId, state, additionalData) => {
-        // Check if this is a busy -> idle transition (AI response completed)
-        const previousState = previousSessionStatesRef.current.get(sessionId);
-        const isResponseComplete = previousState === 'busy' && state === 'idle';
-
-        // Update the previous state
-        previousSessionStatesRef.current.set(sessionId, state);
-
-        setSessions(prev => {
-          const updatedSessions = prev.map(s =>
-            s.id === sessionId
-              ? { ...s, state, ...additionalData }
-              : s
-          );
-
-          // Show notification if response completed and app is backgrounded
-          if (isResponseComplete) {
-            const session = updatedSessions.find(s => s.id === sessionId);
-            if (session) {
-              // Get the response from additionalData or the updated session
-              const response = (additionalData as any)?.lastResponse || (session as any).lastResponse;
-              showResponseNotification(session, response);
-            }
-          }
-
-          return updatedSessions;
-        });
-      },
-      onSessionAdded: (session) => {
-        // Track state for new session
-        previousSessionStatesRef.current.set(session.id, session.state);
-
-        setSessions(prev => {
-          if (prev.some(s => s.id === session.id)) return prev;
-          return [...prev, session as Session];
-        });
-      },
-      onSessionRemoved: (sessionId) => {
-        // Clean up state tracking
-        previousSessionStatesRef.current.delete(sessionId);
-
-        setSessions(prev => prev.filter(s => s.id !== sessionId));
-        if (activeSessionId === sessionId) {
-          setActiveSessionId(null);
-        }
-      },
-    },
+    handlers: wsHandlers,
   });
 
   // Connect on mount
