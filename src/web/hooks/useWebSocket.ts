@@ -31,6 +31,21 @@ export interface UsageStats {
 }
 
 /**
+ * AI Tab data for multi-tab support within a Maestro session
+ */
+export interface AITabData {
+  id: string;
+  claudeSessionId: string | null;
+  name: string | null;
+  starred: boolean;
+  inputValue: string;
+  usageStats?: UsageStats | null;
+  createdAt: number;
+  state: 'idle' | 'busy';
+  thinkingStartTime?: number | null;
+}
+
+/**
  * Last response preview for mobile display
  * Contains a truncated version of the last AI response
  */
@@ -58,6 +73,8 @@ export interface SessionData {
   lastResponse?: LastResponsePreview | null;
   claudeSessionId?: string | null;
   thinkingStartTime?: number | null; // Timestamp when AI started thinking (for elapsed time display)
+  aiTabs?: AITabData[];
+  activeTabId?: string;
 }
 
 /**
@@ -89,6 +106,7 @@ export type ServerMessageType =
   | 'theme'
   | 'custom_commands'
   | 'autorun_state'
+  | 'tabs_changed'
   | 'pong'
   | 'subscribed'
   | 'echo'
@@ -252,6 +270,17 @@ export interface AutoRunStateMessage extends ServerMessage {
 }
 
 /**
+ * Tabs changed message from server
+ * Sent when tabs are added, removed, or active tab changes in a session
+ */
+export interface TabsChangedMessage extends ServerMessage {
+  type: 'tabs_changed';
+  sessionId: string;
+  aiTabs: AITabData[];
+  activeTabId: string;
+}
+
+/**
  * Error message from server
  */
 export interface ErrorMessage extends ServerMessage {
@@ -278,6 +307,7 @@ export type TypedServerMessage =
   | ThemeMessage
   | CustomCommandsMessage
   | AutoRunStateMessage
+  | TabsChangedMessage
   | ErrorMessage
   | ServerMessage;
 
@@ -307,6 +337,8 @@ export interface WebSocketEventHandlers {
   onCustomCommands?: (commands: CustomCommand[]) => void;
   /** Called when AutoRun state changes (batch processing on desktop) */
   onAutoRunStateChange?: (sessionId: string, state: AutoRunState | null) => void;
+  /** Called when tabs change in a session */
+  onTabsChanged?: (sessionId: string, aiTabs: AITabData[], activeTabId: string) => void;
   /** Called when connection state changes */
   onConnectionChange?: (state: WebSocketState) => void;
   /** Called when an error occurs */
@@ -616,6 +648,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
         case 'autorun_state': {
           const autoRunMsg = message as AutoRunStateMessage;
           handlersRef.current?.onAutoRunStateChange?.(autoRunMsg.sessionId, autoRunMsg.state);
+          break;
+        }
+
+        case 'tabs_changed': {
+          const tabsMsg = message as TabsChangedMessage;
+          handlersRef.current?.onTabsChanged?.(tabsMsg.sessionId, tabsMsg.aiTabs, tabsMsg.activeTabId);
           break;
         }
 

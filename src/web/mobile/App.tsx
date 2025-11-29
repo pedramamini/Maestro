@@ -7,7 +7,7 @@
 
 import React, { useEffect, useCallback, useState, useMemo, useRef } from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
-import { useWebSocket, type WebSocketState, type CustomCommand, type AutoRunState } from '../hooks/useWebSocket';
+import { useWebSocket, type WebSocketState, type CustomCommand, type AutoRunState, type AITabData } from '../hooks/useWebSocket';
 // Command history is no longer used in the mobile UI
 import { useNotifications } from '../hooks/useNotifications';
 import { useUnreadBadge } from '../hooks/useUnreadBadge';
@@ -29,6 +29,7 @@ import { OfflineQueueBanner } from './OfflineQueueBanner';
 import { ConnectionStatusIndicator } from './ConnectionStatusIndicator';
 import { MessageHistory, type LogEntry } from './MessageHistory';
 import { AutoRunIndicator } from './AutoRunIndicator';
+import { TabBar } from './TabBar';
 import type { Session, LastResponsePreview } from '../hooks/useSessions';
 
 /**
@@ -637,6 +638,15 @@ export default function MobileApp() {
         [sessionId]: state,
       }));
     },
+    onTabsChanged: (sessionId: string, aiTabs: AITabData[], activeTabId: string) => {
+      // Tab state changed on desktop - update session
+      webLogger.debug(`Tabs changed: ${sessionId} - ${aiTabs.length} tabs, active: ${activeTabId}`, 'Mobile');
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId
+          ? { ...s, aiTabs, activeTabId }
+          : s
+      ));
+    },
   }), [showResponseNotification, setDesktopTheme]);
 
   const { state: connectionState, connect, send, error, reconnectAttempts } = useWebSocket({
@@ -747,6 +757,36 @@ export default function MobileApp() {
     // Notify desktop to switch to this session
     send({ type: 'select_session', sessionId });
   }, [send]);
+
+  // Handle selecting a tab within a session
+  const handleSelectTab = useCallback((tabId: string) => {
+    if (!activeSessionId) return;
+    triggerHaptic(HAPTIC_PATTERNS.tap);
+    // Notify desktop to switch to this tab
+    send({ type: 'select_tab', sessionId: activeSessionId, tabId });
+    // Optimistically update local state
+    setSessions(prev => prev.map(s =>
+      s.id === activeSessionId
+        ? { ...s, activeTabId: tabId }
+        : s
+    ));
+  }, [activeSessionId, send]);
+
+  // Handle creating a new tab
+  const handleNewTab = useCallback(() => {
+    if (!activeSessionId) return;
+    triggerHaptic(HAPTIC_PATTERNS.tap);
+    // Notify desktop to create a new tab
+    send({ type: 'new_tab', sessionId: activeSessionId });
+  }, [activeSessionId, send]);
+
+  // Handle closing a tab
+  const handleCloseTab = useCallback((tabId: string) => {
+    if (!activeSessionId) return;
+    triggerHaptic(HAPTIC_PATTERNS.tap);
+    // Notify desktop to close this tab
+    send({ type: 'close_tab', sessionId: activeSessionId, tabId });
+  }, [activeSessionId, send]);
 
   // Handle opening All Sessions view
   const handleOpenAllSessions = useCallback(() => {
@@ -1165,6 +1205,17 @@ export default function MobileApp() {
           onSelectSession={handleSelectSession}
           onOpenAllSessions={handleOpenAllSessions}
           onOpenHistory={handleOpenHistoryPanel}
+        />
+      )}
+
+      {/* Tab bar - shown when active session has multiple tabs */}
+      {activeSession?.aiTabs && activeSession.aiTabs.length > 1 && activeSession.activeTabId && (
+        <TabBar
+          tabs={activeSession.aiTabs}
+          activeTabId={activeSession.activeTabId}
+          onSelectTab={handleSelectTab}
+          onNewTab={handleNewTab}
+          onCloseTab={handleCloseTab}
         />
       )}
 

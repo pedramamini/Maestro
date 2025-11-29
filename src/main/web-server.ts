@@ -89,6 +89,19 @@ export interface LastResponsePreview {
   fullLength: number; // Total length of the original response
 }
 
+// AI Tab type for multi-tab support within a Maestro session
+export interface AITabData {
+  id: string;
+  claudeSessionId: string | null;
+  name: string | null;
+  starred: boolean;
+  inputValue: string;
+  usageStats?: SessionUsageStats | null;
+  createdAt: number;
+  state: 'idle' | 'busy';
+  thinkingStartTime?: number | null;
+}
+
 // Callback type for fetching sessions data
 export type GetSessionsCallback = () => Array<{
   id: string;
@@ -104,6 +117,8 @@ export type GetSessionsCallback = () => Array<{
   lastResponse?: LastResponsePreview | null;
   claudeSessionId?: string | null;
   thinkingStartTime?: number | null; // Timestamp when AI started thinking (for elapsed time display)
+  aiTabs?: AITabData[];
+  activeTabId?: string;
 }>;
 
 // Session detail type for single session endpoint
@@ -154,6 +169,11 @@ export type SwitchModeCallback = (
 // Callback type for selecting/switching to a session in the desktop app
 // This forwards to the renderer which handles state updates and broadcasts
 export type SelectSessionCallback = (sessionId: string) => Promise<boolean>;
+
+// Tab operation callbacks for multi-tab support
+export type SelectTabCallback = (sessionId: string, tabId: string) => Promise<boolean>;
+export type NewTabCallback = (sessionId: string) => Promise<{ tabId: string } | null>;
+export type CloseTabCallback = (sessionId: string, tabId: string) => Promise<boolean>;
 
 // Re-export Theme type from shared for backwards compatibility
 export type { Theme } from '../shared/theme-types';
@@ -222,6 +242,9 @@ export class WebServer {
   private interruptSessionCallback: InterruptSessionCallback | null = null;
   private switchModeCallback: SwitchModeCallback | null = null;
   private selectSessionCallback: SelectSessionCallback | null = null;
+  private selectTabCallback: SelectTabCallback | null = null;
+  private newTabCallback: NewTabCallback | null = null;
+  private closeTabCallback: CloseTabCallback | null = null;
   private getHistoryCallback: GetHistoryCallback | null = null;
   private webAssetsPath: string | null = null;
 
@@ -488,6 +511,33 @@ export class WebServer {
   setSelectSessionCallback(callback: SelectSessionCallback) {
     logger.info('[WebServer] setSelectSessionCallback called', LOG_CONTEXT);
     this.selectSessionCallback = callback;
+  }
+
+  /**
+   * Set the callback function for selecting a tab within a session
+   * This forwards to the renderer which handles tab state updates and broadcasts
+   */
+  setSelectTabCallback(callback: SelectTabCallback) {
+    logger.info('[WebServer] setSelectTabCallback called', LOG_CONTEXT);
+    this.selectTabCallback = callback;
+  }
+
+  /**
+   * Set the callback function for creating a new tab within a session
+   * This forwards to the renderer which handles tab creation and broadcasts
+   */
+  setNewTabCallback(callback: NewTabCallback) {
+    logger.info('[WebServer] setNewTabCallback called', LOG_CONTEXT);
+    this.newTabCallback = callback;
+  }
+
+  /**
+   * Set the callback function for closing a tab within a session
+   * This forwards to the renderer which handles tab removal and broadcasts
+   */
+  setCloseTabCallback(callback: CloseTabCallback) {
+    logger.info('[WebServer] setCloseTabCallback called', LOG_CONTEXT);
+    this.closeTabCallback = callback;
   }
 
   /**
@@ -1214,6 +1264,137 @@ export class WebServer {
         break;
       }
 
+      case 'select_tab': {
+        // Select a tab within a session
+        const sessionId = message.sessionId as string;
+        const tabId = message.tabId as string;
+        logger.info(`[Web] Received select_tab message: session=${sessionId}, tab=${tabId}`, LOG_CONTEXT);
+
+        if (!sessionId || !tabId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId or tabId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.selectTabCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Tab selection not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.selectTabCallback(sessionId, tabId)
+          .then((success) => {
+            client.socket.send(JSON.stringify({
+              type: 'select_tab_result',
+              success,
+              sessionId,
+              tabId,
+              timestamp: Date.now(),
+            }));
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to select tab: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
+      case 'new_tab': {
+        // Create a new tab within a session
+        const sessionId = message.sessionId as string;
+        logger.info(`[Web] Received new_tab message: session=${sessionId}`, LOG_CONTEXT);
+
+        if (!sessionId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.newTabCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Tab creation not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.newTabCallback(sessionId)
+          .then((result) => {
+            client.socket.send(JSON.stringify({
+              type: 'new_tab_result',
+              success: !!result,
+              sessionId,
+              tabId: result?.tabId,
+              timestamp: Date.now(),
+            }));
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to create tab: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
+      case 'close_tab': {
+        // Close a tab within a session
+        const sessionId = message.sessionId as string;
+        const tabId = message.tabId as string;
+        logger.info(`[Web] Received close_tab message: session=${sessionId}, tab=${tabId}`, LOG_CONTEXT);
+
+        if (!sessionId || !tabId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId or tabId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.closeTabCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Tab closing not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.closeTabCallback(sessionId, tabId)
+          .then((success) => {
+            client.socket.send(JSON.stringify({
+              type: 'close_tab_result',
+              success,
+              sessionId,
+              tabId,
+              timestamp: Date.now(),
+            }));
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to close tab: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
       default:
         // Echo unknown message types for debugging
         logger.debug(`Unknown message type: ${message.type}`, LOG_CONTEXT);
@@ -1347,6 +1528,20 @@ export class WebServer {
     this.broadcastToWebClients({
       type: 'active_session_changed',
       sessionId,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Broadcast tab change to all connected web clients
+   * Called when the tabs array or active tab changes in a session
+   */
+  broadcastTabsChange(sessionId: string, aiTabs: AITabData[], activeTabId: string) {
+    this.broadcastToWebClients({
+      type: 'tabs_changed',
+      sessionId,
+      aiTabs,
+      activeTabId,
       timestamp: Date.now(),
     });
   }

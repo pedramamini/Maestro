@@ -85,6 +85,7 @@ export function createTab(session: Session, options: CreateTabOptions = {}): Cre
     logs,
     messageQueue: [],
     inputValue: '',
+    stagedImages: [],
     usageStats,
     createdAt: Date.now(),
     state: 'idle'

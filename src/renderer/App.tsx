@@ -210,8 +210,8 @@ export default function MaestroConsole() {
   // Flash notification state (for inline notifications like "Commands disabled while agent is working")
   const [flashNotification, setFlashNotification] = useState<string | null>(null);
 
-  // Images Staging (only for AI mode - terminal doesn't support images)
-  const [aiStagedImages, setAiStagedImages] = useState<string[]>([]);
+  // Note: Images are now stored per-tab in AITab.stagedImages
+  // See stagedImages/setStagedImages computed from active tab below
 
   // Global Live Mode State (web interface for all sessions)
   const [isLiveMode, setIsLiveMode] = useState(false);
@@ -287,6 +287,7 @@ export default function MaestroConsole() {
           logs: session.aiLogs || [],
           messageQueue: session.messageQueue || [],
           inputValue: '',
+          stagedImages: [],
           usageStats: session.usageStats,
           createdAt: Date.now(),
           state: 'idle'
@@ -1210,10 +1211,112 @@ export default function MaestroConsole() {
       console.log('[Remote] Switched to session:', sessionId);
     });
 
+    // Handle remote tab selection from web interface
+    const unsubscribeSelectTab = window.maestro.process.onRemoteSelectTab((sessionId: string, tabId: string) => {
+      console.log('[Remote] Received tab selection from web interface:', { sessionId, tabId });
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessionId) return s;
+        // Check if tab exists
+        if (!s.aiTabs.some(t => t.id === tabId)) {
+          console.log('[Remote] Tab not found for selection:', tabId);
+          return s;
+        }
+        return { ...s, activeTabId: tabId };
+      }));
+    });
+
+    // Handle remote new tab from web interface
+    const unsubscribeNewTab = window.maestro.process.onRemoteNewTab((sessionId: string, responseChannel: string) => {
+      console.log('[Remote] Received new tab request from web interface:', { sessionId, responseChannel });
+
+      let newTabId: string | null = null;
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessionId) return s;
+
+        // Use createTab helper
+        const result = createTab(s);
+        newTabId = result.newTab.id;
+        return result.updatedSession;
+      }));
+
+      // Send response back with the new tab ID
+      if (newTabId) {
+        window.maestro.process.sendRemoteNewTabResponse(responseChannel, { tabId: newTabId });
+      } else {
+        window.maestro.process.sendRemoteNewTabResponse(responseChannel, null);
+      }
+    });
+
+    // Handle remote close tab from web interface
+    const unsubscribeCloseTab = window.maestro.process.onRemoteCloseTab((sessionId: string, tabId: string) => {
+      console.log('[Remote] Received close tab request from web interface:', { sessionId, tabId });
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessionId) return s;
+
+        // Don't close if it's the only tab
+        if (s.aiTabs.length <= 1) {
+          console.log('[Remote] Cannot close last tab');
+          return s;
+        }
+
+        // Use closeTab helper
+        const result = closeTab(s, tabId);
+        return result?.updatedSession ?? s;
+      }));
+    });
+
     return () => {
       unsubscribeSelectSession();
+      unsubscribeSelectTab();
+      unsubscribeNewTab();
+      unsubscribeCloseTab();
     };
   }, []);
+
+  // Broadcast tab changes to web clients when tabs or activeTabId changes
+  // Use a ref to track previous values and only broadcast on actual changes
+  const prevTabsRef = useRef<Map<string, { tabCount: number; activeTabId: string }>>(new Map());
+
+  useEffect(() => {
+    // Broadcast tab changes for all sessions that have changed
+    sessions.forEach(session => {
+      if (!session.aiTabs || session.aiTabs.length === 0) return;
+
+      const prev = prevTabsRef.current.get(session.id);
+      const current = {
+        tabCount: session.aiTabs.length,
+        activeTabId: session.activeTabId || session.aiTabs[0]?.id || '',
+      };
+
+      // Check if anything changed
+      if (!prev || prev.tabCount !== current.tabCount || prev.activeTabId !== current.activeTabId) {
+        // Broadcast to web clients
+        const tabsForBroadcast = session.aiTabs.map(tab => ({
+          id: tab.id,
+          claudeSessionId: tab.claudeSessionId,
+          name: tab.name,
+          starred: tab.starred,
+          inputValue: tab.inputValue,
+          usageStats: tab.usageStats,
+          createdAt: tab.createdAt,
+          state: tab.state,
+          thinkingStartTime: tab.thinkingStartTime,
+        }));
+
+        window.maestro.web.broadcastTabsChange(
+          session.id,
+          tabsForBroadcast,
+          current.activeTabId
+        );
+
+        // Update ref
+        prevTabsRef.current.set(session.id, current);
+      }
+    });
+  }, [sessions]);
 
   // Combine built-in slash commands with custom AI commands for autocomplete
   const allSlashCommands = useMemo(() => {
@@ -1255,9 +1358,33 @@ export default function MaestroConsole() {
 
   const inputValue = isAiMode ? aiInputValue : terminalInputValue;
   const setInputValue = isAiMode ? setAiInputValue : setTerminalInputValue;
-  // Images are only used in AI mode
-  const stagedImages = aiStagedImages;
-  const setStagedImages = setAiStagedImages;
+
+  // Images are stored per-tab and only used in AI mode
+  // Get staged images from the active tab
+  const stagedImages = useMemo(() => {
+    if (!activeSession || activeSession.inputMode !== 'ai') return [];
+    const activeTab = getActiveTab(activeSession);
+    return activeTab?.stagedImages || [];
+  }, [activeSession?.aiTabs, activeSession?.activeTabId, activeSession?.inputMode]);
+
+  // Set staged images on the active tab
+  const setStagedImages = useCallback((imagesOrUpdater: string[] | ((prev: string[]) => string[])) => {
+    if (!activeSession) return;
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: s.aiTabs.map(tab => {
+          if (tab.id !== s.activeTabId) return tab;
+          const currentImages = tab.stagedImages || [];
+          const newImages = typeof imagesOrUpdater === 'function'
+            ? imagesOrUpdater(currentImages)
+            : imagesOrUpdater;
+          return { ...tab, stagedImages: newImages };
+        })
+      };
+    }));
+  }, [activeSession]);
 
   // Tab completion suggestions (must be after inputValue is defined)
   const tabCompletionSuggestions = useMemo(() => {
@@ -4658,6 +4785,28 @@ export default function MaestroConsole() {
               ? { ...s, aiTabs: [tabToKeep], activeTabId: tabId }
               : s
           ));
+        }}
+        onUpdateTabByClaudeSessionId={(claudeSessionId: string, updates: { name?: string | null; starred?: boolean }) => {
+          // Update the AITab that matches this Claude session ID
+          // This is called when a session is renamed or starred in the AgentSessionsBrowser
+          if (!activeSession) return;
+          setSessions(prev => prev.map(s => {
+            if (s.id !== activeSession.id) return s;
+            const tabIndex = s.aiTabs.findIndex(tab => tab.claudeSessionId === claudeSessionId);
+            if (tabIndex === -1) return s; // Session not open as a tab
+            return {
+              ...s,
+              aiTabs: s.aiTabs.map(tab =>
+                tab.claudeSessionId === claudeSessionId
+                  ? {
+                      ...tab,
+                      ...(updates.name !== undefined ? { name: updates.name } : {}),
+                      ...(updates.starred !== undefined ? { starred: updates.starred } : {})
+                    }
+                  : tab
+              )
+            };
+          }));
         }}
       />
 

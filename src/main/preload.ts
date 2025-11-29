@@ -123,6 +123,28 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.on('remote:selectSession', handler);
       return () => ipcRenderer.removeListener('remote:selectSession', handler);
     },
+    // Remote tab selection from web interface
+    onRemoteSelectTab: (callback: (sessionId: string, tabId: string) => void) => {
+      const handler = (_: any, sessionId: string, tabId: string) => callback(sessionId, tabId);
+      ipcRenderer.on('remote:selectTab', handler);
+      return () => ipcRenderer.removeListener('remote:selectTab', handler);
+    },
+    // Remote new tab from web interface
+    onRemoteNewTab: (callback: (sessionId: string, responseChannel: string) => void) => {
+      const handler = (_: any, sessionId: string, responseChannel: string) => callback(sessionId, responseChannel);
+      ipcRenderer.on('remote:newTab', handler);
+      return () => ipcRenderer.removeListener('remote:newTab', handler);
+    },
+    // Send response for remote new tab
+    sendRemoteNewTabResponse: (responseChannel: string, result: { tabId: string } | null) => {
+      ipcRenderer.send(responseChannel, result);
+    },
+    // Remote close tab from web interface
+    onRemoteCloseTab: (callback: (sessionId: string, tabId: string) => void) => {
+      const handler = (_: any, sessionId: string, tabId: string) => callback(sessionId, tabId);
+      ipcRenderer.on('remote:closeTab', handler);
+      return () => ipcRenderer.removeListener('remote:closeTab', handler);
+    },
     // Stderr listener for runCommand (separate stream)
     onStderr: (callback: (sessionId: string, data: string) => void) => {
       const handler = (_: any, sessionId: string, data: string) => callback(sessionId, data);
@@ -164,6 +186,19 @@ contextBridge.exposeInMainWorld('maestro', {
       isStopping?: boolean;
     } | null) =>
       ipcRenderer.invoke('web:broadcastAutoRunState', sessionId, state),
+    // Broadcast tab changes to web clients (for tab sync)
+    broadcastTabsChange: (sessionId: string, aiTabs: Array<{
+      id: string;
+      claudeSessionId: string | null;
+      name: string | null;
+      starred: boolean;
+      inputValue: string;
+      usageStats?: any;
+      createdAt: number;
+      state: 'idle' | 'busy';
+      thinkingStartTime?: number | null;
+    }>, activeTabId: string) =>
+      ipcRenderer.invoke('web:broadcastTabsChange', sessionId, aiTabs, activeTabId),
   },
 
   // Git API

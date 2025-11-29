@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { Wand2, ExternalLink, Columns, Copy, Loader2, Clock, GitBranch, ArrowUp, ArrowDown, FileEdit, Star, Edit2, Check, X } from 'lucide-react';
+import { Wand2, ExternalLink, Columns, Copy, Loader2, Clock, GitBranch, ArrowUp, ArrowDown, FileEdit, Star, Edit2, Check, X, List } from 'lucide-react';
 import { LogViewer } from './LogViewer';
 import { TerminalOutput, BusyTabInfo } from './TerminalOutput';
 import { InputArea } from './InputArea';
@@ -117,6 +117,7 @@ interface MainPanelProps {
   onTabRename?: (tabId: string, newName: string) => void;
   onTabReorder?: (fromIndex: number, toIndex: number) => void;
   onCloseOtherTabs?: (tabId: string) => void;
+  onUpdateTabByClaudeSessionId?: (claudeSessionId: string, updates: { name?: string | null; starred?: boolean }) => void;
 }
 
 export function MainPanel(props: MainPanelProps) {
@@ -165,6 +166,22 @@ export function MainPanel(props: MainPanelProps) {
 
   // Extract tab handlers from props
   const { onTabSelect, onTabClose, onNewTab, onTabRename, onTabReorder, onCloseOtherTabs } = props;
+
+  // Get the active tab for header display
+  // The header should show the active tab's data (UUID, name, cost, context), not session-level data
+  const activeTab = useMemo(() => {
+    if (!activeSession?.aiTabs) return null;
+    return getActiveTab(activeSession);
+  }, [activeSession?.aiTabs, activeSession?.activeTabId]);
+
+  // Compute context usage percentage from active tab's usage stats
+  const activeTabContextUsage = useMemo(() => {
+    if (!activeTab?.usageStats) return 0;
+    const { inputTokens, outputTokens, contextWindow } = activeTab.usageStats;
+    if (!contextWindow || contextWindow === 0) return 0;
+    const contextTokens = inputTokens + outputTokens;
+    return Math.min(Math.round((contextTokens / contextWindow) * 100), 100);
+  }, [activeTab?.usageStats]);
 
   // Calculate write-mode lock info for InputArea
   // This determines if another tab (not the current one) is in write mode
@@ -300,15 +317,16 @@ export function MainPanel(props: MainPanelProps) {
     loadSessionMetadata();
   }, [activeSession?.cwd]);
 
-  // Toggle star for current session
+  // Toggle star for current session (uses active tab's session ID)
   const toggleStar = useCallback(async () => {
-    if (!activeSession?.claudeSessionId || !activeSession?.cwd) return;
-    const sessionId = activeSession.claudeSessionId;
+    const tabSessionId = activeTab?.claudeSessionId;
+    if (!tabSessionId || !activeSession?.cwd) return;
     const newStarred = new Set(starredSessions);
-    if (newStarred.has(sessionId)) {
-      newStarred.delete(sessionId);
+    const isNowStarred = !newStarred.has(tabSessionId);
+    if (isNowStarred) {
+      newStarred.add(tabSessionId);
     } else {
-      newStarred.add(sessionId);
+      newStarred.delete(tabSessionId);
     }
     setStarredSessions(newStarred);
     try {
@@ -317,20 +335,22 @@ export function MainPanel(props: MainPanelProps) {
     } catch (error) {
       console.error('Failed to save starred sessions:', error);
     }
-  }, [activeSession?.claudeSessionId, activeSession?.cwd, starredSessions]);
+    // Also update the tab's starred status via the callback
+    props.onUpdateTabByClaudeSessionId?.(tabSessionId, { starred: isNowStarred });
+  }, [activeTab?.claudeSessionId, activeSession?.cwd, starredSessions, props.onUpdateTabByClaudeSessionId]);
 
-  // Rename current session
+  // Rename current session (uses active tab's session ID)
   const saveSessionName = useCallback(async () => {
-    if (!activeSession?.claudeSessionId || !activeSession?.cwd) return;
-    const sessionId = activeSession.claudeSessionId;
+    const tabSessionId = activeTab?.claudeSessionId;
+    if (!tabSessionId || !activeSession?.cwd) return;
     const name = sessionPillRenameValue.trim();
 
     // Update local state for immediate UI feedback
     const newNamed = { ...namedSessions };
     if (name) {
-      newNamed[sessionId] = name;
+      newNamed[tabSessionId] = name;
     } else {
-      delete newNamed[sessionId];
+      delete newNamed[tabSessionId];
     }
     setNamedSessions(newNamed);
     setSessionPillRenaming(false);
@@ -340,13 +360,15 @@ export function MainPanel(props: MainPanelProps) {
       // Save to claudeSessionOriginsStore (single source of truth)
       await window.maestro.claude.updateSessionName(
         activeSession.cwd,
-        sessionId,
+        tabSessionId,
         name
       );
     } catch (error) {
       console.error('Failed to save session name:', error);
     }
-  }, [activeSession?.claudeSessionId, activeSession?.cwd, sessionPillRenameValue, namedSessions]);
+    // Also update the tab's name via the callback
+    props.onUpdateTabByClaudeSessionId?.(tabSessionId, { name: name || null });
+  }, [activeTab?.claudeSessionId, activeSession?.cwd, sessionPillRenameValue, namedSessions, props.onUpdateTabByClaudeSessionId]);
 
   // Close session pill overlay when clicking outside (mainly for rename mode)
   useEffect(() => {
@@ -404,11 +426,12 @@ export function MainPanel(props: MainPanelProps) {
     }
   };
 
-  // Copy session ID to clipboard with notification
+  // Copy session ID to clipboard with notification (uses active tab's session ID)
   const copySessionIdToClipboard = async () => {
-    if (!activeSession?.claudeSessionId) return;
+    const tabSessionId = activeTab?.claudeSessionId;
+    if (!tabSessionId) return;
     try {
-      await navigator.clipboard.writeText(activeSession.claudeSessionId);
+      await navigator.clipboard.writeText(tabSessionId);
       setShowSessionIdCopied(true);
       setTimeout(() => setShowSessionIdCopied(false), 2000);
     } catch (err) {
@@ -436,6 +459,7 @@ export function MainPanel(props: MainPanelProps) {
           onClose={() => setAgentSessionsOpen(false)}
           onResumeSession={onResumeClaudeSession}
           onNewSession={onNewClaudeSession}
+          onUpdateTab={props.onUpdateTabByClaudeSessionId}
         />
       </div>
     );
@@ -628,8 +652,8 @@ export function MainPanel(props: MainPanelProps) {
                 onViewDiff={handleViewGitDiff}
               />
 
-              {/* Session ID Pill with Overlay (hover-triggered) */}
-              {activeSession.inputMode === 'ai' && activeSession.claudeSessionId && (
+              {/* Session ID Pill with Overlay (hover-triggered) - shows active tab's session */}
+              {activeSession.inputMode === 'ai' && activeTab?.claudeSessionId && (
                 <div
                   className="relative"
                   ref={sessionPillRef}
@@ -654,13 +678,13 @@ export function MainPanel(props: MainPanelProps) {
                   <div
                     className="flex items-center gap-1 text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border cursor-default hover:opacity-80 transition-opacity max-w-[200px]"
                     style={{ backgroundColor: theme.colors.accent + '20', color: theme.colors.accent, borderColor: theme.colors.accent + '30' }}
-                    title={namedSessions[activeSession.claudeSessionId] || activeSession.claudeSessionId}
+                    title={activeTab.name || namedSessions[activeTab.claudeSessionId!] || activeTab.claudeSessionId!}
                   >
-                    {starredSessions.has(activeSession.claudeSessionId) && (
+                    {(activeTab.starred || starredSessions.has(activeTab.claudeSessionId!)) && (
                       <Star className="w-2.5 h-2.5 fill-current shrink-0" />
                     )}
                     <span className="truncate">
-                      {namedSessions[activeSession.claudeSessionId] || activeSession.claudeSessionId.split('-')[0].toUpperCase()}
+                      {activeTab.name || namedSessions[activeTab.claudeSessionId!] || activeTab.claudeSessionId!.split('-')[0].toUpperCase()}
                     </span>
                   </div>
 
@@ -690,12 +714,12 @@ export function MainPanel(props: MainPanelProps) {
                       }}
                     >
                       {/* Session name display (if named) */}
-                      {namedSessions[activeSession.claudeSessionId] && (
+                      {(activeTab.name || namedSessions[activeTab.claudeSessionId!]) && (
                         <div
                           className="px-3 py-2 text-xs font-medium border-b"
                           style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
                         >
-                          {namedSessions[activeSession.claudeSessionId]}
+                          {activeTab.name || namedSessions[activeTab.claudeSessionId!]}
                         </div>
                       )}
                       {/* Session ID display */}
@@ -703,7 +727,7 @@ export function MainPanel(props: MainPanelProps) {
                         className="px-3 py-2 text-[10px] font-mono border-b"
                         style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
                       >
-                        {activeSession.claudeSessionId}
+                        {activeTab.claudeSessionId}
                       </div>
 
                       {/* Rename input */}
@@ -778,23 +802,23 @@ export function MainPanel(props: MainPanelProps) {
                           style={{ color: theme.colors.textMain }}
                         >
                           <Star
-                            className={`w-3.5 h-3.5 ${starredSessions.has(activeSession.claudeSessionId!) ? 'fill-current' : ''}`}
-                            style={{ color: starredSessions.has(activeSession.claudeSessionId!) ? theme.colors.warning : theme.colors.textDim }}
+                            className={`w-3.5 h-3.5 ${(activeTab.starred || starredSessions.has(activeTab.claudeSessionId!)) ? 'fill-current' : ''}`}
+                            style={{ color: (activeTab.starred || starredSessions.has(activeTab.claudeSessionId!)) ? theme.colors.warning : theme.colors.textDim }}
                           />
-                          {starredSessions.has(activeSession.claudeSessionId!) ? 'Unstar Session' : 'Star Session'}
+                          {(activeTab.starred || starredSessions.has(activeTab.claudeSessionId!)) ? 'Unstar Session' : 'Star Session'}
                         </button>
 
                         {/* Rename */}
                         <button
                           onClick={() => {
-                            setSessionPillRenameValue(namedSessions[activeSession.claudeSessionId!] || '');
+                            setSessionPillRenameValue(activeTab.name || namedSessions[activeTab.claudeSessionId!] || '');
                             setSessionPillRenaming(true);
                           }}
                           className="w-full flex items-center gap-2 px-3 py-2 text-xs hover:bg-white/5 transition-colors"
                           style={{ color: theme.colors.textMain }}
                         >
                           <Edit2 className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-                          {namedSessions[activeSession.claudeSessionId!] ? 'Rename Session' : 'Name Session'}
+                          {(activeTab.name || namedSessions[activeTab.claudeSessionId!]) ? 'Rename Session' : 'Name Session'}
                         </button>
                       </div>
                     </div>
@@ -850,10 +874,10 @@ export function MainPanel(props: MainPanelProps) {
                 </span>
               )}
 
-              {/* Cost Tracker - styled as pill (hidden when panel is narrow) */}
-              {showCostWidget && activeSession.inputMode === 'ai' && activeSession.usageStats && activeSession.usageStats.totalCostUsd > 0 && (
+              {/* Cost Tracker - styled as pill (hidden when panel is narrow) - shows active tab's cost */}
+              {showCostWidget && activeSession.inputMode === 'ai' && activeTab?.usageStats && activeTab.usageStats.totalCostUsd > 0 && (
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-green-500/30 text-green-500 bg-green-500/10">
-                  ${activeSession.usageStats.totalCostUsd.toFixed(2)}
+                  ${activeTab.usageStats.totalCostUsd.toFixed(2)}
                 </span>
               )}
 
@@ -880,14 +904,14 @@ export function MainPanel(props: MainPanelProps) {
                   <div
                     className="h-full transition-all duration-500 ease-out"
                     style={{
-                      width: `${activeSession.contextUsage}%`,
-                      backgroundColor: getContextColor(activeSession.contextUsage, theme)
+                      width: `${activeTabContextUsage}%`,
+                      backgroundColor: getContextColor(activeTabContextUsage, theme)
                     }}
                   />
                 </div>
 
                 {/* Context Window Tooltip */}
-                {contextTooltipOpen && activeSession.inputMode === 'ai' && activeSession.usageStats && (
+                {contextTooltipOpen && activeSession.inputMode === 'ai' && activeTab?.usageStats && (
                   <>
                     {/* Invisible bridge to prevent hover gap */}
                     <div
@@ -926,25 +950,25 @@ export function MainPanel(props: MainPanelProps) {
                         <div className="flex justify-between items-center">
                           <span className="text-xs" style={{ color: theme.colors.textDim }}>Input Tokens</span>
                           <span className="text-xs font-mono" style={{ color: theme.colors.textMain }}>
-                            {activeSession.usageStats.inputTokens.toLocaleString()}
+                            {activeTab.usageStats.inputTokens.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-xs" style={{ color: theme.colors.textDim }}>Output Tokens</span>
                           <span className="text-xs font-mono" style={{ color: theme.colors.textMain }}>
-                            {activeSession.usageStats.outputTokens.toLocaleString()}
+                            {activeTab.usageStats.outputTokens.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-xs" style={{ color: theme.colors.textDim }}>Cache Read</span>
                           <span className="text-xs font-mono" style={{ color: theme.colors.textMain }}>
-                            {activeSession.usageStats.cacheReadInputTokens.toLocaleString()}
+                            {activeTab.usageStats.cacheReadInputTokens.toLocaleString()}
                           </span>
                         </div>
                         <div className="flex justify-between items-center">
                           <span className="text-xs" style={{ color: theme.colors.textDim }}>Cache Write</span>
                           <span className="text-xs font-mono" style={{ color: theme.colors.textMain }}>
-                            {activeSession.usageStats.cacheCreationInputTokens.toLocaleString()}
+                            {activeTab.usageStats.cacheCreationInputTokens.toLocaleString()}
                           </span>
                         </div>
 
@@ -953,24 +977,24 @@ export function MainPanel(props: MainPanelProps) {
                             <span className="text-xs font-bold" style={{ color: theme.colors.textDim }}>Context Tokens</span>
                             <span className="text-xs font-mono font-bold" style={{ color: theme.colors.accent }}>
                               {(
-                                activeSession.usageStats.inputTokens +
-                                activeSession.usageStats.outputTokens
+                                activeTab.usageStats.inputTokens +
+                                activeTab.usageStats.outputTokens
                               ).toLocaleString()}
                             </span>
                           </div>
                           <div className="flex justify-between items-center mt-1">
                             <span className="text-xs font-bold" style={{ color: theme.colors.textDim }}>Context Size</span>
                             <span className="text-xs font-mono font-bold" style={{ color: theme.colors.textMain }}>
-                              {activeSession.usageStats.contextWindow.toLocaleString()}
+                              {activeTab.usageStats.contextWindow.toLocaleString()}
                             </span>
                           </div>
                           <div className="flex justify-between items-center mt-1">
                             <span className="text-xs font-bold" style={{ color: theme.colors.textDim }}>Usage</span>
                             <span
                               className="text-xs font-mono font-bold"
-                              style={{ color: getContextColor(activeSession.contextUsage, theme) }}
+                              style={{ color: getContextColor(activeTabContextUsage, theme) }}
                             >
-                              {activeSession.contextUsage}%
+                              {activeTabContextUsage}%
                             </span>
                           </div>
                         </div>
@@ -980,6 +1004,18 @@ export function MainPanel(props: MainPanelProps) {
                   </>
                 )}
               </div>
+
+              {/* Agent Sessions Button */}
+              <button
+                onClick={() => {
+                  setActiveClaudeSessionId(null);
+                  setAgentSessionsOpen(true);
+                }}
+                className="p-2 rounded hover:bg-white/5"
+                title={`Agent Sessions (${shortcuts.agentSessions?.keys?.join('+').replace('Meta', 'Cmd').replace('Shift', '⇧') || 'Cmd+⇧+L'})`}
+              >
+                <List className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+              </button>
 
               {!rightPanelOpen && (
                 <button onClick={() => setRightPanelOpen(true)} className="p-2 rounded hover:bg-white/5" title={`Show right panel (${shortcuts.toggleRightPanel.keys.join('+').replace('Meta', 'Cmd')})`}>

@@ -112,6 +112,7 @@ export interface AITab {
   logs: LogEntry[];                // Conversation history
   messageQueue: LogEntry[];        // Pending messages while busy
   inputValue: string;              // Pending input text for this tab
+  stagedImages: string[];          // Staged images (base64) for this tab
   usageStats?: UsageStats;         // Token usage for this tab
   createdAt: number;               // Timestamp for ordering
   state: 'idle' | 'busy';          // Tab-level state for write-mode tracking

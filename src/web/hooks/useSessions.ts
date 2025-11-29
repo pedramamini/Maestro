@@ -15,10 +15,11 @@ import {
   type WebSocketState,
   type UsageStats,
   type LastResponsePreview,
+  type AITabData,
 } from './useWebSocket';
 
 // Re-export types for components
-export type { UsageStats, LastResponsePreview };
+export type { UsageStats, LastResponsePreview, AITabData };
 import type { Theme } from '../../shared/theme-types';
 
 /**
@@ -114,6 +115,14 @@ export interface UseSessionsReturn {
   interruptActive: () => Promise<boolean>;
   /** Switch session mode (AI/Terminal) */
   switchMode: (sessionId: string, mode: InputMode) => Promise<boolean>;
+
+  /** Tab operations */
+  /** Select a tab within a session */
+  selectTab: (sessionId: string, tabId: string) => Promise<boolean>;
+  /** Create a new tab within a session */
+  newTab: (sessionId: string) => Promise<boolean>;
+  /** Close a tab within a session */
+  closeTab: (sessionId: string, tabId: string) => Promise<boolean>;
 
   /** Refresh the sessions list from the server */
   refreshSessions: () => void;
@@ -261,6 +270,27 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
   }, []);
 
   /**
+   * Handle tabs changed in a session
+   */
+  const handleTabsChanged = useCallback(
+    (sessionId: string, aiTabs: AITabData[], activeTabId: string) => {
+      setSessions((prev) => {
+        const index = prev.findIndex((s) => s.id === sessionId);
+        if (index === -1) return prev;
+
+        const updated = [...prev];
+        updated[index] = {
+          ...updated[index],
+          aiTabs,
+          activeTabId,
+        };
+        return updated;
+      });
+    },
+    []
+  );
+
+  /**
    * Handle errors
    */
   const handleError = useCallback((error: string) => {
@@ -276,6 +306,7 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
       onSessionAdded: handleSessionAdded,
       onSessionRemoved: handleSessionRemoved,
       onThemeUpdate: handleThemeUpdate,
+      onTabsChanged: handleTabsChanged,
       onError: handleError,
     },
   });
@@ -479,6 +510,47 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
   );
 
   /**
+   * Select a tab within a session
+   */
+  const selectTab = useCallback(
+    async (sessionId: string, tabId: string): Promise<boolean> => {
+      return ws.send({
+        type: 'select_tab',
+        sessionId,
+        tabId,
+      });
+    },
+    [ws]
+  );
+
+  /**
+   * Create a new tab within a session
+   */
+  const newTab = useCallback(
+    async (sessionId: string): Promise<boolean> => {
+      return ws.send({
+        type: 'new_tab',
+        sessionId,
+      });
+    },
+    [ws]
+  );
+
+  /**
+   * Close a tab within a session
+   */
+  const closeTab = useCallback(
+    async (sessionId: string, tabId: string): Promise<boolean> => {
+      return ws.send({
+        type: 'close_tab',
+        sessionId,
+        tabId,
+      });
+    },
+    [ws]
+  );
+
+  /**
    * Refresh the sessions list
    */
   const refreshSessions = useCallback(() => {
@@ -510,6 +582,12 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
     interrupt,
     interruptActive,
     switchMode,
+
+    // Tab operations
+    selectTab,
+    newTab,
+    closeTab,
+
     refreshSessions,
 
     // Underlying WebSocket hook

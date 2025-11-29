@@ -47,6 +47,7 @@ interface AgentSessionsBrowserProps {
   onClose: () => void;
   onResumeSession: (claudeSessionId: string, messages: LogEntry[], sessionName?: string, starred?: boolean) => void;
   onNewSession: () => void;
+  onUpdateTab?: (claudeSessionId: string, updates: { name?: string | null; starred?: boolean }) => void;
 }
 
 export function AgentSessionsBrowser({
@@ -56,6 +57,7 @@ export function AgentSessionsBrowser({
   onClose,
   onResumeSession,
   onNewSession,
+  onUpdateTab,
 }: AgentSessionsBrowserProps) {
   const [sessions, setSessions] = useState<ClaudeSession[]>([]);
   const [loading, setLoading] = useState(true);
@@ -229,10 +231,11 @@ export function AgentSessionsBrowser({
     e.stopPropagation(); // Don't trigger session view
 
     const newStarred = new Set(starredSessions);
-    if (newStarred.has(sessionId)) {
-      newStarred.delete(sessionId);
-    } else {
+    const isNowStarred = !newStarred.has(sessionId);
+    if (isNowStarred) {
       newStarred.add(sessionId);
+    } else {
+      newStarred.delete(sessionId);
     }
     setStarredSessions(newStarred);
 
@@ -241,7 +244,10 @@ export function AgentSessionsBrowser({
       const starredKey = `starredClaudeSessions:${activeSession.cwd}`;
       await window.maestro.settings.set(starredKey, Array.from(newStarred));
     }
-  }, [starredSessions, activeSession?.cwd]);
+
+    // Update the tab if this session is open as a tab
+    onUpdateTab?.(sessionId, { starred: isNowStarred });
+  }, [starredSessions, activeSession?.cwd, onUpdateTab]);
 
   // Start renaming a session
   const startRename = useCallback((session: ClaudeSession, e: React.MouseEvent) => {
@@ -282,12 +288,15 @@ export function AgentSessionsBrowser({
       if (viewingSession?.sessionId === sessionId) {
         setViewingSession(prev => prev ? { ...prev, sessionName: trimmedName || undefined } : null);
       }
+
+      // Update the tab if this session is open as a tab
+      onUpdateTab?.(sessionId, { name: trimmedName || null });
     } catch (error) {
       console.error('Failed to rename session:', error);
     }
 
     cancelRename();
-  }, [activeSession?.cwd, renameValue, viewingSession?.sessionId, cancelRename]);
+  }, [activeSession?.cwd, renameValue, viewingSession?.sessionId, cancelRename, onUpdateTab]);
 
   // Auto-view session when activeClaudeSessionId is provided (e.g., from history panel click)
   useEffect(() => {

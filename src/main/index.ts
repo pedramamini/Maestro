@@ -205,6 +205,19 @@ function createWebServer(): WebServer {
         }
       }
 
+      // Map aiTabs to web-safe format (strip logs to reduce payload)
+      const aiTabs = s.aiTabs?.map((tab: any) => ({
+        id: tab.id,
+        claudeSessionId: tab.claudeSessionId || null,
+        name: tab.name || null,
+        starred: tab.starred || false,
+        inputValue: tab.inputValue || '',
+        usageStats: tab.usageStats || null,
+        createdAt: tab.createdAt,
+        state: tab.state || 'idle',
+        thinkingStartTime: tab.thinkingStartTime || null,
+      })) || [];
+
       return {
         id: s.id,
         name: s.name,
@@ -219,6 +232,8 @@ function createWebServer(): WebServer {
         lastResponse,
         claudeSessionId: s.claudeSessionId || null,
         thinkingStartTime: s.thinkingStartTime || null,
+        aiTabs,
+        activeTabId: s.activeTabId || (aiTabs.length > 0 ? aiTabs[0].id : undefined),
       };
     });
   });
@@ -371,6 +386,48 @@ function createWebServer(): WebServer {
     // Forward to renderer - it will handle session selection and broadcasts
     logger.info(`[Web→Desktop] Sending IPC remote:selectSession to renderer`, 'WebServer');
     mainWindow.webContents.send('remote:selectSession', sessionId);
+    return true;
+  });
+
+  // Tab operation callbacks
+  server.setSelectTabCallback(async (sessionId: string, tabId: string) => {
+    logger.info(`[Web→Desktop] Tab select callback invoked: session=${sessionId}, tab=${tabId}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for selectTab', 'WebServer');
+      return false;
+    }
+
+    mainWindow.webContents.send('remote:selectTab', sessionId, tabId);
+    return true;
+  });
+
+  server.setNewTabCallback(async (sessionId: string) => {
+    logger.info(`[Web→Desktop] New tab callback invoked: session=${sessionId}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for newTab', 'WebServer');
+      return null;
+    }
+
+    // Use invoke for synchronous response with tab ID
+    return new Promise((resolve) => {
+      const responseChannel = `remote:newTab:response:${Date.now()}`;
+      ipcMain.once(responseChannel, (_event, result) => {
+        resolve(result);
+      });
+      mainWindow!.webContents.send('remote:newTab', sessionId, responseChannel);
+      // Timeout after 5 seconds
+      setTimeout(() => resolve(null), 5000);
+    });
+  });
+
+  server.setCloseTabCallback(async (sessionId: string, tabId: string) => {
+    logger.info(`[Web→Desktop] Close tab callback invoked: session=${sessionId}, tab=${tabId}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for closeTab', 'WebServer');
+      return false;
+    }
+
+    mainWindow.webContents.send('remote:closeTab', sessionId, tabId);
     return true;
   });
 
@@ -654,6 +711,15 @@ function setupIpcHandlers() {
   } | null) => {
     if (webServer && webServer.getWebClientCount() > 0) {
       webServer.broadcastAutoRunState(sessionId, state);
+      return true;
+    }
+    return false;
+  });
+
+  // Broadcast tab changes to web clients
+  ipcMain.handle('web:broadcastTabsChange', async (_, sessionId: string, aiTabs: any[], activeTabId: string) => {
+    if (webServer && webServer.getWebClientCount() > 0) {
+      webServer.broadcastTabsChange(sessionId, aiTabs, activeTabId);
       return true;
     }
     return false;
