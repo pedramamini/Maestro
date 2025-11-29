@@ -217,11 +217,13 @@ export function MainPanel(props: MainPanelProps) {
     return () => clearInterval(interval);
   }, [activeSession?.id, activeSession?.isGitRepo, activeSession?.cwd, activeSession?.shellCwd, activeSession?.inputMode]);
 
-  // Load starred and named Claude sessions from settings (per project cwd)
+  // Load starred and named Claude sessions (per project cwd)
+  // Named sessions come from claudeSessionOriginsStore (single source of truth)
   useEffect(() => {
     const loadSessionMetadata = async () => {
       if (!activeSession?.cwd) return;
       try {
+        // Load starred sessions from settings
         const starredKey = `starredClaudeSessions:${activeSession.cwd}`;
         const savedStarred = await window.maestro.settings.get(starredKey);
         if (savedStarred && Array.isArray(savedStarred)) {
@@ -229,10 +231,16 @@ export function MainPanel(props: MainPanelProps) {
         } else {
           setStarredSessions(new Set());
         }
-        const savedNamed = await window.maestro.settings.get('namedClaudeSessions');
-        if (savedNamed && typeof savedNamed === 'object') {
-          setNamedSessions(savedNamed as Record<string, string>);
+
+        // Load named sessions from Claude session origins (single source of truth)
+        const origins = await window.maestro.claude.getSessionOrigins(activeSession.cwd);
+        const named: Record<string, string> = {};
+        for (const [sessionId, originData] of Object.entries(origins)) {
+          if (typeof originData === 'object' && originData?.sessionName) {
+            named[sessionId] = originData.sessionName;
+          }
         }
+        setNamedSessions(named);
       } catch (error) {
         console.error('Failed to load session metadata:', error);
       }
@@ -277,14 +285,12 @@ export function MainPanel(props: MainPanelProps) {
     setSessionPillRenameValue('');
 
     try {
-      // Save to backend storage so it shows in Claude session list view
+      // Save to claudeSessionOriginsStore (single source of truth)
       await window.maestro.claude.updateSessionName(
         activeSession.cwd,
         sessionId,
         name
       );
-      // Also save to local settings for quick lookup in main panel
-      await window.maestro.settings.set('namedClaudeSessions', newNamed);
     } catch (error) {
       console.error('Failed to save session name:', error);
     }

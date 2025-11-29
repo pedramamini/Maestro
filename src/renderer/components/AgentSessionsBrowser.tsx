@@ -264,21 +264,12 @@ export function AgentSessionsBrowser({
 
     const trimmedName = renameValue.trim();
     try {
-      // Update the Claude session origins store
+      // Update claudeSessionOriginsStore (single source of truth for session names)
       await window.maestro.claude.updateSessionName(
         activeSession.cwd,
         sessionId,
         trimmedName
       );
-
-      // Also update the namedClaudeSessions settings so MainPanel header reflects the change
-      const namedSessions = await window.maestro.settings.get('namedClaudeSessions') || {};
-      if (trimmedName) {
-        namedSessions[sessionId] = trimmedName;
-      } else {
-        delete namedSessions[sessionId];
-      }
-      await window.maestro.settings.set('namedClaudeSessions', namedSessions);
 
       // Update local state
       setSessions(prev => prev.map(s =>
