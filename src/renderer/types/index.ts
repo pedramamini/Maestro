@@ -175,6 +175,8 @@ export interface Session {
   pendingAICommandForSynopsis?: string;
   // Custom batch runner prompt (persisted per session)
   batchRunnerPrompt?: string;
+  // Timestamp when the batch runner prompt was last modified
+  batchRunnerPromptModifiedAt?: number;
 }
 
 export interface Group {

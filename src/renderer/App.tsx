@@ -4359,12 +4359,13 @@ export default function MaestroConsole() {
             handleStartBatchRun(prompt);
           }}
           onSave={(prompt) => {
-            // Save the custom prompt to the session (persisted across restarts)
+            // Save the custom prompt and modification timestamp to the session (persisted across restarts)
             setSessions(prev => prev.map(s =>
-              s.id === activeSession.id ? { ...s, batchRunnerPrompt: prompt } : s
+              s.id === activeSession.id ? { ...s, batchRunnerPrompt: prompt, batchRunnerPromptModifiedAt: Date.now() } : s
             ));
           }}
           initialPrompt={activeSession.batchRunnerPrompt || ''}
+          lastModifiedAt={activeSession.batchRunnerPromptModifiedAt}
           showConfirmation={showConfirmation}
         />
       )}

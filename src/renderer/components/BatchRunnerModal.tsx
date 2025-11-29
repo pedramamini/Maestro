@@ -52,11 +52,30 @@ interface BatchRunnerModalProps {
   onGo: (prompt: string) => void;
   onSave: (prompt: string) => void;
   initialPrompt?: string;
+  lastModifiedAt?: number;
   showConfirmation: (message: string, onConfirm: () => void) => void;
 }
 
+// Helper function to format the last modified date
+function formatLastModified(timestamp: number): string {
+  const date = new Date(timestamp);
+  const now = new Date();
+  const diffMs = now.getTime() - date.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+
+  if (diffDays === 0) {
+    return `today at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (diffDays === 1) {
+    return `yesterday at ${date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`;
+  } else if (diffDays < 7) {
+    return `${diffDays} days ago`;
+  } else {
+    return date.toLocaleDateString([], { month: 'short', day: 'numeric', year: 'numeric' });
+  }
+}
+
 export function BatchRunnerModal(props: BatchRunnerModalProps) {
-  const { theme, onClose, onGo, onSave, initialPrompt, showConfirmation } = props;
+  const { theme, onClose, onGo, onSave, initialPrompt, lastModifiedAt, showConfirmation } = props;
 
   const [prompt, setPrompt] = useState(initialPrompt || DEFAULT_BATCH_PROMPT);
   const [variablesExpanded, setVariablesExpanded] = useState(false);
@@ -136,16 +155,23 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
       >
         {/* Header */}
         <div className="p-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: theme.colors.border }}>
-          <div className="flex items-center gap-3">
-            <h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-              Batch Run Configuration
-            </h2>
-            {isModified && (
-              <span
-                className="text-[10px] px-2 py-0.5 rounded-full"
-                style={{ backgroundColor: theme.colors.accent + '20', color: theme.colors.accent }}
-              >
-                MODIFIED
+          <div className="flex flex-col gap-1">
+            <div className="flex items-center gap-3">
+              <h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+                Batch Run Configuration
+              </h2>
+              {isModified && (
+                <span
+                  className="text-[10px] px-2 py-0.5 rounded-full"
+                  style={{ backgroundColor: theme.colors.accent + '20', color: theme.colors.accent }}
+                >
+                  CUSTOMIZED
+                </span>
+              )}
+            </div>
+            {isModified && lastModifiedAt && (
+              <span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+                Last modified {formatLastModified(lastModifiedAt)}
               </span>
             )}
           </div>
