@@ -739,7 +739,7 @@ export default function MaestroConsole() {
       } | null = null;
       let queuedItemToProcess: { sessionId: string; item: QueuedItem } | null = null;
       // Track if we need to run synopsis after completion (for /commit and other AI commands)
-      let synopsisData: { sessionId: string; cwd: string; claudeSessionId: string; command: string; groupName: string; projectName: string } | null = null;
+      let synopsisData: { sessionId: string; cwd: string; claudeSessionId: string; command: string; groupName: string; projectName: string; tabName?: string; tabId?: string } | null = null;
 
       if (isFromAi) {
         const currentSession = sessionsRef.current.find(s => s.id === actualSessionId);
@@ -822,7 +822,9 @@ export default function MaestroConsole() {
                 claudeSessionId: currentSession.claudeSessionId,
                 command: currentSession.pendingAICommandForSynopsis,
                 groupName,
-                projectName
+                projectName,
+                tabName,
+                tabId: completedTab?.id
               };
             }
           }
@@ -1032,6 +1034,8 @@ export default function MaestroConsole() {
               project: synopsisData!.projectName,
               taskDuration: duration,
               sessionId: synopsisData!.sessionId,
+              tabId: synopsisData!.tabId,
+              tabName: synopsisData!.tabName,
             });
 
             // Refresh history panel if available
