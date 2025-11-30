@@ -254,7 +254,9 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
   ];
 
   const actions = mode === 'main' ? mainActions : groupActions;
-  const filtered = actions.filter(a => a.label.toLowerCase().includes(search.toLowerCase()));
+  const filtered = actions
+    .filter(a => a.label.toLowerCase().includes(search.toLowerCase()))
+    .sort((a, b) => a.label.localeCompare(b.label));
 
   useEffect(() => {
     setSelectedIndex(0);
@@ -298,10 +300,14 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
           setQuickActionOpen(false);
         }
       }
-    } else if (e.metaKey && ['1', '2', '3', '4', '5', '6', '7', '8'].includes(e.key)) {
+    } else if (e.metaKey && ['1', '2', '3', '4', '5', '6', '7', '8', '9', '0'].includes(e.key)) {
       e.preventDefault();
-      const number = parseInt(e.key);
-      const targetIndex = firstVisibleIndex + number - 1;
+      // 1-9 map to positions 1-9, 0 maps to position 10
+      const number = e.key === '0' ? 10 : parseInt(e.key);
+      // Cap firstVisibleIndex so hotkeys always work for the last 10 items
+      const maxFirstIndex = Math.max(0, filtered.length - 10);
+      const effectiveFirstIndex = Math.min(firstVisibleIndex, maxFirstIndex);
+      const targetIndex = effectiveFirstIndex + number - 1;
       if (filtered[targetIndex]) {
         filtered[targetIndex].action();
         if (!renamingSession && mode === 'main') {
@@ -350,10 +356,14 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
         {!renamingSession && (
           <div className="overflow-y-auto py-2 scrollbar-thin" ref={scrollContainerRef} onScroll={handleScroll}>
             {filtered.map((a, i) => {
-              // Calculate dynamic number badge (1-8) based on first visible item
-              const distanceFromFirstVisible = i - firstVisibleIndex;
-              const showNumber = distanceFromFirstVisible >= 0 && distanceFromFirstVisible < 8;
-              const numberBadge = distanceFromFirstVisible + 1;
+              // Calculate dynamic number badge (1-9, 0) based on first visible item
+              // Cap firstVisibleIndex so we always show 10 numbered items when near the end
+              const maxFirstIndex = Math.max(0, filtered.length - 10);
+              const effectiveFirstIndex = Math.min(firstVisibleIndex, maxFirstIndex);
+              const distanceFromFirstVisible = i - effectiveFirstIndex;
+              const showNumber = distanceFromFirstVisible >= 0 && distanceFromFirstVisible < 10;
+              // 1-9 for positions 1-9, 0 for position 10
+              const numberBadge = distanceFromFirstVisible === 9 ? 0 : distanceFromFirstVisible + 1;
 
               return (
                 <button
