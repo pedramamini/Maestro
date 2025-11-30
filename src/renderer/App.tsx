@@ -76,6 +76,7 @@ export default function MaestroConsole() {
   // --- SETTINGS (from useSettings hook) ---
   const settings = useSettings();
   const {
+    settingsLoaded,
     llmProvider, setLlmProvider,
     modelSlug, setModelSlug,
     apiKey, setApiKey,
@@ -110,6 +111,9 @@ export default function MaestroConsole() {
 
   // Track if initial data has been loaded to prevent overwriting on mount
   const initialLoadComplete = useRef(false);
+
+  // Track if sessions/groups have been loaded (for splash screen coordination)
+  const [sessionsLoaded, setSessionsLoaded] = useState(false);
 
   const [activeSessionId, setActiveSessionIdInternal] = useState<string>(sessions[0]?.id || 's1');
 
@@ -526,10 +530,8 @@ export default function MaestroConsole() {
         // Mark initial load as complete to enable persistence
         initialLoadComplete.current = true;
 
-        // Hide the splash screen now that the app is ready
-        if (typeof window.__hideSplash === 'function') {
-          window.__hideSplash();
-        }
+        // Mark sessions as loaded for splash screen coordination
+        setSessionsLoaded(true);
 
         // If no sessions were loaded, automatically open the new agent modal
         if (!hasSessionsLoaded) {
@@ -539,6 +541,16 @@ export default function MaestroConsole() {
     };
     loadSessionsAndGroups();
   }, []);
+
+  // Hide splash screen only when both settings and sessions have fully loaded
+  // This prevents theme flash on initial render
+  useEffect(() => {
+    if (settingsLoaded && sessionsLoaded) {
+      if (typeof window.__hideSplash === 'function') {
+        window.__hideSplash();
+      }
+    }
+  }, [settingsLoaded, sessionsLoaded]);
 
   // Set up process event listeners for real-time output
   useEffect(() => {

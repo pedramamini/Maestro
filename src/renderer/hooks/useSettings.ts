@@ -46,6 +46,9 @@ After committing, push all changes up to origin.`,
 ];
 
 export interface UseSettingsReturn {
+  // Loading state
+  settingsLoaded: boolean;
+
   // LLM settings
   llmProvider: LLMProvider;
   modelSlug: string;
@@ -129,6 +132,9 @@ export interface UseSettingsReturn {
 }
 
 export function useSettings(): UseSettingsReturn {
+  // Loading state
+  const [settingsLoaded, setSettingsLoaded] = useState(false);
+
   // LLM Config
   const [llmProvider, setLlmProviderState] = useState<LLMProvider>('openrouter');
   const [modelSlug, setModelSlugState] = useState('anthropic/claude-3.5-sonnet');
@@ -430,6 +436,9 @@ export function useSettings(): UseSettingsReturn {
       if (savedGlobalStats !== undefined) {
         setGlobalStatsState({ ...DEFAULT_GLOBAL_STATS, ...savedGlobalStats });
       }
+
+      // Mark settings as loaded
+      setSettingsLoaded(true);
     };
     loadSettings();
   }, []);
@@ -440,6 +449,7 @@ export function useSettings(): UseSettingsReturn {
   }, [fontSize]);
 
   return {
+    settingsLoaded,
     llmProvider,
     modelSlug,
     apiKey,
