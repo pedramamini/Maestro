@@ -1067,6 +1067,21 @@ function setupIpcHandlers() {
     }
   });
 
+  ipcMain.handle('fs:stat', async (_, filePath: string) => {
+    try {
+      const stats = await fs.stat(filePath);
+      return {
+        size: stats.size,
+        createdAt: stats.birthtime.toISOString(),
+        modifiedAt: stats.mtime.toISOString(),
+        isDirectory: stats.isDirectory(),
+        isFile: stats.isFile()
+      };
+    } catch (error) {
+      throw new Error(`Failed to get file stats: ${error}`);
+    }
+  });
+
   // Live session management - toggle sessions as live/offline in web interface
   ipcMain.handle('live:toggle', async (_, sessionId: string, claudeSessionId?: string) => {
     if (!webServer) {

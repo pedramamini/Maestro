@@ -145,7 +145,9 @@ export class ProcessManager extends EventEmitter {
           } else {
             ptyCommand = process.platform === 'win32' ? 'powershell.exe' : 'bash';
           }
-          ptyArgs = [];
+          // Use -l flag to spawn as login shell, which sources .zprofile/.zshrc
+          // This ensures the terminal has the same PATH as the user's regular terminal
+          ptyArgs = process.platform === 'win32' ? [] : ['-l'];
         } else {
           // Spawn the AI agent directly with PTY support
           ptyCommand = command;

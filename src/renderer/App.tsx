@@ -204,6 +204,7 @@ export default function MaestroConsole() {
   // Rename Instance Modal State
   const [renameInstanceModalOpen, setRenameInstanceModalOpen] = useState(false);
   const [renameInstanceValue, setRenameInstanceValue] = useState('');
+  const [renameInstanceSessionId, setRenameInstanceSessionId] = useState<string | null>(null);
 
   // Rename Tab Modal State
   const [renameTabModalOpen, setRenameTabModalOpen] = useState(false);
@@ -3461,8 +3462,10 @@ export default function MaestroConsole() {
     setEditingGroupId(null);
   };
 
-  const startRenamingSession = (sessId: string) => {
-    setEditingSessionId(sessId);
+  // startRenamingSession now accepts a unique key (e.g., 'bookmark-id', 'group-gid-id', 'ungrouped-id')
+  // to support renaming the same session from different UI locations (bookmarks vs groups)
+  const startRenamingSession = (editKey: string) => {
+    setEditingSessionId(editKey);
   };
 
   const finishRenamingSession = (sessId: string, newName: string) => {
@@ -3568,7 +3571,7 @@ export default function MaestroConsole() {
     } : s));
   }, [activeSessionId]);
 
-  const processInput = () => {
+  const processInput = async () => {
     console.log('[processInput] Called with:', {
       hasActiveSession: !!activeSession,
       activeSessionId: activeSession?.id,
@@ -3857,29 +3860,41 @@ export default function MaestroConsole() {
       }
       const cdMatch = trimmedInput.match(/^cd\s+(.+)$/);
       if (cdMatch) {
-        cwdChanged = true;
         const targetPath = cdMatch[1].trim().replace(/^['"]|['"]$/g, ''); // Remove quotes
+        let candidatePath: string;
         if (targetPath === '~') {
           // Navigate to session's original directory
-          newShellCwd = activeSession.cwd;
+          candidatePath = activeSession.cwd;
         } else if (targetPath.startsWith('/')) {
           // Absolute path
-          newShellCwd = targetPath;
+          candidatePath = targetPath;
         } else if (targetPath === '..') {
           // Go up one directory
           const parts = newShellCwd.split('/').filter(Boolean);
           parts.pop();
-          newShellCwd = '/' + parts.join('/');
+          candidatePath = '/' + parts.join('/');
         } else if (targetPath.startsWith('../')) {
           // Relative path going up
           const parts = newShellCwd.split('/').filter(Boolean);
           const upCount = targetPath.split('/').filter(p => p === '..').length;
           for (let i = 0; i < upCount; i++) parts.pop();
           const remainingPath = targetPath.split('/').filter(p => p !== '..').join('/');
-          newShellCwd = '/' + [...parts, ...remainingPath.split('/').filter(Boolean)].join('/');
+          candidatePath = '/' + [...parts, ...remainingPath.split('/').filter(Boolean)].join('/');
         } else {
           // Relative path going down
-          newShellCwd = newShellCwd + (newShellCwd.endsWith('/') ? '' : '/') + targetPath;
+          candidatePath = newShellCwd + (newShellCwd.endsWith('/') ? '' : '/') + targetPath;
+        }
+
+        // Verify the directory exists before updating shellCwd
+        try {
+          await window.maestro.fs.readDir(candidatePath);
+          // Directory exists, update shellCwd
+          cwdChanged = true;
+          newShellCwd = candidatePath;
+        } catch {
+          // Directory doesn't exist, keep the current shellCwd
+          // The shell will show its own error message
+          console.log(`[processInput] cd target "${candidatePath}" does not exist, keeping current cwd`);
         }
       }
     }
@@ -5516,10 +5531,14 @@ export default function MaestroConsole() {
           theme={theme}
           value={renameInstanceValue}
           setValue={setRenameInstanceValue}
-          onClose={() => setRenameInstanceModalOpen(false)}
+          onClose={() => {
+            setRenameInstanceModalOpen(false);
+            setRenameInstanceSessionId(null);
+          }}
           sessions={sessions}
           setSessions={setSessions}
           activeSessionId={activeSessionId}
+          targetSessionId={renameInstanceSessionId || undefined}
         />
       )}
 
@@ -5619,6 +5638,9 @@ export default function MaestroConsole() {
             setSessions={setSessions}
             createNewGroup={createNewGroup}
             addNewSession={addNewSession}
+            setRenameInstanceModalOpen={setRenameInstanceModalOpen}
+            setRenameInstanceValue={setRenameInstanceValue}
+            setRenameInstanceSessionId={setRenameInstanceSessionId}
             activeBatchSessionIds={activeBatchSessionIds}
             showSessionJumpNumbers={showSessionJumpNumbers}
             visibleSessions={visibleSessions}

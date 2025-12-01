@@ -221,6 +221,7 @@ contextBridge.exposeInMainWorld('maestro', {
   fs: {
     readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
+    stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
   },
 
   // Web Server API
@@ -492,6 +493,13 @@ export interface MaestroAPI {
   fs: {
     readDir: (dirPath: string) => Promise<DirectoryEntry[]>;
     readFile: (filePath: string) => Promise<string>;
+    stat: (filePath: string) => Promise<{
+      size: number;
+      createdAt: string;
+      modifiedAt: string;
+      isDirectory: boolean;
+      isFile: boolean;
+    }>;
   };
   webserver: {
     getUrl: () => Promise<string>;

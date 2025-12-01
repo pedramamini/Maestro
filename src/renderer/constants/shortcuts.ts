@@ -8,7 +8,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
   navBack: { id: 'navBack', label: 'Navigate Back', keys: ['Meta', 'Shift', ','] },
   navForward: { id: 'navForward', label: 'Navigate Forward', keys: ['Meta', 'Shift', '.'] },
   newInstance: { id: 'newInstance', label: 'New Agent', keys: ['Meta', 'n'] },
-  killInstance: { id: 'killInstance', label: 'Kill Agent', keys: ['Meta', 'Shift', 'Backspace'] },
+  killInstance: { id: 'killInstance', label: 'Remove Agent', keys: ['Meta', 'Shift', 'Backspace'] },
   moveToGroup: { id: 'moveToGroup', label: 'Move Session to Group', keys: ['Meta', 'Shift', 'm'] },
   toggleMode: { id: 'toggleMode', label: 'Switch AI/Shell Mode', keys: ['Meta', 'j'] },
   quickAction: { id: 'quickAction', label: 'Quick Actions', keys: ['Meta', 'k'] },

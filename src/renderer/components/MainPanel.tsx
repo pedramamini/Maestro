@@ -795,6 +795,8 @@ export function MainPanel(props: MainPanelProps) {
                     ? activeTab?.scrollTop
                     : activeSession.terminalScrollTop
                 }
+                markdownRawMode={markdownRawMode}
+                setMarkdownRawMode={setMarkdownRawMode}
               />
 
               {/* Input Area (hidden in mobile landscape for focused reading) */}

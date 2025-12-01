@@ -185,7 +185,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     ...sessionActions,
     { id: 'new', label: 'Create New Agent', shortcut: shortcuts.newInstance, action: addNewSession },
     ...(activeSession ? [{ id: 'freshSession', label: 'Fresh Agent Session', action: () => { startFreshSession(); setQuickActionOpen(false); }, subtext: 'Clear AI history and start fresh' }] : []),
-    ...(activeSession ? [{ id: 'rename', label: 'Rename Agent', action: () => {
+    ...(activeSession ? [{ id: 'rename', label: `Rename Agent: ${activeSession.name}`, action: () => {
       setRenameInstanceValue(activeSession.name);
       setRenameInstanceModalOpen(true);
       setQuickActionOpen(false);
@@ -211,7 +211,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     ...(activeSession ? [{ id: 'switchMode', label: 'Switch AI/Shell Mode', shortcut: shortcuts.toggleMode, action: toggleInputMode }] : []),
     ...(isAiMode && onRenameTab ? [{ id: 'renameTab', label: 'Rename Tab', shortcut: tabShortcuts?.renameTab, action: () => { onRenameTab(); setQuickActionOpen(false); } }] : []),
     ...(isAiMode && onToggleReadOnlyMode ? [{ id: 'toggleReadOnly', label: 'Toggle Read-Only Mode', shortcut: tabShortcuts?.toggleReadOnlyMode, action: () => { onToggleReadOnlyMode(); setQuickActionOpen(false); } }] : []),
-    ...(activeSession ? [{ id: 'kill', label: 'Kill Current Agent', shortcut: shortcuts.killInstance, action: () => deleteSession(activeSessionId) }] : []),
+    ...(activeSession ? [{ id: 'kill', label: `Remove Agent: ${activeSession.name}`, shortcut: shortcuts.killInstance, action: () => deleteSession(activeSessionId) }] : []),
     { id: 'settings', label: 'Settings', shortcut: shortcuts.settings, action: () => { setSettingsModalOpen(true); setQuickActionOpen(false); } },
     { id: 'theme', label: 'Change Theme', action: () => { setSettingsModalOpen(true); setSettingsTab('theme'); setQuickActionOpen(false); } },
     { id: 'shortcuts', label: 'View Shortcuts', shortcut: shortcuts.help, action: () => { setShortcutsHelpOpen(true); setQuickActionOpen(false); } },

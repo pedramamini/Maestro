@@ -9,6 +9,12 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { MermaidRenderer } from './MermaidRenderer';
 
+interface FileStats {
+  size: number;
+  createdAt: string;
+  modifiedAt: string;
+}
+
 interface FilePreviewProps {
   file: { name: string; content: string; path: string } | null;
   onClose: () => void;
@@ -55,6 +61,27 @@ const isImageFile = (filename: string): boolean => {
   const ext = filename.split('.').pop()?.toLowerCase();
   const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg', 'ico'];
   return imageExtensions.includes(ext || '');
+};
+
+// Format file size in human-readable format
+const formatFileSize = (bytes: number): string => {
+  if (bytes === 0) return '0 B';
+  const k = 1024;
+  const sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+  const i = Math.floor(Math.log(bytes) / Math.log(k));
+  return `${parseFloat((bytes / Math.pow(k, i)).toFixed(1))} ${sizes[i]}`;
+};
+
+// Format date/time for display
+const formatDateTime = (isoString: string): string => {
+  const date = new Date(isoString);
+  return date.toLocaleString(undefined, {
+    year: 'numeric',
+    month: 'short',
+    day: 'numeric',
+    hour: '2-digit',
+    minute: '2-digit'
+  });
 };
 
 // Helper to resolve image path relative to markdown file directory
@@ -234,6 +261,7 @@ export function FilePreview({ file, onClose, theme, markdownRawMode, setMarkdown
   const [hoveredLink, setHoveredLink] = useState<{ url: string; x: number; y: number } | null>(null);
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
+  const [fileStats, setFileStats] = useState<FileStats | null>(null);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const codeContainerRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
@@ -251,6 +279,22 @@ export function FilePreview({ file, onClose, theme, markdownRawMode, setMarkdown
 
   // Extract directory path without filename
   const directoryPath = file.path.substring(0, file.path.lastIndexOf('/'));
+
+  // Fetch file stats when file changes
+  useEffect(() => {
+    if (file?.path) {
+      window.maestro.fs.stat(file.path)
+        .then(stats => setFileStats({
+          size: stats.size,
+          createdAt: stats.createdAt,
+          modifiedAt: stats.modifiedAt
+        }))
+        .catch(err => {
+          console.error('Failed to get file stats:', err);
+          setFileStats(null);
+        });
+    }
+  }, [file?.path]);
 
   // Auto-focus on mount so keyboard shortcuts work immediately
   useEffect(() => {
@@ -627,15 +671,32 @@ export function FilePreview({ file, onClose, theme, markdownRawMode, setMarkdown
       onKeyDown={handleKeyDown}
     >
       {/* Header */}
-      <div className="h-16 border-b flex items-center justify-between px-6 shrink-0" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}>
-        <div className="flex items-center gap-2">
-          <FileCode className="w-4 h-4" style={{ color: theme.colors.accent }} />
-          <div>
+      <div className="border-b flex items-center justify-between px-6 py-3 shrink-0" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}>
+        <div className="flex items-center gap-3">
+          <FileCode className="w-5 h-5 shrink-0" style={{ color: theme.colors.accent }} />
+          <div className="min-w-0">
             <div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>{file.name}</div>
-            <div className="text-xs opacity-50" style={{ color: theme.colors.textDim }}>{directoryPath}</div>
+            <div className="text-xs opacity-50 truncate" style={{ color: theme.colors.textDim }}>{directoryPath}</div>
           </div>
+          {/* File Stats */}
+          {fileStats && (
+            <div className="flex items-center gap-4 ml-4 pl-4 border-l" style={{ borderColor: theme.colors.border }}>
+              <div className="text-xs" style={{ color: theme.colors.textDim }}>
+                <span className="opacity-60">Size:</span>{' '}
+                <span style={{ color: theme.colors.textMain }}>{formatFileSize(fileStats.size)}</span>
+              </div>
+              <div className="text-xs" style={{ color: theme.colors.textDim }}>
+                <span className="opacity-60">Modified:</span>{' '}
+                <span style={{ color: theme.colors.textMain }}>{formatDateTime(fileStats.modifiedAt)}</span>
+              </div>
+              <div className="text-xs" style={{ color: theme.colors.textDim }}>
+                <span className="opacity-60">Created:</span>{' '}
+                <span style={{ color: theme.colors.textMain }}>{formatDateTime(fileStats.createdAt)}</span>
+              </div>
+            </div>
+          )}
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 shrink-0">
           {isMarkdown && (
             <button
               onClick={() => setMarkdownRawMode(!markdownRawMode)}

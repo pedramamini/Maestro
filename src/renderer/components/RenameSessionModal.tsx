@@ -12,10 +12,14 @@ interface RenameSessionModalProps {
   sessions: Session[];
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   activeSessionId: string;
+  /** Optional: specific session ID to rename (overrides activeSessionId) */
+  targetSessionId?: string;
 }
 
 export function RenameSessionModal(props: RenameSessionModalProps) {
-  const { theme, value, setValue, onClose, sessions, setSessions, activeSessionId } = props;
+  const { theme, value, setValue, onClose, sessions, setSessions, activeSessionId, targetSessionId } = props;
+  // Use targetSessionId if provided, otherwise fall back to activeSessionId
+  const sessionIdToRename = targetSessionId || activeSessionId;
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
   const modalRef = useRef<HTMLDivElement>(null);
@@ -25,19 +29,19 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
     if (value.trim()) {
       const trimmedName = value.trim();
 
-      // Find the active session to check for Claude session association
-      const activeSession = sessions.find(s => s.id === activeSessionId);
+      // Find the target session to check for Claude session association
+      const targetSession = sessions.find(s => s.id === sessionIdToRename);
 
       // Update local state
       setSessions(prev => prev.map(s =>
-        s.id === activeSessionId ? { ...s, name: trimmedName } : s
+        s.id === sessionIdToRename ? { ...s, name: trimmedName } : s
       ));
 
       // Also update the Claude session name if this session has an associated Claude session
-      if (activeSession?.claudeSessionId && activeSession?.cwd) {
+      if (targetSession?.claudeSessionId && targetSession?.cwd) {
         window.maestro.claude.updateSessionName(
-          activeSession.cwd,
-          activeSession.claudeSessionId,
+          targetSession.cwd,
+          targetSession.claudeSessionId,
           trimmedName
         ).catch(err => console.error('Failed to update Claude session name:', err));
       }
