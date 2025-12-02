@@ -497,6 +497,7 @@ export function TabBar({
 
   const tabBarRef = useRef<HTMLDivElement>(null);
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [isOverflowing, setIsOverflowing] = useState(false);
 
   // Scroll active tab into view when it changes or when tabs are added/removed
   // Use a small delay to ensure the DOM element is rendered and ref is registered
@@ -574,17 +575,38 @@ export function TabBar({
     ? tabs.filter(t => t.hasUnread)
     : tabs;
 
+  // Check if tabs overflow the container (need sticky + button)
+  useEffect(() => {
+    const checkOverflow = () => {
+      if (tabBarRef.current) {
+        // scrollWidth > clientWidth means content overflows
+        setIsOverflowing(tabBarRef.current.scrollWidth > tabBarRef.current.clientWidth);
+      }
+    };
+
+    // Check after DOM renders
+    const timeoutId = setTimeout(checkOverflow, 0);
+
+    // Re-check on window resize
+    window.addEventListener('resize', checkOverflow);
+    return () => {
+      clearTimeout(timeoutId);
+      window.removeEventListener('resize', checkOverflow);
+    };
+  }, [tabs.length, displayedTabs.length]);
+
   return (
     <div
-      className="flex items-end pt-2 border-b"
+      ref={tabBarRef}
+      className="flex items-end gap-0.5 px-2 pt-2 border-b overflow-x-auto overflow-y-hidden no-scrollbar"
       style={{
         backgroundColor: theme.colors.bgSidebar,
         borderColor: theme.colors.border
       }}
     >
-      {/* Unread filter toggle - fixed on left, outside scrollable area */}
+      {/* Unread filter toggle - sticky at the beginning with opaque background */}
       <div
-        className="flex items-center shrink-0 pl-2 pr-1 mb-1 self-center group"
+        className="sticky left-0 z-10 flex items-center shrink-0 pr-1 mb-1 self-center group"
         style={{ backgroundColor: theme.colors.bgSidebar }}
       >
         <button
@@ -615,76 +637,69 @@ export function TabBar({
         </div>
       </div>
 
-      {/* Scrollable tabs area */}
-      <div
-        ref={tabBarRef}
-        className="flex items-end gap-0.5 flex-1 min-w-0 overflow-x-auto overflow-y-hidden no-scrollbar"
-      >
-        {/* Empty state when filter is on but no unread tabs */}
-        {showUnreadOnly && displayedTabs.length === 0 && (
-          <div
-            className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
-            style={{ color: theme.colors.textDim }}
-          >
-            No unread tabs
-          </div>
-        )}
+      {/* Empty state when filter is on but no unread tabs */}
+      {showUnreadOnly && displayedTabs.length === 0 && (
+        <div
+          className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
+          style={{ color: theme.colors.textDim }}
+        >
+          No unread tabs
+        </div>
+      )}
 
-        {/* Tabs with separators between inactive tabs */}
-        {displayedTabs.map((tab, index) => {
-          const isActive = tab.id === activeTabId;
-          const prevTab = index > 0 ? displayedTabs[index - 1] : null;
-          const isPrevActive = prevTab?.id === activeTabId;
-          // Shortcut hint: use displayed index when filtering, original index otherwise
-          // This way Cmd+1 always jumps to the first visible tab
-          const shortcutIndex = showUnreadOnly ? index : tabs.findIndex(t => t.id === tab.id);
+      {/* Tabs with separators between inactive tabs */}
+      {displayedTabs.map((tab, index) => {
+        const isActive = tab.id === activeTabId;
+        const prevTab = index > 0 ? displayedTabs[index - 1] : null;
+        const isPrevActive = prevTab?.id === activeTabId;
+        // Get original index for shortcut hints (Cmd+1-9)
+        const originalIndex = tabs.findIndex(t => t.id === tab.id);
 
-          // Show separator between inactive tabs (not adjacent to active tab)
-          const showSeparator = index > 0 && !isActive && !isPrevActive;
+        // Show separator between inactive tabs (not adjacent to active tab)
+        const showSeparator = index > 0 && !isActive && !isPrevActive;
 
-          return (
-            <React.Fragment key={tab.id}>
-              {showSeparator && (
-                <div
-                  className="w-px h-4 self-center shrink-0"
-                  style={{ backgroundColor: theme.colors.border }}
-                />
-              )}
-              <Tab
-                tab={tab}
-                isActive={isActive}
-                theme={theme}
-                canClose={canClose}
-                onSelect={() => onTabSelect(tab.id)}
-                onClose={() => onTabClose(tab.id)}
-                onMiddleClick={() => canClose && onTabClose(tab.id)}
-                onContextMenu={(e) => handleContextMenu(tab.id, e)}
-                onDragStart={(e) => handleDragStart(tab.id, e)}
-                onDragOver={(e) => handleDragOver(tab.id, e)}
-                onDragEnd={handleDragEnd}
-                onDrop={(e) => handleDrop(tab.id, e)}
-                isDragging={draggingTabId === tab.id}
-                isDragOver={dragOverTabId === tab.id}
-                onRename={() => handleRenameRequest(tab.id)}
-                onStar={onTabStar ? (starred) => onTabStar(tab.id, starred) : undefined}
-                shortcutHint={shortcutIndex < 9 ? shortcutIndex + 1 : null}
-                registerRef={(el) => {
-                  if (el) {
-                    tabRefs.current.set(tab.id, el);
-                  } else {
-                    tabRefs.current.delete(tab.id);
-                  }
-                }}
+        return (
+          <React.Fragment key={tab.id}>
+            {showSeparator && (
+              <div
+                className="w-px h-4 self-center shrink-0"
+                style={{ backgroundColor: theme.colors.border }}
               />
-            </React.Fragment>
-          );
-        })}
-      </div>
+            )}
+            <Tab
+              tab={tab}
+              isActive={isActive}
+              theme={theme}
+              canClose={canClose}
+              onSelect={() => onTabSelect(tab.id)}
+              onClose={() => onTabClose(tab.id)}
+              onMiddleClick={() => canClose && onTabClose(tab.id)}
+              onContextMenu={(e) => handleContextMenu(tab.id, e)}
+              onDragStart={(e) => handleDragStart(tab.id, e)}
+              onDragOver={(e) => handleDragOver(tab.id, e)}
+              onDragEnd={handleDragEnd}
+              onDrop={(e) => handleDrop(tab.id, e)}
+              isDragging={draggingTabId === tab.id}
+              isDragOver={dragOverTabId === tab.id}
+              onRename={() => handleRenameRequest(tab.id)}
+              onStar={onTabStar ? (starred) => onTabStar(tab.id, starred) : undefined}
+              shortcutHint={originalIndex < 9 ? originalIndex + 1 : null}
+              registerRef={(el) => {
+                if (el) {
+                  tabRefs.current.set(tab.id, el);
+                } else {
+                  tabRefs.current.delete(tab.id);
+                }
+              }}
+            />
+          </React.Fragment>
+        );
+      })}
 
-      {/* New Tab Button - fixed on right, outside scrollable area */}
+      {/* New Tab Button - sticky on right when tabs overflow, otherwise inline */}
       <div
-        className="flex items-center shrink-0 pl-1 pr-2 mb-1 self-center"
-        style={{ backgroundColor: theme.colors.bgSidebar }}
+        className={`flex items-center shrink-0 pl-1 mb-1 self-center ${isOverflowing ? 'sticky right-0 z-10' : ''}`}
+        style={{ backgroundColor: isOverflowing ? theme.colors.bgSidebar : 'transparent' }}
       >
         <button
           onClick={onNewTab}
