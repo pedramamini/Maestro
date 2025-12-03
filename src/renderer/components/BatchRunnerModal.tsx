@@ -4,6 +4,7 @@ import type { Theme, BatchDocumentEntry, BatchRunConfig, Playbook, PlaybookDocum
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { TEMPLATE_VARIABLES } from '../utils/templateVariables';
+import { PlaybookDeleteConfirmModal } from './PlaybookDeleteConfirmModal';
 
 // Default batch processing prompt
 export const DEFAULT_BATCH_PROMPT = `CRITICAL: You must complete EXACTLY ONE task and then exit. Do not attempt multiple tasks.
@@ -147,6 +148,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
   const [showSavePlaybookModal, setShowSavePlaybookModal] = useState(false);
   const [newPlaybookName, setNewPlaybookName] = useState('');
   const [savingPlaybook, setSavingPlaybook] = useState(false);
+  const [showDeleteConfirmModal, setShowDeleteConfirmModal] = useState(false);
+  const [playbookToDelete, setPlaybookToDelete] = useState<Playbook | null>(null);
   const playbackDropdownRef = useRef<HTMLDivElement>(null);
   const savePlaybookInputRef = useRef<HTMLInputElement>(null);
 
@@ -230,7 +233,10 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
       type: 'modal',
       priority: MODAL_PRIORITIES.BATCH_RUNNER,
       onEscape: () => {
-        if (showSavePlaybookModal) {
+        if (showDeleteConfirmModal) {
+          setShowDeleteConfirmModal(false);
+          setPlaybookToDelete(null);
+        } else if (showSavePlaybookModal) {
           setShowSavePlaybookModal(false);
           setNewPlaybookName('');
         } else if (showDocSelector) {
@@ -247,13 +253,16 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
         unregisterLayer(layerIdRef.current);
       }
     };
-  }, [registerLayer, unregisterLayer, showDocSelector, showSavePlaybookModal]);
+  }, [registerLayer, unregisterLayer, showDocSelector, showSavePlaybookModal, showDeleteConfirmModal]);
 
   // Update handler when dependencies change
   useEffect(() => {
     if (layerIdRef.current) {
       updateLayerHandler(layerIdRef.current, () => {
-        if (showSavePlaybookModal) {
+        if (showDeleteConfirmModal) {
+          setShowDeleteConfirmModal(false);
+          setPlaybookToDelete(null);
+        } else if (showSavePlaybookModal) {
           setShowSavePlaybookModal(false);
           setNewPlaybookName('');
         } else if (showDocSelector) {
@@ -263,7 +272,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
         }
       });
     }
-  }, [onClose, updateLayerHandler, showDocSelector, showSavePlaybookModal]);
+  }, [onClose, updateLayerHandler, showDocSelector, showSavePlaybookModal, showDeleteConfirmModal]);
 
   // Focus textarea on mount (if not showing doc selector)
   useEffect(() => {
@@ -427,29 +436,39 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
     setShowPlaybookDropdown(false);
   }, []);
 
-  // Handle deleting a playbook
-  const handleDeletePlaybook = useCallback(async (playbook: Playbook, e: React.MouseEvent) => {
+  // Handle opening the delete confirmation modal
+  const handleDeletePlaybook = useCallback((playbook: Playbook, e: React.MouseEvent) => {
     e.stopPropagation();
+    setPlaybookToDelete(playbook);
+    setShowDeleteConfirmModal(true);
+  }, []);
 
-    // Use the showConfirmation prop for confirmation
-    showConfirmation(
-      `Delete playbook "${playbook.name}"? This cannot be undone.`,
-      async () => {
-        try {
-          const result = await window.maestro.playbooks.delete(sessionId, playbook.id);
-          if (result.success) {
-            setPlaybooks(prev => prev.filter(p => p.id !== playbook.id));
-            // If the deleted playbook was loaded, clear it
-            if (loadedPlaybook?.id === playbook.id) {
-              setLoadedPlaybook(null);
-            }
-          }
-        } catch (error) {
-          console.error('Failed to delete playbook:', error);
+  // Handle confirming the delete action
+  const handleConfirmDeletePlaybook = useCallback(async () => {
+    if (!playbookToDelete) return;
+
+    try {
+      const result = await window.maestro.playbooks.delete(sessionId, playbookToDelete.id);
+      if (result.success) {
+        setPlaybooks(prev => prev.filter(p => p.id !== playbookToDelete.id));
+        // If the deleted playbook was loaded, clear it
+        if (loadedPlaybook?.id === playbookToDelete.id) {
+          setLoadedPlaybook(null);
         }
       }
-    );
-  }, [sessionId, showConfirmation, loadedPlaybook]);
+    } catch (error) {
+      console.error('Failed to delete playbook:', error);
+    }
+
+    setShowDeleteConfirmModal(false);
+    setPlaybookToDelete(null);
+  }, [sessionId, playbookToDelete, loadedPlaybook]);
+
+  // Handle canceling the delete action
+  const handleCancelDeletePlaybook = useCallback(() => {
+    setShowDeleteConfirmModal(false);
+    setPlaybookToDelete(null);
+  }, []);
 
   // Handle saving a new playbook
   const handleSaveAsPlaybook = useCallback(async () => {
@@ -1191,6 +1210,16 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
             </div>
           </div>
         </div>
+      )}
+
+      {/* Playbook Delete Confirmation Modal */}
+      {showDeleteConfirmModal && playbookToDelete && (
+        <PlaybookDeleteConfirmModal
+          theme={theme}
+          playbookName={playbookToDelete.name}
+          onConfirm={handleConfirmDeletePlaybook}
+          onCancel={handleCancelDeletePlaybook}
+        />
       )}
     </div>
   );

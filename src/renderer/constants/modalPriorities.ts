@@ -20,6 +20,9 @@ export const MODAL_PRIORITIES = {
   /** Confirmation dialogs - highest priority, always on top */
   CONFIRM: 1000,
 
+  /** Playbook delete confirmation - high priority, appears on top of BatchRunner */
+  PLAYBOOK_DELETE_CONFIRM: 950,
+
   /** Rename instance modal */
   RENAME_INSTANCE: 900,
 
