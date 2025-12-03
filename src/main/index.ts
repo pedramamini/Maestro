@@ -3290,6 +3290,50 @@ function setupIpcHandlers() {
       }
     }
   );
+
+  // Write a markdown document for Auto Run
+  ipcMain.handle(
+    'autorun:writeDoc',
+    async (_event, folderPath: string, filename: string, content: string) => {
+      try {
+        // Sanitize filename to prevent directory traversal
+        const sanitizedFilename = path.basename(filename);
+        if (sanitizedFilename !== filename || filename.includes('..')) {
+          return { success: false, error: 'Invalid filename' };
+        }
+
+        // Ensure filename has .md extension
+        const fullFilename = sanitizedFilename.endsWith('.md')
+          ? sanitizedFilename
+          : `${sanitizedFilename}.md`;
+
+        const filePath = path.join(folderPath, fullFilename);
+
+        // Validate the file is within the folder path (prevent traversal)
+        const resolvedPath = path.resolve(filePath);
+        const resolvedFolder = path.resolve(folderPath);
+        if (!resolvedPath.startsWith(resolvedFolder)) {
+          return { success: false, error: 'Invalid file path' };
+        }
+
+        // Ensure the folder exists
+        try {
+          await fs.access(folderPath);
+        } catch {
+          return { success: false, error: 'Folder does not exist' };
+        }
+
+        // Write the file
+        await fs.writeFile(filePath, content, 'utf-8');
+
+        logger.info(`Wrote Auto Run doc: ${fullFilename}`, 'AutoRun');
+        return { success: true };
+      } catch (error) {
+        logger.error('Error writing Auto Run doc', 'AutoRun', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
 }
 
 // Handle process output streaming (set up after initialization)
