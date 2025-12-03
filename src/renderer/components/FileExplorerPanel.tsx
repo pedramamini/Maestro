@@ -34,6 +34,7 @@ interface FileExplorerPanelProps {
   updateSessionWorkingDirectory: (activeSessionId: string, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => Promise<void>;
   refreshFileTree: (sessionId: string) => Promise<void>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
+  fileTreeRefreshInterval: number;
 }
 
 export function FileExplorerPanel(props: FileExplorerPanelProps) {
@@ -41,11 +42,12 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
     session, theme, fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, activeFocus, activeRightTab,
     previewFile, setActiveFocus, fileTreeContainerRef, fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders,
-    collapseAllFolders, updateSessionWorkingDirectory, refreshFileTree, setSessions
+    collapseAllFolders, updateSessionWorkingDirectory, refreshFileTree, setSessions, fileTreeRefreshInterval
   } = props;
 
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
+  const refreshInProgressRef = useRef(false);
 
   // Register layer when filter is open
   useEffect(() => {
@@ -77,6 +79,35 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
       });
     }
   }, [fileTreeFilterOpen, setFileTreeFilterOpen, setFileTreeFilter, updateLayerHandler]);
+
+  // Auto-refresh file tree when Files tab is active
+  useEffect(() => {
+    if (activeRightTab !== 'files') {
+      // Not on Files tab, don't auto-refresh
+      return;
+    }
+
+    // Set up interval for auto-refresh
+    const intervalMs = fileTreeRefreshInterval * 1000;
+    const intervalId = setInterval(async () => {
+      // Skip if a refresh is already in progress
+      if (refreshInProgressRef.current) {
+        return;
+      }
+
+      try {
+        refreshInProgressRef.current = true;
+        await refreshFileTree(session.id);
+      } catch (error) {
+        console.error('Auto-refresh failed:', error);
+      } finally {
+        refreshInProgressRef.current = false;
+      }
+    }, intervalMs);
+
+    // Clean up interval when component unmounts or dependencies change
+    return () => clearInterval(intervalId);
+  }, [activeRightTab, fileTreeRefreshInterval, session.id, refreshFileTree]);
 
   const renderTree = (nodes: FileNode[], currentPath = '', depth = 0, globalIndex = { value: 0 }) => {
     const expandedSet = new Set(session.fileExplorerExpanded || []);

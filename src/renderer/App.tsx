@@ -6257,6 +6257,7 @@ export default function MaestroConsole() {
             updateSessionWorkingDirectory={updateSessionWorkingDirectory}
             refreshFileTree={refreshFileTree}
             setSessions={setSessions}
+            fileTreeRefreshInterval={fileTreeRefreshInterval}
             updateScratchPad={updateScratchPad}
             updateScratchPadState={updateScratchPadState}
             batchRunState={activeBatchRunState}
@@ -6412,6 +6413,8 @@ export default function MaestroConsole() {
         setToastDuration={setToastDuration}
         customAICommands={customAICommands}
         setCustomAICommands={setCustomAICommands}
+        fileTreeRefreshInterval={fileTreeRefreshInterval}
+        setFileTreeRefreshInterval={setFileTreeRefreshInterval}
         initialTab={settingsTab}
       />
 

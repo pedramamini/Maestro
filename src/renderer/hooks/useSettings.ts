@@ -135,6 +135,10 @@ export interface UseSettingsReturn {
   autoRunStats: AutoRunStats;
   setAutoRunStats: (value: AutoRunStats) => void;
   recordAutoRunComplete: (elapsedTimeMs: number) => { newBadgeLevel: number | null; isNewRecord: boolean };
+
+  // File Tree Auto-Refresh
+  fileTreeRefreshInterval: number;
+  setFileTreeRefreshInterval: (value: number) => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -195,6 +199,9 @@ export function useSettings(): UseSettingsReturn {
 
   // Auto-run Stats (persistent)
   const [autoRunStats, setAutoRunStatsState] = useState<AutoRunStats>(DEFAULT_AUTO_RUN_STATS);
+
+  // File Tree Auto-Refresh (default: 3 seconds)
+  const [fileTreeRefreshInterval, setFileTreeRefreshIntervalState] = useState(3);
 
   // Wrapper functions that persist to electron-store
   const setLlmProvider = (value: LLMProvider) => {
@@ -350,6 +357,11 @@ export function useSettings(): UseSettingsReturn {
     window.maestro.settings.set('autoRunStats', value);
   };
 
+  const setFileTreeRefreshInterval = (value: number) => {
+    setFileTreeRefreshIntervalState(value);
+    window.maestro.settings.set('fileTreeRefreshInterval', value);
+  };
+
   // Import badge calculation from constants (moved inline to avoid circular dependency)
   const getBadgeLevelForTime = (cumulativeTimeMs: number): number => {
     // Time thresholds in milliseconds
@@ -458,6 +470,7 @@ export function useSettings(): UseSettingsReturn {
       const savedCustomAICommands = await window.maestro.settings.get('customAICommands');
       const savedGlobalStats = await window.maestro.settings.get('globalStats');
       const savedAutoRunStats = await window.maestro.settings.get('autoRunStats');
+      const savedFileTreeRefreshInterval = await window.maestro.settings.get('fileTreeRefreshInterval');
 
       if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI);
       if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal);
@@ -514,6 +527,11 @@ export function useSettings(): UseSettingsReturn {
       // Load auto-run stats
       if (savedAutoRunStats !== undefined) {
         setAutoRunStatsState({ ...DEFAULT_AUTO_RUN_STATS, ...savedAutoRunStats });
+      }
+
+      // Load file tree refresh interval
+      if (savedFileTreeRefreshInterval !== undefined) {
+        setFileTreeRefreshIntervalState(savedFileTreeRefreshInterval);
       }
 
       // Mark settings as loaded
@@ -585,5 +603,7 @@ export function useSettings(): UseSettingsReturn {
     autoRunStats,
     setAutoRunStats,
     recordAutoRunComplete,
+    fileTreeRefreshInterval,
+    setFileTreeRefreshInterval,
   };
 }

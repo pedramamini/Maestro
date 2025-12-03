@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Key, Moon, Sun, Keyboard, Check, Terminal, Bell, Volume2, Square, Cpu, Clock, Settings, Palette, Sparkles } from 'lucide-react';
+import { X, Key, Moon, Sun, Keyboard, Check, Terminal, Bell, Volume2, Square, Cpu, Clock, Settings, Palette, Sparkles, RefreshCw } from 'lucide-react';
 import type { AgentConfig, Theme, Shortcut, ShellInfo, CustomAICommand } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -56,6 +56,8 @@ interface SettingsModalProps {
   setToastDuration: (value: number) => void;
   customAICommands: CustomAICommand[];
   setCustomAICommands: (commands: CustomAICommand[]) => void;
+  fileTreeRefreshInterval: number;
+  setFileTreeRefreshInterval: (value: number) => void;
   initialTab?: 'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands';
 }
 
@@ -1169,6 +1171,38 @@ export function SettingsModal(props: SettingsModalProps) {
                       : 'Press Command+Enter to send. Enter creates new line.'}
                   </p>
                 </div>
+              </div>
+
+              {/* File Tree Refresh Interval */}
+              <div>
+                <label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+                  <RefreshCw className="w-3 h-3" />
+                  File Tree Refresh Interval
+                </label>
+                <div className="mb-3">
+                  <input
+                    type="range"
+                    min="3"
+                    max="300"
+                    step="1"
+                    value={props.fileTreeRefreshInterval}
+                    onChange={(e) => props.setFileTreeRefreshInterval(Number(e.target.value))}
+                    className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+                    style={{
+                      background: `linear-gradient(to right, ${theme.colors.accent} 0%, ${theme.colors.accent} ${((props.fileTreeRefreshInterval - 3) / 297) * 100}%, ${theme.colors.border} ${((props.fileTreeRefreshInterval - 3) / 297) * 100}%, ${theme.colors.border} 100%)`
+                    }}
+                  />
+                  <div className="flex justify-between items-center mt-2">
+                    <span className="text-xs opacity-50">3 seconds</span>
+                    <span className="text-sm font-bold px-3 py-1 rounded" style={{ backgroundColor: theme.colors.accentDim, color: theme.colors.textMain }}>
+                      {props.fileTreeRefreshInterval}s
+                    </span>
+                    <span className="text-xs opacity-50">5 minutes</span>
+                  </div>
+                </div>
+                <p className="text-xs opacity-50">
+                  Auto-refresh the file tree when the Files tab is active. Set the interval between refreshes.
+                </p>
               </div>
             </div>
           )}

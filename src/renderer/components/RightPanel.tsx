@@ -50,6 +50,7 @@ interface RightPanelProps {
   updateSessionWorkingDirectory: (activeSessionId: string, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => Promise<void>;
   refreshFileTree: (sessionId: string) => Promise<void>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
+  fileTreeRefreshInterval: number;
 
   // Scratchpad handlers
   updateScratchPad: (content: string) => void;
@@ -76,7 +77,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, previewFile, fileTreeContainerRef,
     fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders, collapseAllFolders,
-    updateSessionWorkingDirectory, refreshFileTree, setSessions, updateScratchPad, updateScratchPadState,
+    updateSessionWorkingDirectory, refreshFileTree, setSessions, fileTreeRefreshInterval, updateScratchPad, updateScratchPadState,
     batchRunState, onOpenBatchRunner, onStopBatchRun, onJumpToClaudeSession, onResumeSession,
     onOpenSessionAsTab
   } = props;
@@ -214,6 +215,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             updateSessionWorkingDirectory={updateSessionWorkingDirectory}
             refreshFileTree={refreshFileTree}
             setSessions={setSessions}
+            fileTreeRefreshInterval={fileTreeRefreshInterval}
           />
         )}
 
