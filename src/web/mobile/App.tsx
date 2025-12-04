@@ -29,6 +29,7 @@ import { ConnectionStatusIndicator } from './ConnectionStatusIndicator';
 import { MessageHistory, type LogEntry } from './MessageHistory';
 import { AutoRunIndicator } from './AutoRunIndicator';
 import { TabBar } from './TabBar';
+import { MobileScratchpad } from './MobileScratchpad';
 import type { Session, LastResponsePreview } from '../hooks/useSessions';
 
 
@@ -299,6 +300,10 @@ export default function MobileApp() {
 
   // AutoRun state per session (batch processing on desktop)
   const [autoRunStates, setAutoRunStates] = useState<Record<string, AutoRunState | null>>({});
+
+  // Scratchpad state
+  const [scratchpadContent, setScratchpadContent] = useState<Record<string, string>>({});
+  const [showScratchpad, setShowScratchpad] = useState(false);
 
   // Detect if on a small screen (phone vs tablet/iPad)
   // Use 768px as breakpoint - below this is considered "small"
@@ -624,6 +629,14 @@ export default function MobileApp() {
         setActiveTabId(newActiveTabId);
       }
     },
+    onScratchpadContent: (sessionId: string, content: string) => {
+      // Scratchpad content synced from desktop
+      webLogger.debug(`Scratchpad content received: ${sessionId} - ${content?.length || 0} chars`, 'Mobile');
+      setScratchpadContent(prev => ({
+        ...prev,
+        [sessionId]: content,
+      }));
+    },
   }), [showResponseNotification, setDesktopTheme]);
 
   const { state: connectionState, connect, send, error, reconnectAttempts } = useWebSocket({
@@ -795,6 +808,67 @@ export default function MobileApp() {
   const handleCloseHistoryPanel = useCallback(() => {
     setShowHistoryPanel(false);
   }, []);
+
+  // Handle opening Scratchpad panel
+  const handleOpenScratchpad = useCallback(() => {
+    if (!activeSessionId) return;
+
+    // Request scratchpad content from server
+    send({
+      type: 'get_scratchpad',
+      sessionId: activeSessionId,
+    });
+
+    setShowScratchpad(true);
+    triggerHaptic(HAPTIC_PATTERNS.tap);
+  }, [activeSessionId, send]);
+
+  // Handle closing Scratchpad panel
+  const handleCloseScratchpad = useCallback(() => {
+    setShowScratchpad(false);
+  }, []);
+
+  // Handle scratchpad content change
+  const handleScratchpadContentChange = useCallback((content: string) => {
+    if (!activeSessionId) return;
+
+    // Update local state immediately
+    setScratchpadContent(prev => ({
+      ...prev,
+      [activeSessionId]: content,
+    }));
+
+    // Send update to server
+    send({
+      type: 'update_scratchpad',
+      sessionId: activeSessionId,
+      content,
+    });
+  }, [activeSessionId, send]);
+
+  // Handle starting AutoRun from mobile
+  const handleStartAutoRun = useCallback(() => {
+    if (!activeSessionId) return;
+
+    send({
+      type: 'start_autorun',
+      sessionId: activeSessionId,
+    });
+
+    triggerHaptic(HAPTIC_PATTERNS.send);
+  }, [activeSessionId, send]);
+
+  // Handle stopping AutoRun from mobile
+  const handleStopAutoRun = useCallback(() => {
+    if (!activeSessionId) return;
+
+    send({
+      type: 'stop_autorun',
+      sessionId: activeSessionId,
+    });
+
+    triggerHaptic(HAPTIC_PATTERNS.tap);
+  }, [activeSessionId, send]);
 
   // Handle command submission
   const handleCommandSubmit = useCallback((command: string) => {
@@ -1215,6 +1289,7 @@ export default function MobileApp() {
           onSelectSession={handleSelectSession}
           onOpenAllSessions={handleOpenAllSessions}
           onOpenHistory={handleOpenHistoryPanel}
+          onOpenScratchpad={handleOpenScratchpad}
         />
       )}
 
@@ -1266,6 +1341,22 @@ export default function MobileApp() {
           onClose={handleCloseHistoryPanel}
           projectPath={activeSession?.cwd}
           sessionId={activeSessionId || undefined}
+        />
+      )}
+
+      {/* Scratchpad panel - full-screen modal with task list */}
+      {showScratchpad && activeSessionId && (
+        <MobileScratchpad
+          isOpen={showScratchpad}
+          onClose={handleCloseScratchpad}
+          content={scratchpadContent[activeSessionId] || ''}
+          onContentChange={handleScratchpadContentChange}
+          sessionId={activeSessionId}
+          sessionName={activeSession?.name}
+          autoRunState={autoRunStates[activeSessionId]}
+          onStartAutoRun={handleStartAutoRun}
+          onStopAutoRun={handleStopAutoRun}
+          isSessionBusy={activeSession?.state === 'busy'}
         />
       )}
 

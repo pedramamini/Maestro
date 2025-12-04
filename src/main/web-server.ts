@@ -180,6 +180,14 @@ export type SelectTabCallback = (sessionId: string, tabId: string) => Promise<bo
 export type NewTabCallback = (sessionId: string) => Promise<{ tabId: string } | null>;
 export type CloseTabCallback = (sessionId: string, tabId: string) => Promise<boolean>;
 
+// Scratchpad callbacks for mobile scratchpad sync
+export type GetScratchpadCallback = (sessionId: string) => Promise<{ content: string } | null>;
+export type UpdateScratchpadCallback = (sessionId: string, content: string) => Promise<boolean>;
+
+// AutoRun callbacks for mobile batch processing control
+export type StartAutoRunCallback = (sessionId: string) => Promise<boolean>;
+export type StopAutoRunCallback = (sessionId: string) => Promise<boolean>;
+
 // Re-export Theme type from shared for backwards compatibility
 export type { Theme } from '../shared/theme-types';
 
@@ -251,6 +259,10 @@ export class WebServer {
   private newTabCallback: NewTabCallback | null = null;
   private closeTabCallback: CloseTabCallback | null = null;
   private getHistoryCallback: GetHistoryCallback | null = null;
+  private getScratchpadCallback: GetScratchpadCallback | null = null;
+  private updateScratchpadCallback: UpdateScratchpadCallback | null = null;
+  private startAutoRunCallback: StartAutoRunCallback | null = null;
+  private stopAutoRunCallback: StopAutoRunCallback | null = null;
   private webAssetsPath: string | null = null;
 
   // Security token - regenerated on each app startup
@@ -551,6 +563,42 @@ export class WebServer {
    */
   setGetHistoryCallback(callback: GetHistoryCallback) {
     this.getHistoryCallback = callback;
+  }
+
+  /**
+   * Set the callback function for getting scratchpad content
+   * This forwards to the renderer which returns the session's scratchpad
+   */
+  setGetScratchpadCallback(callback: GetScratchpadCallback) {
+    logger.info('[WebServer] setGetScratchpadCallback called', LOG_CONTEXT);
+    this.getScratchpadCallback = callback;
+  }
+
+  /**
+   * Set the callback function for updating scratchpad content
+   * This forwards to the renderer which handles state updates and broadcasts
+   */
+  setUpdateScratchpadCallback(callback: UpdateScratchpadCallback) {
+    logger.info('[WebServer] setUpdateScratchpadCallback called', LOG_CONTEXT);
+    this.updateScratchpadCallback = callback;
+  }
+
+  /**
+   * Set the callback function for starting AutoRun batch processing
+   * This forwards to the renderer which handles batch processing
+   */
+  setStartAutoRunCallback(callback: StartAutoRunCallback) {
+    logger.info('[WebServer] setStartAutoRunCallback called', LOG_CONTEXT);
+    this.startAutoRunCallback = callback;
+  }
+
+  /**
+   * Set the callback function for stopping AutoRun batch processing
+   * This forwards to the renderer which handles stopping the batch
+   */
+  setStopAutoRunCallback(callback: StopAutoRunCallback) {
+    logger.info('[WebServer] setStopAutoRunCallback called', LOG_CONTEXT);
+    this.stopAutoRunCallback = callback;
   }
 
   /**
@@ -1408,6 +1456,179 @@ export class WebServer {
         break;
       }
 
+      case 'get_scratchpad': {
+        // Get scratchpad content for a session
+        const sessionId = message.sessionId as string;
+        logger.info(`[Web] Received get_scratchpad message: session=${sessionId}`, LOG_CONTEXT);
+
+        if (!sessionId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.getScratchpadCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Scratchpad not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.getScratchpadCallback(sessionId)
+          .then((result) => {
+            client.socket.send(JSON.stringify({
+              type: 'scratchpad_content',
+              sessionId,
+              content: result?.content || '',
+              timestamp: Date.now(),
+            }));
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to get scratchpad: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
+      case 'update_scratchpad': {
+        // Update scratchpad content for a session
+        const sessionId = message.sessionId as string;
+        const content = message.content as string;
+        logger.info(`[Web] Received update_scratchpad message: session=${sessionId}, length=${content?.length || 0}`, LOG_CONTEXT);
+
+        if (!sessionId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.updateScratchpadCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Scratchpad not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.updateScratchpadCallback(sessionId, content || '')
+          .then((success) => {
+            client.socket.send(JSON.stringify({
+              type: 'update_scratchpad_result',
+              success,
+              sessionId,
+              timestamp: Date.now(),
+            }));
+            // Broadcast updated content to all clients watching this session
+            if (success) {
+              this.broadcastScratchpadContent(sessionId, content || '');
+            }
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to update scratchpad: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
+      case 'start_autorun': {
+        // Start AutoRun batch processing for a session
+        const sessionId = message.sessionId as string;
+        logger.info(`[Web] Received start_autorun message: session=${sessionId}`, LOG_CONTEXT);
+
+        if (!sessionId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.startAutoRunCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'AutoRun not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.startAutoRunCallback(sessionId)
+          .then((success) => {
+            client.socket.send(JSON.stringify({
+              type: 'start_autorun_result',
+              success,
+              sessionId,
+              timestamp: Date.now(),
+            }));
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to start AutoRun: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
+      case 'stop_autorun': {
+        // Stop AutoRun batch processing for a session
+        const sessionId = message.sessionId as string;
+        logger.info(`[Web] Received stop_autorun message: session=${sessionId}`, LOG_CONTEXT);
+
+        if (!sessionId) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'Missing sessionId',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        if (!this.stopAutoRunCallback) {
+          client.socket.send(JSON.stringify({
+            type: 'error',
+            message: 'AutoRun not configured',
+            timestamp: Date.now(),
+          }));
+          return;
+        }
+
+        this.stopAutoRunCallback(sessionId)
+          .then((success) => {
+            client.socket.send(JSON.stringify({
+              type: 'stop_autorun_result',
+              success,
+              sessionId,
+              timestamp: Date.now(),
+            }));
+          })
+          .catch((error) => {
+            client.socket.send(JSON.stringify({
+              type: 'error',
+              message: `Failed to stop AutoRun: ${error.message}`,
+              timestamp: Date.now(),
+            }));
+          });
+        break;
+      }
+
       default:
         // Echo unknown message types for debugging
         logger.debug(`Unknown message type: ${message.type}`, LOG_CONTEXT);
@@ -1598,6 +1819,19 @@ export class WebServer {
       type: 'autorun_state',
       sessionId,
       state,
+      timestamp: Date.now(),
+    });
+  }
+
+  /**
+   * Broadcast scratchpad content to all connected web clients
+   * Called when scratchpad content changes (from mobile or desktop)
+   */
+  broadcastScratchpadContent(sessionId: string, content: string) {
+    this.broadcastToWebClients({
+      type: 'scratchpad_content',
+      sessionId,
+      content,
       timestamp: Date.now(),
     });
   }

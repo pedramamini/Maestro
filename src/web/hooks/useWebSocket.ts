@@ -107,6 +107,7 @@ export type ServerMessageType =
   | 'custom_commands'
   | 'autorun_state'
   | 'tabs_changed'
+  | 'scratchpad_content'
   | 'pong'
   | 'subscribed'
   | 'echo'
@@ -281,6 +282,16 @@ export interface TabsChangedMessage extends ServerMessage {
 }
 
 /**
+ * Scratchpad content message from server
+ * Sent when scratchpad content is requested or updated
+ */
+export interface ScratchpadContentMessage extends ServerMessage {
+  type: 'scratchpad_content';
+  sessionId: string;
+  content: string;
+}
+
+/**
  * Error message from server
  */
 export interface ErrorMessage extends ServerMessage {
@@ -308,6 +319,7 @@ export type TypedServerMessage =
   | CustomCommandsMessage
   | AutoRunStateMessage
   | TabsChangedMessage
+  | ScratchpadContentMessage
   | ErrorMessage
   | ServerMessage;
 
@@ -339,6 +351,8 @@ export interface WebSocketEventHandlers {
   onAutoRunStateChange?: (sessionId: string, state: AutoRunState | null) => void;
   /** Called when tabs change in a session */
   onTabsChanged?: (sessionId: string, aiTabs: AITabData[], activeTabId: string) => void;
+  /** Called when scratchpad content is received or updated */
+  onScratchpadContent?: (sessionId: string, content: string) => void;
   /** Called when connection state changes */
   onConnectionChange?: (state: WebSocketState) => void;
   /** Called when an error occurs */
@@ -654,6 +668,12 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
         case 'tabs_changed': {
           const tabsMsg = message as TabsChangedMessage;
           handlersRef.current?.onTabsChanged?.(tabsMsg.sessionId, tabsMsg.aiTabs, tabsMsg.activeTabId);
+          break;
+        }
+
+        case 'scratchpad_content': {
+          const scratchpadMsg = message as ScratchpadContentMessage;
+          handlersRef.current?.onScratchpadContent?.(scratchpadMsg.sessionId, scratchpadMsg.content);
           break;
         }
 

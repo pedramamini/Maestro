@@ -86,6 +86,11 @@ interface MaestroAPI {
     onRemoteNewTab: (callback: (sessionId: string, responseChannel: string) => void) => () => void;
     sendRemoteNewTabResponse: (responseChannel: string, result: { tabId: string } | null) => void;
     onRemoteCloseTab: (callback: (sessionId: string, tabId: string) => void) => () => void;
+    onRemoteGetScratchpad: (callback: (sessionId: string, responseChannel: string) => void) => () => void;
+    sendRemoteGetScratchpadResponse: (responseChannel: string, result: { content: string } | null) => void;
+    onRemoteUpdateScratchpad: (callback: (sessionId: string, content: string) => void) => () => void;
+    onRemoteStartAutoRun: (callback: (sessionId: string) => void) => () => void;
+    onRemoteStopAutoRun: (callback: (sessionId: string) => void) => () => void;
     onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
     onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
     onUsage: (callback: (sessionId: string, usageStats: UsageStats) => void) => () => void;
@@ -110,6 +115,7 @@ interface MaestroAPI {
       state: 'idle' | 'busy';
       thinkingStartTime?: number | null;
     }>, activeTabId: string) => Promise<void>;
+    broadcastScratchpadContent: (sessionId: string, content: string) => Promise<void>;
   };
   git: {
     status: (cwd: string) => Promise<{ staged: string[]; unstaged: string[]; untracked: string[]; branch?: string }>;

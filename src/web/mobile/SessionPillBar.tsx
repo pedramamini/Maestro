@@ -608,6 +608,8 @@ export interface SessionPillBarProps {
   onOpenAllSessions?: () => void;
   /** Callback to open the History panel */
   onOpenHistory?: () => void;
+  /** Callback to open the Scratchpad panel */
+  onOpenScratchpad?: () => void;
   /** Optional className for additional styling */
   className?: string;
   /** Optional inline styles */
@@ -644,6 +646,7 @@ export function SessionPillBar({
   onSelectSession,
   onOpenAllSessions,
   onOpenHistory,
+  onOpenScratchpad,
   className = '',
   style,
 }: SessionPillBarProps) {
@@ -865,6 +868,49 @@ export function SessionPillBar({
                 >
                   <circle cx="12" cy="12" r="10" />
                   <polyline points="12 6 12 12 16 14" />
+                </svg>
+              </button>
+            )}
+            {/* Scratchpad button - pinned next to history */}
+            {onOpenScratchpad && (
+              <button
+                onClick={() => {
+                  triggerHaptic(HAPTIC_PATTERNS.tap);
+                  onOpenScratchpad();
+                }}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  justifyContent: 'center',
+                  width: '36px',
+                  height: '36px',
+                  borderRadius: '18px',
+                  border: `1px solid ${colors.border}`,
+                  backgroundColor: colors.bgMain,
+                  color: colors.textMain,
+                  cursor: 'pointer',
+                  flexShrink: 0,
+                  padding: 0,
+                  touchAction: 'manipulation',
+                  WebkitTapHighlightColor: 'transparent',
+                  outline: 'none',
+                }}
+                aria-label="Open scratchpad"
+                title="Scratchpad"
+              >
+                {/* Checklist/task icon */}
+                <svg
+                  width="18"
+                  height="18"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  strokeWidth="2"
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                >
+                  <path d="M9 11l3 3L22 4" />
+                  <path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11" />
                 </svg>
               </button>
             )}

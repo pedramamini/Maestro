@@ -497,6 +497,60 @@ function createWebServer(): WebServer {
     return true;
   });
 
+  // Scratchpad callbacks
+  server.setGetScratchpadCallback(async (sessionId: string) => {
+    logger.info(`[Web→Desktop] Get scratchpad callback invoked: session=${sessionId}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for getScratchpad', 'WebServer');
+      return null;
+    }
+
+    // Use invoke pattern for synchronous response
+    return new Promise((resolve) => {
+      const responseChannel = `remote:getScratchpad:response:${Date.now()}`;
+      ipcMain.once(responseChannel, (_event, result) => {
+        resolve(result);
+      });
+      mainWindow!.webContents.send('remote:getScratchpad', sessionId, responseChannel);
+      // Timeout after 5 seconds
+      setTimeout(() => resolve(null), 5000);
+    });
+  });
+
+  server.setUpdateScratchpadCallback(async (sessionId: string, content: string) => {
+    logger.info(`[Web→Desktop] Update scratchpad callback invoked: session=${sessionId}, length=${content?.length || 0}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for updateScratchpad', 'WebServer');
+      return false;
+    }
+
+    mainWindow.webContents.send('remote:updateScratchpad', sessionId, content);
+    return true;
+  });
+
+  // AutoRun callbacks
+  server.setStartAutoRunCallback(async (sessionId: string) => {
+    logger.info(`[Web→Desktop] Start AutoRun callback invoked: session=${sessionId}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for startAutoRun', 'WebServer');
+      return false;
+    }
+
+    mainWindow.webContents.send('remote:startAutoRun', sessionId);
+    return true;
+  });
+
+  server.setStopAutoRunCallback(async (sessionId: string) => {
+    logger.info(`[Web→Desktop] Stop AutoRun callback invoked: session=${sessionId}`, 'WebServer');
+    if (!mainWindow) {
+      logger.warn('mainWindow is null for stopAutoRun', 'WebServer');
+      return false;
+    }
+
+    mainWindow.webContents.send('remote:stopAutoRun', sessionId);
+    return true;
+  });
+
   return server;
 }
 
@@ -798,6 +852,15 @@ function setupIpcHandlers() {
   ipcMain.handle('web:broadcastTabsChange', async (_, sessionId: string, aiTabs: any[], activeTabId: string) => {
     if (webServer && webServer.getWebClientCount() > 0) {
       webServer.broadcastTabsChange(sessionId, aiTabs, activeTabId);
+      return true;
+    }
+    return false;
+  });
+
+  // Broadcast scratchpad content to web clients
+  ipcMain.handle('web:broadcastScratchpadContent', async (_, sessionId: string, content: string) => {
+    if (webServer && webServer.getWebClientCount() > 0) {
+      webServer.broadcastScratchpadContent(sessionId, content);
       return true;
     }
     return false;

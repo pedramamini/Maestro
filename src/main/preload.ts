@@ -147,6 +147,34 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.on('remote:closeTab', handler);
       return () => ipcRenderer.removeListener('remote:closeTab', handler);
     },
+    // Remote get scratchpad from web interface
+    onRemoteGetScratchpad: (callback: (sessionId: string, responseChannel: string) => void) => {
+      const handler = (_: any, sessionId: string, responseChannel: string) => callback(sessionId, responseChannel);
+      ipcRenderer.on('remote:getScratchpad', handler);
+      return () => ipcRenderer.removeListener('remote:getScratchpad', handler);
+    },
+    // Send response for remote get scratchpad
+    sendRemoteGetScratchpadResponse: (responseChannel: string, result: { content: string } | null) => {
+      ipcRenderer.send(responseChannel, result);
+    },
+    // Remote update scratchpad from web interface
+    onRemoteUpdateScratchpad: (callback: (sessionId: string, content: string) => void) => {
+      const handler = (_: any, sessionId: string, content: string) => callback(sessionId, content);
+      ipcRenderer.on('remote:updateScratchpad', handler);
+      return () => ipcRenderer.removeListener('remote:updateScratchpad', handler);
+    },
+    // Remote start AutoRun from web interface
+    onRemoteStartAutoRun: (callback: (sessionId: string) => void) => {
+      const handler = (_: any, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('remote:startAutoRun', handler);
+      return () => ipcRenderer.removeListener('remote:startAutoRun', handler);
+    },
+    // Remote stop AutoRun from web interface
+    onRemoteStopAutoRun: (callback: (sessionId: string) => void) => {
+      const handler = (_: any, sessionId: string) => callback(sessionId);
+      ipcRenderer.on('remote:stopAutoRun', handler);
+      return () => ipcRenderer.removeListener('remote:stopAutoRun', handler);
+    },
     // Stderr listener for runCommand (separate stream)
     onStderr: (callback: (sessionId: string, data: string) => void) => {
       const handler = (_: any, sessionId: string, data: string) => callback(sessionId, data);
@@ -201,6 +229,9 @@ contextBridge.exposeInMainWorld('maestro', {
       thinkingStartTime?: number | null;
     }>, activeTabId: string) =>
       ipcRenderer.invoke('web:broadcastTabsChange', sessionId, aiTabs, activeTabId),
+    // Broadcast scratchpad content to web clients (for scratchpad sync)
+    broadcastScratchpadContent: (sessionId: string, content: string) =>
+      ipcRenderer.invoke('web:broadcastScratchpadContent', sessionId, content),
   },
 
   // Git API

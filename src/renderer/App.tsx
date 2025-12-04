@@ -18,7 +18,7 @@ import { MainPanel } from './components/MainPanel';
 import { ProcessMonitor } from './components/ProcessMonitor';
 import { GitDiffViewer } from './components/GitDiffViewer';
 import { GitLogViewer } from './components/GitLogViewer';
-import { BatchRunnerModal } from './components/BatchRunnerModal';
+import { BatchRunnerModal, DEFAULT_BATCH_PROMPT } from './components/BatchRunnerModal';
 import { TabSwitcherModal } from './components/TabSwitcherModal';
 import { PromptComposerModal } from './components/PromptComposerModal';
 import { ExecutionQueueBrowser } from './components/ExecutionQueueBrowser';
@@ -1391,6 +1391,10 @@ export default function MaestroConsole() {
   const startNewClaudeSessionRef = useRef<typeof startNewClaudeSession | null>(null);
   // Ref for processQueuedMessage - allows batch exit handler to process queued messages
   const processQueuedItemRef = useRef<((sessionId: string, item: QueuedItem) => Promise<void>) | null>(null);
+  // Refs for batch processor functions (to access latest values in remote command handler)
+  const startBatchRunRef = useRef<((sessionId: string, scratchpadContent: string, prompt: string) => Promise<void>) | null>(null);
+  const stopBatchRunRef = useRef<((sessionId: string) => void) | null>(null);
+  const batchCustomPromptsRef = useRef<Record<string, string>>({});
 
   // Ref for handling remote commands from web interface
   // This allows web commands to go through the exact same code path as desktop commands
@@ -1660,11 +1664,88 @@ export default function MaestroConsole() {
       }));
     });
 
+    // Handle remote get scratchpad from web interface
+    const unsubscribeGetScratchpad = window.maestro.process.onRemoteGetScratchpad((sessionId: string, responseChannel: string) => {
+      console.log('[Remote] Received get scratchpad request from web interface:', { sessionId, responseChannel });
+
+      // Get current session state - need to use a ref or callback pattern
+      // Since we're in a useEffect, we access sessions via the setter's callback
+      setSessions(prev => {
+        const session = prev.find(s => s.id === sessionId);
+        const content = session?.scratchPadContent || '';
+        window.maestro.process.sendRemoteGetScratchpadResponse(responseChannel, { content });
+        return prev; // No changes to state
+      });
+    });
+
+    // Handle remote update scratchpad from web interface
+    const unsubscribeUpdateScratchpad = window.maestro.process.onRemoteUpdateScratchpad((sessionId: string, content: string) => {
+      console.log('[Remote] Received update scratchpad request from web interface:', { sessionId, contentLength: content?.length });
+
+      setSessions(prev => prev.map(s => {
+        if (s.id !== sessionId) return s;
+        return { ...s, scratchPadContent: content };
+      }));
+
+      // Broadcast the update back to all web clients (for multi-client sync)
+      window.maestro.web.broadcastScratchpadContent(sessionId, content);
+    });
+
     return () => {
       unsubscribeSelectSession();
       unsubscribeSelectTab();
       unsubscribeNewTab();
       unsubscribeCloseTab();
+      unsubscribeGetScratchpad();
+      unsubscribeUpdateScratchpad();
+    };
+  }, []);
+
+  // Handle remote AutoRun commands from web interface
+  // This is in a separate useEffect because it needs access to startBatchRun/stopBatchRun refs
+  useEffect(() => {
+    // Handle remote start AutoRun from web interface
+    const unsubscribeStartAutoRun = window.maestro.process.onRemoteStartAutoRun((sessionId: string) => {
+      console.log('[Remote] Received start AutoRun request from web interface:', { sessionId });
+
+      if (!startBatchRunRef.current) {
+        console.warn('[Remote] startBatchRun not available yet');
+        return;
+      }
+
+      // Get session and start batch run with default or custom prompt
+      setSessions(prev => {
+        const session = prev.find(s => s.id === sessionId);
+        if (!session) {
+          console.warn('[Remote] Session not found for AutoRun:', sessionId);
+          return prev;
+        }
+
+        // Use custom prompt if set, otherwise use default
+        const prompt = batchCustomPromptsRef.current[sessionId] || DEFAULT_BATCH_PROMPT;
+
+        // Start the batch run asynchronously
+        startBatchRunRef.current!(sessionId, session.scratchPadContent, prompt);
+
+        return prev; // No state changes needed here
+      });
+    });
+
+    // Handle remote stop AutoRun from web interface
+    const unsubscribeStopAutoRun = window.maestro.process.onRemoteStopAutoRun((sessionId: string) => {
+      console.log('[Remote] Received stop AutoRun request from web interface:', { sessionId });
+
+      if (!stopBatchRunRef.current) {
+        console.warn('[Remote] stopBatchRun not available yet');
+        return;
+      }
+
+      stopBatchRunRef.current(sessionId);
+    });
+
+    return () => {
+      unsubscribeStartAutoRun();
+      unsubscribeStopAutoRun();
     };
   }, []);
 
@@ -2332,6 +2413,7 @@ export default function MaestroConsole() {
     activeBatchSessionIds,
     startBatchRun,
     stopBatchRun,
+    customPrompts: batchCustomPrompts,
   } = useBatchProcessor({
     sessions,
     onUpdateSession: (sessionId, updates) => {
@@ -2437,6 +2519,11 @@ export default function MaestroConsole() {
 
   // Get batch state for the active session
   const activeBatchRunState = activeSession ? getBatchState(activeSession.id) : getBatchState('');
+
+  // Update refs for batch processor functions (so remote command handler can access latest versions)
+  startBatchRunRef.current = startBatchRun;
+  stopBatchRunRef.current = stopBatchRun;
+  batchCustomPromptsRef.current = batchCustomPrompts;
 
   // Initialize activity tracker for time tracking
   useActivityTracker(activeSessionId, setSessions);
