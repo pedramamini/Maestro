@@ -10,7 +10,14 @@ interface PromptComposerModalProps {
   theme: Theme;
   initialValue: string;
   onSubmit: (value: string) => void;
+  onSend: (value: string) => void;
   sessionName?: string;
+}
+
+// Simple token estimation (roughly 4 chars per token for English text)
+function estimateTokenCount(text: string): number {
+  if (!text) return 0;
+  return Math.ceil(text.length / 4);
 }
 
 export function PromptComposerModal({
@@ -19,6 +26,7 @@ export function PromptComposerModal({
   theme,
   initialValue,
   onSubmit,
+  onSend,
   sessionName = 'Claude'
 }: PromptComposerModalProps) {
   const [value, setValue] = useState(initialValue);
@@ -28,6 +36,8 @@ export function PromptComposerModal({
   onCloseRef.current = onClose;
   const onSubmitRef = useRef(onSubmit);
   onSubmitRef.current = onSubmit;
+  const onSendRef = useRef(onSend);
+  onSendRef.current = onSend;
   const valueRef = useRef(value);
   valueRef.current = value;
 
@@ -66,18 +76,21 @@ export function PromptComposerModal({
 
   if (!isOpen) return null;
 
-  const handleSubmit = () => {
-    onSubmit(value);
+  const handleSend = () => {
+    if (!value.trim()) return;
+    onSend(value);
     onClose();
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    // Cmd/Ctrl + Enter to submit and close
+    // Cmd/Ctrl + Enter to send the message
     if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
       e.preventDefault();
-      handleSubmit();
+      handleSend();
     }
   };
+
+  const tokenCount = estimateTokenCount(value);
 
   return (
     <div
@@ -111,9 +124,9 @@ export function PromptComposerModal({
               — {sessionName}
             </span>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-3">
             <span className="text-xs opacity-50" style={{ color: theme.colors.textDim }}>
-              ⌘+Enter to send
+              <span style={{ fontFamily: 'system-ui' }}>⌘</span> + Enter to send
             </span>
             <button
               onClick={() => {
@@ -146,12 +159,14 @@ export function PromptComposerModal({
           className="flex items-center justify-between px-4 py-3 border-t"
           style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}
         >
-          <div className="text-xs" style={{ color: theme.colors.textDim }}>
-            {value.length} characters
+          <div className="text-xs flex items-center gap-3" style={{ color: theme.colors.textDim }}>
+            <span>{value.length} characters</span>
+            <span>~{tokenCount.toLocaleString()} tokens</span>
           </div>
           <button
-            onClick={handleSubmit}
-            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:opacity-90"
+            onClick={handleSend}
+            disabled={!value.trim()}
+            className="flex items-center gap-2 px-4 py-2 rounded-lg font-medium transition-all hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed"
             style={{
               backgroundColor: theme.colors.accent,
               color: theme.colors.accentForeground,

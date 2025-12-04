@@ -8,6 +8,13 @@ import { generateId } from './ids';
 const MAX_CLOSED_TAB_HISTORY = 25;
 
 /**
+ * Check if a tab has draft content (unsent input or staged images).
+ */
+function hasDraft(tab: AITab): boolean {
+  return (tab.inputValue && tab.inputValue.trim() !== '') || (tab.stagedImages && tab.stagedImages.length > 0);
+}
+
+/**
  * Get the currently active AI tab for a session.
  * Returns the tab matching activeTabId, or the first tab if not found.
  * Returns undefined if the session has no tabs.
@@ -385,10 +392,10 @@ export function getBusyTabs(session: Session): AITab[] {
 /**
  * Navigate to the next tab in the session's tab list.
  * Wraps around to the first tab if currently on the last tab.
- * When showUnreadOnly is true, only cycles through unread tabs.
+ * When showUnreadOnly is true, only cycles through unread tabs and tabs with drafts.
  *
  * @param session - The Maestro session
- * @param showUnreadOnly - If true, only navigate through unread tabs
+ * @param showUnreadOnly - If true, only navigate through unread tabs and tabs with drafts
  * @returns Object containing the new active tab and updated session, or null if less than 2 tabs
  *
  * @example
@@ -403,8 +410,9 @@ export function navigateToNextTab(session: Session, showUnreadOnly = false): Set
   }
 
   // Get the list of tabs to navigate through
+  // When filtering, include unread tabs and tabs with drafts (unsent input or staged images)
   const navigableTabs = showUnreadOnly
-    ? session.aiTabs.filter(tab => tab.hasUnread)
+    ? session.aiTabs.filter(tab => tab.hasUnread || hasDraft(tab))
     : session.aiTabs;
 
   if (navigableTabs.length === 0) {
@@ -447,10 +455,10 @@ export function navigateToNextTab(session: Session, showUnreadOnly = false): Set
 /**
  * Navigate to the previous tab in the session's tab list.
  * Wraps around to the last tab if currently on the first tab.
- * When showUnreadOnly is true, only cycles through unread tabs.
+ * When showUnreadOnly is true, only cycles through unread tabs and tabs with drafts.
  *
  * @param session - The Maestro session
- * @param showUnreadOnly - If true, only navigate through unread tabs
+ * @param showUnreadOnly - If true, only navigate through unread tabs and tabs with drafts
  * @returns Object containing the new active tab and updated session, or null if less than 2 tabs
  *
  * @example
@@ -465,8 +473,9 @@ export function navigateToPrevTab(session: Session, showUnreadOnly = false): Set
   }
 
   // Get the list of tabs to navigate through
+  // When filtering, include unread tabs and tabs with drafts (unsent input or staged images)
   const navigableTabs = showUnreadOnly
-    ? session.aiTabs.filter(tab => tab.hasUnread)
+    ? session.aiTabs.filter(tab => tab.hasUnread || hasDraft(tab))
     : session.aiTabs;
 
   if (navigableTabs.length === 0) {
@@ -509,11 +518,11 @@ export function navigateToPrevTab(session: Session, showUnreadOnly = false): Set
 /**
  * Navigate to a specific tab by its index (0-based).
  * Used for Cmd+1 through Cmd+8 shortcuts.
- * When showUnreadOnly is true, navigates within the filtered unread tabs list.
+ * When showUnreadOnly is true, navigates within the filtered list (unread + drafts).
  *
  * @param session - The Maestro session
  * @param index - The 0-based index of the tab to navigate to
- * @param showUnreadOnly - If true, navigate within unread tabs only
+ * @param showUnreadOnly - If true, navigate within unread tabs and tabs with drafts
  * @returns Object containing the new active tab and updated session, or null if index out of bounds
  *
  * @example
@@ -529,8 +538,9 @@ export function navigateToTabByIndex(session: Session, index: number, showUnread
   }
 
   // Get the list of tabs to navigate through
+  // When filtering, include unread tabs and tabs with drafts (unsent input or staged images)
   const navigableTabs = showUnreadOnly
-    ? session.aiTabs.filter(tab => tab.hasUnread)
+    ? session.aiTabs.filter(tab => tab.hasUnread || hasDraft(tab))
     : session.aiTabs;
 
   // Check if index is within bounds
@@ -559,11 +569,11 @@ export function navigateToTabByIndex(session: Session, index: number, showUnread
 
 /**
  * Navigate to the last tab in the session's tab list.
- * Used for Cmd+9 shortcut.
- * When showUnreadOnly is true, navigates to the last unread tab.
+ * Used for Cmd+0 shortcut.
+ * When showUnreadOnly is true, navigates to the last tab in the filtered list (unread + drafts).
  *
  * @param session - The Maestro session
- * @param showUnreadOnly - If true, navigate to last unread tab
+ * @param showUnreadOnly - If true, navigate to last unread/draft tab
  * @returns Object containing the new active tab and updated session, or null if no tabs
  *
  * @example
@@ -577,8 +587,9 @@ export function navigateToLastTab(session: Session, showUnreadOnly = false): Set
     return null;
   }
 
+  // When filtering, include unread tabs and tabs with drafts (unsent input or staged images)
   const navigableTabs = showUnreadOnly
-    ? session.aiTabs.filter(tab => tab.hasUnread)
+    ? session.aiTabs.filter(tab => tab.hasUnread || hasDraft(tab))
     : session.aiTabs;
 
   if (navigableTabs.length === 0) {

@@ -16,7 +16,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
   settings: { id: 'settings', label: 'Open Settings', keys: ['Meta', ','] },
   goToFiles: { id: 'goToFiles', label: 'Go to Files Tab', keys: ['Meta', 'Shift', 'f'] },
   goToHistory: { id: 'goToHistory', label: 'Go to History Tab', keys: ['Meta', 'Shift', 'h'] },
-  goToScratchpad: { id: 'goToScratchpad', label: 'Go to Scratchpad Tab', keys: ['Meta', 'Shift', 's'] },
+  goToAutoRun: { id: 'goToAutoRun', label: 'Go to Auto Run Tab', keys: ['Meta', 'Shift', '1'] },
   copyFilePath: { id: 'copyFilePath', label: 'Copy File Path (in Preview)', keys: ['Meta', 'p'] },
   toggleMarkdownMode: { id: 'toggleMarkdownMode', label: 'Toggle Markdown Raw/Preview', keys: ['Meta', 'e'] },
   focusInput: { id: 'focusInput', label: 'Focus Input Field', keys: ['Meta', '.'] },
@@ -57,5 +57,6 @@ export const TAB_SHORTCUTS: Record<string, Shortcut> = {
   goToTab6: { id: 'goToTab6', label: 'Go to Tab 6', keys: ['Meta', '6'] },
   goToTab7: { id: 'goToTab7', label: 'Go to Tab 7', keys: ['Meta', '7'] },
   goToTab8: { id: 'goToTab8', label: 'Go to Tab 8', keys: ['Meta', '8'] },
-  goToLastTab: { id: 'goToLastTab', label: 'Go to Last Tab', keys: ['Meta', '9'] },
+  goToTab9: { id: 'goToTab9', label: 'Go to Tab 9', keys: ['Meta', '9'] },
+  goToLastTab: { id: 'goToLastTab', label: 'Go to Last Tab', keys: ['Meta', '0'] },
 };

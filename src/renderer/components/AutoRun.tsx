@@ -3,20 +3,34 @@ import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Copy, Check, Trash2 } from 'lucide-react';
-import type { BatchRunState, SessionState } from '../types';
+import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, ChevronUp, ChevronDown, ChevronRight, ChevronLeft, Copy, Check, Trash2, FolderOpen, FileText, RefreshCw } from 'lucide-react';
+import type { BatchRunState, SessionState, Theme } from '../types';
 import { AutoRunnerHelpModal } from './AutoRunnerHelpModal';
 import { MermaidRenderer } from './MermaidRenderer';
+import { AutoRunDocumentSelector } from './AutoRunDocumentSelector';
 
 // Memoize remarkPlugins array - it never changes
 const REMARK_PLUGINS = [remarkGfm];
 
-interface ScratchpadProps {
-  content: string;
-  onChange: (content: string) => void;
-  theme: any;
+interface AutoRunProps {
+  theme: Theme;
   sessionId: string; // Maestro session ID for per-session attachment storage
-  initialMode?: 'edit' | 'preview';
+
+  // Folder & document state
+  folderPath: string | null;
+  selectedFile: string | null;
+  documentList: string[];  // Filenames without .md
+  documentTree?: Array<{ name: string; type: 'file' | 'folder'; path: string; children?: unknown[] }>;  // Tree structure for subfolders
+
+  // Content state
+  content: string;
+  onContentChange: (content: string) => void;
+
+  // Mode state
+  mode: 'edit' | 'preview';
+  onModeChange: (mode: 'edit' | 'preview') => void;
+
+  // Scroll/cursor state
   initialCursorPosition?: number;
   initialEditScrollPos?: number;
   initialPreviewScrollPos?: number;
@@ -26,28 +40,49 @@ interface ScratchpadProps {
     editScrollPos: number;
     previewScrollPos: number;
   }) => void;
+
+  // Actions
+  onOpenSetup: () => void;
+  onRefresh: () => void;
+  onSelectDocument: (filename: string) => void;
+  onCreateDocument: (filename: string) => Promise<boolean>;
+  isLoadingDocuments?: boolean;
+
   // Batch processing props
   batchRunState?: BatchRunState;
   onOpenBatchRunner?: () => void;
   onStopBatchRun?: () => void;
+
   // Session state for disabling Run when agent is busy
   sessionState?: SessionState;
+
+  // Legacy prop for backwards compatibility
+  onChange?: (content: string) => void;
 }
 
 // Cache for loaded images to avoid repeated IPC calls
 const imageCache = new Map<string, string>();
 
-// Custom image component that loads attachments from the session storage
+// Undo/Redo state interface
+interface UndoState {
+  content: string;
+  cursorPosition: number;
+}
+
+// Maximum undo history entries per document
+const MAX_UNDO_HISTORY = 50;
+
+// Custom image component that loads images from the Auto Run folder or external URLs
 function AttachmentImage({
   src,
   alt,
-  sessionId,
+  folderPath,
   theme,
   onImageClick
 }: {
   src?: string;
   alt?: string;
-  sessionId: string;
+  folderPath: string | null;
   theme: any;
   onImageClick?: (filename: string) => void;
 }) {
@@ -62,11 +97,11 @@ function AttachmentImage({
       return;
     }
 
-    // Check if this is an attachment reference (maestro-attachment://filename)
-    if (src.startsWith('maestro-attachment://')) {
-      const fname = src.replace('maestro-attachment://', '');
+    // Check if this is a relative path (e.g., images/{docName}-{timestamp}.{ext})
+    if (src.startsWith('images/') && folderPath) {
+      const fname = src.split('/').pop() || src;
       setFilename(fname);
-      const cacheKey = `${sessionId}:${fname}`;
+      const cacheKey = `${folderPath}:${src}`;
 
       // Check cache first
       if (imageCache.has(cacheKey)) {
@@ -75,16 +110,22 @@ function AttachmentImage({
         return;
       }
 
-      // Load from attachment storage
-      window.maestro.attachments.load(sessionId, fname).then(result => {
-        if (result.success && result.dataUrl) {
-          imageCache.set(cacheKey, result.dataUrl);
-          setDataUrl(result.dataUrl);
-        } else {
-          setError(result.error || 'Failed to load image');
-        }
-        setLoading(false);
-      });
+      // Load from folder using absolute path
+      const absolutePath = `${folderPath}/${src}`;
+      window.maestro.fs.readFile(absolutePath)
+        .then((result) => {
+          if (result.startsWith('data:')) {
+            imageCache.set(cacheKey, result);
+            setDataUrl(result);
+          } else {
+            setError('Invalid image data');
+          }
+          setLoading(false);
+        })
+        .catch((err) => {
+          setError(`Failed to load image: ${err.message || 'Unknown error'}`);
+          setLoading(false);
+        });
     } else if (src.startsWith('data:')) {
       // Already a data URL
       setDataUrl(src);
@@ -112,9 +153,10 @@ function AttachmentImage({
           setLoading(false);
         });
     } else {
-      // Relative path or other - try to load as file (may fail if not an absolute path)
+      // Other relative path - try to load as file from folderPath if available
       setFilename(src.split('/').pop() || null);
-      window.maestro.fs.readFile(src)
+      const pathToLoad = folderPath ? `${folderPath}/${src}` : src;
+      window.maestro.fs.readFile(pathToLoad)
         .then((result) => {
           if (result.startsWith('data:')) {
             setDataUrl(result);
@@ -128,7 +170,7 @@ function AttachmentImage({
           setLoading(false);
         });
     }
-  }, [src, sessionId]);
+  }, [src, folderPath]);
 
   if (loading) {
     return (
@@ -303,31 +345,180 @@ function ImagePreview({
 }
 
 // Inner implementation component
-function ScratchpadInner({
-  content,
-  onChange,
+function AutoRunInner({
   theme,
   sessionId,
-  initialMode = 'edit',
+  folderPath,
+  selectedFile,
+  documentList,
+  documentTree,
+  content,
+  onContentChange,
+  mode: externalMode,
+  onModeChange,
   initialCursorPosition = 0,
   initialEditScrollPos = 0,
   initialPreviewScrollPos = 0,
   onStateChange,
+  onOpenSetup,
+  onRefresh,
+  onSelectDocument,
+  onCreateDocument,
+  isLoadingDocuments = false,
   batchRunState,
   onOpenBatchRunner,
   onStopBatchRun,
-  sessionState
-}: ScratchpadProps) {
+  sessionState,
+  onChange,  // Legacy prop for backwards compatibility
+}: AutoRunProps) {
   const isLocked = batchRunState?.isRunning || false;
   const isAgentBusy = sessionState === 'busy' || sessionState === 'connecting';
   const isStopping = batchRunState?.isStopping || false;
-  const [mode, setMode] = useState<'edit' | 'preview'>(initialMode);
+
+  // Use external mode if provided, otherwise use local state
+  const [localMode, setLocalMode] = useState<'edit' | 'preview'>(externalMode || 'edit');
+  const mode = externalMode || localMode;
+  const setMode = useCallback((newMode: 'edit' | 'preview') => {
+    if (onModeChange) {
+      onModeChange(newMode);
+    } else {
+      setLocalMode(newMode);
+    }
+  }, [onModeChange]);
+
+  // Use onContentChange if provided, otherwise fall back to legacy onChange
+  const handleContentChange = onContentChange || onChange || (() => {});
 
   // Local content state for responsive typing - syncs to parent on blur
   const [localContent, setLocalContent] = useState(content);
   const prevSessionIdRef = useRef(sessionId);
   // Track if user is actively editing (to avoid overwriting their changes)
   const isEditingRef = useRef(false);
+
+  // Auto-save timer ref for 5-second debounce
+  const autoSaveTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Track the last saved content to avoid unnecessary saves
+  const lastSavedContentRef = useRef<string>(content);
+
+  // Undo/Redo history maps - keyed by document filename (selectedFile)
+  // Using refs so history persists across re-renders without triggering re-renders
+  const undoHistoryRef = useRef<Map<string, UndoState[]>>(new Map());
+  const redoHistoryRef = useRef<Map<string, UndoState[]>>(new Map());
+  // Track last content that was snapshotted for undo
+  const lastUndoSnapshotRef = useRef<string>(content);
+  // Timer ref for debounced undo snapshots
+  const undoSnapshotTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Push current state to undo history (call BEFORE making changes)
+  const pushUndoState = useCallback((contentToSnapshot?: string, cursorPos?: number) => {
+    if (!selectedFile) return;
+
+    const snapshotContent = contentToSnapshot ?? localContent;
+    const snapshotCursor = cursorPos ?? textareaRef.current?.selectionStart ?? 0;
+
+    // Only push if content actually differs from last snapshot
+    if (snapshotContent === lastUndoSnapshotRef.current) return;
+
+    const currentState: UndoState = {
+      content: snapshotContent,
+      cursorPosition: snapshotCursor,
+    };
+
+    // Get or create history array for this document
+    const history = undoHistoryRef.current.get(selectedFile) || [];
+    history.push(currentState);
+
+    // Limit to MAX_UNDO_HISTORY entries
+    if (history.length > MAX_UNDO_HISTORY) {
+      history.shift();
+    }
+
+    undoHistoryRef.current.set(selectedFile, history);
+
+    // Update last snapshot reference
+    lastUndoSnapshotRef.current = snapshotContent;
+
+    // Clear redo stack on new edit action
+    redoHistoryRef.current.set(selectedFile, []);
+  }, [selectedFile, localContent]);
+
+  // Schedule a debounced undo snapshot (called on each content change)
+  const scheduleUndoSnapshot = useCallback((previousContent: string, previousCursor: number) => {
+    // Clear any pending snapshot
+    if (undoSnapshotTimeoutRef.current) {
+      clearTimeout(undoSnapshotTimeoutRef.current);
+    }
+
+    // Schedule snapshot after 1 second of inactivity
+    undoSnapshotTimeoutRef.current = setTimeout(() => {
+      pushUndoState(previousContent, previousCursor);
+    }, 1000);
+  }, [pushUndoState]);
+
+  // Handle undo (Cmd+Z)
+  const handleUndo = useCallback(() => {
+    if (!selectedFile) return;
+
+    const undoStack = undoHistoryRef.current.get(selectedFile) || [];
+    if (undoStack.length === 0) return;
+
+    // Save current state to redo stack before undoing
+    const redoStack = redoHistoryRef.current.get(selectedFile) || [];
+    redoStack.push({
+      content: localContent,
+      cursorPosition: textareaRef.current?.selectionStart || 0,
+    });
+    redoHistoryRef.current.set(selectedFile, redoStack);
+
+    // Pop and apply the undo state
+    const prevState = undoStack.pop()!;
+    undoHistoryRef.current.set(selectedFile, undoStack);
+
+    // Update content without pushing to undo stack
+    setLocalContent(prevState.content);
+    lastUndoSnapshotRef.current = prevState.content;
+
+    // Restore cursor position after React re-renders
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.setSelectionRange(prevState.cursorPosition, prevState.cursorPosition);
+        textareaRef.current.focus();
+      }
+    });
+  }, [selectedFile, localContent]);
+
+  // Handle redo (Cmd+Shift+Z)
+  const handleRedo = useCallback(() => {
+    if (!selectedFile) return;
+
+    const redoStack = redoHistoryRef.current.get(selectedFile) || [];
+    if (redoStack.length === 0) return;
+
+    // Save current state to undo stack before redoing
+    const undoStack = undoHistoryRef.current.get(selectedFile) || [];
+    undoStack.push({
+      content: localContent,
+      cursorPosition: textareaRef.current?.selectionStart || 0,
+    });
+    undoHistoryRef.current.set(selectedFile, undoStack);
+
+    // Pop and apply the redo state
+    const nextState = redoStack.pop()!;
+    redoHistoryRef.current.set(selectedFile, redoStack);
+
+    // Update content without pushing to undo stack
+    setLocalContent(nextState.content);
+    lastUndoSnapshotRef.current = nextState.content;
+
+    // Restore cursor position after React re-renders
+    requestAnimationFrame(() => {
+      if (textareaRef.current) {
+        textareaRef.current.setSelectionRange(nextState.cursorPosition, nextState.cursorPosition);
+        textareaRef.current.focus();
+      }
+    });
+  }, [selectedFile, localContent]);
 
   // Sync local content from prop when session changes (switching sessions)
   useEffect(() => {
@@ -351,9 +542,67 @@ function ScratchpadInner({
   const syncContentToParent = useCallback(() => {
     isEditingRef.current = false;
     if (localContent !== content) {
-      onChange(localContent);
+      handleContentChange(localContent);
     }
-  }, [localContent, content, onChange]);
+  }, [localContent, content, handleContentChange]);
+
+  // Auto-save to disk with 5-second debounce
+  useEffect(() => {
+    // Only save if we have a folder and selected file
+    if (!folderPath || !selectedFile) return;
+
+    // Never auto-save empty content - this prevents wiping files during load
+    if (!localContent) return;
+
+    // Only save if content has actually changed from last saved
+    if (localContent === lastSavedContentRef.current) return;
+
+    // Clear any existing timeout
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+    }
+
+    // Schedule save after 5 seconds of inactivity
+    autoSaveTimeoutRef.current = setTimeout(async () => {
+      // Double-check content hasn't been externally synced
+      if (localContent !== lastSavedContentRef.current) {
+        try {
+          await window.maestro.autorun.writeDoc(folderPath, selectedFile + '.md', localContent);
+          lastSavedContentRef.current = localContent;
+          // Also sync to parent state so UI stays consistent
+          handleContentChange(localContent);
+        } catch (err) {
+          console.error('Auto-save failed:', err);
+        }
+      }
+    }, 5000);
+
+    // Cleanup on unmount or when dependencies change
+    return () => {
+      if (autoSaveTimeoutRef.current) {
+        clearTimeout(autoSaveTimeoutRef.current);
+      }
+    };
+  }, [localContent, folderPath, selectedFile, handleContentChange]);
+
+  // Clear auto-save timer and update lastSavedContent when document changes (session or file change)
+  useEffect(() => {
+    // Clear pending auto-save when document changes
+    if (autoSaveTimeoutRef.current) {
+      clearTimeout(autoSaveTimeoutRef.current);
+      autoSaveTimeoutRef.current = null;
+    }
+    // Clear pending undo snapshot when document changes
+    if (undoSnapshotTimeoutRef.current) {
+      clearTimeout(undoSnapshotTimeoutRef.current);
+      undoSnapshotTimeoutRef.current = null;
+    }
+    // Reset lastSavedContent to the new content
+    lastSavedContentRef.current = content;
+    // Reset lastUndoSnapshot to the new content (so first edit creates a proper undo point)
+    lastUndoSnapshotRef.current = content;
+  }, [selectedFile, sessionId, content]);
+
   // Track mode before auto-run to restore when it ends
   const modeBeforeAutoRunRef = useRef<'edit' | 'preview' | null>(null);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
@@ -371,6 +620,8 @@ function ScratchpadInner({
   const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
   const [totalMatches, setTotalMatches] = useState(0);
   const matchElementsRef = useRef<HTMLElement[]>([]);
+  // Refresh animation state for empty state button
+  const [isRefreshingEmpty, setIsRefreshingEmpty] = useState(false);
   const searchInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const previewRef = useRef<HTMLDivElement>(null);
@@ -380,24 +631,33 @@ function ScratchpadInner({
   const previewScrollPosRef = useRef(initialPreviewScrollPos);
   const editScrollPosRef = useRef(initialEditScrollPos);
 
-  // Load existing attachments for this session
+  // Load existing images for the current document from the Auto Run folder
   useEffect(() => {
-    if (sessionId) {
-      window.maestro.attachments.list(sessionId).then(result => {
-        if (result.success) {
-          setAttachmentsList(result.files);
-          // Load previews for existing attachments
-          result.files.forEach(filename => {
-            window.maestro.attachments.load(sessionId, filename).then(loadResult => {
-              if (loadResult.success && loadResult.dataUrl) {
-                setAttachmentPreviews(prev => new Map(prev).set(filename, loadResult.dataUrl!));
+    if (folderPath && selectedFile) {
+      window.maestro.autorun.listImages(folderPath, selectedFile).then((result: { success: boolean; images?: { filename: string; relativePath: string }[]; error?: string }) => {
+        if (result.success && result.images) {
+          // Store relative paths (e.g., "images/{docName}-{timestamp}.{ext}")
+          const relativePaths = result.images.map((img: { filename: string; relativePath: string }) => img.relativePath);
+          setAttachmentsList(relativePaths);
+          // Load previews for existing images
+          result.images.forEach((img: { filename: string; relativePath: string }) => {
+            const absolutePath = `${folderPath}/${img.relativePath}`;
+            window.maestro.fs.readFile(absolutePath).then(dataUrl => {
+              if (dataUrl.startsWith('data:')) {
+                setAttachmentPreviews(prev => new Map(prev).set(img.relativePath, dataUrl));
               }
+            }).catch(() => {
+              // Image file might be missing, ignore
             });
           });
         }
       });
+    } else {
+      // Clear attachments when no document is selected
+      setAttachmentsList([]);
+      setAttachmentPreviews(new Map());
     }
-  }, [sessionId]);
+  }, [folderPath, selectedFile]);
 
   // Auto-switch to preview mode when auto-run starts, restore when it ends
   useEffect(() => {
@@ -462,6 +722,54 @@ function ScratchpadInner({
     }
   }, [mode]);
 
+  // Track previous selectedFile to detect document changes
+  const prevSelectedFileRef = useRef(selectedFile);
+  // Track previous content to detect when content prop actually changes
+  const prevContentRef = useRef(content);
+
+  // Handle document selection change - focus and reset editing state
+  useEffect(() => {
+    if (!selectedFile) return;
+
+    const isNewDocument = selectedFile !== prevSelectedFileRef.current;
+    prevSelectedFileRef.current = selectedFile;
+
+    if (isNewDocument) {
+      // Reset editing flag so content syncs properly for new document
+      isEditingRef.current = false;
+      // Reset lastSavedContent to prevent auto-save from firing with stale comparison
+      lastSavedContentRef.current = content;
+      // Focus on document change
+      requestAnimationFrame(() => {
+        if (mode === 'edit' && textareaRef.current) {
+          textareaRef.current.focus();
+        } else if (mode === 'preview' && previewRef.current) {
+          previewRef.current.focus();
+        }
+      });
+    }
+  }, [selectedFile, content, mode]);
+
+  // Sync content from prop - only when content prop actually changes
+  useEffect(() => {
+    // Skip if no document selected
+    if (!selectedFile) return;
+
+    // Only sync when the content PROP actually changed (not just a re-render)
+    const contentPropChanged = content !== prevContentRef.current;
+    prevContentRef.current = content;
+
+    if (!contentPropChanged) return;
+
+    // Skip if user is actively editing - don't overwrite their changes
+    if (isEditingRef.current) return;
+
+    // Content prop changed - sync to local state
+    setLocalContent(content);
+    // Update lastSavedContent so auto-save knows this is the baseline
+    lastSavedContentRef.current = content;
+  }, [selectedFile, content]);
+
   // Save cursor position and scroll position when they change
   const handleCursorOrScrollChange = () => {
     if (textareaRef.current) {
@@ -492,6 +800,17 @@ function ScratchpadInner({
       }
     }
   };
+
+  // Handle refresh for empty state with animation
+  const handleEmptyStateRefresh = useCallback(async () => {
+    setIsRefreshingEmpty(true);
+    try {
+      await onRefresh();
+    } finally {
+      // Keep spinner visible for at least 500ms for visual feedback
+      setTimeout(() => setIsRefreshingEmpty(false), 500);
+    }
+  }, [onRefresh]);
 
   // Open search function
   const openSearch = useCallback(() => {
@@ -602,44 +921,66 @@ function ScratchpadInner({
 
   // Handle image paste
   const handlePaste = useCallback(async (e: React.ClipboardEvent) => {
-    if (isLocked || !sessionId) return;
+    if (isLocked || !folderPath || !selectedFile) {
+      console.log('[AutoRun] Paste blocked:', { isLocked, folderPath, selectedFile });
+      return;
+    }
 
     const items = e.clipboardData?.items;
-    if (!items) return;
+    if (!items) {
+      console.log('[AutoRun] No clipboard items');
+      return;
+    }
 
+    console.log('[AutoRun] Clipboard items:', items.length);
     for (let i = 0; i < items.length; i++) {
       const item = items[i];
+      console.log('[AutoRun] Item', i, ':', item.type);
       if (item.type.startsWith('image/')) {
         e.preventDefault();
 
         const file = item.getAsFile();
-        if (!file) continue;
+        if (!file) {
+          console.log('[AutoRun] Could not get file from item');
+          continue;
+        }
+
+        console.log('[AutoRun] Processing image:', file.name, file.type, file.size);
 
         // Read as base64
         const reader = new FileReader();
         reader.onload = async (event) => {
           const base64Data = event.target?.result as string;
-          if (!base64Data) return;
+          if (!base64Data) {
+            console.log('[AutoRun] No base64 data');
+            return;
+          }
 
-          // Generate unique filename
-          const timestamp = Date.now();
+          // Extract the base64 content without the data URL prefix
+          const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
           const extension = item.type.split('/')[1] || 'png';
-          const filename = `image_${timestamp}.${extension}`;
 
-          // Save to attachments
-          const result = await window.maestro.attachments.save(sessionId, base64Data, filename);
-          if (result.success && result.filename) {
-            // Update attachments list
-            setAttachmentsList(prev => [...prev, result.filename!]);
-            setAttachmentPreviews(prev => new Map(prev).set(result.filename!, base64Data));
+          console.log('[AutoRun] Saving image to:', folderPath, 'doc:', selectedFile, 'ext:', extension);
 
-            // Insert markdown reference at cursor position
+          // Save to Auto Run folder using the new API
+          const result = await window.maestro.autorun.saveImage(folderPath, selectedFile, base64Content, extension);
+          console.log('[AutoRun] Save result:', result);
+          if (result.success && result.relativePath) {
+            // Update attachments list with the relative path
+            const filename = result.relativePath.split('/').pop() || result.relativePath;
+            setAttachmentsList(prev => [...prev, result.relativePath!]);
+            setAttachmentPreviews(prev => new Map(prev).set(result.relativePath!, base64Data));
+
+            // Insert markdown reference at cursor position using relative path
             const textarea = textareaRef.current;
             if (textarea) {
               const cursorPos = textarea.selectionStart;
               const textBefore = localContent.substring(0, cursorPos);
               const textAfter = localContent.substring(cursorPos);
-              const imageMarkdown = `![${result.filename}](maestro-attachment://${result.filename})`;
+              const imageMarkdown = `![${filename}](${result.relativePath})`;
+
+              // Push undo state before modifying content
+              pushUndoState();
 
               // Add newlines if not at start of line
               let prefix = '';
@@ -654,7 +995,8 @@ function ScratchpadInner({
               const newContent = textBefore + prefix + imageMarkdown + suffix + textAfter;
               // Update local state and sync to parent immediately for explicit user action
               setLocalContent(newContent);
-              onChange(newContent);
+              handleContentChange(newContent);
+              lastUndoSnapshotRef.current = newContent;
 
               // Move cursor after the inserted markdown
               const newCursorPos = cursorPos + prefix.length + imageMarkdown.length + suffix.length;
@@ -669,61 +1011,77 @@ function ScratchpadInner({
         break; // Only handle first image
       }
     }
-  }, [localContent, isLocked, onChange, sessionId]);
+  }, [localContent, isLocked, handleContentChange, folderPath, selectedFile, pushUndoState]);
 
   // Handle file input for manual image upload
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
-    if (!file || !sessionId) return;
+    if (!file || !folderPath || !selectedFile) return;
 
     const reader = new FileReader();
     reader.onload = async (event) => {
       const base64Data = event.target?.result as string;
       if (!base64Data) return;
 
-      const timestamp = Date.now();
+      // Extract the base64 content without the data URL prefix
+      const base64Content = base64Data.replace(/^data:image\/\w+;base64,/, '');
       const extension = file.name.split('.').pop() || 'png';
-      const filename = `image_${timestamp}.${extension}`;
 
-      const result = await window.maestro.attachments.save(sessionId, base64Data, filename);
-      if (result.success && result.filename) {
-        setAttachmentsList(prev => [...prev, result.filename!]);
-        setAttachmentPreviews(prev => new Map(prev).set(result.filename!, base64Data));
+      // Save to Auto Run folder using the new API
+      const result = await window.maestro.autorun.saveImage(folderPath, selectedFile, base64Content, extension);
+      if (result.success && result.relativePath) {
+        const filename = result.relativePath.split('/').pop() || result.relativePath;
+        setAttachmentsList(prev => [...prev, result.relativePath!]);
+        setAttachmentPreviews(prev => new Map(prev).set(result.relativePath!, base64Data));
+
+        // Push undo state before modifying content
+        pushUndoState();
 
         // Insert at end of content - update local and sync to parent immediately
-        const imageMarkdown = `\n![${result.filename}](maestro-attachment://${result.filename})\n`;
+        const imageMarkdown = `\n![${filename}](${result.relativePath})\n`;
         const newContent = localContent + imageMarkdown;
         setLocalContent(newContent);
-        onChange(newContent);
+        handleContentChange(newContent);
+        lastUndoSnapshotRef.current = newContent;
       }
     };
     reader.readAsDataURL(file);
 
     // Reset input so same file can be selected again
     e.target.value = '';
-  }, [localContent, onChange, sessionId]);
+  }, [localContent, handleContentChange, folderPath, selectedFile, pushUndoState]);
 
-  // Handle removing an attachment
-  const handleRemoveAttachment = useCallback(async (filename: string) => {
-    if (!sessionId) return;
+  // Handle removing an attachment (relativePath is like "images/{docName}-{timestamp}.{ext}")
+  const handleRemoveAttachment = useCallback(async (relativePath: string) => {
+    if (!folderPath) return;
 
-    await window.maestro.attachments.delete(sessionId, filename);
-    setAttachmentsList(prev => prev.filter(f => f !== filename));
+    // Delete the image file
+    await window.maestro.autorun.deleteImage(folderPath, relativePath);
+    setAttachmentsList(prev => prev.filter(f => f !== relativePath));
     setAttachmentPreviews(prev => {
       const newMap = new Map(prev);
-      newMap.delete(filename);
+      newMap.delete(relativePath);
       return newMap;
     });
 
+    // Push undo state before modifying content
+    pushUndoState();
+
+    // Extract just the filename for the alt text pattern
+    const filename = relativePath.split('/').pop() || relativePath;
     // Remove the markdown reference from content - update local and sync to parent immediately
-    const regex = new RegExp(`!\\[${filename}\\]\\(maestro-attachment://${filename}\\)\\n?`, 'g');
+    // Match both the full relative path and just filename in the alt text
+    const escapedPath = relativePath.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`!\\[${escapedFilename}\\]\\(${escapedPath}\\)\\n?`, 'g');
     const newContent = localContent.replace(regex, '');
     setLocalContent(newContent);
-    onChange(newContent);
+    handleContentChange(newContent);
+    lastUndoSnapshotRef.current = newContent;
 
     // Clear from cache
-    imageCache.delete(`${sessionId}:${filename}`);
-  }, [localContent, onChange, sessionId]);
+    imageCache.delete(`${folderPath}:${relativePath}`);
+  }, [localContent, handleContentChange, folderPath, pushUndoState]);
 
   // Lightbox helpers - handles both attachment filenames and external URLs
   const openLightboxByFilename = useCallback((filenameOrUrl: string) => {
@@ -783,14 +1141,14 @@ function ScratchpadInner({
   }, [lightboxFilename, lightboxExternalUrl, attachmentPreviews]);
 
   const deleteLightboxImage = useCallback(async () => {
-    if (!lightboxFilename || !sessionId) return;
+    if (!lightboxFilename || !folderPath) return;
 
     // Store the current index before deletion
     const currentIndex = lightboxCurrentIndex;
     const totalImages = attachmentsList.length;
 
-    // Delete the attachment
-    await window.maestro.attachments.delete(sessionId, lightboxFilename);
+    // Delete the image file using autorun API
+    await window.maestro.autorun.deleteImage(folderPath, lightboxFilename);
     setAttachmentsList(prev => prev.filter(f => f !== lightboxFilename));
     setAttachmentPreviews(prev => {
       const newMap = new Map(prev);
@@ -798,14 +1156,22 @@ function ScratchpadInner({
       return newMap;
     });
 
+    // Push undo state before modifying content
+    pushUndoState();
+
+    // Extract just the filename for the alt text pattern
+    const filename = lightboxFilename.split('/').pop() || lightboxFilename;
     // Remove the markdown reference from content - update local and sync to parent immediately
-    const regex = new RegExp(`!\\[${lightboxFilename}\\]\\(maestro-attachment://${lightboxFilename}\\)\\n?`, 'g');
+    const escapedPath = lightboxFilename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const escapedFilename = filename.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    const regex = new RegExp(`!\\[${escapedFilename}\\]\\(${escapedPath}\\)\\n?`, 'g');
     const newContent = localContent.replace(regex, '');
     setLocalContent(newContent);
-    onChange(newContent);
+    handleContentChange(newContent);
+    lastUndoSnapshotRef.current = newContent;
 
     // Clear from cache
-    imageCache.delete(`${sessionId}:${lightboxFilename}`);
+    imageCache.delete(`${folderPath}:${lightboxFilename}`);
 
     // Navigate to next/prev image or close lightbox
     if (totalImages <= 1) {
@@ -820,9 +1186,21 @@ function ScratchpadInner({
       const newList = attachmentsList.filter(f => f !== lightboxFilename);
       setLightboxFilename(newList[currentIndex] || null);
     }
-  }, [lightboxFilename, lightboxCurrentIndex, attachmentsList, sessionId, localContent, onChange, closeLightbox]);
+  }, [lightboxFilename, lightboxCurrentIndex, attachmentsList, folderPath, localContent, handleContentChange, closeLightbox, pushUndoState]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Cmd+Z to undo, Cmd+Shift+Z to redo
+    if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.shiftKey) {
+        handleRedo();
+      } else {
+        handleUndo();
+      }
+      return;
+    }
+
     // Command-E to toggle between edit and preview
     if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
       e.preventDefault();
@@ -849,6 +1227,9 @@ function ScratchpadInner({
       const textBeforeCursor = localContent.substring(0, cursorPos);
       const textAfterCursor = localContent.substring(cursorPos);
 
+      // Push undo state before modifying content
+      pushUndoState();
+
       // Check if we're at the start of a line or have text before
       const lastNewline = textBeforeCursor.lastIndexOf('\n');
       const lineStart = lastNewline === -1 ? 0 : lastNewline + 1;
@@ -868,6 +1249,8 @@ function ScratchpadInner({
       }
 
       setLocalContent(newContent);
+      // Update lastUndoSnapshot since we pushed state explicitly
+      lastUndoSnapshotRef.current = newContent;
       setTimeout(() => {
         if (textareaRef.current) {
           textareaRef.current.setSelectionRange(newCursorPos, newCursorPos);
@@ -893,8 +1276,11 @@ function ScratchpadInner({
         // Task list: continue with unchecked checkbox
         const indent = taskListMatch[1];
         e.preventDefault();
+        // Push undo state before modifying content
+        pushUndoState();
         const newContent = textBeforeCursor + '\n' + indent + '- [ ] ' + textAfterCursor;
         setLocalContent(newContent);
+        lastUndoSnapshotRef.current = newContent;
         setTimeout(() => {
           if (textareaRef.current) {
             const newPos = cursorPos + indent.length + 7; // "\n" + indent + "- [ ] "
@@ -906,8 +1292,11 @@ function ScratchpadInner({
         const indent = unorderedListMatch[1];
         const marker = unorderedListMatch[2];
         e.preventDefault();
+        // Push undo state before modifying content
+        pushUndoState();
         const newContent = textBeforeCursor + '\n' + indent + marker + ' ' + textAfterCursor;
         setLocalContent(newContent);
+        lastUndoSnapshotRef.current = newContent;
         setTimeout(() => {
           if (textareaRef.current) {
             const newPos = cursorPos + indent.length + 3; // "\n" + indent + marker + " "
@@ -919,8 +1308,11 @@ function ScratchpadInner({
         const indent = orderedListMatch[1];
         const num = parseInt(orderedListMatch[2]);
         e.preventDefault();
+        // Push undo state before modifying content
+        pushUndoState();
         const newContent = textBeforeCursor + '\n' + indent + (num + 1) + '. ' + textAfterCursor;
         setLocalContent(newContent);
+        lastUndoSnapshotRef.current = newContent;
         setTimeout(() => {
           if (textareaRef.current) {
             const newPos = cursorPos + indent.length + (num + 1).toString().length + 3; // "\n" + indent + num + ". "
@@ -1032,22 +1424,23 @@ function ScratchpadInner({
       <AttachmentImage
         src={src}
         alt={alt}
-        sessionId={sessionId}
+        folderPath={folderPath}
         theme={theme}
         onImageClick={openLightboxByFilename}
         {...props}
       />
     )
-  }), [theme, sessionId, openLightboxByFilename]);
+  }), [theme, folderPath, openLightboxByFilename]);
 
   return (
     <div
       ref={containerRef}
-      className="h-full flex flex-col outline-none"
+      className="h-full flex flex-col outline-none relative"
       tabIndex={-1}
       onKeyDown={(e) => {
         if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
           e.preventDefault();
+          e.stopPropagation();
           toggleMode();
         }
         // CMD+F to open search (works in both modes from container)
@@ -1059,6 +1452,23 @@ function ScratchpadInner({
         }
       }}
     >
+      {/* Select Folder Button - shown when no folder is configured */}
+      {!folderPath && (
+        <div className="pt-2 flex justify-center">
+          <button
+            onClick={onOpenSetup}
+            className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-colors hover:opacity-90"
+            style={{
+              backgroundColor: theme.colors.accent,
+              color: theme.colors.accentForeground,
+            }}
+          >
+            <FolderOpen className="w-3.5 h-3.5" />
+            Select Auto Run Folder
+          </button>
+        </div>
+      )}
+
       {/* Mode Toggle */}
       <div className="flex gap-2 mb-3 justify-center pt-2">
         <button
@@ -1148,7 +1558,7 @@ function ScratchpadInner({
               color: theme.colors.accentForeground,
               border: `1px solid ${theme.colors.accent}`
             }}
-            title={isAgentBusy ? "Cannot run while agent is thinking" : "Run batch processing on scratchpad tasks"}
+            title={isAgentBusy ? "Cannot run while agent is thinking" : "Run batch processing on Auto Run tasks"}
           >
             <Play className="w-3.5 h-3.5" />
             Run
@@ -1164,6 +1574,23 @@ function ScratchpadInner({
           <HelpCircle className="w-4 h-4" />
         </button>
       </div>
+
+      {/* Document Selector */}
+      {folderPath && (
+        <div className="px-2 mb-2">
+          <AutoRunDocumentSelector
+            theme={theme}
+            documents={documentList}
+            documentTree={documentTree as import('./AutoRunDocumentSelector').DocTreeNode[] | undefined}
+            selectedDocument={selectedFile}
+            onSelectDocument={onSelectDocument}
+            onRefresh={onRefresh}
+            onChangeFolder={onOpenSetup}
+            onCreateDocument={onCreateDocument}
+            isLoading={isLoadingDocuments}
+          />
+        </div>
+      )}
 
       {/* Attached Images Preview (edit mode) */}
       {mode === 'edit' && attachmentsList.length > 0 && (
@@ -1267,22 +1694,76 @@ function ScratchpadInner({
       )}
 
       {/* Content Area */}
-      <div className="flex-1 overflow-hidden">
-        {mode === 'edit' ? (
+      <div className="flex-1 min-h-0">
+        {/* Empty folder state - show when folder is configured but has no documents */}
+        {folderPath && documentList.length === 0 && !isLoadingDocuments ? (
+          <div
+            className="h-full flex flex-col items-center justify-center text-center px-6"
+            style={{ color: theme.colors.textDim }}
+          >
+            <div
+              className="w-16 h-16 rounded-full flex items-center justify-center mb-4"
+              style={{ backgroundColor: theme.colors.bgActivity }}
+            >
+              <FileText className="w-8 h-8" style={{ color: theme.colors.textDim }} />
+            </div>
+            <h3
+              className="text-lg font-semibold mb-2"
+              style={{ color: theme.colors.textMain }}
+            >
+              No Documents Found
+            </h3>
+            <p className="mb-4 max-w-xs text-sm">
+              The selected folder doesn't contain any markdown (.md) files.
+            </p>
+            <p className="mb-6 max-w-xs text-xs" style={{ color: theme.colors.textDim }}>
+              Create a markdown file in the folder to get started, or select a different folder.
+            </p>
+            <div className="flex gap-3">
+              <button
+                onClick={handleEmptyStateRefresh}
+                className="flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors hover:opacity-90"
+                style={{
+                  backgroundColor: 'transparent',
+                  color: theme.colors.textMain,
+                  border: `1px solid ${theme.colors.border}`,
+                }}
+              >
+                <RefreshCw className={`w-4 h-4 ${isRefreshingEmpty ? 'animate-spin' : ''}`} />
+                Refresh
+              </button>
+              <button
+                onClick={onOpenSetup}
+                className="flex items-center gap-2 px-4 py-2 rounded text-sm transition-colors hover:opacity-90"
+                style={{
+                  backgroundColor: theme.colors.accent,
+                  color: theme.colors.accentForeground,
+                }}
+              >
+                <FolderOpen className="w-4 h-4" />
+                Change Folder
+              </button>
+            </div>
+          </div>
+        ) : mode === 'edit' ? (
           <textarea
             ref={textareaRef}
             value={localContent}
             onChange={(e) => {
               if (!isLocked) {
                 isEditingRef.current = true;
+                // Schedule undo snapshot with current content before the change
+                const previousContent = localContent;
+                const previousCursor = textareaRef.current?.selectionStart || 0;
                 setLocalContent(e.target.value);
+                scheduleUndoSnapshot(previousContent, previousCursor);
               }
             }}
             onFocus={() => { isEditingRef.current = true; }}
             onBlur={syncContentToParent}
             onKeyDown={!isLocked ? handleKeyDown : undefined}
             onPaste={handlePaste}
-            placeholder="Write your notes in markdown... (paste images from clipboard)"
+            placeholder="Capture notes, images, and tasks in Markdown."
             readOnly={isLocked}
             className={`w-full h-full border rounded p-4 bg-transparent outline-none resize-none font-mono text-sm ${isLocked ? 'cursor-not-allowed opacity-70' : ''}`}
             style={{
@@ -1441,14 +1922,19 @@ function ScratchpadInner({
   );
 }
 
-// Memoized Scratchpad component with custom comparison to prevent unnecessary re-renders
-export const Scratchpad = memo(ScratchpadInner, (prevProps, nextProps) => {
+// Memoized AutoRun component with custom comparison to prevent unnecessary re-renders
+export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {
   // Only re-render when these specific props actually change
   return (
     prevProps.content === nextProps.content &&
     prevProps.sessionId === nextProps.sessionId &&
-    prevProps.initialMode === nextProps.initialMode &&
+    prevProps.mode === nextProps.mode &&
     prevProps.theme === nextProps.theme &&
+    // Document state
+    prevProps.folderPath === nextProps.folderPath &&
+    prevProps.selectedFile === nextProps.selectedFile &&
+    prevProps.documentList === nextProps.documentList &&
+    prevProps.isLoadingDocuments === nextProps.isLoadingDocuments &&
     // Compare batch run state values, not object reference
     prevProps.batchRunState?.isRunning === nextProps.batchRunState?.isRunning &&
     prevProps.batchRunState?.isStopping === nextProps.batchRunState?.isStopping &&
@@ -1457,10 +1943,14 @@ export const Scratchpad = memo(ScratchpadInner, (prevProps, nextProps) => {
     // Session state affects UI (busy disables Run button)
     prevProps.sessionState === nextProps.sessionState &&
     // Callbacks are typically stable, but check identity
-    prevProps.onChange === nextProps.onChange &&
+    prevProps.onContentChange === nextProps.onContentChange &&
+    prevProps.onModeChange === nextProps.onModeChange &&
     prevProps.onStateChange === nextProps.onStateChange &&
     prevProps.onOpenBatchRunner === nextProps.onOpenBatchRunner &&
-    prevProps.onStopBatchRun === nextProps.onStopBatchRun
+    prevProps.onStopBatchRun === nextProps.onStopBatchRun &&
+    prevProps.onOpenSetup === nextProps.onOpenSetup &&
+    prevProps.onRefresh === nextProps.onRefresh &&
+    prevProps.onSelectDocument === nextProps.onSelectDocument
     // Note: initialCursorPosition, initialEditScrollPos, initialPreviewScrollPos
     // are intentionally NOT compared - they're only used on mount
   );

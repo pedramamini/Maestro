@@ -14,6 +14,7 @@ Deep technical documentation for Maestro's architecture and design patterns. For
 - [Theme System](#theme-system)
 - [Settings Persistence](#settings-persistence)
 - [Claude Sessions API](#claude-sessions-api)
+- [Auto Run System](#auto-run-system)
 - [Error Handling Patterns](#error-handling-patterns)
 
 ---
@@ -92,7 +93,7 @@ React frontend with no direct Node.js access:
 | Directory | Purpose |
 |-----------|---------|
 | `components/` | React UI components |
-| `hooks/` | Custom React hooks (useSettings, useSessionManager, useFileExplorer) |
+| `hooks/` | Custom React hooks (useSettings, useSessionManager, useFileExplorer, useBatchProcessor) |
 | `services/` | IPC wrappers (git.ts, process.ts) |
 | `contexts/` | React contexts (LayerStackContext) |
 | `constants/` | Themes, shortcuts, modal priorities |
@@ -591,6 +592,187 @@ const unsubscribe = window.maestro.claude.onGlobalStatsUpdate((stats) => {
 - Shortcut: `Cmd+Shift+L`
 - Quick Actions: `Cmd+K` → "View Agent Sessions"
 - Button in main panel header
+
+---
+
+## Auto Run System
+
+File-based document runner for automating multi-step tasks. Users configure a folder of markdown documents containing checkbox tasks that are processed sequentially by AI agents.
+
+### Component Architecture
+
+| Component | Purpose |
+|-----------|---------|
+| `AutoRun.tsx` | Main panel showing current document with edit/preview modes |
+| `AutoRunSetupModal.tsx` | First-time setup for selecting the Runner Docs folder |
+| `AutoRunDocumentSelector.tsx` | Dropdown for switching between markdown documents |
+| `BatchRunnerModal.tsx` | Configuration modal for multi-document batch execution |
+| `PlaybookNameModal.tsx` | Modal for naming saved playbook configurations |
+| `PlaybookDeleteConfirmModal.tsx` | Confirmation modal for playbook deletion |
+| `useBatchProcessor.ts` | Hook managing batch execution logic |
+
+### Data Types
+
+```typescript
+// Document entry in the batch run queue (supports duplicates)
+interface BatchDocumentEntry {
+  id: string;              // Unique ID for drag-drop and duplicates
+  filename: string;        // Document filename (without .md)
+  resetOnCompletion: boolean;  // Uncheck all boxes when done
+  isDuplicate: boolean;    // True if this is a duplicate entry
+}
+
+// Git worktree configuration for parallel work
+interface WorktreeConfig {
+  enabled: boolean;              // Whether to use a worktree
+  path: string;                  // Absolute path for the worktree
+  branchName: string;            // Branch name to use/create
+  createPROnCompletion: boolean; // Create PR when Auto Run finishes
+}
+
+// Configuration for starting a batch run
+interface BatchRunConfig {
+  documents: BatchDocumentEntry[];  // Ordered list of docs to run
+  prompt: string;                   // Agent prompt template
+  loopEnabled: boolean;             // Loop back to first doc when done
+  worktree?: WorktreeConfig;        // Optional worktree configuration
+}
+
+// Runtime batch processing state
+interface BatchRunState {
+  isRunning: boolean;
+  isStopping: boolean;
+  documents: string[];           // Document filenames in order
+  currentDocumentIndex: number;  // Which document we're on (0-based)
+  currentDocTasksTotal: number;
+  currentDocTasksCompleted: number;
+  totalTasksAcrossAllDocs: number;
+  completedTasksAcrossAllDocs: number;
+  loopEnabled: boolean;
+  loopIteration: number;         // How many times we've looped
+  folderPath: string;
+  worktreeActive: boolean;
+  worktreePath?: string;
+  worktreeBranch?: string;
+}
+
+// Saved playbook configuration
+interface Playbook {
+  id: string;
+  name: string;
+  createdAt: number;
+  updatedAt: number;
+  documents: PlaybookDocumentEntry[];
+  loopEnabled: boolean;
+  prompt: string;
+  worktreeSettings?: {
+    branchNameTemplate: string;
+    createPROnCompletion: boolean;
+  };
+}
+```
+
+### Session Fields
+
+Auto Run state is stored per-session:
+
+```typescript
+// In Session interface
+autoRunFolderPath?: string;      // Persisted folder path for Runner Docs
+autoRunSelectedFile?: string;     // Currently selected markdown filename
+autoRunMode?: 'edit' | 'preview'; // Current editing mode
+autoRunEditScrollPos?: number;    // Scroll position in edit mode
+autoRunPreviewScrollPos?: number; // Scroll position in preview mode
+autoRunCursorPosition?: number;   // Cursor position in edit mode
+batchRunnerPrompt?: string;       // Custom batch runner prompt
+batchRunnerPromptModifiedAt?: number;
+```
+
+### IPC Handlers
+
+```typescript
+// List markdown files in a directory
+'autorun:listDocs': (folderPath: string) => Promise<{ success, files, error? }>
+
+// Read a markdown document
+'autorun:readDoc': (folderPath: string, filename: string) => Promise<{ success, content, error? }>
+
+// Write a markdown document
+'autorun:writeDoc': (folderPath: string, filename: string, content: string) => Promise<{ success, error? }>
+
+// Save image to folder
+'autorun:saveImage': (folderPath: string, docName: string, base64Data: string, extension: string) =>
+  Promise<{ success, relativePath, error? }>
+
+// Delete image
+'autorun:deleteImage': (folderPath: string, relativePath: string) => Promise<{ success, error? }>
+
+// List images for a document
+'autorun:listImages': (folderPath: string, docName: string) => Promise<{ success, images, error? }>
+
+// Playbook CRUD operations
+'playbooks:list': (sessionId: string) => Promise<{ success, playbooks, error? }>
+'playbooks:create': (sessionId: string, playbook) => Promise<{ success, playbook, error? }>
+'playbooks:update': (sessionId: string, playbookId: string, updates) => Promise<{ success, playbook, error? }>
+'playbooks:delete': (sessionId: string, playbookId: string) => Promise<{ success, error? }>
+```
+
+### Git Worktree Integration
+
+When worktree is enabled, Auto Run operates in an isolated directory:
+
+```typescript
+// Check if worktree exists and get branch info
+'git:worktreeInfo': (worktreePath: string) => Promise<{
+  success: boolean;
+  exists: boolean;
+  isWorktree: boolean;
+  currentBranch?: string;
+  repoRoot?: string;
+}>
+
+// Create or reuse a worktree
+'git:worktreeSetup': (mainRepoCwd: string, worktreePath: string, branchName: string) => Promise<{
+  success: boolean;
+  created: boolean;
+  currentBranch: string;
+  branchMismatch: boolean;
+}>
+
+// Checkout a branch in a worktree
+'git:worktreeCheckout': (worktreePath: string, branchName: string, createIfMissing: boolean) => Promise<{
+  success: boolean;
+  hasUncommittedChanges: boolean;
+}>
+
+// Create PR from worktree branch
+'git:createPR': (worktreePath: string, baseBranch: string, title: string, body: string) => Promise<{
+  success: boolean;
+  prUrl?: string;
+}>
+```
+
+### Execution Flow
+
+1. **Setup**: User selects Runner Docs folder via `AutoRunSetupModal`
+2. **Document Selection**: Documents appear in `AutoRunDocumentSelector` dropdown
+3. **Editing**: `AutoRun` component provides edit/preview modes with auto-save (5s debounce)
+4. **Batch Configuration**: `BatchRunnerModal` allows ordering documents, enabling loop/reset, configuring worktree
+5. **Playbooks**: Save/load configurations for repeated batch runs
+6. **Execution**: `useBatchProcessor` hook processes documents sequentially
+7. **Progress**: RightPanel shows document and task-level progress
+
+### Write Queue Integration
+
+Without worktree mode, Auto Run tasks queue through the existing execution queue:
+- Auto Run tasks are marked as write operations (`readOnlyMode: false`)
+- Manual write messages queue behind Auto Run (sequential)
+- Read-only operations from other tabs can run in parallel
+
+With worktree mode:
+- Auto Run operates in a separate directory
+- No queue conflicts with main workspace
+- True parallelization enabled
 
 ---
 

@@ -1,0 +1,25 @@
+name: Auto Assign
+
+on:
+  issues:
+    types: [opened]
+  pull_request:
+    types: [opened]
+
+jobs:
+  assign:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assign to pedramamini
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const issueNumber = context.issue?.number || context.payload.pull_request?.number;
+            if (issueNumber) {
+              await github.rest.issues.addAssignees({
+                owner: context.repo.owner,
+                repo: context.repo.repo,
+                issue_number: issueNumber,
+                assignees: ['pedramamini']
+              });
+            }

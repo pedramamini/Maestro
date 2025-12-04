@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo } from 'react';
-import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, StopCircle, Eye, History, File, Folder, GitBranch, Tag, PenLine } from 'lucide-react';
+import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, Eye, History, File, Folder, GitBranch, Tag, PenLine } from 'lucide-react';
 import type { Session, Theme, BatchRunState } from '../types';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks/useTabCompletion';
 import { ThinkingStatusPill } from './ThinkingStatusPill';
@@ -154,7 +154,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
   );
 
   // Refs for slash command items to enable scroll-into-view
+  // Reset refs array length when filtered commands change to avoid stale refs
   const slashCommandItemRefs = useRef<(HTMLDivElement | null)[]>([]);
+  if (slashCommandItemRefs.current.length !== filteredSlashCommands.length) {
+    slashCommandItemRefs.current = slashCommandItemRefs.current.slice(0, filteredSlashCommands.length);
+  }
 
   // Refs for tab completion items to enable scroll-into-view
   const tabCompletionItemRefs = useRef<(HTMLDivElement | null)[]>([]);
@@ -223,6 +227,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
           autoRunState={autoRunState}
           activeSessionId={session.id}
           onStopAutoRun={onStopAutoRun}
+          onInterrupt={handleInterrupt}
         />
       )}
 
@@ -263,10 +268,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
       {/* Slash Command Autocomplete */}
       {slashCommandOpen && filteredSlashCommands.length > 0 && (
         <div
-          className="absolute bottom-full left-0 right-0 mb-2 border rounded-lg shadow-2xl max-h-64 overflow-hidden"
+          className="absolute bottom-full left-0 right-0 mb-2 border rounded-lg shadow-2xl overflow-hidden"
           style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.border }}
         >
-          <div className="overflow-y-auto max-h-64 scrollbar-thin">
+          <div className="overflow-y-auto max-h-64 scrollbar-thin" style={{ overscrollBehavior: 'contain' }}>
             {filteredSlashCommands.map((cmd, idx) => (
               <div
                 key={cmd.command}
@@ -279,11 +284,14 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                   color: idx === safeSelectedIndex ? theme.colors.bgMain : theme.colors.textMain
                 }}
                 onClick={() => {
+                  // Single click just selects the item
+                  setSelectedSlashCommandIndex(idx);
+                }}
+                onDoubleClick={() => {
+                  // Double click fills in the command text
                   setInputValue(cmd.command);
                   setSlashCommandOpen(false);
                   inputRef.current?.focus();
-                  // Execute the command after a brief delay to let state update
-                  setTimeout(() => processInput(), 10);
                 }}
                 onMouseEnter={() => setSelectedSlashCommandIndex(idx)}
               >
@@ -554,9 +562,12 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 
                 // Show slash command autocomplete when typing /
                 if (value.startsWith('/') && !value.includes(' ')) {
+                  // Only reset selection when modal first opens, not on every keystroke
+                  if (!slashCommandOpen) {
+                    setSelectedSlashCommandIndex(0);
+                  }
                   setSlashCommandOpen(true);
-                  // Always reset selection to first item when filter changes
-                  setSelectedSlashCommandIndex(0);
+                  // Clamp selection if filtered list shrinks (handled by safeSelectedIndex in render)
                 } else {
                   setSlashCommandOpen(false);
                 }
@@ -707,41 +718,31 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
         {/* Mode Toggle & Send/Interrupt Button - Right Side */}
         <div className="flex flex-col gap-2">
           <button
+            type="button"
             onClick={toggleInputMode}
-            className="p-2 rounded border transition-all"
+            className="p-2 rounded-lg border transition-all"
             style={{
-              backgroundColor: session.inputMode === 'terminal' ? theme.colors.bgActivity : theme.colors.accentDim,
+              backgroundColor: theme.colors.bgMain,
               borderColor: theme.colors.border,
-              color: session.inputMode === 'terminal' ? theme.colors.textDim : theme.colors.accentText
+              color: theme.colors.textDim
             }}
             title="Toggle Mode (Cmd+J)"
           >
             {session.inputMode === 'terminal' ? <Terminal className="w-4 h-4" /> : <Cpu className="w-4 h-4" />}
           </button>
-          {/* Show interrupt button only in AI mode when busy. Terminal mode always shows send button
-              because terminal doesn't block - you can send commands while others are running */}
-          {session.state === 'busy' && session.inputMode === 'ai' ? (
-            <button
-              onClick={handleInterrupt}
-              className="p-2 rounded-md text-white hover:opacity-90 shadow-sm transition-all animate-pulse"
-              style={{ backgroundColor: theme.colors.error }}
-              title="Interrupt Claude (Ctrl+C)"
-            >
-              <StopCircle className="w-4 h-4" />
-            </button>
-          ) : (
-            <button
-              onClick={processInput}
-              className="p-2 rounded-md shadow-sm transition-all hover:opacity-90 cursor-pointer"
-              style={{
-                backgroundColor: theme.colors.accent,
-                color: theme.colors.accentForeground
-              }}
-              title={session.inputMode === 'terminal' ? 'Run command (Enter)' : 'Send message'}
-            >
-              <ArrowUp className="w-4 h-4" />
-            </button>
-          )}
+          {/* Send button - always visible. Stop button is now in ThinkingStatusPill */}
+          <button
+            type="button"
+            onClick={() => processInput()}
+            className="p-2 rounded-md shadow-sm transition-all hover:opacity-90 cursor-pointer"
+            style={{
+              backgroundColor: theme.colors.accent,
+              color: theme.colors.accentForeground
+            }}
+            title={session.inputMode === 'terminal' ? 'Run command (Enter)' : 'Send message'}
+          >
+            <ArrowUp className="w-4 h-4" />
+          </button>
         </div>
       </div>
     </div>

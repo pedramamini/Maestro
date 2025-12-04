@@ -108,3 +108,77 @@ export function flattenTree(
   });
   return result;
 }
+
+export interface FileTreeChanges {
+  totalChanges: number;
+  newFiles: number;
+  newFolders: number;
+  removedFiles: number;
+  removedFolders: number;
+}
+
+/**
+ * Helper to collect all paths from a file tree
+ */
+function collectPaths(
+  nodes: FileTreeNode[],
+  currentPath = ''
+): { files: Set<string>; folders: Set<string> } {
+  const files = new Set<string>();
+  const folders = new Set<string>();
+
+  for (const node of nodes) {
+    const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+    if (node.type === 'folder') {
+      folders.add(fullPath);
+      if (node.children) {
+        const childPaths = collectPaths(node.children, fullPath);
+        childPaths.files.forEach(f => files.add(f));
+        childPaths.folders.forEach(f => folders.add(f));
+      }
+    } else {
+      files.add(fullPath);
+    }
+  }
+
+  return { files, folders };
+}
+
+/**
+ * Compare two file trees and count the differences
+ */
+export function compareFileTrees(
+  oldTree: FileTreeNode[],
+  newTree: FileTreeNode[]
+): FileTreeChanges {
+  const oldPaths = collectPaths(oldTree);
+  const newPaths = collectPaths(newTree);
+
+  // Count new items (in new but not in old)
+  let newFiles = 0;
+  let newFolders = 0;
+  for (const file of newPaths.files) {
+    if (!oldPaths.files.has(file)) newFiles++;
+  }
+  for (const folder of newPaths.folders) {
+    if (!oldPaths.folders.has(folder)) newFolders++;
+  }
+
+  // Count removed items (in old but not in new)
+  let removedFiles = 0;
+  let removedFolders = 0;
+  for (const file of oldPaths.files) {
+    if (!newPaths.files.has(file)) removedFiles++;
+  }
+  for (const folder of oldPaths.folders) {
+    if (!newPaths.folders.has(folder)) removedFolders++;
+  }
+
+  return {
+    totalChanges: newFiles + newFolders + removedFiles + removedFolders,
+    newFiles,
+    newFolders,
+    removedFiles,
+    removedFolders
+  };
+}

@@ -650,6 +650,7 @@ export function AgentSessionsBrowser({
 
   // Handle resuming a session
   const handleResume = useCallback(() => {
+    console.log('[AgentSessionsBrowser.handleResume] Called, viewingSession:', viewingSession?.sessionId, 'messages:', messages.length);
     if (viewingSession) {
       // Convert messages to LogEntry format for AI terminal
       const logEntries: LogEntry[] = messages.map((msg, idx) => ({
@@ -658,6 +659,7 @@ export function AgentSessionsBrowser({
         source: msg.type === 'user' ? 'user' as const : 'stdout' as const,
         text: msg.content || (msg.toolUse ? `[Tool: ${msg.toolUse[0]?.name || 'unknown'}]` : '[No content]'),
       }));
+      console.log('[AgentSessionsBrowser.handleResume] Converted to', logEntries.length, 'logEntries, calling onResumeSession');
       // Pass session name and starred status for the new tab
       const isStarred = starredSessions.has(viewingSession.sessionId);
       onResumeSession(viewingSession.sessionId, logEntries, viewingSession.sessionName, isStarred);

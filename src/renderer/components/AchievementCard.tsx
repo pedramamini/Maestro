@@ -125,9 +125,22 @@ function interpolateColor(color1: string, color2: string, t: number): string {
   return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
 }
 
+interface ClaudeGlobalStats {
+  totalSessions: number;
+  totalMessages: number;
+  totalInputTokens: number;
+  totalOutputTokens: number;
+  totalCacheReadTokens: number;
+  totalCacheCreationTokens: number;
+  totalCostUsd: number;
+  totalSizeBytes: number;
+  isComplete?: boolean;
+}
+
 interface AchievementCardProps {
   theme: Theme;
   autoRunStats: AutoRunStats;
+  globalStats?: ClaudeGlobalStats | null;
 }
 
 interface BadgeTooltipProps {
@@ -242,7 +255,7 @@ function BadgeTooltip({ badge, theme, isUnlocked, position, onClose }: BadgeTool
  * Achievement card component for displaying in the About modal
  * Shows current badge, progress to next level, and stats
  */
-export function AchievementCard({ theme, autoRunStats, onEscapeWithBadgeOpen }: AchievementCardProps & { onEscapeWithBadgeOpen?: (handler: (() => boolean) | null) => void }) {
+export function AchievementCard({ theme, autoRunStats, globalStats, onEscapeWithBadgeOpen }: AchievementCardProps & { onEscapeWithBadgeOpen?: (handler: (() => boolean) | null) => void }) {
   const [selectedBadge, setSelectedBadge] = useState<number | null>(null);
   const [historyExpanded, setHistoryExpanded] = useState(false);
   const [shareMenuOpen, setShareMenuOpen] = useState(false);
@@ -345,117 +358,275 @@ export function AchievementCard({ theme, autoRunStats, onEscapeWithBadgeOpen }: 
     return lines;
   };
 
+  // Format token count with K/M suffix
+  const formatTokens = (count: number): string => {
+    if (count >= 1_000_000) {
+      return `${(count / 1_000_000).toFixed(1)}M`;
+    }
+    if (count >= 1_000) {
+      return `${(count / 1_000).toFixed(1)}K`;
+    }
+    return count.toString();
+  };
+
+  // Draw the maestro conductor silhouette
+  const drawMaestroSilhouette = (ctx: CanvasRenderingContext2D, x: number, y: number, size: number) => {
+    ctx.save();
+    ctx.translate(x, y);
+    const scale = size / 512;
+    ctx.scale(scale, scale);
+
+    ctx.fillStyle = '#FFFFFF';
+
+    // Head - profile facing left
+    ctx.beginPath();
+    ctx.ellipse(180, 80, 55, 60, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Nose bump
+    ctx.beginPath();
+    ctx.ellipse(118, 85, 12, 8, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Hair/top of head
+    ctx.beginPath();
+    ctx.ellipse(185, 35, 40, 25, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Neck
+    ctx.fillRect(155, 130, 50, 40);
+
+    // Collar area
+    ctx.beginPath();
+    ctx.moveTo(140, 165);
+    ctx.lineTo(260, 165);
+    ctx.lineTo(250, 185);
+    ctx.lineTo(150, 185);
+    ctx.closePath();
+    ctx.fill();
+
+    // Bow tie
+    ctx.beginPath();
+    ctx.ellipse(200, 175, 25, 10, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Torso
+    ctx.beginPath();
+    ctx.moveTo(140, 185);
+    ctx.lineTo(120, 350);
+    ctx.lineTo(280, 350);
+    ctx.lineTo(260, 185);
+    ctx.closePath();
+    ctx.fill();
+
+    // Left arm
+    ctx.beginPath();
+    ctx.moveTo(140, 200);
+    ctx.quadraticCurveTo(90, 220, 80, 280);
+    ctx.quadraticCurveTo(75, 300, 90, 310);
+    ctx.lineTo(110, 305);
+    ctx.quadraticCurveTo(120, 290, 115, 260);
+    ctx.quadraticCurveTo(130, 240, 145, 230);
+    ctx.closePath();
+    ctx.fill();
+
+    // Left hand
+    ctx.beginPath();
+    ctx.ellipse(85, 295, 18, 22, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Right arm raised with baton
+    ctx.beginPath();
+    ctx.moveTo(260, 200);
+    ctx.quadraticCurveTo(300, 180, 330, 130);
+    ctx.quadraticCurveTo(340, 115, 355, 100);
+    ctx.lineTo(365, 110);
+    ctx.quadraticCurveTo(350, 130, 340, 145);
+    ctx.quadraticCurveTo(315, 195, 270, 220);
+    ctx.closePath();
+    ctx.fill();
+
+    // Right hand
+    ctx.beginPath();
+    ctx.ellipse(350, 95, 15, 18, 0, 0, Math.PI * 2);
+    ctx.fill();
+
+    // Baton
+    ctx.strokeStyle = '#FFFFFF';
+    ctx.lineWidth = 6;
+    ctx.lineCap = 'round';
+    ctx.beginPath();
+    ctx.moveTo(360, 85);
+    ctx.lineTo(395, 20);
+    ctx.stroke();
+
+    ctx.restore();
+  };
+
   // Generate shareable achievement card as canvas
   const generateShareImage = useCallback(async (): Promise<HTMLCanvasElement> => {
     const canvas = document.createElement('canvas');
     const ctx = canvas.getContext('2d')!;
 
     const width = 600;
-    const height = 400;
+    const height = 380;
     canvas.width = width;
     canvas.height = height;
 
-    // Background gradient
-    const bgGradient = ctx.createLinearGradient(0, 0, width, height);
-    bgGradient.addColorStop(0, '#1a1a2e');
-    bgGradient.addColorStop(1, '#16213e');
+    // Background gradient matching app icon (radial gradient from center)
+    const bgGradient = ctx.createRadialGradient(
+      width / 2, height / 2, 0,
+      width / 2, height / 2, width * 0.7
+    );
+    bgGradient.addColorStop(0, '#2d1f4e');  // Lighter purple center
+    bgGradient.addColorStop(1, '#1a1a2e');  // Dark purple edges
     ctx.fillStyle = bgGradient;
-    ctx.roundRect(0, 0, width, height, 16);
+    ctx.roundRect(0, 0, width, height, 20);
     ctx.fill();
 
-    // Border
-    ctx.strokeStyle = goldColor;
-    ctx.lineWidth = 3;
-    ctx.roundRect(0, 0, width, height, 16);
+    // Subtle gradient overlay for depth
+    const overlayGradient = ctx.createLinearGradient(0, 0, 0, height);
+    overlayGradient.addColorStop(0, 'rgba(139, 92, 246, 0.15)');
+    overlayGradient.addColorStop(0.5, 'rgba(0, 0, 0, 0)');
+    overlayGradient.addColorStop(1, 'rgba(0, 0, 0, 0.2)');
+    ctx.fillStyle = overlayGradient;
+    ctx.roundRect(0, 0, width, height, 20);
+    ctx.fill();
+
+    // Border with purple glow effect
+    ctx.strokeStyle = '#8B5CF6';
+    ctx.lineWidth = 2;
+    ctx.roundRect(0, 0, width, height, 20);
     ctx.stroke();
 
-    // Header accent
-    const headerGradient = ctx.createLinearGradient(0, 0, width, 100);
-    headerGradient.addColorStop(0, `${purpleAccent}40`);
-    headerGradient.addColorStop(1, 'transparent');
-    ctx.fillStyle = headerGradient;
-    ctx.fillRect(0, 0, width, 100);
+    // Outer glow border
+    ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
+    ctx.lineWidth = 4;
+    ctx.roundRect(-2, -2, width + 4, height + 4, 22);
+    ctx.stroke();
 
-    // Trophy icon (simplified circle)
+    // Draw conductor silhouette in top left (subtle, as background element)
+    ctx.save();
+    ctx.globalAlpha = 0.08;
+    drawMaestroSilhouette(ctx, -20, 20, 280);
+    ctx.restore();
+
+    // Trophy icon circle with gradient
+    const trophyX = width / 2;
+    const trophyY = 52;
+    const trophyRadius = 32;
+
     ctx.beginPath();
-    ctx.arc(width / 2, 60, 30, 0, Math.PI * 2);
-    const trophyGradient = ctx.createRadialGradient(width / 2, 60, 0, width / 2, 60, 30);
-    trophyGradient.addColorStop(0, '#FFA500');
-    trophyGradient.addColorStop(1, goldColor);
+    ctx.arc(trophyX, trophyY, trophyRadius, 0, Math.PI * 2);
+    const trophyGradient = ctx.createRadialGradient(trophyX, trophyY - 10, 0, trophyX, trophyY, trophyRadius);
+    trophyGradient.addColorStop(0, '#FFE066');
+    trophyGradient.addColorStop(1, '#F59E0B');
     ctx.fillStyle = trophyGradient;
     ctx.fill();
 
     // Trophy emoji
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 28px system-ui';
+    ctx.font = 'bold 32px system-ui';
     ctx.textAlign = 'center';
-    ctx.fillText('🏆', width / 2, 70);
+    ctx.textBaseline = 'middle';
+    ctx.fillStyle = '#78350F';
+    ctx.fillText('🏆', trophyX, trophyY + 2);
 
     // Title
-    ctx.font = 'bold 24px system-ui';
-    ctx.fillStyle = goldColor;
-    ctx.fillText('MAESTRO ACHIEVEMENTS', width / 2, 120);
+    ctx.font = 'bold 18px system-ui';
+    ctx.fillStyle = '#F472B6';  // Pink accent like in screenshots
+    ctx.letterSpacing = '2px';
+    ctx.fillText('MAESTRO ACHIEVEMENTS', width / 2, 105);
 
     if (currentBadge) {
-      // Level badge
-      ctx.font = 'bold 18px system-ui';
+      // Level indicator with stars
+      ctx.font = 'bold 14px system-ui';
       ctx.fillStyle = goldColor;
-      ctx.fillText(`⭐ Level ${currentBadge.level} of 11 ⭐`, width / 2, 155);
+      ctx.fillText(`★ Level ${currentBadge.level} of 11 ★`, width / 2, 130);
 
-      // Badge name
-      ctx.font = 'bold 28px system-ui';
-      ctx.fillStyle = purpleAccent;
-      ctx.fillText(currentBadge.name, width / 2, 190);
+      // Badge name - larger and more prominent
+      ctx.font = 'bold 26px system-ui';
+      ctx.fillStyle = '#F472B6';
+      ctx.fillText(currentBadge.name, width / 2, 162);
 
-      // Flavor text
-      ctx.font = 'italic 14px system-ui';
-      ctx.fillStyle = '#CCCCCC';
-      const flavorLines = wrapText(ctx, `"${currentBadge.flavorText}"`, width - 80);
-      let yOffset = 225;
+      // Flavor text in quotes
+      ctx.font = 'italic 13px system-ui';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.8)';
+      const flavorLines = wrapText(ctx, `"${currentBadge.flavorText}"`, width - 100);
+      let yOffset = 190;
       flavorLines.forEach(line => {
         ctx.fillText(line, width / 2, yOffset);
         yOffset += 18;
       });
     } else {
       // No badge yet
-      ctx.font = 'bold 20px system-ui';
-      ctx.fillStyle = '#AAAAAA';
-      ctx.fillText('Journey Just Beginning...', width / 2, 170);
+      ctx.font = 'bold 22px system-ui';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.7)';
+      ctx.fillText('Journey Just Beginning...', width / 2, 155);
 
       ctx.font = '14px system-ui';
-      ctx.fillStyle = '#888888';
-      ctx.fillText('Complete 15 minutes of AutoRun to unlock first badge', width / 2, 200);
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+      ctx.fillText('Complete 15 minutes of AutoRun to unlock first badge', width / 2, 185);
     }
 
-    // Stats box
-    const statsY = 300;
-    ctx.fillStyle = 'rgba(255, 255, 255, 0.1)';
-    ctx.roundRect(50, statsY - 10, width - 100, 50, 8);
+    // Stats container with dark background
+    const statsY = 240;
+    const statsHeight = 85;
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.35)';
+    ctx.roundRect(30, statsY, width - 60, statsHeight, 12);
     ctx.fill();
 
-    ctx.font = '14px system-ui';
-    ctx.fillStyle = '#AAAAAA';
-    ctx.textAlign = 'left';
-    ctx.fillText('Total AutoRun:', 70, statsY + 15);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 14px system-ui';
-    ctx.fillText(formatCumulativeTime(autoRunStats.cumulativeTimeMs), 180, statsY + 15);
+    // Stats border
+    ctx.strokeStyle = 'rgba(139, 92, 246, 0.3)';
+    ctx.lineWidth = 1;
+    ctx.roundRect(30, statsY, width - 60, statsHeight, 12);
+    ctx.stroke();
 
-    ctx.fillStyle = '#AAAAAA';
-    ctx.font = '14px system-ui';
-    ctx.fillText('Longest Run:', 350, statsY + 15);
-    ctx.fillStyle = '#FFFFFF';
-    ctx.font = 'bold 14px system-ui';
-    ctx.fillText(formatCumulativeTime(autoRunStats.longestRunMs), 450, statsY + 15);
+    // Stats grid - 4 columns
+    const statsColWidth = (width - 60) / 4;
+    const statsCenterY = statsY + statsHeight / 2;
 
-    // Footer branding
-    ctx.font = 'bold 12px system-ui';
-    ctx.fillStyle = '#666666';
+    // Helper to draw a stat
+    const drawStat = (x: number, value: string, label: string) => {
+      ctx.font = 'bold 20px system-ui';
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.fillText(value, x, statsCenterY - 5);
+
+      ctx.font = '11px system-ui';
+      ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+      ctx.fillText(label, x, statsCenterY + 15);
+    };
+
+    // Column 1: Total AutoRun
+    drawStat(30 + statsColWidth * 0.5, formatCumulativeTime(autoRunStats.cumulativeTimeMs), 'Total AutoRun');
+
+    // Column 2: Longest Run
+    drawStat(30 + statsColWidth * 1.5, formatCumulativeTime(autoRunStats.longestRunMs), 'Longest Run');
+
+    // Column 3: Sessions (from globalStats)
+    const sessionsValue = globalStats?.totalSessions?.toLocaleString() || '—';
+    drawStat(30 + statsColWidth * 2.5, sessionsValue, 'Sessions');
+
+    // Column 4: Total Tokens (from globalStats)
+    const totalTokens = globalStats
+      ? globalStats.totalInputTokens + globalStats.totalOutputTokens
+      : 0;
+    const tokensValue = totalTokens > 0 ? formatTokens(totalTokens) : '—';
+    drawStat(30 + statsColWidth * 3.5, tokensValue, 'Total Tokens');
+
+    // Footer with branding and GitHub
+    ctx.font = 'bold 11px system-ui';
+    ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
     ctx.textAlign = 'center';
-    ctx.fillText('MAESTRO • Agent Orchestration Command Center', width / 2, height - 20);
+    ctx.fillText('MAESTRO • Agent Orchestration Command Center', width / 2, height - 30);
+
+    // GitHub link
+    ctx.font = '10px system-ui';
+    ctx.fillStyle = 'rgba(139, 92, 246, 0.8)';
+    ctx.fillText('github.com/pedramamini/Maestro', width / 2, height - 14);
 
     return canvas;
-  }, [currentBadge, autoRunStats.cumulativeTimeMs, autoRunStats.longestRunMs, purpleAccent]);
+  }, [currentBadge, autoRunStats.cumulativeTimeMs, autoRunStats.longestRunMs, globalStats]);
 
   // Copy to clipboard
   const copyToClipboard = useCallback(async () => {
@@ -518,7 +689,7 @@ export function AchievementCard({ theme, autoRunStats, onEscapeWithBadgeOpen }: 
 
           {shareMenuOpen && (
             <div
-              className="absolute right-0 top-full mt-1 p-1.5 rounded-lg shadow-xl z-50 min-w-[160px]"
+              className="absolute right-0 top-full mt-1 p-1.5 rounded-lg shadow-xl z-50"
               style={{
                 backgroundColor: theme.colors.bgSidebar,
                 border: `1px solid ${theme.colors.border}`,
@@ -529,12 +700,12 @@ export function AchievementCard({ theme, autoRunStats, onEscapeWithBadgeOpen }: 
                   copyToClipboard();
                   setShareMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-white/10 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-white/10 transition-colors"
               >
                 {copySuccess ? (
-                  <Check className="w-4 h-4" style={{ color: theme.colors.success }} />
+                  <Check className="w-4 h-4 shrink-0" style={{ color: theme.colors.success }} />
                 ) : (
-                  <Copy className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+                  <Copy className="w-4 h-4 shrink-0" style={{ color: theme.colors.textDim }} />
                 )}
                 <span style={{ color: theme.colors.textMain }}>
                   {copySuccess ? 'Copied!' : 'Copy to Clipboard'}
@@ -545,9 +716,9 @@ export function AchievementCard({ theme, autoRunStats, onEscapeWithBadgeOpen }: 
                   downloadImage();
                   setShareMenuOpen(false);
                 }}
-                className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm hover:bg-white/10 transition-colors"
+                className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-white/10 transition-colors"
               >
-                <Download className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+                <Download className="w-4 h-4 shrink-0" style={{ color: theme.colors.textDim }} />
                 <span style={{ color: theme.colors.textMain }}>Save as Image</span>
               </button>
             </div>

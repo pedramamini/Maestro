@@ -137,6 +137,44 @@ interface MaestroAPI {
       error: string | null;
     }>;
     show: (cwd: string, hash: string) => Promise<{ stdout: string; stderr: string }>;
+    showFile: (cwd: string, ref: string, filePath: string) => Promise<{ content?: string; error?: string }>;
+    // Git worktree operations for Auto Run parallelization
+    worktreeInfo: (worktreePath: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      isWorktree?: boolean;
+      currentBranch?: string;
+      repoRoot?: string;
+      error?: string;
+    }>;
+    getRepoRoot: (cwd: string) => Promise<{
+      success: boolean;
+      root?: string;
+      error?: string;
+    }>;
+    worktreeSetup: (mainRepoCwd: string, worktreePath: string, branchName: string) => Promise<{
+      success: boolean;
+      created?: boolean;
+      currentBranch?: string;
+      requestedBranch?: string;
+      branchMismatch?: boolean;
+      error?: string;
+    }>;
+    worktreeCheckout: (worktreePath: string, branchName: string, createIfMissing: boolean) => Promise<{
+      success: boolean;
+      hasUncommittedChanges: boolean;
+      error?: string;
+    }>;
+    createPR: (worktreePath: string, baseBranch: string, title: string, body: string) => Promise<{
+      success: boolean;
+      prUrl?: string;
+      error?: string;
+    }>;
+    getDefaultBranch: (cwd: string) => Promise<{
+      success: boolean;
+      branch?: string;
+      error?: string;
+    }>;
   };
   fs: {
     readDir: (dirPath: string) => Promise<DirectoryEntry[]>;
@@ -270,6 +308,7 @@ interface MaestroAPI {
       projectPath: string;
       sessionName: string;
       starred?: boolean;
+      lastActivityAt?: number;
     }>>;
     deleteMessagePair: (projectPath: string, sessionId: string, userMessageUuid: string, fallbackContent?: string) => Promise<{ success: boolean; linesRemoved?: number; error?: string }>;
   };
@@ -316,6 +355,55 @@ interface MaestroAPI {
     delete: (sessionId: string, filename: string) => Promise<{ success: boolean; error?: string }>;
     list: (sessionId: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
     getPath: (sessionId: string) => Promise<{ success: boolean; path: string }>;
+  };
+  // Auto Run file operations
+  autorun: {
+    listDocs: (folderPath: string) => Promise<{
+      success: boolean;
+      files: string[];
+      tree?: Array<{
+        name: string;
+        type: 'file' | 'folder';
+        path: string;
+        children?: Array<{
+          name: string;
+          type: 'file' | 'folder';
+          path: string;
+          children?: unknown[];  // Recursive type
+        }>;
+      }>;
+      error?: string;
+    }>;
+    readDoc: (folderPath: string, filename: string) => Promise<{ success: boolean; content?: string; error?: string }>;
+    writeDoc: (folderPath: string, filename: string, content: string) => Promise<{ success: boolean; error?: string }>;
+    saveImage: (folderPath: string, docName: string, base64Data: string, extension: string) => Promise<{ success: boolean; relativePath?: string; error?: string }>;
+    deleteImage: (folderPath: string, relativePath: string) => Promise<{ success: boolean; error?: string }>;
+    listImages: (folderPath: string, docName: string) => Promise<{ success: boolean; images?: Array<{ filename: string; relativePath: string }>; error?: string }>;
+  };
+  // Playbooks API (saved batch run configurations)
+  playbooks: {
+    list: (sessionId: string) => Promise<{ success: boolean; playbooks: Array<{
+      id: string;
+      name: string;
+      createdAt: number;
+      updatedAt: number;
+      documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+      loopEnabled: boolean;
+      prompt: string;
+    }>; error?: string }>;
+    create: (sessionId: string, playbook: {
+      name: string;
+      documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+      loopEnabled: boolean;
+      prompt: string;
+    }) => Promise<{ success: boolean; playbook?: any; error?: string }>;
+    update: (sessionId: string, playbookId: string, updates: Partial<{
+      name: string;
+      documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+      loopEnabled: boolean;
+      prompt: string;
+    }>) => Promise<{ success: boolean; playbook?: any; error?: string }>;
+    delete: (sessionId: string, playbookId: string) => Promise<{ success: boolean; error?: string }>;
   };
 }
 

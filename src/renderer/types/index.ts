@@ -6,8 +6,8 @@ export { Theme, ThemeId, ThemeMode, ThemeColors, isValidThemeId } from '../../sh
 export type ToolType = 'claude' | 'claude-code' | 'aider' | 'opencode' | 'terminal';
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
-export type RightPanelTab = 'files' | 'history' | 'scratchpad';
-export type ScratchPadMode = 'raw' | 'preview' | 'wysiwyg';
+export type RightPanelTab = 'files' | 'history' | 'autorun';
+// Note: ScratchPadMode was removed as part of the Scratchpad → Auto Run migration
 export type FocusArea = 'sidebar' | 'main' | 'right';
 export type LLMProvider = 'openrouter' | 'anthropic' | 'ollama';
 
@@ -92,18 +92,102 @@ export interface HistoryEntry {
   validated?: boolean; // For AUTO entries: whether a human has validated the task completion
 }
 
+// Document entry in the batch run queue (supports duplicates)
+export interface BatchDocumentEntry {
+  id: string;              // Unique ID for this entry (for drag-drop and duplicates)
+  filename: string;        // The actual document filename (without .md)
+  resetOnCompletion: boolean;  // Uncheck all boxes when done
+  isDuplicate: boolean;    // True if this is a duplicate (can be removed)
+  isMissing?: boolean;     // True if this document no longer exists in the folder (for playbook loading)
+}
+
+// Git worktree configuration for Auto Run
+export interface WorktreeConfig {
+  enabled: boolean;              // Whether to use a worktree
+  path: string;                  // Absolute path for the worktree
+  branchName: string;            // Branch name to use/create
+  createPROnCompletion: boolean; // Create PR when Auto Run finishes
+  prTargetBranch: string;        // Target branch for the PR (e.g., 'main')
+}
+
+// Configuration for starting a batch run
+export interface BatchRunConfig {
+  documents: BatchDocumentEntry[];  // Ordered list of docs to run
+  prompt: string;
+  loopEnabled: boolean;    // Loop back to first doc when done
+  maxLoops?: number | null;  // Max loop iterations (null/undefined = infinite)
+  worktree?: WorktreeConfig;     // Optional worktree configuration
+}
+
 // Batch processing state
 export interface BatchRunState {
   isRunning: boolean;
   isStopping: boolean; // Waiting for current task to finish before stopping
+
+  // Document-level progress (multi-document support)
+  documents: string[];           // Ordered list of document filenames to process
+  currentDocumentIndex: number;  // Which document we're on (0-based)
+
+  // Task-level progress within current document
+  currentDocTasksTotal: number;     // Total tasks in current document
+  currentDocTasksCompleted: number; // Completed tasks in current document
+
+  // Overall progress (grows as reset docs add tasks back)
+  totalTasksAcrossAllDocs: number;
+  completedTasksAcrossAllDocs: number;
+
+  // Loop mode
+  loopEnabled: boolean;
+  loopIteration: number;  // How many times we've looped (0 = first pass)
+  maxLoops?: number | null;  // Max loop iterations (null/undefined = infinite)
+
+  // Folder path for file operations
+  folderPath: string;
+
+  // Worktree tracking
+  worktreeActive: boolean;       // Currently running in a worktree
+  worktreePath?: string;         // Path to the active worktree
+  worktreeBranch?: string;       // Branch name in the worktree
+
+  // Legacy fields (kept for backwards compatibility during migration)
   totalTasks: number;
   completedTasks: number;
   currentTaskIndex: number;
   scratchpadPath?: string; // Path to temp file
   originalContent: string; // Original scratchpad content for sync back
+
+  // Prompt configuration
   customPrompt?: string; // User's custom prompt if modified
   sessionIds: string[]; // Claude session IDs from each iteration
   startTime?: number; // Timestamp when batch run started
+}
+
+// Document entry within a playbook (similar to BatchDocumentEntry but for storage)
+export interface PlaybookDocumentEntry {
+  filename: string;                  // Document filename (without .md)
+  resetOnCompletion: boolean;
+  // Note: isDuplicate is not stored - duplicates are just repeated entries
+}
+
+// A saved Playbook configuration
+export interface Playbook {
+  id: string;                        // Unique ID (UUID)
+  name: string;                      // User-defined name
+  createdAt: number;                 // Timestamp
+  updatedAt: number;                 // Timestamp
+
+  // Configuration
+  documents: PlaybookDocumentEntry[];  // Ordered list of documents
+  loopEnabled: boolean;
+  maxLoops?: number | null;          // Max loop iterations (null/undefined = infinite)
+  prompt: string;                    // Custom agent prompt
+
+  // Optional worktree settings (path not stored - user selects each time)
+  worktreeSettings?: {
+    branchNameTemplate: string;    // e.g., "autorun-{playbook}-{timestamp}"
+    createPROnCompletion: boolean;
+    prTargetBranch?: string;       // Target branch for PR (e.g., 'main')
+  };
 }
 
 // Usage statistics from Claude Code CLI
@@ -182,10 +266,10 @@ export interface Session {
   state: SessionState;
   cwd: string;
   fullPath: string;
+  projectRoot: string; // The initial working directory (never changes, used for Claude session storage)
   aiLogs: LogEntry[];
   shellLogs: LogEntry[];
   workLog: WorkLogItem[];
-  scratchPadContent: string;
   contextUsage: number;
   // Usage statistics from AI responses
   usageStats?: UsageStats;
@@ -216,11 +300,6 @@ export interface Session {
   // Command history (separate for each mode)
   aiCommandHistory?: string[];
   shellCommandHistory?: string[];
-  // Scratchpad state tracking
-  scratchPadCursorPosition?: number;
-  scratchPadEditScrollPos?: number;
-  scratchPadPreviewScrollPos?: number;
-  scratchPadMode?: 'edit' | 'preview';
   // Claude Code session ID for conversation continuity
   // DEPRECATED: Use aiTabs[activeIndex].claudeSessionId instead
   claudeSessionId?: string;
@@ -264,6 +343,17 @@ export interface Session {
   terminalScrollTop?: number;
   // Draft input for terminal mode (persisted across session switches)
   terminalDraftInput?: string;
+
+  // Auto Run panel state (file-based document runner)
+  autoRunFolderPath?: string;           // Persisted folder path for Runner Docs
+  autoRunSelectedFile?: string;          // Currently selected markdown filename
+  autoRunMode?: 'edit' | 'preview';      // Current editing mode
+  autoRunEditScrollPos?: number;         // Scroll position in edit mode
+  autoRunPreviewScrollPos?: number;      // Scroll position in preview mode
+  autoRunCursorPosition?: number;        // Cursor position in edit mode
+
+  // File tree auto-refresh interval in seconds (0 = disabled)
+  fileTreeAutoRefreshInterval?: number;
 }
 
 export interface Group {

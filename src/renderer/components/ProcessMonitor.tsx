@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
-import { ChevronRight, ChevronDown, ChevronUp, X, Activity, RefreshCw } from 'lucide-react';
+import { ChevronRight, ChevronDown, ChevronUp, X, Activity, RefreshCw, XCircle } from 'lucide-react';
 import type { Session, Group, Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -27,6 +27,7 @@ interface ProcessNode {
   label: string;
   emoji?: string;
   sessionId?: string;
+  processSessionId?: string; // The full process session ID for killing processes (e.g., "abc123-ai-tab1")
   pid?: number;
   processType?: 'ai' | 'terminal' | 'batch' | 'synopsis';
   isAlive?: boolean;
@@ -44,13 +45,21 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
   const [activeProcesses, setActiveProcesses] = useState<ActiveProcess[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isRefreshing, setIsRefreshing] = useState(false);
+  const [hasExpandedInitially, setHasExpandedInitially] = useState(false);
+  const [killConfirmProcessId, setKillConfirmProcessId] = useState<string | null>(null);
+  const [isKilling, setIsKilling] = useState(false);
   const containerRef = useRef<HTMLDivElement>(null);
   const selectedNodeRef = useRef<HTMLButtonElement | HTMLDivElement>(null);
+  const killConfirmRef = useRef<HTMLDivElement>(null);
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
 
   // Fetch active processes from ProcessManager
-  const fetchActiveProcesses = useCallback(async () => {
+  const fetchActiveProcesses = useCallback(async (showRefresh = false) => {
+    if (showRefresh) {
+      setIsRefreshing(true);
+    }
     try {
       const processes = await window.maestro.process.getActiveProcesses();
       setActiveProcesses(processes);
@@ -58,13 +67,38 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
       console.error('Failed to fetch active processes:', error);
     } finally {
       setIsLoading(false);
+      // Keep refresh spinner visible for at least 500ms for visual feedback
+      if (showRefresh) {
+        setTimeout(() => setIsRefreshing(false), 500);
+      }
     }
   }, []);
+
+  // Kill a process by its session ID
+  const killProcess = useCallback(async (processSessionId: string) => {
+    setIsKilling(true);
+    try {
+      await window.maestro.process.kill(processSessionId);
+      // Refresh the process list after killing
+      await fetchActiveProcesses(true);
+    } catch (error) {
+      console.error('Failed to kill process:', error);
+    } finally {
+      setIsKilling(false);
+      setKillConfirmProcessId(null);
+    }
+  }, [fetchActiveProcesses]);
+
+  // Focus kill confirmation dialog when it opens
+  useEffect(() => {
+    if (killConfirmProcessId && killConfirmRef.current) {
+      killConfirmRef.current.focus();
+    }
+  }, [killConfirmProcessId]);
 
   // Register layer on mount
   useEffect(() => {
     const layerId = registerLayer({
-      id: 'process-monitor',
       type: 'modal',
       priority: MODAL_PRIORITIES.PROCESS_MONITOR,
       blocksLowerLayers: true,
@@ -271,6 +305,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
           pid: proc.pid,
           processType,
           sessionId: session.id,
+          processSessionId: proc.sessionId, // Full process session ID for killing
           isAlive: true, // Active processes are always alive
           toolType: proc.toolType,
           cwd: proc.cwd,
@@ -325,6 +360,18 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 
     return tree;
   };
+
+  // Expand all nodes by default on initial load
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  useEffect(() => {
+    if (!isLoading && !hasExpandedInitially) {
+      // Build tree and get all expandable node IDs
+      const tree = buildProcessTree();
+      const allIds = getAllExpandableNodeIds(tree);
+      setExpandedNodes(new Set(allIds));
+      setHasExpandedInitially(true);
+    }
+  }, [isLoading, hasExpandedInitially, activeProcesses]);
 
   // Build flat list of visible nodes for keyboard navigation
   const getVisibleNodes = (nodes: ProcessNode[]): ProcessNode[] => {
@@ -434,7 +481,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
       case 'r':
       case 'R':
         e.preventDefault();
-        fetchActiveProcesses();
+        fetchActiveProcesses(true);
         break;
     }
   };
@@ -540,7 +587,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
           ref={isSelected ? selectedNodeRef as React.RefObject<HTMLDivElement> : null}
           key={node.id}
           tabIndex={0}
-          className="px-4 py-2 flex items-center gap-2 cursor-default"
+          className="px-4 py-2 flex items-center gap-2 cursor-default group"
           style={{
             paddingLeft: `${paddingLeft}px`,
             color: theme.colors.textMain,
@@ -589,6 +636,22 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
           >
             Running
           </span>
+          {/* Kill button */}
+          {node.processSessionId && (
+            <button
+              className="p-1 rounded opacity-0 group-hover:opacity-100 hover:bg-opacity-20 transition-opacity"
+              style={{ color: theme.colors.error }}
+              onClick={(e) => {
+                e.stopPropagation();
+                setKillConfirmProcessId(node.processSessionId!);
+              }}
+              onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${theme.colors.error}20`}
+              onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+              title="Kill process"
+            >
+              <XCircle className="w-4 h-4" />
+            </button>
+          )}
         </div>
       );
     }
@@ -636,14 +699,14 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
           </div>
           <div className="flex items-center gap-1">
             <button
-              onClick={() => fetchActiveProcesses()}
+              onClick={() => fetchActiveProcesses(true)}
               className="p-1.5 rounded hover:bg-opacity-10 flex items-center gap-1"
               style={{ color: theme.colors.textDim }}
               onMouseEnter={(e) => e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`}
               onMouseLeave={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
               title="Refresh (R)"
             >
-              <RefreshCw className={`w-4 h-4 ${isLoading ? 'animate-spin' : ''}`} />
+              <RefreshCw className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`} />
             </button>
             <button
               onClick={expandAll}
@@ -726,6 +789,65 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
           </div>
         </div>
       </div>
+
+      {/* Kill confirmation modal */}
+      {killConfirmProcessId && (
+        <div
+          className="fixed inset-0 flex items-center justify-center z-[10000]"
+          style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+          onClick={() => setKillConfirmProcessId(null)}
+        >
+          <div
+            ref={killConfirmRef}
+            className="p-4 rounded-lg shadow-xl max-w-md mx-4 outline-none"
+            style={{ backgroundColor: theme.colors.bgMain }}
+            onClick={(e) => e.stopPropagation()}
+            tabIndex={-1}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !isKilling) {
+                e.preventDefault();
+                killProcess(killConfirmProcessId);
+              } else if (e.key === 'Escape') {
+                e.preventDefault();
+                setKillConfirmProcessId(null);
+              }
+            }}
+          >
+            <h3 className="text-lg font-semibold mb-2" style={{ color: theme.colors.textMain }}>
+              Kill Process?
+            </h3>
+            <p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
+              This will forcefully terminate the process. Any unsaved work may be lost.
+            </p>
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={() => setKillConfirmProcessId(null)}
+                className="px-3 py-1.5 rounded text-sm"
+                style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textMain }}
+                disabled={isKilling}
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => killProcess(killConfirmProcessId)}
+                className="px-3 py-1.5 rounded text-sm flex items-center gap-2"
+                style={{ backgroundColor: theme.colors.error, color: 'white' }}
+                disabled={isKilling}
+                autoFocus
+              >
+                {isKilling ? (
+                  <>
+                    <RefreshCw className="w-3 h-3 animate-spin" />
+                    Killing...
+                  </>
+                ) : (
+                  'Kill Process'
+                )}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

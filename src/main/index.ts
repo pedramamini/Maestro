@@ -1,5 +1,7 @@
 import { app, BrowserWindow, ipcMain, dialog, shell } from 'electron';
 import path from 'path';
+import os from 'os';
+import crypto from 'crypto';
 import fs from 'fs/promises';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
@@ -698,6 +700,10 @@ function setupIpcHandlers() {
   });
 
   ipcMain.handle('sessions:setAll', async (_, sessions: any[]) => {
+    // Debug: log autoRunFolderPath values received from renderer
+    const autoRunPaths = sessions.map((s: any) => ({ id: s.id, name: s.name, autoRunFolderPath: s.autoRunFolderPath }));
+    logger.debug('[Sessions:setAll] Received sessions with autoRunFolderPaths:', 'Sessions', autoRunPaths);
+
     // Get previous sessions to detect changes
     const previousSessions = sessionsStore.get('sessions', []);
     const previousSessionMap = new Map(previousSessions.map((s: any) => [s.id, s]));
@@ -742,6 +748,12 @@ function setupIpcHandlers() {
     }
 
     sessionsStore.set('sessions', sessions);
+
+    // Debug: verify what was stored
+    const storedSessions = sessionsStore.get('sessions', []);
+    const storedAutoRunPaths = storedSessions.map((s: any) => ({ id: s.id, name: s.name, autoRunFolderPath: s.autoRunFolderPath }));
+    logger.debug('[Sessions:setAll] After store, autoRunFolderPaths:', 'Sessions', storedAutoRunPaths);
+
     return true;
   });
 
@@ -1129,7 +1141,293 @@ function setupIpcHandlers() {
     }
   });
 
+  // Git worktree operations for Auto Run parallelization
+
+  // Get information about a worktree at a given path
+  ipcMain.handle('git:worktreeInfo', async (_, worktreePath: string) => {
+    try {
+      // Check if the path exists
+      try {
+        await fs.access(worktreePath);
+      } catch {
+        return { success: true, exists: false, isWorktree: false };
+      }
+
+      // Check if it's a git directory (could be main repo or worktree)
+      const isInsideWorkTree = await execFileNoThrow('git', ['rev-parse', '--is-inside-work-tree'], worktreePath);
+      if (isInsideWorkTree.exitCode !== 0) {
+        return { success: true, exists: true, isWorktree: false };
+      }
+
+      // Get the git directory path
+      const gitDirResult = await execFileNoThrow('git', ['rev-parse', '--git-dir'], worktreePath);
+      if (gitDirResult.exitCode !== 0) {
+        return { success: false, error: 'Failed to get git directory' };
+      }
+      const gitDir = gitDirResult.stdout.trim();
+
+      // A worktree's .git is a file pointing to the main repo, not a directory
+      // Check if this is a worktree by looking for .git file (not directory) or checking git-common-dir
+      const gitCommonDirResult = await execFileNoThrow('git', ['rev-parse', '--git-common-dir'], worktreePath);
+      const gitCommonDir = gitCommonDirResult.exitCode === 0 ? gitCommonDirResult.stdout.trim() : gitDir;
+
+      // If git-dir and git-common-dir are different, this is a worktree
+      const isWorktree = gitDir !== gitCommonDir;
+
+      // Get the current branch
+      const branchResult = await execFileNoThrow('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+      const currentBranch = branchResult.exitCode === 0 ? branchResult.stdout.trim() : undefined;
+
+      // Get the repository root (of the main repository)
+      const repoRootResult = await execFileNoThrow('git', ['rev-parse', '--show-toplevel'], worktreePath);
+      let repoRoot: string | undefined;
+
+      if (isWorktree && gitCommonDir) {
+        // For worktrees, we need to find the main repo root from the common dir
+        // The common dir points to the .git folder of the main repo
+        // The main repo root is the parent of the .git folder
+        const path = require('path');
+        const commonDirAbs = path.isAbsolute(gitCommonDir)
+          ? gitCommonDir
+          : path.resolve(worktreePath, gitCommonDir);
+        repoRoot = path.dirname(commonDirAbs);
+      } else if (repoRootResult.exitCode === 0) {
+        repoRoot = repoRootResult.stdout.trim();
+      }
+
+      return {
+        success: true,
+        exists: true,
+        isWorktree,
+        currentBranch,
+        repoRoot
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Get the root directory of the git repository
+  ipcMain.handle('git:getRepoRoot', async (_, cwd: string) => {
+    try {
+      const result = await execFileNoThrow('git', ['rev-parse', '--show-toplevel'], cwd);
+      if (result.exitCode !== 0) {
+        return { success: false, error: result.stderr || 'Not a git repository' };
+      }
+      return { success: true, root: result.stdout.trim() };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Create or reuse a worktree
+  ipcMain.handle('git:worktreeSetup', async (_, mainRepoCwd: string, worktreePath: string, branchName: string) => {
+    try {
+      const path = require('path');
+
+      // First check if the worktree path already exists
+      let pathExists = true;
+      try {
+        await fs.access(worktreePath);
+      } catch {
+        pathExists = false;
+      }
+
+      if (pathExists) {
+        // Check if it's already a worktree of this repo
+        const worktreeInfoResult = await execFileNoThrow('git', ['rev-parse', '--is-inside-work-tree'], worktreePath);
+        if (worktreeInfoResult.exitCode !== 0) {
+          return { success: false, error: 'Path exists but is not a git worktree or repository' };
+        }
+
+        // Get the common dir to check if it's the same repo
+        const gitCommonDirResult = await execFileNoThrow('git', ['rev-parse', '--git-common-dir'], worktreePath);
+        const mainGitDirResult = await execFileNoThrow('git', ['rev-parse', '--git-dir'], mainRepoCwd);
+
+        if (gitCommonDirResult.exitCode === 0 && mainGitDirResult.exitCode === 0) {
+          const worktreeCommonDir = path.resolve(worktreePath, gitCommonDirResult.stdout.trim());
+          const mainGitDir = path.resolve(mainRepoCwd, mainGitDirResult.stdout.trim());
+
+          // Normalize paths for comparison
+          const normalizedWorktreeCommon = path.normalize(worktreeCommonDir);
+          const normalizedMainGit = path.normalize(mainGitDir);
+
+          if (normalizedWorktreeCommon !== normalizedMainGit) {
+            return { success: false, error: 'Worktree path belongs to a different repository' };
+          }
+        }
+
+        // Get current branch in the existing worktree
+        const currentBranchResult = await execFileNoThrow('git', ['rev-parse', '--abbrev-ref', 'HEAD'], worktreePath);
+        const currentBranch = currentBranchResult.exitCode === 0 ? currentBranchResult.stdout.trim() : '';
+
+        return {
+          success: true,
+          created: false,
+          currentBranch,
+          requestedBranch: branchName,
+          branchMismatch: currentBranch !== branchName && branchName !== ''
+        };
+      }
+
+      // Worktree doesn't exist, create it
+      // First check if the branch exists
+      const branchExistsResult = await execFileNoThrow('git', ['rev-parse', '--verify', branchName], mainRepoCwd);
+      const branchExists = branchExistsResult.exitCode === 0;
+
+      let createResult;
+      if (branchExists) {
+        // Branch exists, just add worktree pointing to it
+        createResult = await execFileNoThrow('git', ['worktree', 'add', worktreePath, branchName], mainRepoCwd);
+      } else {
+        // Branch doesn't exist, create it with -b flag
+        createResult = await execFileNoThrow('git', ['worktree', 'add', '-b', branchName, worktreePath], mainRepoCwd);
+      }
+
+      if (createResult.exitCode !== 0) {
+        return { success: false, error: createResult.stderr || 'Failed to create worktree' };
+      }
+
+      return {
+        success: true,
+        created: true,
+        currentBranch: branchName,
+        requestedBranch: branchName,
+        branchMismatch: false
+      };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Checkout a branch in a worktree (with uncommitted changes check)
+  ipcMain.handle('git:worktreeCheckout', async (_, worktreePath: string, branchName: string, createIfMissing: boolean) => {
+    try {
+      // Check for uncommitted changes
+      const statusResult = await execFileNoThrow('git', ['status', '--porcelain'], worktreePath);
+      if (statusResult.exitCode !== 0) {
+        return { success: false, hasUncommittedChanges: false, error: 'Failed to check git status' };
+      }
+
+      const hasUncommittedChanges = statusResult.stdout.trim().length > 0;
+      if (hasUncommittedChanges) {
+        return {
+          success: false,
+          hasUncommittedChanges: true,
+          error: 'Worktree has uncommitted changes. Please commit or stash them first.'
+        };
+      }
+
+      // Check if branch exists
+      const branchExistsResult = await execFileNoThrow('git', ['rev-parse', '--verify', branchName], worktreePath);
+      const branchExists = branchExistsResult.exitCode === 0;
+
+      let checkoutResult;
+      if (branchExists) {
+        checkoutResult = await execFileNoThrow('git', ['checkout', branchName], worktreePath);
+      } else if (createIfMissing) {
+        checkoutResult = await execFileNoThrow('git', ['checkout', '-b', branchName], worktreePath);
+      } else {
+        return { success: false, hasUncommittedChanges: false, error: `Branch '${branchName}' does not exist` };
+      }
+
+      if (checkoutResult.exitCode !== 0) {
+        return { success: false, hasUncommittedChanges: false, error: checkoutResult.stderr || 'Checkout failed' };
+      }
+
+      return { success: true, hasUncommittedChanges: false };
+    } catch (error) {
+      return { success: false, hasUncommittedChanges: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Create a PR from the worktree branch to a base branch
+  ipcMain.handle('git:createPR', async (_, worktreePath: string, baseBranch: string, title: string, body: string) => {
+    try {
+      // First, push the current branch to origin
+      const pushResult = await execFileNoThrow('git', ['push', '-u', 'origin', 'HEAD'], worktreePath);
+      if (pushResult.exitCode !== 0) {
+        return { success: false, error: `Failed to push branch: ${pushResult.stderr}` };
+      }
+
+      // Create the PR using gh CLI
+      const prResult = await execFileNoThrow('gh', [
+        'pr', 'create',
+        '--base', baseBranch,
+        '--title', title,
+        '--body', body
+      ], worktreePath);
+
+      if (prResult.exitCode !== 0) {
+        // Check if gh CLI is not installed
+        if (prResult.stderr.includes('command not found') || prResult.stderr.includes('not recognized')) {
+          return { success: false, error: 'GitHub CLI (gh) is not installed. Please install it to create PRs.' };
+        }
+        return { success: false, error: prResult.stderr || 'Failed to create PR' };
+      }
+
+      // The PR URL is typically in stdout
+      const prUrl = prResult.stdout.trim();
+      return { success: true, prUrl };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
+  // Check if GitHub CLI (gh) is installed and authenticated
+  ipcMain.handle('git:checkGhCli', async () => {
+    try {
+      // Check if gh is installed by running gh --version
+      const versionResult = await execFileNoThrow('gh', ['--version']);
+      if (versionResult.exitCode !== 0) {
+        return { installed: false, authenticated: false };
+      }
+
+      // Check if gh is authenticated by running gh auth status
+      const authResult = await execFileNoThrow('gh', ['auth', 'status']);
+      const authenticated = authResult.exitCode === 0;
+
+      return { installed: true, authenticated };
+    } catch {
+      return { installed: false, authenticated: false };
+    }
+  });
+
+  // Get the default branch name (main or master)
+  ipcMain.handle('git:getDefaultBranch', async (_, cwd: string) => {
+    try {
+      // First try to get the default branch from remote
+      const remoteResult = await execFileNoThrow('git', ['remote', 'show', 'origin'], cwd);
+      if (remoteResult.exitCode === 0) {
+        // Parse "HEAD branch: main" from the output
+        const match = remoteResult.stdout.match(/HEAD branch:\s*(\S+)/);
+        if (match) {
+          return { success: true, branch: match[1] };
+        }
+      }
+
+      // Fallback: check if main or master exists locally
+      const mainResult = await execFileNoThrow('git', ['rev-parse', '--verify', 'main'], cwd);
+      if (mainResult.exitCode === 0) {
+        return { success: true, branch: 'main' };
+      }
+
+      const masterResult = await execFileNoThrow('git', ['rev-parse', '--verify', 'master'], cwd);
+      if (masterResult.exitCode === 0) {
+        return { success: true, branch: 'master' };
+      }
+
+      return { success: false, error: 'Could not determine default branch' };
+    } catch (error) {
+      return { success: false, error: error instanceof Error ? error.message : 'Unknown error' };
+    }
+  });
+
   // File system operations
+  ipcMain.handle('fs:homeDir', () => {
+    return os.homedir();
+  });
+
   ipcMain.handle('fs:readDir', async (_, dirPath: string) => {
     const entries = await fs.readdir(dirPath, { withFileTypes: true });
     // Convert Dirent objects to plain objects for IPC serialization
@@ -2924,23 +3222,40 @@ function setupIpcHandlers() {
 
   // Get all named sessions across all projects (for Tab Switcher "All Named" view)
   ipcMain.handle('claude:getAllNamedSessions', async () => {
+    const os = await import('os');
+    const homeDir = os.default.homedir();
+    const claudeProjectsDir = path.join(homeDir, '.claude', 'projects');
+
     const allOrigins = claudeSessionOriginsStore.get('origins', {});
     const namedSessions: Array<{
       claudeSessionId: string;
       projectPath: string;
       sessionName: string;
       starred?: boolean;
+      lastActivityAt?: number;
     }> = [];
 
     for (const [projectPath, sessions] of Object.entries(allOrigins)) {
       for (const [claudeSessionId, info] of Object.entries(sessions)) {
         // Handle both old string format and new object format
         if (typeof info === 'object' && info.sessionName) {
+          // Try to get last activity time from the session file
+          let lastActivityAt: number | undefined;
+          try {
+            const encodedPath = encodeClaudeProjectPath(projectPath);
+            const sessionFile = path.join(claudeProjectsDir, encodedPath, `${claudeSessionId}.jsonl`);
+            const stats = await fs.stat(sessionFile);
+            lastActivityAt = stats.mtime.getTime();
+          } catch {
+            // Session file may not exist or be inaccessible
+          }
+
           namedSessions.push({
             claudeSessionId,
             projectPath,
             sessionName: info.sessionName,
             starred: info.starred,
+            lastActivityAt,
           });
         }
       }
@@ -3209,13 +3524,526 @@ function setupIpcHandlers() {
     const attachmentsDir = path.join(userDataPath, 'attachments', sessionId);
     return { success: true, path: attachmentsDir };
   });
+
+  // ============================================
+  // Auto Run IPC Handlers
+  // ============================================
+
+  // List markdown files in a directory for Auto Run (with recursive subfolder support)
+  ipcMain.handle('autorun:listDocs', async (_event, folderPath: string) => {
+    try {
+      // Validate the folder path exists
+      const folderStat = await fs.stat(folderPath);
+      if (!folderStat.isDirectory()) {
+        return { success: false, files: [], tree: [], error: 'Path is not a directory' };
+      }
+
+      // Recursive function to build tree structure
+      interface TreeNode {
+        name: string;
+        type: 'file' | 'folder';
+        path: string;  // Relative path from root folder
+        children?: TreeNode[];
+      }
+
+      const scanDirectory = async (dirPath: string, relativePath: string = ''): Promise<TreeNode[]> => {
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+        const nodes: TreeNode[] = [];
+
+        // Sort entries: folders first, then files, both alphabetically
+        const sortedEntries = entries
+          .filter(entry => !entry.name.startsWith('.'))
+          .sort((a, b) => {
+            if (a.isDirectory() && !b.isDirectory()) return -1;
+            if (!a.isDirectory() && b.isDirectory()) return 1;
+            return a.name.toLowerCase().localeCompare(b.name.toLowerCase());
+          });
+
+        for (const entry of sortedEntries) {
+          const entryRelativePath = relativePath ? `${relativePath}/${entry.name}` : entry.name;
+
+          if (entry.isDirectory()) {
+            // Recursively scan subdirectory
+            const children = await scanDirectory(path.join(dirPath, entry.name), entryRelativePath);
+            // Only include folders that contain .md files (directly or in subfolders)
+            if (children.length > 0) {
+              nodes.push({
+                name: entry.name,
+                type: 'folder',
+                path: entryRelativePath,
+                children
+              });
+            }
+          } else if (entry.isFile() && entry.name.toLowerCase().endsWith('.md')) {
+            // Add .md file (without extension in name, but keep in path)
+            nodes.push({
+              name: entry.name.slice(0, -3),
+              type: 'file',
+              path: entryRelativePath.slice(0, -3)  // Remove .md from path too
+            });
+          }
+        }
+
+        return nodes;
+      };
+
+      const tree = await scanDirectory(folderPath);
+
+      // Also build flat list for backwards compatibility
+      const flattenTree = (nodes: TreeNode[]): string[] => {
+        const files: string[] = [];
+        for (const node of nodes) {
+          if (node.type === 'file') {
+            files.push(node.path);
+          } else if (node.children) {
+            files.push(...flattenTree(node.children));
+          }
+        }
+        return files;
+      };
+
+      const files = flattenTree(tree);
+
+      logger.info(`Listed ${files.length} markdown files in ${folderPath} (with subfolders)`, 'AutoRun');
+      return { success: true, files, tree };
+    } catch (error) {
+      logger.error('Error listing Auto Run docs', 'AutoRun', error);
+      return { success: false, files: [], tree: [], error: String(error) };
+    }
+  });
+
+  // Read a markdown document for Auto Run (supports subdirectories)
+  ipcMain.handle(
+    'autorun:readDoc',
+    async (_event, folderPath: string, filename: string) => {
+      try {
+        // Reject obvious traversal attempts
+        if (filename.includes('..')) {
+          return { success: false, content: '', error: 'Invalid filename' };
+        }
+
+        // Ensure filename has .md extension
+        const fullFilename = filename.endsWith('.md')
+          ? filename
+          : `${filename}.md`;
+
+        const filePath = path.join(folderPath, fullFilename);
+
+        // Validate the file is within the folder path (prevent traversal)
+        const resolvedPath = path.resolve(filePath);
+        const resolvedFolder = path.resolve(folderPath);
+        if (!resolvedPath.startsWith(resolvedFolder + path.sep) && resolvedPath !== resolvedFolder) {
+          return { success: false, content: '', error: 'Invalid file path' };
+        }
+
+        // Check if file exists
+        try {
+          await fs.access(filePath);
+        } catch {
+          return { success: false, content: '', error: 'File not found' };
+        }
+
+        // Read the file
+        const content = await fs.readFile(filePath, 'utf-8');
+
+        logger.info(`Read Auto Run doc: ${fullFilename}`, 'AutoRun');
+        return { success: true, content };
+      } catch (error) {
+        logger.error('Error reading Auto Run doc', 'AutoRun', error);
+        return { success: false, content: '', error: String(error) };
+      }
+    }
+  );
+
+  // Write a markdown document for Auto Run (supports subdirectories)
+  ipcMain.handle(
+    'autorun:writeDoc',
+    async (_event, folderPath: string, filename: string, content: string) => {
+      try {
+        // Reject obvious traversal attempts
+        if (filename.includes('..')) {
+          return { success: false, error: 'Invalid filename' };
+        }
+
+        // Ensure filename has .md extension
+        const fullFilename = filename.endsWith('.md')
+          ? filename
+          : `${filename}.md`;
+
+        const filePath = path.join(folderPath, fullFilename);
+
+        // Validate the file is within the folder path (prevent traversal)
+        const resolvedPath = path.resolve(filePath);
+        const resolvedFolder = path.resolve(folderPath);
+        if (!resolvedPath.startsWith(resolvedFolder + path.sep) && resolvedPath !== resolvedFolder) {
+          return { success: false, error: 'Invalid file path' };
+        }
+
+        // Ensure the parent directory exists (create if needed for subdirectories)
+        const parentDir = path.dirname(filePath);
+        try {
+          await fs.access(parentDir);
+        } catch {
+          // Parent dir doesn't exist - create it if it's within folderPath
+          const resolvedParent = path.resolve(parentDir);
+          if (resolvedParent.startsWith(resolvedFolder)) {
+            await fs.mkdir(parentDir, { recursive: true });
+          } else {
+            return { success: false, error: 'Invalid parent directory' };
+          }
+        }
+
+        // Write the file
+        await fs.writeFile(filePath, content, 'utf-8');
+
+        logger.info(`Wrote Auto Run doc: ${fullFilename}`, 'AutoRun');
+        return { success: true };
+      } catch (error) {
+        logger.error('Error writing Auto Run doc', 'AutoRun', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // Save image to Auto Run folder
+  ipcMain.handle(
+    'autorun:saveImage',
+    async (
+      _event,
+      folderPath: string,
+      docName: string,
+      base64Data: string,
+      extension: string
+    ) => {
+      try {
+        // Sanitize docName to prevent directory traversal
+        const sanitizedDocName = path.basename(docName).replace(/\.md$/i, '');
+        if (sanitizedDocName.includes('..') || sanitizedDocName.includes('/')) {
+          return { success: false, error: 'Invalid document name' };
+        }
+
+        // Validate extension (only allow common image formats)
+        const allowedExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+        const sanitizedExtension = extension.toLowerCase().replace(/[^a-z]/g, '');
+        if (!allowedExtensions.includes(sanitizedExtension)) {
+          return { success: false, error: 'Invalid image extension' };
+        }
+
+        // Create images subdirectory if it doesn't exist
+        const imagesDir = path.join(folderPath, 'images');
+        try {
+          await fs.mkdir(imagesDir, { recursive: true });
+        } catch {
+          // Directory might already exist, that's fine
+        }
+
+        // Generate filename: {docName}-{timestamp}.{ext}
+        const timestamp = Date.now();
+        const filename = `${sanitizedDocName}-${timestamp}.${sanitizedExtension}`;
+        const filePath = path.join(imagesDir, filename);
+
+        // Validate the file is within the folder path (prevent traversal)
+        const resolvedPath = path.resolve(filePath);
+        const resolvedFolder = path.resolve(folderPath);
+        if (!resolvedPath.startsWith(resolvedFolder)) {
+          return { success: false, error: 'Invalid file path' };
+        }
+
+        // Decode and write the image
+        const buffer = Buffer.from(base64Data, 'base64');
+        await fs.writeFile(filePath, buffer);
+
+        // Return the relative path for markdown insertion
+        const relativePath = `images/${filename}`;
+        logger.info(`Saved Auto Run image: ${relativePath}`, 'AutoRun');
+        return { success: true, relativePath };
+      } catch (error) {
+        logger.error('Error saving Auto Run image', 'AutoRun', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // Delete image from Auto Run folder
+  ipcMain.handle(
+    'autorun:deleteImage',
+    async (_event, folderPath: string, relativePath: string) => {
+      try {
+        // Sanitize relativePath to prevent directory traversal
+        const normalizedPath = path.normalize(relativePath);
+        if (
+          normalizedPath.includes('..') ||
+          path.isAbsolute(normalizedPath) ||
+          !normalizedPath.startsWith('images/')
+        ) {
+          return { success: false, error: 'Invalid image path' };
+        }
+
+        const filePath = path.join(folderPath, normalizedPath);
+
+        // Validate the file is within the folder path (prevent traversal)
+        const resolvedPath = path.resolve(filePath);
+        const resolvedFolder = path.resolve(folderPath);
+        if (!resolvedPath.startsWith(resolvedFolder)) {
+          return { success: false, error: 'Invalid file path' };
+        }
+
+        // Check if file exists
+        try {
+          await fs.access(filePath);
+        } catch {
+          return { success: false, error: 'Image file not found' };
+        }
+
+        // Delete the file
+        await fs.unlink(filePath);
+        logger.info(`Deleted Auto Run image: ${relativePath}`, 'AutoRun');
+        return { success: true };
+      } catch (error) {
+        logger.error('Error deleting Auto Run image', 'AutoRun', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // List images for a document (by prefix match)
+  ipcMain.handle(
+    'autorun:listImages',
+    async (_event, folderPath: string, docName: string) => {
+      try {
+        // Sanitize docName to prevent directory traversal
+        const sanitizedDocName = path.basename(docName).replace(/\.md$/i, '');
+        if (sanitizedDocName.includes('..') || sanitizedDocName.includes('/')) {
+          return { success: false, error: 'Invalid document name' };
+        }
+
+        const imagesDir = path.join(folderPath, 'images');
+
+        // Check if images directory exists
+        try {
+          await fs.access(imagesDir);
+        } catch {
+          // No images directory means no images
+          return { success: true, images: [] };
+        }
+
+        // Read directory contents
+        const files = await fs.readdir(imagesDir);
+
+        // Filter files that start with the docName prefix
+        const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+        const images = files
+          .filter((file) => {
+            // Check if filename starts with docName-
+            if (!file.startsWith(`${sanitizedDocName}-`)) {
+              return false;
+            }
+            // Check if it has a valid image extension
+            const ext = file.split('.').pop()?.toLowerCase();
+            return ext && imageExtensions.includes(ext);
+          })
+          .map((file) => ({
+            filename: file,
+            relativePath: `images/${file}`,
+          }));
+
+        return { success: true, images };
+      } catch (error) {
+        logger.error('Error listing Auto Run images', 'AutoRun', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // ============================================
+  // Playbook IPC Handlers
+  // ============================================
+
+  // Helper: Get path to playbooks file for a session
+  function getPlaybooksFilePath(sessionId: string): string {
+    const userDataPath = app.getPath('userData');
+    return path.join(userDataPath, 'playbooks', `${sessionId}.json`);
+  }
+
+  // Helper: Read playbooks from file
+  async function readPlaybooks(sessionId: string): Promise<any[]> {
+    const filePath = getPlaybooksFilePath(sessionId);
+    try {
+      const content = await fs.readFile(filePath, 'utf-8');
+      const data = JSON.parse(content);
+      return Array.isArray(data.playbooks) ? data.playbooks : [];
+    } catch {
+      // File doesn't exist or is invalid, return empty array
+      return [];
+    }
+  }
+
+  // Helper: Write playbooks to file
+  async function writePlaybooks(sessionId: string, playbooks: any[]): Promise<void> {
+    const filePath = getPlaybooksFilePath(sessionId);
+    const dir = path.dirname(filePath);
+
+    // Ensure the playbooks directory exists
+    await fs.mkdir(dir, { recursive: true });
+
+    // Write the playbooks file
+    await fs.writeFile(filePath, JSON.stringify({ playbooks }, null, 2), 'utf-8');
+  }
+
+  // List all playbooks for a session
+  ipcMain.handle('playbooks:list', async (_event, sessionId: string) => {
+    try {
+      const playbooks = await readPlaybooks(sessionId);
+      logger.info(`Listed ${playbooks.length} playbooks for session ${sessionId}`, 'Playbooks');
+      return { success: true, playbooks };
+    } catch (error) {
+      logger.error('Error listing playbooks', 'Playbooks', error);
+      return { success: false, playbooks: [], error: String(error) };
+    }
+  });
+
+  // Create a new playbook
+  ipcMain.handle(
+    'playbooks:create',
+    async (
+      _event,
+      sessionId: string,
+      playbook: {
+        name: string;
+        documents: any[];
+        loopEnabled: boolean;
+        prompt: string;
+        worktreeSettings?: {
+          branchNameTemplate: string;
+          createPROnCompletion: boolean;
+          prTargetBranch?: string;
+        };
+      }
+    ) => {
+      try {
+        const playbooks = await readPlaybooks(sessionId);
+
+        // Create new playbook with generated ID and timestamps
+        const now = Date.now();
+        const newPlaybook: {
+          id: string;
+          name: string;
+          createdAt: number;
+          updatedAt: number;
+          documents: any[];
+          loopEnabled: boolean;
+          prompt: string;
+          worktreeSettings?: {
+            branchNameTemplate: string;
+            createPROnCompletion: boolean;
+            prTargetBranch?: string;
+          };
+        } = {
+          id: crypto.randomUUID(),
+          name: playbook.name,
+          createdAt: now,
+          updatedAt: now,
+          documents: playbook.documents,
+          loopEnabled: playbook.loopEnabled,
+          prompt: playbook.prompt,
+        };
+
+        // Include worktree settings if provided
+        if (playbook.worktreeSettings) {
+          newPlaybook.worktreeSettings = playbook.worktreeSettings;
+        }
+
+        // Add to list and save
+        playbooks.push(newPlaybook);
+        await writePlaybooks(sessionId, playbooks);
+
+        logger.info(`Created playbook "${playbook.name}" for session ${sessionId}`, 'Playbooks');
+        return { success: true, playbook: newPlaybook };
+      } catch (error) {
+        logger.error('Error creating playbook', 'Playbooks', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // Update an existing playbook
+  ipcMain.handle(
+    'playbooks:update',
+    async (
+      _event,
+      sessionId: string,
+      playbookId: string,
+      updates: Partial<{
+        name: string;
+        documents: any[];
+        loopEnabled: boolean;
+        prompt: string;
+        updatedAt: number;
+        worktreeSettings?: {
+          branchNameTemplate: string;
+          createPROnCompletion: boolean;
+          prTargetBranch?: string;
+        };
+      }>
+    ) => {
+      try {
+        const playbooks = await readPlaybooks(sessionId);
+
+        // Find the playbook to update
+        const index = playbooks.findIndex((p: any) => p.id === playbookId);
+        if (index === -1) {
+          return { success: false, error: 'Playbook not found' };
+        }
+
+        // Update the playbook
+        const updatedPlaybook = {
+          ...playbooks[index],
+          ...updates,
+          updatedAt: Date.now(),
+        };
+        playbooks[index] = updatedPlaybook;
+
+        await writePlaybooks(sessionId, playbooks);
+
+        logger.info(`Updated playbook "${updatedPlaybook.name}" for session ${sessionId}`, 'Playbooks');
+        return { success: true, playbook: updatedPlaybook };
+      } catch (error) {
+        logger.error('Error updating playbook', 'Playbooks', error);
+        return { success: false, error: String(error) };
+      }
+    }
+  );
+
+  // Delete a playbook
+  ipcMain.handle('playbooks:delete', async (_event, sessionId: string, playbookId: string) => {
+    try {
+      const playbooks = await readPlaybooks(sessionId);
+
+      // Find the playbook to delete
+      const index = playbooks.findIndex((p: any) => p.id === playbookId);
+      if (index === -1) {
+        return { success: false, error: 'Playbook not found' };
+      }
+
+      const deletedName = playbooks[index].name;
+
+      // Remove from list and save
+      playbooks.splice(index, 1);
+      await writePlaybooks(sessionId, playbooks);
+
+      logger.info(`Deleted playbook "${deletedName}" from session ${sessionId}`, 'Playbooks');
+      return { success: true };
+    } catch (error) {
+      logger.error('Error deleting playbook', 'Playbooks', error);
+      return { success: false, error: String(error) };
+    }
+  });
 }
 
 // Handle process output streaming (set up after initialization)
 function setupProcessListeners() {
   if (processManager) {
     processManager.on('data', (sessionId: string, data: string) => {
-      console.log('[IPC] Forwarding process:data to renderer:', { sessionId, dataLength: data.length, hasMainWindow: !!mainWindow });
       mainWindow?.webContents.send('process:data', sessionId, data);
 
       // Broadcast to web clients - extract base session ID (remove -ai or -terminal suffix)
@@ -3283,7 +4111,6 @@ function setupProcessListeners() {
       totalCostUsd: number;
       contextWindow: number;
     }) => {
-      console.log('[IPC] Forwarding process:usage to renderer:', { sessionId, usageStats });
       mainWindow?.webContents.send('process:usage', sessionId, usageStats);
     });
   }

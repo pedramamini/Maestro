@@ -32,12 +32,26 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
   const [loading, setLoading] = useState(true);
   const [refreshingAgent, setRefreshingAgent] = useState<string | null>(null);
   const [debugInfo, setDebugInfo] = useState<AgentDebugInfo | null>(null);
+  const [homeDir, setHomeDir] = useState<string>('');
 
   // Layer stack integration
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
   const modalRef = useRef<HTMLDivElement>(null);
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Fetch home directory on mount for tilde expansion
+  useEffect(() => {
+    window.maestro.fs.homeDir().then(setHomeDir);
+  }, []);
+
+  // Expand tilde in path
+  const expandTilde = (path: string): string => {
+    if (!homeDir) return path;
+    if (path === '~') return homeDir;
+    if (path.startsWith('~/')) return homeDir + path.slice(1);
+    return path;
+  };
 
   // Define handlers first before they're used in effects
   const loadAgents = async () => {
@@ -87,13 +101,15 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
 
   const handleCreate = React.useCallback(() => {
     const name = instanceName || agents.find(a => a.id === selectedAgent)?.name || 'New Agent';
-    onCreate(selectedAgent, workingDir, name);
+    // Expand tilde before passing to callback
+    const expandedWorkingDir = expandTilde(workingDir.trim());
+    onCreate(selectedAgent, expandedWorkingDir, name);
     onClose();
 
     // Reset
     setInstanceName('');
     setWorkingDir('');
-  }, [instanceName, agents, selectedAgent, workingDir, onCreate, onClose]);
+  }, [instanceName, agents, selectedAgent, workingDir, onCreate, onClose, expandTilde]);
 
   // Effects
   useEffect(() => {

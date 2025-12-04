@@ -23,6 +23,8 @@ interface ThinkingStatusPillProps {
   activeSessionId?: string;
   // Callback to stop auto-run (shows stop button in AutoRunPill when provided)
   onStopAutoRun?: () => void;
+  // Callback to interrupt the current AI session
+  onInterrupt?: () => void;
 }
 
 // ElapsedTimeDisplay - shows time since thinking started
@@ -268,7 +270,7 @@ AutoRunPill.displayName = 'AutoRunPill';
  *
  * When AutoRun is active for the active session, shows AutoRunPill instead.
  */
-function ThinkingStatusPillInner({ sessions, theme, onSessionClick, namedSessions, autoRunState, activeSessionId, onStopAutoRun }: ThinkingStatusPillProps) {
+function ThinkingStatusPillInner({ sessions, theme, onSessionClick, namedSessions, autoRunState, activeSessionId, onStopAutoRun, onInterrupt }: ThinkingStatusPillProps) {
   const [isExpanded, setIsExpanded] = useState(false);
 
   // If AutoRun is active for the current session, show the AutoRun pill instead
@@ -468,6 +470,31 @@ function ThinkingStatusPillInner({ sessions, theme, onSessionClick, namedSession
             )}
           </div>
         )}
+
+        {/* Stop/Interrupt button */}
+        {onInterrupt && (
+          <>
+            <div
+              className="w-px h-4 shrink-0"
+              style={{ backgroundColor: theme.colors.border }}
+            />
+            <button
+              type="button"
+              onClick={onInterrupt}
+              className="flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium transition-colors hover:opacity-80"
+              style={{
+                backgroundColor: theme.colors.error,
+                color: 'white'
+              }}
+              title="Interrupt Claude (Ctrl+C)"
+            >
+              <svg className="w-3 h-3" viewBox="0 0 24 24" fill="currentColor">
+                <rect x="6" y="6" width="12" height="12" rx="1" />
+              </svg>
+              Stop
+            </button>
+          </>
+        )}
       </div>
       {/* End Thinking Pill */}
     </div>
@@ -542,6 +569,10 @@ export const ThinkingStatusPill = memo(ThinkingStatusPillInner, (prevProps, next
       }
     }
   }
+
+  // Note: We intentionally don't compare onInterrupt/onStopAutoRun callbacks
+  // because they may change reference on parent re-renders but are semantically
+  // the same. The component will use the latest callback from props anyway.
 
   return prevProps.theme === nextProps.theme;
 });

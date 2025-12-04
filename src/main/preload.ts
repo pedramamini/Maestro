@@ -219,10 +219,59 @@ contextBridge.exposeInMainWorld('maestro', {
     show: (cwd: string, hash: string) => ipcRenderer.invoke('git:show', cwd, hash),
     showFile: (cwd: string, ref: string, filePath: string) =>
       ipcRenderer.invoke('git:showFile', cwd, ref, filePath) as Promise<{ content?: string; error?: string }>,
+    // Git worktree operations for Auto Run parallelization
+    worktreeInfo: (worktreePath: string) =>
+      ipcRenderer.invoke('git:worktreeInfo', worktreePath) as Promise<{
+        success: boolean;
+        exists?: boolean;
+        isWorktree?: boolean;
+        currentBranch?: string;
+        repoRoot?: string;
+        error?: string;
+      }>,
+    getRepoRoot: (cwd: string) =>
+      ipcRenderer.invoke('git:getRepoRoot', cwd) as Promise<{
+        success: boolean;
+        root?: string;
+        error?: string;
+      }>,
+    worktreeSetup: (mainRepoCwd: string, worktreePath: string, branchName: string) =>
+      ipcRenderer.invoke('git:worktreeSetup', mainRepoCwd, worktreePath, branchName) as Promise<{
+        success: boolean;
+        created?: boolean;
+        currentBranch?: string;
+        requestedBranch?: string;
+        branchMismatch?: boolean;
+        error?: string;
+      }>,
+    worktreeCheckout: (worktreePath: string, branchName: string, createIfMissing: boolean) =>
+      ipcRenderer.invoke('git:worktreeCheckout', worktreePath, branchName, createIfMissing) as Promise<{
+        success: boolean;
+        hasUncommittedChanges: boolean;
+        error?: string;
+      }>,
+    createPR: (worktreePath: string, baseBranch: string, title: string, body: string) =>
+      ipcRenderer.invoke('git:createPR', worktreePath, baseBranch, title, body) as Promise<{
+        success: boolean;
+        prUrl?: string;
+        error?: string;
+      }>,
+    getDefaultBranch: (cwd: string) =>
+      ipcRenderer.invoke('git:getDefaultBranch', cwd) as Promise<{
+        success: boolean;
+        branch?: string;
+        error?: string;
+      }>,
+    checkGhCli: () =>
+      ipcRenderer.invoke('git:checkGhCli') as Promise<{
+        installed: boolean;
+        authenticated: boolean;
+      }>,
   },
 
   // File System API
   fs: {
+    homeDir: () => ipcRenderer.invoke('fs:homeDir') as Promise<string>,
     readDir: (dirPath: string) => ipcRenderer.invoke('fs:readDir', dirPath),
     readFile: (filePath: string) => ipcRenderer.invoke('fs:readFile', filePath),
     stat: (filePath: string) => ipcRenderer.invoke('fs:stat', filePath),
@@ -375,6 +424,7 @@ contextBridge.exposeInMainWorld('maestro', {
         projectPath: string;
         sessionName: string;
         starred?: boolean;
+        lastActivityAt?: number;
       }>>,
     deleteMessagePair: (projectPath: string, sessionId: string, userMessageUuid: string, fallbackContent?: string) =>
       ipcRenderer.invoke('claude:deleteMessagePair', projectPath, sessionId, userMessageUuid, fallbackContent),
@@ -431,6 +481,68 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.invoke('attachments:list', sessionId),
     getPath: (sessionId: string) =>
       ipcRenderer.invoke('attachments:getPath', sessionId),
+  },
+
+  // Auto Run API (file-system-based document runner)
+  autorun: {
+    listDocs: (folderPath: string) =>
+      ipcRenderer.invoke('autorun:listDocs', folderPath),
+    readDoc: (folderPath: string, filename: string) =>
+      ipcRenderer.invoke('autorun:readDoc', folderPath, filename),
+    writeDoc: (folderPath: string, filename: string, content: string) =>
+      ipcRenderer.invoke('autorun:writeDoc', folderPath, filename, content),
+    saveImage: (
+      folderPath: string,
+      docName: string,
+      base64Data: string,
+      extension: string
+    ) =>
+      ipcRenderer.invoke(
+        'autorun:saveImage',
+        folderPath,
+        docName,
+        base64Data,
+        extension
+      ),
+    deleteImage: (folderPath: string, relativePath: string) =>
+      ipcRenderer.invoke('autorun:deleteImage', folderPath, relativePath),
+    listImages: (folderPath: string, docName: string) =>
+      ipcRenderer.invoke('autorun:listImages', folderPath, docName),
+  },
+
+  // Playbooks API (saved batch run configurations)
+  playbooks: {
+    list: (sessionId: string) =>
+      ipcRenderer.invoke('playbooks:list', sessionId),
+    create: (
+      sessionId: string,
+      playbook: {
+        name: string;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+        worktreeSettings?: {
+          branchNameTemplate: string;
+          createPROnCompletion: boolean;
+        };
+      }
+    ) => ipcRenderer.invoke('playbooks:create', sessionId, playbook),
+    update: (
+      sessionId: string,
+      playbookId: string,
+      updates: Partial<{
+        name: string;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+        worktreeSettings?: {
+          branchNameTemplate: string;
+          createPROnCompletion: boolean;
+        };
+      }>
+    ) => ipcRenderer.invoke('playbooks:update', sessionId, playbookId, updates),
+    delete: (sessionId: string, playbookId: string) =>
+      ipcRenderer.invoke('playbooks:delete', sessionId, playbookId),
   },
 });
 
@@ -509,8 +621,50 @@ export interface MaestroAPI {
     }>;
     show: (cwd: string, hash: string) => Promise<{ stdout: string; stderr: string }>;
     showFile: (cwd: string, ref: string, filePath: string) => Promise<{ content?: string; error?: string }>;
+    // Git worktree operations for Auto Run parallelization
+    worktreeInfo: (worktreePath: string) => Promise<{
+      success: boolean;
+      exists?: boolean;
+      isWorktree?: boolean;
+      currentBranch?: string;
+      repoRoot?: string;
+      error?: string;
+    }>;
+    getRepoRoot: (cwd: string) => Promise<{
+      success: boolean;
+      root?: string;
+      error?: string;
+    }>;
+    worktreeSetup: (mainRepoCwd: string, worktreePath: string, branchName: string) => Promise<{
+      success: boolean;
+      created?: boolean;
+      currentBranch?: string;
+      requestedBranch?: string;
+      branchMismatch?: boolean;
+      error?: string;
+    }>;
+    worktreeCheckout: (worktreePath: string, branchName: string, createIfMissing: boolean) => Promise<{
+      success: boolean;
+      hasUncommittedChanges: boolean;
+      error?: string;
+    }>;
+    createPR: (worktreePath: string, baseBranch: string, title: string, body: string) => Promise<{
+      success: boolean;
+      prUrl?: string;
+      error?: string;
+    }>;
+    getDefaultBranch: (cwd: string) => Promise<{
+      success: boolean;
+      branch?: string;
+      error?: string;
+    }>;
+    checkGhCli: () => Promise<{
+      installed: boolean;
+      authenticated: boolean;
+    }>;
   };
   fs: {
+    homeDir: () => Promise<string>;
     readDir: (dirPath: string) => Promise<DirectoryEntry[]>;
     readFile: (filePath: string) => Promise<string>;
     stat: (filePath: string) => Promise<{
@@ -716,6 +870,100 @@ export interface MaestroAPI {
     delete: (sessionId: string, filename: string) => Promise<{ success: boolean; error?: string }>;
     list: (sessionId: string) => Promise<{ success: boolean; files: string[]; error?: string }>;
     getPath: (sessionId: string) => Promise<{ success: boolean; path: string }>;
+  };
+  autorun: {
+    listDocs: (
+      folderPath: string
+    ) => Promise<{ success: boolean; files: string[]; error?: string }>;
+    readDoc: (
+      folderPath: string,
+      filename: string
+    ) => Promise<{ success: boolean; content?: string; error?: string }>;
+    writeDoc: (
+      folderPath: string,
+      filename: string,
+      content: string
+    ) => Promise<{ success: boolean; error?: string }>;
+    saveImage: (
+      folderPath: string,
+      docName: string,
+      base64Data: string,
+      extension: string
+    ) => Promise<{ success: boolean; relativePath?: string; error?: string }>;
+    deleteImage: (
+      folderPath: string,
+      relativePath: string
+    ) => Promise<{ success: boolean; error?: string }>;
+    listImages: (
+      folderPath: string,
+      docName: string
+    ) => Promise<{
+      success: boolean;
+      images?: { filename: string; relativePath: string }[];
+      error?: string;
+    }>;
+  };
+  playbooks: {
+    list: (sessionId: string) => Promise<{
+      success: boolean;
+      playbooks: Array<{
+        id: string;
+        name: string;
+        createdAt: number;
+        updatedAt: number;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+      }>;
+      error?: string;
+    }>;
+    create: (
+      sessionId: string,
+      playbook: {
+        name: string;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+      }
+    ) => Promise<{
+      success: boolean;
+      playbook?: {
+        id: string;
+        name: string;
+        createdAt: number;
+        updatedAt: number;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+      };
+      error?: string;
+    }>;
+    update: (
+      sessionId: string,
+      playbookId: string,
+      updates: Partial<{
+        name: string;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+      }>
+    ) => Promise<{
+      success: boolean;
+      playbook?: {
+        id: string;
+        name: string;
+        createdAt: number;
+        updatedAt: number;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        prompt: string;
+      };
+      error?: string;
+    }>;
+    delete: (sessionId: string, playbookId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
   };
 }
 

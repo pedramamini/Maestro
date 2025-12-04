@@ -20,6 +20,12 @@ export const MODAL_PRIORITIES = {
   /** Confirmation dialogs - highest priority, always on top */
   CONFIRM: 1000,
 
+  /** Playbook delete confirmation - high priority, appears on top of BatchRunner */
+  PLAYBOOK_DELETE_CONFIRM: 950,
+
+  /** Playbook name input modal - appears on top of BatchRunner */
+  PLAYBOOK_NAME: 940,
+
   /** Rename instance modal */
   RENAME_INSTANCE: 900,
 
@@ -43,6 +49,12 @@ export const MODAL_PRIORITIES = {
 
   /** Prompt composer modal for long prompts */
   PROMPT_COMPOSER: 725,
+
+  /** Agent prompt composer modal (opens from batch runner) */
+  AGENT_PROMPT_COMPOSER: 730,
+
+  /** Auto Run setup/folder selection modal */
+  AUTORUN_SETUP: 710,
 
   /** Quick actions command palette (Cmd+K) */
   QUICK_ACTION: 700,

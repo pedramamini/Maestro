@@ -52,110 +52,64 @@ export function StandingOvationOverlay({
   const goldColor = '#FFD700';
   const purpleAccent = theme.colors.accent;
 
-  // Confetti colors - celebratory mix
-  const confettiColors = [
-    goldColor, purpleAccent,
-    '#FF6B6B', '#FF8E53', '#FFA726', // Warm colors
-    '#4ECDC4', '#45B7D1', '#64B5F6', // Cool colors
-    '#FFEAA7', '#FFD54F', // Yellows
-    '#DDA0DD', '#BA68C8', // Purples
+  // Confetti colors from playground
+  const confettiColors = React.useMemo(() => [
+    '#FFD700', // Gold
+    '#FF6B6B', // Red
+    '#4ECDC4', // Teal
+    '#45B7D1', // Blue
+    '#FFA726', // Orange
+    '#BA68C8', // Purple
     '#F48FB1', // Pink
-  ];
+    '#FFEAA7', // Yellow
+  ], []);
 
   // Z-index layering: backdrop (99997) < confetti (99998) < modal (99999)
   const CONFETTI_Z_INDEX = 99998;
 
-  // Fire realistic confetti - cannon-style bursts from off-screen bottom corners
+  // Fire confetti from multiple origins with playground settings
   const fireConfetti = useCallback(() => {
     const defaults = {
-      zIndex: CONFETTI_Z_INDEX,
+      particleCount: 500,
+      angle: 90,
+      spread: 91,
+      startVelocity: 74,
+      gravity: 0.8,
+      decay: 0.9,
+      drift: 1.5,
+      scalar: 1.2,
+      ticks: 355,
+      flat: false,
+      shapes: ['circle', 'star', 'square'] as const,
       colors: confettiColors,
+      zIndex: CONFETTI_Z_INDEX,
       disableForReducedMotion: true,
     };
 
-    // Left cannon burst - origin off-screen left/bottom
+    // Center burst
     confetti({
       ...defaults,
-      particleCount: 144,
-      angle: 55,
-      spread: 55,
-      origin: { x: -0.05, y: 1.1 },
-      startVelocity: 70,
-      gravity: 1,
-      scalar: 1.2,
-      ticks: 200,
+      origin: { x: 0.5, y: 1 },
     });
 
-    // Right cannon burst - origin off-screen right/bottom
+    // Left burst
     confetti({
       ...defaults,
-      particleCount: 144,
-      angle: 125,
-      spread: 55,
-      origin: { x: 1.05, y: 1.1 },
-      startVelocity: 70,
-      gravity: 1,
-      scalar: 1.2,
-      ticks: 200,
+      origin: { x: 0, y: 1 },
     });
 
-    // Delayed second wave - slightly smaller
-    setTimeout(() => {
-      confetti({
-        ...defaults,
-        particleCount: 86,
-        angle: 55,
-        spread: 45,
-        origin: { x: -0.05, y: 1.15 },
-        startVelocity: 62,
-        gravity: 1.1,
-        scalar: 1.0,
-        ticks: 180,
-      });
-      confetti({
-        ...defaults,
-        particleCount: 86,
-        angle: 125,
-        spread: 45,
-        origin: { x: 1.05, y: 1.15 },
-        startVelocity: 62,
-        gravity: 1.1,
-        scalar: 1.0,
-        ticks: 180,
-      });
-    }, 250);
-
-    // Third wave - gentle finish
-    setTimeout(() => {
-      confetti({
-        ...defaults,
-        particleCount: 58,
-        angle: 60,
-        spread: 60,
-        origin: { x: -0.02, y: 1.1 },
-        startVelocity: 55,
-        gravity: 1.2,
-        scalar: 0.9,
-        ticks: 160,
-      });
-      confetti({
-        ...defaults,
-        particleCount: 58,
-        angle: 120,
-        spread: 60,
-        origin: { x: 1.02, y: 1.1 },
-        startVelocity: 55,
-        gravity: 1.2,
-        scalar: 0.9,
-        ticks: 160,
-      });
-    }, 500);
+    // Right burst
+    confetti({
+      ...defaults,
+      origin: { x: 1, y: 1 },
+    });
   }, [confettiColors]);
 
-  // Fire confetti on mount - immediately!
+  // Fire confetti on mount only - empty deps to run once
   useEffect(() => {
     fireConfetti();
-  }, [fireConfetti]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // Handle graceful close with confetti
   const handleTakeABow = useCallback(() => {

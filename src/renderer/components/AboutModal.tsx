@@ -192,6 +192,7 @@ export function AboutModal({ theme, sessions, autoRunStats, onClose }: AboutModa
           <AchievementCard
             theme={theme}
             autoRunStats={autoRunStats}
+            globalStats={globalStats}
             onEscapeWithBadgeOpen={(handler) => { badgeEscapeHandlerRef.current = handler; }}
           />
 

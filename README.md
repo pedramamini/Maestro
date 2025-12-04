@@ -63,7 +63,7 @@ Download the latest release for your platform from the [Releases](https://github
 - 🔀 **Git Integration** - Automatic git status, diff tracking, and workspace detection
 - 📁 **File Explorer** - Browse project files with syntax highlighting and markdown preview
 - 📋 **Session Management** - Group, rename, bookmark, and organize your sessions
-- 📝 **Scratchpad** - Built-in markdown editor with live preview for task management
+- 📝 **Auto Run** - File-system-based document runner for automated task management with playbooks
 - ⚡ **Slash Commands** - Extensible command system with autocomplete
 - 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when ready
 - 🌐 **Mobile Remote Control** - Access agents from your phone with QR codes, live agents, and a mobile-optimized web interface
@@ -133,9 +133,9 @@ Each session shows a color-coded status indicator:
 |--------|-------|---------------|
 | Go to Files Tab | `Cmd+Shift+F` | `Ctrl+Shift+F` |
 | Go to History Tab | `Cmd+Shift+H` | `Ctrl+Shift+H` |
-| Go to Scratchpad | `Cmd+Shift+S` | `Ctrl+Shift+S` |
+| Go to Auto Run Tab | `Cmd+Shift+1` | `Ctrl+Shift+1` |
 | Toggle Markdown Raw/Preview | `Cmd+E` | `Ctrl+E` |
-| Insert Checkbox (Scratchpad) | `Cmd+L` | `Ctrl+L` |
+| Insert Checkbox (Auto Run) | `Cmd+L` | `Ctrl+L` |
 
 ### Input & Output
 
@@ -238,15 +238,23 @@ Summarize what I worked on yesterday and suggest priorities for today.
 
 See the full list of available variables in the **Template Variables** section within the Custom AI Commands panel.
 
-## Automatic Runner
+## Auto Run
 
-The Automatic Runner lets you batch-process tasks using AI agents. Define your tasks as markdown checkboxes in the Scratchpad, and Maestro will work through them one by one, spawning a fresh AI session for each task.
+Auto Run is a file-system-based document runner that lets you batch-process tasks using AI agents. Select a folder containing markdown documents with task checkboxes, and Maestro will work through them one by one, spawning a fresh AI session for each task.
+
+### Setting Up Auto Run
+
+1. Navigate to the **Auto Run** tab in the right panel (`Cmd+Shift+1`)
+2. Select a folder containing your markdown task documents
+3. Each `.md` file becomes a selectable document
 
 ### Creating Tasks
 
-Use markdown checkboxes in the Scratchpad tab:
+Use markdown checkboxes in your documents:
 
 ```markdown
+# Feature Implementation Plan
+
 - [ ] Implement user authentication
 - [ ] Add unit tests for the login flow
 - [ ] Update API documentation
@@ -254,16 +262,51 @@ Use markdown checkboxes in the Scratchpad tab:
 
 **Tip**: Press `Cmd+L` (Mac) or `Ctrl+L` (Windows/Linux) to quickly insert a new checkbox at your cursor position.
 
-### Running the Automation
+### Running Single Documents
 
-1. Navigate to the **Scratchpad** tab in the right panel
-2. Add your tasks as unchecked markdown checkboxes (`- [ ]`)
-3. Click the **Run** button (or the ▶ icon)
-4. Customize the agent prompt if needed, then click **Go**
+1. Select a document from the dropdown
+2. Click the **Run** button (or the ▶ icon)
+3. Customize the agent prompt if needed, then click **Go**
+
+### Multi-Document Batch Runs
+
+Auto Run supports running multiple documents in sequence:
+
+1. Click **Run** to open the Batch Runner Modal
+2. Click **+ Add Docs** to add more documents to the queue
+3. Drag to reorder documents as needed
+4. Configure options per document:
+   - **Reset on Completion** - Uncheck all boxes when document completes (for repeatable tasks)
+   - **Duplicate** - Add the same document multiple times
+5. Enable **Loop Mode** to cycle back to the first document after completing the last
+6. Click **Go** to start the batch run
+
+### Playbooks
+
+Save your batch configurations for reuse:
+
+1. Configure your documents, order, and options
+2. Click **Save as Playbook** and enter a name
+3. Load saved playbooks from the **Load Playbook** dropdown
+4. Update or discard changes to loaded playbooks
+
+### Git Worktree Support
+
+For parallel work without file conflicts:
+
+1. Enable **Worktree** in the Batch Runner Modal
+2. Specify a worktree path and branch name
+3. Auto Run operates in the isolated worktree
+4. Optionally create a PR when the batch completes
+
+Without a worktree, Auto Run queues with other write operations to prevent conflicts.
+
+### Progress Tracking
 
 The runner will:
 - Process tasks serially from top to bottom
-- Spawn a fresh AI session for each task
+- Skip documents with no unchecked tasks
+- Show progress: "Document X of Y" and "Task X of Y"
 - Mark tasks as complete (`- [x]`) when done
 - Log each completion to the **History** panel
 
@@ -280,11 +323,13 @@ Each completed task is logged to the History panel with:
 - `Enter` - View full response
 - `Esc` - Close detail view and return to list
 
-### Read-Only Mode
+### Auto-Save
 
-While automation is running, the AI operates in **read-only/plan mode**. You can still send messages to review progress, but the agent won't make changes. This prevents conflicts between manual interactions and automated tasks.
+Documents auto-save after 5 seconds of inactivity, and immediately when switching documents. Full undo/redo support with `Cmd+Z` / `Cmd+Shift+Z`.
 
-The input area shows a **READ-ONLY** indicator with a warning-tinted background during automation.
+### Image Support
+
+Paste images directly into your documents. Images are saved to an `images/` subfolder with relative paths for portability.
 
 ### Stopping the Runner
 
@@ -295,7 +340,7 @@ Click the **Stop** button at any time. The runner will:
 
 ### Parallel Batches
 
-You can run separate batch processes in different Maestro sessions simultaneously. Each session maintains its own independent batch state.
+You can run separate batch processes in different Maestro sessions simultaneously. Each session maintains its own independent batch state. With Git worktrees enabled, you can work on the main branch while Auto Run operates in an isolated worktree.
 
 ## Configuration
 

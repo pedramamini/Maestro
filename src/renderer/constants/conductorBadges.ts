@@ -155,7 +155,7 @@ export const CONDUCTOR_BADGES: ConductorBadge[] = [
     name: 'World Maestro',
     shortName: 'World',
     description: 'Conducts top orchestras globally. Commands rarefied fees and has a distinctive interpretive "voice" recognized worldwide.',
-    requiredTimeMs: 1 * 365 * DAY, // 1 year
+    requiredTimeMs: 365 * DAY, // 1 year
     exampleConductor: {
       name: 'Kirill Petrenko',
       era: 'Current',
@@ -267,7 +267,7 @@ export function formatTimeRemaining(cumulativeTimeMs: number, nextBadge: Conduct
   const hours = Math.floor((remaining % DAY) / HOUR);
   const minutes = Math.floor((remaining % HOUR) / MINUTE);
 
-  if (days > 365) {
+  if (days >= 365) {
     const years = Math.floor(days / 365);
     const remainingDays = days % 365;
     return `${years}y ${remainingDays}d remaining`;
@@ -295,7 +295,7 @@ export function formatCumulativeTime(timeMs: number): string {
   const minutes = Math.floor((timeMs % HOUR) / MINUTE);
   const seconds = Math.floor((timeMs % MINUTE) / 1000);
 
-  if (days > 365) {
+  if (days >= 365) {
     const years = Math.floor(days / 365);
     const remainingDays = days % 365;
     return `${years}y ${remainingDays}d`;

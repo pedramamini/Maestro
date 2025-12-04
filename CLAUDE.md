@@ -8,7 +8,7 @@ Use these terms consistently in code, comments, and documentation:
 
 ### UI Components
 - **Left Bar** - Left sidebar with session list and groups (`SessionList.tsx`)
-- **Right Bar** - Right sidebar with Files, History, Scratchpad tabs (`RightPanel.tsx`)
+- **Right Bar** - Right sidebar with Files, History, Auto Run tabs (`RightPanel.tsx`)
 - **Main Window** - Center workspace (`MainPanel.tsx`)
   - **AI Terminal** - Main window in AI mode (interacting with AI agents)
   - **Command Terminal** - Main window in terminal/shell mode
@@ -172,7 +172,8 @@ interface Session {
   toolType: ToolType;           // 'claude-code' | 'aider' | 'terminal' | etc.
   state: SessionState;          // 'idle' | 'busy' | 'error' | 'connecting'
   inputMode: 'ai' | 'terminal'; // Which process receives input
-  cwd: string;                  // Working directory
+  cwd: string;                  // Current working directory (can change via cd)
+  projectRoot: string;          // Initial working directory (never changes, used for Claude session storage)
   aiPid: number;                // AI process ID
   terminalPid: number;          // Terminal process ID
   aiLogs: LogEntry[];           // AI output history
@@ -223,3 +224,59 @@ The `window.maestro` API exposes:
 ### Modal Escape Not Working
 1. Register with layer stack (don't handle Escape locally)
 2. Check priority is set correctly
+
+## Keyboard Shortcuts
+
+Key shortcuts for navigation and common actions. Full list available via `⌘+/` (Help).
+
+### Panel Navigation
+| Shortcut | Action |
+|----------|--------|
+| `⌥⌘←` | Toggle Left Panel |
+| `⌥⌘→` | Toggle Right Panel |
+| `⌘⇧F` | Go to Files Tab |
+| `⌘⇧H` | Go to History Tab |
+| `⌘⇧1` | Go to Auto Run Tab |
+
+### Session Management
+| Shortcut | Action |
+|----------|--------|
+| `⌘N` | New Agent |
+| `⌘[` / `⌘]` | Previous/Next Agent |
+| `⌥⌘1-0` | Jump to Session 1-10 |
+| `⌘⇧⌫` | Remove Agent |
+| `⌘⇧M` | Move Session to Group |
+
+### Tab Management (AI Mode)
+| Shortcut | Action |
+|----------|--------|
+| `⌘T` | New Tab |
+| `⌘W` | Close Tab |
+| `⌘⇧T` | Reopen Closed Tab |
+| `⌘1-9` | Go to Tab 1-9 |
+| `⌘0` | Go to Last Tab |
+| `⌥⌘T` | Tab Switcher |
+
+### Mode & Focus
+| Shortcut | Action |
+|----------|--------|
+| `⌘J` | Switch AI/Shell Mode |
+| `⌘.` | Focus Input Field |
+| `⌘⇧A` | Focus Left Panel |
+| `⌘R` | Toggle Read-Only Mode |
+| `⌘E` | Toggle Markdown Raw/Preview |
+
+### Git & System
+| Shortcut | Action |
+|----------|--------|
+| `⌘⇧D` | View Git Diff |
+| `⌘⇧G` | View Git Log |
+| `⌥⌘L` | System Log Viewer |
+| `⌥⌘P` | System Process Monitor |
+
+### Quick Access
+| Shortcut | Action |
+|----------|--------|
+| `⌘K` | Quick Actions |
+| `⌘,` | Open Settings |
+| `⌘/` | Show All Shortcuts |

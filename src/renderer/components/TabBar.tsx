@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Star, Copy, Edit2, Mail } from 'lucide-react';
+import { X, Plus, Star, Copy, Edit2, Mail, Pencil } from 'lucide-react';
 import type { AITab, Theme } from '../types';
 
 interface TabBarProps {
@@ -38,6 +38,7 @@ interface TabProps {
   onStar?: (starred: boolean) => void;
   shortcutHint?: number | null;
   registerRef?: (el: HTMLDivElement | null) => void;
+  hasDraft?: boolean;
 }
 
 /**
@@ -78,7 +79,8 @@ function Tab({
   onRename,
   onStar,
   shortcutHint,
-  registerRef
+  registerRef,
+  hasDraft
 }: TabProps) {
   const [isHovered, setIsHovered] = useState(false);
   const [overlayOpen, setOverlayOpen] = useState(false);
@@ -169,6 +171,7 @@ function Tab({
   return (
     <div
       ref={setTabRef}
+      data-tab-id={tab.id}
       className={`
         relative flex items-center gap-1.5 px-3 py-1.5 cursor-pointer
         transition-all duration-150 select-none
@@ -230,6 +233,15 @@ function Tab({
         <Star
           className="w-3 h-3 fill-current shrink-0"
           style={{ color: theme.colors.warning }}
+        />
+      )}
+
+      {/* Draft indicator - pencil icon for tabs with unsent input or staged images */}
+      {hasDraft && (
+        <Pencil
+          className="w-3 h-3 shrink-0"
+          style={{ color: theme.colors.warning }}
+          title="Has draft message"
         />
       )}
 
@@ -499,17 +511,18 @@ export function TabBar({
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [isOverflowing, setIsOverflowing] = useState(false);
 
-  // Scroll active tab into view when it changes or when tabs are added/removed
-  // Use a small delay to ensure the DOM element is rendered and ref is registered
+  // Center the active tab in the scrollable area when activeTabId changes
   useEffect(() => {
-    const timeoutId = setTimeout(() => {
-      const activeTabElement = tabRefs.current.get(activeTabId);
-      if (activeTabElement) {
-        activeTabElement.scrollIntoView({ behavior: 'smooth', block: 'nearest', inline: 'nearest' });
+    requestAnimationFrame(() => {
+      const container = tabBarRef.current;
+      const tabElement = container?.querySelector(`[data-tab-id="${activeTabId}"]`) as HTMLElement | null;
+      if (container && tabElement) {
+        // Calculate scroll position to center the tab
+        const scrollLeft = tabElement.offsetLeft - (container.clientWidth / 2) + (tabElement.offsetWidth / 2);
+        container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
       }
-    }, 0);
-    return () => clearTimeout(timeoutId);
-  }, [activeTabId, tabs.length]);
+    });
+  }, [activeTabId]);
 
   // Can always close tabs - closing the last one creates a fresh new tab
   const canClose = true;
@@ -610,7 +623,7 @@ export function TabBar({
     >
       {/* Unread filter toggle - sticky at the beginning with full-height opaque background */}
       <div
-        className="sticky left-0 flex items-center shrink-0 pl-2 pr-2 self-stretch group"
+        className="sticky left-0 flex items-center shrink-0 pl-2 pr-2 self-stretch"
         style={{ backgroundColor: theme.colors.bgSidebar, zIndex: 5 }}
       >
         <button
@@ -620,6 +633,7 @@ export function TabBar({
             color: showUnreadOnly ? theme.colors.accent : theme.colors.textDim,
             opacity: showUnreadOnly ? 1 : 0.5
           }}
+          title={showUnreadOnly ? 'Showing unread only (Cmd+U)' : 'Filter unread tabs (Cmd+U)'}
         >
           <Mail className="w-4 h-4" />
           {/* Notification dot */}
@@ -628,18 +642,6 @@ export function TabBar({
             style={{ backgroundColor: theme.colors.accent }}
           />
         </button>
-        {/* Hover overlay */}
-        <div
-          className="absolute left-2 top-full mt-1 px-2 py-1 rounded text-xs whitespace-nowrap opacity-0 group-hover:opacity-100 transition-opacity pointer-events-none"
-          style={{
-            backgroundColor: theme.colors.bgSidebar,
-            border: `1px solid ${theme.colors.border}`,
-            color: theme.colors.textMain,
-            zIndex: 6
-          }}
-        >
-          {showUnreadOnly ? 'Showing unread only' : 'Filter unread tabs'}
-        </div>
       </div>
 
       {/* Empty state when filter is on but no unread tabs */}
@@ -689,6 +691,7 @@ export function TabBar({
               onRename={() => handleRenameRequest(tab.id)}
               onStar={onTabStar ? (starred) => onTabStar(tab.id, starred) : undefined}
               shortcutHint={!showUnreadOnly && originalIndex < 9 ? originalIndex + 1 : null}
+              hasDraft={hasDraft(tab)}
               registerRef={(el) => {
                 if (el) {
                   tabRefs.current.set(tab.id, el);

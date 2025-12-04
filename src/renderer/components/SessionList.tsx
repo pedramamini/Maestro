@@ -611,7 +611,7 @@ export function SessionList(props: SessionListProps) {
   return (
     <div
       tabIndex={0}
-      className={`border-r flex flex-col shrink-0 transition-all duration-300 outline-none relative ${activeFocus === 'sidebar' ? 'ring-1 ring-inset z-10' : ''}`}
+      className={`border-r flex flex-col shrink-0 transition-all duration-300 outline-none relative z-20 ${activeFocus === 'sidebar' ? 'ring-1 ring-inset' : ''}`}
       style={{
         width: leftSidebarOpen ? `${leftSidebarWidthState}px` : '64px',
         backgroundColor: theme.colors.bgSidebar,

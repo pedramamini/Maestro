@@ -235,7 +235,6 @@ export function useSessionManager(): UseSessionManagerReturn {
         aiLogs: [],  // Start with clean AI Terminal (no superfluous messages)
         shellLogs: [],  // Start with clean Command Terminal (no superfluous messages)
         workLog: [],
-        scratchPadContent: '',
         contextUsage: 0,
         inputMode: agentId === 'terminal' ? 'terminal' : 'ai',
         // AI process PID (terminal uses runCommand which spawns fresh shells)
@@ -310,23 +309,21 @@ export function useSessionManager(): UseSessionManagerReturn {
     }));
   };
 
-  const updateScratchPad = (content: string) => {
-    setSessions(prev => prev.map(s => s.id === activeSessionId ? { ...s, scratchPadContent: content } : s));
+  // TODO: Auto Run content is now stored in files, not session state
+  // This function will be removed once AutoRun component is updated to use file-based storage
+  const updateScratchPad = (_content: string) => {
+    // No-op: content is now stored in files via autorun:writeDoc IPC
   };
 
-  const updateScratchPadState = (state: {
+  // TODO: Auto Run state tracking to be updated once new autoRun session fields are added
+  // This function will be updated to use the new autoRun* fields
+  const updateScratchPadState = (_state: {
     mode: 'edit' | 'preview';
     cursorPosition: number;
     editScrollPos: number;
     previewScrollPos: number;
   }) => {
-    setSessions(prev => prev.map(s => s.id === activeSessionId ? {
-      ...s,
-      scratchPadMode: state.mode,
-      scratchPadCursorPosition: state.cursorPosition,
-      scratchPadEditScrollPos: state.editScrollPos,
-      scratchPadPreviewScrollPos: state.previewScrollPos
-    } : s));
+    // No-op until new autoRun* fields are added to Session interface
   };
 
   const startRenamingSession = (sessId: string) => {

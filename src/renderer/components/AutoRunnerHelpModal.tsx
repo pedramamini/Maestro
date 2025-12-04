@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { X, CheckSquare, Play, History, Eye, Square, Keyboard } from 'lucide-react';
+import { X, FolderOpen, FileText, CheckSquare, Play, Settings, History, Eye, Square, Keyboard, Repeat, RotateCcw, BookMarked, GitBranch, Image } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -53,7 +53,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 
       {/* Modal */}
       <div
-        className="relative w-full max-w-2xl max-h-[80vh] overflow-hidden rounded-lg border shadow-2xl flex flex-col"
+        className="relative w-full max-w-2xl max-h-[85vh] overflow-hidden rounded-lg border shadow-2xl flex flex-col"
         style={{
           backgroundColor: theme.colors.bgSidebar,
           borderColor: theme.colors.border
@@ -65,7 +65,7 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
           style={{ borderColor: theme.colors.border }}
         >
           <h2 className="text-lg font-bold" style={{ color: theme.colors.textMain }}>
-            Automatic Runner Guide
+            Auto Run Guide
           </h2>
           <button
             onClick={onClose}
@@ -83,9 +83,68 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
           {/* Introduction */}
           <section>
             <p className="text-sm leading-relaxed" style={{ color: theme.colors.textDim }}>
-              Maestro's Automatic Runner lets you batch-process tasks using AI agents.
-              Define your tasks as markdown checkboxes, and let the AI work through them one by one, each time with a fresh context window.
+              Auto Run is a file-system-based document runner that automates AI-driven task execution.
+              Create markdown documents with checkbox tasks, and let AI agents work through them one by one,
+              each with a fresh context window. Run single documents or chain multiple documents together
+              for complex workflows.
             </p>
+          </section>
+
+          {/* Setting Up */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <FolderOpen className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Setting Up a Runner Docs Folder</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                When you first open the Auto Run tab, you'll be prompted to select a folder
+                containing your task documents. This folder will store all your markdown files
+                with tasks to automate.
+              </p>
+              <p>
+                You can change this folder at any time by clicking <strong style={{ color: theme.colors.textMain }}>"Change Folder"</strong> in
+                the document dropdown.
+              </p>
+            </div>
+          </section>
+
+          {/* Document Format */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <FileText className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Document Format</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                Create markdown files (<code>.md</code>) in your Runner Docs folder.
+                Each file can contain multiple tasks defined as markdown checkboxes:
+              </p>
+              <div
+                className="font-mono text-xs p-3 rounded border"
+                style={{
+                  backgroundColor: theme.colors.bgActivity,
+                  borderColor: theme.colors.border
+                }}
+              >
+                # Feature Plan<br /><br />
+                - [ ] Implement user authentication<br />
+                - [ ] Add unit tests for the login flow<br />
+                - [ ] Update API documentation<br />
+                - [ ] Review and optimize database queries
+              </div>
+              <p>
+                Tasks are processed from top to bottom. When an AI agent completes a task,
+                it checks off the box (<code>- [x]</code>) and exits. The next agent picks
+                up the next unchecked task.
+              </p>
+            </div>
           </section>
 
           {/* Creating Tasks */}
@@ -98,27 +157,13 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
               className="text-sm space-y-2 pl-7"
               style={{ color: theme.colors.textDim }}
             >
-              <p>
-                Use markdown checkboxes to define tasks in the Scratchpad:
-              </p>
               <div
-                className="font-mono text-xs p-3 rounded border"
-                style={{
-                  backgroundColor: theme.colors.bgActivity,
-                  borderColor: theme.colors.border
-                }}
-              >
-                - [ ] Implement user authentication<br />
-                - [ ] Add unit tests for the login flow<br />
-                - [ ] Update documentation
-              </div>
-              <div
-                className="flex items-center gap-2 mt-3 px-3 py-2 rounded"
+                className="flex items-center gap-2 px-3 py-2 rounded"
                 style={{ backgroundColor: theme.colors.accent + '15' }}
               >
                 <Keyboard className="w-4 h-4" style={{ color: theme.colors.accent }} />
                 <span>
-                  <strong style={{ color: theme.colors.textMain }}>Tip:</strong> Press{' '}
+                  <strong style={{ color: theme.colors.textMain }}>Quick Insert:</strong> Press{' '}
                   <kbd
                     className="px-1.5 py-0.5 rounded text-[10px] font-mono font-bold"
                     style={{
@@ -128,45 +173,159 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
                   >
                     {formatShortcutKeys(['Meta', 'l'])}
                   </kbd>{' '}
-                  to quickly insert a new checkbox at your cursor position.
+                  to insert a new checkbox at your cursor.
                 </span>
               </div>
+              <p>
+                Write clear, specific task descriptions. Each task should be independently
+                completable—the AI starts fresh for each one without context from previous tasks.
+              </p>
+              <p>
+                <strong style={{ color: theme.colors.textMain }}>Tip:</strong> Prefix tasks with
+                unique identifiers (e.g., <code>FEAT-001:</code>) for easy tracking in history logs.
+              </p>
             </div>
           </section>
 
-          {/* Running Tasks */}
+          {/* Image Attachments */}
           <section>
             <div className="flex items-center gap-2 mb-3">
-              <Play className="w-5 h-5" style={{ color: theme.colors.accent }} />
-              <h3 className="font-bold">Running the Automation</h3>
+              <Image className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Image Attachments</h3>
             </div>
             <div
               className="text-sm space-y-2 pl-7"
               style={{ color: theme.colors.textDim }}
             >
               <p>
-                Click the <strong style={{ color: theme.colors.textMain }}>Run</strong> button to start.
-                A prompt editor will appear where you can customize instructions for the AI agent.
+                Paste images directly into your documents or click the camera button to attach files.
+                Images are saved to an <code>images/</code> subfolder and linked with relative paths.
               </p>
               <p>
-                The runner will iterate through each unchecked task (<code>- [ ]</code>),
-                spawning a fresh AI session for each one. Tasks are processed serially,
-                ensuring each completes before the next begins.
-              </p>
-              <p>
-                Each session starts with a clean context that's pre-loaded with the
-                project instructions and all requisite information to work intelligently—without
-                carrying over context from previous tasks. This isolation prevents
-                cross-contamination between tasks while keeping each agent fully informed.
-              </p>
-              <p>
-                The scratchpad file is passed to the AI via the <code>$$SCRATCHPAD$$</code> placeholder,
-                so the agent can read and modify tasks directly.
+                Use images to provide visual context—screenshots of bugs, UI mockups, diagrams, or
+                reference materials that help the AI understand the task.
               </p>
             </div>
           </section>
 
-          {/* History Logs */}
+          {/* Running Single Document */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Play className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Running a Single Document</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                Click <strong style={{ color: theme.colors.textMain }}>Run</strong> to open the batch runner.
+                By default, the currently selected document is ready to run.
+              </p>
+              <p>
+                The runner spawns a fresh AI session for each unchecked task. When a task completes,
+                the agent checks it off and exits. If tasks remain, another agent is spawned for the next task.
+              </p>
+              <p>
+                The document is provided to the agent as a file path, giving it direct access to read and modify tasks.
+              </p>
+            </div>
+          </section>
+
+          {/* Running Multiple Documents */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Settings className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Running Multiple Documents</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                Click <strong style={{ color: theme.colors.textMain }}>"+ Add Docs"</strong> in the batch runner
+                to select additional documents. Documents are processed sequentially in the order shown.
+              </p>
+              <p>
+                <strong style={{ color: theme.colors.textMain }}>Drag to reorder:</strong> Use the grip handle
+                to rearrange documents in the queue.
+              </p>
+              <p>
+                Documents with zero unchecked tasks are automatically skipped.
+              </p>
+            </div>
+          </section>
+
+          {/* Reset on Completion */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <RotateCcw className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Reset on Completion</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                Enable the reset toggle (<RotateCcw className="w-3 h-3 inline" />) on any document to
+                uncheck all tasks when that document completes. This is useful for recurring task lists.
+              </p>
+              <p>
+                Reset-enabled documents can be duplicated in the queue, allowing the same document to
+                run multiple times in a single batch.
+              </p>
+            </div>
+          </section>
+
+          {/* Loop Mode */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Repeat className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Loop Mode</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                When running multiple documents, enable <strong style={{ color: theme.colors.textMain }}>Loop</strong> to
+                continuously cycle through the document queue until all documents have zero tasks remaining.
+              </p>
+              <p>
+                Combined with reset-on-completion, this creates perpetual workflows—perfect for monitoring
+                tasks, recurring maintenance, or continuous integration scenarios.
+              </p>
+            </div>
+          </section>
+
+          {/* Playbooks */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <BookMarked className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Playbooks</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                Save your batch run configurations as <strong style={{ color: theme.colors.textMain }}>Playbooks</strong> for
+                quick reuse. A playbook stores:
+              </p>
+              <ul className="list-disc ml-4 space-y-1">
+                <li>Document selection and order</li>
+                <li>Reset-on-completion settings per document</li>
+                <li>Loop mode preference</li>
+                <li>Custom agent prompt</li>
+              </ul>
+              <p>
+                Load a saved playbook with one click and modify it as needed—changes can be saved
+                back or discarded.
+              </p>
+            </div>
+          </section>
+
+          {/* History & Tracking */}
           <section>
             <div className="flex items-center gap-2 mb-3">
               <History className="w-5 h-5" style={{ color: theme.colors.accent }} />
@@ -177,16 +336,12 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
               style={{ color: theme.colors.textDim }}
             >
               <p>
-                Each completed task is logged to the <strong style={{ color: theme.colors.textMain }}>History</strong> panel
+                Completed tasks appear in the <strong style={{ color: theme.colors.textMain }}>History</strong> panel
                 with an <span style={{ color: theme.colors.warning }}>AUTO</span> label.
               </p>
               <p>
-                History entries include a session ID pill that you can click to jump directly
-                to that AI conversation, allowing you to review what the agent did.
-              </p>
-              <p>
-                Use <code>/synopsis</code> to manually add summaries, or <code>/clear</code> to
-                capture a synopsis before starting fresh.
+                Click the session ID pill to jump directly to that AI conversation and review
+                what the agent did. Use <code>/synopsis</code> to add manual summaries.
               </p>
             </div>
           </section>
@@ -202,17 +357,38 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
               style={{ color: theme.colors.textDim }}
             >
               <p>
-                While automation is running, the AI interpreter operates in{' '}
-                <strong style={{ color: theme.colors.warning }}>read-only/plan mode</strong>.
+                While Auto Run is active, the AI interpreter operates in{' '}
+                <strong style={{ color: theme.colors.warning }}>read-only mode</strong>.
+                You can send messages to analyze code, but file modifications queue until Auto Run completes.
               </p>
               <p>
-                You can still send messages to the AI, but it will only be able to read and plan—not
-                make changes. This prevents conflicts between your manual interactions and the
-                automated tasks.
+                The input shows a <span style={{ color: theme.colors.warning }}>READ-ONLY</span> indicator
+                as a reminder. This prevents conflicts between manual and automated work...
               </p>
               <p>
-                The input area will show a <span style={{ color: theme.colors.warning }}>READ-ONLY</span> indicator
-                and have a subtle warning background to remind you of this mode.
+                <em style={{ color: theme.colors.textMain }}>Unless</em> you enable Git Worktree:
+              </p>
+            </div>
+          </section>
+
+          {/* Git Worktree */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <GitBranch className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Git Worktree (Parallel Work)</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                For Git repositories, enable <strong style={{ color: theme.colors.textMain }}>Git Worktree</strong> to
+                run Auto Run in an isolated working directory. This allows you to continue working
+                in the main project while Auto Run operates independently—no read-only restrictions.
+              </p>
+              <p>
+                Specify a worktree path and branch name. Optionally enable <strong style={{ color: theme.colors.textMain }}>"Create PR on completion"</strong> to
+                automatically open a pull request when all tasks finish.
               </p>
             </div>
           </section>
@@ -221,25 +397,94 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
           <section>
             <div className="flex items-center gap-2 mb-3">
               <Square className="w-5 h-5" style={{ color: theme.colors.error }} />
-              <h3 className="font-bold">Stopping the Runner</h3>
+              <h3 className="font-bold">Stopping Auto Run</h3>
             </div>
             <div
               className="text-sm space-y-2 pl-7"
               style={{ color: theme.colors.textDim }}
             >
               <p>
-                You can request a stop at any time by clicking the{' '}
-                <strong style={{ color: theme.colors.error }}>Stop</strong> button in the header
-                or scratchpad.
+                Click <strong style={{ color: theme.colors.error }}>Stop</strong> in the header or Auto Run panel
+                to gracefully stop. The current task completes before stopping—no work is left incomplete.
               </p>
               <p>
-                The runner will complete the current task before stopping gracefully.
-                This ensures no work is left in an incomplete state.
+                Completed tasks remain checked. Resume anytime by clicking Run again.
               </p>
-              <p>
-                Any completed tasks will remain checked, and you can resume later by
-                clicking Run again.
-              </p>
+            </div>
+          </section>
+
+          {/* Keyboard Shortcuts */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Keyboard className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Keyboard Shortcuts</h3>
+            </div>
+            <div
+              className="text-sm pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  <kbd
+                    className="px-2 py-1 rounded text-xs font-mono font-bold min-w-[80px] text-center"
+                    style={{
+                      backgroundColor: theme.colors.bgActivity,
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                  >
+                    {formatShortcutKeys(['Meta', 'Shift', '1'])}
+                  </kbd>
+                  <span>Open Auto Run tab</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <kbd
+                    className="px-2 py-1 rounded text-xs font-mono font-bold min-w-[80px] text-center"
+                    style={{
+                      backgroundColor: theme.colors.bgActivity,
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                  >
+                    {formatShortcutKeys(['Meta', 'e'])}
+                  </kbd>
+                  <span>Toggle Edit/Preview mode</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <kbd
+                    className="px-2 py-1 rounded text-xs font-mono font-bold min-w-[80px] text-center"
+                    style={{
+                      backgroundColor: theme.colors.bgActivity,
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                  >
+                    {formatShortcutKeys(['Meta', 'l'])}
+                  </kbd>
+                  <span>Insert checkbox at cursor</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <kbd
+                    className="px-2 py-1 rounded text-xs font-mono font-bold min-w-[80px] text-center"
+                    style={{
+                      backgroundColor: theme.colors.bgActivity,
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                  >
+                    {formatShortcutKeys(['Meta', 'z'])}
+                  </kbd>
+                  <span>Undo</span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <kbd
+                    className="px-2 py-1 rounded text-xs font-mono font-bold min-w-[80px] text-center"
+                    style={{
+                      backgroundColor: theme.colors.bgActivity,
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                  >
+                    {formatShortcutKeys(['Meta', 'Shift', 'z'])}
+                  </kbd>
+                  <span>Redo</span>
+                </div>
+              </div>
             </div>
           </section>
         </div>

@@ -12,6 +12,7 @@ interface NamedSession {
   projectPath: string;
   sessionName: string;
   starred?: boolean;
+  lastActivityAt?: number;
 }
 
 /** Union type for items in the list */
@@ -23,10 +24,10 @@ interface TabSwitcherModalProps {
   theme: Theme;
   tabs: AITab[];
   activeTabId: string;
-  cwd: string; // Current working directory for syncing tab names
+  projectRoot: string; // The initial project directory (used for Claude session storage)
   shortcut?: Shortcut;
   onTabSelect: (tabId: string) => void;
-  onNamedSessionSelect: (claudeSessionId: string, projectPath: string, sessionName: string) => void;
+  onNamedSessionSelect: (claudeSessionId: string, projectPath: string, sessionName: string, starred?: boolean) => void;
   onClose: () => void;
 }
 
@@ -47,6 +48,32 @@ function formatCost(cost: number): string {
   if (cost === 0) return '$0.00';
   if (cost < 0.01) return '<$0.01';
   return '$' + cost.toFixed(2);
+}
+
+/**
+ * Format a timestamp as relative time (e.g., "5m ago", "2h ago", "Dec 3")
+ */
+function formatRelativeTime(timestamp: number): string {
+  const now = Date.now();
+  const diffMs = now - timestamp;
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMins / 60);
+  const diffDays = Math.floor(diffHours / 24);
+
+  if (diffMins < 1) return 'Now';
+  if (diffMins < 60) return `${diffMins}m ago`;
+  if (diffHours < 24) return `${diffHours}h ago`;
+  if (diffDays < 7) return `${diffDays}d ago`;
+  return new Date(timestamp).toLocaleDateString([], { month: 'short', day: 'numeric' });
+}
+
+/**
+ * Get the last activity timestamp from a tab's logs
+ */
+function getTabLastActivity(tab: AITab): number | undefined {
+  if (!tab.logs || tab.logs.length === 0) return undefined;
+  // Get the most recent log entry timestamp
+  return Math.max(...tab.logs.map(log => log.timestamp));
 }
 
 /**
@@ -141,7 +168,7 @@ export function TabSwitcherModal({
   theme,
   tabs,
   activeTabId,
-  cwd,
+  projectRoot,
   shortcut,
   onTabSelect,
   onNamedSessionSelect,
@@ -157,6 +184,12 @@ export function TabSwitcherModal({
   const selectedItemRef = useRef<HTMLButtonElement>(null);
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const layerIdRef = useRef<string>();
+  const onCloseRef = useRef(onClose);
+
+  // Keep onClose ref up to date
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  });
 
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 
@@ -169,7 +202,7 @@ export function TabSwitcherModal({
       capturesFocus: true,
       focusTrap: 'strict',
       ariaLabel: 'Tab Switcher',
-      onEscape: () => onClose()
+      onEscape: () => onCloseRef.current()
     });
 
     return () => {
@@ -177,16 +210,16 @@ export function TabSwitcherModal({
         unregisterLayer(layerIdRef.current);
       }
     };
-  }, [registerLayer, unregisterLayer, onClose]);
+  }, [registerLayer, unregisterLayer]);
 
   // Update handler when onClose changes
   useEffect(() => {
     if (layerIdRef.current) {
       updateLayerHandler(layerIdRef.current, () => {
-        onClose();
+        onCloseRef.current();
       });
     }
-  }, [onClose, updateLayerHandler]);
+  }, [updateLayerHandler]);
 
   // Focus input on mount
   useEffect(() => {
@@ -202,7 +235,7 @@ export function TabSwitcherModal({
       const namedTabs = tabs.filter(t => t.name && t.claudeSessionId);
       await Promise.all(
         namedTabs.map(tab =>
-          window.maestro.claude.updateSessionName(cwd, tab.claudeSessionId!, tab.name!)
+          window.maestro.claude.updateSessionName(projectRoot, tab.claudeSessionId!, tab.name!)
             .catch(err => console.warn('[TabSwitcher] Failed to sync tab name:', err))
         )
       );
@@ -215,7 +248,7 @@ export function TabSwitcherModal({
     if (!namedSessionsLoaded) {
       syncAndLoad();
     }
-  }, [namedSessionsLoaded, tabs, cwd]);
+  }, [namedSessionsLoaded, tabs, projectRoot]);
 
   // Scroll selected item into view
   useEffect(() => {
@@ -248,7 +281,7 @@ export function TabSwitcherModal({
       });
       return sorted.map(tab => ({ type: 'open' as const, tab }));
     } else {
-      // All Named mode - show ALL named sessions (including open ones)
+      // All Named mode - show named sessions for the CURRENT PROJECT only (including open ones)
       // For open tabs, use the 'open' type so we get usage stats; for closed ones use 'named'
       const items: ListItem[] = [];
 
@@ -259,9 +292,9 @@ export function TabSwitcherModal({
         }
       }
 
-      // Add closed named sessions (not currently open)
+      // Add closed named sessions from the SAME PROJECT (not currently open)
       for (const session of namedSessions) {
-        if (!openTabSessionIds.has(session.claudeSessionId)) {
+        if (session.projectPath === projectRoot && !openTabSessionIds.has(session.claudeSessionId)) {
           items.push({ type: 'named' as const, session });
         }
       }
@@ -275,7 +308,7 @@ export function TabSwitcherModal({
 
       return items;
     }
-  }, [viewMode, tabs, namedSessions, openTabSessionIds]);
+  }, [viewMode, tabs, namedSessions, openTabSessionIds, projectRoot]);
 
   // Filter items based on search query
   const filteredItems = useMemo(() => {
@@ -325,7 +358,7 @@ export function TabSwitcherModal({
     if (item.type === 'open') {
       onTabSelect(item.tab.id);
     } else {
-      onNamedSessionSelect(item.session.claudeSessionId, item.session.projectPath, item.session.sessionName);
+      onNamedSessionSelect(item.session.claudeSessionId, item.session.projectPath, item.session.sessionName, item.session.starred);
     }
     onClose();
   };
@@ -512,6 +545,10 @@ export function TabSwitcherModal({
                           <span>{formatCost(cost)}</span>
                         </>
                       )}
+                      {(() => {
+                        const lastActivity = getTabLastActivity(tab);
+                        return lastActivity ? <span>{formatRelativeTime(lastActivity)}</span> : null;
+                      })()}
                     </div>
                   </div>
 
@@ -572,7 +609,9 @@ export function TabSwitcherModal({
                       )}
                     </div>
                     <div className="flex items-center gap-3 text-[10px] opacity-60">
-                      <span className="truncate">{session.projectPath.split('/').slice(-2).join('/')}</span>
+                      {session.lastActivityAt && (
+                        <span>{formatRelativeTime(session.lastActivityAt)}</span>
+                      )}
                     </div>
                   </div>
 

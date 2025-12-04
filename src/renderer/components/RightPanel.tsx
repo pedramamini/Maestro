@@ -1,9 +1,10 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef } from 'react';
 import { PanelRightClose, PanelRightOpen, Loader2 } from 'lucide-react';
 import type { Session, Theme, RightPanelTab, Shortcut, BatchRunState } from '../types';
+import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
-import { Scratchpad } from './Scratchpad';
+import { AutoRun } from './AutoRun';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 export interface RightPanelHandle {
@@ -48,17 +49,27 @@ interface RightPanelProps {
   expandAllFolders: (activeSessionId: string, activeSession: Session, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => void;
   collapseAllFolders: (activeSessionId: string, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => void;
   updateSessionWorkingDirectory: (activeSessionId: string, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => Promise<void>;
-  refreshFileTree: (sessionId: string) => Promise<void>;
+  refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
+  onAutoRefreshChange?: (interval: number) => void;
 
-  // Scratchpad handlers
-  updateScratchPad: (content: string) => void;
-  updateScratchPadState: (state: {
+  // Auto Run handlers
+  autoRunDocumentList: string[];        // List of document filenames (without .md)
+  autoRunDocumentTree?: Array<{ name: string; type: 'file' | 'folder'; path: string; children?: unknown[] }>;  // Tree structure for subfolders
+  autoRunContent: string;               // Content of currently selected document
+  autoRunIsLoadingDocuments: boolean;   // Loading state
+  onAutoRunContentChange: (content: string) => void;
+  onAutoRunModeChange: (mode: 'edit' | 'preview') => void;
+  onAutoRunStateChange: (state: {
     mode: 'edit' | 'preview';
     cursorPosition: number;
     editScrollPos: number;
     previewScrollPos: number;
   }) => void;
+  onAutoRunSelectDocument: (filename: string) => void;
+  onAutoRunCreateDocument: (filename: string) => Promise<boolean>;
+  onAutoRunRefresh: () => void;
+  onAutoRunOpenSetup: () => void;
 
   // Batch processing props
   batchRunState?: BatchRunState;
@@ -76,7 +87,10 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, previewFile, fileTreeContainerRef,
     fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders, collapseAllFolders,
-    updateSessionWorkingDirectory, refreshFileTree, setSessions, updateScratchPad, updateScratchPadState,
+    updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange,
+    autoRunDocumentList, autoRunDocumentTree, autoRunContent, autoRunIsLoadingDocuments,
+    onAutoRunContentChange, onAutoRunModeChange, onAutoRunStateChange,
+    onAutoRunSelectDocument, onAutoRunCreateDocument, onAutoRunRefresh, onAutoRunOpenSetup,
     batchRunState, onOpenBatchRunner, onStopBatchRun, onJumpToClaudeSession, onResumeSession,
     onOpenSessionAsTab
   } = props;
@@ -153,17 +167,17 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
           {rightPanelOpen ? <PanelRightClose className="w-4 h-4 opacity-50" /> : <PanelRightOpen className="w-4 h-4 opacity-50" />}
         </button>
 
-        {['files', 'history', 'scratchpad'].map(tab => (
+        {['files', 'history', 'autorun'].map(tab => (
           <button
             key={tab}
             onClick={() => setActiveRightTab(tab as RightPanelTab)}
-            className="flex-1 text-xs font-bold border-b-2 capitalize transition-colors"
+            className="flex-1 text-xs font-bold border-b-2 transition-colors"
             style={{
               borderColor: activeRightTab === tab ? theme.colors.accent : 'transparent',
               color: activeRightTab === tab ? theme.colors.textMain : theme.colors.textDim
             }}
           >
-            {tab}
+            {tab === 'autorun' ? 'Auto Run' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
       </div>
@@ -175,7 +189,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
         tabIndex={-1}
         onClick={() => {
           setActiveFocus('right');
-          // Only focus the container for file explorer, not for scratchpad (which has its own focus management)
+          // Only focus the container for file explorer, not for autorun (which has its own focus management)
           if (activeRightTab === 'files') {
             fileTreeContainerRef.current?.focus();
           }
@@ -214,6 +228,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             updateSessionWorkingDirectory={updateSessionWorkingDirectory}
             refreshFileTree={refreshFileTree}
             setSessions={setSessions}
+            onAutoRefreshChange={onAutoRefreshChange}
           />
         )}
 
@@ -228,17 +243,27 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
           />
         )}
 
-        {activeRightTab === 'scratchpad' && (
-          <Scratchpad
-            content={session.scratchPadContent}
-            onChange={updateScratchPad}
+        {activeRightTab === 'autorun' && (
+          <AutoRun
             theme={theme}
             sessionId={session.id}
-            initialMode={session.scratchPadMode || 'edit'}
-            initialCursorPosition={session.scratchPadCursorPosition || 0}
-            initialEditScrollPos={session.scratchPadEditScrollPos || 0}
-            initialPreviewScrollPos={session.scratchPadPreviewScrollPos || 0}
-            onStateChange={updateScratchPadState}
+            folderPath={session.autoRunFolderPath || null}
+            selectedFile={session.autoRunSelectedFile || null}
+            documentList={autoRunDocumentList}
+            documentTree={autoRunDocumentTree}
+            content={autoRunContent}
+            onContentChange={onAutoRunContentChange}
+            mode={session.autoRunMode || 'edit'}
+            onModeChange={onAutoRunModeChange}
+            initialCursorPosition={session.autoRunCursorPosition || 0}
+            initialEditScrollPos={session.autoRunEditScrollPos || 0}
+            initialPreviewScrollPos={session.autoRunPreviewScrollPos || 0}
+            onStateChange={onAutoRunStateChange}
+            onOpenSetup={onAutoRunOpenSetup}
+            onRefresh={onAutoRunRefresh}
+            onSelectDocument={onAutoRunSelectDocument}
+            onCreateDocument={onAutoRunCreateDocument}
+            isLoadingDocuments={autoRunIsLoadingDocuments}
             batchRunState={batchRunState}
             onOpenBatchRunner={onOpenBatchRunner}
             onStopBatchRun={onStopBatchRun}
@@ -256,18 +281,57 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             borderColor: theme.colors.warning
           }}
         >
+          {/* Header with status and overall progress */}
           <div className="flex items-center justify-between mb-2">
             <div className="flex items-center gap-2">
               <Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.warning }} />
               <span className="text-xs font-bold uppercase" style={{ color: theme.colors.textMain }}>
                 {batchRunState.isStopping ? 'Stopping...' : 'Auto Mode Running'}
               </span>
+              {/* Loop iteration indicator */}
+              {batchRunState.loopEnabled && batchRunState.loopIteration > 0 && (
+                <span
+                  className="text-[10px] px-1.5 py-0.5 rounded"
+                  style={{ backgroundColor: theme.colors.accent + '30', color: theme.colors.accent }}
+                >
+                  Loop {batchRunState.loopIteration + 1}
+                </span>
+              )}
             </div>
-            <span className="text-xs font-mono" style={{ color: theme.colors.textDim }}>
-              {batchRunState.completedTasks} / {batchRunState.totalTasks} tasks
-            </span>
           </div>
-          {/* Progress bar */}
+
+          {/* Document progress with inline progress bar - only for multi-document runs */}
+          {batchRunState.documents && batchRunState.documents.length > 1 && (
+            <div className="mb-2">
+              {/* Document name with progress bar */}
+              <div className="flex items-center gap-2">
+                <span
+                  className="text-xs font-medium shrink-0"
+                  style={{ color: theme.colors.textMain }}
+                >
+                  Document {batchRunState.currentDocumentIndex + 1}/{batchRunState.documents.length}: {batchRunState.documents[batchRunState.currentDocumentIndex]}
+                </span>
+                <div
+                  className="flex-1 h-1 rounded-full overflow-hidden"
+                  style={{ backgroundColor: theme.colors.border }}
+                >
+                  <div
+                    className="h-full transition-all duration-300 ease-out"
+                    style={{
+                      width: `${
+                        batchRunState.currentDocTasksTotal > 0
+                          ? (batchRunState.currentDocTasksCompleted / batchRunState.currentDocTasksTotal) * 100
+                          : 0
+                      }%`,
+                      backgroundColor: theme.colors.accent
+                    }}
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Overall progress bar */}
           <div
             className="h-1.5 rounded-full overflow-hidden"
             style={{ backgroundColor: theme.colors.border }}
@@ -275,15 +339,37 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             <div
               className="h-full transition-all duration-500 ease-out"
               style={{
-                width: `${batchRunState.totalTasks > 0 ? (batchRunState.completedTasks / batchRunState.totalTasks) * 100 : 0}%`,
+                width: `${
+                  batchRunState.totalTasksAcrossAllDocs > 0
+                    ? (batchRunState.completedTasksAcrossAllDocs / batchRunState.totalTasksAcrossAllDocs) * 100
+                    : batchRunState.totalTasks > 0
+                      ? (batchRunState.completedTasks / batchRunState.totalTasks) * 100
+                      : 0
+                }%`,
                 backgroundColor: batchRunState.isStopping ? theme.colors.error : theme.colors.warning
               }}
             />
           </div>
-          <div className="mt-2 text-[10px]" style={{ color: theme.colors.textDim }}>
-            {batchRunState.isStopping
-              ? 'Waiting for current task to complete before stopping...'
-              : `Task ${batchRunState.currentTaskIndex + 1} in progress...`}
+
+          {/* Overall completed count with loop info */}
+          <div className="mt-2 flex items-center justify-between">
+            <span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+              {batchRunState.isStopping
+                ? 'Waiting for current task to complete before stopping...'
+                : batchRunState.totalTasksAcrossAllDocs > 0
+                  ? `${batchRunState.completedTasksAcrossAllDocs} / ${batchRunState.totalTasksAcrossAllDocs} total tasks completed`
+                  : `${batchRunState.completedTasks} / ${batchRunState.totalTasks} tasks completed`
+              }
+            </span>
+            {/* Loop iteration indicator */}
+            {batchRunState.loopEnabled && (
+              <span
+                className="text-[10px] px-1.5 py-0.5 rounded"
+                style={{ backgroundColor: theme.colors.accent + '20', color: theme.colors.accent }}
+              >
+                Loop {batchRunState.loopIteration + 1} of {batchRunState.maxLoops ?? '∞'}
+              </span>
+            )}
           </div>
         </div>
       )}

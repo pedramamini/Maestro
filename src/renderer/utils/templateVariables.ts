@@ -8,13 +8,19 @@ import type { Session } from '../types';
  * Session Variables:
  *   {{SESSION_ID}}        - Maestro session ID (unique identifier)
  *   {{SESSION_NAME}}      - Current session name
- *   {{CLAUDE_SESSION_ID}} - Claude Code session ID (for conversation continuity)
+ *   {{AGENT_SESSION_ID}}  - Agent session ID (for conversation continuity)
  *   {{TOOL_TYPE}}         - Agent type (claude-code, aider, etc.)
+ *   {{AGENT_NAME}}        - Agent name (same as session name)
+ *   {{AGENT_GROUP}}       - Agent's group name (if grouped)
  *
  * Project Variables:
  *   {{PROJECT_PATH}}      - Full path to project directory
  *   {{PROJECT_NAME}}      - Project folder name (last segment of path)
  *   {{CWD}}               - Current working directory (alias for PROJECT_PATH)
+ *   {{AUTORUN_FOLDER}}    - Auto Run documents folder path
+ *
+ * Auto Run Variables:
+ *   {{LOOP_NUMBER}}       - Current loop iteration (starts at 1)
  *
  * Date/Time Variables:
  *   {{DATE}}              - Current date (YYYY-MM-DD)
@@ -34,37 +40,39 @@ import type { Session } from '../types';
  *
  * Context Variables:
  *   {{CONTEXT_USAGE}}     - Current context window usage percentage
- *   {{INPUT_MODE}}        - Current input mode (ai or terminal)
  */
 
 export interface TemplateContext {
   session: Session;
   gitBranch?: string;
+  groupName?: string;
+  autoRunFolder?: string;
+  loopNumber?: number;
 }
 
 // List of all available template variables for documentation
 export const TEMPLATE_VARIABLES = [
-  { variable: '{{SESSION_ID}}', description: 'Maestro session ID (unique identifier)' },
-  { variable: '{{SESSION_NAME}}', description: 'Current session name' },
-  { variable: '{{CLAUDE_SESSION_ID}}', description: 'Claude Code session ID (for conversation continuity)' },
-  { variable: '{{TOOL_TYPE}}', description: 'Agent type (claude-code, aider, etc.)' },
-  { variable: '{{PROJECT_PATH}}', description: 'Full path to project directory' },
+  { variable: '{{SESSION_ID}}', description: 'Maestro session ID' },
+  { variable: '{{SESSION_NAME}}', description: 'Session name' },
+  { variable: '{{AGENT_SESSION_ID}}', description: 'Agent session ID' },
+  { variable: '{{TOOL_TYPE}}', description: 'Agent type' },
+  { variable: '{{AGENT_NAME}}', description: 'Agent name' },
+  { variable: '{{AGENT_GROUP}}', description: 'Agent group name' },
+  { variable: '{{PROJECT_PATH}}', description: 'Project directory path' },
   { variable: '{{PROJECT_NAME}}', description: 'Project folder name' },
-  { variable: '{{CWD}}', description: 'Current working directory' },
-  { variable: '{{DATE}}', description: 'Current date (YYYY-MM-DD)' },
-  { variable: '{{TIME}}', description: 'Current time (HH:MM:SS)' },
+  { variable: '{{CWD}}', description: 'Working directory' },
+  { variable: '{{AUTORUN_FOLDER}}', description: 'Auto Run folder path' },
+  { variable: '{{LOOP_NUMBER}}', description: 'Current loop iteration (1+)' },
+  { variable: '{{DATE}}', description: 'Date (YYYY-MM-DD)' },
+  { variable: '{{TIME}}', description: 'Time (HH:MM:SS)' },
   { variable: '{{DATETIME}}', description: 'Full datetime' },
   { variable: '{{TIMESTAMP}}', description: 'Unix timestamp (ms)' },
-  { variable: '{{DATE_SHORT}}', description: 'Short date (MM/DD/YY)' },
-  { variable: '{{TIME_SHORT}}', description: 'Short time (HH:MM)' },
+  { variable: '{{DATE_SHORT}}', description: 'Date (MM/DD/YY)' },
+  { variable: '{{TIME_SHORT}}', description: 'Time (HH:MM)' },
   { variable: '{{YEAR}}', description: 'Current year' },
-  { variable: '{{MONTH}}', description: 'Current month (01-12)' },
-  { variable: '{{DAY}}', description: 'Current day (01-31)' },
-  { variable: '{{WEEKDAY}}', description: 'Day of week' },
-  { variable: '{{GIT_BRANCH}}', description: 'Current git branch (if git repo)' },
-  { variable: '{{IS_GIT_REPO}}', description: '"true" or "false"' },
-  { variable: '{{CONTEXT_USAGE}}', description: 'Context window usage %' },
-  { variable: '{{INPUT_MODE}}', description: 'Current input mode (ai/terminal)' },
+  { variable: '{{GIT_BRANCH}}', description: 'Git branch name' },
+  { variable: '{{IS_GIT_REPO}}', description: 'Is git repo (true/false)' },
+  { variable: '{{CONTEXT_USAGE}}', description: 'Context usage %' },
 ];
 
 /**
@@ -74,7 +82,7 @@ export function substituteTemplateVariables(
   template: string,
   context: TemplateContext
 ): string {
-  const { session, gitBranch } = context;
+  const { session, gitBranch, groupName, autoRunFolder, loopNumber } = context;
   const now = new Date();
 
   // Build replacements map
@@ -82,13 +90,19 @@ export function substituteTemplateVariables(
     // Session variables
     'SESSION_ID': session.id,
     'SESSION_NAME': session.name,
-    'CLAUDE_SESSION_ID': session.claudeSessionId || '',
+    'AGENT_SESSION_ID': session.claudeSessionId || '',
     'TOOL_TYPE': session.toolType,
+    'AGENT_NAME': session.name,
+    'AGENT_GROUP': groupName || '',
 
     // Project variables
     'PROJECT_PATH': session.fullPath || session.cwd,
     'PROJECT_NAME': (session.fullPath || session.cwd).split('/').pop() || '',
     'CWD': session.cwd,
+    'AUTORUN_FOLDER': autoRunFolder || session.autoRunFolderPath || '',
+
+    // Loop tracking (1-indexed, defaults to 1 if not in loop mode)
+    'LOOP_NUMBER': String(loopNumber ?? 1),
 
     // Date/Time variables
     'DATE': now.toISOString().split('T')[0],
@@ -108,7 +122,6 @@ export function substituteTemplateVariables(
 
     // Context variables
     'CONTEXT_USAGE': String(session.contextUsage || 0),
-    'INPUT_MODE': session.inputMode,
   };
 
   // Perform case-insensitive replacement

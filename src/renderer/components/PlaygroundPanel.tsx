@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef } from 'react';
-import { X, Trophy, FlaskConical, Play, RotateCcw } from 'lucide-react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
+import { X, Trophy, FlaskConical, Play, RotateCcw, Sparkles, Copy, Check } from 'lucide-react';
+import confetti from 'canvas-confetti';
 import type { Theme, AutoRunStats } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -13,7 +14,7 @@ interface PlaygroundPanelProps {
   onClose: () => void;
 }
 
-type TabId = 'achievements';
+type TabId = 'achievements' | 'confetti';
 
 interface Tab {
   id: TabId;
@@ -23,6 +24,37 @@ interface Tab {
 
 const TABS: Tab[] = [
   { id: 'achievements', label: 'Achievements', icon: <Trophy className="w-4 h-4" /> },
+  { id: 'confetti', label: 'Confetti', icon: <Sparkles className="w-4 h-4" /> },
+];
+
+// Available confetti shapes
+type ConfettiShape = 'square' | 'circle' | 'star';
+const CONFETTI_SHAPES: ConfettiShape[] = ['square', 'circle', 'star'];
+
+// Grid position labels
+const GRID_LABELS = [
+  ['Top Left', 'Top Center', 'Top Right'],
+  ['Middle Left', 'Center', 'Middle Right'],
+  ['Bottom Left', 'Bottom Center', 'Bottom Right'],
+];
+
+// Grid position coordinates (x, y)
+const GRID_POSITIONS: [number, number][][] = [
+  [[0, 0], [0.5, 0], [1, 0]],
+  [[0, 0.5], [0.5, 0.5], [1, 0.5]],
+  [[0, 1], [0.5, 1], [1, 1]],
+];
+
+// Default confetti colors
+const DEFAULT_CONFETTI_COLORS = [
+  '#FFD700', // Gold
+  '#FF6B6B', // Red
+  '#4ECDC4', // Teal
+  '#45B7D1', // Blue
+  '#FFA726', // Orange
+  '#BA68C8', // Purple
+  '#F48FB1', // Pink
+  '#FFEAA7', // Yellow
 ];
 
 export function PlaygroundPanel({ theme, themeMode, onClose }: PlaygroundPanelProps) {
@@ -44,6 +76,49 @@ export function PlaygroundPanel({ theme, themeMode, onClose }: PlaygroundPanelPr
   const [showStandingOvation, setShowStandingOvation] = useState(false);
   const [ovationBadgeLevel, setOvationBadgeLevel] = useState(1);
   const [ovationIsNewRecord, setOvationIsNewRecord] = useState(false);
+
+  // Confetti playground state
+  const [confettiParticleCount, setConfettiParticleCount] = useState(100);
+  const [confettiAngle, setConfettiAngle] = useState(90);
+  const [confettiSpread, setConfettiSpread] = useState(45);
+  const [confettiStartVelocity, setConfettiStartVelocity] = useState(45);
+  const [confettiGravity, setConfettiGravity] = useState(1);
+  const [confettiDecay, setConfettiDecay] = useState(0.9);
+  const [confettiDrift, setConfettiDrift] = useState(0);
+  const [confettiScalar, setConfettiScalar] = useState(1);
+  const [confettiTicks, setConfettiTicks] = useState(200);
+  const [confettiFlat, setConfettiFlat] = useState(false);
+  const [confettiShapes, setConfettiShapes] = useState<ConfettiShape[]>(['square', 'circle']);
+  const [confettiColors, setConfettiColors] = useState<string[]>(DEFAULT_CONFETTI_COLORS);
+  const [selectedOrigins, setSelectedOrigins] = useState<Set<string>>(new Set(['2-1'])); // Default: bottom center
+  const [copySuccess, setCopySuccess] = useState(false);
+
+  // Handle keyboard shortcuts for tab switching
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Cmd+Shift+[ or Cmd+Shift+] to switch tabs
+      if (e.metaKey && e.shiftKey) {
+        if (e.key === '[' || e.key === '{') {
+          e.preventDefault();
+          setActiveTab(prev => {
+            const currentIdx = TABS.findIndex(t => t.id === prev);
+            const newIdx = currentIdx <= 0 ? TABS.length - 1 : currentIdx - 1;
+            return TABS[newIdx].id;
+          });
+        } else if (e.key === ']' || e.key === '}') {
+          e.preventDefault();
+          setActiveTab(prev => {
+            const currentIdx = TABS.findIndex(t => t.id === prev);
+            const newIdx = currentIdx >= TABS.length - 1 ? 0 : currentIdx + 1;
+            return TABS[newIdx].id;
+          });
+        }
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, []);
 
   // Register layer on mount
   useEffect(() => {
@@ -147,6 +222,164 @@ export function PlaygroundPanel({ theme, themeMode, onClose }: PlaygroundPanelPr
     const logValue = Math.log(timeMs);
     return Math.round(((logValue - LOG_MIN) / (LOG_MAX - LOG_MIN)) * 100);
   };
+
+  // Toggle origin grid selection
+  const toggleOrigin = (row: number, col: number) => {
+    const key = `${row}-${col}`;
+    setSelectedOrigins(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(key)) {
+        newSet.delete(key);
+      } else {
+        newSet.add(key);
+      }
+      return newSet;
+    });
+  };
+
+  // Toggle confetti shape
+  const toggleShape = (shape: ConfettiShape) => {
+    setConfettiShapes(prev => {
+      if (prev.includes(shape)) {
+        // Don't allow removing last shape
+        if (prev.length === 1) return prev;
+        return prev.filter(s => s !== shape);
+      }
+      return [...prev, shape];
+    });
+  };
+
+  // Fire confetti with current settings
+  const firePlaygroundConfetti = useCallback(() => {
+    if (selectedOrigins.size === 0) return;
+
+    const origins: { x: number; y: number }[] = [];
+    selectedOrigins.forEach(key => {
+      const [row, col] = key.split('-').map(Number);
+      const [x, y] = GRID_POSITIONS[row][col];
+      origins.push({ x, y });
+    });
+
+    origins.forEach(origin => {
+      confetti({
+        particleCount: Math.round(confettiParticleCount / origins.length),
+        angle: confettiAngle,
+        spread: confettiSpread,
+        startVelocity: confettiStartVelocity,
+        gravity: confettiGravity,
+        decay: confettiDecay,
+        drift: confettiDrift,
+        scalar: confettiScalar,
+        ticks: confettiTicks,
+        flat: confettiFlat,
+        shapes: confettiShapes,
+        colors: confettiColors,
+        origin,
+        zIndex: 99999,
+        disableForReducedMotion: false,
+      });
+    });
+  }, [
+    selectedOrigins,
+    confettiParticleCount,
+    confettiAngle,
+    confettiSpread,
+    confettiStartVelocity,
+    confettiGravity,
+    confettiDecay,
+    confettiDrift,
+    confettiScalar,
+    confettiTicks,
+    confettiFlat,
+    confettiShapes,
+    confettiColors,
+  ]);
+
+  // Reset confetti settings to defaults
+  const resetConfettiSettings = () => {
+    setConfettiParticleCount(100);
+    setConfettiAngle(90);
+    setConfettiSpread(45);
+    setConfettiStartVelocity(45);
+    setConfettiGravity(1);
+    setConfettiDecay(0.9);
+    setConfettiDrift(0);
+    setConfettiScalar(1);
+    setConfettiTicks(200);
+    setConfettiFlat(false);
+    setConfettiShapes(['square', 'circle']);
+    setConfettiColors(DEFAULT_CONFETTI_COLORS);
+    setSelectedOrigins(new Set(['2-1']));
+  };
+
+  // Copy confetti settings to clipboard
+  const copyConfettiSettings = useCallback(async () => {
+    // Build origins array from selected grid positions
+    const origins: { x: number; y: number }[] = [];
+    selectedOrigins.forEach(key => {
+      const [row, col] = key.split('-').map(Number);
+      const [x, y] = GRID_POSITIONS[row][col];
+      origins.push({ x, y });
+    });
+
+    const settings = {
+      particleCount: confettiParticleCount,
+      angle: confettiAngle,
+      spread: confettiSpread,
+      startVelocity: confettiStartVelocity,
+      gravity: confettiGravity,
+      decay: confettiDecay,
+      drift: confettiDrift,
+      scalar: confettiScalar,
+      ticks: confettiTicks,
+      flat: confettiFlat,
+      shapes: confettiShapes,
+      colors: confettiColors,
+      origins,
+    };
+
+    // Format as readable code snippet
+    const codeSnippet = `// Confetti Settings
+confetti({
+  particleCount: ${settings.particleCount},
+  angle: ${settings.angle},
+  spread: ${settings.spread},
+  startVelocity: ${settings.startVelocity},
+  gravity: ${settings.gravity},
+  decay: ${settings.decay},
+  drift: ${settings.drift},
+  scalar: ${settings.scalar},
+  ticks: ${settings.ticks},
+  flat: ${settings.flat},
+  shapes: ${JSON.stringify(settings.shapes)},
+  colors: ${JSON.stringify(settings.colors, null, 2).replace(/\n/g, '\n  ')},
+  origin: ${settings.origins.length === 1
+    ? `{ x: ${settings.origins[0].x}, y: ${settings.origins[0].y} }`
+    : `// Multiple origins:\n  // ${settings.origins.map(o => `{ x: ${o.x}, y: ${o.y} }`).join('\n  // ')}`},
+});`;
+
+    try {
+      await navigator.clipboard.writeText(codeSnippet);
+      setCopySuccess(true);
+      setTimeout(() => setCopySuccess(false), 2000);
+    } catch (err) {
+      console.error('Failed to copy settings:', err);
+    }
+  }, [
+    selectedOrigins,
+    confettiParticleCount,
+    confettiAngle,
+    confettiSpread,
+    confettiStartVelocity,
+    confettiGravity,
+    confettiDecay,
+    confettiDrift,
+    confettiScalar,
+    confettiTicks,
+    confettiFlat,
+    confettiShapes,
+    confettiColors,
+  ]);
 
   return (
     <>
@@ -360,6 +593,340 @@ export function PlaygroundPanel({ theme, themeMode, onClose }: PlaygroundPanelPr
                     Achievement Card Preview
                   </h3>
                   <AchievementCard theme={theme} autoRunStats={mockAutoRunStats} />
+                </div>
+              </div>
+            )}
+
+            {activeTab === 'confetti' && (
+              <div className="grid grid-cols-2 gap-6">
+                {/* Left column - Controls */}
+                <div className="space-y-4">
+                  {/* Origin Grid */}
+                  <div
+                    className="p-4 rounded-lg border"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+                  >
+                    <h3 className="text-sm font-bold mb-3" style={{ color: theme.colors.textMain }}>
+                      Launch Origins (click to toggle)
+                    </h3>
+                    <div className="grid grid-cols-3 gap-2 w-fit mx-auto">
+                      {GRID_LABELS.map((row, rowIdx) =>
+                        row.map((label, colIdx) => {
+                          const key = `${rowIdx}-${colIdx}`;
+                          const isSelected = selectedOrigins.has(key);
+                          return (
+                            <button
+                              key={key}
+                              onClick={() => toggleOrigin(rowIdx, colIdx)}
+                              className="w-16 h-16 rounded-lg text-xs font-medium transition-all hover:scale-105"
+                              style={{
+                                backgroundColor: isSelected ? theme.colors.accent : theme.colors.bgMain,
+                                color: isSelected ? '#fff' : theme.colors.textDim,
+                                border: `2px solid ${isSelected ? theme.colors.accent : theme.colors.border}`,
+                              }}
+                              title={label}
+                            >
+                              {label.split(' ').map((word, i) => (
+                                <div key={i}>{word}</div>
+                              ))}
+                            </button>
+                          );
+                        })
+                      )}
+                    </div>
+                    <p className="text-xs mt-3 text-center" style={{ color: theme.colors.textDim }}>
+                      {selectedOrigins.size === 0
+                        ? 'Select at least one origin'
+                        : `${selectedOrigins.size} origin${selectedOrigins.size > 1 ? 's' : ''} selected`}
+                    </p>
+                  </div>
+
+                  {/* Basic Parameters */}
+                  <div
+                    className="p-4 rounded-lg border"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+                  >
+                    <h3 className="text-sm font-bold mb-3" style={{ color: theme.colors.textMain }}>
+                      Basic Parameters
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Particle Count</span>
+                          <span>{confettiParticleCount}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={10}
+                          max={500}
+                          value={confettiParticleCount}
+                          onChange={e => setConfettiParticleCount(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Angle (degrees)</span>
+                          <span>{confettiAngle}°</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={360}
+                          value={confettiAngle}
+                          onChange={e => setConfettiAngle(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Spread (degrees)</span>
+                          <span>{confettiSpread}°</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={360}
+                          value={confettiSpread}
+                          onChange={e => setConfettiSpread(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Start Velocity</span>
+                          <span>{confettiStartVelocity}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={1}
+                          max={100}
+                          value={confettiStartVelocity}
+                          onChange={e => setConfettiStartVelocity(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Shapes */}
+                  <div
+                    className="p-4 rounded-lg border"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+                  >
+                    <h3 className="text-sm font-bold mb-3" style={{ color: theme.colors.textMain }}>
+                      Shapes
+                    </h3>
+                    <div className="flex gap-2">
+                      {CONFETTI_SHAPES.map(shape => (
+                        <button
+                          key={shape}
+                          onClick={() => toggleShape(shape)}
+                          className="flex-1 px-3 py-2 rounded text-sm font-medium transition-colors"
+                          style={{
+                            backgroundColor: confettiShapes.includes(shape)
+                              ? theme.colors.accent
+                              : theme.colors.bgMain,
+                            color: confettiShapes.includes(shape) ? '#fff' : theme.colors.textMain,
+                          }}
+                        >
+                          {shape === 'square' ? '■' : shape === 'circle' ? '●' : '★'} {shape}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                </div>
+
+                {/* Right column - More Controls */}
+                <div className="space-y-4">
+                  {/* Physics Parameters */}
+                  <div
+                    className="p-4 rounded-lg border"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+                  >
+                    <h3 className="text-sm font-bold mb-3" style={{ color: theme.colors.textMain }}>
+                      Physics
+                    </h3>
+                    <div className="space-y-3">
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Gravity</span>
+                          <span>{confettiGravity.toFixed(2)}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={0}
+                          max={3}
+                          step={0.1}
+                          value={confettiGravity}
+                          onChange={e => setConfettiGravity(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Decay</span>
+                          <span>{confettiDecay.toFixed(2)}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={0.1}
+                          max={1}
+                          step={0.01}
+                          value={confettiDecay}
+                          onChange={e => setConfettiDecay(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Drift</span>
+                          <span>{confettiDrift.toFixed(1)}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={-3}
+                          max={3}
+                          step={0.1}
+                          value={confettiDrift}
+                          onChange={e => setConfettiDrift(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Scalar (size)</span>
+                          <span>{confettiScalar.toFixed(1)}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={0.1}
+                          max={3}
+                          step={0.1}
+                          value={confettiScalar}
+                          onChange={e => setConfettiScalar(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div>
+                        <label className="text-xs flex justify-between" style={{ color: theme.colors.textDim }}>
+                          <span>Ticks (duration)</span>
+                          <span>{confettiTicks}</span>
+                        </label>
+                        <input
+                          type="range"
+                          min={50}
+                          max={500}
+                          value={confettiTicks}
+                          onChange={e => setConfettiTicks(Number(e.target.value))}
+                          className="w-full"
+                        />
+                      </div>
+                      <div className="flex items-center gap-2 pt-1">
+                        <input
+                          type="checkbox"
+                          id="confettiFlat"
+                          checked={confettiFlat}
+                          onChange={e => setConfettiFlat(e.target.checked)}
+                        />
+                        <label htmlFor="confettiFlat" className="text-xs" style={{ color: theme.colors.textDim }}>
+                          Flat (disable 3D wobble)
+                        </label>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Colors */}
+                  <div
+                    className="p-4 rounded-lg border"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
+                  >
+                    <h3 className="text-sm font-bold mb-3" style={{ color: theme.colors.textMain }}>
+                      Colors
+                    </h3>
+                    <div className="flex flex-wrap gap-2">
+                      {confettiColors.map((color, idx) => (
+                        <div key={idx} className="relative group">
+                          <input
+                            type="color"
+                            value={color}
+                            onChange={e => {
+                              const newColors = [...confettiColors];
+                              newColors[idx] = e.target.value;
+                              setConfettiColors(newColors);
+                            }}
+                            className="w-8 h-8 rounded cursor-pointer border-2"
+                            style={{ borderColor: theme.colors.border }}
+                          />
+                          {confettiColors.length > 1 && (
+                            <button
+                              onClick={() => setConfettiColors(confettiColors.filter((_, i) => i !== idx))}
+                              className="absolute -top-1 -right-1 w-4 h-4 rounded-full text-xs bg-red-500 text-white opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              ×
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                      {confettiColors.length < 12 && (
+                        <button
+                          onClick={() => setConfettiColors([...confettiColors, '#FFFFFF'])}
+                          className="w-8 h-8 rounded border-2 border-dashed flex items-center justify-center text-lg"
+                          style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
+                        >
+                          +
+                        </button>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Action Buttons */}
+                  <button
+                    onClick={firePlaygroundConfetti}
+                    disabled={selectedOrigins.size === 0}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-3 rounded-lg font-bold text-lg transition-all hover:scale-[1.02] disabled:opacity-50 disabled:cursor-not-allowed"
+                    style={{
+                      backgroundColor: theme.colors.accent,
+                      color: '#fff',
+                    }}
+                  >
+                    <Sparkles className="w-5 h-5" />
+                    Fire Confetti!
+                  </button>
+
+                  <button
+                    onClick={copyConfettiSettings}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded font-medium transition-colors"
+                    style={{
+                      backgroundColor: copySuccess ? theme.colors.success : theme.colors.bgMain,
+                      color: copySuccess ? '#fff' : theme.colors.textMain,
+                      border: `1px solid ${copySuccess ? theme.colors.success : theme.colors.border}`,
+                    }}
+                  >
+                    {copySuccess ? (
+                      <>
+                        <Check className="w-4 h-4" />
+                        Copied!
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-4 h-4" />
+                        Copy Settings
+                      </>
+                    )}
+                  </button>
+
+                  <button
+                    onClick={resetConfettiSettings}
+                    className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded font-medium transition-colors border"
+                    style={{
+                      borderColor: theme.colors.border,
+                      color: theme.colors.textDim,
+                    }}
+                  >
+                    <RotateCcw className="w-4 h-4" />
+                    Reset to Defaults
+                  </button>
                 </div>
               </div>
             )}

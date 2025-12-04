@@ -157,20 +157,19 @@ export class ProcessManager extends EventEmitter {
         }
 
         // Build environment for PTY process
-        // For terminal sessions, we want the shell to build its own PATH from startup files
-        // (.zprofile, .zshrc, etc.) rather than inheriting Electron's limited PATH.
-        // Electron launched from Finder gets a minimal PATH from launchd, not the user's shell PATH.
+        // For terminal sessions, pass minimal env with base system PATH.
+        // Shell startup files (.zprofile, .zshrc) will prepend user paths (homebrew, go, etc.)
+        // We need the base system paths or commands like sort, find, head won't work.
         let ptyEnv: NodeJS.ProcessEnv;
         if (isTerminal) {
-          // For terminals: pass minimal env, let shell startup files set PATH
-          // This ensures the terminal has the same environment as a regular terminal app
           ptyEnv = {
             HOME: process.env.HOME,
             USER: process.env.USER,
             SHELL: process.env.SHELL,
             TERM: 'xterm-256color',
             LANG: process.env.LANG || 'en_US.UTF-8',
-            // Don't pass PATH - let the shell build it from scratch via .zprofile/.zshrc
+            // Provide base system PATH - shell startup files will prepend user paths
+            PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
           };
         } else {
           // For AI agents in PTY mode: pass full env (they need NODE_PATH, etc.)
@@ -297,17 +296,7 @@ export class ProcessManager extends EventEmitter {
             console.error('[ProcessManager] stdout error:', err);
           });
           childProcess.stdout.on('data', (data: Buffer | string) => {
-            console.log('[ProcessManager] >>> STDOUT EVENT FIRED <<<');
-            console.log('[ProcessManager] stdout event fired for session:', sessionId);
           const output = data.toString();
-
-          console.log('[ProcessManager] stdout data received:', {
-            sessionId,
-            isBatchMode,
-            isStreamJsonMode,
-            dataLength: output.length,
-            dataPreview: output.substring(0, 200)
-          });
 
           if (isStreamJsonMode) {
             // In stream-json mode, each line is a JSONL message
@@ -379,12 +368,10 @@ export class ProcessManager extends EventEmitter {
                     contextWindow
                   };
 
-                  console.log('[ProcessManager] Emitting usage stats from stream-json:', usageStats);
                   this.emit('usage', sessionId, usageStats);
                 }
               } catch (e) {
                 // If it's not valid JSON, emit as raw text
-                console.log('[ProcessManager] Non-JSON line in stream-json mode:', line.substring(0, 100));
                 this.emit('data', sessionId, line);
               }
             }
@@ -487,18 +474,8 @@ export class ProcessManager extends EventEmitter {
                   contextWindow
                 };
 
-                console.log('[ProcessManager] Emitting usage stats:', usageStats);
                 this.emit('usage', sessionId, usageStats);
               }
-
-              // Emit full response for debugging
-              console.log('[ProcessManager] Batch mode JSON response:', {
-                sessionId,
-                hasResult: !!jsonResponse.result,
-                hasSessionId: !!jsonResponse.session_id,
-                sessionIdValue: jsonResponse.session_id,
-                hasCost: jsonResponse.total_cost_usd !== undefined
-              });
             } catch (error) {
               console.error('[ProcessManager] Failed to parse JSON response:', error);
               // Emit raw buffer as fallback
@@ -706,31 +683,32 @@ export class ProcessManager extends EventEmitter {
         // Fish auto-sources config.fish, just run the command
         wrappedCommand = command;
       } else if (shellName === 'zsh') {
-        // Source .zshrc for aliases, then use eval to parse command AFTER aliases are loaded
-        // Without eval, the shell parses the command before .zshrc is sourced, so aliases aren't available
+        // Source both .zprofile (login shell - PATH setup) and .zshrc (interactive - aliases, functions)
+        // This matches what a login interactive shell does (zsh -l -i)
+        // Without eval, the shell parses the command before configs are sourced, so aliases aren't available
         const escapedCommand = command.replace(/'/g, "'\\''");
-        wrappedCommand = `source ~/.zshrc 2>/dev/null; eval '${escapedCommand}'`;
+        wrappedCommand = `source ~/.zprofile 2>/dev/null; source ~/.zshrc 2>/dev/null; eval '${escapedCommand}'`;
       } else if (shellName === 'bash') {
-        // Source .bashrc for aliases, use eval for same reason as zsh
+        // Source both .bash_profile (login shell) and .bashrc (interactive)
         const escapedCommand = command.replace(/'/g, "'\\''");
-        wrappedCommand = `source ~/.bashrc 2>/dev/null; eval '${escapedCommand}'`;
+        wrappedCommand = `source ~/.bash_profile 2>/dev/null; source ~/.bashrc 2>/dev/null; eval '${escapedCommand}'`;
       } else {
         // Other POSIX-compatible shells
         wrappedCommand = command;
       }
 
-      // Ensure PATH includes standard binary locations
-      // Electron's main process may have a stripped-down PATH
-      const env = { ...process.env };
-      const standardPaths = '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
-      if (env.PATH) {
-        // Prepend standard paths if not already present
-        if (!env.PATH.includes('/bin')) {
-          env.PATH = `${standardPaths}:${env.PATH}`;
-        }
-      } else {
-        env.PATH = standardPaths;
-      }
+      // Pass minimal environment with a base PATH for essential system commands.
+      // Shell startup files (.zprofile, .zshrc) will prepend user paths to this.
+      // We need the base system paths or commands like sort, find, head won't work.
+      const env: NodeJS.ProcessEnv = {
+        HOME: process.env.HOME,
+        USER: process.env.USER,
+        SHELL: process.env.SHELL,
+        TERM: 'xterm-256color',
+        LANG: process.env.LANG || 'en_US.UTF-8',
+        // Provide base system PATH - shell startup files will prepend user paths (homebrew, go, etc.)
+        PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+      };
 
       // Resolve shell to full path - Electron's internal PATH may not include /bin
       // where common shells like zsh and bash are located

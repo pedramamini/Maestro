@@ -1,5 +1,6 @@
 import { ChildProcess, spawn } from 'child_process';
 import { logger } from './utils/logger';
+import { getCloudflaredPath, isCloudflaredInstalled } from './utils/cliDetection';
 
 export interface TunnelStatus {
   isRunning: boolean;
@@ -27,10 +28,18 @@ class TunnelManager {
     // Stop any existing tunnel first
     await this.stop();
 
-    return new Promise((resolve) => {
-      logger.info(`Starting cloudflared tunnel for port ${port}`, 'TunnelManager');
+    // Ensure cloudflared is installed and get its path
+    const installed = await isCloudflaredInstalled();
+    if (!installed) {
+      return { success: false, error: 'cloudflared is not installed' };
+    }
 
-      this.process = spawn('cloudflared', [
+    const cloudflaredBinary = getCloudflaredPath() || 'cloudflared';
+
+    return new Promise((resolve) => {
+      logger.info(`Starting cloudflared tunnel for port ${port} using ${cloudflaredBinary}`, 'TunnelManager');
+
+      this.process = spawn(cloudflaredBinary, [
         'tunnel', '--url', `http://localhost:${port}`
       ]);
 

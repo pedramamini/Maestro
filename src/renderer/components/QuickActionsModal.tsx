@@ -58,6 +58,9 @@ interface QuickActionsModalProps {
   isAiMode?: boolean;
   setPlaygroundOpen?: (open: boolean) => void;
   onRefreshGitFileState?: () => Promise<void>;
+  onDebugReleaseQueuedItem?: () => void;
+  markdownRawMode?: boolean;
+  onToggleMarkdownRawMode?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -71,7 +74,8 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     deleteSession, addNewSession, setSettingsModalOpen, setSettingsTab,
     setShortcutsHelpOpen, setAboutModalOpen, setLogViewerOpen, setProcessMonitorOpen,
     setAgentSessionsOpen, setActiveClaudeSessionId, setGitDiffPreview, setGitLogOpen, startFreshSession,
-    onRenameTab, onToggleReadOnlyMode, onOpenTabSwitcher, tabShortcuts, isAiMode, setPlaygroundOpen, onRefreshGitFileState
+    onRenameTab, onToggleReadOnlyMode, onOpenTabSwitcher, tabShortcuts, isAiMode, setPlaygroundOpen, onRefreshGitFileState,
+    onDebugReleaseQueuedItem, markdownRawMode, onToggleMarkdownRawMode
   } = props;
 
   const [search, setSearch] = useState('');
@@ -216,6 +220,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     ...(isAiMode && onOpenTabSwitcher ? [{ id: 'tabSwitcher', label: 'Tab Switcher', shortcut: tabShortcuts?.tabSwitcher, action: () => { onOpenTabSwitcher(); setQuickActionOpen(false); } }] : []),
     ...(isAiMode && onRenameTab ? [{ id: 'renameTab', label: 'Rename Tab', shortcut: tabShortcuts?.renameTab, action: () => { onRenameTab(); setQuickActionOpen(false); } }] : []),
     ...(isAiMode && onToggleReadOnlyMode ? [{ id: 'toggleReadOnly', label: 'Toggle Read-Only Mode', shortcut: tabShortcuts?.toggleReadOnlyMode, action: () => { onToggleReadOnlyMode(); setQuickActionOpen(false); } }] : []),
+    ...(isAiMode && onToggleMarkdownRawMode ? [{ id: 'toggleMarkdown', label: markdownRawMode ? 'Show Formatted Markdown' : 'Show Raw Markdown', shortcut: shortcuts.toggleMarkdownMode, subtext: markdownRawMode ? 'Currently showing plain text' : 'Currently showing formatted', action: () => { onToggleMarkdownRawMode(); setQuickActionOpen(false); } }] : []),
     ...(activeSession ? [{ id: 'kill', label: `Remove Agent: ${activeSession.name}`, shortcut: shortcuts.killInstance, action: () => deleteSession(activeSessionId) }] : []),
     { id: 'settings', label: 'Settings', shortcut: shortcuts.settings, action: () => { setSettingsModalOpen(true); setQuickActionOpen(false); } },
     { id: 'theme', label: 'Change Theme', action: () => { setSettingsModalOpen(true); setSettingsTab('theme'); setQuickActionOpen(false); } },
@@ -248,7 +253,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     { id: 'about', label: 'About Maestro', action: () => { setAboutModalOpen(true); setQuickActionOpen(false); } },
     { id: 'goToFiles', label: 'Go to Files Tab', action: () => { setRightPanelOpen(true); setActiveRightTab('files'); setQuickActionOpen(false); } },
     { id: 'goToHistory', label: 'Go to History Tab', action: () => { setRightPanelOpen(true); setActiveRightTab('history'); setQuickActionOpen(false); } },
-    { id: 'goToScratchpad', label: 'Go to Scratchpad Tab', action: () => { setRightPanelOpen(true); setActiveRightTab('scratchpad'); setQuickActionOpen(false); } },
+    { id: 'goToAutoRun', label: 'Go to Auto Run Tab', action: () => { setRightPanelOpen(true); setActiveRightTab('autorun'); setQuickActionOpen(false); } },
     // Debug commands - only visible when user types "debug"
     { id: 'debugResetBusy', label: 'Debug: Reset Busy State', subtext: 'Clear stuck thinking/busy state for all sessions', action: () => {
       // Reset all sessions and tabs to idle state
@@ -303,6 +308,15 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
       setPlaygroundOpen(true);
       setQuickActionOpen(false);
     } }] : []),
+    ...(activeSession && activeSession.executionQueue?.length > 0 && onDebugReleaseQueuedItem ? [{
+      id: 'debugReleaseQueued',
+      label: 'Debug: Release Next Queued Item',
+      subtext: `Process next item from queue (${activeSession.executionQueue.length} queued)`,
+      action: () => {
+        onDebugReleaseQueuedItem();
+        setQuickActionOpen(false);
+      }
+    }] : []),
   ];
 
   const groupActions: QuickAction[] = [

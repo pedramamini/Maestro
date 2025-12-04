@@ -1273,6 +1273,9 @@ export function SettingsModal(props: SettingsModalProps) {
                     {shortcutsFilter ? `${filteredCount} / ${totalShortcuts}` : totalShortcuts}
                   </span>
                 </div>
+                <p className="text-xs opacity-50 mb-3" style={{ color: theme.colors.textDim }}>
+                  Not all shortcuts can be modified. Press <kbd className="px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: theme.colors.bgActivity }}>⌘/</kbd> to view the full list of keyboard shortcuts.
+                </p>
                 <div className="space-y-2 flex-1 overflow-y-auto pr-2 scrollbar-thin">
                   {filteredShortcuts.map((sc: Shortcut) => (
                     <div key={sc.id} className="flex items-center justify-between p-3 rounded border" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}>
