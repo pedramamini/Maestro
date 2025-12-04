@@ -908,6 +908,7 @@ function setupIpcHandlers() {
       cwd: p.cwd,
       isTerminal: p.isTerminal,
       isBatchMode: p.isBatchMode || false,
+      startTime: p.startTime,
     }));
   });
 

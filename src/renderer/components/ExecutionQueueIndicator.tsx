@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useRef, useState, useEffect, useCallback } from 'react';
 import { ListOrdered, Command, MessageSquare } from 'lucide-react';
 import type { Session, Theme, QueuedItem } from '../types';
 
@@ -15,10 +15,9 @@ interface ExecutionQueueIndicatorProps {
  */
 export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQueueIndicatorProps) {
   const queue = session.executionQueue || [];
-
-  if (queue.length === 0) {
-    return null;
-  }
+  const containerRef = useRef<HTMLButtonElement>(null);
+  const pillsContainerRef = useRef<HTMLDivElement>(null);
+  const [maxVisiblePills, setMaxVisiblePills] = useState(2);
 
   // Count items by type
   const messageCount = queue.filter(item => item.type === 'message').length;
@@ -33,8 +32,67 @@ export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQu
 
   const tabNames = Object.keys(tabCounts);
 
+  // Calculate how many pills we can show based on available space
+  const calculateMaxPills = useCallback(() => {
+    if (!containerRef.current || !pillsContainerRef.current) return;
+
+    const container = containerRef.current;
+    const pillsContainer = pillsContainerRef.current;
+
+    // Get total container width
+    const containerWidth = container.clientWidth;
+
+    // Calculate space used by other elements (left side + type counts + "Click to view")
+    // We need to measure everything except the pills container
+    const containerStyle = getComputedStyle(container);
+    const containerPadding = parseFloat(containerStyle.paddingLeft) + parseFloat(containerStyle.paddingRight);
+    const containerGap = 8; // gap-2 = 0.5rem = 8px
+
+    // Measure left side elements (icon + "X items queued" text)
+    const leftElements = container.querySelectorAll(':scope > *:not([data-pills-container])');
+    let usedWidth = containerPadding;
+
+    leftElements.forEach((el) => {
+      if (el !== pillsContainer) {
+        const rect = el.getBoundingClientRect();
+        usedWidth += rect.width + containerGap;
+      }
+    });
+
+    // Available space for pills (leave some buffer for the +N indicator and spacing)
+    const availableWidth = containerWidth - usedWidth - 80; // 80px buffer for +N and spacing
+
+    // Estimate pill width (approximately 80-100px per pill depending on content)
+    const avgPillWidth = 90;
+    const pillGap = 4; // gap-1 = 0.25rem = 4px
+
+    const maxPills = Math.min(5, Math.max(1, Math.floor(availableWidth / (avgPillWidth + pillGap))));
+    setMaxVisiblePills(maxPills);
+  }, []);
+
+  // Use ResizeObserver to recalculate when container size changes
+  useEffect(() => {
+    if (!containerRef.current) return;
+
+    const observer = new ResizeObserver(() => {
+      calculateMaxPills();
+    });
+
+    observer.observe(containerRef.current);
+
+    // Initial calculation
+    calculateMaxPills();
+
+    return () => observer.disconnect();
+  }, [calculateMaxPills, queue.length, tabNames.length]);
+
+  if (queue.length === 0) {
+    return null;
+  }
+
   return (
     <button
+      ref={containerRef}
       onClick={onClick}
       className="w-full mb-2 px-3 py-2 rounded-lg border flex items-center gap-2 text-sm transition-all hover:opacity-90"
       style={{
@@ -45,14 +103,14 @@ export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQu
     >
       <ListOrdered className="w-4 h-4 flex-shrink-0" style={{ color: theme.colors.warning }} />
 
-      <span className="flex-1 text-left">
+      <span className="text-left whitespace-nowrap">
         <span className="font-semibold">{queue.length}</span>
         {' '}
         {queue.length === 1 ? 'item' : 'items'} queued
       </span>
 
       {/* Item type breakdown */}
-      <div className="flex items-center gap-2 text-xs opacity-70">
+      <div className="flex items-center gap-2 text-xs opacity-70 flex-shrink-0">
         {messageCount > 0 && (
           <span className="flex items-center gap-1">
             <MessageSquare className="w-3 h-3" />
@@ -67,12 +125,15 @@ export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQu
         )}
       </div>
 
-      {/* Tab pills - show first 2 tabs, then +N more */}
-      <div className="flex items-center gap-1">
-        {tabNames.slice(0, 2).map(tabName => (
+      {/* Spacer to push pills to the right */}
+      <div className="flex-1" />
+
+      {/* Tab pills - dynamically show as many as fit, then +N more */}
+      <div ref={pillsContainerRef} data-pills-container className="flex items-center gap-1 flex-shrink-0">
+        {tabNames.slice(0, maxVisiblePills).map(tabName => (
           <span
             key={tabName}
-            className="px-1.5 py-0.5 rounded text-xs font-mono"
+            className="px-1.5 py-0.5 rounded text-xs font-mono whitespace-nowrap"
             style={{
               backgroundColor: theme.colors.accent + '30',
               color: theme.colors.textMain
@@ -82,17 +143,17 @@ export function ExecutionQueueIndicator({ session, theme, onClick }: ExecutionQu
             {tabCounts[tabName] > 1 && ` (${tabCounts[tabName]})`}
           </span>
         ))}
-        {tabNames.length > 2 && (
+        {tabNames.length > maxVisiblePills && (
           <span
-            className="px-1.5 py-0.5 rounded text-xs"
+            className="px-1.5 py-0.5 rounded text-xs whitespace-nowrap"
             style={{ color: theme.colors.textDim }}
           >
-            +{tabNames.length - 2}
+            +{tabNames.length - maxVisiblePills}
           </span>
         )}
       </div>
 
-      <span className="text-xs opacity-50">Click to view</span>
+      <span className="text-xs opacity-50 flex-shrink-0 whitespace-nowrap">Click to view</span>
     </button>
   );
 }

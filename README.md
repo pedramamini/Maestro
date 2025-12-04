@@ -344,6 +344,79 @@ Click the **Stop** button at any time. The runner will:
 
 You can run separate batch processes in different Maestro sessions simultaneously. Each session maintains its own independent batch state. With Git worktrees enabled, you can work on the main branch while Auto Run operates in an isolated worktree.
 
+## Command Line Interface
+
+Maestro includes a CLI tool (`maestro-playbook`) for running playbooks from the command line, cron jobs, or CI/CD pipelines. The CLI is a standalone binary that requires no additional dependencies.
+
+### Installation
+
+The CLI binary is bundled with Maestro. After installation, create a symlink to add it to your PATH:
+
+```bash
+# macOS (after installing Maestro.app)
+sudo ln -sf "/Applications/Maestro.app/Contents/Resources/maestro-playbook" /usr/local/bin/maestro-playbook
+
+# Windows (run as Administrator in PowerShell)
+# The binary is located at: C:\Program Files\Maestro\resources\maestro-playbook.exe
+
+# Linux (AppImage - extract first, or use deb/rpm which installs to /opt)
+sudo ln -sf "/opt/Maestro/resources/maestro-playbook" /usr/local/bin/maestro-playbook
+```
+
+### Usage
+
+```bash
+# List all groups
+maestro-playbook list groups
+
+# List all agents/sessions
+maestro-playbook list agents
+maestro-playbook list agents --group <group-id>
+
+# List playbooks for a session
+maestro-playbook list playbooks --session <session-id>
+
+# Run a playbook (streams JSONL to stdout)
+maestro-playbook run --session <session-id> --playbook <playbook-id>
+
+# Dry run (shows what would be executed)
+maestro-playbook run --session <session-id> --playbook <playbook-id> --dry-run
+
+# Run without writing to history
+maestro-playbook run --session <session-id> --playbook <playbook-id> --no-history
+```
+
+### JSONL Output
+
+All commands output JSONL (JSON Lines) format for easy parsing:
+
+```bash
+# List groups
+maestro-playbook list groups
+{"type":"group","id":"abc123","name":"Frontend","emoji":"...","timestamp":...}
+
+# Running a playbook streams events
+maestro-playbook run -s <session> -p <playbook>
+{"type":"start","timestamp":...,"playbook":{...},"session":{...}}
+{"type":"document_start","timestamp":...,"document":"tasks.md","taskCount":5}
+{"type":"task_start","timestamp":...,"document":"tasks.md","taskIndex":0}
+{"type":"task_complete","timestamp":...,"success":true,"summary":"...","elapsedMs":8000}
+{"type":"document_complete","timestamp":...,"tasksCompleted":5}
+{"type":"complete","timestamp":...,"totalTasksCompleted":5,"totalElapsedMs":60000}
+```
+
+### Scheduling with Cron
+
+```bash
+# Run a playbook every hour
+0 * * * * /usr/local/bin/maestro-playbook run -s <session-id> -p <playbook-id> >> /var/log/maestro.jsonl 2>&1
+```
+
+### Requirements
+
+- Claude Code CLI must be installed and in PATH
+- Maestro config files must exist (created automatically when you use the GUI)
+
 ## Configuration
 
 Settings are stored in:

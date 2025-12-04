@@ -1175,7 +1175,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           className={`flex-1 text-sm font-medium truncate ${doc.isMissing ? 'line-through' : ''}`}
                           style={{ color: doc.isMissing ? theme.colors.error : theme.colors.textMain }}
                         >
-                          {doc.filename}
+                          {doc.filename}.md
                         </span>
 
                         {/* Missing Indicator */}
@@ -1902,7 +1902,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           className="flex-1 text-sm text-left truncate"
                           style={{ color: theme.colors.textMain }}
                         >
-                          {filename}
+                          {filename}.md
                         </span>
 
                         {/* Task Count */}

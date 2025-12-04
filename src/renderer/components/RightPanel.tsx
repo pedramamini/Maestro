@@ -309,7 +309,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
                   className="text-xs font-medium shrink-0"
                   style={{ color: theme.colors.textMain }}
                 >
-                  Document {batchRunState.currentDocumentIndex + 1}/{batchRunState.documents.length}: {batchRunState.documents[batchRunState.currentDocumentIndex]}
+                  Document {batchRunState.currentDocumentIndex + 1}/{batchRunState.documents.length}: {batchRunState.documents[batchRunState.currentDocumentIndex]}.md
                 </span>
                 <div
                   className="flex-1 h-1 rounded-full overflow-hidden"

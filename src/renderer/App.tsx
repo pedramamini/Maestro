@@ -5413,7 +5413,8 @@ export default function MaestroConsole() {
 
   // Refresh file tree for a session and return the changes detected
   const refreshFileTree = useCallback(async (sessionId: string): Promise<FileTreeChanges | undefined> => {
-    const session = sessions.find(s => s.id === sessionId);
+    // Use sessionsRef to avoid dependency on sessions state (prevents timer reset on every session change)
+    const session = sessionsRef.current.find(s => s.id === sessionId);
     if (!session) return undefined;
 
     try {
@@ -5438,7 +5439,7 @@ export default function MaestroConsole() {
       ));
       return undefined;
     }
-  }, [sessions]);
+  }, []);
 
   // Refresh both file tree and git state for a session
   const refreshGitFileState = useCallback(async (sessionId: string) => {

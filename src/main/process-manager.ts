@@ -29,6 +29,7 @@ interface ManagedProcess {
   lastCommand?: string; // Last command sent to terminal (for filtering command echoes)
   sessionIdEmitted?: boolean; // True after session_id has been emitted (prevents duplicate emissions)
   resultEmitted?: boolean; // True after result data has been emitted (prevents duplicate emissions)
+  startTime: number; // Timestamp when process was spawned
 }
 
 /**
@@ -191,6 +192,7 @@ export class ProcessManager extends EventEmitter {
           cwd,
           pid: ptyProcess.pid,
           isTerminal: true,
+          startTime: Date.now(),
         };
 
         this.processes.set(sessionId, managedProcess);
@@ -280,6 +282,7 @@ export class ProcessManager extends EventEmitter {
           isBatchMode,
           isStreamJsonMode,
           jsonBuffer: isBatchMode ? '' : undefined,
+          startTime: Date.now(),
         };
 
         this.processes.set(sessionId, managedProcess);
