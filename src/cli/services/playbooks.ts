@@ -95,6 +95,34 @@ export function resolvePlaybookId(sessionId: string, partialId: string): string 
 }
 
 /**
+ * Find a playbook by ID across all agents
+ * Returns the playbook and its agent ID, or throws if not found/ambiguous
+ */
+export function findPlaybookById(partialId: string): { playbook: Playbook; agentId: string } {
+  const allPlaybooks = listAllPlaybooks();
+
+  // First try exact match
+  const exactMatch = allPlaybooks.find((p) => p.id === partialId);
+  if (exactMatch) {
+    return { playbook: exactMatch, agentId: exactMatch.sessionId };
+  }
+
+  // Try prefix match
+  const matches = allPlaybooks.filter((p) => p.id.startsWith(partialId));
+
+  if (matches.length === 1) {
+    return { playbook: matches[0], agentId: matches[0].sessionId };
+  } else if (matches.length > 1) {
+    const matchList = matches
+      .map((p) => `  ${p.id.slice(0, 8)}  ${p.name}`)
+      .join('\n');
+    throw new Error(`Ambiguous playbook ID '${partialId}'. Matches:\n${matchList}`);
+  }
+
+  throw new Error(`Playbook not found: ${partialId}`);
+}
+
+/**
  * List all playbooks across all sessions
  * Returns playbooks with their session IDs
  */

@@ -65,9 +65,10 @@ export async function* runPlaybook(
   options: {
     dryRun?: boolean;
     writeHistory?: boolean;
+    debug?: boolean;
   } = {}
 ): AsyncGenerator<JsonlEvent> {
-  const { dryRun = false, writeHistory = true } = options;
+  const { dryRun = false, writeHistory = true, debug = false } = options;
   const batchStartTime = Date.now();
 
   // Emit start event
@@ -78,11 +79,49 @@ export async function* runPlaybook(
     session: { id: session.id, name: session.name, cwd: session.cwd },
   };
 
+  // Emit debug info about playbook configuration
+  if (debug) {
+    yield {
+      type: 'debug',
+      timestamp: Date.now(),
+      category: 'config',
+      message: `Playbook config: loopEnabled=${playbook.loopEnabled}, maxLoops=${playbook.maxLoops ?? 'unlimited'}`,
+    };
+    yield {
+      type: 'debug',
+      timestamp: Date.now(),
+      category: 'config',
+      message: `Documents (${playbook.documents.length}): ${playbook.documents.map(d => `${d.filename}${d.resetOnCompletion ? ' [RESET]' : ''}`).join(', ')}`,
+    };
+    yield {
+      type: 'debug',
+      timestamp: Date.now(),
+      category: 'config',
+      message: `Folder path: ${folderPath}`,
+    };
+  }
+
   // Calculate initial total tasks
   let initialTotalTasks = 0;
   for (const doc of playbook.documents) {
     const { taskCount } = readDocAndCountTasks(folderPath, doc.filename);
+    if (debug) {
+      yield {
+        type: 'debug',
+        timestamp: Date.now(),
+        category: 'scan',
+        message: `${doc.filename}: ${taskCount} unchecked task${taskCount !== 1 ? 's' : ''}`,
+      };
+    }
     initialTotalTasks += taskCount;
+  }
+  if (debug) {
+    yield {
+      type: 'debug',
+      timestamp: Date.now(),
+      category: 'scan',
+      message: `Total unchecked tasks: ${initialTotalTasks}`,
+    };
   }
 
   if (initialTotalTasks === 0) {
@@ -251,6 +290,15 @@ export async function* runPlaybook(
         const { content: currentContent } = readDocAndCountTasks(folderPath, docEntry.filename);
         const resetContent = uncheckAllTasks(currentContent);
         writeDoc(folderPath, docEntry.filename + '.md', resetContent);
+        if (debug) {
+          const { taskCount: newTaskCount } = readDocAndCountTasks(folderPath, docEntry.filename);
+          yield {
+            type: 'debug',
+            timestamp: Date.now(),
+            category: 'reset',
+            message: `Reset ${docEntry.filename}: unchecked all tasks (${newTaskCount} tasks now open)`,
+          };
+        }
       }
 
       // Emit document complete event
@@ -264,38 +312,105 @@ export async function* runPlaybook(
 
     // Check if we should continue looping
     if (!playbook.loopEnabled) {
+      if (debug) {
+        yield {
+          type: 'debug',
+          timestamp: Date.now(),
+          category: 'loop',
+          message: 'Exiting: loopEnabled is false',
+        };
+      }
       break;
     }
 
     // Check max loop limit
     if (playbook.maxLoops !== null && playbook.maxLoops !== undefined && loopIteration + 1 >= playbook.maxLoops) {
+      if (debug) {
+        yield {
+          type: 'debug',
+          timestamp: Date.now(),
+          category: 'loop',
+          message: `Exiting: reached max loops (${playbook.maxLoops})`,
+        };
+      }
       break;
     }
 
     // Check if any non-reset documents have remaining tasks
     const hasAnyNonResetDocs = playbook.documents.some(doc => !doc.resetOnCompletion);
+    if (debug) {
+      const nonResetDocs = playbook.documents.filter(d => !d.resetOnCompletion).map(d => d.filename);
+      const resetDocs = playbook.documents.filter(d => d.resetOnCompletion).map(d => d.filename);
+      yield {
+        type: 'debug',
+        timestamp: Date.now(),
+        category: 'loop',
+        message: `Checking loop condition: ${nonResetDocs.length} non-reset docs [${nonResetDocs.join(', ')}], ${resetDocs.length} reset docs [${resetDocs.join(', ')}]`,
+      };
+    }
 
     if (hasAnyNonResetDocs) {
       let anyNonResetDocsHaveTasks = false;
       for (const doc of playbook.documents) {
         if (doc.resetOnCompletion) continue;
         const { taskCount } = readDocAndCountTasks(folderPath, doc.filename);
+        if (debug) {
+          yield {
+            type: 'debug',
+            timestamp: Date.now(),
+            category: 'loop',
+            message: `Non-reset doc ${doc.filename}: ${taskCount} unchecked task${taskCount !== 1 ? 's' : ''}`,
+          };
+        }
         if (taskCount > 0) {
           anyNonResetDocsHaveTasks = true;
           break;
         }
       }
       if (!anyNonResetDocsHaveTasks) {
+        if (debug) {
+          yield {
+            type: 'debug',
+            timestamp: Date.now(),
+            category: 'loop',
+            message: 'Exiting: all non-reset documents have 0 remaining tasks',
+          };
+        }
         break;
       }
     } else {
       // All documents are reset docs - exit after one pass
+      if (debug) {
+        yield {
+          type: 'debug',
+          timestamp: Date.now(),
+          category: 'loop',
+          message: 'Exiting: ALL documents have resetOnCompletion=true (loop requires at least one non-reset doc to drive iterations)',
+        };
+      }
       break;
     }
 
     // Safety check
     if (!anyTasksProcessedThisIteration) {
+      if (debug) {
+        yield {
+          type: 'debug',
+          timestamp: Date.now(),
+          category: 'loop',
+          message: 'Exiting: no tasks were processed this iteration (safety check)',
+        };
+      }
       break;
+    }
+
+    if (debug) {
+      yield {
+        type: 'debug',
+        timestamp: Date.now(),
+        category: 'loop',
+        message: `Continuing to next loop iteration (current: ${loopIteration + 1})`,
+      };
     }
 
     // Emit loop complete event

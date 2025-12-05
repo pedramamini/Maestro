@@ -1192,8 +1192,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           </span>
                         )}
 
-                        {/* Task Count Badge (hidden for missing docs) */}
-                        {!doc.isMissing && (
+                        {/* Task Count Badge (invisible placeholder for missing docs) */}
+                        {!doc.isMissing ? (
                           <span
                             className="text-xs px-2 py-0.5 rounded shrink-0"
                             style={{
@@ -1203,10 +1203,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           >
                             {loadingTaskCounts ? '...' : `${docTaskCount} ${docTaskCount === 1 ? 'task' : 'tasks'}`}
                           </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 shrink-0 invisible">0 tasks</span>
                         )}
 
-                        {/* Reset Toggle Button (hidden for missing docs) */}
-                        {!doc.isMissing && (() => {
+                        {/* Reset Toggle Button (invisible placeholder for missing docs) */}
+                        {!doc.isMissing ? (() => {
                           // Check if this document has duplicates (other entries with same filename)
                           const hasDuplicates = documents.filter(d => d.filename === doc.filename).length > 1;
                           const canDisableReset = !hasDuplicates;
@@ -1244,10 +1246,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                               <RotateCcw className="w-3.5 h-3.5" />
                             </button>
                           );
-                        })()}
+                        })() : (
+                          <span className="p-1 shrink-0 invisible"><RotateCcw className="w-3.5 h-3.5" /></span>
+                        )}
 
-                        {/* Duplicate Button (only shown for reset-enabled docs that aren't missing) */}
-                        {doc.resetOnCompletion && !doc.isMissing && (
+                        {/* Duplicate Button (invisible placeholder when not applicable) */}
+                        {doc.resetOnCompletion && !doc.isMissing ? (
                           <button
                             onClick={() => handleDuplicateDocument(doc.id)}
                             className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
@@ -1256,10 +1260,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
+                        ) : (
+                          <span className="p-1 shrink-0 invisible"><Plus className="w-3.5 h-3.5" /></span>
                         )}
 
-                        {/* Remove Button (only for duplicates, multiple docs, OR missing docs) */}
-                        {(doc.isDuplicate || documents.length > 1 || doc.isMissing) && (
+                        {/* Remove Button (invisible placeholder when not applicable) */}
+                        {(doc.isDuplicate || documents.length > 1 || doc.isMissing) ? (
                           <button
                             onClick={() => handleRemoveDocument(doc.id)}
                             className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
@@ -1268,6 +1274,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
+                        ) : (
+                          <span className="p-1 shrink-0 invisible"><X className="w-3.5 h-3.5" /></span>
                         )}
                       </div>
                     );

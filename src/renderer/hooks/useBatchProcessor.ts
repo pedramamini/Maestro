@@ -5,7 +5,8 @@ import type { BatchRunState, BatchRunConfig, BatchDocumentEntry, Session, Histor
 const UNCHECKED_TASK_REGEX = /^[\s]*-\s*\[\s*\]\s*.+$/gm;
 
 // Regex to match checked markdown checkboxes for reset-on-completion
-const CHECKED_TASK_REGEX = /^(\s*-\s*)\[x\]/gim;
+// Matches both [x] and [X] with various checkbox formats (standard and GitHub-style)
+const CHECKED_TASK_REGEX = /^(\s*-\s*)\[[xX✓✔]\]/gm;
 
 // Default empty batch state
 const DEFAULT_BATCH_STATE: BatchRunState = {
@@ -426,7 +427,7 @@ ${docList}
         if (remainingTasks === 0) {
           // For reset-on-completion documents, check if there are checked tasks that need resetting
           if (docEntry.resetOnCompletion && loopEnabled) {
-            const checkedTaskCount = (docContent.match(/^[\s]*-\s*\[x\]/gim) || []).length;
+            const checkedTaskCount = (docContent.match(CHECKED_TASK_REGEX) || []).length;
             if (checkedTaskCount > 0) {
               console.log(`[BatchProcessor] Document ${docEntry.filename} has ${checkedTaskCount} checked tasks - resetting for next iteration`);
               const resetContent = uncheckAllTasks(docContent);
@@ -597,10 +598,26 @@ ${docList}
 
           // Read the current content and uncheck all tasks
           const { content: currentContent } = await readDocAndCountTasks(folderPath, docEntry.filename);
+
+          // Count checked tasks before reset
+          const checkedMatches = currentContent.match(CHECKED_TASK_REGEX) || [];
+          const checkedBefore = checkedMatches.length;
+          console.log(`[BatchProcessor] Document ${docEntry.filename} has ${checkedBefore} checked tasks before reset`);
+          console.log(`[BatchProcessor] Checked task matches:`, checkedMatches);
+
           const resetContent = uncheckAllTasks(currentContent);
 
+          // Count unchecked tasks after reset
+          const uncheckedAfter = countUnfinishedTasks(resetContent);
+          console.log(`[BatchProcessor] Document ${docEntry.filename} has ${uncheckedAfter} unchecked tasks after reset`);
+
+          // Log first 500 chars of content before/after for debugging
+          console.log(`[BatchProcessor] Content before reset (first 500):`, currentContent.substring(0, 500));
+          console.log(`[BatchProcessor] Content after reset (first 500):`, resetContent.substring(0, 500));
+
           // Write the reset content back
-          await window.maestro.autorun.writeDoc(folderPath, docEntry.filename + '.md', resetContent);
+          const writeResult = await window.maestro.autorun.writeDoc(folderPath, docEntry.filename + '.md', resetContent);
+          console.log(`[BatchProcessor] Write result for ${docEntry.filename}:`, writeResult);
 
           // If loop is enabled, add the reset tasks back to the total
           if (loopEnabled) {
@@ -634,10 +651,13 @@ ${docList}
         break;
       }
 
-      // Loop mode: check if we should continue looping
-      // Key insight: Reset documents will always have tasks after being reset, so we only
-      // continue looping if there are non-reset documents with remaining tasks
+      // Safety check: if we didn't process ANY tasks this iteration, exit to avoid infinite loop
+      if (!anyTasksProcessedThisIteration) {
+        console.warn('[BatchProcessor] No tasks processed this iteration - exiting to avoid infinite loop');
+        break;
+      }
 
+      // Loop mode: check if we should continue looping
       // Check if there are any non-reset documents in the playbook
       const hasAnyNonResetDocs = documents.some(doc => !doc.resetOnCompletion);
 
@@ -658,19 +678,8 @@ ${docList}
           console.log('[BatchProcessor] All non-reset documents completed, exiting loop');
           break;
         }
-      } else {
-        // All documents are reset documents - exit after one pass
-        // Without non-reset docs to track progress, we'd loop forever
-        console.log('[BatchProcessor] All documents are reset-on-completion, exiting after one pass');
-        break;
       }
-
-      // Safety check: if we didn't process ANY tasks this iteration but docs still have tasks,
-      // something is wrong - exit to avoid infinite loop
-      if (!anyTasksProcessedThisIteration) {
-        console.warn('[BatchProcessor] No tasks processed but documents still have tasks - exiting to avoid infinite loop');
-        break;
-      }
+      // If all documents are reset docs, we continue looping (maxLoops check above will stop us)
 
       // Re-scan all documents to get fresh task counts for next loop (tasks may have been added/removed)
       let newTotalTasks = 0;
