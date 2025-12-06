@@ -6,37 +6,6 @@
 
 Maestro is a desktop application that allows you to run and manage multiple AI coding instances in parallel with a Linear/Superhuman-level responsive interface. Currently supporting Claude Code with plans for additional agentic coding tools (OpenAI Codex, Gemini CLI, Qwen3 Coder) based on user demand.
 
-## Screenshots
-### Main Screen
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/a65b27a7-0db7-4b3f-ac23-7ef08e3b614e" />
-
-### Command Interpreter (with collapsed left panel)
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/b4691e96-f55b-4c92-a561-56b2f50b82b1" />
-
-### Git Logs and Diff Viewer
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/78827d23-bfa6-424a-9a8e-217258b85e29" />
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/ef0480a7-ecb6-4ee3-bd6c-1d1ad0e99d18" />
-
-### File Viewer
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/91960bc0-9dc9-49a3-b0dd-37ea923f65ac" />
-
-### CMD+K and Shortcuts Galore
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/5a8eb082-ebd0-4b57-a48e-34e8c6aa4c36" />
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/b2ab9cda-4fa8-4dcb-b322-8d31e50f7127" />
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/f7b7b457-d7e6-48be-a3d3-b2851ab7a02c" />
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/9dd8f89e-5330-4025-b416-3ad2aff61e1d" />
-
-### Themes and Achievements
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/bd9b9e07-7b3c-45fe-955e-18959394c169" />
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/286a0a33-7c29-430a-982f-318e90d9e8c9" />
-
-### Session Tracking, Starring, Labeling, and Recall
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/4b3a5ae6-6654-43b6-a25b-ffe689ea1748" />
-
-### AutoRuns with Change History Tracking
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/66e6f9e9-969e-497e-8139-f9fbf26f976a" />
-<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/0aec0a73-a687-4b7f-9710-4bf9d1325b6d" />
-
 ## Installation
 
 ### Download
@@ -46,6 +15,8 @@ Download the latest release for your platform from the [Releases](https://github
 - **macOS**: `.dmg` or `.zip`
 - **Windows**: `.exe` installer
 - **Linux**: `.AppImage`, `.deb`, or `.rpm`
+
+NOTE: On macOS you may need to clear the quarantine label to successfully launch: `xattr -dr com.apple.quarantine Maestro.app`
 
 ### Requirements
 
@@ -103,6 +74,37 @@ Each session shows a color-coded status indicator:
 - 🟡 **Yellow** - Agent is thinking
 - 🔴 **Red** - No connection with agent
 - 🟠 **Pulsing Orange** - Attempting to establish connection
+
+## Screenshots
+### Main Screen
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/a65b27a7-0db7-4b3f-ac23-7ef08e3b614e" />
+
+### Command Interpreter (with collapsed left panel)
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/b4691e96-f55b-4c92-a561-56b2f50b82b1" />
+
+### Git Logs and Diff Viewer
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/78827d23-bfa6-424a-9a8e-217258b85e29" />
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/ef0480a7-ecb6-4ee3-bd6c-1d1ad0e99d18" />
+
+### File Viewer
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/91960bc0-9dc9-49a3-b0dd-37ea923f65ac" />
+
+### CMD+K and Shortcuts Galore
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/5a8eb082-ebd0-4b57-a48e-34e8c6aa4c36" />
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/b2ab9cda-4fa8-4dcb-b322-8d31e50f7127" />
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/f7b7b457-d7e6-48be-a3d3-b2851ab7a02c" />
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/9dd8f89e-5330-4025-b416-3ad2aff61e1d" />
+
+### Themes and Achievements
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/bd9b9e07-7b3c-45fe-955e-18959394c169" />
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/286a0a33-7c29-430a-982f-318e90d9e8c9" />
+
+### Session Tracking, Starring, Labeling, and Recall
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/4b3a5ae6-6654-43b6-a25b-ffe689ea1748" />
+
+### AutoRuns with Change History Tracking
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/66e6f9e9-969e-497e-8139-f9fbf26f976a" />
+<img width="3592" height="2302" alt="image" src="https://github.com/user-attachments/assets/0aec0a73-a687-4b7f-9710-4bf9d1325b6d" />
 
 ## Keyboard Shortcuts
 
