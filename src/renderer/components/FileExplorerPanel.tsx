@@ -45,6 +45,7 @@ interface FileExplorerPanelProps {
   refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   onAutoRefreshChange?: (interval: number) => void;
+  onShowFlash?: (message: string) => void;
 }
 
 export function FileExplorerPanel(props: FileExplorerPanelProps) {
@@ -52,14 +53,12 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
     session, theme, fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, activeFocus, activeRightTab,
     previewFile, setActiveFocus, fileTreeContainerRef, fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders,
-    collapseAllFolders, updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange
+    collapseAllFolders, updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange, onShowFlash
   } = props;
 
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
   const layerIdRef = useRef<string>();
   const [isRefreshing, setIsRefreshing] = useState(false);
-  const [flashMessage, setFlashMessage] = useState<string | null>(null);
-  const flashTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   // Refresh overlay state
   const [overlayOpen, setOverlayOpen] = useState(false);
@@ -75,34 +74,22 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
   // Handle refresh with animation and flash notification
   const handleRefresh = useCallback(async () => {
     setIsRefreshing(true);
-    // Clear any existing flash message
-    if (flashTimeoutRef.current) {
-      clearTimeout(flashTimeoutRef.current);
-      flashTimeoutRef.current = null;
-    }
-    setFlashMessage(null);
 
     try {
       const changes = await refreshFileTree(session.id);
 
-      // Show flash notification with change count
-      if (changes) {
+      // Show center screen flash notification with change count
+      if (changes && onShowFlash) {
         const message = changes.totalChanges === 0
           ? 'No changes detected'
           : `Detected ${changes.totalChanges} change${changes.totalChanges === 1 ? '' : 's'}`;
-        setFlashMessage(message);
-
-        // Auto-hide after 2 seconds
-        flashTimeoutRef.current = setTimeout(() => {
-          setFlashMessage(null);
-          flashTimeoutRef.current = null;
-        }, 2000);
+        onShowFlash(message);
       }
     } finally {
       // Keep spinner visible for at least 500ms for visual feedback
       setTimeout(() => setIsRefreshing(false), 500);
     }
-  }, [refreshFileTree, session.id]);
+  }, [refreshFileTree, session.id, onShowFlash]);
 
   // Silent refresh for auto-refresh (no flash notification)
   const silentRefresh = useCallback(async () => {
@@ -132,15 +119,6 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
       }
     };
   }, [autoRefreshInterval, silentRefresh]);
-
-  // Cleanup flash timeout on unmount
-  useEffect(() => {
-    return () => {
-      if (flashTimeoutRef.current) {
-        clearTimeout(flashTimeoutRef.current);
-      }
-    };
-  }, []);
 
   // Hover handlers for refresh button overlay
   const handleRefreshMouseEnter = useCallback(() => {
@@ -277,37 +255,6 @@ export function FileExplorerPanel(props: FileExplorerPanelProps) {
 
   return (
     <div className="space-y-2 relative">
-      {/* Flash notification for refresh results */}
-      {flashMessage && (
-        <div
-          className="absolute inset-x-0 top-16 z-20 flex justify-center pointer-events-none"
-          style={{
-            animation: 'fadeInOut 2s ease-in-out forwards',
-          }}
-        >
-          <style>
-            {`
-              @keyframes fadeInOut {
-                0% { opacity: 0; transform: translateY(-8px); }
-                15% { opacity: 1; transform: translateY(0); }
-                85% { opacity: 1; transform: translateY(0); }
-                100% { opacity: 0; transform: translateY(-8px); }
-              }
-            `}
-          </style>
-          <div
-            className="px-4 py-2 rounded-lg shadow-lg text-xs font-medium"
-            style={{
-              backgroundColor: theme.colors.bgActivity,
-              color: theme.colors.textMain,
-              border: `1px solid ${theme.colors.border}`,
-            }}
-          >
-            {flashMessage}
-          </div>
-        </div>
-      )}
-
       {/* File Tree Filter */}
       {fileTreeFilterOpen && (
         <div className="mb-3 pt-4">

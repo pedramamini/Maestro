@@ -1,4 +1,4 @@
-import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, memo, useMemo } from 'react';
+import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, memo, useMemo, forwardRef, useImperativeHandle } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -8,6 +8,8 @@ import type { BatchRunState, SessionState, Theme } from '../types';
 import { AutoRunnerHelpModal } from './AutoRunnerHelpModal';
 import { MermaidRenderer } from './MermaidRenderer';
 import { AutoRunDocumentSelector } from './AutoRunDocumentSelector';
+import { useTemplateAutocomplete } from '../hooks/useTemplateAutocomplete';
+import { TemplateAutocompleteDropdown } from './TemplateAutocompleteDropdown';
 
 // Memoize remarkPlugins array - it never changes
 const REMARK_PLUGINS = [remarkGfm];
@@ -58,6 +60,10 @@ interface AutoRunProps {
 
   // Legacy prop for backwards compatibility
   onChange?: (content: string) => void;
+}
+
+export interface AutoRunHandle {
+  focus: () => void;
 }
 
 // Cache for loaded images to avoid repeated IPC calls
@@ -345,7 +351,7 @@ function ImagePreview({
 }
 
 // Inner implementation component
-function AutoRunInner({
+const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInner({
   theme,
   sessionId,
   folderPath,
@@ -370,7 +376,7 @@ function AutoRunInner({
   onStopBatchRun,
   sessionState,
   onChange,  // Legacy prop for backwards compatibility
-}: AutoRunProps) {
+}, ref) {
   const isLocked = batchRunState?.isRunning || false;
   const isAgentBusy = sessionState === 'busy' || sessionState === 'connecting';
   const isStopping = batchRunState?.isStopping || false;
@@ -520,23 +526,27 @@ function AutoRunInner({
     });
   }, [selectedFile, localContent]);
 
+  // Track content prop to detect external changes (for session switch sync)
+  const prevContentForSyncRef = useRef(content);
+
   // Sync local content from prop when session changes (switching sessions)
+  // or when content changes externally (e.g., switching documents, batch run modifying tasks)
   useEffect(() => {
-    if (sessionId !== prevSessionIdRef.current) {
+    const sessionChanged = sessionId !== prevSessionIdRef.current;
+    const contentChanged = content !== prevContentForSyncRef.current;
+
+    if (sessionChanged) {
       // Reset editing flag so content can sync properly when returning to this session
       isEditingRef.current = false;
       setLocalContent(content);
       prevSessionIdRef.current = sessionId;
+      prevContentForSyncRef.current = content;
+    } else if (contentChanged && !isEditingRef.current) {
+      // Content changed externally (document switch, batch run, etc.) - sync if not editing
+      setLocalContent(content);
+      prevContentForSyncRef.current = content;
     }
   }, [sessionId, content]);
-
-  // Also sync if content changes externally (e.g., batch run modifying tasks)
-  // But only when we're not actively editing (avoid fighting with user input)
-  useEffect(() => {
-    if (!isEditingRef.current && content !== localContent) {
-      setLocalContent(content);
-    }
-  }, [content]);
 
   // Sync local content to parent on blur
   const syncContentToParent = useCallback(() => {
@@ -630,6 +640,32 @@ function AutoRunInner({
   // Track scroll positions in refs to preserve across re-renders
   const previewScrollPosRef = useRef(initialPreviewScrollPos);
   const editScrollPosRef = useRef(initialEditScrollPos);
+
+  // Template variable autocomplete hook
+  const {
+    autocompleteState,
+    handleKeyDown: handleAutocompleteKeyDown,
+    handleChange: handleAutocompleteChange,
+    selectVariable,
+    closeAutocomplete,
+    autocompleteRef,
+  } = useTemplateAutocomplete({
+    textareaRef,
+    value: localContent,
+    onChange: setLocalContent,
+  });
+
+  // Expose focus method to parent via ref
+  useImperativeHandle(ref, () => ({
+    focus: () => {
+      // Focus the appropriate element based on current mode
+      if (mode === 'edit' && textareaRef.current) {
+        textareaRef.current.focus();
+      } else if (mode === 'preview' && previewRef.current) {
+        previewRef.current.focus();
+      }
+    }
+  }), [mode]);
 
   // Load existing images for the current document from the Auto Run folder
   useEffect(() => {
@@ -1107,15 +1143,17 @@ function AutoRunInner({
   const canNavigateLightbox = attachmentsList.length > 1;
 
   const goToPrevImage = useCallback(() => {
-    if (canNavigateLightbox && lightboxCurrentIndex > 0) {
-      setLightboxFilename(attachmentsList[lightboxCurrentIndex - 1]);
+    if (canNavigateLightbox) {
+      const newIndex = lightboxCurrentIndex > 0 ? lightboxCurrentIndex - 1 : attachmentsList.length - 1;
+      setLightboxFilename(attachmentsList[newIndex]);
       setLightboxCopied(false);
     }
   }, [canNavigateLightbox, lightboxCurrentIndex, attachmentsList]);
 
   const goToNextImage = useCallback(() => {
-    if (canNavigateLightbox && lightboxCurrentIndex < attachmentsList.length - 1) {
-      setLightboxFilename(attachmentsList[lightboxCurrentIndex + 1]);
+    if (canNavigateLightbox) {
+      const newIndex = lightboxCurrentIndex < attachmentsList.length - 1 ? lightboxCurrentIndex + 1 : 0;
+      setLightboxFilename(attachmentsList[newIndex]);
       setLightboxCopied(false);
     }
   }, [canNavigateLightbox, lightboxCurrentIndex, attachmentsList]);
@@ -1189,6 +1227,11 @@ function AutoRunInner({
   }, [lightboxFilename, lightboxCurrentIndex, attachmentsList, folderPath, localContent, handleContentChange, closeLightbox, pushUndoState]);
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Let template autocomplete handle keys first
+    if (handleAutocompleteKeyDown(e)) {
+      return;
+    }
+
     // Cmd+Z to undo, Cmd+Shift+Z to redo
     if ((e.metaKey || e.ctrlKey) && e.key === 'z') {
       e.preventDefault();
@@ -1475,28 +1518,29 @@ function AutoRunInner({
           onClick={() => !isLocked && setMode('edit')}
           disabled={isLocked}
           className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
-            mode === 'edit' ? 'font-semibold' : ''
+            mode === 'edit' && !isLocked ? 'font-semibold' : ''
           } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
           style={{
-            backgroundColor: mode === 'edit' ? theme.colors.bgActivity : 'transparent',
-            color: mode === 'edit' ? theme.colors.textMain : theme.colors.textDim,
-            border: `1px solid ${mode === 'edit' ? theme.colors.accent : theme.colors.border}`
+            backgroundColor: mode === 'edit' && !isLocked ? theme.colors.bgActivity : 'transparent',
+            color: isLocked ? theme.colors.textDim : (mode === 'edit' ? theme.colors.textMain : theme.colors.textDim),
+            border: `1px solid ${mode === 'edit' && !isLocked ? theme.colors.accent : theme.colors.border}`
           }}
+          title={isLocked ? 'Editing disabled while Auto Run active' : 'Edit document'}
         >
           <Edit className="w-3.5 h-3.5" />
           Edit
         </button>
         <button
-          onClick={() => !isLocked && setMode('preview')}
-          disabled={isLocked}
+          onClick={() => setMode('preview')}
           className={`flex items-center gap-2 px-3 py-1.5 rounded text-xs transition-colors ${
-            mode === 'preview' ? 'font-semibold' : ''
-          } ${isLocked ? 'opacity-50 cursor-not-allowed' : ''}`}
+            mode === 'preview' || isLocked ? 'font-semibold' : ''
+          }`}
           style={{
-            backgroundColor: mode === 'preview' ? theme.colors.bgActivity : 'transparent',
-            color: mode === 'preview' ? theme.colors.textMain : theme.colors.textDim,
-            border: `1px solid ${mode === 'preview' ? theme.colors.accent : theme.colors.border}`
+            backgroundColor: mode === 'preview' || isLocked ? theme.colors.bgActivity : 'transparent',
+            color: mode === 'preview' || isLocked ? theme.colors.textMain : theme.colors.textDim,
+            border: `1px solid ${mode === 'preview' || isLocked ? theme.colors.accent : theme.colors.border}`
           }}
+          title="Preview document"
         >
           <Eye className="w-3.5 h-3.5" />
           Preview
@@ -1694,7 +1738,7 @@ function AutoRunInner({
       )}
 
       {/* Content Area */}
-      <div className="flex-1 min-h-0">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {/* Empty folder state - show when folder is configured but has no documents */}
         {folderPath && documentList.length === 0 && !isLoadingDocuments ? (
           <div
@@ -1746,36 +1790,46 @@ function AutoRunInner({
             </div>
           </div>
         ) : mode === 'edit' ? (
-          <textarea
-            ref={textareaRef}
-            value={localContent}
-            onChange={(e) => {
-              if (!isLocked) {
-                isEditingRef.current = true;
-                // Schedule undo snapshot with current content before the change
-                const previousContent = localContent;
-                const previousCursor = textareaRef.current?.selectionStart || 0;
-                setLocalContent(e.target.value);
-                scheduleUndoSnapshot(previousContent, previousCursor);
-              }
-            }}
-            onFocus={() => { isEditingRef.current = true; }}
-            onBlur={syncContentToParent}
-            onKeyDown={!isLocked ? handleKeyDown : undefined}
-            onPaste={handlePaste}
-            placeholder="Capture notes, images, and tasks in Markdown."
-            readOnly={isLocked}
-            className={`w-full h-full border rounded p-4 bg-transparent outline-none resize-none font-mono text-sm ${isLocked ? 'cursor-not-allowed opacity-70' : ''}`}
-            style={{
-              borderColor: isLocked ? theme.colors.warning : theme.colors.border,
-              color: theme.colors.textMain,
-              backgroundColor: isLocked ? theme.colors.bgActivity + '30' : 'transparent'
-            }}
-          />
+          <div className="relative w-full h-full">
+            <textarea
+              ref={textareaRef}
+              value={localContent}
+              onChange={(e) => {
+                if (!isLocked) {
+                  isEditingRef.current = true;
+                  // Schedule undo snapshot with current content before the change
+                  const previousContent = localContent;
+                  const previousCursor = textareaRef.current?.selectionStart || 0;
+                  // Use autocomplete handler to detect "{{" triggers
+                  handleAutocompleteChange(e);
+                  scheduleUndoSnapshot(previousContent, previousCursor);
+                }
+              }}
+              onFocus={() => { isEditingRef.current = true; }}
+              onBlur={syncContentToParent}
+              onKeyDown={!isLocked ? handleKeyDown : undefined}
+              onPaste={handlePaste}
+              placeholder="Capture notes, images, and tasks in Markdown. (type {{ for variables)"
+              readOnly={isLocked}
+              className={`w-full h-full border rounded p-4 bg-transparent outline-none resize-none font-mono text-sm ${isLocked ? 'cursor-not-allowed opacity-70' : ''}`}
+              style={{
+                borderColor: isLocked ? theme.colors.warning : theme.colors.border,
+                color: theme.colors.textMain,
+                backgroundColor: isLocked ? theme.colors.bgActivity + '30' : 'transparent'
+              }}
+            />
+            {/* Template Variable Autocomplete Dropdown */}
+            <TemplateAutocompleteDropdown
+              ref={autocompleteRef}
+              theme={theme}
+              state={autocompleteState}
+              onSelect={selectVariable}
+            />
+          </div>
         ) : (
           <div
             ref={previewRef}
-            className="h-full border rounded p-4 overflow-y-auto prose prose-sm max-w-none outline-none scrollbar-thin"
+            className="border rounded p-4 prose prose-sm max-w-none outline-none"
             tabIndex={0}
             onKeyDown={(e) => {
               if ((e.metaKey || e.ctrlKey) && e.key === 'e') {
@@ -1846,7 +1900,7 @@ function AutoRunInner({
           ref={(el) => el?.focus()}
         >
           {/* Previous button - only for attachments carousel */}
-          {!lightboxExternalUrl && canNavigateLightbox && lightboxCurrentIndex > 0 && (
+          {!lightboxExternalUrl && canNavigateLightbox && (
             <button
               onClick={(e) => { e.stopPropagation(); goToPrevImage(); }}
               className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors"
@@ -1898,7 +1952,7 @@ function AutoRunInner({
           </div>
 
           {/* Next button - only for attachments carousel */}
-          {!lightboxExternalUrl && canNavigateLightbox && lightboxCurrentIndex < attachmentsList.length - 1 && (
+          {!lightboxExternalUrl && canNavigateLightbox && (
             <button
               onClick={(e) => { e.stopPropagation(); goToNextImage(); }}
               className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors"
@@ -1920,7 +1974,7 @@ function AutoRunInner({
       )}
     </div>
   );
-}
+});
 
 // Memoized AutoRun component with custom comparison to prevent unnecessary re-renders
 export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {

@@ -245,7 +245,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
       }
       setQuickActionOpen(false);
     } }] : []),
-    ...(activeSession && onRefreshGitFileState ? [{ id: 'refreshGitFileState', label: 'Refresh File/Git State', subtext: 'Reload file tree and git status', action: async () => {
+    ...(activeSession && onRefreshGitFileState ? [{ id: 'refreshGitFileState', label: 'Refresh Files, Git, History', subtext: 'Reload file tree, git status, and history', action: async () => {
       await onRefreshGitFileState();
       setQuickActionOpen(false);
     } }] : []),

@@ -341,7 +341,7 @@ export function AllSessionsView({
   searchQuery = '',
 }: AllSessionsViewProps) {
   const colors = useThemeColors();
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null);
   const [localSearchQuery, setLocalSearchQuery] = useState(searchQuery);
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -357,10 +357,22 @@ export function AllSessionsView({
     );
   }, [sessions, localSearchQuery]);
 
-  // Organize sessions by group
+  // Organize sessions by group, including a special "bookmarks" group
   const sessionsByGroup = useMemo((): Record<string, GroupInfo> => {
     const groups: Record<string, GroupInfo> = {};
 
+    // Add bookmarked sessions to a special "bookmarks" group
+    const bookmarkedSessions = filteredSessions.filter(s => s.bookmarked);
+    if (bookmarkedSessions.length > 0) {
+      groups['bookmarks'] = {
+        id: 'bookmarks',
+        name: 'Bookmarks',
+        emoji: '★',
+        sessions: bookmarkedSessions,
+      };
+    }
+
+    // Organize remaining sessions by their actual groups
     for (const session of filteredSessions) {
       const groupKey = session.groupId || 'ungrouped';
 
@@ -378,20 +390,33 @@ export function AllSessionsView({
     return groups;
   }, [filteredSessions]);
 
-  // Get sorted group keys (ungrouped last)
+  // Get sorted group keys (bookmarks first, ungrouped last)
   const sortedGroupKeys = useMemo(() => {
     const keys = Object.keys(sessionsByGroup);
     return keys.sort((a, b) => {
+      // Put 'bookmarks' at the start
+      if (a === 'bookmarks') return -1;
+      if (b === 'bookmarks') return 1;
+      // Put 'ungrouped' at the end
       if (a === 'ungrouped') return 1;
       if (b === 'ungrouped') return -1;
       return sessionsByGroup[a].name.localeCompare(sessionsByGroup[b].name);
     });
   }, [sessionsByGroup]);
 
+  // Initialize collapsed groups with all groups collapsed by default, except bookmarks
+  useEffect(() => {
+    if (collapsedGroups === null && sortedGroupKeys.length > 0) {
+      // Start with all groups collapsed except bookmarks (which should be expanded by default)
+      const initialCollapsed = new Set(sortedGroupKeys.filter(key => key !== 'bookmarks'));
+      setCollapsedGroups(initialCollapsed);
+    }
+  }, [sortedGroupKeys, collapsedGroups]);
+
   // Toggle group collapse
   const handleToggleCollapse = useCallback((groupId: string) => {
     setCollapsedGroups((prev) => {
-      const next = new Set(prev);
+      const next = new Set(prev || []);
       if (next.has(groupId)) {
         next.delete(groupId);
       } else {
@@ -615,7 +640,7 @@ export function AllSessionsView({
                 sessions={group.sessions}
                 activeSessionId={activeSessionId}
                 onSelectSession={handleSelectSession}
-                isCollapsed={collapsedGroups.has(groupKey)}
+                isCollapsed={collapsedGroups?.has(groupKey) ?? true}
                 onToggleCollapse={handleToggleCollapse}
               />
             );

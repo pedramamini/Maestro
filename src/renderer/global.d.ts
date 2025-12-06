@@ -46,6 +46,8 @@ interface UsageStats {
   contextWindow: number;
 }
 
+type HistoryEntryType = 'AUTO' | 'USER' | 'LOOP';
+
 interface MaestroAPI {
   settings: {
     get: (key: string) => Promise<unknown>;
@@ -78,6 +80,7 @@ interface MaestroAPI {
     onData: (callback: (sessionId: string, data: string) => void) => () => void;
     onExit: (callback: (sessionId: string, code: number) => void) => () => void;
     onSessionId: (callback: (sessionId: string, claudeSessionId: string) => void) => () => void;
+    onSlashCommands: (callback: (sessionId: string, slashCommands: string[]) => void) => () => void;
     onRemoteCommand: (callback: (sessionId: string, command: string, inputMode?: 'ai' | 'terminal') => void) => () => void;
     onRemoteSwitchMode: (callback: (sessionId: string, mode: 'ai' | 'terminal') => void) => () => void;
     onRemoteInterrupt: (callback: (sessionId: string) => void) => () => void;
@@ -112,8 +115,8 @@ interface MaestroAPI {
     }>, activeTabId: string) => Promise<void>;
   };
   git: {
-    status: (cwd: string) => Promise<{ staged: string[]; unstaged: string[]; untracked: string[]; branch?: string }>;
-    diff: (cwd: string, file?: string) => Promise<string>;
+    status: (cwd: string) => Promise<{ stdout: string; stderr: string }>;
+    diff: (cwd: string, file?: string) => Promise<{ stdout: string; stderr: string }>;
     isRepo: (cwd: string) => Promise<boolean>;
     numstat: (cwd: string) => Promise<{ stdout: string; stderr: string }>;
     branch: (cwd: string) => Promise<{ stdout: string; stderr: string }>;
@@ -214,6 +217,12 @@ interface MaestroAPI {
   };
   shell: {
     openExternal: (url: string) => Promise<void>;
+  };
+  tunnel: {
+    isCloudflaredInstalled: () => Promise<boolean>;
+    start: () => Promise<{ success: boolean; url?: string; error?: string }>;
+    stop: () => Promise<{ success: boolean }>;
+    getStatus: () => Promise<{ isRunning: boolean; url: string | null; error: string | null }>;
   };
   devtools: {
     open: () => Promise<void>;
@@ -320,28 +329,39 @@ interface MaestroAPI {
   history: {
     getAll: (projectPath?: string, sessionId?: string) => Promise<Array<{
       id: string;
-      type: 'AUTO' | 'USER';
+      type: HistoryEntryType;
       timestamp: number;
       summary: string;
+      fullResponse?: string;
       claudeSessionId?: string;
       projectPath: string;
       sessionId?: string;
+      sessionName?: string;
       contextUsage?: number;
       usageStats?: UsageStats;
+      success?: boolean;
+      elapsedTimeMs?: number;
+      validated?: boolean;
     }>>;
     add: (entry: {
       id: string;
-      type: 'AUTO' | 'USER';
+      type: HistoryEntryType;
       timestamp: number;
       summary: string;
+      fullResponse?: string;
       claudeSessionId?: string;
       projectPath: string;
       sessionId?: string;
+      sessionName?: string;
       contextUsage?: number;
       usageStats?: UsageStats;
+      success?: boolean;
+      elapsedTimeMs?: number;
+      validated?: boolean;
     }) => Promise<boolean>;
     clear: (projectPath?: string) => Promise<boolean>;
     delete: (entryId: string) => Promise<boolean>;
+    update: (entryId: string, updates: { validated?: boolean }) => Promise<boolean>;
   };
   notification: {
     show: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;

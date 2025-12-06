@@ -282,7 +282,7 @@ const LOAD_MORE_COUNT = 50;         // Entries to add when scrolling
 
 export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPanelProps>(function HistoryPanel({ session, theme, onJumpToClaudeSession, onResumeSession, onOpenSessionAsTab }, ref) {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
-  const [activeFilters, setActiveFilters] = useState<Set<HistoryEntryType>>(new Set(['AUTO', 'USER', 'LOOP_SUMMARY']));
+  const [activeFilters, setActiveFilters] = useState<Set<HistoryEntryType>>(new Set(['AUTO', 'USER', 'LOOP']));
   const [isLoading, setIsLoading] = useState(true);
   const [selectedIndex, setSelectedIndex] = useState<number>(-1);
   const [detailModalEntry, setDetailModalEntry] = useState<HistoryEntry | null>(null);
@@ -572,7 +572,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
         return { bg: theme.colors.warning + '20', text: theme.colors.warning, border: theme.colors.warning + '40' };
       case 'USER':
         return { bg: theme.colors.accent + '20', text: theme.colors.accent, border: theme.colors.accent + '40' };
-      case 'LOOP_SUMMARY':
+      case 'LOOP':
         return { bg: theme.colors.success + '20', text: theme.colors.success, border: theme.colors.success + '40' };
       default:
         return { bg: theme.colors.bgActivity, text: theme.colors.textDim, border: theme.colors.border };
@@ -586,7 +586,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
         return Bot;
       case 'USER':
         return User;
-      case 'LOOP_SUMMARY':
+      case 'LOOP':
         return RefreshCw;
       default:
         return Bot;
@@ -599,31 +599,32 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
       <div className="flex items-start gap-3 mb-4 pt-2">
         {/* Left-justified filter pills */}
         <div className="flex gap-2 flex-shrink-0">
-          {(['AUTO', 'USER', 'LOOP_SUMMARY'] as HistoryEntryType[]).map(type => {
-            const isActive = activeFilters.has(type);
-            const colors = getPillColor(type);
-            const Icon = getEntryIcon(type);
-            // Use shorter label for LOOP_SUMMARY
-            const displayLabel = type === 'LOOP_SUMMARY' ? 'LOOP' : type;
+          {/* Only show LOOP pill if there are LOOP entries */}
+          {(['AUTO', 'USER', 'LOOP'] as HistoryEntryType[])
+            .filter(type => type !== 'LOOP' || historyEntries.some(e => e.type === 'LOOP'))
+            .map(type => {
+              const isActive = activeFilters.has(type);
+              const colors = getPillColor(type);
+              const Icon = getEntryIcon(type);
 
-            return (
-              <button
-                key={type}
-                onClick={() => toggleFilter(type)}
-                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase transition-all ${
-                  isActive ? 'opacity-100' : 'opacity-40'
-                }`}
-                style={{
-                  backgroundColor: isActive ? colors.bg : 'transparent',
-                  color: isActive ? colors.text : theme.colors.textDim,
-                  border: `1px solid ${isActive ? colors.border : theme.colors.border}`
-                }}
-              >
-                <Icon className="w-3 h-3" />
-                {displayLabel}
-              </button>
-            );
-          })}
+              return (
+                <button
+                  key={type}
+                  onClick={() => toggleFilter(type)}
+                  className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase transition-all ${
+                    isActive ? 'opacity-100' : 'opacity-40'
+                  }`}
+                  style={{
+                    backgroundColor: isActive ? colors.bg : 'transparent',
+                    color: isActive ? colors.text : theme.colors.textDim,
+                    border: `1px solid ${isActive ? colors.border : theme.colors.border}`
+                  }}
+                >
+                  <Icon className="w-3 h-3" />
+                  {type}
+                </button>
+              );
+            })}
         </div>
 
         {/* 24-hour activity bar graph */}
@@ -757,7 +758,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
                       }}
                     >
                       <Icon className="w-2.5 h-2.5" />
-                      {entry.type === 'LOOP_SUMMARY' ? 'LOOP' : entry.type}
+                      {entry.type}
                     </span>
 
                     {/* Session Name or ID Octet (clickable) - opens session as new tab */}

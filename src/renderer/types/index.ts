@@ -1,7 +1,8 @@
 // Type definitions for Maestro renderer
 
 // Re-export theme types from shared location
-export { Theme, ThemeId, ThemeMode, ThemeColors, isValidThemeId } from '../../shared/theme-types';
+export type { Theme, ThemeId, ThemeMode, ThemeColors } from '../../shared/theme-types';
+export { isValidThemeId } from '../../shared/theme-types';
 
 export type ToolType = 'claude' | 'claude-code' | 'aider' | 'opencode' | 'terminal';
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
@@ -73,7 +74,8 @@ export interface WorkLogItem {
 }
 
 // History entry types for the History panel
-export type HistoryEntryType = 'AUTO' | 'USER' | 'LOOP_SUMMARY';
+// AUTO = task completed by Auto Run, USER = manual user prompt, LOOP = loop iteration summary
+export type HistoryEntryType = 'AUTO' | 'USER' | 'LOOP';
 
 export interface HistoryEntry {
   id: string;
@@ -331,6 +333,12 @@ export interface Session {
   batchRunnerPrompt?: string;
   // Timestamp when the batch runner prompt was last modified
   batchRunnerPromptModifiedAt?: number;
+  // CLI activity - present when CLI is running a playbook on this session
+  cliActivity?: {
+    playbookId: string;
+    playbookName: string;
+    startedAt: number;
+  };
 
   // Tab management for AI mode (multi-tab Claude Code sessions)
   // Each tab represents a separate Claude Code conversation
@@ -368,6 +376,7 @@ export interface AgentConfig {
   name: string;
   available: boolean;
   path?: string;
+  customPath?: string; // User-specified custom path (shown in UI even if not available)
   command?: string;
   args?: string[];
   hidden?: boolean; // If true, agent is hidden from UI (internal use only)

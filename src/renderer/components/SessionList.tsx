@@ -309,6 +309,11 @@ export function SessionList(props: SessionListProps) {
   const [sessionFilterOpen, setSessionFilterOpen] = useState(false);
   const [ungroupedCollapsed, setUngroupedCollapsed] = useState(false);
   const [preFilterGroupStates, setPreFilterGroupStates] = useState<Map<string, boolean>>(new Map());
+  const [preFilterBookmarksCollapsed, setPreFilterBookmarksCollapsed] = useState<boolean | null>(null);
+  // Remember user's preferred states while in filter mode (persists across filter open/close within session)
+  const [filterModeGroupStates, setFilterModeGroupStates] = useState<Map<string, boolean> | null>(null);
+  const [filterModeBookmarksCollapsed, setFilterModeBookmarksCollapsed] = useState<boolean | null>(null);
+  const [filterModeInitialized, setFilterModeInitialized] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [liveOverlayOpen, setLiveOverlayOpen] = useState(false);
 
@@ -557,44 +562,93 @@ export function SessionList(props: SessionListProps) {
       })
     : sessions;
 
-  // Temporarily expand groups when filtering to show matching sessions
-  // Note: Only depend on sessionFilter and sessions (not filteredSessions which changes reference each render)
+  // When filter opens, apply filter mode preferences (or defaults on first open)
+  // When filter closes, save current states as filter mode preferences and restore original states
   useEffect(() => {
-    if (sessionFilter) {
-      // Save current group states before filtering
+    if (sessionFilterOpen) {
+      // Save current (non-filter) states when filter opens
       if (preFilterGroupStates.size === 0) {
         const currentStates = new Map<string, boolean>();
         groups.forEach(g => currentStates.set(g.id, g.collapsed));
         setPreFilterGroupStates(currentStates);
       }
+      if (preFilterBookmarksCollapsed === null) {
+        setPreFilterBookmarksCollapsed(bookmarksCollapsed);
+      }
 
-      // Find groups that contain matching sessions (search session name AND AI tab names)
-      const groupsWithMatches = new Set<string>();
-      const query = sessionFilter.toLowerCase();
-      sessions.filter(s => {
-        if (s.name.toLowerCase().includes(query)) return true;
-        if (s.aiTabs?.some(tab => tab.name?.toLowerCase().includes(query))) return true;
-        return false;
-      }).forEach(session => {
-        if (session.groupId) {
-          groupsWithMatches.add(session.groupId);
-        }
-      });
-
-      // Temporarily expand groups with matches
-      setGroups(prev => prev.map(g => ({
-        ...g,
-        collapsed: groupsWithMatches.has(g.id) ? false : g.collapsed
-      })));
+      // Apply filter mode preferences if we have them, otherwise use defaults
+      if (filterModeInitialized && filterModeGroupStates) {
+        // Restore user's preferred filter mode states
+        setGroups(prev => prev.map(g => ({
+          ...g,
+          collapsed: filterModeGroupStates.get(g.id) ?? true
+        })));
+        setBookmarksCollapsed(filterModeBookmarksCollapsed ?? false);
+      } else {
+        // First time opening filter - use defaults: collapse all groups, expand bookmarks
+        setGroups(prev => prev.map(g => ({ ...g, collapsed: true })));
+        setBookmarksCollapsed(false);
+        setFilterModeInitialized(true);
+      }
     } else {
-      // Restore original group states when filter is cleared
+      // Filter closing - save current states as filter mode preferences
       if (preFilterGroupStates.size > 0) {
+        const currentFilterStates = new Map<string, boolean>();
+        groups.forEach(g => currentFilterStates.set(g.id, g.collapsed));
+        setFilterModeGroupStates(currentFilterStates);
+        setFilterModeBookmarksCollapsed(bookmarksCollapsed);
+
+        // Restore original (non-filter) states
         setGroups(prev => prev.map(g => ({
           ...g,
           collapsed: preFilterGroupStates.get(g.id) ?? g.collapsed
         })));
         setPreFilterGroupStates(new Map());
       }
+      if (preFilterBookmarksCollapsed !== null) {
+        setBookmarksCollapsed(preFilterBookmarksCollapsed);
+        setPreFilterBookmarksCollapsed(null);
+      }
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sessionFilterOpen]);
+
+  // Temporarily expand groups when filtering to show matching sessions
+  // Note: Only depend on sessionFilter and sessions (not filteredSessions which changes reference each render)
+  useEffect(() => {
+    if (sessionFilter) {
+      // Find groups that contain matching sessions (search session name AND AI tab names)
+      const groupsWithMatches = new Set<string>();
+      const query = sessionFilter.toLowerCase();
+      const matchingSessions = sessions.filter(s => {
+        if (s.name.toLowerCase().includes(query)) return true;
+        if (s.aiTabs?.some(tab => tab.name?.toLowerCase().includes(query))) return true;
+        return false;
+      });
+
+      matchingSessions.forEach(session => {
+        if (session.groupId) {
+          groupsWithMatches.add(session.groupId);
+        }
+      });
+
+      // Check if any matching sessions are bookmarked
+      const hasMatchingBookmarks = matchingSessions.some(s => s.bookmarked);
+
+      // Temporarily expand groups with matches
+      setGroups(prev => prev.map(g => ({
+        ...g,
+        collapsed: groupsWithMatches.has(g.id) ? false : g.collapsed
+      })));
+
+      // Temporarily expand bookmarks if there are matching bookmarked sessions
+      if (hasMatchingBookmarks) {
+        setBookmarksCollapsed(false);
+      }
+    } else if (sessionFilterOpen) {
+      // Filter cleared but filter input still open - collapse groups again, keep bookmarks expanded
+      setGroups(prev => prev.map(g => ({ ...g, collapsed: true })));
+      setBookmarksCollapsed(false);
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionFilter]);
@@ -1291,7 +1345,7 @@ export function SessionList(props: SessionListProps) {
                             title={
                               session.toolType === 'claude' && !session.claudeSessionId ? 'No active Claude session' :
                               session.state === 'idle' ? 'Ready and waiting' :
-                              session.state === 'busy' ? 'Agent is thinking' :
+                              session.state === 'busy' ? (session.cliActivity ? `CLI: Running playbook "${session.cliActivity.playbookName}"` : 'Agent is thinking') :
                               session.state === 'connecting' ? 'Attempting to establish connection' :
                               session.state === 'error' ? 'No connection with agent' :
                               'Waiting for input'
@@ -1579,7 +1633,7 @@ export function SessionList(props: SessionListProps) {
                               title={
                                 session.toolType === 'claude' && !session.claudeSessionId ? 'No active Claude session' :
                                 session.state === 'idle' ? 'Ready and waiting' :
-                                session.state === 'busy' ? 'Agent is thinking' :
+                                session.state === 'busy' ? (session.cliActivity ? `CLI: Running playbook "${session.cliActivity.playbookName}"` : 'Agent is thinking') :
                                 session.state === 'connecting' ? 'Attempting to establish connection' :
                                 session.state === 'error' ? 'No connection with agent' :
                                 'Waiting for input'

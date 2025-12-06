@@ -1,9 +1,11 @@
-import React, { useEffect, useRef, useState } from 'react';
+import React, { useEffect, useRef, useState, useCallback } from 'react';
 import { X, FileText, Variable, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { TEMPLATE_VARIABLES } from '../utils/templateVariables';
+import { useTemplateAutocomplete } from '../hooks/useTemplateAutocomplete';
+import { TemplateAutocompleteDropdown } from './TemplateAutocompleteDropdown';
 
 interface AgentPromptComposerModalProps {
   isOpen: boolean;
@@ -37,12 +39,27 @@ export function AgentPromptComposerModal({
   const valueRef = useRef(value);
   valueRef.current = value;
 
+  // Template variable autocomplete
+  const {
+    autocompleteState,
+    handleKeyDown: handleAutocompleteKeyDown,
+    handleChange: handleAutocompleteChange,
+    selectVariable,
+    closeAutocomplete,
+    autocompleteRef,
+  } = useTemplateAutocomplete({
+    textareaRef,
+    value,
+    onChange: setValue,
+  });
+
   // Sync value when modal opens with new initialValue
   useEffect(() => {
     if (isOpen) {
       setValue(initialValue);
+      closeAutocomplete();
     }
-  }, [isOpen, initialValue]);
+  }, [isOpen, initialValue, closeAutocomplete]);
 
   // Focus textarea when modal opens
   useEffect(() => {
@@ -61,6 +78,11 @@ export function AgentPromptComposerModal({
         type: 'modal',
         priority: MODAL_PRIORITIES.AGENT_PROMPT_COMPOSER,
         onEscape: () => {
+          // If autocomplete is open, close it instead of the modal
+          if (autocompleteState.isOpen) {
+            closeAutocomplete();
+            return;
+          }
           // Save the current value back before closing
           onSubmitRef.current(valueRef.current);
           onCloseRef.current();
@@ -68,13 +90,20 @@ export function AgentPromptComposerModal({
       });
       return () => unregisterLayer(id);
     }
-  }, [isOpen, registerLayer, unregisterLayer]);
+  }, [isOpen, registerLayer, unregisterLayer, autocompleteState.isOpen, closeAutocomplete]);
 
   if (!isOpen) return null;
 
   const handleDone = () => {
     onSubmit(value);
     onClose();
+  };
+
+  const handleTextareaKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Let autocomplete handle keys first
+    if (handleAutocompleteKeyDown(e)) {
+      return;
+    }
   };
 
   const tokenCount = estimateTokenCount(value);
@@ -183,14 +212,22 @@ export function AgentPromptComposerModal({
         </div>
 
         {/* Textarea */}
-        <div className="flex-1 p-4 overflow-hidden">
+        <div className="flex-1 p-4 overflow-hidden relative">
           <textarea
             ref={textareaRef}
             value={value}
-            onChange={(e) => setValue(e.target.value)}
+            onChange={handleAutocompleteChange}
+            onKeyDown={handleTextareaKeyDown}
             className="w-full h-full bg-transparent resize-none outline-none text-sm leading-relaxed scrollbar-thin font-mono"
             style={{ color: theme.colors.textMain }}
-            placeholder="Enter your agent prompt..."
+            placeholder="Enter your agent prompt... (type {{ for variables)"
+          />
+          {/* Template Variable Autocomplete Dropdown */}
+          <TemplateAutocompleteDropdown
+            ref={autocompleteRef}
+            theme={theme}
+            state={autocompleteState}
+            onSelect={selectVariable}
           />
         </div>
 

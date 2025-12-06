@@ -71,6 +71,8 @@ export interface SlashCommandAutocompleteProps {
   selectedIndex?: number;
   /** Called when selected index changes (for keyboard navigation) */
   onSelectedIndexChange?: (index: number) => void;
+  /** Whether the input is expanded (affects max height) */
+  isInputExpanded?: boolean;
 }
 
 /**
@@ -87,6 +89,7 @@ export function SlashCommandAutocomplete({
   onClose,
   selectedIndex = 0,
   onSelectedIndexChange,
+  isInputExpanded = false,
 }: SlashCommandAutocompleteProps) {
   const colors = useThemeColors();
   const containerRef = useRef<HTMLDivElement>(null);
@@ -176,7 +179,9 @@ export function SlashCommandAutocomplete({
         border: `1px solid ${colors.border}`,
         borderRadius: '12px',
         boxShadow: '0 -4px 20px rgba(0, 0, 0, 0.2)',
-        maxHeight: '250px',
+        // When input is not expanded, take more screen space (60vh)
+        // When input is expanded, use smaller height (250px)
+        maxHeight: isInputExpanded ? '250px' : '60vh',
         overflowY: 'auto',
         overflowX: 'hidden',
         zIndex: 110,

@@ -210,7 +210,7 @@ export function AutoRunDocumentSelector({
           backgroundColor: node.path === selectedDocument ? theme.colors.bgActivity : 'transparent',
         }}
       >
-        {node.name}
+        {node.name}.md
       </button>
     );
   };
@@ -231,7 +231,7 @@ export function AutoRunDocumentSelector({
             }}
           >
             <span className="truncate">
-              {selectedDocument || 'Select a document...'}
+              {selectedDocument ? `${selectedDocument}.md` : 'Select a document...'}
             </span>
             <ChevronDown
               className={`w-4 h-4 ml-2 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -274,7 +274,7 @@ export function AutoRunDocumentSelector({
                       backgroundColor: doc === selectedDocument ? theme.colors.bgActivity : 'transparent',
                     }}
                   >
-                    {doc}
+                    {doc}.md
                   </button>
                 ))
               )}

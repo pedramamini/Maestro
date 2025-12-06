@@ -1,6 +1,7 @@
 import { execFileNoThrow } from './utils/execFile';
 import { logger } from './utils/logger';
 import * as os from 'os';
+import * as fs from 'fs';
 
 // Configuration option types for agent-specific settings
 export interface AgentConfigOption {
@@ -21,6 +22,7 @@ export interface AgentConfig {
   args: string[]; // Base args always included
   available: boolean;
   path?: string;
+  customPath?: string; // User-specified custom path (shown in UI even if not available)
   requiresPty?: boolean; // Whether this agent needs a pseudo-terminal
   configOptions?: AgentConfigOption[]; // Agent-specific configuration
   hidden?: boolean; // If true, agent is hidden from UI (internal use only)
@@ -70,6 +72,23 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path'>[] = [
 export class AgentDetector {
   private cachedAgents: AgentConfig[] | null = null;
   private detectionInProgress: Promise<AgentConfig[]> | null = null;
+  private customPaths: Record<string, string> = {};
+
+  /**
+   * Set custom paths for agents (from user configuration)
+   */
+  setCustomPaths(paths: Record<string, string>): void {
+    this.customPaths = paths;
+    // Clear cache when custom paths change
+    this.cachedAgents = null;
+  }
+
+  /**
+   * Get the current custom paths
+   */
+  getCustomPaths(): Record<string, string> {
+    return { ...this.customPaths };
+  }
 
   /**
    * Detect which agents are available on the system
@@ -104,23 +123,45 @@ export class AgentDetector {
     logger.info(`Agent detection starting. PATH: ${expandedEnv.PATH}`, 'AgentDetector');
 
     for (const agentDef of AGENT_DEFINITIONS) {
-      const detection = await this.checkBinaryExists(agentDef.binaryName);
+      const customPath = this.customPaths[agentDef.id];
+      let detection: { exists: boolean; path?: string };
 
-      if (detection.exists) {
-        logger.info(`Agent "${agentDef.name}" found at: ${detection.path}`, 'AgentDetector');
-      } else if (agentDef.binaryName !== 'bash') {
-        // Don't log bash as missing since it's always present, log others as warnings
-        logger.warn(
-          `Agent "${agentDef.name}" (binary: ${agentDef.binaryName}) not found. ` +
-          `Searched in PATH: ${expandedEnv.PATH}`,
-          'AgentDetector'
-        );
+      // If user has specified a custom path, check that first
+      if (customPath) {
+        detection = await this.checkCustomPath(customPath);
+        if (detection.exists) {
+          logger.info(`Agent "${agentDef.name}" found at custom path: ${detection.path}`, 'AgentDetector');
+        } else {
+          logger.warn(
+            `Agent "${agentDef.name}" custom path not valid: ${customPath}`,
+            'AgentDetector'
+          );
+          // Fall back to PATH detection
+          detection = await this.checkBinaryExists(agentDef.binaryName);
+          if (detection.exists) {
+            logger.info(`Agent "${agentDef.name}" found in PATH at: ${detection.path}`, 'AgentDetector');
+          }
+        }
+      } else {
+        detection = await this.checkBinaryExists(agentDef.binaryName);
+
+        if (detection.exists) {
+          logger.info(`Agent "${agentDef.name}" found at: ${detection.path}`, 'AgentDetector');
+        } else if (agentDef.binaryName !== 'bash') {
+          // Don't log bash as missing since it's always present, log others as warnings
+          logger.warn(
+            `Agent "${agentDef.name}" (binary: ${agentDef.binaryName}) not found. ` +
+            `Searched in PATH: ${expandedEnv.PATH}`,
+            'AgentDetector'
+          );
+        }
       }
 
       agents.push({
         ...agentDef,
         available: detection.exists,
         path: detection.path,
+        customPath: customPath || undefined,
       });
     }
 
@@ -129,6 +170,34 @@ export class AgentDetector {
 
     this.cachedAgents = agents;
     return agents;
+  }
+
+  /**
+   * Check if a custom path points to a valid executable
+   */
+  private async checkCustomPath(customPath: string): Promise<{ exists: boolean; path?: string }> {
+    try {
+      // Check if file exists
+      const stats = await fs.promises.stat(customPath);
+      if (!stats.isFile()) {
+        return { exists: false };
+      }
+
+      // Check if file is executable (on Unix systems)
+      if (process.platform !== 'win32') {
+        try {
+          await fs.promises.access(customPath, fs.constants.X_OK);
+        } catch {
+          // File exists but is not executable
+          logger.warn(`Custom path exists but is not executable: ${customPath}`, 'AgentDetector');
+          return { exists: false };
+        }
+      }
+
+      return { exists: true, path: customPath };
+    } catch {
+      return { exists: false };
+    }
   }
 
   /**

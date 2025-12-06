@@ -1,11 +1,13 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { BatchRunState, BatchRunConfig, BatchDocumentEntry, Session, HistoryEntry, UsageStats } from '../types';
+import type { BatchRunState, BatchRunConfig, BatchDocumentEntry, Session, HistoryEntry, UsageStats, Group } from '../types';
+import { substituteTemplateVariables, TemplateContext } from '../utils/templateVariables';
 
 // Regex to count unchecked markdown checkboxes: - [ ] task
 const UNCHECKED_TASK_REGEX = /^[\s]*-\s*\[\s*\]\s*.+$/gm;
 
 // Regex to match checked markdown checkboxes for reset-on-completion
-const CHECKED_TASK_REGEX = /^(\s*-\s*)\[x\]/gim;
+// Matches both [x] and [X] with various checkbox formats (standard and GitHub-style)
+const CHECKED_TASK_REGEX = /^(\s*-\s*)\[[xX✓✔]\]/gm;
 
 // Default empty batch state
 const DEFAULT_BATCH_STATE: BatchRunState = {
@@ -54,6 +56,7 @@ interface PRResultInfo {
 
 interface UseBatchProcessorProps {
   sessions: Session[];
+  groups: Group[];
   onUpdateSession: (sessionId: string, updates: Partial<Session>) => void;
   onSpawnAgent: (sessionId: string, prompt: string, cwdOverride?: string) => Promise<{ success: boolean; response?: string; claudeSessionId?: string; usageStats?: UsageStats }>;
   onSpawnSynopsis: (sessionId: string, cwd: string, claudeSessionId: string, prompt: string) => Promise<{ success: boolean; response?: string }>;
@@ -97,6 +100,73 @@ function formatLoopDuration(ms: number): string {
   const hours = Math.floor(minutes / 60);
   const remainingMinutes = minutes % 60;
   return `${hours}h ${remainingMinutes}m`;
+}
+
+/**
+ * Create a loop summary history entry
+ */
+interface LoopSummaryParams {
+  loopIteration: number;
+  loopTasksCompleted: number;
+  loopStartTime: number;
+  loopTotalInputTokens: number;
+  loopTotalOutputTokens: number;
+  loopTotalCost: number;
+  sessionCwd: string;
+  sessionId: string;
+  isFinal: boolean;
+  exitReason?: string;
+}
+
+function createLoopSummaryEntry(params: LoopSummaryParams): Omit<HistoryEntry, 'id'> {
+  const {
+    loopIteration,
+    loopTasksCompleted,
+    loopStartTime,
+    loopTotalInputTokens,
+    loopTotalOutputTokens,
+    loopTotalCost,
+    sessionCwd,
+    sessionId,
+    isFinal,
+    exitReason
+  } = params;
+
+  const loopElapsedMs = Date.now() - loopStartTime;
+  const loopNumber = loopIteration + 1;
+  const summaryPrefix = isFinal ? `Loop ${loopNumber} (final)` : `Loop ${loopNumber}`;
+  const loopSummary = `${summaryPrefix} completed: ${loopTasksCompleted} task${loopTasksCompleted !== 1 ? 's' : ''} accomplished`;
+
+  const loopDetails = [
+    `**${summaryPrefix} Summary**`,
+    '',
+    `- **Tasks Accomplished:** ${loopTasksCompleted}`,
+    `- **Duration:** ${formatLoopDuration(loopElapsedMs)}`,
+    loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
+      ? `- **Tokens:** ${(loopTotalInputTokens + loopTotalOutputTokens).toLocaleString()} (${loopTotalInputTokens.toLocaleString()} in / ${loopTotalOutputTokens.toLocaleString()} out)`
+      : '',
+    loopTotalCost > 0 ? `- **Cost:** $${loopTotalCost.toFixed(4)}` : '',
+    exitReason ? `- **Exit Reason:** ${exitReason}` : '',
+  ].filter(line => line !== '').join('\n');
+
+  return {
+    type: 'LOOP',
+    timestamp: Date.now(),
+    summary: loopSummary,
+    fullResponse: loopDetails,
+    projectPath: sessionCwd,
+    sessionId: sessionId,
+    success: true,
+    elapsedTimeMs: loopElapsedMs,
+    usageStats: loopTotalInputTokens > 0 || loopTotalOutputTokens > 0 ? {
+      inputTokens: loopTotalInputTokens,
+      outputTokens: loopTotalOutputTokens,
+      cacheReadInputTokens: 0,
+      cacheCreationInputTokens: 0,
+      totalCostUsd: loopTotalCost,
+      contextWindow: 0
+    } : undefined
+  };
 }
 
 /**
@@ -160,6 +230,7 @@ function parseSynopsis(response: string): { shortSummary: string; fullSynopsis: 
 
 export function useBatchProcessor({
   sessions,
+  groups,
   onUpdateSession,
   onSpawnAgent,
   onSpawnSynopsis,
@@ -246,16 +317,19 @@ ${docList}
    * Start a batch processing run for a specific session with multi-document support
    */
   const startBatchRun = useCallback(async (sessionId: string, config: BatchRunConfig, folderPath: string) => {
+    console.log('[BatchProcessor] startBatchRun called:', { sessionId, folderPath, config });
+
     const session = sessions.find(s => s.id === sessionId);
     if (!session) {
-      console.error('Session not found for batch processing:', sessionId);
+      console.error('[BatchProcessor] Session not found for batch processing:', sessionId);
       return;
     }
 
     const { documents, prompt, loopEnabled, maxLoops, worktree } = config;
+    console.log('[BatchProcessor] Config parsed - documents:', documents.length, 'loopEnabled:', loopEnabled, 'maxLoops:', maxLoops);
 
     if (documents.length === 0) {
-      console.warn('No documents provided for batch processing:', sessionId);
+      console.warn('[BatchProcessor] No documents provided for batch processing:', sessionId);
       return;
     }
 
@@ -330,6 +404,21 @@ ${docList}
       }
     }
 
+    // Get git branch for template variable substitution
+    let gitBranch: string | undefined;
+    if (session.isGitRepo) {
+      try {
+        const status = await window.maestro.git.getStatus(effectiveCwd);
+        gitBranch = status.branch;
+      } catch {
+        // Ignore git errors - branch will be empty string
+      }
+    }
+
+    // Find group name for this session (sessions have groupId, groups have id)
+    const sessionGroup = session.groupId ? groups.find(g => g.id === session.groupId) : null;
+    const groupName = sessionGroup?.name;
+
     // Calculate initial total tasks across all documents
     let initialTotalTasks = 0;
     for (const doc of documents) {
@@ -394,11 +483,30 @@ ${docList}
     let loopTotalOutputTokens = 0;
     let loopTotalCost = 0;
 
+    // Helper to add final loop summary (defined here so it has access to tracking vars)
+    const addFinalLoopSummary = (exitReason: string) => {
+      if (loopEnabled && (loopTasksCompleted > 0 || loopIteration > 0)) {
+        onAddHistoryEntry(createLoopSummaryEntry({
+          loopIteration,
+          loopTasksCompleted,
+          loopStartTime,
+          loopTotalInputTokens,
+          loopTotalOutputTokens,
+          loopTotalCost,
+          sessionCwd: session.cwd,
+          sessionId,
+          isFinal: true,
+          exitReason
+        }));
+      }
+    };
+
     // Main processing loop (handles loop mode)
     while (true) {
       // Check for stop request
       if (stopRequestedRefs.current[sessionId]) {
         console.log('[BatchProcessor] Batch run stopped by user for session:', sessionId);
+        addFinalLoopSummary('Stopped by user');
         break;
       }
 
@@ -420,10 +528,29 @@ ${docList}
         const docFilePath = `${folderPath}/${docEntry.filename}.md`;
 
         // Read document and count tasks
-        let { taskCount: remainingTasks } = await readDocAndCountTasks(folderPath, docEntry.filename);
+        let { taskCount: remainingTasks, content: docContent } = await readDocAndCountTasks(folderPath, docEntry.filename);
 
-        // Skip documents with no tasks
+        // Handle documents with no unchecked tasks
         if (remainingTasks === 0) {
+          // For reset-on-completion documents, check if there are checked tasks that need resetting
+          if (docEntry.resetOnCompletion && loopEnabled) {
+            const checkedTaskCount = (docContent.match(CHECKED_TASK_REGEX) || []).length;
+            if (checkedTaskCount > 0) {
+              console.log(`[BatchProcessor] Document ${docEntry.filename} has ${checkedTaskCount} checked tasks - resetting for next iteration`);
+              const resetContent = uncheckAllTasks(docContent);
+              await window.maestro.autorun.writeDoc(folderPath, docEntry.filename + '.md', resetContent);
+              // Update task count in state
+              const resetTaskCount = countUnfinishedTasks(resetContent);
+              setBatchRunStates(prev => ({
+                ...prev,
+                [sessionId]: {
+                  ...prev[sessionId],
+                  totalTasksAcrossAllDocs: prev[sessionId].totalTasksAcrossAllDocs + resetTaskCount,
+                  totalTasks: prev[sessionId].totalTasks + resetTaskCount
+                }
+              }));
+            }
+          }
           console.log(`[BatchProcessor] Skipping document ${docEntry.filename} - no unchecked tasks`);
           continue;
         }
@@ -451,8 +578,30 @@ ${docList}
             break;
           }
 
-          // Replace $$SCRATCHPAD$$ placeholder with actual document path
-          const finalPrompt = prompt.replace(/\$\$SCRATCHPAD\$\$/g, docFilePath);
+          // Build template context for this task
+          const templateContext: TemplateContext = {
+            session,
+            gitBranch,
+            groupName,
+            autoRunFolder: folderPath,
+            loopNumber: loopIteration + 1, // 1-indexed
+            documentName: docEntry.filename,
+            documentPath: docFilePath,
+          };
+
+          // Substitute template variables in the prompt
+          const finalPrompt = substituteTemplateVariables(prompt, templateContext);
+
+          // Read document content and expand template variables in it
+          const docReadResult = await window.maestro.autorun.readDoc(folderPath, docEntry.filename + '.md');
+          if (docReadResult.success && docReadResult.content) {
+            const expandedDocContent = substituteTemplateVariables(docReadResult.content, templateContext);
+            // Write the expanded content back to the document temporarily
+            // (Claude will read this file, so it needs the expanded variables)
+            if (expandedDocContent !== docReadResult.content) {
+              await window.maestro.autorun.writeDoc(folderPath, docEntry.filename + '.md', expandedDocContent);
+            }
+          }
 
           try {
             // Capture start time for elapsed time tracking
@@ -475,7 +624,8 @@ ${docList}
 
             // Re-read document to get updated task count
             const { taskCount: newRemainingTasks } = await readDocAndCountTasks(folderPath, docEntry.filename);
-            const tasksCompletedThisRun = remainingTasks - newRemainingTasks;
+            // Calculate tasks completed - ensure it's never negative (Claude may have added tasks)
+            const tasksCompletedThisRun = Math.max(0, remainingTasks - newRemainingTasks);
 
             // Update counters
             docTasksCompleted += tasksCompletedThisRun;
@@ -578,10 +728,26 @@ ${docList}
 
           // Read the current content and uncheck all tasks
           const { content: currentContent } = await readDocAndCountTasks(folderPath, docEntry.filename);
+
+          // Count checked tasks before reset
+          const checkedMatches = currentContent.match(CHECKED_TASK_REGEX) || [];
+          const checkedBefore = checkedMatches.length;
+          console.log(`[BatchProcessor] Document ${docEntry.filename} has ${checkedBefore} checked tasks before reset`);
+          console.log(`[BatchProcessor] Checked task matches:`, checkedMatches);
+
           const resetContent = uncheckAllTasks(currentContent);
 
+          // Count unchecked tasks after reset
+          const uncheckedAfter = countUnfinishedTasks(resetContent);
+          console.log(`[BatchProcessor] Document ${docEntry.filename} has ${uncheckedAfter} unchecked tasks after reset`);
+
+          // Log first 500 chars of content before/after for debugging
+          console.log(`[BatchProcessor] Content before reset (first 500):`, currentContent.substring(0, 500));
+          console.log(`[BatchProcessor] Content after reset (first 500):`, resetContent.substring(0, 500));
+
           // Write the reset content back
-          await window.maestro.autorun.writeDoc(folderPath, docEntry.filename + '.md', resetContent);
+          const writeResult = await window.maestro.autorun.writeDoc(folderPath, docEntry.filename + '.md', resetContent);
+          console.log(`[BatchProcessor] Write result for ${docEntry.filename}:`, writeResult);
 
           // If loop is enabled, add the reset tasks back to the total
           if (loopEnabled) {
@@ -607,18 +773,24 @@ ${docList}
       // Check if we've hit the max loop limit
       if (maxLoops !== null && maxLoops !== undefined && loopIteration + 1 >= maxLoops) {
         console.log(`[BatchProcessor] Reached max loop limit (${maxLoops}), exiting loop`);
+        addFinalLoopSummary(`Reached max loop limit (${maxLoops})`);
         break;
       }
 
       // Check for stop request after full pass
       if (stopRequestedRefs.current[sessionId]) {
+        addFinalLoopSummary('Stopped by user');
+        break;
+      }
+
+      // Safety check: if we didn't process ANY tasks this iteration, exit to avoid infinite loop
+      if (!anyTasksProcessedThisIteration) {
+        console.warn('[BatchProcessor] No tasks processed this iteration - exiting to avoid infinite loop');
+        addFinalLoopSummary('No tasks processed this iteration');
         break;
       }
 
       // Loop mode: check if we should continue looping
-      // Key insight: Reset documents will always have tasks after being reset, so we only
-      // continue looping if there are non-reset documents with remaining tasks
-
       // Check if there are any non-reset documents in the playbook
       const hasAnyNonResetDocs = documents.some(doc => !doc.resetOnCompletion);
 
@@ -637,21 +809,11 @@ ${docList}
 
         if (!anyNonResetDocsHaveTasks) {
           console.log('[BatchProcessor] All non-reset documents completed, exiting loop');
+          addFinalLoopSummary('All tasks completed');
           break;
         }
-      } else {
-        // All documents are reset documents - exit after one pass
-        // Without non-reset docs to track progress, we'd loop forever
-        console.log('[BatchProcessor] All documents are reset-on-completion, exiting after one pass');
-        break;
       }
-
-      // Safety check: if we didn't process ANY tasks this iteration but docs still have tasks,
-      // something is wrong - exit to avoid infinite loop
-      if (!anyTasksProcessedThisIteration) {
-        console.warn('[BatchProcessor] No tasks processed but documents still have tasks - exiting to avoid infinite loop');
-        break;
-      }
+      // If all documents are reset docs, we continue looping (maxLoops check above will stop us)
 
       // Re-scan all documents to get fresh task counts for next loop (tasks may have been added/removed)
       let newTotalTasks = 0;
@@ -678,7 +840,7 @@ ${docList}
       ].filter(line => line !== '').join('\n');
 
       onAddHistoryEntry({
-        type: 'LOOP_SUMMARY',
+        type: 'LOOP',
         timestamp: Date.now(),
         summary: loopSummary,
         fullResponse: loopDetails,

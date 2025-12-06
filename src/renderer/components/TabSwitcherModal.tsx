@@ -5,6 +5,7 @@ import { fuzzyMatchWithScore } from '../utils/search';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { getContextColor } from '../utils/theme';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 /** Named session from the store (not currently open) */
 interface NamedSession {
@@ -418,7 +419,7 @@ export function TabSwitcherModal({
           <div className="flex items-center gap-2">
             {shortcut && (
               <span className="text-xs font-mono opacity-60" style={{ color: theme.colors.textDim }}>
-                {shortcut.keys.join('+')}
+                {formatShortcutKeys(shortcut.keys)}
               </span>
             )}
             <div

@@ -23,6 +23,9 @@ import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 /** Duration in ms to trigger long-press */
 const LONG_PRESS_DURATION = 500;
 
+/** Minimum touch movement (in pixels) to cancel tap and consider it a scroll */
+const SCROLL_THRESHOLD = 10;
+
 /**
  * Props for individual session pill
  */
@@ -35,12 +38,19 @@ interface SessionPillProps {
 
 /**
  * Individual session pill component
+ *
+ * Uses touch tracking to differentiate between scrolling and tapping:
+ * - If touch moves more than SCROLL_THRESHOLD pixels, it's a scroll (no action)
+ * - If touch ends without much movement, it's a tap (select session)
+ * - Long press still triggers the info popover
  */
 function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillProps) {
   const colors = useThemeColors();
   const buttonRef = useRef<HTMLButtonElement>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isLongPressTriggeredRef = useRef(false);
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isScrollingRef = useRef(false);
 
   // Map session state to status for StatusDot
   const getStatus = (): SessionStatus => {
@@ -63,37 +73,63 @@ function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillPr
   const startLongPressTimer = useCallback(() => {
     isLongPressTriggeredRef.current = false;
     longPressTimerRef.current = setTimeout(() => {
-      isLongPressTriggeredRef.current = true;
-      triggerHaptic(HAPTIC_PATTERNS.success);
-      if (buttonRef.current) {
-        const rect = buttonRef.current.getBoundingClientRect();
-        onLongPress(session, rect);
+      // Only trigger if not scrolling
+      if (!isScrollingRef.current) {
+        isLongPressTriggeredRef.current = true;
+        triggerHaptic(HAPTIC_PATTERNS.success);
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          onLongPress(session, rect);
+        }
       }
     }, LONG_PRESS_DURATION);
   }, [session, onLongPress]);
 
-  // Handle touch/mouse start
-  const handlePressStart = useCallback((e: React.TouchEvent | React.MouseEvent) => {
-    // Prevent context menu on long press
-    e.preventDefault();
+  // Handle touch start - record position, start long-press timer
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    isScrollingRef.current = false;
     startLongPressTimer();
   }, [startLongPressTimer]);
 
-  // Handle touch/mouse end
-  const handlePressEnd = useCallback(() => {
+  // Handle touch move - detect scrolling
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+
+    // If moved more than threshold, it's a scroll
+    if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
+      isScrollingRef.current = true;
+      clearLongPressTimer();
+    }
+  }, [clearLongPressTimer]);
+
+  // Handle touch end - only select if it wasn't a scroll or long press
+  const handleTouchEnd = useCallback(() => {
     clearLongPressTimer();
-    // Only trigger tap if long press wasn't triggered
-    if (!isLongPressTriggeredRef.current) {
+
+    // Only trigger tap if we weren't scrolling and long press wasn't triggered
+    if (!isScrollingRef.current && !isLongPressTriggeredRef.current) {
       triggerHaptic(HAPTIC_PATTERNS.tap);
       onSelect(session.id);
     }
+
+    // Reset state
+    touchStartRef.current = null;
+    isScrollingRef.current = false;
     isLongPressTriggeredRef.current = false;
   }, [clearLongPressTimer, onSelect, session.id]);
 
-  // Handle touch/mouse move (cancel long press if moved too far)
-  const handlePressMove = useCallback(() => {
-    // Cancel long press on move
+  // Handle touch cancel
+  const handleTouchCancel = useCallback(() => {
     clearLongPressTimer();
+    touchStartRef.current = null;
+    isScrollingRef.current = false;
+    isLongPressTriggeredRef.current = false;
   }, [clearLongPressTimer]);
 
   // Cleanup timer on unmount
@@ -124,14 +160,26 @@ function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillPr
   return (
     <button
       ref={buttonRef}
-      onTouchStart={handlePressStart}
-      onTouchEnd={handlePressEnd}
-      onTouchMove={handlePressMove}
-      onTouchCancel={handlePressEnd}
-      onMouseDown={handlePressStart}
-      onMouseUp={handlePressEnd}
-      onMouseLeave={handlePressEnd}
-      onContextMenu={(e) => e.preventDefault()}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      onClick={(e) => {
+        // For non-touch devices (mouse), use onClick
+        // Touch devices will have already handled via touch events
+        if (!('ontouchstart' in window)) {
+          triggerHaptic(HAPTIC_PATTERNS.tap);
+          onSelect(session.id);
+        }
+      }}
+      onContextMenu={(e) => {
+        e.preventDefault();
+        // Show long press menu on right-click for desktop
+        if (buttonRef.current) {
+          const rect = buttonRef.current.getBoundingClientRect();
+          onLongPress(session, rect);
+        }
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -148,7 +196,8 @@ function SessionPill({ session, isActive, onSelect, onLongPress }: SessionPillPr
         transition: 'all 0.15s ease',
         flexShrink: 0,
         minWidth: 'fit-content',
-        touchAction: 'manipulation',
+        // Allow native touch scrolling - don't use 'manipulation' which can interfere
+        touchAction: 'pan-x pan-y',
         WebkitTapHighlightColor: 'transparent',
         outline: 'none',
         userSelect: 'none',
@@ -513,6 +562,9 @@ interface GroupHeaderProps {
 
 /**
  * Group header component that displays group name with collapse/expand toggle
+ *
+ * Uses touch tracking to differentiate between scrolling and tapping,
+ * similar to SessionPill.
  */
 function GroupHeader({
   groupId,
@@ -523,15 +575,62 @@ function GroupHeader({
   onToggleCollapse,
 }: GroupHeaderProps) {
   const colors = useThemeColors();
+  const touchStartRef = useRef<{ x: number; y: number } | null>(null);
+  const isScrollingRef = useRef(false);
 
-  const handleClick = useCallback(() => {
-    triggerHaptic(HAPTIC_PATTERNS.tap);
-    onToggleCollapse(groupId);
+  // Handle touch start - record position
+  const handleTouchStart = useCallback((e: React.TouchEvent) => {
+    const touch = e.touches[0];
+    touchStartRef.current = { x: touch.clientX, y: touch.clientY };
+    isScrollingRef.current = false;
+  }, []);
+
+  // Handle touch move - detect scrolling
+  const handleTouchMove = useCallback((e: React.TouchEvent) => {
+    if (!touchStartRef.current) return;
+
+    const touch = e.touches[0];
+    const deltaX = Math.abs(touch.clientX - touchStartRef.current.x);
+    const deltaY = Math.abs(touch.clientY - touchStartRef.current.y);
+
+    // If moved more than threshold, it's a scroll
+    if (deltaX > SCROLL_THRESHOLD || deltaY > SCROLL_THRESHOLD) {
+      isScrollingRef.current = true;
+    }
+  }, []);
+
+  // Handle touch end - only toggle if it wasn't a scroll
+  const handleTouchEnd = useCallback(() => {
+    // Only trigger tap if we weren't scrolling
+    if (!isScrollingRef.current) {
+      triggerHaptic(HAPTIC_PATTERNS.tap);
+      onToggleCollapse(groupId);
+    }
+
+    // Reset state
+    touchStartRef.current = null;
+    isScrollingRef.current = false;
   }, [groupId, onToggleCollapse]);
+
+  // Handle touch cancel
+  const handleTouchCancel = useCallback(() => {
+    touchStartRef.current = null;
+    isScrollingRef.current = false;
+  }, []);
 
   return (
     <button
-      onClick={handleClick}
+      onTouchStart={handleTouchStart}
+      onTouchMove={handleTouchMove}
+      onTouchEnd={handleTouchEnd}
+      onTouchCancel={handleTouchCancel}
+      onClick={() => {
+        // For non-touch devices (mouse), use onClick
+        if (!('ontouchstart' in window)) {
+          triggerHaptic(HAPTIC_PATTERNS.tap);
+          onToggleCollapse(groupId);
+        }
+      }}
       style={{
         display: 'flex',
         alignItems: 'center',
@@ -546,7 +645,8 @@ function GroupHeader({
         cursor: 'pointer',
         whiteSpace: 'nowrap',
         flexShrink: 0,
-        touchAction: 'manipulation',
+        // Allow native touch scrolling
+        touchAction: 'pan-x pan-y',
         WebkitTapHighlightColor: 'transparent',
         outline: 'none',
         userSelect: 'none',
@@ -650,12 +750,24 @@ export function SessionPillBar({
   const colors = useThemeColors();
   const scrollContainerRef = useRef<HTMLDivElement>(null);
   const [popoverState, setPopoverState] = useState<PopoverState | null>(null);
-  const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+  const [collapsedGroups, setCollapsedGroups] = useState<Set<string> | null>(null);
 
-  // Organize sessions by group
+  // Organize sessions by group, including a special "bookmarks" group
   const sessionsByGroup = useMemo((): Record<string, GroupInfo> => {
     const groups: Record<string, GroupInfo> = {};
 
+    // Add bookmarked sessions to a special "bookmarks" group
+    const bookmarkedSessions = sessions.filter(s => s.bookmarked);
+    if (bookmarkedSessions.length > 0) {
+      groups['bookmarks'] = {
+        id: 'bookmarks',
+        name: 'Bookmarks',
+        emoji: '★',
+        sessions: bookmarkedSessions,
+      };
+    }
+
+    // Organize remaining sessions by their actual groups
     for (const session of sessions) {
       const groupKey = session.groupId || 'ungrouped';
 
@@ -673,10 +785,13 @@ export function SessionPillBar({
     return groups;
   }, [sessions]);
 
-  // Get sorted group keys (ungrouped last)
+  // Get sorted group keys (bookmarks first, ungrouped last)
   const sortedGroupKeys = useMemo(() => {
     const keys = Object.keys(sessionsByGroup);
     return keys.sort((a, b) => {
+      // Put 'bookmarks' at the start
+      if (a === 'bookmarks') return -1;
+      if (b === 'bookmarks') return 1;
       // Put 'ungrouped' at the end
       if (a === 'ungrouped') return 1;
       if (b === 'ungrouped') return -1;
@@ -686,8 +801,38 @@ export function SessionPillBar({
   }, [sessionsByGroup]);
 
   // Check if there are multiple groups (to decide whether to show group headers)
+  // Note: Consider it "multiple groups" if there's bookmarks + any other group
   const hasMultipleGroups = sortedGroupKeys.length > 1 ||
     (sortedGroupKeys.length === 1 && sortedGroupKeys[0] !== 'ungrouped');
+
+  // Initialize collapsed groups with all groups collapsed by default, except bookmarks
+  useEffect(() => {
+    if (collapsedGroups === null && sortedGroupKeys.length > 0) {
+      // Start with all groups collapsed except bookmarks (which should be expanded by default)
+      const initialCollapsed = new Set(sortedGroupKeys.filter(key => key !== 'bookmarks'));
+      setCollapsedGroups(initialCollapsed);
+    }
+  }, [sortedGroupKeys, collapsedGroups]);
+
+  // Auto-expand the group containing the active session
+  useEffect(() => {
+    if (!activeSessionId || collapsedGroups === null) return;
+
+    // Find which group contains the active session
+    const activeSession = sessions.find(s => s.id === activeSessionId);
+    if (!activeSession) return;
+
+    const activeGroupKey = activeSession.groupId || 'ungrouped';
+
+    // If the active session's group is collapsed, expand it
+    if (collapsedGroups.has(activeGroupKey)) {
+      setCollapsedGroups(prev => {
+        const next = new Set(prev || []);
+        next.delete(activeGroupKey);
+        return next;
+      });
+    }
+  }, [activeSessionId, sessions, collapsedGroups]);
 
   // Handle long-press on a session pill
   const handleLongPress = useCallback((session: Session, rect: DOMRect) => {
@@ -699,10 +844,12 @@ export function SessionPillBar({
     setPopoverState(null);
   }, []);
 
-  // Toggle group collapsed state
+  // Toggle group collapsed state and scroll to show the group header when expanding
   const handleToggleCollapse = useCallback((groupId: string) => {
+    const wasCollapsed = collapsedGroups?.has(groupId) ?? true;
+
     setCollapsedGroups(prev => {
-      const next = new Set(prev);
+      const next = new Set(prev || []);
       if (next.has(groupId)) {
         next.delete(groupId);
       } else {
@@ -710,7 +857,26 @@ export function SessionPillBar({
       }
       return next;
     });
-  }, []);
+
+    // If we're expanding a group, scroll to show the group header at the start
+    if (wasCollapsed && scrollContainerRef.current) {
+      // Wait for the DOM to update with the expanded sessions
+      setTimeout(() => {
+        const container = scrollContainerRef.current;
+        if (!container) return;
+
+        // Find the group header element by its data attribute
+        const groupHeader = container.querySelector(`[data-group-id="${groupId}"]`) as HTMLElement | null;
+        if (groupHeader) {
+          // Scroll to put the group header at the left edge (with a small margin)
+          container.scrollTo({
+            left: groupHeader.offsetLeft - 8,
+            behavior: 'smooth',
+          });
+        }
+      }, 50);
+    }
+  }, [collapsedGroups]);
 
   // Scroll active session into view when it changes
   useEffect(() => {
@@ -806,10 +972,10 @@ export function SessionPillBar({
                 WebkitTapHighlightColor: 'transparent',
                 outline: 'none',
               }}
-              aria-label={`View all ${sessions.length} sessions`}
-              title="All Sessions"
+              aria-label={`Search ${sessions.length} sessions`}
+              title="Search Sessions"
             >
-              {/* Hamburger icon */}
+              {/* Search icon */}
               <svg
                 width="18"
                 height="18"
@@ -820,9 +986,8 @@ export function SessionPillBar({
                 strokeLinecap="round"
                 strokeLinejoin="round"
               >
-                <line x1="3" y1="6" x2="21" y2="6" />
-                <line x1="3" y1="12" x2="21" y2="12" />
-                <line x1="3" y1="18" x2="21" y2="18" />
+                <circle cx="11" cy="11" r="8" />
+                <line x1="21" y1="21" x2="16.65" y2="16.65" />
               </svg>
             </button>
             {/* History button - pinned next to hamburger */}
@@ -894,7 +1059,7 @@ export function SessionPillBar({
         >
           {sortedGroupKeys.map((groupKey) => {
             const group = sessionsByGroup[groupKey];
-            const isCollapsed = collapsedGroups.has(groupKey);
+            const isCollapsed = collapsedGroups?.has(groupKey) ?? true;
             const showGroupHeader = hasMultipleGroups;
 
             return (
@@ -902,6 +1067,7 @@ export function SessionPillBar({
                 {/* Group header (only show if multiple groups exist) */}
                 {showGroupHeader && (
                   <div
+                    data-group-id={groupKey}
                     style={{
                       scrollSnapAlign: 'start',
                     }}

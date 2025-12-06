@@ -75,6 +75,7 @@ export interface SessionData {
   thinkingStartTime?: number | null; // Timestamp when AI started thinking (for elapsed time display)
   aiTabs?: AITabData[];
   activeTabId?: string;
+  bookmarked?: boolean; // Whether session is bookmarked (shows in Bookmarks group)
 }
 
 /**
@@ -476,10 +477,9 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
   // Ref for handleMessage to avoid stale closure issues
   const handleMessageRef = useRef<((event: MessageEvent) => void) | null>(null);
 
-  // Keep handlers ref up to date
-  useEffect(() => {
-    handlersRef.current = handlers;
-  }, [handlers]);
+  // Keep handlers ref up to date SYNCHRONOUSLY to avoid race conditions
+  // This must happen before any WebSocket messages are processed
+  handlersRef.current = handlers;
 
   /**
    * Clear all timers
@@ -677,11 +677,10 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
     }
   }, [startPingInterval]);
 
-  // Keep handleMessageRef up to date to avoid stale closure issues
-  // The WebSocket uses a wrapper that always calls the latest handleMessage
-  useEffect(() => {
-    handleMessageRef.current = handleMessage;
-  }, [handleMessage]);
+  // Keep handleMessageRef up to date SYNCHRONOUSLY to avoid race conditions
+  // This must happen before any WebSocket messages are received
+  // Using useEffect would cause a race condition where messages arrive before the ref is set
+  handleMessageRef.current = handleMessage;
 
   /**
    * Attempt to reconnect to the server

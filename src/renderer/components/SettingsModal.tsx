@@ -77,6 +77,7 @@ export function SettingsModal(props: SettingsModalProps) {
   const [shells, setShells] = useState<ShellInfo[]>([]);
   const [shellsLoading, setShellsLoading] = useState(false);
   const [shellsLoaded, setShellsLoaded] = useState(false);
+  const [customAgentPaths, setCustomAgentPaths] = useState<Record<string, string>>({});
 
   // TTS test state
   const [testTtsId, setTestTtsId] = useState<number | null>(null);
@@ -198,6 +199,10 @@ export function SettingsModal(props: SettingsModalProps) {
         configs[agent.id] = config;
       }
       setAgentConfigs(configs);
+
+      // Load custom paths for agents
+      const paths = await window.maestro.agents.getAllCustomPaths();
+      setCustomAgentPaths(paths);
     } catch (error) {
       console.error('Failed to load agents:', error);
     } finally {
@@ -562,45 +567,92 @@ export function SettingsModal(props: SettingsModalProps) {
                   <div className="text-sm opacity-50">Loading agents...</div>
                 ) : (
                   <div className="space-y-2">
-                    {agents.map((agent) => (
-                      <button
+                    {agents.filter((agent) => !agent.hidden).map((agent) => (
+                      <div
                         key={agent.id}
-                        disabled={agent.id !== 'claude-code' || !agent.available}
-                        onClick={() => props.setDefaultAgent(agent.id)}
-                        className={`w-full text-left p-3 rounded border transition-all ${
+                        className={`rounded border transition-all ${
                           props.defaultAgent === agent.id ? 'ring-2' : ''
-                        } ${(agent.id !== 'claude-code' || !agent.available) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-opacity-10'}`}
+                        }`}
                         style={{
                           borderColor: theme.colors.border,
                           backgroundColor: props.defaultAgent === agent.id ? theme.colors.accentDim : theme.colors.bgMain,
                           ringColor: theme.colors.accent,
-                          color: theme.colors.textMain,
                         }}
                       >
-                        <div className="flex items-center justify-between">
-                          <div>
-                            <div className="font-medium">{agent.name}</div>
-                            {agent.path && (
-                              <div className="text-xs opacity-50 font-mono mt-1">{agent.path}</div>
+                        <button
+                          disabled={agent.id !== 'claude-code' || !agent.available}
+                          onClick={() => props.setDefaultAgent(agent.id)}
+                          className={`w-full text-left p-3 ${(agent.id !== 'claude-code' || !agent.available) ? 'opacity-40 cursor-not-allowed' : 'hover:bg-opacity-10'}`}
+                          style={{ color: theme.colors.textMain }}
+                        >
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <div className="font-medium">{agent.name}</div>
+                              {agent.path && (
+                                <div className="text-xs opacity-50 font-mono mt-1">{agent.path}</div>
+                              )}
+                            </div>
+                            {agent.id === 'claude-code' ? (
+                              agent.available ? (
+                                <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: theme.colors.success + '20', color: theme.colors.success }}>
+                                  Available
+                                </span>
+                              ) : (
+                                <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: theme.colors.error + '20', color: theme.colors.error }}>
+                                  Not Found
+                                </span>
+                              )
+                            ) : (
+                              <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: theme.colors.warning + '20', color: theme.colors.warning }}>
+                                Coming Soon
+                              </span>
                             )}
                           </div>
-                          {agent.id === 'claude-code' ? (
-                            agent.available ? (
-                              <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: theme.colors.success + '20', color: theme.colors.success }}>
-                                Available
-                              </span>
-                            ) : (
-                              <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: theme.colors.error + '20', color: theme.colors.error }}>
-                                Not Found
-                              </span>
-                            )
-                          ) : (
-                            <span className="text-xs px-2 py-0.5 rounded" style={{ backgroundColor: theme.colors.warning + '20', color: theme.colors.warning }}>
-                              Coming Soon
-                            </span>
-                          )}
-                        </div>
-                      </button>
+                        </button>
+                        {/* Custom path input for Claude Code */}
+                        {agent.id === 'claude-code' && (
+                          <div className="px-3 pb-3 pt-1 border-t" style={{ borderColor: theme.colors.border }}>
+                            <label className="block text-xs opacity-60 mb-1">Custom Path (optional)</label>
+                            <div className="flex gap-2">
+                              <input
+                                type="text"
+                                value={customAgentPaths[agent.id] || ''}
+                                onChange={(e) => {
+                                  const newPaths = { ...customAgentPaths, [agent.id]: e.target.value };
+                                  setCustomAgentPaths(newPaths);
+                                }}
+                                onBlur={async () => {
+                                  const path = customAgentPaths[agent.id]?.trim() || null;
+                                  await window.maestro.agents.setCustomPath(agent.id, path);
+                                  // Refresh agents to pick up the new path
+                                  loadAgents();
+                                }}
+                                placeholder="/path/to/claude"
+                                className="flex-1 p-1.5 rounded border bg-transparent outline-none text-xs font-mono"
+                                style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                              />
+                              {customAgentPaths[agent.id] && (
+                                <button
+                                  onClick={async () => {
+                                    const newPaths = { ...customAgentPaths };
+                                    delete newPaths[agent.id];
+                                    setCustomAgentPaths(newPaths);
+                                    await window.maestro.agents.setCustomPath(agent.id, null);
+                                    loadAgents();
+                                  }}
+                                  className="px-2 py-1 rounded text-xs"
+                                  style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+                                >
+                                  Clear
+                                </button>
+                              )}
+                            </div>
+                            <p className="text-xs opacity-40 mt-1">
+                              Specify a custom path if the agent is not in your PATH
+                            </p>
+                          </div>
+                        )}
+                      </div>
                     ))}
                   </div>
                 )}
@@ -1274,7 +1326,7 @@ export function SettingsModal(props: SettingsModalProps) {
                   </span>
                 </div>
                 <p className="text-xs opacity-50 mb-3" style={{ color: theme.colors.textDim }}>
-                  Not all shortcuts can be modified. Press <kbd className="px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: theme.colors.bgActivity }}>⌘/</kbd> to view the full list of keyboard shortcuts.
+                  Not all shortcuts can be modified. Press <kbd className="px-1.5 py-0.5 rounded font-mono" style={{ backgroundColor: theme.colors.bgActivity }}>⌘/</kbd> from the main interface to view the full list of keyboard shortcuts.
                 </p>
                 <div className="space-y-2 flex-1 overflow-y-auto pr-2 scrollbar-thin">
                   {filteredShortcuts.map((sc: Shortcut) => (

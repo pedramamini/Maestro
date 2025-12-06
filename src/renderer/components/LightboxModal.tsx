@@ -72,14 +72,16 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate }: Ligh
   }, []);
 
   const goToPrev = () => {
-    if (canNavigate && currentIndex > 0) {
-      onNavigate(stagedImages[currentIndex - 1]);
+    if (canNavigate) {
+      const newIndex = currentIndex > 0 ? currentIndex - 1 : stagedImages.length - 1;
+      onNavigate(stagedImages[newIndex]);
     }
   };
 
   const goToNext = () => {
-    if (canNavigate && currentIndex < stagedImages.length - 1) {
-      onNavigate(stagedImages[currentIndex + 1]);
+    if (canNavigate) {
+      const newIndex = currentIndex < stagedImages.length - 1 ? currentIndex + 1 : 0;
+      onNavigate(stagedImages[newIndex]);
     }
   };
 
@@ -98,7 +100,7 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate }: Ligh
       aria-modal="true"
       aria-label="Image Lightbox"
     >
-      {canNavigate && currentIndex > 0 && (
+      {canNavigate && (
         <button
           onClick={(e) => { e.stopPropagation(); goToPrev(); }}
           className="absolute left-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors"
@@ -116,7 +118,7 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate }: Ligh
         {copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
         {copied && <span className="text-sm">Copied!</span>}
       </button>
-      {canNavigate && currentIndex < stagedImages.length - 1 && (
+      {canNavigate && (
         <button
           onClick={(e) => { e.stopPropagation(); goToNext(); }}
           className="absolute right-4 top-1/2 -translate-y-1/2 bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors"

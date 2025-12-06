@@ -1,6 +1,6 @@
 import React, { useState, useRef, useCallback, useEffect } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Plus, Star, Copy, Edit2, Mail, Pencil } from 'lucide-react';
+import { X, Plus, Star, Copy, Edit2, Mail, Pencil, Search } from 'lucide-react';
 import type { AITab, Theme } from '../types';
 
 interface TabBarProps {
@@ -17,6 +17,7 @@ interface TabBarProps {
   onTabStar?: (tabId: string, starred: boolean) => void;
   showUnreadOnly?: boolean;
   onToggleUnreadFilter?: () => void;
+  onOpenTabSearch?: () => void;
 }
 
 interface TabProps {
@@ -492,7 +493,8 @@ export function TabBar({
   onCloseOthers,
   onTabStar,
   showUnreadOnly: showUnreadOnlyProp,
-  onToggleUnreadFilter
+  onToggleUnreadFilter,
+  onOpenTabSearch
 }: TabBarProps) {
   const [contextMenu, setContextMenu] = useState<{
     tabId: string;
@@ -621,11 +623,23 @@ export function TabBar({
         borderColor: theme.colors.border
       }}
     >
-      {/* Unread filter toggle - sticky at the beginning with full-height opaque background */}
+      {/* Tab search and unread filter - sticky at the beginning with full-height opaque background */}
       <div
-        className="sticky left-0 flex items-center shrink-0 pl-2 pr-2 self-stretch"
+        className="sticky left-0 flex items-center shrink-0 pl-2 pr-1 gap-1 self-stretch"
         style={{ backgroundColor: theme.colors.bgSidebar, zIndex: 5 }}
       >
+        {/* Tab search button */}
+        {onOpenTabSearch && (
+          <button
+            onClick={onOpenTabSearch}
+            className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
+            style={{ color: theme.colors.textDim }}
+            title="Search tabs (Cmd+Shift+O)"
+          >
+            <Search className="w-4 h-4" />
+          </button>
+        )}
+        {/* Unread filter toggle */}
         <button
           onClick={toggleUnreadFilter}
           className="relative flex items-center justify-center w-6 h-6 rounded transition-colors"

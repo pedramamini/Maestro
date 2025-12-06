@@ -12,14 +12,18 @@
     "type": "git",
     "url": "https://github.com/yourusername/maestro.git"
   },
+  "bin": {
+    "maestro-cli": "./dist/cli/maestro-cli.js"
+  },
   "scripts": {
     "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
     "dev:main": "tsc -p tsconfig.main.json && NODE_ENV=development electron .",
     "dev:renderer": "vite",
     "dev:web": "vite --config vite.config.web.mts",
     "generate:pwa-icons": "node scripts/generate-pwa-icons.mjs",
-    "build": "npm run build:main && npm run build:renderer && npm run build:web",
+    "build": "npm run build:main && npm run build:renderer && npm run build:web && npm run build:cli",
     "build:main": "tsc -p tsconfig.main.json",
+    "build:cli": "node scripts/build-cli.mjs",
     "build:renderer": "vite build",
     "build:web": "vite build --config vite.config.web.mts",
     "package": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --mac --win --linux",
@@ -60,7 +64,13 @@
           ]
         }
       ],
-      "icon": "build/icon.icns"
+      "icon": "build/icon.icns",
+      "extraResources": [
+        {
+          "from": "dist/cli/maestro-cli.js",
+          "to": "maestro-cli.js"
+        }
+      ]
     },
     "win": {
       "target": [
@@ -77,7 +87,13 @@
           ]
         }
       ],
-      "icon": "build/icon.ico"
+      "icon": "build/icon.ico",
+      "extraResources": [
+        {
+          "from": "dist/cli/maestro-cli.js",
+          "to": "maestro-cli.js"
+        }
+      ]
     },
     "linux": {
       "target": [
@@ -86,7 +102,13 @@
         "rpm"
       ],
       "category": "Development",
-      "icon": "build/icon.png"
+      "icon": "build/icon.png",
+      "extraResources": [
+        {
+          "from": "dist/cli/maestro-cli.js",
+          "to": "maestro-cli.js"
+        }
+      ]
     },
     "nsis": {
       "oneClick": false,
@@ -105,6 +127,7 @@
     "ansi-to-html": "^0.7.2",
     "archiver": "^7.0.1",
     "canvas-confetti": "^1.9.4",
+    "commander": "^14.0.2",
     "diff": "^8.0.2",
     "dompurify": "^3.3.0",
     "electron-store": "^8.1.0",
@@ -138,6 +161,7 @@
     "electron": "^28.1.0",
     "electron-builder": "^24.9.1",
     "electron-rebuild": "^3.2.9",
+    "esbuild": "^0.24.2",
     "lucide-react": "^0.303.0",
     "postcss": "^8.4.33",
     "react": "^18.2.0",

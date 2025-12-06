@@ -8,6 +8,7 @@ export interface GitStatus {
     path: string;
     status: string;
   }>;
+  branch?: string;
 }
 
 export interface GitDiff {
@@ -74,17 +75,20 @@ export const gitService = {
   },
 
   /**
-   * Get git status (porcelain format)
+   * Get git status (porcelain format) and current branch
    */
   async getStatus(cwd: string): Promise<GitStatus> {
     try {
-      const result = await window.maestro.git.status(cwd);
+      const [statusResult, branchResult] = await Promise.all([
+        window.maestro.git.status(cwd),
+        window.maestro.git.branch(cwd)
+      ]);
 
       // Parse porcelain format output
       const files: Array<{ path: string; status: string }> = [];
 
-      if (result.stdout) {
-        const lines = result.stdout.trim().split('\n').filter(line => line.length > 0);
+      if (statusResult.stdout) {
+        const lines = statusResult.stdout.trim().split('\n').filter(line => line.length > 0);
 
         for (const line of lines) {
           // Porcelain format: XY PATH or XY PATH -> NEWPATH (for renames)
@@ -95,7 +99,10 @@ export const gitService = {
         }
       }
 
-      return { files };
+      // Extract branch name
+      const branch = branchResult.stdout?.trim() || undefined;
+
+      return { files, branch };
     } catch (error) {
       console.error('Git status error:', error);
       return { files: [] };

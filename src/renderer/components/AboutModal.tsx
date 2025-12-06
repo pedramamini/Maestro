@@ -33,6 +33,10 @@ export function AboutModal({ theme, sessions, autoRunStats, onClose }: AboutModa
   const [isStatsComplete, setIsStatsComplete] = useState(false);
   const badgeEscapeHandlerRef = useRef<(() => boolean) | null>(null);
 
+  // Use ref to avoid re-registering layer when onClose changes
+  const onCloseRef = useRef(onClose);
+  onCloseRef.current = onClose;
+
   // Load global stats from all Claude projects on mount with streaming updates
   useEffect(() => {
     // Subscribe to streaming updates
@@ -87,6 +91,7 @@ export function AboutModal({ theme, sessions, autoRunStats, onClose }: AboutModa
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Custom escape handler that checks for badge overlay first
+  // Uses refs to avoid dependency changes that would cause infinite loops
   const handleEscape = useCallback(() => {
     // If badge overlay is open, close it first
     if (badgeEscapeHandlerRef.current) {
@@ -94,10 +99,10 @@ export function AboutModal({ theme, sessions, autoRunStats, onClose }: AboutModa
       return;
     }
     // Otherwise close the modal
-    onClose();
-  }, [onClose]);
+    onCloseRef.current();
+  }, []); // No dependencies - uses refs
 
-  // Register layer on mount
+  // Register layer on mount only
   useEffect(() => {
     const id = registerLayer({
       type: 'modal',
@@ -119,13 +124,6 @@ export function AboutModal({ theme, sessions, autoRunStats, onClose }: AboutModa
       }
     };
   }, [registerLayer, unregisterLayer, handleEscape]);
-
-  // Update handler when dependencies change
-  useEffect(() => {
-    if (layerIdRef.current) {
-      updateLayerHandler(layerIdRef.current, handleEscape);
-    }
-  }, [handleEscape, updateLayerHandler]);
 
   return (
     <div

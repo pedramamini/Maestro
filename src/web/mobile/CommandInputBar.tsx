@@ -133,6 +133,34 @@ const TEXTAREA_VERTICAL_PADDING = 28; // 14px top + 14px bottom
 /** Maximum height for textarea based on max lines */
 const MAX_TEXTAREA_HEIGHT = LINE_HEIGHT * MAX_LINES + TEXTAREA_VERTICAL_PADDING;
 
+/** Mobile breakpoint - phones only, not tablets */
+const MOBILE_MAX_WIDTH = 480;
+
+/** Height of expanded input on mobile (50% of viewport) */
+const MOBILE_EXPANDED_HEIGHT_VH = 50;
+
+/**
+ * Detect if the device is a mobile phone (not tablet/desktop)
+ * Based on screen width and touch capability
+ */
+function useIsMobilePhone(): boolean {
+  const [isMobile, setIsMobile] = useState(false);
+
+  useEffect(() => {
+    const checkMobile = () => {
+      const isTouchDevice = 'ontouchstart' in window || navigator.maxTouchPoints > 0;
+      const isSmallScreen = window.innerWidth <= MOBILE_MAX_WIDTH;
+      setIsMobile(isTouchDevice && isSmallScreen);
+    };
+
+    checkMobile();
+    window.addEventListener('resize', checkMobile);
+    return () => window.removeEventListener('resize', checkMobile);
+  }, []);
+
+  return isMobile;
+}
+
 /**
  * Trigger haptic feedback using the Vibration API
  * Uses short vibrations for tactile confirmation on mobile devices
@@ -244,6 +272,12 @@ export function CommandInputBar({
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
+  // Mobile phone detection
+  const isMobilePhone = useIsMobilePhone();
+
+  // Mobile expanded input state (AI mode only)
+  const [isExpanded, setIsExpanded] = useState(false);
+
   // Swipe up gesture detection for opening history drawer
   const { handlers: swipeUpHandlers } = useSwipeUp({
     onSwipeUp: () => onHistoryOpen?.(),
@@ -277,18 +311,21 @@ export function CommandInputBar({
   const sendButtonRef = useRef<HTMLButtonElement>(null);
 
   // Determine if input should be disabled
-  // Disable when: externally disabled, offline, or not connected
-  // For AI mode: also disable when session is busy (AI is thinking)
+  // In AI mode: NEVER disable the input - user can always prep next message
+  // The send button will show X (interrupt) when AI is busy
   // For terminal mode: do NOT disable when session is busy - terminal commands use a different pathway
-  const isDisabled = externalDisabled || isOffline || !isConnected || (inputMode === 'ai' && isSessionBusy);
+  const isDisabled = externalDisabled || isOffline || !isConnected;
+
+  // Separate flag for whether send is blocked (AI thinking)
+  // When true, shows X button instead of send button
+  const isSendBlocked = inputMode === 'ai' && isSessionBusy;
 
   // Get placeholder text based on state
   const getPlaceholder = () => {
     if (isOffline) return 'Offline...';
     if (!isConnected) return 'Connecting...';
-    // Only show "Waiting..." in AI mode when session is busy
-    // Terminal mode is always available since it uses a different pathway
-    if (inputMode === 'ai' && isSessionBusy) return 'AI thinking...';
+    // In AI mode when busy, show helpful hint that user can still type
+    if (inputMode === 'ai' && isSessionBusy) return 'AI thinking... (type your next message)';
     // In terminal mode, show shortened cwd as placeholder hint
     if (inputMode === 'terminal' && cwd) {
       const shortCwd = cwd.replace(/^\/Users\/[^/]+/, '~');
@@ -461,17 +498,23 @@ export function CommandInputBar({
 
   /**
    * Handle key press events
-   * Enter submits, Shift+Enter adds a newline
+   * AI mode: Enter adds newline (button to send)
+   * Terminal mode: Enter submits (Shift+Enter adds newline)
    */
   const handleKeyDown = useCallback(
     (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-      // Submit on Enter (Shift+Enter adds newline for multi-line input)
+      if (inputMode === 'ai') {
+        // AI mode: Enter always adds newline, use button to send
+        // No special handling needed - default behavior adds newline
+        return;
+      }
+      // Terminal mode: Submit on Enter (Shift+Enter adds newline)
       if (e.key === 'Enter' && !e.shiftKey) {
         e.preventDefault();
         handleSubmit(e);
       }
     },
-    [handleSubmit]
+    [handleSubmit, inputMode]
   );
 
   /**
@@ -718,6 +761,85 @@ export function CommandInputBar({
     };
   }, []);
 
+  /**
+   * Handle click outside to collapse expanded input on mobile
+   */
+  useEffect(() => {
+    if (!isExpanded || !isMobilePhone || inputMode !== 'ai') return;
+
+    const handleClickOutside = (e: MouseEvent | TouchEvent) => {
+      if (containerRef.current && !containerRef.current.contains(e.target as Node)) {
+        setIsExpanded(false);
+        textareaRef.current?.blur();
+      }
+    };
+
+    // Use touchstart for immediate response on mobile
+    document.addEventListener('touchstart', handleClickOutside);
+    document.addEventListener('mousedown', handleClickOutside);
+
+    return () => {
+      document.removeEventListener('touchstart', handleClickOutside);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isExpanded, isMobilePhone, inputMode]);
+
+  /**
+   * Handle focus to expand input on mobile in AI mode
+   */
+  const handleMobileAIFocus = useCallback(() => {
+    if (isMobilePhone && inputMode === 'ai') {
+      setIsExpanded(true);
+    }
+    onInputFocus?.();
+  }, [isMobilePhone, inputMode, onInputFocus]);
+
+  /**
+   * Auto-focus the textarea when expanded mode is activated
+   */
+  useEffect(() => {
+    if (isExpanded && isMobilePhone && inputMode === 'ai' && textareaRef.current) {
+      // Small delay to ensure DOM has updated
+      const timer = setTimeout(() => {
+        textareaRef.current?.focus();
+      }, 50);
+      return () => clearTimeout(timer);
+    }
+  }, [isExpanded, isMobilePhone, inputMode]);
+
+  /**
+   * Collapse input when submitting on mobile
+   */
+  const handleMobileSubmit = useCallback((e: React.FormEvent) => {
+    e.preventDefault();
+    if (!value.trim() || isDisabled || isSendBlocked) return;
+
+    // Trigger haptic feedback on successful send
+    triggerHapticFeedback('medium');
+
+    onSubmit?.(value.trim());
+
+    // Clear input after submit (for uncontrolled mode)
+    if (controlledValue === undefined) {
+      setInternalValue('');
+    }
+
+    // Collapse on mobile after submit
+    if (isMobilePhone && inputMode === 'ai') {
+      setIsExpanded(false);
+    }
+
+    // Keep focus on textarea after submit (unless mobile where we collapse)
+    if (!isMobilePhone) {
+      textareaRef.current?.focus();
+    }
+  }, [value, isDisabled, isSendBlocked, onSubmit, controlledValue, isMobilePhone, inputMode]);
+
+  // Calculate textarea height for mobile expanded mode
+  const mobileExpandedHeight = isMobilePhone && inputMode === 'ai' && isExpanded
+    ? `${MOBILE_EXPANDED_HEIGHT_VH}vh`
+    : undefined;
+
   return (
     <div
       ref={containerRef}
@@ -736,7 +858,13 @@ export function CommandInputBar({
         backgroundColor: colors.bgSidebar,
         borderTop: `1px solid ${colors.border}`,
         // Smooth transition when keyboard appears/disappears
-        transition: isKeyboardVisible ? 'none' : 'bottom 0.15s ease-out',
+        transition: isKeyboardVisible ? 'none' : 'bottom 0.15s ease-out, height 200ms ease-out',
+        // On mobile when expanded, use flexbox for proper layout
+        ...(mobileExpandedHeight && {
+          display: 'flex',
+          flexDirection: 'column',
+          height: `calc(${MOBILE_EXPANDED_HEIGHT_VH}vh + 60px)`, // Textarea height + buttons/padding
+        }),
       }}
     >
       {/* Swipe up handle indicator - visual hint for opening history */}
@@ -783,10 +911,164 @@ export function CommandInputBar({
         onClose={handleCloseSlashCommand}
         selectedIndex={selectedSlashCommandIndex}
         onSelectedIndexChange={setSelectedSlashCommandIndex}
+        isInputExpanded={isExpanded}
       />
 
+      {/* EXPANDED MOBILE AI MODE - Full width textarea with send button below */}
+      {mobileExpandedHeight ? (
+        <form
+          onSubmit={handleMobileSubmit}
+          style={{
+            display: 'flex',
+            flexDirection: 'column',
+            gap: '8px',
+            paddingLeft: '16px',
+            paddingRight: '16px',
+            flex: 1,
+            maxWidth: '100%',
+            overflow: 'hidden',
+          }}
+        >
+          {/* Full-width textarea */}
+          <textarea
+            ref={textareaRef}
+            value={value}
+            onChange={handleChange}
+            onKeyDown={handleKeyDown}
+            placeholder={getPlaceholder()}
+            disabled={isDisabled}
+            autoComplete="off"
+            autoCorrect="off"
+            autoCapitalize="off"
+            spellCheck={false}
+            enterKeyHint="enter"
+            rows={1}
+            style={{
+              flex: 1,
+              width: '100%',
+              padding: '14px 18px',
+              borderRadius: '12px',
+              backgroundColor: colors.bgMain,
+              border: `2px solid ${colors.accent}`,
+              boxShadow: `0 0 0 3px ${colors.accent}33`,
+              color: colors.textMain,
+              fontSize: '17px',
+              fontFamily: 'inherit',
+              lineHeight: `${LINE_HEIGHT}px`,
+              outline: 'none',
+              minHeight: '150px',
+              WebkitAppearance: 'none',
+              appearance: 'none',
+              resize: 'none',
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              overflowY: 'auto',
+              overflowX: 'hidden',
+              wordWrap: 'break-word',
+            }}
+            onBlur={(e) => {
+              // Delay collapse to allow click on send button
+              setTimeout(() => {
+                if (!containerRef.current?.contains(document.activeElement)) {
+                  setIsExpanded(false);
+                }
+              }, 150);
+              onInputBlur?.();
+            }}
+            aria-label="AI message input. Press the send button to submit."
+            aria-multiline="true"
+          />
+
+          {/* Full-width send button below textarea */}
+          {inputMode === 'ai' && isSessionBusy ? (
+            <button
+              type="button"
+              onClick={handleInterrupt}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '12px',
+                backgroundColor: '#ef4444',
+                color: '#ffffff',
+                fontSize: '15px',
+                fontWeight: 600,
+                border: 'none',
+                cursor: 'pointer',
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'opacity 150ms ease, background-color 150ms ease',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              onTouchStart={(e) => {
+                e.currentTarget.style.backgroundColor = '#dc2626';
+              }}
+              onTouchEnd={(e) => {
+                e.currentTarget.style.backgroundColor = '#ef4444';
+              }}
+              aria-label="Cancel running AI query"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2.5"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="18" y1="6" x2="6" y2="18" />
+                <line x1="6" y1="6" x2="18" y2="18" />
+              </svg>
+              <span>Stop</span>
+            </button>
+          ) : (
+            <button
+              type="submit"
+              disabled={isDisabled || !value.trim()}
+              style={{
+                width: '100%',
+                padding: '12px',
+                borderRadius: '12px',
+                backgroundColor: colors.accent,
+                color: '#ffffff',
+                fontSize: '15px',
+                fontWeight: 600,
+                border: 'none',
+                cursor: isDisabled || !value.trim() ? 'default' : 'pointer',
+                opacity: isDisabled || !value.trim() ? 0.5 : 1,
+                display: 'flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                gap: '8px',
+                transition: 'opacity 150ms ease, background-color 150ms ease',
+                WebkitTapHighlightColor: 'transparent',
+              }}
+              aria-label="Send message"
+            >
+              <svg
+                width="18"
+                height="18"
+                viewBox="0 0 24 24"
+                fill="none"
+                stroke="currentColor"
+                strokeWidth="2"
+                strokeLinecap="round"
+                strokeLinejoin="round"
+              >
+                <line x1="12" y1="19" x2="12" y2="5" />
+                <polyline points="5 12 12 5 19 12" />
+              </svg>
+              <span>Send</span>
+            </button>
+          )}
+        </form>
+      ) : (
+      /* NORMAL MODE - Original layout with side buttons */
       <form
-        onSubmit={handleSubmit}
+        onSubmit={handleMobileSubmit}
         style={{
           display: 'flex',
           gap: '8px',
@@ -951,8 +1233,8 @@ export function CommandInputBar({
               // The slash will be added when a command is selected
               setSlashCommandOpen(true);
               setSelectedSlashCommandIndex(0);
-              // Focus the textarea
-              textareaRef.current?.focus();
+              // Don't focus textarea - we want to show slash commands without expanding the input
+              // User can tap the input separately if they want to type
             }}
             disabled={isDisabled}
             style={{
@@ -1073,7 +1355,8 @@ export function CommandInputBar({
             />
           </div>
         ) : (
-          /* AI mode: regular textarea */
+          /* AI mode: regular textarea - on mobile phone, focus triggers expanded mode */
+          /* On mobile, collapsed state shows single-line height matching buttons */
           <textarea
             ref={textareaRef}
             value={value}
@@ -1084,67 +1367,69 @@ export function CommandInputBar({
             autoComplete="off"
             autoCorrect="off"
             autoCapitalize="off"
-          spellCheck={false}
-          enterKeyHint="send"
-          rows={1}
-          style={{
-            flex: 1,
-            // minWidth: 0 is critical for flex items to shrink below content size
-            minWidth: 0,
-            // Large touch-friendly padding (minimum 12px, but larger for comfort)
-            padding: '14px 18px',
-            borderRadius: '12px',
-            backgroundColor: colors.bgMain,
-            border: `2px solid ${colors.border}`,
-            color: isDisabled ? colors.textDim : colors.textMain,
-            // 16px minimum prevents iOS zoom on focus, 17px for better readability
-            fontSize: '17px',
-            fontFamily: 'inherit',
-            lineHeight: `${LINE_HEIGHT}px`,
-            opacity: isDisabled ? 0.5 : 1,
-            outline: 'none',
-            // Dynamic height for auto-expansion (controlled by useEffect)
-            height: `${textareaHeight}px`,
-            // Large minimum height for easy touch targeting
-            minHeight: `${MIN_INPUT_HEIGHT}px`,
-            // Maximum height based on MAX_LINES (4 lines) before scrolling
-            maxHeight: `${MAX_TEXTAREA_HEIGHT}px`,
-            // Reset appearance for consistent styling
-            WebkitAppearance: 'none',
-            appearance: 'none',
-            // Remove default textarea resize handle
-            resize: 'none',
-            // Smooth height transitions for auto-expansion
-            transition: 'height 100ms ease-out, border-color 150ms ease, opacity 150ms ease, box-shadow 150ms ease',
-            // Better text rendering on mobile
-            WebkitFontSmoothing: 'antialiased',
-            MozOsxFontSmoothing: 'grayscale',
-            // Enable scrolling only when content exceeds max height
-            overflowY: textareaHeight >= MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden',
-            overflowX: 'hidden',
-            wordWrap: 'break-word',
-          }}
-          onFocus={(e) => {
-            // Add focus ring for accessibility
-            e.currentTarget.style.borderColor = colors.accent;
-            e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.accent}33`;
-            onInputFocus?.();
-          }}
-          onBlur={(e) => {
-            // Remove focus ring
-            e.currentTarget.style.borderColor = colors.border;
-            e.currentTarget.style.boxShadow = 'none';
-            onInputBlur?.();
-          }}
-          aria-label="Command input"
-          aria-disabled={isDisabled}
+            spellCheck={false}
+            enterKeyHint="enter"
+            rows={1}
+            style={{
+              flex: 1,
+              // minWidth: 0 is critical for flex items to shrink below content size
+              minWidth: 0,
+              // On mobile collapsed state: tighter padding to match button height (48px)
+              // height = padding-top + line-height + padding-bottom + border = 11 + 22 + 11 + 4 = 48
+              // On desktop/tablet: use original larger padding for comfort
+              padding: isMobilePhone ? '11px 14px' : '14px 18px',
+              borderRadius: '12px',
+              backgroundColor: colors.bgMain,
+              border: `2px solid ${colors.border}`,
+              // Never ghost out the input - user can always type
+              color: colors.textMain,
+              // 16px minimum prevents iOS zoom on focus, 17px for better readability
+              fontSize: '17px',
+              fontFamily: 'inherit',
+              lineHeight: `${LINE_HEIGHT}px`,
+              outline: 'none',
+              // On mobile: force single-line height to match buttons (48px)
+              // On desktop: use auto-expanding height
+              height: isMobilePhone ? `${MIN_INPUT_HEIGHT}px` : `${textareaHeight}px`,
+              // Large minimum height for easy touch targeting
+              minHeight: `${MIN_INPUT_HEIGHT}px`,
+              maxHeight: isMobilePhone ? `${MIN_INPUT_HEIGHT}px` : `${MAX_TEXTAREA_HEIGHT}px`,
+              // Reset appearance for consistent styling
+              WebkitAppearance: 'none',
+              appearance: 'none',
+              // Remove default textarea resize handle
+              resize: 'none',
+              // Smooth height transitions for auto-expansion
+              transition: 'height 100ms ease-out, border-color 150ms ease, box-shadow 150ms ease',
+              // Better text rendering on mobile
+              WebkitFontSmoothing: 'antialiased',
+              MozOsxFontSmoothing: 'grayscale',
+              // On mobile collapsed: hide overflow (single line)
+              // On desktop: enable scrolling when content exceeds max height
+              overflowY: isMobilePhone ? 'hidden' : (textareaHeight >= MAX_TEXTAREA_HEIGHT ? 'auto' : 'hidden'),
+              overflowX: 'hidden',
+              wordWrap: 'break-word',
+            }}
+            onFocus={(e) => {
+              // Add focus ring for accessibility
+              e.currentTarget.style.borderColor = colors.accent;
+              e.currentTarget.style.boxShadow = `0 0 0 3px ${colors.accent}33`;
+              handleMobileAIFocus();
+            }}
+            onBlur={(e) => {
+              // Remove focus ring
+              e.currentTarget.style.borderColor = colors.border;
+              e.currentTarget.style.boxShadow = 'none';
+              onInputBlur?.();
+            }}
+            aria-label="AI message input. Press the send button to submit."
           aria-multiline="true"
         />
         )}
 
-        {/* Action button - shows either Interrupt (Red X) when busy, or Send button when idle */}
-        {/* When session is busy, the Red X replaces the Send button to save space on mobile */}
-        {isSessionBusy ? (
+        {/* Action button - shows either Interrupt (Red X) when AI is busy, or Send button otherwise */}
+        {/* The X button only shows in AI mode when busy - terminal mode always shows Send */}
+        {inputMode === 'ai' && isSessionBusy ? (
           <button
             type="button"
             onClick={handleInterrupt}
@@ -1248,6 +1533,7 @@ export function CommandInputBar({
           </button>
         )}
       </form>
+      )}
 
       {/* Inline CSS for animations */}
       <style>

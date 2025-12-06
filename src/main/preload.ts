@@ -86,6 +86,11 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.on('process:session-id', handler);
       return () => ipcRenderer.removeListener('process:session-id', handler);
     },
+    onSlashCommands: (callback: (sessionId: string, slashCommands: string[]) => void) => {
+      const handler = (_: any, sessionId: string, slashCommands: string[]) => callback(sessionId, slashCommands);
+      ipcRenderer.on('process:slash-commands', handler);
+      return () => ipcRenderer.removeListener('process:slash-commands', handler);
+    },
     // Remote command execution from web interface
     // This allows web commands to go through the same code path as desktop commands
     // inputMode is optional - if provided, renderer should use it instead of session state
@@ -309,6 +314,11 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.invoke('agents:getConfigValue', agentId, key),
     setConfigValue: (agentId: string, key: string, value: any) =>
       ipcRenderer.invoke('agents:setConfigValue', agentId, key, value),
+    setCustomPath: (agentId: string, customPath: string | null) =>
+      ipcRenderer.invoke('agents:setCustomPath', agentId, customPath),
+    getCustomPath: (agentId: string) =>
+      ipcRenderer.invoke('agents:getCustomPath', agentId),
+    getAllCustomPaths: () => ipcRenderer.invoke('agents:getAllCustomPaths'),
   },
 
   // Dialog API
@@ -444,7 +454,29 @@ contextBridge.exposeInMainWorld('maestro', {
   history: {
     getAll: (projectPath?: string, sessionId?: string) =>
       ipcRenderer.invoke('history:getAll', projectPath, sessionId),
-    add: (entry: { id: string; type: 'AUTO' | 'USER'; timestamp: number; summary: string; claudeSessionId?: string; projectPath: string; sessionId?: string }) =>
+    add: (entry: {
+      id: string;
+      type: 'AUTO' | 'USER' | 'LOOP';
+      timestamp: number;
+      summary: string;
+      fullResponse?: string;
+      claudeSessionId?: string;
+      projectPath: string;
+      sessionId?: string;
+      sessionName?: string;
+      contextUsage?: number;
+      usageStats?: {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        totalCostUsd: number;
+        contextWindow: number;
+      };
+      success?: boolean;
+      elapsedTimeMs?: number;
+      validated?: boolean;
+    }) =>
       ipcRenderer.invoke('history:add', entry),
     clear: (projectPath?: string) =>
       ipcRenderer.invoke('history:clear', projectPath),
@@ -452,6 +484,22 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.invoke('history:delete', entryId),
     update: (entryId: string, updates: { validated?: boolean }) =>
       ipcRenderer.invoke('history:update', entryId, updates),
+    onExternalChange: (handler: () => void) => {
+      const wrappedHandler = () => handler();
+      ipcRenderer.on('history:externalChange', wrappedHandler);
+      return () => ipcRenderer.removeListener('history:externalChange', wrappedHandler);
+    },
+    reload: () => ipcRenderer.invoke('history:reload'),
+  },
+
+  // CLI activity API (for detecting when CLI is running playbooks)
+  cli: {
+    getActivity: () => ipcRenderer.invoke('cli:getActivity'),
+    onActivityChange: (handler: () => void) => {
+      const wrappedHandler = () => handler();
+      ipcRenderer.on('cli:activityChange', wrappedHandler);
+      return () => ipcRenderer.removeListener('cli:activityChange', wrappedHandler);
+    },
   },
 
   // Notification API
@@ -583,6 +631,7 @@ export interface MaestroAPI {
     onData: (callback: (sessionId: string, data: string) => void) => () => void;
     onExit: (callback: (sessionId: string, code: number) => void) => () => void;
     onSessionId: (callback: (sessionId: string, claudeSessionId: string) => void) => () => void;
+    onSlashCommands: (callback: (sessionId: string, slashCommands: string[]) => void) => () => void;
     onRemoteCommand: (callback: (sessionId: string, command: string) => void) => () => void;
     onRemoteSwitchMode: (callback: (sessionId: string, mode: 'ai' | 'terminal') => void) => () => void;
     onRemoteInterrupt: (callback: (sessionId: string) => void) => () => void;
@@ -690,6 +739,8 @@ export interface MaestroAPI {
     getLiveSessions: () => Promise<Array<{ sessionId: string; claudeSessionId?: string; enabledAt: number }>>;
     broadcastActiveSession: (sessionId: string) => Promise<void>;
     disableAll: () => Promise<{ success: boolean; count: number }>;
+    startServer: () => Promise<{ success: boolean; url?: string; error?: string }>;
+    stopServer: () => Promise<{ success: boolean }>;
   };
   agents: {
     detect: () => Promise<AgentConfig[]>;
@@ -698,6 +749,9 @@ export interface MaestroAPI {
     setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;
     getConfigValue: (agentId: string, key: string) => Promise<any>;
     setConfigValue: (agentId: string, key: string, value: any) => Promise<boolean>;
+    setCustomPath: (agentId: string, customPath: string | null) => Promise<boolean>;
+    getCustomPath: (agentId: string) => Promise<string | null>;
+    getAllCustomPaths: () => Promise<Record<string, string>>;
   };
   dialog: {
     selectFolder: () => Promise<string | null>;
@@ -843,24 +897,67 @@ export interface MaestroAPI {
   history: {
     getAll: (projectPath?: string, sessionId?: string) => Promise<Array<{
       id: string;
-      type: 'AUTO' | 'USER';
+      type: 'AUTO' | 'USER' | 'LOOP';
       timestamp: number;
       summary: string;
+      fullResponse?: string;
       claudeSessionId?: string;
       projectPath: string;
       sessionId?: string;
+      sessionName?: string;
+      contextUsage?: number;
+      usageStats?: {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        totalCostUsd: number;
+        contextWindow: number;
+      };
+      success?: boolean;
+      elapsedTimeMs?: number;
+      validated?: boolean;
     }>>;
     add: (entry: {
       id: string;
-      type: 'AUTO' | 'USER';
+      type: 'AUTO' | 'USER' | 'LOOP';
       timestamp: number;
       summary: string;
+      fullResponse?: string;
       claudeSessionId?: string;
       projectPath: string;
       sessionId?: string;
+      sessionName?: string;
+      contextUsage?: number;
+      usageStats?: {
+        inputTokens: number;
+        outputTokens: number;
+        cacheReadInputTokens: number;
+        cacheCreationInputTokens: number;
+        totalCostUsd: number;
+        contextWindow: number;
+      };
+      success?: boolean;
+      elapsedTimeMs?: number;
+      validated?: boolean;
     }) => Promise<boolean>;
     clear: (projectPath?: string) => Promise<boolean>;
     delete: (entryId: string) => Promise<boolean>;
+    update: (entryId: string, updates: { validated?: boolean }) => Promise<boolean>;
+    onExternalChange: (handler: () => void) => () => void;
+    reload: () => Promise<boolean>;
+  };
+  cli: {
+    getActivity: () => Promise<Array<{
+      sessionId: string;
+      playbookId: string;
+      playbookName: string;
+      startedAt: number;
+      pid: number;
+      currentTask?: string;
+      currentDocument?: string;
+    }>>;
+    onActivityChange: (handler: () => void) => () => void;
   };
   notification: {
     show: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;

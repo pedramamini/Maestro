@@ -114,6 +114,11 @@ export function ShortcutsHelpModal({ theme, shortcuts, onClose }: ShortcutsHelpM
             </div>
           )}
         </div>
+        <div className="px-4 py-3 border-t" style={{ borderColor: theme.colors.border }}>
+          <p className="text-xs" style={{ color: theme.colors.textDim }}>
+            Many shortcuts can be customized from Settings → Shortcuts.
+          </p>
+        </div>
       </div>
     </div>
   );

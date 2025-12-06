@@ -25,20 +25,27 @@ NOTE: On macOS you may need to clear the quarantine label to successfully launch
 
 ## Features
 
-- 🚀 **Multi-Instance Management** - Run multiple Claude Code instances and Command Terminal sessions simultaneously
-- 🤖 **Automatic Runner** - Batch-process tasks using AI agents with serial execution, history tracking, and saved session per task
-- 🔄 **Dual-Mode Input** - Switch between Command Terminal and AI Terminal seamlessly
-- ⌨️ **Keyboard-First Design** - Built for fast flow with full keyboard control, customizable shortcuts, and rapid navigation
-- 🔍 **Powerful Output Filtering** - Search, filter, and navigate output with include/exclude modes and per-response local filters
-- 🎨 **Beautiful Themes** - 12 themes including Dracula, Monokai, Nord, Tokyo Night, GitHub Light, and more
-- 🔀 **Git Integration** - Automatic git status, diff tracking, and workspace detection
-- 📁 **File Explorer** - Browse project files with syntax highlighting and markdown preview
-- 📋 **Session Management** - Group, rename, bookmark, and organize your sessions
-- 📝 **Auto Run** - File-system-based document runner for automated task management with playbooks
-- ⚡ **Slash Commands** - Extensible command system with autocomplete
-- 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when ready
-- 🌐 **Mobile Remote Control** - Access agents from your phone with QR codes, live agents, and a mobile-optimized web interface
-- 💰 **Cost Tracking** - Real-time token usage and cost tracking per session
+### Power Features
+
+- 🤖 **Auto Run & Playbooks** - File-system-based task runner that batch-processes markdown checklists through AI agents. Create playbooks for repeatable workflows, run in loops, and track progress with full history. Each task gets its own AI session for clean conversation context.
+- 🌐 **Mobile Remote Control** - Built-in web server with QR code access. Monitor and control all your agents from your phone. Supports local network access and remote tunneling via Cloudflare for access from anywhere.
+- 💻 **Command Line Interface** - Full CLI (`maestro-cli`) for headless operation. List agents/groups, run playbooks from cron jobs or CI/CD pipelines, with human-readable or JSONL output for scripting.
+- 🚀 **Multi-Instance Management** - Run unlimited Claude Code instances and terminal sessions in parallel. Each agent has its own workspace, conversation history, and isolated context.
+- 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when the agent becomes ready. Never lose a thought.
+
+### Core Features
+
+- 🔄 **Dual-Mode Sessions** - Each agent has both an AI Terminal and Command Terminal. Switch seamlessly between AI conversation and shell commands with `Cmd+J`.
+- ⌨️ **Keyboard-First Design** - Full keyboard control with customizable shortcuts. `Cmd+K` quick actions, vim-style navigation, rapid agent switching, and focus management designed for flow state.
+- 📋 **Session Discovery** - Automatically discovers and imports all Claude Code sessions, including conversations from before Maestro was installed. Browse, search, star, rename, and resume any session.
+- 🔀 **Git Integration** - Automatic repo detection, branch display, diff viewer, commit logs, and git-aware file completion. Work with git without leaving the app.
+- 📁 **File Explorer** - Browse project files with syntax highlighting, markdown preview, and image viewing. Reference files in prompts with `@` mentions.
+- 🔍 **Powerful Output Filtering** - Search and filter AI output with include/exclude modes, regex support, and per-response local filters.
+- ⚡ **Slash Commands** - Extensible command system with autocomplete. Create custom commands with template variables for your workflows.
+- 💾 **Draft Auto-Save** - Never lose work. Drafts are automatically saved and restored per session.
+- 🔊 **Speakable Notifications** - Audio alerts with text-to-speech announcements when agents complete tasks.
+- 🎨 **Beautiful Themes** - 12 themes including Dracula, Monokai, Nord, Tokyo Night, and GitHub Light.
+- 💰 **Cost Tracking** - Real-time token usage and cost tracking per session and globally.
 
 > **Note**: Maestro currently supports Claude Code only. Support for other agentic coding tools may be added in future releases based on community demand.
 
@@ -46,25 +53,27 @@ NOTE: On macOS you may need to clear the quarantine label to successfully launch
 
 | Concept | Description |
 |---------|-------------|
-| **Agents** | An agent has a workspace tied to a directory. Contains one CLI terminal and multiple agent tabs. |
-| **CLI Terminal** | A PTY shell session for running commands directly. One per agent. |
-| **Agent Tabs** | A conversation context with an agent. Each tab has its own input, images, and message history. |
-| **Agent Sessions** | The complete list of conversations with this specific agent. |
-| **History** | Actions made by the user or autonomously. |
+| **Agent** | A workspace tied to a project directory. Contains one Command Terminal and one AI Terminal with full conversation history. |
+| **Group** | Organizational container for agents. Group by project, client, or workflow. |
+| **AI Terminal** | The conversation interface with Claude Code. Supports `@` file mentions, slash commands, and image attachments. |
+| **Command Terminal** | A PTY shell session for running commands directly. Tab completion for files, git branches, and command history. |
+| **Session Explorer** | Browse all past conversations for an agent. Star, rename, search, and resume any previous session. |
+| **Auto Run** | Automated task runner that processes markdown checklists. Spawns fresh AI sessions per task. |
+| **Playbook** | A saved Auto Run configuration with document order, options, and settings for repeatable batch workflows. |
+| **History** | Timestamped log of all actions (user commands, AI responses, Auto Run completions) with session links. |
+| **Remote Control** | Web interface for mobile access. Local network or remote via Cloudflare tunnel. |
+| **CLI** | Headless command-line tool for scripting, automation, and CI/CD integration. |
 
 ## UI Overview
 
 Maestro features a three-panel layout:
 
-- **Left Bar** - Agent list with grouping, filtering, bookmarks, and organization
-- **Main Window** - Center workspace with two modes:
-  - **AI Terminal** - Interact with Claude Code AI assistant
-  - **Command Terminal** - Execute shell commands and scripts
-  - **Session Explorer** - Enumerate, search, star, rename, and resume past conversations
-  - **File Preview** - View images and text documents with source highlighting and markdown rendering
-  - **Git Diffs** - View the current diff when working in Git repositories
-  - **Git Logs** - Explore commit logs without leaving the app
-- **Right Bar** - File explorer, command history, and auto running capabilities
+- **Left Panel** - Agent list with grouping, filtering, search, bookmarks, and drag-and-drop organization
+- **Main Panel** - Center workspace with two modes per agent:
+  - **AI Terminal** - Converse with Claude Code. Supports multiple tabs/sessions, `@` file mentions, image attachments, slash commands, and draft auto-save.
+  - **Command Terminal** - PTY shell with tab completion for files, branches, tags, and command history.
+  - **Views**: Session Explorer, File Preview, Git Diffs, Git Logs
+- **Right Panel** - Three tabs: File Explorer, History Viewer, and Auto Run
 
 ### Agent Status Indicators
 
@@ -224,11 +233,13 @@ Commands support **template variables** that are automatically substituted at ru
 | Variable | Description |
 |----------|-------------|
 | `{{SESSION_NAME}}` | Current session name |
-| `{{CLAUDE_SESSION_ID}}` | Claude Code session ID (for conversation continuity) |
+| `{{AGENT_SESSION_ID}}` | Agent session ID (for conversation continuity) |
 | `{{PROJECT_NAME}}` | Project folder name |
 | `{{PROJECT_PATH}}` | Full path to project directory |
 | `{{GIT_BRANCH}}` | Current git branch (if in a git repo) |
 | `{{DATE}}` | Current date (YYYY-MM-DD) |
+| `{{DAY}}` | Day of month (01-31) |
+| `{{MONTH}}` | Month (01-12) |
 | `{{TIME}}` | Current time (HH:MM:SS) |
 | `{{WEEKDAY}}` | Day of week (Monday, Tuesday, etc.) |
 
@@ -312,6 +323,16 @@ The runner will:
 - Mark tasks as complete (`- [x]`) when done
 - Log each completion to the **History** panel
 
+### Session Isolation
+
+Each task executes in a completely fresh AI session with its own unique session ID. This provides:
+
+- **Clean context** - No conversation history bleeding between tasks
+- **Predictable behavior** - Tasks in looping playbooks execute identically each iteration
+- **Independent execution** - The agent approaches each task without memory of previous work
+
+This isolation is critical for playbooks with `Reset on Completion` documents that loop indefinitely. Without it, the AI might "remember" completing a task and skip re-execution on subsequent loops.
+
 ### History & Tracking
 
 Each completed task is logged to the History panel with:
@@ -343,6 +364,103 @@ Click the **Stop** button at any time. The runner will:
 ### Parallel Batches
 
 You can run separate batch processes in different Maestro sessions simultaneously. Each session maintains its own independent batch state. With Git worktrees enabled, you can work on the main branch while Auto Run operates in an isolated worktree.
+
+## Command Line Interface
+
+Maestro includes a CLI tool (`maestro-cli`) for managing agents and running playbooks from the command line, cron jobs, or CI/CD pipelines. The CLI requires Node.js (which you already have if you're using Claude Code).
+
+### Installation
+
+The CLI is bundled with Maestro as a JavaScript file. Create a shell wrapper to run it:
+
+```bash
+# macOS (after installing Maestro.app)
+echo '#!/bin/bash\nnode "/Applications/Maestro.app/Contents/Resources/maestro-cli.js" "$@"' | sudo tee /usr/local/bin/maestro-cli && sudo chmod +x /usr/local/bin/maestro-cli
+
+# Linux (deb/rpm installs to /opt)
+echo '#!/bin/bash\nnode "/opt/Maestro/resources/maestro-cli.js" "$@"' | sudo tee /usr/local/bin/maestro-cli && sudo chmod +x /usr/local/bin/maestro-cli
+
+# Windows (PowerShell as Administrator) - create a batch file
+@"
+@echo off
+node "%ProgramFiles%\Maestro\resources\maestro-cli.js" %*
+"@ | Out-File -FilePath "$env:ProgramFiles\Maestro\maestro-cli.cmd" -Encoding ASCII
+```
+
+Alternatively, run directly with Node.js:
+```bash
+node "/Applications/Maestro.app/Contents/Resources/maestro-cli.js" list groups
+```
+
+### Usage
+
+```bash
+# List all groups
+maestro-cli list groups
+
+# List all agents
+maestro-cli list agents
+maestro-cli list agents --group <group-id>
+
+# Show agent details (history, usage stats, cost)
+maestro-cli show agent <agent-id>
+
+# List playbooks for an agent
+maestro-cli list playbooks --agent <agent-id>
+
+# Show playbook details
+maestro-cli show playbook <playbook-id>
+
+# Run a playbook
+maestro-cli run <playbook-id>
+
+# Dry run (shows what would be executed)
+maestro-cli run <playbook-id> --dry-run
+
+# Run without writing to history
+maestro-cli run <playbook-id> --no-history
+```
+
+### JSON Output
+
+By default, commands output human-readable formatted text. Use `--json` for machine-parseable JSONL output:
+
+```bash
+# Human-readable output (default)
+maestro-cli list groups
+GROUPS (2)
+
+  🎨  Frontend
+      group-abc123
+  ⚙️  Backend
+      group-def456
+
+# JSON output for scripting
+maestro-cli list groups --json
+{"type":"group","id":"group-abc123","name":"Frontend","emoji":"🎨","timestamp":...}
+{"type":"group","id":"group-def456","name":"Backend","emoji":"⚙️","timestamp":...}
+
+# Running a playbook with JSON streams events
+maestro-cli run <playbook-id> --json
+{"type":"start","timestamp":...,"playbook":{...}}
+{"type":"document_start","timestamp":...,"document":"tasks.md","taskCount":5}
+{"type":"task_start","timestamp":...,"taskIndex":0}
+{"type":"task_complete","timestamp":...,"success":true,"summary":"...","elapsedMs":8000}
+{"type":"document_complete","timestamp":...,"tasksCompleted":5}
+{"type":"complete","timestamp":...,"totalTasksCompleted":5,"totalElapsedMs":60000}
+```
+
+### Scheduling with Cron
+
+```bash
+# Run a playbook every hour (use --json for log parsing)
+0 * * * * /usr/local/bin/maestro-cli run <playbook-id> --json >> /var/log/maestro.jsonl 2>&1
+```
+
+### Requirements
+
+- Claude Code CLI must be installed and in PATH
+- Maestro config files must exist (created automatically when you use the GUI)
 
 ## Configuration
 
@@ -394,4 +512,4 @@ See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture detai
 
 ## License
 
-[MIT License](LICENSE)
+[AGPL-3.0 License](LICENSE)

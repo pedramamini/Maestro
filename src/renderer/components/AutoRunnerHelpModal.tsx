@@ -1,5 +1,5 @@
 import React, { useEffect, useRef } from 'react';
-import { X, FolderOpen, FileText, CheckSquare, Play, Settings, History, Eye, Square, Keyboard, Repeat, RotateCcw, BookMarked, GitBranch, Image } from 'lucide-react';
+import { X, FolderOpen, FileText, CheckSquare, Play, Settings, History, Eye, Square, Keyboard, Repeat, RotateCcw, BookMarked, GitBranch, Image, Variable } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -252,6 +252,62 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
               </p>
               <p>
                 Documents with zero unchecked tasks are automatically skipped.
+              </p>
+            </div>
+          </section>
+
+          {/* Template Variables */}
+          <section>
+            <div className="flex items-center gap-2 mb-3">
+              <Variable className="w-5 h-5" style={{ color: theme.colors.accent }} />
+              <h3 className="font-bold">Template Variables</h3>
+            </div>
+            <div
+              className="text-sm space-y-2 pl-7"
+              style={{ color: theme.colors.textDim }}
+            >
+              <p>
+                Use template variables in your documents and agent prompts to inject dynamic values
+                at runtime. Variables are replaced with actual values before being sent to the AI.
+              </p>
+              <div
+                className="flex items-center gap-2 px-3 py-2 rounded"
+                style={{ backgroundColor: theme.colors.accent + '15' }}
+              >
+                <Keyboard className="w-4 h-4" style={{ color: theme.colors.accent }} />
+                <span>
+                  <strong style={{ color: theme.colors.textMain }}>Quick Insert:</strong> Type{' '}
+                  <code
+                    className="px-1.5 py-0.5 rounded text-xs font-mono"
+                    style={{ backgroundColor: theme.colors.bgActivity }}
+                  >
+                    {'{{'}
+                  </code>{' '}
+                  to open an autocomplete dropdown with all available variables.
+                </span>
+              </div>
+              <p>
+                <strong style={{ color: theme.colors.textMain }}>Available variables:</strong>
+              </p>
+              <div
+                className="font-mono text-xs p-3 rounded border space-y-1"
+                style={{
+                  backgroundColor: theme.colors.bgActivity,
+                  borderColor: theme.colors.border
+                }}
+              >
+                <div><code style={{ color: theme.colors.accent }}>{'{{SESSION_NAME}}'}</code> — Agent/session name</div>
+                <div><code style={{ color: theme.colors.accent }}>{'{{PROJECT_PATH}}'}</code> — Project directory path</div>
+                <div><code style={{ color: theme.colors.accent }}>{'{{GIT_BRANCH}}'}</code> — Current git branch</div>
+                <div><code style={{ color: theme.colors.accent }}>{'{{DATE}}'}</code> — Current date (YYYY-MM-DD)</div>
+                <div><code style={{ color: theme.colors.accent }}>{'{{LOOP_NUMBER}}'}</code> — Current loop iteration</div>
+                <div><code style={{ color: theme.colors.accent }}>{'{{DOCUMENT_NAME}}'}</code> — Current document name</div>
+                <div style={{ color: theme.colors.textDim }}>...and more</div>
+              </div>
+              <p>
+                Variables work in both the <strong style={{ color: theme.colors.textMain }}>agent prompt</strong> (in Playbook settings)
+                and within <strong style={{ color: theme.colors.textMain }}>document content</strong>. Use them to create
+                reusable templates that adapt to different contexts.
               </p>
             </div>
           </section>

@@ -597,22 +597,6 @@ const LogItemComponent = memo(({
                           {children}
                         </a>
                       ),
-                      // Custom li to handle loose lists - render p children inline
-                      li: ({ node, children, ...props }: any) => {
-                        // Process children to convert p tags to spans for inline rendering
-                        const processedChildren = React.Children.map(children, (child: any) => {
-                          // Check various ways the p element might appear
-                          const isParagraph = child?.type === 'p' ||
-                                              child?.type?.displayName === 'p' ||
-                                              child?.props?.node?.tagName === 'p' ||
-                                              (typeof child?.type === 'function' && child?.props?.node?.tagName === 'p');
-                          if (isParagraph) {
-                            return <span style={{ display: 'inline' }}>{child.props.children}</span>;
-                          }
-                          return child;
-                        });
-                        return <li {...props}>{processedChildren}</li>;
-                      },
                       code: ({ node, inline, className, children, ...props }: any) => {
                         const match = (className || '').match(/language-(\w+)/);
                         const language = match ? match[1] : 'text';
@@ -727,22 +711,6 @@ const LogItemComponent = memo(({
                           {children}
                         </a>
                       ),
-                      // Custom li to handle loose lists - render p children inline
-                      li: ({ node, children, ...props }: any) => {
-                        // Process children to convert p tags to spans for inline rendering
-                        const processedChildren = React.Children.map(children, (child: any) => {
-                          // Check various ways the p element might appear
-                          const isParagraph = child?.type === 'p' ||
-                                              child?.type?.displayName === 'p' ||
-                                              child?.props?.node?.tagName === 'p' ||
-                                              (typeof child?.type === 'function' && child?.props?.node?.tagName === 'p');
-                          if (isParagraph) {
-                            return <span style={{ display: 'inline' }}>{child.props.children}</span>;
-                          }
-                          return child;
-                        });
-                        return <li {...props}>{processedChildren}</li>;
-                      },
                       code: ({ node, inline, className, children, ...props }: any) => {
                         const match = (className || '').match(/language-(\w+)/);
                         const language = match ? match[1] : 'text';
@@ -839,21 +807,6 @@ const LogItemComponent = memo(({
                         {children}
                       </a>
                     ),
-                    li: ({ node, children, ...props }: any) => {
-                      // Convert <p> children to <span> to prevent block display in list items
-                      const processedChildren = React.Children.map(children, (child: any) => {
-                        // Check various ways the p element might appear
-                        const isParagraph = child?.type === 'p' ||
-                                            child?.type?.displayName === 'p' ||
-                                            child?.props?.node?.tagName === 'p' ||
-                                            (typeof child?.type === 'function' && child?.props?.node?.tagName === 'p');
-                        if (isParagraph) {
-                          return <span style={{ display: 'inline' }}>{child.props.children}</span>;
-                        }
-                        return child;
-                      });
-                      return <li {...props}>{processedChildren}</li>;
-                    },
                     code: ({ node, inline, className, children, ...props }: any) => {
                       const match = (className || '').match(/language-(\w+)/);
                       const language = match ? match[1] : 'text';
@@ -1585,8 +1538,7 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
     .prose > ul, .prose > ol { color: ${theme.colors.textMain}; margin: 0.25em 0 !important; padding-left: 2em; list-style-position: outside; }
     .prose li ul, .prose li ol { margin: 0 !important; padding-left: 1.5em; list-style-position: outside; }
     .prose li { margin: 0 !important; padding: 0; line-height: 1.4; display: list-item; }
-    .prose li > p { margin: 0 !important; display: inline !important; }
-    .prose li > p:first-child { display: inline !important; }
+    .prose li > p { margin: 0 !important; display: inline; }
     .prose li > p + ul, .prose li > p + ol { margin-top: 0 !important; }
     .prose li:has(> input[type="checkbox"]) { list-style: none; margin-left: -1.5em; }
     .prose code { background-color: ${theme.colors.bgSidebar}; color: ${theme.colors.textMain}; padding: 0.15em 0.3em; border-radius: 3px; font-size: 0.9em; }

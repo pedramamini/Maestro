@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { X, RotateCcw, Play, Variable, ChevronDown, ChevronRight, Save, GripVertical, Plus, Repeat, FolderOpen, Bookmark, GitBranch, AlertTriangle, Loader2, Maximize2, Download, Upload } from 'lucide-react';
+import { X, RotateCcw, Play, Variable, ChevronDown, ChevronRight, Save, GripVertical, Plus, Repeat, FolderOpen, Bookmark, GitBranch, AlertTriangle, Loader2, Maximize2, Download, Upload, RefreshCw } from 'lucide-react';
 import type { Theme, BatchDocumentEntry, BatchRunConfig, Playbook, PlaybookDocumentEntry, WorktreeConfig } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -57,7 +57,17 @@ You are **{{AGENT_NAME}}**, a Maestro-managed AI agent working on the **{{PROJEC
 
 NOTE: If you see a clear issue tag like a little moniker or some short form in front of the task, then your synopsis message should start with that exact token because we're clearly using it as a unique identifier.
 
-If there are no remaining open tasks, exit immediately and state that there is nothing left to do.`;
+If there are no remaining open tasks, exit immediately and state that there is nothing left to do.
+
+---
+
+## Tasks
+
+Process tasks from this document:
+
+{{DOCUMENT_PATH}}
+
+Save changes directly in that file.`;
 
 interface BatchRunnerModalProps {
   theme: Theme;
@@ -72,6 +82,7 @@ interface BatchRunnerModalProps {
   currentDocument: string;
   allDocuments: string[]; // All available docs in folder (without .md)
   getDocumentTaskCount: (filename: string) => Promise<number>; // Get task count for a document
+  onRefreshDocuments: () => Promise<void>; // Refresh document list from folder
   // Session ID for playbook storage
   sessionId: string;
   // Session cwd for git worktree support
@@ -116,6 +127,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
     currentDocument,
     allDocuments,
     getDocumentTaskCount,
+    onRefreshDocuments,
     sessionId,
     sessionCwd
   } = props;
@@ -141,6 +153,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
   // Document selector modal state
   const [showDocSelector, setShowDocSelector] = useState(false);
   const [selectedDocsInSelector, setSelectedDocsInSelector] = useState<Set<string>>(new Set());
+  const [docSelectorRefreshing, setDocSelectorRefreshing] = useState(false);
+  const [docSelectorRefreshMessage, setDocSelectorRefreshMessage] = useState<string | null>(null);
+  const [prevDocCount, setPrevDocCount] = useState(allDocuments.length);
 
   // Loop mode state
   const [loopEnabled, setLoopEnabled] = useState(false);
@@ -649,6 +664,42 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
     });
   }, []);
 
+  // Handle refresh in the document selector modal
+  const handleDocSelectorRefresh = useCallback(async () => {
+    const countBefore = allDocuments.length;
+    setDocSelectorRefreshing(true);
+    setDocSelectorRefreshMessage(null);
+
+    await onRefreshDocuments();
+
+    // The parent will update allDocuments - we need to calculate the diff
+    // after the refresh completes. Use a small timeout to let the prop update.
+    setTimeout(() => {
+      setDocSelectorRefreshing(false);
+    }, 500);
+  }, [onRefreshDocuments, allDocuments.length]);
+
+  // Track document count changes for refresh notification
+  useEffect(() => {
+    if (docSelectorRefreshing === false && prevDocCount !== allDocuments.length) {
+      const diff = allDocuments.length - prevDocCount;
+      let message: string;
+      if (diff > 0) {
+        message = `Found ${diff} new document${diff === 1 ? '' : 's'}`;
+      } else if (diff < 0) {
+        message = `${Math.abs(diff)} document${Math.abs(diff) === 1 ? '' : 's'} removed`;
+      } else {
+        message = 'No changes';
+      }
+      setDocSelectorRefreshMessage(message);
+      setPrevDocCount(allDocuments.length);
+
+      // Clear message after 3 seconds
+      const timer = setTimeout(() => setDocSelectorRefreshMessage(null), 3000);
+      return () => clearTimeout(timer);
+    }
+  }, [allDocuments.length, prevDocCount, docSelectorRefreshing]);
+
   // Handle loading a playbook
   const handleLoadPlaybook = useCallback((playbook: Playbook) => {
     // Convert stored entries to BatchDocumentEntry with IDs
@@ -743,14 +794,14 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
         // Add to local playbooks list
         setPlaybooks(prev => [...prev, result.playbook]);
         // Load the imported playbook
-        loadPlaybook(result.playbook);
+        handleLoadPlaybook(result.playbook);
       } else if (result.error && result.error !== 'Import cancelled') {
         console.error('Failed to import playbook:', result.error);
       }
     } catch (error) {
       console.error('Failed to import playbook:', error);
     }
-  }, [sessionId, folderPath, loadPlaybook]);
+  }, [sessionId, folderPath, handleLoadPlaybook]);
 
   // Handle saving a new playbook
   const handleSaveAsPlaybook = useCallback(async (name: string) => {
@@ -1175,7 +1226,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           className={`flex-1 text-sm font-medium truncate ${doc.isMissing ? 'line-through' : ''}`}
                           style={{ color: doc.isMissing ? theme.colors.error : theme.colors.textMain }}
                         >
-                          {doc.filename}
+                          {doc.filename}.md
                         </span>
 
                         {/* Missing Indicator */}
@@ -1192,8 +1243,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           </span>
                         )}
 
-                        {/* Task Count Badge (hidden for missing docs) */}
-                        {!doc.isMissing && (
+                        {/* Task Count Badge (invisible placeholder for missing docs) */}
+                        {!doc.isMissing ? (
                           <span
                             className="text-xs px-2 py-0.5 rounded shrink-0"
                             style={{
@@ -1203,10 +1254,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           >
                             {loadingTaskCounts ? '...' : `${docTaskCount} ${docTaskCount === 1 ? 'task' : 'tasks'}`}
                           </span>
+                        ) : (
+                          <span className="text-xs px-2 py-0.5 shrink-0 invisible">0 tasks</span>
                         )}
 
-                        {/* Reset Toggle Button (hidden for missing docs) */}
-                        {!doc.isMissing && (() => {
+                        {/* Reset Toggle Button (invisible placeholder for missing docs) */}
+                        {!doc.isMissing ? (() => {
                           // Check if this document has duplicates (other entries with same filename)
                           const hasDuplicates = documents.filter(d => d.filename === doc.filename).length > 1;
                           const canDisableReset = !hasDuplicates;
@@ -1244,10 +1297,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                               <RotateCcw className="w-3.5 h-3.5" />
                             </button>
                           );
-                        })()}
+                        })() : (
+                          <span className="p-1 shrink-0 invisible"><RotateCcw className="w-3.5 h-3.5" /></span>
+                        )}
 
-                        {/* Duplicate Button (only shown for reset-enabled docs that aren't missing) */}
-                        {doc.resetOnCompletion && !doc.isMissing && (
+                        {/* Duplicate Button (invisible placeholder when not applicable) */}
+                        {doc.resetOnCompletion && !doc.isMissing ? (
                           <button
                             onClick={() => handleDuplicateDocument(doc.id)}
                             className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
@@ -1256,10 +1311,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           >
                             <Plus className="w-3.5 h-3.5" />
                           </button>
+                        ) : (
+                          <span className="p-1 shrink-0 invisible"><Plus className="w-3.5 h-3.5" /></span>
                         )}
 
-                        {/* Remove Button (only for duplicates, multiple docs, OR missing docs) */}
-                        {(doc.isDuplicate || documents.length > 1 || doc.isMissing) && (
+                        {/* Remove Button (invisible placeholder when not applicable) */}
+                        {(doc.isDuplicate || documents.length > 1 || doc.isMissing) ? (
                           <button
                             onClick={() => handleRemoveDocument(doc.id)}
                             className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
@@ -1268,6 +1325,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           >
                             <X className="w-3.5 h-3.5" />
                           </button>
+                        ) : (
+                          <span className="p-1 shrink-0 invisible"><X className="w-3.5 h-3.5" /></span>
                         )}
                       </div>
                     );
@@ -1415,25 +1474,30 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
               {/* Enable Worktree Toggle */}
               <div className="flex items-center gap-3 mb-4">
                 <button
-                  onClick={() => setWorktreeEnabled(!worktreeEnabled)}
+                  onClick={() => ghCliStatus?.installed && setWorktreeEnabled(!worktreeEnabled)}
+                  disabled={!ghCliStatus?.installed}
                   className={`flex items-center gap-2 px-3 py-1.5 rounded-lg border transition-colors ${
-                    worktreeEnabled ? 'border-accent' : 'border-border hover:bg-white/5'
+                    !ghCliStatus?.installed
+                      ? 'opacity-50 cursor-not-allowed'
+                      : worktreeEnabled
+                        ? 'border-accent'
+                        : 'border-border hover:bg-white/5'
                   }`}
                   style={{
-                    borderColor: worktreeEnabled ? theme.colors.accent : theme.colors.border,
-                    backgroundColor: worktreeEnabled ? theme.colors.accent + '15' : 'transparent'
+                    borderColor: worktreeEnabled && ghCliStatus?.installed ? theme.colors.accent : theme.colors.border,
+                    backgroundColor: worktreeEnabled && ghCliStatus?.installed ? theme.colors.accent + '15' : 'transparent'
                   }}
                 >
                   <div
                     className={`w-4 h-4 rounded border flex items-center justify-center ${
-                      worktreeEnabled ? 'bg-accent border-accent' : ''
+                      worktreeEnabled && ghCliStatus?.installed ? 'bg-accent border-accent' : ''
                     }`}
                     style={{
-                      borderColor: worktreeEnabled ? theme.colors.accent : theme.colors.border,
-                      backgroundColor: worktreeEnabled ? theme.colors.accent : 'transparent'
+                      borderColor: worktreeEnabled && ghCliStatus?.installed ? theme.colors.accent : theme.colors.border,
+                      backgroundColor: worktreeEnabled && ghCliStatus?.installed ? theme.colors.accent : 'transparent'
                     }}
                   >
-                    {worktreeEnabled && (
+                    {worktreeEnabled && ghCliStatus?.installed && (
                       <svg className="w-3 h-3 text-white" viewBox="0 0 12 12" fill="none">
                         <path d="M2 6L5 9L10 3" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" />
                       </svg>
@@ -1441,11 +1505,40 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                   </div>
                   <span
                     className="text-sm font-medium"
-                    style={{ color: worktreeEnabled ? theme.colors.accent : theme.colors.textMain }}
+                    style={{ color: worktreeEnabled && ghCliStatus?.installed ? theme.colors.accent : theme.colors.textMain }}
                   >
                     Enable Worktree
                   </span>
                 </button>
+
+                {/* GitHub CLI not installed warning - shown inline with disabled toggle */}
+                {ghCliStatus !== null && !ghCliStatus.installed && (
+                  <div className="flex items-center gap-2 text-xs" style={{ color: theme.colors.textDim }}>
+                    <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: theme.colors.warning }} />
+                    <span>
+                      Install{' '}
+                      <a
+                        href="https://cli.github.com"
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="underline hover:opacity-80"
+                        style={{ color: theme.colors.accent }}
+                        onClick={(e) => e.stopPropagation()}
+                      >
+                        GitHub CLI
+                      </a>
+                      {' '}to enable worktree features
+                    </span>
+                  </div>
+                )}
+
+                {/* Still checking gh CLI status */}
+                {ghCliStatus === null && (
+                  <div className="flex items-center gap-2 text-xs" style={{ color: theme.colors.textDim }}>
+                    <Loader2 className="w-3 h-3 animate-spin" />
+                    Checking GitHub CLI...
+                  </div>
+                )}
               </div>
 
               {/* Worktree Configuration (only shown when enabled) */}
@@ -1590,32 +1683,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 
                   {/* Create PR on Completion */}
                   <div className="pt-2 border-t" style={{ borderColor: theme.colors.border }}>
-                    {ghCliStatus === null ? (
-                      // Still checking gh CLI status
-                      <div className="flex items-center gap-2 text-xs" style={{ color: theme.colors.textDim }}>
-                        <Loader2 className="w-3 h-3 animate-spin" />
-                        Checking GitHub CLI...
-                      </div>
-                    ) : !ghCliStatus.installed ? (
-                      // gh CLI not installed
-                      <div className="flex items-center gap-2 text-xs" style={{ color: theme.colors.textDim }}>
-                        <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: theme.colors.warning }} />
-                        <span>
-                          Install{' '}
-                          <a
-                            href="https://cli.github.com"
-                            target="_blank"
-                            rel="noopener noreferrer"
-                            className="underline hover:opacity-80"
-                            style={{ color: theme.colors.accent }}
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            GitHub CLI
-                          </a>
-                          {' '}to enable automatic PR creation
-                        </span>
-                      </div>
-                    ) : !ghCliStatus.authenticated ? (
+                    {!ghCliStatus?.authenticated ? (
                       // gh CLI installed but not authenticated
                       <div className="flex items-center gap-2 text-xs" style={{ color: theme.colors.textDim }}>
                         <AlertTriangle className="w-4 h-4 shrink-0" style={{ color: theme.colors.warning }} />
@@ -1852,12 +1920,36 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
           >
             {/* Selector Header */}
             <div className="p-4 border-b flex items-center justify-between shrink-0" style={{ borderColor: theme.colors.border }}>
-              <h3 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-                Select Documents
-              </h3>
-              <button onClick={() => setShowDocSelector(false)} style={{ color: theme.colors.textDim }}>
-                <X className="w-4 h-4" />
-              </button>
+              <div className="flex items-center gap-2">
+                <h3 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+                  Select Documents
+                </h3>
+                {docSelectorRefreshMessage && (
+                  <span
+                    className="text-xs px-2 py-0.5 rounded animate-in fade-in"
+                    style={{
+                      backgroundColor: theme.colors.success + '20',
+                      color: theme.colors.success
+                    }}
+                  >
+                    {docSelectorRefreshMessage}
+                  </span>
+                )}
+              </div>
+              <div className="flex items-center gap-1">
+                <button
+                  onClick={handleDocSelectorRefresh}
+                  disabled={docSelectorRefreshing}
+                  className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
+                  style={{ color: theme.colors.textDim }}
+                  title="Refresh document list"
+                >
+                  <RefreshCw className={`w-4 h-4 ${docSelectorRefreshing ? 'animate-spin' : ''}`} />
+                </button>
+                <button onClick={() => setShowDocSelector(false)} className="p-1 rounded hover:bg-white/10 transition-colors" style={{ color: theme.colors.textDim }}>
+                  <X className="w-4 h-4" />
+                </button>
+              </div>
             </div>
 
             {/* Document Checkboxes */}
@@ -1902,7 +1994,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           className="flex-1 text-sm text-left truncate"
                           style={{ color: theme.colors.textMain }}
                         >
-                          {filename}
+                          {filename}.md
                         </span>
 
                         {/* Task Count */}

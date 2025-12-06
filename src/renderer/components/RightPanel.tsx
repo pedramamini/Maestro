@@ -4,11 +4,12 @@ import type { Session, Theme, RightPanelTab, Shortcut, BatchRunState } from '../
 import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
-import { AutoRun } from './AutoRun';
+import { AutoRun, AutoRunHandle } from './AutoRun';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 export interface RightPanelHandle {
   refreshHistoryPanel: () => void;
+  focusAutoRun: () => void;
 }
 
 interface RightPanelProps {
@@ -52,6 +53,7 @@ interface RightPanelProps {
   refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
   setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
   onAutoRefreshChange?: (interval: number) => void;
+  onShowFlash?: (message: string) => void;
 
   // Auto Run handlers
   autoRunDocumentList: string[];        // List of document filenames (without .md)
@@ -87,7 +89,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     fileTreeFilter, setFileTreeFilter, fileTreeFilterOpen, setFileTreeFilterOpen,
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, previewFile, fileTreeContainerRef,
     fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders, collapseAllFolders,
-    updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange,
+    updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange, onShowFlash,
     autoRunDocumentList, autoRunDocumentTree, autoRunContent, autoRunIsLoadingDocuments,
     onAutoRunContentChange, onAutoRunModeChange, onAutoRunStateChange,
     onAutoRunSelectDocument, onAutoRunCreateDocument, onAutoRunRefresh, onAutoRunOpenSetup,
@@ -96,11 +98,15 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
   } = props;
 
   const historyPanelRef = useRef<HistoryPanelHandle>(null);
+  const autoRunRef = useRef<AutoRunHandle>(null);
 
-  // Expose refreshHistoryPanel method to parent
+  // Expose methods to parent
   useImperativeHandle(ref, () => ({
     refreshHistoryPanel: () => {
       historyPanelRef.current?.refreshHistory();
+    },
+    focusAutoRun: () => {
+      autoRunRef.current?.focus();
     }
   }), []);
 
@@ -110,6 +116,16 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
       // Small delay to ensure the panel is rendered
       requestAnimationFrame(() => {
         historyPanelRef.current?.focus();
+      });
+    }
+  }, [activeRightTab, rightPanelOpen, activeFocus]);
+
+  // Focus the auto run panel when switching to autorun tab
+  useEffect(() => {
+    if (activeRightTab === 'autorun' && rightPanelOpen && activeFocus === 'right') {
+      // Small delay to ensure the panel is rendered
+      requestAnimationFrame(() => {
+        autoRunRef.current?.focus();
       });
     }
   }, [activeRightTab, rightPanelOpen, activeFocus]);
@@ -229,6 +245,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             refreshFileTree={refreshFileTree}
             setSessions={setSessions}
             onAutoRefreshChange={onAutoRefreshChange}
+            onShowFlash={onShowFlash}
           />
         )}
 
@@ -245,6 +262,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
 
         {activeRightTab === 'autorun' && (
           <AutoRun
+            ref={autoRunRef}
             theme={theme}
             sessionId={session.id}
             folderPath={session.autoRunFolderPath || null}
@@ -309,7 +327,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
                   className="text-xs font-medium shrink-0"
                   style={{ color: theme.colors.textMain }}
                 >
-                  Document {batchRunState.currentDocumentIndex + 1}/{batchRunState.documents.length}: {batchRunState.documents[batchRunState.currentDocumentIndex]}
+                  Document {batchRunState.currentDocumentIndex + 1}/{batchRunState.documents.length}: {batchRunState.documents[batchRunState.currentDocumentIndex]}.md
                 </span>
                 <div
                   className="flex-1 h-1 rounded-full overflow-hidden"

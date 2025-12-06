@@ -119,6 +119,7 @@ export type GetSessionsCallback = () => Array<{
   thinkingStartTime?: number | null; // Timestamp when AI started thinking (for elapsed time display)
   aiTabs?: AITabData[];
   activeTabId?: string;
+  bookmarked?: boolean; // Whether session is bookmarked (shows in Bookmarks group)
 }>;
 
 // Session detail type for single session endpoint
@@ -200,11 +201,12 @@ export type GetCustomCommandsCallback = () => CustomAICommand[];
 // History entry type for the history API
 export interface HistoryEntryData {
   id: string;
-  type: 'AUTO' | 'USER';
+  type: 'AUTO' | 'USER' | 'LOOP';
   timestamp: number;
   summary: string;
   fullResponse?: string;
   claudeSessionId?: string;
+  sessionName?: string;
   projectPath: string;
   sessionId?: string;
   contextUsage?: number;
@@ -218,6 +220,7 @@ export interface HistoryEntryData {
   };
   success?: boolean;
   elapsedTimeMs?: number;
+  validated?: boolean;
 }
 
 // Callback type for fetching history entries
@@ -1469,6 +1472,11 @@ export class WebServer {
     toolType?: string;
     inputMode?: string;
     cwd?: string;
+    cliActivity?: {
+      playbookId: string;
+      playbookName: string;
+      startedAt: number;
+    };
   }) {
     this.broadcastToWebClients({
       type: 'session_state_change',

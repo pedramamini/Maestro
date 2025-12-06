@@ -3,6 +3,7 @@ import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
 import fs from 'fs/promises';
+import fsSync from 'fs';
 import { createWriteStream } from 'fs';
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
@@ -153,14 +154,15 @@ const windowStateStore = new Store<WindowState>({
   },
 });
 
-// History entries store (per-project history for AUTO and USER entries)
+// History entries store (per-project history for AUTO, USER, and LOOP entries)
 interface HistoryEntry {
   id: string;
-  type: 'AUTO' | 'USER';
+  type: 'AUTO' | 'USER' | 'LOOP';
   timestamp: number;
   summary: string;
   fullResponse?: string;
   claudeSessionId?: string;
+  sessionName?: string; // User-defined session name
   projectPath: string;
   sessionId?: string; // Maestro session ID for isolation
   contextUsage?: number; // Context window usage percentage at time of entry
@@ -212,6 +214,11 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let historyFileWatcherInterval: NodeJS.Timeout | null = null;
+let lastHistoryFileMtime: number = 0;
+let historyNeedsReload: boolean = false;
+let cliActivityWatcherInterval: NodeJS.Timeout | null = null;
+let lastCliActivityMtime: number = 0;
 
 /**
  * Create and configure the web server with all necessary callbacks.
@@ -286,6 +293,7 @@ function createWebServer(): WebServer {
         thinkingStartTime: s.thinkingStartTime || null,
         aiTabs,
         activeTabId: s.activeTabId || (aiTabs.length > 0 ? aiTabs[0].id : undefined),
+        bookmarked: s.bookmarked || false,
       };
     });
   });
@@ -619,6 +627,19 @@ app.whenReady().then(() => {
   // Note: webServer is created on-demand when user enables web interface (see setupWebServerCallbacks)
   agentDetector = new AgentDetector();
 
+  // Load custom agent paths from settings
+  const allAgentConfigs = agentConfigsStore.get('configs', {});
+  const customPaths: Record<string, string> = {};
+  for (const [agentId, config] of Object.entries(allAgentConfigs)) {
+    if (config && typeof config === 'object' && 'customPath' in config && config.customPath) {
+      customPaths[agentId] = config.customPath as string;
+    }
+  }
+  if (Object.keys(customPaths).length > 0) {
+    agentDetector.setCustomPaths(customPaths);
+    logger.info(`Loaded custom agent paths: ${JSON.stringify(customPaths)}`, 'Startup');
+  }
+
   logger.info('Core services initialized', 'Startup');
 
   // Set up IPC handlers
@@ -632,6 +653,12 @@ app.whenReady().then(() => {
   // Create main window
   logger.info('Creating main window', 'Startup');
   createWindow();
+
+  // Start history file watcher (polls every 60 seconds for external changes)
+  startHistoryFileWatcher();
+
+  // Start CLI activity watcher (polls every 2 seconds for CLI playbook runs)
+  startCliActivityWatcher();
 
   // Note: Web server is not auto-started - it starts when user enables web interface
   // via live:startServer IPC call from the renderer
@@ -651,6 +678,16 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   logger.info('Application shutting down', 'Shutdown');
+  // Stop history file watcher
+  if (historyFileWatcherInterval) {
+    clearInterval(historyFileWatcherInterval);
+    historyFileWatcherInterval = null;
+  }
+  // Stop CLI activity watcher
+  if (cliActivityWatcherInterval) {
+    clearInterval(cliActivityWatcherInterval);
+    cliActivityWatcherInterval = null;
+  }
   // Clean up all running processes
   logger.info('Killing all running processes', 'Shutdown');
   processManager?.killAll();
@@ -660,6 +697,85 @@ app.on('before-quit', async () => {
   await webServer?.stop();
   logger.info('Shutdown complete', 'Shutdown');
 });
+
+/**
+ * Start watching the history file for external changes (e.g., from CLI).
+ * Polls every 60 seconds and notifies renderer if file was modified.
+ */
+function startHistoryFileWatcher() {
+  const historyFilePath = historyStore.path;
+
+  // Get initial mtime
+  try {
+    const stats = fsSync.statSync(historyFilePath);
+    lastHistoryFileMtime = stats.mtimeMs;
+  } catch {
+    // File doesn't exist yet, that's fine
+    lastHistoryFileMtime = 0;
+  }
+
+  // Poll every 60 seconds
+  historyFileWatcherInterval = setInterval(() => {
+    try {
+      const stats = fsSync.statSync(historyFilePath);
+      if (stats.mtimeMs > lastHistoryFileMtime) {
+        lastHistoryFileMtime = stats.mtimeMs;
+        // File was modified externally - mark for reload on next getAll
+        historyNeedsReload = true;
+        logger.debug('History file changed externally, notifying renderer', 'HistoryWatcher');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('history:externalChange');
+        }
+      }
+    } catch {
+      // File might not exist, ignore
+    }
+  }, 60000); // 60 seconds
+
+  logger.info('History file watcher started', 'Startup');
+}
+
+/**
+ * Start CLI activity file watcher
+ * Polls cli-activity.json every 2 seconds to detect when CLI is running playbooks
+ */
+function startCliActivityWatcher() {
+  const cliActivityPath = path.join(app.getPath('userData'), 'cli-activity.json');
+
+  // Get initial mtime
+  try {
+    const stats = fsSync.statSync(cliActivityPath);
+    lastCliActivityMtime = stats.mtimeMs;
+  } catch {
+    lastCliActivityMtime = 0;
+  }
+
+  // Poll every 2 seconds (more frequent for responsive UI)
+  cliActivityWatcherInterval = setInterval(() => {
+    try {
+      const stats = fsSync.statSync(cliActivityPath);
+      if (stats.mtimeMs > lastCliActivityMtime) {
+        lastCliActivityMtime = stats.mtimeMs;
+        // File was modified, notify renderer
+        logger.debug('CLI activity file changed, notifying renderer', 'CliActivityWatcher');
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('cli:activityChange');
+        }
+      }
+    } catch {
+      // File might not exist, that's fine - means no CLI activity
+      // Check if we had activity before and now it's gone (file deleted or process ended)
+      if (lastCliActivityMtime > 0) {
+        lastCliActivityMtime = 0;
+        if (mainWindow && !mainWindow.isDestroyed()) {
+          mainWindow.webContents.send('cli:activityChange');
+        }
+      }
+    }
+  }, 2000); // 2 seconds
+
+  logger.info('CLI activity watcher started', 'Startup');
+}
 
 function setupIpcHandlers() {
   // Settings management
@@ -721,12 +837,14 @@ function setupIpcHandlers() {
           // Session exists - check if state changed
           if (prevSession.state !== session.state ||
               prevSession.inputMode !== session.inputMode ||
-              prevSession.name !== session.name) {
+              prevSession.name !== session.name ||
+              JSON.stringify(prevSession.cliActivity) !== JSON.stringify(session.cliActivity)) {
             webServer.broadcastSessionStateChange(session.id, session.state, {
               name: session.name,
               toolType: session.toolType,
               inputMode: session.inputMode,
               cwd: session.cwd,
+              cliActivity: session.cliActivity,
             });
           }
         } else {
@@ -908,6 +1026,7 @@ function setupIpcHandlers() {
       cwd: p.cwd,
       isTerminal: p.isTerminal,
       isBatchMode: p.isBatchMode || false,
+      startTime: p.startTime,
     }));
   });
 
@@ -1735,6 +1854,55 @@ function setupIpcHandlers() {
     agentConfigsStore.set('configs', allConfigs);
     logger.debug(`Updated config ${key} for agent ${agentId}`, 'AgentConfig', { value });
     return true;
+  });
+
+  // Set custom path for an agent - used when agent is not in standard PATH locations
+  ipcMain.handle('agents:setCustomPath', async (_event, agentId: string, customPath: string | null) => {
+    if (!agentDetector) throw new Error('Agent detector not initialized');
+
+    const allConfigs = agentConfigsStore.get('configs', {});
+    if (!allConfigs[agentId]) {
+      allConfigs[agentId] = {};
+    }
+
+    if (customPath) {
+      allConfigs[agentId].customPath = customPath;
+      logger.info(`Set custom path for agent ${agentId}: ${customPath}`, 'AgentConfig');
+    } else {
+      delete allConfigs[agentId].customPath;
+      logger.info(`Cleared custom path for agent ${agentId}`, 'AgentConfig');
+    }
+
+    agentConfigsStore.set('configs', allConfigs);
+
+    // Update agent detector with all custom paths
+    const allCustomPaths: Record<string, string> = {};
+    for (const [id, config] of Object.entries(allConfigs)) {
+      if (config && typeof config === 'object' && 'customPath' in config && config.customPath) {
+        allCustomPaths[id] = config.customPath as string;
+      }
+    }
+    agentDetector.setCustomPaths(allCustomPaths);
+
+    return true;
+  });
+
+  // Get custom path for an agent
+  ipcMain.handle('agents:getCustomPath', async (_event, agentId: string) => {
+    const allConfigs = agentConfigsStore.get('configs', {});
+    return allConfigs[agentId]?.customPath || null;
+  });
+
+  // Get all custom paths for agents
+  ipcMain.handle('agents:getAllCustomPaths', async () => {
+    const allConfigs = agentConfigsStore.get('configs', {});
+    const customPaths: Record<string, string> = {};
+    for (const [agentId, config] of Object.entries(allConfigs)) {
+      if (config && typeof config === 'object' && 'customPath' in config && config.customPath) {
+        customPaths[agentId] = config.customPath as string;
+      }
+    }
+    return customPaths;
   });
 
   // Folder selection dialog
@@ -3091,9 +3259,51 @@ function setupIpcHandlers() {
     }
   });
 
+  // CLI activity status (for detecting when CLI is running playbooks)
+  ipcMain.handle('cli:getActivity', async () => {
+    try {
+      const cliActivityPath = path.join(app.getPath('userData'), 'cli-activity.json');
+      const content = fsSync.readFileSync(cliActivityPath, 'utf-8');
+      const data = JSON.parse(content);
+      const activities = data.activities || [];
+
+      // Filter out stale activities (processes no longer running)
+      const stillRunning = activities.filter((activity: { pid: number }) => {
+        try {
+          process.kill(activity.pid, 0); // Doesn't kill, just checks if process exists
+          return true;
+        } catch {
+          return false;
+        }
+      });
+
+      return stillRunning;
+    } catch {
+      return [];
+    }
+  });
+
   // History persistence (per-project and optionally per-session)
   ipcMain.handle('history:getAll', async (_event, projectPath?: string, sessionId?: string) => {
-    const allEntries = historyStore.get('entries', []);
+    // If external changes were detected, reload from disk
+    let allEntries: HistoryEntry[];
+    if (historyNeedsReload) {
+      try {
+        const historyFilePath = historyStore.path;
+        const fileContent = fsSync.readFileSync(historyFilePath, 'utf-8');
+        const data = JSON.parse(fileContent);
+        allEntries = data.entries || [];
+        // Update the in-memory store with fresh data
+        historyStore.set('entries', allEntries);
+        historyNeedsReload = false;
+        logger.debug('Reloaded history from disk after external change', 'History');
+      } catch (error) {
+        logger.warn(`Failed to reload history from disk: ${error}`, 'History');
+        allEntries = historyStore.get('entries', []);
+      }
+    } else {
+      allEntries = historyStore.get('entries', []);
+    }
     let filteredEntries = allEntries;
 
     if (projectPath) {
@@ -3107,6 +3317,23 @@ function setupIpcHandlers() {
     }
 
     return filteredEntries;
+  });
+
+  // Force reload history from disk (for manual refresh)
+  ipcMain.handle('history:reload', async () => {
+    try {
+      const historyFilePath = historyStore.path;
+      const fileContent = fsSync.readFileSync(historyFilePath, 'utf-8');
+      const data = JSON.parse(fileContent);
+      const entries = data.entries || [];
+      historyStore.set('entries', entries);
+      historyNeedsReload = false;
+      logger.debug('Force reloaded history from disk', 'History');
+      return true;
+    } catch (error) {
+      logger.warn(`Failed to force reload history from disk: ${error}`, 'History');
+      return false;
+    }
   });
 
   ipcMain.handle('history:add', async (_event, entry: HistoryEntry) => {
@@ -4265,6 +4492,11 @@ function setupProcessListeners() {
 
     processManager.on('session-id', (sessionId: string, claudeSessionId: string) => {
       mainWindow?.webContents.send('process:session-id', sessionId, claudeSessionId);
+    });
+
+    // Handle slash commands from Claude Code init message
+    processManager.on('slash-commands', (sessionId: string, slashCommands: string[]) => {
+      mainWindow?.webContents.send('process:slash-commands', sessionId, slashCommands);
     });
 
     // Handle stderr separately from runCommand (for clean command execution)

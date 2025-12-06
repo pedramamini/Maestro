@@ -25,10 +25,10 @@ import { DEFAULT_SLASH_COMMANDS, type SlashCommand } from './SlashCommandAutocom
 // CommandHistoryDrawer and RecentCommandChips removed for simpler mobile UI
 import { ResponseViewer, type ResponseItem } from './ResponseViewer';
 import { OfflineQueueBanner } from './OfflineQueueBanner';
-import { ConnectionStatusIndicator } from './ConnectionStatusIndicator';
 import { MessageHistory, type LogEntry } from './MessageHistory';
 import { AutoRunIndicator } from './AutoRunIndicator';
 import { TabBar } from './TabBar';
+import { TabSearchModal } from './TabSearchModal';
 import type { Session, LastResponsePreview } from '../hooks/useSessions';
 
 
@@ -282,6 +282,7 @@ export default function MobileApp() {
   const [activeTabId, setActiveTabId] = useState<string | null>(null);
   const [showAllSessions, setShowAllSessions] = useState(false);
   const [showHistoryPanel, setShowHistoryPanel] = useState(false);
+  const [showTabSearch, setShowTabSearch] = useState(false);
   const [commandInput, setCommandInput] = useState('');
   const [showResponseViewer, setShowResponseViewer] = useState(false);
   const [selectedResponse, setSelectedResponse] = useState<LastResponsePreview | null>(null);
@@ -731,6 +732,19 @@ export default function MobileApp() {
     connect();
   }, [connect]);
 
+  // Auto-reconnect every 30 seconds when disconnected
+  useEffect(() => {
+    // Only auto-reconnect if disconnected and not offline
+    if (connectionState !== 'disconnected' || isOffline) return;
+
+    const intervalId = setInterval(() => {
+      webLogger.info('Auto-reconnecting after 30 seconds...', 'MobileApp');
+      connect();
+    }, 30000); // 30 seconds
+
+    return () => clearInterval(intervalId);
+  }, [connectionState, isOffline, connect]);
+
   // Handle session selection - also notifies desktop to switch
   const handleSelectSession = useCallback((sessionId: string) => {
     // Find the session to get its activeTabId
@@ -794,6 +808,17 @@ export default function MobileApp() {
   // Handle closing History panel
   const handleCloseHistoryPanel = useCallback(() => {
     setShowHistoryPanel(false);
+  }, []);
+
+  // Handle opening Tab Search modal
+  const handleOpenTabSearch = useCallback(() => {
+    setShowTabSearch(true);
+    triggerHaptic(HAPTIC_PATTERNS.tap);
+  }, []);
+
+  // Handle closing Tab Search modal
+  const handleCloseTabSearch = useCallback(() => {
+    setShowTabSearch(false);
   }, []);
 
   // Handle command submission
@@ -1056,11 +1081,10 @@ export default function MobileApp() {
           <p style={{ fontSize: '14px', color: colors.textDim, marginBottom: '12px' }}>
             {error || 'Unable to connect to Maestro desktop app.'}
           </p>
-          {reconnectAttempts > 0 && (
-            <p style={{ fontSize: '12px', color: colors.textDim, marginBottom: '12px' }}>
-              Reconnection attempts: {reconnectAttempts}
-            </p>
-          )}
+          <p style={{ fontSize: '12px', color: colors.textDim, marginBottom: '12px' }}>
+            Auto-reconnecting every 30 seconds...
+            {reconnectAttempts > 0 && ` (attempt ${reconnectAttempts})`}
+          </p>
           <button
             onClick={handleRetry}
             style={{
@@ -1074,7 +1098,7 @@ export default function MobileApp() {
               cursor: 'pointer',
             }}
           >
-            Retry Connection
+            Retry Now
           </button>
         </div>
       );
@@ -1197,17 +1221,7 @@ export default function MobileApp() {
         activeSession={activeSession}
       />
 
-      {/* Connection status indicator with retry button - shows when disconnected or reconnecting */}
-      <ConnectionStatusIndicator
-        connectionState={connectionState}
-        isOffline={isOffline}
-        reconnectAttempts={reconnectAttempts}
-        maxReconnectAttempts={10}
-        error={error}
-        onRetry={handleRetry}
-      />
-
-      {/* Session pill bar - shown when connected and sessions available */}
+      {/* Session pill bar - Row 1: Groups/Sessions with search button */}
       {showSessionPillBar && (
         <SessionPillBar
           sessions={sessions}
@@ -1218,7 +1232,7 @@ export default function MobileApp() {
         />
       )}
 
-      {/* Tab bar - shown when active session has multiple tabs and in AI mode */}
+      {/* Tab bar - Row 2: Tabs for active session with search button */}
       {activeSession?.inputMode === 'ai' && activeSession?.aiTabs && activeSession.aiTabs.length > 1 && activeSession.activeTabId && (
         <TabBar
           tabs={activeSession.aiTabs}
@@ -1226,6 +1240,7 @@ export default function MobileApp() {
           onSelectTab={handleSelectTab}
           onNewTab={handleNewTab}
           onCloseTab={handleCloseTab}
+          onOpenTabSearch={handleOpenTabSearch}
         />
       )}
 
@@ -1266,6 +1281,16 @@ export default function MobileApp() {
           onClose={handleCloseHistoryPanel}
           projectPath={activeSession?.cwd}
           sessionId={activeSessionId || undefined}
+        />
+      )}
+
+      {/* Tab search modal - full-screen modal for searching tabs */}
+      {showTabSearch && activeSession?.aiTabs && activeSession.activeTabId && (
+        <TabSearchModal
+          tabs={activeSession.aiTabs}
+          activeTabId={activeSession.activeTabId}
+          onSelectTab={handleSelectTab}
+          onClose={handleCloseTabSearch}
         />
       )}
 
