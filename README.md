@@ -6,6 +6,8 @@
 
 Maestro is a desktop application that allows you to run and manage multiple AI coding instances in parallel with a Linear/Superhuman-level responsive interface. Currently supporting Claude Code with plans for additional agentic coding tools (OpenAI Codex, Gemini CLI, Qwen3 Coder) based on user demand.
 
+**[Watch the Introduction Video](https://youtu.be/fmwwTOg7cyA?si=dJ89K54tGflKa5G4)**
+
 ## Installation
 
 ### Download
