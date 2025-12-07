@@ -48,15 +48,25 @@ maestro/
 │   │   ├── process-manager.ts
 │   │   ├── preload.ts     # Secure IPC bridge
 │   │   └── utils/         # Shared utilities
-│   └── renderer/          # React frontend (UI)
-│       ├── App.tsx        # Main coordinator
-│       ├── components/    # React components
-│       ├── hooks/         # Custom React hooks
-│       ├── services/      # IPC wrappers (git, process)
-│       ├── contexts/      # React contexts
-│       ├── constants/     # Themes, shortcuts, priorities
-│       ├── types/         # TypeScript definitions
-│       └── utils/         # Frontend utilities
+│   ├── renderer/          # React frontend (Desktop UI)
+│   │   ├── App.tsx        # Main coordinator
+│   │   ├── components/    # React components
+│   │   ├── hooks/         # Custom React hooks
+│   │   ├── services/      # IPC wrappers (git, process)
+│   │   ├── contexts/      # React contexts
+│   │   ├── constants/     # Themes, shortcuts, priorities
+│   │   ├── types/         # TypeScript definitions
+│   │   └── utils/         # Frontend utilities
+│   ├── cli/               # CLI tool (maestro-cli)
+│   │   ├── index.ts       # CLI entry point
+│   │   ├── commands/      # Command implementations
+│   │   ├── services/      # CLI services (storage, batch processor)
+│   │   └── output/        # Output formatters (human, JSONL)
+│   ├── shared/            # Shared code across processes
+│   │   ├── theme-types.ts # Theme type definitions
+│   │   └── templateVariables.ts # Template variable system
+│   └── web/               # Web interface (Remote Control)
+│       └── ...            # Mobile-optimized React app
 ├── build/                 # Application icons
 ├── .github/workflows/     # CI/CD automation
 └── dist/                  # Build output (generated)
@@ -65,16 +75,19 @@ maestro/
 ## Development Scripts
 
 ```bash
-npm run dev          # Start dev server with hot reload
-npm run build        # Full production build
-npm run build:main   # Build main process only
-npm run build:renderer  # Build renderer only
-npm start            # Start built application
-npm run clean        # Clean build artifacts
-npm run package      # Package for all platforms
-npm run package:mac  # Package for macOS
-npm run package:win  # Package for Windows
-npm run package:linux # Package for Linux
+npm run dev            # Start dev server with hot reload
+npm run dev:web        # Start web interface dev server
+npm run build          # Full production build (main + renderer + web + CLI)
+npm run build:main     # Build main process only
+npm run build:renderer # Build renderer only
+npm run build:web      # Build web interface only
+npm run build:cli      # Build CLI tool only
+npm start              # Start built application
+npm run clean          # Clean build artifacts
+npm run package        # Package for all platforms
+npm run package:mac    # Package for macOS
+npm run package:win    # Package for Windows
+npm run package:linux  # Package for Linux
 ```
 
 ## Common Development Tasks
@@ -144,21 +157,23 @@ npm run package:linux # Package for Linux
 
 ### Adding a Slash Command
 
-Add to `src/renderer/slashCommands.ts`:
+Slash commands are now **Custom AI Commands** defined in Settings, not in code. They are prompt macros that get substituted and sent to the AI agent.
+
+To add a built-in slash command that users see by default, add it to the Custom AI Commands default list in `useSettings.ts`. Each command needs:
 
 ```typescript
 {
   command: '/mycommand',
   description: 'Does something useful',
-  terminalOnly: false,  // Optional: restrict to terminal mode
-  execute: (context) => {
-    const { activeSessionId, setSessions } = context;
-    // Your logic
-  }
+  prompt: 'The prompt text with {{TEMPLATE_VARIABLES}}',
 }
 ```
 
+For commands that need programmatic behavior (not just prompts), handle them in `App.tsx` where slash commands are processed before being sent to the agent.
+
 ### Adding a New Theme
+
+Maestro has 16 themes across 3 modes: dark, light, and vibe.
 
 Add to `src/renderer/constants/themes.ts`:
 
@@ -166,25 +181,26 @@ Add to `src/renderer/constants/themes.ts`:
 'my-theme': {
   id: 'my-theme',
   name: 'My Theme',
-  mode: 'dark',  // or 'light'
+  mode: 'dark',  // 'dark', 'light', or 'vibe'
   colors: {
-    bgMain: '#...',
-    bgSidebar: '#...',
-    bgActivity: '#...',
-    border: '#...',
-    textMain: '#...',
-    textDim: '#...',
-    accent: '#...',
-    accentDim: 'rgba(...)',
-    accentText: '#...',
-    success: '#...',
-    warning: '#...',
-    error: '#...',
+    bgMain: '#...',           // Main background
+    bgSidebar: '#...',        // Sidebar background
+    bgActivity: '#...',       // Activity/hover background
+    border: '#...',           // Border color
+    textMain: '#...',         // Primary text
+    textDim: '#...',          // Secondary/dimmed text
+    accent: '#...',           // Accent color
+    accentDim: 'rgba(...)',   // Dimmed accent (with alpha)
+    accentText: '#...',       // Text in accent contexts
+    accentForeground: '#...', // Text ON accent backgrounds (contrast)
+    success: '#...',          // Success state (green)
+    warning: '#...',          // Warning state (yellow/orange)
+    error: '#...',            // Error state (red)
   }
 }
 ```
 
-Then add the ID to `ThemeId` type in `src/renderer/types/index.ts`.
+Then add the ID to `ThemeId` type in `src/shared/theme-types.ts` and to the `isValidThemeId` function.
 
 ### Adding an IPC Handler
 

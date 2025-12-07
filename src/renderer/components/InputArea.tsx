@@ -561,7 +561,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                 setInputValue(value);
 
                 // Show slash command autocomplete when typing /
-                if (value.startsWith('/') && !value.includes(' ')) {
+                // Close when there's a space or newline (user is adding arguments or multiline content)
+                if (value.startsWith('/') && !value.includes(' ') && !value.includes('\n')) {
                   // Only reset selection when modal first opens, not on every keystroke
                   if (!slashCommandOpen) {
                     setSelectedSlashCommandIndex(0);

@@ -232,26 +232,57 @@ Create your own slash commands in **Settings > Custom AI Commands**. Each comman
 
 Commands support **template variables** that are automatically substituted at runtime:
 
+#### Session Variables
 | Variable | Description |
 |----------|-------------|
+| `{{SESSION_ID}}` | Maestro session ID (unique identifier) |
 | `{{SESSION_NAME}}` | Current session name |
 | `{{AGENT_SESSION_ID}}` | Agent session ID (for conversation continuity) |
-| `{{PROJECT_NAME}}` | Project folder name |
+| `{{TOOL_TYPE}}` | Agent type (claude-code, aider, etc.) |
+| `{{AGENT_NAME}}` | Agent name (same as session name) |
+| `{{AGENT_GROUP}}` | Agent's group name (if grouped) |
+
+#### Project Variables
+| Variable | Description |
+|----------|-------------|
 | `{{PROJECT_PATH}}` | Full path to project directory |
-| `{{GIT_BRANCH}}` | Current git branch (if in a git repo) |
+| `{{PROJECT_NAME}}` | Project folder name (last segment of path) |
+| `{{CWD}}` | Current working directory |
+| `{{AUTORUN_FOLDER}}` | Auto Run documents folder path |
+
+#### Auto Run Variables
+| Variable | Description |
+|----------|-------------|
+| `{{DOCUMENT_NAME}}` | Current Auto Run document name (without .md) |
+| `{{DOCUMENT_PATH}}` | Full path to current Auto Run document |
+| `{{LOOP_NUMBER}}` | Current loop iteration (starts at 1) |
+
+#### Date/Time Variables
+| Variable | Description |
+|----------|-------------|
 | `{{DATE}}` | Current date (YYYY-MM-DD) |
-| `{{DAY}}` | Day of month (01-31) |
-| `{{MONTH}}` | Month (01-12) |
 | `{{TIME}}` | Current time (HH:MM:SS) |
+| `{{DATETIME}}` | Full datetime (YYYY-MM-DD HH:MM:SS) |
+| `{{TIMESTAMP}}` | Unix timestamp in milliseconds |
+| `{{DATE_SHORT}}` | Short date (MM/DD/YY) |
+| `{{TIME_SHORT}}` | Short time (HH:MM) |
+| `{{YEAR}}` | Current year (YYYY) |
+| `{{MONTH}}` | Current month (01-12) |
+| `{{DAY}}` | Current day (01-31) |
 | `{{WEEKDAY}}` | Day of week (Monday, Tuesday, etc.) |
+
+#### Git & Context Variables
+| Variable | Description |
+|----------|-------------|
+| `{{GIT_BRANCH}}` | Current git branch name (requires git repo) |
+| `{{IS_GIT_REPO}}` | "true" or "false" |
+| `{{CONTEXT_USAGE}}` | Current context window usage percentage |
 
 **Example**: A custom `/standup` command with prompt:
 ```
 It's {{WEEKDAY}}, {{DATE}}. I'm on branch {{GIT_BRANCH}} in {{PROJECT_NAME}}.
 Summarize what I worked on yesterday and suggest priorities for today.
 ```
-
-See the full list of available variables in the **Template Variables** section within the Custom AI Commands panel.
 
 ## Auto Run
 
@@ -407,20 +438,27 @@ maestro-cli list agents --group <group-id>
 # Show agent details (history, usage stats, cost)
 maestro-cli show agent <agent-id>
 
-# List playbooks for an agent
+# List all playbooks (or filter by agent)
+maestro-cli list playbooks
 maestro-cli list playbooks --agent <agent-id>
 
 # Show playbook details
 maestro-cli show playbook <playbook-id>
 
 # Run a playbook
-maestro-cli run <playbook-id>
+maestro-cli playbook <playbook-id>
 
 # Dry run (shows what would be executed)
-maestro-cli run <playbook-id> --dry-run
+maestro-cli playbook <playbook-id> --dry-run
 
 # Run without writing to history
-maestro-cli run <playbook-id> --no-history
+maestro-cli playbook <playbook-id> --no-history
+
+# Wait for agent if busy, with verbose output
+maestro-cli playbook <playbook-id> --wait --verbose
+
+# Debug mode for troubleshooting
+maestro-cli playbook <playbook-id> --debug
 ```
 
 ### JSON Output
@@ -443,7 +481,7 @@ maestro-cli list groups --json
 {"type":"group","id":"group-def456","name":"Backend","emoji":"⚙️","timestamp":...}
 
 # Running a playbook with JSON streams events
-maestro-cli run <playbook-id> --json
+maestro-cli playbook <playbook-id> --json
 {"type":"start","timestamp":...,"playbook":{...}}
 {"type":"document_start","timestamp":...,"document":"tasks.md","taskCount":5}
 {"type":"task_start","timestamp":...,"taskIndex":0}
@@ -456,7 +494,7 @@ maestro-cli run <playbook-id> --json
 
 ```bash
 # Run a playbook every hour (use --json for log parsing)
-0 * * * * /usr/local/bin/maestro-cli run <playbook-id> --json >> /var/log/maestro.jsonl 2>&1
+0 * * * * /usr/local/bin/maestro-cli playbook <playbook-id> --json >> /var/log/maestro.jsonl 2>&1
 ```
 
 ### Requirements
