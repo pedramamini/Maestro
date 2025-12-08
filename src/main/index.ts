@@ -1472,8 +1472,12 @@ function setupIpcHandlers() {
   });
 
   // Create a PR from the worktree branch to a base branch
-  ipcMain.handle('git:createPR', async (_, worktreePath: string, baseBranch: string, title: string, body: string) => {
+  // ghPath parameter allows specifying custom path to gh binary
+  ipcMain.handle('git:createPR', async (_, worktreePath: string, baseBranch: string, title: string, body: string, ghPath?: string) => {
     try {
+      // Use custom path if provided, otherwise fall back to 'gh' (expects it in PATH)
+      const ghCommand = ghPath || 'gh';
+
       // First, push the current branch to origin
       const pushResult = await execFileNoThrow('git', ['push', '-u', 'origin', 'HEAD'], worktreePath);
       if (pushResult.exitCode !== 0) {
@@ -1481,7 +1485,7 @@ function setupIpcHandlers() {
       }
 
       // Create the PR using gh CLI
-      const prResult = await execFileNoThrow('gh', [
+      const prResult = await execFileNoThrow(ghCommand, [
         'pr', 'create',
         '--base', baseBranch,
         '--title', title,
@@ -1505,16 +1509,20 @@ function setupIpcHandlers() {
   });
 
   // Check if GitHub CLI (gh) is installed and authenticated
-  ipcMain.handle('git:checkGhCli', async () => {
+  // ghPath parameter allows specifying custom path to gh binary (e.g., /opt/homebrew/bin/gh)
+  ipcMain.handle('git:checkGhCli', async (_, ghPath?: string) => {
     try {
+      // Use custom path if provided, otherwise fall back to 'gh' (expects it in PATH)
+      const ghCommand = ghPath || 'gh';
+
       // Check if gh is installed by running gh --version
-      const versionResult = await execFileNoThrow('gh', ['--version']);
+      const versionResult = await execFileNoThrow(ghCommand, ['--version']);
       if (versionResult.exitCode !== 0) {
         return { installed: false, authenticated: false };
       }
 
       // Check if gh is authenticated by running gh auth status
-      const authResult = await execFileNoThrow('gh', ['auth', 'status']);
+      const authResult = await execFileNoThrow(ghCommand, ['auth', 'status']);
       const authenticated = authResult.exitCode === 0;
 
       return { installed: true, authenticated };

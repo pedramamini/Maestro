@@ -255,8 +255,8 @@ contextBridge.exposeInMainWorld('maestro', {
         hasUncommittedChanges: boolean;
         error?: string;
       }>,
-    createPR: (worktreePath: string, baseBranch: string, title: string, body: string) =>
-      ipcRenderer.invoke('git:createPR', worktreePath, baseBranch, title, body) as Promise<{
+    createPR: (worktreePath: string, baseBranch: string, title: string, body: string, ghPath?: string) =>
+      ipcRenderer.invoke('git:createPR', worktreePath, baseBranch, title, body, ghPath) as Promise<{
         success: boolean;
         prUrl?: string;
         error?: string;
@@ -267,8 +267,8 @@ contextBridge.exposeInMainWorld('maestro', {
         branch?: string;
         error?: string;
       }>,
-    checkGhCli: () =>
-      ipcRenderer.invoke('git:checkGhCli') as Promise<{
+    checkGhCli: (ghPath?: string) =>
+      ipcRenderer.invoke('git:checkGhCli', ghPath) as Promise<{
         installed: boolean;
         authenticated: boolean;
       }>,
@@ -701,7 +701,7 @@ export interface MaestroAPI {
       hasUncommittedChanges: boolean;
       error?: string;
     }>;
-    createPR: (worktreePath: string, baseBranch: string, title: string, body: string) => Promise<{
+    createPR: (worktreePath: string, baseBranch: string, title: string, body: string, ghPath?: string) => Promise<{
       success: boolean;
       prUrl?: string;
       error?: string;
@@ -711,7 +711,7 @@ export interface MaestroAPI {
       branch?: string;
       error?: string;
     }>;
-    checkGhCli: () => Promise<{
+    checkGhCli: (ghPath?: string) => Promise<{
       installed: boolean;
       authenticated: boolean;
     }>;

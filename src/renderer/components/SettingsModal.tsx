@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useMemo, useRef } from 'react';
-import { X, Key, Moon, Sun, Keyboard, Check, Terminal, Bell, Volume2, Square, Cpu, Clock, Settings, Palette, Sparkles } from 'lucide-react';
+import { X, Key, Moon, Sun, Keyboard, Check, Terminal, Bell, Volume2, Square, Cpu, Clock, Settings, Palette, Sparkles, History } from 'lucide-react';
 import type { AgentConfig, Theme, Shortcut, ShellInfo, CustomAICommand } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -42,10 +42,14 @@ interface SettingsModalProps {
   setMaxOutputLines: (lines: number) => void;
   defaultShell: string;
   setDefaultShell: (shell: string) => void;
+  ghPath: string;
+  setGhPath: (path: string) => void;
   enterToSendAI: boolean;
   setEnterToSendAI: (value: boolean) => void;
   enterToSendTerminal: boolean;
   setEnterToSendTerminal: (value: boolean) => void;
+  defaultSaveToHistory: boolean;
+  setDefaultSaveToHistory: (value: boolean) => void;
   osNotificationsEnabled: boolean;
   setOsNotificationsEnabled: (value: boolean) => void;
   audioFeedbackEnabled: boolean;
@@ -1166,6 +1170,39 @@ export function SettingsModal(props: SettingsModalProps) {
                 </p>
               </div>
 
+              {/* GitHub CLI Path */}
+              <div>
+                <label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+                  <Terminal className="w-3 h-3" />
+                  GitHub CLI (gh) Path
+                </label>
+                <div className="p-3 rounded border" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}>
+                  <label className="block text-xs opacity-60 mb-1">Custom Path (optional)</label>
+                  <div className="flex gap-2">
+                    <input
+                      type="text"
+                      value={props.ghPath}
+                      onChange={(e) => props.setGhPath(e.target.value)}
+                      placeholder="/opt/homebrew/bin/gh"
+                      className="flex-1 p-1.5 rounded border bg-transparent outline-none text-xs font-mono"
+                      style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                    />
+                    {props.ghPath && (
+                      <button
+                        onClick={() => props.setGhPath('')}
+                        className="px-2 py-1 rounded text-xs"
+                        style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+                      >
+                        Clear
+                      </button>
+                    )}
+                  </div>
+                  <p className="text-xs opacity-40 mt-2">
+                    Specify the full path to the <code className="px-1 py-0.5 rounded" style={{ backgroundColor: theme.colors.bgActivity }}>gh</code> binary if it's not in your PATH. Used for Auto Run worktree features.
+                  </p>
+                </div>
+              </div>
+
               {/* Input Behavior Settings */}
               <div>
                 <label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
@@ -1221,6 +1258,34 @@ export function SettingsModal(props: SettingsModalProps) {
                       : 'Press Command+Enter to send. Enter creates new line.'}
                   </p>
                 </div>
+              </div>
+
+              {/* Default History Toggle */}
+              <div>
+                <label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+                  <History className="w-3 h-3" />
+                  Default History Toggle
+                </label>
+                <label
+                  className="flex items-center gap-3 p-3 rounded border cursor-pointer hover:bg-opacity-10"
+                  style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+                >
+                  <input
+                    type="checkbox"
+                    checked={props.defaultSaveToHistory}
+                    onChange={(e) => props.setDefaultSaveToHistory(e.target.checked)}
+                    className="w-4 h-4"
+                    style={{ accentColor: theme.colors.accent }}
+                  />
+                  <div className="flex-1">
+                    <div className="font-medium" style={{ color: theme.colors.textMain }}>
+                      Enable "History" by default for new tabs
+                    </div>
+                    <div className="text-xs opacity-50 mt-0.5" style={{ color: theme.colors.textDim }}>
+                      When enabled, new AI tabs will have the "History" toggle on by default, saving a synopsis after each completion
+                    </div>
+                  </div>
+                </label>
               </div>
             </div>
           )}

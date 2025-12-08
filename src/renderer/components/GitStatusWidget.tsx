@@ -265,15 +265,16 @@ export function GitStatusWidget({ cwd, isGitRepo, theme, onViewDiff }: GitStatus
             );
           })}
         </div>
-          <div
-            className="text-[10px] p-2 text-center border-t"
+          <button
+            onClick={onViewDiff}
+            className="text-[10px] p-2 text-center border-t w-full hover:bg-white/5 transition-colors cursor-pointer"
             style={{
               color: theme.colors.textDim,
               borderColor: theme.colors.border
             }}
           >
-            Click to view full diff
-          </div>
+            View Full Diff
+          </button>
           </div>
         </>
       )}

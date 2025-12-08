@@ -43,6 +43,7 @@ export interface CreateTabOptions {
   name?: string | null;             // User-defined name (null = show UUID octet)
   starred?: boolean;                // Whether session is starred
   usageStats?: UsageStats;          // Token usage stats
+  saveToHistory?: boolean;          // Whether to save synopsis to history after completions
 }
 
 /**
@@ -80,7 +81,8 @@ export function createTab(session: Session, options: CreateTabOptions = {}): Cre
     logs = [],
     name = null,
     starred = false,
-    usageStats
+    usageStats,
+    saveToHistory = false
   } = options;
 
   // Create the new tab with default values
@@ -94,7 +96,8 @@ export function createTab(session: Session, options: CreateTabOptions = {}): Cre
     stagedImages: [],
     usageStats,
     createdAt: Date.now(),
-    state: 'idle'
+    state: 'idle',
+    saveToHistory
   };
 
   // Update the session with the new tab added and set as active

@@ -901,12 +901,13 @@ ${docList}
         const prTitle = `Auto Run: ${documents.length} document(s) processed`;
         const prBody = generatePRBody(documents, totalCompletedTasks);
 
-        // Create the PR
+        // Create the PR (pass ghPath if configured)
         const prResult = await window.maestro.git.createPR(
           effectiveCwd,
           baseBranch,
           prTitle,
-          prBody
+          prBody,
+          worktree.ghPath
         );
 
         if (prResult.success) {

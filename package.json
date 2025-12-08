@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.1.0",
+  "version": "0.7.0",
   "description": "Multi-Instance AI Coding Console - Unified IDE for managing multiple AI coding assistants",
   "main": "dist/main/index.js",
   "author": {
@@ -33,7 +33,10 @@
     "package:linux": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --linux",
     "start": "electron .",
     "clean": "rm -rf dist release node_modules/.vite",
-    "postinstall": "electron-rebuild -f -w node-pty"
+    "postinstall": "electron-rebuild -f -w node-pty",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "build": {
     "appId": "com.maestro.app",
@@ -146,6 +149,8 @@
     "ws": "^8.16.0"
   },
   "devDependencies": {
+    "@testing-library/jest-dom": "^6.9.1",
+    "@testing-library/react": "^16.3.0",
     "@types/adm-zip": "^0.5.7",
     "@types/archiver": "^7.0.0",
     "@types/canvas-confetti": "^1.9.0",
@@ -156,6 +161,7 @@
     "@types/react-syntax-highlighter": "^15.5.13",
     "@types/ws": "^8.5.10",
     "@vitejs/plugin-react": "^4.2.1",
+    "@vitest/coverage-v8": "^4.0.15",
     "autoprefixer": "^10.4.16",
     "canvas": "^3.2.0",
     "concurrently": "^8.2.2",
@@ -163,6 +169,7 @@
     "electron-builder": "^24.9.1",
     "electron-rebuild": "^3.2.9",
     "esbuild": "^0.24.2",
+    "jsdom": "^27.2.0",
     "lucide-react": "^0.303.0",
     "postcss": "^8.4.33",
     "react": "^18.2.0",
@@ -170,6 +177,7 @@
     "tailwindcss": "^3.4.1",
     "typescript": "^5.3.3",
     "vite": "^5.0.11",
-    "vite-plugin-electron": "^0.28.2"
+    "vite-plugin-electron": "^0.28.2",
+    "vitest": "^4.0.15"
   }
 }

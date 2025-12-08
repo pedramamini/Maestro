@@ -69,6 +69,10 @@ export interface UseSettingsReturn {
   defaultShell: string;
   setDefaultShell: (value: string) => void;
 
+  // GitHub CLI settings
+  ghPath: string;
+  setGhPath: (value: string) => void;
+
   // Font settings
   fontFamily: string;
   fontSize: number;
@@ -84,6 +88,8 @@ export interface UseSettingsReturn {
   setEnterToSendAI: (value: boolean) => void;
   enterToSendTerminal: boolean;
   setEnterToSendTerminal: (value: boolean) => void;
+  defaultSaveToHistory: boolean;
+  setDefaultSaveToHistory: (value: boolean) => void;
   leftSidebarWidth: number;
   rightPanelWidth: number;
   markdownRawMode: boolean;
@@ -155,6 +161,9 @@ export function useSettings(): UseSettingsReturn {
   // Shell Config
   const [defaultShell, setDefaultShellState] = useState('zsh');
 
+  // GitHub CLI Config
+  const [ghPath, setGhPathState] = useState('');
+
   // Font Config
   const [fontFamily, setFontFamilyState] = useState('Roboto Mono, Menlo, "Courier New", monospace');
   const [fontSize, setFontSizeState] = useState(14);
@@ -164,6 +173,7 @@ export function useSettings(): UseSettingsReturn {
   const [activeThemeId, setActiveThemeIdState] = useState<ThemeId>('dracula');
   const [enterToSendAI, setEnterToSendAIState] = useState(false); // AI mode defaults to Command+Enter
   const [enterToSendTerminal, setEnterToSendTerminalState] = useState(true); // Terminal defaults to Enter
+  const [defaultSaveToHistory, setDefaultSaveToHistoryState] = useState(false); // History toggle defaults to off
   const [leftSidebarWidth, setLeftSidebarWidthState] = useState(256);
   const [rightPanelWidth, setRightPanelWidthState] = useState(384);
   const [markdownRawMode, setMarkdownRawModeState] = useState(false);
@@ -225,6 +235,11 @@ export function useSettings(): UseSettingsReturn {
     window.maestro.settings.set('defaultShell', value);
   };
 
+  const setGhPath = (value: string) => {
+    setGhPathState(value);
+    window.maestro.settings.set('ghPath', value);
+  };
+
   const setFontFamily = (value: string) => {
     setFontFamilyState(value);
     window.maestro.settings.set('fontFamily', value);
@@ -253,6 +268,11 @@ export function useSettings(): UseSettingsReturn {
   const setEnterToSendTerminal = (value: boolean) => {
     setEnterToSendTerminalState(value);
     window.maestro.settings.set('enterToSendTerminal', value);
+  };
+
+  const setDefaultSaveToHistory = (value: boolean) => {
+    setDefaultSaveToHistoryState(value);
+    window.maestro.settings.set('defaultSaveToHistory', value);
   };
 
   const setLeftSidebarWidth = (width: number) => {
@@ -458,12 +478,14 @@ export function useSettings(): UseSettingsReturn {
     const loadSettings = async () => {
       const savedEnterToSendAI = await window.maestro.settings.get('enterToSendAI');
       const savedEnterToSendTerminal = await window.maestro.settings.get('enterToSendTerminal');
+      const savedDefaultSaveToHistory = await window.maestro.settings.get('defaultSaveToHistory');
 
       const savedLlmProvider = await window.maestro.settings.get('llmProvider');
       const savedModelSlug = await window.maestro.settings.get('modelSlug');
       const savedApiKey = await window.maestro.settings.get('apiKey');
       const savedDefaultAgent = await window.maestro.settings.get('defaultAgent');
       const savedDefaultShell = await window.maestro.settings.get('defaultShell');
+      const savedGhPath = await window.maestro.settings.get('ghPath');
       const savedFontSize = await window.maestro.settings.get('fontSize');
       const savedFontFamily = await window.maestro.settings.get('fontFamily');
       const savedCustomFonts = await window.maestro.settings.get('customFonts');
@@ -487,12 +509,14 @@ export function useSettings(): UseSettingsReturn {
 
       if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI);
       if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal);
+      if (savedDefaultSaveToHistory !== undefined) setDefaultSaveToHistoryState(savedDefaultSaveToHistory);
 
       if (savedLlmProvider !== undefined) setLlmProviderState(savedLlmProvider);
       if (savedModelSlug !== undefined) setModelSlugState(savedModelSlug);
       if (savedApiKey !== undefined) setApiKeyState(savedApiKey);
       if (savedDefaultAgent !== undefined) setDefaultAgentState(savedDefaultAgent);
       if (savedDefaultShell !== undefined) setDefaultShellState(savedDefaultShell);
+      if (savedGhPath !== undefined) setGhPathState(savedGhPath);
       if (savedFontSize !== undefined) setFontSizeState(savedFontSize);
       if (savedFontFamily !== undefined) setFontFamilyState(savedFontFamily);
       if (savedCustomFonts !== undefined) setCustomFontsState(savedCustomFonts);
@@ -565,6 +589,8 @@ export function useSettings(): UseSettingsReturn {
     setDefaultAgent,
     defaultShell,
     setDefaultShell,
+    ghPath,
+    setGhPath,
     fontFamily,
     fontSize,
     customFonts,
@@ -577,6 +603,8 @@ export function useSettings(): UseSettingsReturn {
     setEnterToSendAI,
     enterToSendTerminal,
     setEnterToSendTerminal,
+    defaultSaveToHistory,
+    setDefaultSaveToHistory,
     leftSidebarWidth,
     rightPanelWidth,
     markdownRawMode,

@@ -110,6 +110,7 @@ export interface WorktreeConfig {
   branchName: string;            // Branch name to use/create
   createPROnCompletion: boolean; // Create PR when Auto Run finishes
   prTargetBranch: string;        // Target branch for the PR (e.g., 'main')
+  ghPath?: string;               // Custom path to gh CLI binary (optional)
 }
 
 // Configuration for starting a batch run

@@ -87,6 +87,8 @@ interface BatchRunnerModalProps {
   sessionId: string;
   // Session cwd for git worktree support
   sessionCwd: string;
+  // Custom path to gh CLI binary (optional, for worktree features)
+  ghPath?: string;
 }
 
 // Helper function to count unchecked tasks in scratchpad content
@@ -129,7 +131,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
     getDocumentTaskCount,
     onRefreshDocuments,
     sessionId,
-    sessionCwd
+    sessionCwd,
+    ghPath
   } = props;
 
   // Document list state
@@ -270,7 +273,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
         if (isRepo) {
           const [branchResult, ghResult] = await Promise.all([
             window.maestro.git.branches(sessionCwd),
-            window.maestro.git.checkGhCli()
+            window.maestro.git.checkGhCli(ghPath || undefined)
           ]);
 
           if (branchResult.branches && branchResult.branches.length > 0) {
@@ -295,7 +298,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
     };
 
     checkGitRepo();
-  }, [sessionCwd]);
+  }, [sessionCwd, ghPath]);
 
   // Validate worktree path when it changes (debounced 500ms)
   useEffect(() => {
@@ -544,7 +547,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
         path: worktreePath,
         branchName,
         createPROnCompletion,
-        prTargetBranch
+        prTargetBranch,
+        ghPath: ghPath || undefined
       };
     }
 

@@ -123,21 +123,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
     ? (shellHistory.length > 0 ? shellHistory : legacyHistory)
     : (aiHistory.length > 0 ? aiHistory : legacyHistory);
 
-  // Combine built-in slash commands with Claude-specific commands (for AI mode only)
-  // Memoize to avoid recreating arrays on every render
-  const allSlashCommands = useMemo(() => {
-    const claudeCommands: SlashCommand[] = (session.claudeCommands || []).map(cmd => ({
-      command: cmd.command,
-      description: cmd.description,
-      aiOnly: true, // Claude commands are only available in AI mode
-    }));
-    return [...slashCommands, ...claudeCommands];
-  }, [session.claudeCommands, slashCommands]);
-
+  // Use the slash commands passed from App.tsx (already includes custom + Claude commands)
   // Memoize filtered slash commands to avoid filtering on every render
   const inputValueLower = inputValue.toLowerCase();
   const filteredSlashCommands = useMemo(() => {
-    return allSlashCommands.filter(cmd => {
+    return slashCommands.filter(cmd => {
       // Check if command is only available in terminal mode
       if (cmd.terminalOnly && !isTerminalMode) return false;
       // Check if command is only available in AI mode
@@ -145,7 +135,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
       // Check if command matches input
       return cmd.command.toLowerCase().startsWith(inputValueLower);
     });
-  }, [allSlashCommands, isTerminalMode, inputValueLower]);
+  }, [slashCommands, isTerminalMode, inputValueLower]);
 
   // Ensure selectedSlashCommandIndex is valid for the filtered list
   const safeSelectedIndex = Math.min(
@@ -184,7 +174,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
         block: 'nearest',
       });
     }
-  }, [safeSelectedIndex, slashCommandOpen]);
+  }, [safeSelectedIndex, slashCommandOpen, selectedSlashCommandIndex]);
 
   // Scroll selected tab completion item into view when index changes
   useEffect(() => {

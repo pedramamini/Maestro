@@ -130,11 +130,13 @@ export default function MaestroConsole() {
     apiKey, setApiKey,
     defaultAgent, setDefaultAgent,
     defaultShell, setDefaultShell,
+    ghPath, setGhPath,
     fontFamily, setFontFamily,
     fontSize, setFontSize,
     activeThemeId, setActiveThemeId,
     enterToSendAI, setEnterToSendAI,
     enterToSendTerminal, setEnterToSendTerminal,
+    defaultSaveToHistory, setDefaultSaveToHistory,
     leftSidebarWidth, setLeftSidebarWidth,
     rightPanelWidth, setRightPanelWidth,
     markdownRawMode, setMarkdownRawMode,
@@ -1703,7 +1705,7 @@ export default function MaestroConsole() {
         if (s.id !== sessionId) return s;
 
         // Use createTab helper
-        const result = createTab(s);
+        const result = createTab(s, { saveToHistory: defaultSaveToHistory });
         newTabId = result.tab.id;
         return result.session;
       }));
@@ -1840,7 +1842,7 @@ export default function MaestroConsole() {
     return unsubscribe;
   }, []);
 
-  // Combine built-in slash commands with custom AI commands for autocomplete
+  // Combine built-in slash commands with custom AI commands AND Claude Code commands for autocomplete
   // Filter out isSystemCommand entries since those are already in slashCommands with execute functions
   const allSlashCommands = useMemo(() => {
     const customCommandsAsSlash = customAICommands
@@ -1851,8 +1853,14 @@ export default function MaestroConsole() {
         aiOnly: true, // Custom AI commands are only available in AI mode
         prompt: cmd.prompt, // Include prompt for execution
       }));
-    return [...slashCommands, ...customCommandsAsSlash];
-  }, [customAICommands]);
+    // Include Claude Code commands from the active session
+    const claudeCommands = (activeSession?.claudeCommands || []).map(cmd => ({
+      command: cmd.command,
+      description: cmd.description,
+      aiOnly: true, // Claude commands are only available in AI mode
+    }));
+    return [...slashCommands, ...customCommandsAsSlash, ...claudeCommands];
+  }, [customAICommands, activeSession?.claudeCommands]);
 
   // Derive current input value and setter based on active session mode
   // For AI mode: use active tab's inputValue (stored per-tab)
@@ -2775,7 +2783,8 @@ export default function MaestroConsole() {
           claudeSessionId,
           logs: messages,
           name,
-          starred: isStarred
+          starred: isStarred,
+          saveToHistory: defaultSaveToHistory
         });
 
         console.log('[handleResumeSession] Created tab:', newTab.id, 'with', newTab.logs.length, 'logs, activeTabId:', updatedSession.activeTabId);
@@ -3432,7 +3441,7 @@ export default function MaestroConsole() {
         }
         if (ctx.isTabShortcut(e, 'newTab')) {
           e.preventDefault();
-          const result = ctx.createTab(ctx.activeSession);
+          const result = ctx.createTab(ctx.activeSession, { saveToHistory: ctx.defaultSaveToHistory });
           ctx.setSessions(prev => prev.map(s =>
             s.id === ctx.activeSession!.id ? result.session : s
           ));
@@ -3838,7 +3847,8 @@ export default function MaestroConsole() {
         inputValue: '',
         stagedImages: [],
         createdAt: Date.now(),
-        state: 'idle'
+        state: 'idle',
+        saveToHistory: defaultSaveToHistory
       };
 
       const newSession: Session = {
@@ -4039,7 +4049,7 @@ export default function MaestroConsole() {
     processMonitorOpen, logViewerOpen, createGroupModalOpen, confirmModalOpen, renameInstanceModalOpen,
     renameGroupModalOpen, activeSession, previewFile, fileTreeFilter, fileTreeFilterOpen, gitDiffPreview,
     gitLogOpen, lightboxImage, hasOpenLayers, hasOpenModal, visibleSessions, sortedSessions, groups,
-    bookmarksCollapsed, leftSidebarOpen, editingSessionId, editingGroupId, markdownRawMode,
+    bookmarksCollapsed, leftSidebarOpen, editingSessionId, editingGroupId, markdownRawMode, defaultSaveToHistory,
     setLeftSidebarOpen, setRightPanelOpen, addNewSession, deleteSession, setQuickActionInitialMode,
     setQuickActionOpen, cycleSession, toggleInputMode, setShortcutsHelpOpen, setSettingsModalOpen,
     setSettingsTab, setActiveRightTab, handleSetActiveRightTab, setActiveFocus, setBookmarksCollapsed, setGroups,
@@ -4231,6 +4241,7 @@ export default function MaestroConsole() {
     if (result.success) {
       const newFiles = result.files || [];
       setAutoRunDocumentList(newFiles);
+      setAutoRunDocumentTree((result.tree as Array<{ name: string; type: 'file' | 'folder'; path: string; children?: unknown[] }>) || []);
       setAutoRunIsLoadingDocuments(false);
 
       // Show flash notification with result
@@ -6329,7 +6340,7 @@ export default function MaestroConsole() {
           if (activeSession) {
             setSessions(prev => prev.map(s => {
               if (s.id !== activeSession.id) return s;
-              const result = createTab(s);
+              const result = createTab(s, { saveToHistory: defaultSaveToHistory });
               return result.session;
             }));
             setActiveClaudeSessionId(null);
@@ -6526,7 +6537,7 @@ export default function MaestroConsole() {
           // Use functional setState to compute from fresh state (avoids stale closure issues)
           setSessions(prev => prev.map(s => {
             if (s.id !== activeSession.id) return s;
-            const result = createTab(s);
+            const result = createTab(s, { saveToHistory: defaultSaveToHistory });
             return result.session;
           }));
         }}
@@ -6781,6 +6792,7 @@ export default function MaestroConsole() {
           onRefreshDocuments={handleAutoRunRefresh}
           sessionId={activeSession.id}
           sessionCwd={activeSession.cwd}
+          ghPath={ghPath}
         />
       )}
 
@@ -6877,10 +6889,14 @@ export default function MaestroConsole() {
         setDefaultAgent={setDefaultAgent}
         defaultShell={defaultShell}
         setDefaultShell={setDefaultShell}
+        ghPath={ghPath}
+        setGhPath={setGhPath}
         enterToSendAI={enterToSendAI}
         setEnterToSendAI={setEnterToSendAI}
         enterToSendTerminal={enterToSendTerminal}
         setEnterToSendTerminal={setEnterToSendTerminal}
+        defaultSaveToHistory={defaultSaveToHistory}
+        setDefaultSaveToHistory={setDefaultSaveToHistory}
         fontFamily={fontFamily}
         setFontFamily={setFontFamily}
         fontSize={fontSize}
