@@ -799,8 +799,9 @@ diff --git a/src/test.ts b/src/test.ts
         expect(screen.queryByText('Loading git log...')).not.toBeInTheDocument();
       });
 
-      // The details pane should show the full date
-      expect(screen.getByText(/12\/7\/2025|Dec\s+7,?\s+2025/)).toBeInTheDocument();
+      // The details pane shows full date with time via toLocaleString()
+      // Match the full datetime format (e.g., "12/7/2025, 10:30:00 AM" or "Dec 7, 2025, 10:30:00 AM")
+      expect(screen.getByText(/12\/7\/2025,\s+\d+:\d+:\d+\s+(AM|PM)|Dec\s+7,?\s+2025,\s+\d+:\d+:\d+\s+(AM|PM)/)).toBeInTheDocument();
     });
   });
 

@@ -282,13 +282,14 @@ export function TabSwitcherModal({
       });
       return sorted.map(tab => ({ type: 'open' as const, tab }));
     } else {
-      // All Named mode - show named sessions for the CURRENT PROJECT only (including open ones)
+      // All Named mode - show sessions with claudeSessionId for the CURRENT PROJECT (including open ones)
       // For open tabs, use the 'open' type so we get usage stats; for closed ones use 'named'
       const items: ListItem[] = [];
 
-      // Add open tabs that have names
+      // Add open tabs that have a Claude session (whether named or not)
+      // This ensures all active sessions are searchable, not just those with custom names
       for (const tab of tabs) {
-        if (tab.name && tab.claudeSessionId) {
+        if (tab.claudeSessionId) {
           items.push({ type: 'open' as const, tab });
         }
       }
@@ -300,10 +301,10 @@ export function TabSwitcherModal({
         }
       }
 
-      // Sort all by name
+      // Sort all by display name (uses name > UUID octet > "New Session" fallback)
       items.sort((a, b) => {
-        const nameA = a.type === 'open' ? (a.tab.name || '').toLowerCase() : a.session.sessionName.toLowerCase();
-        const nameB = b.type === 'open' ? (b.tab.name || '').toLowerCase() : b.session.sessionName.toLowerCase();
+        const nameA = a.type === 'open' ? getTabDisplayName(a.tab).toLowerCase() : a.session.sessionName.toLowerCase();
+        const nameB = b.type === 'open' ? getTabDisplayName(b.tab).toLowerCase() : b.session.sessionName.toLowerCase();
         return nameA.localeCompare(nameB);
       });
 
@@ -410,7 +411,7 @@ export function TabSwitcherModal({
           <input
             ref={inputRef}
             className="flex-1 bg-transparent outline-none text-lg placeholder-opacity-50"
-            placeholder={viewMode === 'open' ? "Search open tabs..." : "Search all named sessions..."}
+            placeholder={viewMode === 'open' ? "Search open tabs..." : "Search all sessions..."}
             style={{ color: theme.colors.textMain }}
             value={search}
             onChange={e => setSearch(e.target.value)}
@@ -451,7 +452,7 @@ export function TabSwitcherModal({
               color: viewMode === 'all-named' ? theme.colors.accentForeground : theme.colors.textDim
             }}
           >
-            All Named ({namedSessions.filter(s => !openTabSessionIds.has(s.claudeSessionId)).length})
+            All Sessions ({tabs.filter(t => t.claudeSessionId).length + namedSessions.filter(s => !openTabSessionIds.has(s.claudeSessionId)).length})
           </button>
           <span className="text-[10px] opacity-50 ml-auto" style={{ color: theme.colors.textDim }}>
             Tab to switch

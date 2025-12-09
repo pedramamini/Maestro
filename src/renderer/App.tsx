@@ -1138,7 +1138,7 @@ export default function MaestroConsole() {
             // Show toast for synopsis completion
             addToastRef.current({
               type: 'info',
-              title: `Synopsis (${synopsisData!.command})`,
+              title: 'Synopsis',
               message: result.response,
               group: synopsisData!.groupName,
               project: synopsisData!.projectName,
