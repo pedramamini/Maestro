@@ -219,18 +219,18 @@ export function AutoRunDocumentSelector({
     <>
       <div className="flex items-center gap-2 mb-3">
         {/* Document Dropdown */}
-        <div ref={dropdownRef} className="relative flex-1">
+        <div ref={dropdownRef} className="relative flex-1 min-w-0">
           <button
             ref={buttonRef}
             onClick={() => setIsOpen(!isOpen)}
-            className="w-full flex items-center justify-between px-3 py-2 rounded text-sm transition-colors hover:opacity-90"
+            className="w-full min-w-0 flex items-center justify-between px-3 py-2 rounded text-sm transition-colors hover:opacity-90"
             style={{
               backgroundColor: theme.colors.bgActivity,
               color: theme.colors.textMain,
               border: `1px solid ${theme.colors.border}`,
             }}
           >
-            <span className="truncate">
+            <span className="truncate min-w-0 flex-1">
               {selectedDocument ? `${selectedDocument}.md` : 'Select a document...'}
             </span>
             <ChevronDown
@@ -304,7 +304,7 @@ export function AutoRunDocumentSelector({
         {/* Create New Document Button */}
         <button
           onClick={() => setShowCreateModal(true)}
-          className="p-2 rounded transition-colors hover:bg-white/10"
+          className="p-2 rounded transition-colors hover:bg-white/10 shrink-0"
           style={{
             color: theme.colors.textDim,
             border: `1px solid ${theme.colors.border}`,
@@ -318,7 +318,7 @@ export function AutoRunDocumentSelector({
         <button
           onClick={onRefresh}
           disabled={isLoading}
-          className={`p-2 rounded transition-colors hover:bg-white/10 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
+          className={`p-2 rounded transition-colors hover:bg-white/10 shrink-0 ${isLoading ? 'opacity-50 cursor-not-allowed' : ''}`}
           style={{
             color: theme.colors.textDim,
             border: `1px solid ${theme.colors.border}`,
@@ -331,7 +331,7 @@ export function AutoRunDocumentSelector({
         {/* Change Folder Button */}
         <button
           onClick={onChangeFolder}
-          className="p-2 rounded transition-colors hover:bg-white/10"
+          className="p-2 rounded transition-colors hover:bg-white/10 shrink-0"
           style={{
             color: theme.colors.textDim,
             border: `1px solid ${theme.colors.border}`,
