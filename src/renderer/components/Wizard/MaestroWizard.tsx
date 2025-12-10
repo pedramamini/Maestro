@@ -237,17 +237,10 @@ export function MaestroWizard({
     }
   }, [state.isOpen, showExitConfirm, registerLayer, unregisterLayer, handleCloseRequest]);
 
-  // Don't render if wizard is not open
-  if (!state.isOpen) {
-    return null;
-  }
-
-  const currentStepNumber = getCurrentStepNumber();
-  const stepTitle = getStepTitle(state.currentStep);
-
   /**
    * Render the appropriate screen component based on displayed step
    * Uses displayedStep (not currentStep) to allow for transition animations
+   * NOTE: This must be defined before the early return to satisfy React hooks rules
    */
   const renderCurrentScreen = useCallback(() => {
     switch (displayedStep) {
@@ -270,6 +263,14 @@ export function MaestroWizard({
         return null;
     }
   }, [displayedStep, theme, onLaunchSession, onWizardComplete]);
+
+  // Don't render if wizard is not open
+  if (!state.isOpen) {
+    return null;
+  }
+
+  const currentStepNumber = getCurrentStepNumber();
+  const stepTitle = getStepTitle(state.currentStep);
 
   return (
     <div
