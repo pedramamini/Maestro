@@ -15,5 +15,11 @@ export {
   PROJECT_DISCOVERY_TAB_NAME,
 } from './conversationManager';
 
-// phaseGenerator will be exported when implemented
-// export { phaseGenerator } from './phaseGenerator';
+export {
+  phaseGenerator,
+  phaseGeneratorUtils,
+  AUTO_RUN_FOLDER_NAME,
+  type GenerationConfig,
+  type GenerationResult,
+  type GenerationCallbacks,
+} from './phaseGenerator';
