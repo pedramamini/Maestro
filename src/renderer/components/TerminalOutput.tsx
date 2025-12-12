@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useMemo, forwardRef, useState, useCallback, memo } from 'react';
-import { Activity, X, ChevronDown, ChevronUp, Filter, PlusCircle, MinusCircle, Trash2, Copy, Volume2, Square, Check, ArrowDown, Eye, FileText, Clipboard } from 'lucide-react';
+import { Activity, X, ChevronDown, ChevronUp, Filter, PlusCircle, MinusCircle, Trash2, Copy, Volume2, Square, Check, ArrowDown, Eye, FileText, Clipboard, RotateCcw } from 'lucide-react';
 import type { Session, Theme, LogEntry } from '../types';
 import Convert from 'ansi-to-html';
 import DOMPurify from 'dompurify';
@@ -246,6 +246,8 @@ interface LogItemProps {
   // Markdown rendering mode for AI responses
   markdownRawMode: boolean;
   onToggleMarkdownRawMode: () => void;
+  // Replay message callback (AI mode only)
+  onReplayMessage?: (text: string, images?: string[]) => void;
 }
 
 const LogItemComponent = memo(({
@@ -280,6 +282,7 @@ const LogItemComponent = memo(({
   ansiConverter,
   markdownRawMode,
   onToggleMarkdownRawMode,
+  onReplayMessage,
 }: LogItemProps) => {
   // Ref for the log item container - used for scroll-into-view on expand
   const logItemRef = useRef<HTMLDivElement>(null);
@@ -921,6 +924,17 @@ const LogItemComponent = memo(({
               </button>
             )
           )}
+          {/* Replay button for user messages in AI mode */}
+          {isUserMessage && isAIMode && onReplayMessage && (
+            <button
+              onClick={() => onReplayMessage(log.text, log.images)}
+              className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
+              style={{ color: theme.colors.textDim }}
+              title="Replay message"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+            </button>
+          )}
           {/* Copy to Clipboard Button */}
           <button
             onClick={() => copyToClipboard(log.text)}
@@ -989,6 +1003,7 @@ const LogItemComponent = memo(({
   );
 }, (prevProps, nextProps) => {
   // Custom comparison - only re-render if these specific props change
+  // IMPORTANT: Include ALL props that affect visual rendering
   return (
     prevProps.log.id === nextProps.log.id &&
     prevProps.log.text === nextProps.log.text &&
@@ -1004,7 +1019,8 @@ const LogItemComponent = memo(({
     prevProps.outputSearchQuery === nextProps.outputSearchQuery &&
     prevProps.theme === nextProps.theme &&
     prevProps.maxOutputLines === nextProps.maxOutputLines &&
-    prevProps.markdownRawMode === nextProps.markdownRawMode
+    prevProps.markdownRawMode === nextProps.markdownRawMode &&
+    prevProps.fontFamily === nextProps.fontFamily
   );
 });
 
@@ -1070,6 +1086,7 @@ interface TerminalOutputProps {
   initialScrollTop?: number; // Initial scroll position to restore
   markdownRawMode: boolean; // Whether to show raw markdown or rendered markdown for AI responses
   setMarkdownRawMode: (value: boolean) => void; // Toggle markdown raw mode
+  onReplayMessage?: (text: string, images?: string[]) => void; // Replay a user message
 }
 
 export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((props, ref) => {
@@ -1078,7 +1095,7 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
     setOutputSearchOpen, setOutputSearchQuery, setActiveFocus, setLightboxImage,
     inputRef, logsEndRef, maxOutputLines, onDeleteLog, onRemoveQueuedItem, onInterrupt,
     audioFeedbackCommand, onScrollPositionChange, initialScrollTop,
-    markdownRawMode, setMarkdownRawMode
+    markdownRawMode, setMarkdownRawMode, onReplayMessage
   } = props;
 
   // Use the forwarded ref if provided, otherwise create a local one
@@ -1730,6 +1747,7 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
             ansiConverter={ansiConverter}
             markdownRawMode={markdownRawMode}
             onToggleMarkdownRawMode={toggleMarkdownRawMode}
+            onReplayMessage={onReplayMessage}
           />
         ))}
 

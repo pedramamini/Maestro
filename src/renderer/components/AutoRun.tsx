@@ -2081,8 +2081,13 @@ export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {
     prevProps.onStopBatchRun === nextProps.onStopBatchRun &&
     prevProps.onOpenSetup === nextProps.onOpenSetup &&
     prevProps.onRefresh === nextProps.onRefresh &&
-    prevProps.onSelectDocument === nextProps.onSelectDocument
+    prevProps.onSelectDocument === nextProps.onSelectDocument &&
+    // UI control props
+    prevProps.hideTopControls === nextProps.hideTopControls &&
+    // External change detection
+    prevProps.contentVersion === nextProps.contentVersion
     // Note: initialCursorPosition, initialEditScrollPos, initialPreviewScrollPos
     // are intentionally NOT compared - they're only used on mount
+    // Note: documentTree is derived from documentList, comparing documentList is sufficient
   );
 });

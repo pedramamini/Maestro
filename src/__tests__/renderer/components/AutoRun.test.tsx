@@ -2233,4 +2233,67 @@ describe('Auto-save Cleanup', () => {
     const doc1SaveCalls = calls.filter((call: any[]) => call[1] === 'doc1.md' && call[2] === 'Changed content');
     expect(doc1SaveCalls.length).toBe(0);
   });
+
+  it('should re-render when hideTopControls changes (memo regression test)', async () => {
+    // This test ensures AutoRun re-renders when hideTopControls prop changes
+    // A previous bug had the memo comparator missing hideTopControls
+    // hideTopControls affects the top control bar visibility when folderPath is set
+    const props = createDefaultProps({ hideTopControls: false, folderPath: '/test/folder' });
+    const { rerender, container } = render(<AutoRun {...props} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // Get elements that are controlled by hideTopControls
+    // The control bar with mode buttons should be visible
+    const controlElements = container.querySelectorAll('button');
+    const initialButtonCount = controlElements.length;
+
+    // Rerender with hideTopControls=true
+    rerender(<AutoRun {...createDefaultProps({ hideTopControls: true, folderPath: '/test/folder' })} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // With hideTopControls=true, the top control bar should be hidden
+    // which means fewer buttons should be visible
+    const updatedControlElements = container.querySelectorAll('button');
+    // The component should have re-rendered and hidden the top controls
+    expect(updatedControlElements.length).toBeLessThan(initialButtonCount);
+  });
+
+  it('should re-render when contentVersion changes (memo regression test)', async () => {
+    // This test ensures AutoRun re-renders when contentVersion changes
+    // contentVersion is used to force-sync on external file changes
+    const onContentChange = vi.fn();
+    const props = createDefaultProps({
+      content: 'Original content',
+      contentVersion: 1,
+      onContentChange,
+    });
+
+    const { rerender } = render(<AutoRun {...props} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // Now simulate an external file change by updating content and contentVersion
+    rerender(<AutoRun {...createDefaultProps({
+      content: 'Externally modified content',
+      contentVersion: 2,
+      onContentChange,
+    })} />);
+
+    await act(async () => {
+      vi.advanceTimersByTime(100);
+    });
+
+    // The component should have re-rendered with the new content
+    // In edit mode, check the textarea value
+    const textarea = screen.getByRole('textbox');
+    expect(textarea).toHaveValue('Externally modified content');
+  });
 });

@@ -148,6 +148,8 @@ interface MainPanelProps {
   onInputBlur?: () => void;
   // Prompt composer modal
   onOpenPromptComposer?: () => void;
+  // Replay a user message (AI mode)
+  onReplayMessage?: (text: string, images?: string[]) => void;
 }
 
 export function MainPanel(props: MainPanelProps) {
@@ -843,6 +845,7 @@ export function MainPanel(props: MainPanelProps) {
                 }
                 markdownRawMode={markdownRawMode}
                 setMarkdownRawMode={setMarkdownRawMode}
+                onReplayMessage={props.onReplayMessage}
               />
               </div>
 

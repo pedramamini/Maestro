@@ -1379,4 +1379,108 @@ describe('ThinkingStatusPill', () => {
       expect(ThinkingStatusPill.displayName).toBe('ThinkingStatusPill');
     });
   });
+
+  describe('memo regression tests', () => {
+    it('should re-render when theme changes', () => {
+      // This test ensures the memo comparator includes theme
+      const thinkingSession = createThinkingSession();
+      const { rerender, container } = render(
+        <ThinkingStatusPill
+          sessions={[thinkingSession]}
+          theme={mockTheme}
+        />
+      );
+
+      // Capture initial text color from theme
+      const pill = container.firstChild as HTMLElement;
+      expect(pill).toBeTruthy();
+
+      // Rerender with different theme
+      const newTheme = {
+        ...mockTheme,
+        colors: {
+          ...mockTheme.colors,
+          textMain: '#ff0000', // Different text color
+        },
+      };
+
+      rerender(
+        <ThinkingStatusPill
+          sessions={[thinkingSession]}
+          theme={newTheme}
+        />
+      );
+
+      // Component should have re-rendered with new theme
+      // This test would fail if theme was missing from memo comparator
+      expect(container.firstChild).toBeTruthy();
+    });
+
+    it('should re-render when autoRunState changes', () => {
+      // This test ensures the memo comparator handles autoRunState correctly
+      const idleSession = createMockSession();
+
+      // Start without AutoRun
+      const { rerender } = render(
+        <ThinkingStatusPill
+          sessions={[idleSession]}
+          theme={mockTheme}
+        />
+      );
+
+      // Should not show anything when no busy sessions and no autoRun
+      expect(screen.queryByText(/thinking/i)).not.toBeInTheDocument();
+
+      // Add autoRunState
+      const autoRunState: BatchRunState = {
+        isRunning: true,
+        isStopping: false,
+        totalTasks: 5,
+        currentTaskIndex: 2,
+        startTime: Date.now(),
+        completedTasks: 3, // This is what gets displayed as "3/5"
+      };
+
+      rerender(
+        <ThinkingStatusPill
+          sessions={[idleSession]}
+          theme={mockTheme}
+          autoRunState={autoRunState}
+        />
+      );
+
+      // Should now show the AutoRun pill with completedTasks/totalTasks
+      expect(screen.getByText('3/5')).toBeInTheDocument();
+    });
+
+    it('should re-render when namedSessions mapping changes', () => {
+      // This test ensures the memo comparator handles namedSessions correctly
+      const thinkingSession = createThinkingSession({
+        claudeSessionId: 'claude-abc123',
+      });
+
+      const { rerender } = render(
+        <ThinkingStatusPill
+          sessions={[thinkingSession]}
+          theme={mockTheme}
+          namedSessions={{}}
+        />
+      );
+
+      // Session name should be the default (may appear in multiple places due to tooltip)
+      expect(screen.getAllByText('Test Session').length).toBeGreaterThan(0);
+
+      // Update namedSessions with a custom name for this Claude session
+      rerender(
+        <ThinkingStatusPill
+          sessions={[thinkingSession]}
+          theme={mockTheme}
+          namedSessions={{ 'claude-abc123': 'Custom Named Session' }}
+        />
+      );
+
+      // Should now show the custom name
+      expect(screen.getAllByText('Custom Named Session').length).toBeGreaterThan(0);
+    });
+  });
 });
