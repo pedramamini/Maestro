@@ -404,7 +404,7 @@ export function TabBar({
   const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
   const [isOverflowing, setIsOverflowing] = useState(false);
 
-  // Center the active tab in the scrollable area when activeTabId changes
+  // Center the active tab in the scrollable area when activeTabId changes or filter is toggled
   useEffect(() => {
     requestAnimationFrame(() => {
       const container = tabBarRef.current;
@@ -415,7 +415,7 @@ export function TabBar({
         container.scrollTo({ left: scrollLeft, behavior: 'smooth' });
       }
     });
-  }, [activeTabId]);
+  }, [activeTabId, showUnreadOnly]);
 
   // Can always close tabs - closing the last one creates a fresh new tab
   const canClose = true;

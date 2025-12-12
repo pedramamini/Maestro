@@ -1341,6 +1341,58 @@ describe('TabBar', () => {
 
       rafSpy.mockRestore();
     });
+
+    it('scrolls to center active tab when showUnreadOnly filter is toggled off', async () => {
+      // Mock requestAnimationFrame
+      const rafSpy = vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
+        cb(0);
+        return 0;
+      });
+      const scrollToSpy = vi.fn();
+
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', hasUnread: true }),
+        createTab({ id: 'tab-3', name: 'Tab 3' }),
+      ];
+
+      const { rerender, container } = render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-3"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+          showUnreadOnly={true}
+        />
+      );
+
+      // Mock scrollTo on the container
+      const tabBarContainer = container.firstChild as HTMLElement;
+      tabBarContainer.scrollTo = scrollToSpy;
+
+      // Clear initial calls
+      scrollToSpy.mockClear();
+
+      // Toggle filter off - this should trigger scroll to active tab
+      rerender(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-3"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+          showUnreadOnly={false}
+        />
+      );
+
+      // scrollTo should have been called when filter was toggled
+      expect(scrollToSpy).toHaveBeenCalled();
+
+      rafSpy.mockRestore();
+    });
   });
 
   describe('styling', () => {
