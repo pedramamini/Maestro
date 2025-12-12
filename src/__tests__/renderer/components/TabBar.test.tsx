@@ -1527,12 +1527,12 @@ describe('TabBar', () => {
       expect(screen.getByText('🎵 Music Tab 日本語')).toBeInTheDocument();
     });
 
-    it('handles very long tab names with truncation', () => {
+    it('handles very long tab names with truncation for inactive tabs', () => {
       const longName = 'This is a very long tab name that should be truncated';
-      const tabs = [createTab({
-        id: 'tab-1',
-        name: longName
-      })];
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Active Tab' }),
+        createTab({ id: 'tab-2', name: longName })
+      ];
 
       render(
         <TabBar
@@ -1545,9 +1545,15 @@ describe('TabBar', () => {
         />
       );
 
-      const tabName = screen.getByText(longName);
-      expect(tabName).toHaveClass('truncate');
-      expect(tabName).toHaveClass('max-w-[120px]');
+      // Inactive tab should be truncated
+      const inactiveTabName = screen.getByText(longName);
+      expect(inactiveTabName).toHaveClass('truncate');
+      expect(inactiveTabName).toHaveClass('max-w-[120px]');
+
+      // Active tab should show full name without truncation
+      const activeTabName = screen.getByText('Active Tab');
+      expect(activeTabName).toHaveClass('whitespace-nowrap');
+      expect(activeTabName).not.toHaveClass('truncate');
     });
 
     it('handles many tabs', () => {

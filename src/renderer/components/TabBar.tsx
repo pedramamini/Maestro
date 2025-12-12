@@ -256,9 +256,9 @@ function Tab({
         </span>
       )}
 
-      {/* Tab name */}
+      {/* Tab name - show full name for active tab, truncate inactive tabs */}
       <span
-        className="text-xs font-medium truncate max-w-[120px]"
+        className={`text-xs font-medium ${isActive ? 'whitespace-nowrap' : 'truncate max-w-[120px]'}`}
         style={{ color: isActive ? theme.colors.textMain : theme.colors.textDim }}
       >
         {displayName}
