@@ -8,8 +8,8 @@ import { PlaybookDeleteConfirmModal } from './PlaybookDeleteConfirmModal';
 import { PlaybookNameModal } from './PlaybookNameModal';
 import { AgentPromptComposerModal } from './AgentPromptComposerModal';
 import { DocumentsPanel } from './DocumentsPanel';
-import { GitWorktreeSection, WorktreeValidationState, GhCliStatus } from './GitWorktreeSection';
-import { usePlaybookManagement } from '../hooks/usePlaybookManagement';
+import { GitWorktreeSection, GhCliStatus } from './GitWorktreeSection';
+import { usePlaybookManagement, useWorktreeValidation } from '../hooks';
 
 // Default batch processing prompt
 export const DEFAULT_BATCH_PROMPT = `# Context
@@ -245,9 +245,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
   const [availableBranches, setAvailableBranches] = useState<string[]>([]);
   const [ghCliStatus, setGhCliStatus] = useState<GhCliStatus | null>(null);
 
-  // Worktree validation state
-  const [worktreeValidation, setWorktreeValidation] = useState<WorktreeValidationState>({
-    checking: false, exists: false, isWorktree: false, branchMismatch: false, sameRepo: true
+  // Worktree validation hook (debounced validation of worktree path)
+  const { validation: worktreeValidation } = useWorktreeValidation({
+    worktreePath,
+    branchName,
+    worktreeEnabled,
+    sessionCwd,
   });
 
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -317,111 +320,6 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 
     checkGitRepo();
   }, [sessionCwd, ghPath]);
-
-  // Validate worktree path when it changes (debounced 500ms)
-  useEffect(() => {
-    // Reset validation state when worktree is disabled or path is empty
-    if (!worktreeEnabled || !worktreePath) {
-      setWorktreeValidation({
-        checking: false,
-        exists: false,
-        isWorktree: false,
-        branchMismatch: false,
-        sameRepo: true,
-        hasUncommittedChanges: false
-      });
-      return;
-    }
-
-    // Set checking state immediately
-    setWorktreeValidation(prev => ({ ...prev, checking: true }));
-
-    // Debounce the validation check
-    const timeoutId = setTimeout(async () => {
-      try {
-        // Check if the path exists and get worktree info
-        const worktreeInfoResult = await window.maestro.git.worktreeInfo(worktreePath);
-
-        if (!worktreeInfoResult.success) {
-          setWorktreeValidation({
-            checking: false,
-            exists: false,
-            isWorktree: false,
-            branchMismatch: false,
-            sameRepo: true,
-            hasUncommittedChanges: false,
-            error: worktreeInfoResult.error
-          });
-          return;
-        }
-
-        // If the path doesn't exist, that's fine - it will be created
-        if (!worktreeInfoResult.exists) {
-          setWorktreeValidation({
-            checking: false,
-            exists: false,
-            isWorktree: false,
-            branchMismatch: false,
-            sameRepo: true,
-            hasUncommittedChanges: false
-          });
-          return;
-        }
-
-        // Path exists - check if it's part of the same repo
-        // If there's no repoRoot, the directory exists but isn't a git repo - that's fine for a new worktree
-        const mainRepoRootResult = await window.maestro.git.getRepoRoot(sessionCwd);
-        const sameRepo = !worktreeInfoResult.repoRoot || (mainRepoRootResult.success &&
-          worktreeInfoResult.repoRoot === mainRepoRootResult.root);
-
-        // Check for branch mismatch (only if branch name is provided AND the path is already a git repo)
-        // If there's no currentBranch, the directory isn't a git repo yet, so no mismatch
-        const branchMismatch = branchName !== '' &&
-          worktreeInfoResult.currentBranch !== undefined &&
-          worktreeInfoResult.currentBranch !== branchName;
-
-        // If there's a branch mismatch and it's the same repo, check for uncommitted changes
-        // This helps warn users that checkout will fail if there are uncommitted changes
-        let hasUncommittedChanges = false;
-        if (branchMismatch && sameRepo) {
-          try {
-            // Use git status to check for uncommitted changes in the worktree
-            const statusResult = await window.maestro.git.status(worktreePath);
-            // If there's any output from git status --porcelain, there are changes
-            hasUncommittedChanges = statusResult.stdout.trim().length > 0;
-          } catch {
-            // If we can't check, assume no uncommitted changes
-            hasUncommittedChanges = false;
-          }
-        }
-
-        setWorktreeValidation({
-          checking: false,
-          exists: true,
-          isWorktree: worktreeInfoResult.isWorktree || false,
-          currentBranch: worktreeInfoResult.currentBranch,
-          branchMismatch,
-          sameRepo,
-          hasUncommittedChanges,
-          error: !sameRepo ? 'This path contains a worktree for a different repository' : undefined
-        });
-      } catch (error) {
-        console.error('Failed to validate worktree path:', error);
-        setWorktreeValidation({
-          checking: false,
-          exists: false,
-          isWorktree: false,
-          branchMismatch: false,
-          sameRepo: true,
-          hasUncommittedChanges: false,
-          error: 'Failed to validate worktree path'
-        });
-      }
-    }, 500); // 500ms debounce
-
-    // Cleanup timeout on unmount or when dependencies change
-    return () => clearTimeout(timeoutId);
-  }, [worktreePath, branchName, worktreeEnabled, sessionCwd]);
 
   // Calculate total tasks across selected documents (excluding missing documents)
   const totalTaskCount = documents.reduce((sum, doc) => {

@@ -13,6 +13,7 @@ export { useAutoRunImageHandling, imageCache } from './useAutoRunImageHandling';
 export { useGitStatusPolling } from './useGitStatusPolling';
 export { useLiveOverlay } from './useLiveOverlay';
 export { usePlaybookManagement } from './usePlaybookManagement';
+export { useWorktreeValidation } from './useWorktreeValidation';
 
 export type { UseSettingsReturn } from './useSettings';
 export type { UseSessionManagerReturn } from './useSessionManager';
@@ -27,3 +28,4 @@ export type { UseAutoRunImageHandlingReturn, UseAutoRunImageHandlingDeps } from 
 export type { UseGitStatusPollingReturn, UseGitStatusPollingOptions } from './useGitStatusPolling';
 export type { UseLiveOverlayReturn, TunnelStatus, UrlTab } from './useLiveOverlay';
 export type { UsePlaybookManagementReturn, UsePlaybookManagementDeps, PlaybookConfigState } from './usePlaybookManagement';
+export type { UseWorktreeValidationReturn, UseWorktreeValidationDeps } from './useWorktreeValidation';
