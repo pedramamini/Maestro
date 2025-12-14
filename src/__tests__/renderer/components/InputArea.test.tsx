@@ -362,6 +362,46 @@ describe('InputArea', () => {
       const inputContainer = container.querySelector('.flex-1.relative.border');
       expect(inputContainer).not.toHaveStyle({ borderColor: mockTheme.colors.warning });
     });
+
+    it('disables read-only toggle when AutoRun is active', () => {
+      const onToggleTabReadOnlyMode = vi.fn();
+      const props = createDefaultProps({
+        session: createMockSession({ inputMode: 'ai' }),
+        isAutoModeActive: true,
+        onToggleTabReadOnlyMode,
+      });
+      render(<InputArea {...props} />);
+
+      const toggle = screen.getByTitle(/Read-only mode locked during AutoRun/);
+      expect(toggle).toBeDisabled();
+
+      fireEvent.click(toggle);
+      expect(onToggleTabReadOnlyMode).not.toHaveBeenCalled();
+    });
+
+    it('shows locked tooltip when AutoRun is active', () => {
+      const props = createDefaultProps({
+        session: createMockSession({ inputMode: 'ai' }),
+        isAutoModeActive: true,
+        onToggleTabReadOnlyMode: vi.fn(),
+      });
+      render(<InputArea {...props} />);
+
+      expect(screen.getByTitle('Read-only mode locked during AutoRun')).toBeInTheDocument();
+    });
+
+    it('shows active read-only styling when AutoRun is active even if tabReadOnlyMode is false', () => {
+      const props = createDefaultProps({
+        session: createMockSession({ inputMode: 'ai' }),
+        isAutoModeActive: true,
+        tabReadOnlyMode: false,
+        onToggleTabReadOnlyMode: vi.fn(),
+      });
+      render(<InputArea {...props} />);
+
+      const toggle = screen.getByTitle(/Read-only mode locked/);
+      expect(toggle).toHaveStyle({ color: mockTheme.colors.warning });
+    });
   });
 
   describe('Staged Images', () => {

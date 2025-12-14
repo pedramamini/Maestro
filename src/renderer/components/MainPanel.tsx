@@ -645,7 +645,7 @@ export const MainPanel = forwardRef<MainPanelHandle, MainPanelProps>(function Ma
               </button>
             )}
 
-            <div className="flex items-center gap-3">
+            <div className="flex items-center gap-3 min-w-[200px] justify-end">
               {/* Session UUID Pill - click to copy full UUID, left-most of session stats */}
               {activeSession.inputMode === 'ai' && activeTab?.claudeSessionId && (
                 <button

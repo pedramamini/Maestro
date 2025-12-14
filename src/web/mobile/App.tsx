@@ -460,6 +460,8 @@ export default function MobileApp() {
     onThemeUpdate: setDesktopTheme,
     onCustomCommands: setCustomCommands,
     onAutoRunStateChange: (sessionId, state) => {
+      webLogger.info(`[App] AutoRun state change: session=${sessionId}, isRunning=${state?.isRunning}, tasks=${state?.completedTasks}/${state?.totalTasks}`, 'Mobile');
+      console.log('[MobileApp] AutoRun state:', { sessionId, state });
       setAutoRunStates(prev => ({
         ...prev,
         [sessionId]: state,

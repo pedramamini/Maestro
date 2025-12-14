@@ -21,6 +21,10 @@
 
 import { WebSocket } from 'ws';
 import type { Theme } from '../../../shared/theme-types';
+import { logger } from '../../utils/logger';
+
+// Logger context for broadcast service logs
+const LOG_CONTEXT = 'BroadcastService';
 
 /**
  * Web client connection info (shared with messageHandlers)
@@ -279,6 +283,7 @@ export class BroadcastService {
    * Called when batch processing starts, progresses, or stops
    */
   broadcastAutoRunState(sessionId: string, state: AutoRunState | null): void {
+    logger.info(`[AutoRun Broadcast] sessionId=${sessionId}, isRunning=${state?.isRunning}, tasks=${state?.completedTasks}/${state?.totalTasks}`, LOG_CONTEXT);
     this.broadcastToAll({
       type: 'autorun_state',
       sessionId,

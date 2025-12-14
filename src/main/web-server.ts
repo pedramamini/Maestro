@@ -261,6 +261,9 @@ export class WebServer {
   // Live sessions - only these appear in the web interface
   private liveSessions: Map<string, LiveSessionInfo> = new Map();
 
+  // AutoRun states per session - tracks which sessions have active batch processing
+  private autoRunStates: Map<string, AutoRunState> = new Map();
+
   // WebSocket message handler instance
   private messageHandler: WebSocketMessageHandler;
 
@@ -601,6 +604,7 @@ export class WebServer {
       getSessions: () => this.getSessionsCallback?.() ?? [],
       getTheme: () => this.getThemeCallback?.() ?? null,
       getCustomCommands: () => this.getCustomCommandsCallback?.() ?? [],
+      getAutoRunStates: () => this.autoRunStates,
       getLiveSessionInfo: (sessionId) => this.liveSessions.get(sessionId),
       isSessionLive: (sessionId) => this.liveSessions.has(sessionId),
       onClientConnect: (client) => {
@@ -718,8 +722,15 @@ export class WebServer {
   /**
    * Broadcast AutoRun state to all connected web clients
    * Called when batch processing starts, progresses, or stops
+   * Also stores state locally so new clients can receive it on connect
    */
   broadcastAutoRunState(sessionId: string, state: AutoRunState | null): void {
+    // Store state locally for new clients connecting later
+    if (state && state.isRunning) {
+      this.autoRunStates.set(sessionId, state);
+    } else {
+      this.autoRunStates.delete(sessionId);
+    }
     this.broadcastService.broadcastAutoRunState(sessionId, state);
   }
 

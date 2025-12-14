@@ -677,18 +677,22 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                 </button>
               )}
               {/* Read-only mode toggle - AI mode only */}
+              {/* When AutoRun is active, pill is locked to enabled state */}
               {session.inputMode === 'ai' && onToggleTabReadOnlyMode && (
                 <button
-                  onClick={onToggleTabReadOnlyMode}
-                  className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full cursor-pointer transition-all ${
-                    tabReadOnlyMode ? '' : 'opacity-40 hover:opacity-70'
+                  onClick={isAutoReadOnly ? undefined : onToggleTabReadOnlyMode}
+                  disabled={isAutoReadOnly}
+                  className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full transition-all ${
+                    isAutoReadOnly ? 'cursor-not-allowed' : 'cursor-pointer'
+                  } ${
+                    isReadOnlyMode ? '' : 'opacity-40 hover:opacity-70'
                   }`}
                   style={{
-                    backgroundColor: tabReadOnlyMode ? `${theme.colors.warning}25` : 'transparent',
-                    color: tabReadOnlyMode ? theme.colors.warning : theme.colors.textDim,
-                    border: tabReadOnlyMode ? `1px solid ${theme.colors.warning}50` : '1px solid transparent'
+                    backgroundColor: isReadOnlyMode ? `${theme.colors.warning}25` : 'transparent',
+                    color: isReadOnlyMode ? theme.colors.warning : theme.colors.textDim,
+                    border: isReadOnlyMode ? `1px solid ${theme.colors.warning}50` : '1px solid transparent'
                   }}
-                  title="Toggle read-only mode (Claude won't modify files)"
+                  title={isAutoReadOnly ? "Read-only mode locked during AutoRun" : "Toggle read-only mode (Claude won't modify files)"}
                 >
                   <Eye className="w-3 h-3" />
                   <span>Read-only</span>

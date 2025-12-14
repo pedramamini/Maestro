@@ -18,6 +18,7 @@
 import { FastifyInstance } from 'fastify';
 import { logger } from '../../utils/logger';
 import { WebClient, WebClientMessage } from '../handlers';
+import { AutoRunState } from '../services/broadcastService';
 import type { Theme } from '../../../shared/theme-types';
 
 // Logger context for all WebSocket route logs
@@ -63,6 +64,7 @@ export interface WsRouteCallbacks {
   getSessions: () => WsSessionData[];
   getTheme: () => Theme | null;
   getCustomCommands: () => CustomAICommand[];
+  getAutoRunStates: () => Map<string, AutoRunState>;
   getLiveSessionInfo: (sessionId: string) => LiveSessionInfo | undefined;
   isSessionLive: (sessionId: string) => boolean;
   onClientConnect: (client: WebClient) => void;
@@ -165,6 +167,22 @@ export class WsRoute {
           commands: customCommands,
           timestamp: Date.now(),
         }));
+      }
+
+      // Send current AutoRun states for all sessions
+      if (this.callbacks.getAutoRunStates) {
+        const autoRunStates = this.callbacks.getAutoRunStates();
+        autoRunStates.forEach((state, sid) => {
+          if (state.isRunning) {
+            logger.debug(`Sending initial AutoRun state for session ${sid}`, LOG_CONTEXT);
+            connection.socket.send(JSON.stringify({
+              type: 'autorun_state',
+              sessionId: sid,
+              state,
+              timestamp: Date.now(),
+            }));
+          }
+        });
       }
 
       // Handle incoming messages

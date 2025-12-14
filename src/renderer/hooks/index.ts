@@ -29,6 +29,7 @@ export { useWebBroadcasting } from './useWebBroadcasting';
 export { useCliActivityMonitoring } from './useCliActivityMonitoring';
 export { useThemeStyles } from './useThemeStyles';
 export { useSortedSessions, stripLeadingEmojis, compareNamesIgnoringEmojis } from './useSortedSessions';
+export { useInputProcessing, DEFAULT_IMAGE_ONLY_PROMPT } from './useInputProcessing';
 
 export type { UseSettingsReturn } from './useSettings';
 export type { UseSessionManagerReturn } from './useSessionManager';
@@ -105,3 +106,8 @@ export type {
   UseSortedSessionsDeps,
   UseSortedSessionsReturn,
 } from './useSortedSessions';
+export type {
+  UseInputProcessingDeps,
+  UseInputProcessingReturn,
+  BatchState,
+} from './useInputProcessing';

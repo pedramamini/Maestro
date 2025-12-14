@@ -647,6 +647,7 @@ export function useWebSocket(options: UseWebSocketOptions = {}): UseWebSocketRet
 
         case 'autorun_state': {
           const autoRunMsg = message as AutoRunStateMessage;
+          webLogger.info(`[WS] AutoRun state received: session=${autoRunMsg.sessionId}, isRunning=${autoRunMsg.state?.isRunning}, tasks=${autoRunMsg.state?.completedTasks}/${autoRunMsg.state?.totalTasks}`, 'WebSocket');
           handlersRef.current?.onAutoRunStateChange?.(autoRunMsg.sessionId, autoRunMsg.state);
           break;
         }
