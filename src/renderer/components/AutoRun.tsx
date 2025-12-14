@@ -33,6 +33,13 @@ interface AutoRunProps {
   onContentChange: (content: string) => void;
   contentVersion?: number;  // Incremented on external file changes to force-sync
 
+  // Optional external draft content management (for sharing between panel and expanded modal)
+  // When provided, the component uses these instead of internal localContent state
+  externalLocalContent?: string;
+  onExternalLocalContentChange?: (content: string) => void;
+  externalSavedContent?: string;
+  onExternalSavedContentChange?: (content: string) => void;
+
   // Mode state
   mode: 'edit' | 'preview';
   onModeChange: (mode: 'edit' | 'preview') => void;
@@ -377,6 +384,10 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   content,
   onContentChange,
   contentVersion = 0,  // Used to force-sync on external file changes
+  externalLocalContent,
+  onExternalLocalContentChange,
+  externalSavedContent,
+  onExternalSavedContentChange,
   mode: externalMode,
   onModeChange,
   initialCursorPosition = 0,
@@ -417,10 +428,72 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   const handleContentChange = onContentChange || onChange || (() => {});
 
   // Local content state for responsive typing
-  const [localContent, setLocalContent] = useState(content);
+  // Always use internal state for immediate feedback, but sync with external state when provided
+  // On initial mount, prefer external state if provided (for restoring draft from shared state)
+  const [internalLocalContent, setInternalLocalContent] = useState(
+    externalLocalContent !== undefined ? externalLocalContent : content
+  );
+
+  // Use refs for external callbacks to ensure stable callback identity
+  const externalLocalContentChangeRef = useRef(onExternalLocalContentChange);
+  externalLocalContentChangeRef.current = onExternalLocalContentChange;
+
+  // Sync internal state FROM external state when external state changes
+  // This handles: opening expanded modal with existing draft, or panel receiving updates from modal
+  const prevExternalLocalContentRef = useRef(externalLocalContent);
+  useEffect(() => {
+    if (externalLocalContent !== undefined &&
+        externalLocalContent !== prevExternalLocalContentRef.current &&
+        externalLocalContent !== internalLocalContent) {
+      setInternalLocalContent(externalLocalContent);
+    }
+    prevExternalLocalContentRef.current = externalLocalContent;
+  }, [externalLocalContent, internalLocalContent]);
+
+  // Always use internal state for display (provides immediate feedback)
+  const localContent = internalLocalContent;
+
+  const setLocalContent = useCallback((newContent: string) => {
+    // Always update internal state for immediate feedback
+    setInternalLocalContent(newContent);
+    // Also propagate to external callback if provided (for sharing with expanded modal)
+    if (externalLocalContentChangeRef.current) {
+      externalLocalContentChangeRef.current(newContent);
+    }
+  }, []); // Empty deps - uses ref for external callback
 
   // Track the saved content to detect dirty state (unsaved changes)
-  const [savedContent, setSavedContent] = useState(content);
+  // On initial mount, prefer external state if provided
+  const [internalSavedContent, setInternalSavedContent] = useState(
+    externalSavedContent !== undefined ? externalSavedContent : content
+  );
+
+  // Use refs for external callbacks to ensure stable callback identity
+  const externalSavedContentChangeRef = useRef(onExternalSavedContentChange);
+  externalSavedContentChangeRef.current = onExternalSavedContentChange;
+
+  // Sync internal saved state FROM external state when external state changes
+  const prevExternalSavedContentRef = useRef(externalSavedContent);
+  useEffect(() => {
+    if (externalSavedContent !== undefined &&
+        externalSavedContent !== prevExternalSavedContentRef.current &&
+        externalSavedContent !== internalSavedContent) {
+      setInternalSavedContent(externalSavedContent);
+    }
+    prevExternalSavedContentRef.current = externalSavedContent;
+  }, [externalSavedContent, internalSavedContent]);
+
+  // Always use internal state for saved content comparison
+  const savedContent = internalSavedContent;
+
+  const setSavedContent = useCallback((newContent: string) => {
+    // Always update internal state
+    setInternalSavedContent(newContent);
+    // Also propagate to external callback if provided
+    if (externalSavedContentChangeRef.current) {
+      externalSavedContentChangeRef.current(newContent);
+    }
+  }, []); // Empty deps - uses ref for external callback
 
   // Dirty state: true when localContent differs from savedContent
   const isDirty = localContent !== savedContent;
@@ -444,7 +517,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
       prevSelectedFileRef.current = selectedFile;
       prevContentVersionRef.current = contentVersion;
     }
-  }, [sessionId, selectedFile, contentVersion, content]);
+  }, [sessionId, selectedFile, contentVersion, content, setLocalContent, setSavedContent]);
 
   // Save function - writes to disk
   // Note: We do NOT call handleContentChange here because it would update the
@@ -460,12 +533,12 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
     } catch (err) {
       console.error('Failed to save:', err);
     }
-  }, [folderPath, selectedFile, localContent, isDirty]);
+  }, [folderPath, selectedFile, localContent, isDirty, setSavedContent]);
 
   // Revert function - discard changes
   const handleRevert = useCallback(() => {
     setLocalContent(savedContent);
-  }, [savedContent]);
+  }, [savedContent, setLocalContent]);
 
   // Track mode before auto-run to restore when it ends
   const modeBeforeAutoRunRef = useRef<'edit' | 'preview' | null>(null);

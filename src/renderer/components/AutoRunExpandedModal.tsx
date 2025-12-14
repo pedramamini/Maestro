@@ -20,6 +20,11 @@ interface AutoRunExpandedModalProps {
   content: string;
   onContentChange: (content: string) => void;
   contentVersion?: number;
+  // Optional external draft content management (for sharing between panel and expanded modal)
+  externalLocalContent?: string;
+  onExternalLocalContentChange?: (content: string) => void;
+  externalSavedContent?: string;
+  onExternalSavedContentChange?: (content: string) => void;
   mode: 'edit' | 'preview';
   onModeChange: (mode: 'edit' | 'preview') => void;
   initialCursorPosition?: number;

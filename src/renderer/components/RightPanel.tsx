@@ -114,6 +114,33 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
   // Elapsed time for Auto Run display (updates every second when current session is running)
   const [elapsedTime, setElapsedTime] = useState<string>('');
 
+  // Shared draft state for Auto Run (shared between panel and expanded modal)
+  // This ensures edits in one view are immediately visible in the other
+  const [sharedLocalContent, setSharedLocalContent] = useState(autoRunContent);
+  const [sharedSavedContent, setSharedSavedContent] = useState(autoRunContent);
+
+  // Sync shared state when the source content changes (e.g., document switch, external file change)
+  const prevAutoRunContentRef = useRef(autoRunContent);
+  const prevAutoRunContentVersionRef = useRef(autoRunContentVersion);
+  const prevSessionIdRef = useRef(session?.id);
+  const prevSelectedFileRef = useRef(session?.autoRunSelectedFile);
+
+  useEffect(() => {
+    const contentChanged = autoRunContent !== prevAutoRunContentRef.current;
+    const versionChanged = autoRunContentVersion !== prevAutoRunContentVersionRef.current;
+    const sessionChanged = session?.id !== prevSessionIdRef.current;
+    const fileChanged = session?.autoRunSelectedFile !== prevSelectedFileRef.current;
+
+    if (contentChanged || versionChanged || sessionChanged || fileChanged) {
+      setSharedLocalContent(autoRunContent);
+      setSharedSavedContent(autoRunContent);
+      prevAutoRunContentRef.current = autoRunContent;
+      prevAutoRunContentVersionRef.current = autoRunContentVersion;
+      prevSessionIdRef.current = session?.id;
+      prevSelectedFileRef.current = session?.autoRunSelectedFile;
+    }
+  }, [autoRunContent, autoRunContentVersion, session?.id, session?.autoRunSelectedFile]);
+
   // Expanded modal state for Auto Run
   const [autoRunExpanded, setAutoRunExpanded] = useState(false);
   const handleExpandAutoRun = useCallback(() => setAutoRunExpanded(true), []);
@@ -345,6 +372,10 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             content={autoRunContent}
             contentVersion={autoRunContentVersion}
             onContentChange={onAutoRunContentChange}
+            externalLocalContent={sharedLocalContent}
+            onExternalLocalContentChange={setSharedLocalContent}
+            externalSavedContent={sharedSavedContent}
+            onExternalSavedContentChange={setSharedSavedContent}
             mode={session.autoRunMode || 'edit'}
             onModeChange={onAutoRunModeChange}
             initialCursorPosition={session.autoRunCursorPosition || 0}
@@ -381,6 +412,10 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
           content={autoRunContent}
           contentVersion={autoRunContentVersion}
           onContentChange={onAutoRunContentChange}
+          externalLocalContent={sharedLocalContent}
+          onExternalLocalContentChange={setSharedLocalContent}
+          externalSavedContent={sharedSavedContent}
+          onExternalSavedContentChange={setSharedSavedContent}
           mode={session.autoRunMode || 'edit'}
           onModeChange={onAutoRunModeChange}
           initialCursorPosition={session.autoRunCursorPosition || 0}

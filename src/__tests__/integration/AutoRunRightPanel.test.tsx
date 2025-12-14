@@ -320,16 +320,16 @@ describe('Auto Run + RightPanel Integration', () => {
   });
 
   describe('Tab Switching Preserves Auto Run State', () => {
-    it('unsaved content changes are lost when switching tabs (by design)', async () => {
-      // Note: AutoRun uses local content state for responsive typing.
-      // Changes are NOT auto-synced to parent. Users must save to persist.
+    it('unsaved content changes persist when switching tabs (via shared state)', async () => {
+      // Note: RightPanel manages shared draft state that persists across tab switches.
+      // This allows users to switch tabs without losing their unsaved changes.
       render(<RightPanelTestWrapper />);
 
       // Find the textarea in Auto Run
       const textarea = screen.getByRole('textbox');
       expect(textarea).toHaveValue('# Test Document\n\n- [ ] Task 1\n- [ ] Task 2');
 
-      // Type some content (modifies local state, not parent)
+      // Type some content (updates shared state in RightPanel)
       fireEvent.change(textarea, { target: { value: 'Modified content' } });
       expect(textarea).toHaveValue('Modified content');
 
@@ -345,9 +345,9 @@ describe('Auto Run + RightPanel Integration', () => {
       const autorunTab = screen.getByRole('button', { name: 'Auto Run' });
       fireEvent.click(autorunTab);
 
-      // Content reverts to parent state since local changes weren't saved
+      // Content is preserved from shared state (not reverted to saved content)
       const newTextarea = screen.getByRole('textbox');
-      expect(newTextarea).toHaveValue('# Test Document\n\n- [ ] Task 1\n- [ ] Task 2');
+      expect(newTextarea).toHaveValue('Modified content');
     });
 
     it('external content changes (via contentVersion) persist across tab switches', async () => {
@@ -492,30 +492,40 @@ describe('Auto Run + RightPanel Integration', () => {
       // Initially no Save button (clean state)
       expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
 
-      // Make content dirty
-      fireEvent.change(textarea, { target: { value: 'Modified content that creates dirty state' } });
+      // Make content dirty - wrap in act for state update
+      await act(async () => {
+        fireEvent.change(textarea, { target: { value: 'Modified content that creates dirty state' } });
+      });
 
       // Check for Save button (indicates dirty state)
-      const saveButton = screen.queryByRole('button', { name: /save/i });
-      expect(saveButton).toBeInTheDocument();
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /save/i })).toBeInTheDocument();
+      });
     });
 
-    it('dirty state is lost when switching tabs (by design - must save first)', async () => {
-      // Note: Dirty state is based on local content, which is reset when AutoRun unmounts
+    it('dirty state persists when switching tabs (via shared state)', async () => {
+      // Note: RightPanel manages shared draft state that includes dirty state tracking
       render(<RightPanelTestWrapper />);
 
       const textarea = screen.getByRole('textbox');
 
-      // Make content dirty
-      fireEvent.change(textarea, { target: { value: 'Modified content' } });
-      expect(screen.queryByRole('button', { name: /save/i })).toBeInTheDocument();
+      // Make content dirty - wrap in act for state update
+      await act(async () => {
+        fireEvent.change(textarea, { target: { value: 'Modified content' } });
+      });
+
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /save/i })).toBeInTheDocument();
+      });
 
       // Switch to history tab and back
       fireEvent.click(screen.getByRole('button', { name: 'History' }));
       fireEvent.click(screen.getByRole('button', { name: 'Auto Run' }));
 
-      // Dirty state is lost because local content reverts to props
-      expect(screen.queryByRole('button', { name: /save/i })).not.toBeInTheDocument();
+      // Dirty state is preserved because shared state includes both local and saved content
+      await waitFor(() => {
+        expect(screen.queryByRole('button', { name: /save/i })).toBeInTheDocument();
+      });
     });
 
     it('preserves document selection when switching tabs', async () => {
@@ -1012,28 +1022,34 @@ describe('Auto Run + RightPanel Integration', () => {
   });
 
   describe('State Persistence Across Tab Visibility Changes', () => {
-    it('AutoRun component unmounts when tab is not active and unsaved changes are lost', async () => {
-      // Note: AutoRun uses local content state that is NOT auto-synced to parent.
-      // Unsaved changes are lost when component unmounts. This is by design.
-      // Users must save changes before switching away to preserve them.
+    it('AutoRun draft content persists across tab switches via shared state', async () => {
+      // Note: RightPanel now manages shared draft state that persists across tab switches.
+      // This allows users to switch tabs without losing unsaved changes.
       render(<RightPanelTestWrapper />);
 
       // Initial content
       const textarea = screen.getByRole('textbox');
       expect(textarea).toHaveValue('# Test Document\n\n- [ ] Task 1\n- [ ] Task 2');
 
-      // Modify content (creates dirty state, not saved to parent)
+      // Modify content (creates dirty state in shared state)
       fireEvent.change(textarea, { target: { value: 'Modified content' } });
-      expect(textarea).toHaveValue('Modified content');
 
-      // Switch away - AutoRun unmounts
+      // Wait for state to propagate
+      await waitFor(() => {
+        expect(textarea).toHaveValue('Modified content');
+      });
+
+      // Switch away - AutoRun unmounts but shared state persists in RightPanel
       fireEvent.click(screen.getByRole('button', { name: 'Files' }));
       expect(screen.queryByRole('textbox')).not.toBeInTheDocument();
 
-      // Switch back - AutoRun remounts with original content (unsaved changes lost)
+      // Switch back - AutoRun remounts with draft content from shared state
       fireEvent.click(screen.getByRole('button', { name: 'Auto Run' }));
-      // Content reverts to the parent's state (initial content) since changes were not saved
-      expect(screen.getByRole('textbox')).toHaveValue('# Test Document\n\n- [ ] Task 1\n- [ ] Task 2');
+
+      // Content is preserved from the shared draft state
+      await waitFor(() => {
+        expect(screen.getByRole('textbox')).toHaveValue('Modified content');
+      });
     });
 
     it('saved content persists across tab switches', async () => {
