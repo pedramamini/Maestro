@@ -23,6 +23,7 @@ import {
   loadGlobalStatsCache,
   saveGlobalStatsCache,
 } from './utils/statsCache';
+import { HistoryEntry } from '../shared/types';
 
 // Demo mode: use a separate data directory for fresh demos
 if (DEMO_MODE) {
@@ -139,29 +140,7 @@ const windowStateStore = new Store<WindowState>({
 });
 
 // History entries store (per-project history for AUTO and USER entries)
-interface HistoryEntry {
-  id: string;
-  type: 'AUTO' | 'USER';
-  timestamp: number;
-  summary: string;
-  fullResponse?: string;
-  claudeSessionId?: string;
-  sessionName?: string; // User-defined session name
-  projectPath: string;
-  sessionId?: string; // Maestro session ID for isolation
-  contextUsage?: number; // Context window usage percentage at time of entry
-  usageStats?: { // Token usage and cost at time of entry
-    inputTokens: number;
-    outputTokens: number;
-    cacheReadInputTokens: number;
-    cacheCreationInputTokens: number;
-    totalCostUsd: number;
-    contextWindow: number;
-  };
-  success?: boolean; // For AUTO entries: whether the task completed successfully
-  elapsedTimeMs?: number; // Time taken to complete this task in milliseconds
-  validated?: boolean; // For AUTO entries: whether a human has validated the task completion
-}
+// HistoryEntry type is imported from ../shared/types
 
 interface HistoryData {
   entries: HistoryEntry[];
