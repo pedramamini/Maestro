@@ -67,6 +67,11 @@ src/
 │   ├── services/          # Playbook and batch processing
 │   └── index.ts           # CLI entry point
 │
+├── prompts/                # System prompts (editable .md files)
+│   ├── wizard-*.md        # Wizard conversation prompts
+│   ├── autorun-*.md       # Auto Run default prompts
+│   └── index.ts           # Central exports
+│
 └── shared/                 # Shared types and utilities
     ├── types.ts           # Common type definitions
     └── templateVariables.ts # Template variable processing
@@ -84,6 +89,7 @@ src/
 | Add modal | Component + `src/renderer/constants/modalPriorities.ts` |
 | Add setting | `src/renderer/hooks/useSettings.ts`, `src/main/index.ts` |
 | Add template variable | `src/shared/templateVariables.ts`, `src/renderer/utils/templateVariables.ts` |
+| Modify system prompts | `src/prompts/*.md` (wizard, Auto Run, etc.) |
 | Add CLI command | `src/cli/commands/`, `src/cli/index.ts` |
 | Configure agent | `src/main/agent-detector.ts` |
 | Add playbook feature | `src/cli/services/playbooks.ts` |
@@ -459,10 +465,10 @@ The tour highlights UI elements with spotlight cutouts:
 | What | Where |
 |------|-------|
 | Add wizard step | `WizardContext.tsx` (WIZARD_TOTAL_STEPS, WizardStep type, STEP_INDEX) |
-| Modify AI prompts | `services/wizardPrompts.ts` |
+| Modify wizard prompts | `src/prompts/wizard-*.md` (content), `services/wizardPrompts.ts` (logic) |
 | Change confidence threshold | `READY_CONFIDENCE_THRESHOLD` in wizardPrompts.ts (default: 80) |
 | Add tour step | `tour/tourSteps.ts` array |
-| Modify Auto Run document format | `services/phaseGenerator.ts` |
+| Modify Auto Run document format | `src/prompts/wizard-document-generation.md` |
 | Change wizard keyboard shortcut | `shortcuts.ts` → `openWizard` |
 
 ### Related Settings

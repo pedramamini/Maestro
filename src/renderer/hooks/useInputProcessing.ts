@@ -4,12 +4,12 @@ import { getActiveTab } from '../utils/tabHelpers';
 import { generateId } from '../utils/ids';
 import { substituteTemplateVariables } from '../utils/templateVariables';
 import { gitService } from '../services/git';
+import { imageOnlyDefaultPrompt } from '../../prompts';
 
 /**
  * Default prompt used when user sends only an image without text.
  */
-export const DEFAULT_IMAGE_ONLY_PROMPT =
-  'Examine the attached picture and best determine based on available and existing context, what the user wants done next.';
+export const DEFAULT_IMAGE_ONLY_PROMPT = imageOnlyDefaultPrompt;
 
 /**
  * Batch state information for a session.

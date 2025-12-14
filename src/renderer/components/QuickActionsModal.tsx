@@ -226,6 +226,12 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     ...(isAiMode && onRenameTab ? [{ id: 'renameTab', label: 'Rename Tab', shortcut: tabShortcuts?.renameTab, action: () => { onRenameTab(); setQuickActionOpen(false); } }] : []),
     ...(isAiMode && onToggleReadOnlyMode ? [{ id: 'toggleReadOnly', label: 'Toggle Read-Only Mode', shortcut: tabShortcuts?.toggleReadOnlyMode, action: () => { onToggleReadOnlyMode(); setQuickActionOpen(false); } }] : []),
     ...(isAiMode && onToggleMarkdownEditMode ? [{ id: 'toggleMarkdown', label: 'Toggle Edit/Preview', shortcut: shortcuts.toggleMarkdownMode, subtext: markdownEditMode ? 'Currently in edit mode' : 'Currently in preview mode', action: () => { onToggleMarkdownEditMode(); setQuickActionOpen(false); } }] : []),
+    ...(activeSession ? [{ id: 'clearTerminal', label: 'Clear Terminal History', action: () => {
+      setSessions(prev => prev.map(s =>
+        s.id === activeSessionId ? { ...s, shellLogs: [] } : s
+      ));
+      setQuickActionOpen(false);
+    } }] : []),
     ...(activeSession ? [{ id: 'kill', label: `Remove Agent: ${activeSession.name}`, shortcut: shortcuts.killInstance, action: () => deleteSession(activeSessionId) }] : []),
     { id: 'settings', label: 'Settings', shortcut: shortcuts.settings, action: () => { setSettingsModalOpen(true); setQuickActionOpen(false); } },
     { id: 'theme', label: 'Change Theme', action: () => { setSettingsModalOpen(true); setSettingsTab('theme'); setQuickActionOpen(false); } },

@@ -2,6 +2,7 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import type { BatchRunState, BatchRunConfig, BatchDocumentEntry, Session, HistoryEntry, UsageStats, Group, AutoRunStats } from '../types';
 import { substituteTemplateVariables, TemplateContext } from '../utils/templateVariables';
 import { getBadgeForTime, getNextBadge, formatTimeRemaining } from '../constants/conductorBadges';
+import { autorunSynopsisPrompt } from '../../prompts';
 
 // Regex to count unchecked markdown checkboxes: - [ ] task
 const UNCHECKED_TASK_REGEX = /^[\s]*-\s*\[\s*\]\s*.+$/gm;
@@ -193,16 +194,7 @@ export function uncheckAllTasks(content: string): string {
  * Hook for managing batch processing of scratchpad tasks across multiple sessions
  */
 // Synopsis prompt for batch tasks - requests a two-part response
-const BATCH_SYNOPSIS_PROMPT = `Provide a brief synopsis of what you just accomplished in this task using this exact format:
-
-**Summary:** [1-2 sentences describing the key outcome]
-
-**Details:** [A paragraph with more specifics about what was done, files changed, etc.]
-
-Rules:
-- Be specific about what was actually accomplished, not what was attempted.
-- Focus only on meaningful work that was done. Omit filler phrases like "the task is complete", "no further action needed", "everything is working", etc.
-- If nothing meaningful was accomplished, respond with only: **Summary:** No changes made.`;
+const BATCH_SYNOPSIS_PROMPT = autorunSynopsisPrompt;
 
 /**
  * Parse a synopsis response into short summary and full synopsis
