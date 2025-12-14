@@ -2210,7 +2210,9 @@ describe('Auto-save Cleanup', () => {
     vi.useRealTimers();
   });
 
-  it('clears auto-save timer when document changes', async () => {
+  it('saves pending changes to old document when switching documents', async () => {
+    // This test verifies that when switching documents, pending changes are saved
+    // to the OLD document (preventing data loss from content "leaking" between documents)
     const props = createDefaultProps({ content: 'Initial', selectedFile: 'doc1' });
     const { rerender } = render(<AutoRun {...props} />);
 
@@ -2219,19 +2221,23 @@ describe('Auto-save Cleanup', () => {
     fireEvent.change(textarea, { target: { value: 'Changed content' } });
 
     // Change document before auto-save fires
+    // The component should save pending changes to doc1 immediately during the switch
     rerender(<AutoRun {...props} selectedFile="doc2" content="Doc 2 content" />);
 
-    // Advance past auto-save time
+    // The pending changes should have been saved to doc1 (not lost!)
+    const calls = mockMaestro.autorun.writeDoc.mock.calls;
+    const doc1SaveCalls = calls.filter((call: any[]) => call[1] === 'doc1.md' && call[2] === 'Changed content');
+    expect(doc1SaveCalls.length).toBe(1);
+
+    // Auto-save timer should be cleared - advancing time should NOT trigger another save
     await act(async () => {
       vi.advanceTimersByTime(6000);
     });
 
-    // Auto-save should NOT have been called for doc1's content
-    // because we switched documents before the timer fired
-    // It might be called for doc2 if there are pending changes, but not with doc1 content
-    const calls = mockMaestro.autorun.writeDoc.mock.calls;
-    const doc1SaveCalls = calls.filter((call: any[]) => call[1] === 'doc1.md' && call[2] === 'Changed content');
-    expect(doc1SaveCalls.length).toBe(0);
+    // Still only one save to doc1 (no duplicate auto-save)
+    const finalCalls = mockMaestro.autorun.writeDoc.mock.calls;
+    const doc1FinalSaveCalls = finalCalls.filter((call: any[]) => call[1] === 'doc1.md' && call[2] === 'Changed content');
+    expect(doc1FinalSaveCalls.length).toBe(1);
   });
 
   it('should re-render when hideTopControls changes (memo regression test)', async () => {

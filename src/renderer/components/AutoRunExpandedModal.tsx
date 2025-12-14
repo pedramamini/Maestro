@@ -5,6 +5,7 @@ import type { Theme, BatchRunState, SessionState, Shortcut } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AutoRun, AutoRunHandle } from './AutoRun';
+import type { DocumentTaskCount } from './AutoRunDocumentSelector';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 interface AutoRunExpandedModalProps {
@@ -35,6 +36,7 @@ interface AutoRunExpandedModalProps {
   onSelectDocument: (filename: string) => void;
   onCreateDocument: (filename: string) => Promise<boolean>;
   isLoadingDocuments?: boolean;
+  documentTaskCounts?: Map<string, DocumentTaskCount>;  // Task counts per document
   batchRunState?: BatchRunState;
   onOpenBatchRunner?: () => void;
   onStopBatchRun?: () => void;

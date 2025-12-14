@@ -207,10 +207,13 @@ describe('AutoRunDocumentSelector', () => {
       const button = screen.getByRole('button', { name: /doc2\.md/i });
       fireEvent.click(button);
 
-      // Find all buttons with doc2.md text, the one in the dropdown is the second one
-      const docButtons = screen.getAllByText('doc2.md');
-      // The dropdown button is the one with the selection highlight styles
-      const selectedDoc = docButtons.find(el => el.tagName === 'BUTTON' && el.className.includes('hover:bg-white/5'));
+      // Find all elements with doc2.md text, find the one in the dropdown
+      const docElements = screen.getAllByText('doc2.md');
+      // The dropdown item is a span inside a button with hover:bg-white/5 class
+      const selectedDoc = docElements.find(el => {
+        const parent = el.closest('button');
+        return parent && parent.className.includes('hover:bg-white/5');
+      })?.closest('button');
       expect(selectedDoc).toHaveStyle({ color: mockTheme.colors.accent });
       expect(selectedDoc).toHaveStyle({ backgroundColor: mockTheme.colors.bgActivity });
     });
@@ -1092,8 +1095,10 @@ describe('AutoRunDocumentSelector', () => {
       const button = screen.getByRole('button', { name: /select a document/i });
       fireEvent.click(button);
 
-      // Find the dropdown menu (the container with border)
-      const menu = screen.getByText('doc1.md').parentElement;
+      // Find the dropdown menu - the doc text is in a span, inside a button, inside the menu container
+      const docText = screen.getByText('doc1.md');
+      const docButton = docText.closest('button');
+      const menu = docButton?.parentElement;
       expect(menu).toHaveStyle({ backgroundColor: mockTheme.colors.bgSidebar });
     });
 

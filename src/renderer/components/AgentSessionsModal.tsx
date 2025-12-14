@@ -126,12 +126,15 @@ export function AgentSessionsModal({
 
       console.log('AgentSessionsModal: Loading sessions for cwd:', activeSession.cwd);
       try {
-        // Load starred sessions for this project
-        const starredKey = `starredClaudeSessions:${activeSession.cwd}`;
-        const savedStarred = await window.maestro.settings.get(starredKey);
-        if (savedStarred && Array.isArray(savedStarred)) {
-          setStarredSessions(new Set(savedStarred));
+        // Load starred sessions from Claude session origins (shared with AgentSessionsBrowser)
+        const origins = await window.maestro.claude.getSessionOrigins(activeSession.cwd);
+        const starredFromOrigins = new Set<string>();
+        for (const [sessionId, originData] of Object.entries(origins)) {
+          if (typeof originData === 'object' && originData?.starred) {
+            starredFromOrigins.add(sessionId);
+          }
         }
+        setStarredSessions(starredFromOrigins);
 
         // Use paginated API for better performance with many sessions
         const result = await window.maestro.claude.listSessionsPaginated(activeSession.cwd, { limit: 100 });
@@ -195,17 +198,21 @@ export function AgentSessionsModal({
     e.stopPropagation(); // Don't trigger session view
 
     const newStarred = new Set(starredSessions);
-    if (newStarred.has(sessionId)) {
-      newStarred.delete(sessionId);
-    } else {
+    const isNowStarred = !newStarred.has(sessionId);
+    if (isNowStarred) {
       newStarred.add(sessionId);
+    } else {
+      newStarred.delete(sessionId);
     }
     setStarredSessions(newStarred);
 
-    // Persist to settings
+    // Persist to Claude session origins (shared with AgentSessionsBrowser)
     if (activeSession?.cwd) {
-      const starredKey = `starredClaudeSessions:${activeSession.cwd}`;
-      await window.maestro.settings.set(starredKey, Array.from(newStarred));
+      await window.maestro.claude.updateSessionStarred(
+        activeSession.cwd,
+        sessionId,
+        isNowStarred
+      );
     }
   }, [starredSessions, activeSession?.cwd]);
 

@@ -5,6 +5,7 @@ import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
 import { AutoRun, AutoRunHandle } from './AutoRun';
+import type { DocumentTaskCount } from './AutoRunDocumentSelector';
 import { AutoRunExpandedModal } from './AutoRunExpandedModal';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
@@ -65,6 +66,7 @@ interface RightPanelProps {
   autoRunContent: string;               // Content of currently selected document
   autoRunContentVersion?: number;       // Version counter for external file changes (forces sync)
   autoRunIsLoadingDocuments: boolean;   // Loading state
+  autoRunDocumentTaskCounts?: Map<string, DocumentTaskCount>;  // Task counts per document
   onAutoRunContentChange: (content: string) => void;
   onAutoRunModeChange: (mode: 'edit' | 'preview') => void;
   onAutoRunStateChange: (state: {
@@ -99,6 +101,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange, onShowFlash,
     showHiddenFiles, setShowHiddenFiles,
     autoRunDocumentList, autoRunDocumentTree, autoRunContent, autoRunContentVersion, autoRunIsLoadingDocuments,
+    autoRunDocumentTaskCounts,
     onAutoRunContentChange, onAutoRunModeChange, onAutoRunStateChange,
     onAutoRunSelectDocument, onAutoRunCreateDocument, onAutoRunRefresh, onAutoRunOpenSetup,
     batchRunState, currentSessionBatchState, onOpenBatchRunner, onStopBatchRun, onJumpToClaudeSession, onResumeSession,
@@ -353,6 +356,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             onSelectDocument={onAutoRunSelectDocument}
             onCreateDocument={onAutoRunCreateDocument}
             isLoadingDocuments={autoRunIsLoadingDocuments}
+            documentTaskCounts={autoRunDocumentTaskCounts}
             batchRunState={currentSessionBatchState || undefined}
             onOpenBatchRunner={onOpenBatchRunner}
             onStopBatchRun={onStopBatchRun}
@@ -388,6 +392,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
           onSelectDocument={onAutoRunSelectDocument}
           onCreateDocument={onAutoRunCreateDocument}
           isLoadingDocuments={autoRunIsLoadingDocuments}
+          documentTaskCounts={autoRunDocumentTaskCounts}
           batchRunState={currentSessionBatchState || undefined}
           onOpenBatchRunner={onOpenBatchRunner}
           onStopBatchRun={onStopBatchRun}

@@ -196,17 +196,14 @@ export function useAutoRunHandlers(
   }, [activeSession, setSessions]);
 
   // Auto Run document selection handler
+  // NOTE: Saving the current document's pending changes is handled by AutoRun.tsx's
+  // useEffect that detects selectedFile changes. This handler only:
+  // 1. Loads the new document's content
+  // 2. Updates the selectedFile in session state
+  // The AutoRun component saves localContent (which may differ from autoRunContent shared state)
+  // to the OLD document before this handler's changes take effect.
   const handleAutoRunSelectDocument = useCallback(async (filename: string) => {
     if (!activeSession?.autoRunFolderPath) return;
-
-    // Save current document first if there's content
-    if (activeSession.autoRunSelectedFile && autoRunContent) {
-      await window.maestro.autorun.writeDoc(
-        activeSession.autoRunFolderPath,
-        activeSession.autoRunSelectedFile + '.md',
-        autoRunContent
-      );
-    }
 
     // Load new document content FIRST (before updating selectedFile)
     // This ensures content prop updates atomically with the file selection
@@ -224,7 +221,7 @@ export function useAutoRunHandlers(
     setSessions(prev => prev.map(s =>
       s.id === activeSession.id ? { ...s, autoRunSelectedFile: filename } : s
     ));
-  }, [activeSession, autoRunContent, setAutoRunContent, setSessions]);
+  }, [activeSession, setAutoRunContent, setSessions]);
 
   // Auto Run refresh handler - reload document list and show flash notification
   const handleAutoRunRefresh = useCallback(async () => {

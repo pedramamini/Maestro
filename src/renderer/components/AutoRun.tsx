@@ -5,7 +5,7 @@ import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, Chevron
 import type { BatchRunState, SessionState, Theme, Shortcut } from '../types';
 import { AutoRunnerHelpModal } from './AutoRunnerHelpModal';
 import { MermaidRenderer } from './MermaidRenderer';
-import { AutoRunDocumentSelector } from './AutoRunDocumentSelector';
+import { AutoRunDocumentSelector, DocumentTaskCount } from './AutoRunDocumentSelector';
 import { AutoRunLightbox } from './AutoRunLightbox';
 import { AutoRunSearchBar } from './AutoRunSearchBar';
 import { useTemplateAutocomplete } from '../hooks/useTemplateAutocomplete';
@@ -54,6 +54,7 @@ interface AutoRunProps {
   onSelectDocument: (filename: string) => void;
   onCreateDocument: (filename: string) => Promise<boolean>;
   isLoadingDocuments?: boolean;
+  documentTaskCounts?: Map<string, DocumentTaskCount>;  // Task counts per document path
 
   // Batch processing props
   batchRunState?: BatchRunState;
@@ -384,6 +385,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   onSelectDocument,
   onCreateDocument,
   isLoadingDocuments = false,
+  documentTaskCounts,
   batchRunState,
   onOpenBatchRunner,
   onStopBatchRun,
@@ -428,48 +430,54 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   // Track contentVersion to detect external file changes (from disk watcher)
   const prevContentVersionRef = useRef(contentVersion);
 
-  // Track previous folder/file paths to save pending changes to the CORRECT session when switching
-  // These are separate from prevSelectedFileRef (used for document change detection) because
-  // we need to track the OLD session's paths during session switches, not just document changes.
-  const sessionSwitchFolderRef = useRef(folderPath);
-  const sessionSwitchFileRef = useRef(selectedFile);
+  // Track previous folder/file paths to save pending changes to the CORRECT document when switching
+  // These are used for BOTH session switches AND document switches within the same session
+  const prevSwitchFolderRef = useRef(folderPath);
+  const prevSwitchFileRef = useRef(selectedFile);
 
   // Sync local content from prop when session changes (switching sessions)
-  // or when content changes externally (e.g., switching documents, batch run modifying tasks)
+  // or when document changes within the same session
+  // or when content changes externally (e.g., batch run modifying tasks)
   // or when file changes on disk (contentVersion increments)
   useEffect(() => {
     const sessionChanged = sessionId !== prevSessionIdRef.current;
+    const documentChanged = selectedFile !== prevSwitchFileRef.current;
     const contentChanged = content !== prevContentForSyncRef.current;
     const versionChanged = contentVersion !== prevContentVersionRef.current;
 
-    if (sessionChanged) {
-      // CRITICAL: Before switching sessions, save any unsaved changes to the OLD session's file
-      // This prevents content from "leaking" to the new session when documents have the same name
-      const prevFolder = sessionSwitchFolderRef.current;
-      const prevFile = sessionSwitchFileRef.current;
-      const prevContent = prevContentForSyncRef.current;
+    // Handle session switch OR document switch - both need to save pending changes to the OLD document
+    if (sessionChanged || documentChanged) {
+      // CRITICAL: Before switching, save any unsaved changes to the OLD document's file
+      // This prevents content from "leaking" between documents or sessions
+      const prevFolder = prevSwitchFolderRef.current;
+      const prevFile = prevSwitchFileRef.current;
 
       // Only save if there are unsaved local changes and we have a valid path
-      if (prevFolder && prevFile && localContent !== prevContent && localContent !== lastSavedContentRef.current) {
-        // Save to the OLD session's file path, not the new one
+      // AND localContent is not empty (prevent wiping files during initial load)
+      if (prevFolder && prevFile && localContent && localContent !== lastSavedContentRef.current) {
+        // Save to the OLD document's file path, not the new one
         window.maestro.autorun.writeDoc(prevFolder, prevFile + '.md', localContent)
-          .catch(err => console.error('Failed to save pending changes before session switch:', err));
+          .then(() => {
+            // Update lastSavedContent for the OLD document
+            // Note: This runs asynchronously, after the refs have been updated to new document
+          })
+          .catch(err => console.error('Failed to save pending changes before switch:', err));
       }
 
-      // Clear any pending auto-save timer (it would save to wrong session)
+      // Clear any pending auto-save timer (it would save to wrong document)
       if (autoSaveTimeoutRef.current) {
         clearTimeout(autoSaveTimeoutRef.current);
         autoSaveTimeoutRef.current = null;
       }
 
-      // Reset editing flag so content can sync properly when returning to this session
+      // Reset editing flag so content can sync properly for the new document
       isEditingRef.current = false;
       setLocalContent(content);
       prevSessionIdRef.current = sessionId;
       prevContentForSyncRef.current = content;
       prevContentVersionRef.current = contentVersion;
-      sessionSwitchFolderRef.current = folderPath;
-      sessionSwitchFileRef.current = selectedFile;
+      prevSwitchFolderRef.current = folderPath;
+      prevSwitchFileRef.current = selectedFile;
       lastSavedContentRef.current = content;
     } else if (versionChanged) {
       // External file change detected (disk watcher) - force sync regardless of editing state
@@ -481,15 +489,9 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
       // Also update lastSavedContentRef to prevent auto-save from overwriting
       lastSavedContentRef.current = content;
     } else if (contentChanged && !isEditingRef.current) {
-      // Content changed externally (document switch, batch run, etc.) - sync if not editing
+      // Content changed externally (batch run, etc.) - sync if not editing
       setLocalContent(content);
       prevContentForSyncRef.current = content;
-    }
-
-    // Always keep folder/file refs in sync (for non-session-change updates)
-    if (!sessionChanged) {
-      sessionSwitchFolderRef.current = folderPath;
-      sessionSwitchFileRef.current = selectedFile;
     }
   }, [sessionId, content, contentVersion, folderPath, selectedFile, localContent]);
 
@@ -748,23 +750,17 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
     }
   }, [mode]);
 
-  // Track previous selectedFile to detect document changes
-  const prevSelectedFileRef = useRef(selectedFile);
-  // Track previous content to detect when content prop actually changes
-  const prevContentRef = useRef(content);
-
-  // Handle document selection change - focus and reset editing state
+  // Handle document selection change - focus the appropriate element
+  // Note: Content syncing and editing state reset is handled by the main sync effect above
+  // This effect ONLY handles focusing on document change
+  const prevFocusSelectedFileRef = useRef(selectedFile);
   useEffect(() => {
     if (!selectedFile) return;
 
-    const isNewDocument = selectedFile !== prevSelectedFileRef.current;
-    prevSelectedFileRef.current = selectedFile;
+    const isNewDocument = selectedFile !== prevFocusSelectedFileRef.current;
+    prevFocusSelectedFileRef.current = selectedFile;
 
     if (isNewDocument) {
-      // Reset editing flag so content syncs properly for new document
-      isEditingRef.current = false;
-      // Reset lastSavedContent to prevent auto-save from firing with stale comparison
-      lastSavedContentRef.current = content;
       // Focus on document change
       requestAnimationFrame(() => {
         if (mode === 'edit' && textareaRef.current) {
@@ -774,27 +770,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
         }
       });
     }
-  }, [selectedFile, content, mode]);
-
-  // Sync content from prop - only when content prop actually changes
-  useEffect(() => {
-    // Skip if no document selected
-    if (!selectedFile) return;
-
-    // Only sync when the content PROP actually changed (not just a re-render)
-    const contentPropChanged = content !== prevContentRef.current;
-    prevContentRef.current = content;
-
-    if (!contentPropChanged) return;
-
-    // Skip if user is actively editing - don't overwrite their changes
-    if (isEditingRef.current) return;
-
-    // Content prop changed - sync to local state
-    setLocalContent(content);
-    // Update lastSavedContent so auto-save knows this is the baseline
-    lastSavedContentRef.current = content;
-  }, [selectedFile, content]);
+  }, [selectedFile, mode]);
 
   // Save cursor position and scroll position when they change
   const handleCursorOrScrollChange = () => {
@@ -1329,6 +1305,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
             onChangeFolder={onOpenSetup}
             onCreateDocument={onCreateDocument}
             isLoading={isLoadingDocuments}
+            documentTaskCounts={documentTaskCounts}
           />
         </div>
       )}

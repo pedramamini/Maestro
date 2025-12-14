@@ -366,6 +366,7 @@ export default function MaestroConsole() {
   const [autoRunContent, setAutoRunContent] = useState<string>('');
   const [autoRunContentVersion, setAutoRunContentVersion] = useState(0);  // Incremented on external file changes
   const [autoRunIsLoadingDocuments, setAutoRunIsLoadingDocuments] = useState(false);
+  const [autoRunDocumentTaskCounts, setAutoRunDocumentTaskCounts] = useState<Map<string, { completed: number; total: number }>>(new Map());
 
   // Restore focus when LogViewer closes to ensure global hotkeys work
   useEffect(() => {
@@ -2340,6 +2341,39 @@ export default function MaestroConsole() {
     }
   }, [shortcutsHelpOpen]);
 
+  // Helper to count tasks in document content
+  const countTasksInContent = useCallback((content: string): { completed: number; total: number } => {
+    const completedRegex = /^[\s]*[-*]\s*\[x\]/gim;
+    const uncheckedRegex = /^[\s]*[-*]\s*\[\s\]/gim;
+    const completedMatches = content.match(completedRegex) || [];
+    const uncheckedMatches = content.match(uncheckedRegex) || [];
+    const completed = completedMatches.length;
+    const total = completed + uncheckedMatches.length;
+    return { completed, total };
+  }, []);
+
+  // Load task counts for all documents
+  const loadTaskCounts = useCallback(async (folderPath: string, documents: string[]) => {
+    const counts = new Map<string, { completed: number; total: number }>();
+
+    // Load content and count tasks for each document in parallel
+    await Promise.all(documents.map(async (docPath) => {
+      try {
+        const result = await window.maestro.autorun.readDoc(folderPath, docPath + '.md');
+        if (result.success && result.content) {
+          const taskCount = countTasksInContent(result.content);
+          if (taskCount.total > 0) {
+            counts.set(docPath, taskCount);
+          }
+        }
+      } catch {
+        // Ignore errors for individual documents
+      }
+    }));
+
+    return counts;
+  }, [countTasksInContent]);
+
   // Load Auto Run document list and content when session changes or autorun tab becomes active
   useEffect(() => {
     const loadAutoRunData = async () => {
@@ -2347,6 +2381,7 @@ export default function MaestroConsole() {
         setAutoRunDocumentList([]);
         setAutoRunDocumentTree([]);
         setAutoRunContent('');
+        setAutoRunDocumentTaskCounts(new Map());
         return;
       }
 
@@ -2354,8 +2389,13 @@ export default function MaestroConsole() {
       setAutoRunIsLoadingDocuments(true);
       const listResult = await window.maestro.autorun.listDocs(activeSession.autoRunFolderPath);
       if (listResult.success) {
-        setAutoRunDocumentList(listResult.files || []);
+        const files = listResult.files || [];
+        setAutoRunDocumentList(files);
         setAutoRunDocumentTree((listResult.tree as Array<{ name: string; type: 'file' | 'folder'; path: string; children?: unknown[] }>) || []);
+
+        // Load task counts for all documents
+        const counts = await loadTaskCounts(activeSession.autoRunFolderPath, files);
+        setAutoRunDocumentTaskCounts(counts);
       }
       setAutoRunIsLoadingDocuments(false);
 
@@ -2376,7 +2416,7 @@ export default function MaestroConsole() {
     };
 
     loadAutoRunData();
-  }, [activeSessionId, activeSession?.autoRunFolderPath, activeSession?.autoRunSelectedFile]);
+  }, [activeSessionId, activeSession?.autoRunFolderPath, activeSession?.autoRunSelectedFile, loadTaskCounts]);
 
   // File watching for Auto Run - watch whenever a folder is configured
   // Updates reflect immediately whether from batch runs, terminal commands, or external editors
@@ -2398,8 +2438,13 @@ export default function MaestroConsole() {
       // Reload document list for any change (in case files added/removed)
       const listResult = await window.maestro.autorun.listDocs(folderPath);
       if (listResult.success) {
-        setAutoRunDocumentList(listResult.files || []);
+        const files = listResult.files || [];
+        setAutoRunDocumentList(files);
         setAutoRunDocumentTree((listResult.tree as Array<{ name: string; type: 'file' | 'folder'; path: string; children?: unknown[] }>) || []);
+
+        // Reload task counts for all documents
+        const counts = await loadTaskCounts(folderPath, files);
+        setAutoRunDocumentTaskCounts(counts);
       }
 
       // If we have a selected document and it matches the changed file, reload its content
@@ -2421,7 +2466,7 @@ export default function MaestroConsole() {
       window.maestro.autorun.unwatchFolder(folderPath);
       unsubscribe();
     };
-  }, [activeSession?.autoRunFolderPath, activeSession?.autoRunSelectedFile]);
+  }, [activeSession?.autoRunFolderPath, activeSession?.autoRunSelectedFile, loadTaskCounts]);
 
   // Auto-scroll logs
   const activeTabLogs = activeSession ? getActiveTab(activeSession)?.logs : undefined;
@@ -5671,6 +5716,7 @@ export default function MaestroConsole() {
             autoRunContent={autoRunContent}
             autoRunContentVersion={autoRunContentVersion}
             autoRunIsLoadingDocuments={autoRunIsLoadingDocuments}
+            autoRunDocumentTaskCounts={autoRunDocumentTaskCounts}
             onAutoRunContentChange={handleAutoRunContentChange}
             onAutoRunModeChange={handleAutoRunModeChange}
             onAutoRunStateChange={handleAutoRunStateChange}

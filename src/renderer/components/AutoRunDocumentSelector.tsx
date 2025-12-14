@@ -10,6 +10,12 @@ export interface DocTreeNode {
   children?: DocTreeNode[];
 }
 
+// Task counts for a document: { completed, total }
+export interface DocumentTaskCount {
+  completed: number;
+  total: number;
+}
+
 interface AutoRunDocumentSelectorProps {
   theme: Theme;
   documents: string[];  // List of document filenames (without .md extension) - flat list for backwards compat
@@ -20,6 +26,7 @@ interface AutoRunDocumentSelectorProps {
   onChangeFolder: () => void;
   onCreateDocument: (filename: string) => Promise<boolean>;  // Returns true if created successfully
   isLoading?: boolean;
+  documentTaskCounts?: Map<string, DocumentTaskCount>;  // Task counts per document path
 }
 
 export function AutoRunDocumentSelector({
@@ -32,6 +39,7 @@ export function AutoRunDocumentSelector({
   onChangeFolder,
   onCreateDocument,
   isLoading = false,
+  documentTaskCounts,
 }: AutoRunDocumentSelectorProps) {
   const [isOpen, setIsOpen] = useState(false);
   const [showCreateModal, setShowCreateModal] = useState(false);
@@ -70,6 +78,17 @@ export function AutoRunDocumentSelector({
     const parts = path.split('/');
     return parts[parts.length - 1];
   };
+
+  // Get percentage display for a document's task completion
+  const getTaskPercentage = (docPath: string): number | null => {
+    if (!documentTaskCounts) return null;
+    const counts = documentTaskCounts.get(docPath);
+    if (!counts || counts.total === 0) return null;
+    return Math.round((counts.completed / counts.total) * 100);
+  };
+
+  // Get the selected document's task percentage for the button
+  const selectedTaskPercentage = selectedDocument ? getTaskPercentage(selectedDocument) : null;
 
   // Close dropdown when clicking outside
   useEffect(() => {
@@ -199,18 +218,30 @@ export function AutoRunDocumentSelector({
     }
 
     // File node
+    const taskPct = getTaskPercentage(node.path);
     return (
       <button
         key={node.path}
         onClick={() => handleSelectDocument(node.path)}
-        className="w-full text-left py-1.5 text-sm transition-colors hover:bg-white/5"
+        className="w-full flex items-center py-1.5 pr-3 text-sm transition-colors hover:bg-white/5"
         style={{
           paddingLeft,
           color: node.path === selectedDocument ? theme.colors.accent : theme.colors.textMain,
           backgroundColor: node.path === selectedDocument ? theme.colors.bgActivity : 'transparent',
         }}
       >
-        {node.name}.md
+        {/* Fixed-width percentage column for alignment */}
+        <span
+          className="shrink-0 text-xs mr-2 px-1.5 py-0.5 rounded text-right"
+          style={{
+            width: '40px',
+            backgroundColor: taskPct !== null ? (taskPct === 100 ? theme.colors.success : theme.colors.bgHover) : 'transparent',
+            color: taskPct !== null ? (taskPct === 100 ? '#000' : theme.colors.textDim) : 'transparent',
+          }}
+        >
+          {taskPct !== null ? `${taskPct}%` : ''}
+        </span>
+        <span className="truncate">{node.name}.md</span>
       </button>
     );
   };
@@ -230,8 +261,19 @@ export function AutoRunDocumentSelector({
               border: `1px solid ${theme.colors.border}`,
             }}
           >
-            <span className="truncate min-w-0 flex-1">
-              {selectedDocument ? `${selectedDocument}.md` : 'Select a document...'}
+            <span className="truncate min-w-0 flex-1 flex items-center gap-2">
+              {selectedTaskPercentage !== null && (
+                <span
+                  className="shrink-0 text-xs px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: selectedTaskPercentage === 100 ? theme.colors.success : theme.colors.bgHover,
+                    color: selectedTaskPercentage === 100 ? '#000' : theme.colors.textDim,
+                  }}
+                >
+                  {selectedTaskPercentage}%
+                </span>
+              )}
+              <span className="truncate">{selectedDocument ? `${selectedDocument}.md` : 'Select a document...'}</span>
             </span>
             <ChevronDown
               className={`w-4 h-4 ml-2 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
@@ -239,15 +281,17 @@ export function AutoRunDocumentSelector({
             />
           </button>
 
-          {/* Dropdown Menu */}
+          {/* Dropdown Menu - extends right under the action buttons for more width */}
           {isOpen && (
             <div
-              className="absolute top-full left-0 right-0 mt-1 rounded shadow-lg overflow-hidden z-50"
+              className="absolute top-full left-0 mt-1 rounded shadow-lg overflow-hidden z-50"
               style={{
                 backgroundColor: theme.colors.bgSidebar,
                 border: `1px solid ${theme.colors.border}`,
-                maxHeight: '300px',
+                maxHeight: '450px',
                 overflowY: 'auto',
+                minWidth: '100%',
+                width: 'calc(100% + 120px)', // Extend under the +, refresh, and folder buttons
               }}
             >
               {documents.length === 0 ? (
@@ -264,19 +308,33 @@ export function AutoRunDocumentSelector({
                 </div>
               ) : (
                 // Fallback to flat list
-                documents.map((doc) => (
-                  <button
-                    key={doc}
-                    onClick={() => handleSelectDocument(doc)}
-                    className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-white/5"
-                    style={{
-                      color: doc === selectedDocument ? theme.colors.accent : theme.colors.textMain,
-                      backgroundColor: doc === selectedDocument ? theme.colors.bgActivity : 'transparent',
-                    }}
-                  >
-                    {doc}.md
-                  </button>
-                ))
+                documents.map((doc) => {
+                  const taskPct = getTaskPercentage(doc);
+                  return (
+                    <button
+                      key={doc}
+                      onClick={() => handleSelectDocument(doc)}
+                      className="w-full flex items-center px-3 py-2 text-sm transition-colors hover:bg-white/5"
+                      style={{
+                        color: doc === selectedDocument ? theme.colors.accent : theme.colors.textMain,
+                        backgroundColor: doc === selectedDocument ? theme.colors.bgActivity : 'transparent',
+                      }}
+                    >
+                      {/* Fixed-width percentage column for alignment */}
+                      <span
+                        className="shrink-0 text-xs mr-2 px-1.5 py-0.5 rounded text-right"
+                        style={{
+                          width: '40px',
+                          backgroundColor: taskPct !== null ? (taskPct === 100 ? theme.colors.success : theme.colors.bgHover) : 'transparent',
+                          color: taskPct !== null ? (taskPct === 100 ? '#000' : theme.colors.textDim) : 'transparent',
+                        }}
+                      >
+                        {taskPct !== null ? `${taskPct}%` : ''}
+                      </span>
+                      <span className="truncate">{doc}.md</span>
+                    </button>
+                  );
+                })
               )}
 
               {/* Divider */}

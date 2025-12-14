@@ -1576,12 +1576,9 @@ describe('AgentSessionsModal', () => {
   });
 
   describe('Starred Sessions', () => {
-    it('should load starred sessions from settings', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key) => {
-        if (key === 'starredClaudeSessions:/test/project') {
-          return ['session-1'];
-        }
-        return undefined;
+    it('should load starred sessions from session origins', async () => {
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({
+        'session-1': { origin: 'user', starred: true },
       });
 
       const mockSessions = [
@@ -1605,16 +1602,13 @@ describe('AgentSessionsModal', () => {
       );
 
       await waitFor(() => {
-        expect(window.maestro.settings.get).toHaveBeenCalledWith('starredClaudeSessions:/test/project');
+        expect(window.maestro.claude.getSessionOrigins).toHaveBeenCalledWith('/test/project');
       });
     });
 
     it('should sort starred sessions to top', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key) => {
-        if (key === 'starredClaudeSessions:/test/project') {
-          return ['session-2'];
-        }
-        return undefined;
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({
+        'session-2': { origin: 'user', starred: true },
       });
 
       const now = new Date();
@@ -1659,6 +1653,8 @@ describe('AgentSessionsModal', () => {
     });
 
     it('should toggle star on click', async () => {
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({});
+
       const mockSessions = [createMockClaudeSession({ sessionId: 'session-1' })];
       vi.mocked(window.maestro.claude.listSessionsPaginated).mockResolvedValue({
         sessions: mockSessions,
@@ -1684,19 +1680,17 @@ describe('AgentSessionsModal', () => {
 
       await waitFor(() => {
         expect(screen.getByTitle('Remove from favorites')).toBeInTheDocument();
-        expect(window.maestro.settings.set).toHaveBeenCalledWith(
-          'starredClaudeSessions:/test/project',
-          ['session-1']
+        expect(window.maestro.claude.updateSessionStarred).toHaveBeenCalledWith(
+          '/test/project',
+          'session-1',
+          true
         );
       });
     });
 
     it('should unstar session on second click', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key) => {
-        if (key === 'starredClaudeSessions:/test/project') {
-          return ['session-1'];
-        }
-        return undefined;
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({
+        'session-1': { origin: 'user', starred: true },
       });
 
       const mockSessions = [createMockClaudeSession({ sessionId: 'session-1' })];
@@ -1724,14 +1718,17 @@ describe('AgentSessionsModal', () => {
 
       await waitFor(() => {
         expect(screen.getByTitle('Add to favorites')).toBeInTheDocument();
-        expect(window.maestro.settings.set).toHaveBeenCalledWith(
-          'starredClaudeSessions:/test/project',
-          []
+        expect(window.maestro.claude.updateSessionStarred).toHaveBeenCalledWith(
+          '/test/project',
+          'session-1',
+          false
         );
       });
     });
 
     it('should not open session view when clicking star', async () => {
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({});
+
       const mockSessions = [createMockClaudeSession({ sessionId: 'session-1' })];
       vi.mocked(window.maestro.claude.listSessionsPaginated).mockResolvedValue({
         sessions: mockSessions,
@@ -2252,11 +2249,8 @@ describe('AgentSessionsModal', () => {
     });
 
     it('should apply warning color to starred icon', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key) => {
-        if (key === 'starredClaudeSessions:/test/project') {
-          return ['session-1'];
-        }
-        return undefined;
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({
+        'session-1': { origin: 'user', starred: true },
       });
 
       const mockSessions = [createMockClaudeSession({ sessionId: 'session-1' })];
