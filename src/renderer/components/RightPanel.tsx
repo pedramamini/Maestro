@@ -1,5 +1,5 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef, useState, useCallback } from 'react';
-import { PanelRightClose, PanelRightOpen, Loader2 } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, Loader2, GitBranch } from 'lucide-react';
 import type { Session, Theme, RightPanelTab, Shortcut, BatchRunState } from '../types';
 import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
@@ -515,6 +515,9 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
               <span className="text-xs font-bold uppercase" style={{ color: theme.colors.textMain }}>
                 {currentSessionBatchState.isStopping ? 'Stopping...' : 'Auto Run Active'}
               </span>
+              {currentSessionBatchState.worktreeActive && (
+                <GitBranch className="w-4 h-4" style={{ color: theme.colors.warning }} title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`} />
+              )}
             </div>
             {/* Elapsed time */}
             {elapsedTime && !currentSessionBatchState.isStopping && (

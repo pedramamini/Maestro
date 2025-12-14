@@ -6,6 +6,7 @@
  * When AutoRun is active, shows a special AutoRun pill with total elapsed time instead.
  */
 import React, { memo, useState, useEffect } from 'react';
+import { GitBranch } from 'lucide-react';
 import type { Session, Theme, AITab, BatchRunState } from '../types';
 import { formatTokensCompact } from '../utils/formatters';
 
@@ -188,6 +189,15 @@ const AutoRunPill = memo(({
         >
           {isStopping ? 'AutoRun Stopping...' : 'AutoRun'}
         </span>
+
+        {/* Worktree indicator */}
+        {autoRunState.worktreeActive && (
+          <GitBranch
+            className="w-3.5 h-3.5 shrink-0"
+            style={{ color: theme.colors.accent }}
+            title={`Worktree: ${autoRunState.worktreeBranch || 'active'}`}
+          />
+        )}
 
         {/* Divider */}
         <div
