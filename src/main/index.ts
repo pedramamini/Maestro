@@ -10,6 +10,7 @@ import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { getThemeById } from './themes';
 import Store from 'electron-store';
+import { getHistoryManager } from './history-manager';
 import { registerGitHandlers, registerAutorunHandlers, registerPlaybooksHandlers, registerHistoryHandlers, registerAgentsHandlers, registerProcessHandlers, registerPersistenceHandlers, registerSystemHandlers, setupLoggerEventForwarding } from './ipc/handlers';
 import { DEMO_MODE, DEMO_DATA_PATH, CLAUDE_SESSION_PARSE_LIMITS, CLAUDE_PRICING } from './constants';
 import {
@@ -604,6 +605,22 @@ app.whenReady().then(() => {
 
   logger.info('Core services initialized', 'Startup');
 
+  // Initialize history manager (handles migration from legacy format if needed)
+  logger.info('Initializing history manager', 'Startup');
+  const historyManager = getHistoryManager();
+  historyManager.initialize().then(() => {
+    logger.info('History manager initialized', 'Startup');
+    // Start watching history directory for external changes (from CLI, etc.)
+    historyManager.startWatching((sessionId) => {
+      logger.debug(`History file changed for session ${sessionId}, notifying renderer`, 'HistoryWatcher');
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        mainWindow.webContents.send('history:externalChange', sessionId);
+      }
+    });
+  }).catch((error) => {
+    logger.error(`Failed to initialize history manager: ${error}`, 'Startup');
+  });
+
   // Set up IPC handlers
   logger.debug('Setting up IPC handlers', 'Startup');
   setupIpcHandlers();
@@ -640,11 +657,13 @@ app.on('window-all-closed', () => {
 
 app.on('before-quit', async () => {
   logger.info('Application shutting down', 'Shutdown');
-  // Stop history file watcher
+  // Stop history file watcher (legacy)
   if (historyFileWatcherInterval) {
     clearInterval(historyFileWatcherInterval);
     historyFileWatcherInterval = null;
   }
+  // Stop new history manager watcher
+  getHistoryManager().stopWatching();
   // Stop CLI activity watcher
   if (cliActivityWatcher) {
     cliActivityWatcher.close();
