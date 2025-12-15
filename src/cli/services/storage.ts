@@ -6,6 +6,20 @@ import * as path from 'path';
 import * as os from 'os';
 import type { Group, SessionInfo, HistoryEntry } from '../../shared/types';
 
+// Per-session history constants (must match src/main/history-manager.ts)
+const HISTORY_VERSION = 1;
+const MAX_ENTRIES_PER_SESSION = 5000;
+
+/**
+ * Per-session history file format (must match src/main/history-manager.ts)
+ */
+interface HistoryFileData {
+  version: number;
+  sessionId: string;
+  projectPath: string;
+  entries: HistoryEntry[];
+}
+
 // Get the Maestro config directory path
 function getConfigDir(): string {
   const platform = os.platform();
@@ -77,11 +91,101 @@ export function readGroups(): Group[] {
   return data?.groups || [];
 }
 
+// ============================================================================
+// Per-Session History Helpers
+// ============================================================================
+
+/**
+ * Check if migration to per-session history format has been completed
+ */
+function hasMigrated(): boolean {
+  const markerPath = path.join(getConfigDir(), 'history-migrated.json');
+  return fs.existsSync(markerPath);
+}
+
+/**
+ * Get the history directory path
+ */
+function getHistoryDir(): string {
+  return path.join(getConfigDir(), 'history');
+}
+
+/**
+ * Get file path for a session's history file
+ */
+function getSessionHistoryPath(sessionId: string): string {
+  // Sanitize sessionId for filesystem safety (same logic as HistoryManager)
+  const safeId = sessionId.replace(/[^a-zA-Z0-9_-]/g, '_');
+  return path.join(getHistoryDir(), `${safeId}.json`);
+}
+
+/**
+ * Read history entries for a specific session (new per-session format)
+ */
+function readSessionHistory(sessionId: string): HistoryEntry[] {
+  const filePath = getSessionHistoryPath(sessionId);
+  if (!fs.existsSync(filePath)) {
+    return [];
+  }
+  try {
+    const data: HistoryFileData = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+    return data.entries || [];
+  } catch {
+    return [];
+  }
+}
+
+/**
+ * List all sessions that have history files
+ */
+function listSessionsWithHistory(): string[] {
+  const historyDir = getHistoryDir();
+  if (!fs.existsSync(historyDir)) {
+    return [];
+  }
+  return fs
+    .readdirSync(historyDir)
+    .filter((f) => f.endsWith('.json'))
+    .map((f) => f.replace('.json', ''));
+}
+
 /**
  * Read history entries from storage
- * Optionally filter by project path or session ID
+ * Supports both legacy single-file and new per-session format.
+ * Optionally filter by project path or session ID.
  */
 export function readHistory(projectPath?: string, sessionId?: string): HistoryEntry[] {
+  // If migrated and sessionId provided, use new per-session format
+  if (hasMigrated()) {
+    if (sessionId) {
+      // Direct lookup for specific session
+      return readSessionHistory(sessionId);
+    }
+
+    if (projectPath) {
+      // Get all entries for sessions in this project
+      const sessions = listSessionsWithHistory();
+      const entries: HistoryEntry[] = [];
+      for (const sid of sessions) {
+        const sessionEntries = readSessionHistory(sid);
+        // Check if this session belongs to the project (first entry has projectPath)
+        if (sessionEntries.length > 0 && sessionEntries[0].projectPath === projectPath) {
+          entries.push(...sessionEntries);
+        }
+      }
+      return entries.sort((a, b) => b.timestamp - a.timestamp);
+    }
+
+    // Return all entries (global view)
+    const sessions = listSessionsWithHistory();
+    const allEntries: HistoryEntry[] = [];
+    for (const sid of sessions) {
+      allEntries.push(...readSessionHistory(sid));
+    }
+    return allEntries.sort((a, b) => b.timestamp - a.timestamp);
+  }
+
+  // Fall back to legacy format
   const data = readStoreFile<HistoryStore>('maestro-history.json');
   let entries = data?.entries || [];
 
@@ -258,15 +362,64 @@ export function getConfigDirectory(): string {
 
 /**
  * Add a history entry
+ * Supports both legacy single-file and new per-session format.
  */
 export function addHistoryEntry(entry: HistoryEntry): void {
   try {
-    const filePath = path.join(getConfigDir(), 'maestro-history.json');
-    const data = readStoreFile<HistoryStore>('maestro-history.json') || { entries: [] };
+    if (hasMigrated()) {
+      // Use new per-session format
+      const sessionId = entry.sessionId || '_orphaned';
+      const historyDir = getHistoryDir();
 
-    data.entries.unshift(entry); // Add to beginning (most recent first)
+      // Ensure history directory exists
+      if (!fs.existsSync(historyDir)) {
+        fs.mkdirSync(historyDir, { recursive: true });
+      }
 
-    fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+      const filePath = getSessionHistoryPath(sessionId);
+      let data: HistoryFileData;
+
+      if (fs.existsSync(filePath)) {
+        try {
+          data = JSON.parse(fs.readFileSync(filePath, 'utf-8'));
+        } catch {
+          data = {
+            version: HISTORY_VERSION,
+            sessionId,
+            projectPath: entry.projectPath,
+            entries: [],
+          };
+        }
+      } else {
+        data = {
+          version: HISTORY_VERSION,
+          sessionId,
+          projectPath: entry.projectPath,
+          entries: [],
+        };
+      }
+
+      // Add to beginning (most recent first)
+      data.entries.unshift(entry);
+
+      // Trim to max entries
+      if (data.entries.length > MAX_ENTRIES_PER_SESSION) {
+        data.entries = data.entries.slice(0, MAX_ENTRIES_PER_SESSION);
+      }
+
+      // Update projectPath if it changed
+      data.projectPath = entry.projectPath;
+
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    } else {
+      // Use legacy format
+      const filePath = path.join(getConfigDir(), 'maestro-history.json');
+      const data = readStoreFile<HistoryStore>('maestro-history.json') || { entries: [] };
+
+      data.entries.unshift(entry); // Add to beginning (most recent first)
+
+      fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
+    }
   } catch (error) {
     // Log error but don't throw - history writing shouldn't break playbook execution
     console.error(`[WARNING] Failed to write history entry: ${error instanceof Error ? error.message : String(error)}`);

@@ -22,6 +22,9 @@ const originalEnv = { ...process.env };
 vi.mock('fs', () => ({
   readFileSync: vi.fn(),
   writeFileSync: vi.fn(),
+  existsSync: vi.fn(),
+  readdirSync: vi.fn(),
+  mkdirSync: vi.fn(),
 }));
 
 // Mock the os module
@@ -79,6 +82,9 @@ describe('storage service', () => {
     // Default to macOS
     vi.mocked(os.platform).mockReturnValue('darwin');
     vi.mocked(os.homedir).mockReturnValue('/Users/testuser');
+    // Default to legacy mode (not migrated) by returning false for migration marker
+    vi.mocked(fs.existsSync).mockReturnValue(false);
+    vi.mocked(fs.readdirSync).mockReturnValue([]);
   });
 
   afterEach(() => {
@@ -979,6 +985,269 @@ describe('storage service', () => {
       expect(readHistory()).toEqual([]);
       expect(readSettings()).toEqual({});
       expect(readAgentConfigs()).toEqual({});
+    });
+  });
+
+  describe('per-session history (migrated mode)', () => {
+    beforeEach(() => {
+      // Enable migrated mode by making existsSync return true for migration marker
+      vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+        const pathStr = String(filepath);
+        if (pathStr.includes('history-migrated.json')) {
+          return true;
+        }
+        if (pathStr.includes('/history/')) {
+          // Check specific session file existence
+          return pathStr.includes('session-123.json') || pathStr.includes('session-456.json');
+        }
+        return false;
+      });
+    });
+
+    describe('readHistory with per-session storage', () => {
+      it('should read from session file when sessionId provided', () => {
+        const sessionHistoryData = {
+          version: 1,
+          sessionId: 'session-123',
+          projectPath: '/project/path',
+          entries: [
+            mockHistoryEntry({ id: 'e1', sessionId: 'session-123' }),
+            mockHistoryEntry({ id: 'e2', sessionId: 'session-123' }),
+          ],
+        };
+        vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(sessionHistoryData));
+
+        const result = readHistory(undefined, 'session-123');
+
+        expect(result).toHaveLength(2);
+        expect(result[0].sessionId).toBe('session-123');
+      });
+
+      it('should return empty array when session file does not exist', () => {
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json')) {
+            return true;
+          }
+          return false; // Session file doesn't exist
+        });
+
+        const result = readHistory(undefined, 'nonexistent-session');
+
+        expect(result).toEqual([]);
+      });
+
+      it('should aggregate entries by projectPath across all sessions', () => {
+        vi.mocked(fs.readdirSync).mockReturnValue([
+          'session-123.json',
+          'session-456.json',
+        ] as unknown as fs.Dirent[]);
+
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json') || pathStr.includes('/history')) {
+            return true;
+          }
+          return false;
+        });
+
+        vi.mocked(fs.readFileSync).mockImplementation((filepath) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('session-123.json')) {
+            return JSON.stringify({
+              version: 1,
+              sessionId: 'session-123',
+              projectPath: '/project/alpha',
+              entries: [mockHistoryEntry({ id: 'e1', projectPath: '/project/alpha', timestamp: 2000 })],
+            });
+          }
+          if (pathStr.includes('session-456.json')) {
+            return JSON.stringify({
+              version: 1,
+              sessionId: 'session-456',
+              projectPath: '/project/beta',
+              entries: [mockHistoryEntry({ id: 'e2', projectPath: '/project/beta', timestamp: 1000 })],
+            });
+          }
+          return '{}';
+        });
+
+        const result = readHistory('/project/alpha');
+
+        expect(result).toHaveLength(1);
+        expect(result[0].id).toBe('e1');
+      });
+
+      it('should return all entries sorted by timestamp when no filters', () => {
+        vi.mocked(fs.readdirSync).mockReturnValue([
+          'session-123.json',
+          'session-456.json',
+        ] as unknown as fs.Dirent[]);
+
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json') || pathStr.includes('/history')) {
+            return true;
+          }
+          return false;
+        });
+
+        vi.mocked(fs.readFileSync).mockImplementation((filepath) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('session-123.json')) {
+            return JSON.stringify({
+              version: 1,
+              sessionId: 'session-123',
+              projectPath: '/project/alpha',
+              entries: [mockHistoryEntry({ id: 'e1', timestamp: 1000 })],
+            });
+          }
+          if (pathStr.includes('session-456.json')) {
+            return JSON.stringify({
+              version: 1,
+              sessionId: 'session-456',
+              projectPath: '/project/beta',
+              entries: [mockHistoryEntry({ id: 'e2', timestamp: 2000 })],
+            });
+          }
+          return '{}';
+        });
+
+        const result = readHistory();
+
+        expect(result).toHaveLength(2);
+        // Most recent first
+        expect(result[0].id).toBe('e2');
+        expect(result[1].id).toBe('e1');
+      });
+    });
+
+    describe('addHistoryEntry with per-session storage', () => {
+      let consoleErrorSpy: ReturnType<typeof vi.spyOn>;
+
+      beforeEach(() => {
+        consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+      });
+
+      afterEach(() => {
+        consoleErrorSpy.mockRestore();
+      });
+
+      it('should write entry to session-specific file', () => {
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json')) {
+            return true;
+          }
+          if (pathStr.includes('/history/session-123.json')) {
+            return true;
+          }
+          return pathStr.includes('/history');
+        });
+
+        const existingData = {
+          version: 1,
+          sessionId: 'session-123',
+          projectPath: '/project',
+          entries: [mockHistoryEntry({ id: 'existing' })],
+        };
+        vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(existingData));
+
+        const newEntry = mockHistoryEntry({
+          id: 'new-entry',
+          sessionId: 'session-123',
+          projectPath: '/project',
+        });
+        addHistoryEntry(newEntry);
+
+        expect(fs.writeFileSync).toHaveBeenCalled();
+        const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
+        expect(writeCall[0]).toContain('/history/session-123.json');
+        const writtenData = JSON.parse(writeCall[1] as string);
+        expect(writtenData.entries).toHaveLength(2);
+        expect(writtenData.entries[0].id).toBe('new-entry'); // New entry at beginning
+      });
+
+      it('should create history directory if it does not exist', () => {
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json')) {
+            return true;
+          }
+          return false; // History directory doesn't exist
+        });
+
+        const newEntry = mockHistoryEntry({
+          id: 'first-entry',
+          sessionId: 'new-session',
+          projectPath: '/project',
+        });
+        addHistoryEntry(newEntry);
+
+        expect(fs.mkdirSync).toHaveBeenCalledWith(
+          expect.stringContaining('/history'),
+          { recursive: true }
+        );
+      });
+
+      it('should use _orphaned for entries without sessionId', () => {
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json')) {
+            return true;
+          }
+          return pathStr.includes('/history');
+        });
+
+        const newEntry = mockHistoryEntry({
+          id: 'orphaned-entry',
+          projectPath: '/project',
+        });
+        // Explicitly remove sessionId
+        delete (newEntry as { sessionId?: string }).sessionId;
+        addHistoryEntry(newEntry);
+
+        expect(fs.writeFileSync).toHaveBeenCalled();
+        const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
+        expect(writeCall[0]).toContain('_orphaned.json');
+      });
+
+      it('should enforce max entries limit (5000)', () => {
+        vi.mocked(fs.existsSync).mockImplementation((filepath: fs.PathLike) => {
+          const pathStr = String(filepath);
+          if (pathStr.includes('history-migrated.json')) {
+            return true;
+          }
+          return pathStr.includes('/history');
+        });
+
+        // Create 5000 existing entries
+        const existingEntries = Array.from({ length: 5000 }, (_, i) =>
+          mockHistoryEntry({ id: `entry-${i}` })
+        );
+        const existingData = {
+          version: 1,
+          sessionId: 'session-123',
+          projectPath: '/project',
+          entries: existingEntries,
+        };
+        vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(existingData));
+
+        const newEntry = mockHistoryEntry({
+          id: 'new-entry',
+          sessionId: 'session-123',
+          projectPath: '/project',
+        });
+        addHistoryEntry(newEntry);
+
+        expect(fs.writeFileSync).toHaveBeenCalled();
+        const writeCall = vi.mocked(fs.writeFileSync).mock.calls[0];
+        const writtenData = JSON.parse(writeCall[1] as string);
+        expect(writtenData.entries).toHaveLength(5000);
+        expect(writtenData.entries[0].id).toBe('new-entry'); // New entry at beginning
+        // Last entry should be trimmed
+        expect(writtenData.entries[4999].id).toBe('entry-4998');
+      });
     });
   });
 });
