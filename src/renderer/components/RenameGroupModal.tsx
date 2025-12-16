@@ -1,10 +1,7 @@
-import React, { useState, useRef } from 'react';
-import { X } from 'lucide-react';
-import data from '@emoji-mart/data';
-import Picker from '@emoji-mart/react';
+import React, { useRef } from 'react';
 import type { Theme, Group } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
-import { Modal, ModalFooter } from './ui/Modal';
+import { Modal, ModalFooter, EmojiPickerField } from './ui';
 
 interface RenameGroupModalProps {
   theme: Theme;
@@ -24,7 +21,6 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
     onClose, groups, setGroups
   } = props;
 
-  const [emojiPickerOpen, setEmojiPickerOpen] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   const handleRename = () => {
@@ -32,7 +28,6 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
       setGroups(prev => prev.map(g =>
         g.id === groupId ? { ...g, name: groupName.trim().toUpperCase(), emoji: groupEmoji } : g
       ));
-      setEmojiPickerOpen(false);
       onClose();
     }
   };
@@ -56,19 +51,12 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
     >
       <div className="flex gap-4 items-end">
         {/* Emoji Selector - Left Side */}
-        <div className="flex flex-col gap-2">
-          <label className="block text-xs font-bold opacity-70 uppercase" style={{ color: theme.colors.textMain }}>
-            Icon
-          </label>
-          <button
-            onClick={() => setEmojiPickerOpen(!emojiPickerOpen)}
-            className="p-3 rounded border bg-transparent text-3xl hover:bg-white/5 transition-colors w-16 h-[52px] flex items-center justify-center"
-            style={{ borderColor: theme.colors.border }}
-            type="button"
-          >
-            {groupEmoji}
-          </button>
-        </div>
+        <EmojiPickerField
+          theme={theme}
+          value={groupEmoji}
+          onChange={setGroupEmoji}
+          restoreFocusRef={inputRef}
+        />
 
         {/* Group Name Input - Right Side */}
         <div className="flex-1 flex flex-col gap-2">
@@ -89,55 +77,10 @@ export function RenameGroupModal(props: RenameGroupModalProps) {
             placeholder="Enter group name..."
             className="w-full p-3 rounded border bg-transparent outline-none h-[52px]"
             style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-            autoFocus={!emojiPickerOpen}
+            autoFocus
           />
         </div>
       </div>
-
-      {/* Emoji Picker Overlay */}
-      {emojiPickerOpen && (
-        <div
-          className="fixed inset-0 bg-black/50 backdrop-blur-sm flex items-center justify-center z-[60]"
-          onClick={() => setEmojiPickerOpen(false)}
-          onKeyDown={(e) => {
-            if (e.key === 'Escape') {
-              e.preventDefault();
-              e.stopPropagation();
-              setEmojiPickerOpen(false);
-            }
-          }}
-          tabIndex={0}
-          ref={(el) => el?.focus()}
-        >
-          <div
-            className="rounded-lg border-2 shadow-2xl overflow-visible relative"
-            style={{ borderColor: theme.colors.accent, backgroundColor: theme.colors.bgSidebar }}
-            onClick={(e) => e.stopPropagation()}
-          >
-            {/* Close button */}
-            <button
-              onClick={() => setEmojiPickerOpen(false)}
-              className="absolute -top-3 -right-3 z-10 p-2 rounded-full shadow-lg hover:scale-110 transition-transform"
-              style={{ backgroundColor: theme.colors.bgSidebar, color: theme.colors.textMain, border: `2px solid ${theme.colors.border}` }}
-            >
-              <X className="w-4 h-4" />
-            </button>
-            <Picker
-              data={data}
-              onEmojiSelect={(emoji: any) => {
-                setGroupEmoji(emoji.native);
-                setEmojiPickerOpen(false);
-              }}
-              theme={theme.mode}
-              previewPosition="none"
-              searchPosition="sticky"
-              perLine={9}
-              set="native"
-              autoFocus
-            />
-          </div>
-        </div>
-      )}
     </Modal>
   );
 }

@@ -151,8 +151,10 @@ describe('RenameGroupModal', () => {
     it('should display current emoji in emoji button', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      // EmojiPickerField uses aria-label for accessibility
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       expect(emojiButton).toBeInTheDocument();
+      expect(emojiButton).toHaveTextContent('📁');
     });
 
     it('should display current group name in input', () => {
@@ -211,7 +213,7 @@ describe('RenameGroupModal', () => {
     it('should show emoji picker when emoji button is clicked', async () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -222,7 +224,7 @@ describe('RenameGroupModal', () => {
     it('should toggle emoji picker on repeated clicks', async () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
 
       // Open
       await act(async () => {
@@ -241,7 +243,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -260,7 +262,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -282,7 +284,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -309,7 +311,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -325,7 +327,7 @@ describe('RenameGroupModal', () => {
 
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} theme={lightTheme} />);
 
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -668,7 +670,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -698,7 +700,7 @@ describe('RenameGroupModal', () => {
       );
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -719,7 +721,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Open emoji picker
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -742,7 +744,7 @@ describe('RenameGroupModal', () => {
     it('should handle multiple rapid emoji selections', async () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -760,7 +762,7 @@ describe('RenameGroupModal', () => {
     it('should not propagate clicks inside emoji picker container', async () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       await act(async () => {
         fireEvent.click(emojiButton);
       });
@@ -805,7 +807,7 @@ describe('RenameGroupModal', () => {
       renderWithLayerStack(<RenameGroupModal {...defaultProps()} />);
 
       // Emoji button should have type="button" to prevent form submission
-      const emojiButton = screen.getByRole('button', { name: '📁' });
+      const emojiButton = screen.getByRole('button', { name: /select emoji/i });
       expect(emojiButton).toHaveAttribute('type', 'button');
     });
   });
