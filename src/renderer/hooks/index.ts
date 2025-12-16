@@ -33,6 +33,7 @@ export { useInputProcessing, DEFAULT_IMAGE_ONLY_PROMPT } from './useInputProcess
 export { useModalLayer } from './useModalLayer';
 export { useClickOutside } from './useClickOutside';
 export { useListNavigation } from './useListNavigation';
+export { useExpandedSet } from './useExpandedSet';
 
 export type { UseSettingsReturn } from './useSettings';
 export type { UseSessionManagerReturn } from './useSessionManager';
@@ -117,3 +118,4 @@ export type {
 export type { UseModalLayerOptions } from './useModalLayer';
 export type { UseClickOutsideOptions } from './useClickOutside';
 export type { UseListNavigationOptions, UseListNavigationReturn } from './useListNavigation';
+export type { UseExpandedSetOptions, UseExpandedSetReturn } from './useExpandedSet';
