@@ -47,6 +47,82 @@ function parseDataUrl(dataUrl: string): { base64: string; mediaType: string } | 
 }
 
 /**
+ * Usage statistics extracted from model usage data
+ */
+export interface UsageStats {
+  inputTokens: number;
+  outputTokens: number;
+  cacheReadInputTokens: number;
+  cacheCreationInputTokens: number;
+  totalCostUsd: number;
+  contextWindow: number;
+}
+
+/**
+ * Model statistics from Claude Code modelUsage response
+ */
+export interface ModelStats {
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheReadInputTokens?: number;
+  cacheCreationInputTokens?: number;
+  contextWindow?: number;
+}
+
+/**
+ * Aggregate token counts from modelUsage for accurate context tracking.
+ * modelUsage contains per-model breakdown with actual context tokens (including cache hits).
+ * Falls back to top-level usage if modelUsage isn't available.
+ *
+ * @param modelUsage - Per-model statistics object from Claude Code response
+ * @param usage - Top-level usage object (fallback)
+ * @param totalCostUsd - Total cost from response
+ * @returns Aggregated usage statistics
+ */
+export function aggregateModelUsage(
+  modelUsage: Record<string, ModelStats> | undefined,
+  usage: { input_tokens?: number; output_tokens?: number; cache_read_input_tokens?: number; cache_creation_input_tokens?: number } = {},
+  totalCostUsd: number = 0
+): UsageStats {
+  let aggregatedInputTokens = 0;
+  let aggregatedOutputTokens = 0;
+  let aggregatedCacheReadTokens = 0;
+  let aggregatedCacheCreationTokens = 0;
+  let contextWindow = 200000; // Default for Claude
+
+  if (modelUsage) {
+    for (const modelStats of Object.values(modelUsage)) {
+      aggregatedInputTokens += modelStats.inputTokens || 0;
+      aggregatedOutputTokens += modelStats.outputTokens || 0;
+      aggregatedCacheReadTokens += modelStats.cacheReadInputTokens || 0;
+      aggregatedCacheCreationTokens += modelStats.cacheCreationInputTokens || 0;
+      // Use the highest context window from any model
+      if (modelStats.contextWindow && modelStats.contextWindow > contextWindow) {
+        contextWindow = modelStats.contextWindow;
+      }
+    }
+  }
+
+  // Fall back to top-level usage if modelUsage isn't available
+  // This handles older CLI versions or different output formats
+  if (aggregatedInputTokens === 0 && aggregatedOutputTokens === 0) {
+    aggregatedInputTokens = usage.input_tokens || 0;
+    aggregatedOutputTokens = usage.output_tokens || 0;
+    aggregatedCacheReadTokens = usage.cache_read_input_tokens || 0;
+    aggregatedCacheCreationTokens = usage.cache_creation_input_tokens || 0;
+  }
+
+  return {
+    inputTokens: aggregatedInputTokens,
+    outputTokens: aggregatedOutputTokens,
+    cacheReadInputTokens: aggregatedCacheReadTokens,
+    cacheCreationInputTokens: aggregatedCacheCreationTokens,
+    totalCostUsd,
+    contextWindow
+  };
+}
+
+/**
  * Build a stream-json message for Claude Code with images and text
  */
 function buildStreamJsonMessage(prompt: string, images: string[]): string {
@@ -340,46 +416,12 @@ export class ProcessManager extends EventEmitter {
                   this.emit('slash-commands', sessionId, msg.slash_commands);
                 }
                 // Extract usage statistics from stream-json messages (typically in 'result' type)
-                // Note: We need to aggregate token counts from modelUsage for accurate context window tracking
                 if (msg.modelUsage || msg.usage || msg.total_cost_usd !== undefined) {
-                  const usage = msg.usage || {};
-
-                  // Aggregate token counts from modelUsage for accurate context tracking
-                  let aggregatedInputTokens = 0;
-                  let aggregatedOutputTokens = 0;
-                  let aggregatedCacheReadTokens = 0;
-                  let aggregatedCacheCreationTokens = 0;
-                  let contextWindow = 200000; // Default for Claude
-
-                  if (msg.modelUsage) {
-                    for (const modelStats of Object.values(msg.modelUsage) as any[]) {
-                      aggregatedInputTokens += modelStats.inputTokens || 0;
-                      aggregatedOutputTokens += modelStats.outputTokens || 0;
-                      aggregatedCacheReadTokens += modelStats.cacheReadInputTokens || 0;
-                      aggregatedCacheCreationTokens += modelStats.cacheCreationInputTokens || 0;
-                      if (modelStats.contextWindow && modelStats.contextWindow > contextWindow) {
-                        contextWindow = modelStats.contextWindow;
-                      }
-                    }
-                  }
-
-                  // Fall back to top-level usage if modelUsage isn't available
-                  if (aggregatedInputTokens === 0 && aggregatedOutputTokens === 0) {
-                    aggregatedInputTokens = usage.input_tokens || 0;
-                    aggregatedOutputTokens = usage.output_tokens || 0;
-                    aggregatedCacheReadTokens = usage.cache_read_input_tokens || 0;
-                    aggregatedCacheCreationTokens = usage.cache_creation_input_tokens || 0;
-                  }
-
-                  const usageStats = {
-                    inputTokens: aggregatedInputTokens,
-                    outputTokens: aggregatedOutputTokens,
-                    cacheReadInputTokens: aggregatedCacheReadTokens,
-                    cacheCreationInputTokens: aggregatedCacheCreationTokens,
-                    totalCostUsd: msg.total_cost_usd || 0,
-                    contextWindow
-                  };
-
+                  const usageStats = aggregateModelUsage(
+                    msg.modelUsage,
+                    msg.usage || {},
+                    msg.total_cost_usd || 0
+                  );
                   this.emit('usage', sessionId, usageStats);
                 }
               } catch (e) {
@@ -441,51 +483,12 @@ export class ProcessManager extends EventEmitter {
               }
 
               // Extract and emit usage statistics
-              // Note: We need to aggregate token counts from modelUsage for accurate context window tracking
-              // The top-level usage object shows billable/new tokens, not total context tokens
               if (jsonResponse.modelUsage || jsonResponse.usage || jsonResponse.total_cost_usd !== undefined) {
-                const usage = jsonResponse.usage || {};
-
-                // Aggregate token counts from modelUsage for accurate context tracking
-                // modelUsage contains per-model breakdown with actual context tokens (including cache hits)
-                let aggregatedInputTokens = 0;
-                let aggregatedOutputTokens = 0;
-                let aggregatedCacheReadTokens = 0;
-                let aggregatedCacheCreationTokens = 0;
-                let contextWindow = 200000; // Default for Claude
-
-                if (jsonResponse.modelUsage) {
-                  for (const modelStats of Object.values(jsonResponse.modelUsage) as any[]) {
-                    // inputTokens in modelUsage includes the full context (not just new tokens)
-                    aggregatedInputTokens += modelStats.inputTokens || 0;
-                    aggregatedOutputTokens += modelStats.outputTokens || 0;
-                    aggregatedCacheReadTokens += modelStats.cacheReadInputTokens || 0;
-                    aggregatedCacheCreationTokens += modelStats.cacheCreationInputTokens || 0;
-                    // Use the highest context window from any model
-                    if (modelStats.contextWindow && modelStats.contextWindow > contextWindow) {
-                      contextWindow = modelStats.contextWindow;
-                    }
-                  }
-                }
-
-                // Fall back to top-level usage if modelUsage isn't available
-                // This handles older CLI versions or different output formats
-                if (aggregatedInputTokens === 0 && aggregatedOutputTokens === 0) {
-                  aggregatedInputTokens = usage.input_tokens || 0;
-                  aggregatedOutputTokens = usage.output_tokens || 0;
-                  aggregatedCacheReadTokens = usage.cache_read_input_tokens || 0;
-                  aggregatedCacheCreationTokens = usage.cache_creation_input_tokens || 0;
-                }
-
-                const usageStats = {
-                  inputTokens: aggregatedInputTokens,
-                  outputTokens: aggregatedOutputTokens,
-                  cacheReadInputTokens: aggregatedCacheReadTokens,
-                  cacheCreationInputTokens: aggregatedCacheCreationTokens,
-                  totalCostUsd: jsonResponse.total_cost_usd || 0,
-                  contextWindow
-                };
-
+                const usageStats = aggregateModelUsage(
+                  jsonResponse.modelUsage,
+                  jsonResponse.usage || {},
+                  jsonResponse.total_cost_usd || 0
+                );
                 this.emit('usage', sessionId, usageStats);
               }
             } catch (error) {
