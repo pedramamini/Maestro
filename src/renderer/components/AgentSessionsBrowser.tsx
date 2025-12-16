@@ -9,6 +9,7 @@ import { formatSize, formatNumber, formatTokens, formatRelativeTime } from '../u
 import { useSessionViewer, type ClaudeSession } from '../hooks/useSessionViewer';
 import { useSessionPagination } from '../hooks/useSessionPagination';
 import { useFilteredAndSortedSessions } from '../hooks/useFilteredAndSortedSessions';
+import { useClickOutside } from '../hooks';
 
 type SearchMode = 'title' | 'user' | 'assistant' | 'all';
 
@@ -292,15 +293,7 @@ export function AgentSessionsBrowser({
   }, [selectedIndex]);
 
   // Close search mode dropdown when clicking outside
-  useEffect(() => {
-    const handleClickOutside = (e: MouseEvent) => {
-      if (searchModeDropdownRef.current && !searchModeDropdownRef.current.contains(e.target as Node)) {
-        setSearchModeDropdownOpen(false);
-      }
-    };
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => document.removeEventListener('mousedown', handleClickOutside);
-  }, []);
+  useClickOutside(searchModeDropdownRef, () => setSearchModeDropdownOpen(false), searchModeDropdownOpen);
 
   // Perform search when query or mode changes (with debounce for non-title searches)
   useEffect(() => {
