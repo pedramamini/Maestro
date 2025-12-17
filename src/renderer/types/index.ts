@@ -162,6 +162,12 @@ export interface BatchRunState {
   startTime?: number; // Timestamp when batch run started
   accumulatedElapsedMs?: number; // Accumulated active elapsed time (excludes sleep/suspend time)
   lastActiveTimestamp?: number; // Last timestamp when actively tracking (for pause/resume calculation)
+
+  // Error handling state (Phase 5.10)
+  error?: AgentError;                // Current error if batch is paused due to agent error
+  errorPaused?: boolean;             // True if batch is paused waiting for error resolution
+  errorDocumentIndex?: number;       // Which document had the error (for skip functionality)
+  errorTaskDescription?: string;     // Description of the task that failed (for UI display)
 }
 
 // Document entry within a playbook (similar to BatchDocumentEntry but for storage)

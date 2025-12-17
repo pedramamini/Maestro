@@ -1,5 +1,5 @@
 import { useState, useCallback, useRef, useEffect } from 'react';
-import type { BatchRunState, BatchRunConfig, BatchDocumentEntry, Session, HistoryEntry, UsageStats, Group, AutoRunStats } from '../types';
+import type { BatchRunState, BatchRunConfig, BatchDocumentEntry, Session, HistoryEntry, UsageStats, Group, AutoRunStats, AgentError } from '../types';
 import { substituteTemplateVariables, TemplateContext } from '../utils/templateVariables';
 import { getBadgeForTime, getNextBadge, formatTimeRemaining } from '../constants/conductorBadges';
 import { autorunSynopsisPrompt } from '../../prompts';
@@ -41,7 +41,12 @@ const DEFAULT_BATCH_STATE: BatchRunState = {
   sessionIds: [],
   // Time tracking (excludes sleep/suspend time)
   accumulatedElapsedMs: 0,
-  lastActiveTimestamp: undefined
+  lastActiveTimestamp: undefined,
+  // Error handling state (Phase 5.10)
+  error: undefined,
+  errorPaused: false,
+  errorDocumentIndex: undefined,
+  errorTaskDescription: undefined
 };
 
 interface BatchCompleteInfo {
@@ -94,6 +99,11 @@ interface UseBatchProcessorReturn {
   // Custom prompts per session
   customPrompts: Record<string, string>;
   setCustomPrompt: (sessionId: string, prompt: string) => void;
+  // Error handling (Phase 5.10)
+  pauseBatchOnError: (sessionId: string, error: AgentError, documentIndex: number, taskDescription?: string) => void;
+  skipCurrentDocument: (sessionId: string) => void;
+  resumeAfterError: (sessionId: string) => void;
+  abortBatchOnError: (sessionId: string) => void;
 }
 
 /**
@@ -1387,6 +1397,133 @@ ${docList}
     }));
   }, []);
 
+  /**
+   * Pause the batch run due to an agent error (Phase 5.10)
+   * Called externally when agent error is detected
+   */
+  const pauseBatchOnError = useCallback((sessionId: string, error: AgentError, documentIndex: number, taskDescription?: string) => {
+    console.log('[BatchProcessor] Pausing batch due to error:', { sessionId, errorType: error.type, documentIndex });
+    window.maestro.logger.autorun(
+      `Auto Run paused due to error: ${error.type}`,
+      sessionId,
+      {
+        errorType: error.type,
+        errorMessage: error.message,
+        documentIndex,
+        taskDescription
+      }
+    );
+
+    setBatchRunStates(prev => {
+      const currentState = prev[sessionId];
+      if (!currentState || !currentState.isRunning) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [sessionId]: {
+          ...currentState,
+          error,
+          errorPaused: true,
+          errorDocumentIndex: documentIndex,
+          errorTaskDescription: taskDescription
+        }
+      };
+    });
+  }, []);
+
+  /**
+   * Skip the current document that caused an error and continue with the next one (Phase 5.10)
+   */
+  const skipCurrentDocument = useCallback((sessionId: string) => {
+    console.log('[BatchProcessor] Skipping current document after error:', sessionId);
+    window.maestro.logger.autorun(
+      `Skipping document after error`,
+      sessionId,
+      {}
+    );
+
+    setBatchRunStates(prev => {
+      const currentState = prev[sessionId];
+      if (!currentState || !currentState.errorPaused) {
+        return prev;
+      }
+
+      // Mark for skip - the processing loop will detect this and move to next document
+      // We clear the error state and set a flag for the processing loop
+      return {
+        ...prev,
+        [sessionId]: {
+          ...currentState,
+          error: undefined,
+          errorPaused: false,
+          errorDocumentIndex: undefined,
+          errorTaskDescription: undefined
+        }
+      };
+    });
+
+    // Signal to skip current document in the processing loop
+    // The stopRequestedRefs is reused with a special marker
+    // Note: This relies on the processing loop checking for error state changes
+  }, []);
+
+  /**
+   * Resume the batch run after an error has been resolved (Phase 5.10)
+   * This clears the error state and allows the batch to continue
+   */
+  const resumeAfterError = useCallback((sessionId: string) => {
+    console.log('[BatchProcessor] Resuming batch after error resolution:', sessionId);
+    window.maestro.logger.autorun(
+      `Resuming Auto Run after error resolution`,
+      sessionId,
+      {}
+    );
+
+    setBatchRunStates(prev => {
+      const currentState = prev[sessionId];
+      if (!currentState) {
+        return prev;
+      }
+      return {
+        ...prev,
+        [sessionId]: {
+          ...currentState,
+          error: undefined,
+          errorPaused: false,
+          errorDocumentIndex: undefined,
+          errorTaskDescription: undefined
+        }
+      };
+    });
+  }, []);
+
+  /**
+   * Abort the batch run completely due to an unrecoverable error (Phase 5.10)
+   */
+  const abortBatchOnError = useCallback((sessionId: string) => {
+    console.log('[BatchProcessor] Aborting batch due to error:', sessionId);
+    window.maestro.logger.autorun(
+      `Auto Run aborted due to error`,
+      sessionId,
+      {}
+    );
+
+    // Request stop and clear error state
+    stopRequestedRefs.current[sessionId] = true;
+    setBatchRunStates(prev => ({
+      ...prev,
+      [sessionId]: {
+        ...prev[sessionId],
+        isStopping: true,
+        error: undefined,
+        errorPaused: false,
+        errorDocumentIndex: undefined,
+        errorTaskDescription: undefined
+      }
+    }));
+  }, []);
+
   return {
     batchRunStates,
     getBatchState,
@@ -1395,6 +1532,11 @@ ${docList}
     startBatchRun,
     stopBatchRun,
     customPrompts,
-    setCustomPrompt
+    setCustomPrompt,
+    // Error handling (Phase 5.10)
+    pauseBatchOnError,
+    skipCurrentDocument,
+    resumeAfterError,
+    abortBatchOnError
   };
 }

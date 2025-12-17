@@ -70,7 +70,7 @@ import { gitService } from './services/git';
 import type {
   ToolType, SessionState, RightPanelTab,
   FocusArea, LogEntry, Session, Group, AITab, UsageStats, QueuedItem, BatchRunConfig,
-  AgentError
+  AgentError, BatchRunState
 } from './types';
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
@@ -1451,6 +1451,21 @@ export default function MaestroConsole() {
         };
       }));
 
+      // Phase 5.10: Check if there's an active batch run for this session and pause it
+      if (getBatchStateRef.current && pauseBatchOnErrorRef.current) {
+        const batchState = getBatchStateRef.current(actualSessionId);
+        if (batchState.isRunning && !batchState.errorPaused) {
+          console.log('[onAgentError] Pausing active batch run due to error:', actualSessionId);
+          const currentDoc = batchState.documents[batchState.currentDocumentIndex];
+          pauseBatchOnErrorRef.current(
+            actualSessionId,
+            agentError,
+            batchState.currentDocumentIndex,
+            currentDoc ? `Processing ${currentDoc}` : undefined
+          );
+        }
+      }
+
       // Show the error modal for this session
       setAgentErrorModalSessionId(actualSessionId);
     });
@@ -1501,6 +1516,11 @@ export default function MaestroConsole() {
   // Ref for handling remote commands from web interface
   // This allows web commands to go through the exact same code path as desktop commands
   const pendingRemoteCommandRef = useRef<{ sessionId: string; command: string } | null>(null);
+
+  // Refs for batch processor error handling (Phase 5.10)
+  // These are populated after useBatchProcessor is called and used in the agent error handler
+  const pauseBatchOnErrorRef = useRef<((sessionId: string, error: AgentError, documentIndex: number, taskDescription?: string) => void) | null>(null);
+  const getBatchStateRef = useRef<((sessionId: string) => BatchRunState) | null>(null);
 
   // Expose addToast to window for debugging/testing
   useEffect(() => {
@@ -1987,6 +2007,11 @@ export default function MaestroConsole() {
     activeBatchSessionIds,
     startBatchRun,
     stopBatchRun,
+    // Error handling (Phase 5.10)
+    pauseBatchOnError,
+    skipCurrentDocument,
+    resumeAfterError,
+    abortBatchOnError,
   } = useBatchProcessor({
     sessions,
     groups,
@@ -2192,6 +2217,11 @@ export default function MaestroConsole() {
     }
   });
 
+  // Update refs for batch processor error handling (Phase 5.10)
+  // These are used by the agent error handler which runs in a useEffect with empty deps
+  pauseBatchOnErrorRef.current = pauseBatchOnError;
+  getBatchStateRef.current = getBatchState;
+
   // Get batch state for the current session - used for locking the AutoRun editor
   // This is session-specific so users can edit docs in other sessions while one runs
   const currentSessionBatchState = activeSession ? getBatchState(activeSession.id) : null;
@@ -2335,6 +2365,46 @@ export default function MaestroConsole() {
     setConfirmModalOnConfirm(() => () => stopBatchRun(sessionId));
     setConfirmModalOpen(true);
   }, [activeBatchSessionIds, activeSession, stopBatchRun]);
+
+  // Error handling callbacks for Auto Run (Phase 5.10)
+  const handleSkipCurrentDocument = useCallback(() => {
+    const sessionId = activeBatchSessionIds.length > 0
+      ? activeBatchSessionIds[0]
+      : activeSession?.id;
+    if (!sessionId) return;
+    skipCurrentDocument(sessionId);
+    // Clear the session error state as well
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId ? { ...s, agentError: undefined, agentErrorPaused: false, state: 'idle' as SessionState } : s
+    ));
+    setAgentErrorModalSessionId(null);
+  }, [activeBatchSessionIds, activeSession, skipCurrentDocument]);
+
+  const handleResumeAfterError = useCallback(() => {
+    const sessionId = activeBatchSessionIds.length > 0
+      ? activeBatchSessionIds[0]
+      : activeSession?.id;
+    if (!sessionId) return;
+    resumeAfterError(sessionId);
+    // Clear the session error state as well
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId ? { ...s, agentError: undefined, agentErrorPaused: false, state: 'idle' as SessionState } : s
+    ));
+    setAgentErrorModalSessionId(null);
+  }, [activeBatchSessionIds, activeSession, resumeAfterError]);
+
+  const handleAbortBatchOnError = useCallback(() => {
+    const sessionId = activeBatchSessionIds.length > 0
+      ? activeBatchSessionIds[0]
+      : activeSession?.id;
+    if (!sessionId) return;
+    abortBatchOnError(sessionId);
+    // Clear the session error state as well
+    setSessions(prev => prev.map(s =>
+      s.id === sessionId ? { ...s, agentError: undefined, agentErrorPaused: false, state: 'idle' as SessionState } : s
+    ));
+    setAgentErrorModalSessionId(null);
+  }, [activeBatchSessionIds, activeSession, abortBatchOnError]);
 
   // Handler for toast navigation - switches to session and optionally to a specific tab
   const handleToastSessionClick = useCallback((sessionId: string, tabId?: string) => {
@@ -5549,6 +5619,9 @@ export default function MaestroConsole() {
             currentSessionBatchState={currentSessionBatchState}
             onOpenBatchRunner={handleOpenBatchRunner}
             onStopBatchRun={handleStopBatchRun}
+            onSkipCurrentDocument={handleSkipCurrentDocument}
+            onAbortBatchOnError={handleAbortBatchOnError}
+            onResumeAfterError={handleResumeAfterError}
             onJumpToClaudeSession={handleJumpToClaudeSession}
             onResumeSession={handleResumeSession}
             onOpenSessionAsTab={handleResumeSession}

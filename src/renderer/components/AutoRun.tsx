@@ -1,7 +1,7 @@
 import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, memo, useMemo, forwardRef, useImperativeHandle } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
-import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, ChevronDown, ChevronRight, FolderOpen, FileText, RefreshCw, Maximize2 } from 'lucide-react';
+import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, ChevronDown, ChevronRight, FolderOpen, FileText, RefreshCw, Maximize2, AlertTriangle, SkipForward, XCircle } from 'lucide-react';
 import type { BatchRunState, SessionState, Theme, Shortcut } from '../types';
 import { AutoRunnerHelpModal } from './AutoRunnerHelpModal';
 import { MermaidRenderer } from './MermaidRenderer';
@@ -67,6 +67,10 @@ interface AutoRunProps {
   batchRunState?: BatchRunState;
   onOpenBatchRunner?: () => void;
   onStopBatchRun?: () => void;
+  // Error handling callbacks (Phase 5.10)
+  onSkipCurrentDocument?: () => void;
+  onAbortBatchOnError?: () => void;
+  onResumeAfterError?: () => void;
 
   // Session state for disabling Run when agent is busy
   sessionState?: SessionState;
@@ -331,6 +335,10 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   batchRunState,
   onOpenBatchRunner,
   onStopBatchRun,
+  // Error handling callbacks (Phase 5.10)
+  onSkipCurrentDocument,
+  onAbortBatchOnError,
+  onResumeAfterError,
   sessionState,
   onExpand,
   shortcuts,
@@ -348,6 +356,12 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   ) || false;
   const isAgentBusy = sessionState === 'busy' || sessionState === 'connecting';
   const isStopping = batchRunState?.isStopping || false;
+  // Error state (Phase 5.10)
+  const isErrorPaused = batchRunState?.errorPaused || false;
+  const batchError = batchRunState?.error;
+  const errorDocumentName = batchRunState?.errorDocumentIndex !== undefined
+    ? batchRunState.documents[batchRunState.errorDocumentIndex]
+    : undefined;
 
   // Use external mode if provided, otherwise use local state
   const [localMode, setLocalMode] = useState<'edit' | 'preview'>(externalMode || 'edit');
@@ -1275,6 +1289,91 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
         </div>
       )}
 
+      {/* Error Banner (Phase 5.10) - shown when batch is paused due to agent error */}
+      {isErrorPaused && batchError && (
+        <div
+          className="mx-2 mb-2 p-3 rounded-lg border"
+          style={{
+            backgroundColor: `${theme.colors.error}15`,
+            borderColor: theme.colors.error
+          }}
+        >
+          <div className="flex items-start gap-2">
+            <AlertTriangle
+              className="w-4 h-4 mt-0.5 flex-shrink-0"
+              style={{ color: theme.colors.error }}
+            />
+            <div className="flex-1 min-w-0">
+              <div
+                className="text-xs font-semibold mb-1"
+                style={{ color: theme.colors.error }}
+              >
+                Auto Run Paused
+              </div>
+              <div
+                className="text-xs mb-2"
+                style={{ color: theme.colors.textMain }}
+              >
+                {batchError.message}
+                {errorDocumentName && (
+                  <span style={{ color: theme.colors.textDim }}>
+                    {' '}— while processing <strong>{errorDocumentName}</strong>
+                  </span>
+                )}
+              </div>
+              <div className="flex gap-2 flex-wrap">
+                {/* Skip button - only show if there are more documents */}
+                {batchRunState && batchRunState.currentDocumentIndex < batchRunState.documents.length - 1 && onSkipCurrentDocument && (
+                  <button
+                    onClick={onSkipCurrentDocument}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: theme.colors.bgActivity,
+                      color: theme.colors.textMain,
+                      border: `1px solid ${theme.colors.border}`
+                    }}
+                    title="Skip this document and continue with the next one"
+                  >
+                    <SkipForward className="w-3 h-3" />
+                    Skip Document
+                  </button>
+                )}
+                {/* Resume button - for recoverable errors */}
+                {batchError.recoverable && onResumeAfterError && (
+                  <button
+                    onClick={onResumeAfterError}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: theme.colors.accent,
+                      color: theme.colors.accentForeground
+                    }}
+                    title="Retry and resume Auto Run"
+                  >
+                    <Play className="w-3 h-3" />
+                    Resume
+                  </button>
+                )}
+                {/* Abort button */}
+                {onAbortBatchOnError && (
+                  <button
+                    onClick={onAbortBatchOnError}
+                    className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
+                    style={{
+                      backgroundColor: theme.colors.error,
+                      color: 'white'
+                    }}
+                    title="Stop Auto Run completely"
+                  >
+                    <XCircle className="w-3 h-3" />
+                    Abort Run
+                  </button>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* Attached Images Preview (edit mode) - only when folder selected */}
       {folderPath && mode === 'edit' && attachmentsList.length > 0 && (
         <div
@@ -1560,6 +1659,10 @@ export const AutoRun = memo(AutoRunInner, (prevProps, nextProps) => {
     prevProps.batchRunState?.isStopping === nextProps.batchRunState?.isStopping &&
     prevProps.batchRunState?.currentTaskIndex === nextProps.batchRunState?.currentTaskIndex &&
     prevProps.batchRunState?.totalTasks === nextProps.batchRunState?.totalTasks &&
+    // Error state (Phase 5.10)
+    prevProps.batchRunState?.errorPaused === nextProps.batchRunState?.errorPaused &&
+    prevProps.batchRunState?.error?.type === nextProps.batchRunState?.error?.type &&
+    prevProps.batchRunState?.error?.message === nextProps.batchRunState?.error?.message &&
     // Session state affects UI (busy disables Run button)
     prevProps.sessionState === nextProps.sessionState &&
     // Callbacks are typically stable, but check identity

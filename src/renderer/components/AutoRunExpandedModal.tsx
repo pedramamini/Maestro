@@ -45,6 +45,10 @@ interface AutoRunExpandedModalProps {
   batchRunState?: BatchRunState;
   onOpenBatchRunner?: () => void;
   onStopBatchRun?: () => void;
+  // Error handling callbacks (Phase 5.10)
+  onSkipCurrentDocument?: () => void;
+  onAbortBatchOnError?: () => void;
+  onResumeAfterError?: () => void;
   sessionState?: SessionState;
   shortcuts?: Record<string, Shortcut>;
 }
@@ -57,6 +61,10 @@ export function AutoRunExpandedModal({
   batchRunState,
   onOpenBatchRunner,
   onStopBatchRun,
+  // Error handling callbacks (Phase 5.10)
+  onSkipCurrentDocument,
+  onAbortBatchOnError,
+  onResumeAfterError,
   sessionState,
   shortcuts,
   ...autoRunProps
@@ -346,6 +354,9 @@ export function AutoRunExpandedModal({
             batchRunState={batchRunState}
             onOpenBatchRunner={onOpenBatchRunner}
             onStopBatchRun={onStopBatchRun}
+            onSkipCurrentDocument={onSkipCurrentDocument}
+            onAbortBatchOnError={onAbortBatchOnError}
+            onResumeAfterError={onResumeAfterError}
             sessionState={sessionState}
             hideTopControls
             {...autoRunProps}

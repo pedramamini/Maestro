@@ -85,6 +85,10 @@ interface RightPanelProps {
   currentSessionBatchState?: BatchRunState | null;  // For locking editor (current session only)
   onOpenBatchRunner?: () => void;
   onStopBatchRun?: () => void;
+  // Error handling callbacks (Phase 5.10)
+  onSkipCurrentDocument?: () => void;
+  onAbortBatchOnError?: () => void;
+  onResumeAfterError?: () => void;
   onJumpToClaudeSession?: (agentSessionId: string) => void;
   onResumeSession?: (agentSessionId: string) => void;
   onOpenSessionAsTab?: (agentSessionId: string) => void;
@@ -104,7 +108,10 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     autoRunDocumentTaskCounts,
     onAutoRunContentChange, onAutoRunModeChange, onAutoRunStateChange,
     onAutoRunSelectDocument, onAutoRunCreateDocument, onAutoRunRefresh, onAutoRunOpenSetup,
-    batchRunState, currentSessionBatchState, onOpenBatchRunner, onStopBatchRun, onJumpToClaudeSession, onResumeSession,
+    batchRunState, currentSessionBatchState, onOpenBatchRunner, onStopBatchRun,
+    // Error handling callbacks (Phase 5.10)
+    onSkipCurrentDocument, onAbortBatchOnError, onResumeAfterError,
+    onJumpToClaudeSession, onResumeSession,
     onOpenSessionAsTab, onOpenAboutModal
   } = props;
 
@@ -454,6 +461,9 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
             batchRunState={currentSessionBatchState || undefined}
             onOpenBatchRunner={onOpenBatchRunner}
             onStopBatchRun={onStopBatchRun}
+            onSkipCurrentDocument={onSkipCurrentDocument}
+            onAbortBatchOnError={onAbortBatchOnError}
+            onResumeAfterError={onResumeAfterError}
             sessionState={session.state}
             onExpand={handleExpandAutoRun}
             shortcuts={shortcuts}
@@ -494,6 +504,9 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
           batchRunState={currentSessionBatchState || undefined}
           onOpenBatchRunner={onOpenBatchRunner}
           onStopBatchRun={onStopBatchRun}
+          onSkipCurrentDocument={onSkipCurrentDocument}
+          onAbortBatchOnError={onAbortBatchOnError}
+          onResumeAfterError={onResumeAfterError}
           sessionState={session.state}
           shortcuts={shortcuts}
         />
