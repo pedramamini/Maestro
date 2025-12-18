@@ -87,6 +87,8 @@ CONTENT:
 
 Continue for as many phases as needed.
 
+**IMPORTANT**: Write the markdown content directly - do NOT wrap it in code fences (like \`\`\`markdown or \`\`\`). The CONTENT section should contain raw markdown text, not a code block containing markdown.
+
 ## Project Discovery Conversation
 
 {{CONVERSATION_SUMMARY}}

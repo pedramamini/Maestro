@@ -452,7 +452,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                 {/* Dropdown Menu */}
                 {showPlaybookDropdown && (
                   <div
-                    className="absolute top-full left-0 mt-1 w-64 rounded-lg border shadow-lg z-10 overflow-hidden"
+                    className="absolute top-full left-0 mt-1 min-w-64 max-w-[calc(700px-48px)] w-max rounded-lg border shadow-lg z-10 overflow-hidden"
                     style={{ backgroundColor: theme.colors.bgSidebar, borderColor: theme.colors.border }}
                   >
                     <div className="max-h-48 overflow-y-auto">
@@ -465,7 +465,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
                           onClick={() => handleLoadPlaybook(pb)}
                         >
                           <span
-                            className="flex-1 text-sm truncate"
+                            className="flex-1 text-sm"
                             style={{ color: theme.colors.textMain }}
                           >
                             {pb.name}

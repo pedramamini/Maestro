@@ -119,10 +119,12 @@ function MessageBubble({
   message,
   theme,
   agentName,
+  providerName,
 }: {
   message: WizardMessage;
   theme: Theme;
   agentName: string;
+  providerName?: string;
 }): JSX.Element {
   const isUser = message.role === 'user';
   const isSystem = message.role === 'system';
@@ -147,19 +149,33 @@ function MessageBubble({
         {/* Role indicator for non-user messages */}
         {!isUser && (
           <div
-            className="text-xs font-medium mb-1 flex items-center gap-2"
+            className="text-xs font-medium mb-2 flex items-center justify-between"
             style={{ color: isSystem ? theme.colors.warning : theme.colors.accent }}
           >
-            <span>{isSystem ? '🎼 System' : formatAgentName(agentName)}</span>
-            {message.confidence !== undefined && (
+            <div className="flex items-center gap-2">
+              <span>{isSystem ? '🎼 System' : formatAgentName(agentName)}</span>
+              {message.confidence !== undefined && (
+                <span
+                  className="text-xs px-1.5 py-0.5 rounded"
+                  style={{
+                    backgroundColor: `${getConfidenceColor(message.confidence)}20`,
+                    color: getConfidenceColor(message.confidence),
+                  }}
+                >
+                  {message.confidence}% confident
+                </span>
+              )}
+            </div>
+            {providerName && !isSystem && (
               <span
-                className="text-xs px-1.5 py-0.5 rounded"
+                className="text-xs px-2 py-0.5 rounded-full"
                 style={{
-                  backgroundColor: `${getConfidenceColor(message.confidence)}20`,
-                  color: getConfidenceColor(message.confidence),
+                  backgroundColor: `${theme.colors.accent}15`,
+                  color: theme.colors.accent,
+                  border: `1px solid ${theme.colors.accent}30`,
                 }}
               >
-                {message.confidence}% confident
+                {providerName}
               </span>
             )}
           </div>
@@ -765,7 +781,7 @@ export function ConversationScreen({ theme }: ConversationScreenProps): JSX.Elem
 
       {/* Conversation Area */}
       <div
-        className="flex-1 overflow-y-auto px-6 py-4"
+        className="flex-1 min-h-0 overflow-y-auto px-6 py-4"
         style={{ backgroundColor: theme.colors.bgMain }}
       >
         {/* Initial Question (shown before first interaction) */}
@@ -790,7 +806,18 @@ export function ConversationScreen({ theme }: ConversationScreenProps): JSX.Elem
 
         {/* Conversation History */}
         {state.conversationHistory.map((message) => (
-          <MessageBubble key={message.id} message={message} theme={theme} agentName={state.agentName || 'Agent'} />
+          <MessageBubble
+            key={message.id}
+            message={message}
+            theme={theme}
+            agentName={state.agentName || 'Agent'}
+            providerName={
+              state.selectedAgent === 'claude-code' ? 'Claude' :
+              state.selectedAgent === 'opencode' ? 'OpenCode' :
+              state.selectedAgent === 'codex' ? 'Codex' :
+              state.selectedAgent || undefined
+            }
+          />
         ))}
 
         {/* Streaming Response or Typing Indicator */}
@@ -932,7 +959,7 @@ export function ConversationScreen({ theme }: ConversationScreenProps): JSX.Elem
           <button
             onClick={handleSendMessage}
             disabled={!inputValue.trim() || state.isConversationLoading}
-            className="px-4 rounded-lg font-medium transition-all flex items-center gap-2 shrink-0 self-stretch"
+            className="px-4 rounded-lg font-medium transition-all flex items-center gap-2 shrink-0 self-end"
             style={{
               backgroundColor:
                 inputValue.trim() && !state.isConversationLoading
@@ -946,7 +973,7 @@ export function ConversationScreen({ theme }: ConversationScreenProps): JSX.Elem
                 inputValue.trim() && !state.isConversationLoading
                   ? 'pointer'
                   : 'not-allowed',
-              minHeight: '48px',
+              height: '48px',
             }}
           >
             {state.isConversationLoading ? (

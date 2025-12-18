@@ -48,13 +48,25 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
   const [announcementKey, setAnnouncementKey] = useState(0);
 
   /**
-   * Extract the YOLO/permission-skip flag from agent args
+   * Extract the YOLO/permission-skip flag from agent config.
+   * Includes the binary name prefix (e.g., "codex run" or "claude --dangerously...")
    */
   const getYoloFlag = useCallback((): string | null => {
-    if (!agentConfig?.args) return null;
-    // Look for permission-related flags
+    if (!agentConfig) return null;
+
+    const binaryName = agentConfig.binaryName || agentConfig.command || 'agent';
+
+    // First check yoloModeArgs (the dedicated property for YOLO mode)
+    if (agentConfig.yoloModeArgs && agentConfig.yoloModeArgs.length > 0) {
+      // Return binary name + YOLO mode args
+      return `${binaryName} ${agentConfig.yoloModeArgs.join(' ')}`;
+    }
+
+    // Fall back to searching in base args
+    if (!agentConfig.args) return null;
     const yoloPatterns = [
       /--dangerously-skip-permissions/,
+      /--dangerously-bypass-approvals/,
       /--yolo/,
       /--no-confirm/,
       /--yes/,
@@ -63,7 +75,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
     for (const arg of agentConfig.args) {
       for (const pattern of yoloPatterns) {
         if (pattern.test(arg)) {
-          return arg;
+          return `${binaryName} ${arg}`;
         }
       }
     }
@@ -327,7 +339,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
       />
 
       {/* Header */}
-      <div className="text-center mb-8">
+      <div className="text-center">
         {/* Agent greeting - prominent at top */}
         <h2
           className="text-3xl font-bold mb-6"
@@ -380,8 +392,11 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
         </p>
       </div>
 
-      {/* Main content area */}
-      <div className="flex-1 flex flex-col items-center justify-center">
+      {/* Spacer before Project Directory */}
+      <div className="flex-1" />
+
+      {/* Main content area - centered */}
+      <div className="flex flex-col items-center">
         <div className="w-full max-w-xl">
           {/* Directory path input with browse button */}
           <div className="mb-8">
@@ -604,66 +619,35 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
         </div>
       </div>
 
-      {/* Footer with navigation buttons */}
-      <div className="mt-8 flex justify-between items-center">
-        <button
-          onClick={handleBack}
-          className="px-6 py-3 rounded-lg font-medium transition-all outline-none flex items-center gap-2"
-          style={{
-            backgroundColor: theme.colors.bgSidebar,
-            color: theme.colors.textMain,
-            border: `1px solid ${theme.colors.border}`,
-          }}
-        >
-          <svg
-            className="w-4 h-4"
-            fill="none"
-            stroke="currentColor"
-            viewBox="0 0 24 24"
-          >
-            <path
-              strokeLinecap="round"
-              strokeLinejoin="round"
-              strokeWidth={2}
-              d="M15 19l-7-7 7-7"
-            />
-          </svg>
-          Back
-        </button>
+      {/* Spacer after content / before Continue button */}
+      <div className="flex-1" />
 
-        {showContinue && (
+      {/* Continue button - centered */}
+      {showContinue && (
+        <div className="flex justify-center">
           <button
             ref={continueButtonRef}
             onClick={handleContinue}
             disabled={!isValid || isValidating}
-            className="px-8 py-3 rounded-lg font-medium transition-all outline-none flex items-center gap-2"
+            className="px-12 py-3 rounded-lg font-medium transition-all outline-none"
             style={{
               backgroundColor: isValid && !isValidating ? theme.colors.accent : theme.colors.border,
               color: isValid && !isValidating ? theme.colors.accentForeground : theme.colors.textDim,
               cursor: isValid && !isValidating ? 'pointer' : 'not-allowed',
               opacity: isValid && !isValidating ? 1 : 0.6,
+              minWidth: '200px',
             }}
           >
             Continue
-            <svg
-              className="w-4 h-4"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
-            >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M9 5l7 7-7 7"
-              />
-            </svg>
           </button>
-        )}
-      </div>
+        </div>
+      )}
+
+      {/* Spacer after Continue button / before keyboard hints */}
+      <div className="flex-1" />
 
       {/* Keyboard hints */}
-      <div className="mt-4 flex justify-center gap-6">
+      <div className="flex justify-center gap-6">
         <span
           className="text-xs flex items-center gap-1"
           style={{ color: theme.colors.textDim }}

@@ -382,7 +382,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
         const rootNode: ProcessNode = {
           id: 'group-root',
           type: 'group',
-          label: 'UNGROUPED',
+          label: 'UNGROUPED AGENTS',
           emoji: '📁',
           expanded: expandedNodes.has('group-root'),
           children: sessionNodes

@@ -455,6 +455,7 @@ export interface AgentConfig {
   args?: string[];
   hidden?: boolean; // If true, agent is hidden from UI (internal use only)
   configOptions?: AgentConfigOption[]; // Agent-specific configuration options
+  yoloModeArgs?: string[]; // Args for YOLO/full-access mode (e.g., ['--dangerously-skip-permissions'])
 }
 
 // Process spawning configuration

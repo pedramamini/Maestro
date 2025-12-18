@@ -634,14 +634,14 @@ export const MainPanel = forwardRef<MainPanelHandle, MainPanelProps>(function Ma
 
 
               {/* Cost Tracker - styled as pill (hidden when panel is narrow or agent doesn't support cost tracking) - shows active tab's cost */}
-              {showCostWidget && activeSession.inputMode === 'ai' && activeTab?.agentSessionId && hasCapability('supportsCostTracking') && (
+              {showCostWidget && activeSession.inputMode === 'ai' && (activeTab?.agentSessionId || activeTab?.usageStats) && hasCapability('supportsCostTracking') && (
                 <span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-green-500/30 text-green-500 bg-green-500/10">
                   ${(activeTab?.usageStats?.totalCostUsd ?? 0).toFixed(2)}
                 </span>
               )}
 
               {/* Context Window Widget with Tooltip - only show when context window is configured and agent supports usage stats */}
-              {activeSession.inputMode === 'ai' && activeTab?.agentSessionId && hasCapability('supportsUsageStats') && (activeTab?.usageStats?.contextWindow ?? 0) > 0 && (
+              {activeSession.inputMode === 'ai' && (activeTab?.agentSessionId || activeTab?.usageStats) && hasCapability('supportsUsageStats') && (activeTab?.usageStats?.contextWindow ?? 0) > 0 && (
               <div
                 className="flex flex-col items-end mr-2 relative cursor-pointer"
                 onMouseEnter={() => {

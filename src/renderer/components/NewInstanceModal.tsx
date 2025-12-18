@@ -55,6 +55,7 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
   const [homeDir, setHomeDir] = useState<string>('');
   const [customAgentPaths, setCustomAgentPaths] = useState<Record<string, string>>({});
   const [customAgentArgs, setCustomAgentArgs] = useState<Record<string, string>>({});
+  const [agentConfigs, setAgentConfigs] = useState<Record<string, Record<string, any>>>({});
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -93,6 +94,14 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
       setCustomAgentPaths(paths);
       const args = await window.maestro.agents.getAllCustomArgs();
       setCustomAgentArgs(args);
+
+      // Load configurations for all agents
+      const configs: Record<string, Record<string, any>> = {};
+      for (const agent of detectedAgents) {
+        const config = await window.maestro.agents.getConfig(agent.id);
+        configs[agent.id] = config;
+      }
+      setAgentConfigs(configs);
 
       // Set default or first available
       const defaultAvailable = detectedAgents.find((a: AgentConfig) => a.id === defaultAgent && a.available);
@@ -193,8 +202,8 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
   useEffect(() => {
     if (isOpen) {
       loadAgents();
-      // Expand the selected agent by default
-      setExpandedAgent(defaultAgent);
+      // Keep all agents collapsed by default
+      setExpandedAgent(null);
     }
   }, [isOpen, defaultAgent]);
 
@@ -439,6 +448,94 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
                               Additional CLI arguments appended to all calls to this agent
                             </p>
                           </div>
+
+                          {/* Agent-specific configuration options (contextWindow, model, etc.) */}
+                          {agent.configOptions && agent.configOptions.length > 0 && agent.configOptions.map((option: any) => (
+                            <div
+                              key={option.key}
+                              className="p-3 rounded border"
+                              style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+                            >
+                              <label className="block text-xs font-medium mb-2" style={{ color: theme.colors.textDim }}>
+                                {option.label}
+                              </label>
+                              {option.type === 'number' && (
+                                <input
+                                  type="number"
+                                  value={agentConfigs[agent.id]?.[option.key] ?? option.default}
+                                  onChange={(e) => {
+                                    const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                                    const newConfig = {
+                                      ...agentConfigs[agent.id],
+                                      [option.key]: isNaN(value) ? 0 : value
+                                    };
+                                    setAgentConfigs(prev => ({
+                                      ...prev,
+                                      [agent.id]: newConfig
+                                    }));
+                                  }}
+                                  onBlur={() => {
+                                    const currentConfig = agentConfigs[agent.id] || {};
+                                    window.maestro.agents.setConfig(agent.id, currentConfig);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  placeholder={option.default?.toString() || '0'}
+                                  min={0}
+                                  className="w-full p-2 rounded border bg-transparent outline-none text-xs font-mono"
+                                  style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                                />
+                              )}
+                              {option.type === 'text' && (
+                                <input
+                                  type="text"
+                                  value={agentConfigs[agent.id]?.[option.key] ?? option.default}
+                                  onChange={(e) => {
+                                    const newConfig = {
+                                      ...agentConfigs[agent.id],
+                                      [option.key]: e.target.value
+                                    };
+                                    setAgentConfigs(prev => ({
+                                      ...prev,
+                                      [agent.id]: newConfig
+                                    }));
+                                  }}
+                                  onBlur={() => {
+                                    const currentConfig = agentConfigs[agent.id] || {};
+                                    window.maestro.agents.setConfig(agent.id, currentConfig);
+                                  }}
+                                  onClick={(e) => e.stopPropagation()}
+                                  placeholder={option.default || ''}
+                                  className="w-full p-2 rounded border bg-transparent outline-none text-xs font-mono"
+                                  style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                                />
+                              )}
+                              {option.type === 'checkbox' && (
+                                <label className="flex items-center gap-2 cursor-pointer" onClick={(e) => e.stopPropagation()}>
+                                  <input
+                                    type="checkbox"
+                                    checked={agentConfigs[agent.id]?.[option.key] ?? option.default}
+                                    onChange={(e) => {
+                                      const newConfig = {
+                                        ...agentConfigs[agent.id],
+                                        [option.key]: e.target.checked
+                                      };
+                                      setAgentConfigs(prev => ({
+                                        ...prev,
+                                        [agent.id]: newConfig
+                                      }));
+                                      window.maestro.agents.setConfig(agent.id, newConfig);
+                                    }}
+                                    className="w-4 h-4"
+                                    style={{ accentColor: theme.colors.accent }}
+                                  />
+                                  <span className="text-xs" style={{ color: theme.colors.textMain }}>Enabled</span>
+                                </label>
+                              )}
+                              <p className="text-xs opacity-50 mt-2">
+                                {option.description}
+                              </p>
+                            </div>
+                          ))}
                         </div>
                       )}
                     </div>
@@ -547,8 +644,23 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, defaultAgen
 export function EditAgentModal({ isOpen, onClose, onSave, theme, session, existingSessions }: EditAgentModalProps) {
   const [instanceName, setInstanceName] = useState('');
   const [nudgeMessage, setNudgeMessage] = useState('');
+  const [agent, setAgent] = useState<AgentConfig | null>(null);
+  const [agentConfig, setAgentConfig] = useState<Record<string, any>>({});
 
   const nameInputRef = useRef<HTMLInputElement>(null);
+
+  // Load agent info and config when modal opens
+  useEffect(() => {
+    if (isOpen && session) {
+      // Load agent definition to get configOptions
+      window.maestro.agents.detect().then((agents: AgentConfig[]) => {
+        const foundAgent = agents.find(a => a.id === session.toolType);
+        setAgent(foundAgent || null);
+      });
+      // Load agent config
+      window.maestro.agents.getConfig(session.toolType).then(setAgentConfig);
+    }
+  }, [isOpen, session]);
 
   // Populate form when session changes or modal opens
   useEffect(() => {
@@ -605,6 +717,7 @@ export function EditAgentModal({ isOpen, onClose, onSave, theme, session, existi
     'claude-code': 'Claude Code',
     'codex': 'Codex',
     'opencode': 'OpenCode',
+    'aider': 'Aider',
   };
   const agentName = agentNameMap[session.toolType] || session.toolType;
 
@@ -703,6 +816,88 @@ export function EditAgentModal({ isOpen, onClose, onSave, theme, session, existi
               {nudgeMessage.length}/{NUDGE_MESSAGE_MAX_LENGTH} characters. This text is added to every message you send to the agent (not visible in chat).
             </p>
           </div>
+
+          {/* Agent-specific configuration options (contextWindow, model, etc.) */}
+          {agent?.configOptions && agent.configOptions.length > 0 && (
+            <div>
+              <label className="block text-xs font-bold opacity-70 uppercase mb-2" style={{ color: theme.colors.textMain }}>
+                {agentName} Settings
+              </label>
+              <div className="space-y-3">
+                {agent.configOptions.map((option: any) => (
+                  <div
+                    key={option.key}
+                    className="p-3 rounded border"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+                  >
+                    <label className="block text-xs font-medium mb-2" style={{ color: theme.colors.textDim }}>
+                      {option.label}
+                    </label>
+                    {option.type === 'number' && (
+                      <input
+                        type="number"
+                        value={agentConfig[option.key] ?? option.default}
+                        onChange={(e) => {
+                          const value = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+                          setAgentConfig(prev => ({
+                            ...prev,
+                            [option.key]: isNaN(value) ? 0 : value
+                          }));
+                        }}
+                        onBlur={() => {
+                          window.maestro.agents.setConfig(session.toolType, agentConfig);
+                        }}
+                        placeholder={option.default?.toString() || '0'}
+                        min={0}
+                        className="w-full p-2 rounded border bg-transparent outline-none text-xs font-mono"
+                        style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                      />
+                    )}
+                    {option.type === 'text' && (
+                      <input
+                        type="text"
+                        value={agentConfig[option.key] ?? option.default}
+                        onChange={(e) => {
+                          setAgentConfig(prev => ({
+                            ...prev,
+                            [option.key]: e.target.value
+                          }));
+                        }}
+                        onBlur={() => {
+                          window.maestro.agents.setConfig(session.toolType, agentConfig);
+                        }}
+                        placeholder={option.default || ''}
+                        className="w-full p-2 rounded border bg-transparent outline-none text-xs font-mono"
+                        style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                      />
+                    )}
+                    {option.type === 'checkbox' && (
+                      <label className="flex items-center gap-2 cursor-pointer">
+                        <input
+                          type="checkbox"
+                          checked={agentConfig[option.key] ?? option.default}
+                          onChange={(e) => {
+                            const newConfig = {
+                              ...agentConfig,
+                              [option.key]: e.target.checked
+                            };
+                            setAgentConfig(newConfig);
+                            window.maestro.agents.setConfig(session.toolType, newConfig);
+                          }}
+                          className="w-4 h-4"
+                          style={{ accentColor: theme.colors.accent }}
+                        />
+                        <span className="text-xs" style={{ color: theme.colors.textMain }}>Enabled</span>
+                      </label>
+                    )}
+                    <p className="text-xs opacity-50 mt-2">
+                      {option.description}
+                    </p>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
         </div>
       </Modal>
     </div>

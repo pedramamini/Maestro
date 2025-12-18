@@ -1766,7 +1766,7 @@ export function SessionList(props: SessionListProps) {
               <div className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider flex-1" style={{ color: theme.colors.textDim }}>
                 {ungroupedCollapsed ? <ChevronRight className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
                 <Folder className="w-3.5 h-3.5" />
-                <span>Ungrouped</span>
+                <span>Ungrouped Agents</span>
               </div>
               <button
                 onClick={(e) => {

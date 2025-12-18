@@ -335,12 +335,9 @@ class ConversationManager {
       // Store resolve for potential early termination
       this.session!.pendingResolve = resolve;
 
-      // Spawn the agent with the prompt
-      // Add --include-partial-messages for real-time streaming text display
-      const argsWithStreaming = [...(agent.args || [])];
-      if (!argsWithStreaming.includes('--include-partial-messages')) {
-        argsWithStreaming.push('--include-partial-messages');
-      }
+      // Build args based on agent type
+      // Each agent has different CLI structure for batch mode
+      const argsForSpawn = this.buildArgsForAgent(agent);
 
       window.maestro.process
         .spawn({
@@ -348,7 +345,7 @@ class ConversationManager {
           toolType: this.session!.agentType,
           cwd: this.session!.directoryPath,
           command: agent.command,
-          args: argsWithStreaming,
+          args: argsForSpawn,
           prompt: prompt,
         })
         .then(() => {
@@ -365,6 +362,45 @@ class ConversationManager {
     });
   }
 
+
+  /**
+   * Build CLI args for the agent based on its type and capabilities.
+   *
+   * Note: The main process IPC handler (process.ts) automatically adds:
+   * - batchModePrefix (e.g., 'exec' for Codex, 'run' for OpenCode)
+   * - batchModeArgs (e.g., YOLO mode flags)
+   * - jsonOutputArgs (e.g., --json, --format json)
+   * - workingDirArgs (e.g., -C dir for Codex)
+   *
+   * So we only need to add agent-specific flags that aren't covered by
+   * the standard argument builders.
+   */
+  private buildArgsForAgent(agent: any): string[] {
+    const agentId = agent.id || this.session?.agentType;
+
+    switch (agentId) {
+      case 'claude-code': {
+        // Claude Code: start with base args, add --include-partial-messages for streaming
+        const args = [...(agent.args || [])];
+        if (!args.includes('--include-partial-messages')) {
+          args.push('--include-partial-messages');
+        }
+        return args;
+      }
+
+      case 'codex':
+      case 'opencode': {
+        // For Codex and OpenCode, use base args only
+        // The IPC handler will add batchModePrefix, jsonOutputArgs, batchModeArgs, workingDirArgs
+        return [...(agent.args || [])];
+      }
+
+      default: {
+        // For unknown agents, use base args
+        return [...(agent.args || [])];
+      }
+    }
+  }
 
   /**
    * Parse the accumulated agent output to extract the structured response
@@ -403,12 +439,67 @@ class ConversationManager {
   }
 
   /**
-   * Extract the result field from Claude's stream-json output format
+   * Extract the result text from agent JSON output.
+   * Handles different agent output formats:
+   * - Claude Code: stream-json with { type: 'result', result: '...' }
+   * - OpenCode: JSONL with { type: 'text', part: { text: '...' } }
+   * - Codex: JSONL with { type: 'message', content: '...' } or similar
    */
   private extractResultFromStreamJson(output: string): string | null {
+    const agentType = this.session?.agentType;
+
     try {
-      // Look for the result message in stream-json format
       const lines = output.split('\n');
+
+      // For OpenCode: concatenate all text parts
+      if (agentType === 'opencode') {
+        const textParts: string[] = [];
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            // OpenCode text messages have type: 'text' and part.text
+            if (msg.type === 'text' && msg.part?.text) {
+              textParts.push(msg.part.text);
+            }
+          } catch {
+            // Ignore non-JSON lines
+          }
+        }
+        if (textParts.length > 0) {
+          return textParts.join('');
+        }
+      }
+
+      // For Codex: look for message content
+      if (agentType === 'codex') {
+        const textParts: string[] = [];
+        for (const line of lines) {
+          if (!line.trim()) continue;
+          try {
+            const msg = JSON.parse(line);
+            // Codex uses agent_message type with content array
+            if (msg.type === 'agent_message' && msg.content) {
+              for (const block of msg.content) {
+                if (block.type === 'text' && block.text) {
+                  textParts.push(block.text);
+                }
+              }
+            }
+            // Also check for message type with text field (older format)
+            if (msg.type === 'message' && msg.text) {
+              textParts.push(msg.text);
+            }
+          } catch {
+            // Ignore non-JSON lines
+          }
+        }
+        if (textParts.length > 0) {
+          return textParts.join('');
+        }
+      }
+
+      // For Claude Code: look for result message
       for (const line of lines) {
         if (!line.trim()) continue;
         try {

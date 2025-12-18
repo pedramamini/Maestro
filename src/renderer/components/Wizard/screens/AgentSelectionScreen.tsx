@@ -63,6 +63,13 @@ const AGENT_TILES: AgentTile[] = [
   },
   // Coming soon agents at the bottom
   {
+    id: 'aider',
+    name: 'Aider',
+    supported: false,
+    description: 'Coming soon',
+    brandColor: '#14B8A6', // Teal
+  },
+  {
     id: 'gemini-cli',
     name: 'Gemini CLI',
     supported: false,
@@ -141,6 +148,33 @@ function AgentLogo({ agentId, supported, detected, brandColor, theme }: {
             d="M24 6v36M40 15L8 33M8 15l32 18"
             stroke={color}
             strokeWidth="2"
+          />
+        </svg>
+      );
+
+    case 'aider':
+      // Aider - chat bubble with code brackets
+      return (
+        <svg
+          className="w-12 h-12"
+          viewBox="0 0 48 48"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          style={{ opacity }}
+        >
+          {/* Chat bubble with code brackets */}
+          <path
+            d="M8 12C8 9.79 9.79 8 12 8H36C38.21 8 40 9.79 40 12V28C40 30.21 38.21 32 36 32H20L12 40V32H12C9.79 32 8 30.21 8 28V12Z"
+            stroke={color}
+            strokeWidth="2"
+            fill="none"
+          />
+          <path
+            d="M18 16L14 20L18 24M30 16L34 20L30 24"
+            stroke={color}
+            strokeWidth="2"
+            strokeLinecap="round"
+            strokeLinejoin="round"
           />
         </svg>
       );

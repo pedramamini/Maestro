@@ -266,6 +266,25 @@ export function MaestroWizard({
     }
   }, [state.isOpen, showExitConfirm, registerLayer, unregisterLayer, handleCloseRequest]);
 
+  // Capture-phase handler to intercept Cmd+E before it reaches the main app
+  // This prevents the wizard's edit/preview toggle from leaking to the AutoRun component
+  useEffect(() => {
+    if (!state.isOpen) return;
+
+    const handleCaptureKeyDown = (e: KeyboardEvent) => {
+      // Intercept Cmd+E to prevent it from reaching the main app's AutoRun
+      if ((e.metaKey || e.ctrlKey) && e.key === 'e' && !e.shiftKey) {
+        // Don't preventDefault here - let the wizard's internal handlers process it
+        // Just stop it from propagating to the main app
+        e.stopPropagation();
+      }
+    };
+
+    // Use capture phase to intercept before bubbling
+    document.addEventListener('keydown', handleCaptureKeyDown, true);
+    return () => document.removeEventListener('keydown', handleCaptureKeyDown, true);
+  }, [state.isOpen]);
+
   /**
    * Render the appropriate screen component based on displayed step
    * Uses displayedStep (not currentStep) to allow for transition animations
@@ -405,28 +424,63 @@ export function MaestroWizard({
             })}
           </div>
 
-          {/* Close button */}
-          <button
-            onClick={handleCloseRequest}
-            className="p-2 rounded-lg hover:bg-white/10 transition-colors"
-            style={{ color: theme.colors.textDim }}
-            title="Close wizard (Escape)"
-            aria-label="Close wizard"
-          >
-            <svg
-              className="w-5 h-5"
-              fill="none"
-              stroke="currentColor"
-              viewBox="0 0 24 24"
+          {/* Back and Close buttons */}
+          <div className="flex items-center gap-2">
+            {/* Back button - only show when past step 1 */}
+            {currentStepNumber > 1 && (
+              <button
+                onClick={() => {
+                  const prevStepNum = currentStepNumber - 1;
+                  const targetStep = INDEX_TO_STEP[prevStepNum];
+                  if (targetStep) {
+                    goToStep(targetStep);
+                  }
+                }}
+                className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-sm font-medium transition-colors hover:bg-white/10"
+                style={{ color: theme.colors.textDim }}
+                title="Go back"
+                aria-label="Go back to previous step"
+              >
+                <svg
+                  className="w-4 h-4"
+                  fill="none"
+                  stroke="currentColor"
+                  viewBox="0 0 24 24"
+                >
+                  <path
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                    strokeWidth={2}
+                    d="M15 19l-7-7 7-7"
+                  />
+                </svg>
+                Back
+              </button>
+            )}
+
+            {/* Close button */}
+            <button
+              onClick={handleCloseRequest}
+              className="p-2 rounded-lg hover:bg-white/10 transition-colors"
+              style={{ color: theme.colors.textDim }}
+              title="Close wizard (Escape)"
+              aria-label="Close wizard"
             >
-              <path
-                strokeLinecap="round"
-                strokeLinejoin="round"
-                strokeWidth={2}
-                d="M6 18L18 6M6 6l12 12"
-              />
-            </svg>
-          </button>
+              <svg
+                className="w-5 h-5"
+                fill="none"
+                stroke="currentColor"
+                viewBox="0 0 24 24"
+              >
+                <path
+                  strokeLinecap="round"
+                  strokeLinejoin="round"
+                  strokeWidth={2}
+                  d="M6 18L18 6M6 6l12 12"
+                />
+              </svg>
+            </button>
+          </div>
         </div>
 
         {/* Content area - renders the current screen with transition animations */}

@@ -202,6 +202,30 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
   },
 
   /**
+   * Aider - AI pair programming in your terminal
+   * https://github.com/paul-gauthier/aider
+   *
+   * PLACEHOLDER: Most capabilities set to false until Aider integration is
+   * implemented. Update this configuration when integrating the agent.
+   */
+  'aider': {
+    supportsResume: false,       // Not yet investigated
+    supportsReadOnlyMode: false, // Not yet investigated
+    supportsJsonOutput: false,   // Not yet investigated
+    supportsSessionId: false,    // Not yet investigated
+    supportsImageInput: true,    // Aider supports vision models
+    supportsSlashCommands: true, // Aider has /commands
+    supportsSessionStorage: false, // Not yet investigated
+    supportsCostTracking: true,  // Aider tracks costs
+    supportsUsageStats: true,    // Aider shows token usage
+    supportsBatchMode: false,    // Not yet investigated
+    requiresPromptToStart: false, // Not yet investigated
+    supportsStreaming: true,     // Likely streams
+    supportsResultMessages: false, // Not yet investigated
+    supportsModelSelection: true, // --model flag
+  },
+
+  /**
    * OpenCode - Open source coding assistant
    * https://github.com/opencode-ai/opencode
    *

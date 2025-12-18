@@ -115,11 +115,13 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'
     args: [], // Base args (none for OpenCode - batch mode uses 'run' subcommand)
     // OpenCode CLI argument builders
     // Batch mode: opencode run --format json [--model provider/model] [--session <id>] [--agent plan] "prompt"
+    // Note: 'run' subcommand auto-approves all permissions (YOLO mode is implicit)
     batchModePrefix: ['run'], // OpenCode uses 'run' subcommand for batch mode
     jsonOutputArgs: ['--format', 'json'], // JSON output format
     resumeArgs: (sessionId: string) => ['--session', sessionId], // Resume with session ID
     readOnlyArgs: ['--agent', 'plan'], // Read-only/plan mode
     modelArgs: (modelId: string) => ['--model', modelId], // Model selection (e.g., 'ollama/qwen3:8b')
+    yoloModeArgs: ['run'], // 'run' subcommand auto-approves all permissions (YOLO mode is implicit)
     // Agent-specific configuration options shown in UI
     configOptions: [
       {
@@ -144,6 +146,13 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'
         default: 128000, // Default for common models (GPT-4, etc.)
       },
     ],
+  },
+  {
+    id: 'aider',
+    name: 'Aider',
+    binaryName: 'aider',
+    command: 'aider',
+    args: [], // Base args (placeholder - to be configured when implemented)
   },
 ];
 
