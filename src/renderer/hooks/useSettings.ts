@@ -997,6 +997,11 @@ export function useSettings(): UseSettingsReturn {
         const commandsById = new Map<string, CustomAICommand>();
         DEFAULT_AI_COMMANDS.forEach(cmd => commandsById.set(cmd.id, cmd));
         savedCustomAICommands.forEach((cmd: CustomAICommand) => {
+          // Migration: Skip old /synopsis command - it was renamed to /history which is now
+          // a built-in command handled by Maestro directly (not a custom AI command)
+          if (cmd.command === '/synopsis' || cmd.id === 'synopsis') {
+            return;
+          }
           // For built-in commands, merge to allow user edits but preserve isBuiltIn flag
           if (commandsById.has(cmd.id)) {
             const existing = commandsById.get(cmd.id)!;

@@ -8,7 +8,6 @@
  * - Aggregates responses and maintains conversation flow
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import {
   GroupChat,
   loadGroupChat,
@@ -43,6 +42,71 @@ export interface IProcessManager {
 const activeModeratorSessions = new Map<string, string>();
 
 /**
+ * Stale session threshold in milliseconds (30 minutes).
+ * Sessions older than this are considered stale and will be cleaned up.
+ */
+const STALE_SESSION_THRESHOLD_MS = 30 * 60 * 1000;
+
+/**
+ * Tracks last activity time for each moderator session.
+ * Maps groupChatId -> timestamp
+ */
+const sessionActivityTimestamps = new Map<string, number>();
+
+/**
+ * Cleanup interval reference for clearing on shutdown.
+ */
+let cleanupIntervalId: NodeJS.Timeout | null = null;
+
+/**
+ * Starts periodic cleanup of stale moderator sessions.
+ * Should be called once during application initialization.
+ */
+export function startSessionCleanup(): void {
+  if (cleanupIntervalId) return; // Already running
+
+  // Run cleanup every 10 minutes
+  cleanupIntervalId = setInterval(() => {
+    const now = Date.now();
+    const staleIds: string[] = [];
+
+    for (const [groupChatId, timestamp] of sessionActivityTimestamps) {
+      if (now - timestamp > STALE_SESSION_THRESHOLD_MS) {
+        staleIds.push(groupChatId);
+      }
+    }
+
+    for (const id of staleIds) {
+      activeModeratorSessions.delete(id);
+      sessionActivityTimestamps.delete(id);
+    }
+
+    if (staleIds.length > 0) {
+      console.log(`[GroupChatModerator] Cleaned up ${staleIds.length} stale session(s)`);
+    }
+  }, 10 * 60 * 1000);
+}
+
+/**
+ * Stops the periodic session cleanup.
+ * Should be called during application shutdown.
+ */
+export function stopSessionCleanup(): void {
+  if (cleanupIntervalId) {
+    clearInterval(cleanupIntervalId);
+    cleanupIntervalId = null;
+  }
+}
+
+/**
+ * Updates the activity timestamp for a moderator session.
+ * Call this when the session is actively used.
+ */
+function touchSession(groupChatId: string): void {
+  sessionActivityTimestamps.set(groupChatId, Date.now());
+}
+
+/**
  * The system prompt sent to the moderator when it starts.
  */
 export const MODERATOR_SYSTEM_PROMPT = `You are a Group Chat Moderator. Your role is to:
@@ -62,40 +126,33 @@ Be concise, professional, and ensure smooth collaboration between agents.`;
 /**
  * Spawns a moderator agent for a group chat.
  *
+ * Note: This function is now only used for initial setup and storing the session mapping.
+ * The actual moderator process is spawned per-message in batch mode (see routeUserMessage).
+ *
  * @param chat - The group chat to spawn a moderator for
- * @param processManager - The process manager to use for spawning
+ * @param processManager - The process manager (not used for spawning, kept for API compatibility)
  * @param cwd - Working directory for the moderator (defaults to home directory)
- * @returns The session ID of the spawned moderator
+ * @returns The session ID prefix that will be used for moderator messages
  */
 export async function spawnModerator(
   chat: GroupChat,
-  processManager: IProcessManager,
-  cwd: string = process.env.HOME || '/tmp'
+  _processManager: IProcessManager,
+  _cwd: string = process.env.HOME || '/tmp'
 ): Promise<string> {
-  const sessionId = `group-chat-${chat.id}-moderator-${uuidv4()}`;
+  // Generate a session ID prefix for this group chat's moderator
+  // Each message will use this prefix with a timestamp suffix
+  const sessionIdPrefix = `group-chat-${chat.id}-moderator`;
 
-  // Spawn the moderator in read-only mode
-  const result = processManager.spawn({
-    sessionId,
-    toolType: chat.moderatorAgentId,
-    cwd,
-    command: chat.moderatorAgentId,  // The agent command
-    args: [],  // Args will be built by the process handler based on readOnlyMode
-    readOnlyMode: true,
-    prompt: MODERATOR_SYSTEM_PROMPT,
-  });
+  // Store the session mapping (using prefix as identifier)
+  activeModeratorSessions.set(chat.id, sessionIdPrefix);
 
-  if (!result.success) {
-    throw new Error(`Failed to spawn moderator for group chat ${chat.id}`);
-  }
+  // Track session activity for cleanup
+  touchSession(chat.id);
 
-  // Store the session mapping
-  activeModeratorSessions.set(chat.id, sessionId);
+  // Update the group chat with the moderator session ID prefix
+  await updateGroupChat(chat.id, { moderatorSessionId: sessionIdPrefix });
 
-  // Update the group chat with the moderator session ID
-  await updateGroupChat(chat.id, { moderatorSessionId: sessionId });
-
-  return sessionId;
+  return sessionIdPrefix;
 }
 
 /**
@@ -117,6 +174,9 @@ export async function sendToModerator(
 
   // Log the message
   await appendToLog(chat.logPath, 'user', message);
+
+  // Update session activity
+  touchSession(groupChatId);
 
   // If process manager is provided, also send to the moderator session
   if (processManager) {
@@ -144,6 +204,7 @@ export async function killModerator(
   }
 
   activeModeratorSessions.delete(groupChatId);
+  sessionActivityTimestamps.delete(groupChatId);
 
   // Clear the session ID in storage
   try {
@@ -179,6 +240,7 @@ export function isModeratorActive(groupChatId: string): boolean {
  */
 export function clearAllModeratorSessions(): void {
   activeModeratorSessions.clear();
+  sessionActivityTimestamps.clear();
 }
 
 /**

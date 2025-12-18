@@ -735,17 +735,143 @@ export class CodexSessionStorage implements AgentSessionStorage {
 
   async deleteMessagePair(
     _projectPath: string,
-    _sessionId: string,
-    _userMessageUuid: string,
-    _fallbackContent?: string
+    sessionId: string,
+    userMessageUuid: string,
+    fallbackContent?: string
   ): Promise<{ success: boolean; error?: string; linesRemoved?: number }> {
-    // Message deletion from Codex sessions is more complex than Claude's format
-    // The JSONL structure uses streaming events rather than simple message entries
-    // For now, this operation is not supported
-    logger.warn('Message deletion not yet implemented for Codex', LOG_CONTEXT);
-    return {
-      success: false,
-      error: 'Message deletion not yet implemented for Codex sessions',
-    };
+    const sessionFilePath = await this.findSessionFile(sessionId);
+
+    if (!sessionFilePath) {
+      logger.warn('Codex session file not found for deletion', LOG_CONTEXT, { sessionId });
+      return { success: false, error: 'Session file not found' };
+    }
+
+    try {
+      const content = await fs.readFile(sessionFilePath, 'utf-8');
+      const lines = content.split('\n').filter((l) => l.trim());
+
+      interface ParsedLine {
+        line: string;
+        entry: {
+          type?: string;
+          role?: string;
+          content?: CodexMessageContent[];
+          item?: {
+            id?: string;
+            type?: string;
+            tool?: string;
+            tool_call_id?: string;
+          };
+        } | null;
+        remove?: boolean;
+      }
+
+      const parsedLines: ParsedLine[] = [];
+      let userMessageIndex = -1;
+
+      // Parse all lines and find the target user message
+      for (let i = 0; i < lines.length; i++) {
+        try {
+          const entry = JSON.parse(lines[i]);
+          parsedLines.push({ line: lines[i], entry });
+
+          // Match by UUID (format: codex-msg-N)
+          if (entry.type === 'message' && entry.role === 'user') {
+            const msgIndex = parsedLines.length - 1;
+            if (userMessageUuid === `codex-msg-${msgIndex}`) {
+              userMessageIndex = msgIndex;
+            }
+          }
+        } catch {
+          parsedLines.push({ line: lines[i], entry: null });
+        }
+      }
+
+      // Fallback: try content match if UUID didn't work
+      if (userMessageIndex === -1 && fallbackContent) {
+        const normalizedFallback = fallbackContent.trim().toLowerCase();
+
+        for (let i = parsedLines.length - 1; i >= 0; i--) {
+          const entry = parsedLines[i].entry;
+          if (entry?.type === 'message' && entry?.role === 'user' && entry.content) {
+            const textContent = extractTextFromContent(entry.content);
+            if (textContent.trim().toLowerCase() === normalizedFallback) {
+              userMessageIndex = i;
+              logger.info('Found Codex message by content match', LOG_CONTEXT, { sessionId, index: i });
+              break;
+            }
+          }
+        }
+      }
+
+      if (userMessageIndex === -1) {
+        logger.warn('User message not found for deletion in Codex session', LOG_CONTEXT, {
+          sessionId,
+          userMessageUuid,
+          hasFallback: !!fallbackContent,
+        });
+        return { success: false, error: 'User message not found' };
+      }
+
+      // Find the end of the response (next user message) and collect tool_call IDs being deleted
+      let endIndex = parsedLines.length;
+      const deletedToolCallIds = new Set<string>();
+
+      for (let i = userMessageIndex + 1; i < parsedLines.length; i++) {
+        const entry = parsedLines[i].entry;
+
+        // Stop at the next user message
+        if (entry?.type === 'message' && entry?.role === 'user') {
+          endIndex = i;
+          break;
+        }
+
+        // Collect tool_call IDs from item.completed events being deleted
+        if (entry?.type === 'item.completed' && entry?.item?.type === 'tool_call' && entry?.item?.id) {
+          deletedToolCallIds.add(entry.item.id);
+        }
+      }
+
+      // Remove the message pair
+      let linesToKeep = [...parsedLines.slice(0, userMessageIndex), ...parsedLines.slice(endIndex)];
+
+      // If we deleted any tool_call blocks, clean up orphaned tool_result blocks
+      if (deletedToolCallIds.size > 0) {
+        linesToKeep = linesToKeep.filter((item) => {
+          const entry = item.entry;
+
+          // Remove tool_result events that reference deleted tool_call IDs
+          if (entry?.type === 'item.completed' && entry?.item?.type === 'tool_result') {
+            // tool_result items reference tool_call via tool_call_id or the item.id pattern
+            const toolCallId = entry.item.tool_call_id || entry.item.id;
+            if (toolCallId && deletedToolCallIds.has(toolCallId)) {
+              return false;
+            }
+          }
+
+          return true;
+        });
+
+        logger.info('Cleaned up orphaned tool_result blocks in Codex session', LOG_CONTEXT, {
+          sessionId,
+          deletedToolCallIds: Array.from(deletedToolCallIds),
+        });
+      }
+
+      const newContent = linesToKeep.map((p) => p.line).join('\n') + '\n';
+      await fs.writeFile(sessionFilePath, newContent, 'utf-8');
+
+      const linesRemoved = parsedLines.length - linesToKeep.length;
+      logger.info('Deleted message pair from Codex session', LOG_CONTEXT, {
+        sessionId,
+        userMessageUuid,
+        linesRemoved,
+      });
+
+      return { success: true, linesRemoved };
+    } catch (error) {
+      logger.error('Error deleting message pair from Codex session', LOG_CONTEXT, { sessionId, error });
+      return { success: false, error: String(error) };
+    }
   }
 }

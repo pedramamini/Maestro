@@ -62,6 +62,8 @@ export interface UseInputProcessingDeps {
   processQueuedItemRef: React.MutableRefObject<((sessionId: string, item: QueuedItem) => Promise<void>) | null>;
   /** Flush any pending batched session updates (ensures AI output is flushed before user message appears) */
   flushBatchedUpdates?: () => void;
+  /** Handler for the /history built-in command (requests synopsis and saves to history) */
+  onHistoryCommand?: () => Promise<void>;
 }
 
 /**
@@ -107,6 +109,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     activeBatchRunState,
     processQueuedItemRef,
     flushBatchedUpdates,
+    onHistoryCommand,
   } = deps;
 
   // Ref for the processInput function so external code can access the latest version
@@ -134,11 +137,27 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
       return;
     }
 
-    // Handle slash commands (custom AI commands only - built-in commands have been removed)
+    // Handle slash commands
     // Note: slash commands are queued like regular messages when agent is busy
     if (effectiveInputValue.trim().startsWith('/')) {
       const commandText = effectiveInputValue.trim();
       const isTerminalMode = activeSession.inputMode === 'terminal';
+
+      // Handle built-in /history command (only in AI mode)
+      // This is intercepted here because it requires Maestro to handle the synopsis generation
+      // rather than passing through to the agent (which may not support it or require special permissions)
+      if (!isTerminalMode && commandText === '/history' && onHistoryCommand) {
+        setInputValue('');
+        setSlashCommandOpen(false);
+        syncAiInputToSession('');
+        if (inputRef.current) inputRef.current.style.height = 'auto';
+
+        // Execute the history command handler asynchronously
+        onHistoryCommand().catch((error) => {
+          console.error('[processInput] /history command failed:', error);
+        });
+        return;
+      }
 
       // Check for custom AI commands (only in AI mode)
       if (!isTerminalMode) {
@@ -721,6 +740,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     processQueuedItemRef,
     setSessions,
     flushBatchedUpdates,
+    onHistoryCommand,
   ]);
 
   // Update ref for external access

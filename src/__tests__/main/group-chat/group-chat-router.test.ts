@@ -32,9 +32,11 @@ import {
   GroupChatParticipant,
 } from '../../../main/group-chat/group-chat-storage';
 import { readLog } from '../../../main/group-chat/group-chat-log';
+import { AgentDetector } from '../../../main/agent-detector';
 
 describe('group-chat-router', () => {
   let mockProcessManager: IProcessManager;
+  let mockAgentDetector: AgentDetector;
   let createdChats: string[] = [];
 
   beforeEach(() => {
@@ -44,6 +46,26 @@ describe('group-chat-router', () => {
       write: vi.fn().mockReturnValue(true),
       kill: vi.fn().mockReturnValue(true),
     };
+
+    // Create a mock agent detector that returns a mock agent config
+    mockAgentDetector = {
+      getAgent: vi.fn().mockResolvedValue({
+        id: 'claude-code',
+        name: 'Claude Code',
+        binaryName: 'claude',
+        command: 'claude',
+        args: ['--print', '--verbose', '--output-format', 'stream-json'],
+        available: true,
+        path: '/usr/local/bin/claude',
+        capabilities: {},
+      }),
+      detectAgents: vi.fn().mockResolvedValue([]),
+      clearCache: vi.fn(),
+      setCustomPaths: vi.fn(),
+      getCustomPaths: vi.fn().mockReturnValue({}),
+      discoverModels: vi.fn().mockResolvedValue([]),
+      clearModelCache: vi.fn(),
+    } as unknown as AgentDetector;
 
     // Clear any leftover sessions from previous tests
     clearAllModeratorSessions();
@@ -213,27 +235,29 @@ describe('group-chat-router', () => {
   });
 
   // ===========================================================================
-  // Test 5.3: routeUserMessage sends to moderator
+  // Test 5.3: routeUserMessage spawns moderator process in batch mode
+  // Note: routeUserMessage now spawns a batch process per message instead of
+  // writing to a persistent session.
   // ===========================================================================
   describe('routeUserMessage', () => {
     it('routes user message to moderator', async () => {
       const chat = await createTestChatWithModerator('Route Test');
 
-      await routeUserMessage(chat.id, 'Hello', mockProcessManager);
+      await routeUserMessage(chat.id, 'Hello', mockProcessManager, mockAgentDetector);
 
       // Should be in log
       const messages = await readLog(chat.logPath);
       expect(messages.some(m => m.from === 'user')).toBe(true);
       expect(messages.some(m => m.content === 'Hello')).toBe(true);
 
-      // Should be sent to moderator
-      expect(mockProcessManager.write).toHaveBeenCalled();
+      // Should spawn a batch process for the moderator
+      expect(mockProcessManager.spawn).toHaveBeenCalled();
     });
 
     it('logs message with correct sender', async () => {
       const chat = await createTestChatWithModerator('Sender Test');
 
-      await routeUserMessage(chat.id, 'User message here', mockProcessManager);
+      await routeUserMessage(chat.id, 'User message here', mockProcessManager, mockAgentDetector);
 
       const messages = await readLog(chat.logPath);
       const userMessage = messages.find(m => m.from === 'user');
@@ -244,17 +268,18 @@ describe('group-chat-router', () => {
     it('sends message to moderator session', async () => {
       const chat = await createTestChatWithModerator('Session Test');
 
-      await routeUserMessage(chat.id, 'Test message', mockProcessManager);
+      await routeUserMessage(chat.id, 'Test message', mockProcessManager, mockAgentDetector);
 
-      // Check that write was called with message + newline
-      expect(mockProcessManager.write).toHaveBeenCalledWith(
-        expect.any(String),
-        'Test message\n'
+      // Check that spawn was called with prompt containing the message
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          prompt: expect.stringContaining('Test message'),
+        })
       );
     });
 
     it('throws for non-existent chat', async () => {
-      await expect(routeUserMessage('non-existent-id', 'Hello', mockProcessManager))
+      await expect(routeUserMessage('non-existent-id', 'Hello', mockProcessManager, mockAgentDetector))
         .rejects.toThrow(/not found/i);
     });
 
@@ -262,7 +287,7 @@ describe('group-chat-router', () => {
       const chat = await createTestChat('No Moderator');
       // Don't spawn moderator
 
-      await expect(routeUserMessage(chat.id, 'Hello', mockProcessManager))
+      await expect(routeUserMessage(chat.id, 'Hello', mockProcessManager, mockAgentDetector))
         .rejects.toThrow(/not active/i);
     });
 
@@ -456,7 +481,7 @@ describe('group-chat-router', () => {
       await addParticipant(chat.id, 'Dev', 'claude-code', mockProcessManager);
 
       // User message
-      await routeUserMessage(chat.id, 'Please help me build a feature', mockProcessManager);
+      await routeUserMessage(chat.id, 'Please help me build a feature', mockProcessManager, mockAgentDetector);
 
       // Moderator response
       await routeModeratorResponse(chat.id, '@Dev: Build the feature', mockProcessManager);
@@ -474,7 +499,7 @@ describe('group-chat-router', () => {
       const chat = await createTestChatWithModerator('Special Char Test');
       await addParticipant(chat.id, 'Client', 'claude-code', mockProcessManager);
 
-      await routeUserMessage(chat.id, 'Message with pipes | and newlines\nand more', mockProcessManager);
+      await routeUserMessage(chat.id, 'Message with pipes | and newlines\nand more', mockProcessManager, mockAgentDetector);
 
       const messages = await readLog(chat.logPath);
       const userMessage = messages.find(m => m.from === 'user');

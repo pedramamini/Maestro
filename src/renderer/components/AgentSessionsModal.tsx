@@ -126,12 +126,14 @@ export function AgentSessionsModal({
       }
 
       const agentId = activeSession.toolType || 'claude-code';
-      console.log('AgentSessionsModal: Loading sessions for cwd:', activeSession.cwd, 'agentId:', agentId);
+      // Use projectRoot (not cwd) for consistent session storage access
+      const projectPath = activeSession.projectRoot;
+      console.log('AgentSessionsModal: Loading sessions for projectPath:', projectPath, 'agentId:', agentId);
       try {
         // Load starred sessions from Claude session origins (shared with AgentSessionsBrowser)
         // Note: Origin tracking remains Claude-specific until generic implementation is added
         if (agentId === 'claude-code') {
-          const origins = await window.maestro.claude.getSessionOrigins(activeSession.cwd);
+          const origins = await window.maestro.claude.getSessionOrigins(projectPath);
           const starredFromOrigins = new Set<string>();
           for (const [sessionId, originData] of Object.entries(origins)) {
             if (typeof originData === 'object' && originData?.starred) {
@@ -142,7 +144,7 @@ export function AgentSessionsModal({
         }
 
         // Use generic agentSessions API for session listing
-        const result = await window.maestro.agentSessions.listPaginated(agentId, activeSession.cwd, { limit: 100 });
+        const result = await window.maestro.agentSessions.listPaginated(agentId, projectPath, { limit: 100 });
         console.log('AgentSessionsModal: Got sessions:', result.sessions.length, 'of', result.totalCount);
         setSessions(result.sessions);
         setHasMoreSessions(result.hasMore);
@@ -156,16 +158,17 @@ export function AgentSessionsModal({
     };
 
     loadSessions();
-  }, [activeSession?.cwd, activeSession?.toolType]);
+  }, [activeSession?.projectRoot, activeSession?.toolType]);
 
   // Load more sessions when scrolling near bottom
   const loadMoreSessions = useCallback(async () => {
-    if (!activeSession?.cwd || !hasMoreSessions || isLoadingMoreSessions || !nextCursorRef.current) return;
+    // Use projectRoot (not cwd) for consistent session storage access
+    if (!activeSession?.projectRoot || !hasMoreSessions || isLoadingMoreSessions || !nextCursorRef.current) return;
 
     const agentId = activeSession.toolType || 'claude-code';
     setIsLoadingMoreSessions(true);
     try {
-      const result = await window.maestro.agentSessions.listPaginated(agentId, activeSession.cwd, {
+      const result = await window.maestro.agentSessions.listPaginated(agentId, activeSession.projectRoot, {
         cursor: nextCursorRef.current,
         limit: 100,
       });
@@ -183,7 +186,7 @@ export function AgentSessionsModal({
     } finally {
       setIsLoadingMoreSessions(false);
     }
-  }, [activeSession?.cwd, activeSession?.toolType, hasMoreSessions, isLoadingMoreSessions]);
+  }, [activeSession?.projectRoot, activeSession?.toolType, hasMoreSessions, isLoadingMoreSessions]);
 
   // Handle scroll for sessions list pagination - load more at 70% scroll
   const handleSessionsScroll = useCallback(() => {
@@ -213,14 +216,15 @@ export function AgentSessionsModal({
     setStarredSessions(newStarred);
 
     // Persist to Claude session origins (shared with AgentSessionsBrowser)
-    if (activeSession?.cwd) {
+    // Use projectRoot (not cwd) for consistent session storage access
+    if (activeSession?.projectRoot) {
       await window.maestro.claude.updateSessionStarred(
-        activeSession.cwd,
+        activeSession.projectRoot,
         sessionId,
         isNowStarred
       );
     }
-  }, [starredSessions, activeSession?.cwd]);
+  }, [starredSessions, activeSession?.projectRoot]);
 
   // Focus input on mount
   useEffect(() => {

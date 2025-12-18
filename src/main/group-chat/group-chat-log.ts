@@ -164,6 +164,9 @@ export async function readLog(logPath: string): Promise<GroupChatMessage[]> {
   }
 }
 
+/** Allowed image file extensions */
+const ALLOWED_IMAGE_EXTENSIONS = ['.png', '.jpg', '.jpeg', '.gif', '.webp'];
+
 /**
  * Save an image to the group chat's images directory.
  * Returns the filename for reference in chat log.
@@ -172,15 +175,29 @@ export async function readLog(logPath: string): Promise<GroupChatMessage[]> {
  * @param imageBuffer - The image data as a Buffer
  * @param originalFilename - Original filename to extract extension from
  * @returns The generated filename for the saved image
+ * @throws Error if extension is invalid or path traversal is detected
  */
 export async function saveImage(
   imagesDir: string,
   imageBuffer: Buffer,
   originalFilename: string
 ): Promise<string> {
-  const ext = path.extname(originalFilename) || '.png';
+  const ext = path.extname(originalFilename).toLowerCase() || '.png';
+
+  // Validate extension against whitelist
+  if (!ALLOWED_IMAGE_EXTENSIONS.includes(ext)) {
+    throw new Error(`Invalid image extension: ${ext}. Allowed: ${ALLOWED_IMAGE_EXTENSIONS.join(', ')}`);
+  }
+
   const filename = `image-${uuidv4().slice(0, 8)}${ext}`;
   const filepath = path.join(imagesDir, filename);
+
+  // Defense-in-depth: verify resolved path stays within expected directory
+  const resolvedPath = path.resolve(filepath);
+  const resolvedDir = path.resolve(imagesDir);
+  if (!resolvedPath.startsWith(resolvedDir + path.sep) && resolvedPath !== resolvedDir) {
+    throw new Error('Path traversal attempt detected');
+  }
 
   await fs.mkdir(imagesDir, { recursive: true });
   await fs.writeFile(filepath, imageBuffer);

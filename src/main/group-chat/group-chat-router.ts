@@ -9,16 +9,21 @@
  */
 
 import { GroupChatParticipant, loadGroupChat } from './group-chat-storage';
-import { appendToLog } from './group-chat-log';
+import { appendToLog, readLog, GroupChatMessage } from './group-chat-log';
 import {
   IProcessManager,
   getModeratorSessionId,
   isModeratorActive,
+  MODERATOR_SYSTEM_PROMPT,
 } from './group-chat-moderator';
 import {
   getParticipantSessionId,
   isParticipantActive,
 } from './group-chat-agent';
+import { AgentDetector } from '../agent-detector';
+
+// Import emitters from IPC handlers (will be populated after handlers are registered)
+import { groupChatEmitters } from '../ipc/handlers/groupChat';
 
 /**
  * Extracts @mentions from text that match known participants.
@@ -51,18 +56,20 @@ export function extractMentions(
 /**
  * Routes a user message to the moderator.
  *
- * - Logs the message as coming from 'user'
- * - Sends to the moderator's session
+ * Spawns a batch process for the moderator to handle this specific message.
+ * The chat history is included in the system prompt for context.
  *
  * @param groupChatId - The ID of the group chat
  * @param message - The message from the user
  * @param processManager - The process manager (optional)
+ * @param agentDetector - The agent detector for resolving agent commands (optional)
  * @param readOnly - Optional flag indicating read-only mode
  */
 export async function routeUserMessage(
   groupChatId: string,
   message: string,
   processManager?: IProcessManager,
+  agentDetector?: AgentDetector,
   readOnly?: boolean
 ): Promise<void> {
   const chat = await loadGroupChat(groupChatId);
@@ -77,15 +84,63 @@ export async function routeUserMessage(
   // Log the message as coming from user
   await appendToLog(chat.logPath, 'user', message, readOnly);
 
-  // Send to moderator (include read-only context if active)
-  if (processManager) {
-    const sessionId = getModeratorSessionId(groupChatId);
-    if (sessionId) {
-      const messageToSend = readOnly
-        ? `[READ-ONLY MODE] ${message}`
-        : message;
-      processManager.write(sessionId, messageToSend + '\n');
+  // Emit message event to renderer so it shows immediately
+  const userMessage: GroupChatMessage = {
+    timestamp: new Date().toISOString(),
+    from: 'user',
+    content: message,
+    readOnly,
+  };
+  groupChatEmitters.emitMessage?.(groupChatId, userMessage);
+
+  // Spawn a batch process for the moderator to handle this message
+  // The response will be captured via the process:data event handler in index.ts
+  if (processManager && agentDetector) {
+    const sessionIdPrefix = getModeratorSessionId(groupChatId);
+    if (sessionIdPrefix) {
+      // Create a unique session ID for this message
+      const sessionId = `${sessionIdPrefix}-${Date.now()}`;
+
+      // Resolve the agent configuration to get the executable command
+      const agent = await agentDetector.getAgent(chat.moderatorAgentId);
+      if (!agent || !agent.available) {
+        throw new Error(`Agent '${chat.moderatorAgentId}' is not available`);
+      }
+
+      // Use the resolved path if available, otherwise fall back to command
+      const command = agent.path || agent.command;
+      // Get the base args from the agent configuration
+      const args = [...agent.args];
+
+      // Build the prompt with context
+      const chatHistory = await readLog(chat.logPath);
+      const historyContext = chatHistory.slice(-20).map(m =>
+        `[${m.from}]: ${m.content}`
+      ).join('\n');
+
+      const fullPrompt = readOnly
+        ? `${MODERATOR_SYSTEM_PROMPT}\n\n## Chat History:\n${historyContext}\n\n## User Request (READ-ONLY MODE - do not make changes):\n${message}`
+        : `${MODERATOR_SYSTEM_PROMPT}\n\n## Chat History:\n${historyContext}\n\n## User Request:\n${message}`;
+
+      // Spawn the moderator process in batch mode
+      try {
+        processManager.spawn({
+          sessionId,
+          toolType: chat.moderatorAgentId,
+          cwd: process.env.HOME || '/tmp',
+          command,
+          args,
+          readOnlyMode: true,
+          prompt: fullPrompt,
+        });
+      } catch (error) {
+        console.error(`[GroupChatRouter] Failed to spawn moderator for ${groupChatId}:`, error);
+        throw new Error(`Failed to spawn moderator: ${error instanceof Error ? error.message : String(error)}`);
+      }
     }
+  } else if (processManager && !agentDetector) {
+    console.error(`[GroupChatRouter] AgentDetector not available, cannot spawn moderator`);
+    throw new Error('AgentDetector not available');
   }
 }
 
@@ -120,8 +175,13 @@ export async function routeModeratorResponse(
       if (isParticipantActive(groupChatId, participantName)) {
         const sessionId = getParticipantSessionId(groupChatId, participantName);
         if (sessionId) {
-          // Send the full message to the mentioned participant
-          processManager.write(sessionId, message + '\n');
+          try {
+            // Send the full message to the mentioned participant
+            processManager.write(sessionId, message + '\n');
+          } catch (error) {
+            console.error(`[GroupChatRouter] Failed to write to participant ${participantName}:`, error);
+            // Continue with other participants even if one fails
+          }
         }
       }
     }
@@ -163,9 +223,14 @@ export async function routeAgentResponse(
   if (processManager && isModeratorActive(groupChatId)) {
     const sessionId = getModeratorSessionId(groupChatId);
     if (sessionId) {
-      // Format the notification to clearly indicate who responded
-      const notification = `[${participantName}]: ${message}`;
-      processManager.write(sessionId, notification + '\n');
+      try {
+        // Format the notification to clearly indicate who responded
+        const notification = `[${participantName}]: ${message}`;
+        processManager.write(sessionId, notification + '\n');
+      } catch (error) {
+        console.error(`[GroupChatRouter] Failed to notify moderator from ${participantName}:`, error);
+        // Don't throw - the message was already logged
+      }
     }
   }
 }

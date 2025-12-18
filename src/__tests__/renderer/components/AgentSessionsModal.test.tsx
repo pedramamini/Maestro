@@ -322,7 +322,7 @@ describe('AgentSessionsModal', () => {
       render(
         <AgentSessionsModal
           theme={mockTheme}
-          activeSession={createMockSession({ cwd: '/my/project' })}
+          activeSession={createMockSession({ cwd: '/my/project', projectRoot: '/my/project' })}
           onClose={mockOnClose}
           onResumeSession={mockOnResumeSession}
         />
@@ -337,7 +337,7 @@ describe('AgentSessionsModal', () => {
       });
     });
 
-    it('should not load sessions when no activeSession.cwd', async () => {
+    it('should not load sessions when no activeSession', async () => {
       const listSessionsMock = vi.fn().mockResolvedValue({
         sessions: [],
         hasMore: false,
@@ -1725,6 +1725,45 @@ describe('AgentSessionsModal', () => {
           '/test/project',
           'session-1',
           false
+        );
+      });
+    });
+
+    it('uses projectRoot (not cwd) for starring when they differ', async () => {
+      // This tests the fix for the cwd vs projectRoot bug
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({});
+
+      const mockSessions = [createMockClaudeSession({ sessionId: 'session-1' })];
+      vi.mocked(window.maestro.agentSessions.listPaginated).mockResolvedValue({
+        sessions: mockSessions,
+        hasMore: false,
+        totalCount: 1,
+        nextCursor: null,
+      });
+
+      render(
+        <AgentSessionsModal
+          theme={mockTheme}
+          activeSession={createMockSession({
+            cwd: '/test/project/some/subdir',  // Changed via cd
+            projectRoot: '/test/project',       // Original project root
+          })}
+          onClose={mockOnClose}
+          onResumeSession={mockOnResumeSession}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByTitle('Add to favorites')).toBeInTheDocument();
+      });
+
+      fireEvent.click(screen.getByTitle('Add to favorites'));
+
+      await waitFor(() => {
+        expect(window.maestro.claude.updateSessionStarred).toHaveBeenCalledWith(
+          '/test/project',  // projectRoot, not '/test/project/some/subdir'
+          'session-1',
+          true
         );
       });
     });

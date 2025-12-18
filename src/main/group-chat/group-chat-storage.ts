@@ -13,6 +13,13 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
+import type { ToolType } from '../../shared/types';
+
+/**
+ * Valid agent IDs that can be used as moderators.
+ * Must match available agents from agent-detector.
+ */
+const VALID_MODERATOR_AGENT_IDS: ToolType[] = ['claude-code', 'codex', 'opencode'];
 
 /**
  * Group chat participant
@@ -100,16 +107,40 @@ function getImagesDir(id: string): string {
 }
 
 /**
+ * Sanitizes a chat name by removing invalid filesystem characters.
+ *
+ * @param name - Raw chat name
+ * @returns Sanitized chat name
+ */
+function sanitizeChatName(name: string): string {
+  return name
+    .replace(/[<>:"/\\|?*\x00-\x1f]/g, '') // Remove filesystem-invalid chars
+    .trim()
+    .slice(0, 255) || 'Untitled Chat'; // Limit length, fallback if empty
+}
+
+/**
  * Creates a new group chat with the specified name and moderator agent.
  *
  * @param name - Display name for the group chat
  * @param moderatorAgentId - ID of the agent to use as moderator (e.g., 'claude-code')
  * @returns The created GroupChat object
+ * @throws Error if moderatorAgentId is not a valid agent ID
  */
 export async function createGroupChat(
   name: string,
   moderatorAgentId: string
 ): Promise<GroupChat> {
+  // Validate agent ID against whitelist
+  if (!VALID_MODERATOR_AGENT_IDS.includes(moderatorAgentId as ToolType)) {
+    throw new Error(
+      `Invalid moderator agent ID: ${moderatorAgentId}. Must be one of: ${VALID_MODERATOR_AGENT_IDS.join(', ')}`
+    );
+  }
+
+  // Sanitize the chat name
+  const sanitizedName = sanitizeChatName(name);
+
   const id = uuidv4();
   const now = Date.now();
   const chatDir = getGroupChatDir(id);
@@ -126,7 +157,7 @@ export async function createGroupChat(
   // Create metadata
   const groupChat: GroupChat = {
     id,
-    name,
+    name: sanitizedName,
     createdAt: now,
     updatedAt: now,
     moderatorAgentId,

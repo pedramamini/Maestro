@@ -56,6 +56,9 @@ import {
 // Group chat router imports
 import { routeUserMessage } from '../../group-chat/group-chat-router';
 
+// Agent detector import
+import { AgentDetector } from '../../agent-detector';
+
 const LOG_CONTEXT = '[GroupChat]';
 
 /**
@@ -101,6 +104,7 @@ interface GenericProcessManager {
 export interface GroupChatHandlerDependencies {
   getMainWindow: () => BrowserWindow | null;
   getProcessManager: () => GenericProcessManager | null;
+  getAgentDetector: () => AgentDetector | null;
 }
 
 /**
@@ -113,7 +117,7 @@ export interface GroupChatHandlerDependencies {
  * - Participants: addParticipant, sendToParticipant, removeParticipant
  */
 export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): void {
-  const { getMainWindow, getProcessManager } = deps;
+  const { getMainWindow, getProcessManager, getAgentDetector } = deps;
 
   // ========== Storage Handlers ==========
 
@@ -248,9 +252,10 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
     'groupChat:sendToModerator',
     withIpcErrorLogging(handlerOpts('sendToModerator'), async (id: string, message: string, images?: string[], readOnly?: boolean): Promise<void> => {
       const processManager = getProcessManager();
+      const agentDetector = getAgentDetector();
 
       // Route through the user message router which handles logging and forwarding
-      await routeUserMessage(id, message, processManager ?? undefined, readOnly);
+      await routeUserMessage(id, message, processManager ?? undefined, agentDetector ?? undefined, readOnly);
 
       logger.debug(`Sent message to moderator in ${id}`, LOG_CONTEXT, {
         messageLength: message.length,

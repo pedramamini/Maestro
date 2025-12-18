@@ -225,6 +225,8 @@ async function discoverClaudeSessionFiles(): Promise<SessionFileInfo[]> {
         const filePath = path.join(projectPath, filename);
         try {
           const fileStat = await fs.stat(filePath);
+          // Skip 0-byte sessions (created but abandoned before any content was written)
+          if (fileStat.size === 0) continue;
           const sessionKey = `${projectDir}/${filename.replace('.jsonl', '')}`;
           files.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
         } catch {
@@ -288,6 +290,8 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 
                 try {
                   const fileStat = await fs.stat(filePath);
+                  // Skip 0-byte sessions (created but abandoned before any content was written)
+                  if (fileStat.size === 0) continue;
                   const sessionKey = `${year}/${month}/${day}/${file.replace('.jsonl', '')}`;
                   files.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
                 } catch {

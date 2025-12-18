@@ -1,6 +1,5 @@
-// Slash commands are now purely prompt macros - no execute functions
-// All commands are defined via Custom AI Commands in settings or fetched from Claude Code CLI
-// This file is kept for backward compatibility but contains no built-in commands
+// Slash commands - both built-in Maestro commands and custom AI commands
+// Built-in commands are intercepted by Maestro before being sent to the agent
 
 export interface SlashCommand {
   command: string;
@@ -9,7 +8,12 @@ export interface SlashCommand {
   aiOnly?: boolean; // Only show this command in AI mode
 }
 
-// Empty array - all slash commands are now custom AI commands
-// Built-in special cases (/history, /clear, /jump) have been removed
-// Users can recreate similar functionality via custom AI commands if needed
-export const slashCommands: SlashCommand[] = [];
+// Built-in Maestro slash commands
+// These are intercepted by Maestro and handled specially (not passed to the agent)
+export const slashCommands: SlashCommand[] = [
+  {
+    command: '/history',
+    description: 'Generate a synopsis of recent work and add to history',
+    aiOnly: true,
+  },
+];

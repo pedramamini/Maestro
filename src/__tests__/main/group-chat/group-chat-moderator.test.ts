@@ -72,10 +72,12 @@ describe('group-chat-moderator', () => {
   }
 
   // ===========================================================================
-  // Test 3.1: spawnModerator creates session in read-only mode
+  // Test 3.1: spawnModerator sets up session mapping (batch mode)
+  // Note: spawnModerator no longer spawns a process directly - it sets up the
+  // session ID mapping. Actual process spawning happens per-message in batch mode.
   // ===========================================================================
   describe('spawnModerator', () => {
-    it('spawns moderator in read-only mode', async () => {
+    it('returns session ID prefix for batch mode', async () => {
       const chat = await createTestChat('Test', 'claude-code');
       const sessionId = await spawnModerator(chat, mockProcessManager);
 
@@ -83,36 +85,26 @@ describe('group-chat-moderator', () => {
       expect(sessionId).toContain('group-chat');
       expect(sessionId).toContain('moderator');
 
-      // Verify read-only flag was passed
-      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          readOnlyMode: true,
-        })
-      );
+      // In batch mode, spawn is not called during spawnModerator
+      // The process is spawned per-message in routeUserMessage
+      expect(mockProcessManager.spawn).not.toHaveBeenCalled();
     });
 
-    it('spawns with correct agent type', async () => {
+    it('stores session mapping for chat', async () => {
       const chat = await createTestChat('Agent Test', 'opencode');
-      await spawnModerator(chat, mockProcessManager);
+      const sessionId = await spawnModerator(chat, mockProcessManager);
 
-      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          toolType: 'opencode',
-        })
-      );
+      // Session ID should be retrievable
+      expect(getModeratorSessionId(chat.id)).toBe(sessionId);
     });
 
-    it('throws error when spawn fails', async () => {
-      const failingProcessManager: IProcessManager = {
-        spawn: vi.fn().mockReturnValue({ pid: -1, success: false }),
-        write: vi.fn(),
-        kill: vi.fn(),
-      };
+    it('succeeds even without process manager activity', async () => {
+      // In batch mode, the process manager is not used during spawn
+      const chat = await createTestChat('Batch Test', 'claude-code');
+      const sessionId = await spawnModerator(chat, mockProcessManager);
 
-      const chat = await createTestChat('Fail Test', 'claude-code');
-
-      await expect(spawnModerator(chat, failingProcessManager))
-        .rejects.toThrow(/Failed to spawn moderator/);
+      expect(sessionId).toBeTruthy();
+      expect(sessionId).toContain(chat.id);
     });
 
     it('updates group chat with session ID', async () => {
@@ -125,19 +117,15 @@ describe('group-chat-moderator', () => {
   });
 
   // ===========================================================================
-  // Test 3.2: spawnModerator sends introduction message
+  // Test 3.2: System prompt for moderator
   // ===========================================================================
-  describe('spawnModerator - introduction', () => {
-    it('sends introduction with system prompt', async () => {
+  describe('spawnModerator - system prompt', () => {
+    it('session ID includes chat ID', async () => {
       const chat = await createTestChat('Intro Test', 'claude-code');
-      await spawnModerator(chat, mockProcessManager);
+      const sessionId = await spawnModerator(chat, mockProcessManager);
 
-      // Verify the spawn was called with the system prompt
-      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
-        expect.objectContaining({
-          prompt: expect.stringContaining('Group Chat Moderator'),
-        })
-      );
+      // Session ID should include the chat ID for tracking
+      expect(sessionId).toContain(chat.id);
     });
 
     it('system prompt contains moderator instructions', () => {

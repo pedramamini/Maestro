@@ -34,7 +34,7 @@ export function GroupChatHeader({
 }: GroupChatHeaderProps): JSX.Element {
   return (
     <div
-      className="flex items-center justify-between px-4 py-3 border-b"
+      className="flex items-center justify-between px-6 h-16 border-b shrink-0"
       style={{
         backgroundColor: theme.colors.bgSidebar,
         borderColor: theme.colors.border,

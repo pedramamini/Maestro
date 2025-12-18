@@ -37,9 +37,10 @@ export function RenameSessionModal(props: RenameSessionModalProps) {
       ));
 
       // Also update the agent session name if this session has an associated agent session
-      if (targetSession?.agentSessionId && targetSession?.cwd) {
+      // Use projectRoot (not cwd) for consistent session storage access
+      if (targetSession?.agentSessionId && targetSession?.projectRoot) {
         window.maestro.agentSessions.updateSessionName(
-          targetSession.cwd,
+          targetSession.projectRoot,
           targetSession.agentSessionId,
           trimmedName
         ).catch(err => console.error('Failed to update agent session name:', err));

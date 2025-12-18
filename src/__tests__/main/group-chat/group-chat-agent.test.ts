@@ -106,10 +106,10 @@ describe('group-chat-agent', () => {
 
       await addParticipant(chat.id, 'Backend', 'claude-code', mockProcessManager);
 
-      // spawn is called twice: once for moderator, once for participant
-      expect(mockProcessManager.spawn).toHaveBeenCalledTimes(2);
+      // spawn is called once for participant (moderator uses batch mode, not spawn)
+      expect(mockProcessManager.spawn).toHaveBeenCalledTimes(1);
 
-      // Check the second call (participant)
+      // Check the participant spawn call
       expect(mockProcessManager.spawn).toHaveBeenLastCalledWith(
         expect.objectContaining({
           toolType: 'claude-code',
@@ -132,10 +132,10 @@ describe('group-chat-agent', () => {
     });
 
     it('throws when spawn fails', async () => {
+      // Note: spawnModerator no longer calls spawn (uses batch mode),
+      // so we only need to mock the participant spawn to fail
       const failingProcessManager: IProcessManager = {
-        spawn: vi.fn()
-          .mockReturnValueOnce({ pid: 12345, success: true }) // Moderator succeeds
-          .mockReturnValueOnce({ pid: -1, success: false }), // Participant fails
+        spawn: vi.fn().mockReturnValue({ pid: -1, success: false }), // Participant fails
         write: vi.fn(),
         kill: vi.fn(),
       };

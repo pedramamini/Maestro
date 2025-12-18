@@ -557,17 +557,167 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 
   async deleteMessagePair(
     _projectPath: string,
-    _sessionId: string,
-    _userMessageUuid: string,
-    _fallbackContent?: string
+    sessionId: string,
+    userMessageUuid: string,
+    fallbackContent?: string
   ): Promise<{ success: boolean; error?: string; linesRemoved?: number }> {
-    // OpenCode message deletion would require deleting multiple JSON files
-    // This is more complex than Claude's JSONL format
-    // For now, this operation is not supported
-    logger.warn('Message deletion not yet implemented for OpenCode', LOG_CONTEXT);
-    return {
-      success: false,
-      error: 'Message deletion not yet implemented for OpenCode sessions',
-    };
+    try {
+      // Load all messages for the session
+      const { messages, parts } = await this.loadSessionMessages(sessionId);
+
+      if (messages.length === 0) {
+        logger.warn('No messages found in OpenCode session', LOG_CONTEXT, { sessionId });
+        return { success: false, error: 'No messages found in session' };
+      }
+
+      // Find the target user message
+      let userMessageIndex = -1;
+      let targetMessage: OpenCodeMessage | null = null;
+
+      // First try matching by UUID (message ID)
+      for (let i = 0; i < messages.length; i++) {
+        if (messages[i].id === userMessageUuid && messages[i].role === 'user') {
+          userMessageIndex = i;
+          targetMessage = messages[i];
+          break;
+        }
+      }
+
+      // Fallback: try content match
+      if (userMessageIndex === -1 && fallbackContent) {
+        const normalizedFallback = fallbackContent.trim().toLowerCase();
+
+        for (let i = messages.length - 1; i >= 0; i--) {
+          if (messages[i].role === 'user') {
+            const msgParts = parts.get(messages[i].id) || [];
+            const textContent = this.extractTextFromParts(msgParts);
+            if (textContent.trim().toLowerCase() === normalizedFallback) {
+              userMessageIndex = i;
+              targetMessage = messages[i];
+              logger.info('Found OpenCode message by content match', LOG_CONTEXT, { sessionId, index: i });
+              break;
+            }
+          }
+        }
+      }
+
+      if (userMessageIndex === -1 || !targetMessage) {
+        logger.warn('User message not found for deletion in OpenCode session', LOG_CONTEXT, {
+          sessionId,
+          userMessageUuid,
+          hasFallback: !!fallbackContent,
+        });
+        return { success: false, error: 'User message not found' };
+      }
+
+      // Find all messages to delete (user message + following assistant messages until next user)
+      const messagesToDelete: OpenCodeMessage[] = [targetMessage];
+      const toolPartsBeingDeleted: OpenCodePart[] = [];
+
+      for (let i = userMessageIndex + 1; i < messages.length; i++) {
+        if (messages[i].role === 'user') {
+          break;
+        }
+        messagesToDelete.push(messages[i]);
+
+        // Collect tool parts from messages being deleted
+        const msgParts = parts.get(messages[i].id) || [];
+        for (const part of msgParts) {
+          if (part.type === 'tool') {
+            toolPartsBeingDeleted.push(part);
+          }
+        }
+      }
+
+      // Delete message files and their associated parts
+      let filesDeleted = 0;
+      const messageDir = this.getMessageDir(sessionId);
+
+      for (const msg of messagesToDelete) {
+        // Delete message file
+        const messageFile = path.join(messageDir, `${msg.id}.json`);
+        try {
+          await fs.unlink(messageFile);
+          filesDeleted++;
+        } catch {
+          // File may not exist
+        }
+
+        // Delete all part files for this message
+        const partDir = this.getPartDir(msg.id);
+        try {
+          const partFiles = await listJsonFiles(partDir);
+          for (const partFile of partFiles) {
+            await fs.unlink(path.join(partDir, partFile));
+            filesDeleted++;
+          }
+          // Try to remove the part directory if empty
+          try {
+            await fs.rmdir(partDir);
+          } catch {
+            // Directory may not be empty or may not exist
+          }
+        } catch {
+          // Part directory may not exist
+        }
+      }
+
+      // If we deleted tool parts, we need to clean up any orphaned tool references
+      // in remaining messages. OpenCode stores tool state in parts, so we need to
+      // check if any remaining messages reference the deleted tools.
+      if (toolPartsBeingDeleted.length > 0) {
+        const deletedToolIds = new Set(toolPartsBeingDeleted.map((p) => p.id));
+
+        // Scan remaining messages for tool parts that might reference deleted tools
+        for (const msg of messages) {
+          if (messagesToDelete.includes(msg)) continue;
+
+          const msgParts = parts.get(msg.id) || [];
+          const partDir = this.getPartDir(msg.id);
+
+          for (const part of msgParts) {
+            // Check if this is a tool part that references a deleted tool
+            // OpenCode tool parts may have state.input or state.output referencing other tool IDs
+            if (part.type === 'tool' && part.state) {
+              const stateStr = JSON.stringify(part.state);
+              for (const deletedId of deletedToolIds) {
+                if (stateStr.includes(deletedId)) {
+                  // This part references a deleted tool, remove it
+                  try {
+                    await fs.unlink(path.join(partDir, `${part.id}.json`));
+                    filesDeleted++;
+                    logger.info('Removed orphaned tool part reference', LOG_CONTEXT, {
+                      sessionId,
+                      partId: part.id,
+                      referencedDeletedTool: deletedId,
+                    });
+                  } catch {
+                    // Part file may not exist
+                  }
+                  break;
+                }
+              }
+            }
+          }
+        }
+
+        logger.info('Cleaned up tool parts in OpenCode session', LOG_CONTEXT, {
+          sessionId,
+          deletedToolIds: Array.from(deletedToolIds),
+        });
+      }
+
+      logger.info('Deleted message pair from OpenCode session', LOG_CONTEXT, {
+        sessionId,
+        userMessageUuid,
+        messagesDeleted: messagesToDelete.length,
+        filesDeleted,
+      });
+
+      return { success: true, linesRemoved: filesDeleted };
+    } catch (error) {
+      logger.error('Error deleting message pair from OpenCode session', LOG_CONTEXT, { sessionId, error });
+      return { success: false, error: String(error) };
+    }
   }
 }

@@ -75,6 +75,10 @@ import { ToastContainer } from './components/Toast';
 // Import services
 import { gitService } from './services/git';
 
+// Import prompts and synopsis parsing
+import { autorunSynopsisPrompt } from '../prompts';
+import { parseSynopsis } from '../shared/synopsis';
+
 // Import types and constants
 import type {
   ToolType, SessionState, RightPanelTab,
@@ -1287,7 +1291,8 @@ export default function MaestroConsole() {
 
         // Register this as a user-initiated Maestro session (batch sessions are filtered above)
         // Do NOT pass session name - names should only be set when user explicitly renames
-        window.maestro.agentSessions.registerSessionOrigin(session.cwd, agentSessionId, 'user')
+        // Use projectRoot (not cwd) for consistent session storage access
+        window.maestro.agentSessions.registerSessionOrigin(session.projectRoot, agentSessionId, 'user')
           .catch(err => console.error('[onSessionId] Failed to register session origin:', err));
 
         return prev.map(s => {
@@ -2338,6 +2343,141 @@ export default function MaestroConsole() {
     ? getBatchState(activeBatchSessionIds[0])
     : (activeSession ? getBatchState(activeSession.id) : getBatchState(''));
 
+  // Handler for the built-in /history command
+  // Requests a synopsis from the current agent session and saves to history
+  const handleHistoryCommand = useCallback(async () => {
+    if (!activeSession) {
+      console.warn('[handleHistoryCommand] No active session');
+      return;
+    }
+
+    const activeTab = getActiveTab(activeSession);
+    const agentSessionId = activeTab?.agentSessionId;
+
+    if (!agentSessionId) {
+      // No agent session yet - show error log
+      const errorLog: LogEntry = {
+        id: generateId(),
+        timestamp: Date.now(),
+        source: 'system',
+        text: 'No active agent session. Start a conversation first before using /history.',
+      };
+      addLogToActiveTab(activeSession.id, errorLog);
+      return;
+    }
+
+    // Show a pending log entry while synopsis is being generated
+    const pendingLog: LogEntry = {
+      id: generateId(),
+      timestamp: Date.now(),
+      source: 'system',
+      text: 'Generating history synopsis...',
+    };
+    addLogToActiveTab(activeSession.id, pendingLog);
+
+    try {
+      // Request synopsis from the agent
+      const result = await spawnBackgroundSynopsis(
+        activeSession.id,
+        activeSession.cwd,
+        agentSessionId,
+        autorunSynopsisPrompt,
+        activeSession.toolType
+      );
+
+      if (result.success && result.response) {
+        // Parse the synopsis response
+        const parsed = parseSynopsis(result.response);
+
+        // Get group info for the history entry
+        const group = groups.find(g => g.id === activeSession.groupId);
+        const groupName = group?.name || 'Ungrouped';
+
+        // Add to history
+        addHistoryEntry({
+          summary: parsed.shortSummary,
+          fullResponse: parsed.fullSynopsis,
+          agentSessionId: agentSessionId,
+          command: '/history',
+          sessionId: activeSession.id,
+          projectPath: activeSession.cwd,
+          sessionName: activeTab.name || undefined,
+          usageStats: result.usageStats,
+        });
+
+        // Update the pending log with success
+        setSessions(prev => prev.map(s => {
+          if (s.id !== activeSession.id) return s;
+          return {
+            ...s,
+            aiTabs: s.aiTabs.map(tab => {
+              if (tab.id !== activeTab.id) return tab;
+              return {
+                ...tab,
+                logs: tab.logs.map(log =>
+                  log.id === pendingLog.id
+                    ? { ...log, text: `Synopsis saved to history: ${parsed.shortSummary}` }
+                    : log
+                ),
+              };
+            }),
+          };
+        }));
+
+        // Show toast
+        addToast({
+          type: 'success',
+          title: 'History Entry Added',
+          message: parsed.shortSummary,
+          group: groupName,
+          project: activeSession.name,
+          sessionId: activeSession.id,
+          tabId: activeTab.id,
+          tabName: activeTab.name || undefined,
+        });
+      } else {
+        // Synopsis generation failed
+        setSessions(prev => prev.map(s => {
+          if (s.id !== activeSession.id) return s;
+          return {
+            ...s,
+            aiTabs: s.aiTabs.map(tab => {
+              if (tab.id !== activeTab.id) return tab;
+              return {
+                ...tab,
+                logs: tab.logs.map(log =>
+                  log.id === pendingLog.id
+                    ? { ...log, text: 'Failed to generate history synopsis. Try again.' }
+                    : log
+                ),
+              };
+            }),
+          };
+        }));
+      }
+    } catch (error) {
+      console.error('[handleHistoryCommand] Error:', error);
+      // Update the pending log with error
+      setSessions(prev => prev.map(s => {
+        if (s.id !== activeSession.id) return s;
+        return {
+          ...s,
+          aiTabs: s.aiTabs.map(tab => {
+            if (tab.id !== activeTab.id) return tab;
+            return {
+              ...tab,
+              logs: tab.logs.map(log =>
+                log.id === pendingLog.id
+                  ? { ...log, text: `Error generating synopsis: ${(error as Error).message}` }
+                  : log
+              ),
+            };
+          }),
+        };
+      }));
+    }
+  }, [activeSession, groups, spawnBackgroundSynopsis, addHistoryEntry, addLogToActiveTab, setSessions, addToast]);
+
   // Input processing hook - handles sending messages and commands
   const { processInput, processInputRef } = useInputProcessing({
     activeSession,
@@ -2358,6 +2498,7 @@ export default function MaestroConsole() {
     activeBatchRunState,
     processQueuedItemRef,
     flushBatchedUpdates: batchedUpdater.flushNow,
+    onHistoryCommand: handleHistoryCommand,
   });
 
   // Initialize activity tracker for time tracking
@@ -2553,6 +2694,32 @@ export default function MaestroConsole() {
     setGroupChatMessages([]);
     setGroupChatState('idle');
   }, []);
+
+  // Open the moderator session in the direct agent view
+  const handleOpenModeratorSession = useCallback((moderatorSessionId: string) => {
+    // Find the session that has this agent session ID
+    const session = sessions.find(s =>
+      s.aiTabs?.some(tab => tab.agentSessionId === moderatorSessionId)
+    );
+
+    if (session) {
+      // Close group chat
+      setActiveGroupChatId(null);
+      setGroupChatMessages([]);
+      setGroupChatState('idle');
+
+      // Set the session as active
+      setActiveSessionId(session.id);
+
+      // Find and activate the tab with this agent session ID
+      const tab = session.aiTabs?.find(t => t.agentSessionId === moderatorSessionId);
+      if (tab) {
+        setSessions(prev => prev.map(s =>
+          s.id === session.id ? { ...s, activeTabId: tab.id } : s
+        ));
+      }
+    }
+  }, [sessions]);
 
   const handleCreateGroupChat = useCallback(async (name: string, moderatorAgentId: string) => {
     const chat = await window.maestro.groupChat.create(name, moderatorAgentId);
@@ -3325,9 +3492,10 @@ export default function MaestroConsole() {
     setSessions(prev => prev.map(s => {
       if (s.id !== activeSession.id) return s;
       // Persist starred status to Claude session metadata (async, fire and forget)
+      // Use projectRoot (not cwd) for consistent session storage access
       if (tab.agentSessionId) {
         window.maestro.claude.updateSessionStarred(
-          s.cwd,
+          s.projectRoot,
           tab.agentSessionId,
           newStarred
         ).catch(err => console.error('Failed to persist tab starred:', err));
@@ -3424,9 +3592,10 @@ export default function MaestroConsole() {
     setSessions(prev => {
       const updated = prev.map(s => s.id === sessId ? { ...s, name: newName } : s);
       // Sync the session name to agent session storage for searchability
+      // Use projectRoot (not cwd) for consistent session storage access
       const session = updated.find(s => s.id === sessId);
-      if (session?.agentSessionId && session.cwd) {
-        window.maestro.agentSessions.updateSessionName(session.cwd, session.agentSessionId, newName)
+      if (session?.agentSessionId && session.projectRoot) {
+        window.maestro.agentSessions.updateSessionName(session.projectRoot, session.agentSessionId, newName)
           .catch(err => console.warn('[finishRenamingSession] Failed to sync session name:', err));
       }
       return updated;
@@ -5177,6 +5346,7 @@ export default function MaestroConsole() {
           groupChat={groupChats.find(c => c.id === activeGroupChatId)!}
           messages={groupChatMessages}
           onClose={() => setShowGroupChatInfo(false)}
+          onOpenModeratorSession={handleOpenModeratorSession}
         />
       )}
 
@@ -5244,8 +5414,9 @@ export default function MaestroConsole() {
               const tab = s.aiTabs.find(t => t.id === renameTabId);
               if (tab?.agentSessionId) {
                 // Persist name to agent session metadata (async, fire and forget)
+                // Use projectRoot (not cwd) for consistent session storage access
                 window.maestro.agentSessions.updateSessionName(
-                  s.cwd,
+                  s.projectRoot,
                   tab.agentSessionId,
                   newName || ''
                 ).catch(err => console.error('Failed to persist tab name:', err));
@@ -5686,8 +5857,9 @@ export default function MaestroConsole() {
             const tab = s.aiTabs.find(t => t.id === tabId);
             if (tab?.agentSessionId) {
               // Persist name to agent session metadata (async, fire and forget)
+              // Use projectRoot (not cwd) for consistent session storage access
               window.maestro.agentSessions.updateSessionName(
-                s.cwd,
+                s.projectRoot,
                 tab.agentSessionId,
                 newName || ''
               ).catch(err => console.error('Failed to persist tab name:', err));
@@ -5760,8 +5932,9 @@ export default function MaestroConsole() {
             const tab = s.aiTabs.find(t => t.id === tabId);
             if (tab?.agentSessionId) {
               // Persist starred status to Claude session metadata (async, fire and forget)
+              // Use projectRoot (not cwd) since session storage is keyed by initial project path
               window.maestro.claude.updateSessionStarred(
-                s.cwd,
+                s.projectRoot,
                 tab.agentSessionId,
                 starred
               ).catch(err => console.error('Failed to persist tab starred:', err));

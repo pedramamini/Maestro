@@ -52,8 +52,12 @@ const createTestTab = (overrides: Partial<AITab> = {}): AITab => ({
   id: `tab-${Math.random().toString(36).substr(2, 9)}`,
   name: '',
   agentSessionId: `${Math.random().toString(36).substr(2, 8)}-abcd-1234-5678-123456789abc`,
+  starred: false,
   state: 'idle',
   logs: [],
+  inputValue: '',
+  stagedImages: [],
+  createdAt: Date.now(),
   usageStats: {
     inputTokens: 1000,
     outputTokens: 500,

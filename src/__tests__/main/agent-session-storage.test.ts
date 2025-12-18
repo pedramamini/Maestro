@@ -256,13 +256,13 @@ describe('OpenCodeSessionStorage', () => {
     expect(path).toContain('session-123');
   });
 
-  it('should reject message deletion (not implemented)', async () => {
+  it('should fail gracefully when deleting from non-existent session', async () => {
     const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
     const storage = new OpenCodeSessionStorage();
 
     const deleteResult = await storage.deleteMessagePair('/test/project', 'session-123', 'uuid-456');
     expect(deleteResult.success).toBe(false);
-    expect(deleteResult.error).toContain('not yet implemented');
+    expect(deleteResult.error).toContain('No messages found in session');
   });
 });
 
@@ -308,13 +308,13 @@ describe('CodexSessionStorage', () => {
     expect(path).toBeNull();
   });
 
-  it('should reject message deletion (not implemented)', async () => {
+  it('should fail gracefully when deleting from non-existent session', async () => {
     const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
     const storage = new CodexSessionStorage();
 
     const deleteResult = await storage.deleteMessagePair('/test/project', 'session-123', 'uuid-456');
     expect(deleteResult.success).toBe(false);
-    expect(deleteResult.error).toContain('not yet implemented');
+    expect(deleteResult.error).toContain('Session file not found');
   });
 
   it('should handle empty search query', async () => {

@@ -16,6 +16,18 @@ vi.mock('lucide-react', () => ({
   Send: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
     <svg data-testid="send-icon" className={className} style={style} />
   ),
+  Keyboard: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg data-testid="keyboard-icon" className={className} style={style} />
+  ),
+  ImageIcon: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg data-testid="image-icon" className={className} style={style} />
+  ),
+  History: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg data-testid="history-icon" className={className} style={style} />
+  ),
+  Eye: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+    <svg data-testid="eye-icon" className={className} style={style} />
+  ),
 }));
 
 // Mock theme
@@ -158,7 +170,8 @@ describe('PromptComposerModal', () => {
       expect(screen.getByText('— My Custom Session')).toBeInTheDocument();
     });
 
-    it('should render keyboard shortcut hint', () => {
+    it('should render keyboard shortcut hint when onToggleEnterToSend is provided', () => {
+      const onToggle = vi.fn();
       renderWithProvider(
         <PromptComposerModal
           isOpen={true}
@@ -167,11 +180,13 @@ describe('PromptComposerModal', () => {
           initialValue=""
           onSubmit={onSubmit}
           onSend={onSend}
+          enterToSend={false}
+          onToggleEnterToSend={onToggle}
         />
       );
 
-      expect(screen.getByText('+ Enter to send')).toBeInTheDocument();
-      expect(screen.getByText('⌘')).toBeInTheDocument();
+      // When enterToSend is false, it shows "⌘ + Enter"
+      expect(screen.getByText('⌘ + Enter')).toBeInTheDocument();
     });
 
     it('should render close button with X icon', () => {

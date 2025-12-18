@@ -55,6 +55,8 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
   const [customAgentPaths, setCustomAgentPaths] = useState<Record<string, string>>({});
   const [customAgentArgs, setCustomAgentArgs] = useState<Record<string, string>>({});
   const [agentConfigs, setAgentConfigs] = useState<Record<string, Record<string, any>>>({});
+  const [availableModels, setAvailableModels] = useState<Record<string, string[]>>({});
+  const [loadingModels, setLoadingModels] = useState<Record<string, boolean>>({});
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
@@ -136,6 +138,26 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
       setRefreshingAgent(null);
     }
   }, []);
+
+  // Load available models for an agent that supports model selection
+  const loadModelsForAgent = React.useCallback(async (agentId: string, forceRefresh = false) => {
+    // Check if agent supports model selection
+    const agent = agents.find(a => a.id === agentId);
+    if (!agent?.capabilities?.supportsModelSelection) return;
+
+    // Skip if already loaded and not forcing refresh
+    if (!forceRefresh && availableModels[agentId]?.length > 0) return;
+
+    setLoadingModels(prev => ({ ...prev, [agentId]: true }));
+    try {
+      const models = await window.maestro.agents.getModels(agentId, forceRefresh);
+      setAvailableModels(prev => ({ ...prev, [agentId]: models }));
+    } catch (error) {
+      console.error(`Failed to load models for ${agentId}:`, error);
+    } finally {
+      setLoadingModels(prev => ({ ...prev, [agentId]: false }));
+    }
+  }, [agents, availableModels]);
 
   const handleCreate = React.useCallback(() => {
     const name = instanceName.trim();
@@ -269,10 +291,15 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
                         onClick={() => {
                           if (isSupported) {
                             // Toggle expansion
-                            setExpandedAgent(isExpanded ? null : agent.id);
+                            const nowExpanded = !isExpanded;
+                            setExpandedAgent(nowExpanded ? agent.id : null);
                             // Auto-select if available
                             if (canSelect) {
                               setSelectedAgent(agent.id);
+                            }
+                            // Load models when expanding an agent that supports model selection
+                            if (nowExpanded && agent.capabilities?.supportsModelSelection) {
+                              loadModelsForAgent(agent.id);
                             }
                           }
                         }}
@@ -481,28 +508,64 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
                                 />
                               )}
                               {option.type === 'text' && (
-                                <input
-                                  type="text"
-                                  value={agentConfigs[agent.id]?.[option.key] ?? option.default}
-                                  onChange={(e) => {
-                                    const newConfig = {
-                                      ...agentConfigs[agent.id],
-                                      [option.key]: e.target.value
-                                    };
-                                    setAgentConfigs(prev => ({
-                                      ...prev,
-                                      [agent.id]: newConfig
-                                    }));
-                                  }}
-                                  onBlur={() => {
-                                    const currentConfig = agentConfigs[agent.id] || {};
-                                    window.maestro.agents.setConfig(agent.id, currentConfig);
-                                  }}
-                                  onClick={(e) => e.stopPropagation()}
-                                  placeholder={option.default || ''}
-                                  className="w-full p-2 rounded border bg-transparent outline-none text-xs font-mono"
-                                  style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-                                />
+                                <>
+                                  <div className="flex gap-2">
+                                    <input
+                                      type="text"
+                                      list={option.key === 'model' ? `models-${agent.id}` : undefined}
+                                      value={agentConfigs[agent.id]?.[option.key] ?? option.default}
+                                      onChange={(e) => {
+                                        const newConfig = {
+                                          ...agentConfigs[agent.id],
+                                          [option.key]: e.target.value
+                                        };
+                                        setAgentConfigs(prev => ({
+                                          ...prev,
+                                          [agent.id]: newConfig
+                                        }));
+                                      }}
+                                      onBlur={() => {
+                                        const currentConfig = agentConfigs[agent.id] || {};
+                                        window.maestro.agents.setConfig(agent.id, currentConfig);
+                                      }}
+                                      onClick={(e) => e.stopPropagation()}
+                                      placeholder={option.default || ''}
+                                      className="flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono"
+                                      style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                                    />
+                                    {option.key === 'model' && agent.capabilities?.supportsModelSelection && (
+                                      <button
+                                        onClick={async (e) => {
+                                          e.stopPropagation();
+                                          await loadModelsForAgent(agent.id, true);
+                                        }}
+                                        className="p-2 rounded border hover:bg-white/10 transition-colors"
+                                        title="Refresh available models"
+                                        style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
+                                      >
+                                        <RefreshCw className={`w-3 h-3 ${loadingModels[agent.id] ? 'animate-spin' : ''}`} />
+                                      </button>
+                                    )}
+                                  </div>
+                                  {/* Datalist for model autocomplete */}
+                                  {option.key === 'model' && availableModels[agent.id]?.length > 0 && (
+                                    <datalist id={`models-${agent.id}`}>
+                                      {availableModels[agent.id].map((model) => (
+                                        <option key={model} value={model} />
+                                      ))}
+                                    </datalist>
+                                  )}
+                                  {option.key === 'model' && loadingModels[agent.id] && (
+                                    <p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+                                      Loading available models...
+                                    </p>
+                                  )}
+                                  {option.key === 'model' && !loadingModels[agent.id] && availableModels[agent.id]?.length > 0 && (
+                                    <p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+                                      {availableModels[agent.id].length} model{availableModels[agent.id].length !== 1 ? 's' : ''} available
+                                    </p>
+                                  )}
+                                </>
                               )}
                               {option.type === 'checkbox' && (
                                 <label className="flex items-center gap-2 cursor-pointer" onClick={(e) => e.stopPropagation()}>
@@ -641,16 +704,27 @@ export function EditAgentModal({ isOpen, onClose, onSave, theme, session, existi
   const [nudgeMessage, setNudgeMessage] = useState('');
   const [agent, setAgent] = useState<AgentConfig | null>(null);
   const [agentConfig, setAgentConfig] = useState<Record<string, any>>({});
+  const [availableModels, setAvailableModels] = useState<string[]>([]);
+  const [loadingModels, setLoadingModels] = useState(false);
 
   const nameInputRef = useRef<HTMLInputElement>(null);
 
-  // Load agent info and config when modal opens
+  // Load agent info, config, and models when modal opens
   useEffect(() => {
     if (isOpen && session) {
       // Load agent definition to get configOptions
       window.maestro.agents.detect().then((agents: AgentConfig[]) => {
         const foundAgent = agents.find(a => a.id === session.toolType);
         setAgent(foundAgent || null);
+
+        // Load models if agent supports model selection
+        if (foundAgent?.capabilities?.supportsModelSelection) {
+          setLoadingModels(true);
+          window.maestro.agents.getModels(session.toolType)
+            .then((models) => setAvailableModels(models))
+            .catch((err) => console.error('Failed to load models:', err))
+            .finally(() => setLoadingModels(false));
+        }
       });
       // Load agent config
       window.maestro.agents.getConfig(session.toolType).then(setAgentConfig);
@@ -686,6 +760,20 @@ export function EditAgentModal({ isOpen, onClose, onSave, theme, session, existi
     onSave(session.id, name, nudgeMessage.trim() || undefined);
     onClose();
   }, [session, instanceName, nudgeMessage, onSave, onClose, existingSessions]);
+
+  // Refresh available models
+  const refreshModels = useCallback(async () => {
+    if (!session || !agent?.capabilities?.supportsModelSelection) return;
+    setLoadingModels(true);
+    try {
+      const models = await window.maestro.agents.getModels(session.toolType, true);
+      setAvailableModels(models);
+    } catch (err) {
+      console.error('Failed to refresh models:', err);
+    } finally {
+      setLoadingModels(false);
+    }
+  }, [session, agent]);
 
   // Check if form is valid for submission
   const isFormValid = useMemo(() => {
@@ -849,22 +937,55 @@ export function EditAgentModal({ isOpen, onClose, onSave, theme, session, existi
                       />
                     )}
                     {option.type === 'text' && (
-                      <input
-                        type="text"
-                        value={agentConfig[option.key] ?? option.default}
-                        onChange={(e) => {
-                          setAgentConfig(prev => ({
-                            ...prev,
-                            [option.key]: e.target.value
-                          }));
-                        }}
-                        onBlur={() => {
-                          window.maestro.agents.setConfig(session.toolType, agentConfig);
-                        }}
-                        placeholder={option.default || ''}
-                        className="w-full p-2 rounded border bg-transparent outline-none text-xs font-mono"
-                        style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-                      />
+                      <>
+                        <div className="flex gap-2">
+                          <input
+                            type="text"
+                            list={option.key === 'model' ? `edit-models-${session.toolType}` : undefined}
+                            value={agentConfig[option.key] ?? option.default}
+                            onChange={(e) => {
+                              setAgentConfig(prev => ({
+                                ...prev,
+                                [option.key]: e.target.value
+                              }));
+                            }}
+                            onBlur={() => {
+                              window.maestro.agents.setConfig(session.toolType, agentConfig);
+                            }}
+                            placeholder={option.default || ''}
+                            className="flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono"
+                            style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                          />
+                          {option.key === 'model' && agent?.capabilities?.supportsModelSelection && (
+                            <button
+                              onClick={refreshModels}
+                              className="p-2 rounded border hover:bg-white/10 transition-colors"
+                              title="Refresh available models"
+                              style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
+                            >
+                              <RefreshCw className={`w-3 h-3 ${loadingModels ? 'animate-spin' : ''}`} />
+                            </button>
+                          )}
+                        </div>
+                        {/* Datalist for model autocomplete */}
+                        {option.key === 'model' && availableModels.length > 0 && (
+                          <datalist id={`edit-models-${session.toolType}`}>
+                            {availableModels.map((model) => (
+                              <option key={model} value={model} />
+                            ))}
+                          </datalist>
+                        )}
+                        {option.key === 'model' && loadingModels && (
+                          <p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+                            Loading available models...
+                          </p>
+                        )}
+                        {option.key === 'model' && !loadingModels && availableModels.length > 0 && (
+                          <p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+                            {availableModels.length} model{availableModels.length !== 1 ? 's' : ''} available
+                          </p>
+                        )}
+                      </>
                     )}
                     {option.type === 'checkbox' && (
                       <label className="flex items-center gap-2 cursor-pointer">

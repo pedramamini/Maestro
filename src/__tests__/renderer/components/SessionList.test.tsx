@@ -299,6 +299,7 @@ describe('SessionList', () => {
       const props = createDefaultProps({
         leftSidebarOpen: true,
         isLiveMode: false,
+        leftSidebarWidthState: 310, // OFFLINE requires >= 310px width
       });
       render(<SessionList {...props} />);
 
@@ -322,6 +323,7 @@ describe('SessionList', () => {
         leftSidebarOpen: true,
         isLiveMode: false,
         toggleGlobalLive,
+        leftSidebarWidthState: 310, // OFFLINE requires >= 310px width
       });
       render(<SessionList {...props} />);
 
@@ -422,10 +424,10 @@ describe('SessionList', () => {
       expect(screen.getByTestId('icon-radio')).toBeInTheDocument();
     });
 
-    it('shows OFFLINE text when sidebar width is wide (>= 280px)', () => {
+    it('shows OFFLINE text when sidebar width is wide (>= 310px)', () => {
       const props = createDefaultProps({
         leftSidebarOpen: true,
-        leftSidebarWidthState: 300,
+        leftSidebarWidthState: 310, // OFFLINE requires >= 310px width
         isLiveMode: false,
       });
       render(<SessionList {...props} />);

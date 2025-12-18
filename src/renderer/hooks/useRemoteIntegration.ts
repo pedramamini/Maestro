@@ -306,9 +306,10 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
         }
 
         // Persist name to agent session metadata (async, fire and forget)
+        // Use projectRoot (not cwd) for consistent session storage access
         if (tab.agentSessionId) {
           window.maestro.agentSessions.updateSessionName(
-            s.cwd,
+            s.projectRoot,
             tab.agentSessionId,
             newName || ''
           ).catch(err => console.error('Failed to persist tab name:', err));

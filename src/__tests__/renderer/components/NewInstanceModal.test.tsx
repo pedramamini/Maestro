@@ -1714,4 +1714,258 @@ describe('NewInstanceModal', () => {
       });
     });
   });
+
+  describe('model autocomplete', () => {
+    it('should load models when expanding an agent with supportsModelSelection', async () => {
+      const agentWithModelSelection = createAgentConfig({
+        id: 'opencode',
+        name: 'OpenCode',
+        available: true,
+        capabilities: {
+          supportsResume: false,
+          supportsReadOnlyMode: false,
+          supportsJsonOutput: true,
+          supportsSessionId: true,
+          supportsImageInput: false,
+          supportsSlashCommands: false,
+          supportsSessionStorage: false,
+          supportsCostTracking: false,
+          supportsUsageStats: true,
+          supportsBatchMode: true,
+          supportsStreaming: true,
+          supportsResultMessages: true,
+          supportsModelSelection: true,
+        },
+        configOptions: [
+          {
+            key: 'model',
+            type: 'text',
+            label: 'Model',
+            description: 'Model to use',
+            default: '',
+          },
+        ],
+      });
+
+      vi.mocked(window.maestro.agents.detect).mockResolvedValue([agentWithModelSelection]);
+      vi.mocked(window.maestro.agents.getModels).mockResolvedValue([
+        'ollama/qwen3:8b',
+        'anthropic/claude-sonnet-4-20250514',
+        'opencode/gpt-5-nano',
+      ]);
+      vi.mocked(window.maestro.agents.getConfig).mockResolvedValue({});
+
+      render(
+        <NewInstanceModal
+          isOpen={true}
+          onClose={onClose}
+          onCreate={onCreate}
+          theme={theme}
+          existingSessions={[]}
+        />
+      );
+
+      // Wait for agents to load and click to expand
+      await waitFor(() => {
+        expect(screen.getByText('OpenCode')).toBeInTheDocument();
+      });
+
+      // Click to expand the agent
+      const agentRow = screen.getByText('OpenCode').closest('[role="option"]');
+      if (agentRow) {
+        await act(async () => {
+          fireEvent.click(agentRow);
+        });
+      }
+
+      // Should call getModels when expanding
+      await waitFor(() => {
+        expect(window.maestro.agents.getModels).toHaveBeenCalledWith('opencode', false);
+      });
+    });
+
+    it('should show model count when models are loaded', async () => {
+      const agentWithModelSelection = createAgentConfig({
+        id: 'opencode',
+        name: 'OpenCode',
+        available: true,
+        capabilities: {
+          supportsResume: false,
+          supportsReadOnlyMode: false,
+          supportsJsonOutput: true,
+          supportsSessionId: true,
+          supportsImageInput: false,
+          supportsSlashCommands: false,
+          supportsSessionStorage: false,
+          supportsCostTracking: false,
+          supportsUsageStats: true,
+          supportsBatchMode: true,
+          supportsStreaming: true,
+          supportsResultMessages: true,
+          supportsModelSelection: true,
+        },
+        configOptions: [
+          {
+            key: 'model',
+            type: 'text',
+            label: 'Model',
+            description: 'Model to use',
+            default: '',
+          },
+        ],
+      });
+
+      vi.mocked(window.maestro.agents.detect).mockResolvedValue([agentWithModelSelection]);
+      vi.mocked(window.maestro.agents.getModels).mockResolvedValue([
+        'model1',
+        'model2',
+        'model3',
+      ]);
+      vi.mocked(window.maestro.agents.getConfig).mockResolvedValue({});
+
+      render(
+        <NewInstanceModal
+          isOpen={true}
+          onClose={onClose}
+          onCreate={onCreate}
+          theme={theme}
+          existingSessions={[]}
+        />
+      );
+
+      // Wait for agents to load and click to expand
+      await waitFor(() => {
+        expect(screen.getByText('OpenCode')).toBeInTheDocument();
+      });
+
+      // Click to expand the agent
+      const agentRow = screen.getByText('OpenCode').closest('[role="option"]');
+      if (agentRow) {
+        await act(async () => {
+          fireEvent.click(agentRow);
+        });
+      }
+
+      // Should show model count
+      await waitFor(() => {
+        expect(screen.getByText('3 models available')).toBeInTheDocument();
+      });
+    });
+
+    it('should not load models for agents without supportsModelSelection', async () => {
+      const agentWithoutModelSelection = createAgentConfig({
+        id: 'claude-code',
+        name: 'Claude Code',
+        available: true,
+        capabilities: {
+          supportsResume: true,
+          supportsReadOnlyMode: true,
+          supportsJsonOutput: true,
+          supportsSessionId: true,
+          supportsImageInput: true,
+          supportsSlashCommands: true,
+          supportsSessionStorage: true,
+          supportsCostTracking: true,
+          supportsUsageStats: true,
+          supportsBatchMode: true,
+          supportsStreaming: true,
+          supportsResultMessages: true,
+          supportsModelSelection: false,
+        },
+      });
+
+      vi.mocked(window.maestro.agents.detect).mockResolvedValue([agentWithoutModelSelection]);
+      vi.mocked(window.maestro.agents.getConfig).mockResolvedValue({});
+
+      render(
+        <NewInstanceModal
+          isOpen={true}
+          onClose={onClose}
+          onCreate={onCreate}
+          theme={theme}
+          existingSessions={[]}
+        />
+      );
+
+      // Wait for agents to load and click to expand
+      await waitFor(() => {
+        expect(screen.getByText('Claude Code')).toBeInTheDocument();
+      });
+
+      // Click to expand the agent
+      const agentRow = screen.getByText('Claude Code').closest('[role="option"]');
+      if (agentRow) {
+        await act(async () => {
+          fireEvent.click(agentRow);
+        });
+      }
+
+      // Should NOT call getModels
+      expect(window.maestro.agents.getModels).not.toHaveBeenCalled();
+    });
+
+    it('should show refresh button for model input when supportsModelSelection', async () => {
+      const agentWithModelSelection = createAgentConfig({
+        id: 'opencode',
+        name: 'OpenCode',
+        available: true,
+        capabilities: {
+          supportsResume: false,
+          supportsReadOnlyMode: false,
+          supportsJsonOutput: true,
+          supportsSessionId: true,
+          supportsImageInput: false,
+          supportsSlashCommands: false,
+          supportsSessionStorage: false,
+          supportsCostTracking: false,
+          supportsUsageStats: true,
+          supportsBatchMode: true,
+          supportsStreaming: true,
+          supportsResultMessages: true,
+          supportsModelSelection: true,
+        },
+        configOptions: [
+          {
+            key: 'model',
+            type: 'text',
+            label: 'Model',
+            description: 'Model to use',
+            default: '',
+          },
+        ],
+      });
+
+      vi.mocked(window.maestro.agents.detect).mockResolvedValue([agentWithModelSelection]);
+      vi.mocked(window.maestro.agents.getModels).mockResolvedValue(['model1']);
+      vi.mocked(window.maestro.agents.getConfig).mockResolvedValue({});
+
+      render(
+        <NewInstanceModal
+          isOpen={true}
+          onClose={onClose}
+          onCreate={onCreate}
+          theme={theme}
+          existingSessions={[]}
+        />
+      );
+
+      // Wait for agents to load and click to expand
+      await waitFor(() => {
+        expect(screen.getByText('OpenCode')).toBeInTheDocument();
+      });
+
+      // Click to expand the agent
+      const agentRow = screen.getByText('OpenCode').closest('[role="option"]');
+      if (agentRow) {
+        await act(async () => {
+          fireEvent.click(agentRow);
+        });
+      }
+
+      // Should show refresh button with correct title
+      await waitFor(() => {
+        expect(screen.getByTitle('Refresh available models')).toBeInTheDocument();
+      });
+    });
+  });
 });

@@ -61,6 +61,7 @@ export function AgentSessionsBrowser({
   const [starredSessions, setStarredSessions] = useState<Set<string>>(new Set());
 
   // Session pagination hook for paginated loading
+  // Use projectRoot (not cwd) for consistent session storage access
   const {
     sessions,
     loading,
@@ -71,7 +72,7 @@ export function AgentSessionsBrowser({
     sessionsContainerRef,
     updateSession,
   } = useSessionPagination({
-    cwd: activeSession?.cwd,
+    projectPath: activeSession?.projectRoot,
     agentId,
     onStarredSessionsLoaded: setStarredSessions,
   });
@@ -218,9 +219,10 @@ export function AgentSessionsBrowser({
     setStarredSessions(newStarred);
 
     // Persist to Claude session origins
-    if (activeSession?.cwd) {
+    // Use projectRoot (not cwd) for consistent session storage access
+    if (activeSession?.projectRoot) {
       await window.maestro.claude.updateSessionStarred(
-        activeSession.cwd,
+        activeSession.projectRoot,
         sessionId,
         isNowStarred
       );
@@ -228,7 +230,7 @@ export function AgentSessionsBrowser({
 
     // Update the tab if this session is open as a tab
     onUpdateTab?.(sessionId, { starred: isNowStarred });
-  }, [starredSessions, activeSession?.cwd, onUpdateTab]);
+  }, [starredSessions, activeSession?.projectRoot, onUpdateTab]);
 
   // Start renaming a session
   const startRename = useCallback((session: ClaudeSession, e: React.MouseEvent) => {
@@ -247,13 +249,14 @@ export function AgentSessionsBrowser({
 
   // Submit rename
   const submitRename = useCallback(async (sessionId: string) => {
-    if (!activeSession?.cwd) return;
+    // Use projectRoot (not cwd) for consistent session storage access
+    if (!activeSession?.projectRoot) return;
 
     const trimmedName = renameValue.trim();
     try {
       // Update session origins store (single source of truth for session names)
       await window.maestro.agentSessions.updateSessionName(
-        activeSession.cwd,
+        activeSession.projectRoot,
         sessionId,
         trimmedName
       );
@@ -273,7 +276,7 @@ export function AgentSessionsBrowser({
     }
 
     cancelRename();
-  }, [activeSession?.cwd, renameValue, viewingSession?.sessionId, cancelRename, onUpdateTab, updateSession]);
+  }, [activeSession?.projectRoot, renameValue, viewingSession?.sessionId, cancelRename, onUpdateTab, updateSession]);
 
   // Auto-view session when activeAgentSessionId is provided (e.g., from history panel click)
   useEffect(() => {

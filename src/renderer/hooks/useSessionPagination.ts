@@ -5,8 +5,8 @@ import type { ClaudeSession } from './useSessionViewer';
  * Dependencies for the useSessionPagination hook.
  */
 export interface UseSessionPaginationDeps {
-  /** Current working directory for loading sessions */
-  cwd: string | undefined;
+  /** Project path for loading sessions (use projectRoot, not cwd, for consistent session storage access) */
+  projectPath: string | undefined;
   /** Agent ID for the session (e.g., 'claude-code', 'opencode') */
   agentId?: string;
   /** Callback to update starred sessions from origins data */
@@ -61,13 +61,13 @@ export interface UseSessionPaginationReturn {
  *   sessionsContainerRef,
  *   updateSession,
  * } = useSessionPagination({
- *   cwd: activeSession?.cwd,
+ *   projectPath: activeSession?.projectRoot,
  *   onStarredSessionsLoaded: setStarredSessions,
  * });
  * ```
  */
 export function useSessionPagination({
-  cwd,
+  projectPath,
   agentId = 'claude-code',
   onStarredSessionsLoaded,
 }: UseSessionPaginationDeps): UseSessionPaginationReturn {
@@ -84,7 +84,7 @@ export function useSessionPagination({
   // Container ref for scroll handling
   const sessionsContainerRef = useRef<HTMLDivElement>(null);
 
-  // Load sessions on mount or when cwd/agentId changes
+  // Load sessions on mount or when projectPath/agentId changes
   useEffect(() => {
     // Reset pagination state
     setSessions([]);
@@ -93,7 +93,7 @@ export function useSessionPagination({
     nextCursorRef.current = null;
 
     const loadSessions = async () => {
-      if (!cwd) {
+      if (!projectPath) {
         setLoading(false);
         return;
       }
@@ -102,7 +102,7 @@ export function useSessionPagination({
         // Load session metadata (starred status) from Claude session origins
         // Note: Origin/starred tracking is currently Claude-specific; other agents will get empty results
         if (agentId === 'claude-code') {
-          const origins = await window.maestro.claude.getSessionOrigins(cwd);
+          const origins = await window.maestro.claude.getSessionOrigins(projectPath);
           const starredFromOrigins = new Set<string>();
           for (const [sessionId, originData] of Object.entries(origins)) {
             if (typeof originData === 'object' && originData?.starred) {
@@ -113,7 +113,7 @@ export function useSessionPagination({
         }
 
         // Use generic agentSessions API with agentId parameter for paginated loading
-        const result = await window.maestro.agentSessions.listPaginated(agentId, cwd, { limit: 100 });
+        const result = await window.maestro.agentSessions.listPaginated(agentId, projectPath, { limit: 100 });
         setSessions(result.sessions);
         setHasMoreSessions(result.hasMore);
         setTotalSessionCount(result.totalCount);
@@ -122,7 +122,7 @@ export function useSessionPagination({
         // Start fetching aggregate stats for ALL sessions (runs in background with progressive updates)
         // Note: Stats tracking is currently Claude-specific; other agents will need their own implementation
         if (agentId === 'claude-code') {
-          window.maestro.claude.getProjectStats(cwd);
+          window.maestro.claude.getProjectStats(projectPath);
         }
       } catch (error) {
         console.error('Failed to load sessions:', error);
@@ -132,16 +132,16 @@ export function useSessionPagination({
     };
 
     loadSessions();
-  }, [cwd, agentId, onStarredSessionsLoaded]);
+  }, [projectPath, agentId, onStarredSessionsLoaded]);
 
   // Load more sessions when scrolling near bottom
   const loadMoreSessions = useCallback(async () => {
-    if (!cwd || !hasMoreSessions || isLoadingMoreSessions || !nextCursorRef.current) return;
+    if (!projectPath || !hasMoreSessions || isLoadingMoreSessions || !nextCursorRef.current) return;
 
     setIsLoadingMoreSessions(true);
     try {
       // Use generic agentSessions API with agentId parameter
-      const result = await window.maestro.agentSessions.listPaginated(agentId, cwd, {
+      const result = await window.maestro.agentSessions.listPaginated(agentId, projectPath, {
         cursor: nextCursorRef.current,
         limit: 100,
       });
@@ -159,7 +159,7 @@ export function useSessionPagination({
     } finally {
       setIsLoadingMoreSessions(false);
     }
-  }, [cwd, agentId, hasMoreSessions, isLoadingMoreSessions]);
+  }, [projectPath, agentId, hasMoreSessions, isLoadingMoreSessions]);
 
   // Handle scroll for sessions list pagination - load more at 70% scroll
   const handleSessionsScroll = useCallback(() => {

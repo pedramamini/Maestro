@@ -301,9 +301,11 @@ export class ClaudeSessionStorage implements AgentSessionStorage {
       })
     );
 
-    // Filter out nulls and sort by modified date
+    // Filter out nulls, 0-byte sessions, and sort by modified date
     const validSessions = sessions
       .filter((s): s is NonNullable<typeof s> => s !== null)
+      // Filter out 0-byte sessions (created but abandoned before any content was written)
+      .filter((s) => s.sizeBytes > 0)
       .sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
 
     // Attach origin info
@@ -358,6 +360,8 @@ export class ClaudeSessionStorage implements AgentSessionStorage {
 
     const sortedFiles = fileStats
       .filter((s): s is NonNullable<typeof s> => s !== null)
+      // Filter out 0-byte sessions (created but abandoned before any content was written)
+      .filter((s) => s.sizeBytes > 0)
       .sort((a, b) => b.modifiedAt - a.modifiedAt);
 
     const totalCount = sortedFiles.length;
@@ -688,18 +692,90 @@ export class ClaudeSessionStorage implements AgentSessionStorage {
         return { success: false, error: 'User message not found' };
       }
 
-      // Find the end of the response
+      // Find the end of the response and collect tool_use IDs being deleted
       let endIndex = parsedLines.length;
+      const deletedToolUseIds = new Set<string>();
+
       for (let i = userMessageIndex + 1; i < parsedLines.length; i++) {
-        const entry = parsedLines[i].entry as { type?: string } | null;
+        const entry = parsedLines[i].entry as {
+          type?: string;
+          message?: { content?: unknown };
+        } | null;
+
         if (entry?.type === 'user') {
           endIndex = i;
           break;
         }
+
+        // Collect tool_use IDs from assistant messages being deleted
+        if (entry?.type === 'assistant' && entry.message?.content) {
+          const content = entry.message.content;
+          if (Array.isArray(content)) {
+            for (const block of content as Array<{ type?: string; id?: string }>) {
+              if (block.type === 'tool_use' && block.id) {
+                deletedToolUseIds.add(block.id);
+              }
+            }
+          }
+        }
       }
 
       // Remove the message pair
-      const linesToKeep = [...parsedLines.slice(0, userMessageIndex), ...parsedLines.slice(endIndex)];
+      let linesToKeep = [...parsedLines.slice(0, userMessageIndex), ...parsedLines.slice(endIndex)];
+
+      // If we deleted any tool_use blocks, clean up orphaned tool_result blocks
+      if (deletedToolUseIds.size > 0) {
+        linesToKeep = linesToKeep.map((item) => {
+          const entry = item.entry as {
+            type?: string;
+            message?: { content?: unknown };
+          } | null;
+
+          // Only process user messages (tool_result blocks are in user messages)
+          if (entry?.type !== 'user' || !entry.message?.content) {
+            return item;
+          }
+
+          const content = entry.message.content;
+          if (!Array.isArray(content)) {
+            return item;
+          }
+
+          // Filter out tool_result blocks that reference deleted tool_use IDs
+          const filteredContent = (content as Array<{ type?: string; tool_use_id?: string }>).filter(
+            (block) => {
+              if (block.type === 'tool_result' && block.tool_use_id) {
+                return !deletedToolUseIds.has(block.tool_use_id);
+              }
+              return true;
+            }
+          );
+
+          // If we removed all content blocks, mark this line for removal
+          if (filteredContent.length === 0) {
+            return { line: '', entry: null, remove: true };
+          }
+
+          // If content changed, update the line
+          if (filteredContent.length !== content.length) {
+            const updatedEntry = {
+              ...entry,
+              message: {
+                ...entry.message,
+                content: filteredContent,
+              },
+            };
+            return { line: JSON.stringify(updatedEntry), entry: updatedEntry };
+          }
+
+          return item;
+        }).filter((item) => !(item as { remove?: boolean }).remove);
+
+        logger.info(`Cleaned up orphaned tool_result blocks`, LOG_CONTEXT, {
+          sessionId,
+          deletedToolUseIds: Array.from(deletedToolUseIds),
+        });
+      }
 
       const newContent = linesToKeep.map((p) => p.line).join('\n') + '\n';
       await fs.writeFile(sessionFile, newContent, 'utf-8');

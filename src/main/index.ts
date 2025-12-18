@@ -13,6 +13,8 @@ import { getThemeById } from './themes';
 import Store from 'electron-store';
 import { getHistoryManager } from './history-manager';
 import { registerGitHandlers, registerAutorunHandlers, registerPlaybooksHandlers, registerHistoryHandlers, registerAgentsHandlers, registerProcessHandlers, registerPersistenceHandlers, registerSystemHandlers, registerClaudeHandlers, registerAgentSessionsHandlers, registerGroupChatHandlers, setupLoggerEventForwarding } from './ipc/handlers';
+import { groupChatEmitters } from './ipc/handlers/groupChat';
+import { routeModeratorResponse } from './group-chat/group-chat-router';
 import { initializeSessionStorages } from './storage';
 import { initializeOutputParsers } from './parsers';
 import { DEMO_MODE, DEMO_DATA_PATH } from './constants';
@@ -848,6 +850,7 @@ function setupIpcHandlers() {
   registerGroupChatHandlers({
     getMainWindow: () => mainWindow,
     getProcessManager: () => processManager,
+    getAgentDetector: () => agentDetector,
   });
 
   // Setup logger event forwarding to renderer
@@ -1658,6 +1661,25 @@ function setupIpcHandlers() {
 function setupProcessListeners() {
   if (processManager) {
     processManager.on('data', (sessionId: string, data: string) => {
+      // Handle group chat moderator output
+      // Session ID format: group-chat-{groupChatId}-moderator-{uuid}
+      const moderatorMatch = sessionId.match(/^group-chat-(.+)-moderator-/);
+      if (moderatorMatch) {
+        const groupChatId = moderatorMatch[1];
+        // Emit the moderator's response as a group chat message
+        const moderatorMessage = {
+          timestamp: new Date().toISOString(),
+          from: 'moderator',
+          content: data,
+        };
+        groupChatEmitters.emitMessage?.(groupChatId, moderatorMessage);
+        // Route the response (handles @mentions and logging)
+        routeModeratorResponse(groupChatId, data, processManager ?? undefined).catch(err => {
+          logger.error('[GroupChat] Failed to route moderator response', 'ProcessListener', { error: String(err) });
+        });
+        return; // Don't send to regular process:data handler
+      }
+
       mainWindow?.webContents.send('process:data', sessionId, data);
 
       // Broadcast to web clients - extract base session ID (remove -ai or -terminal suffix)
@@ -1693,6 +1715,16 @@ function setupProcessListeners() {
     });
 
     processManager.on('exit', (sessionId: string, code: number) => {
+      // Handle group chat moderator exit - set state back to idle
+      // Session ID format: group-chat-{groupChatId}-moderator-{uuid}
+      const moderatorMatch = sessionId.match(/^group-chat-(.+)-moderator-/);
+      if (moderatorMatch) {
+        const groupChatId = moderatorMatch[1];
+        groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
+        // Don't send to regular exit handler
+        return;
+      }
+
       mainWindow?.webContents.send('process:exit', sessionId, code);
 
       // Broadcast exit to web clients

@@ -12,7 +12,7 @@
  * Skip in CI with: SKIP_INTEGRATION_TESTS=true
  */
 
-import { describe, it, expect, beforeAll, afterEach } from 'vitest';
+import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
 import {
   createGroupChat,
   loadGroupChat,
@@ -25,6 +25,7 @@ import {
 } from '../../main/group-chat/group-chat-moderator';
 import { addParticipant } from '../../main/group-chat/group-chat-agent';
 import { routeUserMessage } from '../../main/group-chat/group-chat-router';
+import { AgentDetector } from '../../main/agent-detector';
 import {
   selectTestAgents,
   waitForAgentResponse,
@@ -89,6 +90,30 @@ function getTestAgents(): TestAgentSelection {
   return selectTestAgents(['claude-code', 'opencode']);
 }
 
+/**
+ * Create a mock agent detector for testing.
+ */
+function createMockAgentDetector(): AgentDetector {
+  return {
+    getAgent: vi.fn().mockResolvedValue({
+      id: 'claude-code',
+      name: 'Claude Code',
+      binaryName: 'claude',
+      command: 'claude',
+      args: ['--print', '--verbose', '--output-format', 'stream-json'],
+      available: true,
+      path: '/usr/local/bin/claude',
+      capabilities: {},
+    }),
+    detectAgents: vi.fn().mockResolvedValue([]),
+    clearCache: vi.fn(),
+    setCustomPaths: vi.fn(),
+    getCustomPaths: vi.fn().mockReturnValue({}),
+    discoverModels: vi.fn().mockResolvedValue([]),
+    clearModelCache: vi.fn(),
+  } as unknown as AgentDetector;
+}
+
 describe('Group Chat Integration Tests', () => {
   const createdChatIds: string[] = [];
 
@@ -124,6 +149,7 @@ describe('Group Chat Integration Tests', () => {
 
       const agents = getTestAgents();
       const processManager = createMockProcessManager();
+      const agentDetector = createMockAgentDetector();
 
       // Create group chat
       const groupChat = await createGroupChat('Test Chat', agents.moderator);
@@ -136,7 +162,8 @@ describe('Group Chat Integration Tests', () => {
       await routeUserMessage(
         groupChat.id,
         'Hello, what can you help me with?',
-        processManager
+        processManager,
+        agentDetector
       );
 
       // Verify message was logged
@@ -144,8 +171,8 @@ describe('Group Chat Integration Tests', () => {
       expect(messages.length).toBeGreaterThan(0);
       expect(messages.some((m) => m.from === 'user')).toBe(true);
 
-      // Verify message was written to moderator session
-      expect(processManager.writtenMessages.size).toBeGreaterThan(0);
+      // Verify moderator batch process was spawned (routeUserMessage uses batch mode)
+      expect(processManager.spawnedSessions.size).toBeGreaterThan(0);
 
       // Clean up
       await cleanupGroupChat(groupChat.id);
@@ -175,6 +202,7 @@ describe('Group Chat Integration Tests', () => {
 
       const agents = getTestAgents();
       const processManager = createMockProcessManager();
+      const agentDetector = createMockAgentDetector();
 
       // Create group chat
       const groupChat = await createGroupChat('Addition Test', agents.moderator);
@@ -212,7 +240,8 @@ describe('Group Chat Integration Tests', () => {
         2. Once they respond, ask @Calculator to add 50 to that number
         3. Verify the calculation is correct and tell me the final result
       `,
-        processManager
+        processManager,
+        agentDetector
       );
 
       // Verify message was logged
@@ -246,6 +275,7 @@ describe('Group Chat Integration Tests', () => {
 
       const agents = getTestAgents();
       const processManager = createMockProcessManager();
+      const agentDetector = createMockAgentDetector();
 
       // Create group chat
       const groupChat = await createGroupChat('Context Test', agents.moderator);
@@ -282,7 +312,8 @@ describe('Group Chat Integration Tests', () => {
         1. Ask @Writer to write a one-sentence definition of "recursion"
         2. Ask @Reviewer to check @Writer's definition and suggest an improvement
       `,
-        processManager
+        processManager,
+        agentDetector
       );
 
       // Verify message logging
@@ -311,6 +342,7 @@ describe('Group Chat Integration Tests', () => {
 
       const agents = getTestAgents();
       const processManager = createMockProcessManager();
+      const agentDetector = createMockAgentDetector();
 
       // Create group chat
       const groupChat = await createGroupChat(
@@ -326,7 +358,8 @@ describe('Group Chat Integration Tests', () => {
       await routeUserMessage(
         groupChat.id,
         'Please ask @NonExistent to help me',
-        processManager
+        processManager,
+        agentDetector
       );
 
       // Verify message was logged
@@ -360,6 +393,7 @@ describe('Group Chat Integration Tests', () => {
 
       const agents = getTestAgents();
       const processManager = createMockProcessManager();
+      const agentDetector = createMockAgentDetector();
 
       // Create group chat
       const groupChat = await createGroupChat(
@@ -375,7 +409,8 @@ describe('Group Chat Integration Tests', () => {
       await routeUserMessage(
         groupChat.id,
         'Remember the number 12345',
-        processManager
+        processManager,
+        agentDetector
       );
 
       // Verify initial message logged
@@ -401,7 +436,8 @@ describe('Group Chat Integration Tests', () => {
       await routeUserMessage(
         groupChat.id,
         'What number did I ask you to remember? Check the chat log.',
-        newProcessManager
+        newProcessManager,
+        agentDetector
       );
 
       // Verify both messages are in log
@@ -437,6 +473,7 @@ describe('Group Chat Integration Tests', () => {
       const agentB = agents.agentB;
 
       const processManager = createMockProcessManager();
+      const agentDetector = createMockAgentDetector();
 
       // Create group chat
       const groupChat = await createGroupChat('Mixed Agents', moderator);
@@ -457,7 +494,8 @@ describe('Group Chat Integration Tests', () => {
       await routeUserMessage(
         groupChat.id,
         'Ask @Agent1 to say "ping" and @Agent2 to respond with "pong"',
-        processManager
+        processManager,
+        agentDetector
       );
 
       // Verify both participants have sessions

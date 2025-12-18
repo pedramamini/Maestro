@@ -7,7 +7,7 @@
  */
 
 import { useRef, useCallback, useMemo } from 'react';
-import { Copy, FolderOpen, Users, MessageSquare, Bot, Clock } from 'lucide-react';
+import { Copy, FolderOpen, Users, MessageSquare, Bot, Clock, ExternalLink } from 'lucide-react';
 import type { Theme, GroupChat, GroupChatMessage } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal } from './ui/Modal';
@@ -18,6 +18,7 @@ interface GroupChatInfoOverlayProps {
   groupChat: GroupChat;
   messages: GroupChatMessage[];
   onClose: () => void;
+  onOpenModeratorSession?: (sessionId: string) => void;
 }
 
 /**
@@ -101,6 +102,7 @@ export function GroupChatInfoOverlay({
   groupChat,
   messages,
   onClose,
+  onOpenModeratorSession,
 }: GroupChatInfoOverlayProps): JSX.Element | null {
   const containerRef = useRef<HTMLDivElement>(null);
 
@@ -116,9 +118,10 @@ export function GroupChatInfoOverlay({
 
   // Calculate statistics
   const stats = useMemo(() => {
-    const userMessages = messages.filter(m => m.role === 'user').length;
-    const agentMessages = messages.filter(m => m.role === 'agent').length;
-    const moderatorMessages = messages.filter(m => m.role === 'moderator').length;
+    const userMessages = messages.filter(m => m.from === 'user').length;
+    // Agent messages are those from participants (not user or moderator)
+    const agentMessages = messages.filter(m => m.from !== 'user' && m.from !== 'moderator').length;
+    const moderatorMessages = messages.filter(m => m.from === 'moderator').length;
 
     // Calculate chat duration (time between first and last message)
     let durationStr = '0m';
@@ -233,16 +236,48 @@ export function GroupChatInfoOverlay({
             value={groupChat.moderatorAgentId}
           />
 
-          <InfoRow
-            theme={theme}
-            label="Moderator Session"
-            value={groupChat.moderatorSessionId || 'Not started'}
-            onCopy={
-              groupChat.moderatorSessionId
-                ? () => copyToClipboard(groupChat.moderatorSessionId)
-                : undefined
-            }
-          />
+          {/* Moderator Session - clickable to open in direct agent view */}
+          <div className="flex items-start justify-between gap-4 py-2">
+            <span
+              className="text-sm shrink-0"
+              style={{ color: theme.colors.textDim }}
+            >
+              Moderator Session
+            </span>
+            <div className="flex items-center gap-2 min-w-0">
+              {groupChat.moderatorSessionId ? (
+                <>
+                  <button
+                    onClick={() => {
+                      onOpenModeratorSession?.(groupChat.moderatorSessionId);
+                      onClose();
+                    }}
+                    className="text-sm font-mono truncate text-right hover:underline flex items-center gap-1"
+                    style={{ color: theme.colors.accent }}
+                    title="Open moderator session in direct agent view"
+                  >
+                    <span className="truncate max-w-[280px]">{groupChat.moderatorSessionId}</span>
+                    <ExternalLink className="w-3 h-3 shrink-0" />
+                  </button>
+                  <button
+                    onClick={() => copyToClipboard(groupChat.moderatorSessionId)}
+                    className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+                    style={{ color: theme.colors.textDim }}
+                    title="Copy to clipboard"
+                  >
+                    <Copy className="w-3 h-3" />
+                  </button>
+                </>
+              ) : (
+                <span
+                  className="text-sm font-mono truncate text-right"
+                  style={{ color: theme.colors.textMain }}
+                >
+                  Not started
+                </span>
+              )}
+            </div>
+          </div>
         </div>
 
         {groupChat.participants.length > 0 && (

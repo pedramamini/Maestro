@@ -17,6 +17,12 @@ import { ArrowUp, ImageIcon, Eye, Keyboard, PenLine } from 'lucide-react';
 import type { Theme, GroupChatParticipant, GroupChatState, Session, QueuedItem } from '../types';
 import { QueuedItemsList } from './QueuedItemsList';
 
+/** Maximum image file size in bytes (10MB) */
+const MAX_IMAGE_SIZE = 10 * 1024 * 1024;
+
+/** Allowed image MIME types */
+const ALLOWED_IMAGE_TYPES = ['image/png', 'image/jpeg', 'image/gif', 'image/webp'];
+
 interface GroupChatInputProps {
   theme: Theme;
   state: GroupChatState;
@@ -132,18 +138,6 @@ export function GroupChatInput({
     }
   }, [draftMessage]);
 
-  // Handle Cmd+R to toggle read-only mode (global keyboard listener)
-  useEffect(() => {
-    const handleGlobalKeyDown = (e: KeyboardEvent) => {
-      if ((e.metaKey || e.ctrlKey) && e.key === 'r') {
-        e.preventDefault();
-        setReadOnlyMode(!readOnlyMode);
-      }
-    };
-    window.addEventListener('keydown', handleGlobalKeyDown);
-    return () => window.removeEventListener('keydown', handleGlobalKeyDown);
-  }, [readOnlyMode, setReadOnlyMode]);
-
   const handleSend = useCallback(() => {
     // Allow sending even when busy - messages will be queued in App.tsx
     if (message.trim()) {
@@ -155,7 +149,32 @@ export function GroupChatInput({
   }, [message, onSend, readOnlyMode, onDraftChange, stagedImages]);
 
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
-    // Stop propagation for all key events to prevent global handlers from interfering
+    // Handle hotkeys that should work even when input has focus
+    if (e.metaKey || e.ctrlKey) {
+      // Cmd+R: Toggle read-only mode
+      if (e.key === 'r') {
+        e.preventDefault();
+        e.stopPropagation();
+        setReadOnlyMode(!readOnlyMode);
+        return;
+      }
+      // Cmd+E: Open prompt composer
+      if (e.key === 'e' && onOpenPromptComposer) {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenPromptComposer();
+        return;
+      }
+      // Cmd+Y: Open image carousel
+      if (e.key === 'y' && stagedImages.length > 0 && onOpenLightbox) {
+        e.preventDefault();
+        e.stopPropagation();
+        onOpenLightbox(stagedImages[0], stagedImages);
+        return;
+      }
+    }
+
+    // Stop propagation for other key events to prevent global handlers from interfering
     e.stopPropagation();
 
     if (showMentions && filteredAgents.length > 0) {
@@ -197,7 +216,7 @@ export function GroupChatInput({
         handleSend();
       }
     }
-  }, [handleSend, showMentions, filteredAgents, selectedMentionIndex, enterToSend]);
+  }, [handleSend, showMentions, filteredAgents, selectedMentionIndex, enterToSend, readOnlyMode, setReadOnlyMode, onOpenPromptComposer, stagedImages, onOpenLightbox]);
 
   const handleChange = useCallback((e: React.ChangeEvent<HTMLTextAreaElement>) => {
     const value = e.target.value;
@@ -236,6 +255,16 @@ export function GroupChatInput({
   const handleImageSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
     const files = Array.from(e.target.files || []);
     files.forEach(file => {
+      // Validate file type
+      if (!ALLOWED_IMAGE_TYPES.includes(file.type)) {
+        console.warn(`[GroupChatInput] Invalid file type rejected: ${file.type}`);
+        return;
+      }
+      // Validate file size
+      if (file.size > MAX_IMAGE_SIZE) {
+        console.warn(`[GroupChatInput] File too large rejected: ${(file.size / 1024 / 1024).toFixed(2)}MB (max: 10MB)`);
+        return;
+      }
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {

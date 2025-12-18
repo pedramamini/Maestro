@@ -276,6 +276,39 @@ describe('useSettings', () => {
       expect(customCmd?.description).toBe('Custom command');
     });
 
+    it('should filter out old /synopsis command (renamed to /history built-in)', async () => {
+      // User may have old /synopsis command saved from before it was renamed to /history
+      const savedCommands: CustomAICommand[] = [
+        { id: 'synopsis', command: '/synopsis', description: 'Old synopsis command', prompt: 'old prompt' },
+        { id: 'custom', command: '/custom', description: 'Custom command', prompt: 'custom' },
+      ];
+
+      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
+        if (key === 'customAICommands') return savedCommands;
+        return undefined;
+      });
+
+      const { result } = renderHook(() => useSettings());
+      await waitForSettingsLoaded(result);
+
+      // Old /synopsis command should be filtered out
+      const synopsisCmd = result.current.customAICommands.find(c => c.command === '/synopsis');
+      expect(synopsisCmd).toBeUndefined();
+
+      // Also check by id
+      const synopsisCmdById = result.current.customAICommands.find(c => c.id === 'synopsis');
+      expect(synopsisCmdById).toBeUndefined();
+
+      // Custom command should still be included
+      const customCmd = result.current.customAICommands.find(c => c.id === 'custom');
+      expect(customCmd).toBeDefined();
+      expect(customCmd?.description).toBe('Custom command');
+
+      // Should still have the default /commit command
+      const commitCmd = result.current.customAICommands.find(c => c.id === 'commit');
+      expect(commitCmd).toBeDefined();
+    });
+
     it('should merge saved global stats with defaults', async () => {
       const savedStats: Partial<GlobalStats> = {
         totalSessions: 100,

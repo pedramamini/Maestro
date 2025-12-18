@@ -1171,6 +1171,48 @@ describe('AgentSessionsBrowser', () => {
       expect(onUpdateTab).toHaveBeenCalledWith('session-1', { starred: false });
     });
 
+    it('uses projectRoot (not cwd) for session storage when they differ', async () => {
+      // This tests the fix for the cwd vs projectRoot bug
+      // When cwd changes (e.g., via cd command), session storage should still use projectRoot
+      const sessions = [createMockClaudeSession({ sessionId: 'session-1' })];
+      vi.mocked(window.maestro.agentSessions.listPaginated).mockResolvedValue({
+        sessions,
+        hasMore: false,
+        totalCount: 1,
+        nextCursor: null,
+      });
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({});
+
+      const onUpdateTab = vi.fn();
+      // Create session where cwd differs from projectRoot (simulates user did 'cd' in terminal)
+      const props = createDefaultProps({
+        activeSession: createMockActiveSession({
+          cwd: '/path/to/project/some/subdir',  // Changed via cd
+          projectRoot: '/path/to/project',       // Original project root
+        }),
+        onUpdateTab,
+      });
+
+      await act(async () => {
+        renderWithProvider(<AgentSessionsBrowser {...props} />);
+        await vi.runAllTimersAsync();
+      });
+
+      // Click star button
+      const starButton = screen.getByTestId('icon-star').closest('button');
+      await act(async () => {
+        fireEvent.click(starButton!);
+        await vi.runAllTimersAsync();
+      });
+
+      // Should use projectRoot, NOT cwd
+      expect(window.maestro.claude.updateSessionStarred).toHaveBeenCalledWith(
+        '/path/to/project',  // projectRoot, not '/path/to/project/some/subdir'
+        'session-1',
+        true
+      );
+    });
+
     it('sorts starred sessions to the top', async () => {
       const sessions = [
         createMockClaudeSession({ sessionId: 'session-1', firstMessage: 'Unstarred', modifiedAt: '2025-01-15T12:00:00Z' }),
@@ -1393,6 +1435,54 @@ describe('AgentSessionsBrowser', () => {
         ''
       );
       expect(onUpdateTab).toHaveBeenCalledWith('session-1', { name: null });
+    });
+
+    it('uses projectRoot (not cwd) for rename when they differ', async () => {
+      // This tests the fix for the cwd vs projectRoot bug in rename
+      const sessions = [createMockClaudeSession({ sessionId: 'session-1' })];
+      vi.mocked(window.maestro.agentSessions.listPaginated).mockResolvedValue({
+        sessions,
+        hasMore: false,
+        totalCount: 1,
+        nextCursor: null,
+      });
+      vi.mocked(window.maestro.claude.getSessionOrigins).mockResolvedValue({});
+
+      const onUpdateTab = vi.fn();
+      // Create session where cwd differs from projectRoot
+      const props = createDefaultProps({
+        activeSession: createMockActiveSession({
+          cwd: '/path/to/project/some/subdir',  // Changed via cd
+          projectRoot: '/path/to/project',       // Original project root
+        }),
+        onUpdateTab,
+      });
+
+      await act(async () => {
+        renderWithProvider(<AgentSessionsBrowser {...props} />);
+        await vi.runAllTimersAsync();
+      });
+
+      // Click edit button to start rename
+      const editButton = screen.getByTestId('icon-edit').closest('button');
+      fireEvent.click(editButton!);
+
+      // Type new name - use placeholder to find the rename input specifically
+      const input = screen.getByPlaceholderText('Enter session name...');
+      fireEvent.change(input, { target: { value: 'New Name' } });
+
+      // Submit with Enter
+      await act(async () => {
+        fireEvent.keyDown(input, { key: 'Enter' });
+        await vi.runAllTimersAsync();
+      });
+
+      // Should use projectRoot, NOT cwd
+      expect(window.maestro.agentSessions.updateSessionName).toHaveBeenCalledWith(
+        '/path/to/project',  // projectRoot, not '/path/to/project/some/subdir'
+        'session-1',
+        'New Name'
+      );
     });
   });
 

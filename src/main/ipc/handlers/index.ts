@@ -132,6 +132,7 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
     getMainWindow: deps.getMainWindow,
     // ProcessManager is structurally compatible with the group chat's IProcessManager interface
     getProcessManager: deps.getProcessManager as unknown as GroupChatHandlerDependencies['getProcessManager'],
+    getAgentDetector: deps.getAgentDetector,
   });
   // Setup logger event forwarding to renderer
   setupLoggerEventForwarding(deps.getMainWindow);

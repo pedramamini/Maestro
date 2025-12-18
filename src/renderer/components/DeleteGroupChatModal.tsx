@@ -13,7 +13,7 @@ import { Modal, ModalFooter } from './ui/Modal';
 interface DeleteGroupChatModalProps {
   theme: Theme;
   isOpen: boolean;
-  chatName: string;
+  groupChatName: string;
   onClose: () => void;
   onConfirm: () => void;
 }
@@ -21,7 +21,7 @@ interface DeleteGroupChatModalProps {
 export function DeleteGroupChatModal({
   theme,
   isOpen,
-  chatName,
+  groupChatName,
   onClose,
   onConfirm,
 }: DeleteGroupChatModalProps): JSX.Element | null {
@@ -54,7 +54,7 @@ export function DeleteGroupChatModal({
       }
     >
       <p className="text-sm leading-relaxed" style={{ color: theme.colors.textMain }}>
-        Are you sure you want to delete <strong>"{chatName}"</strong>?
+        Are you sure you want to delete <strong>"{groupChatName}"</strong>?
       </p>
       <p
         className="text-sm leading-relaxed mt-2"
