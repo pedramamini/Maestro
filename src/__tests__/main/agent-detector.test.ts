@@ -249,8 +249,8 @@ describe('agent-detector', () => {
 
       const agents = await detector.detectAgents();
 
-      // Should have all 6 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode)
-      expect(agents.length).toBe(6);
+      // Should have all 7 agents (terminal, claude-code, codex, gemini-cli, qwen3-coder, opencode, aider)
+      expect(agents.length).toBe(7);
 
       const agentIds = agents.map(a => a.id);
       expect(agentIds).toContain('terminal');
@@ -259,6 +259,7 @@ describe('agent-detector', () => {
       expect(agentIds).toContain('gemini-cli');
       expect(agentIds).toContain('qwen3-coder');
       expect(agentIds).toContain('opencode');
+      expect(agentIds).toContain('aider');
     });
 
     it('should mark agents as available when binary is found', async () => {
@@ -801,7 +802,7 @@ describe('agent-detector', () => {
 
       const result = await detectPromise;
       expect(result).toBeDefined();
-      expect(result.length).toBe(6);
+      expect(result.length).toBe(7);
     });
 
     it('should handle very long PATH', async () => {
