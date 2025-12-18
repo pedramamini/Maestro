@@ -96,12 +96,26 @@ function setupIpcHandlers(): void {
   // Download update
   ipcMain.handle('updates:download', async () => {
     try {
+      // First, check for updates with electron-updater to tell it which version to download
+      // This is required because the UI uses the GitHub API check, not electron-updater's check
+      logger.info('Checking for updates before download...', 'AutoUpdater');
+      const checkResult = await autoUpdater.checkForUpdates();
+
+      if (!checkResult || !checkResult.updateInfo) {
+        logger.error('No update found during pre-download check', 'AutoUpdater');
+        currentStatus = { status: 'error', error: 'No update available to download' };
+        sendStatusToRenderer();
+        return { success: false, error: 'No update available to download' };
+      }
+
+      logger.info(`Found update ${checkResult.updateInfo.version}, starting download...`, 'AutoUpdater');
       currentStatus = { status: 'downloading', progress: { percent: 0, bytesPerSecond: 0, total: 0, transferred: 0, delta: 0 } };
       sendStatusToRenderer();
       await autoUpdater.downloadUpdate();
       return { success: true };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : 'Unknown error';
+      logger.error(`Download failed: ${errorMessage}`, 'AutoUpdater');
       currentStatus = { status: 'error', error: errorMessage };
       sendStatusToRenderer();
       return { success: false, error: errorMessage };

@@ -170,6 +170,7 @@ jobs:
             release/*.zip
             release/*-mac.zip
             release/*-mac-*.zip
+            release/latest-mac.yml
           if-no-files-found: error
           retention-days: 5
 
@@ -180,6 +181,7 @@ jobs:
           name: maestro-windows
           path: |
             release/*.exe
+            release/latest.yml
           if-no-files-found: error
           retention-days: 5
 
@@ -193,6 +195,7 @@ jobs:
             release/*.deb
             release/*.rpm
             release/*.snap
+            release/latest-linux.yml
           if-no-files-found: warn
           retention-days: 5
 

@@ -556,6 +556,21 @@ function createWindow() {
   if (process.env.NODE_ENV !== 'development') {
     initAutoUpdater(mainWindow);
     logger.info('Auto-updater initialized', 'Window');
+  } else {
+    // Register stub handlers in development mode so users get a helpful error
+    ipcMain.handle('updates:download', async () => {
+      return { success: false, error: 'Auto-update is disabled in development mode. Please check update first.' };
+    });
+    ipcMain.handle('updates:install', async () => {
+      logger.warn('Auto-update install called in development mode', 'AutoUpdater');
+    });
+    ipcMain.handle('updates:getStatus', async () => {
+      return { status: 'idle' as const };
+    });
+    ipcMain.handle('updates:checkAutoUpdater', async () => {
+      return { success: false, error: 'Auto-update is disabled in development mode' };
+    });
+    logger.info('Auto-updater disabled in development mode (stub handlers registered)', 'Window');
   }
 }
 
