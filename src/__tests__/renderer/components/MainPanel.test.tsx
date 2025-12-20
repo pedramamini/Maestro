@@ -324,13 +324,17 @@ describe('MainPanel', () => {
       supportsJsonOutput: true,
       supportsSessionId: true,
       supportsImageInput: true,
+      supportsImageInputOnResume: true,
       supportsSlashCommands: true,
       supportsSessionStorage: true,
       supportsCostTracking: true,
       supportsUsageStats: true,
       supportsBatchMode: true,
+      requiresPromptToStart: false,
       supportsStreaming: true,
       supportsResultMessages: true,
+      supportsModelSelection: false,
+      supportsStreamJsonInput: true,
     });
 
     // Reset mock git status data to defaults
@@ -461,13 +465,17 @@ describe('MainPanel', () => {
         supportsJsonOutput: true,
         supportsSessionId: true,
         supportsImageInput: true,
+        supportsImageInputOnResume: true,
         supportsSlashCommands: true,
         supportsSessionStorage: false, // Agent doesn't support session storage
         supportsCostTracking: true,
         supportsUsageStats: true,
         supportsBatchMode: true,
+        requiresPromptToStart: false,
         supportsStreaming: true,
         supportsResultMessages: true,
+        supportsModelSelection: false,
+        supportsStreamJsonInput: true,
       });
 
       render(<MainPanel {...defaultProps} />);
@@ -485,13 +493,17 @@ describe('MainPanel', () => {
         supportsJsonOutput: true,
         supportsSessionId: true,
         supportsImageInput: true,
+        supportsImageInputOnResume: true,
         supportsSlashCommands: true,
         supportsSessionStorage: false, // Agent doesn't support session storage
         supportsCostTracking: true,
         supportsUsageStats: true,
         supportsBatchMode: true,
+        requiresPromptToStart: false,
         supportsStreaming: true,
         supportsResultMessages: true,
+        supportsModelSelection: false,
+        supportsStreamJsonInput: true,
       });
 
       render(<MainPanel {...defaultProps} agentSessionsOpen={true} />);
@@ -737,13 +749,17 @@ describe('MainPanel', () => {
         supportsJsonOutput: true,
         supportsSessionId: false, // Agent doesn't support session ID
         supportsImageInput: true,
+        supportsImageInputOnResume: true,
         supportsSlashCommands: true,
         supportsSessionStorage: true,
         supportsCostTracking: true,
         supportsUsageStats: true,
         supportsBatchMode: true,
+        requiresPromptToStart: false,
         supportsStreaming: true,
         supportsResultMessages: true,
+        supportsModelSelection: false,
+        supportsStreamJsonInput: true,
       });
 
       const session = createSession({
@@ -826,13 +842,17 @@ describe('MainPanel', () => {
         supportsJsonOutput: true,
         supportsSessionId: true,
         supportsImageInput: true,
+        supportsImageInputOnResume: true,
         supportsSlashCommands: true,
         supportsSessionStorage: true,
         supportsCostTracking: false, // Agent doesn't support cost tracking
         supportsUsageStats: true,
         supportsBatchMode: true,
+        requiresPromptToStart: false,
         supportsStreaming: true,
         supportsResultMessages: true,
+        supportsModelSelection: false,
+        supportsStreamJsonInput: true,
       });
 
       // Mock offsetWidth to return a value > 500 so cost widget would be shown if capability was true
@@ -898,13 +918,17 @@ describe('MainPanel', () => {
         supportsJsonOutput: true,
         supportsSessionId: true,
         supportsImageInput: true,
+        supportsImageInputOnResume: true,
         supportsSlashCommands: true,
         supportsSessionStorage: true,
         supportsCostTracking: true,
         supportsUsageStats: false, // Agent doesn't support usage stats
         supportsBatchMode: true,
+        requiresPromptToStart: false,
         supportsStreaming: true,
         supportsResultMessages: true,
+        supportsModelSelection: false,
+        supportsStreamJsonInput: true,
       });
 
       render(<MainPanel {...defaultProps} />);

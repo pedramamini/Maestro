@@ -45,6 +45,9 @@ export interface AgentCapabilities {
   /** Agent supports batch/headless mode (non-interactive) */
   supportsBatchMode: boolean;
 
+  /** Agent requires a prompt to start (no eager spawn on session creation) */
+  requiresPromptToStart: boolean;
+
   /** Agent streams responses in real-time */
   supportsStreaming: boolean;
 
@@ -53,6 +56,9 @@ export interface AgentCapabilities {
 
   /** Agent supports selecting different models (e.g., --model flag) */
   supportsModelSelection: boolean;
+
+  /** Agent supports --input-format stream-json for image input via stdin */
+  supportsStreamJsonInput: boolean;
 }
 
 /**
@@ -71,9 +77,11 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
   supportsCostTracking: false,
   supportsUsageStats: false,
   supportsBatchMode: false,
+  requiresPromptToStart: false,
   supportsStreaming: false,
   supportsResultMessages: false,
   supportsModelSelection: false,
+  supportsStreamJsonInput: false,
 };
 
 /**
@@ -127,7 +135,8 @@ export function useAgentCapabilities(
   const [loading, setLoading] = useState<boolean>(!agentId || !capabilitiesCache.has(agentId));
   const [error, setError] = useState<string | null>(null);
 
-  const fetchCapabilities = useCallback(async () => {
+  const fetchCapabilities = useCallback(async (forceRefresh = false) => {
+    setError(null);
     if (!agentId) {
       setCapabilities(DEFAULT_CAPABILITIES);
       setLoading(false);
@@ -135,14 +144,13 @@ export function useAgentCapabilities(
     }
 
     // Check cache first
-    if (capabilitiesCache.has(agentId)) {
+    if (!forceRefresh && capabilitiesCache.has(agentId)) {
       setCapabilities(capabilitiesCache.get(agentId)!);
       setLoading(false);
       return;
     }
 
     setLoading(true);
-    setError(null);
 
     try {
       const result = await window.maestro.agents.getCapabilities(agentId);
@@ -175,7 +183,7 @@ export function useAgentCapabilities(
     capabilities,
     loading,
     error,
-    refresh: fetchCapabilities,
+    refresh: () => fetchCapabilities(true),
     hasCapability,
   };
 }

@@ -33,8 +33,11 @@ interface AgentCapabilities {
   supportsCostTracking: boolean;
   supportsUsageStats: boolean;
   supportsBatchMode: boolean;
+  requiresPromptToStart: boolean;
   supportsStreaming: boolean;
   supportsResultMessages: boolean;
+  supportsModelSelection: boolean;
+  supportsStreamJsonInput: boolean;
 }
 
 interface AgentConfig {

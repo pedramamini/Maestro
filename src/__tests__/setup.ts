@@ -180,8 +180,11 @@ const mockMaestro = {
       supportsCostTracking: true,
       supportsUsageStats: true,
       supportsBatchMode: true,
+      requiresPromptToStart: false,
       supportsStreaming: true,
       supportsResultMessages: true,
+      supportsModelSelection: false,
+      supportsStreamJsonInput: true,
     }),
   },
   fonts: {

@@ -52,6 +52,25 @@ interface AgentConfig {
   configOptions?: AgentConfigOption[];
 }
 
+interface AgentCapabilities {
+  supportsResume: boolean;
+  supportsReadOnlyMode: boolean;
+  supportsJsonOutput: boolean;
+  supportsSessionId: boolean;
+  supportsImageInput: boolean;
+  supportsImageInputOnResume: boolean;
+  supportsSlashCommands: boolean;
+  supportsSessionStorage: boolean;
+  supportsCostTracking: boolean;
+  supportsUsageStats: boolean;
+  supportsBatchMode: boolean;
+  requiresPromptToStart: boolean;
+  supportsStreaming: boolean;
+  supportsResultMessages: boolean;
+  supportsModelSelection: boolean;
+  supportsStreamJsonInput: boolean;
+}
+
 interface DirectoryEntry {
   name: string;
   isDirectory: boolean;
@@ -232,6 +251,7 @@ interface MaestroAPI {
     detect: () => Promise<AgentConfig[]>;
     refresh: (agentId?: string) => Promise<AgentConfig[]>;
     get: (agentId: string) => Promise<AgentConfig | null>;
+    getCapabilities: (agentId: string) => Promise<AgentCapabilities>;
     getConfig: (agentId: string) => Promise<Record<string, any>>;
     setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;
     getConfigValue: (agentId: string, key: string) => Promise<any>;
