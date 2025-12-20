@@ -1689,12 +1689,20 @@ export default function MaestroConsole() {
       }
     });
 
+    const unsubModeratorSessionId = window.maestro.groupChat.onModeratorSessionIdChanged?.((id, sessionId) => {
+      // Update the group chat's moderator session ID
+      setGroupChats(prev => prev.map(chat =>
+        chat.id === id ? { ...chat, moderatorSessionId: sessionId } : chat
+      ));
+    });
+
     return () => {
       unsubMessage();
       unsubState();
       unsubParticipants();
       unsubModeratorUsage?.();
       unsubParticipantState?.();
+      unsubModeratorSessionId?.();
     };
   }, [activeGroupChatId]);
 

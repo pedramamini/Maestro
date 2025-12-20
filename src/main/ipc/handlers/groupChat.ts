@@ -94,6 +94,7 @@ export const groupChatEmitters: {
   emitModeratorUsage?: (groupChatId: string, usage: ModeratorUsage) => void;
   emitHistoryEntry?: (groupChatId: string, entry: GroupChatHistoryEntry) => void;
   emitParticipantState?: (groupChatId: string, participantName: string, state: ParticipantState) => void;
+  emitModeratorSessionIdChanged?: (groupChatId: string, sessionId: string) => void;
 } = {};
 
 // Helper to create handler options with consistent context
@@ -525,6 +526,17 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
     const mainWindow = getMainWindow();
     if (mainWindow && !mainWindow.isDestroyed()) {
       mainWindow.webContents.send('groupChat:participantState', groupChatId, participantName, state);
+    }
+  };
+
+  /**
+   * Emit a moderator session ID change event to the renderer.
+   * Called when the moderator's real agent session ID is captured.
+   */
+  groupChatEmitters.emitModeratorSessionIdChanged = (groupChatId: string, sessionId: string): void => {
+    const mainWindow = getMainWindow();
+    if (mainWindow && !mainWindow.isDestroyed()) {
+      mainWindow.webContents.send('groupChat:moderatorSessionIdChanged', groupChatId, sessionId);
     }
   };
 

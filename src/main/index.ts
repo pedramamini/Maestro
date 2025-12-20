@@ -15,7 +15,7 @@ import { getHistoryManager } from './history-manager';
 import { registerGitHandlers, registerAutorunHandlers, registerPlaybooksHandlers, registerHistoryHandlers, registerAgentsHandlers, registerProcessHandlers, registerPersistenceHandlers, registerSystemHandlers, registerClaudeHandlers, registerAgentSessionsHandlers, registerGroupChatHandlers, setupLoggerEventForwarding } from './ipc/handlers';
 import { groupChatEmitters } from './ipc/handlers/groupChat';
 import { routeModeratorResponse, routeAgentResponse, setGetSessionsCallback, setGetCustomEnvVarsCallback, setGetAgentConfigCallback, markParticipantResponded, spawnModeratorSynthesis, getGroupChatReadOnlyState } from './group-chat/group-chat-router';
-import { updateParticipant, loadGroupChat } from './group-chat/group-chat-storage';
+import { updateParticipant, loadGroupChat, updateGroupChat } from './group-chat/group-chat-storage';
 import { initializeSessionStorages } from './storage';
 import { initializeOutputParsers, getOutputParser } from './parsers';
 import { DEMO_MODE, DEMO_DATA_PATH } from './constants';
@@ -2169,6 +2169,21 @@ function setupProcessListeners() {
           }
         }).catch(err => {
           logger.error('[GroupChat] Failed to update participant agentSessionId', 'ProcessListener', { error: String(err), participant: participantName });
+        });
+        // Don't return - still send to renderer for logging purposes
+      }
+
+      // Handle group chat moderator session ID - store the real agent session ID
+      // Session ID format: group-chat-{groupChatId}-moderator-{timestamp}
+      const moderatorMatch = sessionId.match(/^group-chat-(.+)-moderator-\d+$/);
+      if (moderatorMatch) {
+        const groupChatId = moderatorMatch[1];
+        // Update the group chat with the moderator's real agent session ID
+        updateGroupChat(groupChatId, { moderatorSessionId: agentSessionId }).then(() => {
+          // Emit session ID change event so UI updates with the new session ID
+          groupChatEmitters.emitModeratorSessionIdChanged?.(groupChatId, agentSessionId);
+        }).catch((err: unknown) => {
+          logger.error('[GroupChat] Failed to update moderator session ID', 'ProcessListener', { error: String(err), groupChatId });
         });
         // Don't return - still send to renderer for logging purposes
       }

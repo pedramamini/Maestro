@@ -394,7 +394,54 @@ export class OpenCodeOutputParser implements AgentOutputParser {
     stderr: string,
     stdout: string
   ): AgentError | null {
-    // Exit code 0 is success
+    // OpenCode quirk: sometimes exits with code 0 even on errors (e.g., invalid provider)
+    // If exit code is 0 but there's stderr content and no stdout, treat as error
+    const hasStderr = stderr?.trim().length > 0;
+    const hasStdout = stdout?.trim().length > 0;
+
+    if (exitCode === 0 && hasStderr && !hasStdout) {
+      // Check stderr for known error patterns
+      const patterns = getErrorPatterns(this.agentId);
+      const match = matchErrorPattern(patterns, stderr);
+
+      if (match) {
+        return {
+          type: match.type,
+          message: match.message,
+          recoverable: match.recoverable,
+          agentId: this.agentId,
+          timestamp: Date.now(),
+          raw: {
+            exitCode,
+            stderr,
+            stdout,
+          },
+        };
+      }
+
+      // No pattern matched but stderr with no stdout is suspicious
+      // Extract first meaningful line from stderr for the error message
+      const stderrLines = stderr.trim().split('\n');
+      const meaningfulLine = stderrLines.find(line =>
+        !line.match(/^\s*\d+\s*\|/) && // Skip source code lines (e.g., "847 |     const...")
+        line.trim().length > 10
+      ) || stderrLines[0];
+
+      return {
+        type: 'agent_crashed',
+        message: `OpenCode failed: ${meaningfulLine?.substring(0, 200) || 'Unknown error (check stderr)'}`,
+        recoverable: true,
+        agentId: this.agentId,
+        timestamp: Date.now(),
+        raw: {
+          exitCode,
+          stderr,
+          stdout,
+        },
+      };
+    }
+
+    // Exit code 0 with stdout is success
     if (exitCode === 0) {
       return null;
     }
