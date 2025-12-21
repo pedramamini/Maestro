@@ -321,7 +321,6 @@ export function AchievementCard({ theme, autoRunStats, globalStats, onEscapeWith
 
   const currentLevel = currentBadge?.level || 0;
   const goldColor = '#FFD700';
-  const purpleAccent = theme.colors.accent;
 
   // Close share menu when clicking outside
   useEffect(() => {
