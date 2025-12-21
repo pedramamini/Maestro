@@ -350,6 +350,27 @@ contextBridge.exposeInMainWorld('maestro', {
         installed: boolean;
         authenticated: boolean;
       }>,
+    // List all worktrees for a git repository
+    listWorktrees: (cwd: string) =>
+      ipcRenderer.invoke('git:listWorktrees', cwd) as Promise<{
+        worktrees: Array<{
+          path: string;
+          head: string;
+          branch: string | null;
+          isBare: boolean;
+        }>;
+      }>,
+    // Scan a directory for subdirectories that are git repositories or worktrees
+    scanWorktreeDirectory: (parentPath: string) =>
+      ipcRenderer.invoke('git:scanWorktreeDirectory', parentPath) as Promise<{
+        gitSubdirs: Array<{
+          path: string;
+          name: string;
+          isWorktree: boolean;
+          branch: string | null;
+          repoRoot: string | null;
+        }>;
+      }>,
   },
 
   // File System API
@@ -1226,6 +1247,23 @@ export interface MaestroAPI {
     checkGhCli: (ghPath?: string) => Promise<{
       installed: boolean;
       authenticated: boolean;
+    }>;
+    listWorktrees: (cwd: string) => Promise<{
+      worktrees: Array<{
+        path: string;
+        head: string;
+        branch: string | null;
+        isBare: boolean;
+      }>;
+    }>;
+    scanWorktreeDirectory: (parentPath: string) => Promise<{
+      gitSubdirs: Array<{
+        path: string;
+        name: string;
+        isWorktree: boolean;
+        branch: string | null;
+        repoRoot: string | null;
+      }>;
     }>;
   };
   fs: {

@@ -325,6 +325,8 @@ export interface Session {
   gitBranches?: string[];
   gitTags?: string[];
   gitRefsCacheTime?: number;  // Timestamp when branches/tags were last fetched
+  // Worktree parent path - if set, this session is a worktree parent that should be scanned for new worktrees
+  worktreeParentPath?: string;
   // File Explorer per-session state
   fileTree: any[];
   fileExplorerExpanded: string[];

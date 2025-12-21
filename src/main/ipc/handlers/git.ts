@@ -574,5 +574,142 @@ export function registerGitHandlers(): void {
     }
   ));
 
+  // List all worktrees for a git repository
+  ipcMain.handle('git:listWorktrees', createIpcHandler(
+    handlerOpts('listWorktrees'),
+    async (cwd: string) => {
+      // Run git worktree list --porcelain for machine-readable output
+      const result = await execFileNoThrow('git', ['worktree', 'list', '--porcelain'], cwd);
+      if (result.exitCode !== 0) {
+        // Not a git repo or no worktree support
+        return { worktrees: [] };
+      }
+
+      // Parse porcelain output:
+      // worktree /path/to/worktree
+      // HEAD abc123
+      // branch refs/heads/branch-name
+      // (blank line separates entries)
+      const worktrees: Array<{
+        path: string;
+        head: string;
+        branch: string | null;
+        isBare: boolean;
+      }> = [];
+
+      const lines = result.stdout.split('\n');
+      let current: { path?: string; head?: string; branch?: string | null; isBare?: boolean } = {};
+
+      for (const line of lines) {
+        if (line.startsWith('worktree ')) {
+          current.path = line.substring(9);
+        } else if (line.startsWith('HEAD ')) {
+          current.head = line.substring(5);
+        } else if (line.startsWith('branch ')) {
+          // Extract branch name from refs/heads/branch-name
+          const branchRef = line.substring(7);
+          current.branch = branchRef.replace('refs/heads/', '');
+        } else if (line === 'bare') {
+          current.isBare = true;
+        } else if (line === 'detached') {
+          current.branch = null; // Detached HEAD
+        } else if (line === '' && current.path) {
+          // End of entry
+          worktrees.push({
+            path: current.path,
+            head: current.head || '',
+            branch: current.branch ?? null,
+            isBare: current.isBare || false,
+          });
+          current = {};
+        }
+      }
+
+      // Handle last entry if no trailing newline
+      if (current.path) {
+        worktrees.push({
+          path: current.path,
+          head: current.head || '',
+          branch: current.branch ?? null,
+          isBare: current.isBare || false,
+        });
+      }
+
+      return { worktrees };
+    }
+  ));
+
+  // Scan a directory for subdirectories that are git repositories or worktrees
+  // This is used for auto-discovering worktrees in a parent directory
+  ipcMain.handle('git:scanWorktreeDirectory', createIpcHandler(
+    handlerOpts('scanWorktreeDirectory'),
+    async (parentPath: string) => {
+      const gitSubdirs: Array<{
+        path: string;
+        name: string;
+        isWorktree: boolean;
+        branch: string | null;
+        repoRoot: string | null;
+      }> = [];
+
+      try {
+        // Read directory contents
+        const entries = await fs.readdir(parentPath, { withFileTypes: true });
+
+        // Filter to only directories (excluding hidden directories)
+        const subdirs = entries.filter(e => e.isDirectory() && !e.name.startsWith('.'));
+
+        // Check each subdirectory for git status
+        for (const subdir of subdirs) {
+          const subdirPath = path.join(parentPath, subdir.name);
+
+          // Check if it's inside a git work tree
+          const isInsideWorkTree = await execFileNoThrow('git', ['rev-parse', '--is-inside-work-tree'], subdirPath);
+          if (isInsideWorkTree.exitCode !== 0) {
+            continue; // Not a git repo
+          }
+
+          // Check if it's a worktree (git-dir != git-common-dir)
+          const gitDirResult = await execFileNoThrow('git', ['rev-parse', '--git-dir'], subdirPath);
+          const gitCommonDirResult = await execFileNoThrow('git', ['rev-parse', '--git-common-dir'], subdirPath);
+
+          const gitDir = gitDirResult.exitCode === 0 ? gitDirResult.stdout.trim() : '';
+          const gitCommonDir = gitCommonDirResult.exitCode === 0 ? gitCommonDirResult.stdout.trim() : gitDir;
+          const isWorktree = gitDir !== gitCommonDir;
+
+          // Get current branch
+          const branchResult = await execFileNoThrow('git', ['rev-parse', '--abbrev-ref', 'HEAD'], subdirPath);
+          const branch = branchResult.exitCode === 0 ? branchResult.stdout.trim() : null;
+
+          // Get repo root
+          let repoRoot: string | null = null;
+          if (isWorktree && gitCommonDir) {
+            const commonDirAbs = path.isAbsolute(gitCommonDir)
+              ? gitCommonDir
+              : path.resolve(subdirPath, gitCommonDir);
+            repoRoot = path.dirname(commonDirAbs);
+          } else {
+            const repoRootResult = await execFileNoThrow('git', ['rev-parse', '--show-toplevel'], subdirPath);
+            if (repoRootResult.exitCode === 0) {
+              repoRoot = repoRootResult.stdout.trim();
+            }
+          }
+
+          gitSubdirs.push({
+            path: subdirPath,
+            name: subdir.name,
+            isWorktree,
+            branch,
+            repoRoot,
+          });
+        }
+      } catch (err) {
+        logger.error(`Failed to scan directory ${parentPath}: ${err}`, LOG_CONTEXT);
+      }
+
+      return { gitSubdirs };
+    }
+  ));
+
   logger.debug(`${LOG_CONTEXT} Git IPC handlers registered`);
 }
