@@ -354,13 +354,11 @@ export function useAgentExecution(
     toolType: ToolType = 'claude-code'
   ): Promise<AgentSpawnResult> => {
     try {
-      console.log(`[spawnBackgroundSynopsis] Called with toolType: ${toolType}, resumeAgentSessionId: ${resumeAgentSessionId}`);
       const agent = await window.maestro.agents.get(toolType);
       if (!agent) {
         console.error(`[spawnBackgroundSynopsis] Agent not found for toolType: ${toolType}`);
         return { success: false };
       }
-      console.log(`[spawnBackgroundSynopsis] Got agent: ${agent.id}, command: ${agent.command}, path: ${agent.path}`);
 
       // Use a unique target ID for background synopsis
       const targetSessionId = `${sessionId}-synopsis-${Date.now()}`;
@@ -411,7 +409,6 @@ export function useAgentExecution(
 
         // Spawn with session resume - the IPC handler will use the agent's resumeArgs builder
         const commandToUse = agent.path || agent.command;
-        console.log(`[spawnBackgroundSynopsis] Spawning synopsis: command=${commandToUse}, toolType=${toolType}, agentSessionId=${resumeAgentSessionId}`);
         window.maestro.process.spawn({
           sessionId: targetSessionId,
           toolType,

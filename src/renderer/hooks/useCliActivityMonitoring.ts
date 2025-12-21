@@ -77,7 +77,6 @@ export function useCliActivityMonitoring(deps: UseCliActivityMonitoringDeps): Us
 
     // Listen for changes
     const unsubscribe = window.maestro.cli.onActivityChange(() => {
-      console.log('[CLI Activity] Activity change detected');
       checkCliActivity();
     });
     return unsubscribe;
