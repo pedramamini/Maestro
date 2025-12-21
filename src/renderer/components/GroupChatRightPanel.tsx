@@ -335,8 +335,6 @@ export function GroupChatRightPanel({
               // Convert 'working' state to 'busy' for SessionState compatibility
               const workState = participantStates.get(participant.name);
               const sessionState = workState === 'working' ? 'busy' : 'idle';
-              // Debug: log participant state lookup on every render
-              console.log(`[GroupChat:ParticipantCard] ${participant.name}: workState=${workState ?? 'undefined'} -> sessionState=${sessionState}, participantStates size=${participantStates.size}`);
               return (
                 <ParticipantCard
                   key={participant.sessionId}
