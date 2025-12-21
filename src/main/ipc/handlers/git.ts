@@ -524,9 +524,26 @@ export function registerGitHandlers(): void {
   ipcMain.handle('git:checkGhCli', withIpcErrorLogging(
     handlerOpts('checkGhCli'),
     async (ghPath?: string) => {
-      // Use custom path if provided, otherwise fall back to 'gh' (expects it in PATH)
-      const ghCommand = ghPath || 'gh';
-      logger.debug(`Checking gh CLI at: ${ghCommand} (custom path: ${ghPath || 'none'})`, LOG_CONTEXT);
+      let ghCommand: string;
+      
+      if (ghPath) {
+        // Use custom path if explicitly provided
+        ghCommand = ghPath;
+        logger.debug(`Using custom gh path: ${ghCommand}`, LOG_CONTEXT);
+      } else {
+        // Auto-detect gh location using 'which' command
+        // This properly handles PATH resolution and finds gh wherever it's installed
+        const whichResult = await execFileNoThrow('which', ['gh']);
+        
+        if (whichResult.exitCode === 0 && whichResult.stdout.trim()) {
+          ghCommand = whichResult.stdout.trim();
+          logger.debug(`Auto-detected gh CLI at: ${ghCommand}`, LOG_CONTEXT);
+        } else {
+          // If 'which' fails, fall back to 'gh' and let execFileNoThrow handle the error
+          ghCommand = 'gh';
+          logger.debug(`Could not auto-detect gh path (which exit code: ${whichResult.exitCode}), using default: ${ghCommand}`, LOG_CONTEXT);
+        }
+      }
 
       // Check if gh is installed by running gh --version
       const versionResult = await execFileNoThrow(ghCommand, ['--version']);
