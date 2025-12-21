@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import type { Session, SessionState, LogEntry, QueuedItem, AITab, CustomAICommand } from '../types';
+import type { Session, SessionState, LogEntry, QueuedItem, AITab, CustomAICommand, BatchRunState } from '../types';
 import { getActiveTab } from '../utils/tabHelpers';
 import { generateId } from '../utils/ids';
 import { substituteTemplateVariables } from '../utils/templateVariables';
@@ -10,17 +10,6 @@ import { imageOnlyDefaultPrompt, maestroSystemPrompt } from '../../prompts';
  * Default prompt used when user sends only an image without text.
  */
 export const DEFAULT_IMAGE_ONLY_PROMPT = imageOnlyDefaultPrompt;
-
-/**
- * Batch state information for a session.
- */
-export interface BatchState {
-  isRunning: boolean;
-  isPaused?: boolean;
-  currentFile?: string;
-  totalFiles?: number;
-  completedFiles?: number;
-}
 
 /**
  * Dependencies for the useInputProcessing hook.
@@ -67,6 +56,11 @@ export interface UseInputProcessingDeps {
 }
 
 /**
+ * @deprecated Use BatchRunState from '../types' directly. This alias is kept for backwards compatibility.
+ */
+export type BatchState = BatchRunState;
+
+/**
  * Return type for useInputProcessing hook.
  */
 export interface UseInputProcessingReturn {
@@ -106,7 +100,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     isAiMode,
     sessionsRef,
     getBatchState,
-    activeBatchRunState,
+    // Note: activeBatchRunState is in deps interface but not used - kept for API compatibility
     processQueuedItemRef,
     flushBatchedUpdates,
     onHistoryCommand,
@@ -124,16 +118,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     flushBatchedUpdates?.();
 
     const effectiveInputValue = overrideInputValue ?? inputValue;
-    console.log('[processInput] Called with:', {
-      overrideInputValue,
-      inputValue,
-      effectiveInputValue,
-      activeSessionId: activeSession?.id,
-      inputMode: activeSession?.inputMode,
-      stagedImagesCount: stagedImages.length,
-    });
     if (!activeSession || (!effectiveInputValue.trim() && stagedImages.length === 0)) {
-      console.log('[processInput] Early return - no session or empty input');
       return;
     }
 
@@ -409,9 +394,6 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
         } catch {
           // Directory doesn't exist, keep the current shellCwd
           // The shell will show its own error message
-          console.log(
-            `[processInput] cd target "${candidatePath}" does not exist, keeping current cwd`
-          );
         }
       }
     }
@@ -767,7 +749,6 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     inputRef,
     sessionsRef,
     getBatchState,
-    activeBatchRunState,
     processQueuedItemRef,
     setSessions,
     flushBatchedUpdates,

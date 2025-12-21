@@ -116,6 +116,7 @@ export type {
 export type {
   UseInputProcessingDeps,
   UseInputProcessingReturn,
+  /** @deprecated Use BatchRunState from '../types' directly */
   BatchState,
 } from './useInputProcessing';
 export type { UseModalLayerOptions } from './useModalLayer';
