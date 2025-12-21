@@ -444,6 +444,7 @@ interface MaestroAPI {
       }>;
     }) => void) => () => void;
     getAllNamedSessions: () => Promise<Array<{
+      agentId: string;
       agentSessionId: string;
       projectPath: string;
       sessionName: string;
@@ -580,6 +581,7 @@ interface MaestroAPI {
     updateSessionStarred: (projectPath: string, agentSessionId: string, starred: boolean) => Promise<boolean>;
     getSessionOrigins: (projectPath: string) => Promise<Record<string, 'user' | 'auto' | { origin: 'user' | 'auto'; sessionName?: string; starred?: boolean }>>;
     getAllNamedSessions: () => Promise<Array<{
+      agentId: string;
       agentSessionId: string;
       projectPath: string;
       sessionName: string;
@@ -746,6 +748,7 @@ interface MaestroAPI {
       currentVersion: string;
       latestVersion: string;
       updateAvailable: boolean;
+      assetsReady: boolean;
       versionsBehind: number;
       releases: Array<{
         tag_name: string;
@@ -977,6 +980,7 @@ interface MaestroAPI {
     deleteHistoryEntry: (groupChatId: string, entryId: string) => Promise<boolean>;
     clearHistory: (id: string) => Promise<void>;
     getHistoryFilePath: (id: string) => Promise<string | null>;
+    getImages: (id: string) => Promise<Record<string, string>>;
     // Events
     onMessage: (callback: (groupChatId: string, message: {
       timestamp: string;

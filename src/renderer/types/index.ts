@@ -20,6 +20,9 @@ export type {
 import type {
   WorktreeConfig as BaseWorktreeConfig,
   BatchRunConfig as BaseBatchRunConfig,
+  BatchDocumentEntry,
+  UsageStats,
+  ToolType,
 } from '../../shared/types';
 
 // Re-export group chat types from shared location
