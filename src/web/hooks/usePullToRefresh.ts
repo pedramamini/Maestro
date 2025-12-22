@@ -71,6 +71,7 @@ export function usePullToRefresh(options: UsePullToRefreshOptions): UsePullToRef
     threshold = GESTURE_THRESHOLDS.pullToRefresh,
     maxPull = 150,
     enabled = true,
+    containerRef,
   } = options;
 
   const [pullDistance, setPullDistance] = useState(0);
@@ -108,10 +109,10 @@ export function usePullToRefresh(options: UsePullToRefreshOptions): UsePullToRef
       touchStartX.current = touch.clientX;
 
       // Check if we're at the top of the scroll container
-      const target = e.currentTarget as HTMLElement;
+      const target = containerRef?.current ?? (e.currentTarget as HTMLElement);
       isScrolledToTop.current = checkScrollTop(target);
     },
-    [enabled, isRefreshing, checkScrollTop]
+    [enabled, isRefreshing, checkScrollTop, containerRef]
   );
 
   /**

@@ -357,7 +357,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
         if (ctx.isTabShortcut(e, 'closeTab')) {
           e.preventDefault();
           // Only close if there's more than one tab (closeTab returns null otherwise)
-          const result = ctx.closeTab(ctx.activeSession, ctx.activeSession.activeTabId);
+          const result = ctx.closeTab(ctx.activeSession, ctx.activeSession.activeTabId, ctx.showUnreadOnly);
           if (result) {
             ctx.setSessions((prev: Session[]) => prev.map((s: Session) =>
               s.id === ctx.activeSession!.id ? result.session : s

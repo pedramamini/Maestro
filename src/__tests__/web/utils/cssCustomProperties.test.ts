@@ -71,8 +71,8 @@ function createLightTheme(): Theme {
 
 describe('cssCustomProperties', () => {
   describe('THEME_CSS_PROPERTIES constant', () => {
-    it('should contain all 13 theme CSS properties', () => {
-      expect(THEME_CSS_PROPERTIES).toHaveLength(13);
+    it('should contain all 14 theme CSS properties', () => {
+      expect(THEME_CSS_PROPERTIES).toHaveLength(14);
     });
 
     it('should include all color properties', () => {
@@ -86,6 +86,7 @@ describe('cssCustomProperties', () => {
         '--maestro-accent',
         '--maestro-accent-dim',
         '--maestro-accent-text',
+        '--maestro-accent-foreground',
         '--maestro-success',
         '--maestro-warning',
         '--maestro-error',
@@ -145,11 +146,11 @@ describe('cssCustomProperties', () => {
       expect(properties['--maestro-mode']).toBe('vibe');
     });
 
-    it('should return all 13 properties', () => {
+    it('should return all 14 properties', () => {
       const theme = createMockTheme();
       const properties = generateCSSProperties(theme);
 
-      expect(Object.keys(properties)).toHaveLength(13);
+      expect(Object.keys(properties)).toHaveLength(14);
     });
 
     it('should handle themes with rgba colors', () => {
@@ -446,7 +447,7 @@ describe('cssCustomProperties', () => {
           count++;
         }
       });
-      expect(count).toBe(13);
+      expect(count).toBe(14);
     });
 
     it('should update properties when called again with different theme', () => {
@@ -750,8 +751,8 @@ describe('cssCustomProperties', () => {
       // Should be valid CSS that can be parsed
       expect(css).toMatch(/^:root \{[\s\S]+\}$/);
 
-      // Should contain all properties
-      expect((css.match(/--maestro-/g) || []).length).toBe(13);
+      // Should contain all properties (14 = 13 colors + accentForeground + mode)
+      expect((css.match(/--maestro-/g) || []).length).toBe(14);
     });
 
     it('should support cssVar in style objects pattern', () => {

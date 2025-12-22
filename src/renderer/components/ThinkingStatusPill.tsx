@@ -192,11 +192,12 @@ const AutoRunPill = memo(({
 
         {/* Worktree indicator */}
         {autoRunState.worktreeActive && (
-          <GitBranch
-            className="w-3.5 h-3.5 shrink-0"
-            style={{ color: theme.colors.accent }}
-            title={`Worktree: ${autoRunState.worktreeBranch || 'active'}`}
-          />
+          <span title={`Worktree: ${autoRunState.worktreeBranch || 'active'}`}>
+            <GitBranch
+              className="w-3.5 h-3.5 shrink-0"
+              style={{ color: theme.colors.accent }}
+            />
+          </span>
         )}
 
         {/* Divider */}

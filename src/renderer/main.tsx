@@ -9,11 +9,14 @@ import { WizardProvider } from './components/Wizard';
 import { logger } from './utils/logger';
 import './index.css';
 
-// Initialize Sentry for the renderer process
-// The main process handles the enabled/disabled check and initializes Sentry there
-// Renderer Sentry will automatically connect to main process Sentry
-// We initialize unconditionally here - if main process didn't init, this is a no-op
-Sentry.init({});
+// Initialize Sentry for the renderer process (production only)
+// Skip in development to avoid noise from hot-reload artifacts and temporal errors
+// The main process also skips Sentry in dev mode
+// Check for Vite dev server (localhost:5173) or explicit dev mode
+const isDevelopment = window.location.hostname === 'localhost' || window.location.protocol === 'http:';
+if (!isDevelopment) {
+  Sentry.init({});
+}
 
 // Set up global error handlers for uncaught exceptions in renderer process
 window.addEventListener('error', (event: ErrorEvent) => {

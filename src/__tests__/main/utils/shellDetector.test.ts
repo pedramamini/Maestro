@@ -166,14 +166,15 @@ describe('shellDetector', () => {
       Object.defineProperty(process, 'platform', { value: 'win32', writable: true });
 
       mockedExecFileNoThrow.mockResolvedValue({
-        stdout: 'C:\\Windows\\System32\\bash.exe\n',
+        stdout: 'C:\\Windows\\System32\\powershell.exe\n',
         stderr: '',
         exitCode: 0,
       });
 
       await detectShells();
 
-      expect(mockedExecFileNoThrow).toHaveBeenCalledWith('where', ['zsh']);
+      // On Windows, the first shell is powershell.exe
+      expect(mockedExecFileNoThrow).toHaveBeenCalledWith('where', ['powershell.exe']);
 
       // Restore original platform
       Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
@@ -305,12 +306,12 @@ describe('shellDetector', () => {
         Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
       });
 
-      it('should return bash for sh on Windows', () => {
-        expect(getShellCommand('sh')).toBe('bash');
+      it('should return bash.exe for sh on Windows', () => {
+        expect(getShellCommand('sh')).toBe('bash.exe');
       });
 
-      it('should return bash for bash on Windows', () => {
-        expect(getShellCommand('bash')).toBe('bash');
+      it('should return bash.exe for bash on Windows', () => {
+        expect(getShellCommand('bash')).toBe('bash.exe');
       });
 
       it('should return powershell.exe for zsh on Windows', () => {

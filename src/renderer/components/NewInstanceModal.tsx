@@ -326,8 +326,8 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
                       style={{
                         borderColor: theme.colors.border,
                         backgroundColor: isSelected ? theme.colors.accentDim : 'transparent',
-                        ringColor: theme.colors.accent,
-                      }}
+                        '--tw-ring-color': theme.colors.accent,
+                      } as React.CSSProperties}
                     >
                       {/* Collapsed header row */}
                       <div

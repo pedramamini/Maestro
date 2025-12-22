@@ -127,8 +127,9 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate, onDele
 
   // Default theme for ConfirmModal if not provided
   const defaultTheme: Theme = {
-    id: 'default',
+    id: 'dracula',
     name: 'Default',
+    mode: 'dark',
     colors: {
       bgMain: '#1a1a1a',
       bgSidebar: '#252525',
@@ -137,12 +138,12 @@ export function LightboxModal({ image, stagedImages, onClose, onNavigate, onDele
       textDim: '#888888',
       border: '#444444',
       accent: '#007acc',
+      accentDim: 'rgba(0, 122, 204, 0.2)',
+      accentText: '#3b82f6',
       accentForeground: '#ffffff',
       success: '#22c55e',
       warning: '#eab308',
       error: '#ef4444',
-      info: '#3b82f6',
-      link: '#3b82f6',
     },
   };
 

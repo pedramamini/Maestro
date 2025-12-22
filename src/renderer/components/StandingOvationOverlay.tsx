@@ -84,7 +84,7 @@ export function StandingOvationOverlay({
       scalar: 1.2,
       ticks: 355,
       flat: false,
-      shapes: ['circle', 'star', 'square'] as const,
+      shapes: ['circle', 'star', 'square'] as ('circle' | 'star' | 'square')[],
       colors: confettiColors,
       zIndex: CONFETTI_Z_INDEX,
       disableForReducedMotion: true,

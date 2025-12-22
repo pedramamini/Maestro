@@ -39,17 +39,32 @@ import type { ToolType } from '../../shared/types';
 const LOG_CONTEXT = '[OpenCodeSessionStorage]';
 
 /**
- * OpenCode storage base directory
+ * Get OpenCode storage base directory (platform-specific)
+ * - Linux/macOS: ~/.local/share/opencode/storage
+ * - Windows: %APPDATA%\opencode\storage
  */
-const OPENCODE_STORAGE_DIR = path.join(os.homedir(), '.local', 'share', 'opencode', 'storage');
+function getOpenCodeStorageDir(): string {
+  if (process.platform === 'win32') {
+    const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+    return path.join(appData, 'opencode', 'storage');
+  }
+  return path.join(os.homedir(), '.local', 'share', 'opencode', 'storage');
+}
+
+const OPENCODE_STORAGE_DIR = getOpenCodeStorageDir();
 
 /**
  * OpenCode project metadata structure
  */
 interface OpenCodeProject {
   id: string;
-  path: string;
-  // Other fields may exist
+  worktree: string; // Project path (called "worktree" in OpenCode)
+  vcsDir?: string;
+  vcs?: string;
+  time?: {
+    created?: number;
+    updated?: number;
+  };
 }
 
 /**
@@ -57,11 +72,19 @@ interface OpenCodeProject {
  */
 interface OpenCodeSession {
   id: string;          // Session ID (e.g., ses_...)
+  version?: string;    // OpenCode version
   projectID: string;   // Project ID this session belongs to
+  directory?: string;  // Working directory
   title?: string;      // Auto-generated title
-  createdAt?: string;  // ISO timestamp
-  updatedAt?: string;  // ISO timestamp
-  summary?: string;    // Session summary
+  time?: {
+    created?: number;  // Unix timestamp in milliseconds
+    updated?: number;  // Unix timestamp in milliseconds
+  };
+  summary?: {
+    additions?: number;
+    deletions?: number;
+    files?: number;
+  };
 }
 
 /**
@@ -71,8 +94,13 @@ interface OpenCodeMessage {
   id: string;
   sessionID: string;
   role: 'user' | 'assistant';
-  createdAt?: string;
-  model?: string;
+  time?: {
+    created?: number; // Unix timestamp in milliseconds
+  };
+  model?: {
+    providerID?: string;
+    modelID?: string;
+  };
   agent?: string;
   tokens?: {
     input?: number;
@@ -84,6 +112,10 @@ interface OpenCodeMessage {
     };
   };
   cost?: number;
+  summary?: {
+    title?: string;
+    diffs?: unknown[];
+  };
 }
 
 /**
@@ -171,29 +203,54 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
     try {
       await fs.access(projectDir);
     } catch {
+      logger.info(`OpenCode project directory not found: ${projectDir}`, LOG_CONTEXT);
       return null;
     }
 
     const projectFiles = await listJsonFiles(projectDir);
 
+    // Normalize project path for comparison (resolve and remove trailing slashes)
+    const normalizedPath = path.resolve(projectPath).replace(/\/+$/, '');
+    logger.info(`Looking for OpenCode project for path: ${normalizedPath}`, LOG_CONTEXT);
+
     for (const file of projectFiles) {
+      // Skip global.json - we'll use it as fallback
+      if (file === 'global.json') continue;
+
       const projectData = await readJsonFile<OpenCodeProject>(
         path.join(projectDir, file)
       );
-      if (projectData?.path === projectPath) {
+      if (!projectData?.worktree) continue;
+
+      // Normalize stored path the same way
+      const storedPath = path.resolve(projectData.worktree).replace(/\/+$/, '');
+
+      // Exact match
+      if (storedPath === normalizedPath) {
+        logger.info(`Found OpenCode project: ${projectData.id} for path: ${normalizedPath}`, LOG_CONTEXT);
+        return projectData.id;
+      }
+
+      // Check if one is a subdirectory of the other (handles worktree subdirs)
+      if (normalizedPath.startsWith(storedPath + '/') || storedPath.startsWith(normalizedPath + '/')) {
+        logger.info(`Found OpenCode project (subdirectory match): ${projectData.id} for path: ${normalizedPath}`, LOG_CONTEXT);
         return projectData.id;
       }
     }
 
-    // Also check using hash-based ID
+    // Also check using hash-based ID (OpenCode may use SHA1 of path)
     const hashedId = hashProjectPath(projectPath);
     const hashedFile = path.join(projectDir, `${hashedId}.json`);
     try {
       await fs.access(hashedFile);
+      logger.info(`Found OpenCode project by hash: ${hashedId}`, LOG_CONTEXT);
       return hashedId;
     } catch {
-      return null;
+      // Not found by hash
     }
+
+    logger.info(`No OpenCode project found for path: ${normalizedPath}`, LOG_CONTEXT);
+    return null;
   }
 
   /**
@@ -259,10 +316,10 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
       // Directory may not exist
     }
 
-    // Sort messages by creation time
+    // Sort messages by creation time (OpenCode uses time.created as Unix timestamp in ms)
     messages.sort((a, b) => {
-      const aTime = a.createdAt ? new Date(a.createdAt).getTime() : 0;
-      const bTime = b.createdAt ? new Date(b.createdAt).getTime() : 0;
+      const aTime = a.time?.created || 0;
+      const bTime = b.time?.created || 0;
       return aTime - bTime;
     });
 
@@ -325,25 +382,35 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
         totalCost
       } = await this.loadSessionMessages(sessionData.id);
 
-      // Get first user message
-      let firstMessage = sessionData.title || '';
-      if (!firstMessage && messages.length > 0) {
-        const firstUserMsg = messages.find(m => m.role === 'user');
-        if (firstUserMsg) {
-          const msgParts = parts.get(firstUserMsg.id) || [];
-          firstMessage = this.extractTextFromParts(msgParts);
+      // Get preview message - prefer first assistant response, fall back to user message or title
+      let firstAssistantMessage = '';
+      let firstUserMessage = '';
+
+      for (const msg of messages) {
+        const msgParts = parts.get(msg.id) || [];
+        const textContent = this.extractTextFromParts(msgParts);
+
+        if (!firstUserMessage && msg.role === 'user' && textContent.trim()) {
+          firstUserMessage = textContent;
+        }
+        if (!firstAssistantMessage && msg.role === 'assistant' && textContent.trim()) {
+          firstAssistantMessage = textContent;
+          break; // Found first assistant response, stop scanning
         }
       }
 
-      // Calculate duration
+      // Priority: assistant response > user message > title
+      const previewMessage = firstAssistantMessage || firstUserMessage || sessionData.title || '';
+
+      // Calculate duration using time.created (Unix timestamp in ms)
       let durationSeconds = 0;
       if (messages.length >= 2) {
         const firstMsg = messages[0];
         const lastMsg = messages[messages.length - 1];
-        if (firstMsg.createdAt && lastMsg.createdAt) {
-          const start = new Date(firstMsg.createdAt).getTime();
-          const end = new Date(lastMsg.createdAt).getTime();
-          durationSeconds = Math.max(0, Math.floor((end - start) / 1000));
+        const startTime = firstMsg.time?.created || 0;
+        const endTime = lastMsg.time?.created || 0;
+        if (startTime && endTime) {
+          durationSeconds = Math.max(0, Math.floor((endTime - startTime) / 1000));
         }
       }
 
@@ -356,12 +423,20 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
         // Ignore stat errors
       }
 
+      // Convert OpenCode timestamps (Unix ms) to ISO strings
+      const createdAt = sessionData.time?.created
+        ? new Date(sessionData.time.created).toISOString()
+        : new Date().toISOString();
+      const updatedAt = sessionData.time?.updated
+        ? new Date(sessionData.time.updated).toISOString()
+        : createdAt;
+
       sessions.push({
         sessionId: sessionData.id,
         projectPath,
-        timestamp: sessionData.createdAt || new Date().toISOString(),
-        modifiedAt: sessionData.updatedAt || sessionData.createdAt || new Date().toISOString(),
-        firstMessage: firstMessage.slice(0, 200),
+        timestamp: createdAt,
+        modifiedAt: updatedAt,
+        firstMessage: previewMessage.slice(0, 200),
         messageCount: messages.filter(m => m.role === 'user' || m.role === 'assistant').length,
         sizeBytes,
         costUsd: totalCost,
@@ -427,11 +502,16 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
       const toolUse = toolParts.length > 0 ? toolParts : undefined;
 
       if (textContent || toolUse) {
+        // Convert Unix timestamp (ms) to ISO string
+        const timestamp = msg.time?.created
+          ? new Date(msg.time.created).toISOString()
+          : '';
+
         sessionMessages.push({
           type: msg.role,
           role: msg.role,
           content: textContent,
-          timestamp: msg.createdAt || '',
+          timestamp,
           uuid: msg.id,
           toolUse,
         });

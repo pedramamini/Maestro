@@ -43,6 +43,8 @@ interface AgentCapabilities {
 interface AgentConfig {
   id: string;
   name: string;
+  command: string;
+  args?: string[];
   available: boolean;
   path?: string;
   capabilities?: AgentCapabilities;
@@ -858,6 +860,13 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.on('autorun:fileChanged', wrappedHandler);
       return () => ipcRenderer.removeListener('autorun:fileChanged', wrappedHandler);
     },
+    // Backup operations for reset-on-completion documents
+    createBackup: (folderPath: string, filename: string) =>
+      ipcRenderer.invoke('autorun:createBackup', folderPath, filename),
+    restoreBackup: (folderPath: string, filename: string) =>
+      ipcRenderer.invoke('autorun:restoreBackup', folderPath, filename),
+    deleteBackups: (folderPath: string) =>
+      ipcRenderer.invoke('autorun:deleteBackups', folderPath),
   },
 
   // Playbooks API (saved batch run configurations)
@@ -898,6 +907,8 @@ contextBridge.exposeInMainWorld('maestro', {
     ) => ipcRenderer.invoke('playbooks:update', sessionId, playbookId, updates),
     delete: (sessionId: string, playbookId: string) =>
       ipcRenderer.invoke('playbooks:delete', sessionId, playbookId),
+    deleteAll: (sessionId: string) =>
+      ipcRenderer.invoke('playbooks:deleteAll', sessionId),
     export: (sessionId: string, playbookId: string, autoRunFolderPath: string) =>
       ipcRenderer.invoke('playbooks:export', sessionId, playbookId, autoRunFolderPath),
     import: (sessionId: string, autoRunFolderPath: string) =>
@@ -1691,6 +1702,9 @@ export interface MaestroAPI {
     watchFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
     unwatchFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
     onFileChanged: (handler: (data: { folderPath: string; filename: string; eventType: string }) => void) => () => void;
+    createBackup: (folderPath: string, filename: string) => Promise<{ success: boolean; backupFilename?: string; error?: string }>;
+    restoreBackup: (folderPath: string, filename: string) => Promise<{ success: boolean; error?: string }>;
+    deleteBackups: (folderPath: string) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
   };
   playbooks: {
     list: (sessionId: string) => Promise<{
@@ -1781,6 +1795,10 @@ export interface MaestroAPI {
       error?: string;
     }>;
     delete: (sessionId: string, playbookId: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    deleteAll: (sessionId: string) => Promise<{
       success: boolean;
       error?: string;
     }>;

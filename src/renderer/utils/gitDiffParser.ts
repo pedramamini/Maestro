@@ -1,4 +1,4 @@
-import { parseDiff, File as DiffFile } from 'react-diff-view';
+import { parseDiff, type FileData, type HunkData, type ChangeData } from 'react-diff-view';
 
 // Image file extensions for binary detection
 const IMAGE_EXTENSIONS = ['png', 'jpg', 'jpeg', 'gif', 'bmp', 'webp', 'svg', 'ico'];
@@ -7,7 +7,7 @@ export interface ParsedFileDiff {
   oldPath: string;
   newPath: string;
   diffText: string;
-  parsedDiff: DiffFile[];
+  parsedDiff: FileData[];
   isBinary: boolean;
   isImage: boolean;
   isNewFile: boolean;
@@ -92,13 +92,13 @@ export function getFileName(path: string): string {
  * @param parsedDiff - Parsed diff from react-diff-view
  * @returns Object with additions and deletions count
  */
-export function getDiffStats(parsedDiff: DiffFile[]): { additions: number; deletions: number } {
+export function getDiffStats(parsedDiff: FileData[]): { additions: number; deletions: number } {
   let additions = 0;
   let deletions = 0;
 
-  parsedDiff.forEach(file => {
-    file.hunks.forEach(hunk => {
-      hunk.changes.forEach(change => {
+  parsedDiff.forEach((file: FileData) => {
+    file.hunks.forEach((hunk: HunkData) => {
+      hunk.changes.forEach((change: ChangeData) => {
         if (change.type === 'insert') additions++;
         if (change.type === 'delete') deletions++;
       });

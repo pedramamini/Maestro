@@ -78,6 +78,7 @@ export function UpdateCheckModal({ theme, onClose }: UpdateCheckModalProps) {
         currentVersion: __APP_VERSION__,
         latestVersion: __APP_VERSION__,
         updateAvailable: false,
+        assetsReady: false,
         versionsBehind: 0,
         releases: [],
         releasesUrl: 'https://github.com/pedramamini/Maestro/releases',

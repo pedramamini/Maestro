@@ -83,6 +83,14 @@ export interface OverlayLayer extends BaseLayer {
 export type Layer = ModalLayer | OverlayLayer;
 
 /**
+ * Input types for registerLayer (without 'id' field)
+ * These are separate types to preserve discriminated union behavior with Omit
+ */
+export type ModalLayerInput = Omit<ModalLayer, 'id'>;
+export type OverlayLayerInput = Omit<OverlayLayer, 'id'>;
+export type LayerInput = ModalLayerInput | OverlayLayerInput;
+
+/**
  * Type guard to check if a layer is a modal
  */
 export function isModalLayer(layer: Layer): layer is ModalLayer {

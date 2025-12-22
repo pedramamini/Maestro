@@ -9,16 +9,29 @@ export interface ShellInfo {
 
 /**
  * Detect available shells on the system
- * Checks for common shells: zsh, bash, sh, fish, tcsh
+ * Checks for platform-appropriate shells
  */
 export async function detectShells(): Promise<ShellInfo[]> {
-  const shells = [
-    { id: 'zsh', name: 'Zsh' },
-    { id: 'bash', name: 'Bash' },
-    { id: 'sh', name: 'Bourne Shell (sh)' },
-    { id: 'fish', name: 'Fish' },
-    { id: 'tcsh', name: 'Tcsh' },
-  ];
+  const isWindows = process.platform === 'win32';
+
+  // Platform-specific shell definitions
+  const shells = isWindows
+    ? [
+        // Windows shells
+        { id: 'powershell', name: 'PowerShell' },
+        { id: 'pwsh', name: 'PowerShell Core' },
+        { id: 'cmd', name: 'Command Prompt' },
+        { id: 'bash', name: 'Bash (Git Bash/WSL)' },
+        { id: 'wsl', name: 'WSL' },
+      ]
+    : [
+        // Unix-like shells
+        { id: 'zsh', name: 'Zsh' },
+        { id: 'bash', name: 'Bash' },
+        { id: 'sh', name: 'Bourne Shell (sh)' },
+        { id: 'fish', name: 'Fish' },
+        { id: 'tcsh', name: 'Tcsh' },
+      ];
 
   const shellInfos: ShellInfo[] = [];
 
@@ -35,9 +48,33 @@ export async function detectShells(): Promise<ShellInfo[]> {
  */
 async function detectShell(shellId: string, shellName: string): Promise<ShellInfo> {
   try {
+    const isWindows = process.platform === 'win32';
+
+    // Map shell IDs to executable names for Windows
+    let executableName = shellId;
+    if (isWindows) {
+      switch (shellId) {
+        case 'powershell':
+          executableName = 'powershell.exe';
+          break;
+        case 'pwsh':
+          executableName = 'pwsh.exe';
+          break;
+        case 'cmd':
+          executableName = 'cmd.exe';
+          break;
+        case 'wsl':
+          executableName = 'wsl.exe';
+          break;
+        case 'bash':
+          executableName = 'bash.exe';
+          break;
+      }
+    }
+
     // Use 'which' on Unix-like systems, 'where' on Windows
-    const command = process.platform === 'win32' ? 'where' : 'which';
-    const result = await execFileNoThrow(command, [shellId]);
+    const command = isWindows ? 'where' : 'which';
+    const result = await execFileNoThrow(command, [executableName]);
 
     if (result.exitCode === 0 && result.stdout.trim()) {
       return {
@@ -69,12 +106,23 @@ async function detectShell(shellId: string, shellName: string): Promise<ShellInf
 export function getShellCommand(shellId: string): string {
   // For Windows, map to appropriate commands
   if (process.platform === 'win32') {
-    if (shellId === 'sh' || shellId === 'bash') {
-      // On Windows, try bash (usually from Git Bash or WSL)
-      return 'bash';
+    switch (shellId) {
+      case 'powershell':
+        return 'powershell.exe';
+      case 'pwsh':
+        return 'pwsh.exe';
+      case 'cmd':
+        return 'cmd.exe';
+      case 'wsl':
+        return 'wsl.exe';
+      case 'bash':
+      case 'sh':
+        // On Windows, bash is typically from Git Bash or WSL
+        return 'bash.exe';
+      default:
+        // Default to PowerShell on Windows for unknown shells
+        return 'powershell.exe';
     }
-    // Default to PowerShell on Windows for unknown shells
-    return 'powershell.exe';
   }
 
   // On Unix-like systems, use the shell ID directly

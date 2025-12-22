@@ -73,9 +73,10 @@ export function useSessionNavigation(
 
         // If there's a tab ID, also switch to that tab
         if (entry.tabId) {
+          const targetTabId = entry.tabId; // Capture in variable to satisfy TypeScript narrowing
           setSessions(prev => prev.map(s => {
-            if (s.id === entry.sessionId && s.aiTabs?.some(t => t.id === entry.tabId)) {
-              return { ...s, activeTabId: entry.tabId };
+            if (s.id === entry.sessionId && s.aiTabs?.some(t => t.id === targetTabId)) {
+              return { ...s, activeTabId: targetTabId };
             }
             return s;
           }));
@@ -97,9 +98,10 @@ export function useSessionNavigation(
 
         // If there's a tab ID, also switch to that tab
         if (entry.tabId) {
+          const targetTabId = entry.tabId; // Capture in variable to satisfy TypeScript narrowing
           setSessions(prev => prev.map(s => {
-            if (s.id === entry.sessionId && s.aiTabs?.some(t => t.id === entry.tabId)) {
-              return { ...s, activeTabId: entry.tabId };
+            if (s.id === entry.sessionId && s.aiTabs?.some(t => t.id === targetTabId)) {
+              return { ...s, activeTabId: targetTabId };
             }
             return s;
           }));

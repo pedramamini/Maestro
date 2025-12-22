@@ -63,6 +63,9 @@ export const AutoRunLightbox = memo(({
       const id = registerLayer({
         type: 'modal',
         priority: MODAL_PRIORITIES.AUTORUN_LIGHTBOX,
+        blocksLowerLayers: true,
+        capturesFocus: true,
+        focusTrap: 'lenient',
         onEscape: () => {
           onCloseRef.current();
         },

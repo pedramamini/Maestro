@@ -406,10 +406,9 @@ export default function MobileApp() {
     const notification = showNotification(title, {
       body: firstLine,
       tag: `maestro-response-${session.id}`, // Prevent duplicate notifications for same session
-      renotify: true, // Allow notification to be re-shown if same tag
       silent: false,
       requireInteraction: false, // Auto-dismiss on mobile
-    });
+    } as NotificationOptions);
 
     if (notification) {
       webLogger.debug(`Notification shown for session: ${session.name}`, 'Mobile');
@@ -453,7 +452,6 @@ export default function MobileApp() {
     onCustomCommands: setCustomCommands,
     onAutoRunStateChange: (sessionId, state) => {
       webLogger.info(`[App] AutoRun state change: session=${sessionId}, isRunning=${state?.isRunning}, tasks=${state?.completedTasks}/${state?.totalTasks}`, 'Mobile');
-      console.log('[MobileApp] AutoRun state:', { sessionId, state });
       setAutoRunStates(prev => ({
         ...prev,
         [sessionId]: state,
@@ -481,29 +479,55 @@ export default function MobileApp() {
   // On mobile browsers, ensure the document is fully loaded before connecting
   // to avoid race conditions with __MAESTRO_CONFIG__ injection
   useEffect(() => {
+    let timeoutId: number | null = null;
+    let cancelled = false;
+
+    const scheduleAttempt = (delay: number) => {
+      timeoutId = window.setTimeout(() => {
+        if (cancelled) return;
+        attemptConnect();
+      }, delay);
+    };
+
     const attemptConnect = () => {
+      if (cancelled) return;
       // Verify config is available before connecting
       if (window.__MAESTRO_CONFIG__) {
         connect();
       } else {
         // Config not ready, retry after a short delay
         webLogger.warn('Config not ready, retrying connection in 100ms', 'Mobile');
-        setTimeout(attemptConnect, 100);
+        scheduleAttempt(100);
       }
     };
+
+    const scheduleInitialConnect = () => {
+      scheduleAttempt(50);
+    };
+
+    let onLoad: (() => void) | null = null;
 
     // On mobile Safari, the document may not be fully ready even when React mounts
     // Use a small delay to ensure everything is initialized
     if (document.readyState === 'complete') {
-      setTimeout(attemptConnect, 50);
+      scheduleInitialConnect();
     } else {
       // Wait for page to fully load
-      const onLoad = () => {
-        setTimeout(attemptConnect, 50);
+      onLoad = () => {
+        scheduleInitialConnect();
       };
       window.addEventListener('load', onLoad);
-      return () => window.removeEventListener('load', onLoad);
     }
+
+    return () => {
+      cancelled = true;
+      if (timeoutId) {
+        window.clearTimeout(timeoutId);
+      }
+      if (onLoad) {
+        window.removeEventListener('load', onLoad);
+      }
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -635,7 +659,6 @@ export default function MobileApp() {
         inputMode: currentMode,
       });
       webLogger.info(`[Web->Server] Command send result: ${sendResult}, command="${command.substring(0, 50)}" mode=${currentMode} session=${activeSessionId}`, 'Mobile');
-      console.log('[MobileApp] Command sent:', { sendResult, sessionId: activeSessionId, mode: currentMode, commandLen: command.length });
     }
 
     // Clear the input

@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { Search } from 'lucide-react';
-import type { Session, Group, Theme, Shortcut } from '../types';
+import type { Session, Group, Theme, Shortcut, RightPanelTab, SettingsTab } from '../types';
 import type { GroupChat } from '../../shared/group-chat-types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { useToast } from '../contexts/ToastContext';
@@ -38,12 +38,12 @@ interface QuickActionsModalProps {
   setCreateGroupModalOpen: (open: boolean) => void;
   setLeftSidebarOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
   setRightPanelOpen: (open: boolean | ((prev: boolean) => boolean)) => void;
-  setActiveRightTab: (tab: string) => void;
+  setActiveRightTab: (tab: RightPanelTab) => void;
   toggleInputMode: () => void;
   deleteSession: (id: string) => void;
   addNewSession: () => void;
   setSettingsModalOpen: (open: boolean) => void;
-  setSettingsTab: (tab: string) => void;
+  setSettingsTab: (tab: SettingsTab) => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   setAboutModalOpen: (open: boolean) => void;
   setLogViewerOpen: (open: boolean) => void;
@@ -77,7 +77,9 @@ interface QuickActionsModalProps {
   onCloseGroupChat?: () => void;
   onDeleteGroupChat?: (id: string) => void;
   activeGroupChatId?: string | null;
-  hasActiveSessionCapability?: (capability: string) => boolean;
+  hasActiveSessionCapability?: (capability: 'supportsSessionStorage' | 'supportsSlashCommands') => boolean;
+  // Remote control
+  onToggleRemoteControl?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {

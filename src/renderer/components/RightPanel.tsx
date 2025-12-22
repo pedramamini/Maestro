@@ -1,6 +1,6 @@
 import React, { useRef, useEffect, useImperativeHandle, forwardRef, useState, useCallback } from 'react';
 import { PanelRightClose, PanelRightOpen, Loader2, GitBranch } from 'lucide-react';
-import type { Session, Theme, RightPanelTab, Shortcut, BatchRunState } from '../types';
+import type { Session, Theme, RightPanelTab, Shortcut, BatchRunState, FocusArea } from '../types';
 import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
 import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
@@ -32,8 +32,8 @@ interface RightPanelProps {
   setActiveRightTab: (tab: RightPanelTab) => void;
 
   // Focus management
-  activeFocus: string;
-  setActiveFocus: (focus: string) => void;
+  activeFocus: FocusArea;
+  setActiveFocus: (focus: FocusArea) => void;
 
   // File explorer state & handlers
   fileTreeFilter: string;
@@ -234,7 +234,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
         lastActiveTimestampRef.current = Date.now();
         // Restart the interval
         if (!intervalRef.current) {
-          intervalRef.current = setInterval(updateElapsed, 1000);
+          intervalRef.current = setInterval(updateElapsed, 3000); // Quick Win 3: reduced from 1s to 3s
         }
       }
       updateElapsed();
@@ -243,9 +243,9 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     // Initial update
     updateElapsed();
 
-    // Start interval only if visible
+    // Start interval only if visible (Quick Win 3: reduced from 1s to 3s for performance)
     if (!document.hidden) {
-      intervalRef.current = setInterval(updateElapsed, 1000);
+      intervalRef.current = setInterval(updateElapsed, 3000);
     }
 
     // Listen for visibility changes
@@ -338,8 +338,8 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
         width: rightPanelOpen ? `${rightPanelWidth}px` : '0',
         backgroundColor: theme.colors.bgSidebar,
         borderColor: theme.colors.border,
-        ringColor: theme.colors.accent
-      }}
+        '--tw-ring-color': theme.colors.accent
+      } as React.CSSProperties}
       onClick={() => setActiveFocus('right')}
       onFocus={() => setActiveFocus('right')}
     >
@@ -501,7 +501,9 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
                 {currentSessionBatchState.isStopping ? 'Stopping...' : 'Auto Run Active'}
               </span>
               {currentSessionBatchState.worktreeActive && (
-                <GitBranch className="w-4 h-4" style={{ color: theme.colors.warning }} title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`} />
+                <span title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`}>
+                  <GitBranch className="w-4 h-4" style={{ color: theme.colors.warning }} />
+                </span>
               )}
             </div>
             {/* Elapsed time */}

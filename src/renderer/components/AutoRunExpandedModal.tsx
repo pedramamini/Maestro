@@ -135,6 +135,9 @@ export function AutoRunExpandedModal({
     const id = registerLayer({
       type: 'modal',
       priority: MODAL_PRIORITIES.AUTORUN_EXPANDED,
+      blocksLowerLayers: true,
+      capturesFocus: true,
+      focusTrap: 'strict',
       onEscape: () => {
         onCloseRef.current();
       }

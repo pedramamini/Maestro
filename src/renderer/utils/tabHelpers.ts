@@ -176,10 +176,12 @@ export interface CloseTabResult {
  * Close an AI tab and add it to the closed tab history.
  * The closed tab is stored in closedTabHistory for potential restoration via Cmd+Shift+T.
  * If the closed tab was active, the next tab (or previous if at end) becomes active.
+ * When showUnreadOnly is true, prioritizes switching to the next unread tab.
  * If closing the last tab, a fresh new tab is created to replace it.
  *
  * @param session - The Maestro session containing the tab
  * @param tabId - The ID of the tab to close
+ * @param showUnreadOnly - If true, prioritize switching to the next unread tab
  * @returns Object containing the closed tab info and updated session, or null if tab not found
  *
  * @example
@@ -189,7 +191,7 @@ export interface CloseTabResult {
  *   console.log(`Closed tab at index ${closedTab.index}`);
  * }
  */
-export function closeTab(session: Session, tabId: string): CloseTabResult | null {
+export function closeTab(session: Session, tabId: string, showUnreadOnly = false): CloseTabResult | null {
   if (!session || !session.aiTabs || session.aiTabs.length === 0) {
     return null;
   }
@@ -229,9 +231,30 @@ export function closeTab(session: Session, tabId: string): CloseTabResult | null
     updatedTabs = [freshTab];
     newActiveTabId = freshTab.id;
   } else if (session.activeTabId === tabId) {
-    // If we closed the active tab, select the next tab or the previous one if at end
-    const newIndex = Math.min(tabIndex, updatedTabs.length - 1);
-    newActiveTabId = updatedTabs[newIndex].id;
+    // If we closed the active tab, select the next appropriate tab
+
+    if (showUnreadOnly) {
+      // When filtering unread tabs, find the next unread tab to switch to
+      // Build a temporary session with the updated tabs to use getNavigableTabs
+      const tempSession = { ...session, aiTabs: updatedTabs };
+      const navigableTabs = getNavigableTabs(tempSession, true);
+
+      if (navigableTabs.length > 0) {
+        // Find the position of the closed tab within the navigable tabs (before removal)
+        // Then pick the tab at the same position or the last one if we were at the end
+        const closedTabNavIndex = getNavigableTabs(session, true).findIndex(t => t.id === tabId);
+        const newNavIndex = Math.min(closedTabNavIndex, navigableTabs.length - 1);
+        newActiveTabId = navigableTabs[Math.max(0, newNavIndex)].id;
+      } else {
+        // No more unread tabs - fall back to selecting by position in full list
+        const newIndex = Math.min(tabIndex, updatedTabs.length - 1);
+        newActiveTabId = updatedTabs[newIndex].id;
+      }
+    } else {
+      // Normal mode: select the next tab or the previous one if at end
+      const newIndex = Math.min(tabIndex, updatedTabs.length - 1);
+      newActiveTabId = updatedTabs[newIndex].id;
+    }
   }
 
   // Add to closed tab history, maintaining max size

@@ -7,7 +7,7 @@
  * their device settings.
  */
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect } from 'react';
 
 /**
  * Device color scheme preferences

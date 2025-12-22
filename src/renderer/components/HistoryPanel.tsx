@@ -519,11 +519,10 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
       const searchLower = searchFilter.toLowerCase();
       const summaryMatch = entry.summary?.toLowerCase().includes(searchLower);
       const responseMatch = entry.fullResponse?.toLowerCase().includes(searchLower);
-      const promptMatch = entry.prompt?.toLowerCase().includes(searchLower);
       // Search by session ID (full ID or short octet form)
       const sessionIdMatch = entry.agentSessionId?.toLowerCase().includes(searchLower);
       const sessionNameMatch = entry.sessionName?.toLowerCase().includes(searchLower);
-      if (!summaryMatch && !responseMatch && !promptMatch && !sessionIdMatch && !sessionNameMatch) return false;
+      if (!summaryMatch && !responseMatch && !sessionIdMatch && !sessionNameMatch) return false;
     }
 
     return true;

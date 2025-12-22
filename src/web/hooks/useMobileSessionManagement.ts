@@ -383,30 +383,51 @@ export function useMobileSessionManagement(
       previousSessionStatesRef.current.delete(sessionId);
 
       setSessions(prev => prev.filter(s => s.id !== sessionId));
-      setActiveSessionId(prev => prev === sessionId ? null : prev);
+      setActiveSessionId(prev => {
+        if (prev === sessionId) {
+          setActiveTabId(null);
+          return null;
+        }
+        return prev;
+      });
     },
     onActiveSessionChanged: (sessionId: string) => {
       // Desktop app switched to a different session - sync with web
       webLogger.debug(`Desktop active session changed: ${sessionId}`, 'Mobile');
       setActiveSessionId(sessionId);
+      setActiveTabId(null);
     },
     onSessionOutput: (sessionId: string, data: string, source: 'ai' | 'terminal', tabId?: string) => {
       // Real-time output from AI or terminal - append to session logs
       const currentActiveId = activeSessionIdRef.current;
       const currentActiveTabId = activeTabIdRef.current;
-      console.log(`[MobileApp] onSessionOutput: session=${sessionId}, activeSession=${currentActiveId}, tabId=${tabId || 'none'}, activeTabId=${currentActiveTabId || 'none'}, source=${source}, dataLen=${data?.length || 0}`);
       webLogger.debug(`Session output: ${sessionId} (${source}) ${data.length} chars`, 'Mobile');
+      webLogger.debug('Session output detail', 'Mobile', {
+        sessionId,
+        activeSessionId: currentActiveId,
+        tabId: tabId || 'none',
+        activeTabId: currentActiveTabId || 'none',
+        source,
+        dataLen: data?.length || 0,
+      });
 
       // Only update if this is the active session
       if (currentActiveId !== sessionId) {
-        console.log(`[MobileApp] Skipping output - not active session`);
+        webLogger.debug('Skipping output - not active session', 'Mobile', {
+          sessionId,
+          activeSessionId: currentActiveId,
+        });
         return;
       }
 
       // For AI output with tabId, only update if this is the active tab
       // This prevents output from newly created tabs appearing in the wrong tab's logs
       if (source === 'ai' && tabId && currentActiveTabId && tabId !== currentActiveTabId) {
-        console.log(`[MobileApp] Skipping output - not active tab (output tab: ${tabId}, active tab: ${currentActiveTabId})`);
+        webLogger.debug('Skipping output - not active tab', 'Mobile', {
+          sessionId,
+          outputTabId: tabId,
+          activeTabId: currentActiveTabId,
+        });
         return;
       }
 
@@ -427,7 +448,11 @@ export function useMobileSessionManagement(
             ...lastLog,
             text: lastLog.text + data,
           };
-          console.log(`[MobileApp] Appended to existing log entry, new length: ${updatedLogs[updatedLogs.length - 1].text.length}`);
+          webLogger.debug('Appended to existing log entry', 'Mobile', {
+            sessionId,
+            source,
+            newLength: updatedLogs[updatedLogs.length - 1].text.length,
+          });
           return { ...prev, [logKey]: updatedLogs };
         } else {
           // Create new entry
@@ -437,7 +462,11 @@ export function useMobileSessionManagement(
             source: 'stdout',
             text: data,
           };
-          console.log(`[MobileApp] Created new log entry, text length: ${data.length}`);
+          webLogger.debug('Created new log entry', 'Mobile', {
+            sessionId,
+            source,
+            dataLength: data.length,
+          });
           return { ...prev, [logKey]: [...existingLogs, newEntry] };
         }
       });
@@ -452,12 +481,20 @@ export function useMobileSessionManagement(
     onUserInput: (sessionId: string, command: string, inputMode: 'ai' | 'terminal') => {
       // User input from desktop app - add to session logs so web interface stays in sync
       const currentActiveId = activeSessionIdRef.current;
-      console.log(`[MobileApp] onUserInput: session=${sessionId}, activeSession=${currentActiveId}, mode=${inputMode}, cmdLen=${command.length}, match=${currentActiveId === sessionId}`);
-      webLogger.debug(`User input from desktop: ${sessionId} (${inputMode}) ${command.substring(0, 50)}`, 'Mobile');
+      webLogger.debug(`User input from desktop: ${sessionId} (${inputMode}) ${command.substring(0, 50)}`, 'Mobile', {
+        sessionId,
+        activeSessionId: currentActiveId,
+        inputMode,
+        commandLength: command.length,
+        isActiveSession: currentActiveId === sessionId,
+      });
 
       // Only add if this is the active session
       if (currentActiveId !== sessionId) {
-        console.log(`[MobileApp] Skipping user input - not active session`);
+        webLogger.debug('Skipping user input - not active session', 'Mobile', {
+          sessionId,
+          activeSessionId: currentActiveId,
+        });
         return;
       }
 

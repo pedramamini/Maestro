@@ -84,7 +84,7 @@ export function isMobileViewport(): boolean {
  */
 export function supportsHaptics(): boolean {
   if (typeof window === 'undefined') return false;
-  return 'vibrate' in navigator;
+  return typeof navigator.vibrate === 'function';
 }
 
 /**

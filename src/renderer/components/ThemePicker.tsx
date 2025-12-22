@@ -33,8 +33,8 @@ export function ThemePicker({ theme, themes, activeThemeId, setActiveThemeId }: 
                  style={{
                    borderColor: theme.colors.border,
                    backgroundColor: t.colors.bgSidebar,
-                   ringColor: theme.colors.accent
-                 }}
+                   '--tw-ring-color': theme.colors.accent
+                 } as React.CSSProperties}
                >
                   <div className="flex justify-between items-center mb-2">
                     <span className="text-sm font-bold" style={{ color: t.colors.textMain }}>{t.name}</span>

@@ -429,6 +429,20 @@ describe('ResponseViewer', () => {
       expect(highlighter).toHaveAttribute('data-language', 'bash');
     });
 
+    it('handles languages with non-word characters (c++)', () => {
+      const textWithCode = '```c++\nint main() { return 0; }\n```';
+      render(
+        <ResponseViewer
+          isOpen={true}
+          response={createMockResponse({ text: textWithCode })}
+          onClose={vi.fn()}
+        />
+      );
+      const highlighter = screen.getByTestId('syntax-highlighter');
+      expect(highlighter).toHaveAttribute('data-language', 'cpp');
+      expect(screen.getByText('cpp')).toBeInTheDocument();
+    });
+
     it('handles empty code blocks gracefully', () => {
       const textWithEmptyBlock = 'Text before\n```\n   \n```\nText after';
       render(

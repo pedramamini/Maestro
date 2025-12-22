@@ -129,13 +129,13 @@ export function GroupChatInfoOverlay({
         console.warn('Failed to fetch history for export:', error);
       }
 
-      await downloadGroupChatExport(groupChat, messages, history);
+      await downloadGroupChatExport(groupChat, messages, history, theme);
     } catch (error) {
       console.error('Export failed:', error);
     } finally {
       setIsExporting(false);
     }
-  }, [groupChat, messages, isExporting]);
+  }, [groupChat, messages, isExporting, theme]);
 
   // Calculate statistics
   const stats = useMemo(() => {
@@ -331,7 +331,7 @@ export function GroupChatInfoOverlay({
         )}
 
         <div
-          className="border-t pt-4 flex gap-2"
+          className="border-t pt-4 flex justify-between"
           style={{ borderColor: theme.colors.border }}
         >
           <button

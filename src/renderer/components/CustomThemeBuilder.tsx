@@ -76,8 +76,8 @@ function MiniUIPreview({ colors }: { colors: ThemeColors }) {
             style={{
               backgroundColor: colors.accentDim,
               color: colors.accent,
-              ringColor: colors.accent
-            }}
+              '--tw-ring-color': colors.accent
+            } as React.CSSProperties}
           >
             S2
           </div>
@@ -380,8 +380,8 @@ export function CustomThemeBuilder({
         style={{
           borderColor: theme.colors.border,
           backgroundColor: customThemeColors.bgSidebar,
-          ringColor: customThemeColors.accent
-        }}
+          '--tw-ring-color': customThemeColors.accent
+        } as React.CSSProperties}
       >
         {/* Clickable Header to Select Theme */}
         <button

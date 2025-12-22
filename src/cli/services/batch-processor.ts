@@ -17,35 +17,11 @@ import { registerCliActivity, updateCliActivity, unregisterCliActivity } from '.
 import { logger } from '../../main/utils/logger';
 import { autorunSynopsisPrompt } from '../../prompts';
 import { parseSynopsis } from '../../shared/synopsis';
+import { generateUUID } from '../../shared/uuid';
+import { formatElapsedTime } from '../../shared/formatters';
 
 // Synopsis prompt for batch tasks
 const BATCH_SYNOPSIS_PROMPT = autorunSynopsisPrompt;
-
-/**
- * Generate a UUID (simple implementation without uuid package)
- */
-function generateUUID(): string {
-  return 'xxxxxxxx-xxxx-4xxx-yxxx-xxxxxxxxxxxx'.replace(/[xy]/g, (c) => {
-    const r = (Math.random() * 16) | 0;
-    const v = c === 'x' ? r : (r & 0x3) | 0x8;
-    return v.toString(16);
-  });
-}
-
-/**
- * Format duration in human-readable format for loop summaries
- */
-function formatLoopDuration(ms: number): string {
-  if (ms < 1000) return `${ms}ms`;
-  const seconds = Math.floor(ms / 1000);
-  if (seconds < 60) return `${seconds}s`;
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = seconds % 60;
-  if (minutes < 60) return `${minutes}m ${remainingSeconds}s`;
-  const hours = Math.floor(minutes / 60);
-  const remainingMinutes = minutes % 60;
-  return `${hours}h ${remainingMinutes}m`;
-}
 
 /**
  * Get the current git branch for a directory
@@ -296,7 +272,7 @@ export async function* runPlaybook(
       `**Loop ${loopNumber} (final) Summary**`,
       '',
       `- **Tasks Accomplished:** ${loopTasksCompleted}`,
-      `- **Duration:** ${formatLoopDuration(loopElapsedMs)}`,
+      `- **Duration:** ${formatElapsedTime(loopElapsedMs)}`,
       loopTotalInputTokens > 0 || loopTotalOutputTokens > 0
         ? `- **Tokens:** ${(loopTotalInputTokens + loopTotalOutputTokens).toLocaleString()} (${loopTotalInputTokens.toLocaleString()} in / ${loopTotalOutputTokens.toLocaleString()} out)`
         : '',
@@ -346,7 +322,7 @@ export async function* runPlaybook(
       '',
       `- **Total Tasks Completed:** ${totalCompletedTasks}`,
       `- **Loops Completed:** ${loopsCompleted}`,
-      `- **Total Duration:** ${formatLoopDuration(totalElapsedMs)}`,
+      `- **Total Duration:** ${formatElapsedTime(totalElapsedMs)}`,
       totalInputTokens > 0 || totalOutputTokens > 0
         ? `- **Total Tokens:** ${(totalInputTokens + totalOutputTokens).toLocaleString()} (${totalInputTokens.toLocaleString()} in / ${totalOutputTokens.toLocaleString()} out)`
         : '',

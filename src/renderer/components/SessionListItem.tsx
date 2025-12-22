@@ -65,7 +65,7 @@ export interface SessionListItemProps {
   /** Ref to attach to selected item */
   selectedItemRef: React.RefObject<HTMLButtonElement | HTMLDivElement | null>;
   /** Ref for rename input */
-  renameInputRef: React.RefObject<HTMLInputElement | null>;
+  renameInputRef: React.RefObject<HTMLInputElement>;
   /** Handler for clicking a session row */
   onSessionClick: (session: ClaudeSession) => void;
   /** Handler for toggling star status */
@@ -270,10 +270,10 @@ export function SessionListItem({
           </span>
 
           {/* Cost per session */}
-          {session.costUsd > 0 && (
+          {(session.costUsd ?? 0) > 0 && (
             <span className="flex items-center gap-1 font-mono" style={{ color: theme.colors.success }}>
               <DollarSign className="w-3 h-3" />
-              {session.costUsd.toFixed(2)}
+              {(session.costUsd ?? 0).toFixed(2)}
             </span>
           )}
 

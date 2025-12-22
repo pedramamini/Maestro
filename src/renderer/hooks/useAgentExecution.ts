@@ -48,7 +48,7 @@ export interface UseAgentExecutionReturn {
     toolType?: ToolType
   ) => Promise<AgentSpawnResult>;
   /** Ref to spawnBackgroundSynopsis for use in callbacks that need latest version */
-  spawnBackgroundSynopsisRef: React.MutableRefObject<UseAgentExecutionReturn['spawnBackgroundSynopsis'] | null>;
+  spawnBackgroundSynopsisRef: React.MutableRefObject<((sessionId: string, cwd: string, resumeAgentSessionId: string, prompt: string, toolType?: ToolType) => Promise<AgentSpawnResult>) | null>;
   /** Ref to spawnAgentWithPrompt for use in callbacks that need latest version */
   spawnAgentWithPromptRef: React.MutableRefObject<((prompt: string) => Promise<AgentSpawnResult>) | null>;
   /** Show flash notification (auto-dismisses after 2 seconds) */

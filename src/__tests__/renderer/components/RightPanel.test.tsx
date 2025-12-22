@@ -786,8 +786,8 @@ describe('RightPanel', () => {
       const { container } = render(<RightPanel {...props} />);
 
       const panel = container.firstChild as HTMLElement;
-      // ringColor is a custom property, may not be normalized
-      expect(panel.style.ringColor).toBe('#bd93f9');
+      // --tw-ring-color is a CSS custom property for Tailwind ring utility
+      expect(panel.style.getPropertyValue('--tw-ring-color')).toBe('#bd93f9');
     });
 
     it('should apply correct width based on rightPanelWidth', () => {
@@ -1124,17 +1124,17 @@ describe('RightPanel', () => {
       });
       expect(screen.getByText('0s')).toBeInTheDocument();
 
-      // Advance time by 1 second
+      // Advance time by 3 seconds (timer updates every 3s for performance - Quick Win 3)
       await act(async () => {
-        vi.advanceTimersByTime(1000);
+        vi.advanceTimersByTime(3000);
       });
-      expect(screen.getByText('1s')).toBeInTheDocument();
+      expect(screen.getByText('3s')).toBeInTheDocument();
 
-      // Advance time by another second
+      // Advance time by another 3 seconds
       await act(async () => {
-        vi.advanceTimersByTime(1000);
+        vi.advanceTimersByTime(3000);
       });
-      expect(screen.getByText('2s')).toBeInTheDocument();
+      expect(screen.getByText('6s')).toBeInTheDocument();
     });
 
     it('should clear interval when batch run stops', async () => {

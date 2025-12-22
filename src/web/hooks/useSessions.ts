@@ -211,10 +211,10 @@ export function useSessions(options: UseSessionsOptions = {}): UseSessionsReturn
           lastError: existing?.lastError,
         };
       });
+      onSessionsChangeRef.current?.(updated);
       return updated;
     });
-    onSessionsChangeRef.current?.(sessions);
-  }, [sessions]);
+  }, []);
 
   /**
    * Handle individual session state change

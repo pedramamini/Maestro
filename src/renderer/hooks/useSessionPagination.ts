@@ -84,6 +84,9 @@ export function useSessionPagination({
   // Container ref for scroll handling
   const sessionsContainerRef = useRef<HTMLDivElement>(null);
 
+  // Store origins map for merging into paginated results
+  const originsMapRef = useRef<Map<string, { origin?: string; sessionName?: string; starred?: boolean }>>(new Map());
+
   // Load sessions on mount or when projectPath/agentId changes
   useEffect(() => {
     // Reset pagination state
@@ -99,22 +102,44 @@ export function useSessionPagination({
       }
 
       try {
-        // Load session metadata (starred status) from Claude session origins
-        // Note: Origin/starred tracking is currently Claude-specific; other agents will get empty results
+        // Load session metadata (starred status, sessionName) from session origins
+        // Note: Origins are currently Claude-specific; other agents will need their own implementation
+        const originsMap = new Map<string, { origin?: string; sessionName?: string; starred?: boolean }>();
         if (agentId === 'claude-code') {
           const origins = await window.maestro.claude.getSessionOrigins(projectPath);
           const starredFromOrigins = new Set<string>();
           for (const [sessionId, originData] of Object.entries(origins)) {
-            if (typeof originData === 'object' && originData?.starred) {
-              starredFromOrigins.add(sessionId);
+            if (typeof originData === 'object') {
+              if (originData?.starred) {
+                starredFromOrigins.add(sessionId);
+              }
+              originsMap.set(sessionId, originData);
+            } else if (typeof originData === 'string') {
+              originsMap.set(sessionId, { origin: originData });
             }
           }
           onStarredSessionsLoaded?.(starredFromOrigins);
         }
 
+        // Store for use in loadMoreSessions
+        originsMapRef.current = originsMap;
+
         // Use generic agentSessions API with agentId parameter for paginated loading
         const result = await window.maestro.agentSessions.listPaginated(agentId, projectPath, { limit: 100 });
-        setSessions(result.sessions);
+
+        // Merge origins data (sessionName, starred) into sessions
+        // Type cast to ClaudeSession since the API returns compatible data
+        const sessionsWithOrigins: ClaudeSession[] = result.sessions.map(session => {
+          const originData = originsMapRef.current.get(session.sessionId);
+          return {
+            ...session,
+            sessionName: originData?.sessionName || session.sessionName,
+            starred: originData?.starred || session.starred,
+            origin: (originData?.origin || session.origin) as 'user' | 'auto' | undefined,
+          };
+        });
+
+        setSessions(sessionsWithOrigins);
         setHasMoreSessions(result.hasMore);
         setTotalSessionCount(result.totalCount);
         nextCursorRef.current = result.nextCursor;
@@ -146,10 +171,22 @@ export function useSessionPagination({
         limit: 100,
       });
 
+      // Merge origins data (sessionName, starred) into new sessions
+      // Type cast to ClaudeSession since the API returns compatible data
+      const sessionsWithOrigins: ClaudeSession[] = result.sessions.map(session => {
+        const originData = originsMapRef.current.get(session.sessionId);
+        return {
+          ...session,
+          sessionName: originData?.sessionName || session.sessionName,
+          starred: originData?.starred || session.starred,
+          origin: (originData?.origin || session.origin) as 'user' | 'auto' | undefined,
+        };
+      });
+
       // Append new sessions, avoiding duplicates
       setSessions(prev => {
         const existingIds = new Set(prev.map(s => s.sessionId));
-        const newSessions = result.sessions.filter(s => !existingIds.has(s.sessionId));
+        const newSessions = sessionsWithOrigins.filter(s => !existingIds.has(s.sessionId));
         return [...prev, ...newSessions];
       });
       setHasMoreSessions(result.hasMore);

@@ -246,7 +246,7 @@ export function useTemplateAutocomplete({
 
   // Close on click outside (uses multiple refs to exclude both dropdown and textarea)
   useClickOutside(
-    [autocompleteRef, textareaRef],
+    [autocompleteRef, textareaRef] as React.RefObject<HTMLElement | null>[],
     closeAutocomplete,
     autocompleteState.isOpen
   );

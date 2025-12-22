@@ -494,6 +494,119 @@ export function registerAutorunHandlers(deps: {
     })
   );
 
+  // Create a backup copy of a document (for reset-on-completion)
+  ipcMain.handle(
+    'autorun:createBackup',
+    createIpcHandler(handlerOpts('createBackup'), async (folderPath: string, filename: string) => {
+      // Reject obvious traversal attempts
+      if (filename.includes('..')) {
+        throw new Error('Invalid filename');
+      }
+
+      // Ensure filename has .md extension
+      const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+      const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
+
+      const sourcePath = path.join(folderPath, fullFilename);
+      const backupPath = path.join(folderPath, backupFilename);
+
+      // Validate paths are within folder
+      if (!validatePathWithinFolder(sourcePath, folderPath) || !validatePathWithinFolder(backupPath, folderPath)) {
+        throw new Error('Invalid file path');
+      }
+
+      // Check if source file exists
+      try {
+        await fs.access(sourcePath);
+      } catch {
+        throw new Error('Source file not found');
+      }
+
+      // Copy the file to backup
+      await fs.copyFile(sourcePath, backupPath);
+
+      logger.info(`Created Auto Run backup: ${backupFilename}`, LOG_CONTEXT);
+      return { backupFilename };
+    })
+  );
+
+  // Restore a document from its backup (for reset-on-completion)
+  ipcMain.handle(
+    'autorun:restoreBackup',
+    createIpcHandler(handlerOpts('restoreBackup'), async (folderPath: string, filename: string) => {
+      // Reject obvious traversal attempts
+      if (filename.includes('..')) {
+        throw new Error('Invalid filename');
+      }
+
+      // Ensure filename has .md extension
+      const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+      const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
+
+      const targetPath = path.join(folderPath, fullFilename);
+      const backupPath = path.join(folderPath, backupFilename);
+
+      // Validate paths are within folder
+      if (!validatePathWithinFolder(targetPath, folderPath) || !validatePathWithinFolder(backupPath, folderPath)) {
+        throw new Error('Invalid file path');
+      }
+
+      // Check if backup file exists
+      try {
+        await fs.access(backupPath);
+      } catch {
+        throw new Error('Backup file not found');
+      }
+
+      // Copy backup back to original
+      await fs.copyFile(backupPath, targetPath);
+
+      // Delete the backup
+      await fs.unlink(backupPath);
+
+      logger.info(`Restored Auto Run backup: ${fullFilename}`, LOG_CONTEXT);
+      return {};
+    })
+  );
+
+  // Delete all backup files in a folder
+  ipcMain.handle(
+    'autorun:deleteBackups',
+    createIpcHandler(handlerOpts('deleteBackups'), async (folderPath: string) => {
+      // Validate folder exists
+      const folderStat = await fs.stat(folderPath);
+      if (!folderStat.isDirectory()) {
+        throw new Error('Path is not a directory');
+      }
+
+      // Find and delete all .backup.md files recursively
+      const deleteBackupsRecursive = async (dirPath: string): Promise<number> => {
+        let deleted = 0;
+        const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+        for (const entry of entries) {
+          const entryPath = path.join(dirPath, entry.name);
+
+          if (entry.isDirectory()) {
+            // Recurse into subdirectory
+            deleted += await deleteBackupsRecursive(entryPath);
+          } else if (entry.isFile() && entry.name.endsWith('.backup.md')) {
+            // Delete backup file
+            await fs.unlink(entryPath);
+            deleted++;
+            logger.info(`Deleted Auto Run backup: ${entry.name}`, LOG_CONTEXT);
+          }
+        }
+
+        return deleted;
+      };
+
+      const deletedCount = await deleteBackupsRecursive(folderPath);
+      logger.info(`Deleted ${deletedCount} Auto Run backup(s) in ${folderPath}`, LOG_CONTEXT);
+      return { deletedCount };
+    })
+  );
+
   // Clean up all watchers on app quit
   app.on('before-quit', () => {
     for (const [folderPath, watcher] of autoRunWatchers) {

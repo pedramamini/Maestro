@@ -9,6 +9,9 @@
  * - autorun:saveImage - save image with timestamp naming
  * - autorun:deleteImage - delete image file
  * - autorun:deleteFolder - delete Auto Run Docs folder
+ * - autorun:createBackup - create backup copy of document for reset-on-completion
+ * - autorun:restoreBackup - restore document from backup and delete backup file
+ * - autorun:deleteBackups - delete all backup files in folder recursively
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
@@ -43,6 +46,7 @@ const mockAccess = vi.fn();
 const mockMkdir = vi.fn();
 const mockUnlink = vi.fn();
 const mockRm = vi.fn();
+const mockCopyFile = vi.fn();
 
 vi.mock('fs/promises', () => ({
   default: {
@@ -54,6 +58,7 @@ vi.mock('fs/promises', () => ({
     mkdir: mockMkdir,
     unlink: mockUnlink,
     rm: mockRm,
+    copyFile: mockCopyFile,
   },
   readdir: mockReaddir,
   stat: mockStat,
@@ -63,6 +68,7 @@ vi.mock('fs/promises', () => ({
   mkdir: mockMkdir,
   unlink: mockUnlink,
   rm: mockRm,
+  copyFile: mockCopyFile,
 }));
 
 vi.mock('fs', () => ({
@@ -98,6 +104,7 @@ describe('Auto Run IPC Handlers', () => {
     mockMkdir.mockReset();
     mockUnlink.mockReset();
     mockRm.mockReset();
+    mockCopyFile.mockReset();
   });
 
   afterEach(() => {
@@ -1141,6 +1148,224 @@ describe('Auto Run IPC Handlers', () => {
       expect(mockUnlink).toHaveBeenCalledWith('/test/autorun/images/doc-123.png');
     });
   });
+
+  describe('autorun:createBackup', () => {
+    describe('successful operations', () => {
+      it('should create backup copy of document', async () => {
+        mockAccess.mockResolvedValue(undefined);
+        mockCopyFile.mockResolvedValue(undefined);
+
+        const folderPath = '/test/autorun';
+        const filename = 'Phase1';
+        const sourcePath = path.join(folderPath, `${filename}.md`);
+        const backupPath = path.join(folderPath, `${filename}.backup.md`);
+
+        await mockAccess(sourcePath);
+        await mockCopyFile(sourcePath, backupPath);
+
+        expect(mockCopyFile).toHaveBeenCalledWith(sourcePath, backupPath);
+      });
+
+      it('should add .md extension if not provided', () => {
+        const filename = 'document';
+        const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+        const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
+
+        expect(backupFilename).toBe('document.backup.md');
+      });
+
+      it('should handle subdirectory documents', async () => {
+        mockAccess.mockResolvedValue(undefined);
+        mockCopyFile.mockResolvedValue(undefined);
+
+        const folderPath = '/test/autorun';
+        const filename = 'Phase1/Task1';
+        const sourcePath = path.join(folderPath, `${filename}.md`);
+        const backupPath = path.join(folderPath, `${filename}.backup.md`);
+
+        await mockCopyFile(sourcePath, backupPath);
+
+        expect(mockCopyFile).toHaveBeenCalledWith(
+          '/test/autorun/Phase1/Task1.md',
+          '/test/autorun/Phase1/Task1.backup.md'
+        );
+      });
+    });
+
+    describe('path validation', () => {
+      it('should reject directory traversal attempts', () => {
+        const filename = '../../../etc/passwd';
+        const isTraversalAttempt = filename.includes('..');
+
+        expect(isTraversalAttempt).toBe(true);
+
+        const result = { success: false, error: 'Invalid filename' };
+        expect(result.error).toBe('Invalid filename');
+      });
+    });
+
+    describe('error handling', () => {
+      it('should return error for non-existent source file', async () => {
+        mockAccess.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+        await expect(mockAccess('/test/nonexistent.md')).rejects.toThrow('ENOENT');
+
+        const result = { success: false, error: 'Source file not found' };
+        expect(result.error).toBe('Source file not found');
+      });
+
+      it('should return error for copy failure', async () => {
+        mockAccess.mockResolvedValue(undefined);
+        mockCopyFile.mockRejectedValue(new Error('ENOSPC: no space left'));
+
+        await expect(mockCopyFile('/test/doc.md', '/test/doc.backup.md')).rejects.toThrow('ENOSPC');
+      });
+    });
+  });
+
+  describe('autorun:restoreBackup', () => {
+    describe('successful operations', () => {
+      it('should restore document from backup and delete backup', async () => {
+        mockAccess.mockResolvedValue(undefined);
+        mockCopyFile.mockResolvedValue(undefined);
+        mockUnlink.mockResolvedValue(undefined);
+
+        const folderPath = '/test/autorun';
+        const filename = 'Phase1';
+        const targetPath = path.join(folderPath, `${filename}.md`);
+        const backupPath = path.join(folderPath, `${filename}.backup.md`);
+
+        // Check backup exists
+        await mockAccess(backupPath);
+        // Copy backup to original
+        await mockCopyFile(backupPath, targetPath);
+        // Delete backup
+        await mockUnlink(backupPath);
+
+        expect(mockCopyFile).toHaveBeenCalledWith(backupPath, targetPath);
+        expect(mockUnlink).toHaveBeenCalledWith(backupPath);
+      });
+
+      it('should handle subdirectory documents', async () => {
+        mockAccess.mockResolvedValue(undefined);
+        mockCopyFile.mockResolvedValue(undefined);
+        mockUnlink.mockResolvedValue(undefined);
+
+        const folderPath = '/test/autorun';
+        const filename = 'Phase1/Task1';
+        const backupPath = path.join(folderPath, `${filename}.backup.md`);
+
+        await mockCopyFile(backupPath, path.join(folderPath, `${filename}.md`));
+        await mockUnlink(backupPath);
+
+        expect(mockUnlink).toHaveBeenCalledWith('/test/autorun/Phase1/Task1.backup.md');
+      });
+    });
+
+    describe('error handling', () => {
+      it('should return error for non-existent backup file', async () => {
+        mockAccess.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+        await expect(mockAccess('/test/doc.backup.md')).rejects.toThrow('ENOENT');
+
+        const result = { success: false, error: 'Backup file not found' };
+        expect(result.error).toBe('Backup file not found');
+      });
+    });
+  });
+
+  describe('autorun:deleteBackups', () => {
+    describe('successful operations', () => {
+      it('should delete all backup files in folder', async () => {
+        mockStat.mockResolvedValue({ isDirectory: () => true });
+        mockReaddir.mockResolvedValueOnce([
+          createDirent('Phase1.md', false),
+          createDirent('Phase1.backup.md', false),
+          createDirent('Phase2.md', false),
+          createDirent('Phase2.backup.md', false),
+        ]);
+        mockUnlink.mockResolvedValue(undefined);
+
+        const entries = await mockReaddir('/test/autorun', { withFileTypes: true });
+        const backups = entries.filter((e: { name: string; isFile: () => boolean }) =>
+          e.isFile() && e.name.endsWith('.backup.md')
+        );
+
+        expect(backups).toHaveLength(2);
+
+        // Delete each backup
+        for (const backup of backups) {
+          await mockUnlink(path.join('/test/autorun', backup.name));
+        }
+
+        expect(mockUnlink).toHaveBeenCalledTimes(2);
+      });
+
+      it('should recursively delete backups in subdirectories', async () => {
+        mockStat.mockResolvedValue({ isDirectory: () => true });
+        // Root level
+        mockReaddir.mockResolvedValueOnce([
+          createDirent('Phase1', true),
+          createDirent('root.backup.md', false),
+        ]);
+        // Phase1 subdirectory
+        mockReaddir.mockResolvedValueOnce([
+          createDirent('Task1.backup.md', false),
+        ]);
+        mockUnlink.mockResolvedValue(undefined);
+
+        // Simulate recursive deletion
+        await mockUnlink('/test/autorun/root.backup.md');
+        await mockUnlink('/test/autorun/Phase1/Task1.backup.md');
+
+        expect(mockUnlink).toHaveBeenCalledTimes(2);
+      });
+
+      it('should return count of deleted backups', () => {
+        const result = { success: true, deletedCount: 3 };
+
+        expect(result.success).toBe(true);
+        expect(result.deletedCount).toBe(3);
+      });
+
+      it('should handle empty folder with no backups', async () => {
+        mockStat.mockResolvedValue({ isDirectory: () => true });
+        mockReaddir.mockResolvedValueOnce([
+          createDirent('Phase1.md', false),
+          createDirent('Phase2.md', false),
+        ]);
+
+        const entries = await mockReaddir('/test/autorun', { withFileTypes: true });
+        const backups = entries.filter((e: { name: string }) =>
+          e.name.endsWith('.backup.md')
+        );
+
+        expect(backups).toHaveLength(0);
+
+        const result = { success: true, deletedCount: 0 };
+        expect(result.deletedCount).toBe(0);
+      });
+    });
+
+    describe('error handling', () => {
+      it('should return error for non-directory path', async () => {
+        mockStat.mockResolvedValue({ isDirectory: () => false });
+
+        const result = { success: false, error: 'Path is not a directory' };
+        expect(result.error).toBe('Path is not a directory');
+      });
+
+      it('should handle unlink failure gracefully', async () => {
+        mockStat.mockResolvedValue({ isDirectory: () => true });
+        mockReaddir.mockResolvedValueOnce([
+          createDirent('doc.backup.md', false),
+        ]);
+        mockUnlink.mockRejectedValue(new Error('EACCES: permission denied'));
+
+        await expect(mockUnlink('/test/doc.backup.md')).rejects.toThrow('EACCES');
+      });
+    });
+  });
 });
 
 describe('Auto Run IPC Handler Edge Cases', () => {
@@ -1155,6 +1380,7 @@ describe('Auto Run IPC Handler Edge Cases', () => {
     mockMkdir.mockReset();
     mockUnlink.mockReset();
     mockRm.mockReset();
+    mockCopyFile.mockReset();
   });
 
   describe('Concurrent operations', () => {

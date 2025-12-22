@@ -72,6 +72,9 @@ export function AgentPromptComposerModal({
       const id = registerLayer({
         type: 'modal',
         priority: MODAL_PRIORITIES.AGENT_PROMPT_COMPOSER,
+        blocksLowerLayers: true,
+        capturesFocus: true,
+        focusTrap: 'strict',
         onEscape: () => {
           // If autocomplete is open, close it instead of the modal
           if (autocompleteState.isOpen) {

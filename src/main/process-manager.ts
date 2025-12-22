@@ -386,14 +386,19 @@ export class ProcessManager extends EventEmitter {
         // We need the base system paths or commands like sort, find, head won't work.
         let ptyEnv: NodeJS.ProcessEnv;
         if (isTerminal) {
+          // Platform-specific base PATH for terminal sessions
+          const basePath = process.platform === 'win32'
+            ? `${process.env.SystemRoot || 'C:\\Windows'}\\System32;${process.env.SystemRoot || 'C:\\Windows'};${process.env.ProgramFiles || 'C:\\Program Files'}\\Git\\cmd`
+            : '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+
           ptyEnv = {
-            HOME: process.env.HOME,
-            USER: process.env.USER,
-            SHELL: process.env.SHELL,
+            HOME: process.env.HOME || process.env.USERPROFILE,
+            USER: process.env.USER || process.env.USERNAME,
+            SHELL: process.env.SHELL || process.env.COMSPEC,
             TERM: 'xterm-256color',
             LANG: process.env.LANG || 'en_US.UTF-8',
             // Provide base system PATH - shell startup files will prepend user paths
-            PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+            PATH: basePath,
           };
 
           // Apply custom shell environment variables from user configuration
@@ -469,11 +474,36 @@ export class ProcessManager extends EventEmitter {
         // Electron's main process may have a limited PATH that doesn't include
         // user-installed binaries like node, which is needed for #!/usr/bin/env node scripts
         const env = { ...process.env };
-        const standardPaths = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+        const isWindows = process.platform === 'win32';
+        const home = os.homedir();
+
+        // Platform-specific standard paths
+        let standardPaths: string;
+        let checkPath: string;
+
+        if (isWindows) {
+          const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+          const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+          const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+
+          standardPaths = [
+            path.join(appData, 'npm'),
+            path.join(localAppData, 'npm'),
+            path.join(programFiles, 'nodejs'),
+            path.join(programFiles, 'Git', 'cmd'),
+            path.join(programFiles, 'Git', 'bin'),
+            path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
+          ].join(';');
+          checkPath = path.join(appData, 'npm');
+        } else {
+          standardPaths = '/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+          checkPath = '/opt/homebrew/bin';
+        }
+
         if (env.PATH) {
           // Prepend standard paths if not already present
-          if (!env.PATH.includes('/opt/homebrew/bin')) {
-            env.PATH = `${standardPaths}:${env.PATH}`;
+          if (!env.PATH.includes(checkPath)) {
+            env.PATH = `${standardPaths}${path.delimiter}${env.PATH}`;
           }
         } else {
           env.PATH = standardPaths;
@@ -573,6 +603,19 @@ export class ProcessManager extends EventEmitter {
           hasStdout: childProcess.stdout ? 'exists' : 'null',
           hasStderr: childProcess.stderr ? 'exists' : 'null'
         });
+
+        // Handle stdin errors (EPIPE when process closes before we finish writing)
+        if (childProcess.stdin) {
+          childProcess.stdin.on('error', (err) => {
+            // EPIPE is expected when process terminates while we're writing - log but don't crash
+            const errorCode = (err as NodeJS.ErrnoException).code;
+            if (errorCode === 'EPIPE') {
+              logger.debug('[ProcessManager] stdin EPIPE - process closed before write completed', 'ProcessManager', { sessionId });
+            } else {
+              logger.error('[ProcessManager] stdin error', 'ProcessManager', { sessionId, error: String(err), code: errorCode });
+            }
+          });
+        }
 
         // Handle stdout
         if (childProcess.stdout) {
@@ -1117,7 +1160,7 @@ export class ProcessManager extends EventEmitter {
    * @param sessionId - Session ID for event emission
    * @param command - The shell command to execute
    * @param cwd - Working directory
-   * @param shell - Shell to use (default: bash)
+   * @param shell - Shell to use (default: platform-appropriate)
    * @param shellEnvVars - Additional environment variables for the shell
    * @returns Promise that resolves when command completes
    */
@@ -1125,18 +1168,33 @@ export class ProcessManager extends EventEmitter {
     sessionId: string,
     command: string,
     cwd: string,
-    shell: string = 'bash',
+    shell: string = process.platform === 'win32' ? 'powershell.exe' : 'bash',
     shellEnvVars?: Record<string, string>
   ): Promise<{ exitCode: number }> {
     return new Promise((resolve) => {
-      logger.debug('[ProcessManager] runCommand()', 'ProcessManager', { sessionId, command, cwd, shell, hasEnvVars: !!shellEnvVars });
+      const isWindows = process.platform === 'win32';
+
+      logger.debug('[ProcessManager] runCommand()', 'ProcessManager', { sessionId, command, cwd, shell, hasEnvVars: !!shellEnvVars, isWindows });
 
       // Build the command with shell config sourcing
       // This ensures PATH, aliases, and functions are available
-      const shellName = shell.split('/').pop() || shell;
+      const shellName = shell.split(/[/\\]/).pop()?.replace(/\.exe$/i, '') || shell;
       let wrappedCommand: string;
 
-      if (shellName === 'fish') {
+      if (isWindows) {
+        // Windows shell handling
+        if (shellName === 'powershell' || shellName === 'pwsh') {
+          // PowerShell: use -Command flag, escape for PowerShell
+          // No need to source profiles - PowerShell loads them automatically
+          wrappedCommand = command;
+        } else if (shellName === 'cmd') {
+          // cmd.exe: use /c flag
+          wrappedCommand = command;
+        } else {
+          // Other Windows shells (bash via Git Bash/WSL)
+          wrappedCommand = command;
+        }
+      } else if (shellName === 'fish') {
         // Fish auto-sources config.fish, just run the command
         wrappedCommand = command;
       } else if (shellName === 'zsh') {
@@ -1154,18 +1212,30 @@ export class ProcessManager extends EventEmitter {
         wrappedCommand = command;
       }
 
+      // Platform-specific base PATH
+      const basePath = isWindows
+        ? `${process.env.SystemRoot || 'C:\\Windows'}\\System32;${process.env.SystemRoot || 'C:\\Windows'};${process.env.ProgramFiles || 'C:\\Program Files'}\\Git\\cmd`
+        : '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin';
+
       // Pass minimal environment with a base PATH for essential system commands.
-      // Shell startup files (.zprofile, .zshrc) will prepend user paths to this.
-      // We need the base system paths or commands like sort, find, head won't work.
+      // Shell startup files will prepend user paths to this.
       const env: NodeJS.ProcessEnv = {
-        HOME: process.env.HOME,
-        USER: process.env.USER,
-        SHELL: process.env.SHELL,
+        HOME: process.env.HOME || process.env.USERPROFILE,
+        USER: process.env.USER || process.env.USERNAME,
+        SHELL: process.env.SHELL || process.env.COMSPEC,
         TERM: 'xterm-256color',
         LANG: process.env.LANG || 'en_US.UTF-8',
-        // Provide base system PATH - shell startup files will prepend user paths (homebrew, go, etc.)
-        PATH: '/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin',
+        PATH: basePath,
       };
+
+      // Windows-specific env vars
+      if (isWindows) {
+        env.USERPROFILE = process.env.USERPROFILE;
+        env.APPDATA = process.env.APPDATA;
+        env.LOCALAPPDATA = process.env.LOCALAPPDATA;
+        env.SystemRoot = process.env.SystemRoot;
+        env.COMSPEC = process.env.COMSPEC;
+      }
 
       // Apply custom shell environment variables from user configuration
       if (shellEnvVars && Object.keys(shellEnvVars).length > 0) {
@@ -1177,11 +1247,20 @@ export class ProcessManager extends EventEmitter {
         });
       }
 
-      // Resolve shell to full path - Electron's internal PATH may not include /bin
-      // where common shells like zsh and bash are located
+      // Resolve shell to full path
       let shellPath = shell;
-      if (!shell.includes('/')) {
-        const fs = require('fs');
+      if (isWindows) {
+        // On Windows, shells are typically in PATH or have full paths
+        // PowerShell and cmd.exe are always available via COMSPEC/PATH
+        if (shellName === 'powershell' && !shell.includes('\\')) {
+          shellPath = 'powershell.exe';
+        } else if (shellName === 'pwsh' && !shell.includes('\\')) {
+          shellPath = 'pwsh.exe';
+        } else if (shellName === 'cmd' && !shell.includes('\\')) {
+          shellPath = 'cmd.exe';
+        }
+      } else if (!shell.includes('/')) {
+        // Unix: resolve shell to full path - Electron's internal PATH may not include /bin
         const commonPaths = ['/bin/', '/usr/bin/', '/usr/local/bin/', '/opt/homebrew/bin/'];
         for (const prefix of commonPaths) {
           try {

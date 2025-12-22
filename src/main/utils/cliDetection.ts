@@ -1,5 +1,6 @@
 import { execFileNoThrow } from './execFile';
 import * as os from 'os';
+import * as path from 'path';
 
 let cloudflaredInstalledCache: boolean | null = null;
 let cloudflaredPathCache: string | null = null;
@@ -11,22 +12,41 @@ let cloudflaredPathCache: string | null = null;
 function getExpandedEnv(): NodeJS.ProcessEnv {
   const home = os.homedir();
   const env = { ...process.env };
+  const isWindows = process.platform === 'win32';
 
-  const additionalPaths = [
-    '/opt/homebrew/bin',           // Homebrew on Apple Silicon
-    '/opt/homebrew/sbin',
-    '/usr/local/bin',              // Homebrew on Intel, common install location
-    '/usr/local/sbin',
-    `${home}/.local/bin`,          // User local installs
-    `${home}/bin`,                 // User bin directory
-    '/usr/bin',
-    '/bin',
-    '/usr/sbin',
-    '/sbin',
-  ];
+  // Platform-specific paths
+  let additionalPaths: string[];
+
+  if (isWindows) {
+    const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+    const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+    const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+
+    additionalPaths = [
+      path.join(appData, 'npm'),
+      path.join(localAppData, 'npm'),
+      path.join(programFiles, 'cloudflared'),
+      path.join(home, 'scoop', 'shims'),
+      path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
+      path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
+    ];
+  } else {
+    additionalPaths = [
+      '/opt/homebrew/bin',           // Homebrew on Apple Silicon
+      '/opt/homebrew/sbin',
+      '/usr/local/bin',              // Homebrew on Intel, common install location
+      '/usr/local/sbin',
+      `${home}/.local/bin`,          // User local installs
+      `${home}/bin`,                 // User bin directory
+      '/usr/bin',
+      '/bin',
+      '/usr/sbin',
+      '/sbin',
+    ];
+  }
 
   const currentPath = env.PATH || '';
-  const pathParts = currentPath.split(':');
+  const pathParts = currentPath.split(path.delimiter);
 
   for (const p of additionalPaths) {
     if (!pathParts.includes(p)) {
@@ -34,7 +54,7 @@ function getExpandedEnv(): NodeJS.ProcessEnv {
     }
   }
 
-  env.PATH = pathParts.join(':');
+  env.PATH = pathParts.join(path.delimiter);
   return env;
 }
 

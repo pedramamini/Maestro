@@ -291,6 +291,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
     const id = registerLayer({
       type: 'modal',
       priority: MODAL_PRIORITIES.BATCH_RUNNER,
+      blocksLowerLayers: true,
+      capturesFocus: true,
+      focusTrap: 'strict',
       onEscape: () => {
         if (showDeleteConfirmModal) {
           handleCancelDeletePlaybook();

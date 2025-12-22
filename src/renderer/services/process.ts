@@ -34,7 +34,7 @@ export const processService = {
   /**
    * Write data to process stdin
    */
-  write: (sessionId: string, data: string): Promise<void> =>
+  write: (sessionId: string, data: string): Promise<boolean> =>
     createIpcMethod({
       call: () => window.maestro.process.write(sessionId, data),
       errorContext: 'Process write',
@@ -44,7 +44,7 @@ export const processService = {
   /**
    * Interrupt a process (send SIGINT/Ctrl+C)
    */
-  interrupt: (sessionId: string): Promise<void> =>
+  interrupt: (sessionId: string): Promise<boolean> =>
     createIpcMethod({
       call: () => window.maestro.process.interrupt(sessionId),
       errorContext: 'Process interrupt',
@@ -54,7 +54,7 @@ export const processService = {
   /**
    * Kill a process
    */
-  kill: (sessionId: string): Promise<void> =>
+  kill: (sessionId: string): Promise<boolean> =>
     createIpcMethod({
       call: () => window.maestro.process.kill(sessionId),
       errorContext: 'Process kill',
@@ -64,7 +64,7 @@ export const processService = {
   /**
    * Resize PTY terminal
    */
-  resize: (sessionId: string, cols: number, rows: number): Promise<void> =>
+  resize: (sessionId: string, cols: number, rows: number): Promise<boolean> =>
     createIpcMethod({
       call: () => window.maestro.process.resize(sessionId, cols, rows),
       errorContext: 'Process resize',

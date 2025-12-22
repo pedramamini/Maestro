@@ -9,7 +9,7 @@
  */
 
 import { useState, useRef, useCallback, useEffect } from 'react';
-import { Layer } from '../types/layer';
+import { Layer, LayerInput } from '../types/layer';
 
 /**
  * Extend Window interface for debug API
@@ -45,7 +45,7 @@ export interface LayerStackAPI {
    * @param layer - Layer configuration (without id)
    * @returns Unique layer id
    */
-  registerLayer: (layer: Omit<Layer, 'id'>) => string;
+  registerLayer: (layer: LayerInput) => string;
 
   /**
    * Remove a layer from the stack
@@ -116,7 +116,7 @@ export function useLayerStack(): LayerStackAPI {
   /**
    * Register a new layer in the stack
    */
-  const registerLayer = useCallback((layer: Omit<Layer, 'id'>): string => {
+  const registerLayer = useCallback((layer: LayerInput): string => {
     const id = generateId();
     const newLayer: Layer = { ...layer, id } as Layer;
 
@@ -124,7 +124,7 @@ export function useLayerStack(): LayerStackAPI {
     handlerRefs.current.set(id, newLayer.onEscape);
 
     // Add layer and sort by priority (ascending order - lowest priority first)
-    setLayers((prev) => {
+    setLayers((prev: Layer[]) => {
       const updated = [...prev, newLayer];
       updated.sort((a, b) => a.priority - b.priority);
       return updated;
@@ -141,7 +141,7 @@ export function useLayerStack(): LayerStackAPI {
     handlerRefs.current.delete(id);
 
     // Remove from layers state
-    setLayers((prev) => prev.filter((layer) => layer.id !== id));
+    setLayers((prev: Layer[]) => prev.filter((layer: Layer) => layer.id !== id));
   }, []);
 
   /**
@@ -177,7 +177,7 @@ export function useLayerStack(): LayerStackAPI {
    * Check if any true modal (not overlay) is open
    */
   const hasOpenModal = useCallback((): boolean => {
-    return layers.some(layer => layer.type === 'modal');
+    return layers.some((layer: Layer) => layer.type === 'modal');
   }, [layers]);
 
   /**
@@ -223,7 +223,7 @@ export function useLayerStack(): LayerStackAPI {
          */
         list: () => {
           console.table(
-            layers.map((layer) => ({
+            layers.map((layer: Layer) => ({
               id: layer.id,
               type: layer.type,
               priority: layer.priority,

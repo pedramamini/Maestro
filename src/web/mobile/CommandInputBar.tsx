@@ -33,6 +33,7 @@ import { useLongPressMenu } from '../hooks/useLongPressMenu';
 import { RecentCommandChips } from './RecentCommandChips';
 import { SlashCommandAutocomplete, type SlashCommand, DEFAULT_SLASH_COMMANDS } from './SlashCommandAutocomplete';
 import { QuickActionsMenu } from './QuickActionsMenu';
+import { triggerHaptic } from './constants';
 import {
   InputModeToggleButton,
   VoiceInputButton,
@@ -41,9 +42,6 @@ import {
   ExpandedModeSendInterruptButton,
 } from './CommandInputButtons';
 import type { CommandHistoryEntry } from '../hooks/useCommandHistory';
-
-/** Minimum touch target size per Apple HIG guidelines (44pt) */
-const MIN_TOUCH_TARGET = 44;
 
 /** Default minimum height for the text input area */
 const MIN_INPUT_HEIGHT = 48;
@@ -88,33 +86,6 @@ function useIsMobilePhone(): boolean {
   return isMobile;
 }
 
-/**
- * Trigger haptic feedback using the Vibration API
- * Uses short vibrations for tactile confirmation on mobile devices
- *
- * @param pattern - Vibration pattern in milliseconds or single duration
- *   - 'light' (10ms) - subtle tap for button presses
- *   - 'medium' (25ms) - standard confirmation feedback
- *   - 'strong' (50ms) - important action confirmation
- *   - number - custom duration in milliseconds
- */
-function triggerHapticFeedback(pattern: 'light' | 'medium' | 'strong' | number = 'medium'): void {
-  // Check if the Vibration API is supported
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    const duration =
-      pattern === 'light' ? 10 :
-      pattern === 'medium' ? 25 :
-      pattern === 'strong' ? 50 :
-      pattern;
-
-    try {
-      navigator.vibrate(duration);
-    } catch {
-      // Silently fail if vibration is not allowed (e.g., permissions, battery saver)
-    }
-  }
-}
-
 /** Input mode type - AI assistant or terminal */
 export type InputMode = 'ai' | 'terminal';
 
@@ -153,10 +124,6 @@ export interface CommandInputBarProps {
   hasActiveSession?: boolean;
   /** Current working directory (shown in terminal mode) */
   cwd?: string;
-  /** Callback when slash command button is pressed (to open/close autocomplete) */
-  onSlashCommandToggle?: () => void;
-  /** Whether slash command autocomplete is currently open */
-  isSlashCommandOpen?: boolean;
   /** Callback when input receives focus */
   onInputFocus?: () => void;
   /** Callback when input loses focus */
@@ -189,8 +156,6 @@ export function CommandInputBar({
   slashCommands = DEFAULT_SLASH_COMMANDS,
   hasActiveSession = false,
   cwd,
-  onSlashCommandToggle,
-  isSlashCommandOpen = false,
   onInputFocus,
   onInputBlur,
   showRecentCommands = true,
@@ -354,7 +319,7 @@ export function CommandInputBar({
       if (!value.trim() || isDisabled) return;
 
       // Trigger haptic feedback on successful send
-      triggerHapticFeedback('medium');
+      triggerHaptic(25);
 
       onSubmit?.(value.trim());
 
@@ -394,8 +359,6 @@ export function CommandInputBar({
    * Handle mode toggle between AI and Terminal
    */
   const handleModeToggle = useCallback(() => {
-    // Light haptic feedback for mode switch
-    triggerHapticFeedback('light');
     const newMode = inputMode === 'ai' ? 'terminal' : 'ai';
     onModeToggle?.(newMode);
   }, [inputMode, onModeToggle]);
@@ -416,8 +379,6 @@ export function CommandInputBar({
    * Handle interrupt button press
    */
   const handleInterrupt = useCallback(() => {
-    // Strong haptic feedback for interrupt action (important action)
-    triggerHapticFeedback('strong');
     onInterrupt?.();
   }, [onInterrupt]);
 
@@ -475,7 +436,7 @@ export function CommandInputBar({
     if (!value.trim() || isDisabled || isSendBlocked) return;
 
     // Trigger haptic feedback on successful send
-    triggerHapticFeedback('medium');
+    triggerHaptic(25);
 
     onSubmit?.(value.trim());
 
@@ -719,7 +680,7 @@ export function CommandInputBar({
               $
             </span>
             <input
-              ref={textareaRef as React.RefObject<HTMLInputElement>}
+              ref={textareaRef as unknown as React.RefObject<HTMLInputElement>}
               type="text"
               value={value}
               onChange={(e) => handleChange(e as unknown as React.ChangeEvent<HTMLTextAreaElement>)}

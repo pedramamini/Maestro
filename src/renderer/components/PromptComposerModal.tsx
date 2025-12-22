@@ -82,6 +82,9 @@ export function PromptComposerModal({
       const id = registerLayer({
         type: 'modal',
         priority: MODAL_PRIORITIES.PROMPT_COMPOSER,
+        blocksLowerLayers: true,
+        capturesFocus: true,
+        focusTrap: 'strict',
         onEscape: () => {
           // Save the current value back before closing
           onSubmitRef.current(valueRef.current);

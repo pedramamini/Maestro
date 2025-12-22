@@ -16,8 +16,8 @@ interface GitLogEntry {
   date: string;
   refs: string[];
   subject: string;
-  additions: number;
-  deletions: number;
+  additions?: number;
+  deletions?: number;
 }
 
 interface GitLogViewerProps {
@@ -403,12 +403,12 @@ export const GitLogViewer = memo(function GitLogViewer({ cwd, theme, onClose }: 
                       <span>{entry.author}</span>
                       <span>{formatDate(entry.date)}</span>
                       {/* Addition/deletion stats */}
-                      {(entry.additions > 0 || entry.deletions > 0) && (
+                      {((entry.additions ?? 0) > 0 || (entry.deletions ?? 0) > 0) && (
                         <span className="font-mono flex items-center gap-1">
-                          {entry.additions > 0 && (
+                          {(entry.additions ?? 0) > 0 && (
                             <span style={{ color: 'rgb(34, 197, 94)' }}>+{entry.additions}</span>
                           )}
-                          {entry.deletions > 0 && (
+                          {(entry.deletions ?? 0) > 0 && (
                             <span style={{ color: 'rgb(239, 68, 68)' }}>-{entry.deletions}</span>
                           )}
                         </span>

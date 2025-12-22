@@ -65,9 +65,10 @@ function MobileSessionCard({ session, isActive, onSelect }: SessionCardProps) {
   // Truncate path for display
   const truncatePath = (path: string, maxLength: number = 40): string => {
     if (path.length <= maxLength) return path;
-    const parts = path.split('/');
+    const separator = path.includes('\\') ? '\\' : '/';
+    const parts = path.split(/[/\\]/).filter(Boolean);
     if (parts.length <= 2) return `...${path.slice(-maxLength + 3)}`;
-    return `.../${parts.slice(-2).join('/')}`;
+    return `...${separator}${parts.slice(-2).join(separator)}`;
   };
 
   const handleClick = useCallback(() => {

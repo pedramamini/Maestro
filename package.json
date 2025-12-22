@@ -59,6 +59,9 @@
       "dist/**/*",
       "package.json"
     ],
+    "asarUnpack": [
+      "node_modules/node-pty/**/*"
+    ],
     "mac": {
       "category": "public.app-category.developer-tools",
       "hardenedRuntime": true,
@@ -138,6 +141,21 @@
         }
       ]
     },
+    "deb": {
+      "depends": [
+        "libgtk-3-0",
+        "libnotify4",
+        "libnss3",
+        "libxss1",
+        "libxtst6",
+        "xdg-utils",
+        "libatspi2.0-0",
+        "libuuid1",
+        "libdrm2",
+        "libgbm1",
+        "libasound2"
+      ]
+    },
     "rpm": {
       "depends": [
         "gtk3",
@@ -147,7 +165,10 @@
         "(libXtst or libXtst6)",
         "xdg-utils",
         "at-spi2-core",
-        "(libuuid or libuuid1)"
+        "(libuuid or libuuid1)",
+        "libdrm",
+        "mesa-libgbm",
+        "alsa-lib"
       ]
     },
     "nsis": {

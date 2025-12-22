@@ -270,7 +270,7 @@ export function AboutModal({ theme, sessions, autoRunStats, onClose, onOpenLeade
                   {(totalActiveTimeMs > 0 || globalStats.hasCostData) && (
                     <div className="flex justify-between col-span-2 pt-2 border-t" style={{ borderColor: theme.colors.border }}>
                       {totalActiveTimeMs > 0 && (
-                        <span style={{ color: theme.colors.textDim }}>{formatDuration(totalActiveTimeMs)}</span>
+                        <span style={{ color: theme.colors.textDim }}>Hands-on Time: {formatDuration(totalActiveTimeMs)}</span>
                       )}
                       {!totalActiveTimeMs && globalStats.hasCostData && (
                         <span style={{ color: theme.colors.textDim }}>Total Cost</span>

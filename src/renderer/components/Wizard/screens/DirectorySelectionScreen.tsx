@@ -252,7 +252,8 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
     // Check if Auto Run Docs folder exists and has files
     try {
       const autoRunPath = `${state.directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
-      const docs = await window.maestro.autorun.listDocuments(autoRunPath);
+      const result = await window.maestro.autorun.listDocs(autoRunPath);
+      const docs = result.success ? result.files : [];
 
       if (docs && docs.length > 0) {
         setDirectoryError(

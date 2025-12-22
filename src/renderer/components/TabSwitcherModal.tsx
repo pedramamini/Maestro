@@ -76,7 +76,7 @@ function getTabDisplayName(tab: AITab): string {
 /**
  * Get the UUID pill display (first octet of session ID)
  */
-function getUuidPill(agentSessionId: string | undefined): string | null {
+function getUuidPill(agentSessionId: string | undefined | null): string | null {
   if (!agentSessionId) return null;
   return agentSessionId.split('-')[0].toUpperCase();
 }

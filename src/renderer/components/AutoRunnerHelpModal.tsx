@@ -282,11 +282,13 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
             >
               <p>
                 Enable the reset toggle (<RotateCcw className="w-3 h-3 inline" />) on any document to
-                uncheck all tasks when that document completes. This is useful for recurring task lists.
+                restore it to its original form after all tasks complete. A backup is created when the
+                document starts, and restored before moving to the next document.
               </p>
               <p>
                 Reset-enabled documents can be duplicated in the queue, allowing the same document to
-                run multiple times in a single batch.
+                run multiple times in a single batch. If Auto Run is interrupted while processing a
+                reset document, the backup is automatically restored.
               </p>
             </div>
           </section>
