@@ -216,6 +216,24 @@ export function registerPlaybooksHandlers(deps: PlaybooksHandlerDependencies): v
     })
   );
 
+  // Delete all playbooks for a session (used when session is deleted)
+  ipcMain.handle(
+    'playbooks:deleteAll',
+    createIpcHandler(handlerOpts('deleteAll'), async (sessionId: string) => {
+      const filePath = getPlaybooksFilePath(app, sessionId);
+      try {
+        await fs.unlink(filePath);
+        logger.info(`Deleted all playbooks for session ${sessionId}`, LOG_CONTEXT);
+      } catch (error) {
+        // File doesn't exist, that's fine
+        if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
+          throw error;
+        }
+      }
+      return {};
+    })
+  );
+
   // Export a playbook as a ZIP file
   ipcMain.handle(
     'playbooks:export',

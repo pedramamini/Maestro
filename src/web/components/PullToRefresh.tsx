@@ -215,13 +215,39 @@ export interface PullToRefreshWrapperProps {
 }
 
 /**
- * Helper function to convert hex color to RGB values
+ * Helper function to convert a hex or rgb(a) color to RGB values
  */
-function hexToRgb(hex: string): string {
-  // Remove # if present
-  const cleanHex = hex.replace('#', '');
+function hexToRgb(color: string): string {
+  const trimmed = color.trim();
 
-  // Parse hex values
+  if (trimmed.startsWith('rgb')) {
+    const match = trimmed.match(/rgba?\(\s*([\d.]+)\s*,\s*([\d.]+)\s*,\s*([\d.]+)/i);
+    if (match) {
+      const r = Math.round(parseFloat(match[1]));
+      const g = Math.round(parseFloat(match[2]));
+      const b = Math.round(parseFloat(match[3]));
+      return `${r}, ${g}, ${b}`;
+    }
+  }
+
+  let cleanHex = trimmed.replace('#', '');
+
+  if (cleanHex.length === 3 || cleanHex.length === 4) {
+    cleanHex = cleanHex
+      .slice(0, 3)
+      .split('')
+      .map((value) => value + value)
+      .join('');
+  }
+
+  if (cleanHex.length === 8) {
+    cleanHex = cleanHex.slice(0, 6);
+  }
+
+  if (!/^[\da-fA-F]{6}$/.test(cleanHex)) {
+    return '0, 0, 0';
+  }
+
   const bigint = parseInt(cleanHex, 16);
   const r = (bigint >> 16) & 255;
   const g = (bigint >> 8) & 255;

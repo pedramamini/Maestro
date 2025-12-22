@@ -23,7 +23,7 @@ export interface AgentSession {
   firstMessage: string;
   messageCount: number;
   sizeBytes: number;
-  costUsd: number;
+  costUsd?: number;  // Optional - some sessions may not have cost data
   inputTokens: number;
   outputTokens: number;
   cacheReadTokens: number;

@@ -52,8 +52,8 @@ export function ShortcutEditor({ theme, shortcuts, setShortcuts }: ShortcutEdito
               borderColor: recordingId === sc.id ? theme.colors.accent : theme.colors.border,
               backgroundColor: recordingId === sc.id ? theme.colors.accentDim : theme.colors.bgActivity,
               color: recordingId === sc.id ? theme.colors.accent : theme.colors.textDim,
-              ringColor: theme.colors.accent
-            }}
+              '--tw-ring-color': theme.colors.accent
+            } as React.CSSProperties}
           >
             {recordingId === sc.id ? 'Press keys...' : formatShortcutKeys(sc.keys)}
           </button>

@@ -86,7 +86,7 @@ interface MainPanelProps {
   setInputValue: (value: string) => void;
   setEnterToSendAI: (value: boolean) => void;
   setEnterToSendTerminal: (value: boolean) => void;
-  setStagedImages: (images: string[]) => void;
+  setStagedImages: React.Dispatch<React.SetStateAction<string[]>>;
   setLightboxImage: (image: string | null, contextImages?: string[], source?: 'staged' | 'history') => void;
   setCommandHistoryOpen: (open: boolean) => void;
   setCommandHistoryFilter: (filter: string) => void;
@@ -121,10 +121,10 @@ interface MainPanelProps {
   handleInterrupt: () => void;
   handleInputKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   handlePaste: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
-  handleDrop: (e: React.DragEvent<HTMLDivElement>) => void;
+  handleDrop: (e: React.DragEvent<HTMLElement>) => void;
   getContextColor: (usage: number, theme: Theme) => string;
   setActiveSessionId: (id: string) => void;
-  onDeleteLog?: (logId: string) => void;
+  onDeleteLog?: (logId: string) => number | null;
   onRemoveQueuedItem?: (itemId: string) => void;
   onOpenQueueBrowser?: () => void;
 
@@ -433,7 +433,7 @@ export const MainPanel = forwardRef<MainPanelHandle, MainPanelProps>(function Ma
       <ErrorBoundary>
         <div
           className={`flex-1 flex flex-col min-w-0 relative ${activeFocus === 'main' ? 'ring-1 ring-inset z-10' : ''}`}
-          style={{ backgroundColor: theme.colors.bgMain, ringColor: theme.colors.accent }}
+          style={{ backgroundColor: theme.colors.bgMain, '--tw-ring-color': theme.colors.accent } as React.CSSProperties}
           onClick={() => setActiveFocus('main')}
         >
           {/* Top Bar (hidden in mobile landscape for focused reading) */}
@@ -453,7 +453,7 @@ export const MainPanel = forwardRef<MainPanelHandle, MainPanelProps>(function Ma
                       e.stopPropagation();
                       if (activeSession.isGitRepo) {
                         refreshGitStatus(); // Refresh git info immediately on click
-                        setGitLogOpen(true);
+                        setGitLogOpen?.(true);
                       }
                     }}
                   >
@@ -608,7 +608,9 @@ export const MainPanel = forwardRef<MainPanelHandle, MainPanelProps>(function Ma
                   </span>
                 )}
                 {currentSessionBatchState?.worktreeActive && (
-                  <GitBranch className="w-4 h-4 ml-1" title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`} />
+                  <span title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`}>
+                    <GitBranch className="w-4 h-4 ml-1" />
+                  </span>
                 )}
               </button>
             )}

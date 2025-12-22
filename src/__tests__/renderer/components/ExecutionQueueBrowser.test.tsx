@@ -155,6 +155,9 @@ describe('ExecutionQueueBrowser', () => {
       expect(mockRegisterLayer).toHaveBeenCalledWith({
         type: 'modal',
         priority: expect.any(Number),
+        blocksLowerLayers: true,
+        capturesFocus: true,
+        focusTrap: 'strict',
         onEscape: expect.any(Function),
       });
     });
@@ -1079,7 +1082,7 @@ describe('ExecutionQueueBrowser', () => {
         />
       );
 
-      expect(screen.getByText('Items are processed sequentially per project to prevent file conflicts.')).toBeInTheDocument();
+      expect(screen.getByText('Drag and drop to reorder. Items are processed sequentially per project to prevent file conflicts.')).toBeInTheDocument();
     });
   });
 

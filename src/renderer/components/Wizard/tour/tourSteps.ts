@@ -79,9 +79,9 @@ export const tourSteps: TourStepConfig[] = [
     id: 'history-tab',
     title: 'History & Tracking',
     description:
-      'The History tab tracks all changes made during your session. Auto Run entries are marked automatically, while manual changes you make are tracked separately. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default behavior in Settings → Input & Behavior. Press {{goToHistory}} to jump here.',
+      'The History tab tracks all changes made during your session. Auto Run entries are marked automatically, while manual changes you make are tracked separately. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default behavior in Settings → General. Press {{goToHistory}} to jump here.',
     descriptionGeneric:
-      'The History tab tracks all AI interactions in your session. Auto Run entries are marked automatically, while manual changes are tracked separately. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default behavior in Settings → Input & Behavior. Press {{goToHistory}} to jump here.',
+      'The History tab tracks all AI interactions in your session. Auto Run entries are marked automatically, while manual changes are tracked separately. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default behavior in Settings → General. Press {{goToHistory}} to jump here.',
     selector: '[data-tour="history-tab"]',
     position: 'left',
     uiActions: [

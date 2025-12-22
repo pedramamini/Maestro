@@ -150,6 +150,26 @@ describe('useSessions', () => {
       expect(result.current.sessions[1].id).toBe('session-2');
     });
 
+    it('handleSessionsUpdate notifies onSessionsChange with updated sessions', async () => {
+      const onSessionsChange = vi.fn();
+      renderHook(() => useSessions({ onSessionsChange }));
+
+      const newSessions: SessionData[] = [
+        { id: 'session-1', name: 'Session 1', state: 'idle' } as SessionData,
+        { id: 'session-2', name: 'Session 2', state: 'busy' } as SessionData,
+      ];
+
+      act(() => {
+        capturedHandlers.onSessionsUpdate?.(newSessions);
+      });
+
+      expect(onSessionsChange).toHaveBeenCalledTimes(1);
+      expect(onSessionsChange).toHaveBeenCalledWith([
+        expect.objectContaining({ id: 'session-1', name: 'Session 1', state: 'idle' }),
+        expect.objectContaining({ id: 'session-2', name: 'Session 2', state: 'busy' }),
+      ]);
+    });
+
     it('handleSessionsUpdate preserves client-side state (isSending, lastError)', async () => {
       const { result } = renderHook(() => useSessions());
 

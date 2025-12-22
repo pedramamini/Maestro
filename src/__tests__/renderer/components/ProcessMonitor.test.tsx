@@ -411,7 +411,13 @@ describe('ProcessMonitor', () => {
         />
       );
 
-      expect(mockUpdateLayerHandler).toHaveBeenCalledWith('layer-123', newOnClose);
+      const lastCall = mockUpdateLayerHandler.mock.calls.at(-1);
+      expect(lastCall?.[0]).toBe('layer-123');
+      const handler = lastCall?.[1] as (() => void) | undefined;
+      expect(handler).toBeDefined();
+
+      handler?.();
+      expect(newOnClose).toHaveBeenCalled();
     });
   });
 
@@ -1642,7 +1648,7 @@ describe('ProcessMonitor', () => {
         />
       );
 
-      expect(screen.getByText('↑↓ navigate • ←→ collapse/expand • R refresh')).toBeInTheDocument();
+      expect(screen.getByText('↑↓ navigate • Enter view details • R refresh')).toBeInTheDocument();
     });
 
     it('should display running indicator', () => {

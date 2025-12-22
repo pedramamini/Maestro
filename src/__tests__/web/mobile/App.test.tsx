@@ -758,6 +758,15 @@ describe('MobileApp', () => {
       expect(mockConnect).toHaveBeenCalled();
     });
 
+    it('cleans up pending connect retry on unmount', () => {
+      const { unmount } = render(<MobileApp />);
+      unmount();
+      act(() => {
+        vi.advanceTimersByTime(150);
+      });
+      expect(mockConnect).not.toHaveBeenCalled();
+    });
+
     it('renders command input bar', () => {
       render(<MobileApp />);
       expect(screen.getByTestId('command-input-bar')).toBeInTheDocument();

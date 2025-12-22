@@ -12,6 +12,7 @@ For architecture details, see [ARCHITECTURE.md](ARCHITECTURE.md). For quick refe
 - [Project Structure](#project-structure)
 - [Development Scripts](#development-scripts)
 - [Testing](#testing)
+- [Linting](#linting)
 - [Common Development Tasks](#common-development-tasks)
 - [Adding a New AI Agent](#adding-a-new-ai-agent)
 - [Code Style](#code-style)
@@ -89,6 +90,7 @@ npm run build:web      # Build web interface only
 npm run build:cli      # Build CLI tool only
 npm start              # Start built application
 npm run clean          # Clean build artifacts
+npm run lint           # Run TypeScript type checking
 npm run package        # Package for all platforms
 npm run package:mac    # Package for macOS
 npm run package:win    # Package for Windows
@@ -153,6 +155,27 @@ src/__tests__/
 ├── shared/        # Shared utility tests
 └── web/           # Web interface tests
 ```
+
+## Linting
+
+Run TypeScript type checking to catch errors before building:
+
+```bash
+npm run lint           # Run type checking across the codebase
+```
+
+The linter uses a dedicated `tsconfig.lint.json` configuration that type-checks all source files without emitting output. This catches type errors, unused variables, and other TypeScript issues.
+
+**When to run linting:**
+- Before committing changes
+- After making significant refactors
+- When CI fails with type errors
+
+**Common lint issues:**
+- Unused imports or variables
+- Type mismatches in function calls
+- Missing required properties on interfaces
+- Incorrect generic type parameters
 
 ## Common Development Tasks
 

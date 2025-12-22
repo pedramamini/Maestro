@@ -181,13 +181,17 @@ UU both-changed-in-merge.ts`;
     });
 
     test('returns diff for specific files when files array provided', async () => {
-      const diffOutput = 'diff for specific files';
-      mockGit.diff.mockResolvedValue({ diff: diffOutput });
+      const diffOutput1 = 'diff for file1';
+      const diffOutput2 = 'diff for file2';
+      mockGit.diff
+        .mockResolvedValueOnce({ stdout: diffOutput1 })
+        .mockResolvedValueOnce({ stdout: diffOutput2 });
 
       const result = await gitService.getDiff('/path/to/repo', ['file1.ts', 'file2.ts']);
 
-      expect(result).toEqual({ diff: diffOutput });
-      expect(mockGit.diff).toHaveBeenCalledWith('/path/to/repo', ['file1.ts', 'file2.ts']);
+      expect(result).toEqual({ diff: `${diffOutput1}\n${diffOutput2}` });
+      expect(mockGit.diff).toHaveBeenNthCalledWith(1, '/path/to/repo', 'file1.ts');
+      expect(mockGit.diff).toHaveBeenNthCalledWith(2, '/path/to/repo', 'file2.ts');
     });
 
     test('returns empty diff string on error', async () => {

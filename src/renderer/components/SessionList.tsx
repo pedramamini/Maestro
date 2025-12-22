@@ -5,7 +5,7 @@ import {
   ScrollText, Cpu, Menu, Bookmark, Trophy, Trash2, Edit3, FolderInput, Download, Compass, Globe
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
-import type { Session, Group, Theme, Shortcut, AutoRunStats, GroupChat, GroupChatState } from '../types';
+import type { Session, Group, Theme, Shortcut, AutoRunStats, GroupChat, GroupChatState, SettingsTab, FocusArea } from '../types';
 import { getBadgeForTime } from '../constants/conductorBadges';
 import { getStatusColor, getContextColor, formatActiveTime } from '../utils/theme';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
@@ -248,7 +248,7 @@ interface HamburgerMenuContentProps {
   startTour?: () => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   setSettingsModalOpen: (open: boolean) => void;
-  setSettingsTab: (tab: string) => void;
+  setSettingsTab: (tab: SettingsTab) => void;
   setLogViewerOpen: (open: boolean) => void;
   setProcessMonitorOpen: (open: boolean) => void;
   setUpdateCheckModalOpen: (open: boolean) => void;
@@ -543,13 +543,13 @@ interface SessionListProps {
   setUngroupedCollapsed: (collapsed: boolean) => void;
 
   // Handlers
-  setActiveFocus: (focus: string) => void;
+  setActiveFocus: (focus: FocusArea) => void;
   setActiveSessionId: (id: string) => void;
   setLeftSidebarOpen: (open: boolean) => void;
   setLeftSidebarWidthState: (width: number) => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   setSettingsModalOpen: (open: boolean) => void;
-  setSettingsTab: (tab: string) => void;
+  setSettingsTab: (tab: SettingsTab) => void;
   setAboutModalOpen: (open: boolean) => void;
   setUpdateCheckModalOpen: (open: boolean) => void;
   setLogViewerOpen: (open: boolean) => void;
@@ -912,8 +912,8 @@ export function SessionList(props: SessionListProps) {
         width: leftSidebarOpen ? `${leftSidebarWidthState}px` : '64px',
         backgroundColor: theme.colors.bgSidebar,
         borderColor: theme.colors.border,
-        ringColor: theme.colors.accent
-      }}
+        '--tw-ring-color': theme.colors.accent
+      } as React.CSSProperties}
       onClick={() => setActiveFocus('sidebar')}
       onFocus={() => setActiveFocus('sidebar')}
       onKeyDown={(e) => {
@@ -1900,7 +1900,7 @@ export function SessionList(props: SessionListProps) {
               onClick={() => setActiveSessionId(session.id)}
               onContextMenu={(e) => handleContextMenu(e, session.id)}
               className={`group relative w-8 h-8 rounded-full flex items-center justify-center cursor-pointer transition-all ${activeSessionId === session.id ? 'ring-2' : 'hover:bg-white/10'}`}
-              style={{ ringColor: theme.colors.accent }}
+              style={{ '--tw-ring-color': theme.colors.accent } as React.CSSProperties}
             >
               <div className="relative">
                 <div

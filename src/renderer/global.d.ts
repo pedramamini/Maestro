@@ -9,6 +9,13 @@ declare module '*.md?raw' {
   export default content;
 }
 
+type AutoRunTreeNode = {
+  name: string;
+  type: 'file' | 'folder';
+  path: string;
+  children?: AutoRunTreeNode[];
+};
+
 interface ProcessConfig {
   sessionId: string;
   toolType: string;
@@ -40,16 +47,34 @@ interface AgentConfigOption {
   options?: string[];
 }
 
+interface AgentCapabilities {
+  supportsResume: boolean;
+  supportsReadOnlyMode: boolean;
+  supportsJsonOutput: boolean;
+  supportsSessionId: boolean;
+  supportsImageInput: boolean;
+  supportsImageInputOnResume: boolean;
+  supportsSlashCommands: boolean;
+  supportsSessionStorage: boolean;
+  supportsCostTracking: boolean;
+  supportsUsageStats: boolean;
+  supportsBatchMode: boolean;
+  supportsStreaming: boolean;
+  supportsResultMessages: boolean;
+  supportsModelSelection?: boolean;
+}
+
 interface AgentConfig {
   id: string;
   name: string;
   binaryName?: string;
   available: boolean;
   path?: string;
-  command?: string;
+  command: string;
   args?: string[];
   hidden?: boolean;
   configOptions?: AgentConfigOption[];
+  capabilities?: AgentCapabilities;
 }
 
 interface AgentCapabilities {
@@ -74,6 +99,7 @@ interface AgentCapabilities {
 interface DirectoryEntry {
   name: string;
   isDirectory: boolean;
+  isFile: boolean;
   path: string;
 }
 
@@ -132,7 +158,7 @@ interface MaestroAPI {
     onRemoteCommand: (callback: (sessionId: string, command: string, inputMode?: 'ai' | 'terminal') => void) => () => void;
     onRemoteSwitchMode: (callback: (sessionId: string, mode: 'ai' | 'terminal') => void) => () => void;
     onRemoteInterrupt: (callback: (sessionId: string) => void) => () => void;
-    onRemoteSelectSession: (callback: (sessionId: string, tabId?: string) => void) => () => void;
+    onRemoteSelectSession: (callback: (sessionId: string) => void) => () => void;
     onRemoteSelectTab: (callback: (sessionId: string, tabId: string) => void) => () => void;
     onRemoteNewTab: (callback: (sessionId: string, responseChannel: string) => void) => () => void;
     sendRemoteNewTabResponse: (responseChannel: string, result: { tabId: string } | null) => void;
@@ -141,6 +167,28 @@ interface MaestroAPI {
     onStderr: (callback: (sessionId: string, data: string) => void) => () => void;
     onCommandExit: (callback: (sessionId: string, code: number) => void) => () => void;
     onUsage: (callback: (sessionId: string, usageStats: UsageStats) => void) => () => void;
+    onAgentError: (callback: (sessionId: string, error: {
+      type: string;
+      message: string;
+      recoverable: boolean;
+      agentId: string;
+      sessionId?: string;
+      timestamp: number;
+      raw?: {
+        exitCode?: number;
+        stderr?: string;
+        stdout?: string;
+        errorLine?: string;
+      };
+      parsedJson?: unknown;
+    }) => void) => () => void;
+  };
+  agentError: {
+    clearError: (sessionId: string) => Promise<{ success: boolean }>;
+    retryAfterError: (sessionId: string, options?: {
+      prompt?: string;
+      newSession?: boolean;
+    }) => Promise<{ success: boolean }>;
   };
   web: {
     broadcastUserInput: (sessionId: string, command: string, inputMode: 'ai' | 'terminal') => Promise<void>;
@@ -190,6 +238,10 @@ interface MaestroAPI {
     }>;
     show: (cwd: string, hash: string) => Promise<{ stdout: string; stderr: string }>;
     showFile: (cwd: string, ref: string, filePath: string) => Promise<{ content?: string; error?: string }>;
+    branches: (cwd: string) => Promise<{ branches: string[] }>;
+    tags: (cwd: string) => Promise<{ tags: string[] }>;
+    commitCount: (cwd: string) => Promise<{ count: number; error: string | null }>;
+    checkGhCli: (ghPath?: string) => Promise<{ installed: boolean; authenticated: boolean }>;
     // Git worktree operations for Auto Run parallelization
     worktreeInfo: (worktreePath: string) => Promise<{
       success: boolean;
@@ -217,7 +269,7 @@ interface MaestroAPI {
       hasUncommittedChanges: boolean;
       error?: string;
     }>;
-    createPR: (worktreePath: string, baseBranch: string, title: string, body: string) => Promise<{
+    createPR: (worktreePath: string, baseBranch: string, title: string, body: string, ghPath?: string) => Promise<{
       success: boolean;
       prUrl?: string;
       error?: string;
@@ -229,9 +281,17 @@ interface MaestroAPI {
     }>;
   };
   fs: {
+    homeDir: () => Promise<string>;
     readDir: (dirPath: string) => Promise<DirectoryEntry[]>;
     readFile: (filePath: string) => Promise<string>;
     writeFile: (filePath: string, content: string) => Promise<{ success: boolean }>;
+    stat: (filePath: string) => Promise<{
+      size: number;
+      createdAt: string;
+      modifiedAt: string;
+      isDirectory: boolean;
+      isFile: boolean;
+    }>;
   };
   webserver: {
     getUrl: () => Promise<string>;
@@ -249,14 +309,37 @@ interface MaestroAPI {
   };
   agents: {
     detect: () => Promise<AgentConfig[]>;
-    refresh: (agentId?: string) => Promise<AgentConfig[]>;
+    refresh: (agentId?: string) => Promise<{
+      agents: AgentConfig[];
+      debugInfo: {
+        agentId: string;
+        available: boolean;
+        path: string | null;
+        binaryName: string;
+        envPath: string;
+        homeDir: string;
+        platform: string;
+        whichCommand: string;
+        error: string | null;
+      } | null;
+    }>;
     get: (agentId: string) => Promise<AgentConfig | null>;
     getCapabilities: (agentId: string) => Promise<AgentCapabilities>;
     getConfig: (agentId: string) => Promise<Record<string, any>>;
     setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;
     getConfigValue: (agentId: string, key: string) => Promise<any>;
     setConfigValue: (agentId: string, key: string, value: any) => Promise<boolean>;
+    setCustomPath: (agentId: string, customPath: string | null) => Promise<boolean>;
+    getCustomPath: (agentId: string) => Promise<string | null>;
+    getAllCustomPaths: () => Promise<Record<string, string>>;
+    setCustomArgs: (agentId: string, customArgs: string | null) => Promise<boolean>;
+    getCustomArgs: (agentId: string) => Promise<string | null>;
+    getAllCustomArgs: () => Promise<Record<string, string>>;
+    setCustomEnvVars: (agentId: string, customEnvVars: Record<string, string> | null) => Promise<boolean>;
+    getCustomEnvVars: (agentId: string) => Promise<Record<string, string> | null>;
+    getAllCustomEnvVars: () => Promise<Record<string, Record<string, string>>>;
     getModels: (agentId: string, forceRefresh?: boolean) => Promise<string[]>;
+    discoverSlashCommands: (agentId: string, cwd: string, customPath?: string) => Promise<string[] | null>;
   };
   agentSessions: {
     list: (agentId: string, projectPath: string) => Promise<Array<{
@@ -289,6 +372,9 @@ interface MaestroAPI {
         cacheReadTokens: number;
         cacheCreationTokens: number;
         durationSeconds: number;
+        origin?: 'user' | 'auto';
+        sessionName?: string;
+        starred?: boolean;
       }>;
       hasMore: boolean;
       totalCount: number;
@@ -395,10 +481,10 @@ interface MaestroAPI {
     toggle: () => Promise<void>;
   };
   logger: {
-    log: (level: string, message: string, context?: string, data?: unknown) => Promise<void>;
+    log: (level: 'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun', message: string, context?: string, data?: unknown) => Promise<void>;
     getLogs: (filter?: { level?: string; context?: string; limit?: number }) => Promise<Array<{
       timestamp: number;
-      level: string;
+      level: 'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun';
       message: string;
       context?: string;
       data?: unknown;
@@ -409,6 +495,8 @@ interface MaestroAPI {
     setMaxLogBuffer: (max: number) => Promise<void>;
     getMaxLogBuffer: () => Promise<number>;
     toast: (title: string, data?: unknown) => Promise<void>;
+    autorun: (message: string, context?: string, data?: unknown) => Promise<void>;
+    onNewLog: (callback: (log: { timestamp: number; level: 'debug' | 'info' | 'warn' | 'error' | 'toast' | 'autorun'; message: string; context?: string; data?: unknown }) => void) => () => void;
   };
   claude: {
     listSessions: (projectPath: string) => Promise<Array<{
@@ -451,6 +539,24 @@ interface MaestroAPI {
       totalSizeBytes: number;
       isComplete: boolean;
     }) => void) => () => void;
+    getProjectStats: (projectPath: string) => Promise<{
+      totalSessions: number;
+      totalMessages: number;
+      totalCostUsd: number;
+      totalSizeBytes: number;
+      oldestTimestamp: string | null;
+    }>;
+    onProjectStatsUpdate: (callback: (stats: {
+      projectPath: string;
+      totalSessions: number;
+      totalMessages: number;
+      totalTokens: number;
+      totalCostUsd: number;
+      totalSizeBytes: number;
+      oldestTimestamp: string | null;
+      processedCount: number;
+      isComplete: boolean;
+    }) => void) => () => void;
     readSessionMessages: (projectPath: string, sessionId: string, options?: { offset?: number; limit?: number }) => Promise<{
       messages: Array<{
         type: string;
@@ -478,6 +584,7 @@ interface MaestroAPI {
     updateSessionStarred: (projectPath: string, agentSessionId: string, starred: boolean) => Promise<boolean>;
     getSessionOrigins: (projectPath: string) => Promise<Record<string, 'user' | 'auto' | { origin: 'user' | 'auto'; sessionName?: string; starred?: boolean }>>;
     getAllNamedSessions: () => Promise<Array<{
+      agentId: string;
       agentSessionId: string;
       projectPath: string;
       sessionName: string;
@@ -509,6 +616,32 @@ interface MaestroAPI {
       elapsedTimeMs?: number;
       validated?: boolean;
     }>>;
+    getAllPaginated: (options?: {
+      projectPath?: string;
+      sessionId?: string;
+      pagination?: { limit?: number; offset?: number };
+    }) => Promise<{
+      entries: Array<{
+        id: string;
+        type: HistoryEntryType;
+        timestamp: number;
+        summary: string;
+        fullResponse?: string;
+        agentSessionId?: string;
+        projectPath: string;
+        sessionId?: string;
+        sessionName?: string;
+        contextUsage?: number;
+        usageStats?: UsageStats;
+        success?: boolean;
+        elapsedTimeMs?: number;
+        validated?: boolean;
+      }>;
+      total: number;
+      limit: number;
+      offset: number;
+      hasMore: boolean;
+    }>;
     add: (entry: {
       id: string;
       type: HistoryEntryType;
@@ -525,9 +658,14 @@ interface MaestroAPI {
       elapsedTimeMs?: number;
       validated?: boolean;
     }) => Promise<boolean>;
-    clear: (projectPath?: string) => Promise<boolean>;
-    delete: (entryId: string) => Promise<boolean>;
-    update: (entryId: string, updates: { validated?: boolean }) => Promise<boolean>;
+    clear: (projectPath?: string, sessionId?: string) => Promise<boolean>;
+    delete: (entryId: string, sessionId?: string) => Promise<boolean>;
+    update: (entryId: string, updates: { validated?: boolean }, sessionId?: string) => Promise<boolean>;
+    updateSessionName: (agentSessionId: string, sessionName: string) => Promise<number>;
+    getFilePath: (sessionId: string) => Promise<string | null>;
+    listSessions: () => Promise<string[]>;
+    onExternalChange: (handler: () => void) => () => void;
+    reload: () => Promise<boolean>;
   };
   notification: {
     show: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
@@ -547,17 +685,7 @@ interface MaestroAPI {
     listDocs: (folderPath: string) => Promise<{
       success: boolean;
       files: string[];
-      tree?: Array<{
-        name: string;
-        type: 'file' | 'folder';
-        path: string;
-        children?: Array<{
-          name: string;
-          type: 'file' | 'folder';
-          path: string;
-          children?: unknown[];  // Recursive type
-        }>;
-      }>;
+      tree?: AutoRunTreeNode[];
       error?: string;
     }>;
     readDoc: (folderPath: string, filename: string) => Promise<{ success: boolean; content?: string; error?: string }>;
@@ -570,6 +698,10 @@ interface MaestroAPI {
     watchFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
     unwatchFolder: (folderPath: string) => Promise<{ success: boolean; error?: string }>;
     onFileChanged: (handler: (data: { folderPath: string; filename: string; eventType: string }) => void) => () => void;
+    // Backup operations for reset-on-completion documents
+    createBackup: (folderPath: string, filename: string) => Promise<{ success: boolean; backupFilename?: string; error?: string }>;
+    restoreBackup: (folderPath: string, filename: string) => Promise<{ success: boolean; error?: string }>;
+    deleteBackups: (folderPath: string) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
   };
   // Playbooks API (saved batch run configurations)
   playbooks: {
@@ -614,17 +746,115 @@ interface MaestroAPI {
       };
     }>) => Promise<{ success: boolean; playbook?: any; error?: string }>;
     delete: (sessionId: string, playbookId: string) => Promise<{ success: boolean; error?: string }>;
+    deleteAll: (sessionId: string) => Promise<{ success: boolean; error?: string }>;
     export: (sessionId: string, playbookId: string, autoRunFolderPath: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
     import: (sessionId: string, autoRunFolderPath: string) => Promise<{ success: boolean; playbook?: any; importedDocs?: string[]; error?: string }>;
   };
-  // Group Chat API
+  // Updates API
+  updates: {
+    check: () => Promise<{
+      currentVersion: string;
+      latestVersion: string;
+      updateAvailable: boolean;
+      assetsReady: boolean;
+      versionsBehind: number;
+      releases: Array<{
+        tag_name: string;
+        name: string;
+        body: string;
+        html_url: string;
+        published_at: string;
+      }>;
+      releasesUrl: string;
+      error?: string;
+    }>;
+    download: () => Promise<{ success: boolean; error?: string }>;
+    install: () => Promise<void>;
+    getStatus: () => Promise<{
+      status: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
+      info?: { version: string };
+      progress?: { percent: number; bytesPerSecond: number; total: number; transferred: number };
+      error?: string;
+    }>;
+    onStatus: (callback: (status: {
+      status: 'idle' | 'checking' | 'available' | 'not-available' | 'downloading' | 'downloaded' | 'error';
+      info?: { version: string };
+      progress?: { percent: number; bytesPerSecond: number; total: number; transferred: number };
+      error?: string;
+    }) => void) => () => void;
+  };
+  // Debug Package API
+  debug: {
+    createPackage: (options?: {
+      includeLogs?: boolean;
+      includeErrors?: boolean;
+      includeSessions?: boolean;
+      includeGroupChats?: boolean;
+      includeBatchState?: boolean;
+    }) => Promise<{
+      success: boolean;
+      path?: string;
+      filesIncluded: string[];
+      totalSizeBytes: number;
+      cancelled?: boolean;
+      error?: string;
+    }>;
+    previewPackage: () => Promise<{
+      success: boolean;
+      categories: Array<{
+        id: string;
+        name: string;
+        included: boolean;
+        sizeEstimate: string;
+      }>;
+      error?: string;
+    }>;
+  };
+  // Sync API (custom storage location)
+  sync: {
+    getDefaultPath: () => Promise<string>;
+    getSettings: () => Promise<{ customSyncPath?: string }>;
+    getCurrentStoragePath: () => Promise<string>;
+    selectSyncFolder: () => Promise<string | null>;
+    setCustomPath: (customPath: string | null) => Promise<{
+      success: boolean;
+      migrated?: number;
+      errors?: string[];
+      requiresRestart?: boolean;
+      error?: string;
+    }>;
+  };
+  // CLI activity API
+  cli: {
+    getActivity: () => Promise<Array<{
+      sessionId: string;
+      playbookId: string;
+      playbookName: string;
+      startedAt: number;
+      pid: number;
+      currentTask?: string;
+      currentDocument?: string;
+    }>>;
+    onActivityChange: (handler: () => void) => () => void;
+  };
+  // Group Chat API (multi-agent coordination)
   groupChat: {
-    create: (name: string, moderatorAgentId: string, moderatorConfig?: { customPath?: string; customArgs?: string; customEnvVars?: Record<string, string> }) => Promise<{
+    // Storage
+    create: (name: string, moderatorAgentId: string, moderatorConfig?: {
+      customPath?: string;
+      customArgs?: string;
+      customEnvVars?: Record<string, string>;
+    }) => Promise<{
       id: string;
       name: string;
       moderatorAgentId: string;
       moderatorSessionId: string;
-      participants: Array<{ name: string; agentId: string; sessionId: string; addedAt: number }>;
+      participants: Array<{
+        name: string;
+        agentId: string;
+        sessionId: string;
+        addedAt: number;
+      }>;
       logPath: string;
       imagesDir: string;
       createdAt: number;
@@ -634,7 +864,12 @@ interface MaestroAPI {
       name: string;
       moderatorAgentId: string;
       moderatorSessionId: string;
-      participants: Array<{ name: string; agentId: string; sessionId: string; addedAt: number }>;
+      participants: Array<{
+        name: string;
+        agentId: string;
+        sessionId: string;
+        addedAt: number;
+      }>;
       logPath: string;
       imagesDir: string;
       createdAt: number;
@@ -644,24 +879,78 @@ interface MaestroAPI {
       name: string;
       moderatorAgentId: string;
       moderatorSessionId: string;
-      participants: Array<{ name: string; agentId: string; sessionId: string; addedAt: number }>;
+      participants: Array<{
+        name: string;
+        agentId: string;
+        sessionId: string;
+        addedAt: number;
+      }>;
       logPath: string;
       imagesDir: string;
       createdAt: number;
     } | null>;
     delete: (id: string) => Promise<boolean>;
-    rename: (id: string, name: string) => Promise<any>;
-    update: (id: string, updates: { name?: string; moderatorAgentId?: string; moderatorConfig?: any }) => Promise<any>;
+    rename: (id: string, name: string) => Promise<{
+      id: string;
+      name: string;
+      moderatorAgentId: string;
+      moderatorSessionId: string;
+      participants: Array<{
+        name: string;
+        agentId: string;
+        sessionId: string;
+        addedAt: number;
+      }>;
+      logPath: string;
+      imagesDir: string;
+      createdAt: number;
+    }>;
+    update: (id: string, updates: {
+      name?: string;
+      moderatorAgentId?: string;
+      moderatorConfig?: {
+        customPath?: string;
+        customArgs?: string;
+        customEnvVars?: Record<string, string>;
+      };
+    }) => Promise<{
+      id: string;
+      name: string;
+      moderatorAgentId: string;
+      moderatorSessionId: string;
+      participants: Array<{
+        name: string;
+        agentId: string;
+        sessionId: string;
+        addedAt: number;
+      }>;
+      logPath: string;
+      imagesDir: string;
+      createdAt: number;
+    }>;
+    // Chat log
     appendMessage: (id: string, from: string, content: string) => Promise<void>;
-    getMessages: (id: string) => Promise<Array<{ timestamp: string; from: string; content: string; readOnly?: boolean }>>;
+    getMessages: (id: string) => Promise<Array<{
+      timestamp: string;
+      from: string;
+      content: string;
+    }>>;
     saveImage: (id: string, imageData: string, filename: string) => Promise<string>;
+    // Moderator
     startModerator: (id: string) => Promise<string>;
     sendToModerator: (id: string, message: string, images?: string[], readOnly?: boolean) => Promise<void>;
     stopModerator: (id: string) => Promise<void>;
     getModeratorSessionId: (id: string) => Promise<string | null>;
-    addParticipant: (id: string, name: string, agentId: string, cwd?: string) => Promise<{ name: string; agentId: string; sessionId: string; addedAt: number }>;
+    // Participants
+    addParticipant: (id: string, name: string, agentId: string, cwd?: string) => Promise<{
+      name: string;
+      agentId: string;
+      sessionId: string;
+      addedAt: number;
+    }>;
     sendToParticipant: (id: string, name: string, message: string, images?: string[]) => Promise<void>;
     removeParticipant: (id: string, name: string) => Promise<void>;
+    // History
     getHistory: (id: string) => Promise<Array<{
       id: string;
       timestamp: number;
@@ -674,18 +963,137 @@ interface MaestroAPI {
       cost?: number;
       fullResponse?: string;
     }>>;
-    addHistoryEntry: (id: string, entry: any) => Promise<any>;
+    addHistoryEntry: (id: string, entry: {
+      timestamp: number;
+      summary: string;
+      participantName: string;
+      participantColor: string;
+      type: 'delegation' | 'response' | 'synthesis' | 'error';
+      elapsedTimeMs?: number;
+      tokenCount?: number;
+      cost?: number;
+      fullResponse?: string;
+    }) => Promise<{
+      id: string;
+      timestamp: number;
+      summary: string;
+      participantName: string;
+      participantColor: string;
+      type: 'delegation' | 'response' | 'synthesis' | 'error';
+      elapsedTimeMs?: number;
+      tokenCount?: number;
+      cost?: number;
+      fullResponse?: string;
+    }>;
     deleteHistoryEntry: (groupChatId: string, entryId: string) => Promise<boolean>;
     clearHistory: (id: string) => Promise<void>;
     getHistoryFilePath: (id: string) => Promise<string | null>;
     getImages: (id: string) => Promise<Record<string, string>>;
-    onMessage: (callback: (groupChatId: string, message: { timestamp: string; from: string; content: string }) => void) => () => void;
+    // Events
+    onMessage: (callback: (groupChatId: string, message: {
+      timestamp: string;
+      from: string;
+      content: string;
+    }) => void) => () => void;
     onStateChange: (callback: (groupChatId: string, state: 'idle' | 'moderator-thinking' | 'agent-working') => void) => () => void;
-    onParticipantsChanged: (callback: (groupChatId: string, participants: Array<{ name: string; agentId: string; sessionId: string; addedAt: number }>) => void) => () => void;
-    onModeratorUsage: (callback: (groupChatId: string, usage: { contextUsage: number; totalCost: number; tokenCount: number }) => void) => () => void;
-    onHistoryEntry: (callback: (groupChatId: string, entry: any) => void) => () => void;
+    onParticipantsChanged: (callback: (groupChatId: string, participants: Array<{
+      name: string;
+      agentId: string;
+      sessionId: string;
+      addedAt: number;
+    }>) => void) => () => void;
+    onModeratorUsage: (callback: (groupChatId: string, usage: {
+      contextUsage: number;
+      totalCost: number;
+      tokenCount: number;
+    }) => void) => () => void;
+    onHistoryEntry: (callback: (groupChatId: string, entry: {
+      id: string;
+      timestamp: number;
+      summary: string;
+      participantName: string;
+      participantColor: string;
+      type: 'delegation' | 'response' | 'synthesis' | 'error';
+      elapsedTimeMs?: number;
+      tokenCount?: number;
+      cost?: number;
+      fullResponse?: string;
+    }) => void) => () => void;
     onParticipantState: (callback: (groupChatId: string, participantName: string, state: 'idle' | 'working') => void) => () => void;
     onModeratorSessionIdChanged: (callback: (groupChatId: string, sessionId: string) => void) => () => void;
+  };
+  // Leaderboard API
+  leaderboard: {
+    submit: (data: {
+      email: string;
+      displayName: string;
+      githubUsername?: string;
+      twitterHandle?: string;
+      linkedinHandle?: string;
+      badgeLevel: number;
+      badgeName: string;
+      cumulativeTimeMs: number;
+      totalRuns: number;
+      longestRunMs?: number;
+      longestRunDate?: string;
+      currentRunMs?: number;
+      theme?: string;
+      clientToken?: string;
+      authToken?: string;
+    }) => Promise<{
+      success: boolean;
+      message: string;
+      pendingEmailConfirmation?: boolean;
+      error?: string;
+      authTokenRequired?: boolean;
+      requiresConfirmation?: boolean;
+      ranking?: {
+        cumulative: {
+          rank: number;
+          total: number;
+          previousRank: number | null;
+          improved: boolean;
+        };
+        longestRun?: {
+          rank: number;
+          total: number;
+          previousRank: number | null;
+          improved: boolean;
+        };
+      };
+    }>;
+    pollAuthStatus: (clientToken: string) => Promise<{
+      status: 'pending' | 'confirmed' | 'expired' | 'error';
+      authToken?: string;
+      message?: string;
+      error?: string;
+    }>;
+    get: (options?: { limit?: number }) => Promise<{
+      success: boolean;
+      entries?: Array<{
+        rank: number;
+        displayName: string;
+        githubUsername?: string;
+        avatarUrl?: string;
+        badgeLevel: number;
+        badgeName: string;
+        cumulativeTimeMs: number;
+        totalRuns: number;
+      }>;
+      error?: string;
+    }>;
+    getLongestRuns: (options?: { limit?: number }) => Promise<{
+      success: boolean;
+      entries?: Array<{
+        rank: number;
+        displayName: string;
+        githubUsername?: string;
+        avatarUrl?: string;
+        longestRunMs: number;
+        runDate: string;
+      }>;
+      error?: string;
+    }>;
   };
 }
 

@@ -110,7 +110,7 @@ function getErrorColor(error: AgentError, theme: Theme): string {
     return theme.colors.error;
   }
   // Use warning color for recoverable errors
-  return theme.colors.warning || theme.colors.yellow || theme.colors.accent;
+  return theme.colors.warning;
 }
 
 export function AgentErrorModal({

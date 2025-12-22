@@ -362,11 +362,12 @@ function MarkdownImage({
 // Remark plugin to support ==highlighted text== syntax
 function remarkHighlight() {
   return (tree: any) => {
-    visit(tree, 'text', (node: any, index: number, parent: any) => {
+    visit(tree, 'text', (node: any, index: number | null | undefined, parent: any) => {
       const text = node.value;
       const regex = /==([^=]+)==/g;
 
       if (!regex.test(text)) return;
+      if (index === null || index === undefined || !parent) return;
 
       const parts: any[] = [];
       let lastIndex = 0;
@@ -1570,7 +1571,7 @@ export function FilePreview({ file, onClose, theme, markdownEditMode, setMarkdow
                     </a>
                   );
                 },
-                code: ({ node, inline, className, children, ...props }) => {
+                code: ({ node, inline, className, children, ...props }: any) => {
                   const match = (className || '').match(/language-(\w+)/);
                   const language = match ? match[1] : 'text';
                   const codeContent = String(children).replace(/\n$/, '');

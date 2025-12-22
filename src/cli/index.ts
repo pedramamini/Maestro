@@ -11,6 +11,7 @@ import { listPlaybooks } from './commands/list-playbooks';
 import { showPlaybook } from './commands/show-playbook';
 import { showAgent } from './commands/show-agent';
 import { runPlaybook } from './commands/run-playbook';
+import { cleanPlaybooks } from './commands/clean-playbooks';
 
 // Read version from package.json at runtime
 function getVersion(): string {
@@ -80,5 +81,15 @@ program
   .option('--verbose', 'Show full prompt sent to agent on each iteration')
   .option('--wait', 'Wait for agent to become available if busy')
   .action(runPlaybook);
+
+// Clean command
+const clean = program.command('clean').description('Clean up orphaned resources');
+
+clean
+  .command('playbooks')
+  .description('Remove playbooks for deleted sessions')
+  .option('--dry-run', 'Show what would be removed without actually removing')
+  .option('--json', 'Output as JSON (for scripting)')
+  .action(cleanPlaybooks);
 
 program.parse();

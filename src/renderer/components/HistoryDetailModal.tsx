@@ -80,6 +80,9 @@ export function HistoryDetailModal({
     const id = registerLayer({
       type: 'modal',
       priority: MODAL_PRIORITIES.CONFIRM, // Use same priority as confirm modal
+      blocksLowerLayers: true,
+      capturesFocus: true,
+      focusTrap: 'strict',
       onEscape: () => {
         onCloseRef.current();
       }

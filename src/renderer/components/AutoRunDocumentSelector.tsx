@@ -57,7 +57,7 @@ export function AutoRunDocumentSelector({
   const fullNewPath = selectedCreateFolder
     ? `${selectedCreateFolder}/${normalizedNewName}`.toLowerCase()
     : normalizedNewName;
-  const isDuplicate = fullNewPath && documents.some(
+  const isDuplicate = !!fullNewPath && documents.some(
     doc => doc.toLowerCase() === fullNewPath
   );
 
@@ -225,7 +225,7 @@ export function AutoRunDocumentSelector({
           className="shrink-0 text-xs mr-2 px-1.5 py-0.5 rounded text-right"
           style={{
             width: '40px',
-            backgroundColor: taskPct !== null ? (taskPct === 100 ? theme.colors.success : theme.colors.bgHover) : 'transparent',
+            backgroundColor: taskPct !== null ? (taskPct === 100 ? theme.colors.success : theme.colors.accentDim) : 'transparent',
             color: taskPct !== null ? (taskPct === 100 ? '#000' : theme.colors.textDim) : 'transparent',
           }}
         >
@@ -256,7 +256,7 @@ export function AutoRunDocumentSelector({
                 <span
                   className="shrink-0 text-xs px-1.5 py-0.5 rounded"
                   style={{
-                    backgroundColor: selectedTaskPercentage === 100 ? theme.colors.success : theme.colors.bgHover,
+                    backgroundColor: selectedTaskPercentage === 100 ? theme.colors.success : theme.colors.accentDim,
                     color: selectedTaskPercentage === 100 ? '#000' : theme.colors.textDim,
                   }}
                 >
@@ -315,7 +315,7 @@ export function AutoRunDocumentSelector({
                         className="shrink-0 text-xs mr-2 px-1.5 py-0.5 rounded text-right"
                         style={{
                           width: '40px',
-                          backgroundColor: taskPct !== null ? (taskPct === 100 ? theme.colors.success : theme.colors.bgHover) : 'transparent',
+                          backgroundColor: taskPct !== null ? (taskPct === 100 ? theme.colors.success : theme.colors.accentDim) : 'transparent',
                           color: taskPct !== null ? (taskPct === 100 ? '#000' : theme.colors.textDim) : 'transparent',
                         }}
                       >

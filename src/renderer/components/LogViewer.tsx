@@ -577,7 +577,7 @@ export function LogViewer({ theme, onClose, logLevel = 'info', savedSelectedLeve
                   <div className="text-sm break-words" style={{ color: theme.colors.textMain }}>
                     {log.message}
                   </div>
-                  {log.data && (
+                  {!!log.data && (
                     <div className="mt-2">
                       <button
                         onClick={() => toggleDataExpanded(index)}

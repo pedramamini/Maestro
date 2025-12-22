@@ -100,7 +100,7 @@ export function useAgentSessionManagement(
     let sessionName = entry.sessionName;
     if (!sessionName && activeSession && !entry.sessionId) {
       const activeTab = getActiveTab(activeSession);
-      sessionName = activeTab?.name;
+      sessionName = activeTab?.name ?? undefined;
     }
 
     const shouldIncludeContextUsage = !entry.sessionId || entry.sessionId === activeSession?.id;

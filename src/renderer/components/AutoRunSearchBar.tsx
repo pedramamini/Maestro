@@ -46,6 +46,9 @@ export function AutoRunSearchBar({
     const id = registerLayer({
       type: 'modal',
       priority: MODAL_PRIORITIES.AUTORUN_SEARCH,
+      blocksLowerLayers: false,
+      capturesFocus: true,
+      focusTrap: 'lenient',
       onEscape: () => onCloseRef.current(),
     });
     return () => unregisterLayer(id);

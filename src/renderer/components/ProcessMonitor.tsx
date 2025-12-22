@@ -21,7 +21,7 @@ interface ActiveProcess {
   cwd: string;
   isTerminal: boolean;
   isBatchMode: boolean;
-  startTime: number;
+  startTime?: number;
   command?: string;
   args?: string[];
 }
@@ -190,10 +190,13 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
     containerRef.current?.focus();
   }, []);
 
-  // Focus detail view when it opens
+  // Focus detail view when it opens, restore focus to container when it closes
   useEffect(() => {
     if (detailView && detailViewRef.current) {
       detailViewRef.current.focus();
+    } else if (!detailView && containerRef.current) {
+      // Restore focus to the container when returning from detail view
+      containerRef.current.focus();
     }
   }, [detailView]);
 
@@ -1035,7 +1038,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
         </div>
 
         {/* Detail Content */}
-        <div className="flex-1 overflow-y-auto p-6 space-y-6">
+        <div className="flex-1 min-h-0 overflow-y-auto scrollbar-thin p-6 space-y-6">
           {/* Process Name & Status */}
           <div className="flex items-center gap-3">
             <div

@@ -598,7 +598,8 @@ describe('useBatchProcessor hook', () => {
   // Mock window.maestro methods
   let mockReadDoc: ReturnType<typeof vi.fn>;
   let mockWriteDoc: ReturnType<typeof vi.fn>;
-  let mockGetStatus: ReturnType<typeof vi.fn>;
+  let mockStatus: ReturnType<typeof vi.fn>;
+  let mockBranch: ReturnType<typeof vi.fn>;
   let mockBroadcastAutoRunState: ReturnType<typeof vi.fn>;
   let mockRegisterSessionOrigin: ReturnType<typeof vi.fn>;
   let mockWorktreeSetup: ReturnType<typeof vi.fn>;
@@ -618,7 +619,8 @@ describe('useBatchProcessor hook', () => {
     // Set up window.maestro mocks
     mockReadDoc = vi.fn().mockResolvedValue({ success: true, content: '# Tasks\n- [ ] Task 1\n- [ ] Task 2' });
     mockWriteDoc = vi.fn().mockResolvedValue({ success: true });
-    mockGetStatus = vi.fn().mockResolvedValue({ branch: 'main', status: [] });
+    mockStatus = vi.fn().mockResolvedValue({ stdout: '' });
+    mockBranch = vi.fn().mockResolvedValue({ stdout: 'main' });
     mockBroadcastAutoRunState = vi.fn();
     mockRegisterSessionOrigin = vi.fn().mockResolvedValue(undefined);
     mockWorktreeSetup = vi.fn().mockResolvedValue({ success: true });
@@ -638,7 +640,8 @@ describe('useBatchProcessor hook', () => {
       },
       git: {
         ...window.maestro.git,
-        getStatus: mockGetStatus,
+        status: mockStatus,
+        branch: mockBranch,
         worktreeSetup: mockWorktreeSetup,
         worktreeCheckout: mockWorktreeCheckout,
         getDefaultBranch: mockGetDefaultBranch,
@@ -1952,7 +1955,7 @@ describe('useBatchProcessor hook', () => {
       const sessions = [createMockSession({ isGitRepo: true })];
       const groups = [createMockGroup()];
 
-      mockGetStatus.mockResolvedValue({ branch: 'feature/test', status: [] });
+      mockBranch.mockResolvedValue({ stdout: 'feature/test' });
 
       let callCount = 0;
       mockReadDoc.mockImplementation(async () => {
@@ -1981,14 +1984,15 @@ describe('useBatchProcessor hook', () => {
         }, '/test/folder');
       });
 
-      expect(mockGetStatus).toHaveBeenCalled();
+      expect(mockStatus).toHaveBeenCalled();
+      expect(mockBranch).toHaveBeenCalled();
     });
 
     it('should handle git status failure gracefully', async () => {
       const sessions = [createMockSession({ isGitRepo: true })];
       const groups = [createMockGroup()];
 
-      mockGetStatus.mockRejectedValue(new Error('Git error'));
+      mockStatus.mockRejectedValue(new Error('Git error'));
 
       let callCount = 0;
       mockReadDoc.mockImplementation(async () => {
@@ -2052,7 +2056,8 @@ describe('useBatchProcessor hook', () => {
         }, '/test/folder');
       });
 
-      expect(mockGetStatus).not.toHaveBeenCalled();
+      expect(mockStatus).not.toHaveBeenCalled();
+      expect(mockBranch).not.toHaveBeenCalled();
     });
   });
 

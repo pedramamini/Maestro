@@ -17,30 +17,13 @@
 import React from 'react';
 import { useThemeColors } from '../components/ThemeProvider';
 import type { InputMode } from './CommandInputBar';
+import { triggerHaptic } from './constants';
 
 /** Minimum touch target size per Apple HIG guidelines (44pt) */
 const MIN_TOUCH_TARGET = 44;
 
 /** Default minimum height for the buttons */
 const MIN_INPUT_HEIGHT = 48;
-
-/**
- * Trigger haptic feedback using the Vibration API
- */
-function triggerHapticFeedback(pattern: 'light' | 'medium' | 'strong' | number = 'medium'): void {
-  if (typeof navigator !== 'undefined' && 'vibrate' in navigator) {
-    const duration =
-      pattern === 'light' ? 10 :
-      pattern === 'medium' ? 25 :
-      pattern === 'strong' ? 50 :
-      pattern;
-    try {
-      navigator.vibrate(duration);
-    } catch {
-      // Silently fail if vibration is not allowed
-    }
-  }
-}
 
 /**
  * Common base styles for all input bar buttons
@@ -88,7 +71,7 @@ export function InputModeToggleButton({
   const isAiMode = inputMode === 'ai';
 
   const handleClick = () => {
-    triggerHapticFeedback('light');
+    triggerHaptic(10);
     onModeToggle();
   };
 
@@ -334,7 +317,7 @@ export function SendInterruptButton({
   const colors = useThemeColors();
 
   const handleInterrupt = () => {
-    triggerHapticFeedback('strong');
+    triggerHaptic(50);
     onInterrupt();
   };
 
@@ -444,7 +427,7 @@ export function ExpandedModeSendInterruptButton({
   const colors = useThemeColors();
 
   const handleInterrupt = () => {
-    triggerHapticFeedback('strong');
+    triggerHaptic(50);
     onInterrupt();
   };
 
@@ -530,11 +513,3 @@ export function ExpandedModeSendInterruptButton({
     </button>
   );
 }
-
-export default {
-  InputModeToggleButton,
-  VoiceInputButton,
-  SlashCommandButton,
-  SendInterruptButton,
-  ExpandedModeSendInterruptButton,
-};

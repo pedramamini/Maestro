@@ -2,6 +2,7 @@ import { execFileNoThrow } from './utils/execFile';
 import { logger } from './utils/logger';
 import * as os from 'os';
 import * as fs from 'fs';
+import * as path from 'path';
 import { AgentCapabilities, getAgentCapabilities } from './agent-capabilities';
 
 // Re-export AgentCapabilities for convenience
@@ -50,8 +51,9 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'
   {
     id: 'terminal',
     name: 'Terminal',
-    binaryName: 'bash',
-    command: 'bash',
+    // Use platform-appropriate default shell
+    binaryName: process.platform === 'win32' ? 'powershell.exe' : 'bash',
+    command: process.platform === 'win32' ? 'powershell.exe' : 'bash',
     args: [],
     requiresPty: true,
     hidden: true, // Internal agent, not shown in UI
@@ -305,25 +307,69 @@ export class AgentDetector {
   private getExpandedEnv(): NodeJS.ProcessEnv {
     const home = os.homedir();
     const env = { ...process.env };
+    const isWindows = process.platform === 'win32';
 
-    // Standard system paths + common user-installed binary locations
-    const additionalPaths = [
-      '/opt/homebrew/bin',           // Homebrew on Apple Silicon
-      '/opt/homebrew/sbin',
-      '/usr/local/bin',              // Homebrew on Intel, common install location
-      '/usr/local/sbin',
-      `${home}/.local/bin`,          // User local installs (pip, etc.)
-      `${home}/.npm-global/bin`,     // npm global with custom prefix
-      `${home}/bin`,                 // User bin directory
-      `${home}/.claude/local`,       // Sneaky Claude loccation
-      '/usr/bin',
-      '/bin',
-      '/usr/sbin',
-      '/sbin',
-    ];
+    // Platform-specific paths
+    let additionalPaths: string[];
+
+    if (isWindows) {
+      // Windows-specific paths
+      const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+      const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+      const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+      const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+
+      additionalPaths = [
+        // npm global installs
+        path.join(appData, 'npm'),
+        path.join(localAppData, 'npm'),
+        // Claude Code CLI install location (npm global)
+        path.join(appData, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli'),
+        // User local programs
+        path.join(localAppData, 'Programs'),
+        path.join(localAppData, 'Microsoft', 'WindowsApps'),
+        // Python/pip user installs
+        path.join(appData, 'Python', 'Scripts'),
+        path.join(localAppData, 'Programs', 'Python', 'Python311', 'Scripts'),
+        path.join(localAppData, 'Programs', 'Python', 'Python310', 'Scripts'),
+        // Git for Windows (provides bash, common tools)
+        path.join(programFiles, 'Git', 'cmd'),
+        path.join(programFiles, 'Git', 'bin'),
+        path.join(programFiles, 'Git', 'usr', 'bin'),
+        path.join(programFilesX86, 'Git', 'cmd'),
+        path.join(programFilesX86, 'Git', 'bin'),
+        // Node.js
+        path.join(programFiles, 'nodejs'),
+        path.join(localAppData, 'Programs', 'node'),
+        // Scoop package manager
+        path.join(home, 'scoop', 'shims'),
+        // Chocolatey
+        path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
+        // Windows system paths
+        path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
+        path.join(process.env.SystemRoot || 'C:\\Windows'),
+      ];
+    } else {
+      // Unix-like paths (macOS/Linux)
+      additionalPaths = [
+        '/opt/homebrew/bin',           // Homebrew on Apple Silicon
+        '/opt/homebrew/sbin',
+        '/usr/local/bin',              // Homebrew on Intel, common install location
+        '/usr/local/sbin',
+        `${home}/.local/bin`,          // User local installs (pip, etc.)
+        `${home}/.npm-global/bin`,     // npm global with custom prefix
+        `${home}/bin`,                 // User bin directory
+        `${home}/.claude/local`,       // Claude local install location
+        '/usr/bin',
+        '/bin',
+        '/usr/sbin',
+        '/sbin',
+      ];
+    }
 
     const currentPath = env.PATH || '';
-    const pathParts = currentPath.split(':');
+    // Use platform-appropriate path delimiter
+    const pathParts = currentPath.split(path.delimiter);
 
     // Add paths that aren't already present
     for (const p of additionalPaths) {
@@ -332,7 +378,7 @@ export class AgentDetector {
       }
     }
 
-    env.PATH = pathParts.join(':');
+    env.PATH = pathParts.join(path.delimiter);
     return env;
   }
 

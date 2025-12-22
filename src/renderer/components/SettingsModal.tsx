@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, memo } from 'react';
 import { X, Key, Moon, Sun, Keyboard, Check, Terminal, Bell, Cpu, Settings, Palette, Sparkles, History, Download, Bug, Cloud, FolderSync, RotateCcw, Folder, ChevronDown, Plus, Trash2 } from 'lucide-react';
-import type { Theme, ThemeColors, ThemeId, Shortcut, ShellInfo, CustomAICommand } from '../types';
+import type { Theme, ThemeColors, ThemeId, Shortcut, ShellInfo, CustomAICommand, LLMProvider } from '../types';
 import { CustomThemeBuilder } from './CustomThemeBuilder';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -154,14 +154,14 @@ interface SettingsModalProps {
   onClose: () => void;
   theme: Theme;
   themes: Record<string, Theme>;
-  activeThemeId: string;
-  setActiveThemeId: (id: string) => void;
+  activeThemeId: ThemeId;
+  setActiveThemeId: (id: ThemeId) => void;
   customThemeColors: ThemeColors;
   setCustomThemeColors: (colors: ThemeColors) => void;
   customThemeBaseId: ThemeId;
   setCustomThemeBaseId: (id: ThemeId) => void;
-  llmProvider: string;
-  setLlmProvider: (provider: string) => void;
+  llmProvider: LLMProvider;
+  setLlmProvider: (provider: LLMProvider) => void;
   modelSlug: string;
   setModelSlug: (slug: string) => void;
   apiKey: string;
@@ -369,8 +369,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
       const detected = await window.maestro.fonts.detect();
       setSystemFonts(detected);
 
-      const savedCustomFonts = await window.maestro.settings.get('customFonts');
-      if (savedCustomFonts) {
+      const savedCustomFonts = await window.maestro.settings.get('customFonts') as string[] | undefined;
+      if (savedCustomFonts && Array.isArray(savedCustomFonts)) {
         setCustomFonts(savedCustomFonts);
       }
       setFontsLoaded(true);
@@ -636,8 +636,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                 style={{
                   borderColor: theme.colors.border,
                   backgroundColor: t.colors.bgSidebar,
-                  ringColor: t.colors.accent
-                }}
+                  '--tw-ring-color': t.colors.accent
+                } as React.CSSProperties}
                 tabIndex={-1}
               >
                 <div className="flex justify-between items-center mb-2">
@@ -840,9 +840,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                           style={{
                             borderColor: theme.colors.border,
                             backgroundColor: props.defaultShell === shell.id ? theme.colors.accentDim : theme.colors.bgMain,
-                            ringColor: theme.colors.accent,
+                            '--tw-ring-color': theme.colors.accent,
                             color: theme.colors.textMain,
-                          }}
+                          } as React.CSSProperties}
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -884,9 +884,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                           style={{
                             borderColor: theme.colors.border,
                             backgroundColor: theme.colors.accentDim,
-                            ringColor: theme.colors.accent,
+                            '--tw-ring-color': theme.colors.accent,
                             color: theme.colors.textMain,
-                          }}
+                          } as React.CSSProperties}
                         >
                           <div className="flex items-center justify-between">
                             <div>
@@ -1153,7 +1153,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                     <p className="text-[10px] uppercase font-bold opacity-40 mb-1">Default Location</p>
                     <div
                       className="text-xs p-2 rounded font-mono truncate"
-                      style={{ backgroundColor: theme.colors.bgPanel }}
+                      style={{ backgroundColor: theme.colors.bgActivity }}
                       title={defaultStoragePath}
                     >
                       {defaultStoragePath || 'Loading...'}
@@ -1303,7 +1303,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                 <label className="block text-xs font-bold opacity-70 uppercase mb-2">LLM Provider</label>
                 <select
                   value={props.llmProvider}
-                  onChange={(e) => props.setLlmProvider(e.target.value)}
+                  onChange={(e) => props.setLlmProvider(e.target.value as LLMProvider)}
                   className="w-full p-2 rounded border bg-transparent outline-none"
                   style={{ borderColor: theme.colors.border }}
                 >
@@ -1429,8 +1429,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                           borderColor: recordingId === sc.id ? theme.colors.accent : theme.colors.border,
                           backgroundColor: recordingId === sc.id ? theme.colors.accentDim : theme.colors.bgActivity,
                           color: recordingId === sc.id ? theme.colors.accent : theme.colors.textDim,
-                          ringColor: theme.colors.accent
-                        }}
+                          '--tw-ring-color': theme.colors.accent
+                        } as React.CSSProperties}
                       >
                         {recordingId === sc.id ? 'Press keys...' : formatShortcutKeys(sc.keys)}
                       </button>

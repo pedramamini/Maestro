@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react'
 import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { ChevronRight, ChevronDown, ChevronUp, Folder, RefreshCw, Check, Eye, EyeOff } from 'lucide-react';
-import type { Session, Theme } from '../types';
+import type { Session, Theme, FocusArea } from '../types';
 import type { FileNode } from '../types/fileTree';
 import type { FileTreeChanges } from '../utils/fileExplorer';
 import { getFileIcon } from '../utils/theme';
@@ -35,10 +35,11 @@ interface FileExplorerPanelProps {
   filteredFileTree: FileNode[];
   selectedFileIndex: number;
   setSelectedFileIndex: (index: number) => void;
-  activeFocus: string;
+  activeFocus: FocusArea;
   activeRightTab: string;
   previewFile: {name: string; content: string; path: string} | null;
-  setActiveFocus: (focus: string) => void;
+  setActiveFocus: (focus: FocusArea) => void;
+  fileTreeContainerRef?: React.RefObject<HTMLDivElement>;
   fileTreeFilterInputRef?: React.RefObject<HTMLInputElement>;
   toggleFolder: (path: string, activeSessionId: string, setSessions: React.Dispatch<React.SetStateAction<Session[]>>) => void;
   handleFileClick: (node: any, path: string, activeSession: Session) => Promise<void>;

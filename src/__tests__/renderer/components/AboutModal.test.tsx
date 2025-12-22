@@ -762,7 +762,7 @@ describe('AboutModal', () => {
         }
       });
 
-      expect(screen.getByText('1h 5m')).toBeInTheDocument();
+      expect(screen.getByText(/Hands-on Time:.*1h 5m/)).toBeInTheDocument();
     });
 
     it('should format minutes and seconds', async () => {
@@ -781,7 +781,7 @@ describe('AboutModal', () => {
         }
       });
 
-      expect(screen.getByText('2m 5s')).toBeInTheDocument();
+      expect(screen.getByText(/Hands-on Time:.*2m 5s/)).toBeInTheDocument();
     });
 
     it('should format only seconds for small values', async () => {
@@ -800,7 +800,7 @@ describe('AboutModal', () => {
         }
       });
 
-      expect(screen.getByText('45s')).toBeInTheDocument();
+      expect(screen.getByText(/Hands-on Time:.*45s/)).toBeInTheDocument();
     });
 
     it('should not show Active Time when totalActiveTimeMs is 0', async () => {
@@ -841,7 +841,7 @@ describe('AboutModal', () => {
         }
       });
 
-      expect(screen.getByText('2m 0s')).toBeInTheDocument();
+      expect(screen.getByText(/Hands-on Time:.*2m 0s/)).toBeInTheDocument();
     });
   });
 

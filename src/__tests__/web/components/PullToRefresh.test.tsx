@@ -19,20 +19,24 @@ import PullToRefreshIndicator, {
   PullToRefreshIndicatorProps,
   PullToRefreshWrapperProps,
 } from '../../../web/components/PullToRefresh';
+import * as themeProvider from '../../../web/components/ThemeProvider';
 
 // Mock the ThemeProvider's useThemeColors hook
 vi.mock('../../../web/components/ThemeProvider', () => ({
-  useThemeColors: () => ({
-    accent: '#ff5500',
-    textDim: '#888888',
-    background: '#1a1a1a',
-    textMain: '#ffffff',
-  }),
+  useThemeColors: vi.fn(),
 }));
+
+const mockedUseThemeColors = vi.mocked(themeProvider.useThemeColors);
 
 describe('PullToRefresh', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockedUseThemeColors.mockReturnValue({
+      accent: '#ff5500',
+      textDim: '#888888',
+      background: '#1a1a1a',
+      textMain: '#ffffff',
+    });
   });
 
   afterEach(() => {
@@ -305,6 +309,84 @@ describe('PullToRefresh', () => {
         );
         const outerDiv = container.firstChild as HTMLElement;
         expect(outerDiv.style.overflow).toBe('hidden');
+      });
+    });
+
+    describe('accent color parsing', () => {
+      it('handles 3-digit hex colors', () => {
+        mockedUseThemeColors.mockReturnValue({
+          accent: '#fff',
+          textDim: '#888888',
+          background: '#1a1a1a',
+          textMain: '#ffffff',
+        });
+        const { container } = render(
+          <PullToRefreshIndicator
+            pullDistance={80}
+            progress={1}
+            isRefreshing={false}
+            isThresholdReached={true}
+          />
+        );
+        const outerDiv = container.firstChild as HTMLElement;
+        expect(outerDiv.style.backgroundColor).toBe('rgba(255, 255, 255, 0.2)');
+      });
+
+      it('handles rgb colors', () => {
+        mockedUseThemeColors.mockReturnValue({
+          accent: 'rgb(10, 20, 30)',
+          textDim: '#888888',
+          background: '#1a1a1a',
+          textMain: '#ffffff',
+        });
+        const { container } = render(
+          <PullToRefreshIndicator
+            pullDistance={80}
+            progress={1}
+            isRefreshing={false}
+            isThresholdReached={true}
+          />
+        );
+        const outerDiv = container.firstChild as HTMLElement;
+        expect(outerDiv.style.backgroundColor).toBe('rgba(10, 20, 30, 0.2)');
+      });
+
+      it('handles rgba colors by ignoring alpha', () => {
+        mockedUseThemeColors.mockReturnValue({
+          accent: 'rgba(10, 20, 30, 0.5)',
+          textDim: '#888888',
+          background: '#1a1a1a',
+          textMain: '#ffffff',
+        });
+        const { container } = render(
+          <PullToRefreshIndicator
+            pullDistance={80}
+            progress={1}
+            isRefreshing={false}
+            isThresholdReached={true}
+          />
+        );
+        const outerDiv = container.firstChild as HTMLElement;
+        expect(outerDiv.style.backgroundColor).toBe('rgba(10, 20, 30, 0.2)');
+      });
+
+      it('falls back to black for invalid colors', () => {
+        mockedUseThemeColors.mockReturnValue({
+          accent: 'not-a-color',
+          textDim: '#888888',
+          background: '#1a1a1a',
+          textMain: '#ffffff',
+        });
+        const { container } = render(
+          <PullToRefreshIndicator
+            pullDistance={80}
+            progress={1}
+            isRefreshing={false}
+            isThresholdReached={true}
+          />
+        );
+        const outerDiv = container.firstChild as HTMLElement;
+        expect(outerDiv.style.backgroundColor).toBe('rgba(0, 0, 0, 0.2)');
       });
     });
 

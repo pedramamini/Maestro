@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { X, Trophy, FlaskConical, Play, RotateCcw, Sparkles, Copy, Check } from 'lucide-react';
 import confetti from 'canvas-confetti';
-import type { Theme, AutoRunStats } from '../types';
+import type { Theme, AutoRunStats, ThemeMode } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AchievementCard } from './AchievementCard';
@@ -10,7 +10,7 @@ import { CONDUCTOR_BADGES, getBadgeForTime } from '../constants/conductorBadges'
 
 interface PlaygroundPanelProps {
   theme: Theme;
-  themeMode: 'dark' | 'light';
+  themeMode: ThemeMode;
   onClose: () => void;
 }
 
@@ -156,6 +156,7 @@ export function PlaygroundPanel({ theme, themeMode, onClose }: PlaygroundPanelPr
     totalRuns: mockTotalRuns,
     currentBadgeLevel: getBadgeForTime(mockCumulativeTime)?.level || 0,
     lastBadgeUnlockLevel: mockBadgeHistory.length > 0 ? mockBadgeHistory[mockBadgeHistory.length - 1].level : 0,
+    lastAcknowledgedBadgeLevel: mockBadgeHistory.length > 0 ? mockBadgeHistory[mockBadgeHistory.length - 1].level : 0,
     badgeHistory: mockBadgeHistory,
   };
 

@@ -239,6 +239,14 @@ describe('AllSessionsView', () => {
         expect(screen.getByText(/.+\/src\/components/)).toBeInTheDocument();
       });
 
+      it('handles windows paths when truncating', () => {
+        const windowsPath = 'C:\\Users\\dev\\project\\very-long-folder-name\\src\\components';
+        const sessions = [createMockSession({ cwd: windowsPath })];
+        render(<AllSessionsView {...createDefaultProps({ sessions })} />);
+
+        expect(screen.getByText('...\\src\\components')).toBeInTheDocument();
+      });
+
       it('truncates paths with only two components properly', () => {
         const twoPartPath = 'a'.repeat(50); // Very long single-part path
         const sessions = [createMockSession({ cwd: twoPartPath })];

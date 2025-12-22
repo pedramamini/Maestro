@@ -906,38 +906,38 @@ export function useSettings(): UseSettingsReturn {
       const savedWebInterfaceUseCustomPort = await window.maestro.settings.get('webInterfaceUseCustomPort');
       const savedWebInterfaceCustomPort = await window.maestro.settings.get('webInterfaceCustomPort');
 
-      if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI);
-      if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal);
-      if (savedDefaultSaveToHistory !== undefined) setDefaultSaveToHistoryState(savedDefaultSaveToHistory);
+      if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI as boolean);
+      if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal as boolean);
+      if (savedDefaultSaveToHistory !== undefined) setDefaultSaveToHistoryState(savedDefaultSaveToHistory as boolean);
 
-      if (savedLlmProvider !== undefined) setLlmProviderState(savedLlmProvider);
-      if (savedModelSlug !== undefined) setModelSlugState(savedModelSlug);
-      if (savedApiKey !== undefined) setApiKeyState(savedApiKey);
-      if (savedDefaultShell !== undefined) setDefaultShellState(savedDefaultShell);
-      if (savedCustomShellPath !== undefined) setCustomShellPathState(savedCustomShellPath);
-      if (savedShellArgs !== undefined) setShellArgsState(savedShellArgs);
-      if (savedShellEnvVars !== undefined) setShellEnvVarsState(savedShellEnvVars);
-      if (savedGhPath !== undefined) setGhPathState(savedGhPath);
-      if (savedFontSize !== undefined) setFontSizeState(savedFontSize);
-      if (savedFontFamily !== undefined) setFontFamilyState(savedFontFamily);
-      if (savedLeftSidebarWidth !== undefined) setLeftSidebarWidthState(Math.max(256, Math.min(600, savedLeftSidebarWidth)));
-      if (savedRightPanelWidth !== undefined) setRightPanelWidthState(savedRightPanelWidth);
-      if (savedMarkdownEditMode !== undefined) setMarkdownEditModeState(savedMarkdownEditMode);
-      if (savedShowHiddenFiles !== undefined) setShowHiddenFilesState(savedShowHiddenFiles);
-      if (savedActiveThemeId !== undefined) setActiveThemeIdState(savedActiveThemeId);
-      if (savedCustomThemeColors !== undefined) setCustomThemeColorsState(savedCustomThemeColors);
-      if (savedCustomThemeBaseId !== undefined) setCustomThemeBaseIdState(savedCustomThemeBaseId);
-      if (savedTerminalWidth !== undefined) setTerminalWidthState(savedTerminalWidth);
+      if (savedLlmProvider !== undefined) setLlmProviderState(savedLlmProvider as LLMProvider);
+      if (savedModelSlug !== undefined) setModelSlugState(savedModelSlug as string);
+      if (savedApiKey !== undefined) setApiKeyState(savedApiKey as string);
+      if (savedDefaultShell !== undefined) setDefaultShellState(savedDefaultShell as string);
+      if (savedCustomShellPath !== undefined) setCustomShellPathState(savedCustomShellPath as string);
+      if (savedShellArgs !== undefined) setShellArgsState(savedShellArgs as string);
+      if (savedShellEnvVars !== undefined) setShellEnvVarsState(savedShellEnvVars as Record<string, string>);
+      if (savedGhPath !== undefined) setGhPathState(savedGhPath as string);
+      if (savedFontSize !== undefined) setFontSizeState(savedFontSize as number);
+      if (savedFontFamily !== undefined) setFontFamilyState(savedFontFamily as string);
+      if (savedLeftSidebarWidth !== undefined) setLeftSidebarWidthState(Math.max(256, Math.min(600, savedLeftSidebarWidth as number)));
+      if (savedRightPanelWidth !== undefined) setRightPanelWidthState(savedRightPanelWidth as number);
+      if (savedMarkdownEditMode !== undefined) setMarkdownEditModeState(savedMarkdownEditMode as boolean);
+      if (savedShowHiddenFiles !== undefined) setShowHiddenFilesState(savedShowHiddenFiles as boolean);
+      if (savedActiveThemeId !== undefined) setActiveThemeIdState(savedActiveThemeId as ThemeId);
+      if (savedCustomThemeColors !== undefined) setCustomThemeColorsState(savedCustomThemeColors as ThemeColors);
+      if (savedCustomThemeBaseId !== undefined) setCustomThemeBaseIdState(savedCustomThemeBaseId as ThemeId);
+      if (savedTerminalWidth !== undefined) setTerminalWidthState(savedTerminalWidth as number);
       if (savedLogLevel !== undefined) setLogLevelState(savedLogLevel);
       if (savedMaxLogBuffer !== undefined) setMaxLogBufferState(savedMaxLogBuffer);
-      if (savedMaxOutputLines !== undefined) setMaxOutputLinesState(savedMaxOutputLines);
-      if (savedOsNotificationsEnabled !== undefined) setOsNotificationsEnabledState(savedOsNotificationsEnabled);
-      if (savedAudioFeedbackEnabled !== undefined) setAudioFeedbackEnabledState(savedAudioFeedbackEnabled);
-      if (savedAudioFeedbackCommand !== undefined) setAudioFeedbackCommandState(savedAudioFeedbackCommand);
-      if (savedToastDuration !== undefined) setToastDurationState(savedToastDuration);
-      if (savedCheckForUpdatesOnStartup !== undefined) setCheckForUpdatesOnStartupState(savedCheckForUpdatesOnStartup);
-      if (savedCrashReportingEnabled !== undefined) setCrashReportingEnabledState(savedCrashReportingEnabled);
-      if (savedLogViewerSelectedLevels !== undefined) setLogViewerSelectedLevelsState(savedLogViewerSelectedLevels);
+      if (savedMaxOutputLines !== undefined) setMaxOutputLinesState(savedMaxOutputLines as number);
+      if (savedOsNotificationsEnabled !== undefined) setOsNotificationsEnabledState(savedOsNotificationsEnabled as boolean);
+      if (savedAudioFeedbackEnabled !== undefined) setAudioFeedbackEnabledState(savedAudioFeedbackEnabled as boolean);
+      if (savedAudioFeedbackCommand !== undefined) setAudioFeedbackCommandState(savedAudioFeedbackCommand as string);
+      if (savedToastDuration !== undefined) setToastDurationState(savedToastDuration as number);
+      if (savedCheckForUpdatesOnStartup !== undefined) setCheckForUpdatesOnStartupState(savedCheckForUpdatesOnStartup as boolean);
+      if (savedCrashReportingEnabled !== undefined) setCrashReportingEnabledState(savedCrashReportingEnabled as boolean);
+      if (savedLogViewerSelectedLevels !== undefined) setLogViewerSelectedLevelsState(savedLogViewerSelectedLevels as string[]);
 
       // Merge saved shortcuts with defaults (in case new shortcuts were added)
       if (savedShortcuts !== undefined) {
@@ -1000,11 +1000,11 @@ export function useSettings(): UseSettingsReturn {
       }
 
       // Merge saved AI commands with defaults (ensure built-in commands always exist)
-      if (savedCustomAICommands !== undefined) {
+      if (savedCustomAICommands !== undefined && Array.isArray(savedCustomAICommands)) {
         // Start with defaults, then merge saved commands (by ID to avoid duplicates)
         const commandsById = new Map<string, CustomAICommand>();
         DEFAULT_AI_COMMANDS.forEach(cmd => commandsById.set(cmd.id, cmd));
-        savedCustomAICommands.forEach((cmd: CustomAICommand) => {
+        (savedCustomAICommands as CustomAICommand[]).forEach((cmd: CustomAICommand) => {
           // Migration: Skip old /synopsis command - it was renamed to /history which is now
           // a built-in command handled by Maestro directly (not a custom AI command)
           if (cmd.command === '/synopsis' || cmd.id === 'synopsis') {
@@ -1023,24 +1023,24 @@ export function useSettings(): UseSettingsReturn {
 
       // Load global stats
       if (savedGlobalStats !== undefined) {
-        setGlobalStatsState({ ...DEFAULT_GLOBAL_STATS, ...savedGlobalStats });
+        setGlobalStatsState({ ...DEFAULT_GLOBAL_STATS, ...(savedGlobalStats as Partial<GlobalStats>) });
       }
 
       // Load auto-run stats
       if (savedAutoRunStats !== undefined) {
-        setAutoRunStatsState({ ...DEFAULT_AUTO_RUN_STATS, ...savedAutoRunStats });
+        setAutoRunStatsState({ ...DEFAULT_AUTO_RUN_STATS, ...(savedAutoRunStats as Partial<AutoRunStats>) });
       }
 
       // Load onboarding settings
       // UI collapse states
-      if (savedUngroupedCollapsed !== undefined) setUngroupedCollapsedState(savedUngroupedCollapsed);
+      if (savedUngroupedCollapsed !== undefined) setUngroupedCollapsedState(savedUngroupedCollapsed as boolean);
 
-      if (savedTourCompleted !== undefined) setTourCompletedState(savedTourCompleted);
-      if (savedFirstAutoRunCompleted !== undefined) setFirstAutoRunCompletedState(savedFirstAutoRunCompleted);
+      if (savedTourCompleted !== undefined) setTourCompletedState(savedTourCompleted as boolean);
+      if (savedFirstAutoRunCompleted !== undefined) setFirstAutoRunCompletedState(savedFirstAutoRunCompleted as boolean);
 
       // Load onboarding stats
       if (savedOnboardingStats !== undefined) {
-        setOnboardingStatsState({ ...DEFAULT_ONBOARDING_STATS, ...savedOnboardingStats });
+        setOnboardingStatsState({ ...DEFAULT_ONBOARDING_STATS, ...(savedOnboardingStats as Partial<OnboardingStats>) });
       }
 
       // Load leaderboard registration
@@ -1049,8 +1049,8 @@ export function useSettings(): UseSettingsReturn {
       }
 
       // Load web interface settings
-      if (savedWebInterfaceUseCustomPort !== undefined) setWebInterfaceUseCustomPortState(savedWebInterfaceUseCustomPort);
-      if (savedWebInterfaceCustomPort !== undefined) setWebInterfaceCustomPortState(savedWebInterfaceCustomPort);
+      if (savedWebInterfaceUseCustomPort !== undefined) setWebInterfaceUseCustomPortState(savedWebInterfaceUseCustomPort as boolean);
+      if (savedWebInterfaceCustomPort !== undefined) setWebInterfaceCustomPortState(savedWebInterfaceCustomPort as number);
 
       // Mark settings as loaded
       setSettingsLoaded(true);

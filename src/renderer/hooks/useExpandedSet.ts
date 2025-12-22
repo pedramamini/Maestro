@@ -158,7 +158,7 @@ export function useExpandedSet<T extends string | number = string>(
   // Convert initial expanded to a Set<T>
   const initialSet = useMemo(() => {
     if (!initialExpanded) return new Set<T>();
-    if (initialExpanded instanceof Set) return new Set(initialExpanded) as Set<T>;
+    if (initialExpanded instanceof Set) return new Set<T>([...initialExpanded] as T[]);
     return new Set(initialExpanded as T[]);
   }, []);
 

@@ -26,6 +26,7 @@ export type ThemeCSSProperty =
   | '--maestro-accent'
   | '--maestro-accent-dim'
   | '--maestro-accent-text'
+  | '--maestro-accent-foreground'
   | '--maestro-success'
   | '--maestro-warning'
   | '--maestro-error'
@@ -44,6 +45,7 @@ const colorToCSSProperty: Record<keyof ThemeColors, ThemeCSSProperty> = {
   accent: '--maestro-accent',
   accentDim: '--maestro-accent-dim',
   accentText: '--maestro-accent-text',
+  accentForeground: '--maestro-accent-foreground',
   success: '--maestro-success',
   warning: '--maestro-warning',
   error: '--maestro-error',
@@ -62,6 +64,7 @@ export const THEME_CSS_PROPERTIES: ThemeCSSProperty[] = [
   '--maestro-accent',
   '--maestro-accent-dim',
   '--maestro-accent-text',
+  '--maestro-accent-foreground',
   '--maestro-success',
   '--maestro-warning',
   '--maestro-error',

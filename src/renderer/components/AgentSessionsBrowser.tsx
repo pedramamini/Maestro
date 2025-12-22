@@ -176,17 +176,17 @@ export function AgentSessionsBrowser({
     prevViewingSessionRef.current = viewingSession;
   }, [viewingSession]);
 
-  // Reset aggregate stats when cwd changes (session loading is handled by useSessionPagination)
+  // Reset aggregate stats when cwd or agentId changes (session loading is handled by useSessionPagination)
   useEffect(() => {
     setAggregateStats({ totalSessions: 0, totalMessages: 0, totalCostUsd: 0, totalSizeBytes: 0, totalTokens: 0, oldestTimestamp: null, isComplete: false });
-  }, [activeSession?.cwd]);
+  }, [activeSession?.cwd, agentId]);
 
   // Listen for progressive stats updates (Claude-specific)
   useEffect(() => {
     // Use projectRoot for consistent session storage access (same as useSessionPagination)
     if (!activeSession?.projectRoot) return;
     // Only subscribe for Claude Code sessions
-    if (activeSession.toolType !== 'claude-code') return;
+    if (agentId !== 'claude-code') return;
 
     const unsubscribe = window.maestro.claude.onProjectStatsUpdate((stats) => {
       // Only update if this is for our project (use projectRoot, not cwd)
@@ -204,7 +204,43 @@ export function AgentSessionsBrowser({
     });
 
     return unsubscribe;
-  }, [activeSession?.projectRoot, activeSession?.toolType]);
+  }, [activeSession?.projectRoot, agentId]);
+
+  // Compute stats from loaded sessions for non-Claude agents
+  useEffect(() => {
+    // Only for non-Claude agents (Claude uses progressive stats from backend)
+    if (agentId === 'claude-code') return;
+    if (loading) return;
+
+    // Compute aggregate stats from the sessions array
+    let totalMessages = 0;
+    let totalCostUsd = 0;
+    let totalSizeBytes = 0;
+    let totalTokens = 0;
+    let oldestTimestamp: string | null = null;
+
+    for (const session of sessions) {
+      totalMessages += session.messageCount || 0;
+      totalCostUsd += session.costUsd || 0;
+      totalSizeBytes += session.sizeBytes || 0;
+      totalTokens += (session.inputTokens || 0) + (session.outputTokens || 0);
+      if (session.timestamp) {
+        if (!oldestTimestamp || session.timestamp < oldestTimestamp) {
+          oldestTimestamp = session.timestamp;
+        }
+      }
+    }
+
+    setAggregateStats({
+      totalSessions: sessions.length,
+      totalMessages,
+      totalCostUsd,
+      totalSizeBytes,
+      totalTokens,
+      oldestTimestamp,
+      isComplete: !hasMoreSessions, // Complete when all sessions are loaded
+    });
+  }, [agentId, sessions, loading, hasMoreSessions]);
 
   // Toggle star status for a session
   const toggleStar = useCallback(async (sessionId: string, e: React.MouseEvent) => {
@@ -729,7 +765,7 @@ export function AgentSessionsBrowser({
                   </span>
                 </div>
                 <span className="text-lg font-mono font-semibold" style={{ color: theme.colors.success }}>
-                  ${viewingSession.costUsd.toFixed(2)}
+                  ${(viewingSession.costUsd ?? 0).toFixed(2)}
                 </span>
               </div>
 
@@ -750,7 +786,7 @@ export function AgentSessionsBrowser({
                 </span>
               </div>
 
-              {/* Context Window with visual gauge */}
+              {/* Total Tokens */}
               <div className="flex flex-col">
                 <div className="flex items-center gap-2 mb-1">
                   <Zap className="w-4 h-4" style={{ color: theme.colors.accent }} />
@@ -758,39 +794,19 @@ export function AgentSessionsBrowser({
                     Total Tokens
                   </span>
                 </div>
-                {(() => {
-                  const totalTokens = viewingSession.inputTokens + viewingSession.outputTokens;
-                  const contextUsage = Math.min(100, (totalTokens / 200000) * 100);
-                  const getContextColor = (usage: number) => {
-                    if (usage >= 90) return theme.colors.error;
-                    if (usage >= 70) return theme.colors.warning;
+                <div className="flex items-baseline gap-2">
+                  <span className="text-lg font-mono font-semibold" style={{ color: theme.colors.textMain }}>
+                    {formatNumber(viewingSession.inputTokens + viewingSession.outputTokens)}
+                  </span>
+                  <span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+                    of 200k context <span className="font-mono font-medium" style={{ color: (() => {
+                    const usagePercent = ((viewingSession.inputTokens + viewingSession.outputTokens) / 200000) * 100;
+                    if (usagePercent >= 90) return theme.colors.error;
+                    if (usagePercent >= 70) return theme.colors.warning;
                     return theme.colors.accent;
-                  };
-                  return (
-                    <>
-                      <span className="text-lg font-mono font-semibold" style={{ color: theme.colors.textMain }}>
-                        {formatNumber(totalTokens)}
-                      </span>
-                      <div className="flex items-center gap-2 mt-1">
-                        <div className="w-24 h-2 rounded-full overflow-hidden" style={{ backgroundColor: theme.colors.border }}>
-                          <div
-                            className="h-full transition-all duration-500 ease-out"
-                            style={{
-                              width: `${contextUsage}%`,
-                              backgroundColor: getContextColor(contextUsage)
-                            }}
-                          />
-                        </div>
-                        <span className="text-[10px] font-mono font-bold" style={{ color: getContextColor(contextUsage) }}>
-                          {contextUsage.toFixed(1)}%
-                        </span>
-                      </div>
-                      <span className="text-[10px] mt-0.5" style={{ color: theme.colors.textDim }}>
-                        of 200k context
-                      </span>
-                    </>
-                  );
-                })()}
+                  })() }}>{Math.min(100, ((viewingSession.inputTokens + viewingSession.outputTokens) / 200000) * 100).toFixed(1)}%</span>
+                  </span>
+                </div>
               </div>
 
               {/* Messages */}

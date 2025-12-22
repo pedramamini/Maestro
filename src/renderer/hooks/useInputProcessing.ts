@@ -346,7 +346,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     };
 
     // Track shell CWD changes when in terminal mode
-    let newShellCwd = activeSession.shellCwd;
+    let newShellCwd = activeSession.shellCwd || activeSession.cwd;
     let cwdChanged = false;
     if (currentMode === 'terminal') {
       const trimmedInput = effectiveInputValue.trim();
@@ -549,12 +549,13 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
           // (they would override the read-only mode we're requesting)
           // - Claude Code: --dangerously-skip-permissions
           // - Codex: --dangerously-bypass-approvals-and-sandbox
+          const baseArgs = agent.args ?? [];
           const spawnArgs = isReadOnly
-            ? agent.args.filter((arg) =>
+            ? baseArgs.filter((arg) =>
                 arg !== '--dangerously-skip-permissions' &&
                 arg !== '--dangerously-bypass-approvals-and-sandbox'
               )
-            : [...agent.args];
+            : [...baseArgs];
 
           // Use agent.path (full path) if available, otherwise fall back to agent.command
           const commandToUse = agent.path || agent.command;
@@ -601,7 +602,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
             prompt: effectivePrompt,
             images: hasImages ? capturedImages : undefined,
             // Generic spawn options - main process builds agent-specific args
-            agentSessionId: tabAgentSessionId,
+            agentSessionId: tabAgentSessionId ?? undefined,
             readOnlyMode: isReadOnly,
             // Per-session config overrides (if set)
             sessionCustomPath: freshSession.customPath,

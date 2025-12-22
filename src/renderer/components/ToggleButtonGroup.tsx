@@ -66,9 +66,9 @@ function ToggleButtonGroupInner<T extends string | number>({
             style={{
               borderColor: theme.colors.border,
               backgroundColor: isActive ? activeColor : 'transparent',
-              ringColor: ringColor,
+              '--tw-ring-color': ringColor,
               color: isActive ? activeTextColor : theme.colors.textMain,
-            }}
+            } as React.CSSProperties}
           >
             {displayLabel}
           </button>

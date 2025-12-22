@@ -87,6 +87,7 @@ const createMockUpdateResult = (overrides: Partial<{
   currentVersion: string;
   latestVersion: string;
   updateAvailable: boolean;
+  assetsReady: boolean;
   versionsBehind: number;
   releases: any[];
   releasesUrl: string;
@@ -95,6 +96,7 @@ const createMockUpdateResult = (overrides: Partial<{
   currentVersion: '1.0.0',
   latestVersion: '1.1.0',
   updateAvailable: true,
+  assetsReady: true,
   versionsBehind: 1,
   releases: [createMockRelease()],
   releasesUrl: 'https://github.com/pedramamini/Maestro/releases',

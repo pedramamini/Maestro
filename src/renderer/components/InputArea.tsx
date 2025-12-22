@@ -39,7 +39,7 @@ interface InputAreaProps {
   inputRef: React.RefObject<HTMLTextAreaElement>;
   handleInputKeyDown: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
   handlePaste: (e: React.ClipboardEvent<HTMLTextAreaElement>) => void;
-  handleDrop: (e: React.DragEvent<HTMLTextAreaElement>) => void;
+  handleDrop: (e: React.DragEvent<HTMLElement>) => void;
   toggleInputMode: () => void;
   processInput: () => void;
   handleInterrupt: () => void;
@@ -155,10 +155,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 
   // Get the appropriate command history based on current mode
   // Fall back to legacy commandHistory for sessions created before the split
-  const legacyHistory = (session as any).commandHistory || [];
-  const shellHistory = session.shellCommandHistory || [];
-  const aiHistory = session.aiCommandHistory || [];
-  const currentCommandHistory = isTerminalMode
+  const legacyHistory: string[] = (session as any).commandHistory || [];
+  const shellHistory: string[] = session.shellCommandHistory || [];
+  const aiHistory: string[] = session.aiCommandHistory || [];
+  const currentCommandHistory: string[] = isTerminalMode
     ? (shellHistory.length > 0 ? shellHistory : legacyHistory)
     : (aiHistory.length > 0 ? aiHistory : legacyHistory);
 
@@ -361,10 +361,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                     className={`px-3 py-2 cursor-pointer text-sm font-mono ${isSelected ? 'ring-1 ring-inset' : ''} ${isMostRecent ? 'font-semibold' : ''}`}
                     style={{
                       backgroundColor: isSelected ? theme.colors.bgActivity : (isMostRecent ? theme.colors.accent + '15' : 'transparent'),
-                      ringColor: theme.colors.accent,
+                      '--tw-ring-color': theme.colors.accent,
                       color: theme.colors.textMain,
                       borderLeft: isMostRecent ? `2px solid ${theme.colors.accent}` : 'none'
-                    }}
+                    } as React.CSSProperties}
                     onClick={() => {
                       setInputValue(cmd);
                       setCommandHistoryOpen(false);
@@ -451,9 +451,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                     className={`px-3 py-2 cursor-pointer text-sm font-mono flex items-center gap-2 ${isSelected ? 'ring-1 ring-inset' : ''}`}
                     style={{
                       backgroundColor: isSelected ? theme.colors.bgActivity : 'transparent',
-                      ringColor: theme.colors.accent,
+                      '--tw-ring-color': theme.colors.accent,
                       color: theme.colors.textMain
-                    }}
+                    } as React.CSSProperties}
                     onClick={() => {
                       setInputValue(suggestion.value);
                       setTabCompletionOpen?.(false);
@@ -464,7 +464,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                     <IconComponent className="w-3.5 h-3.5 flex-shrink-0" style={{
                       color: suggestion.type === 'history' ? theme.colors.accent :
                              suggestion.type === 'branch' ? theme.colors.success :
-                             suggestion.type === 'tag' ? theme.colors.info :
+                             suggestion.type === 'tag' ? theme.colors.accentText :
                              suggestion.type === 'folder' ? theme.colors.warning : theme.colors.textDim
                     }} />
                     <span className="flex-1 truncate">{suggestion.displayText}</span>
@@ -505,9 +505,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                   className={`px-3 py-2 cursor-pointer text-sm font-mono flex items-center gap-2 ${isSelected ? 'ring-1 ring-inset' : ''}`}
                   style={{
                     backgroundColor: isSelected ? theme.colors.bgActivity : 'transparent',
-                    ringColor: theme.colors.accent,
+                    '--tw-ring-color': theme.colors.accent,
                     color: theme.colors.textMain
-                  }}
+                  } as React.CSSProperties}
                   onClick={() => {
                     // Replace @filter with @path
                     const beforeAt = inputValue.substring(0, atMentionStartIndex);

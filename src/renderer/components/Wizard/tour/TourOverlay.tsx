@@ -210,6 +210,9 @@ export function TourOverlay({
       const id = registerLayer({
         type: 'modal',
         priority: MODAL_PRIORITIES.TOUR,
+        blocksLowerLayers: true,
+        capturesFocus: true,
+        focusTrap: 'lenient',
         onEscape: skipTour,
       });
       return () => unregisterLayer(id);

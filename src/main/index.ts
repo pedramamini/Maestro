@@ -64,13 +64,16 @@ function getSyncPath(): string | undefined {
 const syncPath = getSyncPath();
 
 // Initialize Sentry for crash reporting (before app.ready)
+// Only enable in production - skip during development to avoid noise from hot-reload artifacts
+const isDevelopment = process.env.NODE_ENV === 'development';
+
 // Check if crash reporting is enabled (default: true for opt-out behavior)
 const crashReportingStore = new Store<{ crashReportingEnabled: boolean }>({
   name: 'maestro-settings',
 });
 const crashReportingEnabled = crashReportingStore.get('crashReportingEnabled', true);
 
-if (crashReportingEnabled) {
+if (crashReportingEnabled && !isDevelopment) {
   Sentry.init({
     dsn: 'https://2303c5f787f910863d83ed5d27ce8ed2@o4510554134740992.ingest.us.sentry.io/4510554135789568',
     // Set release version for better debugging
@@ -1259,6 +1262,15 @@ function setupIpcHandlers() {
 
       // Write the text to stdin and close it
       if (child.stdin) {
+        // Handle stdin errors (EPIPE if process terminates before write completes)
+        child.stdin.on('error', (err) => {
+          const errorCode = (err as NodeJS.ErrnoException).code;
+          if (errorCode === 'EPIPE') {
+            logger.debug('TTS stdin EPIPE - process closed before write completed', 'TTS');
+          } else {
+            logger.error('TTS stdin error', 'TTS', { error: String(err), code: errorCode });
+          }
+        });
         child.stdin.write(text);
         child.stdin.end();
       }

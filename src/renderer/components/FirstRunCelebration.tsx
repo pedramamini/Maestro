@@ -120,7 +120,7 @@ export function FirstRunCelebration({
       scalar: 1.2,
       ticks: 300,
       flat: false,
-      shapes: ['circle', 'star', 'square'] as const,
+      shapes: ['circle', 'star', 'square'] as ('circle' | 'star' | 'square')[],
       colors: confettiColors,
       zIndex: CONFETTI_Z_INDEX,
       disableForReducedMotion: true,
@@ -152,7 +152,7 @@ export function FirstRunCelebration({
         confetti({
           ...defaults,
           particleCount: 100,
-          shapes: ['star'] as const,
+          shapes: ['star'] as ('star')[],
           colors: [goldColor, '#FFA500', '#FFD700'],
           origin: { x: 0.5, y: 0.3 },
           startVelocity: 40,
