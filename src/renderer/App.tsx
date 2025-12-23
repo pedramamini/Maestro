@@ -1499,6 +1499,7 @@ export default function MaestroConsole() {
 
           // Suppress toast if user is already viewing this tab (they'll see the response directly)
           // Only show toasts for out-of-view completions (different session or different tab)
+          // ALSO suppress toasts for ACP mode sessions (they exit immediately after each message)
           const currentActiveSession = sessionsRef.current.find(s => s.id === activeSessionIdRef.current);
           const isViewingCompletedTab = currentActiveSession?.id === actualSessionId
             && (!tabIdFromSession || currentActiveSession.activeTabId === tabIdFromSession);
@@ -1522,7 +1523,8 @@ export default function MaestroConsole() {
 
       // Run synopsis in parallel if this was a custom AI command (like /commit)
       // This creates a USER history entry to track the work
-      if (synopsisData && spawnBackgroundSynopsisRef.current && addHistoryEntryRef.current) {
+      // DISABLED: Causes duplicate toasts and needs rework for ACP mode
+      if (false && synopsisData && spawnBackgroundSynopsisRef.current && addHistoryEntryRef.current) {
         const SYNOPSIS_PROMPT = 'Synopsize our recent work in 2-3 sentences max.';
         const startTime = Date.now();
 

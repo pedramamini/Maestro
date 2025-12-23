@@ -53,7 +53,8 @@ export class ACPProcess extends EventEmitter {
   private client: ACPClient;
   private config: ACPProcessConfig;
   private acpSessionId: SessionId | null = null;
-  private streamedText = '';
+  private streamedText = ''; // Full accumulated text from this turn
+  private emittedTextLength = 0; // Track how much we've already emitted to avoid duplicates
   private startTime: number;
 
   constructor(config: ACPProcessConfig) {
@@ -187,6 +188,7 @@ export class ACPProcess extends EventEmitter {
 
     // Clear any previous streamed text before starting new prompt
     this.streamedText = '';
+    this.emittedTextLength = 0; // Reset emission tracker for new prompt
 
     try {
       logger.debug(`Sending prompt to ACP agent`, LOG_CONTEXT, {
@@ -276,10 +278,23 @@ export class ACPProcess extends EventEmitter {
         // Accumulate text for final result
         if (event.type === 'text' && event.text) {
           this.streamedText += event.text;
+          
+          // Check if this text has already been emitted (OpenCode may send cumulative text)
+          const currentLength = this.streamedText.length;
+          if (currentLength > this.emittedTextLength) {
+            // Extract only the new portion
+            const newText = this.streamedText.substring(this.emittedTextLength);
+            this.emittedTextLength = currentLength;
+            
+            // Emit only the delta
+            const deltaEvent = { ...event, text: newText };
+            this.emit('data', this.config.sessionId, deltaEvent);
+          }
+          // Skip emitting if we've already sent this text
+        } else {
+          // Non-text events - emit as-is
+          this.emit('data', this.config.sessionId, event);
         }
-
-        // Emit as parsed event
-        this.emit('data', this.config.sessionId, event);
       }
     });
 
