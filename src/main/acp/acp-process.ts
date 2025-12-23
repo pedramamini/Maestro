@@ -203,10 +203,10 @@ export class ACPProcess extends EventEmitter {
       }
 
       // Emit final result event to signal completion
-      // Don't include streamedText as it was already emitted during streaming
+      // Include streamedText so ProcessManager can emit it if streaming was disabled
       const resultEvent = createResultEvent(
         this.config.sessionId,
-        '', // Text already streamed, just signal completion
+        this.streamedText, // Include accumulated text for non-streaming mode
         response.stopReason
       );
       this.emit('data', this.config.sessionId, resultEvent);

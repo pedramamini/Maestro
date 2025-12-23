@@ -346,16 +346,21 @@ export class ProcessManager extends EventEmitter {
           if (event.isPartial) {
             this.emit('thinking-chunk', sid, event.text);
           }
-        } else if (event.type === 'result' && event.text) {
-          // Emit result text
-          this.emit('data', sid, event.text);
+        } else if (event.type === 'result') {
+          // Emit result text only if streaming was disabled (otherwise it was already shown)
+          // This ensures text is displayed exactly once
+          if (!acpShowStreaming && event.text) {
+            this.emit('data', sid, event.text);
+          }
+          // Don't emit empty result events or JSON - just signal completion via exit event
         } else if (event.type === 'init' && event.sessionId) {
           // Emit session ID event
           this.emit('session-id', sid, event.sessionId);
-        } else {
-          // For other event types (tool_use, system, etc.), emit as JSON
+        } else if (event.type === 'tool_use' || event.type === 'system' || event.type === 'error') {
+          // For actionable event types, emit as JSON for rendering
           this.emit('data', sid, JSON.stringify(event));
         }
+        // Ignore other event types (usage, etc.) - don't emit as raw JSON
       });
 
       acpProcess.on('agent-error', (sid: string, error: AgentError) => {
