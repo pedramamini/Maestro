@@ -40,6 +40,27 @@ import { classifyTransferError } from '../components/TransferErrorModal';
 import { generateId } from '../utils/ids';
 
 /**
+ * Maximum recommended context tokens before warning the user
+ * Default: 100,000 tokens (safe for most models)
+ */
+const MAX_CONTEXT_TOKENS_WARNING = 100000;
+
+/**
+ * Estimate token count from log entries
+ * Uses a simple heuristic: ~4 characters per token (average for English text)
+ */
+function estimateTokensFromLogs(logs: { text: string }[]): number {
+  const totalChars = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
+  return Math.round(totalChars / 4);
+}
+
+/**
+ * Global flag to track if a transfer is in progress.
+ * Only one transfer operation should run at a time.
+ */
+let globalTransferInProgress = false;
+
+/**
  * State of the transfer operation
  */
 export type TransferState = 'idle' | 'grooming' | 'creating' | 'complete' | 'error';
@@ -70,6 +91,8 @@ export interface UseSendToAgentResult {
   error: string | null;
   /** Structured transfer error for recovery UI */
   transferError: TransferError | null;
+  /** Whether a transfer is currently in progress globally */
+  isTransferInProgress: boolean;
   /** Start a transfer operation */
   startTransfer: (request: TransferRequest) => Promise<MergeResult>;
   /** Cancel an in-progress transfer operation */
@@ -199,6 +222,17 @@ export function useSendToAgent(): UseSendToAgentResult {
   const startTransfer = useCallback(async (request: TransferRequest): Promise<MergeResult> => {
     const { sourceSession, sourceTabId, targetAgent, options } = request;
 
+    // Edge case: Check for concurrent transfer operations
+    if (globalTransferInProgress) {
+      return {
+        success: false,
+        error: 'A transfer operation is already in progress. Please wait for it to complete.',
+      };
+    }
+
+    // Set global transfer flag
+    globalTransferInProgress = true;
+
     // Store the request for retry purposes
     setLastRequest(request);
 
@@ -215,6 +249,34 @@ export function useSendToAgent(): UseSendToAgentResult {
       const sourceTab = sourceSession.aiTabs.find(t => t.id === sourceTabId);
       if (!sourceTab) {
         throw new Error('Source tab not found');
+      }
+
+      // Edge case: Check for empty context source
+      if (sourceTab.logs.length === 0) {
+        throw new Error('Cannot transfer empty context - source tab has no conversation history');
+      }
+
+      // Edge case: Check for context too large
+      const sourceTokens = estimateTokensFromLogs(sourceTab.logs);
+      if (sourceTokens > MAX_CONTEXT_TOKENS_WARNING) {
+        // Log a warning but continue - the modal should have already warned the user
+        console.warn(
+          `Large context transfer: ~${sourceTokens.toLocaleString()} tokens. ` +
+          `This may exceed the target agent's context window.`
+        );
+      }
+
+      // Edge case: Check if target agent is available
+      // This is done at the modal level, but we do a final check here
+      try {
+        const agentStatus = await window.maestro.agents.get(targetAgent);
+        if (!agentStatus?.available) {
+          throw new Error(`${getAgentDisplayName(targetAgent)} is not available. Please install and configure it first.`);
+        }
+      } catch (agentCheckError) {
+        // If we can't check agent status, log warning but continue
+        // The agent detection may not be available in all contexts
+        console.warn('Could not verify agent availability:', agentCheckError);
       }
 
       // Check for cancellation
@@ -387,6 +449,9 @@ export function useSendToAgent(): UseSendToAgentResult {
         success: false,
         error: errorMessage,
       };
+    } finally {
+      // Always clear the global transfer flag when done
+      globalTransferInProgress = false;
     }
   }, []);
 
@@ -433,6 +498,7 @@ export function useSendToAgent(): UseSendToAgentResult {
     progress,
     error,
     transferError,
+    isTransferInProgress: globalTransferInProgress,
     startTransfer,
     cancelTransfer,
     reset,

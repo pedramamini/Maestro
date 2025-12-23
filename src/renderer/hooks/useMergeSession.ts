@@ -33,6 +33,27 @@ import { createMergedSession, getActiveTab } from '../utils/tabHelpers';
 import { generateId } from '../utils/ids';
 
 /**
+ * Maximum recommended context tokens before warning the user
+ * Default: 100,000 tokens (safe for most models)
+ */
+const MAX_CONTEXT_TOKENS_WARNING = 100000;
+
+/**
+ * Estimate token count from log entries
+ * Uses a simple heuristic: ~4 characters per token (average for English text)
+ */
+function estimateTokensFromLogs(logs: { text: string }[]): number {
+  const totalChars = logs.reduce((sum, log) => sum + (log.text?.length || 0), 0);
+  return Math.round(totalChars / 4);
+}
+
+/**
+ * Global flag to track if a merge is in progress.
+ * Only one merge operation should run at a time.
+ */
+let globalMergeInProgress = false;
+
+/**
  * State of the merge operation
  */
 export type MergeState = 'idle' | 'merging' | 'complete' | 'error';
@@ -63,6 +84,8 @@ export interface UseMergeSessionResult {
   progress: GroomingProgress | null;
   /** Error message if merge failed */
   error: string | null;
+  /** Whether a merge is currently in progress globally */
+  isMergeInProgress: boolean;
   /** Start a merge operation */
   startMerge: (request: MergeSessionRequest) => Promise<MergeResult>;
   /** Cancel an in-progress merge operation */
@@ -189,6 +212,17 @@ export function useMergeSession(): UseMergeSessionResult {
   const startMerge = useCallback(async (request: MergeSessionRequest): Promise<MergeResult> => {
     const { sourceSession, sourceTabId, targetSession, targetTabId, options } = request;
 
+    // Edge case: Check for concurrent merge operations
+    if (globalMergeInProgress) {
+      return {
+        success: false,
+        error: 'A merge operation is already in progress. Please wait for it to complete.',
+      };
+    }
+
+    // Set global merge flag
+    globalMergeInProgress = true;
+
     // Reset state
     cancelledRef.current = false;
     setError(null);
@@ -202,11 +236,42 @@ export function useMergeSession(): UseMergeSessionResult {
         throw new Error('Source tab not found');
       }
 
-      const targetTab = targetTabId
-        ? targetSession.aiTabs.find(t => t.id === targetTabId)
+      const resolvedTargetTabId = targetTabId ?? getActiveTab(targetSession)?.id;
+      const targetTab = resolvedTargetTabId
+        ? targetSession.aiTabs.find(t => t.id === resolvedTargetTabId)
         : getActiveTab(targetSession);
       if (!targetTab) {
         throw new Error('Target tab not found');
+      }
+
+      // Edge case: Check for self-merge attempt
+      if (sourceSession.id === targetSession.id && sourceTabId === targetTab.id) {
+        throw new Error('Cannot merge a tab with itself');
+      }
+
+      // Edge case: Check for empty context source
+      if (sourceTab.logs.length === 0) {
+        throw new Error('Cannot merge empty context - source tab has no conversation history');
+      }
+
+      // Edge case: Check for empty target context (just a warning, allow it)
+      if (targetTab.logs.length === 0 && sourceTab.logs.length > 0) {
+        // This is allowed - we're essentially just copying context to a new session
+        // No need to throw, but we could log it
+        console.info('Merging into empty target tab - will copy source context');
+      }
+
+      // Edge case: Check for context too large
+      const sourceTokens = estimateTokensFromLogs(sourceTab.logs);
+      const targetTokens = estimateTokensFromLogs(targetTab.logs);
+      const estimatedMergedTokens = sourceTokens + targetTokens;
+
+      if (estimatedMergedTokens > MAX_CONTEXT_TOKENS_WARNING) {
+        // Log a warning but continue - the modal should have already warned the user
+        console.warn(
+          `Large context merge: ~${estimatedMergedTokens.toLocaleString()} tokens. ` +
+          `This may exceed some agents' context windows.`
+        );
       }
 
       // Check for cancellation
@@ -373,6 +438,9 @@ export function useMergeSession(): UseMergeSessionResult {
         success: false,
         error: errorMessage,
       };
+    } finally {
+      // Always clear the global merge flag when done
+      globalMergeInProgress = false;
     }
   }, []);
 
@@ -380,6 +448,7 @@ export function useMergeSession(): UseMergeSessionResult {
     mergeState,
     progress,
     error,
+    isMergeInProgress: globalMergeInProgress,
     startMerge,
     cancelMerge,
     reset,
