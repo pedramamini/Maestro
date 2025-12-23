@@ -12,6 +12,9 @@ import type {
   ContentBlock,
   ToolCallStatus,
 } from './types';
+import { logger } from '../utils/logger';
+
+const LOG_CONTEXT = '[ACPAdapter]';
 
 /**
  * Extract text from a ContentBlock
@@ -21,6 +24,8 @@ import type {
  */
 function extractText(block: ContentBlock): string {
   const content = block as any;
+  
+  logger.debug('Extracting text from content block', LOG_CONTEXT, { content });
   
   // OpenCode format: { type: 'text', text: '...' }
   if (content.type === 'text' && typeof content.text === 'string') {
@@ -37,6 +42,11 @@ function extractText(block: ContentBlock): string {
     return content.text;
   }
   
+  // Direct string content
+  if (typeof content === 'string') {
+    return content;
+  }
+  
   if ('image' in content) {
     return '[image]';
   }
@@ -50,7 +60,10 @@ function extractText(block: ContentBlock): string {
     }
     return '[binary resource]';
   }
-  return '';
+  
+  // Fallback: try to stringify
+  logger.warn('Unknown content block format', LOG_CONTEXT, { content });
+  return typeof content === 'object' ? JSON.stringify(content) : String(content);
 }
 
 /**
@@ -78,9 +91,17 @@ export function acpUpdateToParseEvent(
   sessionId: SessionId,
   update: SessionUpdate
 ): ParsedEvent | null {
+  logger.debug('Converting ACP update to ParsedEvent', LOG_CONTEXT, { 
+    sessionId, 
+    updateKeys: Object.keys(update),
+    update 
+  });
+  
   // Agent message chunk (streaming text)
   if ('agent_message_chunk' in update) {
-    const text = extractText(update.agent_message_chunk.content);
+    const chunk = update.agent_message_chunk;
+    logger.debug('Processing agent_message_chunk', LOG_CONTEXT, { chunk });
+    const text = extractText(chunk.content);
     return {
       type: 'text',
       text,

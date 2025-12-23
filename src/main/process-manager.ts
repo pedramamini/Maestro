@@ -332,8 +332,26 @@ export class ProcessManager extends EventEmitter {
       this.processes.set(sessionId, managedProcess);
 
       // Wire up ACP events to ProcessManager events
+      // ACP emits ParsedEvent objects, but the renderer expects strings
+      // For text events, emit the text content; for other events, emit as JSON
       acpProcess.on('data', (sid: string, event: ParsedEvent) => {
-        this.emit('data', sid, event);
+        if (event.type === 'text' && event.text) {
+          // Emit text content directly for streaming display
+          this.emit('data', sid, event.text);
+          // Also emit as thinking chunk if partial (for showThinking mode)
+          if (event.isPartial) {
+            this.emit('thinking-chunk', sid, event.text);
+          }
+        } else if (event.type === 'result' && event.text) {
+          // Emit result text
+          this.emit('data', sid, event.text);
+        } else if (event.type === 'init' && event.sessionId) {
+          // Emit session ID event
+          this.emit('session-id', sid, event.sessionId);
+        } else {
+          // For other event types (tool_use, system, etc.), emit as JSON
+          this.emit('data', sid, JSON.stringify(event));
+        }
       });
 
       acpProcess.on('agent-error', (sid: string, error: AgentError) => {
