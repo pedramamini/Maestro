@@ -16,3 +16,4 @@ export {
   createResultEvent,
   createErrorEvent,
 } from './acp-adapter';
+export { ACPProcess, spawnACPProcess, type ACPProcessConfig } from './acp-process';

@@ -193,6 +193,12 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       // Falls back to the agent's configOptions default (e.g., 400000 for Codex, 128000 for OpenCode)
       const contextWindow = getContextWindowValue(agent, agentConfigValues, config.sessionCustomContextWindow);
 
+      // Check if ACP mode is enabled for this agent (currently only OpenCode supports it)
+      const useACP = agent?.capabilities?.supportsACP && agentConfigValues.useACP === true;
+      if (useACP) {
+        logger.info('ACP mode enabled for agent', LOG_CONTEXT, { toolType: config.toolType });
+      }
+
       const result = processManager.spawn({
         ...config,
         args: finalArgs,
@@ -205,6 +211,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
         customEnvVars: effectiveCustomEnvVars, // Pass custom env vars (session-level or agent-level)
         imageArgs: agent?.imageArgs,     // Function to build image CLI args (for Codex, OpenCode)
         noPromptSeparator: agent?.noPromptSeparator, // OpenCode doesn't support '--' before prompt
+        useACP,                          // Use ACP protocol if enabled in agent config
+        acpSessionId: config.agentSessionId, // ACP session ID for resume
       });
 
       logger.info(`Process spawned successfully`, LOG_CONTEXT, {
