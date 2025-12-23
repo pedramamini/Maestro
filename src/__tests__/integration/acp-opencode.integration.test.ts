@@ -166,8 +166,8 @@ describe.skipIf(!SHOULD_RUN)('ACP OpenCode Integration Tests', () => {
       const event = acpUpdateToParseEvent('test-session', update);
 
       expect(event).toBeDefined();
-      expect(event?.type).toBe('thinking');
-      expect(event?.text).toBe('Let me think about this...');
+      expect(event?.type).toBe('text'); // Mapped to 'text' type since ParsedEvent doesn't have 'thinking'
+      expect(event?.text).toBe('[thinking] Let me think about this...');
     });
 
     it('should convert tool_call to tool_use event', () => {
@@ -186,8 +186,8 @@ describe.skipIf(!SHOULD_RUN)('ACP OpenCode Integration Tests', () => {
       expect(event).toBeDefined();
       expect(event?.type).toBe('tool_use');
       expect(event?.toolName).toBe('read_file');
-      expect(event?.toolId).toBe('tc-123');
-      expect(event?.status).toBe('running');
+      expect((event?.toolState as any)?.id).toBe('tc-123');
+      expect((event?.toolState as any)?.status).toBe('running');
     });
 
     it('should convert tool_call_update with output', () => {
@@ -203,14 +203,14 @@ describe.skipIf(!SHOULD_RUN)('ACP OpenCode Integration Tests', () => {
 
       expect(event).toBeDefined();
       expect(event?.type).toBe('tool_use');
-      expect(event?.status).toBe('completed');
-      expect(event?.toolOutput).toEqual({ content: 'file contents here' });
+      expect((event?.toolState as any)?.status).toBe('completed');
+      expect((event?.toolState as any)?.output).toEqual({ content: 'file contents here' });
     });
 
     it('should create session_id event', () => {
       const event = createSessionIdEvent('ses_abc123');
 
-      expect(event.type).toBe('session_id');
+      expect(event.type).toBe('init'); // Mapped to 'init' type since ParsedEvent doesn't have 'session_id'
       expect(event.sessionId).toBe('ses_abc123');
     });
   });
