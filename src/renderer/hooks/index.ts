@@ -147,3 +147,11 @@ export type {
   UseSendToAgentWithSessionsDeps,
   UseSendToAgentWithSessionsResult,
 } from './useSendToAgent';
+
+// Re-export TransferError types from component for convenience
+export type {
+  TransferError,
+  TransferErrorType,
+  TransferErrorModalProps,
+} from '../components/TransferErrorModal';
+export { classifyTransferError } from '../components/TransferErrorModal';

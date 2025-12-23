@@ -11,6 +11,11 @@
  * - ContextGroomingService for AI-powered context preparation
  * - buildContextTransferPrompt for agent-specific grooming
  * - tabHelpers for creating the new session
+ *
+ * Error Handling:
+ * - Provides structured TransferError with type classification
+ * - Supports retry with different options (with or without grooming)
+ * - Tracks last request for easy retry functionality
  */
 
 import { useState, useCallback, useRef } from 'react';
@@ -22,6 +27,7 @@ import type {
   MergeRequest,
 } from '../types/contextMerge';
 import type { SendToAgentOptions } from '../components/SendToAgentModal';
+import type { TransferError } from '../components/TransferErrorModal';
 import {
   ContextGroomingService,
   contextGroomingService,
@@ -30,6 +36,7 @@ import {
 } from '../services/contextGroomer';
 import { extractTabContext } from '../utils/contextExtractor';
 import { createMergedSession, getActiveTab } from '../utils/tabHelpers';
+import { classifyTransferError } from '../components/TransferErrorModal';
 
 /**
  * State of the transfer operation
@@ -58,14 +65,22 @@ export interface UseSendToAgentResult {
   transferState: TransferState;
   /** Progress information during transfer */
   progress: GroomingProgress | null;
-  /** Error message if transfer failed */
+  /** Error message if transfer failed (simple string) */
   error: string | null;
+  /** Structured transfer error for recovery UI */
+  transferError: TransferError | null;
   /** Start a transfer operation */
   startTransfer: (request: TransferRequest) => Promise<MergeResult>;
   /** Cancel an in-progress transfer operation */
   cancelTransfer: () => void;
   /** Reset the hook state back to idle */
   reset: () => void;
+  /** Retry the last failed transfer */
+  retryTransfer: () => Promise<MergeResult>;
+  /** Retry the last failed transfer without grooming */
+  retryWithoutGrooming: () => Promise<MergeResult>;
+  /** The last request that was attempted (for retry purposes) */
+  lastRequest: TransferRequest | null;
 }
 
 /**
@@ -142,10 +157,13 @@ export function useSendToAgent(): UseSendToAgentResult {
   const [transferState, setTransferState] = useState<TransferState>('idle');
   const [progress, setProgress] = useState<GroomingProgress | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [transferError, setTransferError] = useState<TransferError | null>(null);
+  const [lastRequest, setLastRequest] = useState<TransferRequest | null>(null);
 
-  // Refs for cancellation
+  // Refs for cancellation and timing
   const cancelledRef = useRef(false);
   const groomingServiceRef = useRef<ContextGroomingService>(contextGroomingService);
+  const transferStartTimeRef = useRef<number>(0);
 
   /**
    * Reset the hook state to idle
@@ -154,6 +172,7 @@ export function useSendToAgent(): UseSendToAgentResult {
     setTransferState('idle');
     setProgress(null);
     setError(null);
+    setTransferError(null);
     cancelledRef.current = false;
   }, []);
 
@@ -170,6 +189,7 @@ export function useSendToAgent(): UseSendToAgentResult {
     setTransferState('idle');
     setProgress(null);
     setError('Transfer cancelled by user');
+    setTransferError(null);
   }, []);
 
   /**
@@ -178,11 +198,16 @@ export function useSendToAgent(): UseSendToAgentResult {
   const startTransfer = useCallback(async (request: TransferRequest): Promise<MergeResult> => {
     const { sourceSession, sourceTabId, targetAgent, options } = request;
 
+    // Store the request for retry purposes
+    setLastRequest(request);
+
     // Reset state
     cancelledRef.current = false;
     setError(null);
+    setTransferError(null);
     setTransferState('grooming');
     setProgress(INITIAL_PROGRESS);
+    transferStartTimeRef.current = Date.now();
 
     try {
       // Step 1: Validate inputs and get source tab
@@ -338,8 +363,18 @@ export function useSendToAgent(): UseSendToAgentResult {
       };
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : 'Unknown error during transfer';
+      const elapsedTimeMs = Date.now() - transferStartTimeRef.current;
+
+      // Classify the error for structured handling
+      const classifiedError = classifyTransferError(errorMessage, {
+        sourceAgent: sourceSession.toolType,
+        targetAgent,
+        wasGrooming: options.groomContext,
+        elapsedTimeMs,
+      });
 
       setError(errorMessage);
+      setTransferError(classifiedError);
       setTransferState('error');
       setProgress({
         stage: 'complete',
@@ -354,13 +389,55 @@ export function useSendToAgent(): UseSendToAgentResult {
     }
   }, []);
 
+  /**
+   * Retry the last failed transfer with the same options
+   */
+  const retryTransfer = useCallback(async (): Promise<MergeResult> => {
+    if (!lastRequest) {
+      return {
+        success: false,
+        error: 'No previous transfer to retry',
+      };
+    }
+
+    return startTransfer(lastRequest);
+  }, [lastRequest, startTransfer]);
+
+  /**
+   * Retry the last failed transfer without grooming
+   * (useful when grooming failed or timed out)
+   */
+  const retryWithoutGrooming = useCallback(async (): Promise<MergeResult> => {
+    if (!lastRequest) {
+      return {
+        success: false,
+        error: 'No previous transfer to retry',
+      };
+    }
+
+    // Create a modified request with grooming disabled
+    const modifiedRequest: TransferRequest = {
+      ...lastRequest,
+      options: {
+        ...lastRequest.options,
+        groomContext: false,
+      },
+    };
+
+    return startTransfer(modifiedRequest);
+  }, [lastRequest, startTransfer]);
+
   return {
     transferState,
     progress,
     error,
+    transferError,
     startTransfer,
     cancelTransfer,
     reset,
+    retryTransfer,
+    retryWithoutGrooming,
+    lastRequest,
   };
 }
 

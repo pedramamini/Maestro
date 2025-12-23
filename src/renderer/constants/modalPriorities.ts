@@ -125,6 +125,9 @@ export const MODAL_PRIORITIES = {
   /** Transfer progress modal (appears during cross-agent transfer operation) */
   TRANSFER_PROGRESS: 683,
 
+  /** Transfer error modal (appears when cross-agent transfer fails) */
+  TRANSFER_ERROR: 682,
+
   /** Agent sessions browser (Cmd+Shift+L) */
   AGENT_SESSIONS: 680,
 

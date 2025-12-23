@@ -550,6 +550,234 @@ describe('useSendToAgentWithSessions', () => {
   });
 });
 
+describe('error handling', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('provides transferError with structured error info', async () => {
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockResolvedValue({
+      groomedLogs: [],
+      tokensSaved: 0,
+      success: false,
+      error: 'Grooming timed out',
+    });
+
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+
+    await act(async () => {
+      await result.current.startTransfer({
+        sourceSession,
+        sourceTabId: 'tab-1',
+        targetAgent: 'opencode',
+        options: { groomContext: true, createNewSession: true },
+      });
+    });
+
+    expect(result.current.transferError).not.toBeNull();
+    expect(result.current.transferError?.type).toBe('grooming_timeout');
+    expect(result.current.transferError?.recoverable).toBe(true);
+    expect(result.current.transferError?.sourceAgent).toBe('claude-code');
+    expect(result.current.transferError?.targetAgent).toBe('opencode');
+  });
+
+  it('stores lastRequest for retry functionality', async () => {
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockResolvedValue({
+      groomedLogs: [],
+      tokensSaved: 0,
+      success: false,
+      error: 'Network error',
+    });
+
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+    const options = { groomContext: true, createNewSession: true };
+
+    await act(async () => {
+      await result.current.startTransfer({
+        sourceSession,
+        sourceTabId: 'tab-1',
+        targetAgent: 'opencode',
+        options,
+      });
+    });
+
+    expect(result.current.lastRequest).not.toBeNull();
+    expect(result.current.lastRequest?.sourceSession.id).toBe('source-1');
+    expect(result.current.lastRequest?.targetAgent).toBe('opencode');
+    expect(result.current.lastRequest?.options.groomContext).toBe(true);
+  });
+
+  it('retryTransfer reuses the last request', async () => {
+    // First call fails
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockResolvedValueOnce({
+      groomedLogs: [],
+      tokensSaved: 0,
+      success: false,
+      error: 'Network error',
+    });
+
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+
+    await act(async () => {
+      await result.current.startTransfer({
+        sourceSession,
+        sourceTabId: 'tab-1',
+        targetAgent: 'opencode',
+        options: { groomContext: true, createNewSession: true },
+      });
+    });
+
+    expect(result.current.transferState).toBe('error');
+
+    // Mock success for retry
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockResolvedValueOnce({
+      groomedLogs: [{ id: 'log', timestamp: Date.now(), source: 'ai', text: 'Success!' }],
+      tokensSaved: 10,
+      success: true,
+    });
+
+    let retryResult;
+    await act(async () => {
+      retryResult = await result.current.retryTransfer();
+    });
+
+    expect(retryResult.success).toBe(true);
+    expect(result.current.transferState).toBe('complete');
+  });
+
+  it('retryWithoutGrooming disables grooming on retry', async () => {
+    // First call fails during grooming
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockResolvedValueOnce({
+      groomedLogs: [],
+      tokensSaved: 0,
+      success: false,
+      error: 'Grooming timeout',
+    });
+
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+
+    await act(async () => {
+      await result.current.startTransfer({
+        sourceSession,
+        sourceTabId: 'tab-1',
+        targetAgent: 'opencode',
+        options: { groomContext: true, createNewSession: true },
+      });
+    });
+
+    expect(result.current.transferState).toBe('error');
+
+    // Retry without grooming
+    let retryResult;
+    await act(async () => {
+      retryResult = await result.current.retryWithoutGrooming();
+    });
+
+    // Should succeed since grooming is skipped
+    expect(retryResult.success).toBe(true);
+    // Grooming service should not be called again since we skipped it
+    expect(contextGroomer.contextGroomingService.groomContexts).toHaveBeenCalledTimes(1);
+  });
+
+  it('retryTransfer returns error when no previous request exists', async () => {
+    const { result } = renderHook(() => useSendToAgent());
+
+    let retryResult;
+    await act(async () => {
+      retryResult = await result.current.retryTransfer();
+    });
+
+    expect(retryResult.success).toBe(false);
+    expect(retryResult.error).toBe('No previous transfer to retry');
+  });
+
+  it('retryWithoutGrooming returns error when no previous request exists', async () => {
+    const { result } = renderHook(() => useSendToAgent());
+
+    let retryResult;
+    await act(async () => {
+      retryResult = await result.current.retryWithoutGrooming();
+    });
+
+    expect(retryResult.success).toBe(false);
+    expect(retryResult.error).toBe('No previous transfer to retry');
+  });
+
+  it('classifies source tab not found as source_not_found error', async () => {
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+
+    await act(async () => {
+      await result.current.startTransfer({
+        sourceSession,
+        sourceTabId: 'non-existent-tab',
+        targetAgent: 'opencode',
+        options: { groomContext: true, createNewSession: true },
+      });
+    });
+
+    expect(result.current.transferError?.type).toBe('source_not_found');
+    expect(result.current.transferError?.recoverable).toBe(false);
+  });
+
+  it('clears transferError on reset', async () => {
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockResolvedValue({
+      groomedLogs: [],
+      tokensSaved: 0,
+      success: false,
+      error: 'Some error',
+    });
+
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+
+    await act(async () => {
+      await result.current.startTransfer({
+        sourceSession,
+        sourceTabId: 'tab-1',
+        targetAgent: 'opencode',
+        options: { groomContext: true, createNewSession: true },
+      });
+    });
+
+    expect(result.current.transferError).not.toBeNull();
+
+    act(() => {
+      result.current.reset();
+    });
+
+    expect(result.current.transferError).toBeNull();
+  });
+
+  it('clears transferError on cancelTransfer', async () => {
+    vi.mocked(contextGroomer.contextGroomingService.groomContexts).mockImplementation(
+      () => new Promise(() => {}) // Never resolves
+    );
+
+    const { result } = renderHook(() => useSendToAgent());
+    const sourceSession = createMockSession('source-1', 'claude-code');
+
+    // Start transfer (it will hang)
+    result.current.startTransfer({
+      sourceSession,
+      sourceTabId: 'tab-1',
+      targetAgent: 'opencode',
+      options: { groomContext: true, createNewSession: true },
+    });
+
+    // Cancel
+    act(() => {
+      result.current.cancelTransfer();
+    });
+
+    expect(result.current.transferError).toBeNull();
+  });
+});
+
 describe('transfer edge cases', () => {
   beforeEach(() => {
     vi.clearAllMocks();
