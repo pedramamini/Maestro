@@ -3240,4 +3240,319 @@ branch refs/heads/bugfix-123
       });
     });
   });
+
+  describe('git:scanWorktreeDirectory', () => {
+    let mockFs: typeof import('fs/promises').default;
+
+    beforeEach(async () => {
+      mockFs = (await import('fs/promises')).default;
+    });
+
+    it('should find git repositories and worktrees in directory', async () => {
+      // Mock fs.readdir to return directory entries
+      vi.mocked(mockFs.readdir).mockResolvedValue([
+        { name: 'main-repo', isDirectory: () => true },
+        { name: 'worktree-feature', isDirectory: () => true },
+        { name: 'regular-folder', isDirectory: () => true },
+      ] as any);
+
+      // Mock git commands for each subdirectory
+      vi.mocked(execFile.execFileNoThrow)
+        .mockImplementation(async (cmd, args, cwd) => {
+          const cwdStr = String(cwd);
+
+          // main-repo: regular git repo
+          if (cwdStr.endsWith('main-repo')) {
+            if (args?.includes('--is-inside-work-tree')) {
+              return { stdout: 'true\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-dir')) {
+              return { stdout: '.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-common-dir')) {
+              return { stdout: '.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--abbrev-ref')) {
+              return { stdout: 'main\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--show-toplevel')) {
+              return { stdout: '/parent/main-repo', stderr: '', exitCode: 0 };
+            }
+          }
+
+          // worktree-feature: a git worktree
+          if (cwdStr.endsWith('worktree-feature')) {
+            if (args?.includes('--is-inside-work-tree')) {
+              return { stdout: 'true\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-dir')) {
+              return { stdout: '/parent/main-repo/.git/worktrees/worktree-feature', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-common-dir')) {
+              return { stdout: '/parent/main-repo/.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--abbrev-ref')) {
+              return { stdout: 'feature-branch\n', stderr: '', exitCode: 0 };
+            }
+          }
+
+          // regular-folder: not a git repo
+          if (cwdStr.endsWith('regular-folder')) {
+            if (args?.includes('--is-inside-work-tree')) {
+              return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 };
+            }
+          }
+
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/parent');
+
+      expect(mockFs.readdir).toHaveBeenCalledWith('/parent', { withFileTypes: true });
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [
+          {
+            path: '/parent/main-repo',
+            name: 'main-repo',
+            isWorktree: false,
+            branch: 'main',
+            repoRoot: '/parent/main-repo',
+          },
+          {
+            path: '/parent/worktree-feature',
+            name: 'worktree-feature',
+            isWorktree: true,
+            branch: 'feature-branch',
+            repoRoot: '/parent/main-repo',
+          },
+        ],
+      });
+    });
+
+    it('should exclude hidden directories', async () => {
+      vi.mocked(mockFs.readdir).mockResolvedValue([
+        { name: '.git', isDirectory: () => true },
+        { name: '.hidden', isDirectory: () => true },
+        { name: 'visible-repo', isDirectory: () => true },
+      ] as any);
+
+      vi.mocked(execFile.execFileNoThrow)
+        .mockImplementation(async (cmd, args, cwd) => {
+          const cwdStr = String(cwd);
+
+          if (cwdStr.endsWith('visible-repo')) {
+            if (args?.includes('--is-inside-work-tree')) {
+              return { stdout: 'true\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-dir')) {
+              return { stdout: '.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-common-dir')) {
+              return { stdout: '.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--abbrev-ref')) {
+              return { stdout: 'main\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--show-toplevel')) {
+              return { stdout: '/parent/visible-repo', stderr: '', exitCode: 0 };
+            }
+          }
+
+          return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 };
+        });
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/parent');
+
+      // Should only include visible-repo, not .git or .hidden
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [
+          {
+            path: '/parent/visible-repo',
+            name: 'visible-repo',
+            isWorktree: false,
+            branch: 'main',
+            repoRoot: '/parent/visible-repo',
+          },
+        ],
+      });
+    });
+
+    it('should skip files (non-directories)', async () => {
+      vi.mocked(mockFs.readdir).mockResolvedValue([
+        { name: 'repo-dir', isDirectory: () => true },
+        { name: 'file.txt', isDirectory: () => false },
+        { name: 'README.md', isDirectory: () => false },
+      ] as any);
+
+      vi.mocked(execFile.execFileNoThrow)
+        .mockImplementation(async (cmd, args, cwd) => {
+          const cwdStr = String(cwd);
+
+          if (cwdStr.endsWith('repo-dir')) {
+            if (args?.includes('--is-inside-work-tree')) {
+              return { stdout: 'true\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-dir')) {
+              return { stdout: '.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--git-common-dir')) {
+              return { stdout: '.git', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--abbrev-ref')) {
+              return { stdout: 'develop\n', stderr: '', exitCode: 0 };
+            }
+            if (args?.includes('--show-toplevel')) {
+              return { stdout: '/parent/repo-dir', stderr: '', exitCode: 0 };
+            }
+          }
+
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/parent');
+
+      // Should only include repo-dir directory
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [
+          {
+            path: '/parent/repo-dir',
+            name: 'repo-dir',
+            isWorktree: false,
+            branch: 'develop',
+            repoRoot: '/parent/repo-dir',
+          },
+        ],
+      });
+    });
+
+    it('should return empty array when directory has no git repos', async () => {
+      vi.mocked(mockFs.readdir).mockResolvedValue([
+        { name: 'folder1', isDirectory: () => true },
+        { name: 'folder2', isDirectory: () => true },
+      ] as any);
+
+      vi.mocked(execFile.execFileNoThrow).mockResolvedValue({
+        stdout: '',
+        stderr: 'fatal: not a git repository',
+        exitCode: 128,
+      });
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/parent');
+
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [],
+      });
+    });
+
+    it('should return empty array when directory is empty', async () => {
+      vi.mocked(mockFs.readdir).mockResolvedValue([]);
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/empty/parent');
+
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [],
+      });
+    });
+
+    it('should handle readdir errors gracefully', async () => {
+      vi.mocked(mockFs.readdir).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/nonexistent/path');
+
+      // The handler catches errors and returns empty gitSubdirs
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [],
+      });
+    });
+
+    it('should handle null branch when git branch command fails', async () => {
+      vi.mocked(mockFs.readdir).mockResolvedValue([
+        { name: 'detached-repo', isDirectory: () => true },
+      ] as any);
+
+      vi.mocked(execFile.execFileNoThrow)
+        .mockImplementation(async (cmd, args, cwd) => {
+          if (args?.includes('--is-inside-work-tree')) {
+            return { stdout: 'true\n', stderr: '', exitCode: 0 };
+          }
+          if (args?.includes('--git-dir')) {
+            return { stdout: '.git', stderr: '', exitCode: 0 };
+          }
+          if (args?.includes('--git-common-dir')) {
+            return { stdout: '.git', stderr: '', exitCode: 0 };
+          }
+          if (args?.includes('--abbrev-ref')) {
+            // Branch command fails (e.g., empty repo)
+            return { stdout: '', stderr: 'fatal: ambiguous argument', exitCode: 128 };
+          }
+          if (args?.includes('--show-toplevel')) {
+            return { stdout: '/parent/detached-repo', stderr: '', exitCode: 0 };
+          }
+
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/parent');
+
+      expect(result).toEqual({
+        success: true,
+        gitSubdirs: [
+          {
+            path: '/parent/detached-repo',
+            name: 'detached-repo',
+            isWorktree: false,
+            branch: null,
+            repoRoot: '/parent/detached-repo',
+          },
+        ],
+      });
+    });
+
+    it('should correctly calculate repo root for worktrees with relative git-common-dir', async () => {
+      vi.mocked(mockFs.readdir).mockResolvedValue([
+        { name: 'my-worktree', isDirectory: () => true },
+      ] as any);
+
+      vi.mocked(execFile.execFileNoThrow)
+        .mockImplementation(async (cmd, args, cwd) => {
+          if (args?.includes('--is-inside-work-tree')) {
+            return { stdout: 'true\n', stderr: '', exitCode: 0 };
+          }
+          if (args?.includes('--git-dir')) {
+            // Worktree has a different git-dir
+            return { stdout: '../main-repo/.git/worktrees/my-worktree', stderr: '', exitCode: 0 };
+          }
+          if (args?.includes('--git-common-dir')) {
+            // Relative path to main repo's .git
+            return { stdout: '../main-repo/.git', stderr: '', exitCode: 0 };
+          }
+          if (args?.includes('--abbrev-ref')) {
+            return { stdout: 'feature-xyz\n', stderr: '', exitCode: 0 };
+          }
+
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+      const handler = handlers.get('git:scanWorktreeDirectory');
+      const result = await handler!({} as any, '/parent');
+
+      // The repoRoot should be resolved from the relative git-common-dir
+      expect(result.gitSubdirs[0].isWorktree).toBe(true);
+      expect(result.gitSubdirs[0].branch).toBe('feature-xyz');
+      expect(result.gitSubdirs[0].repoRoot).toMatch(/main-repo$/);
+    });
+  });
 });
