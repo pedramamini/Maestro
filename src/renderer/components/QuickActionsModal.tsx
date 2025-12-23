@@ -68,7 +68,6 @@ interface QuickActionsModalProps {
   wizardGoToStep?: (step: WizardStep) => void;
   setDebugWizardModalOpen?: (open: boolean) => void;
   setDebugPackageModalOpen?: (open: boolean) => void;
-  setACPDebugModalOpen?: (open: boolean) => void;
   startTour?: () => void;
   setFuzzyFileSearchOpen?: (open: boolean) => void;
   onEditAgent?: (session: Session) => void;
@@ -98,7 +97,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     setShortcutsHelpOpen, setAboutModalOpen, setLogViewerOpen, setProcessMonitorOpen,
     setAgentSessionsOpen, setActiveAgentSessionId, setGitDiffPreview, setGitLogOpen,
     onRenameTab, onToggleReadOnlyMode, onToggleTabShowThinking, onOpenTabSwitcher, tabShortcuts, isAiMode, setPlaygroundOpen, onRefreshGitFileState,
-    onDebugReleaseQueuedItem, markdownEditMode, onToggleMarkdownEditMode, setUpdateCheckModalOpen, openWizard, wizardGoToStep, setDebugWizardModalOpen, setDebugPackageModalOpen, setACPDebugModalOpen, startTour, setFuzzyFileSearchOpen, onEditAgent,
+    onDebugReleaseQueuedItem, markdownEditMode, onToggleMarkdownEditMode, setUpdateCheckModalOpen, openWizard, wizardGoToStep, setDebugWizardModalOpen, setDebugPackageModalOpen, startTour, setFuzzyFileSearchOpen, onEditAgent,
     groupChats, onNewGroupChat, onOpenGroupChat, onCloseGroupChat, onDeleteGroupChat, activeGroupChatId,
     hasActiveSessionCapability, onOpenCreatePR
   } = props;
@@ -426,15 +425,6 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
       subtext: 'Jump directly to Phase Review step (requires existing Auto Run docs)',
       action: () => {
         setDebugWizardModalOpen(true);
-        setQuickActionOpen(false);
-      }
-    }] : []),
-    ...(setACPDebugModalOpen ? [{
-      id: 'debugACPLog',
-      label: 'Debug: ACP Protocol Log',
-      subtext: 'View ACP communication history (init command, messages)',
-      action: () => {
-        setACPDebugModalOpen(true);
         setQuickActionOpen(false);
       }
     }] : []),
