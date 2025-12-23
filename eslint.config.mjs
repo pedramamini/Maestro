@@ -55,7 +55,8 @@ export default tseslint.config(
         argsIgnorePattern: '^_',
         varsIgnorePattern: '^_',
       }],
-      '@typescript-eslint/no-explicit-any': 'off', // Too many existing uses
+      // TODO: Change to 'warn' after reducing ~304 existing uses
+      '@typescript-eslint/no-explicit-any': 'off',
       '@typescript-eslint/no-empty-object-type': 'off',
       '@typescript-eslint/no-require-imports': 'off', // Used in main process
 
@@ -67,6 +68,7 @@ export default tseslint.config(
 
       // React Hooks rules
       'react-hooks/rules-of-hooks': 'error',
+      // TODO: Change to 'error' after fixing ~74 existing violations
       'react-hooks/exhaustive-deps': 'warn',
 
       // General rules

@@ -163,6 +163,7 @@ Run TypeScript type checking and ESLint to catch errors before building:
 ```bash
 npm run lint           # TypeScript type checking (all configs: renderer, main, cli)
 npm run lint:eslint    # ESLint code quality checks (React hooks, unused vars, etc.)
+npm run lint:eslint -- --fix  # Auto-fix ESLint issues where possible
 ```
 
 ### TypeScript Linting
@@ -176,7 +177,7 @@ The TypeScript linter checks all three build configurations:
 
 ESLint is configured with TypeScript and React plugins (`eslint.config.mjs`):
 - `react-hooks/rules-of-hooks` - Enforces React hooks rules
-- `react-hooks/exhaustive-deps` - Warns about missing hook dependencies
+- `react-hooks/exhaustive-deps` - Enforces correct hook dependencies
 - `@typescript-eslint/no-unused-vars` - Warns about unused variables
 - `prefer-const` - Suggests const for never-reassigned variables
 

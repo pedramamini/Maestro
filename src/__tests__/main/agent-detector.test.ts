@@ -24,6 +24,7 @@ import * as os from 'os';
 describe('agent-detector', () => {
   let detector: AgentDetector;
   const mockExecFileNoThrow = vi.mocked(execFileNoThrow);
+  const originalPlatform = process.platform;
 
   beforeEach(() => {
     vi.clearAllMocks();
@@ -34,6 +35,9 @@ describe('agent-detector', () => {
 
   afterEach(() => {
     vi.restoreAllMocks();
+    // Ensure process.platform is always restored to the original value
+    // This is critical because some tests modify it to test Windows/Unix behavior
+    Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
   });
 
   describe('Type exports', () => {
