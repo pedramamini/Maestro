@@ -202,10 +202,11 @@ export class ACPProcess extends EventEmitter {
         response = await this.client.prompt(this.acpSessionId, text);
       }
 
-      // Emit final result
+      // Emit final result event to signal completion
+      // Don't include streamedText as it was already emitted during streaming
       const resultEvent = createResultEvent(
         this.config.sessionId,
-        this.streamedText,
+        '', // Text already streamed, just signal completion
         response.stopReason
       );
       this.emit('data', this.config.sessionId, resultEvent);

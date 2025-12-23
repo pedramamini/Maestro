@@ -60,6 +60,7 @@ interface ProcessConfig {
   customEnvVars?: Record<string, string>; // Custom environment variables from user configuration
   noPromptSeparator?: boolean; // If true, don't add '--' before the prompt (e.g., OpenCode doesn't support it)
   useACP?: boolean; // If true, use ACP protocol instead of stdout JSON parsing (for OpenCode)
+  acpShowStreaming?: boolean; // If true, show streaming text output in ACP mode (default: false to avoid duplicates)
   acpSessionId?: string; // ACP session ID for resuming sessions
 }
 
@@ -276,7 +277,7 @@ export class ProcessManager extends EventEmitter {
    * Spawn a new process for a session
    */
   spawn(config: ProcessConfig): { pid: number; success: boolean } {
-    const { sessionId, toolType, cwd, command, args, requiresPty, prompt, shell, shellArgs, shellEnvVars, images, imageArgs, contextWindow, customEnvVars, noPromptSeparator, useACP, acpSessionId } = config;
+    const { sessionId, toolType, cwd, command, args, requiresPty, prompt, shell, shellArgs, shellEnvVars, images, imageArgs, contextWindow, customEnvVars, noPromptSeparator, useACP, acpShowStreaming, acpSessionId } = config;
 
     // ========================================================================
     // ACP Mode: Use Agent Client Protocol instead of stdout JSON parsing
@@ -334,11 +335,14 @@ export class ProcessManager extends EventEmitter {
       // Wire up ACP events to ProcessManager events
       // ACP emits ParsedEvent objects, but the renderer expects strings
       // For text events, emit the text content; for other events, emit as JSON
+      // acpShowStreaming controls whether streaming text is shown (default: false to avoid duplicates)
       acpProcess.on('data', (sid: string, event: ParsedEvent) => {
         if (event.type === 'text' && event.text) {
-          // Emit text content directly for streaming display
-          this.emit('data', sid, event.text);
-          // Also emit as thinking chunk if partial (for showThinking mode)
+          // Only emit streaming text if acpShowStreaming is enabled
+          if (acpShowStreaming) {
+            this.emit('data', sid, event.text);
+          }
+          // Always emit as thinking chunk if partial (for showThinking mode)
           if (event.isPartial) {
             this.emit('thinking-chunk', sid, event.text);
           }

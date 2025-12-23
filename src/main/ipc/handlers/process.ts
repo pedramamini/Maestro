@@ -197,15 +197,17 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       const supportsACP = agent?.capabilities?.supportsACP;
       const useACPConfig = agentConfigValues.useACP;
       const useACP = supportsACP && useACPConfig === true;
+      const acpShowStreaming = agentConfigValues.acpShowStreaming === true;
       logger.debug('ACP mode check', LOG_CONTEXT, { 
         toolType: config.toolType,
         supportsACP,
         useACPConfig,
         useACP,
+        acpShowStreaming,
         agentConfigValues
       });
       if (useACP) {
-        logger.info('ACP mode enabled for agent', LOG_CONTEXT, { toolType: config.toolType });
+        logger.info('ACP mode enabled for agent', LOG_CONTEXT, { toolType: config.toolType, acpShowStreaming });
       }
 
       const result = processManager.spawn({
@@ -221,6 +223,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
         imageArgs: agent?.imageArgs,     // Function to build image CLI args (for Codex, OpenCode)
         noPromptSeparator: agent?.noPromptSeparator, // OpenCode doesn't support '--' before prompt
         useACP,                          // Use ACP protocol if enabled in agent config
+        acpShowStreaming,                // Show streaming output in ACP mode
         acpSessionId: config.agentSessionId, // ACP session ID for resume
       });
 

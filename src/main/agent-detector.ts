@@ -160,6 +160,13 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'
         description: 'Enable Agent Client Protocol for standardized communication. This is experimental and may have different behavior than the default JSON output mode.',
         default: false,
       },
+      {
+        key: 'acpShowStreaming',
+        type: 'checkbox',
+        label: 'Show Streaming Output (ACP)',
+        description: 'Display text as it streams from the agent. Disable to only show the final response (avoids duplicate text issues).',
+        default: false,
+      },
     ],
   },
   {
