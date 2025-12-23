@@ -194,7 +194,16 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       const contextWindow = getContextWindowValue(agent, agentConfigValues, config.sessionCustomContextWindow);
 
       // Check if ACP mode is enabled for this agent (currently only OpenCode supports it)
-      const useACP = agent?.capabilities?.supportsACP && agentConfigValues.useACP === true;
+      const supportsACP = agent?.capabilities?.supportsACP;
+      const useACPConfig = agentConfigValues.useACP;
+      const useACP = supportsACP && useACPConfig === true;
+      logger.debug('ACP mode check', LOG_CONTEXT, { 
+        toolType: config.toolType,
+        supportsACP,
+        useACPConfig,
+        useACP,
+        agentConfigValues
+      });
       if (useACP) {
         logger.info('ACP mode enabled for agent', LOG_CONTEXT, { toolType: config.toolType });
       }
