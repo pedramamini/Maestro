@@ -36,6 +36,9 @@ Thumbs.db
 *.swp
 *.swo
 
+# ESLint
+.eslintcache
+
 # Electron
 out/
 

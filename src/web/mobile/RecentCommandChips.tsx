@@ -54,11 +54,6 @@ export function RecentCommandChips({
   // Get limited number of commands
   const displayCommands = commands.slice(0, maxChips);
 
-  // Don't render if no commands
-  if (displayCommands.length === 0) {
-    return null;
-  }
-
   /**
    * Handle chip tap
    */
@@ -70,6 +65,11 @@ export function RecentCommandChips({
     },
     [disabled, onSelectCommand]
   );
+
+  // Don't render if no commands
+  if (displayCommands.length === 0) {
+    return null;
+  }
 
   return (
     <div

@@ -23,7 +23,6 @@ export interface PackageContents {
   'storage-info.json': unknown;
   'group-chats.json': unknown;
   'batch-state.json': unknown;
-  'windows-diagnostics.json': unknown;
   'collection-errors.json'?: unknown;
 }
 

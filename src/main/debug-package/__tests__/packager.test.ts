@@ -211,7 +211,6 @@ describe('Debug Package Packager', () => {
         'storage-info.json': { paths: {} },
         'group-chats.json': [],
         'batch-state.json': { activeSessions: [] },
-        'windows-diagnostics.json': { platform: 'win32' },
         'collection-errors.json': [],
       };
 

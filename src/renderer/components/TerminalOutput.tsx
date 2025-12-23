@@ -800,7 +800,8 @@ export const TerminalOutput = forwardRef<HTMLDivElement, TerminalOutputProps>((p
   } = props;
 
   // Use the forwarded ref if provided, otherwise create a local one
-  const terminalOutputRef = (ref as React.RefObject<HTMLDivElement>) || useRef<HTMLDivElement>(null);
+  const localRef = useRef<HTMLDivElement>(null);
+  const terminalOutputRef = (ref as React.RefObject<HTMLDivElement>) || localRef;
 
   // Scroll container ref for native scrolling
   const scrollContainerRef = useRef<HTMLDivElement>(null);

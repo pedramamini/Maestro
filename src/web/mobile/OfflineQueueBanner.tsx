@@ -48,11 +48,6 @@ export function OfflineQueueBanner({
   const colors = useThemeColors();
   const [isExpanded, setIsExpanded] = useState(false);
 
-  // Don't show if queue is empty
-  if (queue.length === 0) {
-    return null;
-  }
-
   const isProcessing = status === 'processing';
   const canRetry = !isOffline && isConnected && status !== 'processing';
 
@@ -77,6 +72,11 @@ export function OfflineQueueBanner({
     triggerHaptic(HAPTIC_PATTERNS.tap);
     onRemoveCommand(commandId);
   }, [onRemoveCommand]);
+
+  // Don't show if queue is empty
+  if (queue.length === 0) {
+    return null;
+  }
 
   return (
     <div
