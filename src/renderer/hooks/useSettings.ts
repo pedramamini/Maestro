@@ -11,6 +11,10 @@ const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
   showMergePreview: true,         // Show preview before merge
   groomingTimeout: 60000,         // 1 minute timeout for grooming operations
   preferredGroomingAgent: 'fastest', // 'fastest' or specific ToolType
+  // Context window warning settings (Phase 6)
+  contextWarningsEnabled: true,   // Enable context consumption warnings
+  contextWarningYellowThreshold: 60, // Yellow warning at 60% (min: 30, max: 90)
+  contextWarningRedThreshold: 80,    // Red warning at 80% (min: 50, max: 95)
 };
 
 // Default global stats

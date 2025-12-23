@@ -613,4 +613,8 @@ export interface ContextManagementSettings {
   showMergePreview: boolean;               // Show preview before merge (default: true)
   groomingTimeout: number;                 // Timeout for grooming operations in ms (default: 60000)
   preferredGroomingAgent: ToolType | 'fastest';  // Which agent to use for grooming (default: 'fastest')
+  // Context window warning settings (Phase 6)
+  contextWarningsEnabled: boolean;         // Enable context consumption warnings (default: true)
+  contextWarningYellowThreshold: number;   // Yellow warning threshold percentage (default: 60)
+  contextWarningRedThreshold: number;      // Red warning threshold percentage (default: 80)
 }
