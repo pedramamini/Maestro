@@ -54,11 +54,13 @@ jobs:
 
       # Linux ARM64: Install build dependencies for native modules and electron-builder
       # Requires build-essential for compiling node-pty native module
+      # Ruby and fpm are needed because the bundled fpm is x86-only and won't run on ARM64
       - name: Install Linux ARM64 build dependencies
         if: matrix.platform == 'linux-arm64'
         run: |
           sudo apt-get update
-          sudo apt-get install -y libarchive-tools rpm build-essential
+          sudo apt-get install -y libarchive-tools rpm build-essential ruby ruby-dev rubygems
+          sudo gem install --no-document fpm
 
       # Linux ARM64: Setup Python 3.11 for node-gyp (Python 3.12+ removed distutils)
       - name: Setup Python for node-gyp (Linux ARM64)
@@ -197,11 +199,31 @@ jobs:
           DEBUG: electron-builder
 
       # ARM64 Linux: Build on native ARM64 runner to properly compile node-pty
+      # USE_SYSTEM_FPM=true tells electron-builder to use system fpm instead of bundled x86 version
       - name: Package for Linux ARM64
         if: matrix.platform == 'linux-arm64'
         run: npx electron-builder --linux --arm64 --publish never --config.extraMetadata.version=${{ steps.version.outputs.VERSION }}
         env:
           DEBUG: electron-builder
+          USE_SYSTEM_FPM: true
+
+      # Verify pty.node is correctly included in unpacked resources (Linux ARM64 only)
+      - name: Verify pty.node in package
+        if: matrix.platform == 'linux-arm64'
+        run: |
+          echo "Checking for pty.node in unpacked resources..."
+          UNPACKED_DIR="release/linux-arm64-unpacked/resources/app.asar.unpacked"
+          PTY_NODE="$UNPACKED_DIR/node_modules/node-pty/build/Release/pty.node"
+          if [ -f "$PTY_NODE" ]; then
+            echo "✓ pty.node found at: $PTY_NODE"
+            file "$PTY_NODE"
+            ls -la "$PTY_NODE"
+          else
+            echo "✗ ERROR: pty.node not found in unpacked resources!"
+            echo "Contents of app.asar.unpacked:"
+            find "$UNPACKED_DIR" -name "*.node" -o -name "pty*" 2>/dev/null || echo "Directory not found"
+            exit 1
+          fi
 
       # List what was built for debugging
       - name: List release artifacts
