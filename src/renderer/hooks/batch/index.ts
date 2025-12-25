@@ -33,3 +33,13 @@ export type {
   DocumentProcessorCallbacks,
   UseDocumentProcessorReturn,
 } from './useDocumentProcessor';
+
+// Git worktree management hook
+export { useWorktreeManager } from './useWorktreeManager';
+export type {
+  WorktreeConfig,
+  WorktreeSetupResult,
+  PRCreationResult,
+  CreatePROptions,
+  UseWorktreeManagerReturn,
+} from './useWorktreeManager';
