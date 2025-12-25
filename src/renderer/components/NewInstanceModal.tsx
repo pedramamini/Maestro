@@ -33,10 +33,13 @@ interface NewInstanceModalProps {
     customPath?: string,
     customArgs?: string,
     customEnvVars?: Record<string, string>,
-    customModel?: string
+    customModel?: string,
+    customContextWindow?: number,
+    customProviderPath?: string
   ) => void;
   theme: any;
   existingSessions: Session[];
+  sourceSession?: Session; // Optional session to duplicate from
 }
 
 interface EditAgentModalProps {
@@ -60,7 +63,7 @@ interface EditAgentModalProps {
 // Supported agents that are fully implemented
 const SUPPORTED_AGENTS = ['claude-code', 'opencode', 'codex'];
 
-export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSessions }: NewInstanceModalProps) {
+export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSessions, sourceSession }: NewInstanceModalProps) {
   const [agents, setAgents] = useState<AgentConfig[]>([]);
   const [selectedAgent, setSelectedAgent] = useState('');
   const [expandedAgent, setExpandedAgent] = useState<string | null>(null);
@@ -110,7 +113,8 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
   }, [workingDir]);
 
   // Define handlers first before they're used in effects
-  const loadAgents = async () => {
+  // Takes optional source session to pre-fill after loading (avoids race condition)
+  const loadAgents = async (source?: Session) => {
     setLoading(true);
     try {
       const detectedAgents = await window.maestro.agents.detect();
@@ -118,9 +122,12 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
 
       // Per-agent config (path, args, env vars) starts empty - each agent gets its own config
       // No provider-level loading - config is set per-agent during creation
-      setCustomAgentPaths({});
-      setCustomAgentArgs({});
-      setCustomAgentEnvVars({});
+      // Only reset if NOT duplicating (source session will provide values)
+      if (!source) {
+        setCustomAgentPaths({});
+        setCustomAgentArgs({});
+        setCustomAgentEnvVars({});
+      }
 
       // Load configurations for all agents (model, contextWindow - these are provider-level)
       const configs: Record<string, Record<string, any>> = {};
@@ -128,13 +135,53 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
         const config = await window.maestro.agents.getConfig(agent.id);
         configs[agent.id] = config;
       }
+
+      // If duplicating, merge source session config values into loaded configs
+      if (source) {
+        const sourceConfig: Record<string, any> = { ...configs[source.toolType] };
+        if (source.customModel) {
+          sourceConfig.model = source.customModel;
+        }
+        if (source.customContextWindow) {
+          sourceConfig.contextWindow = source.customContextWindow;
+        }
+        if (source.customProviderPath) {
+          sourceConfig.providerPath = source.customProviderPath;
+        }
+        configs[source.toolType] = sourceConfig;
+      }
       setAgentConfigs(configs);
 
-      // Select first available non-hidden agent
+      // Select first available non-hidden agent (or source agent if duplicating)
       // (hidden agents like 'terminal' should never be auto-selected)
-      const firstAvailable = detectedAgents.find((a: AgentConfig) => a.available && !a.hidden);
-      if (firstAvailable) {
-        setSelectedAgent(firstAvailable.id);
+      if (source) {
+        setSelectedAgent(source.toolType);
+      } else {
+        const firstAvailable = detectedAgents.find((a: AgentConfig) => a.available && !a.hidden);
+        if (firstAvailable) {
+          setSelectedAgent(firstAvailable.id);
+        }
+      }
+
+      // Pre-fill form fields AFTER agents are loaded (ensures no race condition)
+      if (source) {
+        setWorkingDir(source.cwd);
+        setInstanceName(`${source.name} (Copy)`);
+        setNudgeMessage(source.nudgeMessage || '');
+
+        // Pre-fill custom agent configuration
+        setCustomAgentPaths(prev => ({
+          ...prev,
+          [source.toolType]: source.customPath || ''
+        }));
+        setCustomAgentArgs(prev => ({
+          ...prev,
+          [source.toolType]: source.customArgs || ''
+        }));
+        setCustomAgentEnvVars(prev => ({
+          ...prev,
+          [source.toolType]: source.customEnvVars || {}
+        }));
       }
     } catch (error) {
       console.error('Failed to load agents:', error);
@@ -202,8 +249,12 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
     const agentCustomEnvVars = customAgentEnvVars[selectedAgent] && Object.keys(customAgentEnvVars[selectedAgent]).length > 0
       ? customAgentEnvVars[selectedAgent]
       : undefined;
-    // Get model from agent config - this will become per-session
+    // Get model and other config from agent config
     const agentCustomModel = agentConfigs[selectedAgent]?.model?.trim() || undefined;
+    const agentCustomContextWindow = typeof agentConfigs[selectedAgent]?.contextWindow === 'number' && agentConfigs[selectedAgent]?.contextWindow > 0
+      ? agentConfigs[selectedAgent]?.contextWindow
+      : undefined;
+    const agentCustomProviderPath = agentConfigs[selectedAgent]?.providerPath?.trim() || undefined;
 
     onCreate(
       selectedAgent,
@@ -213,7 +264,9 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
       agentCustomPath,
       agentCustomArgs,
       agentCustomEnvVars,
-      agentCustomModel
+      agentCustomModel,
+      agentCustomContextWindow,
+      agentCustomProviderPath
     );
     onClose();
 
@@ -266,16 +319,20 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
     return [...supported, ...comingSoon];
   }, [agents]);
 
-  // Effects
+  // Effects - load agents and optionally pre-fill from source session
   useEffect(() => {
     if (isOpen) {
-      loadAgents();
-      // Keep all agents collapsed by default
-      setExpandedAgent(null);
+      // Pass sourceSession to loadAgents to handle pre-fill AFTER agents are loaded
+      // This prevents the race condition where loadAgents would overwrite pre-filled values
+      loadAgents(sourceSession);
+      // Keep all agents collapsed by default (unless duplicating - handled in loadAgents)
+      if (!sourceSession) {
+        setExpandedAgent(null);
+      }
       // Reset warning acknowledgment when modal opens
       setDirectoryWarningAcknowledged(false);
     }
-  }, [isOpen]);
+  }, [isOpen, sourceSession]);
 
   if (!isOpen) return null;
 
