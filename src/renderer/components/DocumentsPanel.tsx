@@ -157,7 +157,7 @@ function DocumentSelectorModal({
 
   // Handle refresh
   const handleRefresh = useCallback(async () => {
-    const countBefore = allDocuments.length;
+    const _countBefore = allDocuments.length;
     setRefreshing(true);
     setRefreshMessage(null);
 
@@ -341,7 +341,7 @@ function DocumentSelectorModal({
   };
 
   const allSelected = selectedDocs.size === allDocuments.length && allDocuments.length > 0;
-  const someSelected = selectedDocs.size > 0;
+  const _someSelected = selectedDocs.size > 0;
 
   // Calculate task count for selected documents
   const selectedTaskCount = useMemo(() => {

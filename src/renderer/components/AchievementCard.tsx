@@ -156,7 +156,7 @@ interface BadgeTooltipProps {
   onClose: () => void;
 }
 
-function BadgeTooltip({ badge, theme, isUnlocked, position, onClose }: BadgeTooltipProps) {
+function BadgeTooltip({ badge, theme, isUnlocked, position, onClose: _onClose }: BadgeTooltipProps) {
   // Calculate horizontal positioning based on badge position
   const getPositionStyles = () => {
     switch (position) {

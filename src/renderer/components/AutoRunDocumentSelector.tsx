@@ -75,7 +75,7 @@ export function AutoRunDocumentSelector({
   };
 
   // Get display name for selected document (just the filename, not full path)
-  const getDisplayName = (path: string) => {
+  const _getDisplayName = (path: string) => {
     const parts = path.split('/');
     return parts[parts.length - 1];
   };

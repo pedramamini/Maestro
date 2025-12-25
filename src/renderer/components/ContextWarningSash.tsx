@@ -24,7 +24,7 @@ export interface ContextWarningSashProps {
  * - Dismiss button that hides the warning until usage increases 10%+ or crosses threshold
  */
 export function ContextWarningSash({
-  theme,
+  theme: _theme,
   contextUsage,
   yellowThreshold,
   redThreshold,

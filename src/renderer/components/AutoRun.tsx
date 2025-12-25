@@ -518,7 +518,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
     handleKeyDown: handleAutocompleteKeyDown,
     handleChange: handleAutocompleteChange,
     selectVariable,
-    closeAutocomplete,
+    closeAutocomplete: _closeAutocomplete,
     autocompleteRef,
   } = useTemplateAutocomplete({
     textareaRef,
@@ -712,7 +712,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   }, [selectedFile, mode]);
 
   // Save cursor position and scroll position when they change
-  const handleCursorOrScrollChange = () => {
+  const _handleCursorOrScrollChange = () => {
     if (textareaRef.current) {
       // Save to ref for persistence across re-renders
       editScrollPosRef.current = textareaRef.current.scrollTop;

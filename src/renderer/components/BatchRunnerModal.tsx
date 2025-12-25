@@ -193,7 +193,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 
   // Count missing documents for warning display
   const missingDocCount = documents.filter(doc => doc.isMissing).length;
-  const hasMissingDocs = missingDocCount > 0;
+  const _hasMissingDocs = missingDocCount > 0;
 
   // Register layer on mount
   useEffect(() => {
