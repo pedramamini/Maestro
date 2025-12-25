@@ -41,13 +41,6 @@ interface BatchRunnerModalProps {
   sessionId: string;
 }
 
-// Helper function to count unchecked tasks in scratchpad content
-function countUncheckedTasks(content: string): number {
-  if (!content) return 0;
-  const matches = content.match(/^-\s*\[\s*\]/gm);
-  return matches ? matches.length : 0;
-}
-
 // Helper function to format the last modified date
 function formatLastModified(timestamp: number): string {
   const date = new Date(timestamp);

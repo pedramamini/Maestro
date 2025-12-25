@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { X, FileText, Variable, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';

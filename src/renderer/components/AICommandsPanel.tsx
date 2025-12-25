@@ -1,5 +1,5 @@
 import React, { useState, useRef } from 'react';
-import { Plus, Trash2, Edit2, Save, X, Terminal, Lock, ChevronDown, ChevronRight, Variable, RotateCcw } from 'lucide-react';
+import { Plus, Trash2, Edit2, Save, X, Terminal, Lock, ChevronDown, ChevronRight, Variable } from 'lucide-react';
 import type { Theme, CustomAICommand } from '../types';
 import { TEMPLATE_VARIABLES_GENERAL } from '../utils/templateVariables';
 import { useTemplateAutocomplete } from '../hooks/useTemplateAutocomplete';

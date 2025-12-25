@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Minimize2, Eye, Edit, Play, Square, Loader2, Image, Save, RotateCcw } from 'lucide-react';
+import { X, Minimize2, Eye, Edit, Play, Square, Loader2, Save, RotateCcw } from 'lucide-react';
 import type { Theme, BatchRunState, SessionState, Shortcut } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';

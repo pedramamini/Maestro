@@ -4,7 +4,7 @@ import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
-import { FileCode, X, Copy, FileText, Eye, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Loader2, Image, Globe, Save, Edit, FolderOpen, AlertTriangle } from 'lucide-react';
+import { FileCode, X, Eye, ChevronUp, ChevronDown, ChevronLeft, ChevronRight, Clipboard, Loader2, Image, Globe, Save, Edit, FolderOpen, AlertTriangle } from 'lucide-react';
 import { visit } from 'unist-util-visit';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';

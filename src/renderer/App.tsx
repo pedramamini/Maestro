@@ -106,13 +106,12 @@ import type {
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
 import { getContextColor } from './utils/theme';
-import { setActiveTab, createTab, closeTab, reopenClosedTab, getActiveTab, getWriteModeTab, navigateToNextTab, navigateToPrevTab, navigateToTabByIndex, navigateToLastTab, getInitialRenameValue, createMergedSession } from './utils/tabHelpers';
-import { TAB_SHORTCUTS } from './constants/shortcuts';
+import { setActiveTab, createTab, closeTab, reopenClosedTab, getActiveTab, getWriteModeTab, navigateToNextTab, navigateToPrevTab, navigateToTabByIndex, navigateToLastTab, getInitialRenameValue } from './utils/tabHelpers';
 import { shouldOpenExternally, getAllFolderPaths, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
 import { validateNewSession } from './utils/sessionValidation';
-import { estimateContextUsage, DEFAULT_CONTEXT_WINDOWS } from './utils/contextUsage';
+import { estimateContextUsage } from './utils/contextUsage';
 
 /**
  * Known Claude Code tool names - used to detect concatenated tool name patterns
@@ -6140,7 +6139,7 @@ export default function MaestroConsole() {
             if (s.id !== activeSession.id) return s;
 
             // Add kill log to the appropriate place and clear thinking/tool logs
-            let updatedSession = { ...s };
+            const updatedSession = { ...s };
             if (currentMode === 'ai') {
               const tab = getActiveTab(s);
               if (tab) {
