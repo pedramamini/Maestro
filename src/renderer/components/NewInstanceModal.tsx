@@ -295,6 +295,9 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
       setInstanceName(`${sourceSession.name} (Copy)`);
       setNudgeMessage(sourceSession.nudgeMessage || '');
 
+      // Expand the agent to show custom configuration fields
+      setExpandedAgent(sourceSession.toolType);
+
       // Pre-fill custom agent configuration
       if (sourceSession.customPath) {
         setCustomAgentPaths(prev => ({
