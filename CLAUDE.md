@@ -99,6 +99,7 @@ src/
 | Add keyboard shortcut | `src/renderer/constants/shortcuts.ts`, `App.tsx` |
 | Add theme | `src/renderer/constants/themes.ts` |
 | Add modal | Component + `src/renderer/constants/modalPriorities.ts` |
+| Add tab overlay menu | See Tab Hover Overlay Menu pattern in `src/renderer/components/TabBar.tsx` |
 | Add setting | `src/renderer/hooks/useSettings.ts`, `src/main/index.ts` |
 | Add template variable | `src/shared/templateVariables.ts`, `src/renderer/utils/templateVariables.ts` |
 | Modify system prompts | `src/prompts/*.md` (wizard, Auto Run, etc.) |
@@ -240,6 +241,66 @@ window.maestro.autorun.saveDocument(folderPath, filename, content);
 ```
 
 **Worktree Support:** Auto Run can operate in a git worktree, allowing users to continue interactive editing in the main repo while Auto Run processes tasks in the background. When `batchRunState.worktreeActive` is true, read-only mode is disabled and a git branch icon appears in the UI. See `useBatchProcessor.ts` for worktree setup logic.
+
+### 9. Tab Hover Overlay Menu
+
+AI conversation tabs display a hover overlay menu after a 400ms delay when hovering over tabs with an established session. The overlay includes tab management and context operations:
+
+**Menu Structure:**
+```typescript
+// Tab operations (always shown)
+- Copy Session ID (if session exists)
+- Star/Unstar Session (if session exists)
+- Rename Tab
+- Mark as Unread
+
+// Context management (shown when applicable)
+- Context: Compact (if tab has 5+ messages)
+- Context: Merge Into (if session exists)
+- Context: Send to Agent (if session exists)
+
+// Tab close actions (always shown)
+- Close (disabled if only one tab)
+- Close Others (disabled if only one tab)
+- Close Tabs to the Left (disabled if first tab)
+- Close Tabs to the Right (disabled if last tab)
+```
+
+**Implementation Pattern:**
+```typescript
+const [overlayOpen, setOverlayOpen] = useState(false);
+const [overlayPosition, setOverlayPosition] = useState<{ top: number; left: number } | null>(null);
+
+const handleMouseEnter = () => {
+  if (!tab.agentSessionId) return; // Only for established sessions
+
+  hoverTimeoutRef.current = setTimeout(() => {
+    if (tabRef.current) {
+      const rect = tabRef.current.getBoundingClientRect();
+      setOverlayPosition({ top: rect.bottom + 4, left: rect.left });
+    }
+    setOverlayOpen(true);
+  }, 400);
+};
+
+// Render overlay via portal to escape stacking context
+{overlayOpen && overlayPosition && createPortal(
+  <div style={{ top: overlayPosition.top, left: overlayPosition.left }}>
+    {/* Overlay menu items */}
+  </div>,
+  document.body
+)}
+```
+
+**Key Features:**
+- Appears after 400ms hover delay (only for tabs with `agentSessionId`)
+- Fixed positioning at tab bottom
+- Mouse can move from tab to overlay without closing
+- Disabled states with visual feedback (opacity-40, cursor-default)
+- Theme-aware styling
+- Dividers separate action groups
+
+See `src/renderer/components/TabBar.tsx` (Tab component) for implementation details.
 
 ## Code Conventions
 

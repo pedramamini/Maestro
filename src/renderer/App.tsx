@@ -422,6 +422,7 @@ export default function MaestroConsole() {
   const [playgroundOpen, setPlaygroundOpen] = useState(false);
   const [debugWizardModalOpen, setDebugWizardModalOpen] = useState(false);
   const [debugPackageModalOpen, setDebugPackageModalOpen] = useState(false);
+  const [closeAllTabsConfirmOpen, setCloseAllTabsConfirmOpen] = useState(false);
 
   // Stable callbacks for memoized modals (prevents re-renders from callback reference changes)
   // NOTE: These must be declared AFTER the state they reference
@@ -5256,6 +5257,119 @@ export default function MaestroConsole() {
     }));
   }, [activeSession]);
 
+  // Close all tabs (creates one new empty tab after closing all)
+  const handleCloseAllTabs = useCallback(() => {
+    if (!activeSession) return;
+
+    // Show confirmation modal
+    setCloseAllTabsConfirmOpen(true);
+  }, [activeSession]);
+
+  // Close all tabs except the currently active one
+  const handleCloseOtherTabs = useCallback(() => {
+    if (!activeSession || activeSession.aiTabs.length <= 1) return;
+
+    const activeTab = getActiveTab(activeSession);
+    if (!activeTab) return;
+
+    const closedTabs = activeSession.aiTabs.filter(t => t.id !== activeTab.id);
+
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: [activeTab],
+        closedTabHistory: [...(s.closedTabHistory || []), ...closedTabs.map((tab, index) => ({
+          tab,
+          index: activeSession.aiTabs.findIndex(t => t.id === tab.id),
+          closedAt: Date.now()
+        }))].slice(-25) // Keep last 25 closed tabs
+      };
+    }));
+  }, [activeSession]);
+
+  // Close all tabs to the left of the active tab
+  const handleCloseTabsLeft = useCallback(() => {
+    if (!activeSession) return;
+
+    const activeTabIndex = activeSession.aiTabs.findIndex(t => t.id === activeSession.activeTabId);
+    if (activeTabIndex <= 0) return; // No tabs to the left
+
+    const closedTabs = activeSession.aiTabs.slice(0, activeTabIndex);
+    const remainingTabs = activeSession.aiTabs.slice(activeTabIndex);
+
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: remainingTabs,
+        closedTabHistory: [...(s.closedTabHistory || []), ...closedTabs.map((tab, index) => ({
+          tab,
+          index,
+          closedAt: Date.now()
+        }))].slice(-25) // Keep last 25 closed tabs
+      };
+    }));
+  }, [activeSession]);
+
+  // Close all tabs to the right of the active tab
+  const handleCloseTabsRight = useCallback(() => {
+    if (!activeSession) return;
+
+    const activeTabIndex = activeSession.aiTabs.findIndex(t => t.id === activeSession.activeTabId);
+    if (activeTabIndex < 0 || activeTabIndex >= activeSession.aiTabs.length - 1) return; // No tabs to the right
+
+    const remainingTabs = activeSession.aiTabs.slice(0, activeTabIndex + 1);
+    const closedTabs = activeSession.aiTabs.slice(activeTabIndex + 1);
+
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: remainingTabs,
+        closedTabHistory: [...(s.closedTabHistory || []), ...closedTabs.map((tab, index) => ({
+          tab,
+          index: activeTabIndex + 1 + index,
+          closedAt: Date.now()
+        }))].slice(-25) // Keep last 25 closed tabs
+      };
+    }));
+  }, [activeSession]);
+
+  // Confirm and execute close all tabs
+  const confirmCloseAllTabs = useCallback(() => {
+    if (!activeSession) return;
+
+    const closedTabs = activeSession.aiTabs;
+    const newTab: AITab = {
+      id: generateId(),
+      agentSessionId: null,
+      name: null,
+      starred: false,
+      logs: [],
+      inputValue: '',
+      stagedImages: [],
+      createdAt: Date.now(),
+      state: 'idle'
+    };
+
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: [newTab],
+        activeTabId: newTab.id,
+        closedTabHistory: [...(s.closedTabHistory || []), ...closedTabs.map((tab, index) => ({
+          tab,
+          index,
+          closedAt: Date.now()
+        }))].slice(-25) // Keep last 25 closed tabs
+      };
+    }));
+
+    setCloseAllTabsConfirmOpen(false);
+  }, [activeSession]);
+
   // Toggle global live mode (enables web interface for all sessions)
   const toggleGlobalLive = async () => {
     try {
@@ -6775,6 +6889,8 @@ export default function MaestroConsole() {
     setTabSwitcherOpen, showUnreadOnly, stagedImages, handleSetLightboxImage, setMarkdownEditMode,
     toggleTabStar, toggleTabUnread, setPromptComposerOpen, openWizardModal, rightPanelRef, setFuzzyFileSearchOpen,
     setShowNewGroupChatModal, deleteGroupChatWithConfirmation,
+    // Tab close operations
+    handleCloseAllTabs, handleCloseOtherTabs, handleCloseTabsLeft, handleCloseTabsRight,
     // Group chat context
     activeGroupChatId, groupChatInputRef, groupChatStagedImages, setGroupChatRightTab,
     // Navigation handlers from useKeyboardNavigation hook
@@ -7211,6 +7327,10 @@ export default function MaestroConsole() {
             }
             setTimeout(() => setSuccessFlashNotification(null), 4000);
           }}
+          onCloseAllTabs={handleCloseAllTabs}
+          onCloseOtherTabs={handleCloseOtherTabs}
+          onCloseTabsLeft={handleCloseTabsLeft}
+          onCloseTabsRight={handleCloseTabsRight}
         />
       )}
       {lightboxImage && (
@@ -8123,6 +8243,16 @@ export default function MaestroConsole() {
           message={confirmModalMessage}
           onConfirm={confirmModalOnConfirm}
           onClose={() => setConfirmModalOpen(false)}
+        />
+      )}
+
+      {/* --- CLOSE ALL TABS CONFIRMATION MODAL --- */}
+      {closeAllTabsConfirmOpen && activeSession && (
+        <ConfirmModal
+          theme={theme}
+          message={`Close all ${activeSession.aiTabs.length} ${activeSession.aiTabs.length === 1 ? 'tab' : 'tabs'}? A new empty tab will be created.`}
+          onConfirm={confirmCloseAllTabs}
+          onClose={() => setCloseAllTabsConfirmOpen(false)}
         />
       )}
 

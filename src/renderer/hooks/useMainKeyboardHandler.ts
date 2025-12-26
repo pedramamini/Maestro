@@ -405,6 +405,37 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
             trackShortcut('closeTab');
           }
         }
+        if (ctx.isTabShortcut(e, 'closeAllTabs')) {
+          e.preventDefault();
+          ctx.handleCloseAllTabs();
+          trackShortcut('closeAllTabs');
+        }
+        if (ctx.isTabShortcut(e, 'closeOtherTabs')) {
+          e.preventDefault();
+          // Only execute if there are multiple tabs
+          if (ctx.activeSession.aiTabs.length > 1) {
+            ctx.handleCloseOtherTabs();
+            trackShortcut('closeOtherTabs');
+          }
+        }
+        if (ctx.isTabShortcut(e, 'closeTabsLeft')) {
+          e.preventDefault();
+          const activeTabIndex = ctx.activeSession.aiTabs.findIndex((t: AITab) => t.id === ctx.activeSession.activeTabId);
+          // Only execute if not first tab
+          if (activeTabIndex > 0) {
+            ctx.handleCloseTabsLeft();
+            trackShortcut('closeTabsLeft');
+          }
+        }
+        if (ctx.isTabShortcut(e, 'closeTabsRight')) {
+          e.preventDefault();
+          const activeTabIndex = ctx.activeSession.aiTabs.findIndex((t: AITab) => t.id === ctx.activeSession.activeTabId);
+          // Only execute if not last tab
+          if (activeTabIndex < ctx.activeSession.aiTabs.length - 1) {
+            ctx.handleCloseTabsRight();
+            trackShortcut('closeTabsRight');
+          }
+        }
         if (ctx.isTabShortcut(e, 'reopenClosedTab')) {
           e.preventDefault();
           // Reopen the most recently closed tab, or switch to existing if duplicate

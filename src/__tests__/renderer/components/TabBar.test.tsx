@@ -1786,6 +1786,430 @@ describe('TabBar', () => {
     });
   });
 
+  describe('tab hover overlay menu (tab close operations)', () => {
+    const mockOnCloseOthers = vi.fn();
+    const mockOnCloseTabsToLeft = vi.fn();
+    const mockOnCloseTabsToRight = vi.fn();
+
+    beforeEach(() => {
+      mockOnCloseOthers.mockClear();
+      mockOnCloseTabsToLeft.mockClear();
+      mockOnCloseTabsToRight.mockClear();
+    });
+
+    it('opens overlay menu on hover with agentSessionId', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+          onCloseOthers={mockOnCloseOthers}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      // Overlay menu should appear
+      expect(screen.getByText('Close')).toBeInTheDocument();
+    });
+
+    it('shows all overlay menu items', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+        createTab({ id: 'tab-3', name: 'Tab 3', agentSessionId: 'session-3' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-2"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+          onCloseOthers={mockOnCloseOthers}
+        />
+      );
+
+      const tab = screen.getByText('Tab 2').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      expect(screen.getByText('Close')).toBeInTheDocument();
+      expect(screen.getByText('Close Others')).toBeInTheDocument();
+      expect(screen.getByText('Close Tabs to the Left')).toBeInTheDocument();
+      expect(screen.getByText('Close Tabs to the Right')).toBeInTheDocument();
+    });
+
+    it('disables "Close" when only one tab exists', () => {
+      const tabs = [createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' })];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+          onCloseOthers={mockOnCloseOthers}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      const closeItem = screen.getByText('Close').closest('button');
+      expect(closeItem).toHaveClass('opacity-40');
+      expect(closeItem).toHaveClass('cursor-default');
+    });
+
+    it('disables "Close Others" when only one tab exists', () => {
+      const tabs = [createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' })];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+          onCloseOthers={mockOnCloseOthers}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      const closeOthersItem = screen.getByText('Close Others').closest('button');
+      expect(closeOthersItem).toHaveClass('opacity-40');
+      expect(closeOthersItem).toHaveClass('cursor-default');
+    });
+
+    it('disables "Close Tabs to the Left" when hovering first tab', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      const closeLeftItem = screen.getByText('Close Tabs to the Left').closest('button');
+      expect(closeLeftItem).toHaveClass('opacity-40');
+      expect(closeLeftItem).toHaveClass('cursor-default');
+    });
+
+    it('disables "Close Tabs to the Right" when hovering last tab', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 2').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      const closeRightItem = screen.getByText('Close Tabs to the Right').closest('button');
+      expect(closeRightItem).toHaveClass('opacity-40');
+      expect(closeRightItem).toHaveClass('cursor-default');
+    });
+
+    it('closes tab when "Close" is clicked', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      fireEvent.click(screen.getByText('Close'));
+
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-1');
+    });
+
+    it('closes other tabs when "Close Others" is clicked', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+        createTab({ id: 'tab-3', name: 'Tab 3', agentSessionId: 'session-3' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-2"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 2').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      fireEvent.click(screen.getByText('Close Others'));
+
+      // Should close tab-1 and tab-3, but not tab-2
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-1');
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-3');
+      expect(mockOnTabClose).not.toHaveBeenCalledWith('tab-2');
+    });
+
+    it('closes tabs to the left when clicked', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+        createTab({ id: 'tab-3', name: 'Tab 3', agentSessionId: 'session-3' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 3').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      fireEvent.click(screen.getByText('Close Tabs to the Left'));
+
+      // Should close tab-1 and tab-2
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-1');
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-2');
+    });
+
+    it('closes tabs to the right when clicked', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+        createTab({ id: 'tab-3', name: 'Tab 3', agentSessionId: 'session-3' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-3"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      fireEvent.click(screen.getByText('Close Tabs to the Right'));
+
+      // Should close tab-2 and tab-3
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-2');
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-3');
+    });
+
+    it('closes overlay menu after action', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      expect(screen.getByText('Close')).toBeInTheDocument();
+
+      fireEvent.click(screen.getByText('Close'));
+
+      // Overlay should be closed after clicking Close
+      // Note: The overlay closes because onTabClose is called which removes the tab
+      expect(mockOnTabClose).toHaveBeenCalledWith('tab-1');
+    });
+
+    it('handles overlay menu on different tabs', () => {
+      const tabs = [
+        createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+        createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+        createTab({ id: 'tab-3', name: 'Tab 3', agentSessionId: 'session-3' }),
+      ];
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-1"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      // Open overlay menu on Tab 1 (first tab)
+      const tab1 = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab1);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      const closeLeft1 = screen.getByText('Close Tabs to the Left').closest('button');
+      expect(closeLeft1).toHaveClass('opacity-40');
+      expect(closeLeft1).toHaveClass('cursor-default');
+
+      // Close menu by hovering away
+      fireEvent.mouseLeave(tab1);
+
+      // Open overlay menu on Tab 3 (last tab)
+      const tab3 = screen.getByText('Tab 3').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab3);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      const closeRight3 = screen.getByText('Close Tabs to the Right').closest('button');
+      expect(closeRight3).toHaveClass('opacity-40');
+      expect(closeRight3).toHaveClass('cursor-default');
+    });
+
+    it('overlay menu works with many tabs', () => {
+      const tabs = Array.from({ length: 20 }, (_, i) =>
+        createTab({ id: `tab-${i}`, name: `Tab ${i + 1}`, agentSessionId: `session-${i}` })
+      );
+
+      render(
+        <TabBar
+          tabs={tabs}
+          activeTabId="tab-10"
+          theme={mockTheme}
+          onTabSelect={mockOnTabSelect}
+          onTabClose={mockOnTabClose}
+          onNewTab={mockOnNewTab}
+        />
+      );
+
+      const tab = screen.getByText('Tab 11').closest('[data-tab-id]')!;
+      fireEvent.mouseEnter(tab);
+
+      act(() => {
+        vi.advanceTimersByTime(450);
+      });
+
+      expect(screen.getByText('Close')).toBeInTheDocument();
+      expect(screen.getByText('Close Others')).toBeInTheDocument();
+
+      // Middle tab should have enabled left and right actions
+      const closeLeft = screen.getByText('Close Tabs to the Left').closest('button');
+      const closeRight = screen.getByText('Close Tabs to the Right').closest('button');
+
+      expect(closeLeft).not.toHaveClass('opacity-40');
+      expect(closeRight).not.toHaveClass('opacity-40');
+    });
+  });
+
   describe('Send to Agent', () => {
     const mockOnSendToAgent = vi.fn();
 

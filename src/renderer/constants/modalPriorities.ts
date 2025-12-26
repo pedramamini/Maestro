@@ -95,6 +95,9 @@ export const MODAL_PRIORITIES = {
   /** Tab switcher modal (Opt+Cmd+T) */
   TAB_SWITCHER: 710,
 
+  /** Tab context menu (right-click on tab) */
+  TAB_CONTEXT_MENU: 708,
+
   /** Prompt composer modal for long prompts */
   PROMPT_COMPOSER: 725,
 
