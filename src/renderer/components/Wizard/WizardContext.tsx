@@ -526,8 +526,13 @@ export function WizardProvider({ children }: WizardProviderProps) {
 
   // Wizard lifecycle
   const openWizard = useCallback(() => {
+    // If previous wizard was completed, reset state for fresh start
+    // This prevents showing stale state when running wizard multiple times in same session
+    if (state.isComplete) {
+      dispatch({ type: 'RESET_WIZARD' });
+    }
     dispatch({ type: 'OPEN_WIZARD' });
-  }, []);
+  }, [state.isComplete]);
 
   const closeWizard = useCallback(() => {
     dispatch({ type: 'CLOSE_WIZARD' });

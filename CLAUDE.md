@@ -261,6 +261,8 @@ docs: documentation
 refactor: code refactoring
 ```
 
+**IMPORTANT**: Do NOT create a `CHANGELOG.md` file. This project does not use changelogs - all change documentation goes in commit messages and PR descriptions only.
+
 ## Session Interface
 
 Key fields on the Session object (abbreviated - see `src/renderer/types/index.ts` for full definition):
@@ -506,6 +508,48 @@ const savedState = await loadResumeState();
 // Clear saved state
 clearResumeState();
 ```
+
+#### State Lifecycle
+
+The Wizard maintains two types of state:
+
+1. **In-Memory State** (React `useReducer`)
+   - Managed in `WizardContext.tsx`
+   - Includes: `currentStep`, `isOpen`, `isComplete`, conversation history, etc.
+   - Lives only during the app session
+   - Must be reset when opening wizard after completion
+
+2. **Persisted State** (Settings)
+   - Stored in `wizardResumeState` via `window.maestro.settings`
+   - Enables resume functionality across app restarts
+   - Automatically saved when advancing past step 1
+   - Cleared on completion or when user chooses "Just Quit"
+
+**State Save Triggers:**
+- Auto-save: When `currentStep` changes (step > 1) - `WizardContext.tsx:791`
+- Manual save: User clicks "Save & Exit" - `MaestroWizard.tsx:147`
+
+**State Clear Triggers:**
+- Wizard completion: `App.tsx:4681` + `WizardContext.tsx:711`
+- User quits: "Just Quit" button - `MaestroWizard.tsx:168`
+- User starts fresh: "Start Fresh" in resume modal - `App.tsx` resume handlers
+
+**Opening Wizard Logic:**
+The `openWizard()` function in `WizardContext.tsx:528-535` handles state initialization:
+```typescript
+// If previous wizard was completed, reset in-memory state first
+if (state.isComplete === true) {
+  dispatch({ type: 'RESET_WIZARD' });  // Clear stale state
+}
+dispatch({ type: 'OPEN_WIZARD' });  // Show wizard UI
+```
+
+This ensures:
+- **Fresh starts**: Completed wizards don't contaminate new runs
+- **Resume works**: Abandoned wizards (isComplete: false) preserve state
+- **No race conditions**: Persisted state is checked after wizard opens
+
+**Important:** The persisted state and in-memory state are independent. Clearing one doesn't automatically clear the other. Both must be managed correctly to prevent state contamination (see Issue #89).
 
 ### Tour System
 

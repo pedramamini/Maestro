@@ -270,6 +270,70 @@ describe('WizardContext', () => {
       expect(result.current.state.directoryPath).toBe('');
       expect(result.current.state.currentStep).toBe('agent-selection');
     });
+
+    it('resets state when opening wizard after completion (Issue #89 fix)', () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+
+      // Complete a full wizard flow
+      act(() => {
+        result.current.openWizard();
+        result.current.setSelectedAgent('claude-code');
+        result.current.setAgentName('First Project');
+        result.current.goToStep('phase-review');
+        result.current.setGeneratedDocuments([createMockDocument()]);
+        result.current.completeWizard('session-123');
+      });
+
+      // Verify wizard is completed and closed
+      expect(result.current.state.isComplete).toBe(true);
+      expect(result.current.state.isOpen).toBe(false);
+      expect(result.current.state.currentStep).toBe('phase-review');
+      expect(result.current.state.selectedAgent).toBe('claude-code');
+      expect(result.current.state.agentName).toBe('First Project');
+
+      // Open wizard again (simulating second wizard run in same session)
+      act(() => {
+        result.current.openWizard();
+      });
+
+      // Verify wizard opens at first step with clean state (not phase-review)
+      expect(result.current.state.isOpen).toBe(true);
+      expect(result.current.state.currentStep).toBe('agent-selection');
+      expect(result.current.state.selectedAgent).toBeNull();
+      expect(result.current.state.agentName).toBe('');
+      expect(result.current.state.isComplete).toBe(false);
+      expect(result.current.state.createdSessionId).toBeNull();
+    });
+
+    it('does not reset state when opening wizard after abandonment (preserves resume)', () => {
+      const { result } = renderHook(() => useWizard(), { wrapper });
+
+      // Start wizard but abandon mid-flow (don't complete)
+      act(() => {
+        result.current.openWizard();
+        result.current.setSelectedAgent('claude-code');
+        result.current.setAgentName('Abandoned Project');
+        result.current.goToStep('conversation');
+        result.current.closeWizard();
+      });
+
+      // Verify wizard is NOT completed (abandoned)
+      expect(result.current.state.isComplete).toBe(false);
+      expect(result.current.state.isOpen).toBe(false);
+      expect(result.current.state.currentStep).toBe('conversation');
+
+      // Open wizard again (simulating resume)
+      act(() => {
+        result.current.openWizard();
+      });
+
+      // Verify state is preserved (not reset) because wizard was abandoned, not completed
+      expect(result.current.state.isOpen).toBe(true);
+      expect(result.current.state.currentStep).toBe('conversation'); // Still at conversation step
+      expect(result.current.state.selectedAgent).toBe('claude-code');
+      expect(result.current.state.agentName).toBe('Abandoned Project');
+      expect(result.current.state.isComplete).toBe(false);
+    });
   });
 
   describe('Navigation', () => {
