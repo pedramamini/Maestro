@@ -967,6 +967,7 @@ function setupIpcHandlers() {
     getAgentDetector: () => agentDetector,
     agentConfigsStore,
     settingsStore: store,
+    getMainWindow: () => mainWindow,
   });
 
   // Persistence operations - extracted to src/main/ipc/handlers/persistence.ts

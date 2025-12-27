@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo, forwardRef, useImperativeHandle } from 'react';
-import { Wand2, ExternalLink, Columns, Copy, Loader2, GitBranch, ArrowUp, ArrowDown, FileEdit, List, AlertCircle, X, GitPullRequest, Settings2 } from 'lucide-react';
+import { Wand2, ExternalLink, Columns, Copy, Loader2, GitBranch, ArrowUp, ArrowDown, FileEdit, List, AlertCircle, X, GitPullRequest, Settings2, Server } from 'lucide-react';
 import { LogViewer } from './LogViewer';
 import { TerminalOutput } from './TerminalOutput';
 import { InputArea } from './InputArea';
@@ -680,6 +680,24 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
                 onViewDiff={handleViewGitDiff}
                 compact={useCompactGitWidget}
               />
+
+              {/* SSH Remote Indicator - shows when session is using SSH remote execution */}
+              {activeSession.sshRemote && (
+                <span
+                  className="flex items-center gap-1.5 text-xs px-2 py-0.5 rounded-full border"
+                  style={{
+                    borderColor: 'rgba(147, 51, 234, 0.3)', // purple-500/30
+                    color: 'rgb(147, 51, 234)', // purple-500
+                    backgroundColor: 'rgba(147, 51, 234, 0.1)', // purple-500/10
+                  }}
+                  title={`Running on SSH remote: ${activeSession.sshRemote.name} (${activeSession.sshRemote.host})`}
+                >
+                  <Server className="w-3 h-3" />
+                  <span className="max-w-[100px] truncate">
+                    {activeSession.sshRemote.name}
+                  </span>
+                </span>
+              )}
 
             </div>
 

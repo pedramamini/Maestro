@@ -269,10 +269,34 @@
 
 **Prerequisite**: US2 complete.
 
-- [ ] T038 [US5] Add sshRemoteId field to session state tracking in src/renderer/App.tsx
-- [ ] T039 [US5] Add remote indicator component to src/renderer/components/SessionHeader.tsx
-- [ ] T040 [US5] Show remote name or "Local" based on session config in src/renderer/components/SessionHeader.tsx
-- [ ] T041 [US5] Style indicator with appropriate colors (normal/error) in src/renderer/components/SessionHeader.tsx
+- [x] T038 [US5] Add sshRemoteId field to session state tracking in src/renderer/App.tsx
+- [x] T039 [US5] Add remote indicator component to src/renderer/components/SessionHeader.tsx
+- [x] T040 [US5] Show remote name or "Local" based on session config in src/renderer/components/SessionHeader.tsx
+- [x] T041 [US5] Style indicator with appropriate colors (normal/error) in src/renderer/components/SessionHeader.tsx
+
+**Phase 7 Notes (2025-12-27):**
+- Added `sshRemote` field to Session type in `src/renderer/types/index.ts` (lines 478-483):
+  - Stores `id`, `name`, and `host` for the SSH remote used by the session
+  - Optional field - only set when session is using SSH remote execution
+- Updated process spawn IPC handler in `src/main/ipc/handlers/process.ts`:
+  - Added `getMainWindow` dependency to emit SSH remote status events
+  - Emits `process:ssh-remote` event with SSH remote info (or null for local execution)
+  - Event sent immediately after successful process spawn
+- Added `onSshRemote` IPC event listener in:
+  - `src/main/preload.ts` (implementation and type declaration)
+  - `src/renderer/global.d.ts` (MaestroAPI type)
+- Added SSH remote event handler in `src/renderer/App.tsx` (lines 2152-2174):
+  - Listens for `process:ssh-remote` events
+  - Updates session state with SSH remote info
+  - Parses sessionId to extract actual session ID (handles -ai-{tabId} and -terminal suffixes)
+- Added SSH remote indicator in `src/renderer/components/MainPanel.tsx`:
+  - Purple-themed pill badge showing remote name when session uses SSH
+  - Server icon with remote name (max 100px, truncated)
+  - Tooltip showing "Running on SSH remote: {name} ({host})"
+  - Positioned in header area next to Git Status Widget
+- Updated test mocks in `src/__tests__/main/ipc/handlers/process.test.ts`:
+  - Added mock for `getMainWindow` dependency
+  - All 12,232 tests pass
 
 ---
 

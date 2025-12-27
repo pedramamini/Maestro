@@ -1,4 +1,4 @@
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import { ProcessManager } from '../../process-manager';
 import { AgentDetector } from '../../agent-detector';
@@ -57,6 +57,7 @@ export interface ProcessHandlerDependencies {
   getAgentDetector: () => AgentDetector | null;
   agentConfigsStore: Store<AgentConfigsData>;
   settingsStore: Store<MaestroSettings>;
+  getMainWindow: () => BrowserWindow | null;
 }
 
 /**
@@ -72,7 +73,7 @@ export interface ProcessHandlerDependencies {
  * - runCommand: Execute a single command and capture output
  */
 export function registerProcessHandlers(deps: ProcessHandlerDependencies): void {
-  const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore } = deps;
+  const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore, getMainWindow } = deps;
 
   // Spawn a new process for a session
   // Supports agent-specific argument builders for batch mode, JSON output, resume, read-only mode, YOLO mode
@@ -271,9 +272,31 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 
       logger.info(`Process spawned successfully`, LOG_CONTEXT, {
         sessionId: config.sessionId,
-        pid: result.pid
+        pid: result.pid,
+        ...(sshRemoteUsed && { sshRemoteId: sshRemoteUsed.id, sshRemoteName: sshRemoteUsed.name })
       });
-      return result;
+
+      // Emit SSH remote status event for renderer to update session state
+      // This is emitted for all spawns (sshRemote will be null for local execution)
+      const mainWindow = getMainWindow();
+      if (mainWindow && !mainWindow.isDestroyed()) {
+        const sshRemoteInfo = sshRemoteUsed ? {
+          id: sshRemoteUsed.id,
+          name: sshRemoteUsed.name,
+          host: sshRemoteUsed.host,
+        } : null;
+        mainWindow.webContents.send('process:ssh-remote', config.sessionId, sshRemoteInfo);
+      }
+
+      // Return spawn result with SSH remote info if used
+      return {
+        ...result,
+        sshRemote: sshRemoteUsed ? {
+          id: sshRemoteUsed.id,
+          name: sshRemoteUsed.name,
+          host: sshRemoteUsed.host,
+        } : undefined,
+      };
     })
   );
 

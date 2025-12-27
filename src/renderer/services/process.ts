@@ -20,11 +20,25 @@ export interface ProcessSessionIdHandler {
   (sessionId: string, agentSessionId: string): void;
 }
 
+/**
+ * Result from process spawn operation.
+ * Includes SSH remote info when the agent is executed on a remote host.
+ */
+export interface ProcessSpawnResult {
+  pid: number;
+  success: boolean;
+  sshRemote?: {
+    id: string;
+    name: string;
+    host: string;
+  };
+}
+
 export const processService = {
   /**
    * Spawn a new process
    */
-  spawn: (config: ProcessConfig): Promise<{ pid: number; success: boolean }> =>
+  spawn: (config: ProcessConfig): Promise<ProcessSpawnResult> =>
     createIpcMethod({
       call: () => window.maestro.process.spawn(config),
       errorContext: 'Process spawn',

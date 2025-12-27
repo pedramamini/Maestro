@@ -463,6 +463,14 @@ export interface Session {
   // When true, new messages are blocked until the error is resolved
   agentErrorPaused?: boolean;
 
+  // SSH Remote execution status
+  // Tracks the SSH remote being used for this session's agent execution
+  sshRemote?: {
+    id: string;          // SSH remote config ID
+    name: string;        // Display name for UI
+    host: string;        // Remote host for tooltip
+  };
+
   // Per-session agent configuration overrides
   // These override the global agent-level settings for this specific session
   customPath?: string;           // Custom path to agent binary (overrides agent-level)

@@ -190,6 +190,7 @@ interface MaestroAPI {
     onSlashCommands: (callback: (sessionId: string, slashCommands: string[]) => void) => () => void;
     onThinkingChunk: (callback: (sessionId: string, content: string) => void) => () => void;
     onToolExecution: (callback: (sessionId: string, toolEvent: { toolName: string; state?: unknown; timestamp: number }) => void) => () => void;
+    onSshRemote: (callback: (sessionId: string, sshRemote: { id: string; name: string; host: string } | null) => void) => () => void;
     onRemoteCommand: (callback: (sessionId: string, command: string, inputMode?: 'ai' | 'terminal') => void) => () => void;
     onRemoteSwitchMode: (callback: (sessionId: string, mode: 'ai' | 'terminal') => void) => () => void;
     onRemoteInterrupt: (callback: (sessionId: string) => void) => () => void;

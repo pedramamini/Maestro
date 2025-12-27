@@ -2149,6 +2149,30 @@ function MaestroConsoleInner() {
       }
     });
 
+    // Handle SSH remote status events - tracks when sessions are executing on remote hosts
+    const unsubscribeSshRemote = window.maestro.process.onSshRemote?.((sessionId: string, sshRemote: { id: string; name: string; host: string } | null) => {
+      // Parse sessionId to get actual session ID (format: {id}-ai-{tabId} or {id}-terminal)
+      let actualSessionId: string;
+      const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
+      if (aiTabMatch) {
+        actualSessionId = aiTabMatch[1];
+      } else if (sessionId.endsWith('-ai') || sessionId.endsWith('-terminal')) {
+        actualSessionId = sessionId.replace(/-ai$|-terminal$/, '');
+      } else {
+        actualSessionId = sessionId;
+      }
+
+      // Update session with SSH remote info
+      setSessions(prev => prev.map(s => {
+        if (s.id !== actualSessionId) return s;
+        // Only update if the value actually changed (avoid unnecessary re-renders)
+        const currentRemoteId = s.sshRemote?.id;
+        const newRemoteId = sshRemote?.id;
+        if (currentRemoteId === newRemoteId) return s;
+        return { ...s, sshRemote: sshRemote ?? undefined };
+      }));
+    });
+
     // Handle tool execution events from AI agents
     // Only appends to logs if the tab has showThinking enabled (tools shown alongside thinking)
     const unsubscribeToolExecution = window.maestro.process.onToolExecution?.((sessionId: string, toolEvent: { toolName: string; state?: unknown; timestamp: number }) => {
@@ -2197,6 +2221,7 @@ function MaestroConsoleInner() {
       unsubscribeUsage();
       unsubscribeAgentError();
       unsubscribeThinkingChunk?.();
+      unsubscribeSshRemote?.();
       unsubscribeToolExecution?.();
       // Cancel any pending thinking chunk RAF and clear buffer (Phase 6.4)
       if (thinkingChunkRafIdRef.current !== null) {

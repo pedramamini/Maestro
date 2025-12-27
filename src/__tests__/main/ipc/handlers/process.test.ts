@@ -107,12 +107,21 @@ describe('process IPC handlers', () => {
       set: vi.fn(),
     };
 
+    // Create mock main window for SSH remote event emission
+    const mockMainWindow = {
+      isDestroyed: vi.fn().mockReturnValue(false),
+      webContents: {
+        send: vi.fn(),
+      },
+    };
+
     // Create dependencies
     deps = {
       getProcessManager: () => mockProcessManager as any,
       getAgentDetector: () => mockAgentDetector as any,
       agentConfigsStore: mockAgentConfigsStore as any,
       settingsStore: mockSettingsStore as any,
+      getMainWindow: () => mockMainWindow as any,
     };
 
     // Capture all registered handlers
