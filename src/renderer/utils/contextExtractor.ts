@@ -517,35 +517,24 @@ export function calculateTotalTokens(contexts: ContextSource[]): number {
 }
 
 /**
- * Escape special XML characters in text.
- */
-function escapeXml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
-
-/**
- * Convert log entries to a simple XML format for clipboard copying.
+ * Convert log entries to a simple text format for clipboard copying.
  * Only includes user messages and AI responses - excludes thinking, system prompts,
  * tool calls, and other internal entries.
  *
  * @param logs - Array of log entries to convert
- * @returns XML string with message/response pairs
+ * @returns Plain text with USER/ASSISTANT labels
  *
  * @example
- * const xml = formatLogsAsXml(tab.logs);
+ * const text = formatLogsForClipboard(tab.logs);
  * // Returns:
- * // <conversation>
- * //   <message>How do I implement feature X?</message>
- * //   <response>To implement feature X, you should...</response>
- * // </conversation>
+ * // USER:
+ * // How do I implement feature X?
+ * //
+ * // ASSISTANT:
+ * // To implement feature X, you should...
  */
-export function formatLogsAsXml(logs: LogEntry[]): string {
-  const lines: string[] = ['<conversation>'];
+export function formatLogsForClipboard(logs: LogEntry[]): string {
+  const sections: string[] = [];
 
   for (const log of logs) {
     // Skip empty entries
@@ -554,16 +543,16 @@ export function formatLogsAsXml(logs: LogEntry[]): string {
     }
 
     // Only include user messages and AI responses
+    // AI responses can be 'ai' or 'stdout' depending on the agent
     if (log.source === 'user') {
-      lines.push(`  <message>${escapeXml(log.text)}</message>`);
-    } else if (log.source === 'ai') {
-      lines.push(`  <response>${escapeXml(log.text)}</response>`);
+      sections.push(`USER:\n${log.text}`);
+    } else if (log.source === 'ai' || log.source === 'stdout') {
+      sections.push(`ASSISTANT:\n${log.text}`);
     }
-    // Skip: thinking, tool, system, stdout, stderr, error
+    // Skip: thinking, tool, system, stderr, error
   }
 
-  lines.push('</conversation>');
-  return lines.join('\n');
+  return sections.join('\n\n');
 }
 
 /**

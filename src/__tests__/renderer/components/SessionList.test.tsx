@@ -28,6 +28,7 @@ vi.mock('lucide-react', () => ({
   Settings: () => <span data-testid="icon-settings" />,
   ChevronRight: () => <span data-testid="icon-chevron-right" />,
   ChevronDown: () => <span data-testid="icon-chevron-down" />,
+  ChevronUp: () => <span data-testid="icon-chevron-up" />,
   Activity: () => <span data-testid="icon-activity" />,
   X: () => <span data-testid="icon-x" />,
   Keyboard: () => <span data-testid="icon-keyboard" />,
@@ -40,6 +41,7 @@ vi.mock('lucide-react', () => ({
   Info: () => <span data-testid="icon-info" />,
   FileText: () => <span data-testid="icon-file-text" />,
   GitBranch: () => <span data-testid="icon-git-branch" />,
+  GitPullRequest: () => <span data-testid="icon-git-pull-request" />,
   Bot: () => <span data-testid="icon-bot" />,
   Clock: () => <span data-testid="icon-clock" />,
   ScrollText: () => <span data-testid="icon-scroll-text" />,
@@ -53,6 +55,7 @@ vi.mock('lucide-react', () => ({
   Download: () => <span data-testid="icon-download" />,
   Compass: () => <span data-testid="icon-compass" />,
   Globe: () => <span data-testid="icon-globe" />,
+  BookOpen: () => <span data-testid="icon-book-open" />,
 }));
 
 // Mock gitService
