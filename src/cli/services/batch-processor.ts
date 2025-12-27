@@ -15,7 +15,7 @@ import { addHistoryEntry, readGroups } from './storage';
 import { substituteTemplateVariables, TemplateContext } from '../../shared/templateVariables';
 import { registerCliActivity, unregisterCliActivity } from '../../shared/cli-activity';
 import { logger } from '../../main/utils/logger';
-import { autorunSynopsisPrompt } from '../../prompts';
+import { autorunSynopsisPrompt, autorunDefaultPrompt } from '../../prompts';
 import { parseSynopsis } from '../../shared/synopsis';
 import { generateUUID } from '../../shared/uuid';
 import { formatElapsedTime } from '../../shared/formatters';
@@ -412,7 +412,12 @@ export async function* runPlaybook(
         };
 
         // Substitute template variables in the prompt
-        const basePrompt = substituteTemplateVariables(playbook.prompt, templateContext);
+        // Use default Auto Run prompt if playbook.prompt is empty/null
+        // Marketplace playbooks with prompt: null will use the default
+        const basePrompt = substituteTemplateVariables(
+          playbook.prompt || autorunDefaultPrompt,
+          templateContext
+        );
 
         // Read document content and expand template variables in it
         const { content: docContent } = readDocAndCountTasks(folderPath, docEntry.filename);

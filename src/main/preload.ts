@@ -1102,6 +1102,18 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.invoke('playbooks:import', sessionId, autoRunFolderPath),
   },
 
+  // Marketplace API (browse and import playbooks from GitHub)
+  marketplace: {
+    getManifest: () => ipcRenderer.invoke('marketplace:getManifest'),
+    refreshManifest: () => ipcRenderer.invoke('marketplace:refreshManifest'),
+    getDocument: (playbookPath: string, filename: string) =>
+      ipcRenderer.invoke('marketplace:getDocument', playbookPath, filename),
+    getReadme: (playbookPath: string) =>
+      ipcRenderer.invoke('marketplace:getReadme', playbookPath),
+    importPlaybook: (playbookId: string, targetFolderName: string, autoRunFolderPath: string, sessionId: string) =>
+      ipcRenderer.invoke('marketplace:importPlaybook', playbookId, targetFolderName, autoRunFolderPath, sessionId),
+  },
+
   // Debug Package API (generate support bundles for bug reporting)
   debug: {
     createPackage: (options?: {

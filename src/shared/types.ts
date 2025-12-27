@@ -194,3 +194,28 @@ export interface AgentErrorRecovery {
   /** Icon identifier for the action button (optional) */
   icon?: string;
 }
+
+// ============================================================================
+// Marketplace Types (re-exported from marketplace-types.ts)
+// ============================================================================
+
+export type {
+  MarketplaceManifest,
+  MarketplacePlaybook,
+  MarketplaceDocument,
+  MarketplaceCache,
+  MarketplaceDocumentContent,
+  MarketplaceErrorType,
+  MarketplaceError,
+  GetManifestResponse,
+  GetDocumentResponse,
+  GetReadmeResponse,
+  ImportPlaybookResponse,
+  MarketplaceErrorResponse,
+} from './marketplace-types';
+
+export {
+  MarketplaceFetchError,
+  MarketplaceCacheError,
+  MarketplaceImportError,
+} from './marketplace-types';

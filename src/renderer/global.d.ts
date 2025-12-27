@@ -837,6 +837,89 @@ interface MaestroAPI {
     export: (sessionId: string, playbookId: string, autoRunFolderPath: string) => Promise<{ success: boolean; filePath?: string; error?: string }>;
     import: (sessionId: string, autoRunFolderPath: string) => Promise<{ success: boolean; playbook?: any; importedDocs?: string[]; error?: string }>;
   };
+  // Marketplace API (browse and import playbooks from GitHub)
+  marketplace: {
+    getManifest: () => Promise<{
+      success: boolean;
+      manifest?: {
+        lastUpdated: string;
+        playbooks: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: string;
+          subcategory?: string;
+          author: string;
+          authorLink?: string;
+          tags?: string[];
+          lastUpdated: string;
+          path: string;
+          documents: Array<{
+            filename: string;
+            resetOnCompletion: boolean;
+          }>;
+          loopEnabled: boolean;
+          maxLoops?: number | null;
+          prompt: string | null;
+        }>;
+      };
+      fromCache?: boolean;
+      cacheAge?: number;
+      error?: string;
+    }>;
+    refreshManifest: () => Promise<{
+      success: boolean;
+      manifest?: {
+        lastUpdated: string;
+        playbooks: Array<{
+          id: string;
+          title: string;
+          description: string;
+          category: string;
+          subcategory?: string;
+          author: string;
+          authorLink?: string;
+          tags?: string[];
+          lastUpdated: string;
+          path: string;
+          documents: Array<{
+            filename: string;
+            resetOnCompletion: boolean;
+          }>;
+          loopEnabled: boolean;
+          maxLoops?: number | null;
+          prompt: string | null;
+        }>;
+      };
+      fromCache?: boolean;
+      error?: string;
+    }>;
+    getDocument: (playbookPath: string, filename: string) => Promise<{
+      success: boolean;
+      content?: string;
+      error?: string;
+    }>;
+    getReadme: (playbookPath: string) => Promise<{
+      success: boolean;
+      content?: string | null;
+      error?: string;
+    }>;
+    importPlaybook: (playbookId: string, targetFolderName: string, autoRunFolderPath: string, sessionId: string) => Promise<{
+      success: boolean;
+      playbook?: {
+        id: string;
+        name: string;
+        createdAt: number;
+        updatedAt: number;
+        documents: Array<{ filename: string; resetOnCompletion: boolean }>;
+        loopEnabled: boolean;
+        maxLoops?: number | null;
+        prompt: string;
+      };
+      importedDocs?: string[];
+      error?: string;
+    }>;
+  };
   // Updates API
   updates: {
     check: () => Promise<{

@@ -23,6 +23,7 @@ import { registerGroupChatHandlers, GroupChatHandlerDependencies } from './group
 import { registerDebugHandlers, DebugHandlerDependencies } from './debug';
 import { registerSpeckitHandlers } from './speckit';
 import { registerContextHandlers, ContextHandlerDependencies, cleanupAllGroomingSessions, getActiveGroomingSessionCount } from './context';
+import { registerMarketplaceHandlers, MarketplaceHandlerDependencies } from './marketplace';
 import { AgentDetector } from '../../agent-detector';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -46,6 +47,8 @@ export { registerGroupChatHandlers };
 export { registerDebugHandlers };
 export { registerSpeckitHandlers };
 export { registerContextHandlers, cleanupAllGroomingSessions, getActiveGroomingSessionCount };
+export { registerMarketplaceHandlers };
+export type { MarketplaceHandlerDependencies };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -158,6 +161,10 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
     getMainWindow: deps.getMainWindow,
     getProcessManager: deps.getProcessManager,
     getAgentDetector: deps.getAgentDetector,
+  });
+  // Register marketplace handlers
+  registerMarketplaceHandlers({
+    app: deps.app,
   });
   // Setup logger event forwarding to renderer
   setupLoggerEventForwarding(deps.getMainWindow);
