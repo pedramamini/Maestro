@@ -157,9 +157,33 @@
   - Falls back through the priority chain gracefully when remotes are missing or disabled
 - Added 18 unit tests in `src/__tests__/main/utils/ssh-remote-resolver.test.ts`
   - Tests cover: no remotes configured, global default, agent override, priority ordering, disabled remotes, store adapter
-- [ ] T027 [US2] Modify spawn() to detect SSH remote config in src/main/process-manager.ts
-- [ ] T028 [US2] Wrap agent command with buildSshCommand when SSH enabled in src/main/process-manager.ts
-- [ ] T029 [US2] Pass agent config env vars to remote command in src/main/process-manager.ts
+- [x] T027 [US2] Modify spawn() to detect SSH remote config in src/main/process-manager.ts
+- [x] T028 [US2] Wrap agent command with buildSshCommand when SSH enabled in src/main/process-manager.ts
+- [x] T029 [US2] Pass agent config env vars to remote command in src/main/process-manager.ts
+
+**Phase 4 (T027-T029) Notes (2025-12-27):**
+- Modified `src/main/ipc/handlers/process.ts` to integrate SSH remote execution:
+  - Added imports for `getSshRemoteConfig`, `createSshRemoteStoreAdapter`, and `buildSshCommand`
+  - Updated `MaestroSettings` interface to include `sshRemotes` and `defaultSshRemoteId` fields
+  - Integrated SSH remote detection in `process:spawn` handler after all agent args are built
+- SSH remote execution logic:
+  - Terminal sessions (`toolType === 'terminal'`) are always local (need PTY for shell interaction)
+  - For AI agents, resolves effective SSH remote using priority chain (agent override > global default)
+  - When SSH remote is configured, wraps command with `buildSshCommand()`
+  - Disables PTY when using SSH (SSH handles terminal emulation)
+  - Passes custom environment variables via the SSH remote command string, not locally
+  - Uses `remoteWorkingDir` from SSH config when available, otherwise uses local cwd
+- Logging:
+  - Added info log when SSH remote execution is configured with remote details
+  - Logs original command, wrapped SSH command, and resolution source
+- Added 8 unit tests in `src/__tests__/main/ipc/handlers/process.test.ts`:
+  - Wrap command with SSH when global default remote is configured
+  - Use agent-specific SSH remote override
+  - Terminal sessions should not use SSH
+  - Pass custom env vars to SSH remote command
+  - Not wrap command when SSH is disabled for agent
+  - Run locally when no SSH remote is configured
+  - Use remoteWorkingDir from SSH config when available
 
 ---
 

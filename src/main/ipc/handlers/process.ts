@@ -10,6 +10,9 @@ import {
   requireDependency,
   CreateHandlerOptions,
 } from '../../utils/ipcHandler';
+import { getSshRemoteConfig, createSshRemoteStoreAdapter } from '../../utils/ssh-remote-resolver';
+import { buildSshCommand } from '../../utils/ssh-command-builder';
+import type { SshRemoteConfig, AgentSshRemoteConfig } from '../../../shared/types';
 
 const LOG_CONTEXT = '[ProcessManager]';
 
@@ -40,6 +43,9 @@ interface MaestroSettings {
   customShellPath?: string;  // Custom path to shell binary (overrides auto-detected path)
   shellArgs?: string;        // Additional CLI arguments for shell sessions
   shellEnvVars?: Record<string, string>;  // Environment variables for shell sessions
+  // SSH remote execution
+  sshRemotes: SshRemoteConfig[];
+  defaultSshRemoteId: string | null;
   [key: string]: any;
 }
 
@@ -193,16 +199,72 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       // Falls back to the agent's configOptions default (e.g., 400000 for Codex, 128000 for OpenCode)
       const contextWindow = getContextWindowValue(agent, agentConfigValues, config.sessionCustomContextWindow);
 
+      // ========================================================================
+      // SSH Remote Execution: Detect and wrap command for remote execution
+      // Terminal sessions are always local (they need PTY for shell interaction)
+      // ========================================================================
+      let commandToSpawn = config.command;
+      let argsToSpawn = finalArgs;
+      let sshRemoteUsed: SshRemoteConfig | null = null;
+
+      // Only consider SSH remote for non-terminal AI agent sessions
+      if (config.toolType !== 'terminal') {
+        // Get agent-specific SSH config from agent configs store
+        const agentSshConfig = agentConfigValues.sshRemote as AgentSshRemoteConfig | undefined;
+
+        // Resolve effective SSH remote configuration
+        const sshStoreAdapter = createSshRemoteStoreAdapter(settingsStore);
+        const sshResult = getSshRemoteConfig(sshStoreAdapter, {
+          agentSshConfig,
+          agentId: config.toolType,
+        });
+
+        if (sshResult.config) {
+          // SSH remote is configured - wrap the command for remote execution
+          sshRemoteUsed = sshResult.config;
+
+          // Build the SSH command that wraps the agent execution
+          // The cwd is the local project path which may not exist on remote
+          // Remote should use remoteWorkingDir from SSH config if set
+          const sshCommand = buildSshCommand(sshResult.config, {
+            command: config.command,
+            args: finalArgs,
+            // Use the local cwd - the SSH command builder will handle remote path resolution
+            // If SSH config has remoteWorkingDir, that takes precedence
+            cwd: sshResult.config.remoteWorkingDir ? undefined : config.cwd,
+            // Pass custom environment variables to the remote command
+            env: effectiveCustomEnvVars,
+          });
+
+          commandToSpawn = sshCommand.command;
+          argsToSpawn = sshCommand.args;
+
+          logger.info(`SSH remote execution configured`, LOG_CONTEXT, {
+            sessionId: config.sessionId,
+            toolType: config.toolType,
+            remoteName: sshResult.config.name,
+            remoteHost: sshResult.config.host,
+            source: sshResult.source,
+            originalCommand: config.command,
+            sshCommand: `${sshCommand.command} ${sshCommand.args.join(' ')}`,
+          });
+        }
+      }
+
       const result = processManager.spawn({
         ...config,
-        args: finalArgs,
-        requiresPty: agent?.requiresPty,
+        command: commandToSpawn,
+        args: argsToSpawn,
+        // When using SSH, disable PTY (SSH provides its own terminal handling)
+        // and env vars are passed via the remote command string
+        requiresPty: sshRemoteUsed ? false : agent?.requiresPty,
         prompt: config.prompt,
         shell: shellToUse,
         shellArgs: shellArgsStr,         // Shell-specific CLI args (for terminal sessions)
         shellEnvVars: shellEnvVars,      // Shell-specific env vars (for terminal sessions)
         contextWindow, // Pass configured context window to process manager
-        customEnvVars: effectiveCustomEnvVars, // Pass custom env vars (session-level or agent-level)
+        // When using SSH, env vars are passed in the remote command string, not locally
+        customEnvVars: sshRemoteUsed ? undefined : effectiveCustomEnvVars,
         imageArgs: agent?.imageArgs,     // Function to build image CLI args (for Codex, OpenCode)
         noPromptSeparator: agent?.noPromptSeparator, // OpenCode doesn't support '--' before prompt
       });

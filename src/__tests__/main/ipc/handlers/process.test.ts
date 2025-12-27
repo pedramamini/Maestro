@@ -599,4 +599,306 @@ describe('process IPC handlers', () => {
       })).rejects.toThrow('Agent detector');
     });
   });
+
+  describe('SSH remote execution', () => {
+    const mockSshRemote = {
+      id: 'remote-1',
+      name: 'Dev Server',
+      host: 'dev.example.com',
+      port: 22,
+      username: 'devuser',
+      privateKeyPath: '~/.ssh/id_ed25519',
+      enabled: true,
+      remoteEnv: { REMOTE_VAR: 'remote-value' },
+    };
+
+    it('should wrap agent command with SSH when global default remote is configured', async () => {
+      const mockAgent = {
+        id: 'claude-code',
+        name: 'Claude Code',
+        requiresPty: false,
+      };
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return [mockSshRemote];
+        if (key === 'defaultSshRemoteId') return 'remote-1';
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'claude-code',
+        cwd: '/local/project',
+        command: 'claude',
+        args: ['--print', '--verbose'],
+      });
+
+      // Should spawn with 'ssh' command instead of 'claude'
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'ssh',
+          // SSH args should include authentication and remote command
+          args: expect.arrayContaining([
+            '-i', expect.stringContaining('.ssh/id_ed25519'),
+            '-p', '22',
+            'devuser@dev.example.com',
+          ]),
+          // SSH remote execution disables PTY
+          requiresPty: false,
+        })
+      );
+    });
+
+    it('should use agent-specific SSH remote override', async () => {
+      const agentSpecificRemote = {
+        ...mockSshRemote,
+        id: 'agent-remote',
+        name: 'Agent-Specific Server',
+        host: 'agent.example.com',
+      };
+
+      const mockAgent = {
+        id: 'claude-code',
+        requiresPty: true, // Note: should be disabled when using SSH
+      };
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockAgentConfigsStore.get.mockReturnValue({
+        'claude-code': {
+          sshRemote: {
+            enabled: true,
+            remoteId: 'agent-remote',
+          },
+        },
+      });
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return [mockSshRemote, agentSpecificRemote];
+        if (key === 'defaultSshRemoteId') return 'remote-1'; // Global default is different
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'claude-code',
+        cwd: '/local/project',
+        command: 'claude',
+        args: ['--print'],
+      });
+
+      // Should use agent-specific remote, not global default
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'ssh',
+          args: expect.arrayContaining([
+            'devuser@agent.example.com', // agent-specific host
+          ]),
+          // PTY should be disabled for SSH
+          requiresPty: false,
+        })
+      );
+    });
+
+    it('should not use SSH for terminal sessions', async () => {
+      const mockAgent = {
+        id: 'terminal',
+        requiresPty: true,
+      };
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return [mockSshRemote];
+        if (key === 'defaultSshRemoteId') return 'remote-1';
+        if (key === 'defaultShell') return 'zsh';
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'terminal',
+        cwd: '/local/project',
+        command: '/bin/zsh',
+        args: [],
+      });
+
+      // Terminal sessions should NOT use SSH - they need local PTY
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: '/bin/zsh',
+          requiresPty: true,
+        })
+      );
+      expect(mockProcessManager.spawn).not.toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'ssh',
+        })
+      );
+    });
+
+    it('should pass custom env vars to SSH remote command', async () => {
+      const mockAgent = {
+        id: 'claude-code',
+        requiresPty: false,
+      };
+
+      // Mock applyAgentConfigOverrides to return custom env vars
+      const { applyAgentConfigOverrides } = await import('../../../../main/utils/agent-args');
+      vi.mocked(applyAgentConfigOverrides).mockReturnValue({
+        args: ['--print'],
+        modelSource: 'none',
+        customArgsSource: 'none',
+        customEnvSource: 'session',
+        effectiveCustomEnvVars: { CUSTOM_API_KEY: 'secret123' },
+      });
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return [mockSshRemote];
+        if (key === 'defaultSshRemoteId') return 'remote-1';
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'claude-code',
+        cwd: '/local/project',
+        command: 'claude',
+        args: ['--print'],
+        sessionCustomEnvVars: { CUSTOM_API_KEY: 'secret123' },
+      });
+
+      // When using SSH, customEnvVars should be undefined (passed via remote command)
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'ssh',
+          customEnvVars: undefined, // Env vars passed in SSH command, not locally
+        })
+      );
+
+      // The SSH args should contain the remote command with env vars
+      const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+      const remoteCommandArg = spawnCall.args[spawnCall.args.length - 1];
+      expect(remoteCommandArg).toContain('CUSTOM_API_KEY=');
+    });
+
+    it('should not wrap command when SSH is disabled for agent', async () => {
+      const mockAgent = {
+        id: 'claude-code',
+        requiresPty: false,
+      };
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockAgentConfigsStore.get.mockReturnValue({
+        'claude-code': {
+          sshRemote: {
+            enabled: false, // Explicitly disabled for this agent
+            remoteId: null,
+          },
+        },
+      });
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return [mockSshRemote];
+        if (key === 'defaultSshRemoteId') return 'remote-1';
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'claude-code',
+        cwd: '/local/project',
+        command: 'claude',
+        args: ['--print'],
+      });
+
+      // Agent has SSH disabled, should run locally
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'claude', // Original command, not 'ssh'
+        })
+      );
+    });
+
+    it('should run locally when no SSH remote is configured', async () => {
+      const mockAgent = {
+        id: 'claude-code',
+        requiresPty: true,
+      };
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return []; // No remotes configured
+        if (key === 'defaultSshRemoteId') return null;
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'claude-code',
+        cwd: '/local/project',
+        command: 'claude',
+        args: ['--print'],
+      });
+
+      // No SSH remote, should run locally with original command
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'claude',
+          requiresPty: true, // Preserved when running locally
+        })
+      );
+    });
+
+    it('should use remoteWorkingDir from SSH config when available', async () => {
+      const sshRemoteWithWorkDir = {
+        ...mockSshRemote,
+        remoteWorkingDir: '/home/devuser/projects',
+      };
+
+      const mockAgent = {
+        id: 'claude-code',
+        requiresPty: false,
+      };
+
+      mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+      mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+        if (key === 'sshRemotes') return [sshRemoteWithWorkDir];
+        if (key === 'defaultSshRemoteId') return 'remote-1';
+        return defaultValue;
+      });
+      mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+      const handler = handlers.get('process:spawn');
+      await handler!({} as any, {
+        sessionId: 'session-1',
+        toolType: 'claude-code',
+        cwd: '/local/project', // Local cwd should be ignored when remoteWorkingDir is set
+        command: 'claude',
+        args: ['--print'],
+      });
+
+      // The SSH command should use the remote working directory
+      expect(mockProcessManager.spawn).toHaveBeenCalledWith(
+        expect.objectContaining({
+          command: 'ssh',
+        })
+      );
+
+      // Check that the remote command includes the remote working directory
+      const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+      const remoteCommandArg = spawnCall.args[spawnCall.args.length - 1];
+      expect(remoteCommandArg).toContain('/home/devuser/projects');
+    });
+  });
 });
