@@ -8,6 +8,7 @@ import { stripControlSequences, stripAllAnsiCodes } from './utils/terminalFilter
 import { logger } from './utils/logger';
 import { getOutputParser, type ParsedEvent, type AgentOutputParser } from './parsers';
 import { aggregateModelUsage } from './parsers/usage-aggregator';
+import { matchSshErrorPattern } from './parsers/error-patterns';
 import type { AgentError } from '../shared/types';
 import { getAgentCapabilities } from './agent-capabilities';
 
@@ -701,6 +702,32 @@ export class ProcessManager extends EventEmitter {
                 }
               }
 
+              // Check for SSH-specific errors (when running via SSH remote)
+              // These are checked separately because they can occur with any agent
+              if (!managedProcess.errorEmitted) {
+                const sshError = matchSshErrorPattern(line);
+                if (sshError) {
+                  managedProcess.errorEmitted = true;
+                  const agentError: AgentError = {
+                    type: sshError.type,
+                    message: sshError.message,
+                    recoverable: sshError.recoverable,
+                    agentId: toolType,
+                    sessionId,
+                    timestamp: Date.now(),
+                    raw: {
+                      errorLine: line,
+                    },
+                  };
+                  logger.debug('[ProcessManager] SSH error detected from output', 'ProcessManager', {
+                    sessionId,
+                    errorType: sshError.type,
+                    errorMessage: sshError.message,
+                  });
+                  this.emit('agent-error', sessionId, agentError);
+                }
+              }
+
               try {
                 const msg = JSON.parse(line);
 
@@ -903,6 +930,32 @@ export class ProcessManager extends EventEmitter {
               }
             }
 
+            // Check for SSH-specific errors in stderr (when running via SSH remote)
+            // SSH errors typically appear on stderr (connection refused, permission denied, etc.)
+            if (!managedProcess.errorEmitted) {
+              const sshError = matchSshErrorPattern(stderrData);
+              if (sshError) {
+                managedProcess.errorEmitted = true;
+                const agentError: AgentError = {
+                  type: sshError.type,
+                  message: sshError.message,
+                  recoverable: sshError.recoverable,
+                  agentId: toolType,
+                  sessionId,
+                  timestamp: Date.now(),
+                  raw: {
+                    stderr: stderrData,
+                  },
+                };
+                logger.debug('[ProcessManager] SSH error detected from stderr', 'ProcessManager', {
+                  sessionId,
+                  errorType: sshError.type,
+                  errorMessage: sshError.message,
+                });
+                this.emit('agent-error', sessionId, agentError);
+              }
+            }
+
             // Strip ANSI codes and only emit if there's actual content
             const cleanedStderr = stripAllAnsiCodes(stderrData).trim();
             if (cleanedStderr) {
@@ -986,6 +1039,35 @@ export class ProcessManager extends EventEmitter {
                 exitCode: code,
                 errorType: agentError.type,
                 errorMessage: agentError.message,
+              });
+              this.emit('agent-error', sessionId, agentError);
+            }
+          }
+
+          // Check for SSH-specific errors at exit (if not already emitted)
+          // This catches SSH errors that may not have been detected during streaming
+          if (!managedProcess.errorEmitted && (code !== 0 || managedProcess.stderrBuffer)) {
+            const stderrToCheck = managedProcess.stderrBuffer || '';
+            const sshError = matchSshErrorPattern(stderrToCheck);
+            if (sshError) {
+              managedProcess.errorEmitted = true;
+              const agentError: AgentError = {
+                type: sshError.type,
+                message: sshError.message,
+                recoverable: sshError.recoverable,
+                agentId: toolType,
+                sessionId,
+                timestamp: Date.now(),
+                raw: {
+                  exitCode: code || 0,
+                  stderr: stderrToCheck,
+                },
+              };
+              logger.debug('[ProcessManager] SSH error detected at exit', 'ProcessManager', {
+                sessionId,
+                exitCode: code,
+                errorType: sshError.type,
+                errorMessage: sshError.message,
               });
               this.emit('agent-error', sessionId, agentError);
             }

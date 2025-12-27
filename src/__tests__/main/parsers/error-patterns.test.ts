@@ -9,11 +9,14 @@ import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import {
   getErrorPatterns,
   matchErrorPattern,
+  matchSshErrorPattern,
+  getSshErrorPatterns,
   registerErrorPatterns,
   clearPatternRegistry,
   CLAUDE_ERROR_PATTERNS,
   OPENCODE_ERROR_PATTERNS,
   CODEX_ERROR_PATTERNS,
+  SSH_ERROR_PATTERNS,
   type AgentErrorPatterns,
 } from '../../../main/parsers/error-patterns';
 
@@ -513,6 +516,216 @@ describe('error-patterns', () => {
           expect(result?.type).toBe('agent_crashed');
         });
       });
+    });
+  });
+
+  describe('SSH_ERROR_PATTERNS', () => {
+    it('should define permission_denied patterns', () => {
+      expect(SSH_ERROR_PATTERNS.permission_denied).toBeDefined();
+      expect(SSH_ERROR_PATTERNS.permission_denied?.length).toBeGreaterThan(0);
+    });
+
+    it('should define network_error patterns', () => {
+      expect(SSH_ERROR_PATTERNS.network_error).toBeDefined();
+      expect(SSH_ERROR_PATTERNS.network_error?.length).toBeGreaterThan(0);
+    });
+
+    it('should define agent_crashed patterns', () => {
+      expect(SSH_ERROR_PATTERNS.agent_crashed).toBeDefined();
+      expect(SSH_ERROR_PATTERNS.agent_crashed?.length).toBeGreaterThan(0);
+    });
+
+    describe('permission_denied patterns', () => {
+      it('should match "ssh: permission denied"', () => {
+        const result = matchSshErrorPattern('ssh: Permission denied (publickey)');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('permission_denied');
+        expect(result?.recoverable).toBe(false);
+      });
+
+      it('should match "Permission denied (publickey"', () => {
+        const result = matchSshErrorPattern('Permission denied (publickey,keyboard-interactive)');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('permission_denied');
+      });
+
+      it('should match "host key verification failed"', () => {
+        const result = matchSshErrorPattern('Host key verification failed.');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('permission_denied');
+      });
+
+      it('should match "no matching host key type found"', () => {
+        const result = matchSshErrorPattern('no matching host key type found. Their offer: ssh-rsa');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('permission_denied');
+      });
+
+      it('should match "enter passphrase for key"', () => {
+        const result = matchSshErrorPattern('Enter passphrase for key "/home/user/.ssh/id_rsa":');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('permission_denied');
+      });
+    });
+
+    describe('network_error patterns', () => {
+      it('should match "ssh: connection refused"', () => {
+        const result = matchSshErrorPattern('ssh: connect to host example.com port 22: Connection refused');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+        expect(result?.recoverable).toBe(true);
+      });
+
+      it('should match "ssh: connection timed out"', () => {
+        const result = matchSshErrorPattern('ssh: connect to host example.com port 22: Connection timed out');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+
+      it('should match "ssh: operation timed out"', () => {
+        const result = matchSshErrorPattern('ssh: connect to host example.com port 22: Operation timed out');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+
+      it('should match "ssh: could not resolve hostname"', () => {
+        const result = matchSshErrorPattern('ssh: Could not resolve hostname example.com: nodename nor servname provided');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+        expect(result?.recoverable).toBe(false); // DNS errors are not recoverable by retry
+      });
+
+      it('should match "ssh: no route to host"', () => {
+        const result = matchSshErrorPattern('ssh: connect to host example.com port 22: No route to host');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+
+      it('should match "ssh: connection reset"', () => {
+        const result = matchSshErrorPattern('ssh: connect to host example.com port 22: Connection reset by peer');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+
+      it('should match "ssh: network is unreachable"', () => {
+        const result = matchSshErrorPattern('ssh: connect to host example.com port 22: Network is unreachable');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+
+      it('should match "ssh: connection closed"', () => {
+        const result = matchSshErrorPattern('ssh: Connection closed by 192.168.1.1');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+
+      it('should match "connect to host...connection refused"', () => {
+        const result = matchSshErrorPattern('connect to host example.com port 22: Connection refused');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('network_error');
+      });
+    });
+
+    describe('agent_crashed patterns', () => {
+      it('should match "bash: command not found"', () => {
+        const result = matchSshErrorPattern('bash: claude: command not found');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+        expect(result?.recoverable).toBe(false);
+      });
+
+      it('should match "zsh: command not found"', () => {
+        const result = matchSshErrorPattern('zsh: command not found: claude');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+
+      it('should match "sh: command not found"', () => {
+        const result = matchSshErrorPattern('sh: claude: command not found');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+
+      it('should match generic "command not found:"', () => {
+        const result = matchSshErrorPattern('command not found: opencode');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+
+      it('should match "no such file or directory" for agent binaries', () => {
+        const result = matchSshErrorPattern('/usr/local/bin/claude: No such file or directory');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+
+      it('should match "ssh: broken pipe"', () => {
+        const result = matchSshErrorPattern('ssh: Broken pipe');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+        expect(result?.recoverable).toBe(true);
+      });
+
+      it('should match "ssh: client_loop: send disconnect"', () => {
+        const result = matchSshErrorPattern('client_loop: send disconnect: Broken pipe');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+
+      it('should match "ssh: packet corrupt"', () => {
+        const result = matchSshErrorPattern('ssh: packet corrupt');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+
+      it('should match "ssh: protocol error"', () => {
+        const result = matchSshErrorPattern('ssh: protocol error');
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('agent_crashed');
+      });
+    });
+
+    describe('non-matching lines', () => {
+      it('should return null for normal SSH output', () => {
+        const result = matchSshErrorPattern('Connected to example.com');
+        expect(result).toBeNull();
+      });
+
+      it('should return null for empty string', () => {
+        const result = matchSshErrorPattern('');
+        expect(result).toBeNull();
+      });
+
+      it('should return null for normal agent output', () => {
+        const result = matchSshErrorPattern('Hello, how can I help you today?');
+        expect(result).toBeNull();
+      });
+
+      it('should return null for unrelated file errors', () => {
+        // Should not match generic "no such file" - only agent-specific
+        const result = matchSshErrorPattern('cat: somefile.txt: No such file or directory');
+        expect(result).toBeNull();
+      });
+    });
+  });
+
+  describe('matchSshErrorPattern', () => {
+    it('should return error info for SSH errors', () => {
+      const result = matchSshErrorPattern('ssh: Connection refused');
+      expect(result).not.toBeNull();
+      expect(result?.type).toBe('network_error');
+      expect(result?.message).toContain('SSH');
+      expect(result?.recoverable).toBe(true);
+    });
+
+    it('should return null for non-SSH errors', () => {
+      const result = matchSshErrorPattern('Some normal output');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getSshErrorPatterns', () => {
+    it('should return SSH_ERROR_PATTERNS', () => {
+      expect(getSshErrorPatterns()).toBe(SSH_ERROR_PATTERNS);
     });
   });
 

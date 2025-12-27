@@ -478,6 +478,147 @@ export const CODEX_ERROR_PATTERNS: AgentErrorPatterns = {
 };
 
 // ============================================================================
+// SSH Error Patterns
+// ============================================================================
+
+/**
+ * Error patterns for SSH remote execution errors.
+ * These are checked separately from agent-specific patterns because they can
+ * occur when ANY agent runs via SSH remote execution.
+ */
+export const SSH_ERROR_PATTERNS: AgentErrorPatterns = {
+  permission_denied: [
+    {
+      // SSH authentication failure - wrong key, key not authorized, etc.
+      pattern: /ssh:.*permission denied/i,
+      message: 'SSH authentication failed. Check your SSH key configuration.',
+      recoverable: false,
+    },
+    {
+      // SSH key authentication rejected
+      pattern: /permission denied \(publickey/i,
+      message: 'SSH key authentication failed. Ensure your key is authorized on the remote host.',
+      recoverable: false,
+    },
+    {
+      // Host key verification failed
+      pattern: /host key verification failed/i,
+      message: 'SSH host key verification failed. The remote host may have changed or this is a new connection.',
+      recoverable: false,
+    },
+    {
+      // No matching host key type (SSH algorithm mismatch)
+      pattern: /no matching host key type found/i,
+      message: 'SSH connection failed. No compatible host key algorithms between client and server.',
+      recoverable: false,
+    },
+    {
+      // Key passphrase required but not provided
+      pattern: /enter passphrase for key/i,
+      message: 'SSH key requires a passphrase. Use a key without a passphrase or add it to ssh-agent.',
+      recoverable: false,
+    },
+  ],
+
+  network_error: [
+    {
+      // SSH connection refused - sshd not running or firewall blocking
+      pattern: /ssh:.*connection refused/i,
+      message: 'SSH connection refused. Ensure the SSH server is running on the remote host.',
+      recoverable: true,
+    },
+    {
+      // SSH connection timed out
+      pattern: /ssh:.*connection timed out/i,
+      message: 'SSH connection timed out. Check network connectivity and firewall rules.',
+      recoverable: true,
+    },
+    {
+      // SSH operation timed out
+      pattern: /ssh:.*operation timed out/i,
+      message: 'SSH operation timed out. The remote host may be unreachable.',
+      recoverable: true,
+    },
+    {
+      // SSH hostname resolution failure
+      pattern: /ssh:.*could not resolve hostname/i,
+      message: 'SSH could not resolve hostname. Check the remote host address.',
+      recoverable: false,
+    },
+    {
+      // SSH no route to host
+      pattern: /ssh:.*no route to host/i,
+      message: 'SSH connection failed. No network route to the remote host.',
+      recoverable: true,
+    },
+    {
+      // SSH connection reset
+      pattern: /ssh:.*connection reset/i,
+      message: 'SSH connection was reset. The remote host may have terminated the connection.',
+      recoverable: true,
+    },
+    {
+      // SSH network unreachable
+      pattern: /ssh:.*network is unreachable/i,
+      message: 'SSH connection failed. The network is unreachable.',
+      recoverable: true,
+    },
+    {
+      // Generic SSH connection closed
+      pattern: /ssh:.*connection closed/i,
+      message: 'SSH connection was closed unexpectedly.',
+      recoverable: true,
+    },
+    {
+      // SSH port not open (connection refused without ssh: prefix)
+      pattern: /connect to host.*port.*connection refused/i,
+      message: 'SSH connection refused. The SSH port may be blocked or the server is not running.',
+      recoverable: true,
+    },
+  ],
+
+  agent_crashed: [
+    {
+      // Agent command not found on remote host
+      pattern: /bash:.*command not found|zsh:.*command not found|sh:.*command not found/i,
+      message: 'Agent command not found on remote host. Ensure the agent is installed on the remote machine.',
+      recoverable: false,
+    },
+    {
+      // Generic command not found (without shell prefix)
+      pattern: /command not found:/i,
+      message: 'Command not found on remote host. The agent may not be installed.',
+      recoverable: false,
+    },
+    {
+      // No such file or directory (agent binary missing)
+      // Matches patterns like: "/usr/local/bin/claude: No such file or directory"
+      pattern: /claude.*no such file or directory|opencode.*no such file or directory|codex.*no such file or directory/i,
+      message: 'Agent binary not found on remote host. Install the agent on the remote machine.',
+      recoverable: false,
+    },
+    {
+      // SSH broken pipe - connection dropped during command execution
+      pattern: /ssh:.*broken pipe/i,
+      message: 'SSH connection dropped during command execution. The connection may have been interrupted.',
+      recoverable: true,
+    },
+    {
+      // SSH client died - may or may not have "ssh:" prefix
+      pattern: /client_loop:\s*send disconnect/i,
+      message: 'SSH connection was disconnected. The session may have timed out or been interrupted.',
+      recoverable: true,
+    },
+    {
+      // SSH packet corruption or protocol error
+      pattern: /ssh:.*packet corrupt|ssh:.*protocol error/i,
+      message: 'SSH protocol error. The connection may be unstable.',
+      recoverable: true,
+    },
+  ],
+};
+
+// ============================================================================
 // Pattern Registry
 // ============================================================================
 
@@ -552,4 +693,26 @@ export function registerErrorPatterns(
  */
 export function clearPatternRegistry(): void {
   patternRegistry.clear();
+}
+
+/**
+ * Match a line against SSH-specific error patterns.
+ * This should be called in addition to agent-specific pattern matching
+ * when a session is running via SSH remote execution.
+ *
+ * @param line - The line to check for SSH errors
+ * @returns Matched error info or null if no match
+ */
+export function matchSshErrorPattern(
+  line: string
+): { type: AgentErrorType; message: string; recoverable: boolean } | null {
+  return matchErrorPattern(SSH_ERROR_PATTERNS, line);
+}
+
+/**
+ * Get the SSH error patterns object.
+ * Useful for testing or combining with agent patterns.
+ */
+export function getSshErrorPatterns(): AgentErrorPatterns {
+  return SSH_ERROR_PATTERNS;
 }
