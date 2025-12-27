@@ -267,6 +267,13 @@ const mockMaestro = {
     export: vi.fn().mockResolvedValue({ success: true }),
     import: vi.fn().mockResolvedValue({ success: true, playbook: {} }),
   },
+  marketplace: {
+    getManifest: vi.fn().mockResolvedValue({ success: true, manifest: { lastUpdated: '2025-01-01', playbooks: [] }, fromCache: false }),
+    refreshManifest: vi.fn().mockResolvedValue({ success: true, manifest: { lastUpdated: '2025-01-01', playbooks: [] }, fromCache: false }),
+    getDocument: vi.fn().mockResolvedValue({ success: true, content: '' }),
+    getReadme: vi.fn().mockResolvedValue({ success: true, content: null }),
+    importPlaybook: vi.fn().mockResolvedValue({ success: true, playbook: {}, importedDocs: [] }),
+  },
   web: {
     broadcastAutoRunState: vi.fn(),
     broadcastSessionState: vi.fn(),

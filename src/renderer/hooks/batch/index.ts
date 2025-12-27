@@ -84,3 +84,7 @@ export type { UseWorktreeValidationReturn, UseWorktreeValidationDeps } from './u
 // Auto Run achievements/badges
 export { useAchievements, queueAchievement } from './useAchievements';
 export type { AchievementState, PendingAchievement, UseAchievementsReturn } from './useAchievements';
+
+// Marketplace browsing and import
+export { useMarketplace } from './useMarketplace';
+export type { UseMarketplaceReturn } from './useMarketplace';
