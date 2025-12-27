@@ -36,6 +36,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
   openPromptComposer: { id: 'openPromptComposer', label: 'Open Prompt Composer', keys: ['Meta', 'Shift', 'p'] },
   openWizard: { id: 'openWizard', label: 'New Agent Wizard', keys: ['Meta', 'Shift', 'n'] },
   fuzzyFileSearch: { id: 'fuzzyFileSearch', label: 'Fuzzy File Search', keys: ['Meta', 'g'] },
+  openMarketplace: { id: 'openMarketplace', label: 'Open Playbook Marketplace', keys: ['Meta', 'Shift', 'm'] },
 };
 
 // Non-editable shortcuts (displayed in help but not configurable)

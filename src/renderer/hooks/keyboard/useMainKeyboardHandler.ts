@@ -269,6 +269,14 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
         ctx.openWizardModal();
         trackShortcut('openWizard');
       }
+      else if (ctx.isShortcut(e, 'openMarketplace')) {
+        e.preventDefault();
+        // Only open marketplace if Auto Run folder is set on active session
+        if (ctx.activeSession?.autoRunFolderPath) {
+          ctx.setMarketplaceModalOpen(true);
+          trackShortcut('openMarketplace');
+        }
+      }
       else if (ctx.isShortcut(e, 'focusInput')) {
         e.preventDefault();
         // Use group chat input ref when group chat is active

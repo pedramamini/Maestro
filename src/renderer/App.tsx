@@ -7819,7 +7819,7 @@ function MaestroConsoleInner() {
     setFileTreeFilterOpen, isShortcut, isTabShortcut, handleNavBack, handleNavForward, toggleUnreadFilter,
     setTabSwitcherOpen, showUnreadOnly, stagedImages, handleSetLightboxImage, setMarkdownEditMode,
     toggleTabStar, toggleTabUnread, setPromptComposerOpen, openWizardModal, rightPanelRef, setFuzzyFileSearchOpen,
-    setShowNewGroupChatModal, deleteGroupChatWithConfirmation,
+    setMarketplaceModalOpen, setShowNewGroupChatModal, deleteGroupChatWithConfirmation,
     // Group chat context
     activeGroupChatId, groupChatInputRef, groupChatStagedImages, setGroupChatRightTab,
     // Navigation handlers from useKeyboardNavigation hook
