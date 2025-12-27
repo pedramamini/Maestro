@@ -34,6 +34,9 @@ export interface MaestroSettings {
   defaultShell: string;
   webAuthEnabled: boolean;
   webAuthToken: string | null;
+  // SSH Remote configuration
+  sshRemotes: any[];
+  defaultSshRemoteId: string | null;
   [key: string]: any;
 }
 

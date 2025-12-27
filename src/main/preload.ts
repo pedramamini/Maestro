@@ -557,6 +557,36 @@ contextBridge.exposeInMainWorld('maestro', {
     getStatus: () => ipcRenderer.invoke('tunnel:getStatus'),
   },
 
+  // SSH Remote API (execute agents on remote hosts via SSH)
+  sshRemote: {
+    saveConfig: (config: {
+      id?: string;
+      name?: string;
+      host?: string;
+      port?: number;
+      username?: string;
+      privateKeyPath?: string;
+      remoteWorkingDir?: string;
+      remoteEnv?: Record<string, string>;
+      enabled?: boolean;
+    }) => ipcRenderer.invoke('ssh-remote:saveConfig', config),
+    deleteConfig: (id: string) => ipcRenderer.invoke('ssh-remote:deleteConfig', id),
+    getConfigs: () => ipcRenderer.invoke('ssh-remote:getConfigs'),
+    getDefaultId: () => ipcRenderer.invoke('ssh-remote:getDefaultId'),
+    setDefaultId: (id: string | null) => ipcRenderer.invoke('ssh-remote:setDefaultId', id),
+    test: (configOrId: string | {
+      id: string;
+      name: string;
+      host: string;
+      port: number;
+      username: string;
+      privateKeyPath: string;
+      remoteWorkingDir?: string;
+      remoteEnv?: Record<string, string>;
+      enabled: boolean;
+    }, agentCommand?: string) => ipcRenderer.invoke('ssh-remote:test', configOrId, agentCommand),
+  },
+
   // Sync API (custom storage location for cross-device sync)
   sync: {
     getDefaultPath: () => ipcRenderer.invoke('sync:getDefaultPath') as Promise<string>,
@@ -1536,6 +1566,76 @@ export interface MaestroAPI {
     start: () => Promise<{ success: boolean; url?: string; error?: string }>;
     stop: () => Promise<{ success: boolean }>;
     getStatus: () => Promise<{ isRunning: boolean; url: string | null; error: string | null }>;
+  };
+  sshRemote: {
+    saveConfig: (config: {
+      id?: string;
+      name?: string;
+      host?: string;
+      port?: number;
+      username?: string;
+      privateKeyPath?: string;
+      remoteWorkingDir?: string;
+      remoteEnv?: Record<string, string>;
+      enabled?: boolean;
+    }) => Promise<{
+      success: boolean;
+      config?: {
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKeyPath: string;
+        remoteWorkingDir?: string;
+        remoteEnv?: Record<string, string>;
+        enabled: boolean;
+      };
+      error?: string;
+    }>;
+    deleteConfig: (id: string) => Promise<{ success: boolean; error?: string }>;
+    getConfigs: () => Promise<{
+      success: boolean;
+      configs?: Array<{
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKeyPath: string;
+        remoteWorkingDir?: string;
+        remoteEnv?: Record<string, string>;
+        enabled: boolean;
+      }>;
+      error?: string;
+    }>;
+    getDefaultId: () => Promise<{ success: boolean; id?: string | null; error?: string }>;
+    setDefaultId: (id: string | null) => Promise<{ success: boolean; error?: string }>;
+    test: (
+      configOrId: string | {
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKeyPath: string;
+        remoteWorkingDir?: string;
+        remoteEnv?: Record<string, string>;
+        enabled: boolean;
+      },
+      agentCommand?: string
+    ) => Promise<{
+      success: boolean;
+      result?: {
+        success: boolean;
+        error?: string;
+        remoteInfo?: {
+          hostname: string;
+          agentVersion?: string;
+        };
+      };
+      error?: string;
+    }>;
   };
   sync: {
     getDefaultPath: () => Promise<string>;

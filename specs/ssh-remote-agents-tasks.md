@@ -69,14 +69,29 @@
 
 **Test Criteria**: Can call `window.maestro.sshRemote.saveConfig()`, `getConfigs()`, `setDefaultId()` from devtools.
 
-- [ ] T012 [US1] Create IPC handlers file src/main/ipc/handlers/ssh-remote.ts
-- [ ] T013 [US1] Implement ssh-remote:saveConfig handler in src/main/ipc/handlers/ssh-remote.ts
-- [ ] T014 [US1] Implement ssh-remote:deleteConfig handler in src/main/ipc/handlers/ssh-remote.ts
-- [ ] T015 [US1] Implement ssh-remote:getConfigs handler in src/main/ipc/handlers/ssh-remote.ts
-- [ ] T016 [US1] Implement ssh-remote:getDefaultId handler in src/main/ipc/handlers/ssh-remote.ts
-- [ ] T017 [US1] Implement ssh-remote:setDefaultId handler in src/main/ipc/handlers/ssh-remote.ts
-- [ ] T018 [US1] Register SSH remote handlers in src/main/ipc/handlers/index.ts
-- [ ] T019 [US1] Expose sshRemote API in src/main/preload.ts
+- [x] T012 [US1] Create IPC handlers file src/main/ipc/handlers/ssh-remote.ts
+- [x] T013 [US1] Implement ssh-remote:saveConfig handler in src/main/ipc/handlers/ssh-remote.ts
+- [x] T014 [US1] Implement ssh-remote:deleteConfig handler in src/main/ipc/handlers/ssh-remote.ts
+- [x] T015 [US1] Implement ssh-remote:getConfigs handler in src/main/ipc/handlers/ssh-remote.ts
+- [x] T016 [US1] Implement ssh-remote:getDefaultId handler in src/main/ipc/handlers/ssh-remote.ts
+- [x] T017 [US1] Implement ssh-remote:setDefaultId handler in src/main/ipc/handlers/ssh-remote.ts
+- [x] T018 [US1] Register SSH remote handlers in src/main/ipc/handlers/index.ts
+- [x] T019 [US1] Expose sshRemote API in src/main/preload.ts
+
+**Phase 3 Backend Notes (2025-12-27):**
+- Created `src/main/ipc/handlers/ssh-remote.ts` with 6 IPC handlers:
+  - `ssh-remote:saveConfig` - Create or update SSH remote configuration with validation
+  - `ssh-remote:deleteConfig` - Delete SSH remote by ID, auto-clears default if deleted
+  - `ssh-remote:getConfigs` - Get all stored SSH remote configurations
+  - `ssh-remote:getDefaultId` - Get the global default SSH remote ID
+  - `ssh-remote:setDefaultId` - Set/clear the global default SSH remote ID
+  - `ssh-remote:test` - Test SSH connection (accepts config ID or full config object)
+- Registered handlers in `src/main/ipc/handlers/index.ts`
+- Exposed `window.maestro.sshRemote` API in `src/main/preload.ts` with full TypeScript types
+- Updated `MaestroSettings` interface to include `sshRemotes` and `defaultSshRemoteId` fields
+- Added 19 unit tests in `src/__tests__/main/ipc/handlers/ssh-remote.test.ts`
+- All IPC handlers use `createIpcHandler` pattern for consistent error handling and logging
+
 - [ ] T020 [US1] Create useSshRemotes hook in src/renderer/hooks/useSshRemotes.ts
 - [ ] T021 [US1] Create SshRemoteModal component in src/renderer/components/Settings/SshRemoteModal.tsx
 - [ ] T022 [US1] Create SshRemotesSection component in src/renderer/components/Settings/SshRemotesSection.tsx
