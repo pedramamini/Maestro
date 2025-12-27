@@ -34,6 +34,8 @@ import { GroupChatRightPanel, type GroupChatRightTab } from './components/GroupC
 import {
   // Batch processing
   useBatchProcessor,
+  useInlineWizard,
+  type PreviousUIState,
   // Settings
   useSettings,
   useDebouncedPersistence,
@@ -4236,6 +4238,10 @@ You are taking over this conversation. Based on the context above, provide a bri
     return activeSession ? getBatchState(activeSession.id) : getBatchState('');
   }, [activeBatchSessionIds, activeSession, getBatchState]);
 
+  // Inline wizard hook for /wizard command
+  // This manages the state for the inline wizard that creates/iterates on Auto Run documents
+  const { startWizard: startInlineWizard } = useInlineWizard();
+
   // Handler for the built-in /history command
   // Requests a synopsis from the current agent session and saves to history
   const handleHistoryCommand = useCallback(async () => {
@@ -4390,6 +4396,43 @@ You are taking over this conversation. Based on the context above, provide a bri
     }
   }, [activeSession, groups, spawnBackgroundSynopsis, addHistoryEntry, addLogToActiveTab, setSessions, addToast]);
 
+  // Handler for the built-in /wizard command
+  // Starts the inline wizard for creating/iterating on Auto Run documents
+  const handleWizardCommand = useCallback((args: string) => {
+    if (!activeSession) {
+      console.warn('[handleWizardCommand] No active session');
+      return;
+    }
+
+    const activeTab = getActiveTab(activeSession);
+    if (!activeTab) {
+      console.warn('[handleWizardCommand] No active tab');
+      return;
+    }
+
+    // Capture current UI state for restoration when wizard ends
+    const currentUIState: PreviousUIState = {
+      readOnlyMode: activeTab.readOnlyMode ?? false,
+      saveToHistory: activeTab.saveToHistory ?? true,
+      showThinking: activeTab.showThinking ?? false,
+    };
+
+    // Start the inline wizard with the argument text (natural language input)
+    // The wizard will use the intent parser to determine mode (new/iterate/ask)
+    startInlineWizard(args || undefined, currentUIState);
+
+    // Show a system log entry indicating wizard started
+    const wizardLog: LogEntry = {
+      id: generateId(),
+      timestamp: Date.now(),
+      source: 'system',
+      text: args
+        ? `Starting wizard with: "${args}"`
+        : 'Starting wizard for Auto Run documents...',
+    };
+    addLogToActiveTab(activeSession.id, wizardLog);
+  }, [activeSession, startInlineWizard, addLogToActiveTab]);
+
   // Input processing hook - handles sending messages and commands
   const { processInput, processInputRef: _processInputRef } = useInputProcessing({
     activeSession,
@@ -4411,6 +4454,7 @@ You are taking over this conversation. Based on the context above, provide a bri
     processQueuedItemRef,
     flushBatchedUpdates: batchedUpdater.flushNow,
     onHistoryCommand: handleHistoryCommand,
+    onWizardCommand: handleWizardCommand,
   });
 
   // Initialize activity tracker for per-session time tracking

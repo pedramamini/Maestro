@@ -16,4 +16,9 @@ export const slashCommands: SlashCommand[] = [
     description: 'Generate a synopsis of recent work and add to history',
     aiOnly: true,
   },
+  {
+    command: '/wizard',
+    description: 'Start the planning wizard for Auto Run documents',
+    aiOnly: true,
+  },
 ];

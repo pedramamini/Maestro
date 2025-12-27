@@ -53,6 +53,8 @@ export interface UseInputProcessingDeps {
   flushBatchedUpdates?: () => void;
   /** Handler for the /history built-in command (requests synopsis and saves to history) */
   onHistoryCommand?: () => Promise<void>;
+  /** Handler for the /wizard built-in command (starts the inline wizard for Auto Run documents) */
+  onWizardCommand?: (args: string) => void;
 }
 
 /**
@@ -104,6 +106,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     processQueuedItemRef,
     flushBatchedUpdates,
     onHistoryCommand,
+    onWizardCommand,
   } = deps;
 
   // Ref for the processInput function so external code can access the latest version
@@ -141,6 +144,25 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
         onHistoryCommand().catch((error) => {
           console.error('[processInput] /history command failed:', error);
         });
+        return;
+      }
+
+      // Handle built-in /wizard command (only in AI mode)
+      // This starts the inline planning wizard for Auto Run documents
+      // The command can have optional arguments: /wizard <natural language input>
+      // Match exactly "/wizard" or "/wizard " followed by arguments (not "/wizardry" etc.)
+      const isWizardCommand = commandText === '/wizard' || commandText.startsWith('/wizard ');
+      if (!isTerminalMode && isWizardCommand && onWizardCommand) {
+        // Extract arguments after '/wizard ' (everything after the command)
+        const args = commandText.slice('/wizard'.length).trim();
+
+        setInputValue('');
+        setSlashCommandOpen(false);
+        syncAiInputToSession('');
+        if (inputRef.current) inputRef.current.style.height = 'auto';
+
+        // Execute the wizard command handler with the argument text
+        onWizardCommand(args);
         return;
       }
 
@@ -909,6 +931,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
     setSessions,
     flushBatchedUpdates,
     onHistoryCommand,
+    onWizardCommand,
   ]);
 
   // Update ref for external access
