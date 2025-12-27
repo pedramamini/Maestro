@@ -88,3 +88,14 @@ export type { AchievementState, PendingAchievement, UseAchievementsReturn } from
 // Marketplace browsing and import
 export { useMarketplace } from './useMarketplace';
 export type { UseMarketplaceReturn } from './useMarketplace';
+
+// Inline wizard for creating/iterating Auto Run documents
+export { useInlineWizard } from '../useInlineWizard';
+export type {
+  InlineWizardMode,
+  InlineWizardMessage,
+  PreviousUIState,
+  InlineGeneratedDocument,
+  InlineWizardState,
+  UseInlineWizardReturn,
+} from '../useInlineWizard';
