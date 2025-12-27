@@ -97,6 +97,8 @@ interface RightPanelProps {
   onOpenAboutModal?: () => void;  // For opening About/achievements panel from history entries
   // File linking callback for history detail modal
   onFileClick?: (path: string) => void;
+  // Marketplace modal
+  onOpenMarketplace?: () => void;
 }
 
 export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function RightPanel(props, ref) {
@@ -116,7 +118,8 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     // Error handling callbacks (Phase 5.10)
     onSkipCurrentDocument, onAbortBatchOnError, onResumeAfterError,
     onJumpToAgentSession, onResumeSession,
-    onOpenSessionAsTab, onOpenAboutModal, onFileClick
+    onOpenSessionAsTab, onOpenAboutModal, onFileClick,
+    onOpenMarketplace
   } = props;
 
   const historyPanelRef = useRef<HistoryPanelHandle>(null);
@@ -284,6 +287,7 @@ export const RightPanel = forwardRef<RightPanelHandle, RightPanelProps>(function
     onResumeAfterError,
     sessionState: session.state,
     shortcuts,
+    onOpenMarketplace,
   };
 
   return (

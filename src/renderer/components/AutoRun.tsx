@@ -2,7 +2,7 @@ import React, { useState, useRef, useEffect, useLayoutEffect, useCallback, memo,
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeSlug from 'rehype-slug';
-import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, ChevronDown, ChevronRight, FolderOpen, FileText, RefreshCw, Maximize2, AlertTriangle, SkipForward, XCircle, RotateCcw } from 'lucide-react';
+import { Eye, Edit, Play, Square, HelpCircle, Loader2, Image, X, Search, ChevronDown, ChevronRight, FolderOpen, FileText, RefreshCw, Maximize2, AlertTriangle, SkipForward, XCircle, RotateCcw, LayoutGrid } from 'lucide-react';
 import { getEncoder, formatTokenCount } from '../utils/tokenCounter';
 import type { BatchRunState, SessionState, Theme, Shortcut } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -77,6 +77,9 @@ interface AutoRunProps {
 
   // Expand to modal callback
   onExpand?: () => void;
+
+  // Open marketplace modal
+  onOpenMarketplace?: () => void;
 
   // Shortcuts for displaying hotkey hints
   shortcuts?: Record<string, Shortcut>;
@@ -346,6 +349,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
   onResumeAfterError,
   sessionState,
   onExpand,
+  onOpenMarketplace,
   shortcuts,
   hideTopControls = false,
 }, ref) {
@@ -1365,6 +1369,20 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
           >
             <Play className="w-3.5 h-3.5" />
             Run
+          </button>
+        )}
+        {/* Marketplace button */}
+        {onOpenMarketplace && (
+          <button
+            onClick={onOpenMarketplace}
+            className="flex items-center justify-center w-8 h-8 rounded transition-colors hover:bg-white/10"
+            style={{
+              color: theme.colors.textDim,
+              border: `1px solid ${theme.colors.border}`
+            }}
+            title="Browse Playbook Marketplace"
+          >
+            <LayoutGrid className="w-3.5 h-3.5" />
           </button>
         )}
         {/* Help button */}

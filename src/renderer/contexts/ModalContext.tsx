@@ -170,6 +170,10 @@ export interface ModalContextValue {
   autoRunSetupModalOpen: boolean;
   setAutoRunSetupModalOpen: Dispatch<SetStateAction<boolean>>;
 
+  // Marketplace Modal
+  marketplaceModalOpen: boolean;
+  setMarketplaceModalOpen: Dispatch<SetStateAction<boolean>>;
+
   // Wizard Resume Modal
   wizardResumeModalOpen: boolean;
   setWizardResumeModalOpen: (open: boolean) => void;
@@ -359,6 +363,9 @@ export function ModalProvider({ children }: ModalProviderProps) {
 
   // Auto Run Setup Modal
   const [autoRunSetupModalOpen, setAutoRunSetupModalOpen] = useState(false);
+
+  // Marketplace Modal
+  const [marketplaceModalOpen, setMarketplaceModalOpen] = useState(false);
 
   // Wizard Resume Modal
   const [wizardResumeModalOpen, setWizardResumeModalOpen] = useState(false);
@@ -572,6 +579,10 @@ export function ModalProvider({ children }: ModalProviderProps) {
     autoRunSetupModalOpen,
     setAutoRunSetupModalOpen,
 
+    // Marketplace Modal
+    marketplaceModalOpen,
+    setMarketplaceModalOpen,
+
     // Wizard Resume Modal
     wizardResumeModalOpen,
     setWizardResumeModalOpen,
@@ -696,6 +707,8 @@ export function ModalProvider({ children }: ModalProviderProps) {
     batchRunnerModalOpen,
     // Auto Run Setup Modal
     autoRunSetupModalOpen,
+    // Marketplace Modal
+    marketplaceModalOpen,
     // Wizard Resume Modal
     wizardResumeModalOpen, wizardResumeState,
     // Agent Error Modal

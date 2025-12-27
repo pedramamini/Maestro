@@ -1,6 +1,6 @@
 import { useEffect, useRef, useCallback, useState } from 'react';
 import { createPortal } from 'react-dom';
-import { X, Minimize2, Eye, Edit, Play, Square, Loader2, Save, RotateCcw } from 'lucide-react';
+import { X, Minimize2, Eye, Edit, Play, Square, Loader2, Save, RotateCcw, LayoutGrid } from 'lucide-react';
 import type { Theme, BatchRunState, SessionState, Shortcut } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -51,6 +51,7 @@ interface AutoRunExpandedModalProps {
   onResumeAfterError?: () => void;
   sessionState?: SessionState;
   shortcuts?: Record<string, Shortcut>;
+  onOpenMarketplace?: () => void;
 }
 
 export function AutoRunExpandedModal({
@@ -69,6 +70,7 @@ export function AutoRunExpandedModal({
   sessionState,
   shortcuts,
   sessionId,
+  onOpenMarketplace,
   ...autoRunProps
 }: AutoRunExpandedModalProps) {
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -347,6 +349,20 @@ export function AutoRunExpandedModal({
               >
                 <Play className="w-3.5 h-3.5" />
                 Run
+              </button>
+            )}
+            {/* Marketplace button */}
+            {onOpenMarketplace && (
+              <button
+                onClick={onOpenMarketplace}
+                className="flex items-center justify-center w-8 h-8 rounded transition-colors hover:bg-white/10"
+                style={{
+                  color: theme.colors.textDim,
+                  border: `1px solid ${theme.colors.border}`
+                }}
+                title="Browse Playbook Marketplace"
+              >
+                <LayoutGrid className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
