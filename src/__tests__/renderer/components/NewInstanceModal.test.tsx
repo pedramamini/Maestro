@@ -10,39 +10,7 @@ import { NewInstanceModal } from '../../../renderer/components/NewInstanceModal'
 import type { Theme, Session } from '../../../renderer/types';
 import type { AgentConfig } from '../../../renderer/types';
 
-// Mock lucide-react icons
-vi.mock('lucide-react', () => ({
-  Folder: ({ className }: { className?: string }) => (
-    <span data-testid="folder-icon" className={className}>📁</span>
-  ),
-  X: ({ className }: { className?: string }) => (
-    <span data-testid="x-icon" className={className}>×</span>
-  ),
-  RefreshCw: ({ className }: { className?: string }) => (
-    <span data-testid="refresh-icon" className={className}>🔄</span>
-  ),
-  ChevronRight: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="chevron-right-icon" className={className} style={style}>▶</span>
-  ),
-  Check: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="check-icon" className={className} style={style}>✓</span>
-  ),
-  AlertCircle: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="alert-circle-icon" className={className} style={style}>⚠</span>
-  ),
-  Plus: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="plus-icon" className={className} style={style}>+</span>
-  ),
-  Trash2: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="trash-icon" className={className} style={style}>🗑</span>
-  ),
-  HelpCircle: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="help-circle-icon" className={className} style={style}>?</span>
-  ),
-  ChevronDown: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="chevron-down-icon" className={className} style={style}>▼</span>
-  ),
-}));
+// lucide-react icons are mocked globally in src/__tests__/setup.ts using a Proxy
 
 // Mock layer stack context
 const mockRegisterLayer = vi.fn(() => 'layer-new-instance-123');

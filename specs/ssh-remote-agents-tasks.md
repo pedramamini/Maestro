@@ -195,9 +195,30 @@
 
 **Prerequisite**: US1 and US2 complete.
 
-- [ ] T030 [US3] Add SSH remote dropdown to agent config in src/renderer/components/AgentConfigModal.tsx
-- [ ] T031 [US3] Save agent SSH remote selection to agent config store in src/renderer/components/AgentConfigModal.tsx
-- [ ] T032 [US3] Update getSshRemoteConfig to check agent override first in src/main/process-manager.ts
+- [x] T030 [US3] Add SSH remote dropdown to agent config in src/renderer/components/AgentConfigModal.tsx
+- [x] T031 [US3] Save agent SSH remote selection to agent config store in src/renderer/components/AgentConfigModal.tsx
+- [x] T032 [US3] Update getSshRemoteConfig to check agent override first in src/main/process-manager.ts
+
+**Phase 5 (T030-T032) Notes (2025-12-27):**
+- Note: The actual component is `AgentConfigPanel.tsx` (shared), used by `NewInstanceModal.tsx` and `EditAgentModal`
+- Added SSH remote configuration to `AgentConfigPanel.tsx`:
+  - Added new props: `sshRemotes`, `sshRemoteConfig`, `onSshRemoteConfigChange`, `globalDefaultSshRemoteId`
+  - Created SSH remote dropdown with options: "Use Global Default", "Force Local Execution", and individual remotes
+  - Added status indicator showing effective remote (local, SSH disabled, or specific remote)
+  - Shows hint when no SSH remotes are configured, directing users to Settings
+- Updated `NewInstanceModal.tsx`:
+  - Added state for SSH remotes, global default ID, and per-agent SSH remote configs
+  - Load SSH remote configurations in `loadAgents()` function
+  - Pass SSH remote props to `AgentConfigPanel` for each agent
+  - Save SSH remote config to agent config store on create
+- Updated `EditAgentModal` (in `NewInstanceModal.tsx`):
+  - Added state for SSH remotes, global default ID, and SSH remote config
+  - Load SSH remote configurations when modal opens
+  - Pass SSH remote props to `AgentConfigPanel`
+  - Save SSH remote config to agent config store on save
+- T032 was already implemented in Phase 4 - `getSshRemoteConfig()` in `src/main/utils/ssh-remote-resolver.ts` already checks agent override first (Priority 1) before falling back to global default (Priority 2)
+- Updated test setup (`src/__tests__/setup.ts`) to mock `window.maestro.sshRemote` API
+- All tests pass (12,232 tests)
 
 ---
 

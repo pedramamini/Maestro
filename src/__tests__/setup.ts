@@ -372,6 +372,13 @@ const mockMaestro = {
       deletedAutoRunTasks: 0,
     }),
   },
+  sshRemote: {
+    getConfigs: vi.fn().mockResolvedValue({ success: true, configs: [] }),
+    getDefaultId: vi.fn().mockResolvedValue({ success: true, id: null }),
+    setConfigs: vi.fn().mockResolvedValue({ success: true }),
+    setDefaultId: vi.fn().mockResolvedValue({ success: true }),
+    testConnection: vi.fn().mockResolvedValue({ success: true }),
+  },
 };
 
 Object.defineProperty(window, 'maestro', {
