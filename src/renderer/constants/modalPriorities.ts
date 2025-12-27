@@ -110,6 +110,9 @@ export const MODAL_PRIORITIES = {
   /** Auto Run search bar (within expanded modal) */
   AUTORUN_SEARCH: 706,
 
+  /** Playbook Marketplace modal - browse and import community playbooks */
+  MARKETPLACE: 708,
+
   /** Auto Run lightbox (above expanded modal so Escape closes it first) */
   AUTORUN_LIGHTBOX: 715,
 
