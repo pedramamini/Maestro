@@ -5,7 +5,7 @@
  * Features category tabs, search filtering, keyboard navigation, and playbook tiles grid.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -70,7 +70,7 @@ interface PlaybookDetailViewProps {
  * Format cache age into human-readable string
  */
 function formatCacheAge(cacheAgeMs: number | null): string {
-  if (cacheAgeMs === null || cacheAgeMs === 0) return '';
+  if (cacheAgeMs === null || cacheAgeMs === 0) return 'just now';
 
   const seconds = Math.floor(cacheAgeMs / 1000);
   const minutes = Math.floor(seconds / 60);
@@ -83,6 +83,55 @@ function formatCacheAge(cacheAgeMs: number | null): string {
   } else {
     return 'just now';
   }
+}
+
+// ============================================================================
+// PlaybookTileSkeleton Sub-component
+// ============================================================================
+
+function PlaybookTileSkeleton({ theme }: { theme: Theme }) {
+  return (
+    <div
+      className="p-4 rounded-lg border animate-pulse"
+      style={{
+        backgroundColor: theme.colors.bgActivity,
+        borderColor: theme.colors.border,
+      }}
+    >
+      {/* Category badge skeleton */}
+      <div className="flex items-center gap-2 mb-2">
+        <div
+          className="w-16 h-5 rounded"
+          style={{ backgroundColor: theme.colors.bgMain }}
+        />
+      </div>
+      {/* Title skeleton */}
+      <div
+        className="h-5 w-3/4 rounded mb-1"
+        style={{ backgroundColor: theme.colors.bgMain }}
+      />
+      {/* Description skeleton lines */}
+      <div
+        className="h-4 w-full rounded mb-1"
+        style={{ backgroundColor: theme.colors.bgMain }}
+      />
+      <div
+        className="h-4 w-2/3 rounded mb-3"
+        style={{ backgroundColor: theme.colors.bgMain }}
+      />
+      {/* Footer skeleton */}
+      <div className="flex justify-between">
+        <div
+          className="h-3 w-20 rounded"
+          style={{ backgroundColor: theme.colors.bgMain }}
+        />
+        <div
+          className="h-3 w-12 rounded"
+          style={{ backgroundColor: theme.colors.bgMain }}
+        />
+      </div>
+    </div>
+  );
 }
 
 // ============================================================================
@@ -134,10 +183,11 @@ function PlaybookTile({ playbook, theme, isSelected, onSelect }: PlaybookTilePro
         )}
       </div>
 
-      {/* Title */}
+      {/* Title - with tooltip for truncated text */}
       <h3
         className="font-semibold mb-1 line-clamp-1"
         style={{ color: theme.colors.textMain }}
+        title={playbook.title}
       >
         {playbook.title}
       </h3>
@@ -777,7 +827,7 @@ export function MarketplaceModal({
       <div
         role="dialog"
         aria-modal="true"
-        aria-label="Playbook Marketplace"
+        aria-labelledby="marketplace-title"
         tabIndex={-1}
         className="w-[900px] max-w-[90vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[80vh] outline-none"
         style={{
@@ -815,6 +865,7 @@ export function MarketplaceModal({
                   style={{ color: theme.colors.accent }}
                 />
                 <h2
+                  id="marketplace-title"
                   className="text-lg font-semibold"
                   style={{ color: theme.colors.textMain }}
                 >
@@ -832,6 +883,8 @@ export function MarketplaceModal({
                   disabled={isRefreshing}
                   className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
                   title="Refresh marketplace data"
+                  aria-label="Refresh marketplace"
+                  aria-busy={isRefreshing}
                 >
                   <RefreshCw
                     className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -842,7 +895,8 @@ export function MarketplaceModal({
                 <button
                   onClick={onClose}
                   className="p-1.5 rounded hover:bg-white/10 transition-colors"
-                  title="Close"
+                  title="Close (Esc)"
+                  aria-label="Close marketplace"
                 >
                   <X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
                 </button>
@@ -913,22 +967,27 @@ export function MarketplaceModal({
             {/* Playbook Grid */}
             <div className="flex-1 overflow-y-auto p-4">
               {isLoading ? (
-                <div className="flex items-center justify-center h-full min-h-[200px]">
-                  <Loader2
-                    className="w-8 h-8 animate-spin"
-                    style={{ color: theme.colors.accent }}
-                  />
+                // Loading skeleton tiles
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                  {[...Array(6)].map((_, i) => (
+                    <PlaybookTileSkeleton key={i} theme={theme} />
+                  ))}
                 </div>
               ) : error ? (
-                <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
+                <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center py-12">
                   <Package
-                    className="w-12 h-12 mb-3"
-                    style={{ color: theme.colors.error }}
+                    className="w-16 h-16 mb-4"
+                    style={{ color: theme.colors.error, opacity: 0.7 }}
                   />
-                  <p style={{ color: theme.colors.error }}>{error}</p>
+                  <p className="text-lg font-medium mb-2" style={{ color: theme.colors.error }}>
+                    Failed to load marketplace
+                  </p>
+                  <p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
+                    {error}
+                  </p>
                   <button
                     onClick={() => refresh()}
-                    className="mt-4 px-4 py-2 rounded text-sm"
+                    className="px-4 py-2 rounded text-sm font-medium"
                     style={{
                       backgroundColor: theme.colors.accent,
                       color: theme.colors.accentForeground,
@@ -938,16 +997,30 @@ export function MarketplaceModal({
                   </button>
                 </div>
               ) : filteredPlaybooks.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center">
+                <div className="flex flex-col items-center justify-center h-full min-h-[200px] text-center py-12">
                   <Package
-                    className="w-12 h-12 mb-3"
-                    style={{ color: theme.colors.textDim }}
+                    className="w-16 h-16 mb-4"
+                    style={{ color: theme.colors.textDim, opacity: 0.5 }}
                   />
-                  <p style={{ color: theme.colors.textDim }}>
-                    {searchQuery
-                      ? 'No playbooks match your search'
-                      : 'No playbooks available'}
-                  </p>
+                  {searchQuery ? (
+                    <>
+                      <p className="text-lg font-medium mb-2" style={{ color: theme.colors.textMain }}>
+                        No results found
+                      </p>
+                      <p className="text-sm" style={{ color: theme.colors.textDim }}>
+                        Try adjusting your search or browse a different category
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="text-lg font-medium mb-2" style={{ color: theme.colors.textMain }}>
+                        No playbooks available
+                      </p>
+                      <p className="text-sm" style={{ color: theme.colors.textDim }}>
+                        Check back later for new playbooks
+                      </p>
+                    </>
+                  )}
                 </div>
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
