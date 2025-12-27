@@ -12,6 +12,7 @@ import { ToggleButtonGroup } from './ToggleButtonGroup';
 import { SettingCheckbox } from './SettingCheckbox';
 import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
+import { SshRemotesSection } from './Settings/SshRemotesSection';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -1269,6 +1270,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
                   </div>
                 </div>
               </div>
+
+              {/* SSH Remote Hosts */}
+              <SshRemotesSection theme={theme} />
 
               {/* Settings Storage Location */}
               <div

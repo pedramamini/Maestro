@@ -93,9 +93,26 @@
 - All IPC handlers use `createIpcHandler` pattern for consistent error handling and logging
 
 - [x] T020 [US1] Create useSshRemotes hook in src/renderer/hooks/useSshRemotes.ts
-- [ ] T021 [US1] Create SshRemoteModal component in src/renderer/components/Settings/SshRemoteModal.tsx
-- [ ] T022 [US1] Create SshRemotesSection component in src/renderer/components/Settings/SshRemotesSection.tsx
-- [ ] T023 [US1] Integrate SshRemotesSection into src/renderer/components/Settings/SettingsModal.tsx
+- [x] T021 [US1] Create SshRemoteModal component in src/renderer/components/Settings/SshRemoteModal.tsx
+- [x] T022 [US1] Create SshRemotesSection component in src/renderer/components/Settings/SshRemotesSection.tsx
+- [x] T023 [US1] Integrate SshRemotesSection into src/renderer/components/Settings/SettingsModal.tsx
+
+**Phase 3 Frontend Notes (2025-12-27):**
+- Created `src/renderer/components/Settings/SshRemoteModal.tsx` with form for adding/editing SSH remotes
+  - Display name, host, port, username, private key path
+  - Optional remote working directory and environment variables
+  - Enabled/disabled toggle
+  - Connection testing with result display (success/error with hostname)
+  - Uses `Modal` and `FormInput` components for consistent UI
+- Created `src/renderer/components/Settings/SshRemotesSection.tsx` for the Settings modal
+  - Lists all configured SSH remotes with status badges (default, disabled)
+  - Inline actions: test connection, set as default, edit, delete
+  - Empty state with helpful instructions
+  - Add SSH Remote button
+  - Integrates with `useSshRemotes` hook for all state management
+- Added `SSH_REMOTE` modal priority (460) in `modalPriorities.ts`
+- Integrated `SshRemotesSection` into `SettingsModal.tsx` general tab
+- Created `src/renderer/components/Settings/index.ts` for exports
 
 ---
 
