@@ -307,6 +307,13 @@ const mockMaestro = {
     migrateStorage: vi.fn().mockResolvedValue({ success: true, migratedCount: 0 }),
     resetToDefault: vi.fn().mockResolvedValue({ success: true }),
   },
+  sshRemote: {
+    getConfigs: vi.fn().mockResolvedValue({ success: true, configs: [] }),
+    getDefaultId: vi.fn().mockResolvedValue({ success: true, id: null }),
+    setConfigs: vi.fn().mockResolvedValue({ success: true }),
+    setDefaultId: vi.fn().mockResolvedValue({ success: true }),
+    testConnection: vi.fn().mockResolvedValue({ success: true }),
+  },
 };
 
 Object.defineProperty(window, 'maestro', {
