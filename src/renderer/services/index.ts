@@ -29,3 +29,11 @@ export type { GroomingResult, GroomingConfig } from './contextGroomer';
 // Context summarization service
 export { ContextSummarizationService, contextSummarizationService } from './contextSummarizer';
 export type { SummarizationConfig } from './contextSummarizer';
+
+// Wizard intent parser service
+export {
+  parseWizardIntent,
+  suggestsIterateIntent,
+  suggestsNewIntent,
+} from './wizardIntentParser';
+export type { WizardIntentResult } from './wizardIntentParser';
