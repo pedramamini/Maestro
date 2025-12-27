@@ -45,11 +45,21 @@
 
 **Prerequisite**: Phase 1 complete.
 
-- [ ] T007 Create SshRemoteManager class skeleton in src/main/ssh-remote-manager.ts
-- [ ] T008 Implement validateConfig method in src/main/ssh-remote-manager.ts
-- [ ] T009 Implement testConnection method in src/main/ssh-remote-manager.ts
-- [ ] T010 Implement buildSshArgs helper method in src/main/ssh-remote-manager.ts
-- [ ] T011 Export SshRemoteManager singleton instance in src/main/ssh-remote-manager.ts
+- [x] T007 Create SshRemoteManager class skeleton in src/main/ssh-remote-manager.ts
+- [x] T008 Implement validateConfig method in src/main/ssh-remote-manager.ts
+- [x] T009 Implement testConnection method in src/main/ssh-remote-manager.ts
+- [x] T010 Implement buildSshArgs helper method in src/main/ssh-remote-manager.ts
+- [x] T011 Export SshRemoteManager singleton instance in src/main/ssh-remote-manager.ts
+
+**Phase 2 Notes (2025-12-27):**
+- Created `src/main/ssh-remote-manager.ts` with full `SshRemoteManager` class
+- Implemented `validateConfig()` for required fields, port range (1-65535), and private key readability
+- Implemented `testConnection()` with SSH connection test, hostname retrieval, and optional agent detection
+- Implemented `buildSshArgs()` for constructing SSH command-line arguments with security options (BatchMode, StrictHostKeyChecking, ConnectTimeout)
+- Added dependency injection pattern (`SshRemoteManagerDeps`) for testability
+- Comprehensive SSH error parsing for user-friendly messages (permission denied, connection refused, timeout, hostname resolution, host key changed, passphrase issues)
+- Added 38 unit tests in `src/__tests__/main/ssh-remote-manager.test.ts`
+- Exported `sshRemoteManager` singleton instance for use throughout the application
 
 ---
 
