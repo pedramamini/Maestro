@@ -138,7 +138,25 @@
 - Added 29 unit tests in `src/__tests__/main/utils/ssh-command-builder.test.ts`
   - Tests cover: basic command building, cwd handling, env merging, tilde expansion
   - Security tests: injection prevention via args, cwd, env values, invalid env names
-- [ ] T026 [US2] Add getSshRemoteConfig helper to resolve effective remote in src/main/process-manager.ts
+- [x] T026 [US2] Add getSshRemoteConfig helper to resolve effective remote in src/main/process-manager.ts
+
+**Phase 4 (T026) Notes (2025-12-27):**
+- Created `src/main/utils/ssh-remote-resolver.ts` with:
+  - `getSshRemoteConfig()`: Resolves effective SSH remote config with priority:
+    1. Agent-specific disabled -> force local execution
+    2. Agent-specific remoteId -> use that specific remote
+    3. Global defaultSshRemoteId -> use that remote
+    4. No SSH remote configured -> local execution
+  - `createSshRemoteStoreAdapter()`: Factory to wrap electron-store with SshRemoteSettingsStore interface
+  - `SshRemoteSettingsStore` interface: Abstracts store access for testability
+  - `SshRemoteResolveResult` type: Returns both config and resolution source ('agent', 'global', 'disabled', 'none')
+- Design decisions:
+  - Created separate utility file (not in process-manager.ts) for better testability and separation of concerns
+  - Uses dependency injection pattern via store interface for easy unit testing
+  - Validates that remotes are enabled before returning them
+  - Falls back through the priority chain gracefully when remotes are missing or disabled
+- Added 18 unit tests in `src/__tests__/main/utils/ssh-remote-resolver.test.ts`
+  - Tests cover: no remotes configured, global default, agent override, priority ordering, disabled remotes, store adapter
 - [ ] T027 [US2] Modify spawn() to detect SSH remote config in src/main/process-manager.ts
 - [ ] T028 [US2] Wrap agent command with buildSshCommand when SSH enabled in src/main/process-manager.ts
 - [ ] T029 [US2] Pass agent config env vars to remote command in src/main/process-manager.ts
