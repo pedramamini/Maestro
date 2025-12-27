@@ -92,7 +92,7 @@
 - Added 19 unit tests in `src/__tests__/main/ipc/handlers/ssh-remote.test.ts`
 - All IPC handlers use `createIpcHandler` pattern for consistent error handling and logging
 
-- [ ] T020 [US1] Create useSshRemotes hook in src/renderer/hooks/useSshRemotes.ts
+- [x] T020 [US1] Create useSshRemotes hook in src/renderer/hooks/useSshRemotes.ts
 - [ ] T021 [US1] Create SshRemoteModal component in src/renderer/components/Settings/SshRemoteModal.tsx
 - [ ] T022 [US1] Create SshRemotesSection component in src/renderer/components/Settings/SshRemotesSection.tsx
 - [ ] T023 [US1] Integrate SshRemotesSection into src/renderer/components/Settings/SettingsModal.tsx

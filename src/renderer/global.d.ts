@@ -554,6 +554,76 @@ interface MaestroAPI {
     stop: () => Promise<{ success: boolean }>;
     getStatus: () => Promise<{ isRunning: boolean; url: string | null; error: string | null }>;
   };
+  sshRemote: {
+    saveConfig: (config: {
+      id?: string;
+      name?: string;
+      host?: string;
+      port?: number;
+      username?: string;
+      privateKeyPath?: string;
+      remoteWorkingDir?: string;
+      remoteEnv?: Record<string, string>;
+      enabled?: boolean;
+    }) => Promise<{
+      success: boolean;
+      config?: {
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKeyPath: string;
+        remoteWorkingDir?: string;
+        remoteEnv?: Record<string, string>;
+        enabled: boolean;
+      };
+      error?: string;
+    }>;
+    deleteConfig: (id: string) => Promise<{ success: boolean; error?: string }>;
+    getConfigs: () => Promise<{
+      success: boolean;
+      configs?: Array<{
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKeyPath: string;
+        remoteWorkingDir?: string;
+        remoteEnv?: Record<string, string>;
+        enabled: boolean;
+      }>;
+      error?: string;
+    }>;
+    getDefaultId: () => Promise<{ success: boolean; id?: string | null; error?: string }>;
+    setDefaultId: (id: string | null) => Promise<{ success: boolean; error?: string }>;
+    test: (
+      configOrId: string | {
+        id: string;
+        name: string;
+        host: string;
+        port: number;
+        username: string;
+        privateKeyPath: string;
+        remoteWorkingDir?: string;
+        remoteEnv?: Record<string, string>;
+        enabled: boolean;
+      },
+      agentCommand?: string
+    ) => Promise<{
+      success: boolean;
+      result?: {
+        success: boolean;
+        error?: string;
+        remoteInfo?: {
+          hostname: string;
+          agentVersion?: string;
+        };
+      };
+      error?: string;
+    }>;
+  };
   devtools: {
     open: () => Promise<void>;
     close: () => Promise<void>;

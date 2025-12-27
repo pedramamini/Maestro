@@ -31,3 +31,7 @@ export type {
   UseCliActivityMonitoringDeps,
   UseCliActivityMonitoringReturn,
 } from './useCliActivityMonitoring';
+
+// SSH remote configuration management
+export { useSshRemotes } from './useSshRemotes';
+export type { UseSshRemotesReturn } from './useSshRemotes';
