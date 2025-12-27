@@ -89,6 +89,7 @@ import { InputProvider, useInputContext } from './contexts/InputContext';
 import { GroupChatProvider, useGroupChat } from './contexts/GroupChatContext';
 import { AutoRunProvider, useAutoRun } from './contexts/AutoRunContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
+import { InlineWizardProvider } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
 
 // Import services
@@ -10361,6 +10362,7 @@ You are taking over this conversation. Based on the context above, provide a bri
  * Phase 4: GroupChatProvider - centralized group chat state management
  * Phase 5: AutoRunProvider - centralized Auto Run and batch processing state management
  * Phase 6: SessionProvider - centralized session and group state management
+ * Phase 7: InlineWizardProvider - inline /wizard command state management
  * See refactor-details-2.md for full plan.
  */
 export default function MaestroConsole() {
@@ -10368,9 +10370,11 @@ export default function MaestroConsole() {
     <SessionProvider>
       <AutoRunProvider>
         <GroupChatProvider>
-          <InputProvider>
-            <MaestroConsoleInner />
-          </InputProvider>
+          <InlineWizardProvider>
+            <InputProvider>
+              <MaestroConsoleInner />
+            </InputProvider>
+          </InlineWizardProvider>
         </GroupChatProvider>
       </AutoRunProvider>
     </SessionProvider>
