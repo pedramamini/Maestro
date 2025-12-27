@@ -230,11 +230,34 @@
 
 **Prerequisite**: US1 complete.
 
-- [ ] T033 [US4] Implement ssh-remote:test handler in src/main/ipc/handlers/ssh-remote.ts
-- [ ] T034 [US4] Add test IPC call to sshRemote API in src/main/preload.ts
-- [ ] T035 [US4] Add testConnection function to useSshRemotes hook in src/renderer/hooks/useSshRemotes.ts
-- [ ] T036 [US4] Add Test Connection button and result display in src/renderer/components/Settings/SshRemoteModal.tsx
-- [ ] T037 [US4] Add Test button per remote in list in src/renderer/components/Settings/SshRemotesSection.tsx
+- [x] T033 [US4] Implement ssh-remote:test handler in src/main/ipc/handlers/ssh-remote.ts
+- [x] T034 [US4] Add test IPC call to sshRemote API in src/main/preload.ts
+- [x] T035 [US4] Add testConnection function to useSshRemotes hook in src/renderer/hooks/useSshRemotes.ts
+- [x] T036 [US4] Add Test Connection button and result display in src/renderer/components/Settings/SshRemoteModal.tsx
+- [x] T037 [US4] Add Test button per remote in list in src/renderer/components/Settings/SshRemotesSection.tsx
+
+**Phase 6 Notes (2025-12-27):**
+- All Phase 6 tasks were already completed as part of Phase 3 backend and frontend work
+- `ssh-remote:test` handler implemented in `src/main/ipc/handlers/ssh-remote.ts` (lines 222-260):
+  - Accepts either config ID (to test stored config) or full config object (to test before saving)
+  - Logs connection test attempts and results
+  - Returns `SshRemoteTestResult` with success status, error message, and remote info (hostname, agent version)
+- `test` IPC exposed in `src/main/preload.ts` (lines 577-587):
+  - `window.maestro.sshRemote.test(configOrId, agentCommand?)` method available
+  - Accepts string ID or full `SshRemoteConfig` object
+  - Optional `agentCommand` parameter to check agent availability on remote
+- `testConnection` function in `useSshRemotes` hook (`src/renderer/hooks/remote/useSshRemotes.ts` lines 225-251):
+  - Manages `testingConfigId` state to show loading indicator
+  - Returns structured result with success status and detailed error messages
+- Test Connection button and result display in `SshRemoteModal.tsx`:
+  - Button in modal footer (lines 287-309) with loading spinner during test
+  - Success/failure result banner (lines 337-361) with hostname display
+  - Validates form before testing
+- Test button per remote in `SshRemotesSection.tsx` (lines 264-279):
+  - Wifi icon button that triggers connection test
+  - Shows loading spinner during test
+  - Displays inline test result with success/failure message
+- 75 SSH-related tests pass (38 ssh-remote-manager + 18 ssh-remote-resolver + 19 IPC handlers)
 
 ---
 
