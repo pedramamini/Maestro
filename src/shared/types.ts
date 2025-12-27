@@ -194,3 +194,86 @@ export interface AgentErrorRecovery {
   /** Icon identifier for the action button (optional) */
   icon?: string;
 }
+
+// ============================================================================
+// SSH Remote Execution Types
+// ============================================================================
+
+/**
+ * Configuration for an SSH remote host where agents can be executed.
+ * Supports key-based authentication only (no password auth).
+ */
+export interface SshRemoteConfig {
+  /** Unique identifier for this remote configuration */
+  id: string;
+
+  /** Display name for UI */
+  name: string;
+
+  /** SSH server hostname or IP */
+  host: string;
+
+  /** SSH server port (default: 22) */
+  port: number;
+
+  /** SSH username */
+  username: string;
+
+  /** Path to private key file (required, no password auth) */
+  privateKeyPath: string;
+
+  /** Default working directory on remote (optional) */
+  remoteWorkingDir?: string;
+
+  /** Environment variables to set on remote */
+  remoteEnv?: Record<string, string>;
+
+  /** Enable this remote configuration */
+  enabled: boolean;
+}
+
+/**
+ * Status of an SSH remote connection from last test.
+ */
+export interface SshRemoteStatus {
+  /** Last connection test result */
+  lastTestSuccess: boolean | null;
+
+  /** Last connection test timestamp */
+  lastTestAt: number | null;
+
+  /** Error message from last test */
+  lastTestError: string | null;
+}
+
+/**
+ * Result of testing an SSH remote connection.
+ */
+export interface SshRemoteTestResult {
+  /** Whether the connection test succeeded */
+  success: boolean;
+
+  /** Error message if test failed */
+  error?: string;
+
+  /** Remote host info (hostname, agent version, etc.) */
+  remoteInfo?: {
+    hostname: string;
+    agentVersion?: string;
+  };
+}
+
+/**
+ * Agent-level SSH remote configuration.
+ * Allows overriding the global default SSH remote for specific agents.
+ */
+export interface AgentSshRemoteConfig {
+  /** Use SSH remote for this agent */
+  enabled: boolean;
+
+  /** Remote config ID to use (references SshRemoteConfig.id) */
+  remoteId: string | null;
+
+  /** Override working directory for this agent */
+  workingDirOverride?: string;
+}
