@@ -77,6 +77,21 @@ export interface WizardPreviousUIState {
 }
 
 /**
+ * Generated document from wizard.
+ * Stores document content and metadata for display and editing.
+ */
+export interface WizardGeneratedDocument {
+  /** Filename (e.g., "phase-01.md") */
+  filename: string;
+  /** Document content (markdown) */
+  content: string;
+  /** Number of tasks in the document */
+  taskCount: number;
+  /** Absolute path after saving */
+  savedPath?: string;
+}
+
+/**
  * Per-session/per-tab wizard state.
  * Keeps track of inline wizard state for the /wizard command.
  */
@@ -93,6 +108,24 @@ export interface SessionWizardState {
   conversationHistory: WizardMessage[];
   /** Previous UI state to restore when wizard ends */
   previousUIState: WizardPreviousUIState;
+
+  // Document generation state
+  /** Whether documents are currently being generated (triggers takeover view) */
+  isGeneratingDocs?: boolean;
+  /** Generated documents */
+  generatedDocuments?: WizardGeneratedDocument[];
+  /** Currently selected document index */
+  currentDocumentIndex?: number;
+  /** Streaming content for document being generated */
+  streamingContent?: string;
+  /** Progress message during generation */
+  progressMessage?: string;
+  /** Index of document currently being generated (for progress indicator) */
+  currentGeneratingIndex?: number;
+  /** Total number of documents to generate (for progress indicator) */
+  totalDocuments?: number;
+  /** Folder path for Auto Run docs */
+  autoRunFolderPath?: string;
 }
 
 export interface Shortcut {

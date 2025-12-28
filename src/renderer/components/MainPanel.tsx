@@ -8,7 +8,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { GitStatusWidget } from './GitStatusWidget';
 import { AgentSessionsBrowser } from './AgentSessionsBrowser';
 import { TabBar } from './TabBar';
-import { WizardConversationView } from './InlineWizard';
+import { WizardConversationView, DocumentGenerationView } from './InlineWizard';
 import { gitService } from '../services/git';
 import { useGitStatus } from '../contexts/GitStatusContext';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
@@ -231,6 +231,14 @@ interface MainPanelProps {
 
   // Document Graph
   onOpenInGraph?: () => void;
+
+  // Wizard document generation callbacks
+  /** Called when wizard document generation completes and user clicks Done */
+  onWizardComplete?: () => void;
+  /** Called when user selects a different document in the wizard */
+  onWizardDocumentSelect?: (index: number) => void;
+  /** Called when user edits document content in the wizard */
+  onWizardContentChange?: (content: string, docIndex: number) => void;
 }
 
 // PERFORMANCE: Wrap with React.memo to prevent re-renders when parent (App.tsx) re-renders
@@ -1102,9 +1110,25 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
             </div>
           ) : (
             <>
-              {/* Logs Area - Show WizardConversationView when wizard is active, otherwise show TerminalOutput */}
+              {/* Logs Area - Show DocumentGenerationView when generating docs, WizardConversationView when wizard is active, otherwise show TerminalOutput */}
               <div className="flex-1 overflow-hidden flex flex-col" data-tour="main-terminal">
-              {activeSession.wizardState?.isActive ? (
+              {activeSession.wizardState?.isGeneratingDocs ? (
+                <DocumentGenerationView
+                  key={`wizard-gen-${activeSession.id}-${activeSession.activeTabId}`}
+                  theme={theme}
+                  documents={activeSession.wizardState?.generatedDocuments ?? []}
+                  currentDocumentIndex={activeSession.wizardState?.currentDocumentIndex ?? 0}
+                  isGenerating={activeSession.state === 'busy' || Boolean(activeSession.wizardState?.streamingContent)}
+                  streamingContent={activeSession.wizardState?.streamingContent}
+                  onComplete={props.onWizardComplete || (() => {})}
+                  onDocumentSelect={props.onWizardDocumentSelect || (() => {})}
+                  folderPath={activeSession.wizardState?.autoRunFolderPath}
+                  onContentChange={props.onWizardContentChange}
+                  progressMessage={activeSession.wizardState?.progressMessage}
+                  currentGeneratingIndex={activeSession.wizardState?.currentGeneratingIndex}
+                  totalDocuments={activeSession.wizardState?.totalDocuments}
+                />
+              ) : activeSession.wizardState?.isActive ? (
                 <WizardConversationView
                   key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
                   theme={theme}
