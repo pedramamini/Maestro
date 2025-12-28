@@ -15,7 +15,7 @@
  * - Tab character insertion
  */
 
-import { useState, useCallback, useRef, useMemo } from 'react';
+import { useState, useCallback, useRef, useMemo, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
@@ -31,7 +31,7 @@ import {
 import type { Theme } from '../../../types';
 import { MermaidRenderer } from '../../MermaidRenderer';
 import type { GeneratedDocument } from '../WizardContext';
-import { useEffect } from 'react';
+import { DocumentSelector } from './DocumentSelector';
 
 // Memoize remarkPlugins array - it never changes
 const REMARK_PLUGINS = [remarkGfm];
@@ -578,133 +578,21 @@ export function DocumentEditor({
     [theme, folderPath]
   );
 
-  // Calculate dropdown width based on longest filename
-  // Approximate: ~8px per character + padding (40px for icon + padding)
-  const longestFilename = useMemo(() => {
-    if (documents.length === 0) return '';
-    return documents.reduce((longest, doc) =>
-      doc.filename.length > longest.length ? doc.filename : longest
-    , '');
-  }, [documents]);
-
-  // Min 280px, max 500px, scale with filename length
-  const dropdownWidth = useMemo(() => {
-    const charWidth = 7.5; // approximate px per character in the font
-    const padding = 60; // padding + chevron icon space
-    const calculatedWidth = longestFilename.length * charWidth + padding;
-    return Math.min(500, Math.max(280, calculatedWidth));
-  }, [longestFilename]);
-
-  // Import DocumentSelector inline to avoid circular dependency
-  // This is a simplified version for use within the editor
-  const DocumentSelectorInline = useMemo(() => {
-    return function Selector() {
-      const [isOpen, setIsOpen] = useState(false);
-      const dropdownRef = useRef<HTMLDivElement>(null);
-      const buttonRef = useRef<HTMLButtonElement>(null);
-
-      const selectedDoc = documents[selectedDocIndex];
-
-      useEffect(() => {
-        function handleClickOutside(event: MouseEvent) {
-          if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
-            setIsOpen(false);
-          }
-        }
-        if (isOpen) {
-          document.addEventListener('mousedown', handleClickOutside);
-          return () => document.removeEventListener('mousedown', handleClickOutside);
-        }
-      }, [isOpen]);
-
-      useEffect(() => {
-        function handleKeyDown(event: KeyboardEvent) {
-          if (event.key === 'Escape' && isOpen) {
-            event.preventDefault();
-            event.stopPropagation();
-            setIsOpen(false);
-            buttonRef.current?.focus();
-          }
-        }
-        if (isOpen) {
-          document.addEventListener('keydown', handleKeyDown, true);
-          return () => document.removeEventListener('keydown', handleKeyDown, true);
-        }
-      }, [isOpen]);
-
-      return (
-        <div ref={dropdownRef} className="relative flex-1 min-w-0">
-          <button
-            ref={buttonRef}
-            onClick={() => setIsOpen(!isOpen)}
-            className="w-full min-w-0 flex items-center justify-between px-3 py-2 rounded text-sm transition-colors hover:opacity-90"
-            style={{
-              backgroundColor: theme.colors.bgActivity,
-              color: theme.colors.textMain,
-              border: `1px solid ${theme.colors.border}`,
-            }}
-          >
-            <span className="truncate min-w-0 flex-1">
-              {selectedDoc?.filename || 'Select document...'}
-            </span>
-            <ChevronDown
-              className={`w-4 h-4 ml-2 shrink-0 transition-transform ${isOpen ? 'rotate-180' : ''}`}
-              style={{ color: theme.colors.textDim }}
-            />
-          </button>
-
-          {isOpen && (
-            <div
-              className="absolute top-full left-0 right-0 mt-1 rounded shadow-lg overflow-hidden z-50"
-              style={{
-                backgroundColor: theme.colors.bgSidebar,
-                border: `1px solid ${theme.colors.border}`,
-                maxHeight: '300px',
-                overflowY: 'auto',
-              }}
-            >
-              {documents.length === 0 ? (
-                <div
-                  className="px-3 py-2 text-sm"
-                  style={{ color: theme.colors.textDim }}
-                >
-                  No documents generated
-                </div>
-              ) : (
-                documents.map((doc, index) => (
-                  <button
-                    key={doc.filename}
-                    onClick={() => {
-                      onDocumentSelect(index);
-                      setIsOpen(false);
-                    }}
-                    className="w-full text-left px-3 py-2 text-sm transition-colors hover:bg-white/5"
-                    style={{
-                      color: index === selectedDocIndex ? theme.colors.accent : theme.colors.textMain,
-                      backgroundColor: index === selectedDocIndex ? theme.colors.bgActivity : 'transparent',
-                    }}
-                  >
-                    {doc.filename}
-                  </button>
-                ))
-              )}
-            </div>
-          )}
-        </div>
-      );
-    };
-  }, [documents, selectedDocIndex, onDocumentSelect, theme]);
-
   return (
     <div className="flex flex-col flex-1 min-h-0">
       {/* Toolbar row: Document selector + Edit/Preview buttons - centered */}
       {showHeader && (
         <>
           <div className="flex items-center justify-center gap-3 mb-2">
-            {/* Document selector - width based on longest filename */}
-            <div className="min-w-0" style={{ width: dropdownWidth }}>
-              <DocumentSelectorInline />
-            </div>
+            {/* Document selector - uses shared DocumentSelector component */}
+            <DocumentSelector
+              documents={documents}
+              selectedIndex={selectedDocIndex}
+              onSelect={onDocumentSelect}
+              theme={theme}
+              disabled={isLocked}
+              className="min-w-0"
+            />
 
             {/* Edit/Preview toggle */}
             <div className="flex gap-2">
