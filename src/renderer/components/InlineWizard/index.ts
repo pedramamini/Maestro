@@ -9,3 +9,4 @@ export { WizardPill } from './WizardPill';
 export { WizardConfidenceGauge } from './WizardConfidenceGauge';
 export { WizardInputPanel } from './WizardInputPanel';
 export { WizardModePrompt } from './WizardModePrompt';
+export { WizardMessageBubble, type WizardMessageBubbleProps, type WizardMessageBubbleMessage } from './WizardMessageBubble';
