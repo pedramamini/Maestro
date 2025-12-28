@@ -16,7 +16,7 @@ Settings are organized into tabs:
 | **Shortcuts** | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts)) |
 | **Appearance** | Font size, UI density |
 | **Notifications** | Sound alerts, text-to-speech settings |
-| **AI Commands** | View and edit slash commands and Spec-Kit prompts |
+| **AI Commands** | View and edit slash commands, [Spec-Kit](./speckit-commands), and [OpenSpec](./openspec-commands) prompts |
 
 ## Checking for Updates
 

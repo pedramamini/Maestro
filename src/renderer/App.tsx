@@ -90,6 +90,7 @@ import { ToastContainer } from './components/Toast';
 // Import services
 import { gitService } from './services/git';
 import { getSpeckitCommands } from './services/speckit';
+import { getOpenSpecCommands } from './services/openspec';
 
 // Import prompts and synopsis parsing
 import { autorunSynopsisPrompt, maestroSystemPrompt } from '../prompts';
@@ -101,7 +102,7 @@ import type {
   ToolType, SessionState, RightPanelTab,
   FocusArea, LogEntry, Session, AITab, UsageStats, QueuedItem, BatchRunConfig,
   AgentError, BatchRunState, GroupChatMessage,
-  SpecKitCommand, LeaderboardRegistration, CustomAICommand
+  SpecKitCommand, OpenSpecCommand, LeaderboardRegistration, CustomAICommand
 } from './types';
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
@@ -314,6 +315,9 @@ function MaestroConsoleInner() {
 
   // Spec Kit commands (loaded from bundled prompts)
   const [speckitCommands, setSpeckitCommands] = useState<SpecKitCommand[]>([]);
+
+  // OpenSpec commands (loaded from bundled prompts)
+  const [openspecCommands, setOpenspecCommands] = useState<OpenSpecCommand[]>([]);
 
   // --- GROUP CHAT STATE (Phase 4: extracted to GroupChatContext) ---
   // Note: groupChatsExpanded remains here as it's a UI layout concern (already in UILayoutContext)
@@ -1139,6 +1143,19 @@ function MaestroConsoleInner() {
       }
     };
     loadSpeckitCommands();
+  }, []);
+
+  // Load OpenSpec commands on startup
+  useEffect(() => {
+    const loadOpenspecCommands = async () => {
+      try {
+        const commands = await getOpenSpecCommands();
+        setOpenspecCommands(commands);
+      } catch (error) {
+        console.error('[OpenSpec] Failed to load commands:', error);
+      }
+    };
+    loadOpenspecCommands();
   }, []);
 
   // Set up process event listeners for real-time output
@@ -2372,10 +2389,12 @@ function MaestroConsoleInner() {
   const updateGlobalStatsRef = useRef(updateGlobalStats);
   const customAICommandsRef = useRef(customAICommands);
   const speckitCommandsRef = useRef(speckitCommands);
+  const openspecCommandsRef = useRef(openspecCommands);
   addToastRef.current = addToast;
   updateGlobalStatsRef.current = updateGlobalStats;
   customAICommandsRef.current = customAICommands;
   speckitCommandsRef.current = speckitCommands;
+  openspecCommandsRef.current = openspecCommands;
 
   // Note: spawnBackgroundSynopsisRef and spawnAgentWithPromptRef are now provided by useAgentExecution hook
   // Note: addHistoryEntryRef is now provided by useAgentSessionManagement hook
@@ -3131,8 +3150,8 @@ function MaestroConsoleInner() {
     });
   }, [activeSession, canSummarize, minContextUsagePercent, startSummarize, setSessions, addToast, clearTabState]);
 
-  // Combine custom AI commands with spec-kit commands for input processing (slash command execution)
-  // This ensures speckit commands are processed the same way as custom commands
+  // Combine custom AI commands with spec-kit and openspec commands for input processing (slash command execution)
+  // This ensures speckit and openspec commands are processed the same way as custom commands
   const allCustomCommands = useMemo((): CustomAICommand[] => {
     // Convert speckit commands to CustomAICommand format
     const speckitAsCustom: CustomAICommand[] = speckitCommands.map(cmd => ({
@@ -3142,10 +3161,18 @@ function MaestroConsoleInner() {
       prompt: cmd.prompt,
       isBuiltIn: true, // Speckit commands are built-in (bundled)
     }));
-    return [...customAICommands, ...speckitAsCustom];
-  }, [customAICommands, speckitCommands]);
+    // Convert openspec commands to CustomAICommand format
+    const openspecAsCustom: CustomAICommand[] = openspecCommands.map(cmd => ({
+      id: `openspec-${cmd.id}`,
+      command: cmd.command,
+      description: cmd.description,
+      prompt: cmd.prompt,
+      isBuiltIn: true, // OpenSpec commands are built-in (bundled)
+    }));
+    return [...customAICommands, ...speckitAsCustom, ...openspecAsCustom];
+  }, [customAICommands, speckitCommands, openspecCommands]);
 
-  // Combine built-in slash commands with custom AI commands, spec-kit commands, AND agent-specific commands for autocomplete
+  // Combine built-in slash commands with custom AI commands, spec-kit commands, openspec commands, AND agent-specific commands for autocomplete
   const allSlashCommands = useMemo(() => {
     const customCommandsAsSlash = customAICommands
       .map(cmd => ({
@@ -3163,6 +3190,15 @@ function MaestroConsoleInner() {
         prompt: cmd.prompt, // Include prompt for execution
         isSpeckit: true, // Mark as spec-kit command for special handling
       }));
+    // OpenSpec commands (bundled from Fission-AI/OpenSpec)
+    const openspecCommandsAsSlash = openspecCommands
+      .map(cmd => ({
+        command: cmd.command,
+        description: cmd.description,
+        aiOnly: true, // OpenSpec commands are only available in AI mode
+        prompt: cmd.prompt, // Include prompt for execution
+        isOpenspec: true, // Mark as openspec command for special handling
+      }));
     // Only include agent-specific commands if the agent supports slash commands
     // This allows built-in and custom commands to be shown for all agents (Codex, OpenCode, etc.)
     const agentCommands = hasActiveSessionCapability('supportsSlashCommands')
@@ -3172,8 +3208,8 @@ function MaestroConsoleInner() {
           aiOnly: true, // Agent commands are only available in AI mode
         }))
       : [];
-    return [...slashCommands, ...customCommandsAsSlash, ...speckitCommandsAsSlash, ...agentCommands];
-  }, [customAICommands, speckitCommands, activeSession?.agentCommands, hasActiveSessionCapability]);
+    return [...slashCommands, ...customCommandsAsSlash, ...speckitCommandsAsSlash, ...openspecCommandsAsSlash, ...agentCommands];
+  }, [customAICommands, speckitCommands, openspecCommands, activeSession?.agentCommands, hasActiveSessionCapability]);
 
   // Derive current input value and setter based on active session mode
   // For AI mode: use active tab's inputValue (stored per-tab)
@@ -5945,10 +5981,15 @@ function MaestroConsoleInner() {
           cmd => cmd.command === commandText
         );
 
-        const matchingCommand = matchingCustomCommand || matchingSpeckitCommand;
+        // Look up in openspec commands
+        const matchingOpenspecCommand = openspecCommandsRef.current.find(
+          cmd => cmd.command === commandText
+        );
+
+        const matchingCommand = matchingCustomCommand || matchingSpeckitCommand || matchingOpenspecCommand;
 
         if (matchingCommand) {
-          console.log('[Remote] Found matching command:', matchingCommand.command, matchingSpeckitCommand ? '(spec-kit)' : '(custom)');
+          console.log('[Remote] Found matching command:', matchingCommand.command, matchingSpeckitCommand ? '(spec-kit)' : matchingOpenspecCommand ? '(openspec)' : '(custom)');
 
           // Get git branch for template substitution
           let gitBranch: string | undefined;
@@ -6269,10 +6310,11 @@ function MaestroConsoleInner() {
           sessionCustomContextWindow: session.customContextWindow,
         });
       } else if (item.type === 'command' && item.command) {
-        // Process a slash command - find the matching custom AI command or speckit command
+        // Process a slash command - find the matching custom AI command, speckit command, or openspec command
         // Use refs to get latest values and avoid stale closure
         const matchingCommand = customAICommandsRef.current.find(cmd => cmd.command === item.command)
-          || speckitCommandsRef.current.find(cmd => cmd.command === item.command);
+          || speckitCommandsRef.current.find(cmd => cmd.command === item.command)
+          || openspecCommandsRef.current.find(cmd => cmd.command === item.command);
         if (matchingCommand) {
           // Substitute template variables
           let gitBranch: string | undefined;
@@ -7702,6 +7744,19 @@ function MaestroConsoleInner() {
     }));
   }, [activeSession, getActiveTab]);
   const handlePromptToggleEnterToSend = useCallback(() => setEnterToSendAI(!enterToSendAI), [enterToSendAI]);
+  // OpenSpec command injection - sets prompt content into input field
+  const handleInjectOpenSpecPrompt = useCallback((prompt: string) => {
+    if (activeGroupChatId) {
+      // Update group chat draft
+      setGroupChats(prev => prev.map(c =>
+        c.id === activeGroupChatId ? { ...c, draftMessage: prompt } : c
+      ));
+    } else {
+      setInputValue(prompt);
+    }
+    // Focus the input so user can edit/send the injected prompt
+    setTimeout(() => inputRef.current?.focus(), 0);
+  }, [activeGroupChatId, setInputValue]);
 
   // QuickActionsModal stable callbacks
   const handleQuickActionsRenameTab = useCallback(() => {
@@ -8291,6 +8346,7 @@ function MaestroConsoleInner() {
         isFilePreviewOpen={previewFile !== null}
         ghCliAvailable={ghCliAvailable}
         onPublishGist={() => setGistPublishModalOpen(true)}
+        onInjectOpenSpecPrompt={handleInjectOpenSpecPrompt}
         lightboxImage={lightboxImage}
         lightboxImages={lightboxImages}
         stagedImages={stagedImages}

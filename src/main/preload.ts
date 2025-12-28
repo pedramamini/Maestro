@@ -992,6 +992,75 @@ contextBridge.exposeInMainWorld('maestro', {
       }>,
   },
 
+  // OpenSpec API (bundled OpenSpec slash commands)
+  openspec: {
+    // Get metadata (version, last refresh date)
+    getMetadata: () =>
+      ipcRenderer.invoke('openspec:getMetadata') as Promise<{
+        success: boolean;
+        metadata?: {
+          lastRefreshed: string;
+          commitSha: string;
+          sourceVersion: string;
+          sourceUrl: string;
+        };
+        error?: string;
+      }>,
+    // Get all openspec prompts
+    getPrompts: () =>
+      ipcRenderer.invoke('openspec:getPrompts') as Promise<{
+        success: boolean;
+        commands?: Array<{
+          id: string;
+          command: string;
+          description: string;
+          prompt: string;
+          isCustom: boolean;
+          isModified: boolean;
+        }>;
+        error?: string;
+      }>,
+    // Get a single command by slash command string
+    getCommand: (slashCommand: string) =>
+      ipcRenderer.invoke('openspec:getCommand', slashCommand) as Promise<{
+        success: boolean;
+        command?: {
+          id: string;
+          command: string;
+          description: string;
+          prompt: string;
+          isCustom: boolean;
+          isModified: boolean;
+        } | null;
+        error?: string;
+      }>,
+    // Save user's edit to a prompt
+    savePrompt: (id: string, content: string) =>
+      ipcRenderer.invoke('openspec:savePrompt', id, content) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+    // Reset a prompt to bundled default
+    resetPrompt: (id: string) =>
+      ipcRenderer.invoke('openspec:resetPrompt', id) as Promise<{
+        success: boolean;
+        prompt?: string;
+        error?: string;
+      }>,
+    // Refresh prompts from GitHub
+    refresh: () =>
+      ipcRenderer.invoke('openspec:refresh') as Promise<{
+        success: boolean;
+        metadata?: {
+          lastRefreshed: string;
+          commitSha: string;
+          sourceVersion: string;
+          sourceUrl: string;
+        };
+        error?: string;
+      }>,
+  },
+
   // Notification API
   notification: {
     show: (title: string, body: string) =>
@@ -2351,6 +2420,61 @@ export interface MaestroAPI {
         isCustom: boolean;
         isModified: boolean;
       };
+      error?: string;
+    }>;
+    savePrompt: (id: string, content: string) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    resetPrompt: (id: string) => Promise<{
+      success: boolean;
+      prompt?: string;
+      error?: string;
+    }>;
+    refresh: () => Promise<{
+      success: boolean;
+      metadata?: {
+        lastRefreshed: string;
+        commitSha: string;
+        sourceVersion: string;
+        sourceUrl: string;
+      };
+      error?: string;
+    }>;
+  };
+  openspec: {
+    getMetadata: () => Promise<{
+      success: boolean;
+      metadata?: {
+        lastRefreshed: string;
+        commitSha: string;
+        sourceVersion: string;
+        sourceUrl: string;
+      };
+      error?: string;
+    }>;
+    getPrompts: () => Promise<{
+      success: boolean;
+      commands?: Array<{
+        id: string;
+        command: string;
+        description: string;
+        prompt: string;
+        isCustom: boolean;
+        isModified: boolean;
+      }>;
+      error?: string;
+    }>;
+    getCommand: (slashCommand: string) => Promise<{
+      success: boolean;
+      command?: {
+        id: string;
+        command: string;
+        description: string;
+        prompt: string;
+        isCustom: boolean;
+        isModified: boolean;
+      } | null;
       error?: string;
     }>;
     savePrompt: (id: string, content: string) => Promise<{

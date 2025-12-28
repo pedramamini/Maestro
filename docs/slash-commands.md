@@ -67,3 +67,23 @@ Commands support **template variables** that are automatically substituted at ru
 It's {{WEEKDAY}}, {{DATE}}. I'm on branch {{GIT_BRANCH}} at {{AGENT_PATH}}.
 Summarize what I worked on yesterday and suggest priorities for today.
 ```
+
+## Spec-Kit Commands
+
+Maestro bundles [GitHub's spec-kit](https://github.com/github/spec-kit) methodology for structured feature development. Commands include `/speckit.constitution`, `/speckit.specify`, `/speckit.clarify`, `/speckit.plan`, `/speckit.tasks`, and `/speckit.implement`.
+
+See [Spec-Kit Commands](/speckit-commands) for the complete workflow guide.
+
+## OpenSpec Commands
+
+Maestro bundles [OpenSpec](https://github.com/Fission-AI/OpenSpec) for spec-driven change management. These commands help you propose, implement, and archive changes systematically:
+
+| Command | Description |
+|---------|-------------|
+| `/openspec.proposal` | Create a change proposal with spec deltas before writing code |
+| `/openspec.apply` | Implement an approved proposal by following the tasks |
+| `/openspec.archive` | Archive completed changes after deployment |
+| `/openspec.implement` | Generate Auto Run documents from a proposal (Maestro-specific) |
+| `/openspec.help` | Get help with OpenSpec workflow and concepts |
+
+See [OpenSpec Commands](/openspec-commands) for the complete workflow guide and directory structure.

@@ -55,14 +55,16 @@
             "group": "Usage",
             "pages": [
               "general-usage",
+              "keyboard-shortcuts",
+              "slash-commands",
+              "speckit-commands",
+              "openspec-commands",
               "history",
               "context-management",
               "autorun-playbooks",
               "git-worktrees",
               "group-chat",
               "remote-access",
-              "slash-commands",
-              "speckit-commands",
               "configuration"
             ]
           },
@@ -77,7 +79,6 @@
             "group": "Reference",
             "pages": [
               "achievements",
-              "keyboard-shortcuts",
               "troubleshooting"
             ],
             "icon": "life-ring"

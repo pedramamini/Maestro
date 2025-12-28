@@ -22,6 +22,7 @@ import { registerAgentSessionsHandlers, AgentSessionsHandlerDependencies } from 
 import { registerGroupChatHandlers, GroupChatHandlerDependencies } from './groupChat';
 import { registerDebugHandlers, DebugHandlerDependencies } from './debug';
 import { registerSpeckitHandlers } from './speckit';
+import { registerOpenSpecHandlers } from './openspec';
 import { registerContextHandlers, ContextHandlerDependencies, cleanupAllGroomingSessions, getActiveGroomingSessionCount } from './context';
 import { AgentDetector } from '../../agent-detector';
 import { ProcessManager } from '../../process-manager';
@@ -45,6 +46,7 @@ export { registerAgentSessionsHandlers };
 export { registerGroupChatHandlers };
 export { registerDebugHandlers };
 export { registerSpeckitHandlers };
+export { registerOpenSpecHandlers };
 export { registerContextHandlers, cleanupAllGroomingSessions, getActiveGroomingSessionCount };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
@@ -154,6 +156,8 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
   });
   // Register spec-kit handlers (no dependencies needed)
   registerSpeckitHandlers();
+  // Register OpenSpec handlers (no dependencies needed)
+  registerOpenSpecHandlers();
   registerContextHandlers({
     getMainWindow: deps.getMainWindow,
     getProcessManager: deps.getProcessManager,

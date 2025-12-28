@@ -749,6 +749,8 @@ export interface AppUtilityModalsProps {
   autoRunSelectedDocument: string | null;
   autoRunCompletedTaskCount: number;
   onAutoRunResetTasks: () => void;
+  // OpenSpec commands
+  onInjectOpenSpecPrompt?: (prompt: string) => void;
 
   // Gist publishing (for QuickActionsModal)
   isFilePreviewOpen: boolean;
@@ -920,6 +922,8 @@ export function AppUtilityModals({
   isFilePreviewOpen,
   ghCliAvailable,
   onPublishGist,
+  // OpenSpec commands
+  onInjectOpenSpecPrompt,
   // LightboxModal
   lightboxImage,
   lightboxImages,
@@ -1061,6 +1065,7 @@ export function AppUtilityModals({
           isFilePreviewOpen={isFilePreviewOpen}
           ghCliAvailable={ghCliAvailable}
           onPublishGist={onPublishGist}
+          onInjectOpenSpecPrompt={onInjectOpenSpecPrompt}
         />
       )}
 
@@ -1740,6 +1745,8 @@ export interface AppModalsProps {
   isFilePreviewOpen: boolean;
   ghCliAvailable: boolean;
   onPublishGist?: () => void;
+  // OpenSpec commands
+  onInjectOpenSpecPrompt?: (prompt: string) => void;
   lightboxImage: string | null;
   lightboxImages: string[];
   stagedImages: string[];
@@ -2007,6 +2014,8 @@ export function AppModals(props: AppModalsProps) {
     isFilePreviewOpen,
     ghCliAvailable,
     onPublishGist,
+    // OpenSpec commands
+    onInjectOpenSpecPrompt,
     lightboxImage,
     lightboxImages,
     stagedImages,
@@ -2291,6 +2300,7 @@ export function AppModals(props: AppModalsProps) {
         isFilePreviewOpen={isFilePreviewOpen}
         ghCliAvailable={ghCliAvailable}
         onPublishGist={onPublishGist}
+        onInjectOpenSpecPrompt={onInjectOpenSpecPrompt}
         lightboxImage={lightboxImage}
         lightboxImages={lightboxImages}
         stagedImages={stagedImages}

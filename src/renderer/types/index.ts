@@ -585,6 +585,24 @@ export interface SpecKitMetadata {
   sourceUrl: string; // GitHub repo URL
 }
 
+// OpenSpec command definition (bundled from Fission-AI/OpenSpec)
+export interface OpenSpecCommand {
+  id: string; // e.g., 'proposal'
+  command: string; // e.g., '/openspec.proposal'
+  description: string;
+  prompt: string;
+  isCustom: boolean; // true for 'help' and 'implement' (Maestro-specific)
+  isModified: boolean; // true if user has edited
+}
+
+// OpenSpec metadata for tracking version and refresh status
+export interface OpenSpecMetadata {
+  lastRefreshed: string; // ISO date
+  commitSha: string; // Git commit SHA or version tag
+  sourceVersion: string; // Semantic version
+  sourceUrl: string; // GitHub repo URL
+}
+
 // Leaderboard registration data for runmaestro.ai integration
 export interface LeaderboardRegistration {
   // Required fields

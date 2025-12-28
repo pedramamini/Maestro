@@ -307,6 +307,23 @@ To add a built-in slash command that users see by default, add it to the Custom 
 
 For commands that need programmatic behavior (not just prompts), handle them in `App.tsx` where slash commands are processed before being sent to the agent.
 
+### Adding Bundled AI Command Sets (Spec-Kit / OpenSpec Pattern)
+
+Maestro bundles two spec-driven workflow systems. To add a similar bundled command set:
+
+1. **Create prompts directory**: `src/prompts/my-workflow/`
+2. **Add command markdown files**: `my-workflow.command1.md`, `my-workflow.command2.md`
+3. **Create index.ts**: Export command definitions with IDs, slash commands, descriptions, and prompts
+4. **Create metadata.json**: Track source version, commit SHA, and last refreshed date
+5. **Create manager**: `src/main/my-workflow-manager.ts` (handles loading, saving, refreshing)
+6. **Add IPC handlers**: In `src/main/index.ts` for get/set/refresh operations
+7. **Add preload API**: In `src/main/preload.ts` to expose to renderer
+8. **Create UI panel**: Similar to `OpenSpecCommandsPanel.tsx` or `SpecKitCommandsPanel.tsx`
+9. **Add to extraResources**: In `package.json` build config for all platforms
+10. **Create refresh script**: `scripts/refresh-my-workflow.mjs`
+
+Reference the existing Spec-Kit (`src/prompts/speckit/`, `src/main/speckit-manager.ts`) and OpenSpec (`src/prompts/openspec/`, `src/main/openspec-manager.ts`) implementations.
+
 ### Adding a New Theme
 
 Maestro has 16 themes across 3 modes: dark, light, and vibe.
@@ -698,15 +715,23 @@ All PRs must pass these checks before review:
 
 ## Building for Release
 
-### 0. Refresh Spec Kit Prompts (Optional)
+### 0. Refresh AI Command Prompts (Optional)
 
-Before releasing, check if GitHub's spec-kit has updates:
+Before releasing, check if the upstream spec-kit and OpenSpec repositories have updates:
 
 ```bash
+# Refresh GitHub's spec-kit prompts
 npm run refresh-speckit
+
+# Refresh Fission-AI's OpenSpec prompts
+npm run refresh-openspec
 ```
 
-This fetches the latest prompts from [github/spec-kit](https://github.com/github/spec-kit) and updates the bundled files in `src/prompts/speckit/`. The custom `/speckit.implement` prompt is never overwritten.
+These scripts fetch the latest prompts from their respective repositories:
+- **Spec-Kit**: [github/spec-kit](https://github.com/github/spec-kit) → `src/prompts/speckit/`
+- **OpenSpec**: [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) → `src/prompts/openspec/`
+
+Custom Maestro-specific prompts (`/speckit.implement`, `/openspec.implement`, `/openspec.help`) are never overwritten by the refresh scripts.
 
 Review any changes with `git diff` before committing.
 

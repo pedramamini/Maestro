@@ -22,7 +22,7 @@ icon: sparkles
 - 🔀 **Git Integration** - Automatic repo detection, branch display, diff viewer, commit logs, and git-aware file completion. Work with git without leaving the app.
 - 📁 **[File Explorer](./general-usage)** - Browse project files with syntax highlighting, markdown preview, and image viewing. Reference files in prompts with `@` mentions.
 - 🔍 **[Powerful Output Filtering](./general-usage)** - Search and filter AI output with include/exclude modes, regex support, and per-response local filters.
-- ⚡ **[Slash Commands](./slash-commands)** - Extensible command system with autocomplete. Create custom commands with template variables for your workflows.
+- ⚡ **[Slash Commands](./slash-commands)** - Extensible command system with autocomplete. Create custom commands with template variables for your workflows. Includes bundled [Spec-Kit](./speckit-commands) for feature specifications and [OpenSpec](./openspec-commands) for change proposals.
 - 💾 **Draft Auto-Save** - Never lose work. Drafts are automatically saved and restored per session.
 - 🔊 **Speakable Notifications** - Audio alerts with text-to-speech announcements when agents complete tasks.
 - 🎨 **[Beautiful Themes](https://github.com/pedramamini/Maestro/blob/main/THEMES.md)** - 12 themes including Dracula, Monokai, Nord, Tokyo Night, GitHub Light, and more.

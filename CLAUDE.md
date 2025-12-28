@@ -109,6 +109,8 @@ src/
 | Add setting | `src/renderer/hooks/useSettings.ts`, `src/main/index.ts` |
 | Add template variable | `src/shared/templateVariables.ts`, `src/renderer/utils/templateVariables.ts` |
 | Modify system prompts | `src/prompts/*.md` (wizard, Auto Run, etc.) |
+| Add Spec-Kit command | `src/prompts/speckit/`, `src/main/speckit-manager.ts` |
+| Add OpenSpec command | `src/prompts/openspec/`, `src/main/openspec-manager.ts` |
 | Add CLI command | `src/cli/commands/`, `src/cli/index.ts` |
 | Configure agent | `src/main/agent-detector.ts`, `src/main/agent-capabilities.ts` |
 | Add agent output parser | `src/main/parsers/`, `src/main/parsers/index.ts` |

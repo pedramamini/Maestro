@@ -7,6 +7,7 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AICommandsPanel } from './AICommandsPanel';
 import { SpecKitCommandsPanel } from './SpecKitCommandsPanel';
+import { OpenSpecCommandsPanel } from './OpenSpecCommandsPanel';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { ToggleButtonGroup } from './ToggleButtonGroup';
 import { SettingCheckbox } from './SettingCheckbox';
@@ -1665,6 +1666,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
               {/* Spec Kit Commands Section */}
               <SpecKitCommandsPanel theme={theme} />
+
+              {/* Divider */}
+              <div
+                className="border-t"
+                style={{ borderColor: theme.colors.border }}
+              />
+
+              {/* OpenSpec Commands Section */}
+              <OpenSpecCommandsPanel theme={theme} />
             </div>
           )}
         </div>
