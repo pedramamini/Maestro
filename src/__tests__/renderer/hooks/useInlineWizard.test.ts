@@ -40,6 +40,24 @@ vi.mock('../../../renderer/services/inlineWizardConversation', () => ({
   READY_CONFIDENCE_THRESHOLD: 80,
 }));
 
+vi.mock('../../../renderer/services/inlineWizardDocumentGeneration', () => ({
+  generateInlineDocuments: vi.fn().mockResolvedValue({
+    success: true,
+    documents: [
+      {
+        filename: 'Phase-01-Setup.md',
+        content: '# Phase 01\n\n- [ ] Task 1',
+        taskCount: 1,
+        savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+      },
+    ],
+    rawOutput: 'test output',
+  }),
+}));
+
+import { generateInlineDocuments } from '../../../renderer/services/inlineWizardDocumentGeneration';
+const mockGenerateInlineDocuments = vi.mocked(generateInlineDocuments);
+
 // Import mocked modules
 import { parseWizardIntent } from '../../../renderer/services/wizardIntentParser';
 import {
@@ -454,6 +472,156 @@ describe('useInlineWizard', () => {
       expect(result.current.confidence).toBe(0);
       expect(result.current.conversationHistory).toEqual([]);
       expect(result.current.state.projectPath).toBe(null);
+    });
+  });
+
+  describe('generateDocuments', () => {
+    it('should return error when agent type is missing', async () => {
+      const { result } = renderHook(() => useInlineWizard());
+
+      // Don't start wizard (no agentType or projectPath)
+      await act(async () => {
+        await result.current.generateDocuments();
+      });
+
+      expect(result.current.error).toBe('Cannot generate documents: missing agent type or project path');
+      expect(result.current.isGeneratingDocs).toBe(false);
+    });
+
+    it('should set isGeneratingDocs to true during generation', async () => {
+      // Mock generateInlineDocuments to capture the callbacks
+      let capturedCallbacks: { onStart?: () => void } | undefined;
+      mockGenerateInlineDocuments.mockImplementationOnce(async (config) => {
+        capturedCallbacks = config.callbacks;
+        // Call onStart to simulate the service behavior
+        config.callbacks?.onStart?.();
+        return {
+          success: true,
+          documents: [
+            {
+              filename: 'Phase-01-Setup.md',
+              content: '# Phase 01\n\n- [ ] Task 1',
+              taskCount: 1,
+              savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+            },
+          ],
+          rawOutput: 'test output',
+        };
+      });
+
+      const { result } = renderHook(() => useInlineWizard());
+
+      // Start wizard with required params
+      await act(async () => {
+        await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+      });
+
+      // Start generation
+      let onStartCalled = false;
+      await act(async () => {
+        await result.current.generateDocuments({
+          onStart: () => {
+            onStartCalled = true;
+          },
+        });
+      });
+
+      // The wrapper onStart in the hook should have been called
+      expect(capturedCallbacks?.onStart).toBeDefined();
+      expect(onStartCalled).toBe(true);
+    });
+
+    it('should call generateInlineDocuments with correct config', async () => {
+      const { result } = renderHook(() => useInlineWizard());
+
+      // Start wizard with required params
+      await act(async () => {
+        await result.current.startWizard('test goal', undefined, '/test/project', 'claude-code', 'Test Project');
+      });
+
+      // Generate documents
+      await act(async () => {
+        await result.current.generateDocuments();
+      });
+
+      expect(mockGenerateInlineDocuments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          agentType: 'claude-code',
+          directoryPath: '/test/project',
+          projectName: 'Test Project',
+          autoRunFolderPath: '/test/project/Auto Run Docs',
+        })
+      );
+    });
+
+    it('should update generatedDocuments on success', async () => {
+      const { result } = renderHook(() => useInlineWizard());
+
+      // Start wizard with required params
+      await act(async () => {
+        await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+      });
+
+      // Generate documents
+      await act(async () => {
+        await result.current.generateDocuments();
+      });
+
+      expect(result.current.generatedDocuments).toHaveLength(1);
+      expect(result.current.generatedDocuments[0].filename).toBe('Phase-01-Setup.md');
+      expect(result.current.isGeneratingDocs).toBe(false);
+    });
+
+    it('should set error on generation failure', async () => {
+      mockGenerateInlineDocuments.mockResolvedValueOnce({
+        success: false,
+        error: 'Generation failed',
+      });
+
+      const { result } = renderHook(() => useInlineWizard());
+
+      // Start wizard with required params
+      await act(async () => {
+        await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+      });
+
+      // Generate documents
+      await act(async () => {
+        await result.current.generateDocuments();
+      });
+
+      expect(result.current.error).toBe('Generation failed');
+      expect(result.current.isGeneratingDocs).toBe(false);
+    });
+
+    it('should call callbacks during generation', async () => {
+      const { result } = renderHook(() => useInlineWizard());
+
+      const onStart = vi.fn();
+      const onComplete = vi.fn();
+
+      // Start wizard with required params
+      await act(async () => {
+        await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+      });
+
+      // Generate documents with callbacks
+      await act(async () => {
+        await result.current.generateDocuments({
+          onStart,
+          onComplete,
+        });
+      });
+
+      // The callbacks should have been passed to generateInlineDocuments
+      expect(mockGenerateInlineDocuments).toHaveBeenCalledWith(
+        expect.objectContaining({
+          callbacks: expect.objectContaining({
+            onStart: expect.any(Function),
+            onComplete: expect.any(Function),
+          }),
+        })
+      );
     });
   });
 });

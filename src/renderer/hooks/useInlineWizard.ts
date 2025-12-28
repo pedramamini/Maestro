@@ -26,6 +26,10 @@ import {
   type ExistingDocumentWithContent,
   type ConversationCallbacks,
 } from '../services/inlineWizardConversation';
+import {
+  generateInlineDocuments,
+  type DocumentGenerationCallbacks,
+} from '../services/inlineWizardDocumentGeneration';
 import type { ToolType } from '../types';
 
 /**
@@ -186,6 +190,13 @@ export interface UseInlineWizardReturn {
   clearConversation: () => void;
   /** Reset the wizard to initial state */
   reset: () => void;
+  /**
+   * Generate Auto Run documents based on the conversation.
+   * Sets isGeneratingDocs to true, streams AI response, parses documents,
+   * and saves them to the Auto Run folder.
+   * @param callbacks - Optional callbacks for generation progress
+   */
+  generateDocuments: (callbacks?: DocumentGenerationCallbacks) => Promise<void>;
 }
 
 /**
@@ -665,6 +676,122 @@ export function useInlineWizard(): UseInlineWizardReturn {
     setState(initialState);
   }, []);
 
+  /**
+   * Generate Auto Run documents based on the conversation.
+   *
+   * This function:
+   * 1. Sets isGeneratingDocs to true
+   * 2. Constructs prompt using wizard-document-generation.md with conversation summary
+   * 3. Streams AI response
+   * 4. Parses document markers (---BEGIN DOCUMENT--- / ---END DOCUMENT---)
+   * 5. Saves documents via window.maestro.autorun.writeDoc()
+   * 6. Updates generatedDocuments array as each completes
+   */
+  const generateDocuments = useCallback(
+    async (callbacks?: DocumentGenerationCallbacks): Promise<void> => {
+      // Validate we have the required state
+      if (!state.agentType || !state.projectPath) {
+        const errorMsg = 'Cannot generate documents: missing agent type or project path';
+        console.error('[useInlineWizard]', errorMsg);
+        setState((prev) => ({ ...prev, error: errorMsg }));
+        callbacks?.onError?.(errorMsg);
+        return;
+      }
+
+      // Set generating state
+      setState((prev) => ({
+        ...prev,
+        isGeneratingDocs: true,
+        generatedDocuments: [],
+        error: null,
+      }));
+
+      try {
+        // Get the Auto Run folder path
+        const autoRunFolderPath = getAutoRunFolderPath(state.projectPath);
+
+        // Call the document generation service
+        const result = await generateInlineDocuments({
+          agentType: state.agentType,
+          directoryPath: state.projectPath,
+          projectName: state.sessionName || 'Project',
+          conversationHistory: state.conversationHistory,
+          existingDocuments: state.existingDocuments,
+          mode: state.mode === 'iterate' ? 'iterate' : 'new',
+          goal: state.goal || undefined,
+          autoRunFolderPath,
+          callbacks: {
+            onStart: () => {
+              console.log('[useInlineWizard] Document generation started');
+              callbacks?.onStart?.();
+            },
+            onProgress: (message) => {
+              console.log('[useInlineWizard] Progress:', message);
+              callbacks?.onProgress?.(message);
+            },
+            onChunk: (chunk) => {
+              callbacks?.onChunk?.(chunk);
+            },
+            onDocumentComplete: (doc) => {
+              console.log('[useInlineWizard] Document saved:', doc.filename);
+              // Add document to the list as it completes
+              setState((prev) => ({
+                ...prev,
+                generatedDocuments: [...prev.generatedDocuments, doc],
+              }));
+              callbacks?.onDocumentComplete?.(doc);
+            },
+            onComplete: (allDocs) => {
+              console.log('[useInlineWizard] All documents complete:', allDocs.length);
+              callbacks?.onComplete?.(allDocs);
+            },
+            onError: (error) => {
+              console.error('[useInlineWizard] Generation error:', error);
+              callbacks?.onError?.(error);
+            },
+          },
+        });
+
+        if (result.success) {
+          // Update state with final documents
+          setState((prev) => ({
+            ...prev,
+            isGeneratingDocs: false,
+            generatedDocuments: result.documents || [],
+          }));
+        } else {
+          // Handle error
+          setState((prev) => ({
+            ...prev,
+            isGeneratingDocs: false,
+            error: result.error || 'Document generation failed',
+          }));
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error during document generation';
+        console.error('[useInlineWizard] generateDocuments error:', error);
+
+        setState((prev) => ({
+          ...prev,
+          isGeneratingDocs: false,
+          error: errorMessage,
+        }));
+
+        callbacks?.onError?.(errorMessage);
+      }
+    },
+    [
+      state.agentType,
+      state.projectPath,
+      state.sessionName,
+      state.conversationHistory,
+      state.existingDocuments,
+      state.mode,
+      state.goal,
+    ]
+  );
+
   // Compute readyToGenerate based on ready flag and confidence threshold
   const readyToGenerate = state.ready && state.confidence >= READY_CONFIDENCE_THRESHOLD;
 
@@ -701,5 +828,6 @@ export function useInlineWizard(): UseInlineWizardReturn {
     addAssistantMessage,
     clearConversation,
     reset,
+    generateDocuments,
   };
 }
