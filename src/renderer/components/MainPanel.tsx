@@ -8,6 +8,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { GitStatusWidget } from './GitStatusWidget';
 import { AgentSessionsBrowser } from './AgentSessionsBrowser';
 import { TabBar } from './TabBar';
+import { WizardConversationView } from './InlineWizard';
 import { gitService } from '../services/git';
 import { useGitStatus } from '../contexts/GitStatusContext';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
@@ -1101,46 +1102,56 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
             </div>
           ) : (
             <>
-              {/* Logs Area */}
+              {/* Logs Area - Show WizardConversationView when wizard is active, otherwise show TerminalOutput */}
               <div className="flex-1 overflow-hidden flex flex-col" data-tour="main-terminal">
-              <TerminalOutput
-                key={`${activeSession.id}-${activeSession.activeTabId}`}
-                ref={terminalOutputRef}
-                session={activeSession}
-                theme={theme}
-                fontFamily={props.fontFamily}
-                activeFocus={activeFocus}
-                outputSearchOpen={outputSearchOpen}
-                outputSearchQuery={outputSearchQuery}
-                setOutputSearchOpen={setOutputSearchOpen}
-                setOutputSearchQuery={setOutputSearchQuery}
-                setActiveFocus={setActiveFocus}
-                setLightboxImage={setLightboxImage}
-                inputRef={inputRef}
-                logsEndRef={logsEndRef}
-                maxOutputLines={maxOutputLines}
-                onDeleteLog={props.onDeleteLog}
-                onRemoveQueuedItem={onRemoveQueuedItem}
-                onInterrupt={handleInterrupt}
-                audioFeedbackCommand={props.audioFeedbackCommand}
-                onScrollPositionChange={props.onScrollPositionChange}
-                onAtBottomChange={props.onAtBottomChange}
-                initialScrollTop={
-                  activeSession.inputMode === 'ai'
-                    ? activeTab?.scrollTop
-                    : activeSession.terminalScrollTop
-                }
-                markdownEditMode={markdownEditMode}
-                setMarkdownEditMode={setMarkdownEditMode}
-                onReplayMessage={props.onReplayMessage}
-                fileTree={props.fileTree}
-                cwd={activeSession.cwd.startsWith(activeSession.fullPath)
-                  ? activeSession.cwd.slice(activeSession.fullPath.length + 1)
-                  : ''}
-                projectRoot={activeSession.fullPath}
-                onFileClick={props.onFileClick}
-                onShowErrorDetails={props.onShowAgentErrorModal}
-              />
+              {activeSession.wizardState?.isActive ? (
+                <WizardConversationView
+                  key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
+                  theme={theme}
+                  conversationHistory={activeSession.wizardState.conversationHistory}
+                  isLoading={activeSession.state === 'busy'}
+                  agentName={activeSession.name}
+                />
+              ) : (
+                <TerminalOutput
+                  key={`${activeSession.id}-${activeSession.activeTabId}`}
+                  ref={terminalOutputRef}
+                  session={activeSession}
+                  theme={theme}
+                  fontFamily={props.fontFamily}
+                  activeFocus={activeFocus}
+                  outputSearchOpen={outputSearchOpen}
+                  outputSearchQuery={outputSearchQuery}
+                  setOutputSearchOpen={setOutputSearchOpen}
+                  setOutputSearchQuery={setOutputSearchQuery}
+                  setActiveFocus={setActiveFocus}
+                  setLightboxImage={setLightboxImage}
+                  inputRef={inputRef}
+                  logsEndRef={logsEndRef}
+                  maxOutputLines={maxOutputLines}
+                  onDeleteLog={props.onDeleteLog}
+                  onRemoveQueuedItem={onRemoveQueuedItem}
+                  onInterrupt={handleInterrupt}
+                  audioFeedbackCommand={props.audioFeedbackCommand}
+                  onScrollPositionChange={props.onScrollPositionChange}
+                  onAtBottomChange={props.onAtBottomChange}
+                  initialScrollTop={
+                    activeSession.inputMode === 'ai'
+                      ? activeTab?.scrollTop
+                      : activeSession.terminalScrollTop
+                  }
+                  markdownEditMode={markdownEditMode}
+                  setMarkdownEditMode={setMarkdownEditMode}
+                  onReplayMessage={props.onReplayMessage}
+                  fileTree={props.fileTree}
+                  cwd={activeSession.cwd.startsWith(activeSession.fullPath)
+                    ? activeSession.cwd.slice(activeSession.fullPath.length + 1)
+                    : ''}
+                  projectRoot={activeSession.fullPath}
+                  onFileClick={props.onFileClick}
+                  onShowErrorDetails={props.onShowAgentErrorModal}
+                />
+              )}
               </div>
 
               {/* Input Area (hidden in mobile landscape for focused reading) */}

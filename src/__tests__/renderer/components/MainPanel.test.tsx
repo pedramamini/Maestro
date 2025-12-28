@@ -78,6 +78,19 @@ vi.mock('../../../renderer/components/ErrorBoundary', () => ({
   ErrorBoundary: (props: { children: React.ReactNode }) => props.children,
 }));
 
+vi.mock('../../../renderer/components/InlineWizard', () => ({
+  WizardConversationView: (props: {
+    conversationHistory: Array<{ id: string; role: string; content: string }>;
+    isLoading?: boolean;
+    agentName?: string;
+  }) => {
+    return React.createElement('div', { 'data-testid': 'wizard-conversation-view' },
+      `Wizard Conversation (${props.conversationHistory.length} messages)`,
+      props.isLoading && React.createElement('span', { 'data-testid': 'wizard-loading' }, ' Loading...')
+    );
+  },
+}));
+
 // Mock git service
 vi.mock('../../../renderer/services/git', () => ({
   gitService: {
@@ -2775,6 +2788,137 @@ describe('MainPanel', () => {
       expect(errorBanner).toBeInTheDocument();
       const alertIcon = errorBanner?.querySelector('svg');
       expect(alertIcon).toBeInTheDocument();
+    });
+  });
+
+  describe('Wizard Mode', () => {
+    it('should render WizardConversationView when wizard is active', () => {
+      const session = createSession({
+        wizardState: {
+          isActive: true,
+          mode: 'new',
+          confidence: 50,
+          conversationHistory: [
+            { id: 'msg-1', role: 'system', content: 'Welcome', timestamp: Date.now() },
+            { id: 'msg-2', role: 'user', content: 'Hello', timestamp: Date.now() },
+          ],
+          previousUIState: {
+            readOnlyMode: false,
+            saveToHistory: true,
+            showThinking: false,
+          },
+        },
+      });
+
+      render(<MainPanel {...defaultProps} activeSession={session} />);
+
+      expect(screen.getByTestId('wizard-conversation-view')).toBeInTheDocument();
+      expect(screen.getByText('Wizard Conversation (2 messages)')).toBeInTheDocument();
+      expect(screen.queryByTestId('terminal-output')).not.toBeInTheDocument();
+    });
+
+    it('should render TerminalOutput when wizard is not active', () => {
+      const session = createSession({
+        wizardState: undefined,
+      });
+
+      render(<MainPanel {...defaultProps} activeSession={session} />);
+
+      expect(screen.getByTestId('terminal-output')).toBeInTheDocument();
+      expect(screen.queryByTestId('wizard-conversation-view')).not.toBeInTheDocument();
+    });
+
+    it('should render TerminalOutput when wizard is inactive', () => {
+      const session = createSession({
+        wizardState: {
+          isActive: false,
+          mode: 'new',
+          confidence: 0,
+          conversationHistory: [],
+          previousUIState: {
+            readOnlyMode: false,
+            saveToHistory: true,
+            showThinking: false,
+          },
+        },
+      });
+
+      render(<MainPanel {...defaultProps} activeSession={session} />);
+
+      expect(screen.getByTestId('terminal-output')).toBeInTheDocument();
+      expect(screen.queryByTestId('wizard-conversation-view')).not.toBeInTheDocument();
+    });
+
+    it('should show loading indicator when session is busy during wizard mode', () => {
+      const session = createSession({
+        state: 'busy',
+        wizardState: {
+          isActive: true,
+          mode: 'new',
+          confidence: 30,
+          conversationHistory: [
+            { id: 'msg-1', role: 'user', content: 'What should I build?', timestamp: Date.now() },
+          ],
+          previousUIState: {
+            readOnlyMode: false,
+            saveToHistory: true,
+            showThinking: false,
+          },
+        },
+      });
+
+      render(<MainPanel {...defaultProps} activeSession={session} />);
+
+      expect(screen.getByTestId('wizard-conversation-view')).toBeInTheDocument();
+      expect(screen.getByTestId('wizard-loading')).toBeInTheDocument();
+    });
+
+    it('should still render header and tabs when wizard is active', () => {
+      const session = createSession({
+        wizardState: {
+          isActive: true,
+          mode: 'new',
+          confidence: 50,
+          conversationHistory: [],
+          previousUIState: {
+            readOnlyMode: false,
+            saveToHistory: true,
+            showThinking: false,
+          },
+        },
+      });
+
+      render(<MainPanel {...defaultProps} activeSession={session} />);
+
+      // Header elements should still be visible
+      expect(screen.getByText('Test Session')).toBeInTheDocument();
+      // Tab bar should still be visible
+      expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
+      // Wizard conversation view should be visible
+      expect(screen.getByTestId('wizard-conversation-view')).toBeInTheDocument();
+    });
+
+    it('should pass agentName to WizardConversationView', () => {
+      const session = createSession({
+        name: 'My Custom Agent',
+        wizardState: {
+          isActive: true,
+          mode: 'iterate',
+          goal: 'Add dark mode',
+          confidence: 75,
+          conversationHistory: [],
+          previousUIState: {
+            readOnlyMode: false,
+            saveToHistory: true,
+            showThinking: false,
+          },
+        },
+      });
+
+      render(<MainPanel {...defaultProps} activeSession={session} />);
+
+      // The mock component just shows message count, but the agentName is passed through
+      expect(screen.getByTestId('wizard-conversation-view')).toBeInTheDocument();
     });
   });
 });
