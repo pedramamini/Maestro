@@ -30,7 +30,7 @@ import type { Theme } from '../../types';
 import type { GeneratedDocument } from '../Wizard/WizardContext';
 import { MermaidRenderer } from '../MermaidRenderer';
 import { useClickOutside } from '../../hooks';
-import { getNextAustinFact, parseFactWithLinks, type FactSegment } from '../Wizard/services/austinFacts';
+import { AustinFactsDisplay } from './AustinFactsDisplay';
 
 // Memoize remarkPlugins array - it never changes
 const REMARK_PLUGINS = [remarkGfm];
@@ -321,203 +321,6 @@ function MarkdownImage({
   );
 }
 
-/**
- * Texas Flag SVG component (for Austin facts)
- */
-function TexasFlag({ className, style }: { className?: string; style?: React.CSSProperties }): JSX.Element {
-  return (
-    <svg
-      viewBox="0 0 150 100"
-      className={className}
-      style={style}
-    >
-      {/* Blue vertical stripe */}
-      <rect x="0" y="0" width="50" height="100" fill="#002868" />
-      {/* White horizontal stripe */}
-      <rect x="50" y="0" width="100" height="50" fill="#FFFFFF" />
-      {/* Red horizontal stripe */}
-      <rect x="50" y="50" width="100" height="50" fill="#BF0A30" />
-      {/* White five-pointed star */}
-      <polygon
-        points="25,15 29.5,30 45,30 32.5,40 37,55 25,45 13,55 17.5,40 5,30 20.5,30"
-        fill="#FFFFFF"
-      />
-    </svg>
-  );
-}
-
-/**
- * Get the plain text version of a fact (for typewriter character counting)
- */
-function getFactPlainText(fact: string): string {
-  return fact.replace(/\[([^\]]+)\]\([^)]+\)/g, '$1');
-}
-
-/**
- * Render fact segments with proper link handling
- */
-function FactContent({
-  segments,
-  displayLength,
-  theme,
-}: {
-  segments: FactSegment[];
-  displayLength: number;
-  theme: Theme;
-}): JSX.Element {
-  let charCount = 0;
-  const elements: JSX.Element[] = [];
-
-  for (let i = 0; i < segments.length; i++) {
-    const segment = segments[i];
-
-    if (segment.type === 'text') {
-      const segmentLength = segment.content.length;
-      const startChar = charCount;
-      const endChar = charCount + segmentLength;
-
-      if (displayLength > startChar) {
-        const visibleChars = Math.min(displayLength - startChar, segmentLength);
-        elements.push(
-          <span key={i}>{segment.content.slice(0, visibleChars)}</span>
-        );
-      }
-      charCount = endChar;
-    } else if (segment.type === 'link') {
-      const segmentLength = segment.text.length;
-      const startChar = charCount;
-      const endChar = charCount + segmentLength;
-
-      if (displayLength > startChar) {
-        const visibleChars = Math.min(displayLength - startChar, segmentLength);
-        const isFullyVisible = visibleChars === segmentLength;
-
-        if (isFullyVisible) {
-          elements.push(
-            <a
-              key={i}
-              href={segment.url}
-              onClick={(e) => {
-                e.preventDefault();
-                if (!window.maestro?.shell?.openExternal?.(segment.url)) {
-                  window.open(segment.url, '_blank');
-                }
-              }}
-              className="underline hover:opacity-80 cursor-pointer transition-opacity"
-              style={{ color: theme.colors.accent }}
-            >
-              {segment.text}
-            </a>
-          );
-        } else {
-          elements.push(
-            <span key={i} style={{ color: theme.colors.accent }}>
-              {segment.text.slice(0, visibleChars)}
-            </span>
-          );
-        }
-      }
-      charCount = endChar;
-    }
-  }
-
-  return <>{elements}</>;
-}
-
-/**
- * AustinFactsDisplay - Shows rotating Austin facts during generation
- * Positioned in the bottom-right corner of the generation view
- */
-export function AustinFactsDisplay({
-  theme,
-  isVisible = true,
-}: {
-  theme: Theme;
-  isVisible?: boolean;
-}): JSX.Element | null {
-  const [currentFact, setCurrentFact] = useState(() => getNextAustinFact());
-  const [displayLength, setDisplayLength] = useState(0);
-  const [isTypingComplete, setIsTypingComplete] = useState(false);
-
-  // Parse the fact into segments (text and links)
-  const segments = parseFactWithLinks(currentFact);
-  const plainText = getFactPlainText(currentFact);
-
-  // Typewriter effect
-  useEffect(() => {
-    let currentIndex = 0;
-    setDisplayLength(0);
-    setIsTypingComplete(false);
-
-    const typeInterval = setInterval(() => {
-      if (currentIndex < plainText.length) {
-        currentIndex++;
-        setDisplayLength(currentIndex);
-      } else {
-        setIsTypingComplete(true);
-        clearInterval(typeInterval);
-      }
-    }, 25);
-
-    return () => clearInterval(typeInterval);
-  }, [currentFact, plainText.length]);
-
-  // Rotate to new fact 4-5 seconds after typing completes
-  useEffect(() => {
-    if (!isTypingComplete) return;
-
-    const rotateTimer = setTimeout(() => {
-      setCurrentFact(getNextAustinFact());
-    }, 4500); // 4.5 seconds
-
-    return () => clearTimeout(rotateTimer);
-  }, [isTypingComplete]);
-
-  if (!isVisible) return null;
-
-  return (
-    <div
-      className="absolute bottom-4 right-4 px-4 py-3 rounded-lg transition-opacity duration-300"
-      style={{
-        backgroundColor: `${theme.colors.accent}10`,
-        border: `1px solid ${theme.colors.accent}30`,
-        maxWidth: '320px',
-        opacity: isVisible ? 1 : 0,
-      }}
-    >
-      <div className="flex items-start gap-3">
-        <TexasFlag className="w-8 h-6 shrink-0 mt-0.5" style={{ opacity: 0.85 }} />
-        <div className="flex-1 min-w-0">
-          <p
-            className="text-[10px] font-medium uppercase tracking-wide mb-1"
-            style={{ color: theme.colors.accent }}
-          >
-            Austin Facts
-          </p>
-          <p
-            className="text-xs leading-relaxed"
-            style={{
-              color: theme.colors.textMain,
-              minHeight: '2.5em',
-            }}
-          >
-            <FactContent
-              segments={segments}
-              displayLength={displayLength}
-              theme={theme}
-            />
-            {!isTypingComplete && (
-              <span
-                className="inline-block w-0.5 h-3 ml-0.5 animate-pulse"
-                style={{ backgroundColor: theme.colors.accent }}
-              />
-            )}
-          </p>
-        </div>
-      </div>
-    </div>
-  );
-}
 
 /**
  * StreamingDocumentPreview - Shows document content as it streams in
@@ -1364,3 +1167,6 @@ export function DocumentGenerationView({
 
 // Export individual components for reuse
 export { DocumentSelector, DocumentEditor };
+
+// Re-export AustinFactsDisplay from standalone file
+export { AustinFactsDisplay } from './AustinFactsDisplay';
