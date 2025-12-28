@@ -75,6 +75,17 @@ export interface InlineGeneratedDocument {
 }
 
 /**
+ * Progress tracking for document generation.
+ * Used to display "Generating Phase 1 of 3..." during generation.
+ */
+export interface GenerationProgress {
+  /** Current document being generated (1-indexed for display) */
+  current: number;
+  /** Total number of documents to generate */
+  total: number;
+}
+
+/**
  * State shape for the inline wizard.
  */
 export interface InlineWizardState {
@@ -110,6 +121,10 @@ export interface InlineWizardState {
   agentType: ToolType | null;
   /** Session name/project name */
   sessionName: string | null;
+  /** Streaming content being generated (accumulates as AI outputs) */
+  streamingContent: string;
+  /** Progress tracking for document generation */
+  generationProgress: GenerationProgress | null;
 }
 
 /**
@@ -142,6 +157,10 @@ export interface UseInlineWizardReturn {
   existingDocuments: ExistingDocument[];
   /** Error message if any */
   error: string | null;
+  /** Streaming content being generated (accumulates as AI outputs) */
+  streamingContent: string;
+  /** Progress tracking for document generation (e.g., "Phase 1 of 3") */
+  generationProgress: GenerationProgress | null;
   /** Full wizard state */
   state: InlineWizardState;
   /**
@@ -226,6 +245,8 @@ const initialState: InlineWizardState = {
   projectPath: null,
   agentType: null,
   sessionName: null,
+  streamingContent: '',
+  generationProgress: null,
 };
 
 /**
@@ -698,12 +719,14 @@ export function useInlineWizard(): UseInlineWizardReturn {
         return;
       }
 
-      // Set generating state
+      // Set generating state - reset streaming content and progress
       setState((prev) => ({
         ...prev,
         isGeneratingDocs: true,
         generatedDocuments: [],
         error: null,
+        streamingContent: '',
+        generationProgress: null,
       }));
 
       try {
@@ -727,22 +750,53 @@ export function useInlineWizard(): UseInlineWizardReturn {
             },
             onProgress: (message) => {
               console.log('[useInlineWizard] Progress:', message);
+              // Try to extract progress info from message (e.g., "Saving 1 of 3 document(s)...")
+              const progressMatch = message.match(/(\d+)\s+(?:of|\/)\s+(\d+)/);
+              if (progressMatch) {
+                setState((prev) => ({
+                  ...prev,
+                  generationProgress: {
+                    current: parseInt(progressMatch[1], 10),
+                    total: parseInt(progressMatch[2], 10),
+                  },
+                }));
+              }
               callbacks?.onProgress?.(message);
             },
             onChunk: (chunk) => {
+              // Accumulate streaming content for display
+              setState((prev) => ({
+                ...prev,
+                streamingContent: prev.streamingContent + chunk,
+              }));
               callbacks?.onChunk?.(chunk);
             },
             onDocumentComplete: (doc) => {
               console.log('[useInlineWizard] Document saved:', doc.filename);
               // Add document to the list as it completes
-              setState((prev) => ({
-                ...prev,
-                generatedDocuments: [...prev.generatedDocuments, doc],
-              }));
+              // Update progress to show completion of this document
+              setState((prev) => {
+                const newDocs = [...prev.generatedDocuments, doc];
+                return {
+                  ...prev,
+                  generatedDocuments: newDocs,
+                  generationProgress: prev.generationProgress
+                    ? { ...prev.generationProgress, current: newDocs.length }
+                    : { current: newDocs.length, total: newDocs.length },
+                };
+              });
               callbacks?.onDocumentComplete?.(doc);
             },
             onComplete: (allDocs) => {
               console.log('[useInlineWizard] All documents complete:', allDocs.length);
+              // Set final progress state
+              setState((prev) => ({
+                ...prev,
+                generationProgress: {
+                  current: allDocs.length,
+                  total: allDocs.length,
+                },
+              }));
               callbacks?.onComplete?.(allDocs);
             },
             onError: (error) => {
@@ -753,18 +807,25 @@ export function useInlineWizard(): UseInlineWizardReturn {
         });
 
         if (result.success) {
-          // Update state with final documents
+          // Update state with final documents - streaming content preserved for review
+          const finalDocs = result.documents || [];
           setState((prev) => ({
             ...prev,
             isGeneratingDocs: false,
-            generatedDocuments: result.documents || [],
+            generatedDocuments: finalDocs,
+            generationProgress: {
+              current: finalDocs.length,
+              total: finalDocs.length,
+            },
           }));
         } else {
-          // Handle error
+          // Handle error - clear streaming state
           setState((prev) => ({
             ...prev,
             isGeneratingDocs: false,
             error: result.error || 'Document generation failed',
+            streamingContent: '',
+            generationProgress: null,
           }));
         }
       } catch (error) {
@@ -772,10 +833,13 @@ export function useInlineWizard(): UseInlineWizardReturn {
           error instanceof Error ? error.message : 'Unknown error during document generation';
         console.error('[useInlineWizard] generateDocuments error:', error);
 
+        // Clear streaming state on error
         setState((prev) => ({
           ...prev,
           isGeneratingDocs: false,
           error: errorMessage,
+          streamingContent: '',
+          generationProgress: null,
         }));
 
         callbacks?.onError?.(errorMessage);
@@ -810,6 +874,8 @@ export function useInlineWizard(): UseInlineWizardReturn {
     generatedDocuments: state.generatedDocuments,
     existingDocuments: state.existingDocuments,
     error: state.error,
+    streamingContent: state.streamingContent,
+    generationProgress: state.generationProgress,
 
     // Full state
     state,

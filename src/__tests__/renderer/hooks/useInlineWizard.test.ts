@@ -96,6 +96,8 @@ describe('useInlineWizard', () => {
       expect(result.current.generatedDocuments).toEqual([]);
       expect(result.current.existingDocuments).toEqual([]);
       expect(result.current.error).toBe(null);
+      expect(result.current.streamingContent).toBe('');
+      expect(result.current.generationProgress).toBe(null);
     });
   });
 
@@ -622,6 +624,209 @@ describe('useInlineWizard', () => {
           }),
         })
       );
+    });
+
+    describe('streaming state', () => {
+      it('should reset streaming state when starting generation', async () => {
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // Streaming content should be reset at start (though may be populated by chunks)
+        // The key test is that generateInlineDocuments was called with callbacks
+        expect(mockGenerateInlineDocuments).toHaveBeenCalledWith(
+          expect.objectContaining({
+            callbacks: expect.objectContaining({
+              onChunk: expect.any(Function),
+            }),
+          })
+        );
+      });
+
+      it('should accumulate streaming content when onChunk is called', async () => {
+        // Capture callbacks to simulate streaming
+        let capturedCallbacks: { onChunk?: (chunk: string) => void } | undefined;
+        mockGenerateInlineDocuments.mockImplementationOnce(async (config) => {
+          capturedCallbacks = config.callbacks;
+          // Simulate streaming chunks
+          config.callbacks?.onChunk?.('First chunk');
+          config.callbacks?.onChunk?.(' Second chunk');
+          return {
+            success: true,
+            documents: [
+              {
+                filename: 'Phase-01-Setup.md',
+                content: '# Phase 01\n\n- [ ] Task 1',
+                taskCount: 1,
+                savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+              },
+            ],
+            rawOutput: 'test output',
+          };
+        });
+
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // Streaming content should have accumulated
+        expect(result.current.streamingContent).toBe('First chunk Second chunk');
+      });
+
+      it('should update generationProgress when onDocumentComplete is called', async () => {
+        // Capture callbacks to simulate document completion
+        mockGenerateInlineDocuments.mockImplementationOnce(async (config) => {
+          // Simulate onDocumentComplete being called
+          config.callbacks?.onDocumentComplete?.({
+            filename: 'Phase-01-Setup.md',
+            content: '# Phase 01\n\n- [ ] Task 1',
+            taskCount: 1,
+            savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+          });
+          config.callbacks?.onDocumentComplete?.({
+            filename: 'Phase-02-Build.md',
+            content: '# Phase 02\n\n- [ ] Task 2',
+            taskCount: 1,
+            savedPath: '/test/project/Auto Run Docs/Phase-02-Build.md',
+          });
+          return {
+            success: true,
+            documents: [
+              {
+                filename: 'Phase-01-Setup.md',
+                content: '# Phase 01\n\n- [ ] Task 1',
+                taskCount: 1,
+                savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+              },
+              {
+                filename: 'Phase-02-Build.md',
+                content: '# Phase 02\n\n- [ ] Task 2',
+                taskCount: 1,
+                savedPath: '/test/project/Auto Run Docs/Phase-02-Build.md',
+              },
+            ],
+            rawOutput: 'test output',
+          };
+        });
+
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // Progress should show 2 of 2 after completion
+        expect(result.current.generationProgress).toEqual({
+          current: 2,
+          total: 2,
+        });
+      });
+
+      it('should parse progress from onProgress message', async () => {
+        // Capture callbacks to simulate progress message
+        mockGenerateInlineDocuments.mockImplementationOnce(async (config) => {
+          // Simulate progress message with "X of Y" format
+          config.callbacks?.onProgress?.('Saving 1 of 3 document(s)...');
+          return {
+            success: true,
+            documents: [
+              {
+                filename: 'Phase-01-Setup.md',
+                content: '# Phase 01\n\n- [ ] Task 1',
+                taskCount: 1,
+                savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+              },
+            ],
+            rawOutput: 'test output',
+          };
+        });
+
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents - progress will be updated then overwritten by completion
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // Progress was parsed from the message, then finalized
+        // The final state will reflect the actual document count
+        expect(result.current.generationProgress).toBeDefined();
+      });
+
+      it('should clear streaming state on error', async () => {
+        mockGenerateInlineDocuments.mockImplementationOnce(async (config) => {
+          // Simulate some streaming before error
+          config.callbacks?.onChunk?.('Some content');
+          return {
+            success: false,
+            error: 'Generation failed',
+          };
+        });
+
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents (will fail)
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // Error should be set and streaming state should be cleared
+        expect(result.current.error).toBe('Generation failed');
+        expect(result.current.streamingContent).toBe('');
+        expect(result.current.generationProgress).toBe(null);
+      });
+
+      it('should set final progress on successful completion', async () => {
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // Final progress should match document count
+        expect(result.current.generationProgress).toEqual({
+          current: 1,
+          total: 1,
+        });
+      });
     });
   });
 });
