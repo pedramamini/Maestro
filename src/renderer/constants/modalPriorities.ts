@@ -80,6 +80,9 @@ export const MODAL_PRIORITIES = {
   /** Onboarding wizard - high priority, guides new users through setup */
   WIZARD: 760,
 
+  /** Inline wizard mode prompt - appears when user runs /wizard with existing docs */
+  WIZARD_MODE_PROMPT: 762,
+
   /** Create PR modal (from worktree) */
   CREATE_PR: 755,
 

@@ -8,3 +8,4 @@
 export { WizardPill } from './WizardPill';
 export { WizardConfidenceGauge } from './WizardConfidenceGauge';
 export { WizardInputPanel } from './WizardInputPanel';
+export { WizardModePrompt } from './WizardModePrompt';
