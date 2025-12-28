@@ -23,6 +23,7 @@ import ReactFlow, {
   useEdgesState,
   useReactFlow,
   OnSelectionChangeFunc,
+  NodeMouseHandler,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
 import { X, LayoutGrid, Network, ExternalLink, RefreshCw, Maximize2 } from 'lucide-react';
@@ -32,6 +33,7 @@ import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { DocumentNode } from './DocumentNode';
 import { ExternalLinkNode } from './ExternalLinkNode';
 import { buildGraphData, GraphNodeData } from './graphDataBuilder';
+import { NodeContextMenu } from './NodeContextMenu';
 import {
   applyForceLayout,
   applyHierarchicalLayout,
@@ -91,11 +93,19 @@ function DocumentGraphViewInner({
   const [includeExternalLinks, setIncludeExternalLinks] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
 
+  // Context menu state
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    nodeId: string;
+    nodeData: GraphNodeData;
+  } | null>(null);
+
   const containerRef = useRef<HTMLDivElement>(null);
   const { registerLayer, unregisterLayer } = useLayerStack();
   const onCloseRef = useRef(onClose);
   onCloseRef.current = onClose;
-  const { fitView } = useReactFlow();
+  const { fitView, setCenter, getZoom } = useReactFlow();
 
   // Register with layer stack for Escape handling
   useEffect(() => {
@@ -295,6 +305,77 @@ function DocumentGraphViewInner({
       }
     },
     [onDocumentOpen, onExternalLinkOpen]
+  );
+
+  /**
+   * Handle node right-click for context menu
+   */
+  const handleNodeContextMenu: NodeMouseHandler = useCallback(
+    (event: React.MouseEvent, node: Node<GraphNodeData>) => {
+      // Prevent default browser context menu
+      event.preventDefault();
+      // Close any existing context menu first
+      setContextMenu(null);
+      // Open context menu at mouse position
+      setContextMenu({
+        x: event.clientX,
+        y: event.clientY,
+        nodeId: node.id,
+        nodeData: node.data,
+      });
+    },
+    []
+  );
+
+  /**
+   * Handle pane click to close context menu
+   */
+  const handlePaneClick = useCallback(() => {
+    setContextMenu(null);
+  }, []);
+
+  /**
+   * Handle focus action from context menu - centers view on node
+   */
+  const handleFocusNode = useCallback(
+    (nodeId: string) => {
+      const node = nodes.find((n) => n.id === nodeId);
+      if (node) {
+        // Calculate center position of the node (assuming 280x120 size for documents)
+        const nodeWidth = node.type === 'documentNode' ? 280 : 160;
+        const nodeHeight = node.type === 'documentNode' ? 120 : 50;
+        const centerX = node.position.x + nodeWidth / 2;
+        const centerY = node.position.y + nodeHeight / 2;
+        // Use current zoom level or default to 1
+        const zoom = getZoom() || 1;
+        setCenter(centerX, centerY, { zoom, duration: 300 });
+      }
+    },
+    [nodes, setCenter, getZoom]
+  );
+
+  /**
+   * Handle open action from context menu
+   */
+  const handleContextMenuOpen = useCallback(
+    (filePath: string) => {
+      if (onDocumentOpen) {
+        onDocumentOpen(filePath);
+      }
+    },
+    [onDocumentOpen]
+  );
+
+  /**
+   * Handle open external action from context menu
+   */
+  const handleContextMenuOpenExternal = useCallback(
+    (url: string) => {
+      if (onExternalLinkOpen) {
+        onExternalLinkOpen(url);
+      }
+    },
+    [onExternalLinkOpen]
   );
 
   /**
@@ -580,6 +661,8 @@ function DocumentGraphViewInner({
               onEdgesChange={onEdgesChange}
               onSelectionChange={handleSelectionChange}
               onNodeDoubleClick={handleNodeDoubleClick}
+              onNodeContextMenu={handleNodeContextMenu}
+              onPaneClick={handlePaneClick}
               onNodeDragStop={handleNodeDragStop}
               nodeTypes={nodeTypes}
               fitView
@@ -629,6 +712,21 @@ function DocumentGraphViewInner({
               />
             </ReactFlow>
           )}
+
+          {/* Context Menu */}
+          {contextMenu && (
+            <NodeContextMenu
+              x={contextMenu.x}
+              y={contextMenu.y}
+              theme={theme}
+              nodeData={contextMenu.nodeData}
+              nodeId={contextMenu.nodeId}
+              onOpen={handleContextMenuOpen}
+              onOpenExternal={handleContextMenuOpenExternal}
+              onFocus={handleFocusNode}
+              onDismiss={() => setContextMenu(null)}
+            />
+          )}
         </div>
 
         {/* Footer */}
@@ -646,7 +744,7 @@ function DocumentGraphViewInner({
                 }`
               : 'No documents found'}
           </span>
-          <span style={{ opacity: 0.7 }}>Double-click to open • Drag to move • Scroll to zoom • Esc to close</span>
+          <span style={{ opacity: 0.7 }}>Double-click to open • Right-click for menu • Drag to move • Scroll to zoom • Esc to close</span>
         </div>
       </div>
     </div>
