@@ -9,24 +9,34 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { UsageDashboardModal } from '../../../renderer/components/UsageDashboard/UsageDashboardModal';
 import type { Theme } from '../../../renderer/types';
 
-// Mock lucide-react icons
-vi.mock('lucide-react', () => ({
-  X: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="x-icon" className={className} style={style}>×</span>
-  ),
-  BarChart3: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="barchart-icon" className={className} style={style}>📊</span>
-  ),
-  Calendar: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="calendar-icon" className={className} style={style}>📅</span>
-  ),
-  Download: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="download-icon" className={className} style={style}>⬇️</span>
-  ),
-  RefreshCw: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-    <span data-testid="refresh-icon" className={className} style={style}>🔄</span>
-  ),
-}));
+// Mock lucide-react icons - include all icons used by modal and its child components
+vi.mock('lucide-react', () => {
+  const createIcon = (name: string, emoji: string) => {
+    return ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+      <span data-testid={`${name}-icon`} className={className} style={style}>{emoji}</span>
+    );
+  };
+
+  return {
+    // UsageDashboardModal icons
+    X: createIcon('x', '×'),
+    BarChart3: createIcon('barchart', '📊'),
+    Calendar: createIcon('calendar', '📅'),
+    Download: createIcon('download', '⬇️'),
+    RefreshCw: createIcon('refresh', '🔄'),
+    // SummaryCards icons
+    MessageSquare: createIcon('message-square', '💬'),
+    Clock: createIcon('clock', '🕐'),
+    Timer: createIcon('timer', '⏱️'),
+    Bot: createIcon('bot', '🤖'),
+    Users: createIcon('users', '👥'),
+    // AutoRunStats icons
+    Play: createIcon('play', '▶️'),
+    CheckSquare: createIcon('check-square', '✅'),
+    ListChecks: createIcon('list-checks', '📝'),
+    Target: createIcon('target', '🎯'),
+  };
+});
 
 // Mock layer stack context
 const mockRegisterLayer = vi.fn(() => 'layer-123');
@@ -43,6 +53,8 @@ vi.mock('../../../renderer/contexts/LayerStackContext', () => ({
 const mockGetAggregation = vi.fn();
 const mockExportCsv = vi.fn();
 const mockOnStatsUpdate = vi.fn(() => vi.fn()); // Returns unsubscribe function
+const mockGetAutoRunSessions = vi.fn(() => Promise.resolve([]));
+const mockGetAutoRunTasks = vi.fn(() => Promise.resolve([]));
 
 // Mock dialog and fs API
 const mockSaveFile = vi.fn();
@@ -53,6 +65,8 @@ const mockMaestro = {
     getAggregation: mockGetAggregation,
     exportCsv: mockExportCsv,
     onStatsUpdate: mockOnStatsUpdate,
+    getAutoRunSessions: mockGetAutoRunSessions,
+    getAutoRunTasks: mockGetAutoRunTasks,
   },
   dialog: {
     saveFile: mockSaveFile,

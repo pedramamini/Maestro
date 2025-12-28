@@ -59,6 +59,8 @@ interface AutoRunStatsProps {
   timeRange: StatsTimeRange;
   /** Current theme for styling */
   theme: Theme;
+  /** Number of columns for responsive layout (default: 6) */
+  columns?: number;
 }
 
 /**
@@ -172,7 +174,7 @@ function groupTasksByDate(tasks: AutoRunTask[]): { date: string; count: number; 
     .sort((a, b) => a.date.localeCompare(b.date));
 }
 
-export function AutoRunStats({ timeRange, theme }: AutoRunStatsProps) {
+export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProps) {
   const [sessions, setSessions] = useState<AutoRunSession[]>([]);
   const [allTasks, setAllTasks] = useState<AutoRunTask[]>([]);
   const [loading, setLoading] = useState(true);
@@ -362,7 +364,13 @@ export function AutoRunStats({ timeRange, theme }: AutoRunStatsProps) {
   return (
     <div className="space-y-4" data-testid="autorun-stats">
       {/* Metrics Cards */}
-      <div className="grid grid-cols-6 gap-4" data-testid="autorun-metrics">
+      <div
+        className="grid gap-4"
+        style={{
+          gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+        }}
+        data-testid="autorun-metrics"
+      >
         <MetricCard
           icon={<Play className="w-4 h-4" />}
           label="Total Sessions"

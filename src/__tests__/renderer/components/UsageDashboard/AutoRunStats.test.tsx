@@ -489,12 +489,37 @@ describe('AutoRunStats', () => {
   });
 
   describe('Grid Layout', () => {
-    it('uses 6-column grid layout for metrics', async () => {
+    it('uses 6-column grid layout for metrics by default', async () => {
       render(<AutoRunStats timeRange="week" theme={theme} />);
 
       await waitFor(() => {
         const container = screen.getByTestId('autorun-metrics');
-        expect(container).toHaveClass('grid-cols-6');
+        expect(container).toHaveClass('grid');
+        expect(container).toHaveStyle({
+          gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
+        });
+      });
+    });
+
+    it('supports responsive column configuration', async () => {
+      render(<AutoRunStats timeRange="week" theme={theme} columns={3} />);
+
+      await waitFor(() => {
+        const container = screen.getByTestId('autorun-metrics');
+        expect(container).toHaveStyle({
+          gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+        });
+      });
+    });
+
+    it('supports 2-column layout for narrow screens', async () => {
+      render(<AutoRunStats timeRange="week" theme={theme} columns={2} />);
+
+      await waitFor(() => {
+        const container = screen.getByTestId('autorun-metrics');
+        expect(container).toHaveStyle({
+          gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+        });
       });
     });
   });

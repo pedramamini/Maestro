@@ -33,6 +33,8 @@ interface SummaryCardsProps {
   data: StatsAggregation;
   /** Current theme for styling */
   theme: Theme;
+  /** Number of columns for responsive layout (default: 5) */
+  columns?: number;
 }
 
 /**
@@ -115,7 +117,7 @@ function MetricCard({ icon, label, value, theme }: MetricCardProps) {
   );
 }
 
-export function SummaryCards({ data, theme }: SummaryCardsProps) {
+export function SummaryCards({ data, theme, columns = 5 }: SummaryCardsProps) {
   // Calculate derived metrics
   const { mostActiveAgent, interactiveRatio } = useMemo(() => {
     // Find most active agent by query count
@@ -166,7 +168,10 @@ export function SummaryCards({ data, theme }: SummaryCardsProps) {
 
   return (
     <div
-      className="grid grid-cols-5 gap-4"
+      className="grid gap-4"
+      style={{
+        gridTemplateColumns: `repeat(${columns}, minmax(0, 1fr))`,
+      }}
       data-testid="summary-cards"
     >
       {metrics.map((metric) => (

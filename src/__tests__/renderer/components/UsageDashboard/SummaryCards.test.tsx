@@ -296,11 +296,32 @@ describe('SummaryCards', () => {
   });
 
   describe('Grid Layout', () => {
-    it('uses 5-column grid layout', () => {
+    it('uses 5-column grid layout by default', () => {
       render(<SummaryCards data={mockData} theme={theme} />);
 
       const container = screen.getByTestId('summary-cards');
-      expect(container).toHaveClass('grid-cols-5');
+      expect(container).toHaveClass('grid');
+      expect(container).toHaveStyle({
+        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+      });
+    });
+
+    it('supports responsive column configuration', () => {
+      render(<SummaryCards data={mockData} theme={theme} columns={3} />);
+
+      const container = screen.getByTestId('summary-cards');
+      expect(container).toHaveStyle({
+        gridTemplateColumns: 'repeat(3, minmax(0, 1fr))',
+      });
+    });
+
+    it('supports 2-column layout for narrow screens', () => {
+      render(<SummaryCards data={mockData} theme={theme} columns={2} />);
+
+      const container = screen.getByTestId('summary-cards');
+      expect(container).toHaveStyle({
+        gridTemplateColumns: 'repeat(2, minmax(0, 1fr))',
+      });
     });
   });
 
