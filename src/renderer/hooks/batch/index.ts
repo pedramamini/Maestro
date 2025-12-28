@@ -99,3 +99,6 @@ export type {
   InlineWizardState,
   UseInlineWizardReturn,
 } from '../useInlineWizard';
+
+// Re-export ExistingDocument type from existingDocsDetector for convenience
+export type { ExistingDocument } from '../../utils/existingDocsDetector';

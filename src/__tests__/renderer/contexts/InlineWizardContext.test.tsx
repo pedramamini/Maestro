@@ -14,6 +14,16 @@ import {
 } from '../../../renderer/contexts/InlineWizardContext';
 import type { PreviousUIState } from '../../../renderer/hooks/useInlineWizard';
 
+// Mock the dependencies used by useInlineWizard
+vi.mock('../../../renderer/services/wizardIntentParser', () => ({
+  parseWizardIntent: vi.fn().mockReturnValue({ mode: 'iterate', goal: 'test goal' }),
+}));
+
+vi.mock('../../../renderer/utils/existingDocsDetector', () => ({
+  hasExistingAutoRunDocs: vi.fn().mockResolvedValue(false),
+  getExistingAutoRunDocs: vi.fn().mockResolvedValue([]),
+}));
+
 // Wrapper component for testing hooks that need the provider
 function createWrapper() {
   return function Wrapper({ children }: { children: ReactNode }) {
@@ -66,57 +76,62 @@ describe('InlineWizardContext', () => {
 
       expect(result.current.state).toEqual({
         isActive: false,
+        isInitializing: false,
         mode: null,
         goal: null,
         confidence: 0,
         conversationHistory: [],
         isGeneratingDocs: false,
         generatedDocuments: [],
+        existingDocuments: [],
         previousUIState: null,
         error: null,
+        projectPath: null,
       });
     });
   });
 
   describe('startWizard', () => {
-    it('should activate the wizard when called', () => {
+    it('should activate the wizard when called', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
-      act(() => {
-        result.current.startWizard();
+      await act(async () => {
+        await result.current.startWizard();
       });
 
       expect(result.current.isWizardActive).toBe(true);
     });
 
-    it('should set mode to ask when no input is provided', () => {
+    it('should set mode to new when no input provided and no existing docs', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
-      act(() => {
-        result.current.startWizard();
+      await act(async () => {
+        await result.current.startWizard();
       });
 
-      expect(result.current.wizardMode).toBe('ask');
+      // No project path provided → no existing docs check → defaults to 'new'
+      expect(result.current.wizardMode).toBe('new');
     });
 
-    it('should set mode to null when input is provided (for intent parsing)', () => {
+    it('should parse intent and set mode when input is provided', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
-      act(() => {
-        result.current.startWizard('add authentication');
+      await act(async () => {
+        await result.current.startWizard('add authentication');
       });
 
       expect(result.current.isWizardActive).toBe(true);
-      expect(result.current.wizardMode).toBeNull(); // Mode determined by intent parser
+      // Mode is now determined by intent parser (mocked to return 'iterate')
+      expect(result.current.wizardMode).toBe('iterate');
     });
 
-    it('should store previous UI state', () => {
+    it('should store previous UI state', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
@@ -127,29 +142,32 @@ describe('InlineWizardContext', () => {
         showThinking: true,
       };
 
-      act(() => {
-        result.current.startWizard('test', previousUIState);
+      await act(async () => {
+        await result.current.startWizard('test', previousUIState);
       });
 
       expect(result.current.state.previousUIState).toEqual(previousUIState);
     });
 
-    it('should reset conversation history when starting', () => {
+    it('should reset conversation history when starting', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
       // Start wizard and add a message
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.sendMessage('test message');
       });
 
       expect(result.current.conversationHistory.length).toBeGreaterThan(0);
 
       // Start wizard again - should reset
-      act(() => {
-        result.current.startWizard('new session');
+      await act(async () => {
+        await result.current.startWizard('new session');
       });
 
       expect(result.current.conversationHistory).toEqual([]);
@@ -157,13 +175,13 @@ describe('InlineWizardContext', () => {
   });
 
   describe('endWizard', () => {
-    it('should deactivate the wizard', () => {
+    it('should deactivate the wizard', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
-      act(() => {
-        result.current.startWizard();
+      await act(async () => {
+        await result.current.startWizard();
       });
 
       expect(result.current.isWizardActive).toBe(true);
@@ -175,7 +193,7 @@ describe('InlineWizardContext', () => {
       expect(result.current.isWizardActive).toBe(false);
     });
 
-    it('should return the previous UI state', () => {
+    it('should return the previous UI state', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
@@ -186,8 +204,8 @@ describe('InlineWizardContext', () => {
         showThinking: true,
       };
 
-      act(() => {
-        result.current.startWizard('test', previousUIState);
+      await act(async () => {
+        await result.current.startWizard('test', previousUIState);
       });
 
       let returnedState: PreviousUIState | null = null;
@@ -198,14 +216,17 @@ describe('InlineWizardContext', () => {
       expect(returnedState).toEqual(previousUIState);
     });
 
-    it('should reset all state to initial values', () => {
+    it('should reset all state to initial values', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
       // Build up some state
+      await act(async () => {
+        await result.current.startWizard('test');
+      });
+
       act(() => {
-        result.current.startWizard('test');
         result.current.setMode('new');
         result.current.setGoal('add feature');
         result.current.setConfidence(75);
@@ -222,26 +243,32 @@ describe('InlineWizardContext', () => {
       // All state should be reset
       expect(result.current.state).toEqual({
         isActive: false,
+        isInitializing: false,
         mode: null,
         goal: null,
         confidence: 0,
         conversationHistory: [],
         isGeneratingDocs: false,
         generatedDocuments: [],
+        existingDocuments: [],
         previousUIState: null,
         error: null,
+        projectPath: null,
       });
     });
   });
 
   describe('sendMessage', () => {
-    it('should add a user message to conversation history', () => {
+    it('should add a user message to conversation history', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.sendMessage('Hello, wizard!');
       });
 
@@ -250,13 +277,16 @@ describe('InlineWizardContext', () => {
       expect(result.current.conversationHistory[0].content).toBe('Hello, wizard!');
     });
 
-    it('should generate unique message IDs', () => {
+    it('should generate unique message IDs', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.sendMessage('Message 1');
         result.current.sendMessage('Message 2');
       });
@@ -265,15 +295,18 @@ describe('InlineWizardContext', () => {
       expect(ids[0]).not.toBe(ids[1]);
     });
 
-    it('should include timestamp on messages', () => {
+    it('should include timestamp on messages', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
+      });
+
+      await act(async () => {
+        await result.current.startWizard();
       });
 
       const beforeTime = Date.now();
 
       act(() => {
-        result.current.startWizard();
         result.current.sendMessage('Test message');
       });
 
@@ -286,13 +319,16 @@ describe('InlineWizardContext', () => {
   });
 
   describe('addAssistantMessage', () => {
-    it('should add an assistant message to conversation history', () => {
+    it('should add an assistant message to conversation history', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.addAssistantMessage('I can help with that!');
       });
 
@@ -301,13 +337,16 @@ describe('InlineWizardContext', () => {
       expect(result.current.conversationHistory[0].content).toBe('I can help with that!');
     });
 
-    it('should include confidence when provided', () => {
+    it('should include confidence when provided', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.addAssistantMessage('Understanding better...', 65);
       });
 
@@ -315,13 +354,16 @@ describe('InlineWizardContext', () => {
       expect(result.current.confidence).toBe(65);
     });
 
-    it('should include ready flag when provided', () => {
+    it('should include ready flag when provided', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.addAssistantMessage('Ready to generate!', 85, true);
       });
 
@@ -330,26 +372,32 @@ describe('InlineWizardContext', () => {
   });
 
   describe('setConfidence', () => {
-    it('should update confidence value', () => {
+    it('should update confidence value', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setConfidence(50);
       });
 
       expect(result.current.confidence).toBe(50);
     });
 
-    it('should clamp confidence to 0-100 range', () => {
+    it('should clamp confidence to 0-100 range', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setConfidence(150);
       });
 
@@ -364,13 +412,16 @@ describe('InlineWizardContext', () => {
   });
 
   describe('setMode', () => {
-    it('should update wizard mode', () => {
+    it('should update wizard mode', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setMode('new');
       });
 
@@ -385,26 +436,32 @@ describe('InlineWizardContext', () => {
   });
 
   describe('setGoal', () => {
-    it('should update wizard goal', () => {
+    it('should update wizard goal', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setGoal('add user authentication');
       });
 
       expect(result.current.wizardGoal).toBe('add user authentication');
     });
 
-    it('should allow null goal', () => {
+    it('should allow null goal', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setGoal('some goal');
       });
 
@@ -419,13 +476,16 @@ describe('InlineWizardContext', () => {
   });
 
   describe('setGeneratingDocs', () => {
-    it('should update generating docs state', () => {
+    it('should update generating docs state', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setGeneratingDocs(true);
       });
 
@@ -440,7 +500,7 @@ describe('InlineWizardContext', () => {
   });
 
   describe('setGeneratedDocuments', () => {
-    it('should update generated documents', () => {
+    it('should update generated documents', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
@@ -450,21 +510,27 @@ describe('InlineWizardContext', () => {
         { filename: 'phase-2.md', content: '# Phase 2', taskCount: 3 },
       ];
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setGeneratedDocuments(docs);
       });
 
       expect(result.current.generatedDocuments).toEqual(docs);
     });
 
-    it('should set isGeneratingDocs to false when documents are set', () => {
+    it('should set isGeneratingDocs to false when documents are set', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setGeneratingDocs(true);
       });
 
@@ -481,26 +547,32 @@ describe('InlineWizardContext', () => {
   });
 
   describe('setError', () => {
-    it('should update error state', () => {
+    it('should update error state', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setError('Something went wrong');
       });
 
       expect(result.current.error).toBe('Something went wrong');
     });
 
-    it('should allow clearing error', () => {
+    it('should allow clearing error', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.setError('Error');
       });
 
@@ -515,13 +587,16 @@ describe('InlineWizardContext', () => {
   });
 
   describe('clearConversation', () => {
-    it('should clear conversation history', () => {
+    it('should clear conversation history', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
+      await act(async () => {
+        await result.current.startWizard();
+      });
+
       act(() => {
-        result.current.startWizard();
         result.current.sendMessage('Message 1');
         result.current.addAssistantMessage('Response 1');
         result.current.sendMessage('Message 2');
@@ -538,18 +613,21 @@ describe('InlineWizardContext', () => {
   });
 
   describe('reset', () => {
-    it('should reset all state to initial values', () => {
+    it('should reset all state to initial values', async () => {
       const { result } = renderHook(() => useInlineWizardContext(), {
         wrapper: createWrapper(),
       });
 
       // Build up state
-      act(() => {
-        result.current.startWizard('test', {
+      await act(async () => {
+        await result.current.startWizard('test', {
           readOnlyMode: true,
           saveToHistory: false,
           showThinking: true,
         });
+      });
+
+      act(() => {
         result.current.setMode('iterate');
         result.current.setGoal('add feature');
         result.current.setConfidence(80);
@@ -603,7 +681,7 @@ describe('InlineWizardContext', () => {
   });
 
   describe('multiple consumers', () => {
-    it('should share state between multiple consumers', () => {
+    it('should share state between multiple consumers', async () => {
       // Create a shared wrapper
       const wrapper = createWrapper();
 
@@ -618,8 +696,8 @@ describe('InlineWizardContext', () => {
       });
 
       // Start wizard from consumer1
-      act(() => {
-        consumer1.current.startWizard('test');
+      await act(async () => {
+        await consumer1.current.startWizard('test');
       });
 
       // Both consumers should see the change

@@ -80,12 +80,14 @@ export function InlineWizardProvider({ children }: InlineWizardProviderProps) {
   const value = useMemo<InlineWizardContextValue>(() => wizardState, [
     // Dependencies from the wizard state
     wizardState.isWizardActive,
+    wizardState.isInitializing,
     wizardState.wizardMode,
     wizardState.wizardGoal,
     wizardState.confidence,
     wizardState.conversationHistory,
     wizardState.isGeneratingDocs,
     wizardState.generatedDocuments,
+    wizardState.existingDocuments,
     wizardState.error,
     wizardState.state,
     // Actions (stable references from useCallback)
@@ -97,6 +99,7 @@ export function InlineWizardProvider({ children }: InlineWizardProviderProps) {
     wizardState.setGoal,
     wizardState.setGeneratingDocs,
     wizardState.setGeneratedDocuments,
+    wizardState.setExistingDocuments,
     wizardState.setError,
     wizardState.addAssistantMessage,
     wizardState.clearConversation,

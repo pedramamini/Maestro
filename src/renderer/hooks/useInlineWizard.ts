@@ -10,6 +10,12 @@
  */
 
 import { useState, useCallback, useRef } from 'react';
+import { parseWizardIntent } from '../services/wizardIntentParser';
+import {
+  hasExistingAutoRunDocs,
+  getExistingAutoRunDocs,
+  type ExistingDocument,
+} from '../utils/existingDocsDetector';
 
 /**
  * Wizard mode determines whether the user wants to create new documents
@@ -59,6 +65,8 @@ export interface InlineGeneratedDocument {
 export interface InlineWizardState {
   /** Whether wizard is currently active */
   isActive: boolean;
+  /** Whether wizard is initializing (checking for existing docs, parsing intent) */
+  isInitializing: boolean;
   /** Current wizard mode */
   mode: InlineWizardMode;
   /** Goal for iterate mode (what the user wants to add/change) */
@@ -71,10 +79,14 @@ export interface InlineWizardState {
   isGeneratingDocs: boolean;
   /** Generated documents (if any) */
   generatedDocuments: InlineGeneratedDocument[];
+  /** Existing Auto Run documents loaded for iterate mode context */
+  existingDocuments: ExistingDocument[];
   /** Previous UI state to restore when wizard ends */
   previousUIState: PreviousUIState | null;
   /** Error message if something goes wrong */
   error: string | null;
+  /** Project path used for document detection */
+  projectPath: string | null;
 }
 
 /**
@@ -83,6 +95,8 @@ export interface InlineWizardState {
 export interface UseInlineWizardReturn {
   /** Whether the wizard is currently active */
   isWizardActive: boolean;
+  /** Whether the wizard is initializing (checking for existing docs, parsing intent) */
+  isInitializing: boolean;
   /** Current wizard mode */
   wizardMode: InlineWizardMode;
   /** Goal for iterate mode */
@@ -95,19 +109,23 @@ export interface UseInlineWizardReturn {
   isGeneratingDocs: boolean;
   /** Generated documents */
   generatedDocuments: InlineGeneratedDocument[];
+  /** Existing documents loaded for iterate mode */
+  existingDocuments: ExistingDocument[];
   /** Error message if any */
   error: string | null;
   /** Full wizard state */
   state: InlineWizardState;
   /**
-   * Start the wizard.
+   * Start the wizard with intent parsing flow.
    * @param naturalLanguageInput - Optional input from `/wizard <text>` command
    * @param currentUIState - Current UI state to restore when wizard ends
+   * @param projectPath - Project path to check for existing Auto Run documents
    */
   startWizard: (
     naturalLanguageInput?: string,
-    currentUIState?: PreviousUIState
-  ) => void;
+    currentUIState?: PreviousUIState,
+    projectPath?: string
+  ) => Promise<void>;
   /** End the wizard and restore previous UI state */
   endWizard: () => PreviousUIState | null;
   /**
@@ -128,6 +146,8 @@ export interface UseInlineWizardReturn {
   setGeneratingDocs: (generating: boolean) => void;
   /** Set generated documents */
   setGeneratedDocuments: (docs: InlineGeneratedDocument[]) => void;
+  /** Set existing documents (for iterate mode context) */
+  setExistingDocuments: (docs: ExistingDocument[]) => void;
   /** Set error message */
   setError: (error: string | null) => void;
   /** Add an assistant response to the conversation */
@@ -150,14 +170,17 @@ function generateMessageId(): string {
  */
 const initialState: InlineWizardState = {
   isActive: false,
+  isInitializing: false,
   mode: null,
   goal: null,
   confidence: 0,
   conversationHistory: [],
   isGeneratingDocs: false,
   generatedDocuments: [],
+  existingDocuments: [],
   previousUIState: null,
   error: null,
+  projectPath: null,
 };
 
 /**
@@ -199,29 +222,97 @@ export function useInlineWizard(): UseInlineWizardReturn {
   const previousUIStateRef = useRef<PreviousUIState | null>(null);
 
   /**
-   * Start the wizard.
+   * Start the wizard with intent parsing flow.
+   *
+   * Flow:
+   * 1. Check if project has existing Auto Run documents
+   * 2. If no input provided and docs exist → 'ask' mode (prompt user)
+   * 3. If input provided → parse intent to determine mode
+   * 4. If mode is 'iterate' → load existing docs for context
    */
   const startWizard = useCallback(
-    (naturalLanguageInput?: string, currentUIState?: PreviousUIState) => {
+    async (
+      naturalLanguageInput?: string,
+      currentUIState?: PreviousUIState,
+      projectPath?: string
+    ): Promise<void> => {
       // Store current UI state for later restoration
       if (currentUIState) {
         previousUIStateRef.current = currentUIState;
       }
 
+      // Set initializing state immediately
       setState((prev) => ({
         ...prev,
         isActive: true,
-        // Mode will be determined by intent parser (in wiring task)
-        // For now, start with 'ask' mode if no input provided
-        mode: naturalLanguageInput ? null : 'ask',
+        isInitializing: true,
+        mode: null,
         goal: null,
         confidence: 0,
         conversationHistory: [],
         isGeneratingDocs: false,
         generatedDocuments: [],
+        existingDocuments: [],
         previousUIState: currentUIState || null,
         error: null,
+        projectPath: projectPath || null,
       }));
+
+      try {
+        // Step 1: Check for existing Auto Run documents
+        const hasExistingDocs = projectPath
+          ? await hasExistingAutoRunDocs(projectPath)
+          : false;
+
+        // Step 2: Determine mode based on input and existing docs
+        let mode: InlineWizardMode;
+        let goal: string | null = null;
+        let existingDocs: ExistingDocument[] = [];
+
+        const trimmedInput = naturalLanguageInput?.trim() || '';
+
+        if (!trimmedInput) {
+          // No input provided
+          if (hasExistingDocs) {
+            // Docs exist - ask user what they want to do
+            mode = 'ask';
+          } else {
+            // No docs - default to new mode
+            mode = 'new';
+          }
+        } else {
+          // Input provided - parse intent
+          const intentResult = parseWizardIntent(trimmedInput, hasExistingDocs);
+          mode = intentResult.mode;
+          goal = intentResult.goal || null;
+        }
+
+        // Step 3: If iterate mode, load existing docs for context
+        if (mode === 'iterate' && projectPath) {
+          existingDocs = await getExistingAutoRunDocs(projectPath);
+        }
+
+        // Update state with parsed results
+        setState((prev) => ({
+          ...prev,
+          isInitializing: false,
+          mode,
+          goal,
+          existingDocuments: existingDocs,
+        }));
+      } catch (error) {
+        // Handle any errors during initialization
+        const errorMessage =
+          error instanceof Error ? error.message : 'Failed to initialize wizard';
+        console.error('[useInlineWizard] startWizard error:', error);
+
+        setState((prev) => ({
+          ...prev,
+          isInitializing: false,
+          mode: 'new', // Default to new mode on error
+          error: errorMessage,
+        }));
+      }
     },
     []
   );
@@ -331,6 +422,16 @@ export function useInlineWizard(): UseInlineWizardReturn {
   }, []);
 
   /**
+   * Set existing documents (for iterate mode context).
+   */
+  const setExistingDocuments = useCallback((docs: ExistingDocument[]) => {
+    setState((prev) => ({
+      ...prev,
+      existingDocuments: docs,
+    }));
+  }, []);
+
+  /**
    * Set error message.
    */
   const setError = useCallback((error: string | null) => {
@@ -361,12 +462,14 @@ export function useInlineWizard(): UseInlineWizardReturn {
   return {
     // Convenience accessors
     isWizardActive: state.isActive,
+    isInitializing: state.isInitializing,
     wizardMode: state.mode,
     wizardGoal: state.goal,
     confidence: state.confidence,
     conversationHistory: state.conversationHistory,
     isGeneratingDocs: state.isGeneratingDocs,
     generatedDocuments: state.generatedDocuments,
+    existingDocuments: state.existingDocuments,
     error: state.error,
 
     // Full state
@@ -381,6 +484,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
     setGoal,
     setGeneratingDocs,
     setGeneratedDocuments,
+    setExistingDocuments,
     setError,
     addAssistantMessage,
     clearConversation,
