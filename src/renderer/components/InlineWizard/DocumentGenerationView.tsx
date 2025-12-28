@@ -31,6 +31,7 @@ import { MermaidRenderer } from '../MermaidRenderer';
 import { useClickOutside } from '../../hooks';
 import { AustinFactsDisplay } from './AustinFactsDisplay';
 import { StreamingDocumentPreview } from './StreamingDocumentPreview';
+import { GenerationCompleteOverlay } from './GenerationCompleteOverlay';
 
 // Memoize remarkPlugins array - it never changes
 const REMARK_PLUGINS = [remarkGfm];
@@ -321,58 +322,6 @@ function MarkdownImage({
   );
 }
 
-
-/**
- * GenerationCompleteOverlay - Shown when document generation finishes
- */
-export function GenerationCompleteOverlay({
-  theme,
-  taskCount,
-  onDone,
-}: {
-  theme: Theme;
-  taskCount: number;
-  onDone: () => void;
-}): JSX.Element {
-  return (
-    <div
-      className="absolute inset-0 flex flex-col items-center justify-center"
-      style={{
-        backgroundColor: `${theme.colors.bgMain}E6`,
-        backdropFilter: 'blur(4px)',
-      }}
-    >
-      {/* Celebratory header */}
-      <div className="text-center mb-6">
-        <h2
-          className="text-2xl font-bold mb-2"
-          style={{ color: theme.colors.textMain }}
-        >
-          Your action plan is ready!
-        </h2>
-        <p
-          className="text-sm"
-          style={{ color: theme.colors.textDim }}
-        >
-          {taskCount} {taskCount === 1 ? 'task' : 'tasks'} prepared and ready to run
-        </p>
-      </div>
-
-      {/* Done button */}
-      <button
-        onClick={onDone}
-        className="px-8 py-3 rounded-lg font-semibold text-lg transition-all hover:scale-105"
-        style={{
-          backgroundColor: theme.colors.accent,
-          color: theme.colors.accentForeground,
-          boxShadow: `0 4px 14px ${theme.colors.accent}40`,
-        }}
-      >
-        Done
-      </button>
-    </div>
-  );
-}
 
 /**
  * Document editor component with edit/preview modes
@@ -1103,3 +1052,4 @@ export { DocumentSelector, DocumentEditor };
 // Re-export standalone components from their files
 export { AustinFactsDisplay } from './AustinFactsDisplay';
 export { StreamingDocumentPreview } from './StreamingDocumentPreview';
+export { GenerationCompleteOverlay } from './GenerationCompleteOverlay';
