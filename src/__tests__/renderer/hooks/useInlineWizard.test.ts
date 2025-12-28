@@ -16,6 +16,28 @@ vi.mock('../../../renderer/services/wizardIntentParser', () => ({
 vi.mock('../../../renderer/utils/existingDocsDetector', () => ({
   hasExistingAutoRunDocs: vi.fn(),
   getExistingAutoRunDocs: vi.fn(),
+  getAutoRunFolderPath: vi.fn((projectPath: string) => `${projectPath}/Auto Run Docs`),
+}));
+
+vi.mock('../../../renderer/services/inlineWizardConversation', () => ({
+  startInlineWizardConversation: vi.fn().mockReturnValue({
+    sessionId: 'test-session-id',
+    agentType: 'claude-code',
+    directoryPath: '/test/project',
+    projectName: 'Test Project',
+    systemPrompt: 'Test system prompt',
+    isActive: true,
+  }),
+  sendWizardMessage: vi.fn().mockResolvedValue({
+    success: true,
+    response: {
+      confidence: 50,
+      ready: false,
+      message: 'Test response',
+    },
+  }),
+  endInlineWizardConversation: vi.fn().mockResolvedValue(undefined),
+  READY_CONFIDENCE_THRESHOLD: 80,
 }));
 
 // Import mocked modules
@@ -286,8 +308,8 @@ describe('useInlineWizard', () => {
         expect(result.current.state.previousUIState).toEqual(uiState);
 
         let returnedState: typeof uiState | null;
-        act(() => {
-          returnedState = result.current.endWizard();
+        await act(async () => {
+          returnedState = await result.current.endWizard();
         });
 
         expect(returnedState).toEqual(uiState);
@@ -329,8 +351,8 @@ describe('useInlineWizard', () => {
       expect(result.current.isWizardActive).toBe(true);
 
       // End wizard
-      act(() => {
-        result.current.endWizard();
+      await act(async () => {
+        await result.current.endWizard();
       });
 
       expect(result.current.isWizardActive).toBe(false);

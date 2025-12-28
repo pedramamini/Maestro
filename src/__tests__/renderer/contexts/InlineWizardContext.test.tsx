@@ -22,6 +22,28 @@ vi.mock('../../../renderer/services/wizardIntentParser', () => ({
 vi.mock('../../../renderer/utils/existingDocsDetector', () => ({
   hasExistingAutoRunDocs: vi.fn().mockResolvedValue(false),
   getExistingAutoRunDocs: vi.fn().mockResolvedValue([]),
+  getAutoRunFolderPath: vi.fn((projectPath: string) => `${projectPath}/Auto Run Docs`),
+}));
+
+vi.mock('../../../renderer/services/inlineWizardConversation', () => ({
+  startInlineWizardConversation: vi.fn().mockReturnValue({
+    sessionId: 'test-session-id',
+    agentType: 'claude-code',
+    directoryPath: '/test/project',
+    projectName: 'Test Project',
+    systemPrompt: 'Test system prompt',
+    isActive: true,
+  }),
+  sendWizardMessage: vi.fn().mockResolvedValue({
+    success: true,
+    response: {
+      confidence: 50,
+      ready: false,
+      message: 'Test response',
+    },
+  }),
+  endInlineWizardConversation: vi.fn().mockResolvedValue(undefined),
+  READY_CONFIDENCE_THRESHOLD: 80,
 }));
 
 // Wrapper component for testing hooks that need the provider
@@ -77,9 +99,11 @@ describe('InlineWizardContext', () => {
       expect(result.current.state).toEqual({
         isActive: false,
         isInitializing: false,
+        isWaiting: false,
         mode: null,
         goal: null,
         confidence: 0,
+        ready: false,
         conversationHistory: [],
         isGeneratingDocs: false,
         generatedDocuments: [],
@@ -87,6 +111,8 @@ describe('InlineWizardContext', () => {
         previousUIState: null,
         error: null,
         projectPath: null,
+        agentType: null,
+        sessionName: null,
       });
     });
   });
@@ -186,8 +212,8 @@ describe('InlineWizardContext', () => {
 
       expect(result.current.isWizardActive).toBe(true);
 
-      act(() => {
-        result.current.endWizard();
+      await act(async () => {
+        await result.current.endWizard();
       });
 
       expect(result.current.isWizardActive).toBe(false);
@@ -209,8 +235,8 @@ describe('InlineWizardContext', () => {
       });
 
       let returnedState: PreviousUIState | null = null;
-      act(() => {
-        returnedState = result.current.endWizard();
+      await act(async () => {
+        returnedState = await result.current.endWizard();
       });
 
       expect(returnedState).toEqual(previousUIState);
@@ -226,27 +252,29 @@ describe('InlineWizardContext', () => {
         await result.current.startWizard('test');
       });
 
-      act(() => {
+      await act(async () => {
         result.current.setMode('new');
         result.current.setGoal('add feature');
         result.current.setConfidence(75);
-        result.current.sendMessage('hello');
+        await result.current.sendMessage('hello');
         result.current.setGeneratingDocs(true);
         result.current.setError('test error');
       });
 
       // End wizard
-      act(() => {
-        result.current.endWizard();
+      await act(async () => {
+        await result.current.endWizard();
       });
 
       // All state should be reset
       expect(result.current.state).toEqual({
         isActive: false,
         isInitializing: false,
+        isWaiting: false,
         mode: null,
         goal: null,
         confidence: 0,
+        ready: false,
         conversationHistory: [],
         isGeneratingDocs: false,
         generatedDocuments: [],
@@ -254,6 +282,8 @@ describe('InlineWizardContext', () => {
         previousUIState: null,
         error: null,
         projectPath: null,
+        agentType: null,
+        sessionName: null,
       });
     });
   });

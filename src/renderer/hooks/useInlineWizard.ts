@@ -14,8 +14,19 @@ import { parseWizardIntent } from '../services/wizardIntentParser';
 import {
   hasExistingAutoRunDocs,
   getExistingAutoRunDocs,
+  getAutoRunFolderPath,
   type ExistingDocument,
 } from '../utils/existingDocsDetector';
+import {
+  startInlineWizardConversation,
+  sendWizardMessage,
+  endInlineWizardConversation,
+  READY_CONFIDENCE_THRESHOLD,
+  type InlineWizardConversationSession,
+  type ExistingDocumentWithContent,
+  type ConversationCallbacks,
+} from '../services/inlineWizardConversation';
+import type { ToolType } from '../types';
 
 /**
  * Wizard mode determines whether the user wants to create new documents
@@ -67,12 +78,16 @@ export interface InlineWizardState {
   isActive: boolean;
   /** Whether wizard is initializing (checking for existing docs, parsing intent) */
   isInitializing: boolean;
+  /** Whether waiting for AI response */
+  isWaiting: boolean;
   /** Current wizard mode */
   mode: InlineWizardMode;
   /** Goal for iterate mode (what the user wants to add/change) */
   goal: string | null;
   /** Confidence level from agent responses (0-100) */
   confidence: number;
+  /** Whether the AI is ready to proceed with document generation */
+  ready: boolean;
   /** Conversation history for this wizard session */
   conversationHistory: InlineWizardMessage[];
   /** Whether documents are being generated */
@@ -87,6 +102,10 @@ export interface InlineWizardState {
   error: string | null;
   /** Project path used for document detection */
   projectPath: string | null;
+  /** Agent type for the session */
+  agentType: ToolType | null;
+  /** Session name/project name */
+  sessionName: string | null;
 }
 
 /**
@@ -97,12 +116,18 @@ export interface UseInlineWizardReturn {
   isWizardActive: boolean;
   /** Whether the wizard is initializing (checking for existing docs, parsing intent) */
   isInitializing: boolean;
+  /** Whether waiting for AI response */
+  isWaiting: boolean;
   /** Current wizard mode */
   wizardMode: InlineWizardMode;
   /** Goal for iterate mode */
   wizardGoal: string | null;
   /** Current confidence level (0-100) */
   confidence: number;
+  /** Whether the AI is ready to proceed with document generation */
+  ready: boolean;
+  /** Whether the wizard is ready to generate documents (ready=true && confidence >= threshold) */
+  readyToGenerate: boolean;
   /** Conversation history */
   conversationHistory: InlineWizardMessage[];
   /** Whether documents are being generated */
@@ -120,19 +145,24 @@ export interface UseInlineWizardReturn {
    * @param naturalLanguageInput - Optional input from `/wizard <text>` command
    * @param currentUIState - Current UI state to restore when wizard ends
    * @param projectPath - Project path to check for existing Auto Run documents
+   * @param agentType - The AI agent type to use for conversation
+   * @param sessionName - The session name (used as project name)
    */
   startWizard: (
     naturalLanguageInput?: string,
     currentUIState?: PreviousUIState,
-    projectPath?: string
+    projectPath?: string,
+    agentType?: ToolType,
+    sessionName?: string
   ) => Promise<void>;
   /** End the wizard and restore previous UI state */
-  endWizard: () => PreviousUIState | null;
+  endWizard: () => Promise<PreviousUIState | null>;
   /**
    * Send a message to the wizard conversation.
    * @param content - Message content
+   * @param callbacks - Optional callbacks for streaming progress
    */
-  sendMessage: (content: string) => void;
+  sendMessage: (content: string, callbacks?: ConversationCallbacks) => Promise<void>;
   /**
    * Set the confidence level.
    * @param value - Confidence value (0-100)
@@ -171,9 +201,11 @@ function generateMessageId(): string {
 const initialState: InlineWizardState = {
   isActive: false,
   isInitializing: false,
+  isWaiting: false,
   mode: null,
   goal: null,
   confidence: 0,
+  ready: false,
   conversationHistory: [],
   isGeneratingDocs: false,
   generatedDocuments: [],
@@ -181,6 +213,8 @@ const initialState: InlineWizardState = {
   previousUIState: null,
   error: null,
   projectPath: null,
+  agentType: null,
+  sessionName: null,
 };
 
 /**
@@ -221,6 +255,49 @@ export function useInlineWizard(): UseInlineWizardReturn {
   // Use ref to hold the previous UI state for restoration
   const previousUIStateRef = useRef<PreviousUIState | null>(null);
 
+  // Use ref to hold the conversation session (persists across re-renders)
+  const conversationSessionRef = useRef<InlineWizardConversationSession | null>(null);
+
+  /**
+   * Load document contents for existing documents.
+   * Converts ExistingDocument[] to ExistingDocumentWithContent[].
+   */
+  const loadDocumentContents = useCallback(
+    async (
+      docs: ExistingDocument[],
+      autoRunFolderPath: string
+    ): Promise<ExistingDocumentWithContent[]> => {
+      const docsWithContent: ExistingDocumentWithContent[] = [];
+
+      for (const doc of docs) {
+        try {
+          const result = await window.maestro.autorun.readDoc(autoRunFolderPath, doc.name);
+          if (result.success && result.content) {
+            docsWithContent.push({
+              ...doc,
+              content: result.content,
+            });
+          } else {
+            // Include doc without content if read failed
+            docsWithContent.push({
+              ...doc,
+              content: '(Failed to load content)',
+            });
+          }
+        } catch (error) {
+          console.warn(`[useInlineWizard] Failed to load ${doc.filename}:`, error);
+          docsWithContent.push({
+            ...doc,
+            content: '(Failed to load content)',
+          });
+        }
+      }
+
+      return docsWithContent;
+    },
+    []
+  );
+
   /**
    * Start the wizard with intent parsing flow.
    *
@@ -228,13 +305,16 @@ export function useInlineWizard(): UseInlineWizardReturn {
    * 1. Check if project has existing Auto Run documents
    * 2. If no input provided and docs exist → 'ask' mode (prompt user)
    * 3. If input provided → parse intent to determine mode
-   * 4. If mode is 'iterate' → load existing docs for context
+   * 4. If mode is 'iterate' → load existing docs with content for context
+   * 5. Initialize conversation session with appropriate prompt
    */
   const startWizard = useCallback(
     async (
       naturalLanguageInput?: string,
       currentUIState?: PreviousUIState,
-      projectPath?: string
+      projectPath?: string,
+      agentType?: ToolType,
+      sessionName?: string
     ): Promise<void> => {
       // Store current UI state for later restoration
       if (currentUIState) {
@@ -246,9 +326,11 @@ export function useInlineWizard(): UseInlineWizardReturn {
         ...prev,
         isActive: true,
         isInitializing: true,
+        isWaiting: false,
         mode: null,
         goal: null,
         confidence: 0,
+        ready: false,
         conversationHistory: [],
         isGeneratingDocs: false,
         generatedDocuments: [],
@@ -256,6 +338,8 @@ export function useInlineWizard(): UseInlineWizardReturn {
         previousUIState: currentUIState || null,
         error: null,
         projectPath: projectPath || null,
+        agentType: agentType || null,
+        sessionName: sessionName || null,
       }));
 
       try {
@@ -287,9 +371,29 @@ export function useInlineWizard(): UseInlineWizardReturn {
           goal = intentResult.goal || null;
         }
 
-        // Step 3: If iterate mode, load existing docs for context
+        // Step 3: If iterate mode, load existing docs with content for context
+        let docsWithContent: ExistingDocumentWithContent[] = [];
         if (mode === 'iterate' && projectPath) {
           existingDocs = await getExistingAutoRunDocs(projectPath);
+          const autoRunFolderPath = getAutoRunFolderPath(projectPath);
+          docsWithContent = await loadDocumentContents(existingDocs, autoRunFolderPath);
+        }
+
+        // Step 4: Initialize conversation session (only for 'new' or 'iterate' modes)
+        if ((mode === 'new' || mode === 'iterate') && agentType && projectPath) {
+          const autoRunFolderPath = getAutoRunFolderPath(projectPath);
+          const session = startInlineWizardConversation({
+            mode,
+            agentType,
+            directoryPath: projectPath,
+            projectName: sessionName || 'Project',
+            goal: goal || undefined,
+            existingDocs: docsWithContent.length > 0 ? docsWithContent : undefined,
+            autoRunFolderPath,
+          });
+
+          conversationSessionRef.current = session;
+          console.log('[useInlineWizard] Conversation session started:', session.sessionId);
         }
 
         // Update state with parsed results
@@ -314,15 +418,26 @@ export function useInlineWizard(): UseInlineWizardReturn {
         }));
       }
     },
-    []
+    [loadDocumentContents]
   );
 
   /**
    * End the wizard and return the previous UI state for restoration.
    */
-  const endWizard = useCallback((): PreviousUIState | null => {
+  const endWizard = useCallback(async (): Promise<PreviousUIState | null> => {
     const previousState = previousUIStateRef.current;
     previousUIStateRef.current = null;
+
+    // Clean up conversation session
+    if (conversationSessionRef.current) {
+      try {
+        await endInlineWizardConversation(conversationSessionRef.current);
+        console.log('[useInlineWizard] Conversation session ended');
+      } catch (error) {
+        console.warn('[useInlineWizard] Failed to end conversation session:', error);
+      }
+      conversationSessionRef.current = null;
+    }
 
     setState(initialState);
 
@@ -331,20 +446,103 @@ export function useInlineWizard(): UseInlineWizardReturn {
 
   /**
    * Send a user message to the wizard conversation.
+   * Adds the message to history, calls the AI service, and updates state with response.
    */
-  const sendMessage = useCallback((content: string) => {
-    const message: InlineWizardMessage = {
-      id: generateMessageId(),
-      role: 'user',
-      content,
-      timestamp: Date.now(),
-    };
+  const sendMessage = useCallback(
+    async (content: string, callbacks?: ConversationCallbacks): Promise<void> => {
+      // Create user message
+      const userMessage: InlineWizardMessage = {
+        id: generateMessageId(),
+        role: 'user',
+        content,
+        timestamp: Date.now(),
+      };
 
-    setState((prev) => ({
-      ...prev,
-      conversationHistory: [...prev.conversationHistory, message],
-    }));
-  }, []);
+      // Add user message to history and set waiting state
+      setState((prev) => ({
+        ...prev,
+        conversationHistory: [...prev.conversationHistory, userMessage],
+        isWaiting: true,
+        error: null,
+      }));
+
+      // Check if we have an active conversation session
+      const session = conversationSessionRef.current;
+      if (!session) {
+        console.error('[useInlineWizard] No active conversation session');
+        setState((prev) => ({
+          ...prev,
+          isWaiting: false,
+          error: 'No active conversation session. Please restart the wizard.',
+        }));
+        callbacks?.onError?.('No active conversation session');
+        return;
+      }
+
+      try {
+        // Get current conversation history (excluding the message we just added)
+        const currentHistory = state.conversationHistory;
+
+        // Call the AI service
+        const result = await sendWizardMessage(
+          session,
+          content,
+          currentHistory,
+          callbacks
+        );
+
+        if (result.success && result.response) {
+          // Create assistant message from response
+          const assistantMessage: InlineWizardMessage = {
+            id: generateMessageId(),
+            role: 'assistant',
+            content: result.response.message,
+            timestamp: Date.now(),
+            confidence: result.response.confidence,
+            ready: result.response.ready,
+          };
+
+          // Update state with response
+          setState((prev) => ({
+            ...prev,
+            conversationHistory: [...prev.conversationHistory, assistantMessage],
+            confidence: result.response!.confidence,
+            ready: result.response!.ready,
+            isWaiting: false,
+          }));
+
+          console.log(
+            `[useInlineWizard] Response received - confidence: ${result.response.confidence}, ready: ${result.response.ready}`
+          );
+        } else {
+          // Handle error response
+          const errorMessage = result.error || 'Failed to get response from AI';
+          console.error('[useInlineWizard] sendWizardMessage error:', errorMessage);
+
+          setState((prev) => ({
+            ...prev,
+            isWaiting: false,
+            error: errorMessage,
+          }));
+
+          callbacks?.onError?.(errorMessage);
+        }
+      } catch (error) {
+        const errorMessage =
+          error instanceof Error ? error.message : 'Unknown error occurred';
+        console.error('[useInlineWizard] sendMessage error:', error);
+
+        setState((prev) => ({
+          ...prev,
+          isWaiting: false,
+          error: errorMessage,
+        }));
+
+        callbacks?.onError?.(errorMessage);
+      }
+    },
+    [state.conversationHistory]
+  );
 
   /**
    * Add an assistant response to the conversation.
@@ -363,8 +561,9 @@ export function useInlineWizard(): UseInlineWizardReturn {
       setState((prev) => ({
         ...prev,
         conversationHistory: [...prev.conversationHistory, message],
-        // Update confidence if provided
+        // Update confidence and ready if provided
         confidence: confidence !== undefined ? confidence : prev.confidence,
+        ready: ready !== undefined ? ready : prev.ready,
       }));
     },
     []
@@ -455,17 +654,30 @@ export function useInlineWizard(): UseInlineWizardReturn {
    * Reset the wizard to initial state.
    */
   const reset = useCallback(() => {
+    // Clean up conversation session
+    if (conversationSessionRef.current) {
+      endInlineWizardConversation(conversationSessionRef.current).catch(() => {
+        // Ignore cleanup errors during reset
+      });
+      conversationSessionRef.current = null;
+    }
     previousUIStateRef.current = null;
     setState(initialState);
   }, []);
+
+  // Compute readyToGenerate based on ready flag and confidence threshold
+  const readyToGenerate = state.ready && state.confidence >= READY_CONFIDENCE_THRESHOLD;
 
   return {
     // Convenience accessors
     isWizardActive: state.isActive,
     isInitializing: state.isInitializing,
+    isWaiting: state.isWaiting,
     wizardMode: state.mode,
     wizardGoal: state.goal,
     confidence: state.confidence,
+    ready: state.ready,
+    readyToGenerate,
     conversationHistory: state.conversationHistory,
     isGeneratingDocs: state.isGeneratingDocs,
     generatedDocuments: state.generatedDocuments,

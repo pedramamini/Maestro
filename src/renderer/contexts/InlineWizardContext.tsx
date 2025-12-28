@@ -81,9 +81,12 @@ export function InlineWizardProvider({ children }: InlineWizardProviderProps) {
     // Dependencies from the wizard state
     wizardState.isWizardActive,
     wizardState.isInitializing,
+    wizardState.isWaiting,
     wizardState.wizardMode,
     wizardState.wizardGoal,
     wizardState.confidence,
+    wizardState.ready,
+    wizardState.readyToGenerate,
     wizardState.conversationHistory,
     wizardState.isGeneratingDocs,
     wizardState.generatedDocuments,
