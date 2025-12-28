@@ -6,7 +6,9 @@
  * "Done" button. On click, triggers confetti animation and calls onComplete().
  */
 
+import { useState, useCallback } from 'react';
 import type { Theme } from '../../types';
+import { triggerCelebration } from '../../utils/confetti';
 
 /**
  * Props for GenerationCompleteOverlay
@@ -28,13 +30,28 @@ export interface GenerationCompleteOverlayProps {
  * - Task count summary
  * - Prominent "Done" button with accent color
  *
- * On click: triggers confetti animation, then calls onComplete() callback
+ * On click: triggers confetti animation, waits 500ms, then calls onComplete() callback
  */
 export function GenerationCompleteOverlay({
   theme,
   taskCount,
   onDone,
 }: GenerationCompleteOverlayProps): JSX.Element {
+  const [isClosing, setIsClosing] = useState(false);
+
+  const handleDoneClick = useCallback(() => {
+    if (isClosing) return; // Prevent double-clicks
+    setIsClosing(true);
+
+    // Trigger celebratory confetti burst
+    triggerCelebration();
+
+    // Wait 500ms for confetti to be visible, then call completion callback
+    setTimeout(() => {
+      onDone();
+    }, 500);
+  }, [isClosing, onDone]);
+
   return (
     <div
       className="absolute inset-0 flex flex-col items-center justify-center"
@@ -61,15 +78,18 @@ export function GenerationCompleteOverlay({
 
       {/* Done button - prominent, centered, with accent color */}
       <button
-        onClick={onDone}
-        className="px-8 py-3 rounded-lg font-semibold text-lg transition-all hover:scale-105"
+        onClick={handleDoneClick}
+        disabled={isClosing}
+        className={`px-8 py-3 rounded-lg font-semibold text-lg transition-all ${
+          isClosing ? 'opacity-50 cursor-not-allowed' : 'hover:scale-105'
+        }`}
         style={{
           backgroundColor: theme.colors.accent,
           color: theme.colors.accentForeground,
           boxShadow: `0 4px 14px ${theme.colors.accent}40`,
         }}
       >
-        Done
+        {isClosing ? 'Finishing...' : 'Done'}
       </button>
     </div>
   );
