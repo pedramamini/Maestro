@@ -1690,6 +1690,55 @@ describe('InputArea', () => {
       const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
       expect(modeButton.querySelector('[data-testid="cpu-icon"]')).toBeInTheDocument();
     });
+
+    it('shows Wand2 icon in AI mode when wizard is active', () => {
+      const props = createDefaultProps({
+        session: createMockSession({
+          inputMode: 'ai',
+          wizardState: {
+            isActive: true,
+            mode: 'new',
+            confidence: 50,
+            conversationHistory: [],
+            previousUIState: {
+              readOnlyMode: false,
+              saveToHistory: true,
+              showThinking: false,
+            },
+          },
+        }),
+        // Note: onExitWizard is intentionally NOT provided, so we test the fallback path
+        // in the regular InputArea (not WizardInputPanel)
+      });
+      render(<InputArea {...props} />);
+
+      const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
+      // wand2 icon should be shown with accent color
+      expect(modeButton.querySelector('[data-testid="wand2-icon"]')).toBeInTheDocument();
+    });
+
+    it('shows Terminal icon in terminal mode even when wizard is active', () => {
+      const props = createDefaultProps({
+        session: createMockSession({
+          inputMode: 'terminal',
+          wizardState: {
+            isActive: true,
+            mode: 'new',
+            confidence: 50,
+            conversationHistory: [],
+            previousUIState: {
+              readOnlyMode: false,
+              saveToHistory: true,
+              showThinking: false,
+            },
+          },
+        }),
+      });
+      render(<InputArea {...props} />);
+
+      const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
+      expect(modeButton.querySelector('[data-testid="terminal-icon"]')).toBeInTheDocument();
+    });
   });
 
   describe('Toggle Button Styling', () => {

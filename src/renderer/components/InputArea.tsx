@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, startTransition } from 'react';
-import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, Eye, History, File, Folder, GitBranch, Tag, PenLine, Brain } from 'lucide-react';
+import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, Eye, History, File, Folder, GitBranch, Tag, PenLine, Brain, Wand2 } from 'lucide-react';
 import type { Session, Theme, BatchRunState, Shortcut } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks';
@@ -901,7 +901,13 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
             }}
             title="Toggle Mode (Cmd+J)"
           >
-            {session.inputMode === 'terminal' ? <Terminal className="w-4 h-4" /> : <Cpu className="w-4 h-4" />}
+            {session.inputMode === 'terminal' ? (
+              <Terminal className="w-4 h-4" />
+            ) : session.wizardState?.isActive ? (
+              <Wand2 className="w-4 h-4" style={{ color: theme.colors.accent }} />
+            ) : (
+              <Cpu className="w-4 h-4" />
+            )}
           </button>
           {/* Send button - always visible. Stop button is now in ThinkingStatusPill */}
           <button
