@@ -15,13 +15,17 @@
  * - Read-only toggle
  * - History toggle
  * - Thinking toggle
+ *
+ * Keyboard shortcuts:
+ * - Escape: Opens exit confirmation dialog
  */
 
-import React, { useEffect } from 'react';
+import React, { useEffect, useState, useCallback } from 'react';
 import { Terminal, Cpu, Wand2, ImageIcon, ArrowUp, PenLine, X, Keyboard } from 'lucide-react';
 import type { Session, Theme } from '../../types';
 import { WizardPill } from './WizardPill';
 import { WizardConfidenceGauge } from './WizardConfidenceGauge';
+import { WizardExitConfirmDialog } from './WizardExitConfirmDialog';
 
 interface WizardInputPanelProps {
   /** Current session with wizard state */
@@ -105,6 +109,9 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
   showFlashNotification,
   setLightboxImage,
 }: WizardInputPanelProps) {
+  // State for exit confirmation dialog
+  const [showExitConfirm, setShowExitConfirm] = useState(false);
+
   // Auto-resize textarea when inputValue changes
   useEffect(() => {
     if (inputRef.current) {
@@ -112,6 +119,31 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
       inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 112)}px`;
     }
   }, [inputValue, inputRef]);
+
+  // Handle Escape key to show exit confirmation
+  const handleEscapeKey = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === 'Escape') {
+      e.preventDefault();
+      e.stopPropagation();
+      setShowExitConfirm(true);
+      return;
+    }
+    // Forward other key events to the parent handler
+    handleInputKeyDown(e);
+  }, [handleInputKeyDown]);
+
+  // Handle exit confirmation
+  const handleConfirmExit = useCallback(() => {
+    setShowExitConfirm(false);
+    onExitWizard();
+  }, [onExitWizard]);
+
+  // Handle cancel exit
+  const handleCancelExit = useCallback(() => {
+    setShowExitConfirm(false);
+    // Re-focus the input after closing dialog
+    inputRef.current?.focus();
+  }, [inputRef]);
 
   const isTerminalMode = session.inputMode === 'terminal';
 
@@ -160,7 +192,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
           >
             {/* Wizard indicator row */}
             <div className="flex items-center justify-between px-3 py-2 border-b" style={{ borderColor: `${theme.colors.accent}30` }}>
-              <WizardPill theme={theme} onClick={onExitWizard} />
+              <WizardPill theme={theme} onClick={() => setShowExitConfirm(true)} />
               <WizardConfidenceGauge confidence={confidence} theme={theme} />
             </div>
 
@@ -184,7 +216,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
                     textarea.style.height = `${Math.min(textarea.scrollHeight, 112)}px`;
                   });
                 }}
-                onKeyDown={handleInputKeyDown}
+                onKeyDown={handleEscapeKey}
                 onPaste={handlePaste}
                 rows={1}
               />
@@ -292,6 +324,15 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
           </button>
         </div>
       </div>
+
+      {/* Exit confirmation dialog */}
+      {showExitConfirm && (
+        <WizardExitConfirmDialog
+          theme={theme}
+          onConfirm={handleConfirmExit}
+          onCancel={handleCancelExit}
+        />
+      )}
     </div>
   );
 });

@@ -15,6 +15,15 @@ import { render, screen, fireEvent } from '@testing-library/react';
 import { WizardInputPanel } from '../../../../renderer/components/InlineWizard/WizardInputPanel';
 import type { Session, Theme } from '../../../../renderer/types';
 
+// Mock useLayerStack for the WizardExitConfirmDialog
+vi.mock('../../../../renderer/contexts/LayerStackContext', () => ({
+  useLayerStack: () => ({
+    registerLayer: vi.fn(() => 'layer-1'),
+    unregisterLayer: vi.fn(),
+    updateLayerHandler: vi.fn(),
+  }),
+}));
+
 // Mock theme for testing
 const mockTheme: Theme = {
   id: 'test-theme',
@@ -256,15 +265,13 @@ describe('WizardInputPanel', () => {
   });
 
   describe('wizard pill click', () => {
-    it('calls onExitWizard when WizardPill is clicked', () => {
-      const onExitWizard = vi.fn();
-      render(
-        <WizardInputPanel {...defaultProps} onExitWizard={onExitWizard} />
-      );
+    it('shows exit confirmation dialog when WizardPill is clicked', () => {
+      render(<WizardInputPanel {...defaultProps} />);
 
       fireEvent.click(screen.getByText('Wizard'));
 
-      expect(onExitWizard).toHaveBeenCalled();
+      // Dialog should appear instead of directly calling onExitWizard
+      expect(screen.getByText('Exit Wizard?')).toBeInTheDocument();
     });
   });
 
@@ -451,6 +458,100 @@ describe('WizardInputPanel', () => {
       expect(inputContainer).toHaveStyle({
         backgroundColor: `${mockTheme.colors.accent}10`,
       });
+    });
+  });
+
+  describe('escape key handling', () => {
+    it('shows exit confirmation dialog when Escape is pressed in textarea', () => {
+      render(<WizardInputPanel {...defaultProps} />);
+
+      const textarea = screen.getByPlaceholderText(
+        'Tell the wizard about your project...'
+      );
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      // Dialog should appear
+      expect(screen.getByText('Exit Wizard?')).toBeInTheDocument();
+      expect(screen.getByText('Progress will be lost. Are you sure you want to exit the wizard?')).toBeInTheDocument();
+    });
+
+    it('forwards non-Escape key events to handleInputKeyDown', () => {
+      const handleInputKeyDown = vi.fn();
+      render(
+        <WizardInputPanel
+          {...defaultProps}
+          handleInputKeyDown={handleInputKeyDown}
+        />
+      );
+
+      const textarea = screen.getByPlaceholderText(
+        'Tell the wizard about your project...'
+      );
+      fireEvent.keyDown(textarea, { key: 'Enter' });
+
+      expect(handleInputKeyDown).toHaveBeenCalled();
+    });
+
+    it('does not forward Escape key to handleInputKeyDown', () => {
+      const handleInputKeyDown = vi.fn();
+      render(
+        <WizardInputPanel
+          {...defaultProps}
+          handleInputKeyDown={handleInputKeyDown}
+        />
+      );
+
+      const textarea = screen.getByPlaceholderText(
+        'Tell the wizard about your project...'
+      );
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      expect(handleInputKeyDown).not.toHaveBeenCalled();
+    });
+
+    it('calls onExitWizard when Exit is clicked in dialog', () => {
+      const onExitWizard = vi.fn();
+      render(<WizardInputPanel {...defaultProps} onExitWizard={onExitWizard} />);
+
+      // Show the dialog
+      const textarea = screen.getByPlaceholderText(
+        'Tell the wizard about your project...'
+      );
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      // Click Exit button
+      fireEvent.click(screen.getByRole('button', { name: 'Exit' }));
+
+      expect(onExitWizard).toHaveBeenCalledTimes(1);
+    });
+
+    it('closes dialog when Cancel is clicked', () => {
+      render(<WizardInputPanel {...defaultProps} />);
+
+      // Show the dialog
+      const textarea = screen.getByPlaceholderText(
+        'Tell the wizard about your project...'
+      );
+      fireEvent.keyDown(textarea, { key: 'Escape' });
+
+      // Dialog should be visible
+      expect(screen.getByText('Exit Wizard?')).toBeInTheDocument();
+
+      // Click Cancel button
+      fireEvent.click(screen.getByRole('button', { name: 'Cancel' }));
+
+      // Dialog should be closed
+      expect(screen.queryByText('Exit Wizard?')).not.toBeInTheDocument();
+    });
+
+    it('shows exit dialog when WizardPill is clicked', () => {
+      render(<WizardInputPanel {...defaultProps} />);
+
+      // Click the Wizard pill
+      fireEvent.click(screen.getByText('Wizard'));
+
+      // Dialog should appear
+      expect(screen.getByText('Exit Wizard?')).toBeInTheDocument();
     });
   });
 });

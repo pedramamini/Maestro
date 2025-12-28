@@ -11,3 +11,4 @@ export { WizardInputPanel } from './WizardInputPanel';
 export { WizardModePrompt } from './WizardModePrompt';
 export { WizardMessageBubble, type WizardMessageBubbleProps, type WizardMessageBubbleMessage } from './WizardMessageBubble';
 export { WizardConversationView, type WizardConversationViewProps } from './WizardConversationView';
+export { WizardExitConfirmDialog } from './WizardExitConfirmDialog';
