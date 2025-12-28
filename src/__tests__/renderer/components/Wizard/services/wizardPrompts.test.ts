@@ -783,10 +783,20 @@ describe('wizardPrompts', () => {
       }
     });
 
-    it('should be a question', () => {
-      const question = getInitialQuestion();
+    it('should be a question or engaging prompt', () => {
+      // Check all questions contain either a question mark or end with proper punctuation
+      // Some phrases are imperatives (e.g., "Tell me what you're passionate about building.")
+      // which are valid conversational prompts even without a question mark
+      const allQuestions = getAllInitialQuestions();
 
-      expect(question).toContain('?');
+      for (const question of allQuestions) {
+        const hasQuestionMark = question.includes('?');
+        const endsWithPunctuation = /[.!]$/.test(question);
+        expect(
+          hasQuestionMark || endsWithPunctuation,
+          `Question "${question}" should contain '?' or end with '.' or '!'`
+        ).toBe(true);
+      }
     });
   });
 
