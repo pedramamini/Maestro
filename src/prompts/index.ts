@@ -17,6 +17,7 @@ export {
   wizardInlineSystemPrompt,
   wizardInlineIteratePrompt,
   wizardInlineNewPrompt,
+  wizardInlineIterateGenerationPrompt,
 
   // AutoRun
   autorunDefaultPrompt,

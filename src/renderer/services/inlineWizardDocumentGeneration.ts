@@ -12,7 +12,10 @@
 import type { ToolType } from '../types';
 import type { InlineWizardMessage, InlineGeneratedDocument } from '../hooks/useInlineWizard';
 import type { ExistingDocument } from '../utils/existingDocsDetector';
-import { wizardDocumentGenerationPrompt } from '../../prompts';
+import {
+  wizardDocumentGenerationPrompt,
+  wizardInlineIterateGenerationPrompt,
+} from '../../prompts';
 import { substituteTemplateVariables, type TemplateContext } from '../utils/templateVariables';
 
 /**
@@ -88,6 +91,8 @@ interface ParsedDocument {
   filename: string;
   content: string;
   phase: number;
+  /** Whether this document updates an existing file (vs creating new) */
+  isUpdate: boolean;
 }
 
 /**
@@ -122,13 +127,35 @@ export function countTasks(content: string): number {
 }
 
 /**
+ * Format existing documents for inclusion in the iterate prompt.
+ *
+ * @param docs - Array of existing documents with content
+ * @returns Formatted string for the prompt
+ */
+function formatExistingDocsForPrompt(docs: ExistingDocument[]): string {
+  if (!docs || docs.length === 0) {
+    return '(No existing documents found)';
+  }
+
+  return docs
+    .map((doc, index) => {
+      const content = (doc as ExistingDocument & { content?: string }).content || '(Content not loaded)';
+      return `### ${index + 1}. ${doc.filename}\n\n${content}`;
+    })
+    .join('\n\n---\n\n');
+}
+
+/**
  * Generate the document generation prompt.
+ *
+ * Uses the iterate-specific prompt when in iterate mode, which includes
+ * existing documents and the user's goal for extending/modifying plans.
  *
  * @param config Configuration for generation
  * @returns The complete prompt for the agent
  */
 function generateDocumentPrompt(config: DocumentGenerationConfig): string {
-  const { projectName, directoryPath, conversationHistory } = config;
+  const { projectName, directoryPath, conversationHistory, mode, goal, existingDocuments } = config;
   const projectDisplay = projectName || 'this project';
 
   // Build conversation summary from the wizard conversation
@@ -140,12 +167,27 @@ function generateDocumentPrompt(config: DocumentGenerationConfig): string {
     })
     .join('\n\n');
 
+  // Choose the appropriate prompt template based on mode
+  const basePrompt = mode === 'iterate'
+    ? wizardInlineIterateGenerationPrompt
+    : wizardDocumentGenerationPrompt;
+
   // Handle wizard-specific template variables
-  let prompt = wizardDocumentGenerationPrompt
+  let prompt = basePrompt
     .replace(/\{\{PROJECT_NAME\}\}/gi, projectDisplay)
     .replace(/\{\{DIRECTORY_PATH\}\}/gi, directoryPath)
     .replace(/\{\{AUTO_RUN_FOLDER_NAME\}\}/gi, AUTO_RUN_FOLDER_NAME)
     .replace(/\{\{CONVERSATION_SUMMARY\}\}/gi, conversationSummary);
+
+  // Handle iterate-mode specific placeholders
+  if (mode === 'iterate') {
+    const existingDocsText = formatExistingDocsForPrompt(existingDocuments || []);
+    const iterateGoal = goal || '(No specific goal provided)';
+
+    prompt = prompt
+      .replace(/\{\{EXISTING_DOCS\}\}/gi, existingDocsText)
+      .replace(/\{\{ITERATE_GOAL\}\}/gi, iterateGoal);
+  }
 
   // Build template context for remaining variables
   const templateContext: TemplateContext = {
@@ -170,20 +212,38 @@ function generateDocumentPrompt(config: DocumentGenerationConfig): string {
  * Looks for document blocks with markers:
  * ---BEGIN DOCUMENT---
  * FILENAME: Phase-01-Setup.md
+ * UPDATE: true  (optional - indicates this updates an existing file)
  * CONTENT:
  * [markdown content]
  * ---END DOCUMENT---
+ *
+ * When UPDATE: true is present, the document will overwrite an existing file.
+ * Otherwise, it creates a new file.
  */
 export function parseGeneratedDocuments(output: string): ParsedDocument[] {
   const documents: ParsedDocument[] = [];
 
-  // Pattern to match document blocks
-  const docPattern = /---BEGIN DOCUMENT---\s*\nFILENAME:\s*(.+?)\s*\nCONTENT:\s*\n([\s\S]*?)(?=---END DOCUMENT---|$)/g;
+  // Split by document markers and process each block
+  const blocks = output.split(/---BEGIN DOCUMENT---/);
 
-  let match;
-  while ((match = docPattern.exec(output)) !== null) {
-    const filename = match[1].trim();
-    let content = match[2].trim();
+  for (const block of blocks) {
+    if (!block.trim()) continue;
+
+    // Extract filename
+    const filenameMatch = block.match(/FILENAME:\s*(.+?)(?:\n|$)/);
+    if (!filenameMatch) continue;
+
+    const filename = filenameMatch[1].trim();
+
+    // Check for UPDATE marker (optional)
+    const updateMatch = block.match(/UPDATE:\s*(true|false)/i);
+    const isUpdate = updateMatch ? updateMatch[1].toLowerCase() === 'true' : false;
+
+    // Extract content - everything after "CONTENT:" line
+    const contentMatch = block.match(/CONTENT:\s*\n([\s\S]*?)(?=---END DOCUMENT---|$)/);
+    if (!contentMatch) continue;
+
+    let content = contentMatch[1].trim();
 
     // Remove any trailing ---END DOCUMENT--- marker from content
     content = content.replace(/---END DOCUMENT---\s*$/, '').trim();
@@ -197,6 +257,7 @@ export function parseGeneratedDocuments(output: string): ParsedDocument[] {
         filename,
         content,
         phase,
+        isUpdate,
       });
     }
   }
@@ -212,6 +273,9 @@ export function parseGeneratedDocuments(output: string): ParsedDocument[] {
  *
  * If the agent generates one large document instead of multiple phases,
  * this function attempts to split it intelligently.
+ *
+ * Note: Documents created by splitting are always treated as new (isUpdate: false)
+ * since we can't determine intent from raw content.
  */
 export function splitIntoPhases(content: string): ParsedDocument[] {
   const documents: ParsedDocument[] = [];
@@ -239,6 +303,7 @@ export function splitIntoPhases(content: string): ParsedDocument[] {
       filename: `Phase-${String(phaseNumber).padStart(2, '0')}-${description}.md`,
       content: fullContent,
       phase: phaseNumber,
+      isUpdate: false,
     });
 
     phaseNumber++;
@@ -250,6 +315,7 @@ export function splitIntoPhases(content: string): ParsedDocument[] {
       filename: 'Phase-01-Initial-Setup.md',
       content: content.trim(),
       phase: 1,
+      isUpdate: false,
     });
   }
 
@@ -355,6 +421,10 @@ function buildArgsForAgent(agent: { id: string; args?: string[] }): string[] {
 /**
  * Save a single document to the Auto Run folder.
  *
+ * Handles both creating new files and updating existing ones.
+ * The isUpdate flag is used for logging purposes - both operations
+ * use writeDoc which will create or overwrite as needed.
+ *
  * @param autoRunFolderPath - The Auto Run folder path
  * @param doc - The parsed document to save
  * @returns The saved document with path information
@@ -368,9 +438,10 @@ async function saveDocument(
   // Ensure filename has .md extension
   const filename = sanitized.endsWith('.md') ? sanitized : `${sanitized}.md`;
 
-  console.log('[InlineWizardDocGen] Saving document:', filename);
+  const action = doc.isUpdate ? 'Updating' : 'Creating';
+  console.log(`[InlineWizardDocGen] ${action} document:`, filename);
 
-  // Write the document
+  // Write the document (creates or overwrites as needed)
   const result = await window.maestro.autorun.writeDoc(
     autoRunFolderPath,
     filename,
@@ -378,7 +449,7 @@ async function saveDocument(
   );
 
   if (!result.success) {
-    throw new Error(result.error || `Failed to save ${filename}`);
+    throw new Error(result.error || `Failed to ${action.toLowerCase()} ${filename}`);
   }
 
   const fullPath = `${autoRunFolderPath}/${filename}`;
@@ -600,6 +671,9 @@ export async function generateInlineDocuments(
  *
  * This is a fallback for when the agent writes files directly
  * instead of outputting them with markers.
+ *
+ * Note: Documents read from disk are treated as new (isUpdate: false)
+ * since they were written directly by the agent.
  */
 async function readDocumentsFromDisk(autoRunFolderPath: string): Promise<ParsedDocument[]> {
   const documents: ParsedDocument[] = [];
@@ -626,6 +700,7 @@ async function readDocumentsFromDisk(autoRunFolderPath: string): Promise<ParsedD
           filename,
           content: readResult.content,
           phase,
+          isUpdate: false,
         });
       }
     }
