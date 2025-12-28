@@ -13,6 +13,11 @@ export {
   wizardSystemContinuationPrompt,
   wizardDocumentGenerationPrompt,
 
+  // Inline Wizard
+  wizardInlineSystemPrompt,
+  wizardInlineIteratePrompt,
+  wizardInlineNewPrompt,
+
   // AutoRun
   autorunDefaultPrompt,
   autorunSynopsisPrompt,
