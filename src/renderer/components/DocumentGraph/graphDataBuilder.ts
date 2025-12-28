@@ -19,6 +19,10 @@ export interface BuildOptions {
   includeExternalLinks: boolean;
   /** Root directory path to scan for markdown files */
   rootPath: string;
+  /** Maximum number of document nodes to include (for performance with large directories) */
+  maxNodes?: number;
+  /** Number of nodes to skip (for pagination/load more) */
+  offset?: number;
 }
 
 /**
@@ -56,6 +60,12 @@ export interface GraphData {
   nodes: Node<GraphNodeData>[];
   /** React Flow edges representing links between documents */
   edges: Edge[];
+  /** Total number of markdown files found (for pagination info) */
+  totalDocuments: number;
+  /** Number of documents currently loaded (may be less than total if maxNodes is set) */
+  loadedDocuments: number;
+  /** Whether there are more documents to load */
+  hasMore: boolean;
 }
 
 /**
@@ -166,14 +176,21 @@ async function parseFile(rootPath: string, relativePath: string): Promise<Parsed
  * @returns GraphData with nodes and edges for React Flow
  */
 export async function buildGraphData(options: BuildOptions): Promise<GraphData> {
-  const { rootPath, includeExternalLinks } = options;
+  const { rootPath, includeExternalLinks, maxNodes, offset = 0 } = options;
 
   // Step 1: Scan for all markdown files
   const markdownPaths = await scanMarkdownFiles(rootPath);
+  const totalDocuments = markdownPaths.length;
 
-  // Step 2: Parse all files
+  // Step 2: Apply pagination if maxNodes is set
+  let pathsToProcess = markdownPaths;
+  if (maxNodes !== undefined && maxNodes > 0) {
+    pathsToProcess = markdownPaths.slice(offset, offset + maxNodes);
+  }
+
+  // Step 3: Parse the files we're processing
   const parsedFiles: ParsedFile[] = [];
-  for (const relativePath of markdownPaths) {
+  for (const relativePath of pathsToProcess) {
     const parsed = await parseFile(rootPath, relativePath);
     if (parsed) {
       parsedFiles.push(parsed);
@@ -181,9 +198,12 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
   }
 
   // Create a set of known file paths for validating internal links
-  const knownPaths = new Set(parsedFiles.map((f) => f.relativePath));
+  // Note: We use ALL known paths (not just loaded ones) to allow edges to connect properly
+  const knownPaths = new Set(markdownPaths);
+  // Track which files we've loaded for edge filtering
+  const loadedPaths = new Set(parsedFiles.map((f) => f.relativePath));
 
-  // Step 3: Build document nodes
+  // Step 4: Build document nodes
   const nodes: Node<GraphNodeData>[] = [];
   const edges: Edge[] = [];
 
@@ -207,8 +227,8 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
 
     // Create edges for internal links
     for (const internalLink of file.internalLinks) {
-      // Only create edge if target file exists
-      if (knownPaths.has(internalLink)) {
+      // Only create edge if target file exists AND is loaded (to avoid dangling edges)
+      if (knownPaths.has(internalLink) && loadedPaths.has(internalLink)) {
         const targetNodeId = `doc-${internalLink}`;
         edges.push({
           id: `edge-${nodeId}-${targetNodeId}`,
@@ -247,7 +267,7 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
     }
   }
 
-  // Step 4: Create external domain nodes if enabled
+  // Step 5: Create external domain nodes if enabled
   if (includeExternalLinks) {
     for (const [domain, data] of externalDomains) {
       nodes.push({
@@ -264,7 +284,11 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
     }
   }
 
-  return { nodes, edges };
+  // Calculate pagination info
+  const loadedDocuments = parsedFiles.length;
+  const hasMore = maxNodes !== undefined && maxNodes > 0 && offset + loadedDocuments < totalDocuments;
+
+  return { nodes, edges, totalDocuments, loadedDocuments, hasMore };
 }
 
 /**

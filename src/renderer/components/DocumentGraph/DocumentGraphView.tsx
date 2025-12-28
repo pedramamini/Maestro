@@ -30,7 +30,7 @@ import ReactFlow, {
   NodeMouseHandler,
 } from 'reactflow';
 import 'reactflow/dist/style.css';
-import { X, LayoutGrid, Network, ExternalLink, RefreshCw, Maximize2 } from 'lucide-react';
+import { X, LayoutGrid, Network, ExternalLink, RefreshCw, Maximize2, ChevronDown, Loader2 } from 'lucide-react';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -46,6 +46,11 @@ import {
   restoreNodePositions,
   hasSavedPositions,
 } from './layoutAlgorithms';
+
+/** Default maximum number of nodes to load initially (for performance with large directories) */
+const DEFAULT_MAX_NODES = 50;
+/** Number of additional nodes to load when clicking "Load more" */
+const LOAD_MORE_INCREMENT = 25;
 
 /**
  * Props for the DocumentGraphView component
@@ -92,10 +97,17 @@ function DocumentGraphViewInner({
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
   const [loading, setLoading] = useState(true);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [layoutType, setLayoutType] = useState<LayoutType>('force');
   const [includeExternalLinks, setIncludeExternalLinks] = useState(true);
   const [selectedNodeId, setSelectedNodeId] = useState<string | null>(null);
+
+  // Pagination state for large directories
+  const [totalDocuments, setTotalDocuments] = useState(0);
+  const [loadedDocuments, setLoadedDocuments] = useState(0);
+  const [hasMore, setHasMore] = useState(false);
+  const [maxNodes, setMaxNodes] = useState(DEFAULT_MAX_NODES);
 
   // Context menu state
   const [contextMenu, setContextMenu] = useState<{
@@ -224,15 +236,26 @@ function DocumentGraphViewInner({
   /**
    * Load and build graph data
    */
-  const loadGraphData = useCallback(async () => {
+  const loadGraphData = useCallback(async (resetPagination = true) => {
     setLoading(true);
     setError(null);
+
+    // Reset maxNodes when doing a fresh load
+    if (resetPagination) {
+      setMaxNodes(DEFAULT_MAX_NODES);
+    }
 
     try {
       const graphData = await buildGraphData({
         rootPath,
         includeExternalLinks,
+        maxNodes: resetPagination ? DEFAULT_MAX_NODES : maxNodes,
       });
+
+      // Update pagination state
+      setTotalDocuments(graphData.totalDocuments);
+      setLoadedDocuments(graphData.loadedDocuments);
+      setHasMore(graphData.hasMore);
 
       // Check for saved positions first
       let layoutedNodes: Node<GraphNodeData>[];
@@ -259,7 +282,7 @@ function DocumentGraphViewInner({
     } finally {
       setLoading(false);
     }
-  }, [rootPath, includeExternalLinks, applyLayout, injectThemeIntoNodes, setNodes, setEdges, fitView]);
+  }, [rootPath, includeExternalLinks, maxNodes, applyLayout, injectThemeIntoNodes, setNodes, setEdges, fitView]);
 
   // Load data when modal opens or settings change
   useEffect(() => {
@@ -495,6 +518,46 @@ function DocumentGraphViewInner({
   const handleFitView = useCallback(() => {
     fitView({ padding: 0.1, duration: 300 });
   }, [fitView]);
+
+  /**
+   * Handle load more button - loads additional nodes
+   */
+  const handleLoadMore = useCallback(async () => {
+    if (!hasMore || loadingMore) return;
+
+    setLoadingMore(true);
+    const newMaxNodes = maxNodes + LOAD_MORE_INCREMENT;
+    setMaxNodes(newMaxNodes);
+
+    try {
+      const graphData = await buildGraphData({
+        rootPath,
+        includeExternalLinks,
+        maxNodes: newMaxNodes,
+      });
+
+      // Update pagination state
+      setTotalDocuments(graphData.totalDocuments);
+      setLoadedDocuments(graphData.loadedDocuments);
+      setHasMore(graphData.hasMore);
+
+      // Apply layout to new nodes
+      const layoutedNodes = applyLayout(graphData.nodes, graphData.edges);
+
+      // Inject theme
+      const themedNodes = injectThemeIntoNodes(layoutedNodes);
+
+      setNodes(themedNodes as Node[]);
+      setEdges(graphData.edges);
+
+      // Save positions for the new layout
+      saveNodePositions(rootPath, layoutedNodes);
+    } catch (err) {
+      console.error('Failed to load more documents:', err);
+    } finally {
+      setLoadingMore(false);
+    }
+  }, [hasMore, loadingMore, maxNodes, rootPath, includeExternalLinks, applyLayout, injectThemeIntoNodes, setNodes, setEdges]);
 
   if (!isOpen) return null;
 
@@ -744,13 +807,39 @@ function DocumentGraphViewInner({
             color: theme.colors.textDim,
           }}
         >
-          <span>
-            {documentCount > 0
-              ? `${documentCount} document${documentCount !== 1 ? 's' : ''}${
-                  includeExternalLinks && externalCount > 0 ? `, ${externalCount} external domain${externalCount !== 1 ? 's' : ''}` : ''
-                }`
-              : 'No documents found'}
-          </span>
+          <div className="flex items-center gap-3">
+            <span>
+              {documentCount > 0
+                ? `${documentCount}${totalDocuments > loadedDocuments ? ` of ${totalDocuments}` : ''} document${documentCount !== 1 ? 's' : ''}${
+                    includeExternalLinks && externalCount > 0 ? `, ${externalCount} external domain${externalCount !== 1 ? 's' : ''}` : ''
+                  }`
+                : 'No documents found'}
+            </span>
+            {/* Load More Button */}
+            {hasMore && (
+              <button
+                onClick={handleLoadMore}
+                disabled={loadingMore}
+                className="flex items-center gap-1 px-2 py-1 rounded text-xs transition-colors"
+                style={{
+                  backgroundColor: theme.colors.accent,
+                  color: theme.colors.bgMain,
+                  opacity: loadingMore ? 0.7 : 1,
+                  cursor: loadingMore ? 'wait' : 'pointer',
+                }}
+                onMouseEnter={(e) => !loadingMore && (e.currentTarget.style.opacity = '0.85')}
+                onMouseLeave={(e) => !loadingMore && (e.currentTarget.style.opacity = '1')}
+                title={`Load ${Math.min(LOAD_MORE_INCREMENT, totalDocuments - loadedDocuments)} more documents`}
+              >
+                {loadingMore ? (
+                  <Loader2 className="w-3 h-3 animate-spin" />
+                ) : (
+                  <ChevronDown className="w-3 h-3" />
+                )}
+                {loadingMore ? 'Loading...' : `Load more (${totalDocuments - loadedDocuments} remaining)`}
+              </button>
+            )}
+          </div>
           <span style={{ opacity: 0.7 }}>Double-click to open • Right-click for menu • Drag to move • Scroll to zoom • Esc to close</span>
         </div>
       </div>

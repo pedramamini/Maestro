@@ -340,6 +340,131 @@ describe('graphDataBuilder', () => {
     });
   });
 
+  describe('max nodes limit', () => {
+    it('should limit nodes when maxNodes is set', async () => {
+      const result = await buildGraphData({
+        rootPath: '/test',
+        includeExternalLinks: false,
+        maxNodes: 2,
+      });
+
+      // Should only have 2 document nodes
+      const documentNodes = result.nodes.filter((n) => n.type === 'documentNode');
+      expect(documentNodes).toHaveLength(2);
+    });
+
+    it('should return correct pagination info with maxNodes', async () => {
+      const result = await buildGraphData({
+        rootPath: '/test',
+        includeExternalLinks: false,
+        maxNodes: 2,
+      });
+
+      // Total should be 4 (all markdown files), but only 2 loaded
+      expect(result.totalDocuments).toBe(4);
+      expect(result.loadedDocuments).toBe(2);
+      expect(result.hasMore).toBe(true);
+    });
+
+    it('should return hasMore=false when all documents loaded', async () => {
+      const result = await buildGraphData({
+        rootPath: '/test',
+        includeExternalLinks: false,
+        maxNodes: 10, // More than total documents
+      });
+
+      expect(result.totalDocuments).toBe(4);
+      expect(result.loadedDocuments).toBe(4);
+      expect(result.hasMore).toBe(false);
+    });
+
+    it('should not create edges to unloaded documents', async () => {
+      // Load only 1 document - readme.md links to getting-started.md
+      // but getting-started.md won't be loaded, so no edge should be created
+      mockReadDir.mockImplementation((path: string) => {
+        if (path === '/test') {
+          return Promise.resolve([
+            { name: 'readme.md', isDirectory: false, path: '/test/readme.md' },
+            { name: 'getting-started.md', isDirectory: false, path: '/test/getting-started.md' },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockReadFile.mockImplementation((path: string) => {
+        if (path === '/test/readme.md') {
+          return Promise.resolve('# Readme\n\nSee [[getting-started]].');
+        }
+        if (path === '/test/getting-started.md') {
+          return Promise.resolve('# Getting Started\n\nHello.');
+        }
+        return Promise.resolve(null);
+      });
+
+      const result = await buildGraphData({
+        rootPath: '/test',
+        includeExternalLinks: false,
+        maxNodes: 1,
+      });
+
+      // Only 1 document loaded
+      expect(result.loadedDocuments).toBe(1);
+      // Should have no edges (target not loaded)
+      expect(result.edges).toHaveLength(0);
+    });
+
+    it('should work with offset for pagination', async () => {
+      mockReadDir.mockImplementation((path: string) => {
+        if (path === '/test') {
+          return Promise.resolve([
+            { name: 'a.md', isDirectory: false, path: '/test/a.md' },
+            { name: 'b.md', isDirectory: false, path: '/test/b.md' },
+            { name: 'c.md', isDirectory: false, path: '/test/c.md' },
+            { name: 'd.md', isDirectory: false, path: '/test/d.md' },
+          ]);
+        }
+        return Promise.resolve([]);
+      });
+
+      mockReadFile.mockImplementation((path: string) => {
+        const name = path.split('/').pop()?.replace('.md', '').toUpperCase();
+        return Promise.resolve(`# ${name}`);
+      });
+
+      mockStat.mockResolvedValue({ size: 10, createdAt: '', modifiedAt: '' });
+
+      // Load 2 documents starting from offset 1
+      const result = await buildGraphData({
+        rootPath: '/test',
+        includeExternalLinks: false,
+        maxNodes: 2,
+        offset: 1,
+      });
+
+      expect(result.totalDocuments).toBe(4);
+      expect(result.loadedDocuments).toBe(2);
+      expect(result.hasMore).toBe(true);
+
+      // Should have b.md and c.md loaded (skipped a.md)
+      const nodeIds = result.nodes.map((n) => n.id);
+      expect(nodeIds).toContain('doc-b.md');
+      expect(nodeIds).toContain('doc-c.md');
+      expect(nodeIds).not.toContain('doc-a.md');
+      expect(nodeIds).not.toContain('doc-d.md');
+    });
+
+    it('should include all documents when maxNodes is not set', async () => {
+      const result = await buildGraphData({
+        rootPath: '/test',
+        includeExternalLinks: false,
+      });
+
+      expect(result.totalDocuments).toBe(4);
+      expect(result.loadedDocuments).toBe(4);
+      expect(result.hasMore).toBe(false);
+    });
+  });
+
   describe('edge cases', () => {
     it('should handle empty directory', async () => {
       mockReadDir.mockResolvedValue([]);
@@ -351,6 +476,9 @@ describe('graphDataBuilder', () => {
 
       expect(result.nodes).toHaveLength(0);
       expect(result.edges).toHaveLength(0);
+      expect(result.totalDocuments).toBe(0);
+      expect(result.loadedDocuments).toBe(0);
+      expect(result.hasMore).toBe(false);
     });
 
     it('should handle file read errors gracefully', async () => {
