@@ -17,6 +17,11 @@ import { WizardMessageBubble, type WizardMessageBubbleMessage } from './WizardMe
 import { getNextFillerPhrase } from '../Wizard/services/fillerPhrases';
 
 /**
+ * Ready confidence threshold for "Let's Go" button (matches READY_CONFIDENCE_THRESHOLD)
+ */
+const READY_CONFIDENCE_THRESHOLD = 80;
+
+/**
  * Props for WizardConversationView
  */
 export interface WizardConversationViewProps {
@@ -34,6 +39,12 @@ export interface WizardConversationViewProps {
   providerName?: string;
   /** Optional className for the container */
   className?: string;
+  /** Confidence level from AI responses (0-100) */
+  confidence?: number;
+  /** Whether the AI is ready to proceed with document generation */
+  ready?: boolean;
+  /** Callback when user clicks the "Let's Go" button to start document generation */
+  onLetsGo?: () => void;
 }
 
 /**
@@ -207,6 +218,9 @@ export function WizardConversationView({
   agentName = 'Agent',
   providerName,
   className = '',
+  confidence = 0,
+  ready = false,
+  onLetsGo,
 }: WizardConversationViewProps): JSX.Element {
   const containerRef = useRef<HTMLDivElement>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -282,6 +296,43 @@ export function WizardConversationView({
             onRequestNewPhrase={handleRequestNewPhrase}
           />
         ))}
+
+      {/* "Let's Go" Action Button - shown when ready and confidence threshold met */}
+      {ready && confidence >= READY_CONFIDENCE_THRESHOLD && !isLoading && onLetsGo && (
+        <div
+          className="mx-auto max-w-md mb-4 p-4 rounded-lg text-center"
+          style={{
+            backgroundColor: `${theme.colors.success}15`,
+            border: `1px solid ${theme.colors.success}40`,
+          }}
+          data-testid="wizard-lets-go-container"
+        >
+          <p
+            className="text-sm font-medium mb-3"
+            style={{ color: theme.colors.success }}
+          >
+            I think I have a good understanding of your project. Ready to create your action plan?
+          </p>
+          <button
+            onClick={onLetsGo}
+            className="px-6 py-2.5 rounded-lg text-sm font-bold transition-all hover:scale-105"
+            style={{
+              backgroundColor: theme.colors.success,
+              color: theme.colors.bgMain,
+              boxShadow: `0 4px 12px ${theme.colors.success}40`,
+            }}
+            data-testid="wizard-lets-go-button"
+          >
+            Let's create your action plan! 🚀
+          </button>
+          <p
+            className="text-xs mt-3"
+            style={{ color: theme.colors.textDim }}
+          >
+            Or continue chatting below to add more details
+          </p>
+        </div>
+      )}
 
       {/* Scroll anchor */}
       <div ref={messagesEndRef} data-testid="wizard-scroll-anchor" />

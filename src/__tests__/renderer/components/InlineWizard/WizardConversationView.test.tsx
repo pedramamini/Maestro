@@ -552,6 +552,148 @@ describe('WizardConversationView', () => {
     });
   });
 
+  describe('Lets Go button', () => {
+    it('shows Lets Go button when ready=true, confidence>=80, not loading, and onLetsGo provided', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={80}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.getByTestId('wizard-lets-go-container')).toBeInTheDocument();
+      expect(screen.getByTestId('wizard-lets-go-button')).toBeInTheDocument();
+      expect(screen.getByText("Let's create your action plan! 🚀")).toBeInTheDocument();
+    });
+
+    it('does not show Lets Go button when ready=false', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={false}
+          confidence={80}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.queryByTestId('wizard-lets-go-container')).not.toBeInTheDocument();
+    });
+
+    it('does not show Lets Go button when confidence < 80', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={79}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.queryByTestId('wizard-lets-go-container')).not.toBeInTheDocument();
+    });
+
+    it('does not show Lets Go button when isLoading=true', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={true}
+          ready={true}
+          confidence={80}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.queryByTestId('wizard-lets-go-container')).not.toBeInTheDocument();
+    });
+
+    it('does not show Lets Go button when onLetsGo is not provided', () => {
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={80}
+          // onLetsGo not provided
+        />
+      );
+      expect(screen.queryByTestId('wizard-lets-go-container')).not.toBeInTheDocument();
+    });
+
+    it('calls onLetsGo when button is clicked', () => {
+      const handleLetsGo = vi.fn();
+
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={85}
+          onLetsGo={handleLetsGo}
+        />
+      );
+
+      const button = screen.getByTestId('wizard-lets-go-button');
+      button.click();
+      expect(handleLetsGo).toHaveBeenCalledTimes(1);
+    });
+
+    it('shows Lets Go button with confidence exactly at threshold (80)', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={80}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.getByTestId('wizard-lets-go-button')).toBeInTheDocument();
+    });
+
+    it('shows Lets Go button with confidence above threshold', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={100}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.getByTestId('wizard-lets-go-button')).toBeInTheDocument();
+    });
+
+    it('displays helpful hint text below the button', () => {
+      const handleLetsGo = vi.fn();
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[createMessage()]}
+          isLoading={false}
+          ready={true}
+          confidence={80}
+          onLetsGo={handleLetsGo}
+        />
+      );
+      expect(screen.getByText('Or continue chatting below to add more details')).toBeInTheDocument();
+    });
+  });
+
   describe('edge cases', () => {
     it('handles empty streamingText string correctly', () => {
       render(

@@ -104,6 +104,8 @@ export interface SessionWizardState {
   goal?: string;
   /** Confidence level from agent responses (0-100) */
   confidence: number;
+  /** Whether the AI is ready to proceed with document generation */
+  ready?: boolean;
   /** Conversation history for this wizard session */
   conversationHistory: WizardMessage[];
   /** Previous UI state to restore when wizard ends */
