@@ -1750,6 +1750,67 @@ contextBridge.exposeInMainWorld('maestro', {
         };
       }>,
   },
+
+  // Symphony API (token donations / open source contributions)
+  symphony: {
+    // Registry operations
+    getRegistry: (forceRefresh?: boolean) =>
+      ipcRenderer.invoke('symphony:getRegistry', forceRefresh),
+    getIssues: (repoSlug: string, forceRefresh?: boolean) =>
+      ipcRenderer.invoke('symphony:getIssues', repoSlug, forceRefresh),
+
+    // State operations
+    getState: () => ipcRenderer.invoke('symphony:getState'),
+    getActive: () => ipcRenderer.invoke('symphony:getActive'),
+    getCompleted: (limit?: number) =>
+      ipcRenderer.invoke('symphony:getCompleted', limit),
+    getStats: () => ipcRenderer.invoke('symphony:getStats'),
+
+    // Contribution lifecycle
+    start: (params: {
+      repoSlug: string;
+      repoUrl: string;
+      repoName: string;
+      issueNumber: number;
+      issueTitle: string;
+      documentPaths: string[];
+      agentType: string;
+      sessionId: string;
+      baseBranch?: string;
+    }) => ipcRenderer.invoke('symphony:start', params),
+    updateStatus: (params: {
+      contributionId: string;
+      status?: string;
+      progress?: {
+        totalDocuments?: number;
+        completedDocuments?: number;
+        currentDocument?: string;
+        totalTasks?: number;
+        completedTasks?: number;
+      };
+      tokenUsage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        estimatedCost?: number;
+      };
+      timeSpent?: number;
+      error?: string;
+    }) => ipcRenderer.invoke('symphony:updateStatus', params),
+    complete: (params: { contributionId: string; prBody?: string }) =>
+      ipcRenderer.invoke('symphony:complete', params),
+    cancel: (contributionId: string, cleanup?: boolean) =>
+      ipcRenderer.invoke('symphony:cancel', contributionId, cleanup),
+
+    // Cache operations
+    clearCache: () => ipcRenderer.invoke('symphony:clearCache'),
+
+    // Real-time updates
+    onUpdated: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('symphony:updated', handler);
+      return () => ipcRenderer.removeListener('symphony:updated', handler);
+    },
+  },
 });
 
 // Type definitions for TypeScript
