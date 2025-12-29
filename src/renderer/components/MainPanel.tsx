@@ -1124,6 +1124,7 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
                 onToggleTabShowThinking={props.onToggleTabShowThinking}
                 supportsThinking={hasCapability('supportsThinkingDisplay')}
                 onOpenPromptComposer={props.onOpenPromptComposer}
+                shortcuts={shortcuts}
                 showFlashNotification={showFlashNotification}
                 // Context warning sash props (Phase 6) - use tab-level context usage
                 contextUsage={activeTabContextUsage}

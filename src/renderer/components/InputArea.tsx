@@ -1,6 +1,7 @@
 import React, { useEffect, useMemo, startTransition } from 'react';
 import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, Eye, History, File, Folder, GitBranch, Tag, PenLine, Brain } from 'lucide-react';
-import type { Session, Theme, BatchRunState } from '../types';
+import type { Session, Theme, BatchRunState, Shortcut } from '../types';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks';
 import type { SummarizeProgress, SummarizeResult, GroomingProgress, MergeResult } from '../types/contextMerge';
 import { ThinkingStatusPill } from './ThinkingStatusPill';
@@ -84,6 +85,8 @@ interface InputAreaProps {
   onToggleTabSaveToHistory?: () => void;
   // Prompt composer modal
   onOpenPromptComposer?: () => void;
+  // Shortcuts for displaying keyboard hints
+  shortcuts?: Record<string, Shortcut>;
   // Flash notification callback
   showFlashNotification?: (message: string) => void;
   // Show Thinking toggle (per-tab)
@@ -137,6 +140,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
     tabReadOnlyMode = false, onToggleTabReadOnlyMode,
     tabSaveToHistory = false, onToggleTabSaveToHistory,
     onOpenPromptComposer,
+    shortcuts,
     showFlashNotification,
     tabShowThinking = false, onToggleTabShowThinking, supportsThinking = false,
     // Context warning sash props (Phase 6)
@@ -721,7 +725,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
                 <button
                   onClick={onOpenPromptComposer}
                   className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-                  title="Open Prompt Composer"
+                  title={`Open Prompt Composer${shortcuts?.openPromptComposer ? ` (${formatShortcutKeys(shortcuts.openPromptComposer.keys)})` : ''}`}
                 >
                   <PenLine className="w-4 h-4"/>
                 </button>

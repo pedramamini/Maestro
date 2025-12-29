@@ -155,6 +155,7 @@ export function GroupChatPanel({
         enterToSendAI={enterToSendAI}
         setEnterToSendAI={setEnterToSendAI}
         showFlashNotification={showFlashNotification}
+        shortcuts={shortcuts}
       />
     </div>
   );

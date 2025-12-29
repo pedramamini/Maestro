@@ -14,7 +14,8 @@
 
 import React, { useState, useRef, useCallback, useMemo, useEffect } from 'react';
 import { ArrowUp, ImageIcon, Eye, Keyboard, PenLine } from 'lucide-react';
-import type { Theme, GroupChatParticipant, GroupChatState, Session, QueuedItem } from '../types';
+import type { Theme, GroupChatParticipant, GroupChatState, Session, QueuedItem, Shortcut } from '../types';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { QueuedItemsList } from './QueuedItemsList';
 import { normalizeMentionName } from '../utils/participantColors';
 
@@ -56,6 +57,8 @@ interface GroupChatInputProps {
   setEnterToSendAI?: (value: boolean) => void;
   // Flash notification callback
   showFlashNotification?: (message: string) => void;
+  // Shortcuts for displaying keyboard hints
+  shortcuts?: Record<string, Shortcut>;
 }
 
 // PERF: Wrap in React.memo to prevent unnecessary re-renders when parent state changes
@@ -83,6 +86,7 @@ export const GroupChatInput = React.memo(function GroupChatInput({
   enterToSendAI: enterToSendAIProp,
   setEnterToSendAI: setEnterToSendAIProp,
   showFlashNotification,
+  shortcuts,
 }: GroupChatInputProps): JSX.Element {
   const [message, setMessage] = useState(draftMessage || '');
   const [showMentions, setShowMentions] = useState(false);
@@ -434,7 +438,7 @@ export const GroupChatInput = React.memo(function GroupChatInput({
                 <button
                   onClick={onOpenPromptComposer}
                   className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-                  title="Open Prompt Composer"
+                  title={`Open Prompt Composer${shortcuts?.openPromptComposer ? ` (${formatShortcutKeys(shortcuts.openPromptComposer.keys)})` : ''}`}
                 >
                   <PenLine className="w-4 h-4" />
                 </button>
