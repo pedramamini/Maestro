@@ -102,6 +102,8 @@ interface RightPanelProps {
   // Graph view state
   isGraphViewOpen?: boolean;
   onOpenGraphView?: () => void;
+  /** Callback to open graph view focused on a specific file (relative path to session.cwd) */
+  onFocusFileInGraph?: (relativePath: string) => void;
 }
 
 export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(function RightPanel(props, ref) {
@@ -123,7 +125,7 @@ export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(fun
     onJumpToAgentSession, onResumeSession,
     onOpenSessionAsTab, onOpenAboutModal, onFileClick,
     onOpenMarketplace,
-    isGraphViewOpen, onOpenGraphView
+    isGraphViewOpen, onOpenGraphView, onFocusFileInGraph
   } = props;
 
   const historyPanelRef = useRef<HistoryPanelHandle>(null);
@@ -412,6 +414,7 @@ export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(fun
               showHiddenFiles={showHiddenFiles}
               setShowHiddenFiles={setShowHiddenFiles}
               onOpenGraphView={onOpenGraphView}
+              onFocusFileInGraph={onFocusFileInGraph}
             />
           </div>
         )}

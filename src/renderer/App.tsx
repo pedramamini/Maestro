@@ -394,6 +394,8 @@ function MaestroConsoleInner() {
   const [fileTreeFilter, setFileTreeFilter] = useState('');
   const [fileTreeFilterOpen, setFileTreeFilterOpen] = useState(false);
   const [isGraphViewOpen, setIsGraphViewOpen] = useState(false);
+  // File path to focus on when opening the Document Graph (relative to session.cwd)
+  const [graphFocusFilePath, setGraphFocusFilePath] = useState<string | undefined>(undefined);
 
   // GitHub CLI availability (for gist publishing)
   const [ghCliAvailable, setGhCliAvailable] = useState(false);
@@ -8571,6 +8573,8 @@ function MaestroConsoleInner() {
           // Open external URL in default browser
           window.maestro.shell.openExternal(url);
         }}
+        focusFilePath={graphFocusFilePath}
+        onFocusFileConsumed={() => setGraphFocusFilePath(undefined)}
       />
 
       {/* NOTE: All modals are now rendered via the unified <AppModals /> component above */}
@@ -9494,6 +9498,10 @@ function MaestroConsoleInner() {
             }}
             isGraphViewOpen={isGraphViewOpen}
             onOpenGraphView={() => setIsGraphViewOpen(true)}
+            onFocusFileInGraph={(relativePath: string) => {
+              setGraphFocusFilePath(relativePath);
+              setIsGraphViewOpen(true);
+            }}
           />
         </ErrorBoundary>
       )}

@@ -84,6 +84,10 @@ export interface DocumentGraphViewProps {
   onDocumentOpen?: (filePath: string) => void;
   /** Optional callback when an external link node is double-clicked */
   onExternalLinkOpen?: (url: string) => void;
+  /** Optional file path (relative to rootPath) to focus on when the graph opens */
+  focusFilePath?: string;
+  /** Callback when focus file is consumed (cleared after focusing) */
+  onFocusFileConsumed?: () => void;
 }
 
 /**
@@ -109,6 +113,8 @@ function DocumentGraphViewInner({
   rootPath,
   onDocumentOpen,
   onExternalLinkOpen,
+  focusFilePath,
+  onFocusFileConsumed,
 }: DocumentGraphViewProps) {
   const [nodes, setNodes, onNodesChange] = useNodesState([]);
   const [edges, setEdges, onEdgesChange] = useEdgesState([]);
@@ -174,6 +180,13 @@ function DocumentGraphViewInner({
   const previousNodesRef = useRef<Node<GraphNodeData>[]>([]);
   // Track if this is the initial load (skip animation for initial load)
   const isInitialLoadRef = useRef(true);
+  // Track if we should focus on a specific file after initial load
+  const pendingFocusRef = useRef<string | null>(null);
+  // Track the focusFilePath prop to avoid stale closure issues
+  const focusFilePathRef = useRef(focusFilePath);
+  focusFilePathRef.current = focusFilePath;
+  const onFocusFileConsumedRef = useRef(onFocusFileConsumed);
+  onFocusFileConsumedRef.current = onFocusFileConsumed;
 
   /**
    * Apply layout algorithm to nodes
@@ -485,10 +498,16 @@ function DocumentGraphViewInner({
         // Save positions after initial layout (ensures positions are preserved on first file change)
         saveNodePositions(rootPath, layoutedNodes);
 
-        // Fit view after nodes are set
-        setTimeout(() => {
-          fitView({ padding: 0.1, duration: 300 });
-        }, 50);
+        // Check if we should focus on a specific file or fit the whole view
+        if (focusFilePathRef.current) {
+          // Store the focus file path for the useEffect to handle after nodes are in state
+          pendingFocusRef.current = focusFilePathRef.current;
+        } else {
+          // Fit view after nodes are set
+          setTimeout(() => {
+            fitView({ padding: 0.1, duration: 300 });
+          }, 50);
+        }
       } else if (previousNodes.length > 0 && !isAnimatingRef.current) {
         // Diff previous nodes with new nodes to find additions and removals
         const diff = diffNodes(previousNodes, layoutedNodes);
@@ -610,6 +629,7 @@ function DocumentGraphViewInner({
       isInitialMountRef.current = true;
       isInitialLoadRef.current = true;
       previousNodesRef.current = [];
+      pendingFocusRef.current = null;
       setSearchQuery('');
     }
   }, [isOpen]);
@@ -755,6 +775,42 @@ function DocumentGraphViewInner({
     },
     [nodes, setCenter, getZoom]
   );
+
+  /**
+   * Focus on pending file after initial load completes
+   * This effect runs when loading finishes and nodes are set, allowing us to focus on
+   * a specific file that was requested via the focusFilePath prop.
+   */
+  useEffect(() => {
+    if (!loading && nodes.length > 0 && pendingFocusRef.current) {
+      const nodeId = `doc-${pendingFocusRef.current}`;
+      const node = nodes.find((n) => n.id === nodeId);
+
+      if (node) {
+        // Select the node to highlight it
+        setSelectedNodeId(nodeId);
+
+        // Focus on the node after a small delay to ensure layout is stable
+        setTimeout(() => {
+          const nodeWidth = node.type === 'documentNode' ? 280 : 160;
+          const nodeHeight = node.type === 'documentNode' ? 120 : 50;
+          const centerX = node.position.x + nodeWidth / 2;
+          const centerY = node.position.y + nodeHeight / 2;
+          // Use a slightly zoomed in view for better focus
+          setCenter(centerX, centerY, { zoom: 1.2, duration: 300 });
+        }, 100);
+      } else {
+        // File not found in graph, fit the whole view instead
+        setTimeout(() => {
+          fitView({ padding: 0.1, duration: 300 });
+        }, 50);
+      }
+
+      // Clear the pending focus and notify parent
+      pendingFocusRef.current = null;
+      onFocusFileConsumedRef.current?.();
+    }
+  }, [loading, nodes, setCenter, fitView]);
 
   /**
    * Handle open action from context menu

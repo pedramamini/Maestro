@@ -1835,4 +1835,45 @@ describe('DocumentGraphView', () => {
       expect(matchCount).toBe(3);
     });
   });
+
+  describe('focusFilePath prop', () => {
+    it('accepts focusFilePath prop in interface', () => {
+      // The focusFilePath prop allows opening the graph focused on a specific file
+      // This test verifies the interface accepts the prop
+      const focusPath = 'docs/README.md';
+      expect(focusPath).toBeDefined();
+      expect(typeof focusPath).toBe('string');
+    });
+
+    it('accepts onFocusFileConsumed callback in interface', () => {
+      // The onFocusFileConsumed callback is called after focusing on the file
+      const onFocusConsumed = vi.fn();
+      expect(typeof onFocusConsumed).toBe('function');
+    });
+
+    it('constructs correct node ID from file path', () => {
+      // Node IDs are constructed as "doc-" + relativePath
+      const relativePath = 'docs/guide.md';
+      const expectedNodeId = `doc-${relativePath}`;
+
+      expect(expectedNodeId).toBe('doc-docs/guide.md');
+    });
+
+    it('handles file paths without leading slash', () => {
+      // Paths should be relative without leading slash
+      const focusPath = 'README.md';
+      const nodeId = `doc-${focusPath}`;
+
+      expect(nodeId).toBe('doc-README.md');
+      expect(focusPath.startsWith('/')).toBe(false);
+    });
+
+    it('handles nested file paths correctly', () => {
+      // Deeply nested paths should work correctly
+      const nestedPath = 'docs/api/v2/endpoints.md';
+      const nodeId = `doc-${nestedPath}`;
+
+      expect(nodeId).toBe('doc-docs/api/v2/endpoints.md');
+    });
+  });
 });

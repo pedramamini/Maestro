@@ -1,13 +1,14 @@
 import React, { useEffect, useRef, useState, useCallback, useMemo, memo } from 'react';
 import { createPortal } from 'react-dom';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import { ChevronRight, ChevronDown, ChevronUp, Folder, RefreshCw, Check, Eye, EyeOff, GitGraph } from 'lucide-react';
+import { ChevronRight, ChevronDown, ChevronUp, Folder, RefreshCw, Check, Eye, EyeOff, GitGraph, Target, Copy, ExternalLink } from 'lucide-react';
 import type { Session, Theme, FocusArea } from '../types';
 import type { FileNode } from '../types/fileTree';
 import type { FileTreeChanges } from '../utils/fileExplorer';
 import { getFileIcon } from '../utils/theme';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { useClickOutside } from '../hooks/ui/useClickOutside';
 
 // Auto-refresh interval options in seconds
 const AUTO_REFRESH_OPTIONS = [
@@ -62,6 +63,8 @@ interface FileExplorerPanelProps {
   showHiddenFiles: boolean;
   setShowHiddenFiles: (value: boolean) => void;
   onOpenGraphView?: () => void;
+  /** Callback to open graph view focused on a specific file (relative path to session.cwd) */
+  onFocusFileInGraph?: (relativePath: string) => void;
 }
 
 function FileExplorerPanelInner(props: FileExplorerPanelProps) {
@@ -70,7 +73,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
     filteredFileTree, selectedFileIndex, setSelectedFileIndex, activeFocus, activeRightTab,
     previewFile, setActiveFocus, fileTreeFilterInputRef, toggleFolder, handleFileClick, expandAllFolders,
     collapseAllFolders, updateSessionWorkingDirectory, refreshFileTree, setSessions, onAutoRefreshChange, onShowFlash,
-    showHiddenFiles, setShowHiddenFiles, onOpenGraphView
+    showHiddenFiles, setShowHiddenFiles, onOpenGraphView, onFocusFileInGraph
   } = props;
 
   const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -84,6 +87,20 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
   const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const isOverOverlayRef = useRef(false);
   const autoRefreshTimerRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Context menu state for file tree items
+  const [contextMenu, setContextMenu] = useState<{
+    x: number;
+    y: number;
+    node: FileNode;
+    path: string;
+  } | null>(null);
+  const contextMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close context menu when clicking outside
+  useClickOutside(contextMenuRef, () => {
+    setContextMenu(null);
+  }, contextMenu !== null);
 
   // Use refs to avoid recreating the timer when callbacks change
   const refreshFileTreeRef = useRef(refreshFileTree);
@@ -187,6 +204,57 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
     onAutoRefreshChange?.(interval);
     setOverlayOpen(false);
   }, [onAutoRefreshChange]);
+
+  // Context menu handlers
+  const handleContextMenu = useCallback((e: React.MouseEvent, node: FileNode, path: string) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setContextMenu({
+      x: e.clientX,
+      y: e.clientY,
+      node,
+      path
+    });
+  }, []);
+
+  const handleFocusInGraph = useCallback(() => {
+    if (contextMenu && onFocusFileInGraph) {
+      onFocusFileInGraph(contextMenu.path);
+    }
+    setContextMenu(null);
+  }, [contextMenu, onFocusFileInGraph]);
+
+  const handleCopyPath = useCallback(() => {
+    if (contextMenu) {
+      const absolutePath = `${session.fullPath}/${contextMenu.path}`;
+      navigator.clipboard.writeText(absolutePath);
+    }
+    setContextMenu(null);
+  }, [contextMenu, session.fullPath]);
+
+  const handleOpenInExplorer = useCallback(() => {
+    if (contextMenu) {
+      const absolutePath = `${session.fullPath}/${contextMenu.path}`;
+      // Extract the directory path to reveal in file manager
+      const isFolder = contextMenu.node.type === 'folder';
+      const pathToOpen = isFolder ? absolutePath : absolutePath.split('/').slice(0, -1).join('/');
+      window.maestro?.shell?.openExternal(`file://${pathToOpen}`);
+    }
+    setContextMenu(null);
+  }, [contextMenu, session.fullPath]);
+
+  // Close context menu on Escape key
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && contextMenu) {
+        setContextMenu(null);
+      }
+    };
+    if (contextMenu) {
+      window.addEventListener('keydown', handleKeyDown);
+      return () => window.removeEventListener('keydown', handleKeyDown);
+    }
+  }, [contextMenu]);
 
   // Register layer when filter is open
   useEffect(() => {
@@ -337,6 +405,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
             handleFileClick(node, fullPath, session);
           }
         }}
+        onContextMenu={(e) => handleContextMenu(e, node, fullPath)}
       >
         {indentGuides}
         {isFolder && (
@@ -358,7 +427,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
       </div>
     );
      
-  }, [session.fullPath, session.changedFiles, session.fileExplorerExpanded, session.id, previewFile?.path, activeFocus, activeRightTab, selectedFileIndex, theme, toggleFolder, setSessions, setSelectedFileIndex, setActiveFocus, handleFileClick, fileTreeFilter]);
+  }, [session.fullPath, session.changedFiles, session.fileExplorerExpanded, session.id, previewFile?.path, activeFocus, activeRightTab, selectedFileIndex, theme, toggleFolder, setSessions, setSelectedFileIndex, setActiveFocus, handleFileClick, fileTreeFilter, handleContextMenu]);
 
   return (
     <div className="space-y-2 relative">
@@ -589,6 +658,62 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
             </span>
           </span>
         </div>
+      )}
+
+      {/* File tree context menu - rendered via portal */}
+      {contextMenu && createPortal(
+        <div
+          ref={contextMenuRef}
+          className="fixed z-[10000] rounded-lg shadow-xl border overflow-hidden"
+          style={{
+            backgroundColor: theme.colors.bgSidebar,
+            borderColor: theme.colors.border,
+            minWidth: '180px',
+            // Position menu, adjusting if it would go off-screen
+            top: Math.min(contextMenu.y, window.innerHeight - 200),
+            left: Math.min(contextMenu.x, window.innerWidth - 200),
+          }}
+        >
+          <div className="p-1">
+            {/* Focus in Graph option - only for markdown files */}
+            {contextMenu.node.type === 'file' &&
+             (contextMenu.node.name.endsWith('.md') || contextMenu.node.name.endsWith('.markdown')) &&
+             onFocusFileInGraph && (
+              <>
+                <button
+                  onClick={handleFocusInGraph}
+                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+                  style={{ color: theme.colors.textMain }}
+                >
+                  <Target className="w-3.5 h-3.5" style={{ color: theme.colors.accent }} />
+                  <span>Focus in Graph</span>
+                </button>
+                <div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
+              </>
+            )}
+
+            {/* Copy Path option */}
+            <button
+              onClick={handleCopyPath}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+              style={{ color: theme.colors.textMain }}
+            >
+              <Copy className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+              <span>Copy Path</span>
+            </button>
+
+            {/* Reveal in Finder option */}
+            <button
+              onClick={handleOpenInExplorer}
+              className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+              style={{ color: theme.colors.textMain }}
+            >
+              <ExternalLink className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+              <span>Reveal in Finder</span>
+            </button>
+          </div>
+        </div>,
+        document.body
       )}
     </div>
   );

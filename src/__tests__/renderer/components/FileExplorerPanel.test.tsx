@@ -22,6 +22,14 @@ vi.mock('lucide-react', () => ({
     <span data-testid="eye-icon" className={className} style={style}>👁</span>,
   EyeOff: ({ className, style }: { className?: string; style?: React.CSSProperties }) =>
     <span data-testid="eye-off-icon" className={className} style={style}>👁‍🗨</span>,
+  GitGraph: ({ className, style }: { className?: string; style?: React.CSSProperties }) =>
+    <span data-testid="gitgraph-icon" className={className} style={style}>📊</span>,
+  Target: ({ className, style }: { className?: string; style?: React.CSSProperties }) =>
+    <span data-testid="target-icon" className={className} style={style}>🎯</span>,
+  Copy: ({ className, style }: { className?: string; style?: React.CSSProperties }) =>
+    <span data-testid="copy-icon" className={className} style={style}>📋</span>,
+  ExternalLink: ({ className, style }: { className?: string; style?: React.CSSProperties }) =>
+    <span data-testid="external-link-icon" className={className} style={style}>🔗</span>,
 }));
 
 // Mock @tanstack/react-virtual for virtualization
@@ -73,6 +81,18 @@ vi.mock('../../../renderer/utils/theme', () => ({
 vi.mock('../../../renderer/constants/modalPriorities', () => ({
   MODAL_PRIORITIES: {
     FILE_TREE_FILTER: 50,
+  },
+}));
+
+// Mock useClickOutside - stores the callback for testing
+let clickOutsideCallback: (() => void) | null = null;
+vi.mock('../../../renderer/hooks/ui/useClickOutside', () => ({
+  useClickOutside: (_ref: unknown, callback: () => void, enabled: boolean) => {
+    if (enabled) {
+      clickOutsideCallback = callback;
+    } else {
+      clickOutsideCallback = null;
+    }
   },
 }));
 
@@ -144,6 +164,10 @@ const mockFileTree = [
   },
   {
     name: 'package.json',
+    type: 'file' as const,
+  },
+  {
+    name: 'README.md',
     type: 'file' as const,
   },
 ];
@@ -1319,6 +1343,114 @@ describe('FileExplorerPanel', () => {
       items.forEach(item => {
         expect(item).toHaveStyle({ height: '28px' });
       });
+    });
+  });
+
+  describe('Context Menu', () => {
+    it('shows context menu on right-click', () => {
+      const { container } = render(<FileExplorerPanel {...defaultProps} />);
+      const fileItem = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('package.json'));
+      expect(fileItem).toBeTruthy();
+
+      fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+      expect(screen.getByText('Copy Path')).toBeInTheDocument();
+      expect(screen.getByText('Reveal in Finder')).toBeInTheDocument();
+    });
+
+    it('shows Focus in Graph option only for markdown files', () => {
+      const onFocusFileInGraph = vi.fn();
+      const { container } = render(
+        <FileExplorerPanel {...defaultProps} onFocusFileInGraph={onFocusFileInGraph} />
+      );
+
+      // Right-click on markdown file - should show Focus in Graph
+      const mdFile = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('README.md'));
+      fireEvent.contextMenu(mdFile!, { clientX: 100, clientY: 200 });
+      expect(screen.getByText('Focus in Graph')).toBeInTheDocument();
+    });
+
+    it('does not show Focus in Graph option for non-markdown files', () => {
+      const onFocusFileInGraph = vi.fn();
+      const { container } = render(
+        <FileExplorerPanel {...defaultProps} onFocusFileInGraph={onFocusFileInGraph} />
+      );
+
+      // Right-click on non-markdown file - should not show Focus in Graph
+      const jsonFile = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('package.json'));
+      fireEvent.contextMenu(jsonFile!, { clientX: 100, clientY: 200 });
+      expect(screen.queryByText('Focus in Graph')).not.toBeInTheDocument();
+    });
+
+    it('calls onFocusFileInGraph with relative path when clicked', () => {
+      const onFocusFileInGraph = vi.fn();
+      const { container } = render(
+        <FileExplorerPanel {...defaultProps} onFocusFileInGraph={onFocusFileInGraph} />
+      );
+
+      const mdFile = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('README.md'));
+      fireEvent.contextMenu(mdFile!, { clientX: 100, clientY: 200 });
+
+      const focusButton = screen.getByText('Focus in Graph');
+      fireEvent.click(focusButton);
+
+      expect(onFocusFileInGraph).toHaveBeenCalledWith('README.md');
+    });
+
+    it('copies path to clipboard when Copy Path is clicked', async () => {
+      const mockClipboard = { writeText: vi.fn().mockResolvedValue(undefined) };
+      Object.defineProperty(navigator, 'clipboard', { value: mockClipboard, writable: true });
+
+      const { container } = render(<FileExplorerPanel {...defaultProps} />);
+
+      const fileItem = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('package.json'));
+      fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+      const copyButton = screen.getByText('Copy Path');
+      fireEvent.click(copyButton);
+
+      expect(mockClipboard.writeText).toHaveBeenCalledWith('/Users/test/project/package.json');
+    });
+
+    it('closes context menu on Escape key', () => {
+      const { container } = render(<FileExplorerPanel {...defaultProps} />);
+
+      const fileItem = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('package.json'));
+      fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+      expect(screen.getByText('Copy Path')).toBeInTheDocument();
+
+      // Press Escape
+      fireEvent.keyDown(window, { key: 'Escape' });
+      act(() => {
+        vi.runAllTimers();
+      });
+
+      expect(screen.queryByText('Copy Path')).not.toBeInTheDocument();
+    });
+
+    it('registers useClickOutside callback when context menu is open', () => {
+      // Reset the callback tracker
+      clickOutsideCallback = null;
+
+      const { container } = render(<FileExplorerPanel {...defaultProps} />);
+
+      // Initially no callback registered
+      expect(clickOutsideCallback).toBeNull();
+
+      // Open context menu
+      const fileItem = Array.from(container.querySelectorAll('[data-file-index]'))
+        .find(el => el.textContent?.includes('package.json'));
+      fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+      // Callback should now be registered
+      expect(clickOutsideCallback).toBeInstanceOf(Function);
     });
   });
 });
