@@ -16,6 +16,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { format, parseISO } from 'date-fns';
 import type { Theme } from '../../types';
 import type { StatsTimeRange, StatsAggregation } from '../../hooks/useStats';
+import { COLORBLIND_LINE_COLORS } from '../../constants/colorblindPalettes';
 
 // Data point for the chart
 interface DataPoint {
@@ -34,6 +35,8 @@ interface DurationTrendsChartProps {
   timeRange: StatsTimeRange;
   /** Current theme for styling */
   theme: Theme;
+  /** Enable colorblind-friendly colors */
+  colorBlindMode?: boolean;
 }
 
 /**
@@ -136,7 +139,7 @@ function formatXAxisDate(dateStr: string, timeRange: StatsTimeRange): string {
   }
 }
 
-export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsChartProps) {
+export function DurationTrendsChart({ data, timeRange, theme, colorBlindMode = false }: DurationTrendsChartProps) {
   const [showSmoothed, setShowSmoothed] = useState(false);
   const [hoveredPoint, setHoveredPoint] = useState<DataPoint | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -257,9 +260,14 @@ export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsCh
     setTooltipPos(null);
   }, []);
 
-  // Parse accent color for gradient
+  // Get the primary chart color (colorblind-safe or theme accent)
+  const primaryColor = useMemo(() => {
+    return colorBlindMode ? COLORBLIND_LINE_COLORS.primary : theme.colors.accent;
+  }, [colorBlindMode, theme.colors.accent]);
+
+  // Parse primary color for gradient
   const accentRgb = useMemo(() => {
-    const accent = theme.colors.accent;
+    const accent = primaryColor;
     if (accent.startsWith('#')) {
       const hex = accent.slice(1);
       return {
@@ -279,7 +287,7 @@ export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsCh
       }
     }
     return { r: 100, g: 149, b: 237 }; // Default blue
-  }, [theme.colors.accent]);
+  }, [primaryColor]);
 
   // Generate unique ID for gradient
   const gradientId = useMemo(() => `duration-gradient-${Math.random().toString(36).slice(2, 9)}`, []);
@@ -310,7 +318,7 @@ export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsCh
               className="relative w-9 h-5 rounded-full transition-colors"
               style={{
                 backgroundColor: showSmoothed
-                  ? theme.colors.accent
+                  ? primaryColor
                   : `${theme.colors.border}80`,
               }}
               aria-label={showSmoothed ? 'Disable smoothing' : 'Enable smoothing'}
@@ -422,7 +430,7 @@ export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsCh
             <path
               d={linePath}
               fill="none"
-              stroke={theme.colors.accent}
+              stroke={primaryColor}
               strokeWidth={2}
               strokeLinecap="round"
               strokeLinejoin="round"
@@ -443,8 +451,8 @@ export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsCh
                   cx={x}
                   cy={y}
                   r={isHovered ? 6 : 4}
-                  fill={isHovered ? theme.colors.accent : theme.colors.bgMain}
-                  stroke={theme.colors.accent}
+                  fill={isHovered ? primaryColor : theme.colors.bgMain}
+                  stroke={primaryColor}
                   strokeWidth={2}
                   style={{
                     cursor: 'pointer',
@@ -510,7 +518,7 @@ export function DurationTrendsChart({ data, timeRange, theme }: DurationTrendsCh
         <div className="flex items-center gap-1.5">
           <div
             className="w-4 h-0.5 rounded"
-            style={{ backgroundColor: theme.colors.accent }}
+            style={{ backgroundColor: primaryColor }}
           />
           <span className="text-xs" style={{ color: theme.colors.textDim }}>
             {showSmoothed ? 'Moving Average' : 'Avg Duration'}

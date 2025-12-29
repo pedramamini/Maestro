@@ -16,6 +16,7 @@ import React, { useState, useMemo, useCallback } from 'react';
 import { format, parseISO, startOfWeek, addDays, differenceInWeeks, subWeeks, isAfter, isBefore, isSameDay } from 'date-fns';
 import type { Theme } from '../../types';
 import type { StatsTimeRange, StatsAggregation } from '../../hooks/useStats';
+import { COLORBLIND_HEATMAP_SCALE } from '../../constants/colorblindPalettes';
 
 // Days of week labels (Sunday first to match GitHub's layout)
 const DAYS_OF_WEEK = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
@@ -46,6 +47,8 @@ interface ActivityHeatmapProps {
   timeRange: StatsTimeRange;
   /** Current theme for styling */
   theme: Theme;
+  /** Enable colorblind-friendly colors */
+  colorBlindMode?: boolean;
 }
 
 /**
@@ -104,7 +107,13 @@ function calculateIntensity(value: number, maxValue: number): number {
 /**
  * Get color for a given intensity level
  */
-function getIntensityColor(intensity: number, theme: Theme): string {
+function getIntensityColor(intensity: number, theme: Theme, colorBlindMode?: boolean): string {
+  // Use colorblind-safe palette when colorblind mode is enabled
+  if (colorBlindMode) {
+    const clampedIntensity = Math.max(0, Math.min(4, Math.round(intensity)));
+    return COLORBLIND_HEATMAP_SCALE[clampedIntensity];
+  }
+
   const accent = theme.colors.accent;
   const bgSecondary = theme.colors.bgActivity;
 
@@ -154,7 +163,7 @@ function getIntensityColor(intensity: number, theme: Theme): string {
   }
 }
 
-export function ActivityHeatmap({ data, timeRange, theme }: ActivityHeatmapProps) {
+export function ActivityHeatmap({ data, timeRange, theme, colorBlindMode = false }: ActivityHeatmapProps) {
   const [metricMode, setMetricMode] = useState<MetricMode>('count');
   const [hoveredDay, setHoveredDay] = useState<DayData | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -447,7 +456,8 @@ export function ActivityHeatmap({ data, timeRange, theme }: ActivityHeatmapProps
                           height: cellSize,
                           backgroundColor: getIntensityColor(
                             day.intensity,
-                            theme
+                            theme,
+                            colorBlindMode
                           ),
                           outline:
                             hoveredDay?.dateString === day.dateString
@@ -484,7 +494,7 @@ export function ActivityHeatmap({ data, timeRange, theme }: ActivityHeatmapProps
                   style={{
                     width: cellSize,
                     height: cellSize,
-                    backgroundColor: getIntensityColor(level, theme),
+                    backgroundColor: getIntensityColor(level, theme, colorBlindMode),
                   }}
                   role="listitem"
                   aria-label={`Intensity level ${level}: ${level === 0 ? 'No activity' : level === 1 ? 'Low' : level === 2 ? 'Medium-low' : level === 3 ? 'Medium-high' : 'High'} activity`}

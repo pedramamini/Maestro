@@ -16,6 +16,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/useStats';
+import { COLORBLIND_BINARY_PALETTE } from '../../constants/colorblindPalettes';
 
 // Metric display mode
 type MetricMode = 'count' | 'duration';
@@ -33,6 +34,8 @@ interface SourceDistributionChartProps {
   data: StatsAggregation;
   /** Current theme for styling */
   theme: Theme;
+  /** Enable colorblind-friendly colors */
+  colorBlindMode?: boolean;
 }
 
 /**
@@ -160,6 +163,7 @@ function describeArc(
 export function SourceDistributionChart({
   data,
   theme,
+  colorBlindMode = false,
 }: SourceDistributionChartProps) {
   const [metricMode, setMetricMode] = useState<MetricMode>('count');
   const [hoveredSource, setHoveredSource] = useState<'interactive' | 'auto' | null>(null);
@@ -176,13 +180,17 @@ export function SourceDistributionChart({
 
     const sources: SourceData[] = [];
 
+    // Use colorblind-safe colors when colorblind mode is enabled
+    const interactiveColor = colorBlindMode ? COLORBLIND_BINARY_PALETTE.primary : theme.colors.accent;
+    const autoColor = colorBlindMode ? COLORBLIND_BINARY_PALETTE.secondary : getAutoColor(theme);
+
     if (interactiveValue > 0 || autoValue === 0) {
       sources.push({
         source: 'interactive',
         label: 'Interactive',
         value: interactiveValue,
         percentage: total > 0 ? (interactiveValue / total) * 100 : (total === 0 ? 50 : 0),
-        color: theme.colors.accent,
+        color: interactiveColor,
       });
     }
 
@@ -192,12 +200,12 @@ export function SourceDistributionChart({
         label: 'Auto Run',
         value: autoValue,
         percentage: total > 0 ? (autoValue / total) * 100 : (total === 0 ? 50 : 0),
-        color: getAutoColor(theme),
+        color: autoColor,
       });
     }
 
     return sources;
-  }, [data, metricMode, theme]);
+  }, [data, metricMode, theme, colorBlindMode]);
 
   // Calculate total for center label
   const total = useMemo(() => {

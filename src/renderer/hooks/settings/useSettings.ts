@@ -278,6 +278,10 @@ export interface UseSettingsReturn {
   recordShortcutUsage: (shortcutId: string) => { newLevel: number | null };
   acknowledgeKeyboardMasteryLevel: (level: number) => void;
   getUnacknowledgedKeyboardMasteryLevel: () => number | null;
+
+  // Accessibility settings
+  colorBlindMode: boolean;
+  setColorBlindMode: (value: boolean) => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -385,6 +389,9 @@ export function useSettings(): UseSettingsReturn {
   useEffect(() => {
     keyboardMasteryStatsRef.current = keyboardMasteryStats;
   }, [keyboardMasteryStats]);
+
+  // Accessibility settings
+  const [colorBlindMode, setColorBlindModeState] = useState(false);
 
   // Wrapper functions that persist to electron-store
   // PERF: All wrapped in useCallback to prevent re-renders
@@ -1062,6 +1069,12 @@ export function useSettings(): UseSettingsReturn {
     return null;
   }, [keyboardMasteryStats.lastAcknowledgedLevel, keyboardMasteryStats.currentLevel]);
 
+  // Colorblind mode toggle
+  const setColorBlindMode = useCallback((value: boolean) => {
+    setColorBlindModeState(value);
+    window.maestro.settings.set('colorBlindMode', value);
+  }, []);
+
   // Load settings from electron-store on mount
   useEffect(() => {
     console.log('[Settings] useEffect triggered, about to call loadSettings');
@@ -1119,6 +1132,7 @@ export function useSettings(): UseSettingsReturn {
       const savedWebInterfaceCustomPort = await window.maestro.settings.get('webInterfaceCustomPort');
       const savedContextManagementSettings = await window.maestro.settings.get('contextManagementSettings');
       const savedKeyboardMasteryStats = await window.maestro.settings.get('keyboardMasteryStats');
+      const savedColorBlindMode = await window.maestro.settings.get('colorBlindMode');
 
       if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI as boolean);
       if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal as boolean);
@@ -1338,6 +1352,9 @@ export function useSettings(): UseSettingsReturn {
         setKeyboardMasteryStatsState({ ...DEFAULT_KEYBOARD_MASTERY_STATS, ...(savedKeyboardMasteryStats as Partial<KeyboardMasteryStats>) });
       }
 
+      // Accessibility settings
+      if (savedColorBlindMode !== undefined) setColorBlindModeState(savedColorBlindMode as boolean);
+
       } catch (error) {
         console.error('[Settings] Failed to load settings:', error);
       } finally {
@@ -1474,6 +1491,8 @@ export function useSettings(): UseSettingsReturn {
     recordShortcutUsage,
     acknowledgeKeyboardMasteryLevel,
     getUnacknowledgedKeyboardMasteryLevel,
+    colorBlindMode,
+    setColorBlindMode,
   }), [
     // State values
     settingsLoaded,
@@ -1591,5 +1610,7 @@ export function useSettings(): UseSettingsReturn {
     recordShortcutUsage,
     acknowledgeKeyboardMasteryLevel,
     getUnacknowledgedKeyboardMasteryLevel,
+    colorBlindMode,
+    setColorBlindMode,
   ]);
 }

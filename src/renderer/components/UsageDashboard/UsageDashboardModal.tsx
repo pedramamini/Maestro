@@ -61,6 +61,8 @@ interface UsageDashboardModalProps {
   isOpen: boolean;
   onClose: () => void;
   theme: Theme;
+  /** Enable colorblind-friendly colors for charts */
+  colorBlindMode?: boolean;
 }
 
 /**
@@ -101,6 +103,7 @@ export function UsageDashboardModal({
   isOpen,
   onClose,
   theme,
+  colorBlindMode = false,
 }: UsageDashboardModalProps) {
   const [timeRange, setTimeRange] = useState<StatsTimeRange>('week');
   const [viewMode, setViewMode] = useState<ViewMode>('overview');
@@ -641,7 +644,7 @@ export function UsageDashboardModal({
                       data-testid="section-agent-comparison"
                     >
                       <ChartErrorBoundary theme={theme} chartName="Agent Comparison">
-                        <AgentComparisonChart data={data} theme={theme} />
+                        <AgentComparisonChart data={data} theme={theme} colorBlindMode={colorBlindMode} />
                       </ChartErrorBoundary>
                     </div>
 
@@ -660,7 +663,7 @@ export function UsageDashboardModal({
                       data-testid="section-source-distribution"
                     >
                       <ChartErrorBoundary theme={theme} chartName="Source Distribution">
-                        <SourceDistributionChart data={data} theme={theme} />
+                        <SourceDistributionChart data={data} theme={theme} colorBlindMode={colorBlindMode} />
                       </ChartErrorBoundary>
                     </div>
                   </div>
@@ -685,6 +688,7 @@ export function UsageDashboardModal({
                         data={data}
                         timeRange={timeRange}
                         theme={theme}
+                        colorBlindMode={colorBlindMode}
                       />
                     </ChartErrorBoundary>
                   </div>
@@ -709,6 +713,7 @@ export function UsageDashboardModal({
                         data={data}
                         timeRange={timeRange}
                         theme={theme}
+                        colorBlindMode={colorBlindMode}
                       />
                     </ChartErrorBoundary>
                   </div>
@@ -733,7 +738,7 @@ export function UsageDashboardModal({
                     data-testid="section-agent-comparison"
                   >
                     <ChartErrorBoundary theme={theme} chartName="Agent Comparison">
-                      <AgentComparisonChart data={data} theme={theme} />
+                      <AgentComparisonChart data={data} theme={theme} colorBlindMode={colorBlindMode} />
                     </ChartErrorBoundary>
                   </div>
                 </>
@@ -761,6 +766,7 @@ export function UsageDashboardModal({
                         data={data}
                         timeRange={timeRange}
                         theme={theme}
+                        colorBlindMode={colorBlindMode}
                       />
                     </ChartErrorBoundary>
                   </div>
@@ -783,6 +789,7 @@ export function UsageDashboardModal({
                         data={data}
                         timeRange={timeRange}
                         theme={theme}
+                        colorBlindMode={colorBlindMode}
                       />
                     </ChartErrorBoundary>
                   </div>

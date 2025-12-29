@@ -16,6 +16,7 @@
 import React, { useState, useMemo, useCallback } from 'react';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/useStats';
+import { COLORBLIND_AGENT_PALETTE } from '../../constants/colorblindPalettes';
 
 // Metric display mode
 type MetricMode = 'count' | 'duration';
@@ -34,26 +35,31 @@ interface AgentComparisonChartProps {
   data: StatsAggregation;
   /** Current theme for styling */
   theme: Theme;
+  /** Enable colorblind-friendly colors */
+  colorBlindMode?: boolean;
 }
+
+// Standard color palette that works with both light and dark themes
+const STANDARD_AGENT_PALETTE = [
+  '#3b82f6', // blue
+  '#10b981', // emerald
+  '#f59e0b', // amber
+  '#ef4444', // red
+  '#8b5cf6', // violet
+  '#ec4899', // pink
+  '#06b6d4', // cyan
+  '#f97316', // orange
+  '#84cc16', // lime
+  '#6366f1', // indigo
+];
 
 /**
  * Generate a distinct color for an agent based on its position in the list
  * Uses a predefined palette to ensure visual distinction between agents
  */
-function getAgentColor(agentName: string, index: number, theme: Theme): string {
-  // Predefined color palette that works with both light and dark themes
-  const palette = [
-    '#3b82f6', // blue
-    '#10b981', // emerald
-    '#f59e0b', // amber
-    '#ef4444', // red
-    '#8b5cf6', // violet
-    '#ec4899', // pink
-    '#06b6d4', // cyan
-    '#f97316', // orange
-    '#84cc16', // lime
-    '#6366f1', // indigo
-  ];
+function getAgentColor(agentName: string, index: number, theme: Theme, colorBlindMode?: boolean): string {
+  // Use colorblind-safe palette when colorblind mode is enabled
+  const palette = colorBlindMode ? COLORBLIND_AGENT_PALETTE : STANDARD_AGENT_PALETTE;
 
   // Use index directly to ensure unique colors for each agent position
   // This guarantees distinct colors for up to 10 agents
@@ -91,7 +97,7 @@ function formatNumber(num: number): string {
   return num.toString();
 }
 
-export function AgentComparisonChart({ data, theme }: AgentComparisonChartProps) {
+export function AgentComparisonChart({ data, theme, colorBlindMode = false }: AgentComparisonChartProps) {
   const [metricMode, setMetricMode] = useState<MetricMode>('duration');
   const [hoveredAgent, setHoveredAgent] = useState<string | null>(null);
   const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
@@ -117,11 +123,11 @@ export function AgentComparisonChart({ data, theme }: AgentComparisonChartProps)
           duration: stats.duration,
           value,
           percentage: total > 0 ? (value / total) * 100 : 0,
-          color: getAgentColor(agent, index, theme),
+          color: getAgentColor(agent, index, theme, colorBlindMode),
         };
       })
       .sort((a, b) => b.value - a.value);
-  }, [data.byAgent, metricMode, theme]);
+  }, [data.byAgent, metricMode, theme, colorBlindMode]);
 
   // Get max value for bar width calculation
   const maxValue = useMemo(() => {
