@@ -28,6 +28,10 @@ const mockDb = {
   pragma: vi.fn(() => [{ user_version: 0 }]),
   prepare: vi.fn(() => mockStatement),
   close: vi.fn(),
+  // Transaction mock that immediately executes the function
+  transaction: vi.fn((fn: () => void) => {
+    return () => fn();
+  }),
 };
 
 // Mock better-sqlite3 as a class
@@ -40,6 +44,7 @@ vi.mock('better-sqlite3', () => {
       pragma = mockDb.pragma;
       prepare = mockDb.prepare;
       close = mockDb.close;
+      transaction = mockDb.transaction;
     },
   };
 });
@@ -316,6 +321,194 @@ describe('StatsDB class (mocked)', () => {
 
       // Should NOT set user_version (no migration needed)
       expect(mockDb.pragma).not.toHaveBeenCalledWith('user_version = 1');
+    });
+
+    it('should create _migrations table on initialization', async () => {
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: 0 }];
+        return undefined;
+      });
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      // Should have prepared the CREATE TABLE IF NOT EXISTS _migrations statement
+      expect(mockDb.prepare).toHaveBeenCalledWith(
+        expect.stringContaining('CREATE TABLE IF NOT EXISTS _migrations')
+      );
+    });
+
+    it('should record successful migration in _migrations table', async () => {
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: 0 }];
+        return undefined;
+      });
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      // Should have inserted a success record into _migrations
+      expect(mockDb.prepare).toHaveBeenCalledWith(
+        expect.stringContaining("INSERT OR REPLACE INTO _migrations")
+      );
+    });
+
+    it('should use transaction for migration atomicity', async () => {
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: 0 }];
+        return undefined;
+      });
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      // Should have used transaction
+      expect(mockDb.transaction).toHaveBeenCalled();
+    });
+  });
+
+  describe('migration system API', () => {
+    beforeEach(() => {
+      vi.clearAllMocks();
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: 1 }];
+        return undefined;
+      });
+      mockDb.prepare.mockReturnValue(mockStatement);
+      mockStatement.run.mockReturnValue({ changes: 1 });
+      mockStatement.get.mockReturnValue(null);
+      mockStatement.all.mockReturnValue([]);
+      mockFsExistsSync.mockReturnValue(true);
+    });
+
+    afterEach(() => {
+      vi.resetModules();
+    });
+
+    it('should return current version via getCurrentVersion()', async () => {
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: 1 }];
+        return undefined;
+      });
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      expect(db.getCurrentVersion()).toBe(1);
+    });
+
+    it('should return target version via getTargetVersion()', async () => {
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      // Currently we have version 1 migration
+      expect(db.getTargetVersion()).toBe(1);
+    });
+
+    it('should return false from hasPendingMigrations() when up to date', async () => {
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: 1 }];
+        return undefined;
+      });
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      expect(db.hasPendingMigrations()).toBe(false);
+    });
+
+    it('should correctly identify pending migrations based on version difference', async () => {
+      // This test verifies the hasPendingMigrations() logic
+      // by checking current version < target version
+
+      // Simulate a database that's already at version 1
+      let currentVersion = 1;
+      mockDb.pragma.mockImplementation((sql: string) => {
+        if (sql === 'user_version') return [{ user_version: currentVersion }];
+        // Handle version updates from migration
+        if (sql.startsWith('user_version = ')) {
+          currentVersion = parseInt(sql.replace('user_version = ', ''));
+        }
+        return undefined;
+      });
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      // At version 1, target is 1, so no pending migrations
+      expect(db.getCurrentVersion()).toBe(1);
+      expect(db.getTargetVersion()).toBe(1);
+      expect(db.hasPendingMigrations()).toBe(false);
+    });
+
+    it('should return empty array from getMigrationHistory() when no _migrations table', async () => {
+      mockStatement.get.mockReturnValue(null); // No table exists
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      const history = db.getMigrationHistory();
+      expect(history).toEqual([]);
+    });
+
+    it('should return migration records from getMigrationHistory()', async () => {
+      const mockMigrationRows = [
+        {
+          version: 1,
+          description: 'Initial schema',
+          applied_at: 1704067200000,
+          status: 'success' as const,
+          error_message: null,
+        },
+      ];
+
+      mockStatement.get.mockReturnValue({ name: '_migrations' }); // Table exists
+      mockStatement.all.mockReturnValue(mockMigrationRows);
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      const history = db.getMigrationHistory();
+      expect(history).toHaveLength(1);
+      expect(history[0]).toEqual({
+        version: 1,
+        description: 'Initial schema',
+        appliedAt: 1704067200000,
+        status: 'success',
+        errorMessage: undefined,
+      });
+    });
+
+    it('should include errorMessage in migration history for failed migrations', async () => {
+      const mockMigrationRows = [
+        {
+          version: 2,
+          description: 'Add new column',
+          applied_at: 1704067200000,
+          status: 'failed' as const,
+          error_message: 'SQLITE_ERROR: duplicate column name',
+        },
+      ];
+
+      mockStatement.get.mockReturnValue({ name: '_migrations' });
+      mockStatement.all.mockReturnValue(mockMigrationRows);
+
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      const history = db.getMigrationHistory();
+      expect(history[0].status).toBe('failed');
+      expect(history[0].errorMessage).toBe('SQLITE_ERROR: duplicate column name');
     });
   });
 
@@ -1034,6 +1227,9 @@ describe('Query events recorded for interactive sessions', () => {
       const db = new StatsDB();
       db.initialize();
 
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
+
       const baseTime = Date.now();
 
       // First query
@@ -1082,6 +1278,9 @@ describe('Query events recorded for interactive sessions', () => {
       const { StatsDB } = await import('../../main/stats-db');
       const db = new StatsDB();
       db.initialize();
+
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
 
       const startTime = Date.now();
 
@@ -1603,6 +1802,9 @@ describe('Auto Run sessions and tasks recorded correctly', () => {
       const db = new StatsDB();
       db.initialize();
 
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
+
       const autoRunSessionId = 'multi-task-session';
       const baseTime = Date.now();
 
@@ -1856,6 +2058,9 @@ describe('Auto Run sessions and tasks recorded correctly', () => {
       const db = new StatsDB();
       db.initialize();
 
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
+
       const batchStartTime = Date.now();
 
       // Step 1: Start Auto Run session
@@ -1908,6 +2113,9 @@ describe('Auto Run sessions and tasks recorded correctly', () => {
       const { StatsDB } = await import('../../main/stats-db');
       const db = new StatsDB();
       db.initialize();
+
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
 
       const startTime = Date.now();
 
@@ -2036,6 +2244,9 @@ describe('Auto Run sessions and tasks recorded correctly', () => {
       const { StatsDB } = await import('../../main/stats-db');
       const db = new StatsDB();
       db.initialize();
+
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
 
       // Claude Code Auto Run
       db.insertAutoRunSession({
@@ -4275,6 +4486,9 @@ describe('Concurrent writes and database locking', () => {
       const db = new StatsDB();
       db.initialize();
 
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
+
       const ids: string[] = [];
       for (let i = 0; i < 10; i++) {
         const id = db.insertQueryEvent({
@@ -4300,6 +4514,9 @@ describe('Concurrent writes and database locking', () => {
       const db = new StatsDB();
       db.initialize();
 
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
+
       const ids: string[] = [];
       for (let i = 0; i < 10; i++) {
         const id = db.insertAutoRunSession({
@@ -4324,6 +4541,9 @@ describe('Concurrent writes and database locking', () => {
       const { StatsDB } = await import('../../main/stats-db');
       const db = new StatsDB();
       db.initialize();
+
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
 
       const ids: string[] = [];
       for (let i = 0; i < 10; i++) {
@@ -4351,6 +4571,9 @@ describe('Concurrent writes and database locking', () => {
       const { StatsDB } = await import('../../main/stats-db');
       const db = new StatsDB();
       db.initialize();
+
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
 
       // Simulate concurrent writes by wrapping synchronous operations in promises
       const writeOperations = [
@@ -4397,6 +4620,9 @@ describe('Concurrent writes and database locking', () => {
       const db = new StatsDB();
       db.initialize();
 
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
+
       const writeOperations = Array.from({ length: 20 }, (_, i) =>
         Promise.resolve().then(() =>
           db.insertQueryEvent({
@@ -4421,6 +4647,9 @@ describe('Concurrent writes and database locking', () => {
       const { StatsDB } = await import('../../main/stats-db');
       const db = new StatsDB();
       db.initialize();
+
+      // Clear mocks after initialize() to count only test operations
+      mockStatement.run.mockClear();
 
       const operations = [
         Promise.resolve().then(() =>
@@ -4553,15 +4782,16 @@ describe('Concurrent writes and database locking', () => {
 
   describe('high-volume concurrent writes', () => {
     it('should handle 50 concurrent writes without data loss', async () => {
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
+      // Reset counter after initialize() to count only test operations
       const insertedCount = { value: 0 };
       mockStatement.run.mockImplementation(() => {
         insertedCount.value++;
         return { changes: 1 };
       });
-
-      const { StatsDB } = await import('../../main/stats-db');
-      const db = new StatsDB();
-      db.initialize();
 
       const writeOperations = Array.from({ length: 50 }, (_, i) =>
         Promise.resolve().then(() =>
@@ -4723,7 +4953,12 @@ describe('Concurrent writes and database locking', () => {
     });
 
     it('should handle operations after previous operations complete', async () => {
+      const { StatsDB } = await import('../../main/stats-db');
+      const db = new StatsDB();
+      db.initialize();
+
       // Track call count manually since we're testing sequential batches
+      // Set up tracking AFTER initialize() to count only test operations
       let runCallCount = 0;
       const trackingStatement = {
         run: vi.fn(() => {
@@ -4734,10 +4969,6 @@ describe('Concurrent writes and database locking', () => {
         all: vi.fn(() => []),
       };
       mockDb.prepare.mockReturnValue(trackingStatement);
-
-      const { StatsDB } = await import('../../main/stats-db');
-      const db = new StatsDB();
-      db.initialize();
 
       // First batch
       for (let i = 0; i < 10; i++) {

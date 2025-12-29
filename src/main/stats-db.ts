@@ -6,6 +6,32 @@
  *
  * Database location: ~/Library/Application Support/Maestro/stats.db
  * (platform-appropriate path resolved via app.getPath('userData'))
+ *
+ * ## Migration System
+ *
+ * This module uses a versioned migration system to manage schema changes:
+ *
+ * 1. **Version Tracking**: Uses SQLite's `user_version` pragma for fast version checks
+ * 2. **Migrations Table**: Stores detailed migration history with timestamps and status
+ * 3. **Sequential Execution**: Migrations run in order, skipping already-applied ones
+ *
+ * ### Adding New Migrations
+ *
+ * To add a new migration:
+ * 1. Create a new migration function following the pattern: `migrateVN()`
+ * 2. Add it to the `MIGRATIONS` array with version number and description
+ * 3. Update `STATS_DB_VERSION` in `../shared/stats-types.ts`
+ *
+ * Example:
+ * ```typescript
+ * // In MIGRATIONS array:
+ * { version: 2, description: 'Add token_count column', up: () => this.migrateV2() }
+ *
+ * // Migration function:
+ * private migrateV2(): void {
+ *   this.db.prepare('ALTER TABLE query_events ADD COLUMN token_count INTEGER').run();
+ * }
+ * ```
  */
 
 import Database from 'better-sqlite3';
@@ -23,6 +49,46 @@ import {
 } from '../shared/stats-types';
 
 const LOG_CONTEXT = '[StatsDB]';
+
+// ============================================================================
+// Migration System Types
+// ============================================================================
+
+/**
+ * Represents a single database migration
+ */
+export interface Migration {
+  /** Version number (must be sequential starting from 1) */
+  version: number;
+  /** Human-readable description of the migration */
+  description: string;
+  /** Function to apply the migration */
+  up: () => void;
+}
+
+/**
+ * Record of an applied migration stored in the migrations table
+ */
+export interface MigrationRecord {
+  version: number;
+  description: string;
+  appliedAt: number;
+  status: 'success' | 'failed';
+  errorMessage?: string;
+}
+
+/**
+ * SQL for creating the migrations tracking table
+ */
+const CREATE_MIGRATIONS_TABLE_SQL = `
+  CREATE TABLE IF NOT EXISTS _migrations (
+    version INTEGER PRIMARY KEY,
+    description TEXT NOT NULL,
+    applied_at INTEGER NOT NULL,
+    status TEXT NOT NULL CHECK(status IN ('success', 'failed')),
+    error_message TEXT
+  )
+`;
 
 /**
  * Generate a unique ID for database entries
@@ -149,6 +215,27 @@ export class StatsDB {
   private dbPath: string;
   private initialized = false;
 
+  /**
+   * Registry of all database migrations.
+   * Migrations must be sequential starting from version 1.
+   * Each migration is run exactly once and recorded in the _migrations table.
+   */
+  private getMigrations(): Migration[] {
+    return [
+      {
+        version: 1,
+        description: 'Initial schema: query_events, auto_run_sessions, auto_run_tasks tables',
+        up: () => this.migrateV1(),
+      },
+      // Future migrations should be added here:
+      // {
+      //   version: 2,
+      //   description: 'Add token_count column to query_events',
+      //   up: () => this.migrateV2(),
+      // },
+    ];
+  }
+
   constructor() {
     this.dbPath = path.join(app.getPath('userData'), 'stats.db');
   }
@@ -185,28 +272,175 @@ export class StatsDB {
     }
   }
 
+  // ============================================================================
+  // Migration System
+  // ============================================================================
+
   /**
-   * Run database migrations based on current version
+   * Run all pending database migrations.
+   *
+   * The migration system:
+   * 1. Creates the _migrations table if it doesn't exist
+   * 2. Gets the current schema version from user_version pragma
+   * 3. Runs each pending migration in a transaction
+   * 4. Records each migration in the _migrations table
+   * 5. Updates the user_version pragma
+   *
+   * If a migration fails, it is recorded as 'failed' with an error message,
+   * and the error is re-thrown to prevent the app from starting with an
+   * inconsistent database state.
    */
   private runMigrations(): void {
     if (!this.db) throw new Error('Database not initialized');
+
+    // Create migrations table (this is the only table created outside the migration system)
+    this.db.prepare(CREATE_MIGRATIONS_TABLE_SQL).run();
 
     // Get current version (0 if fresh database)
     const versionResult = this.db.pragma('user_version') as Array<{ user_version: number }>;
     const currentVersion = versionResult[0]?.user_version ?? 0;
 
-    if (currentVersion < 1) {
-      this.migrateV1();
-      this.db.pragma(`user_version = 1`);
-      logger.info('Migrated stats database to version 1', LOG_CONTEXT);
+    const migrations = this.getMigrations();
+    const pendingMigrations = migrations.filter((m) => m.version > currentVersion);
+
+    if (pendingMigrations.length === 0) {
+      logger.debug(`Database is up to date (version ${currentVersion})`, LOG_CONTEXT);
+      return;
     }
 
-    // Future migrations would go here:
-    // if (currentVersion < 2) { this.migrateV2(); this.db.pragma('user_version = 2'); }
+    // Sort by version to ensure sequential execution
+    pendingMigrations.sort((a, b) => a.version - b.version);
+
+    logger.info(
+      `Running ${pendingMigrations.length} pending migration(s) (current version: ${currentVersion})`,
+      LOG_CONTEXT
+    );
+
+    for (const migration of pendingMigrations) {
+      this.applyMigration(migration);
+    }
   }
 
   /**
+   * Apply a single migration within a transaction.
+   * Records the migration in the _migrations table with success/failure status.
+   */
+  private applyMigration(migration: Migration): void {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const startTime = Date.now();
+    logger.info(`Applying migration v${migration.version}: ${migration.description}`, LOG_CONTEXT);
+
+    try {
+      // Run migration in a transaction for atomicity
+      const runMigration = this.db.transaction(() => {
+        // Execute the migration
+        migration.up();
+
+        // Record success in _migrations table
+        this.db!.prepare(`
+          INSERT OR REPLACE INTO _migrations (version, description, applied_at, status, error_message)
+          VALUES (?, ?, ?, 'success', NULL)
+        `).run(migration.version, migration.description, Date.now());
+
+        // Update user_version pragma
+        this.db!.pragma(`user_version = ${migration.version}`);
+      });
+
+      runMigration();
+
+      const duration = Date.now() - startTime;
+      logger.info(`Migration v${migration.version} completed in ${duration}ms`, LOG_CONTEXT);
+    } catch (error) {
+      // Record failure in _migrations table (outside transaction since it was rolled back)
+      const errorMessage = error instanceof Error ? error.message : String(error);
+
+      this.db.prepare(`
+        INSERT OR REPLACE INTO _migrations (version, description, applied_at, status, error_message)
+        VALUES (?, ?, ?, 'failed', ?)
+      `).run(migration.version, migration.description, Date.now(), errorMessage);
+
+      logger.error(`Migration v${migration.version} failed: ${errorMessage}`, LOG_CONTEXT);
+
+      // Re-throw to prevent app from starting with inconsistent state
+      throw error;
+    }
+  }
+
+  /**
+   * Get the list of applied migrations from the _migrations table.
+   * Useful for debugging and diagnostics.
+   */
+  getMigrationHistory(): MigrationRecord[] {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Check if _migrations table exists
+    const tableExists = this.db.prepare(`
+      SELECT name FROM sqlite_master WHERE type='table' AND name='_migrations'
+    `).get();
+
+    if (!tableExists) {
+      return [];
+    }
+
+    const rows = this.db.prepare(`
+      SELECT version, description, applied_at, status, error_message
+      FROM _migrations
+      ORDER BY version ASC
+    `).all() as Array<{
+      version: number;
+      description: string;
+      applied_at: number;
+      status: 'success' | 'failed';
+      error_message: string | null;
+    }>;
+
+    return rows.map((row) => ({
+      version: row.version,
+      description: row.description,
+      appliedAt: row.applied_at,
+      status: row.status,
+      errorMessage: row.error_message ?? undefined,
+    }));
+  }
+
+  /**
+   * Get the current database schema version.
+   */
+  getCurrentVersion(): number {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const versionResult = this.db.pragma('user_version') as Array<{ user_version: number }>;
+    return versionResult[0]?.user_version ?? 0;
+  }
+
+  /**
+   * Get the target version (highest version in migrations registry).
+   */
+  getTargetVersion(): number {
+    const migrations = this.getMigrations();
+    if (migrations.length === 0) return 0;
+    return Math.max(...migrations.map((m) => m.version));
+  }
+
+  /**
+   * Check if any migrations are pending.
+   */
+  hasPendingMigrations(): boolean {
+    return this.getCurrentVersion() < this.getTargetVersion();
+  }
+
+  // ============================================================================
+  // Individual Migration Functions
+  // ============================================================================
+
+  /**
    * Migration v1: Initial schema creation
+   *
+   * Creates the core tables for tracking AI interactions:
+   * - query_events: Individual AI query/response cycles
+   * - auto_run_sessions: Batch processing runs
+   * - auto_run_tasks: Individual tasks within batch runs
    */
   private migrateV1(): void {
     if (!this.db) throw new Error('Database not initialized');
@@ -231,6 +465,10 @@ export class StatsDB {
 
     logger.debug('Created stats database tables and indexes', LOG_CONTEXT);
   }
+
+  // ============================================================================
+  // Database Lifecycle
+  // ============================================================================
 
   /**
    * Close the database connection
