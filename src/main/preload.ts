@@ -1810,6 +1810,25 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.on('symphony:updated', handler);
       return () => ipcRenderer.removeListener('symphony:updated', handler);
     },
+    onContributionStarted: (callback: (data: {
+      contributionId: string;
+      sessionId: string;
+      branchName: string;
+      draftPrNumber: number;
+      draftPrUrl: string;
+      autoRunPath: string;
+    }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: {
+        contributionId: string;
+        sessionId: string;
+        branchName: string;
+        draftPrNumber: number;
+        draftPrUrl: string;
+        autoRunPath: string;
+      }) => callback(data);
+      ipcRenderer.on('symphony:contributionStarted', handler);
+      return () => ipcRenderer.removeListener('symphony:contributionStarted', handler);
+    },
   },
 });
 

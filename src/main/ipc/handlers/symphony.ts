@@ -912,5 +912,148 @@ This PR will be updated automatically when the Auto Run completes.`;
     )
   );
 
+  // ─────────────────────────────────────────────────────────────────────────
+  // Session Creation Workflow (App.tsx integration)
+  // ─────────────────────────────────────────────────────────────────────────
+
+  /**
+   * Clone a repository for a new Symphony session.
+   * This is a simpler version of the start handler for the session creation flow.
+   */
+  ipcMain.handle(
+    'symphony:cloneRepo',
+    createIpcHandler(
+      handlerOpts('cloneRepo'),
+      async (params: { repoUrl: string; localPath: string }): Promise<{ success: boolean; error?: string }> => {
+        const { repoUrl, localPath } = params;
+
+        // Ensure parent directory exists
+        const parentDir = path.dirname(localPath);
+        await fs.mkdir(parentDir, { recursive: true });
+
+        // Clone with depth=1 for speed
+        const result = await cloneRepository(repoUrl, localPath);
+        if (!result.success) {
+          return { success: false, error: `Clone failed: ${result.error}` };
+        }
+
+        logger.info('Repository cloned for Symphony session', LOG_CONTEXT, { localPath });
+        return { success: true };
+      }
+    )
+  );
+
+  /**
+   * Start the contribution workflow after session is created.
+   * Creates branch, empty commit, pushes, and creates draft PR.
+   */
+  ipcMain.handle(
+    'symphony:startContribution',
+    createIpcHandler(
+      handlerOpts('startContribution'),
+      async (params: {
+        contributionId: string;
+        sessionId: string;
+        repoSlug: string;
+        issueNumber: number;
+        issueTitle: string;
+        localPath: string;
+        documentPaths: string[];
+      }): Promise<{
+        success: boolean;
+        branchName?: string;
+        draftPrNumber?: number;
+        draftPrUrl?: string;
+        autoRunPath?: string;
+        error?: string;
+      }> => {
+        const { contributionId, sessionId, repoSlug: _repoSlug, issueNumber, issueTitle, localPath, documentPaths } = params;
+
+        try {
+          // 1. Create branch
+          const branchName = generateBranchName(issueNumber);
+          const branchResult = await createBranch(localPath, branchName);
+          if (!branchResult.success) {
+            return { success: false, error: 'Failed to create branch' };
+          }
+
+          // 2. Empty commit to enable push
+          const commitMessage = `[Symphony] Start contribution for #${issueNumber}`;
+          await execFileNoThrow('git', ['commit', '--allow-empty', '-m', commitMessage], localPath);
+
+          // 3. Push branch
+          const pushResult = await execFileNoThrow('git', ['push', '-u', 'origin', branchName], localPath);
+          if (pushResult.exitCode !== 0) {
+            return { success: false, error: 'Failed to push branch' };
+          }
+
+          // 4. Create draft PR
+          const prTitle = `[WIP] Symphony: ${issueTitle}`;
+          const prBody = `## Symphony Contribution\n\nCloses #${issueNumber}\n\n*Work in progress via Maestro Symphony*`;
+          const prResult = await execFileNoThrow(
+            'gh',
+            ['pr', 'create', '--draft', '--title', prTitle, '--body', prBody],
+            localPath
+          );
+          if (prResult.exitCode !== 0) {
+            return { success: false, error: 'Failed to create draft PR' };
+          }
+
+          const prUrl = prResult.stdout.trim();
+          const prNumberMatch = prUrl.match(/\/pull\/(\d+)/);
+          const prNumber = prNumberMatch ? parseInt(prNumberMatch[1], 10) : 0;
+
+          // 5. Copy Auto Run documents to local folder
+          const autoRunDir = path.join(localPath, 'Auto Run Docs');
+          await fs.mkdir(autoRunDir, { recursive: true });
+
+          for (const docPath of documentPaths) {
+            const sourcePath = path.join(localPath, docPath);
+            const destPath = path.join(autoRunDir, path.basename(docPath));
+            try {
+              await fs.copyFile(sourcePath, destPath);
+            } catch (e) {
+              logger.warn('Failed to copy document', LOG_CONTEXT, { docPath, error: e });
+            }
+          }
+
+          // 6. Broadcast status update
+          const mainWindow = getMainWindow?.();
+          if (mainWindow && !mainWindow.isDestroyed()) {
+            mainWindow.webContents.send('symphony:contributionStarted', {
+              contributionId,
+              sessionId,
+              branchName,
+              draftPrNumber: prNumber,
+              draftPrUrl: prUrl,
+              autoRunPath: autoRunDir,
+            });
+          }
+
+          logger.info('Symphony contribution started', LOG_CONTEXT, {
+            contributionId,
+            sessionId,
+            prNumber,
+            documentCount: documentPaths.length,
+          });
+
+          return {
+            success: true,
+            branchName,
+            draftPrNumber: prNumber,
+            draftPrUrl: prUrl,
+            autoRunPath: autoRunDir,
+          };
+        } catch (error) {
+          logger.error('Symphony contribution failed', LOG_CONTEXT, { error });
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Unknown error',
+          };
+        }
+      }
+    )
+  );
+
   logger.info('Symphony handlers registered', LOG_CONTEXT);
 }

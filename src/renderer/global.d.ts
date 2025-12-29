@@ -1975,6 +1975,14 @@ interface MaestroAPI {
     }>;
     // Real-time updates
     onUpdated: (callback: () => void) => () => void;
+    onContributionStarted: (callback: (data: {
+      contributionId: string;
+      sessionId: string;
+      branchName: string;
+      draftPrNumber: number;
+      draftPrUrl: string;
+      autoRunPath: string;
+    }) => void) => () => void;
   };
 }
 

@@ -39,6 +39,9 @@ export type {
 } from '../../shared/group-chat-types';
 // Import AgentError for use within this file
 import type { AgentError } from '../../shared/types';
+// Import Symphony types for session metadata
+import type { SymphonySessionMetadata } from '../../shared/symphony-types';
+export type { SymphonySessionMetadata } from '../../shared/symphony-types';
 
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
@@ -620,6 +623,9 @@ export interface Session {
   // SSH connection status - runtime only, not persisted
   // Set when background SSH operations fail (e.g., git info fetch on startup)
   sshConnectionFailed?: boolean;
+
+  // Symphony contribution metadata (only set for Symphony sessions)
+  symphonyMetadata?: SymphonySessionMetadata;
 }
 
 export interface AgentConfigOption {
