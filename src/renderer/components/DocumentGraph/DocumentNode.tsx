@@ -27,6 +27,11 @@ export interface DocumentNodeProps extends NodeProps<DocumentNodeData & {
 }
 
 /**
+ * Maximum characters for title before truncation
+ */
+const MAX_TITLE_LENGTH = 40;
+
+/**
  * Maximum characters for description before truncation
  */
 const MAX_DESCRIPTION_LENGTH = 80;
@@ -117,16 +122,25 @@ export const DocumentNode = memo(function DocumentNode({
     height: 8,
   }), [theme.colors]);
 
+  // Truncate title if too long
+  const displayTitle = truncateText(title, MAX_TITLE_LENGTH);
+  const isTitleTruncated = title.length > MAX_TITLE_LENGTH;
+
   // Truncate description if too long
   const displayDescription = description
     ? truncateText(description, MAX_DESCRIPTION_LENGTH)
     : null;
 
+  // Build tooltip: show full title if truncated, always show file path
+  const tooltipText = isTitleTruncated
+    ? `${title}\n\n${filePath}`
+    : filePath;
+
   return (
     <div
       className={`document-node${isHighlighted ? ' search-highlight' : ''}`}
       style={containerStyle}
-      title={filePath}
+      title={tooltipText}
     >
       {/* Input handle (for incoming edges) */}
       <Handle
@@ -141,7 +155,7 @@ export const DocumentNode = memo(function DocumentNode({
           size={14}
           style={{ color: theme.colors.accent, flexShrink: 0 }}
         />
-        <div style={titleStyle}>{title}</div>
+        <div style={titleStyle}>{displayTitle}</div>
       </div>
 
       {/* Stats row: lines, words, size */}

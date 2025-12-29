@@ -108,6 +108,88 @@ describe('DocumentNode', () => {
     });
   });
 
+  describe('Title Truncation', () => {
+    it('displays full title when under 40 characters', () => {
+      const shortTitle = 'Short Title Here';
+      const props = createNodeProps({ title: shortTitle });
+      renderWithProvider(<DocumentNode {...props} />);
+
+      expect(screen.getByText(shortTitle)).toBeInTheDocument();
+    });
+
+    it('truncates title with ellipsis when exceeding 40 characters', () => {
+      const longTitle = 'This Is A Very Long Document Title That Exceeds The Maximum Allowed Length';
+      const props = createNodeProps({ title: longTitle });
+      renderWithProvider(<DocumentNode {...props} />);
+
+      // Should show truncated text with ellipsis
+      const truncatedElement = screen.getByText(/\.\.\./);
+      expect(truncatedElement).toBeInTheDocument();
+      // The full title should not appear
+      expect(screen.queryByText(longTitle)).not.toBeInTheDocument();
+    });
+
+    it('truncates title at exactly 40 characters', () => {
+      // Create a title that's exactly 42 chars (40 + will be truncated)
+      const longTitle = 'ABCDEFGHIJ'.repeat(5); // 50 chars
+      const props = createNodeProps({ title: longTitle });
+      renderWithProvider(<DocumentNode {...props} />);
+
+      // First 40 characters should be visible (trimmed) with ellipsis
+      const truncatedText = 'ABCDEFGHIJ'.repeat(4) + '...'; // 40 chars + ellipsis
+      expect(screen.getByText(truncatedText)).toBeInTheDocument();
+    });
+
+    it('shows full title in tooltip when title is truncated', () => {
+      const longTitle = 'This Is A Very Long Document Title That Exceeds The Maximum Allowed Length';
+      const filePath = 'docs/my-document.md';
+      const props = createNodeProps({ title: longTitle, filePath });
+
+      const { container } = renderWithProvider(<DocumentNode {...props} />);
+
+      const nodeElement = container.querySelector('.document-node');
+      const titleAttr = nodeElement?.getAttribute('title') || '';
+      // Tooltip should contain the full title
+      expect(titleAttr).toContain(longTitle);
+      // And the file path
+      expect(titleAttr).toContain(filePath);
+    });
+
+    it('shows only file path in tooltip when title is not truncated', () => {
+      const shortTitle = 'Short Title';
+      const filePath = 'docs/my-document.md';
+      const props = createNodeProps({ title: shortTitle, filePath });
+
+      const { container } = renderWithProvider(<DocumentNode {...props} />);
+
+      const nodeElement = container.querySelector('.document-node');
+      expect(nodeElement).toHaveAttribute('title', filePath);
+    });
+
+    it('handles title exactly at max length (40 chars)', () => {
+      const exactTitle = 'A'.repeat(40); // Exactly 40 chars
+      const props = createNodeProps({ title: exactTitle });
+      renderWithProvider(<DocumentNode {...props} />);
+
+      // Should show full title without ellipsis
+      expect(screen.getByText(exactTitle)).toBeInTheDocument();
+    });
+
+    it('preserves CSS overflow ellipsis on title element', () => {
+      const props = createNodeProps({ title: 'Test Title' });
+
+      const { container } = renderWithProvider(<DocumentNode {...props} />);
+
+      // Find the title div (contains the title text)
+      const titleElement = screen.getByText('Test Title');
+      expect(titleElement).toHaveStyle({
+        overflow: 'hidden',
+        textOverflow: 'ellipsis',
+        whiteSpace: 'nowrap',
+      });
+    });
+  });
+
   describe('Description Truncation', () => {
     it('truncates long descriptions with ellipsis', () => {
       const longDescription = 'This is a very long description that exceeds the maximum allowed length and should be truncated with an ellipsis at the end';
@@ -166,13 +248,32 @@ describe('DocumentNode', () => {
   });
 
   describe('Accessibility', () => {
-    it('has file path as title attribute for full path tooltip', () => {
-      const props = createNodeProps({ filePath: 'docs/guide/intro.md' });
+    it('has file path as title attribute when title is not truncated', () => {
+      const props = createNodeProps({
+        title: 'Short Title', // Under 40 chars
+        filePath: 'docs/guide/intro.md',
+      });
 
       const { container } = renderWithProvider(<DocumentNode {...props} />);
 
       const nodeElement = container.querySelector('.document-node');
       expect(nodeElement).toHaveAttribute('title', 'docs/guide/intro.md');
+    });
+
+    it('includes full title and file path in tooltip when title is truncated', () => {
+      const longTitle = 'This Is A Very Long Document Title That Exceeds Maximum';
+      const filePath = 'docs/guide/intro.md';
+      const props = createNodeProps({
+        title: longTitle,
+        filePath,
+      });
+
+      const { container } = renderWithProvider(<DocumentNode {...props} />);
+
+      const nodeElement = container.querySelector('.document-node');
+      const titleAttr = nodeElement?.getAttribute('title') || '';
+      expect(titleAttr).toContain(longTitle);
+      expect(titleAttr).toContain(filePath);
     });
 
     it('has tooltips for stat items', () => {
