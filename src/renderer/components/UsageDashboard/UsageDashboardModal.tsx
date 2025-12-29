@@ -23,6 +23,7 @@ import { DurationTrendsChart } from './DurationTrendsChart';
 import { AutoRunStats } from './AutoRunStats';
 import { EmptyState } from './EmptyState';
 import { DashboardSkeleton } from './ChartSkeletons';
+import { ChartErrorBoundary } from './ChartErrorBoundary';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
@@ -458,11 +459,13 @@ export function UsageDashboardModal({
               {viewMode === 'overview' && (
                 <>
                   {/* Summary Stats Cards - Horizontal row at top, responsive */}
-                  <SummaryCards
-                    data={data}
-                    theme={theme}
-                    columns={layout.summaryCardsCols}
-                  />
+                  <ChartErrorBoundary theme={theme} chartName="Summary Cards">
+                    <SummaryCards
+                      data={data}
+                      theme={theme}
+                      columns={layout.summaryCardsCols}
+                    />
+                  </ChartErrorBoundary>
 
                   {/* Charts Grid - 2 columns on wide, 1 on narrow */}
                   <div
@@ -473,31 +476,39 @@ export function UsageDashboardModal({
                   >
                     {/* Agent Comparison Chart */}
                     <div style={{ minHeight: '300px' }}>
-                      <AgentComparisonChart data={data} theme={theme} />
+                      <ChartErrorBoundary theme={theme} chartName="Agent Comparison">
+                        <AgentComparisonChart data={data} theme={theme} />
+                      </ChartErrorBoundary>
                     </div>
 
                     {/* Source Distribution Chart */}
                     <div style={{ minHeight: '300px' }}>
-                      <SourceDistributionChart data={data} theme={theme} />
+                      <ChartErrorBoundary theme={theme} chartName="Source Distribution">
+                        <SourceDistributionChart data={data} theme={theme} />
+                      </ChartErrorBoundary>
                     </div>
                   </div>
 
                   {/* Activity Heatmap - Full width */}
                   <div style={{ minHeight: '200px' }}>
-                    <ActivityHeatmap
-                      data={data}
-                      timeRange={timeRange}
-                      theme={theme}
-                    />
+                    <ChartErrorBoundary theme={theme} chartName="Activity Heatmap">
+                      <ActivityHeatmap
+                        data={data}
+                        timeRange={timeRange}
+                        theme={theme}
+                      />
+                    </ChartErrorBoundary>
                   </div>
 
                   {/* Duration Trends Chart - Full width */}
                   <div style={{ minHeight: '280px' }}>
-                    <DurationTrendsChart
-                      data={data}
-                      timeRange={timeRange}
-                      theme={theme}
-                    />
+                    <ChartErrorBoundary theme={theme} chartName="Duration Trends">
+                      <DurationTrendsChart
+                        data={data}
+                        timeRange={timeRange}
+                        theme={theme}
+                      />
+                    </ChartErrorBoundary>
                   </div>
                 </>
               )}
@@ -506,7 +517,9 @@ export function UsageDashboardModal({
                 <>
                   {/* Agent-focused view */}
                   <div style={{ minHeight: '400px' }}>
-                    <AgentComparisonChart data={data} theme={theme} />
+                    <ChartErrorBoundary theme={theme} chartName="Agent Comparison">
+                      <AgentComparisonChart data={data} theme={theme} />
+                    </ChartErrorBoundary>
                   </div>
                 </>
               )}
@@ -515,18 +528,22 @@ export function UsageDashboardModal({
                 <>
                   {/* Activity-focused view */}
                   <div style={{ minHeight: '300px' }}>
-                    <ActivityHeatmap
-                      data={data}
-                      timeRange={timeRange}
-                      theme={theme}
-                    />
+                    <ChartErrorBoundary theme={theme} chartName="Activity Heatmap">
+                      <ActivityHeatmap
+                        data={data}
+                        timeRange={timeRange}
+                        theme={theme}
+                      />
+                    </ChartErrorBoundary>
                   </div>
                   <div style={{ minHeight: '280px' }}>
-                    <DurationTrendsChart
-                      data={data}
-                      timeRange={timeRange}
-                      theme={theme}
-                    />
+                    <ChartErrorBoundary theme={theme} chartName="Duration Trends">
+                      <DurationTrendsChart
+                        data={data}
+                        timeRange={timeRange}
+                        theme={theme}
+                      />
+                    </ChartErrorBoundary>
                   </div>
                 </>
               )}
@@ -534,11 +551,13 @@ export function UsageDashboardModal({
               {viewMode === 'autorun' && (
                 <>
                   {/* Auto Run-focused view */}
-                  <AutoRunStats
-                    timeRange={timeRange}
-                    theme={theme}
-                    columns={layout.autoRunStatsCols}
-                  />
+                  <ChartErrorBoundary theme={theme} chartName="Auto Run Stats">
+                    <AutoRunStats
+                      timeRange={timeRange}
+                      theme={theme}
+                      columns={layout.autoRunStatsCols}
+                    />
+                  </ChartErrorBoundary>
                 </>
               )}
             </div>
