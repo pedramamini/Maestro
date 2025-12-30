@@ -128,6 +128,7 @@ src/
 | Add Document Graph feature | `src/renderer/components/DocumentGraph/`, `src/main/ipc/handlers/documentGraph.ts` |
 | Add colorblind palette | `src/renderer/constants/colorblindPalettes.ts` |
 | Add performance metrics | `src/shared/performance-metrics.ts` |
+| Add power management | `src/main/power-manager.ts`, `src/main/ipc/handlers/system.ts` |
 
 ## Core Patterns
 
@@ -485,6 +486,9 @@ window.maestro.history = {
 
 **AI Context Integration**: Use `getFilePath(sessionId)` to get the path to a session's history file. This file can be passed directly to AI agents as context, giving them visibility into past completed tasks, decisions, and work patterns.
 
+### Power Management
+- `power` - Sleep prevention: setEnabled, isEnabled, getStatus, addReason, removeReason
+
 ### Utilities
 - `fonts` - Font detection
 - `notification` - Desktop notifications, text-to-speech
@@ -745,6 +749,7 @@ import { COLORBLIND_AGENT_PALETTE, getColorBlindAgentColor } from '../constants/
 statsCollectionEnabled: boolean           // Enable/disable stats collection (default: true)
 defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all'  // Default time filter
 colorBlindMode: boolean                   // Use accessible color palettes
+preventSleepEnabled: boolean              // Prevent system sleep while agents are busy (default: false)
 ```
 
 ## Document Graph
