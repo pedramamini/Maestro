@@ -477,6 +477,10 @@ export interface Session {
     host: string;        // Remote host for tooltip
   };
 
+  // SSH Remote context (session-wide, for all operations - file explorer, git, auto run, etc.)
+  sshRemoteId?: string;           // ID of SSH remote config being used (flattened from sshRemote.id)
+  remoteCwd?: string;             // Current working directory on remote host
+
   // Per-session agent configuration overrides
   // These override the global agent-level settings for this specific session
   customPath?: string;           // Custom path to agent binary (overrides agent-level)
