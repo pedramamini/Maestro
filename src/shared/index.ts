@@ -13,3 +13,4 @@ export * from './gitUtils';
 export * from './emojiUtils';
 export * from './treeUtils';
 export * from './stringUtils';
+export * from './pathUtils';

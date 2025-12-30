@@ -1,20 +1,28 @@
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import {
   buildSshCommand,
   buildRemoteCommand,
 } from '../../../main/utils/ssh-command-builder';
 import type { SshRemoteConfig } from '../../../shared/types';
+import * as os from 'os';
+
+// Mock os.homedir() for consistent path expansion tests
+vi.mock('os', async () => {
+  const actual = await vi.importActual('os');
+  return {
+    ...actual,
+    homedir: vi.fn(() => '/Users/testuser'),
+  };
+});
 
 describe('ssh-command-builder', () => {
-  const originalEnv = process.env;
-
   beforeEach(() => {
-    // Mock HOME for consistent path expansion tests
-    process.env = { ...originalEnv, HOME: '/Users/testuser' };
+    // Reset mock to ensure consistent behavior
+    vi.mocked(os.homedir).mockReturnValue('/Users/testuser');
   });
 
   afterEach(() => {
-    process.env = originalEnv;
+    vi.clearAllMocks();
   });
 
   // Base config for testing

@@ -6,9 +6,9 @@
  */
 
 import * as fs from 'fs';
-import * as path from 'path';
 import { SshRemoteConfig, SshRemoteTestResult } from '../shared/types';
 import { execFileNoThrow, ExecResult } from './utils/execFile';
+import { expandTilde } from '../shared/pathUtils';
 
 /**
  * Validation result for SSH remote configuration.
@@ -127,7 +127,7 @@ export class SshRemoteManager {
 
     // Private key file existence check (only if path is provided)
     if (config.privateKeyPath && config.privateKeyPath.trim() !== '') {
-      const keyPath = this.expandPath(config.privateKeyPath);
+      const keyPath = expandTilde(config.privateKeyPath);
       if (!this.deps.checkFileAccess(keyPath)) {
         errors.push(`Private key not readable: ${config.privateKeyPath}`);
       }
@@ -236,11 +236,11 @@ export class SshRemoteManager {
     if (config.useSshConfig) {
       // Only add key if explicitly provided (as override)
       if (config.privateKeyPath && config.privateKeyPath.trim()) {
-        args.push('-i', this.expandPath(config.privateKeyPath));
+        args.push('-i', expandTilde(config.privateKeyPath));
       }
     } else {
       // Direct connection: require private key
-      args.push('-i', this.expandPath(config.privateKeyPath));
+      args.push('-i', expandTilde(config.privateKeyPath));
     }
 
     // Default SSH options
@@ -267,20 +267,6 @@ export class SshRemoteManager {
     }
 
     return args;
-  }
-
-  /**
-   * Expand tilde (~) in paths to the user's home directory.
-   *
-   * @param filePath Path that may start with ~
-   * @returns Expanded absolute path
-   */
-  private expandPath(filePath: string): string {
-    if (filePath.startsWith('~')) {
-      const homeDir = process.env.HOME || process.env.USERPROFILE || '';
-      return path.join(homeDir, filePath.slice(1));
-    }
-    return filePath;
   }
 
   /**

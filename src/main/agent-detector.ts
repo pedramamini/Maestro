@@ -4,6 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AgentCapabilities, getAgentCapabilities } from './agent-capabilities';
+import { expandTilde } from '../shared/pathUtils';
 
 // Re-export AgentCapabilities for convenience
 export { AgentCapabilities } from './agent-capabilities';
@@ -290,17 +291,6 @@ export class AgentDetector {
   }
 
   /**
-   * Expand tilde (~) to home directory in paths.
-   * This is necessary because Node.js fs functions don't understand shell tilde expansion.
-   */
-  private expandTilde(filePath: string): string {
-    if (filePath.startsWith('~/') || filePath === '~') {
-      return path.join(os.homedir(), filePath.slice(1));
-    }
-    return filePath;
-  }
-
-  /**
    * Check if a custom path points to a valid executable
    * On Windows, also tries .cmd and .exe extensions if the path doesn't exist as-is
    */
@@ -308,7 +298,7 @@ export class AgentDetector {
     const isWindows = process.platform === 'win32';
 
     // Expand tilde to home directory (Node.js fs doesn't understand ~)
-    const expandedPath = this.expandTilde(customPath);
+    const expandedPath = expandTilde(customPath);
 
     // Helper to check if a specific path exists and is a file
     const checkPath = async (pathToCheck: string): Promise<boolean> => {

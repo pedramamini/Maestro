@@ -10,6 +10,7 @@ import { getOutputParser, type ParsedEvent, type AgentOutputParser } from './par
 import { aggregateModelUsage } from './parsers/usage-aggregator';
 import { matchSshErrorPattern } from './parsers/error-patterns';
 import type { AgentError } from '../shared/types';
+import { compareVersions } from '../shared/pathUtils';
 import { getAgentCapabilities } from './agent-capabilities';
 
 // Re-export parser types for consumers
@@ -24,7 +25,7 @@ export type { UsageStats, ModelStats } from './parsers/usage-aggregator';
 export { aggregateModelUsage } from './parsers/usage-aggregator';
 
 // Export Node version manager detection for testing
-export { detectNodeVersionManagerPaths, buildUnixBasePath, sortNodeVersionsDescending };
+export { detectNodeVersionManagerPaths, buildUnixBasePath };
 
 /**
  * Maximum buffer size for stdout/stderr error detection buffers.
@@ -189,22 +190,6 @@ function normalizeCodexUsage(
 // and re-exported above for backwards compatibility
 
 /**
- * Sort Node.js version strings in descending order (latest first).
- * Expects version strings like 'v20.10.0', 'v18.19.1', etc.
- * Mutates the input array and returns it for convenience.
- */
-function sortNodeVersionsDescending(versions: string[]): string[] {
-  return versions.sort((a, b) => {
-    const aParts = a.slice(1).split('.').map(Number);
-    const bParts = b.slice(1).split('.').map(Number);
-    for (let i = 0; i < 3; i++) {
-      if (aParts[i] !== bParts[i]) return bParts[i] - aParts[i];
-    }
-    return 0;
-  });
-}
-
-/**
  * Detect Node version manager paths on Unix systems (macOS/Linux).
  * Checks for nvm, fnm, volta, and mise installations and returns their bin paths.
  * These paths are prepended to ensure node/npm are available even when launched from
@@ -240,7 +225,7 @@ function detectNodeVersionManagerPaths(): string[] {
           if (fs.existsSync(versionsDir)) {
             const versions = fs.readdirSync(versionsDir).filter(v => v.startsWith('v'));
             if (versions.length > 0) {
-              sortNodeVersionsDescending(versions);
+              versions.sort((a, b) => compareVersions(b, a));
               version = versions[0];
             }
           }
@@ -259,7 +244,7 @@ function detectNodeVersionManagerPaths(): string[] {
         try {
           const versions = fs.readdirSync(versionsDir).filter(v => v.startsWith('v'));
           if (versions.length > 0) {
-            sortNodeVersionsDescending(versions);
+            versions.sort((a, b) => compareVersions(b, a));
             const versionBin = path.join(versionsDir, versions[0], 'bin');
             if (fs.existsSync(versionBin)) {
               detectedPaths.push(versionBin);
@@ -293,7 +278,7 @@ function detectNodeVersionManagerPaths(): string[] {
         try {
           const versions = fs.readdirSync(fnmNodeVersions).filter(v => v.startsWith('v'));
           if (versions.length > 0) {
-            sortNodeVersionsDescending(versions);
+            versions.sort((a, b) => compareVersions(b, a));
             const versionBin = path.join(fnmNodeVersions, versions[0], 'installation', 'bin');
             if (fs.existsSync(versionBin)) {
               detectedPaths.push(versionBin);

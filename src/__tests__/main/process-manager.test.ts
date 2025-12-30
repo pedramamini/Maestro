@@ -29,7 +29,6 @@ import {
   ProcessManager,
   detectNodeVersionManagerPaths,
   buildUnixBasePath,
-  sortNodeVersionsDescending,
   type UsageStats,
   type ModelStats,
   type AgentError,
@@ -530,56 +529,4 @@ describe('process-manager.ts', () => {
     });
   });
 
-  describe('sortNodeVersionsDescending', () => {
-    it('should sort versions in descending order (latest first)', () => {
-      const versions = ['v16.14.0', 'v20.10.0', 'v18.19.1', 'v14.21.3'];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toEqual(['v20.10.0', 'v18.19.1', 'v16.14.0', 'v14.21.3']);
-    });
-
-    it('should handle versions with different minor versions', () => {
-      const versions = ['v20.1.0', 'v20.10.0', 'v20.2.0'];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toEqual(['v20.10.0', 'v20.2.0', 'v20.1.0']);
-    });
-
-    it('should handle versions with different patch versions', () => {
-      const versions = ['v20.10.1', 'v20.10.10', 'v20.10.2'];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toEqual(['v20.10.10', 'v20.10.2', 'v20.10.1']);
-    });
-
-    it('should handle single version', () => {
-      const versions = ['v18.0.0'];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toEqual(['v18.0.0']);
-    });
-
-    it('should handle empty array', () => {
-      const versions: string[] = [];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toEqual([]);
-    });
-
-    it('should mutate and return the original array', () => {
-      const versions = ['v16.0.0', 'v20.0.0'];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toBe(versions); // Same reference
-      expect(versions).toEqual(['v20.0.0', 'v16.0.0']); // Original is mutated
-    });
-
-    it('should handle LTS version naming patterns', () => {
-      // Real-world nvm version directory names
-      const versions = ['v18.20.4', 'v20.18.0', 'v22.11.0', 'v21.7.3'];
-      const result = sortNodeVersionsDescending(versions);
-
-      expect(result).toEqual(['v22.11.0', 'v21.7.3', 'v20.18.0', 'v18.20.4']);
-    });
-  });
 });

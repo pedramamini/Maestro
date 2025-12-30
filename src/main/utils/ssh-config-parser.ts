@@ -10,6 +10,7 @@
 
 import * as fs from 'fs';
 import * as path from 'path';
+import { expandTilde } from '../../shared/pathUtils';
 
 /**
  * Parsed SSH config host entry.
@@ -85,19 +86,6 @@ function getDefaultDeps(): SshConfigParserDeps {
 }
 
 /**
- * Expand tilde (~) in paths to the user's home directory.
- */
-function expandPath(filePath: string, homeDir: string): string {
-  if (filePath.startsWith('~/')) {
-    return path.join(homeDir, filePath.slice(2));
-  }
-  if (filePath === '~') {
-    return homeDir;
-  }
-  return filePath;
-}
-
-/**
  * Normalize an IdentityFile path.
  * Handles ~ expansion and resolves %d, %h, %r tokens.
  */
@@ -107,7 +95,7 @@ function normalizeIdentityFile(
   user: string | undefined,
   homeDir: string
 ): string {
-  let normalized = expandPath(identityFile, homeDir);
+  let normalized = expandTilde(identityFile, homeDir);
 
   // Replace common SSH config tokens
   normalized = normalized.replace(/%d/g, homeDir);

@@ -3,6 +3,8 @@
  * Fetches release information from GitHub API to check for updates
  */
 
+import { compareVersions } from '../shared/pathUtils';
+
 // GitHub repository information
 const GITHUB_OWNER = 'pedramamini';
 const GITHUB_REPO = 'Maestro';
@@ -74,36 +76,6 @@ function hasAssetsForPlatform(release: Release): boolean {
   }
 }
 
-/**
- * Parse version string to comparable array
- * e.g., "0.7.0" -> [0, 7, 0]
- */
-function parseVersion(version: string): number[] {
-  // Remove 'v' prefix if present
-  const cleaned = version.replace(/^v/, '');
-  return cleaned.split('.').map(n => parseInt(n, 10) || 0);
-}
-
-/**
- * Compare two versions
- * Returns: 1 if a > b, -1 if a < b, 0 if equal
- */
-function compareVersions(a: string, b: string): number {
-  const partsA = parseVersion(a);
-  const partsB = parseVersion(b);
-
-  const maxLength = Math.max(partsA.length, partsB.length);
-
-  for (let i = 0; i < maxLength; i++) {
-    const numA = partsA[i] || 0;
-    const numB = partsB[i] || 0;
-
-    if (numA > numB) return 1;
-    if (numA < numB) return -1;
-  }
-
-  return 0;
-}
 
 /**
  * Fetch all releases from GitHub API
