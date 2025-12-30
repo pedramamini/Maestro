@@ -411,7 +411,8 @@ describe('AutoRun Session Isolation', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/session-a-folder',
         'my-doc.md',
-        'New content'
+        'New content',
+        undefined // sshRemoteId (undefined for local sessions)
       );
 
       // Should NOT be called with any other path
@@ -605,7 +606,8 @@ describe('AutoRun Session Isolation', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/folder-a',
         'doc-a.md',
-        'Modified'
+        'Modified',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
   });
@@ -667,7 +669,8 @@ describe('AutoRun Folder Path Isolation', () => {
     expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
       '/unique/session/path',
       'unique-doc.md',
-      'Changed'
+      'Changed',
+      undefined // sshRemoteId (undefined for local sessions)
     );
   });
 });

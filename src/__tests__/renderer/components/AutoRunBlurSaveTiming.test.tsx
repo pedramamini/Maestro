@@ -216,7 +216,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/projects/alpha/docs',
         'Phase-1.md',
-        'Modified content for alpha'
+        'Modified content for alpha',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -240,7 +241,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/projects/beta/auto-run',
         'Tasks.md',
-        'Updated tasks list'
+        'Updated tasks list',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -263,7 +265,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/home/user/gamma-project/docs',
         'README.md',
-        'Updated readme content'
+        'Updated readme content',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -286,7 +289,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenLastCalledWith(
         '/delta/path',
         'doc1.md',
-        'Version 2'
+        'Version 2',
+        undefined // sshRemoteId (undefined for local sessions)
       );
 
       // Simulate saved content update (file watcher triggers contentVersion change)
@@ -299,7 +303,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenLastCalledWith(
         '/delta/path',
         'doc1.md',
-        'Version 3'
+        'Version 3',
+        undefined // sshRemoteId (undefined for local sessions)
       );
 
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledTimes(2);
@@ -609,7 +614,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/rapid/test',
         'rapid-doc.md',
-        'Final typed content'
+        'Final typed content',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -630,7 +636,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/empty/test',
         'empty-doc.md',
-        ''
+        '',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -651,7 +658,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/whitespace/test',
         'ws-doc.md',
-        '   \n\n   '
+        '   \n\n   ',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -673,7 +681,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/special/test',
         'special-doc.md',
-        specialContent
+        specialContent,
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -696,7 +705,8 @@ describe('AutoRun Save Path Correctness', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/long/test',
         'long-doc.md',
-        longContent
+        longContent,
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
   });

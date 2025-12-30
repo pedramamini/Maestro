@@ -506,7 +506,8 @@ describe('AutoRun Content Synchronization Race Conditions', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/test/path',
         'my-doc.md',
-        'New content to save'
+        'New content to save',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 

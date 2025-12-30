@@ -360,7 +360,8 @@ describe('AutoRun', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/test/folder',
         'test-doc.md',
-        'Updated content'
+        'Updated content',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -663,7 +664,8 @@ describe('AutoRun', () => {
       expect(mockMaestro.autorun.writeDoc).toHaveBeenCalledWith(
         '/test/folder',
         'test-doc.md',
-        'new content'
+        'new content',
+        undefined // sshRemoteId (undefined for local sessions)
       );
       expect(onOpenBatchRunner).toHaveBeenCalled();
     });

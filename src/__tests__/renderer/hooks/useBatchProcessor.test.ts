@@ -1057,7 +1057,8 @@ describe('useBatchProcessor hook', () => {
       expect(mockWorktreeSetup).toHaveBeenCalledWith(
         '/test/path',
         '/test/worktree',
-        'feature/test'
+        'feature/test',
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
 
@@ -1138,7 +1139,8 @@ describe('useBatchProcessor hook', () => {
       expect(mockWorktreeCheckout).toHaveBeenCalledWith(
         '/test/worktree',
         'feature/test',
-        true
+        true,
+        undefined // sshRemoteId (undefined for local sessions)
       );
     });
   });
@@ -2853,7 +2855,8 @@ describe('useBatchProcessor hook', () => {
       expect(mockWorktreeCheckout).toHaveBeenCalledWith(
         '/test/worktree',
         'feature-branch',
-        true
+        true,
+        undefined // sshRemoteId (undefined for local sessions)
       );
 
       // Should have spawned agent with worktree path
