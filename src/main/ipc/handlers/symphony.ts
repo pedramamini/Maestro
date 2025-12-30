@@ -53,6 +53,114 @@ import { SymphonyError } from '../../../shared/symphony-types';
 const LOG_CONTEXT = '[Symphony]';
 
 // ============================================================================
+// Validation Helpers
+// ============================================================================
+
+/**
+ * Sanitize repository name to prevent path traversal attacks.
+ * Removes any characters that could be used for path traversal.
+ */
+function sanitizeRepoName(repoName: string): string {
+  // Only allow alphanumeric, dashes, underscores, and dots (not leading)
+  return repoName
+    .replace(/\.\./g, '') // Remove path traversal sequences
+    .replace(/[^a-zA-Z0-9_\-]/g, '-') // Replace unsafe chars with dashes
+    .replace(/^\.+/, '') // Remove leading dots
+    .substring(0, 100); // Limit length
+}
+
+/**
+ * Validate that a URL is a GitHub repository URL.
+ * Only allows HTTPS URLs to github.com.
+ */
+function validateGitHubUrl(url: string): { valid: boolean; error?: string } {
+  try {
+    const parsed = new URL(url);
+    if (parsed.protocol !== 'https:') {
+      return { valid: false, error: 'Only HTTPS URLs are allowed' };
+    }
+    if (parsed.hostname !== 'github.com' && parsed.hostname !== 'www.github.com') {
+      return { valid: false, error: 'Only GitHub repositories are allowed' };
+    }
+    // Check for valid repo path format (owner/repo)
+    const pathParts = parsed.pathname.split('/').filter(Boolean);
+    if (pathParts.length < 2) {
+      return { valid: false, error: 'Invalid repository path' };
+    }
+    return { valid: true };
+  } catch {
+    return { valid: false, error: 'Invalid URL format' };
+  }
+}
+
+/**
+ * Validate repository slug format (owner/repo).
+ */
+function validateRepoSlug(slug: string): { valid: boolean; error?: string } {
+  if (!slug || typeof slug !== 'string') {
+    return { valid: false, error: 'Repository slug is required' };
+  }
+  const parts = slug.split('/');
+  if (parts.length !== 2) {
+    return { valid: false, error: 'Invalid repository slug format (expected owner/repo)' };
+  }
+  const [owner, repo] = parts;
+  if (!owner || !repo) {
+    return { valid: false, error: 'Owner and repository name are required' };
+  }
+  // GitHub username/repo name rules
+  if (!/^[a-zA-Z0-9]([a-zA-Z0-9-]*[a-zA-Z0-9])?$/.test(owner)) {
+    return { valid: false, error: 'Invalid owner name' };
+  }
+  if (!/^[a-zA-Z0-9._-]+$/.test(repo)) {
+    return { valid: false, error: 'Invalid repository name' };
+  }
+  return { valid: true };
+}
+
+/**
+ * Validate contribution start parameters.
+ */
+function validateContributionParams(params: {
+  repoSlug: string;
+  repoUrl: string;
+  repoName: string;
+  issueNumber: number;
+  documentPaths: string[];
+}): { valid: boolean; error?: string } {
+  // Validate repo slug
+  const slugValidation = validateRepoSlug(params.repoSlug);
+  if (!slugValidation.valid) {
+    return slugValidation;
+  }
+
+  // Validate URL
+  const urlValidation = validateGitHubUrl(params.repoUrl);
+  if (!urlValidation.valid) {
+    return urlValidation;
+  }
+
+  // Validate repo name
+  if (!params.repoName || typeof params.repoName !== 'string') {
+    return { valid: false, error: 'Repository name is required' };
+  }
+
+  // Validate issue number
+  if (!Number.isInteger(params.issueNumber) || params.issueNumber <= 0) {
+    return { valid: false, error: 'Invalid issue number' };
+  }
+
+  // Validate document paths (check for path traversal)
+  for (const docPath of params.documentPaths) {
+    if (docPath.includes('..') || docPath.startsWith('/')) {
+      return { valid: false, error: `Invalid document path: ${docPath}` };
+    }
+  }
+
+  return { valid: true };
+}
+
+// ============================================================================
 // Dependencies Interface
 // ============================================================================
 
@@ -332,6 +440,53 @@ async function createBranch(
 }
 
 /**
+ * Check if gh CLI is authenticated.
+ */
+async function checkGhAuthentication(): Promise<{ authenticated: boolean; error?: string }> {
+  const result = await execFileNoThrow('gh', ['auth', 'status']);
+  if (result.exitCode !== 0) {
+    // gh auth status outputs to stderr even on success for some info
+    const output = result.stderr + result.stdout;
+    if (output.includes('not logged in') || output.includes('no accounts')) {
+      return { authenticated: false, error: 'GitHub CLI is not authenticated. Run "gh auth login" to authenticate.' };
+    }
+    // If gh CLI is not installed
+    if (output.includes('command not found') || output.includes('not recognized')) {
+      return { authenticated: false, error: 'GitHub CLI (gh) is not installed. Install it from https://cli.github.com/' };
+    }
+    return { authenticated: false, error: `GitHub CLI error: ${output}` };
+  }
+  return { authenticated: true };
+}
+
+/**
+ * Get the default branch of a repository.
+ */
+async function getDefaultBranch(repoPath: string): Promise<string> {
+  // Try to get the default branch from remote
+  const result = await execFileNoThrow('git', ['symbolic-ref', 'refs/remotes/origin/HEAD'], repoPath);
+  if (result.exitCode === 0) {
+    // Output is like "refs/remotes/origin/main"
+    const branch = result.stdout.trim().replace('refs/remotes/origin/', '');
+    if (branch) return branch;
+  }
+
+  // Fallback: try common branch names
+  const checkResult = await execFileNoThrow('git', ['ls-remote', '--heads', 'origin', 'main'], repoPath);
+  if (checkResult.exitCode === 0 && checkResult.stdout.includes('refs/heads/main')) {
+    return 'main';
+  }
+
+  const masterCheck = await execFileNoThrow('git', ['ls-remote', '--heads', 'origin', 'master'], repoPath);
+  if (masterCheck.exitCode === 0 && masterCheck.stdout.includes('refs/heads/master')) {
+    return 'master';
+  }
+
+  // Default to main if we can't determine
+  return 'main';
+}
+
+/**
  * Push branch and create draft PR using gh CLI.
  */
 async function createDraftPR(
@@ -340,6 +495,12 @@ async function createDraftPR(
   title: string,
   body: string
 ): Promise<{ success: boolean; prUrl?: string; prNumber?: number; error?: string }> {
+  // Check gh authentication first
+  const authCheck = await checkGhAuthentication();
+  if (!authCheck.authenticated) {
+    return { success: false, error: authCheck.error };
+  }
+
   // First push the branch
   const pushResult = await execFileNoThrow('git', ['push', '-u', 'origin', 'HEAD'], repoPath);
 
@@ -355,6 +516,9 @@ async function createDraftPR(
   );
 
   if (prResult.exitCode !== 0) {
+    // If PR creation failed after push, try to delete the remote branch
+    logger.warn('PR creation failed, attempting to clean up remote branch', LOG_CONTEXT);
+    await execFileNoThrow('git', ['push', 'origin', '--delete', 'HEAD'], repoPath);
     return { success: false, error: `Failed to create PR: ${prResult.stderr}` };
   }
 
@@ -592,6 +756,24 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
         sessionId: string;
         baseBranch?: string;
       }): Promise<Omit<StartContributionResponse, 'success'>> => {
+        // Validate input parameters
+        const validation = validateContributionParams({
+          repoSlug: params.repoSlug,
+          repoUrl: params.repoUrl,
+          repoName: params.repoName,
+          issueNumber: params.issueNumber,
+          documentPaths: params.documentPaths,
+        });
+        if (!validation.valid) {
+          return { error: validation.error };
+        }
+
+        // Check gh CLI authentication before starting
+        const authCheck = await checkGhAuthentication();
+        if (!authCheck.authenticated) {
+          return { error: authCheck.error };
+        }
+
         const {
           repoSlug,
           repoUrl,
@@ -601,7 +783,6 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
           documentPaths,
           agentType,
           sessionId,
-          baseBranch = 'main',
         } = params;
 
         const contributionId = generateContributionId();
@@ -617,10 +798,13 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
           };
         }
 
+        // Sanitize repo name for local path
+        const sanitizedRepoName = sanitizeRepoName(repoName);
+
         // Determine local path
         const reposDir = getReposDir(app);
         await fs.mkdir(reposDir, { recursive: true });
-        const localPath = path.join(reposDir, `${repoName}-${contributionId}`);
+        const localPath = path.join(reposDir, `${sanitizedRepoName}-${contributionId}`);
 
         // Generate branch name
         const branchName = generateBranchName(issueNumber);
@@ -630,6 +814,9 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
         if (!cloneResult.success) {
           return { error: `Clone failed: ${cloneResult.error}` };
         }
+
+        // Detect default branch (don't rely on hardcoded 'main')
+        const baseBranch = params.baseBranch || await getDefaultBranch(localPath);
 
         // Create branch
         const branchResult = await createBranch(localPath, branchName);
@@ -927,6 +1114,12 @@ This PR will be updated automatically when the Auto Run completes.`;
       async (params: { repoUrl: string; localPath: string }): Promise<{ success: boolean; error?: string }> => {
         const { repoUrl, localPath } = params;
 
+        // Validate GitHub URL
+        const urlValidation = validateGitHubUrl(repoUrl);
+        if (!urlValidation.valid) {
+          return { success: false, error: urlValidation.error };
+        }
+
         // Ensure parent directory exists
         const parentDir = path.dirname(localPath);
         await fs.mkdir(parentDir, { recursive: true });
@@ -967,57 +1160,98 @@ This PR will be updated automatically when the Auto Run completes.`;
         autoRunPath?: string;
         error?: string;
       }> => {
-        const { contributionId, sessionId, repoSlug: _repoSlug, issueNumber, issueTitle, localPath, documentPaths } = params;
+        const { contributionId, sessionId, repoSlug, issueNumber, issueTitle, localPath, documentPaths } = params;
+
+        // Validate inputs
+        const slugValidation = validateRepoSlug(repoSlug);
+        if (!slugValidation.valid) {
+          return { success: false, error: slugValidation.error };
+        }
+
+        if (!Number.isInteger(issueNumber) || issueNumber <= 0) {
+          return { success: false, error: 'Invalid issue number' };
+        }
+
+        // Validate document paths for path traversal
+        for (const docPath of documentPaths) {
+          if (docPath.includes('..') || docPath.startsWith('/')) {
+            return { success: false, error: `Invalid document path: ${docPath}` };
+          }
+        }
+
+        // Check gh CLI authentication
+        const authCheck = await checkGhAuthentication();
+        if (!authCheck.authenticated) {
+          return { success: false, error: authCheck.error };
+        }
 
         try {
           // 1. Create branch
           const branchName = generateBranchName(issueNumber);
           const branchResult = await createBranch(localPath, branchName);
           if (!branchResult.success) {
-            return { success: false, error: 'Failed to create branch' };
+            logger.error('Failed to create branch', LOG_CONTEXT, { localPath, branchName, error: branchResult.error });
+            return { success: false, error: `Failed to create branch: ${branchResult.error}` };
           }
 
           // 2. Empty commit to enable push
           const commitMessage = `[Symphony] Start contribution for #${issueNumber}`;
-          await execFileNoThrow('git', ['commit', '--allow-empty', '-m', commitMessage], localPath);
+          const commitResult = await execFileNoThrow('git', ['commit', '--allow-empty', '-m', commitMessage], localPath);
+          if (commitResult.exitCode !== 0) {
+            logger.error('Failed to create empty commit', LOG_CONTEXT, { localPath, error: commitResult.stderr });
+          }
 
           // 3. Push branch
           const pushResult = await execFileNoThrow('git', ['push', '-u', 'origin', branchName], localPath);
           if (pushResult.exitCode !== 0) {
-            return { success: false, error: 'Failed to push branch' };
+            logger.error('Failed to push branch', LOG_CONTEXT, { localPath, branchName, error: pushResult.stderr });
+            return { success: false, error: `Failed to push branch: ${pushResult.stderr}` };
           }
 
-          // 4. Create draft PR
+          // 4. Detect default branch for PR base
+          const baseBranch = await getDefaultBranch(localPath);
+
+          // 5. Create draft PR
           const prTitle = `[WIP] Symphony: ${issueTitle}`;
           const prBody = `## Symphony Contribution\n\nCloses #${issueNumber}\n\n*Work in progress via Maestro Symphony*`;
           const prResult = await execFileNoThrow(
             'gh',
-            ['pr', 'create', '--draft', '--title', prTitle, '--body', prBody],
+            ['pr', 'create', '--draft', '--base', baseBranch, '--title', prTitle, '--body', prBody],
             localPath
           );
           if (prResult.exitCode !== 0) {
-            return { success: false, error: 'Failed to create draft PR' };
+            // Attempt to clean up the remote branch
+            logger.warn('PR creation failed, cleaning up remote branch', LOG_CONTEXT, { branchName });
+            await execFileNoThrow('git', ['push', 'origin', '--delete', branchName], localPath);
+            logger.error('Failed to create draft PR', LOG_CONTEXT, { localPath, error: prResult.stderr });
+            return { success: false, error: `Failed to create draft PR: ${prResult.stderr}` };
           }
 
           const prUrl = prResult.stdout.trim();
           const prNumberMatch = prUrl.match(/\/pull\/(\d+)/);
           const prNumber = prNumberMatch ? parseInt(prNumberMatch[1], 10) : 0;
 
-          // 5. Copy Auto Run documents to local folder
+          // 6. Copy Auto Run documents to local folder
           const autoRunDir = path.join(localPath, 'Auto Run Docs');
           await fs.mkdir(autoRunDir, { recursive: true });
 
           for (const docPath of documentPaths) {
-            const sourcePath = path.join(localPath, docPath);
+            // Ensure the path doesn't escape the localPath
+            const resolvedSource = path.resolve(localPath, docPath);
+            if (!resolvedSource.startsWith(localPath)) {
+              logger.error('Attempted path traversal in document copy', LOG_CONTEXT, { docPath });
+              continue;
+            }
             const destPath = path.join(autoRunDir, path.basename(docPath));
             try {
-              await fs.copyFile(sourcePath, destPath);
+              await fs.copyFile(resolvedSource, destPath);
+              logger.info('Copied document', LOG_CONTEXT, { from: resolvedSource, to: destPath });
             } catch (e) {
-              logger.warn('Failed to copy document', LOG_CONTEXT, { docPath, error: e });
+              logger.warn('Failed to copy document', LOG_CONTEXT, { docPath, error: e instanceof Error ? e.message : String(e) });
             }
           }
 
-          // 6. Broadcast status update
+          // 7. Broadcast status update
           const mainWindow = getMainWindow?.();
           if (mainWindow && !mainWindow.isDestroyed()) {
             mainWindow.webContents.send('symphony:contributionStarted', {
