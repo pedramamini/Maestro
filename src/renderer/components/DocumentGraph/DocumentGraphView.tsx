@@ -412,14 +412,6 @@ export function DocumentGraphView({
     onNeighborDepthChange?.(newDepth);
   }, [onNeighborDepthChange]);
   /**
-   * Clear focus mode
-   */
-  const handleClearFocus = useCallback(() => {
-    setActiveFocusFile(null);
-    setNeighborDepth(0);
-  }, []);
-
-  /**
    * Focus on selected node
    */
   const handleFocusOnNode = useCallback(() => {
@@ -659,17 +651,15 @@ export function DocumentGraphView({
             </span>
             {activeFocusFile && (
               <span
-                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded cursor-pointer"
+                className="flex items-center gap-1 text-xs px-2 py-0.5 rounded"
                 style={{
                   backgroundColor: `${theme.colors.accent}30`,
                   color: theme.colors.accent,
                 }}
-                onClick={handleClearFocus}
-                title="Click to show all documents"
+                title="Double-click another node to change focus"
               >
                 <Focus className="w-3 h-3" />
                 Focus: {activeFocusFile.split('/').pop()}
-                <X className="w-3 h-3 ml-1" />
               </span>
             )}
           </div>

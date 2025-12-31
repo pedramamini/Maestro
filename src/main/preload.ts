@@ -107,8 +107,18 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.invoke('process:resize', sessionId, cols, rows),
 
     // Run a single command and capture only stdout/stderr (no PTY echo/prompts)
-    runCommand: (config: { sessionId: string; command: string; cwd: string; shell?: string }) =>
-      ipcRenderer.invoke('process:runCommand', config),
+    // Supports SSH remote execution when sessionSshRemoteConfig is provided
+    runCommand: (config: {
+      sessionId: string;
+      command: string;
+      cwd: string;
+      shell?: string;
+      sessionSshRemoteConfig?: {
+        enabled: boolean;
+        remoteId: string | null;
+        workingDirOverride?: string;
+      };
+    }) => ipcRenderer.invoke('process:runCommand', config),
 
     // Get all active processes from ProcessManager
     getActiveProcesses: () => ipcRenderer.invoke('process:getActiveProcesses'),
@@ -1716,7 +1726,17 @@ export interface MaestroAPI {
     interrupt: (sessionId: string) => Promise<boolean>;
     kill: (sessionId: string) => Promise<boolean>;
     resize: (sessionId: string, cols: number, rows: number) => Promise<boolean>;
-    runCommand: (config: { sessionId: string; command: string; cwd: string; shell?: string }) => Promise<{ exitCode: number }>;
+    runCommand: (config: {
+      sessionId: string;
+      command: string;
+      cwd: string;
+      shell?: string;
+      sessionSshRemoteConfig?: {
+        enabled: boolean;
+        remoteId: string | null;
+        workingDirOverride?: string;
+      };
+    }) => Promise<{ exitCode: number }>;
     getActiveProcesses: () => Promise<Array<{
       sessionId: string;
       toolType: string;

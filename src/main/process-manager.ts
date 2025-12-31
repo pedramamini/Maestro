@@ -9,9 +9,10 @@ import { logger } from './utils/logger';
 import { getOutputParser, type ParsedEvent, type AgentOutputParser } from './parsers';
 import { aggregateModelUsage } from './parsers/usage-aggregator';
 import { matchSshErrorPattern } from './parsers/error-patterns';
-import type { AgentError } from '../shared/types';
-import { detectNodeVersionManagerBinPaths } from '../shared/pathUtils';
+import type { AgentError, SshRemoteConfig } from '../shared/types';
+import { detectNodeVersionManagerBinPaths, expandTilde } from '../shared/pathUtils';
 import { getAgentCapabilities } from './agent-capabilities';
+import { shellEscapeForDoubleQuotes } from './utils/shell-escape';
 
 // Re-export parser types for consumers
 export type { ParsedEvent, AgentOutputParser } from './parsers';
@@ -1472,11 +1473,15 @@ export class ProcessManager extends EventEmitter {
    * This does NOT use PTY - it spawns the command directly via shell -c
    * and captures only the command output without prompts or echoes.
    *
+   * When sshRemoteConfig is provided, the command is executed on the remote
+   * host via SSH instead of locally.
+   *
    * @param sessionId - Session ID for event emission
    * @param command - The shell command to execute
-   * @param cwd - Working directory
+   * @param cwd - Working directory (local path, or remote path if SSH)
    * @param shell - Shell to use (default: platform-appropriate)
    * @param shellEnvVars - Additional environment variables for the shell
+   * @param sshRemoteConfig - Optional SSH remote config for remote execution
    * @returns Promise that resolves when command completes
    */
   runCommand(
@@ -1484,12 +1489,20 @@ export class ProcessManager extends EventEmitter {
     command: string,
     cwd: string,
     shell: string = process.platform === 'win32' ? 'powershell.exe' : 'bash',
-    shellEnvVars?: Record<string, string>
+    shellEnvVars?: Record<string, string>,
+    sshRemoteConfig?: SshRemoteConfig | null
   ): Promise<{ exitCode: number }> {
     return new Promise((resolve) => {
       const isWindows = process.platform === 'win32';
 
-      logger.debug('[ProcessManager] runCommand()', 'ProcessManager', { sessionId, command, cwd, shell, hasEnvVars: !!shellEnvVars, isWindows });
+      logger.debug('[ProcessManager] runCommand()', 'ProcessManager', { sessionId, command, cwd, shell, hasEnvVars: !!shellEnvVars, isWindows, sshRemote: sshRemoteConfig?.name || null });
+
+      // ========================================================================
+      // SSH Remote Execution: If SSH config is provided, run via SSH
+      // ========================================================================
+      if (sshRemoteConfig) {
+        return this.runCommandViaSsh(sessionId, command, cwd, sshRemoteConfig, shellEnvVars, resolve);
+      }
 
       // Build the command with shell config sourcing
       // This ensures PATH, aliases, and functions are available
@@ -1651,6 +1664,164 @@ export class ProcessManager extends EventEmitter {
         this.emit('command-exit', sessionId, 1);
         resolve({ exitCode: 1 });
       });
+    });
+  }
+
+  /**
+   * Run a terminal command on a remote host via SSH.
+   *
+   * This is called by runCommand when SSH config is provided. It builds an SSH
+   * command that executes the user's shell command on the remote host, using
+   * the remote's login shell to ensure PATH and environment are set up correctly.
+   *
+   * @param sessionId - Session ID for event emission
+   * @param command - The shell command to execute on the remote
+   * @param cwd - Working directory on the remote (or local path to use as fallback)
+   * @param sshConfig - SSH remote configuration
+   * @param shellEnvVars - Additional environment variables to set on remote
+   * @param resolve - Promise resolver function
+   */
+  private runCommandViaSsh(
+    sessionId: string,
+    command: string,
+    cwd: string,
+    sshConfig: SshRemoteConfig,
+    shellEnvVars: Record<string, string> | undefined,
+    resolve: (result: { exitCode: number }) => void
+  ): void {
+    // Build SSH arguments
+    const sshArgs: string[] = [];
+
+    // Force disable TTY allocation
+    sshArgs.push('-T');
+
+    // Add identity file
+    if (sshConfig.useSshConfig) {
+      // Only specify identity file if explicitly provided (override SSH config)
+      if (sshConfig.privateKeyPath && sshConfig.privateKeyPath.trim()) {
+        sshArgs.push('-i', expandTilde(sshConfig.privateKeyPath));
+      }
+    } else {
+      // Direct connection: require private key
+      sshArgs.push('-i', expandTilde(sshConfig.privateKeyPath));
+    }
+
+    // Default SSH options for non-interactive operation
+    const sshOptions: Record<string, string> = {
+      BatchMode: 'yes',
+      StrictHostKeyChecking: 'accept-new',
+      ConnectTimeout: '10',
+      ClearAllForwardings: 'yes',
+      RequestTTY: 'no',
+    };
+    for (const [key, value] of Object.entries(sshOptions)) {
+      sshArgs.push('-o', `${key}=${value}`);
+    }
+
+    // Port specification
+    if (!sshConfig.useSshConfig || sshConfig.port !== 22) {
+      sshArgs.push('-p', sshConfig.port.toString());
+    }
+
+    // Build destination (user@host or just host for SSH config)
+    if (sshConfig.useSshConfig) {
+      if (sshConfig.username && sshConfig.username.trim()) {
+        sshArgs.push(`${sshConfig.username}@${sshConfig.host}`);
+      } else {
+        sshArgs.push(sshConfig.host);
+      }
+    } else {
+      sshArgs.push(`${sshConfig.username}@${sshConfig.host}`);
+    }
+
+    // Determine the working directory on the remote
+    // Priority: remoteWorkingDir from SSH config > local cwd (may not exist on remote)
+    const remoteCwd = sshConfig.remoteWorkingDir || cwd;
+
+    // Merge environment variables: SSH config's remoteEnv + shell env vars
+    const mergedEnv: Record<string, string> = {
+      ...(sshConfig.remoteEnv || {}),
+      ...(shellEnvVars || {}),
+    };
+
+    // Build the remote command with cd and env vars
+    const envExports = Object.entries(mergedEnv)
+      .filter(([key]) => /^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key))
+      .map(([key, value]) => `${key}='${value.replace(/'/g, "'\\''")}'`)
+      .join(' ');
+
+    // Escape the user's command for the remote shell
+    // We wrap it in $SHELL -lc to get the user's login shell with full PATH
+    const escapedCommand = shellEscapeForDoubleQuotes(command);
+    let remoteCommand: string;
+    if (envExports) {
+      remoteCommand = `cd '${remoteCwd.replace(/'/g, "'\\''")}' && ${envExports} $SHELL -lc "${escapedCommand}"`;
+    } else {
+      remoteCommand = `cd '${remoteCwd.replace(/'/g, "'\\''")}' && $SHELL -lc "${escapedCommand}"`;
+    }
+
+    // Wrap the entire thing for SSH: use double quotes so $SHELL expands on remote
+    const wrappedForSsh = `$SHELL -c "${shellEscapeForDoubleQuotes(remoteCommand)}"`;
+    sshArgs.push(wrappedForSsh);
+
+    logger.info('[ProcessManager] runCommandViaSsh spawning', 'ProcessManager', {
+      sessionId,
+      sshHost: sshConfig.host,
+      remoteCwd,
+      command,
+      fullSshCommand: `ssh ${sshArgs.join(' ')}`,
+    });
+
+    // Spawn the SSH process
+    const childProcess = spawn('ssh', sshArgs, {
+      env: {
+        ...process.env,
+        // Ensure SSH can find the key and config
+        HOME: process.env.HOME,
+        SSH_AUTH_SOCK: process.env.SSH_AUTH_SOCK,
+      },
+    });
+
+    // Handle stdout
+    childProcess.stdout?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      if (output.trim()) {
+        logger.debug('[ProcessManager] runCommandViaSsh stdout', 'ProcessManager', { sessionId, length: output.length });
+        this.emit('data', sessionId, output);
+      }
+    });
+
+    // Handle stderr
+    childProcess.stderr?.on('data', (data: Buffer) => {
+      const output = data.toString();
+      logger.debug('[ProcessManager] runCommandViaSsh stderr', 'ProcessManager', { sessionId, output: output.substring(0, 200) });
+
+      // Check for SSH-specific errors
+      const sshError = matchSshErrorPattern(output);
+      if (sshError) {
+        logger.warn('[ProcessManager] SSH error detected in terminal command', 'ProcessManager', {
+          sessionId,
+          errorType: sshError.type,
+          message: sshError.message,
+        });
+      }
+
+      this.emit('stderr', sessionId, output);
+    });
+
+    // Handle process exit
+    childProcess.on('exit', (code) => {
+      logger.debug('[ProcessManager] runCommandViaSsh exit', 'ProcessManager', { sessionId, exitCode: code });
+      this.emit('command-exit', sessionId, code || 0);
+      resolve({ exitCode: code || 0 });
+    });
+
+    // Handle errors (e.g., spawn failures)
+    childProcess.on('error', (error) => {
+      logger.error('[ProcessManager] runCommandViaSsh error', 'ProcessManager', { sessionId, error: error.message });
+      this.emit('stderr', sessionId, `SSH Error: ${error.message}`);
+      this.emit('command-exit', sessionId, 1);
+      resolve({ exitCode: 1 });
     });
   }
 }

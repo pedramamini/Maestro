@@ -708,11 +708,14 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
       // Terminal mode: Use runCommand for clean stdout/stderr capture (no PTY noise)
       // This spawns a fresh shell with -l -c to run the command, ensuring aliases work
+      // When SSH is enabled for the session, the command runs on the remote host
       window.maestro.process
         .runCommand({
           sessionId: activeSession.id, // Plain session ID (not suffixed)
           command: capturedInputValue,
           cwd: activeSession.shellCwd || activeSession.cwd,
+          // Pass SSH config if the session has SSH enabled
+          sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
         })
         .catch((error) => {
           console.error('Failed to run command:', error);

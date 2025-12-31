@@ -228,6 +228,7 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
         ...s,
         cwd: newPath,
         fullPath: newPath,
+        projectRoot: newPath, // Also update projectRoot so Files tab header stays in sync
         fileTree: [],
         fileTreeError: undefined,
         // Clear ALL runtime SSH state when selecting a new local directory

@@ -471,12 +471,12 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
               textOverflow: 'ellipsis',
               textAlign: 'left',
             }}
-            title={session.sshRemote ? `${session.sshRemote.host}:${session.cwd}` : session.cwd}
+            title={session.sshRemote ? `${session.sshRemote.host}:${session.projectRoot}` : session.projectRoot}
             onDoubleClick={() => {
-              navigator.clipboard.writeText(session.cwd);
+              navigator.clipboard.writeText(session.projectRoot);
               onShowFlash?.('Path copied to clipboard');
             }}
-          ><bdi>{session.cwd}</bdi></span>
+          ><bdi>{session.projectRoot}</bdi></span>
         </div>
         <div className="flex items-center gap-1 flex-shrink-0">
           <button

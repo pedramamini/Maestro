@@ -181,7 +181,17 @@ interface MaestroAPI {
     interrupt: (sessionId: string) => Promise<boolean>;
     kill: (sessionId: string) => Promise<boolean>;
     resize: (sessionId: string, cols: number, rows: number) => Promise<boolean>;
-    runCommand: (config: { sessionId: string; command: string; cwd: string; shell?: string }) => Promise<{ exitCode: number }>;
+    runCommand: (config: {
+      sessionId: string;
+      command: string;
+      cwd: string;
+      shell?: string;
+      sessionSshRemoteConfig?: {
+        enabled: boolean;
+        remoteId: string | null;
+        workingDirOverride?: string;
+      };
+    }) => Promise<{ exitCode: number }>;
     getActiveProcesses: () => Promise<Array<{
       sessionId: string;
       toolType: string;

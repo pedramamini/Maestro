@@ -93,12 +93,16 @@ export function useFileTreeManagement(
     // Extract SSH context for remote file operations
     const sshContext = getSshContext(session);
 
+    // Use projectRoot for file tree (consistent with Files tab header)
+    // This ensures the file tree always shows the agent's working directory, not wherever cd'd to
+    const treeRoot = session.projectRoot || session.cwd;
+
     try {
       // Fetch tree and stats in parallel
       // Pass SSH context for remote file operations
       const [newTree, stats] = await Promise.all([
-        loadFileTree(session.cwd, 10, 0, sshContext),
-        window.maestro.fs.directorySize(session.cwd, sshContext?.sshRemoteId)
+        loadFileTree(treeRoot, 10, 0, sshContext),
+        window.maestro.fs.directorySize(treeRoot, sshContext?.sshRemoteId)
       ]);
       const oldTree = session.fileTree || [];
       const changes = compareFileTrees(oldTree, newTree);
@@ -124,7 +128,7 @@ export function useFileTreeManagement(
         s.id === sessionId ? {
           ...s,
           fileTree: [],
-          fileTreeError: `Cannot access directory: ${session.cwd}\n${errorMsg}`,
+          fileTreeError: `Cannot access directory: ${treeRoot}\n${errorMsg}`,
           fileTreeStats: undefined
         } : s
       ));
@@ -141,7 +145,10 @@ export function useFileTreeManagement(
     const session = sessions.find(s => s.id === sessionId);
     if (!session) return;
 
-    const cwd = session.inputMode === 'terminal' ? (session.shellCwd || session.cwd) : session.cwd;
+    // Use projectRoot for file tree (consistent with Files tab header)
+    // Git operations use the appropriate directory based on terminal mode
+    const treeRoot = session.projectRoot || session.cwd;
+    const gitRoot = session.inputMode === 'terminal' ? (session.shellCwd || session.cwd) : session.cwd;
 
     // Extract SSH context for remote file/git operations
     const sshContext = getSshContext(session);
@@ -150,9 +157,9 @@ export function useFileTreeManagement(
       // Refresh file tree, stats, git repo status, branches, and tags in parallel
       // Pass SSH context for remote file operations
       const [tree, stats, isGitRepo] = await Promise.all([
-        loadFileTree(cwd, 10, 0, sshContext),
-        window.maestro.fs.directorySize(cwd, sshContext?.sshRemoteId),
-        gitService.isRepo(cwd)
+        loadFileTree(treeRoot, 10, 0, sshContext),
+        window.maestro.fs.directorySize(treeRoot, sshContext?.sshRemoteId),
+        gitService.isRepo(gitRoot)
       ]);
 
       let gitBranches: string[] | undefined;
@@ -161,8 +168,8 @@ export function useFileTreeManagement(
 
       if (isGitRepo) {
         [gitBranches, gitTags] = await Promise.all([
-          gitService.getBranches(cwd),
-          gitService.getTags(cwd)
+          gitService.getBranches(gitRoot),
+          gitService.getTags(gitRoot)
         ]);
         gitRefsCacheTime = Date.now();
       }
@@ -194,7 +201,7 @@ export function useFileTreeManagement(
         s.id === sessionId ? {
           ...s,
           fileTree: [],
-          fileTreeError: `Cannot access directory: ${cwd}\n${errorMsg}`,
+          fileTreeError: `Cannot access directory: ${treeRoot}\n${errorMsg}`,
           fileTreeStats: undefined
         } : s
       ));
@@ -215,9 +222,12 @@ export function useFileTreeManagement(
       // Extract SSH context for remote file operations
       const sshContext = getSshContext(session);
 
+      // Use projectRoot for file tree (consistent with Files tab header)
+      const treeRoot = session.projectRoot || session.cwd;
+
       Promise.all([
-        loadFileTree(session.cwd, 10, 0, sshContext),
-        window.maestro.fs.directorySize(session.cwd, sshContext?.sshRemoteId)
+        loadFileTree(treeRoot, 10, 0, sshContext),
+        window.maestro.fs.directorySize(treeRoot, sshContext?.sshRemoteId)
       ]).then(([tree, stats]) => {
         setSessions(prev => prev.map(s =>
           s.id === activeSessionId ? {
@@ -238,7 +248,7 @@ export function useFileTreeManagement(
           s.id === activeSessionId ? {
             ...s,
             fileTree: [],
-            fileTreeError: `Cannot access directory: ${session.cwd}\n${errorMsg}`,
+            fileTreeError: `Cannot access directory: ${treeRoot}\n${errorMsg}`,
             fileTreeStats: undefined
           } : s
         ));

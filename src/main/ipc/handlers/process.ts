@@ -413,6 +413,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
   );
 
   // Run a single command and capture only stdout/stderr (no PTY echo/prompts)
+  // Supports SSH remote execution when sessionSshRemoteConfig is provided
   ipcMain.handle(
     'process:runCommand',
     withIpcErrorLogging(handlerOpts('runCommand'), async (config: {
@@ -420,6 +421,12 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       command: string;
       cwd: string;
       shell?: string;
+      // Per-session SSH remote config (same as process:spawn)
+      sessionSshRemoteConfig?: {
+        enabled: boolean;
+        remoteId: string | null;
+        workingDirOverride?: string;
+      };
     }) => {
       const processManager = requireProcessManager(getProcessManager);
 
@@ -434,11 +441,34 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       // Get shell env vars for passing to runCommand
       const shellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
 
+      // ========================================================================
+      // SSH Remote Execution: Resolve SSH config if provided
+      // ========================================================================
+      let sshRemoteConfig: SshRemoteConfig | null = null;
+
+      if (config.sessionSshRemoteConfig?.enabled && config.sessionSshRemoteConfig?.remoteId) {
+        const sshStoreAdapter = createSshRemoteStoreAdapter(settingsStore);
+        const sshResult = getSshRemoteConfig(sshStoreAdapter, {
+          sessionSshConfig: config.sessionSshRemoteConfig,
+        });
+
+        if (sshResult.config) {
+          sshRemoteConfig = sshResult.config;
+          logger.info(`Terminal command will execute via SSH`, LOG_CONTEXT, {
+            sessionId: config.sessionId,
+            remoteName: sshResult.config.name,
+            remoteHost: sshResult.config.host,
+            source: sshResult.source,
+          });
+        }
+      }
+
       logger.debug(`Running command: ${config.command}`, LOG_CONTEXT, {
         sessionId: config.sessionId,
         cwd: config.cwd,
         shell,
-        hasCustomEnvVars: Object.keys(shellEnvVars).length > 0
+        hasCustomEnvVars: Object.keys(shellEnvVars).length > 0,
+        sshRemote: sshRemoteConfig?.name || null,
       });
 
       return processManager.runCommand(
@@ -446,7 +476,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
         config.command,
         config.cwd,
         shell,
-        shellEnvVars
+        shellEnvVars,
+        sshRemoteConfig
       );
     })
   );

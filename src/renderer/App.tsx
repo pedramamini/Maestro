@@ -6157,11 +6157,14 @@ function MaestroConsoleInner() {
 
         // Use runCommand for clean stdout/stderr capture (same as desktop)
         // This spawns a fresh shell with -l -c to run the command
+        // When SSH is enabled for the session, the command runs on the remote host
         try {
           await window.maestro.process.runCommand({
             sessionId: sessionId,  // Plain session ID (not suffixed)
             command: command,
-            cwd: session.shellCwd || session.cwd
+            cwd: session.shellCwd || session.cwd,
+            // Pass SSH config if the session has SSH enabled
+            sessionSshRemoteConfig: session.sessionSshRemoteConfig,
           });
           console.log('[Remote] Terminal command completed successfully');
         } catch (error: unknown) {
