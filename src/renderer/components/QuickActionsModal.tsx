@@ -109,6 +109,10 @@ interface QuickActionsModalProps {
   onInjectOpenSpecPrompt?: (prompt: string) => void;
   // Playbook Exchange
   onOpenPlaybookExchange?: () => void;
+  // Document Graph
+  onOpenDocumentGraph?: () => void;
+  // Symphony
+  onOpenSymphony?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -131,7 +135,9 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     onCloseAllTabs, onCloseOtherTabs, onCloseTabsLeft, onCloseTabsRight,
     isFilePreviewOpen, ghCliAvailable, onPublishGist,
     onInjectOpenSpecPrompt,
-    onOpenPlaybookExchange
+    onOpenPlaybookExchange,
+    onOpenDocumentGraph,
+    onOpenSymphony
   } = props;
 
   const [search, setSearch] = useState('');
@@ -273,6 +279,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
     ...groupChatActions,
     { id: 'new', label: 'Create New Agent', shortcut: shortcuts.newInstance, action: addNewSession },
     ...(openWizard ? [{ id: 'wizard', label: 'New Agent Wizard', shortcut: shortcuts.openWizard, action: () => { openWizard(); setQuickActionOpen(false); } }] : []),
+    ...(onOpenSymphony ? [{ id: 'symphony', label: 'Maestro Symphony', shortcut: shortcuts.openSymphony, subtext: 'Contribute to open source projects', action: () => { onOpenSymphony(); setQuickActionOpen(false); } }] : []),
     ...(activeSession ? [{ id: 'rename', label: `Rename Agent: ${activeSession.name}`, action: () => {
       setRenameInstanceValue(activeSession.name);
       setRenameInstanceModalOpen(true);

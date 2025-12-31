@@ -3,7 +3,7 @@ import {
   Wand2, Plus, Settings, ChevronRight, ChevronDown, ChevronUp, X, Keyboard,
   Radio, Copy, ExternalLink, PanelLeftClose, PanelLeftOpen, Folder, Info, GitBranch, Bot, Clock,
   ScrollText, Cpu, Menu, Bookmark, Trophy, Trash2, Edit3, FolderInput, Download, Compass, Globe,
-  GitPullRequest, BookOpen, BarChart3
+  GitPullRequest, BookOpen, BarChart3, Heart
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Session, Group, Theme, Shortcut, AutoRunStats, GroupChat, GroupChatState, SettingsTab, FocusArea } from '../types';
@@ -358,6 +358,7 @@ interface HamburgerMenuContentProps {
   theme: Theme;
   shortcuts: Record<string, Shortcut>;
   openWizard?: () => void;
+  openSymphony?: () => void;
   startTour?: () => void;
   setShortcutsHelpOpen: (open: boolean) => void;
   setSettingsModalOpen: (open: boolean) => void;
@@ -374,6 +375,7 @@ function HamburgerMenuContent({
   theme,
   shortcuts,
   openWizard,
+  openSymphony,
   startTour,
   setShortcutsHelpOpen,
   setSettingsModalOpen,
@@ -399,6 +401,21 @@ function HamburgerMenuContent({
           </div>
           <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}>
             {shortcuts.openWizard ? formatShortcutKeys(shortcuts.openWizard.keys) : '⇧⌘N'}
+          </span>
+        </button>
+      )}
+      {openSymphony && (
+        <button
+          onClick={() => { openSymphony(); setMenuOpen(false); }}
+          className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 transition-colors text-left"
+        >
+          <Heart className="w-5 h-5" style={{ color: theme.colors.accent }} />
+          <div className="flex-1">
+            <div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>Maestro Symphony</div>
+            <div className="text-xs" style={{ color: theme.colors.textDim }}>Contribute to open source</div>
+          </div>
+          <span className="text-xs font-mono px-1.5 py-0.5 rounded" style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}>
+            {shortcuts.openSymphony ? formatShortcutKeys(shortcuts.openSymphony.keys) : '⇧⌘Y'}
           </span>
         </button>
       )}
@@ -762,6 +779,9 @@ interface SessionListProps {
   // Wizard props
   openWizard?: () => void;
 
+  // Symphony props
+  openSymphony?: () => void;
+
   // Tour props
   startTour?: () => void;
 
@@ -821,6 +841,7 @@ function SessionListInner(props: SessionListProps) {
     visibleSessions = [],
     autoRunStats,
     openWizard,
+    openSymphony,
     startTour,
     sidebarContainerRef,
     // Group Chat props
@@ -1793,6 +1814,7 @@ function SessionListInner(props: SessionListProps) {
                     theme={theme}
                     shortcuts={shortcuts}
                     openWizard={openWizard}
+                    openSymphony={openSymphony}
                     startTour={startTour}
                     setShortcutsHelpOpen={setShortcutsHelpOpen}
                     setSettingsModalOpen={setSettingsModalOpen}
@@ -1830,6 +1852,7 @@ function SessionListInner(props: SessionListProps) {
                   theme={theme}
                   shortcuts={shortcuts}
                   openWizard={openWizard}
+                  openSymphony={openSymphony}
                   startTour={startTour}
                   setShortcutsHelpOpen={setShortcutsHelpOpen}
                   setSettingsModalOpen={setSettingsModalOpen}

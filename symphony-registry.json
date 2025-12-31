@@ -1,0 +1,21 @@
+{
+  "schemaVersion": "1.0",
+  "lastUpdated": "2025-01-01T00:00:00Z",
+  "repositories": [
+    {
+      "slug": "pedramamini/Maestro",
+      "name": "Maestro",
+      "description": "Desktop app for managing multiple AI coding assistants with a keyboard-first interface.",
+      "url": "https://github.com/pedramamini/Maestro",
+      "category": "developer-tools",
+      "tags": ["electron", "ai", "productivity", "typescript"],
+      "maintainer": {
+        "name": "Pedram Amini",
+        "url": "https://github.com/pedramamini"
+      },
+      "isActive": true,
+      "featured": true,
+      "addedAt": "2025-01-01"
+    }
+  ]
+}

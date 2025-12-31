@@ -277,6 +277,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
         ctx.openWizardModal();
         trackShortcut('openWizard');
       }
+      else if (ctx.isShortcut(e, 'openSymphony')) {
+        e.preventDefault();
+        ctx.setShowSymphonyModal(true);
+        trackShortcut('openSymphony');
+      }
       else if (ctx.isShortcut(e, 'focusInput')) {
         e.preventDefault();
         // Use group chat input ref when group chat is active

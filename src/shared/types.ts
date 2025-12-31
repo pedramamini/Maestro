@@ -386,3 +386,29 @@ export interface GlobalAgentStats {
   /** Per-provider breakdown */
   byProvider: Record<string, ProviderStats>;
 }
+
+// ============================================================================
+// Symphony Types (re-exported from symphony-types.ts)
+// ============================================================================
+
+export type {
+  SymphonyRegistry,
+  RegisteredRepository,
+  SymphonyCategory,
+  SymphonyIssue,
+  IssueStatus,
+  ActiveContribution,
+  CompletedContribution,
+  ContributionStatus,
+  ContributorStats,
+  SymphonyState,
+  SymphonyCache,
+  SymphonySessionMetadata,
+  GetRegistryResponse,
+  GetIssuesResponse,
+  StartContributionResponse,
+  CompleteContributionResponse,
+  SymphonyErrorType,
+} from './symphony-types';
+
+export { SymphonyError } from './symphony-types';
