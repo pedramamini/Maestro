@@ -1,9 +1,13 @@
 /**
  * @file vitest.integration.config.ts
- * @description Vitest configuration for Group Chat integration tests.
+ * @description Vitest configuration for integration tests.
  *
- * Integration tests require real agents and exercise the full flow.
- * These tests are meant to be run manually or in dedicated CI jobs.
+ * Includes:
+ * - Group Chat integration tests (require real agents)
+ * - iOS Tools integration tests (require macOS + Xcode)
+ *
+ * These tests exercise real system components and are meant to be
+ * run manually or in dedicated CI jobs with appropriate environment.
  *
  * Run with: npm run test:integration
  */
