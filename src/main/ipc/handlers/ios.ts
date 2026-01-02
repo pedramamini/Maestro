@@ -712,5 +712,110 @@ export function registerIOSHandlers(): void {
     })
   );
 
+  // ==========================================================================
+  // Flow Runner
+  // ==========================================================================
+
+  // Run a Maestro flow
+  ipcMain.handle(
+    'ios:flow:run',
+    createIpcHandler(
+      handlerOpts('runFlow'),
+      async (options: iosTools.FlowRunOptions) => {
+        return iosTools.runFlow(options);
+      }
+    )
+  );
+
+  // Run a flow with retry support
+  ipcMain.handle(
+    'ios:flow:runWithRetry',
+    createIpcHandler(
+      handlerOpts('runFlowWithRetry'),
+      async (options: iosTools.FlowRunWithRetryOptions) => {
+        return iosTools.runFlowWithRetry(options);
+      }
+    )
+  );
+
+  // Run multiple flows in sequence
+  ipcMain.handle(
+    'ios:flow:runBatch',
+    createIpcHandler(
+      handlerOpts('runFlows'),
+      async (flowPaths: string[], options: Omit<iosTools.FlowRunOptions, 'flowPath'>) => {
+        return iosTools.runFlows(flowPaths, options);
+      }
+    )
+  );
+
+  // Validate a flow file
+  ipcMain.handle(
+    'ios:flow:validate',
+    createIpcHandler(handlerOpts('validateFlow'), async (flowPath: string) => {
+      return iosTools.validateFlow(flowPath);
+    })
+  );
+
+  // Validate a flow file using Maestro CLI
+  ipcMain.handle(
+    'ios:flow:validateWithMaestro',
+    createIpcHandler(handlerOpts('validateFlowWithMaestro'), async (flowPath: string) => {
+      return iosTools.validateFlowWithMaestro(flowPath);
+    })
+  );
+
+  // ==========================================================================
+  // Flow Result Formatting
+  // ==========================================================================
+
+  // Format flow result for agent output
+  ipcMain.handle(
+    'ios:flow:formatResult',
+    createIpcHandler(
+      handlerOpts('formatFlowResult'),
+      async (result: iosTools.FlowRunResult, options?: iosTools.FlowFormatOptions) => {
+        const formatted = iosTools.formatFlowResult(result, options);
+        return { success: true, data: formatted };
+      }
+    )
+  );
+
+  // Format flow result as JSON
+  ipcMain.handle(
+    'ios:flow:formatResultJson',
+    createIpcHandler(
+      handlerOpts('formatFlowResultAsJson'),
+      async (result: iosTools.FlowRunResult) => {
+        const json = iosTools.formatFlowResultAsJson(result);
+        return { success: true, data: json };
+      }
+    )
+  );
+
+  // Format flow result compact
+  ipcMain.handle(
+    'ios:flow:formatResultCompact',
+    createIpcHandler(
+      handlerOpts('formatFlowResultCompact'),
+      async (result: iosTools.FlowRunResult) => {
+        const compact = iosTools.formatFlowResultCompact(result);
+        return { success: true, data: compact };
+      }
+    )
+  );
+
+  // Format batch flow result
+  ipcMain.handle(
+    'ios:flow:formatBatchResult',
+    createIpcHandler(
+      handlerOpts('formatBatchFlowResult'),
+      async (result: iosTools.BatchFlowResult, options?: iosTools.FlowFormatOptions) => {
+        const formatted = iosTools.formatBatchFlowResult(result, options);
+        return { success: true, data: formatted };
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }

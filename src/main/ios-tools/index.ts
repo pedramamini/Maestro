@@ -257,3 +257,41 @@ export type {
   FlowDefinition,
   GeneratedFlow,
 } from './flow-generator';
+
+// =============================================================================
+// Flow Execution
+// =============================================================================
+
+export {
+  runFlow,
+  runFlowWithRetry,
+  runFlows,
+  validateFlow,
+  validateFlowWithMaestro,
+} from './flow-runner';
+export type {
+  FlowRunOptions,
+  FlowRunWithRetryOptions,
+  FlowStepResult,
+  FlowRunResult,
+  BatchFlowResult,
+} from './flow-runner';
+
+// =============================================================================
+// Action Formatting
+// =============================================================================
+
+export {
+  formatFlowResult,
+  formatFlowResultAsJson,
+  formatFlowResultCompact,
+  formatBatchFlowResult,
+  formatStepsTable,
+  formatStatusBadge,
+  formatDuration,
+  formatProgressBar,
+} from './action-formatter';
+export type {
+  FlowFormatOptions,
+  FormattedFlowResult,
+} from './action-formatter';
