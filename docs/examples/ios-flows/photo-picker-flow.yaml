@@ -1,0 +1,76 @@
+# Photo Picker Flow Example
+# Tests photo picker and image upload functionality
+#
+# Covers:
+# - Opening photo picker
+# - Permission handling
+# - Selecting photos
+# - Uploading images
+
+appId: com.example.myapp
+name: Photo Picker Flow
+tags:
+  - photos
+  - permissions
+  - upload
+---
+- launchApp
+
+# Navigate to profile edit screen
+- tapOn:
+    id: "tab_profile"
+- tapOn: "Edit Profile"
+- takeScreenshot: "01-edit-profile"
+
+# Tap on profile photo to change
+- tapOn:
+    id: "profile_photo"
+
+# Action sheet appears
+- assertVisible: "Choose Photo"
+- takeScreenshot: "02-action-sheet"
+
+# Select from photo library
+- tapOn: "Photo Library"
+
+# Handle permission dialog (if appears)
+# Note: In automated tests, permissions are typically pre-granted
+# This handles the case where permission dialog appears
+- wait: 1000
+
+# Select a photo from the library
+- tapOn:
+    id: "photo_0"
+
+- takeScreenshot: "03-photo-selected"
+
+# Confirm selection
+- tapOn: "Choose"
+
+# Wait for upload/processing
+- extendedWaitUntil:
+    visible:
+      id: "profile_photo_updated"
+    timeout: 10000
+
+# Verify photo was updated
+- takeScreenshot: "04-photo-updated"
+
+# Test camera option (will show permission needed)
+- tapOn:
+    id: "profile_photo"
+- tapOn: "Take Photo"
+
+# In simulator, camera shows placeholder
+- assertVisible: "Camera"
+- takeScreenshot: "05-camera-view"
+
+# Cancel camera
+- tapOn: "Cancel"
+
+# Save profile changes
+- tapOn: "Save"
+
+# Verify changes saved
+- assertVisible: "Profile updated"
+- takeScreenshot: "06-profile-saved"

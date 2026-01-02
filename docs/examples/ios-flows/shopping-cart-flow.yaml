@@ -1,0 +1,107 @@
+# Shopping Cart Flow Example
+# E-commerce add to cart and checkout flow
+#
+# Covers:
+# - Product browsing
+# - Adding items to cart
+# - Cart management (update quantity, remove)
+# - Checkout process
+
+appId: com.example.store
+name: Shopping Cart Flow
+tags:
+  - ecommerce
+  - cart
+  - checkout
+env:
+  PROMO_CODE: SAVE20
+---
+- launchApp
+
+# Navigate to products
+- tapOn: "Shop"
+- assertVisible: "Products"
+- takeScreenshot: "01-products-list"
+
+# Select first product
+- tapOn:
+    id: "product_0"
+
+# Verify product details
+- assertVisible: "Add to Cart"
+- takeScreenshot: "02-product-details"
+
+# Add to cart
+- tapOn: "Add to Cart"
+
+# Verify cart badge updated
+- assertVisible:
+    id: "cart_badge"
+    containsText: "1"
+
+# Go back and add another product
+- tapOn:
+    id: "back_button"
+
+# Scroll to see more products
+- scroll:
+    direction: DOWN
+
+- tapOn:
+    id: "product_3"
+- tapOn: "Add to Cart"
+- tapOn:
+    id: "back_button"
+
+# Navigate to cart
+- tapOn:
+    id: "cart_button"
+- assertVisible: "Your Cart"
+- assertVisible: "2 items"
+- takeScreenshot: "03-cart-view"
+
+# Increase quantity of first item
+- tapOn:
+    id: "increase_qty_0"
+- wait: 500
+- takeScreenshot: "04-quantity-updated"
+
+# Remove second item (swipe to delete)
+- swipe:
+    start: "90%, 60%"
+    end: "10%, 60%"
+    duration: 300
+- tapOn: "Delete"
+- takeScreenshot: "05-item-removed"
+
+# Apply promo code
+- tapOn:
+    id: "promo_code_field"
+- inputText: "${PROMO_CODE}"
+- tapOn: "Apply"
+
+# Verify discount applied
+- assertVisible: "Discount applied"
+- takeScreenshot: "06-promo-applied"
+
+# Proceed to checkout
+- tapOn: "Checkout"
+
+# Verify checkout screen
+- assertVisible: "Order Summary"
+- assertVisible: "Total"
+- takeScreenshot: "07-checkout"
+
+# Select payment method
+- tapOn: "Credit Card"
+- tapOn: "Confirm Order"
+
+# Wait for order confirmation
+- extendedWaitUntil:
+    visible:
+      text: "Order Confirmed"
+    timeout: 15000
+
+- assertVisible: "Order Confirmed"
+- assertVisible: "Order #"
+- takeScreenshot: "08-order-confirmed"

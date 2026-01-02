@@ -1602,3 +1602,191 @@ For keyboard interactions:
 | `end` | `.end` |
 | `pageUp` | `.pageUp` |
 | `pageDown` | `.pageDown` |
+
+## Example Flows
+
+The `docs/examples/ios-flows/` directory contains ready-to-use Maestro Mobile flow templates for common iOS automation scenarios. Each example demonstrates best practices for UI testing.
+
+### Available Examples
+
+| Flow | Description | Key Patterns |
+|------|-------------|--------------|
+| `login-flow.yaml` | Complete authentication flow | Env vars, assertions, screenshots |
+| `onboarding-flow.yaml` | Multi-screen onboarding | Swipe gestures, carousel navigation |
+| `search-flow.yaml` | Search and results | Text input, keyboard, scrolling |
+| `form-validation-flow.yaml` | Input validation | Error states, field clearing |
+| `settings-navigation-flow.yaml` | Settings hierarchy | Toggle switches, nested navigation |
+| `shopping-cart-flow.yaml` | E-commerce checkout | Cart management, promo codes |
+| `pull-to-refresh-flow.yaml` | Refresh gestures | Pull-to-refresh, animation waits |
+| `deep-link-flow.yaml` | URL schemes | Deep links, universal links |
+| `photo-picker-flow.yaml` | Photo selection | Permissions, image upload |
+| `logout-flow.yaml` | User logout | Session cleanup, confirmation dialogs |
+
+### Quick Start
+
+1. **Copy an example** to your project:
+   ```bash
+   cp docs/examples/ios-flows/login-flow.yaml my-flows/
+   ```
+
+2. **Update the bundle ID**:
+   ```yaml
+   appId: com.yourcompany.yourapp
+   ```
+
+3. **Update element identifiers** to match your app's accessibility IDs
+
+4. **Run the flow**:
+   ```
+   /ios.run_flow my-flows/login-flow.yaml
+   ```
+
+### Login Flow Example
+
+A complete authentication flow demonstrating credentials entry and success verification:
+
+```yaml
+appId: com.example.myapp
+name: Login Flow
+env:
+  TEST_EMAIL: test@example.com
+  TEST_PASSWORD: SecurePass123!
+---
+- launchApp:
+    clearState: true
+
+- assertVisible: "Sign In"
+- takeScreenshot: "01-login-screen"
+
+- tapOn:
+    id: "email_field"
+- inputText: "${TEST_EMAIL}"
+
+- tapOn:
+    id: "password_field"
+- inputText: "${TEST_PASSWORD}"
+
+- tapOn: "Sign In"
+
+- extendedWaitUntil:
+    visible:
+      text: "Welcome"
+    timeout: 15000
+
+- assertVisible: "Welcome"
+- takeScreenshot: "02-login-success"
+```
+
+### Form Validation Example
+
+Testing input validation and error states:
+
+```yaml
+appId: com.example.myapp
+name: Form Validation
+---
+- launchApp
+- tapOn: "Create Account"
+
+# Test empty form submission
+- tapOn: "Submit"
+- assertVisible: "Email is required"
+- assertVisible: "Password is required"
+
+# Test invalid email
+- tapOn:
+    id: "email_field"
+- inputText: "invalid-email"
+- tapOn: "Submit"
+- assertVisible: "Please enter a valid email"
+
+# Fix and submit
+- tapOn:
+    id: "email_field"
+- eraseText
+- inputText: "valid@example.com"
+- tapOn:
+    id: "password_field"
+- inputText: "ValidPass123!"
+- tapOn: "Submit"
+
+- assertVisible: "Account created"
+```
+
+### E-Commerce Cart Example
+
+Shopping cart with quantity changes and promo codes:
+
+```yaml
+appId: com.example.store
+name: Shopping Cart
+env:
+  PROMO_CODE: SAVE20
+---
+- launchApp
+- tapOn: "Shop"
+
+# Add product to cart
+- tapOn:
+    id: "product_0"
+- tapOn: "Add to Cart"
+- tapOn:
+    id: "back_button"
+
+# Go to cart
+- tapOn:
+    id: "cart_button"
+- assertVisible: "Your Cart"
+
+# Apply promo code
+- tapOn:
+    id: "promo_code_field"
+- inputText: "${PROMO_CODE}"
+- tapOn: "Apply"
+- assertVisible: "Discount applied"
+
+# Checkout
+- tapOn: "Checkout"
+- tapOn: "Credit Card"
+- tapOn: "Confirm Order"
+
+- extendedWaitUntil:
+    visible:
+      text: "Order Confirmed"
+    timeout: 15000
+```
+
+### Deep Link Example
+
+Testing URL scheme handling:
+
+```yaml
+appId: com.example.myapp
+name: Deep Link Handling
+---
+- launchApp:
+    clearState: true
+
+# Open product via deep link
+- openLink: "myapp://product/12345"
+- assertVisible: "Product Details"
+
+# Open settings page
+- openLink: "myapp://settings/notifications"
+- assertVisible: "Notification Settings"
+
+# Handle universal link
+- openLink: "https://example.com/share/abc123"
+- assertVisible: "Shared Content"
+```
+
+### Best Practices in Examples
+
+1. **Environment Variables** - Sensitive data like passwords stored in `env`
+2. **Strategic Screenshots** - Numbered screenshots at key verification points
+3. **Explicit Waits** - `extendedWaitUntil` instead of arbitrary delays
+4. **Clean State** - `clearState: true` for consistent test starts
+5. **Accessibility IDs** - Prefer `id` over text matching for reliability
+6. **Scroll Until Visible** - Handle off-screen elements gracefully
+
+See the [README](examples/ios-flows/README.md) in the examples directory for more customization tips and troubleshooting

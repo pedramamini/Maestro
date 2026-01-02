@@ -1,0 +1,72 @@
+# Logout Flow Example
+# Tests user logout functionality
+#
+# Covers:
+# - Navigation to logout
+# - Confirmation dialog
+# - Session cleanup
+# - Redirect to login
+
+appId: com.example.myapp
+name: Logout Flow
+tags:
+  - auth
+  - logout
+  - cleanup
+env:
+  TEST_EMAIL: test@example.com
+  TEST_PASSWORD: SecurePass123!
+---
+# First, ensure user is logged in
+- launchApp
+
+# Check if we need to login first
+# This flow assumes already logged in, but handles login if needed
+- wait: 2000
+
+# Navigate to settings/profile
+- tapOn:
+    id: "tab_profile"
+
+# Verify on profile screen
+- assertVisible: "Profile"
+- takeScreenshot: "01-profile-screen"
+
+# Scroll to find logout button (if below fold)
+- scrollUntilVisible:
+    element:
+      text: "Log Out"
+    direction: DOWN
+
+- takeScreenshot: "02-logout-visible"
+
+# Tap logout
+- tapOn: "Log Out"
+
+# Confirmation dialog appears
+- assertVisible: "Log Out?"
+- assertVisible: "Cancel"
+- assertVisible: "Log Out"
+- takeScreenshot: "03-confirmation-dialog"
+
+# Confirm logout
+- tapOn:
+    id: "confirm_logout"
+
+# Wait for logout to complete
+- extendedWaitUntil:
+    visible:
+      text: "Sign In"
+    timeout: 5000
+
+# Verify returned to login screen
+- assertVisible: "Sign In"
+- assertNotVisible: "Profile"
+- takeScreenshot: "04-logged-out"
+
+# Verify session is cleared - try to access protected screen
+- openLink: "myapp://profile"
+
+# Should still show login (not profile)
+- assertVisible: "Sign In"
+- takeScreenshot: "05-session-cleared"

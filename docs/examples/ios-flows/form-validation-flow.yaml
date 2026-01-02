@@ -1,0 +1,90 @@
+# Form Validation Flow Example
+# Tests form input validation including error states
+#
+# Covers:
+# - Empty field validation
+# - Invalid format detection
+# - Error message display
+# - Successful submission
+
+appId: com.example.myapp
+name: Form Validation Flow
+tags:
+  - forms
+  - validation
+  - edge-cases
+---
+- launchApp
+
+# Navigate to registration/signup form
+- tapOn: "Create Account"
+
+# Wait for form to load
+- assertVisible: "Registration"
+- takeScreenshot: "01-empty-form"
+
+# Test 1: Submit empty form
+- tapOn: "Submit"
+
+# Verify validation errors appear
+- assertVisible: "Email is required"
+- assertVisible: "Password is required"
+- takeScreenshot: "02-validation-errors"
+
+# Test 2: Invalid email format
+- tapOn:
+    id: "email_field"
+- inputText: "invalid-email"
+- tapOn: "Submit"
+
+- assertVisible: "Please enter a valid email"
+- takeScreenshot: "03-invalid-email"
+
+# Clear the field and enter valid email
+- tapOn:
+    id: "email_field"
+- eraseText
+- inputText: "valid@example.com"
+
+# Test 3: Password too short
+- tapOn:
+    id: "password_field"
+- inputText: "123"
+- tapOn: "Submit"
+
+- assertVisible: "Password must be at least 8 characters"
+- takeScreenshot: "04-password-too-short"
+
+# Test 4: Passwords don't match
+- tapOn:
+    id: "password_field"
+- eraseText
+- inputText: "ValidPass123!"
+
+- tapOn:
+    id: "confirm_password_field"
+- inputText: "DifferentPass456!"
+- tapOn: "Submit"
+
+- assertVisible: "Passwords do not match"
+- takeScreenshot: "05-passwords-mismatch"
+
+# Test 5: Successful submission
+- tapOn:
+    id: "confirm_password_field"
+- eraseText
+- inputText: "ValidPass123!"
+
+- hideKeyboard
+- takeScreenshot: "06-valid-form"
+
+- tapOn: "Submit"
+
+# Wait for success
+- extendedWaitUntil:
+    visible:
+      text: "Account created"
+    timeout: 10000
+
+- assertVisible: "Account created"
+- takeScreenshot: "07-success"

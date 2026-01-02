@@ -1,0 +1,60 @@
+# Deep Link Flow Example
+# Tests deep link handling and app URL schemes
+#
+# Covers:
+# - Opening custom URL schemes
+# - Universal links
+# - Handling deep link parameters
+
+appId: com.example.myapp
+name: Deep Link Flow
+tags:
+  - deeplinks
+  - navigation
+---
+# Test 1: Open product via deep link
+- launchApp:
+    clearState: true
+
+# Open product detail via deep link
+- openLink: "myapp://product/12345"
+
+# Verify product screen opened
+- assertVisible: "Product Details"
+- takeScreenshot: "01-product-deeplink"
+
+# Test 2: Open user profile
+- openLink: "myapp://profile/user123"
+
+# Verify profile loaded
+- assertVisible: "Profile"
+- takeScreenshot: "02-profile-deeplink"
+
+# Test 3: Open settings page
+- openLink: "myapp://settings/notifications"
+
+# Verify correct settings page
+- assertVisible: "Notification Settings"
+- takeScreenshot: "03-settings-deeplink"
+
+# Test 4: Handle universal link
+- openLink: "https://example.com/share/abc123"
+
+# Verify shared content opened in app
+- assertVisible: "Shared Content"
+- takeScreenshot: "04-universal-link"
+
+# Test 5: Open with action parameter
+- openLink: "myapp://compose?recipient=user456&subject=Hello"
+
+# Verify compose screen with pre-filled data
+- assertVisible: "New Message"
+- assertVisible: "user456"
+- takeScreenshot: "05-compose-deeplink"
+
+# Close compose screen
+- tapOn: "Cancel"
+
+# Verify app returned to previous screen
+- assertVisible: "Home"
+- takeScreenshot: "06-after-cancel"

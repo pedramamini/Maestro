@@ -1,0 +1,71 @@
+# Search Flow Example
+# Demonstrates search functionality testing patterns
+#
+# Covers:
+# - Tapping search field
+# - Typing search queries
+# - Verifying results
+# - Clearing and re-searching
+
+appId: com.example.myapp
+name: Search Flow
+tags:
+  - search
+  - functional
+---
+- launchApp
+
+# Navigate to search tab (if needed)
+- tapOn:
+    id: "tab_search"
+
+# Wait for search screen
+- assertVisible:
+    id: "search_field"
+- takeScreenshot: "01-search-screen"
+
+# Tap search field to focus
+- tapOn:
+    id: "search_field"
+
+# Type search query
+- inputText: "coffee shops"
+- takeScreenshot: "02-search-query"
+
+# Submit search (press return key)
+- pressKey: enter
+
+# Wait for results to load
+- extendedWaitUntil:
+    visible:
+      id: "search_results"
+    timeout: 10000
+
+# Verify results appeared
+- assertVisible: "results found"
+- assertNotVisible: "No results"
+- takeScreenshot: "03-search-results"
+
+# Scroll through results
+- scroll:
+    direction: DOWN
+
+- wait: 500
+
+- scroll:
+    direction: DOWN
+
+- takeScreenshot: "04-scrolled-results"
+
+# Clear search and try another query
+- tapOn:
+    id: "clear_search"
+
+- inputText: "pizza near me"
+- pressKey: enter
+
+# Wait for new results
+- wait: 2000
+
+- assertVisible: "results found"
+- takeScreenshot: "05-new-search"

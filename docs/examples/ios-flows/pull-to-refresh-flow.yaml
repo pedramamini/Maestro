@@ -1,0 +1,77 @@
+# Pull to Refresh Flow Example
+# Tests pull-to-refresh functionality on list views
+#
+# Covers:
+# - Pull to refresh gesture
+# - Loading indicator detection
+# - Content refresh verification
+
+appId: com.example.myapp
+name: Pull to Refresh Flow
+tags:
+  - refresh
+  - gestures
+---
+- launchApp
+
+# Navigate to a list that supports pull-to-refresh
+- tapOn:
+    id: "tab_feed"
+
+# Wait for initial content to load
+- assertVisible:
+    id: "feed_list"
+- takeScreenshot: "01-initial-content"
+
+# Note the first item's text (for verification)
+- copyTextFrom:
+    id: "feed_item_0"
+
+# Perform pull-to-refresh gesture
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 400
+
+# Wait for loading indicator
+- assertVisible:
+    id: "refresh_indicator"
+
+# Wait for refresh to complete
+- waitForAnimationToEnd:
+    timeout: 5000
+
+# Verify refresh completed
+- assertNotVisible:
+    id: "refresh_indicator"
+- takeScreenshot: "02-after-refresh"
+
+# Scroll down to load more content
+- scroll:
+    direction: DOWN
+- scroll:
+    direction: DOWN
+- scroll:
+    direction: DOWN
+
+# Verify more content loaded
+- takeScreenshot: "03-scrolled-content"
+
+# Scroll back to top
+- scroll:
+    direction: UP
+- scroll:
+    direction: UP
+- scroll:
+    direction: UP
+
+# Do another refresh
+- swipe:
+    start: "50%, 30%"
+    end: "50%, 80%"
+    duration: 400
+
+- waitForAnimationToEnd:
+    timeout: 5000
+
+- takeScreenshot: "04-second-refresh"

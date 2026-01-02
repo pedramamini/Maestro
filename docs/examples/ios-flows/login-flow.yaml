@@ -1,0 +1,54 @@
+# Login Flow Example
+# A complete authentication flow demonstrating common login patterns
+#
+# Prerequisites:
+# - iOS Simulator booted
+# - App installed and at login screen
+# - Maestro Mobile CLI installed
+
+appId: com.example.myapp
+name: Login Flow
+tags:
+  - auth
+  - smoke
+  - regression
+env:
+  TEST_EMAIL: test@example.com
+  TEST_PASSWORD: SecurePass123!
+---
+# Start fresh with a clean app state
+- launchApp:
+    clearState: true
+
+# Wait for the login screen to appear
+- assertVisible: "Sign In"
+- takeScreenshot: "01-login-screen"
+
+# Enter email credentials
+- tapOn:
+    id: "email_field"
+- inputText: "${TEST_EMAIL}"
+
+# Enter password
+- tapOn:
+    id: "password_field"
+- inputText: "${TEST_PASSWORD}"
+
+# Capture credentials entered
+- takeScreenshot: "02-credentials-entered"
+
+# Submit the login form
+- tapOn: "Sign In"
+
+# Wait for authentication to complete
+- extendedWaitUntil:
+    visible:
+      text: "Welcome"
+    timeout: 15000
+
+# Verify successful login
+- assertVisible: "Welcome"
+- assertNotVisible: "Sign In"
+
+# Capture success state
+- takeScreenshot: "03-login-success"

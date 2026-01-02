@@ -1,0 +1,85 @@
+# Settings Navigation Flow Example
+# Tests navigation through settings hierarchy
+#
+# Covers:
+# - Tab bar navigation
+# - Table view row selection
+# - Toggle switches
+# - Back navigation
+# - Nested settings screens
+
+appId: com.example.myapp
+name: Settings Navigation Flow
+tags:
+  - settings
+  - navigation
+---
+- launchApp
+
+# Navigate to Settings tab
+- tapOn:
+    id: "tab_settings"
+
+# Verify settings screen loaded
+- assertVisible: "Settings"
+- takeScreenshot: "01-settings-main"
+
+# Navigate to Account settings
+- tapOn: "Account"
+
+# Verify Account screen
+- assertVisible: "Account Settings"
+- assertVisible: "Email"
+- assertVisible: "Password"
+- takeScreenshot: "02-account-settings"
+
+# Go back to main settings
+- tapOn:
+    id: "back_button"
+
+# Navigate to Notifications settings
+- tapOn: "Notifications"
+- takeScreenshot: "03-notifications"
+
+# Toggle push notifications
+- tapOn:
+    id: "push_notifications_toggle"
+- wait: 500
+
+# Verify toggle changed state
+- takeScreenshot: "04-notifications-toggled"
+
+# Navigate to notification preferences
+- tapOn: "Email Preferences"
+- assertVisible: "Email Notifications"
+- takeScreenshot: "05-email-preferences"
+
+# Enable marketing emails toggle
+- tapOn:
+    id: "marketing_toggle"
+
+# Go back twice
+- tapOn:
+    id: "back_button"
+- tapOn:
+    id: "back_button"
+
+# Navigate to Privacy settings
+- tapOn: "Privacy"
+- assertVisible: "Privacy Settings"
+- takeScreenshot: "06-privacy"
+
+# Scroll to see more options
+- scroll:
+    direction: DOWN
+
+- assertVisible: "Delete Account"
+- takeScreenshot: "07-privacy-scrolled"
+
+# Go back to main settings
+- tapOn:
+    id: "back_button"
+
+# Verify back on main settings screen
+- assertVisible: "Settings"
+- takeScreenshot: "08-back-to-settings"

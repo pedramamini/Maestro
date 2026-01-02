@@ -1,0 +1,54 @@
+# Onboarding Flow Example
+# Navigates through a multi-screen onboarding experience
+#
+# Common patterns:
+# - Swiping through carousel screens
+# - Tapping "Next" buttons
+# - Skipping or completing the onboarding
+
+appId: com.example.myapp
+name: Onboarding Flow
+tags:
+  - onboarding
+  - smoke
+---
+# Fresh app install starts with onboarding
+- launchApp:
+    clearState: true
+
+# Screen 1: Welcome
+- assertVisible: "Welcome"
+- takeScreenshot: "onboarding-01-welcome"
+
+# Navigate to next screen
+- tapOn: "Next"
+
+# Screen 2: Feature highlights
+- assertVisible: "Discover Features"
+- takeScreenshot: "onboarding-02-features"
+
+# Swipe to advance (alternative to Next button)
+- swipe:
+    start: "80%, 50%"
+    end: "20%, 50%"
+    duration: 300
+
+# Screen 3: Permissions or settings
+- assertVisible: "Stay Connected"
+- takeScreenshot: "onboarding-03-permissions"
+
+# Skip notification permission for testing
+- tapOn: "Maybe Later"
+
+# Screen 4: Final screen
+- assertVisible: "Get Started"
+- takeScreenshot: "onboarding-04-getstarted"
+
+# Complete onboarding
+- tapOn: "Get Started"
+
+# Verify we're on the main screen
+- assertVisible: "Home"
+- assertNotVisible: "Welcome"
+
+- takeScreenshot: "onboarding-complete"
