@@ -142,12 +142,17 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
 
 ### Slash Commands for Primitives
 
-- [ ] Create `src/main/slash-commands/ios-tap.ts`
-  - [ ] `/ios.tap <target>` - tap element
-  - [ ] Arguments:
+- [x] Create `src/main/slash-commands/ios-tap.ts`
+  - [x] `/ios.tap <target>` - tap element
+  - [x] Arguments:
     - `#identifier` - by accessibility ID
     - `"label text"` - by label
     - `x,y` - by coordinates
+  - [x] Additional options: `--app`, `--simulator`, `--double`, `--long`, `--offset`, `--timeout`, `--debug`
+  - [x] Registered IPC handler in `src/main/ipc/handlers/ios.ts`
+  - [x] Exported from `src/main/slash-commands/index.ts`
+  - [x] Unit tests (71 tests) in `src/__tests__/main/slash-commands/ios-tap.test.ts`
+  - Note: Uses the NativeDriver from native-driver.ts. Currently returns "not yet implemented" since NativeDriver execution requires building XCUITest project dynamically. Recommends using Maestro Mobile CLI (`/ios.run_flow`) for actual interactions until NativeDriver is fully implemented.
 
 - [ ] Create `src/main/slash-commands/ios-type.ts`
   - [ ] `/ios.type <text>` - type into focused element

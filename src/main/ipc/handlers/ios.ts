@@ -1292,6 +1292,18 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // Execute /ios.tap slash command
+  ipcMain.handle(
+    'ios:slashCommand:tap',
+    withIpcErrorLogging(
+      handlerOpts('executeTapCommand'),
+      async (commandText: string, sessionId: string, cwd?: string) => {
+        const { executeTapCommand } = await import('../../slash-commands/ios-tap');
+        return executeTapCommand(commandText, sessionId, cwd);
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }
 

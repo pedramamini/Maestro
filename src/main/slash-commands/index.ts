@@ -36,6 +36,18 @@ export {
   type RunFlowCommandResult,
 } from './ios-run-flow';
 
+// iOS Tap Command
+export {
+  executeTapCommand,
+  parseTapArgs,
+  parseTarget,
+  tapCommandMetadata,
+  type TapCommandArgs,
+  type TapCommandResult,
+  type TapTarget,
+  type TapTargetType,
+} from './ios-tap';
+
 // Command registry for all slash commands
 export interface SlashCommandMetadata {
   command: string;
@@ -53,9 +65,11 @@ export interface SlashCommandMetadata {
 import { snapshotCommandMetadata } from './ios-snapshot';
 import { inspectCommandMetadata } from './ios-inspect';
 import { runFlowCommandMetadata } from './ios-run-flow';
+import { tapCommandMetadata } from './ios-tap';
 
 export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   snapshotCommandMetadata,
   inspectCommandMetadata,
   runFlowCommandMetadata,
+  tapCommandMetadata,
 ];
