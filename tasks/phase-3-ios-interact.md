@@ -328,7 +328,15 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
   - Tests type safety (action types, target types, direction types, velocity types)
   - Gracefully handles "not yet implemented" state (execution requires XCUITest project building)
   - Run with: `npm run test:integration -- src/__tests__/integration/native-driver.integration.test.ts`
-- [ ] Test error cases (missing elements, timeouts)
+- [x] Test error cases (missing elements, timeouts)
+  - 67 tests in `src/__tests__/main/ios-tools/error-cases.test.ts`
+  - Tests element not found scenarios with suggestions generation
+  - Tests timeout error creation and formatting (flow timeout, interaction timeout)
+  - Tests element validation failures (disabled, not visible, off-screen, obscured, zero-size)
+  - Tests tool installation errors (Maestro not installed)
+  - Tests app crash error handling
+  - Tests ActionResult and ValidationResult error conversion
+  - Tests error message quality (actionable hints, formatted output)
 
 ## Documentation
 
