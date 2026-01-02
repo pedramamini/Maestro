@@ -90,11 +90,36 @@ See [OpenSpec Commands](/openspec-commands) for the complete workflow guide and 
 
 ## iOS Development Commands
 
-For iOS development workflows, Maestro provides commands to capture simulator state:
+For iOS development workflows, Maestro provides commands to capture simulator state and automate UI interactions:
 
 | Command | Description |
 |---------|-------------|
 | `/ios.snapshot` | Capture screenshot, logs, and crash data from iOS simulator |
+| `/ios.run_flow` | Run Maestro Mobile YAML test flows on iOS simulator |
+
+### `/ios.run_flow` Options
+
+```
+/ios.run_flow <path> [--simulator <name|udid>] [--app <bundleId>] [--timeout <seconds>]
+/ios.run_flow --inline "tap:Login" "type:password" "tap:Submit"
+```
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--simulator` | `-s` | Target simulator by name or UDID |
+| `--app` | `-a` | Target app bundle ID |
+| `--timeout` | `-t` | Max execution time in seconds (default: 300) |
+| `--inline` | | Run inline action strings instead of file |
+| `--retry` | | Number of retry attempts on failure |
+| `--continue` | | Continue on error |
+| `--debug` | | Enable verbose output |
+
+**Examples**:
+```
+/ios.run_flow login_flow.yaml
+/ios.run_flow flows/test.yaml --simulator "iPhone 15 Pro" --app com.example.app
+/ios.run_flow --inline "tap:Login" "type:password123" "tap:Submit"
+```
 
 ### `/ios.snapshot` Options
 

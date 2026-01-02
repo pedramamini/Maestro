@@ -273,3 +273,383 @@ If no logs appear:
 - Increase `--duration` to capture more history
 - Remove `--app` filter to see all logs
 - Ensure the app is actually running in the simulator
+
+## The `/ios.run_flow` Command
+
+Execute Maestro Mobile test flows on iOS simulators. This command runs YAML-based UI automation flows using the [Maestro Mobile CLI](https://maestro.mobile.dev/).
+
+```
+/ios.run_flow <path>
+/ios.run_flow --inline "tap:Login" "type:password123"
+```
+
+### Prerequisites
+
+Install Maestro Mobile CLI before using this command:
+
+```bash
+# Option 1: Homebrew (recommended)
+brew tap mobile-dev-inc/tap && brew install maestro
+
+# Option 2: Direct installation
+curl -Ls "https://get.maestro.mobile.dev" | bash
+```
+
+Verify installation:
+```bash
+maestro --version
+```
+
+### Command Options
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--simulator <name\|udid>` | `-s` | Target simulator by name or UDID (default: first booted) |
+| `--app <bundleId>` | `-a` | App bundle ID to target |
+| `--timeout <seconds>` | `-t` | Maximum execution time in seconds (default: 300) |
+| `--screenshot-dir <path>` | | Output directory for screenshots |
+| `--inline` | | Run inline action strings instead of a file |
+| `--retry <count>` | | Number of retry attempts on failure (default: 1) |
+| `--continue` | | Continue on error (don't stop at first failure) |
+| `--debug` | | Enable debug mode with verbose output |
+
+### Examples
+
+**Run a flow file**:
+```
+/ios.run_flow login_flow.yaml
+```
+
+**Target a specific simulator**:
+```
+/ios.run_flow flows/signup.yaml --simulator "iPhone 15 Pro"
+```
+
+**Specify app and timeout**:
+```
+/ios.run_flow test.yaml --app com.example.myapp --timeout 60
+```
+
+**Retry on failure**:
+```
+/ios.run_flow flow.yaml --retry 3
+```
+
+**Run inline steps**:
+```
+/ios.run_flow --inline "tap:Login" "type:password123" "tap:Submit"
+```
+
+**Combined options**:
+```
+/ios.run_flow flow.yaml -s "iPhone 15" -a com.example.app --debug
+```
+
+### Agent Output
+
+When you run `/ios.run_flow`, the AI agent receives a structured summary:
+
+```markdown
+## ✓ Flow Execution PASSED
+
+| Metric | Value |
+|--------|-------|
+| Status | PASSED |
+| Duration | 12.5s |
+| Steps Passed | 8/8 |
+
+### Steps
+
+- ✓ Launch app (2100ms)
+- ✓ Tap on "Login" (450ms)
+- ✓ Input text (120ms)
+- ✓ Tap on "Submit" (380ms)
+- ✓ Assert visible "Welcome" (250ms)
+- ✓ Take screenshot (180ms)
+- ✓ Scroll down (320ms)
+- ✓ Tap on "Settings" (400ms)
+
+### Artifacts
+
+- Report: `~/Library/Application Support/Maestro/ios-artifacts/{session}/report.html`
+```
+
+For failed flows, the output includes:
+- Error message with details
+- Failure screenshot path
+- Step-by-step results showing which step failed
+- Troubleshooting suggestions
+
+### Maestro Mobile YAML Format
+
+Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported actions:
+
+#### Basic Actions
+
+```yaml
+# Tap on element by text
+- tapOn: "Login"
+
+# Tap on element by accessibility ID
+- tapOn:
+    id: "login_button"
+
+# Tap at specific coordinates
+- tapOn:
+    point: "150,300"
+
+# Input text (into focused element)
+- inputText: "hello@example.com"
+
+# Erase text from focused field
+- eraseText
+
+# Hide keyboard
+- hideKeyboard
+```
+
+#### Scrolling and Swiping
+
+```yaml
+# Scroll in direction
+- scroll:
+    direction: DOWN
+
+# Scroll until element visible
+- scrollUntilVisible:
+    element:
+      text: "Terms of Service"
+    direction: DOWN
+
+# Swipe gesture
+- swipe:
+    start: "50%, 80%"
+    end: "50%, 20%"
+    duration: 500
+```
+
+#### Assertions and Waiting
+
+```yaml
+# Assert element is visible
+- assertVisible: "Welcome"
+
+# Assert by ID
+- assertVisible:
+    id: "welcome_message"
+
+# Assert element is NOT visible
+- assertNotVisible: "Loading..."
+
+# Wait for element (with timeout)
+- extendedWaitUntil:
+    visible:
+      text: "Dashboard"
+    timeout: 10000
+```
+
+#### App Control
+
+```yaml
+# Launch app (uses appId from config)
+- launchApp
+
+# Launch specific app with options
+- launchApp:
+    appId: "com.example.myapp"
+    clearState: true
+    clearKeychain: true
+
+# Stop app
+- stopApp
+
+# Open deep link
+- openLink: "myapp://settings"
+```
+
+#### Screenshots and Utility
+
+```yaml
+# Take screenshot
+- takeScreenshot
+
+# Take named screenshot
+- takeScreenshot: "login_page"
+
+# Press hardware keys
+- pressKey: home
+- pressKey: back
+- pressKey: volume_up
+
+# Wait (in milliseconds)
+- wait: 2000
+```
+
+#### Complete Flow Example
+
+```yaml
+appId: com.example.myapp
+name: Login Flow
+---
+# Launch the app fresh
+- launchApp:
+    clearState: true
+
+# Wait for login screen
+- assertVisible: "Sign In"
+
+# Enter credentials
+- tapOn:
+    id: "email_field"
+- inputText: "test@example.com"
+- tapOn:
+    id: "password_field"
+- inputText: "password123"
+
+# Submit
+- tapOn: "Sign In"
+
+# Verify success
+- assertVisible: "Welcome"
+- takeScreenshot: "login_success"
+```
+
+### Inline Action Shortcuts
+
+When using `--inline`, these shorthand formats are supported:
+
+| Shorthand | Description | Example |
+|-----------|-------------|---------|
+| `tap:<text>` | Tap element by text | `tap:Login` |
+| `tapid:<id>` | Tap element by accessibility ID | `tapid:login_button` |
+| `type:<text>` | Input text | `type:hello@example.com` |
+| `scroll:<dir>` | Scroll direction | `scroll:down` |
+| `screenshot` | Take screenshot | `screenshot` |
+| `screenshot:<name>` | Named screenshot | `screenshot:login` |
+| `visible:<text>` | Assert visible | `visible:Welcome` |
+| `notvisible:<text>` | Assert not visible | `notvisible:Error` |
+| `wait:<ms>` | Wait duration | `wait:2000` |
+| `waitfor:<text>` | Wait for element | `waitfor:Dashboard` |
+| `press:<key>` | Press key | `press:home` |
+| `open:<url>` | Open URL | `open:myapp://home` |
+| `launchapp` | Launch app | `launchapp` |
+| `launchapp:<id>` | Launch specific app | `launchapp:com.example.app` |
+| `stopapp` | Stop app | `stopapp` |
+| `hidekeyboard` | Hide keyboard | `hidekeyboard` |
+| `erasetext` | Erase text | `erasetext` |
+
+**Example inline flow**:
+```
+/ios.run_flow --inline "launchapp:com.example.app" "waitfor:Login" "tap:Login" "type:user@example.com" "tap:Submit" "visible:Welcome" "screenshot:success"
+```
+
+### Auto Run Integration
+
+Use `ios.run_flow` in playbook YAML files:
+
+```yaml
+name: iOS Login Test
+steps:
+  - action: ios.run_flow
+    inputs:
+      flow: flows/login_flow.yaml
+      app: com.example.myapp
+      simulator: "iPhone 15 Pro"
+      timeout: 120
+      retry: 2
+    store_as: flow_result
+
+  - action: assert
+    inputs:
+      condition: "{{ variables.flow_result.passed }}"
+      message: "Login flow should pass"
+
+  - action: message
+    content: |
+      Flow completed in {{flow_result.durationSeconds}}s
+      Steps: {{flow_result.passedSteps}}/{{flow_result.totalSteps}}
+```
+
+### Action Inputs for Auto Run
+
+| Input | Type | Required | Default | Description |
+|-------|------|----------|---------|-------------|
+| `flow` | string | Yes | - | Path to flow YAML file |
+| `app` | string | No | - | Bundle ID to target |
+| `simulator` | string | No | First booted | Simulator name or UDID |
+| `timeout` | number | No | 300 | Timeout in seconds |
+| `retry` | number | No | 1 | Retry attempts |
+| `continue_on_error` | boolean | No | false | Continue past failures |
+| `env` | object | No | - | Environment variables |
+
+### Action Outputs for Auto Run
+
+When using `store_as`, these fields are available:
+
+| Output | Type | Description |
+|--------|------|-------------|
+| `passed` | boolean | Whether flow passed |
+| `duration` | number | Duration in milliseconds |
+| `durationSeconds` | string | Duration as string (e.g., "12.5") |
+| `totalSteps` | number | Total steps in flow |
+| `passedSteps` | number | Number of passed steps |
+| `failedSteps` | number | Number of failed steps |
+| `error` | string | Error message if failed |
+| `failureScreenshotPath` | string | Path to failure screenshot |
+| `reportPath` | string | Path to HTML report |
+
+### Troubleshooting
+
+#### "Maestro CLI not installed" Error
+
+Install Maestro Mobile CLI:
+```bash
+brew tap mobile-dev-inc/tap && brew install maestro
+```
+
+Or:
+```bash
+curl -Ls "https://get.maestro.mobile.dev" | bash
+```
+
+#### "No simulator booted" Error
+
+Ensure a simulator is running:
+```bash
+xcrun simctl list devices booted
+xcrun simctl boot "iPhone 15 Pro"
+```
+
+#### Flow Validation Errors
+
+Validate your YAML syntax:
+```bash
+maestro validate path/to/flow.yaml
+```
+
+#### Element Not Found
+
+- Check element accessibility IDs using Xcode Accessibility Inspector
+- Use `/ios.snapshot` to capture current UI state
+- Try using `containsText` for partial matches:
+  ```yaml
+  - tapOn:
+      containsText: "Log"
+  ```
+
+#### Timeout Errors
+
+- Increase `--timeout` value
+- Add explicit waits before actions:
+  ```yaml
+  - extendedWaitUntil:
+      visible:
+        text: "Login"
+      timeout: 15000
+  ```
+
+#### Flaky Tests
+
+- Use `--retry` to automatically retry on failure
+- Add `wait` steps between rapid actions
+- Use `waitForAnimationToEnd` before assertions
