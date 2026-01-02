@@ -86,6 +86,59 @@ export const ERROR_MESSAGES: Record<IOSErrorCode, { title: string; hint: string 
     title: 'Unknown error',
     hint: 'An unexpected error occurred. Check the logs for details.',
   },
+  // Interaction-specific errors
+  ELEMENT_NOT_FOUND: {
+    title: 'Element not found',
+    hint: 'Use /ios.inspect to view the current UI hierarchy and find the correct element identifier or label.',
+  },
+  ELEMENT_NOT_HITTABLE: {
+    title: 'Element not hittable',
+    hint: 'The element may be obscured by another view. Try dismissing overlays or scrolling the element fully into view.',
+  },
+  ELEMENT_NOT_VISIBLE: {
+    title: 'Element not visible',
+    hint: 'The element exists but is not visible on screen. Try scrolling it into view with /ios.scroll --to <target>.',
+  },
+  ELEMENT_NOT_ENABLED: {
+    title: 'Element is disabled',
+    hint: 'The element is in a disabled state. Complete any required preceding steps or wait for the element to become enabled.',
+  },
+  ELEMENT_OBSCURED: {
+    title: 'Element is obscured',
+    hint: 'Another element is covering the target. Dismiss any alerts, popovers, or modals first.',
+  },
+  ELEMENT_OFF_SCREEN: {
+    title: 'Element is off-screen',
+    hint: 'The element is outside the visible screen bounds. Scroll the element into view first.',
+  },
+  ELEMENT_ZERO_SIZE: {
+    title: 'Element has zero size',
+    hint: 'The element may be collapsed or hidden. Wait for it to load or expand.',
+  },
+  MAESTRO_NOT_INSTALLED: {
+    title: 'Maestro CLI not installed',
+    hint: 'Install with: brew tap mobile-dev-inc/tap && brew install maestro',
+  },
+  FLOW_TIMEOUT: {
+    title: 'Flow execution timed out',
+    hint: 'The flow took too long. Increase timeout with --timeout or break into smaller steps.',
+  },
+  FLOW_VALIDATION_FAILED: {
+    title: 'Flow validation failed',
+    hint: 'Check the YAML syntax. Use maestro validate <flow.yaml> for detailed errors.',
+  },
+  APP_CRASHED: {
+    title: 'App crashed during interaction',
+    hint: 'Check crash logs with /ios.logs --crash and restart the app.',
+  },
+  APP_NOT_RUNNING: {
+    title: 'App is not running',
+    hint: 'Launch the app first with /ios.run_flow --inline "launchApp: <bundleId>".',
+  },
+  INTERACTION_TIMEOUT: {
+    title: 'Interaction timed out',
+    hint: 'The element did not respond in time. Increase timeout with --timeout <ms>.',
+  },
 };
 
 // =============================================================================

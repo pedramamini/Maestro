@@ -289,12 +289,18 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
 
 ## Error Handling
 
-- [ ] Handle "element not found" with suggestions
-- [ ] Handle "element not hittable" with reason
-- [ ] Handle "Maestro Mobile CLI not installed" with install instructions
-- [ ] Handle timeout during flow execution
-- [ ] Handle app crash during interaction
-- [ ] Capture screenshot on failure automatically
+- [x] Handle "element not found" with suggestions
+  - Note: Implemented in `src/main/ios-tools/interaction-errors.ts` with `createElementNotFoundError()`. Integrates with `action-validator.ts` to generate suggestions from the UI tree using fuzzy string matching (Levenshtein distance) on identifiers, labels, and text. Suggestions are sorted by similarity score (0-100) and formatted in markdown tables with alternative targets.
+- [x] Handle "element not hittable" with reason
+  - Note: Implemented `createElementNotHittableError()` in `interaction-errors.ts`. Maps `NotHittableReason` from action-validator to specific error codes (`ELEMENT_OBSCURED`, `ELEMENT_OFF_SCREEN`, `ELEMENT_NOT_VISIBLE`, `ELEMENT_NOT_ENABLED`, `ELEMENT_ZERO_SIZE`). Includes element position info and suggested remediation actions.
+- [x] Handle "Maestro Mobile CLI not installed" with install instructions
+  - Note: Implemented `createMaestroNotInstalledError()` with default Homebrew (`brew tap mobile-dev-inc/tap && brew install maestro`) and curl installation instructions. Custom instructions can be provided.
+- [x] Handle timeout during flow execution
+  - Note: Implemented `createFlowTimeoutError()` which includes flow path, timeout value in ms, and automatically suggests doubling the timeout value. Screenshot path can be included. The flow-runner already had timeout support via `Promise.race`.
+- [x] Handle app crash during interaction
+  - Note: Implemented `createInteractionAppCrashedError()` (exported with prefix to avoid conflict with inspect-errors). Includes bundle ID, optional crash type (e.g., EXC_BAD_ACCESS) and crash message, plus screenshot path.
+- [x] Capture screenshot on failure automatically
+  - Note: Already implemented in `flow-runner.ts` (`captureOnFailure` option, default: true). The `FlowRunResult` includes `failureScreenshotPath`. The interaction-errors module supports `screenshotPath` in all error types. All error formatting functions (`formatInteractionError`, `formatInteractionErrorAsJson`) include screenshot paths when present.
 
 ## Testing
 

@@ -332,7 +332,21 @@ export type IOSErrorCode =
   | 'TIMEOUT'
   | 'COMMAND_FAILED'
   | 'PARSE_ERROR'
-  | 'UNKNOWN';
+  | 'UNKNOWN'
+  // Interaction-specific error codes
+  | 'ELEMENT_NOT_FOUND'
+  | 'ELEMENT_NOT_HITTABLE'
+  | 'ELEMENT_NOT_VISIBLE'
+  | 'ELEMENT_NOT_ENABLED'
+  | 'ELEMENT_OBSCURED'
+  | 'ELEMENT_OFF_SCREEN'
+  | 'ELEMENT_ZERO_SIZE'
+  | 'MAESTRO_NOT_INSTALLED'
+  | 'FLOW_TIMEOUT'
+  | 'FLOW_VALIDATION_FAILED'
+  | 'APP_CRASHED'
+  | 'APP_NOT_RUNNING'
+  | 'INTERACTION_TIMEOUT';
 
 /**
  * iOS operation error

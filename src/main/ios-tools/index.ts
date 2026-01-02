@@ -659,3 +659,36 @@ export type {
   HittabilityResult,
   ValidationOptions,
 } from './action-validator';
+
+// =============================================================================
+// Interaction Error Handling
+// =============================================================================
+
+export {
+  // Error code mapping
+  mapNotHittableReasonToCode,
+  mapActionStatusToCode,
+  // Error message constants
+  INTERACTION_ERROR_MESSAGES,
+  // Error creation functions
+  createElementNotFoundError,
+  createElementNotHittableError,
+  createMaestroNotInstalledError,
+  createFlowTimeoutError,
+  createAppCrashedError as createInteractionAppCrashedError,  // Renamed to avoid conflict with inspect-errors
+  createErrorFromActionResult,
+  createErrorFromValidationResult,
+  // Error formatting
+  formatInteractionError,
+  formatInteractionErrorAsJson,
+  formatInteractionErrorCompact,
+  // Utility functions
+  formatTarget as formatActionTarget,  // Renamed to avoid ambiguity
+  createIOSResultFromError,
+  hasElementSuggestions,
+  getBestSuggestion,
+} from './interaction-errors';
+export type {
+  InteractionErrorCode,
+  InteractionError,
+} from './interaction-errors';
