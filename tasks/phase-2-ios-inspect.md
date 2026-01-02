@@ -320,8 +320,21 @@
 
 - [x] Write unit tests for ui-analyzer.ts
 - [x] Write unit tests for inspect-formatter.ts
-- [ ] Write unit tests for element query parsing
+- [x] Write unit tests for element query parsing
 - [ ] Write integration test with sample app
+
+> **Completed**: Created comprehensive unit tests for element query parsing (96 tests):
+> - `src/__tests__/main/slash-commands/ios-inspect.test.ts`
+> - Tests for `parseInspectArgs()` - all command line arguments including --app, --simulator, --element, --depth, --format, --no-screenshot
+> - Tests for `parseElementQuery()` - all query syntax variants:
+>   - Identifier query: `#login_button`, `#my-element-id`
+>   - Label query: `"Log In"`, `'Submit Form'`
+>   - Type query: `Button`, `TextField`, `ScrollView`
+>   - Combined type#identifier: `Button#login_button`
+>   - Contains query: `*submit*`, `*password*`
+>   - Multiple queries: `#btn1, #btn2`
+> - Tests for `executeInspectCommand()` - successful execution, format options, element queries, simulator resolution, error handling
+> - Tests for `inspectCommandMetadata` - command metadata validation
 
 > **Completed**: Created comprehensive unit tests for `inspect-formatter.ts` (78 tests):
 > - `src/__tests__/main/ios-tools/inspect-formatter.test.ts`
