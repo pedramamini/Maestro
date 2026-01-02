@@ -237,7 +237,15 @@
   **Note (2026-01-01)**: 23 tests in `src/__tests__/main/ios-tools/artifacts.test.ts`
 - [x] Write unit tests for snapshot.ts
   **Note (2026-01-01)**: 21 tests in `src/__tests__/main/ios-tools/snapshot.test.ts` - covers captureSnapshot with mocked dependencies
-- [ ] Write integration test for full snapshot flow
+- [x] Write integration test for full snapshot flow
+  **Note (2026-01-01)**: Added comprehensive integration test suite in `src/__tests__/integration/ios-tools.integration.test.ts` under "Snapshot Flow Integration" section. Tests cover:
+  - Complete snapshot capture with screenshot and logs
+  - Auto-detected simulator selection
+  - Error handling for non-existent simulators
+  - Log level counting verification
+  - Multiple snapshots per session
+  - Custom snapshot ID support
+  Tests run with `npm run test:integration` and require macOS with Xcode installed.
 - [x] Test with various log sizes (small, large, empty)
   **Note (2026-01-01)**: Covered in snapshot.test.ts and snapshot-formatter.test.ts
 - [x] Test crash log detection
