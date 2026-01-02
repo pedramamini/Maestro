@@ -170,12 +170,23 @@ export {
 // UI Inspection
 // =============================================================================
 
+// Simple inspection using simctl ui describe
 export { inspect } from './inspect-simple';
 export type {
   UIElement,
   InspectOptions,
   InspectResult,
 } from './inspect-simple';
+
+// XCUITest-based inspection (more detailed)
+export { inspectWithXCUITest } from './inspect';
+export type {
+  XCUITestInspectOptions,
+  XCUITestInspectResult,
+  ElementNode,
+  ElementFrame,
+  AccessibilityWarning,
+} from './inspect';
 
 // =============================================================================
 // UI Analysis
