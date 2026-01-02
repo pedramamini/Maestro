@@ -1336,6 +1336,20 @@ contextBridge.exposeInMainWorld('maestro', {
       hasCrashed: (bundleId: string, udid: string, since: string) =>
         ipcRenderer.invoke('ios:assert:hasCrashed', bundleId, udid, since),
       waitForNoCrash: (options: any) => ipcRenderer.invoke('ios:assert:waitForNoCrash', options),
+      // Text assertions
+      text: (options: any) => ipcRenderer.invoke('ios:assert:text', options),
+      textById: (identifier: string, expected: string, options: any) =>
+        ipcRenderer.invoke('ios:assert:textById', identifier, expected, options),
+      textByLabel: (label: string, expected: string, options: any) =>
+        ipcRenderer.invoke('ios:assert:textByLabel', label, expected, options),
+      textContains: (target: any, expected: string, options: any) =>
+        ipcRenderer.invoke('ios:assert:textContains', target, expected, options),
+      textMatches: (target: any, pattern: string, options: any) =>
+        ipcRenderer.invoke('ios:assert:textMatches', target, pattern, options),
+      textStartsWith: (target: any, expected: string, options: any) =>
+        ipcRenderer.invoke('ios:assert:textStartsWith', target, expected, options),
+      textEndsWith: (target: any, expected: string, options: any) =>
+        ipcRenderer.invoke('ios:assert:textEndsWith', target, expected, options),
     },
     // Wait for element operations
     wait: {

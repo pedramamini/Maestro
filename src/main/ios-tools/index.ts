@@ -463,6 +463,14 @@ export {
   waitForNotById as waitForElementNotById,
   waitForNotByLabel as waitForElementNotByLabel,
   waitForNotByText as waitForElementNotByText,
+  // Text assertions
+  assertText,
+  assertTextById,
+  assertTextByLabel,
+  assertTextContains,
+  assertTextMatches,
+  assertTextStartsWith,
+  assertTextEndsWith,
   // Crash assertions
   assertNoCrash,
   hasCrashed,
@@ -478,6 +486,11 @@ export type {
   WaitForTarget,
   WaitForOptions,
   WaitForData,
+  // Text assertion types
+  TextMatchMode,
+  TextElementTarget,
+  AssertTextOptions,
+  TextAssertionData,
   // Crash types
   AssertNoCrashOptions,
   NoCrashAssertionData,

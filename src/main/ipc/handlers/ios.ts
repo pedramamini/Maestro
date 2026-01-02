@@ -1098,6 +1098,87 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // ==========================================================================
+  // Text Assertions
+  // ==========================================================================
+
+  // Assert element text matches expected value
+  ipcMain.handle(
+    'ios:assert:text',
+    withIpcErrorLogging(
+      handlerOpts('assertText'),
+      async (options: iosTools.AssertTextOptions) => {
+        return iosTools.assertText(options);
+      }
+    )
+  );
+
+  // Assert element text by identifier
+  ipcMain.handle(
+    'ios:assert:textById',
+    withIpcErrorLogging(
+      handlerOpts('assertTextById'),
+      async (identifier: string, expected: string, options: Omit<iosTools.AssertTextOptions, 'target' | 'expected'>) => {
+        return iosTools.assertTextById(identifier, expected, options);
+      }
+    )
+  );
+
+  // Assert element text by label
+  ipcMain.handle(
+    'ios:assert:textByLabel',
+    withIpcErrorLogging(
+      handlerOpts('assertTextByLabel'),
+      async (label: string, expected: string, options: Omit<iosTools.AssertTextOptions, 'target' | 'expected'>) => {
+        return iosTools.assertTextByLabel(label, expected, options);
+      }
+    )
+  );
+
+  // Assert element text contains value
+  ipcMain.handle(
+    'ios:assert:textContains',
+    withIpcErrorLogging(
+      handlerOpts('assertTextContains'),
+      async (target: iosTools.TextElementTarget, expected: string, options: Omit<iosTools.AssertTextOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertTextContains(target, expected, options);
+      }
+    )
+  );
+
+  // Assert element text matches regex
+  ipcMain.handle(
+    'ios:assert:textMatches',
+    withIpcErrorLogging(
+      handlerOpts('assertTextMatches'),
+      async (target: iosTools.TextElementTarget, pattern: string, options: Omit<iosTools.AssertTextOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertTextMatches(target, pattern, options);
+      }
+    )
+  );
+
+  // Assert element text starts with value
+  ipcMain.handle(
+    'ios:assert:textStartsWith',
+    withIpcErrorLogging(
+      handlerOpts('assertTextStartsWith'),
+      async (target: iosTools.TextElementTarget, expected: string, options: Omit<iosTools.AssertTextOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertTextStartsWith(target, expected, options);
+      }
+    )
+  );
+
+  // Assert element text ends with value
+  ipcMain.handle(
+    'ios:assert:textEndsWith',
+    withIpcErrorLogging(
+      handlerOpts('assertTextEndsWith'),
+      async (target: iosTools.TextElementTarget, expected: string, options: Omit<iosTools.AssertTextOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertTextEndsWith(target, expected, options);
+      }
+    )
+  );
+
   // Format verification result for agent
   ipcMain.handle(
     'ios:verify:formatResult',

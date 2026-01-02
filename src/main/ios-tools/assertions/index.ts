@@ -42,6 +42,26 @@ export type {
 } from './wait-for';
 
 // =============================================================================
+// Text Assertions
+// =============================================================================
+
+export {
+  assertText,
+  assertTextById,
+  assertTextByLabel,
+  assertTextContains,
+  assertTextMatches,
+  assertTextStartsWith,
+  assertTextEndsWith,
+} from './text';
+export type {
+  TextMatchMode,
+  TextElementTarget,
+  AssertTextOptions,
+  TextAssertionData,
+} from './text';
+
+// =============================================================================
 // Crash Assertions
 // =============================================================================
 

@@ -91,22 +91,29 @@
 
 ### /ios.assert_text
 
-- [ ] Create `src/main/ios-tools/assertions/text.ts`
-  - [ ] Implement `assertText(target, expected, options)`
-  - [ ] Match modes:
-    - [ ] Exact: text equals expected
-    - [ ] Contains: text includes expected
-    - [ ] Regex: text matches pattern
-    - [ ] StartsWith / EndsWith
-  - [ ] Support checking label OR value
+- [x] Create `src/main/ios-tools/assertions/text.ts` ✅ *Implemented with comprehensive text matching*
+  - [x] Implement `assertText(target, expected, options)` ✅
+  - [x] Match modes: ✅
+    - [x] Exact: text equals expected ✅
+    - [x] Contains: text includes expected ✅
+    - [x] Regex: text matches pattern ✅
+    - [x] StartsWith / EndsWith ✅
+  - [x] Support checking label OR value ✅ *Via `textProperty` option: 'label', 'value', or 'any' (default)*
 
-- [ ] Create slash command `/ios.assert_text`
-  - [ ] Arguments:
-    - `<target>` - element to check
-    - `<expected>` - expected text
-    - `--contains` - partial match
-    - `--regex` - regex match
-  - [ ] Examples:
+- [x] Create slash command `/ios.assert_text` ✅ *IPC handlers registered:*
+  - *`ios:assert:text` - main assertion*
+  - *`ios:assert:textById` - by identifier*
+  - *`ios:assert:textByLabel` - by label*
+  - *`ios:assert:textContains` - contains mode*
+  - *`ios:assert:textMatches` - regex mode*
+  - *`ios:assert:textStartsWith` - startsWith mode*
+  - *`ios:assert:textEndsWith` - endsWith mode*
+  - [x] Arguments:
+    - `<target>` - element to check ✅ *Supports identifier, label, text, type, query*
+    - `<expected>` - expected text ✅
+    - `--contains` - partial match ✅ *Via `matchMode: 'contains'`*
+    - `--regex` - regex match ✅ *Via `matchMode: 'regex'`*
+  - [x] Examples: ✅
     - `/ios.assert_text #username_label "John Doe"`
     - `/ios.assert_text #status --contains "Success"`
     - `/ios.assert_text #email --regex ".*@.*\.com"`
@@ -281,7 +288,7 @@
 - [ ] Add verification IPC handlers to `src/main/ipc/handlers/ios.ts`
   - [x] Register `ios:assert:visible` handler ✅
   - [x] Register `ios:assert:notVisible` handler ✅
-  - [ ] Register `ios:assert:text` handler
+  - [x] Register `ios:assert:text` handler ✅ *All text assertion variants registered (text, textById, textByLabel, textContains, textMatches, textStartsWith, textEndsWith)*
   - [ ] Register `ios:assert:value` handler
   - [ ] Register `ios:assert:enabled` handler
   - [ ] Register `ios:assert:hittable` handler
