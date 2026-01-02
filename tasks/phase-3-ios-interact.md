@@ -251,23 +251,38 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
 
 ### Auto Run Integration
 
-- [ ] Add interaction actions to Auto Run
-  - [ ] Example:
+- [x] Add interaction actions to Auto Run
+  - [x] `ios.run_flow` - Execute Maestro YAML flows with retry, timeout, env vars support
+  - [x] `ios.tap` - Tap elements by #identifier, "label", or x,y coordinates; supports double-tap and long-press
+  - [x] `ios.type` - Type text into focused element or specific target; supports clear-first
+  - [x] `ios.scroll` - Scroll in direction or scroll-to-element; supports container scrolling
+  - [x] `ios.swipe` - Swipe gestures with velocity control; supports starting from specific element
+  - [x] `assert` - Condition checking with truthy/falsy evaluation; supports negation with `not: true`
+  - [x] Exported all actions from `src/cli/services/playbook-actions/actions/index.ts`
+  - [x] Unit tests: 95 new tests in `ios-interaction-actions.test.ts` (50 tests) and `assert-action.test.ts` (45 tests)
+  - [x] Example usage:
     ```yaml
     - action: ios.run_flow
-      flow: login_flow.yaml
+      inputs:
+        flow: login_flow.yaml
+        app: com.example.myapp
       store_as: login_result
 
     - action: assert
-      condition: "login_result.success"
-      message: "Login flow should complete successfully"
+      inputs:
+        condition: "{{ variables.login_result.passed }}"
+        message: "Login flow should complete successfully"
 
     - action: ios.tap
-      target: "#settings_button"
+      inputs:
+        target: "#settings_button"
+        app: com.example.myapp
 
     - action: ios.type
-      into: "#search_field"
-      text: "query text"
+      inputs:
+        into: "#search_field"
+        text: "query text"
+        app: com.example.myapp
     ```
 
 ---
