@@ -471,6 +471,16 @@ export {
   assertTextMatches,
   assertTextStartsWith,
   assertTextEndsWith,
+  // Value assertions
+  assertValue,
+  assertValueById,
+  assertValueByLabel,
+  assertValueContains,
+  assertValueMatches,
+  assertValueStartsWith,
+  assertValueEndsWith,
+  assertValueEmpty,
+  assertValueNotEmpty,
   // Crash assertions
   assertNoCrash,
   hasCrashed,
@@ -491,6 +501,11 @@ export type {
   TextElementTarget,
   AssertTextOptions,
   TextAssertionData,
+  // Value assertion types
+  ValueMatchMode,
+  ValueElementTarget,
+  AssertValueOptions,
+  ValueAssertionData,
   // Crash types
   AssertNoCrashOptions,
   NoCrashAssertionData,

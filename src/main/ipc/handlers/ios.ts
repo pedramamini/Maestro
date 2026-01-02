@@ -1179,6 +1179,109 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // ==========================================================================
+  // Value Assertions
+  // ==========================================================================
+
+  // Assert element value matches expected
+  ipcMain.handle(
+    'ios:assert:value',
+    withIpcErrorLogging(
+      handlerOpts('assertValue'),
+      async (options: iosTools.AssertValueOptions) => {
+        return iosTools.assertValue(options);
+      }
+    )
+  );
+
+  // Assert element value by identifier
+  ipcMain.handle(
+    'ios:assert:valueById',
+    withIpcErrorLogging(
+      handlerOpts('assertValueById'),
+      async (identifier: string, expected: string, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected'>) => {
+        return iosTools.assertValueById(identifier, expected, options);
+      }
+    )
+  );
+
+  // Assert element value by label
+  ipcMain.handle(
+    'ios:assert:valueByLabel',
+    withIpcErrorLogging(
+      handlerOpts('assertValueByLabel'),
+      async (label: string, expected: string, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected'>) => {
+        return iosTools.assertValueByLabel(label, expected, options);
+      }
+    )
+  );
+
+  // Assert element value contains substring
+  ipcMain.handle(
+    'ios:assert:valueContains',
+    withIpcErrorLogging(
+      handlerOpts('assertValueContains'),
+      async (target: iosTools.ValueElementTarget, expected: string, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertValueContains(target, expected, options);
+      }
+    )
+  );
+
+  // Assert element value matches regex
+  ipcMain.handle(
+    'ios:assert:valueMatches',
+    withIpcErrorLogging(
+      handlerOpts('assertValueMatches'),
+      async (target: iosTools.ValueElementTarget, pattern: string, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertValueMatches(target, pattern, options);
+      }
+    )
+  );
+
+  // Assert element value starts with
+  ipcMain.handle(
+    'ios:assert:valueStartsWith',
+    withIpcErrorLogging(
+      handlerOpts('assertValueStartsWith'),
+      async (target: iosTools.ValueElementTarget, expected: string, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertValueStartsWith(target, expected, options);
+      }
+    )
+  );
+
+  // Assert element value ends with
+  ipcMain.handle(
+    'ios:assert:valueEndsWith',
+    withIpcErrorLogging(
+      handlerOpts('assertValueEndsWith'),
+      async (target: iosTools.ValueElementTarget, expected: string, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertValueEndsWith(target, expected, options);
+      }
+    )
+  );
+
+  // Assert element value is empty
+  ipcMain.handle(
+    'ios:assert:valueEmpty',
+    withIpcErrorLogging(
+      handlerOpts('assertValueEmpty'),
+      async (target: iosTools.ValueElementTarget, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertValueEmpty(target, options);
+      }
+    )
+  );
+
+  // Assert element value is not empty
+  ipcMain.handle(
+    'ios:assert:valueNotEmpty',
+    withIpcErrorLogging(
+      handlerOpts('assertValueNotEmpty'),
+      async (target: iosTools.ValueElementTarget, options: Omit<iosTools.AssertValueOptions, 'target' | 'expected' | 'matchMode'>) => {
+        return iosTools.assertValueNotEmpty(target, options);
+      }
+    )
+  );
+
   // Format verification result for agent
   ipcMain.handle(
     'ios:verify:formatResult',

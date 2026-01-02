@@ -62,6 +62,28 @@ export type {
 } from './text';
 
 // =============================================================================
+// Value Assertions
+// =============================================================================
+
+export {
+  assertValue,
+  assertValueById,
+  assertValueByLabel,
+  assertValueContains,
+  assertValueMatches,
+  assertValueStartsWith,
+  assertValueEndsWith,
+  assertValueEmpty,
+  assertValueNotEmpty,
+} from './value';
+export type {
+  ValueMatchMode,
+  ValueElementTarget,
+  AssertValueOptions,
+  ValueAssertionData,
+} from './value';
+
+// =============================================================================
 // Crash Assertions
 // =============================================================================
 

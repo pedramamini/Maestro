@@ -120,12 +120,23 @@
 
 ### /ios.assert_value
 
-- [ ] Create `src/main/ios-tools/assertions/value.ts`
-  - [ ] Implement `assertValue(target, expected, options)`
-  - [ ] Check element's value property (for text fields, etc.)
-  - [ ] Useful for verifying form input state
+- [x] Create `src/main/ios-tools/assertions/value.ts` ✅ *Fully implemented*
+  - [x] Implement `assertValue(target, expected, options)` ✅ *With full match mode support*
+  - [x] Check element's value property (for text fields, etc.) ✅
+  - [x] Useful for verifying form input state ✅
+  - [x] Match modes: exact, contains, regex, startsWith, endsWith, empty, notEmpty ✅
+  - [x] Convenience functions: assertValueById, assertValueByLabel, assertValueContains, assertValueMatches, assertValueStartsWith, assertValueEndsWith, assertValueEmpty, assertValueNotEmpty ✅
 
-- [ ] Create slash command `/ios.assert_value`
+- [x] Create slash command `/ios.assert_value` ✅ *IPC handlers registered:*
+  - *`ios:assert:value` - main assertion*
+  - *`ios:assert:valueById` - by identifier*
+  - *`ios:assert:valueByLabel` - by label*
+  - *`ios:assert:valueContains` - contains mode*
+  - *`ios:assert:valueMatches` - regex mode*
+  - *`ios:assert:valueStartsWith` - startsWith mode*
+  - *`ios:assert:valueEndsWith` - endsWith mode*
+  - *`ios:assert:valueEmpty` - empty value check*
+  - *`ios:assert:valueNotEmpty` - non-empty value check*
 
 ---
 
@@ -289,7 +300,7 @@
   - [x] Register `ios:assert:visible` handler ✅
   - [x] Register `ios:assert:notVisible` handler ✅
   - [x] Register `ios:assert:text` handler ✅ *All text assertion variants registered (text, textById, textByLabel, textContains, textMatches, textStartsWith, textEndsWith)*
-  - [ ] Register `ios:assert:value` handler
+  - [x] Register `ios:assert:value` handler ✅ *All value assertion variants registered (value, valueById, valueByLabel, valueContains, valueMatches, valueStartsWith, valueEndsWith, valueEmpty, valueNotEmpty)*
   - [ ] Register `ios:assert:enabled` handler
   - [ ] Register `ios:assert:hittable` handler
   - [x] Register `ios:assert:noCrash` handler ✅
