@@ -16,6 +16,10 @@ import {
   wizardInlineIteratePrompt,
   wizardInlineNewPrompt,
 } from '../../prompts';
+import {
+  parseStructuredOutput,
+  getConfidenceColor,
+} from '../components/Wizard/services/wizardPrompts';
 
 /**
  * Extended ExistingDocument interface that includes loaded content.
@@ -278,141 +282,35 @@ function buildPromptWithContext(
 /**
  * Parse a structured response from the agent.
  *
- * Attempts to extract JSON from the response with multiple fallback strategies.
+ * Delegates to the shared parseStructuredOutput from wizardPrompts.ts to avoid
+ * code duplication. The shared implementation handles multiple fallback strategies
+ * for extracting JSON from agent responses.
  *
  * @param response The raw response string from the agent
  * @returns Parsed WizardResponse or null if parsing failed
  */
 export function parseWizardResponse(response: string): WizardResponse | null {
-  const rawText = response.trim();
+  const result = parseStructuredOutput(response);
 
-  // Strategy 1: Direct JSON parse
-  try {
-    const parsed = JSON.parse(rawText);
-    if (isValidWizardResponse(parsed)) {
-      return normalizeResponse(parsed);
-    }
-  } catch {
-    // Continue to next strategy
+  if (result.parseSuccess && result.structured) {
+    // Apply our ready threshold check on top of the shared parsing
+    return {
+      confidence: result.structured.confidence,
+      ready: result.structured.ready && result.structured.confidence >= READY_CONFIDENCE_THRESHOLD,
+      message: result.structured.message,
+    };
   }
 
-  // Strategy 2: Extract JSON from markdown code blocks
-  const codeBlockMatch = rawText.match(/```(?:json)?\s*([\s\S]*?)```/);
-  if (codeBlockMatch) {
-    try {
-      const parsed = JSON.parse(codeBlockMatch[1].trim());
-      if (isValidWizardResponse(parsed)) {
-        return normalizeResponse(parsed);
-      }
-    } catch {
-      // Continue to next strategy
-    }
+  // If parsing failed but we have a structured response from fallback, use it
+  if (result.structured) {
+    return {
+      confidence: result.structured.confidence,
+      ready: result.structured.ready && result.structured.confidence >= READY_CONFIDENCE_THRESHOLD,
+      message: result.structured.message,
+    };
   }
 
-  // Strategy 3: Find JSON object pattern with required fields
-  const jsonMatch = rawText.match(/\{[\s\S]*"confidence"[\s\S]*"ready"[\s\S]*"message"[\s\S]*\}/);
-  if (jsonMatch) {
-    try {
-      const parsed = JSON.parse(jsonMatch[0]);
-      if (isValidWizardResponse(parsed)) {
-        return normalizeResponse(parsed);
-      }
-    } catch {
-      // Continue to next strategy
-    }
-  }
-
-  // Strategy 4: Find any JSON object pattern
-  const anyJsonMatch = rawText.match(/\{[^{}]*\}/);
-  if (anyJsonMatch) {
-    try {
-      const parsed = JSON.parse(anyJsonMatch[0]);
-      if (isValidWizardResponse(parsed)) {
-        return normalizeResponse(parsed);
-      }
-    } catch {
-      // Continue to fallback
-    }
-  }
-
-  // Fallback: Create a response from raw text with heuristics
-  return createFallbackResponse(rawText);
-}
-
-/**
- * Check if an object matches the expected wizard response format.
- */
-function isValidWizardResponse(obj: unknown): obj is WizardResponse {
-  if (typeof obj !== 'object' || obj === null) {
-    return false;
-  }
-
-  const response = obj as Record<string, unknown>;
-
-  return (
-    typeof response.confidence === 'number' &&
-    typeof response.ready === 'boolean' &&
-    typeof response.message === 'string'
-  );
-}
-
-/**
- * Normalize a response to ensure valid ranges and types.
- */
-function normalizeResponse(response: WizardResponse): WizardResponse {
-  return {
-    confidence: Math.max(0, Math.min(100, Math.round(response.confidence))),
-    ready: response.ready && response.confidence >= READY_CONFIDENCE_THRESHOLD,
-    message: response.message.trim(),
-  };
-}
-
-/**
- * Create a fallback response when parsing fails.
- * Uses heuristics to extract useful information from raw text.
- */
-function createFallbackResponse(rawText: string): WizardResponse {
-  const DEFAULT_CONFIDENCE = 20;
-
-  // Try to extract confidence from text patterns
-  let confidence = DEFAULT_CONFIDENCE;
-  const confidenceMatch = rawText.match(/confidence[:\s]*(\d+)/i) ||
-    rawText.match(/(\d+)\s*%?\s*confiden/i);
-  if (confidenceMatch) {
-    const extractedConfidence = parseInt(confidenceMatch[1], 10);
-    if (extractedConfidence >= 0 && extractedConfidence <= 100) {
-      confidence = extractedConfidence;
-    }
-  }
-
-  // Try to detect ready status from text
-  const readyPatterns = /\b(ready to proceed|ready to create|let's proceed|shall we proceed|i'm ready)\b/i;
-  const notReadyPatterns = /\b(need more|clarif|question|tell me more|could you explain)\b/i;
-
-  let ready = false;
-  if (confidence >= READY_CONFIDENCE_THRESHOLD && readyPatterns.test(rawText)) {
-    ready = true;
-  }
-  if (notReadyPatterns.test(rawText)) {
-    ready = false;
-  }
-
-  // Clean up the message
-  let message = rawText
-    .replace(/```(?:json)?/g, '')
-    .replace(/```/g, '')
-    .replace(/^\s*\{[\s\S]*?\}\s*$/g, '')
-    .trim();
-
-  if (!message) {
-    message = rawText;
-  }
-
-  return {
-    confidence,
-    ready,
-    message,
-  };
+  return null;
 }
 
 /**
@@ -488,6 +386,8 @@ function extractResultFromStreamJson(output: string, agentType: ToolType): strin
 
 /**
  * Build CLI args for the agent based on its type and capabilities.
+ * For wizard conversations, we restrict tool usage to read-only operations
+ * to prevent the agent from making changes during the discovery phase.
  */
 function buildArgsForAgent(agent: any): string[] {
   const agentId = agent.id;
@@ -497,6 +397,12 @@ function buildArgsForAgent(agent: any): string[] {
       const args = [...(agent.args || [])];
       if (!args.includes('--include-partial-messages')) {
         args.push('--include-partial-messages');
+      }
+      // Restrict to read-only tools during wizard conversation
+      // The agent can read files to understand the project, but cannot write/edit
+      // This ensures the wizard conversation phase doesn't make code changes
+      if (!args.includes('--allowedTools')) {
+        args.push('--allowedTools', 'Read', 'Glob', 'Grep', 'LS');
       }
       return args;
     }
@@ -703,21 +609,5 @@ export async function endInlineWizardConversation(
   }
 }
 
-/**
- * Get the color for the confidence meter based on the level.
- *
- * @param confidence The confidence level (0-100)
- * @returns HSL color string transitioning from red to yellow to green
- */
-export function getConfidenceColor(confidence: number): string {
-  const clampedConfidence = Math.max(0, Math.min(100, confidence));
-
-  let hue: number;
-  if (clampedConfidence <= 50) {
-    hue = (clampedConfidence / 50) * 60; // 0 to 60 (red to yellow)
-  } else {
-    hue = 60 + ((clampedConfidence - 50) / 50) * 60; // 60 to 120 (yellow to green)
-  }
-
-  return `hsl(${hue}, 80%, 45%)`;
-}
+// Re-export getConfidenceColor from the shared location for backwards compatibility
+export { getConfidenceColor };

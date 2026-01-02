@@ -112,6 +112,7 @@ export function InlineWizardProvider({ children }: InlineWizardProviderProps) {
     wizardState.generateDocuments,
     wizardState.streamingContent,
     wizardState.generationProgress,
+    wizardState.wizardTabId,
   ]);
 
   return (

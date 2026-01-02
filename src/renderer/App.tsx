@@ -34,7 +34,6 @@ import { GroupChatRightPanel, type GroupChatRightTab } from './components/GroupC
 import {
   // Batch processing
   useBatchProcessor,
-  useInlineWizard,
   type PreviousUIState,
   // Settings
   useSettings,
@@ -89,7 +88,7 @@ import { InputProvider, useInputContext } from './contexts/InputContext';
 import { GroupChatProvider, useGroupChat } from './contexts/GroupChatContext';
 import { AutoRunProvider, useAutoRun } from './contexts/AutoRunContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
-import { InlineWizardProvider } from './contexts/InlineWizardContext';
+import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
 
 // Import services
@@ -4239,13 +4238,127 @@ You are taking over this conversation. Based on the context above, provide a bri
     return activeSession ? getBatchState(activeSession.id) : getBatchState('');
   }, [activeBatchSessionIds, activeSession, getBatchState]);
 
-  // Inline wizard hook for /wizard command
+  // Inline wizard context for /wizard command
   // This manages the state for the inline wizard that creates/iterates on Auto Run documents
   const {
     startWizard: startInlineWizard,
+    endWizard: endInlineWizard,
     clearError: clearInlineWizardError,
     retryLastMessage: retryInlineWizardMessage,
-  } = useInlineWizard();
+    generateDocuments: generateInlineWizardDocuments,
+    // State for syncing to session.wizardState
+    isWizardActive: inlineWizardActive,
+    isWaiting: inlineWizardIsWaiting,
+    wizardMode: inlineWizardMode,
+    wizardGoal: inlineWizardGoal,
+    confidence: inlineWizardConfidence,
+    ready: inlineWizardReady,
+    conversationHistory: inlineWizardConversationHistory,
+    error: inlineWizardError,
+    isGeneratingDocs: inlineWizardIsGeneratingDocs,
+    generatedDocuments: inlineWizardGeneratedDocuments,
+    streamingContent: inlineWizardStreamingContent,
+    generationProgress: inlineWizardGenerationProgress,
+    state: inlineWizardState,
+    wizardTabId: inlineWizardTabId,
+  } = useInlineWizardContext();
+
+  // Sync inline wizard context state to session.wizardState
+  // This bridges the gap between the context-based state and session-based UI rendering
+  // The wizard is per-tab, so only sync when the active tab matches the wizard's tab
+  useEffect(() => {
+    if (!activeSession) return;
+
+    const activeTab = getActiveTab(activeSession);
+    const activeTabId = activeTab?.id;
+
+    // Only sync if the active tab is the wizard's tab
+    const isWizardTab = inlineWizardTabId && activeTabId === inlineWizardTabId;
+    const currentWizardState = activeSession.wizardState;
+    const shouldHaveWizardState = isWizardTab && (inlineWizardActive || inlineWizardIsGeneratingDocs);
+
+    if (!shouldHaveWizardState && !currentWizardState) {
+      // Neither active nor has state - nothing to do
+      return;
+    }
+
+    if (!shouldHaveWizardState && currentWizardState) {
+      // Wizard was deactivated or we switched to a different tab - clear the state
+      setSessions(prev => prev.map(s =>
+        s.id === activeSession.id
+          ? { ...s, wizardState: undefined }
+          : s
+      ));
+      return;
+    }
+
+    if (!isWizardTab) {
+      // Not the wizard's tab - don't sync
+      return;
+    }
+
+    // Sync the wizard state to the session
+    const newWizardState = {
+      isActive: inlineWizardActive,
+      isWaiting: inlineWizardIsWaiting,
+      mode: inlineWizardMode === 'ask' ? 'new' : inlineWizardMode, // Map 'ask' to 'new' for session state
+      goal: inlineWizardGoal ?? undefined,
+      confidence: inlineWizardConfidence,
+      ready: inlineWizardReady,
+      conversationHistory: inlineWizardConversationHistory.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        confidence: msg.confidence,
+        ready: msg.ready,
+      })),
+      previousUIState: inlineWizardState.previousUIState ?? {
+        readOnlyMode: false,
+        saveToHistory: true,
+        showThinking: false,
+      },
+      error: inlineWizardError,
+      isGeneratingDocs: inlineWizardIsGeneratingDocs,
+      generatedDocuments: inlineWizardGeneratedDocuments.map(doc => ({
+        filename: doc.filename,
+        content: doc.content,
+        taskCount: doc.taskCount,
+        savedPath: doc.savedPath,
+      })),
+      streamingContent: inlineWizardStreamingContent,
+      currentGeneratingIndex: inlineWizardGenerationProgress?.current,
+      totalDocuments: inlineWizardGenerationProgress?.total,
+      autoRunFolderPath: inlineWizardState.projectPath
+        ? `${inlineWizardState.projectPath}/Auto Run Docs`
+        : undefined,
+    };
+
+    setSessions(prev => prev.map(s =>
+      s.id === activeSession.id
+        ? { ...s, wizardState: newWizardState }
+        : s
+    ));
+  }, [
+    activeSession?.id,
+    activeSession?.activeTabId,
+    inlineWizardTabId,
+    inlineWizardActive,
+    inlineWizardIsWaiting,
+    inlineWizardMode,
+    inlineWizardGoal,
+    inlineWizardConfidence,
+    inlineWizardReady,
+    inlineWizardConversationHistory,
+    inlineWizardError,
+    inlineWizardIsGeneratingDocs,
+    inlineWizardGeneratedDocuments,
+    inlineWizardStreamingContent,
+    inlineWizardGenerationProgress,
+    inlineWizardState.previousUIState,
+    inlineWizardState.projectPath,
+    setSessions,
+  ]);
 
   // Handler for the built-in /history command
   // Requests a synopsis from the current agent session and saves to history
@@ -4424,7 +4537,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 
     // Start the inline wizard with the argument text (natural language input)
     // The wizard will use the intent parser to determine mode (new/iterate/ask)
-    startInlineWizard(args || undefined, currentUIState);
+    startInlineWizard(
+      args || undefined,
+      currentUIState,
+      activeSession.projectRoot || activeSession.cwd, // Project path for Auto Run folder detection
+      activeSession.toolType, // Agent type for AI conversation
+      activeSession.name, // Session/project name
+      activeTab.id // Tab ID for per-tab isolation
+    );
 
     // Show a system log entry indicating wizard started
     const wizardLog: LogEntry = {
@@ -10048,9 +10168,12 @@ You are taking over this conversation. Based on the context above, provide a bri
           // Refresh the Auto Run panel to show newly generated documents
           handleAutoRunRefresh();
         }}
-        // Inline wizard error handling callbacks
+        // Inline wizard callbacks
+        onWizardLetsGo={generateInlineWizardDocuments}
         onWizardRetry={retryInlineWizardMessage}
         onWizardClearError={clearInlineWizardError}
+        // Inline wizard exit handler (for WizardInputPanel)
+        onExitWizard={endInlineWizard}
       />
       )}
 

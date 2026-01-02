@@ -528,14 +528,17 @@ describe('wizardPrompts', () => {
       expect(prompt).toContain('Maestro');
     });
 
-    it('should include directory restriction instructions', () => {
+    it('should include file access restriction instructions', () => {
       const config: SystemPromptConfig = {
         agentName: 'Test',
         agentPath: '/specific/path',
       };
       const prompt = generateSystemPrompt(config);
 
-      expect(prompt).toContain('ONLY create or modify files within this directory');
+      // Check for the new file access restriction format
+      expect(prompt).toContain('WRITE ACCESS (Limited)');
+      expect(prompt).toContain('READ ACCESS (Unrestricted)');
+      expect(prompt).toContain('ONLY create or modify files in the Auto Run folder');
       expect(prompt).toContain('/specific/path');
     });
 

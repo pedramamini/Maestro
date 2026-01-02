@@ -9,7 +9,7 @@
  * runs inline within the existing AI conversation interface.
  */
 
-import { useState, useCallback, useRef } from 'react';
+import { useState, useCallback, useRef, useEffect } from 'react';
 import { parseWizardIntent } from '../services/wizardIntentParser';
 import {
   hasExistingAutoRunDocs,
@@ -123,6 +123,10 @@ export interface InlineWizardState {
   agentType: ToolType | null;
   /** Session name/project name */
   sessionName: string | null;
+  /** Tab ID the wizard was started on (for per-tab isolation) */
+  tabId: string | null;
+  /** Whether the initial greeting has been sent to kick off the conversation */
+  initialGreetingSent: boolean;
   /** Streaming content being generated (accumulates as AI outputs) */
   streamingContent: string;
   /** Progress tracking for document generation */
@@ -163,6 +167,8 @@ export interface UseInlineWizardReturn {
   streamingContent: string;
   /** Progress tracking for document generation (e.g., "Phase 1 of 3") */
   generationProgress: GenerationProgress | null;
+  /** Tab ID the wizard was started on (for per-tab isolation) */
+  wizardTabId: string | null;
   /** Full wizard state */
   state: InlineWizardState;
   /**
@@ -172,13 +178,15 @@ export interface UseInlineWizardReturn {
    * @param projectPath - Project path to check for existing Auto Run documents
    * @param agentType - The AI agent type to use for conversation
    * @param sessionName - The session name (used as project name)
+   * @param tabId - The tab ID to associate the wizard with
    */
   startWizard: (
     naturalLanguageInput?: string,
     currentUIState?: PreviousUIState,
     projectPath?: string,
     agentType?: ToolType,
-    sessionName?: string
+    sessionName?: string,
+    tabId?: string
   ) => Promise<void>;
   /** End the wizard and restore previous UI state */
   endWizard: () => Promise<PreviousUIState | null>;
@@ -256,6 +264,8 @@ const initialState: InlineWizardState = {
   projectPath: null,
   agentType: null,
   sessionName: null,
+  tabId: null,
+  initialGreetingSent: false,
   streamingContent: '',
   generationProgress: null,
 };
@@ -357,7 +367,8 @@ export function useInlineWizard(): UseInlineWizardReturn {
       currentUIState?: PreviousUIState,
       projectPath?: string,
       agentType?: ToolType,
-      sessionName?: string
+      sessionName?: string,
+      tabId?: string
     ): Promise<void> => {
       // Store current UI state for later restoration
       if (currentUIState) {
@@ -383,6 +394,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
         projectPath: projectPath || null,
         agentType: agentType || null,
         sessionName: sessionName || null,
+        tabId: tabId || null,
       }));
 
       try {
@@ -918,6 +930,55 @@ export function useInlineWizard(): UseInlineWizardReturn {
   // Compute readyToGenerate based on ready flag and confidence threshold
   const readyToGenerate = state.ready && state.confidence >= READY_CONFIDENCE_THRESHOLD;
 
+  // Automatically send an initial greeting to start the conversation
+  // This triggers the agent to examine the project and ask opening questions
+  useEffect(() => {
+    // Only send if:
+    // - Wizard is active and not initializing
+    // - Mode is determined (new or iterate)
+    // - Haven't sent the initial greeting yet
+    // - No conversation history yet
+    // - Not currently waiting for a response
+    const shouldSendGreeting =
+      state.isActive &&
+      !state.isInitializing &&
+      (state.mode === 'new' || state.mode === 'iterate') &&
+      !state.initialGreetingSent &&
+      state.conversationHistory.length === 0 &&
+      !state.isWaiting &&
+      conversationSessionRef.current;
+
+    if (shouldSendGreeting) {
+      // Mark as sent immediately to prevent duplicate sends
+      setState((prev) => ({ ...prev, initialGreetingSent: true }));
+
+      // Build an appropriate initial message based on mode and goal
+      let initialMessage: string;
+      if (state.mode === 'iterate' && state.goal) {
+        initialMessage = `I want to ${state.goal}`;
+      } else if (state.mode === 'iterate') {
+        initialMessage = 'I want to iterate on my existing Auto Run documents.';
+      } else {
+        initialMessage = 'Hello! I want to create a new action plan.';
+      }
+
+      // Send the initial message to trigger the agent's greeting
+      // We use a short delay to ensure state is fully updated
+      setTimeout(() => {
+        sendMessage(initialMessage);
+      }, 100);
+    }
+  }, [
+    state.isActive,
+    state.isInitializing,
+    state.mode,
+    state.goal,
+    state.initialGreetingSent,
+    state.conversationHistory.length,
+    state.isWaiting,
+    sendMessage,
+  ]);
+
   return {
     // Convenience accessors
     isWizardActive: state.isActive,
@@ -935,6 +996,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
     error: state.error,
     streamingContent: state.streamingContent,
     generationProgress: state.generationProgress,
+    wizardTabId: state.tabId,
 
     // Full state
     state,

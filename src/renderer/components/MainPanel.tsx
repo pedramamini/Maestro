@@ -245,6 +245,8 @@ interface MainPanelProps {
   onWizardRetry?: () => void;
   /** Called when user dismisses an error in the wizard */
   onWizardClearError?: () => void;
+  /** Called when user exits inline wizard mode (Escape or clicks pill) */
+  onExitWizard?: () => void;
 }
 
 // PERFORMANCE: Wrap with React.memo to prevent re-renders when parent (App.tsx) re-renders
@@ -296,6 +298,8 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
     mergeSourceName,
     mergeTargetName,
     onCancelMerge,
+    // Inline wizard exit handler
+    onExitWizard,
   } = props;
 
   // isCurrentSessionAutoMode: THIS session has active batch run (for all UI indicators)
@@ -1139,7 +1143,7 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
                   key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
                   theme={theme}
                   conversationHistory={activeSession.wizardState.conversationHistory}
-                  isLoading={activeSession.state === 'busy'}
+                  isLoading={activeSession.wizardState.isWaiting ?? false}
                   agentName={activeSession.name}
                   confidence={activeSession.wizardState.confidence}
                   ready={activeSession.wizardState.ready}
@@ -1275,6 +1279,8 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
                 mergeSourceName={mergeSourceName}
                 mergeTargetName={mergeTargetName}
                 onCancelMerge={onCancelMerge}
+                // Inline wizard mode
+                onExitWizard={onExitWizard}
               />
               </div>
               )}

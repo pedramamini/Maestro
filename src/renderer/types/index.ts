@@ -98,6 +98,8 @@ export interface WizardGeneratedDocument {
 export interface SessionWizardState {
   /** Whether wizard is currently active */
   isActive: boolean;
+  /** Whether waiting for AI response */
+  isWaiting?: boolean;
   /** Current wizard mode: 'new' for creating documents, 'iterate' for modifying existing */
   mode: WizardMode;
   /** Goal for iterate mode (what the user wants to add/change) */
