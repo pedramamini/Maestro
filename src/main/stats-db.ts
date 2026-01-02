@@ -43,6 +43,7 @@ import {
   QueryEvent,
   AutoRunSession,
   AutoRunTask,
+  SessionLifecycleEvent,
   StatsTimeRange,
   StatsFilters,
   StatsAggregation,
@@ -254,6 +255,27 @@ const CREATE_AUTO_RUN_TASKS_INDEXES_SQL = `
 `;
 
 /**
+ * SQL for creating session_lifecycle table
+ */
+const CREATE_SESSION_LIFECYCLE_SQL = `
+  CREATE TABLE IF NOT EXISTS session_lifecycle (
+    id TEXT PRIMARY KEY,
+    session_id TEXT NOT NULL UNIQUE,
+    agent_type TEXT NOT NULL,
+    project_path TEXT,
+    created_at INTEGER NOT NULL,
+    closed_at INTEGER,
+    duration INTEGER,
+    is_remote INTEGER
+  )
+`;
+
+const CREATE_SESSION_LIFECYCLE_INDEXES_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_session_created_at ON session_lifecycle(created_at);
+  CREATE INDEX IF NOT EXISTS idx_session_agent_type ON session_lifecycle(agent_type)
+`;
+
+/**
  * StatsDB manages the SQLite database for usage statistics.
  * Implements singleton pattern for database connection management.
  */
@@ -278,6 +300,11 @@ export class StatsDB {
         version: 2,
         description: 'Add is_remote column to query_events for tracking SSH sessions',
         up: () => this.migrateV2(),
+      },
+      {
+        version: 3,
+        description: 'Add session_lifecycle table for tracking session creation and closure',
+        up: () => this.migrateV3(),
       },
     ];
   }
@@ -552,6 +579,26 @@ export class StatsDB {
     this.db.prepare('CREATE INDEX IF NOT EXISTS idx_query_is_remote ON query_events(is_remote)').run();
 
     logger.debug('Added is_remote column to query_events table', LOG_CONTEXT);
+  }
+
+  /**
+   * Migration v3: Add session_lifecycle table for tracking session creation and closure
+   *
+   * This enables tracking of unique sessions launched over time, session duration,
+   * and session lifecycle metrics in the Usage Dashboard.
+   */
+  private migrateV3(): void {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Create session_lifecycle table
+    this.db.prepare(CREATE_SESSION_LIFECYCLE_SQL).run();
+
+    // Create indexes
+    for (const indexSql of CREATE_SESSION_LIFECYCLE_INDEXES_SQL.split(';').filter((s) => s.trim())) {
+      this.db.prepare(indexSql).run();
+    }
+
+    logger.debug('Created session_lifecycle table', LOG_CONTEXT);
   }
 
   // ============================================================================
@@ -1134,6 +1181,100 @@ export class StatsDB {
   }
 
   // ============================================================================
+  // Session Lifecycle
+  // ============================================================================
+
+  /**
+   * Record a session being created (launched)
+   */
+  recordSessionCreated(event: Omit<SessionLifecycleEvent, 'id' | 'closedAt' | 'duration'>): string {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const id = generateId();
+    const stmt = this.db.prepare(`
+      INSERT INTO session_lifecycle (id, session_id, agent_type, project_path, created_at, is_remote)
+      VALUES (?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      event.sessionId,
+      event.agentType,
+      normalizePath(event.projectPath),
+      event.createdAt,
+      event.isRemote !== undefined ? (event.isRemote ? 1 : 0) : null
+    );
+
+    logger.debug(`Recorded session created: ${event.sessionId}`, LOG_CONTEXT);
+    return id;
+  }
+
+  /**
+   * Record a session being closed
+   */
+  recordSessionClosed(sessionId: string, closedAt: number): boolean {
+    if (!this.db) throw new Error('Database not initialized');
+
+    // Get the session's created_at time to calculate duration
+    const session = this.db.prepare(`
+      SELECT created_at FROM session_lifecycle WHERE session_id = ?
+    `).get(sessionId) as { created_at: number } | undefined;
+
+    if (!session) {
+      logger.debug(`Session not found for closure: ${sessionId}`, LOG_CONTEXT);
+      return false;
+    }
+
+    const duration = closedAt - session.created_at;
+
+    const stmt = this.db.prepare(`
+      UPDATE session_lifecycle
+      SET closed_at = ?, duration = ?
+      WHERE session_id = ?
+    `);
+
+    const result = stmt.run(closedAt, duration, sessionId);
+    logger.debug(`Recorded session closed: ${sessionId}, duration: ${duration}ms`, LOG_CONTEXT);
+    return result.changes > 0;
+  }
+
+  /**
+   * Get session lifecycle events within a time range
+   */
+  getSessionLifecycleEvents(range: StatsTimeRange): SessionLifecycleEvent[] {
+    if (!this.db) throw new Error('Database not initialized');
+
+    const startTime = getTimeRangeStart(range);
+    const stmt = this.db.prepare(`
+      SELECT * FROM session_lifecycle
+      WHERE created_at >= ?
+      ORDER BY created_at DESC
+    `);
+
+    const rows = stmt.all(startTime) as Array<{
+      id: string;
+      session_id: string;
+      agent_type: string;
+      project_path: string | null;
+      created_at: number;
+      closed_at: number | null;
+      duration: number | null;
+      is_remote: number | null;
+    }>;
+
+    return rows.map((row) => ({
+      id: row.id,
+      sessionId: row.session_id,
+      agentType: row.agent_type,
+      projectPath: row.project_path ?? undefined,
+      createdAt: row.created_at,
+      closedAt: row.closed_at ?? undefined,
+      duration: row.duration ?? undefined,
+      isRemote: row.is_remote !== null ? row.is_remote === 1 : undefined,
+    }));
+  }
+
+  // ============================================================================
   // Aggregations
   // ============================================================================
 
@@ -1246,6 +1387,49 @@ export class StatsDB {
     }>;
     perfMetrics.end(byHourStart, 'getAggregatedStats:byHour', { range });
 
+    // Session lifecycle stats
+    const sessionsStart = perfMetrics.start();
+
+    // Total sessions and average duration
+    const sessionTotalsStmt = this.db.prepare(`
+      SELECT COUNT(*) as count, COALESCE(AVG(duration), 0) as avg_duration
+      FROM session_lifecycle
+      WHERE created_at >= ?
+    `);
+    const sessionTotals = sessionTotalsStmt.get(startTime) as { count: number; avg_duration: number };
+
+    // Sessions by agent type
+    const sessionsByAgentStmt = this.db.prepare(`
+      SELECT agent_type, COUNT(*) as count
+      FROM session_lifecycle
+      WHERE created_at >= ?
+      GROUP BY agent_type
+    `);
+    const sessionsByAgentRows = sessionsByAgentStmt.all(startTime) as Array<{
+      agent_type: string;
+      count: number;
+    }>;
+    const sessionsByAgent: Record<string, number> = {};
+    for (const row of sessionsByAgentRows) {
+      sessionsByAgent[row.agent_type] = row.count;
+    }
+
+    // Sessions by day
+    const sessionsByDayStmt = this.db.prepare(`
+      SELECT date(created_at / 1000, 'unixepoch', 'localtime') as date,
+             COUNT(*) as count
+      FROM session_lifecycle
+      WHERE created_at >= ?
+      GROUP BY date(created_at / 1000, 'unixepoch', 'localtime')
+      ORDER BY date ASC
+    `);
+    const sessionsByDayRows = sessionsByDayStmt.all(startTime) as Array<{
+      date: string;
+      count: number;
+    }>;
+
+    perfMetrics.end(sessionsStart, 'getAggregatedStats:sessions', { range, sessionCount: sessionTotals.count });
+
     const totalDuration = perfMetrics.end(perfStart, 'getAggregatedStats:total', {
       range,
       totalQueries: totals.count,
@@ -1269,6 +1453,10 @@ export class StatsDB {
       byDay: byDayRows,
       byLocation,
       byHour: byHourRows,
+      totalSessions: sessionTotals.count,
+      sessionsByAgent,
+      sessionsByDay: sessionsByDayRows,
+      avgSessionDuration: Math.round(sessionTotals.avg_duration),
     };
   }
 
@@ -1279,9 +1467,9 @@ export class StatsDB {
   /**
    * Clear old data from the database.
    *
-   * Deletes query_events, auto_run_sessions, and auto_run_tasks that are older
-   * than the specified number of days. This is useful for managing database size
-   * and removing stale historical data.
+   * Deletes query_events, auto_run_sessions, auto_run_tasks, and session_lifecycle
+   * records that are older than the specified number of days. This is useful for
+   * managing database size and removing stale historical data.
    *
    * @param olderThanDays - Delete records older than this many days (e.g., 30, 90, 180, 365)
    * @returns Object with success status, number of records deleted from each table, and any error
@@ -1291,6 +1479,7 @@ export class StatsDB {
     deletedQueryEvents: number;
     deletedAutoRunSessions: number;
     deletedAutoRunTasks: number;
+    deletedSessionLifecycle: number;
     error?: string;
   } {
     if (!this.db) {
@@ -1299,6 +1488,7 @@ export class StatsDB {
         deletedQueryEvents: 0,
         deletedAutoRunSessions: 0,
         deletedAutoRunTasks: 0,
+        deletedSessionLifecycle: 0,
         error: 'Database not initialized',
       };
     }
@@ -1309,6 +1499,7 @@ export class StatsDB {
         deletedQueryEvents: 0,
         deletedAutoRunSessions: 0,
         deletedAutoRunTasks: 0,
+        deletedSessionLifecycle: 0,
         error: 'olderThanDays must be greater than 0',
       };
     }
@@ -1351,9 +1542,15 @@ export class StatsDB {
         .run(cutoffTime);
       const deletedEvents = eventsResult.changes;
 
-      const totalDeleted = deletedEvents + deletedSessions + deletedTasks;
+      // Delete session_lifecycle
+      const lifecycleResult = this.db
+        .prepare('DELETE FROM session_lifecycle WHERE created_at < ?')
+        .run(cutoffTime);
+      const deletedLifecycle = lifecycleResult.changes;
+
+      const totalDeleted = deletedEvents + deletedSessions + deletedTasks + deletedLifecycle;
       logger.info(
-        `Cleared ${totalDeleted} old stats records (${deletedEvents} query events, ${deletedSessions} auto-run sessions, ${deletedTasks} auto-run tasks)`,
+        `Cleared ${totalDeleted} old stats records (${deletedEvents} query events, ${deletedSessions} auto-run sessions, ${deletedTasks} auto-run tasks, ${deletedLifecycle} session lifecycle)`,
         LOG_CONTEXT
       );
 
@@ -1362,6 +1559,7 @@ export class StatsDB {
         deletedQueryEvents: deletedEvents,
         deletedAutoRunSessions: deletedSessions,
         deletedAutoRunTasks: deletedTasks,
+        deletedSessionLifecycle: deletedLifecycle,
       };
     } catch (error) {
       const errorMessage = error instanceof Error ? error.message : String(error);
@@ -1371,6 +1569,7 @@ export class StatsDB {
         deletedQueryEvents: 0,
         deletedAutoRunSessions: 0,
         deletedAutoRunTasks: 0,
+        deletedSessionLifecycle: 0,
         error: errorMessage,
       };
     }

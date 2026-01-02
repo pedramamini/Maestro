@@ -31,11 +31,16 @@ vi.mock('lucide-react', () => {
     Timer: createIcon('timer', '⏱️'),
     Bot: createIcon('bot', '🤖'),
     Users: createIcon('users', '👥'),
+    Layers: createIcon('layers', '📚'),
     // AutoRunStats icons
     Play: createIcon('play', '▶️'),
     CheckSquare: createIcon('check-square', '✅'),
     ListChecks: createIcon('list-checks', '📝'),
     Target: createIcon('target', '🎯'),
+    // ChartErrorBoundary icons
+    AlertTriangle: createIcon('alert-triangle', '⚠️'),
+    ChevronDown: createIcon('chevron-down', '▼'),
+    ChevronUp: createIcon('chevron-up', '▲'),
   };
 });
 
@@ -116,12 +121,28 @@ const createSampleData = () => ({
     'terminal': { count: 50, duration: 1200000 },
   },
   bySource: { user: 100, auto: 50 },
+  byLocation: { local: 120, remote: 30 },
   byDay: [
     { date: '2024-01-15', count: 25, duration: 600000 },
     { date: '2024-01-16', count: 30, duration: 720000 },
     { date: '2024-01-17', count: 45, duration: 1080000 },
     { date: '2024-01-18', count: 50, duration: 1200000 },
   ],
+  byHour: [
+    { hour: 9, count: 20, duration: 480000 },
+    { hour: 10, count: 35, duration: 840000 },
+    { hour: 14, count: 45, duration: 1080000 },
+    { hour: 15, count: 50, duration: 1200000 },
+  ],
+  totalSessions: 25,
+  sessionsByAgent: { 'claude-code': 15, 'terminal': 10 },
+  sessionsByDay: [
+    { date: '2024-01-15', count: 5 },
+    { date: '2024-01-16', count: 7 },
+    { date: '2024-01-17', count: 6 },
+    { date: '2024-01-18', count: 7 },
+  ],
+  avgSessionDuration: 144000,
 });
 
 describe('UsageDashboardModal', () => {

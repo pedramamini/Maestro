@@ -51,6 +51,22 @@ export interface AutoRunTask {
 }
 
 /**
+ * Session lifecycle event - tracks when sessions are created and closed
+ */
+export interface SessionLifecycleEvent {
+  id: string;
+  sessionId: string;
+  agentType: string;
+  projectPath?: string;
+  createdAt: number;
+  closedAt?: number;
+  /** Duration in ms (computed from closedAt - createdAt when session is closed) */
+  duration?: number;
+  /** Whether this was a remote SSH session */
+  isRemote?: boolean;
+}
+
+/**
  * Time range for querying stats
  */
 export type StatsTimeRange = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -69,6 +85,14 @@ export interface StatsAggregation {
   byLocation: { local: number; remote: number };
   /** Breakdown by hour of day (0-23) for peak hours chart */
   byHour: Array<{ hour: number; count: number; duration: number }>;
+  /** Total unique sessions launched in the time period */
+  totalSessions: number;
+  /** Sessions by agent type */
+  sessionsByAgent: Record<string, number>;
+  /** Sessions launched per day */
+  sessionsByDay: Array<{ date: string; count: number }>;
+  /** Average session duration in ms (for closed sessions) */
+  avgSessionDuration: number;
 }
 
 /**
@@ -84,4 +108,4 @@ export interface StatsFilters {
 /**
  * Database schema version for migrations
  */
-export const STATS_DB_VERSION = 2;
+export const STATS_DB_VERSION = 3;

@@ -1647,6 +1647,10 @@ interface MaestroAPI {
       byLocation: { local: number; remote: number };
       byDay: Array<{ date: string; count: number; duration: number }>;
       byHour: Array<{ hour: number; count: number; duration: number }>;
+      totalSessions: number;
+      sessionsByAgent: Record<string, number>;
+      sessionsByDay: Array<{ date: string; count: number }>;
+      avgSessionDuration: number;
     }>;
     // Export query events to CSV
     exportCsv: (range: 'day' | 'week' | 'month' | 'year' | 'all') => Promise<string>;
@@ -1658,10 +1662,32 @@ interface MaestroAPI {
       deletedQueryEvents: number;
       deletedAutoRunSessions: number;
       deletedAutoRunTasks: number;
+      deletedSessionLifecycle: number;
       error?: string;
     }>;
     // Get database size in bytes
     getDatabaseSize: () => Promise<number>;
+    // Record session creation (launched)
+    recordSessionCreated: (event: {
+      sessionId: string;
+      agentType: string;
+      projectPath?: string;
+      createdAt: number;
+      isRemote?: boolean;
+    }) => Promise<string | null>;
+    // Record session closure
+    recordSessionClosed: (sessionId: string, closedAt: number) => Promise<boolean>;
+    // Get session lifecycle events within a time range
+    getSessionLifecycle: (range: 'day' | 'week' | 'month' | 'year' | 'all') => Promise<Array<{
+      id: string;
+      sessionId: string;
+      agentType: string;
+      projectPath?: string;
+      createdAt: number;
+      closedAt?: number;
+      duration?: number;
+      isRemote?: boolean;
+    }>>;
   };
   // Document Graph API (file watching for graph visualization)
   documentGraph: {

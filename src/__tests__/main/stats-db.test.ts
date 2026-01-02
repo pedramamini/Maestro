@@ -93,6 +93,7 @@ import type {
   QueryEvent,
   AutoRunSession,
   AutoRunTask,
+  SessionLifecycleEvent,
   StatsTimeRange,
   StatsFilters,
   StatsAggregation,
@@ -188,6 +189,58 @@ describe('stats-types.ts', () => {
     });
   });
 
+  describe('SessionLifecycleEvent interface', () => {
+    it('should define proper SessionLifecycleEvent structure for created session', () => {
+      const event: SessionLifecycleEvent = {
+        id: 'lifecycle-1',
+        sessionId: 'session-1',
+        agentType: 'claude-code',
+        projectPath: '/test/project',
+        createdAt: Date.now(),
+        isRemote: false,
+      };
+
+      expect(event.id).toBe('lifecycle-1');
+      expect(event.sessionId).toBe('session-1');
+      expect(event.agentType).toBe('claude-code');
+      expect(event.closedAt).toBeUndefined();
+      expect(event.duration).toBeUndefined();
+    });
+
+    it('should define proper SessionLifecycleEvent structure for closed session', () => {
+      const createdAt = Date.now() - 3600000; // 1 hour ago
+      const closedAt = Date.now();
+      const event: SessionLifecycleEvent = {
+        id: 'lifecycle-2',
+        sessionId: 'session-2',
+        agentType: 'claude-code',
+        projectPath: '/test/project',
+        createdAt,
+        closedAt,
+        duration: closedAt - createdAt,
+        isRemote: true,
+      };
+
+      expect(event.closedAt).toBe(closedAt);
+      expect(event.duration).toBe(3600000);
+      expect(event.isRemote).toBe(true);
+    });
+
+    it('should allow optional fields to be undefined', () => {
+      const event: SessionLifecycleEvent = {
+        id: 'lifecycle-3',
+        sessionId: 'session-3',
+        agentType: 'opencode',
+        createdAt: Date.now(),
+      };
+
+      expect(event.projectPath).toBeUndefined();
+      expect(event.closedAt).toBeUndefined();
+      expect(event.duration).toBeUndefined();
+      expect(event.isRemote).toBeUndefined();
+    });
+  });
+
   describe('StatsTimeRange type', () => {
     it('should accept valid time ranges', () => {
       const ranges: StatsTimeRange[] = ['day', 'week', 'month', 'year', 'all'];
@@ -221,16 +274,37 @@ describe('stats-types.ts', () => {
           opencode: { count: 30, duration: 150000 },
         },
         bySource: { user: 60, auto: 40 },
+        byLocation: { local: 80, remote: 20 },
         byDay: [
           { date: '2024-01-01', count: 10, duration: 50000 },
           { date: '2024-01-02', count: 15, duration: 75000 },
         ],
+        byHour: [
+          { hour: 9, count: 20, duration: 100000 },
+          { hour: 10, count: 25, duration: 125000 },
+        ],
+        // Session lifecycle fields
+        totalSessions: 15,
+        sessionsByAgent: {
+          'claude-code': 10,
+          opencode: 5,
+        },
+        sessionsByDay: [
+          { date: '2024-01-01', count: 3 },
+          { date: '2024-01-02', count: 5 },
+        ],
+        avgSessionDuration: 1800000,
       };
 
       expect(aggregation.totalQueries).toBe(100);
       expect(aggregation.byAgent['claude-code'].count).toBe(70);
       expect(aggregation.bySource.user).toBe(60);
       expect(aggregation.byDay).toHaveLength(2);
+      // Session lifecycle assertions
+      expect(aggregation.totalSessions).toBe(15);
+      expect(aggregation.sessionsByAgent['claude-code']).toBe(10);
+      expect(aggregation.sessionsByDay).toHaveLength(2);
+      expect(aggregation.avgSessionDuration).toBe(1800000);
     });
   });
 });
@@ -414,13 +488,13 @@ describe('StatsDB class (mocked)', () => {
       const db = new StatsDB();
       db.initialize();
 
-      // Currently we have version 2 migration (v1: initial schema, v2: is_remote column)
-      expect(db.getTargetVersion()).toBe(2);
+      // Currently we have version 3 migration (v1: initial schema, v2: is_remote column, v3: session_lifecycle table)
+      expect(db.getTargetVersion()).toBe(3);
     });
 
     it('should return false from hasPendingMigrations() when up to date', async () => {
       mockDb.pragma.mockImplementation((sql: string) => {
-        if (sql === 'user_version') return [{ user_version: 2 }];
+        if (sql === 'user_version') return [{ user_version: 3 }];
         return undefined;
       });
 
@@ -435,8 +509,8 @@ describe('StatsDB class (mocked)', () => {
       // This test verifies the hasPendingMigrations() logic
       // by checking current version < target version
 
-      // Simulate a database that's already at version 2 (target version)
-      let currentVersion = 2;
+      // Simulate a database that's already at version 3 (target version)
+      let currentVersion = 3;
       mockDb.pragma.mockImplementation((sql: string) => {
         if (sql === 'user_version') return [{ user_version: currentVersion }];
         // Handle version updates from migration
@@ -450,9 +524,9 @@ describe('StatsDB class (mocked)', () => {
       const db = new StatsDB();
       db.initialize();
 
-      // At version 2, target is 2, so no pending migrations
-      expect(db.getCurrentVersion()).toBe(2);
-      expect(db.getTargetVersion()).toBe(2);
+      // At version 3, target is 3, so no pending migrations
+      expect(db.getCurrentVersion()).toBe(3);
+      expect(db.getTargetVersion()).toBe(3);
       expect(db.hasPendingMigrations()).toBe(false);
     });
 
@@ -8240,12 +8314,15 @@ describe('Database VACUUM functionality', () => {
 
         db.clearOldData(30);
 
-        // All DELETE queries should filter by start_time (indexed)
+        // All DELETE queries should filter by indexed time columns
+        // (start_time for query_events, auto_run_sessions, auto_run_tasks;
+        //  created_at for session_lifecycle)
         const deleteQueries = queriesExecuted.filter((sql) => sql.includes('DELETE'));
         expect(deleteQueries.length).toBeGreaterThan(0);
 
         for (const query of deleteQueries) {
-          expect(query).toContain('start_time <');
+          const usesIndexedTimeColumn = query.includes('start_time <') || query.includes('created_at <');
+          expect(usesIndexedTimeColumn).toBe(true);
         }
       });
     });
@@ -8475,8 +8552,10 @@ describe('Database VACUUM functionality', () => {
 
         for (const query of selectQueries) {
           // Each query should filter by an indexed column
+          // (includes created_at for session_lifecycle table)
           const hasIndexedFilter =
             query.includes('start_time') ||
+            query.includes('created_at') ||
             query.includes('auto_run_session_id') ||
             query.includes('session_id');
           expect(hasIndexedFilter).toBe(true);

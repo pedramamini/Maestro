@@ -60,9 +60,20 @@ describe('stats IPC handlers', () => {
         avgDuration: 0,
         byAgent: {},
         bySource: { user: 0, auto: 0 },
+        byLocation: { local: 0, remote: 0 },
         byDay: [],
+        byHour: [],
+        totalSessions: 0,
+        sessionsByAgent: {},
+        sessionsByDay: [],
+        avgSessionDuration: 0,
       }),
       exportToCsv: vi.fn().mockReturnValue('id,sessionId,...'),
+      clearOldData: vi.fn().mockReturnValue({ success: true, deletedCount: 0 }),
+      getDatabaseSize: vi.fn().mockReturnValue({ sizeBytes: 1024, sizeFormatted: '1 KB' }),
+      recordSessionCreated: vi.fn().mockReturnValue('session-lifecycle-id'),
+      recordSessionClosed: vi.fn().mockReturnValue(true),
+      getSessionLifecycleEvents: vi.fn().mockReturnValue([]),
     };
 
     vi.mocked(statsDbModule.getStatsDB).mockReturnValue(mockStatsDB as unknown as StatsDB);
@@ -103,6 +114,11 @@ describe('stats IPC handlers', () => {
         'stats:get-autorun-tasks',
         'stats:get-aggregation',
         'stats:export-csv',
+        'stats:clear-old-data',
+        'stats:get-database-size',
+        'stats:record-session-created',
+        'stats:record-session-closed',
+        'stats:get-session-lifecycle',
       ];
 
       for (const channel of expectedChannels) {
@@ -373,6 +389,111 @@ describe('stats IPC handlers', () => {
       expect(mockMainWindow.webContents.send).toHaveBeenNthCalledWith(2, 'stats:updated');
       expect(mockMainWindow.webContents.send).toHaveBeenNthCalledWith(3, 'stats:updated');
       expect(mockMainWindow.webContents.send).toHaveBeenNthCalledWith(4, 'stats:updated');
+    });
+  });
+
+  describe('session lifecycle handlers', () => {
+    describe('stats:record-session-created', () => {
+      it('should broadcast stats:updated after recording session created', async () => {
+        const handler = handlers.get('stats:record-session-created');
+        const lifecycleEvent = {
+          sessionId: 'session-1',
+          agentType: 'claude-code',
+          projectPath: '/test/project',
+          createdAt: Date.now(),
+          isRemote: false,
+        };
+
+        const result = await handler!({} as any, lifecycleEvent);
+
+        expect(result).toBe('session-lifecycle-id');
+        expect(mockStatsDB.recordSessionCreated).toHaveBeenCalledWith(lifecycleEvent);
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('stats:updated');
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledTimes(1);
+      });
+
+      it('should not broadcast when main window is null', async () => {
+        const nullWindowGetMainWindow = () => null;
+        handlers.clear();
+        vi.mocked(ipcMain.handle).mockImplementation((channel, handler) => {
+          handlers.set(channel, handler);
+        });
+        registerStatsHandlers({ getMainWindow: nullWindowGetMainWindow });
+
+        const handler = handlers.get('stats:record-session-created');
+        const lifecycleEvent = {
+          sessionId: 'session-1',
+          agentType: 'claude-code',
+          createdAt: Date.now(),
+        };
+
+        await handler!({} as any, lifecycleEvent);
+
+        expect(mockStatsDB.recordSessionCreated).toHaveBeenCalled();
+        expect(mockMainWindow.webContents.send).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('stats:record-session-closed', () => {
+      it('should broadcast stats:updated after recording session closed', async () => {
+        const handler = handlers.get('stats:record-session-closed');
+        const sessionId = 'session-1';
+        const closedAt = Date.now();
+
+        const result = await handler!({} as any, sessionId, closedAt);
+
+        expect(result).toBe(true);
+        expect(mockStatsDB.recordSessionClosed).toHaveBeenCalledWith(sessionId, closedAt);
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('stats:updated');
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledTimes(1);
+      });
+
+      it('should broadcast stats:updated even when session not found', async () => {
+        vi.mocked(mockStatsDB.recordSessionClosed).mockReturnValue(false);
+
+        const handler = handlers.get('stats:record-session-closed');
+        const result = await handler!({} as any, 'nonexistent-session', Date.now());
+
+        expect(result).toBe(false);
+        // Should still broadcast - UI may need to refresh regardless
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('stats:updated');
+      });
+    });
+
+    describe('stats:get-session-lifecycle', () => {
+      it('should not broadcast stats:updated when getting session lifecycle events', async () => {
+        const handler = handlers.get('stats:get-session-lifecycle');
+
+        await handler!({} as any, 'week');
+
+        expect(mockStatsDB.getSessionLifecycleEvents).toHaveBeenCalledWith('week');
+        expect(mockMainWindow.webContents.send).not.toHaveBeenCalled();
+      });
+    });
+  });
+
+  describe('clear old data handler', () => {
+    describe('stats:clear-old-data', () => {
+      it('should broadcast stats:updated after clearing old data', async () => {
+        const handler = handlers.get('stats:clear-old-data');
+
+        const result = await handler!({} as any, 30);
+
+        expect(result).toEqual({ success: true, deletedCount: 0 });
+        expect(mockStatsDB.clearOldData).toHaveBeenCalledWith(30);
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('stats:updated');
+      });
+
+      it('should not broadcast when clear fails', async () => {
+        vi.mocked(mockStatsDB.clearOldData).mockReturnValue({ success: false, deletedCount: 0 });
+
+        const handler = handlers.get('stats:clear-old-data');
+        const result = await handler!({} as any, 30);
+
+        expect(result).toEqual({ success: false, deletedCount: 0 });
+        // Should not broadcast on failure
+        expect(mockMainWindow.webContents.send).not.toHaveBeenCalled();
+      });
     });
   });
 });

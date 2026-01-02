@@ -20,6 +20,7 @@ import {
   QueryEvent,
   AutoRunSession,
   AutoRunTask,
+  SessionLifecycleEvent,
   StatsTimeRange,
   StatsFilters,
 } from '../../../shared/stats-types';
@@ -239,6 +240,56 @@ export function registerStatsHandlers(deps: StatsHandlerDependencies): void {
     withIpcErrorLogging(handlerOpts('getDatabaseSize'), async () => {
       const db = getStatsDB();
       return db.getDatabaseSize();
+    })
+  );
+
+  // Record session creation (launched)
+  ipcMain.handle(
+    'stats:record-session-created',
+    withIpcErrorLogging(
+      handlerOpts('recordSessionCreated'),
+      async (event: Omit<SessionLifecycleEvent, 'id' | 'closedAt' | 'duration'>) => {
+        // Check if stats collection is enabled
+        if (!isStatsCollectionEnabled(settingsStore)) {
+          logger.debug('Stats collection disabled, skipping session creation', LOG_CONTEXT);
+          return null;
+        }
+
+        const db = getStatsDB();
+        const id = db.recordSessionCreated(event);
+        logger.debug(`Recorded session created: ${event.sessionId}`, LOG_CONTEXT, {
+          agentType: event.agentType,
+          projectPath: event.projectPath,
+        });
+        broadcastStatsUpdate(getMainWindow);
+        return id;
+      }
+    )
+  );
+
+  // Record session closure
+  ipcMain.handle(
+    'stats:record-session-closed',
+    withIpcErrorLogging(
+      handlerOpts('recordSessionClosed'),
+      async (sessionId: string, closedAt: number) => {
+        const db = getStatsDB();
+        const updated = db.recordSessionClosed(sessionId, closedAt);
+        if (updated) {
+          logger.debug(`Recorded session closed: ${sessionId}`, LOG_CONTEXT);
+        }
+        broadcastStatsUpdate(getMainWindow);
+        return updated;
+      }
+    )
+  );
+
+  // Get session lifecycle events within a time range
+  ipcMain.handle(
+    'stats:get-session-lifecycle',
+    withIpcErrorLogging(handlerOpts('getSessionLifecycle'), async (range: StatsTimeRange) => {
+      const db = getStatsDB();
+      return db.getSessionLifecycleEvents(range);
     })
   );
 }

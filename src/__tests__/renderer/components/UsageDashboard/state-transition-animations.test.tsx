@@ -38,10 +38,14 @@ vi.mock('lucide-react', () => {
     Timer: createIcon('timer', '⏱️'),
     Bot: createIcon('bot', '🤖'),
     Users: createIcon('users', '👥'),
+    Layers: createIcon('layers', '📚'),
     Play: createIcon('play', '▶️'),
     CheckSquare: createIcon('check-square', '✅'),
     ListChecks: createIcon('list-checks', '📝'),
     Target: createIcon('target', '🎯'),
+    AlertTriangle: createIcon('alert-triangle', '⚠️'),
+    ChevronDown: createIcon('chevron-down', '▼'),
+    ChevronUp: createIcon('chevron-up', '▲'),
   };
 });
 
@@ -136,10 +140,22 @@ beforeEach(() => {
       'opencode': { count: 20, duration: 720000 },
     },
     bySource: { user: 70, auto: 30 },
+    byLocation: { local: 80, remote: 20 },
     byDay: [
       { date: '2024-01-01', count: 50, duration: 1800000 },
       { date: '2024-01-02', count: 50, duration: 1800000 },
     ],
+    byHour: [
+      { hour: 9, count: 40, duration: 1440000 },
+      { hour: 14, count: 60, duration: 2160000 },
+    ],
+    totalSessions: 20,
+    sessionsByAgent: { 'claude-code': 15, 'opencode': 5 },
+    sessionsByDay: [
+      { date: '2024-01-01', count: 10 },
+      { date: '2024-01-02', count: 10 },
+    ],
+    avgSessionDuration: 180000,
   });
   mockStats.getDatabaseSize.mockResolvedValue(1024 * 1024); // 1 MB
 });
@@ -271,7 +287,13 @@ describe('Usage Dashboard State Transition Animations', () => {
       avgDuration: 36000,
       byAgent: { 'claude-code': { count: 100, duration: 3600000 } },
       bySource: { user: 70, auto: 30 },
+      byLocation: { local: 80, remote: 20 },
       byDay: [],
+      byHour: [],
+      totalSessions: 15,
+      sessionsByAgent: { 'claude-code': 15 },
+      sessionsByDay: [],
+      avgSessionDuration: 240000,
     };
 
     it('applies dashboard-card-enter class to metric cards', () => {
@@ -287,7 +309,7 @@ describe('Usage Dashboard State Transition Animations', () => {
       render(<SummaryCards data={mockData} theme={mockTheme} />);
 
       const cards = screen.getAllByTestId('metric-card');
-      expect(cards.length).toBe(5); // 5 metric cards
+      expect(cards.length).toBe(6); // 6 metric cards
 
       // Verify each card has incrementing animation delay
       cards.forEach((card, index) => {
@@ -303,11 +325,11 @@ describe('Usage Dashboard State Transition Animations', () => {
       expect(cards[0]).toHaveStyle({ animationDelay: '0ms' });
     });
 
-    it('last card has 200ms delay (4 * 50ms)', () => {
+    it('last card has 250ms delay (5 * 50ms)', () => {
       render(<SummaryCards data={mockData} theme={mockTheme} />);
 
       const cards = screen.getAllByTestId('metric-card');
-      expect(cards[4]).toHaveStyle({ animationDelay: '200ms' });
+      expect(cards[5]).toHaveStyle({ animationDelay: '250ms' });
     });
   });
 

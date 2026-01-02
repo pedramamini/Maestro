@@ -29,6 +29,11 @@ export interface StatsAggregation {
   byLocation: { local: number; remote: number };
   byDay: Array<{ date: string; count: number; duration: number }>;
   byHour: Array<{ hour: number; count: number; duration: number }>;
+  // Session lifecycle stats
+  totalSessions: number;
+  sessionsByAgent: Record<string, number>;
+  sessionsByDay: Array<{ date: string; count: number }>;
+  avgSessionDuration: number;
 }
 
 // Return type for the useStats hook

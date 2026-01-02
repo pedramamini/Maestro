@@ -5634,6 +5634,9 @@ You are taking over this conversation. Based on the context above, provide a bri
     showConfirmation(
       `Are you sure you want to delete the agent "${session.name}"? This action cannot be undone.`,
       async () => {
+        // Record session closure for Usage Dashboard (before cleanup)
+        window.maestro.stats.recordSessionClosed(id, Date.now());
+
         // Kill both processes for this session
         try {
           await window.maestro.process.kill(`${id}-ai`);
@@ -5873,6 +5876,14 @@ You are taking over this conversation. Based on the context above, provide a bri
       setActiveSessionId(newId);
       // Track session creation in global stats
       updateGlobalStats({ totalSessions: 1 });
+      // Record session lifecycle for Usage Dashboard
+      window.maestro.stats.recordSessionCreated({
+        sessionId: newId,
+        agentType: agentId,
+        projectPath: workingDir,
+        createdAt: Date.now(),
+        isRemote: !!isRemoteSession,
+      });
       // Auto-focus the input so user can start typing immediately
       // Use a small delay to ensure the modal has closed and the UI has updated
       setActiveFocus('main');
@@ -6007,6 +6018,14 @@ You are taking over this conversation. Based on the context above, provide a bri
     setSessions(prev => [...prev, newSession]);
     setActiveSessionId(newId);
     updateGlobalStats({ totalSessions: 1 });
+    // Record session lifecycle for Usage Dashboard
+    window.maestro.stats.recordSessionCreated({
+      sessionId: newId,
+      agentType: selectedAgent,
+      projectPath: directoryPath,
+      createdAt: Date.now(),
+      isRemote: !!sessionSshRemoteConfig?.enabled,
+    });
 
     // Clear wizard resume state since we completed successfully
     clearResumeState();

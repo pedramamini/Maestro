@@ -3,9 +3,11 @@
  *
  * These tests verify that the Usage Dashboard modal correctly adapts its layout
  * based on container width, supporting:
- * - Narrow screens (<600px): Single column charts, 2-column summary cards
- * - Medium screens (600-900px): 2-column charts, 3-column summary cards
- * - Wide screens (>900px): 2-column charts, 5-column summary cards
+ * - Narrow screens (<600px): Single column charts, 2-column summary cards grid
+ * - Medium screens (600-900px): 2-column charts, 3-column summary cards grid
+ * - Wide screens (>900px): 2-column charts, 5-column summary cards grid
+ *
+ * Note: SummaryCards always renders 6 metric cards regardless of grid column count.
  *
  * The responsive system uses ResizeObserver to track container width and
  * dynamically adjusts grid column counts via CSS grid.
@@ -36,10 +38,14 @@ vi.mock('lucide-react', () => {
     Timer: createIcon('timer', '⏱️'),
     Bot: createIcon('bot', '🤖'),
     Users: createIcon('users', '👥'),
+    Layers: createIcon('layers', '📚'),
     Play: createIcon('play', '▶️'),
     CheckSquare: createIcon('check-square', '✅'),
     ListChecks: createIcon('list-checks', '📝'),
     Target: createIcon('target', '🎯'),
+    AlertTriangle: createIcon('alert-triangle', '⚠️'),
+    ChevronDown: createIcon('chevron-down', '▼'),
+    ChevronUp: createIcon('chevron-up', '▲'),
   };
 });
 
@@ -181,12 +187,27 @@ const createSampleData = () => ({
     'terminal': { count: 50, duration: 1200000 },
   },
   bySource: { user: 100, auto: 50 },
+  byLocation: { local: 120, remote: 30 },
   byDay: [
     { date: '2024-01-15', count: 25, duration: 600000 },
     { date: '2024-01-16', count: 30, duration: 720000 },
     { date: '2024-01-17', count: 45, duration: 1080000 },
     { date: '2024-01-18', count: 50, duration: 1200000 },
   ],
+  byHour: [
+    { hour: 9, count: 40, duration: 960000 },
+    { hour: 14, count: 60, duration: 1440000 },
+    { hour: 15, count: 50, duration: 1200000 },
+  ],
+  totalSessions: 25,
+  sessionsByAgent: { 'claude-code': 15, 'terminal': 10 },
+  sessionsByDay: [
+    { date: '2024-01-15', count: 5 },
+    { date: '2024-01-16', count: 7 },
+    { date: '2024-01-17', count: 6 },
+    { date: '2024-01-18', count: 7 },
+  ],
+  avgSessionDuration: 144000,
 });
 
 describe('UsageDashboard Responsive Layout', () => {
@@ -378,7 +399,7 @@ describe('UsageDashboard Responsive Layout', () => {
       });
     });
 
-    it('renders all 5 metric cards regardless of column count', async () => {
+    it('renders all 6 metric cards regardless of column count', async () => {
       render(
         <UsageDashboardModal isOpen={true} onClose={onClose} theme={theme} />
       );
@@ -387,9 +408,9 @@ describe('UsageDashboard Responsive Layout', () => {
         expect(screen.getByTestId('usage-dashboard-content')).toBeInTheDocument();
       });
 
-      // Should always have 5 metric cards
+      // Should always have 6 metric cards
       const metricCards = screen.getAllByTestId('metric-card');
-      expect(metricCards).toHaveLength(5);
+      expect(metricCards).toHaveLength(6);
     });
   });
 

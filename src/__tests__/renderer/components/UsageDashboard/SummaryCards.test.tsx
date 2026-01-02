@@ -2,7 +2,7 @@
  * Tests for SummaryCards component
  *
  * Verifies:
- * - Renders all five metric cards correctly
+ * - Renders all six metric cards correctly
  * - Displays formatted values (numbers, durations)
  * - Shows correct icons for each metric
  * - Applies theme colors properly
@@ -30,10 +30,16 @@ const mockData: StatsAggregation = {
     'aider': { count: 50, duration: 2200000 },
   },
   bySource: { user: 120, auto: 30 },
+  byLocation: { local: 120, remote: 30 },
   byDay: [
     { date: '2024-12-20', count: 50, duration: 2400000 },
     { date: '2024-12-21', count: 100, duration: 4800000 },
   ],
+  byHour: [],
+  totalSessions: 25,
+  sessionsByAgent: { 'claude-code': 15, 'aider': 10 },
+  sessionsByDay: [],
+  avgSessionDuration: 288000,
 };
 
 // Empty data for edge case testing
@@ -43,7 +49,13 @@ const emptyData: StatsAggregation = {
   avgDuration: 0,
   byAgent: {},
   bySource: { user: 0, auto: 0 },
+  byLocation: { local: 0, remote: 0 },
   byDay: [],
+  byHour: [],
+  totalSessions: 0,
+  sessionsByAgent: {},
+  sessionsByDay: [],
+  avgSessionDuration: 0,
 };
 
 // Data with large numbers
@@ -56,7 +68,13 @@ const largeNumbersData: StatsAggregation = {
     'openai-codex': { count: 500000, duration: 160000000 },
   },
   bySource: { user: 1200000, auto: 300000 },
+  byLocation: { local: 1000000, remote: 500000 },
   byDay: [],
+  byHour: [],
+  totalSessions: 50000,
+  sessionsByAgent: { 'claude-code': 30000, 'openai-codex': 20000 },
+  sessionsByDay: [],
+  avgSessionDuration: 7200000,
 };
 
 // Single agent data
@@ -68,7 +86,13 @@ const singleAgentData: StatsAggregation = {
     'terminal': { count: 50, duration: 1800000 },
   },
   bySource: { user: 50, auto: 0 },
+  byLocation: { local: 50, remote: 0 },
   byDay: [],
+  byHour: [],
+  totalSessions: 5,
+  sessionsByAgent: { 'terminal': 5 },
+  sessionsByDay: [],
+  avgSessionDuration: 360000,
 };
 
 // Only auto queries
@@ -80,7 +104,13 @@ const onlyAutoData: StatsAggregation = {
     'claude-code': { count: 100, duration: 3600000 },
   },
   bySource: { user: 0, auto: 100 },
+  byLocation: { local: 100, remote: 0 },
   byDay: [],
+  byHour: [],
+  totalSessions: 10,
+  sessionsByAgent: { 'claude-code': 10 },
+  sessionsByDay: [],
+  avgSessionDuration: 360000,
 };
 
 describe('SummaryCards', () => {
@@ -91,11 +121,11 @@ describe('SummaryCards', () => {
       expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
     });
 
-    it('renders all five metric cards', () => {
+    it('renders all six metric cards', () => {
       render(<SummaryCards data={mockData} theme={theme} />);
 
       const cards = screen.getAllByTestId('metric-card');
-      expect(cards).toHaveLength(5);
+      expect(cards).toHaveLength(6);
     });
 
     it('renders Total Queries metric', () => {
@@ -291,18 +321,18 @@ describe('SummaryCards', () => {
 
       // Each card should have an SVG icon
       const svgElements = container.querySelectorAll('svg');
-      expect(svgElements.length).toBe(5);
+      expect(svgElements.length).toBe(6);
     });
   });
 
   describe('Grid Layout', () => {
-    it('uses 5-column grid layout by default', () => {
+    it('uses 6-column grid layout by default', () => {
       render(<SummaryCards data={mockData} theme={theme} />);
 
       const container = screen.getByTestId('summary-cards');
       expect(container).toHaveClass('grid');
       expect(container).toHaveStyle({
-        gridTemplateColumns: 'repeat(5, minmax(0, 1fr))',
+        gridTemplateColumns: 'repeat(6, minmax(0, 1fr))',
       });
     });
 
@@ -331,7 +361,8 @@ describe('SummaryCards', () => {
 
       // Should render without errors
       expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
-      expect(screen.getByText('0')).toBeInTheDocument();
+      // Multiple cards show '0' for empty data (Sessions, Queries)
+      expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(1);
     });
 
     it('handles very large numbers', () => {

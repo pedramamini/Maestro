@@ -50,11 +50,24 @@ const mockStatsData: StatsAggregation = {
     user: 120,
     auto: 30,
   },
+  byLocation: { local: 120, remote: 30 },
   byDay: [
     { date: '2025-01-20', count: 50, duration: 2400000 },
     { date: '2025-01-21', count: 45, duration: 2160000 },
     { date: '2025-01-22', count: 55, duration: 2640000 },
   ],
+  byHour: [
+    { hour: 9, count: 50, duration: 2400000 },
+    { hour: 14, count: 100, duration: 4800000 },
+  ],
+  totalSessions: 25,
+  sessionsByAgent: { 'claude-code': 15, 'opencode': 6, 'gemini-cli': 4 },
+  sessionsByDay: [
+    { date: '2025-01-20', count: 8 },
+    { date: '2025-01-21', count: 9 },
+    { date: '2025-01-22', count: 8 },
+  ],
+  avgSessionDuration: 288000,
 };
 
 describe('Chart Accessibility - AgentComparisonChart', () => {
@@ -301,7 +314,7 @@ describe('Chart Accessibility - SummaryCards', () => {
   it('each metric card has role="group"', () => {
     render(<SummaryCards data={mockStatsData} theme={mockTheme} />);
     const groups = screen.getAllByRole('group');
-    expect(groups).toHaveLength(5); // 5 metric cards
+    expect(groups).toHaveLength(6); // 6 metric cards
   });
 
   it('metric cards have descriptive aria-labels', () => {
@@ -309,6 +322,7 @@ describe('Chart Accessibility - SummaryCards', () => {
     const groups = screen.getAllByRole('group');
 
     const expectedLabels = [
+      /Sessions/i,
       /Total Queries/i,
       /Total Time/i,
       /Avg Duration/i,
@@ -376,7 +390,13 @@ describe('Chart Accessibility - General ARIA Patterns', () => {
       avgDuration: 0,
       byAgent: {},
       bySource: { user: 0, auto: 0 },
+      byLocation: { local: 0, remote: 0 },
       byDay: [],
+      byHour: [],
+      totalSessions: 0,
+      sessionsByAgent: {},
+      sessionsByDay: [],
+      avgSessionDuration: 0,
     };
 
     render(<AgentComparisonChart data={emptyData} theme={mockTheme} />);

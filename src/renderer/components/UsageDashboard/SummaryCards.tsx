@@ -24,6 +24,7 @@ import {
   Timer,
   Bot,
   Users,
+  Layers,
 } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/useStats';
@@ -33,7 +34,7 @@ interface SummaryCardsProps {
   data: StatsAggregation;
   /** Current theme for styling */
   theme: Theme;
-  /** Number of columns for responsive layout (default: 5) */
+  /** Number of columns for responsive layout (default: 6) */
   columns?: number;
 }
 
@@ -124,7 +125,7 @@ function MetricCard({ icon, label, value, theme, animationIndex = 0 }: MetricCar
   );
 }
 
-export function SummaryCards({ data, theme, columns = 5 }: SummaryCardsProps) {
+export function SummaryCards({ data, theme, columns = 6 }: SummaryCardsProps) {
   // Calculate derived metrics
   const { mostActiveAgent, interactiveRatio } = useMemo(() => {
     // Find most active agent by query count
@@ -146,6 +147,11 @@ export function SummaryCards({ data, theme, columns = 5 }: SummaryCardsProps) {
   }, [data.byAgent, data.bySource]);
 
   const metrics = [
+    {
+      icon: <Layers className="w-4 h-4" />,
+      label: 'Sessions',
+      value: formatNumber(data.totalSessions),
+    },
     {
       icon: <MessageSquare className="w-4 h-4" />,
       label: 'Total Queries',
