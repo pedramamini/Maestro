@@ -347,16 +347,17 @@
 
 ### Configuration
 
-- [ ] Create `Design-Review/playbook.yaml`
+- [x] Create `Design-Review/playbook.yaml`
+  > Created at `~/.maestro/playbooks/iOS/Design-Review/playbook.yaml` with full YAML configuration including inputs (app_path, project_path, scheme, bundle_id, navigation_map, device_sizes, output_dir, capture_ui_tree, generate_comparison_sheet, wait_after_navigation, reset_between_screens), variables (total_devices, total_screens, devices_completed, screens_captured, capture_failures, current_device, current_screen), and comprehensive steps for validate → build → create dirs → device loop (boot → install → screen loop (launch/reset → navigate → wait → screenshot → ui_tree → record) → shutdown) → generate comparison sheet → summarize. Also created README.md with CLI usage, Auto Run integration, navigation map format, output structure, comparison sheet features, and example configurations.
   ```yaml
   name: iOS Design Review
-  description: Capture all screens for design comparison
+  description: Capture all screens for design comparison across multiple device sizes
   version: 1.0.0
 
   inputs:
     navigation_map:
       description: Map of screens and how to reach them
-      type: object
+      type: array
       required: true
     device_sizes:
       description: Simulators to capture on
@@ -364,7 +365,10 @@
         - "iPhone SE (3rd generation)"
         - "iPhone 15"
         - "iPhone 15 Pro Max"
-        - "iPad Pro (12.9-inch)"
+        - "iPad Pro (12.9-inch) (6th generation)"
+    output_dir:
+      description: Directory to save captured screenshots
+      required: true
 
   steps:
     - loop: "{{ inputs.device_sizes }}"
@@ -383,17 +387,40 @@
 
             - action: ios.screenshot
               inputs:
-                output: "{{ artifacts_dir }}/{{ device }}/{{ screen.name }}.png"
+                output: "{{ output_dir }}/{{ device }}/{{ screen.name }}.png"
 
             - action: ios.inspect
               inputs:
-                output: "{{ artifacts_dir }}/{{ device }}/{{ screen.name }}.json"
+                output: "{{ output_dir }}/{{ device }}/{{ screen.name }}.json"
+
+        - action: ios.shutdown_simulator
+          inputs:
+            name: "{{ device }}"
 
     - action: generate_design_sheet
       inputs:
-        screenshots: "{{ artifacts_dir }}"
-        output: "{{ artifacts_dir }}/design_review.html"
+        screenshots: "{{ output_dir }}"
+        output: "{{ output_dir }}/design_review.html"
   ```
+
+### Implementation
+
+- [x] Create `src/main/ios-tools/playbooks/design-review.ts`
+  - [x] Implement multi-device capture orchestration
+  - [x] Implement screen navigation and capture
+  - [x] Implement UI tree capture
+  - [x] Implement HTML comparison sheet generation
+  - [x] Implement progress reporting
+  > Created comprehensive Design Review executor (`design-review.ts`) with full implementation including:
+  > - `runDesignReview()` - main executor that iterates through devices, boots simulators, and captures screenshots for each screen
+  > - Multi-device orchestration with automatic boot/shutdown cycle for each simulator
+  > - Screen navigation using navigation steps from navigation_map
+  > - UI tree capture via `inspectWithXCUITest()` with JSON output
+  > - HTML and JSON report generation with visual comparison grid
+  > - Progress reporting via `onProgress` callback with phases: initializing, building, booting, installing, navigating, capturing, generating_sheet, complete/failed
+  > - Support for reset_between_screens, capture_ui_tree, wait_after_navigation options
+  > - Result formatters: `formatDesignReviewResult()` (markdown), `formatDesignReviewResultAsJson()`, `formatDesignReviewResultCompact()`
+  > - 41 unit tests covering input validation, dry run, execution, progress reporting, error handling, UI tree capture, reset behavior, report generation, default device sizes, and slugify
 
 ---
 

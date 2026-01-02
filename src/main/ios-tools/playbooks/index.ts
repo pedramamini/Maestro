@@ -56,3 +56,21 @@ export type {
   CrashDetection,
   CrashHuntResult,
 } from './crash-hunt';
+
+// Design Review Playbook
+export {
+  runDesignReview,
+  formatDesignReviewResult,
+  formatDesignReviewResultAsJson,
+  formatDesignReviewResultCompact,
+} from './design-review';
+
+export type {
+  DesignScreen,
+  DesignReviewInputs,
+  DesignReviewOptions,
+  DesignReviewProgress,
+  ScreenCaptureResult,
+  DeviceResult,
+  DesignReviewResult,
+} from './design-review';
