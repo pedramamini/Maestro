@@ -1154,3 +1154,451 @@ Until the native driver is fully implemented, use Maestro Mobile flows for relia
 # Instead of: /ios.scroll down --app com.example.app
 /ios.run_flow --inline "scroll:down" --app com.example.app
 ```
+
+## Native Driver Swift Integration
+
+The primitive commands (`/ios.tap`, `/ios.type`, `/ios.scroll`, `/ios.swipe`) are powered by a native XCUITest driver that provides direct access to iOS UI testing APIs. This section documents the Swift integration architecture for developers extending or maintaining the native driver.
+
+<Note>
+The native driver is not yet fully implemented—execution currently returns "not yet implemented". The Swift code and TypeScript wrapper are complete and ready for when XCUITest project building is implemented. For production use, prefer Maestro Mobile flows via `/ios.run_flow`.
+</Note>
+
+### Architecture Overview
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                    TypeScript Layer                          │
+│  src/main/ios-tools/native-driver.ts                        │
+│  - NativeDriver class                                        │
+│  - Target helpers (byId, byLabel, byCoordinates, etc.)      │
+│  - Action helpers (tap, doubleTap, typeText, etc.)          │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ JSON ActionRequest
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                     Swift Layer                              │
+│  src/main/ios-tools/xcuitest-driver/                        │
+│  - ActionTypes.swift   - Action and target definitions       │
+│  - ActionResult.swift  - Result serialization with markers   │
+│  - ActionRunner.swift  - Main action executor                │
+└──────────────────────────┬──────────────────────────────────┘
+                           │ XCUITest APIs
+                           ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    iOS Simulator                             │
+│  - XCUIApplication                                           │
+│  - XCUIElement interactions                                  │
+└─────────────────────────────────────────────────────────────┘
+```
+
+### Swift Components
+
+The native driver consists of three Swift files in `src/main/ios-tools/xcuitest-driver/`:
+
+#### ActionTypes.swift
+
+Defines all action types and target specifications. Designed to be JSON-deserializable from TypeScript.
+
+**Action Types:**
+
+| Type | Description |
+|------|-------------|
+| `tap` | Single tap on element |
+| `doubleTap` | Double tap on element |
+| `longPress` | Long press with duration |
+| `typeText` | Type text into element |
+| `clearText` | Clear text from element |
+| `scroll` | Scroll in direction |
+| `scrollTo` | Scroll until element visible |
+| `swipe` | Swipe gesture |
+| `pinch` | Pinch gesture for zoom |
+| `rotate` | Rotation gesture |
+| `waitForElement` | Wait for element to exist |
+| `waitForNotExist` | Wait for element to disappear |
+| `assertExists` | Verify element exists |
+| `assertNotExists` | Verify element does not exist |
+| `assertEnabled` | Verify element is enabled |
+| `assertDisabled` | Verify element is disabled |
+
+**Target Types:**
+
+| Type | Description | Example Value |
+|------|-------------|---------------|
+| `identifier` | Accessibility identifier | `"login_button"` |
+| `label` | Accessibility label | `"Sign In"` |
+| `text` | Text content (label or value) | `"Welcome"` |
+| `predicate` | NSPredicate format | `"label BEGINSWITH 'Sign'"` |
+| `coordinates` | Screen coordinates | `"150,300"` |
+| `type` | Element type with optional index | `"button"` |
+
+**Direction and Velocity:**
+
+```swift
+enum SwipeDirection: String, Codable {
+    case up, down, left, right
+}
+
+enum SwipeVelocity: String, Codable {
+    case slow    // XCUIGestureVelocity.slow
+    case normal  // XCUIGestureVelocity.default
+    case fast    // XCUIGestureVelocity.fast
+}
+```
+
+#### ActionResult.swift
+
+Handles result serialization with JSON markers for extraction from mixed stdout output.
+
+**Output Markers:**
+
+```swift
+// Results are wrapped with markers for extraction
+===MAESTRO_ACTION_RESULT_START===
+{ "success": true, "status": "success", ... }
+===MAESTRO_ACTION_RESULT_END===
+```
+
+**Status Codes:**
+
+| Status | Description |
+|--------|-------------|
+| `success` | Action completed successfully |
+| `failed` | Action failed (generic) |
+| `timeout` | Element wait timed out |
+| `notFound` | Element not found |
+| `notHittable` | Element found but not tappable |
+| `notEnabled` | Element is disabled |
+| `error` | Unexpected error |
+
+**Result Structure:**
+
+```json
+{
+  "success": true,
+  "status": "success",
+  "actionType": "tap",
+  "duration": 245,
+  "timestamp": "2024-01-15T10:30:00Z",
+  "details": {
+    "element": {
+      "type": "button",
+      "identifier": "login_button",
+      "label": "Sign In",
+      "frame": { "x": 100, "y": 200, "width": 80, "height": 44 },
+      "isEnabled": true,
+      "isHittable": true
+    }
+  }
+}
+```
+
+#### ActionRunner.swift
+
+The main action executor that finds elements and performs interactions using XCUITest APIs.
+
+**Key Methods:**
+
+```swift
+class ActionRunner {
+    let app: XCUIApplication
+    var defaultTimeout: TimeInterval = 10.0
+    var screenshotOnFailure: Bool = true
+
+    // Execute a single action
+    func execute(_ request: ActionRequest) -> ActionResult
+
+    // Execute multiple actions in sequence
+    func executeAll(_ requests: [ActionRequest], stopOnFailure: Bool = true) -> BatchActionResult
+}
+```
+
+**Element Finding:**
+
+The `findElement` method supports all target types:
+
+```swift
+private func findElement(_ target: ActionTarget, timeout: TimeInterval? = nil) throws -> XCUIElement {
+    switch target.type {
+    case .identifier:
+        // app.descendants(matching: .any).matching(identifier: "...")
+    case .label:
+        // NSPredicate(format: "label == %@", label)
+    case .text:
+        // NSPredicate(format: "label CONTAINS %@ OR value CONTAINS %@", ...)
+    case .predicate:
+        // NSPredicate(format: predicateString)
+    case .coordinates:
+        // app.windows.firstMatch + normalized coordinates
+    case .type:
+        // app.descendants(matching: xcType)
+    }
+}
+```
+
+**Error Handling with Suggestions:**
+
+When an element is not found, the driver searches for similar elements to provide suggestions:
+
+```swift
+private func findSimilarElements(_ target: ActionTarget) -> [String] {
+    // Searches buttons, text fields, static texts
+    // Returns identifiers/labels containing the search term
+    // Limited to 5 suggestions
+}
+```
+
+### TypeScript API
+
+The TypeScript wrapper in `src/main/ios-tools/native-driver.ts` provides a high-level API.
+
+#### Target Helpers
+
+```typescript
+import { byId, byLabel, byText, byPredicate, byCoordinates, byType } from './native-driver';
+
+// By accessibility identifier
+const target1 = byId('login_button');
+
+// By accessibility label
+const target2 = byLabel('Sign In');
+
+// By text content
+const target3 = byText('Welcome');
+
+// By NSPredicate
+const target4 = byPredicate('label BEGINSWITH "Sign"');
+
+// By screen coordinates
+const target5 = byCoordinates(150, 300);
+
+// By element type with optional index
+const target6 = byType('button', 0);  // First button
+```
+
+#### Action Helpers
+
+```typescript
+import {
+  tap, doubleTap, longPress,
+  typeText, clearText,
+  scroll, scrollTo, swipe,
+  pinch, rotate,
+  waitForElement, waitForNotExist,
+  assertExists, assertNotExists, assertEnabled, assertDisabled
+} from './native-driver';
+
+// Tap actions
+const tapAction = tap(byId('button'));
+const tapWithOffset = tap(byId('cell'), { offsetX: 0.9, offsetY: 0.5 });
+const doubleTapAction = doubleTap(byLabel('Image'));
+const longPressAction = longPress(byId('delete'), 2.0);  // 2 seconds
+
+// Text actions
+const typeAction = typeText('hello@example.com');
+const typeIntoAction = typeText('password', { target: byId('password_field'), clearFirst: true });
+const clearAction = clearText(byId('search_field'));
+
+// Scroll/swipe actions
+const scrollAction = scroll('down', { distance: 0.5 });
+const scrollToAction = scrollTo(byId('footer'), { maxAttempts: 15 });
+const swipeAction = swipe('left', { velocity: 'fast' });
+
+// Gesture actions
+const pinchAction = pinch(2.0, { target: byId('image') });  // Zoom in
+const rotateAction = rotate(Math.PI / 4);  // 45 degrees
+
+// Wait actions
+const waitAction = waitForElement(byId('loading'), 5000);
+const waitGoneAction = waitForNotExist(byLabel('Spinner'), 10000);
+
+// Assert actions
+const assertAction = assertExists(byId('welcome_message'));
+const assertGoneAction = assertNotExists(byId('error'));
+const assertEnabledAction = assertEnabled(byId('submit_button'));
+```
+
+#### NativeDriver Class
+
+```typescript
+import { NativeDriver, createNativeDriver } from './native-driver';
+
+// Create driver instance
+const driver = createNativeDriver({
+  bundleId: 'com.example.myapp',
+  udid: 'SIMULATOR_UDID',  // Optional, auto-detects if omitted
+  timeout: 10000,           // Default element timeout (ms)
+  screenshotDir: '/path/to/screenshots',
+  debug: true
+});
+
+// Initialize (verifies simulator, etc.)
+await driver.initialize();
+
+// Execute single action
+const result = await driver.execute(tap(byId('login')));
+
+// Execute batch of actions
+const batchResult = await driver.executeAll([
+  tap(byId('email_field')),
+  typeText('user@example.com'),
+  tap(byId('password_field')),
+  typeText('password123'),
+  tap(byId('login_button'))
+], { stopOnFailure: true });
+
+// Convenience methods
+await driver.tapById('submit_button');
+await driver.tapByLabel('Continue');
+await driver.tapAt(150, 300);
+await driver.type('hello world');
+await driver.typeInto('search_field', 'query', true);  // clearFirst=true
+await driver.scrollDown(0.5);
+await driver.scrollUp(0.5);
+await driver.scrollToId('footer_element', 15);  // maxAttempts=15
+await driver.swipeDirection('left');
+await driver.waitFor('loading_indicator', 5000);
+await driver.waitForGone('spinner', 10000);
+await driver.assertElementExists('welcome_message');
+await driver.assertElementNotExists('error_banner');
+```
+
+### Result Types
+
+```typescript
+interface ActionResult {
+  success: boolean;
+  status: 'success' | 'failed' | 'timeout' | 'notFound' | 'notHittable' | 'notEnabled' | 'error';
+  actionType: ActionType;
+  duration: number;  // milliseconds
+  error?: string;
+  details?: {
+    element?: ElementInfo;
+    suggestions?: string[];  // Alternative targets on notFound
+    typedText?: string;
+    scrollAttempts?: number;
+    direction?: string;
+    screenshotPath?: string;
+  };
+  timestamp: string;  // ISO8601
+}
+
+interface BatchActionResult {
+  allPassed: boolean;
+  totalActions: number;
+  passedActions: number;
+  failedActions: number;
+  totalDuration: number;
+  results: ActionResult[];
+  timestamp: string;
+}
+```
+
+### Extending the Native Driver
+
+To add a new action type:
+
+1. **Swift: ActionTypes.swift**
+   ```swift
+   // Add to ActionType enum
+   enum ActionType: String, Codable {
+       // ... existing types
+       case newAction
+   }
+
+   // Create action struct
+   struct NewAction: Action, Codable {
+       let actionType = ActionType.newAction
+       let target: ActionTarget
+       let customParam: String
+   }
+
+   // Add to ActionRequest if needed
+   struct ActionRequest: Codable {
+       // ... existing fields
+       let customParam: String?
+   }
+   ```
+
+2. **Swift: ActionRunner.swift**
+   ```swift
+   private func executeAction(_ request: ActionRequest) throws -> ActionResult {
+       switch request.type {
+       // ... existing cases
+       case .newAction:
+           return try executeNewAction(request, startTime: startTime)
+       }
+   }
+
+   private func executeNewAction(_ request: ActionRequest, startTime: Date) throws -> ActionResult {
+       // Implementation
+   }
+   ```
+
+3. **TypeScript: native-driver.ts**
+   ```typescript
+   // Add to ActionType union
+   export type ActionType = /* existing */ | 'newAction';
+
+   // Add action helper
+   export function newAction(target: ActionTarget, customParam: string): ActionRequest {
+       return { type: 'newAction', target, customParam };
+   }
+
+   // Add convenience method to NativeDriver class
+   async newActionById(identifier: string, customParam: string): Promise<IOSResult<ActionResult>> {
+       return this.execute(newAction(byId(identifier), customParam));
+   }
+   ```
+
+### Element Type Mappings
+
+The Swift driver maps string element types to XCUIElement.ElementType:
+
+| String | XCUIElement.ElementType |
+|--------|------------------------|
+| `button` | `.button` |
+| `textField`, `text_field` | `.textField` |
+| `secureTextField`, `password` | `.secureTextField` |
+| `staticText`, `text` | `.staticText` |
+| `image` | `.image` |
+| `switch`, `toggle` | `.switch` |
+| `slider` | `.slider` |
+| `picker` | `.picker` |
+| `datePicker`, `date_picker` | `.datePicker` |
+| `table` | `.table` |
+| `cell` | `.cell` |
+| `collectionView` | `.collectionView` |
+| `scrollView` | `.scrollView` |
+| `navigationBar` | `.navigationBar` |
+| `tabBar` | `.tabBar` |
+| `toolbar` | `.toolbar` |
+| `alert` | `.alert` |
+| `sheet` | `.sheet` |
+| `searchField` | `.searchField` |
+| `textView` | `.textView` |
+| `link` | `.link` |
+| `menu` | `.menu` |
+| `menuItem` | `.menuItem` |
+| `webView` | `.webView` |
+| `window` | `.window` |
+| `any` | `.any` |
+
+### Hardware Key Codes
+
+For keyboard interactions:
+
+| KeyCode | XCUIKeyboardKey |
+|---------|-----------------|
+| `return` | `.return` |
+| `delete` | `.delete` |
+| `escape` | `.escape` |
+| `tab` | `.tab` |
+| `space` | `.space` |
+| `up` | `.upArrow` |
+| `down` | `.downArrow` |
+| `left` | `.leftArrow` |
+| `right` | `.rightArrow` |
+| `home` | `.home` |
+| `end` | `.end` |
+| `pageUp` | `.pageUp` |
+| `pageDown` | `.pageDown` |
