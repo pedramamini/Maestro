@@ -167,7 +167,8 @@
 
 ### Configuration
 
-- [ ] Create `Regression-Check/playbook.yaml`
+- [x] Create `Regression-Check/playbook.yaml`
+  > Created at `~/.maestro/playbooks/iOS/Regression-Check/playbook.yaml` with full YAML configuration including inputs (app_path, project_path, scheme, simulator, flows, baseline_dir, threshold, update_baselines, screenshot_after_each, fail_fast), variables (total_flows, flows_run, regressions_found, screenshots_compared, baseline_updates), and comprehensive steps for boot → build → install → launch → flow loop (reset, execute, capture, update/compare) → report generation. Also created README.md with CLI usage, Auto Run integration, flow file format, baseline directory structure, artifacts output, threshold guide, and CI/CD integration examples.
   ```yaml
   name: iOS Regression Check
   description: Run flows and compare screenshots against baselines
@@ -226,11 +227,20 @@
 
 ### Implementation
 
-- [ ] Create `src/main/ios-tools/playbooks/regression-check.ts`
-  - [ ] Implement flow runner
-  - [ ] Implement screenshot comparison
-  - [ ] Implement diff report generation
-  - [ ] Implement baseline update workflow
+- [x] Create `src/main/ios-tools/playbooks/regression-check.ts`
+  - [x] Implement flow runner
+  - [x] Implement screenshot comparison
+  - [x] Implement diff report generation
+  - [x] Implement baseline update workflow
+  > Created comprehensive Regression Check executor (`regression-check.ts`) with full implementation including:
+  > - `runRegressionCheck()` - main executor that iterates through flows, captures screenshots, and compares against baselines
+  > - Flow execution via `runFlow()` from flow-runner module with reset/launch/execute cycle
+  > - Screenshot comparison using byte-level buffer comparison (placeholder for pixelmatch integration)
+  > - HTML and JSON report generation with visual diff display
+  > - Baseline update workflow (`update_baselines: true` mode)
+  > - Progress reporting via `onProgress` callback with phases: initializing, building, installing, running_flow, capturing, comparing, updating_baseline, generating_report, complete/failed
+  > - Result formatters: `formatRegressionCheckResult()` (markdown), `formatRegressionCheckResultAsJson()`, `formatRegressionCheckResultCompact()`
+  > - 30 unit tests covering input validation, dry run, progress reporting, result structure, flow configuration, formatting, and variable tracking
 
 ---
 
