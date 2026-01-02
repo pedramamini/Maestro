@@ -1158,6 +1158,101 @@ export function registerIOSHandlers(): void {
   );
 
   // ==========================================================================
+  // XCUITest-based UI Inspection
+  // ==========================================================================
+
+  // Run XCUITest-based inspection (more detailed than simple inspect)
+  ipcMain.handle(
+    'ios:inspect:run',
+    withIpcErrorLogging(
+      handlerOpts('inspectWithXCUITest'),
+      async (options: iosTools.XCUITestInspectOptions) => {
+        return iosTools.inspectWithXCUITest(options);
+      }
+    )
+  );
+
+  // Find element in XCUITest inspection result
+  // Takes the rootElement from XCUITestInspectResult and a query
+  ipcMain.handle(
+    'ios:inspect:findElement',
+    withIpcErrorLogging(
+      handlerOpts('inspectFindElement'),
+      async (
+        rootElement: iosTools.ElementNode,
+        query: {
+          identifier?: string;
+          label?: string;
+          type?: string;
+          value?: string;
+          containsText?: string;
+        }
+      ) => {
+        // Convert ElementNode tree to UIElement tree for ui-analyzer functions
+        const uiElement = convertElementNodeToUIElement(rootElement);
+        const element = iosTools.findElement(uiElement, query);
+        return { success: true, data: element };
+      }
+    )
+  );
+
+  // Get interactable elements from XCUITest inspection result
+  ipcMain.handle(
+    'ios:inspect:getInteractable',
+    withIpcErrorLogging(
+      handlerOpts('inspectGetInteractable'),
+      async (rootElement: iosTools.ElementNode, visibleOnly?: boolean) => {
+        // Convert ElementNode tree to UIElement tree for ui-analyzer functions
+        const uiElement = convertElementNodeToUIElement(rootElement);
+        const elements = iosTools.getInteractableElements(uiElement, visibleOnly);
+        return { success: true, data: elements };
+      }
+    )
+  );
+
+  // Format XCUITest inspection result for agent
+  ipcMain.handle(
+    'ios:inspect:formatXCUITest',
+    withIpcErrorLogging(
+      handlerOpts('formatXCUITestInspect'),
+      async (result: iosTools.XCUITestInspectResult, options?: iosTools.FormatOptions) => {
+        // Convert XCUITestInspectResult to InspectResult for formatting
+        const inspectResult = convertXCUITestToInspectResult(result);
+        const formatted = iosTools.formatInspectForAgent(inspectResult, options);
+        return { success: true, data: formatted };
+      }
+    )
+  );
+
+  // Detect accessibility issues in XCUITest inspection result
+  ipcMain.handle(
+    'ios:inspect:detectIssues',
+    withIpcErrorLogging(
+      handlerOpts('detectAccessibilityIssues'),
+      async (rootElement: iosTools.ElementNode) => {
+        // Convert ElementNode tree to UIElement tree for ui-analyzer functions
+        const uiElement = convertElementNodeToUIElement(rootElement);
+        const issues = iosTools.detectIssues(uiElement);
+        return { success: true, data: issues };
+      }
+    )
+  );
+
+  // Summarize screen from XCUITest inspection result
+  ipcMain.handle(
+    'ios:inspect:summarizeScreen',
+    withIpcErrorLogging(
+      handlerOpts('summarizeScreen'),
+      async (rootElement: iosTools.ElementNode) => {
+        // Convert ElementNode tree to UIElement tree for ui-analyzer functions
+        const uiElement = convertElementNodeToUIElement(rootElement);
+        const summary = iosTools.summarizeScreen(uiElement);
+        return { success: true, data: summary };
+      }
+    )
+  );
+
+  // ==========================================================================
   // Slash Command Handlers
   // ==========================================================================
 
@@ -1173,5 +1268,87 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // Execute /ios.inspect slash command
+  ipcMain.handle(
+    'ios:slashCommand:inspect',
+    withIpcErrorLogging(
+      handlerOpts('executeInspectCommand'),
+      async (commandText: string, sessionId: string) => {
+        const { executeInspectCommand } = await import('../../slash-commands/ios-inspect');
+        return executeInspectCommand(commandText, sessionId);
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
+}
+
+// =============================================================================
+// Helper Functions
+// =============================================================================
+
+/**
+ * Convert ElementNode (from XCUITest inspection) to UIElement (for ui-analyzer).
+ * This allows using the ui-analyzer functions with XCUITest inspection results.
+ */
+function convertElementNodeToUIElement(node: iosTools.ElementNode): iosTools.UIElement {
+  return {
+    type: node.type,
+    identifier: node.identifier,
+    label: node.label,
+    value: node.value,
+    placeholder: node.placeholderValue,
+    frame: {
+      x: node.frame.x,
+      y: node.frame.y,
+      width: node.frame.width,
+      height: node.frame.height,
+    },
+    visible: node.isVisible,
+    enabled: node.isEnabled,
+    traits: node.traits,
+    children: node.children.map(convertElementNodeToUIElement),
+  };
+}
+
+/**
+ * Convert XCUITestInspectResult to InspectResult for formatting.
+ * This allows using the format functions with XCUITest inspection results.
+ */
+function convertXCUITestToInspectResult(result: iosTools.XCUITestInspectResult): iosTools.InspectResult {
+  // Recursively convert ElementNode tree to UIElement tree
+  const tree = convertElementNodeToUIElement(result.rootElement);
+
+  // Flatten the tree to get all elements
+  const elements: iosTools.UIElement[] = [];
+  function collectElements(el: iosTools.UIElement) {
+    elements.push(el);
+    for (const child of el.children) {
+      collectElements(child);
+    }
+  }
+  collectElements(tree);
+
+  return {
+    id: result.id,
+    timestamp: result.timestamp,
+    simulator: result.simulator,
+    tree,
+    elements,
+    stats: {
+      totalElements: result.summary.totalElements,
+      interactableElements: result.summary.interactableElements,
+      buttons: result.summary.buttons,
+      textFields: result.summary.textInputs,
+      textElements: result.summary.textElements,
+      images: result.summary.images,
+    },
+    screenshot: result.screenshotPath
+      ? {
+          path: result.screenshotPath,
+          size: 0, // Size not available from XCUITest result
+        }
+      : undefined,
+    artifactDir: result.artifactDir,
+  };
 }
