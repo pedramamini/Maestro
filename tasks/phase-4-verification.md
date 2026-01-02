@@ -261,13 +261,37 @@
 
 ### /ios.assert_log_contains
 
-- [ ] Create `src/main/ios-tools/assertions/log-contains.ts`
-  - [ ] Implement `assertLogContains(pattern, options)`
-  - [ ] Search recent logs for pattern
-  - [ ] Useful for verifying API calls, analytics events
+- [x] Create `src/main/ios-tools/assertions/log-contains.ts` ✅ *Fully implemented with comprehensive features*
+  - [x] Implement `assertLogContains(pattern, options)` ✅ *Main assertion with polling support*
+  - [x] Search recent logs for pattern ✅ *Uses `getSystemLog` with configurable timeframe*
+  - [x] Useful for verifying API calls, analytics events ✅
+  - [x] Match modes: contains, exact, regex, startsWith, endsWith ✅ *Via `matchMode` option*
+  - [x] Case-sensitive matching option ✅ *Via `caseSensitive` option*
+  - [x] Negation support (notContains) ✅ *Via `notContains` option*
+  - [x] Context lines support ✅ *Via `contextLines` option*
+  - [x] Convenience functions: ✅
+    - `assertLogContainsPattern(pattern, options)` - simple wrapper
+    - `assertLogContainsExact(text, options)` - exact match mode
+    - `assertLogMatches(regex, options)` - regex match mode
+    - `assertLogNotContains(pattern, options)` - negation check
+    - `assertLogContainsForApp(bundleId, pattern, options)` - app-specific
+    - `countLogMatches(udid, pattern, since, bundleId?, matchMode?)` - count occurrences
+    - `hasLogPattern(udid, pattern, since?, bundleId?, matchMode?)` - boolean check
+    - `waitForLogPattern(pattern, options)` - wait with polling
+    - `waitForLogPatternGone(pattern, options)` - wait for disappearance
 
-- [ ] Create slash command `/ios.assert_log_contains`
-  - [ ] Examples:
+- [x] Create slash command `/ios.assert_log_contains` ✅ *IPC handlers registered:*
+  - *`ios:assert:logContains` - main assertion*
+  - *`ios:assert:logContainsPattern` - simple wrapper*
+  - *`ios:assert:logContainsExact` - exact match mode*
+  - *`ios:assert:logMatches` - regex match mode*
+  - *`ios:assert:logNotContains` - negation check*
+  - *`ios:assert:logContainsForApp` - app-specific*
+  - *`ios:assert:countLogMatches` - count occurrences*
+  - *`ios:assert:hasLogPattern` - boolean check*
+  - *`ios:assert:waitForLogPattern` - wait with polling*
+  - *`ios:assert:waitForLogPatternGone` - wait for disappearance*
+  - [x] Examples: ✅
     - `/ios.assert_log_contains "Login successful"`
     - `/ios.assert_log_contains --regex "API response: \d+"`
 
@@ -355,7 +379,7 @@
   - [x] Register `ios:assert:hittable` handler ✅ *All hittable variants registered*
   - [x] Register `ios:assert:noCrash` handler ✅
   - [x] Register `ios:assert:noErrors` handler ✅ *All noErrors variants registered (noErrors, noErrorsForApp, noHttpErrors, noCrashIndicators, countErrors, hasErrorPattern)*
-  - [ ] Register `ios:assert:logContains` handler
+  - [x] Register `ios:assert:logContains` handler ✅ *All logContains variants registered (logContains, logContainsPattern, logContainsExact, logMatches, logNotContains, logContainsForApp, countLogMatches, hasLogPattern, waitForLogPattern, waitForLogPatternGone)*
   - [ ] Register `ios:assert:screen` handler
   - [x] Register `ios:wait:for` handler ✅ *Registered along with all convenience variants (forById, forByLabel, forByText, forNot, etc.)*
 
@@ -435,7 +459,7 @@
 - [x] Assertions provide clear pass/fail with evidence ✅
 - [x] Failed assertions include suggestions ✅ *Error messages include hints*
 - [x] No crash detection works with crash log scanning ✅
-- [ ] Log assertions can search recent logs *(not yet implemented)*
+- [x] Log assertions can search recent logs ✅ *Implemented via `assertLogContains` with multiple match modes*
 - [ ] Screen assertions check multiple conditions *(not yet implemented)*
 - [ ] Auto Run documents can use all assertions *(partial - core assertions available)*
 - [x] Agent can use assertions to "prove" feature works ✅ *Via IPC handlers and verification formatter*

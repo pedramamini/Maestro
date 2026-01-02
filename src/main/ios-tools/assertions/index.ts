@@ -180,3 +180,26 @@ export type {
   NoErrorsAssertionData,
   MatchedError,
 } from './no-errors';
+
+// =============================================================================
+// Log Contains Assertions
+// =============================================================================
+
+export {
+  assertLogContains,
+  assertLogContainsPattern,
+  assertLogContainsExact,
+  assertLogMatches,
+  assertLogNotContains,
+  assertLogContainsForApp,
+  countLogMatches,
+  hasLogPattern,
+  waitForLogPattern,
+  waitForLogPatternGone,
+} from './log-contains';
+export type {
+  LogMatchMode,
+  MatchedLogEntry,
+  AssertLogContainsOptions,
+  LogContainsAssertionData,
+} from './log-contains';

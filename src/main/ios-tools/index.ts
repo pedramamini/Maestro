@@ -522,6 +522,17 @@ export {
   assertNoCrashIndicators,
   DEFAULT_ERROR_PATTERNS,
   DEFAULT_IGNORE_PATTERNS,
+  // Log contains assertions
+  assertLogContains,
+  assertLogContainsPattern,
+  assertLogContainsExact,
+  assertLogMatches,
+  assertLogNotContains,
+  assertLogContainsForApp,
+  countLogMatches,
+  hasLogPattern,
+  waitForLogPattern,
+  waitForLogPatternGone,
 } from './assertions';
 export type {
   // Visibility types
@@ -563,6 +574,11 @@ export type {
   AssertNoErrorsOptions,
   NoErrorsAssertionData,
   MatchedError,
+  // Log contains types
+  LogMatchMode,
+  MatchedLogEntry,
+  AssertLogContainsOptions,
+  LogContainsAssertionData,
 } from './assertions';
 
 // =============================================================================

@@ -1643,6 +1643,138 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // ==========================================================================
+  // Log Contains Assertions
+  // ==========================================================================
+
+  // Assert log contains a pattern
+  ipcMain.handle(
+    'ios:assert:logContains',
+    withIpcErrorLogging(
+      handlerOpts('assertLogContains'),
+      async (pattern: string, options: iosTools.AssertLogContainsOptions) => {
+        return iosTools.assertLogContains(pattern, options);
+      }
+    )
+  );
+
+  // Assert log contains pattern (simple wrapper)
+  ipcMain.handle(
+    'ios:assert:logContainsPattern',
+    withIpcErrorLogging(
+      handlerOpts('assertLogContainsPattern'),
+      async (pattern: string, options: Omit<iosTools.AssertLogContainsOptions, 'matchMode'>) => {
+        return iosTools.assertLogContainsPattern(pattern, options);
+      }
+    )
+  );
+
+  // Assert log contains exact text
+  ipcMain.handle(
+    'ios:assert:logContainsExact',
+    withIpcErrorLogging(
+      handlerOpts('assertLogContainsExact'),
+      async (text: string, options: Omit<iosTools.AssertLogContainsOptions, 'matchMode'>) => {
+        return iosTools.assertLogContainsExact(text, options);
+      }
+    )
+  );
+
+  // Assert log matches regex pattern
+  ipcMain.handle(
+    'ios:assert:logMatches',
+    withIpcErrorLogging(
+      handlerOpts('assertLogMatches'),
+      async (regex: string, options: Omit<iosTools.AssertLogContainsOptions, 'matchMode'>) => {
+        return iosTools.assertLogMatches(regex, options);
+      }
+    )
+  );
+
+  // Assert log does NOT contain a pattern
+  ipcMain.handle(
+    'ios:assert:logNotContains',
+    withIpcErrorLogging(
+      handlerOpts('assertLogNotContains'),
+      async (pattern: string, options: Omit<iosTools.AssertLogContainsOptions, 'notContains'>) => {
+        return iosTools.assertLogNotContains(pattern, options);
+      }
+    )
+  );
+
+  // Assert log contains pattern for a specific app
+  ipcMain.handle(
+    'ios:assert:logContainsForApp',
+    withIpcErrorLogging(
+      handlerOpts('assertLogContainsForApp'),
+      async (bundleId: string, pattern: string, options: Omit<iosTools.AssertLogContainsOptions, 'bundleId'>) => {
+        return iosTools.assertLogContainsForApp(bundleId, pattern, options);
+      }
+    )
+  );
+
+  // Count log pattern matches
+  ipcMain.handle(
+    'ios:assert:countLogMatches',
+    withIpcErrorLogging(
+      handlerOpts('countLogMatches'),
+      async (
+        udid: string,
+        pattern: string,
+        since: string,
+        bundleId?: string,
+        matchMode?: iosTools.LogMatchMode
+      ) => {
+        return iosTools.countLogMatches(udid, pattern, new Date(since), bundleId, matchMode);
+      }
+    )
+  );
+
+  // Check if log pattern exists
+  ipcMain.handle(
+    'ios:assert:hasLogPattern',
+    withIpcErrorLogging(
+      handlerOpts('hasLogPattern'),
+      async (
+        udid: string,
+        pattern: string,
+        since?: string,
+        bundleId?: string,
+        matchMode?: iosTools.LogMatchMode
+      ) => {
+        return iosTools.hasLogPattern(
+          udid,
+          pattern,
+          since ? new Date(since) : undefined,
+          bundleId,
+          matchMode
+        );
+      }
+    )
+  );
+
+  // Wait for log pattern to appear
+  ipcMain.handle(
+    'ios:assert:waitForLogPattern',
+    withIpcErrorLogging(
+      handlerOpts('waitForLogPattern'),
+      async (pattern: string, options: iosTools.AssertLogContainsOptions) => {
+        return iosTools.waitForLogPattern(pattern, options);
+      }
+    )
+  );
+
+  // Wait for log pattern to disappear
+  ipcMain.handle(
+    'ios:assert:waitForLogPatternGone',
+    withIpcErrorLogging(
+      handlerOpts('waitForLogPatternGone'),
+      async (pattern: string, options: Omit<iosTools.AssertLogContainsOptions, 'notContains'>) => {
+        return iosTools.waitForLogPatternGone(pattern, options);
+      }
+    )
+  );
+
   // Format verification result for agent
   ipcMain.handle(
     'ios:verify:formatResult',
