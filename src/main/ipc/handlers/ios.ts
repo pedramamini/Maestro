@@ -1316,6 +1316,18 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // Execute /ios.scroll slash command
+  ipcMain.handle(
+    'ios:slashCommand:scroll',
+    withIpcErrorLogging(
+      handlerOpts('executeScrollCommand'),
+      async (commandText: string, sessionId: string, cwd?: string) => {
+        const { executeScrollCommand } = await import('../../slash-commands/ios-scroll');
+        return executeScrollCommand(commandText, sessionId, cwd);
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }
 

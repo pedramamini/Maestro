@@ -169,9 +169,22 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
   - [x] Unit tests (66 tests) in `src/__tests__/main/slash-commands/ios-type.test.ts`
   - Note: Uses the NativeDriver from native-driver.ts. Currently returns "not yet implemented" since NativeDriver execution requires building XCUITest project dynamically. Recommends using Maestro Mobile CLI (`/ios.run_flow`) for actual interactions until NativeDriver is fully implemented.
 
-- [ ] Create `src/main/slash-commands/ios-scroll.ts`
-  - [ ] `/ios.scroll <direction>` - scroll up/down/left/right
-  - [ ] `/ios.scroll --to <target>` - scroll until element visible
+- [x] Create `src/main/slash-commands/ios-scroll.ts`
+  - [x] `/ios.scroll <direction>` - scroll up/down/left/right
+  - [x] `/ios.scroll --to <target>` - scroll until element visible
+  - [x] Arguments:
+    - `--to, -t <target>` - target element to scroll to (#identifier or "label")
+    - `--app, -a <bundleId>` - target app (required)
+    - `--simulator, -s <name|udid>` - target simulator
+    - `--distance <n>` - scroll distance (0.0-1.0, default: 0.5)
+    - `--attempts <n>` - max scroll attempts when targeting element (default: 10)
+    - `--in <target>` - scroll within a specific container
+    - `--timeout <ms>` - element wait timeout (default: 10000)
+    - `--debug` - verbose output mode
+  - [x] Registered IPC handler in `src/main/ipc/handlers/ios.ts`
+  - [x] Exported from `src/main/slash-commands/index.ts`
+  - [x] Unit tests (104 tests) in `src/__tests__/main/slash-commands/ios-scroll.test.ts`
+  - Note: Uses the NativeDriver from native-driver.ts. Currently returns "not yet implemented" since NativeDriver execution requires building XCUITest project dynamically. Recommends using Maestro Mobile CLI (`/ios.run_flow`) for actual interactions until NativeDriver is fully implemented.
 
 - [ ] Create `src/main/slash-commands/ios-swipe.ts`
   - [ ] `/ios.swipe <direction>` - swipe gesture

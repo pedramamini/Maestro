@@ -60,6 +60,20 @@ export {
   type TypeTargetType,
 } from './ios-type';
 
+// iOS Scroll Command
+export {
+  executeScrollCommand,
+  parseScrollArgs,
+  parseScrollTarget,
+  parseDirection,
+  scrollCommandMetadata,
+  type ScrollCommandArgs,
+  type ScrollCommandResult,
+  type ScrollTarget,
+  type ScrollTargetType,
+  type ScrollDirection,
+} from './ios-scroll';
+
 // Command registry for all slash commands
 export interface SlashCommandMetadata {
   command: string;
@@ -79,6 +93,7 @@ import { inspectCommandMetadata } from './ios-inspect';
 import { runFlowCommandMetadata } from './ios-run-flow';
 import { tapCommandMetadata } from './ios-tap';
 import { typeCommandMetadata } from './ios-type';
+import { scrollCommandMetadata } from './ios-scroll';
 
 export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   snapshotCommandMetadata,
@@ -86,4 +101,5 @@ export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   runFlowCommandMetadata,
   tapCommandMetadata,
   typeCommandMetadata,
+  scrollCommandMetadata,
 ];
