@@ -451,3 +451,25 @@ export type {
   ShipLoopProgress,
   ShipLoopResult,
 } from './ship-loop';
+
+// =============================================================================
+// Error Handling
+// =============================================================================
+
+export {
+  ERROR_MESSAGES,
+  ERROR_PATTERNS,
+  formatErrorForUser,
+  getTroubleshootingHint,
+  detectErrorType,
+  createUserFriendlyError,
+  wrapCommandError,
+  validateSimulatorBooted,
+  validateBundleId,
+  noBootedSimulatorError,
+  simulatorNotFoundError,
+  appNotInstalledError,
+  permissionDeniedError,
+  screenshotTimeoutError,
+  logParsingWarning,
+} from './errors';

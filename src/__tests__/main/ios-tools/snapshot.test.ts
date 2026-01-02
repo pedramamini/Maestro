@@ -448,7 +448,9 @@ describe('snapshot.ts', () => {
 
       expect(result.success).toBe(false);
       expect(result.errorCode).toBe('SIMULATOR_NOT_BOOTED');
-      expect(result.error).toContain('not booted');
+      // New user-friendly error format includes simulator name and helpful hints
+      expect(result.error).toContain('shutdown');
+      expect(result.error).toContain('iPhone 15 Pro');
     });
 
     it('returns error when artifact directory creation fails', async () => {

@@ -180,11 +180,20 @@
 
 ## Error Handling
 
-- [ ] Handle "no simulator booted" gracefully with helpful message
-- [ ] Handle "no app installed" when bundleId specified
-- [ ] Handle permission errors on artifact directory
-- [ ] Handle screenshot timeout (simulator frozen)
-- [ ] Handle log parsing errors
+- [x] Handle "no simulator booted" gracefully with helpful message
+  **Note (2026-01-01)**: Implemented centralized error handling module `src/main/ios-tools/errors.ts` with:
+  - User-friendly error messages with troubleshooting hints for all error codes
+  - `noBootedSimulatorError()` helper for consistent "no simulator booted" errors
+  - `validateSimulatorBooted()` helper to check simulator state
+  - Error messages include simulator name and actionable hints (e.g., "Start a simulator with: xcrun simctl boot...")
+- [x] Handle "no app installed" when bundleId specified
+  **Note (2026-01-01)**: `appNotInstalledError()` helper with bundle ID in message. Existing detection in `simulator.ts` uses `APP_NOT_INSTALLED` error code.
+- [x] Handle permission errors on artifact directory
+  **Note (2026-01-01)**: `permissionDeniedError()` helper. `snapshot.ts` now detects EACCES/permission patterns and provides path in error message.
+- [x] Handle screenshot timeout (simulator frozen)
+  **Note (2026-01-01)**: `screenshotTimeoutError()` helper. `capture.ts` now detects timeout patterns in output and suggests restarting Simulator.app.
+- [x] Handle log parsing errors
+  **Note (2026-01-01)**: `logParsingWarning()` helper logs malformed entries without failing. `logs.ts` gracefully skips malformed JSON lines. Added `ERROR_PATTERNS` for detecting common error types from command output.
 
 ## Testing
 

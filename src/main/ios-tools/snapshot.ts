@@ -12,6 +12,12 @@ import { screenshot } from './capture';
 import { getSystemLog, getCrashLogs } from './logs';
 import { getSimulator } from './simulator';
 import { getSnapshotDirectory, generateSnapshotId } from './artifacts';
+import {
+  noBootedSimulatorError,
+  validateSimulatorBooted,
+  permissionDeniedError,
+  createUserFriendlyError,
+} from './errors';
 import { logger } from '../utils/logger';
 
 const LOG_CONTEXT = '[iOS-Snapshot]';
@@ -114,11 +120,7 @@ export async function captureSnapshot(options: SnapshotOptions): Promise<IOSResu
   if (!udid) {
     const bootedResult = await import('./simulator').then((m) => m.getBootedSimulators());
     if (!bootedResult.success || !bootedResult.data || bootedResult.data.length === 0) {
-      return {
-        success: false,
-        error: 'No booted simulator found. Please specify --simulator or boot a simulator.',
-        errorCode: 'SIMULATOR_NOT_BOOTED',
-      };
+      return noBootedSimulatorError();
     }
     udid = bootedResult.data[0].udid;
     logger.info(`${LOG_CONTEXT} Using first booted simulator: ${udid}`);
@@ -134,12 +136,10 @@ export async function captureSnapshot(options: SnapshotOptions): Promise<IOSResu
     };
   }
 
-  if (simResult.data.state !== 'Booted') {
-    return {
-      success: false,
-      error: `Simulator is not booted (state: ${simResult.data.state})`,
-      errorCode: 'SIMULATOR_NOT_BOOTED',
-    };
+  // Validate simulator is booted
+  const bootedError = validateSimulatorBooted<SnapshotResult>(simResult.data.state, simResult.data.name);
+  if (bootedError) {
+    return bootedError;
   }
 
   // Create artifact directory
@@ -147,11 +147,12 @@ export async function captureSnapshot(options: SnapshotOptions): Promise<IOSResu
   try {
     artifactDir = await getSnapshotDirectory(sessionId, snapshotId);
   } catch (error) {
-    return {
-      success: false,
-      error: `Failed to create artifact directory: ${error}`,
-      errorCode: 'COMMAND_FAILED',
-    };
+    const errorMsg = error instanceof Error ? error.message : String(error);
+    // Check for permission errors
+    if (errorMsg.toLowerCase().includes('permission') || errorMsg.toLowerCase().includes('eacces')) {
+      return permissionDeniedError(artifactDir || 'artifact directory');
+    }
+    return createUserFriendlyError('COMMAND_FAILED', `Failed to create artifact directory: ${errorMsg}`);
   }
 
   // Capture screenshot

@@ -14,6 +14,12 @@ import {
 } from './types';
 import { runSimctl } from './utils';
 import { getSimulator } from './simulator';
+import {
+  validateSimulatorBooted,
+  screenshotTimeoutError,
+  detectErrorType,
+  createUserFriendlyError,
+} from './errors';
 import { logger } from '../utils/logger';
 
 const LOG_CONTEXT = '[iOS-Capture]';
@@ -50,12 +56,10 @@ export async function screenshot(options: ScreenshotOptions): Promise<IOSResult<
     };
   }
 
-  if (simResult.data!.state !== 'Booted') {
-    return {
-      success: false,
-      error: 'Simulator must be booted to capture screenshot',
-      errorCode: 'SIMULATOR_NOT_BOOTED',
-    };
+  // Validate simulator is booted
+  const bootedError = validateSimulatorBooted<ScreenshotResult>(simResult.data!.state, simResult.data!.name);
+  if (bootedError) {
+    return bootedError;
   }
 
   // Ensure output directory exists
@@ -85,11 +89,25 @@ export async function screenshot(options: ScreenshotOptions): Promise<IOSResult<
   const result = await runSimctl(captureArgs);
 
   if (result.exitCode !== 0) {
-    return {
-      success: false,
-      error: `Failed to capture screenshot: ${result.stderr || 'Unknown error'}`,
-      errorCode: 'SCREENSHOT_FAILED',
-    };
+    const errorOutput = result.stderr || result.stdout || '';
+
+    // Check for timeout/frozen simulator
+    const detectedError = detectErrorType(errorOutput);
+    if (detectedError === 'TIMEOUT') {
+      return screenshotTimeoutError(simResult.data!.name);
+    }
+
+    // Check for specific timeout patterns in error message
+    if (errorOutput.toLowerCase().includes('timeout') ||
+        errorOutput.toLowerCase().includes('timed out') ||
+        errorOutput.toLowerCase().includes('not responding')) {
+      return screenshotTimeoutError(simResult.data!.name);
+    }
+
+    return createUserFriendlyError(
+      'SCREENSHOT_FAILED',
+      `Failed to capture screenshot: ${errorOutput || 'Unknown error'}`
+    );
   }
 
   // Get file info
@@ -177,12 +195,10 @@ export async function startRecording(options: RecordingOptions): Promise<IOSResu
     };
   }
 
-  if (simResult.data!.state !== 'Booted') {
-    return {
-      success: false,
-      error: 'Simulator must be booted to record video',
-      errorCode: 'SIMULATOR_NOT_BOOTED',
-    };
+  // Validate simulator is booted
+  const bootedError = validateSimulatorBooted<void>(simResult.data!.state, simResult.data!.name);
+  if (bootedError) {
+    return bootedError;
   }
 
   // Ensure output directory exists
