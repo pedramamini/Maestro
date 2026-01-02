@@ -21,7 +21,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
-import { Terminal, Cpu, Wand2, ImageIcon, ArrowUp, PenLine, X, Keyboard } from 'lucide-react';
+import { Terminal, Wand2, ImageIcon, ArrowUp, PenLine, X, Keyboard } from 'lucide-react';
 import type { Session, Theme } from '../../types';
 import { WizardPill } from './WizardPill';
 import { WizardConfidenceGauge } from './WizardConfidenceGauge';
