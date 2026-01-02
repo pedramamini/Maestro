@@ -1790,3 +1790,542 @@ name: Deep Link Handling
 6. **Scroll Until Visible** - Handle off-screen elements gracefully
 
 See the [README](examples/ios-flows/README.md) in the examples directory for more customization tips and troubleshooting
+
+## iOS Assertion Commands
+
+Maestro provides verification assertions for automated testing workflows. These assertions help prove that features work correctly by checking UI state, text content, and system behavior.
+
+### Overview
+
+All assertions share common behaviors:
+
+- **Polling**: Assertions poll at configurable intervals (default: 500ms) until the condition is met or timeout is reached
+- **Timeout**: Maximum wait time before assertion fails (default: 10s)
+- **Evidence capture**: Screenshots are automatically captured on failure
+- **Retry support**: Transient failures can be retried with exponential backoff
+
+### Common Options
+
+All assertion commands accept these base options:
+
+| Option | Type | Default | Description |
+|--------|------|---------|-------------|
+| `--simulator <udid>` | string | First booted | Target simulator by UDID |
+| `--timeout <ms>` | number | 10000 | Maximum time to wait for condition |
+| `--poll-interval <ms>` | number | 500 | Interval between checks |
+| `--retry <count>` | number | 0 | Number of retry attempts on failure |
+
+### Element Visibility Assertions
+
+#### `/ios.assert_visible`
+
+Verify an element is visible on screen.
+
+```
+/ios.assert_visible <target> [--timeout <ms>] [--require-enabled]
+```
+
+**Target Formats:**
+
+| Format | Description | Example |
+|--------|-------------|---------|
+| `#identifier` | Accessibility identifier | `#login_button` |
+| `@label` | Accessibility label | `@"Sign In"` |
+| `"text"` | Text content | `"Welcome"` |
+| `Type#id` | Type + identifier | `Button#submit` |
+
+**Examples:**
+```
+/ios.assert_visible #login_button
+/ios.assert_visible "Welcome to App"
+/ios.assert_visible @"Sign In" --timeout 15000
+/ios.assert_visible Button#submit --require-enabled
+```
+
+#### `/ios.assert_not_visible`
+
+Verify an element is NOT visible (or doesn't exist).
+
+```
+/ios.assert_not_visible <target> [--timeout <ms>]
+```
+
+Useful for verifying:
+- Modals/dialogs have closed
+- Loading spinners have disappeared
+- Error messages are not shown
+
+**Examples:**
+```
+/ios.assert_not_visible #loading_spinner
+/ios.assert_not_visible "Error occurred"
+/ios.assert_not_visible @"Loading..." --timeout 30000
+```
+
+#### `/ios.wait_for`
+
+Wait for an element to appear (returns element info when found).
+
+```
+/ios.wait_for <target> [--timeout <ms>] [--not]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--not` | Wait for element to disappear instead |
+
+**Examples:**
+```
+/ios.wait_for #home_screen
+/ios.wait_for "Dashboard loaded" --timeout 20000
+/ios.wait_for #loading_indicator --not
+```
+
+### Text & Content Assertions
+
+#### `/ios.assert_text`
+
+Verify element text matches expected value.
+
+```
+/ios.assert_text <target> <expected> [--mode <mode>] [--case-insensitive]
+```
+
+**Match Modes:**
+
+| Mode | Description | Example Usage |
+|------|-------------|---------------|
+| `exact` (default) | Text equals expected exactly | `"John Doe"` |
+| `contains` | Text includes expected substring | `"contains Welcome"` |
+| `startsWith` | Text starts with expected | `"starts with Hello"` |
+| `endsWith` | Text ends with expected | `"ends with !"` |
+| `regex` | Text matches regex pattern | `"regex .*@.*\\.com"` |
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--mode <mode>` | exact | Match mode (exact/contains/startsWith/endsWith/regex) |
+| `--case-insensitive` | false | Ignore case when matching |
+| `--property <prop>` | any | Check 'label', 'value', or 'any' |
+
+**Examples:**
+```
+/ios.assert_text #username_label "John Doe"
+/ios.assert_text #status "Success" --mode contains
+/ios.assert_text #email "EMAIL" --case-insensitive
+/ios.assert_text #price "\\$\\d+\\.\\d{2}" --mode regex
+```
+
+#### `/ios.assert_value`
+
+Verify an input field's value (for text fields, switches, etc.).
+
+```
+/ios.assert_value <target> <expected> [--mode <mode>]
+```
+
+Same match modes as `assert_text`. Additionally supports:
+
+| Mode | Description |
+|------|-------------|
+| `empty` | Value is empty or nil |
+| `notEmpty` | Value has content |
+
+**Examples:**
+```
+/ios.assert_value #email_field "user@example.com"
+/ios.assert_value #search_input "" --mode empty
+/ios.assert_value #password_field --mode notEmpty
+```
+
+### State Assertions
+
+#### `/ios.assert_enabled`
+
+Verify element is enabled for interaction.
+
+```
+/ios.assert_enabled <target> [--timeout <ms>]
+```
+
+**Examples:**
+```
+/ios.assert_enabled #submit_button
+/ios.assert_enabled @"Continue"
+```
+
+#### `/ios.assert_disabled`
+
+Verify element is disabled.
+
+```
+/ios.assert_disabled <target> [--timeout <ms>]
+```
+
+**Examples:**
+```
+/ios.assert_disabled #submit_button  # Before form is filled
+/ios.assert_disabled @"Next" --timeout 5000
+```
+
+#### `/ios.assert_selected`
+
+Verify element is selected (for tabs, checkboxes, toggles).
+
+```
+/ios.assert_selected <target> [--timeout <ms>]
+/ios.assert_selected <target> --not  # Assert NOT selected
+```
+
+**Examples:**
+```
+/ios.assert_selected #dark_mode_toggle
+/ios.assert_selected @"Profile Tab"
+/ios.assert_selected #newsletter_checkbox --not
+```
+
+#### `/ios.assert_hittable`
+
+Verify element can receive tap events (useful for debugging tap issues).
+
+```
+/ios.assert_hittable <target> [--timeout <ms>]
+```
+
+Checks:
+- Element is visible
+- Element is enabled
+- Element has non-zero size
+- Element is not off-screen
+- Element is not obscured by overlays
+
+**Examples:**
+```
+/ios.assert_hittable #action_button
+/ios.assert_hittable @"Purchase" --timeout 5000
+```
+
+### Log & Crash Assertions
+
+#### `/ios.assert_no_crash`
+
+Verify app has not crashed.
+
+```
+/ios.assert_no_crash --app <bundleId> [--since <timestamp>]
+```
+
+| Option | Description |
+|--------|-------------|
+| `--app <bundleId>` | Bundle ID to monitor (required) |
+| `--since <timestamp>` | Check for crashes since this time |
+
+**Examples:**
+```
+/ios.assert_no_crash --app com.example.myapp
+/ios.assert_no_crash --app com.example.myapp --since "2024-01-15T10:00:00"
+```
+
+#### `/ios.assert_no_errors`
+
+Verify no error patterns appear in system logs.
+
+```
+/ios.assert_no_errors [--app <bundleId>] [--since <timestamp>] [--pattern <regex>]
+```
+
+**Default Error Patterns:**
+- Generic: `error`, `failed`, `exception`, `crash`, `fatal`
+- iOS: `EXC_BAD_ACCESS`, `SIGABRT`, `SIGSEGV`, `NSException`
+- Swift: `fatalError`, `preconditionFailure`, `unexpectedly found nil`
+- Network: `HTTP 4xx/5xx`, `API error`, `network error`, `timeout`
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--app <bundleId>` | All apps | Filter logs to specific app |
+| `--since <timestamp>` | 60s ago | Check logs since this time |
+| `--pattern <regex>` | Defaults | Add custom error pattern |
+| `--ignore <regex>` | Defaults | Pattern to ignore (false positive) |
+| `--max-errors <n>` | 10 | Maximum errors to return |
+| `--context-lines <n>` | 2 | Log lines around each error |
+
+**Examples:**
+```
+/ios.assert_no_errors --app com.example.myapp
+/ios.assert_no_errors --pattern "database.*error"
+/ios.assert_no_errors --ignore "debug_error_message"
+```
+
+#### `/ios.assert_log_contains`
+
+Verify a pattern appears in system logs.
+
+```
+/ios.assert_log_contains <pattern> [--app <bundleId>] [--mode <mode>]
+```
+
+Useful for verifying:
+- API calls were made
+- Analytics events fired
+- Specific log messages appear
+
+**Options:**
+
+| Option | Default | Description |
+|--------|---------|-------------|
+| `--app <bundleId>` | All apps | Filter logs to specific app |
+| `--mode <mode>` | contains | Match mode (contains/exact/regex/startsWith/endsWith) |
+| `--not` | false | Assert pattern does NOT appear |
+| `--min-matches <n>` | 1 | Minimum required matches |
+| `--since <timestamp>` | 60s ago | Check logs since this time |
+
+**Examples:**
+```
+/ios.assert_log_contains "Login successful"
+/ios.assert_log_contains "API response: \\d+" --mode regex
+/ios.assert_log_contains "analytics.track.*purchase" --mode regex --app com.example.myapp
+/ios.assert_log_contains "ERROR" --not  # Assert no ERROR in logs
+```
+
+### Compound Assertions
+
+#### `/ios.assert_screen`
+
+Verify multiple conditions that define a "screen" state.
+
+```
+/ios.assert_screen <screen_definition> [--timeout <ms>]
+```
+
+A screen definition specifies:
+- Elements that must be visible
+- Elements that must NOT be visible
+- Elements that must be enabled/disabled
+
+**Screen Definition Format:**
+
+```yaml
+name: login_screen
+description: Login form ready for input
+elements:                    # Must be visible
+  - "#email_field"
+  - "#password_field"
+  - "#login_button"
+not_visible:                 # Must NOT be visible
+  - "#loading_spinner"
+  - "#error_message"
+disabled:                    # Must be disabled
+  - "#login_button"          # Disabled until form filled
+```
+
+**Shorthand Prefixes:**
+- `#identifier` - accessibility identifier
+- `@label` - accessibility label
+- `"text"` - text content
+
+**Examples:**
+
+```
+# Define screen inline
+/ios.assert_screen name=login elements="#email,#password,#login" not_visible="#loading"
+
+# Use screen from registry
+/ios.assert_screen login_screen --timeout 15000
+```
+
+**Using Screen Definitions in Code:**
+
+```typescript
+import { assertScreen, createScreenDefinition } from './ios-tools/assertions';
+
+// Quick creation
+const loginScreen = createScreenDefinition('login', [
+  '#email_field',
+  '#password_field',
+  '#login_button'
+], ['#loading_spinner']);
+
+// Full definition
+const homeScreen = {
+  name: 'home',
+  elements: [
+    { identifier: 'home_header' },
+    { label: 'Profile' },
+    { text: 'Welcome' }
+  ],
+  notVisible: [
+    { identifier: 'onboarding_modal' }
+  ],
+  enabled: [
+    { identifier: 'action_button' }
+  ]
+};
+```
+
+### Timeout and Retry Configuration
+
+#### Timeout Behavior
+
+Assertions poll until either:
+1. Condition is met (pass)
+2. Timeout is reached (fail with timeout status)
+3. Hard error occurs (fail with error status)
+
+```
+/ios.assert_visible #element --timeout 5000 --poll-interval 250
+```
+
+This will check every 250ms for up to 5 seconds.
+
+#### Retry Policy
+
+For handling transient failures (network glitches, simulator timing):
+
+```typescript
+{
+  retry: {
+    maxAttempts: 3,         // Total attempts including first
+    initialDelay: 500,      // Delay before first retry
+    maxDelay: 5000,         // Maximum delay cap
+    backoffMultiplier: 2,   // Exponential backoff multiplier
+    exponentialBackoff: true
+  }
+}
+```
+
+**Backoff Calculation:**
+- Attempt 1: 500ms delay
+- Attempt 2: 1000ms delay
+- Attempt 3: 2000ms delay (capped at maxDelay)
+
+### Auto Run Integration
+
+Use assertions in Auto Run task documents:
+
+```markdown
+# Feature: User Login
+
+## Tasks
+
+- [ ] Navigate to login screen
+  - ios.tap: "#login_nav_button"
+  - ios.wait_for: "#login_screen"
+
+- [ ] Verify login form elements
+  - ios.assert_visible: "#email_field"
+  - ios.assert_visible: "#password_field"
+  - ios.assert_visible: "#login_button"
+  - ios.assert_disabled: "#login_button"
+
+- [ ] Fill and submit form
+  - ios.type: { into: "#email_field", text: "test@example.com" }
+  - ios.type: { into: "#password_field", text: "password123" }
+  - ios.assert_enabled: "#login_button"
+  - ios.tap: "#login_button"
+
+- [ ] Verify successful login
+  - ios.wait_for: "#home_screen"
+  - ios.assert_visible: "#welcome_message"
+  - ios.assert_text: { element: "#welcome_message", contains: "Welcome" }
+  - ios.assert_no_crash: { app: "com.example.myapp" }
+```
+
+### Assertion Results
+
+All assertions return structured results:
+
+```typescript
+interface VerificationResult {
+  id: string;              // Unique assertion ID
+  type: string;            // Assertion type (visible, text, etc.)
+  status: 'passed' | 'failed' | 'timeout' | 'error';
+  passed: boolean;         // Quick check for pass/fail
+  message: string;         // Human-readable result
+  target: string;          // What was being verified
+  duration: number;        // Total time in ms
+  attempts: Attempt[];     // All polling attempts
+  artifacts?: {
+    screenshots?: string[];  // Captured screenshots
+    logs?: string[];         // Collected logs
+  };
+  simulator?: {
+    udid: string;
+    name: string;
+    iosVersion: string;
+  };
+  data?: any;              // Type-specific data
+}
+```
+
+### Error Messages
+
+When assertions fail, helpful messages are provided:
+
+**Element not found:**
+```
+Element "#submit_button" not found in UI tree.
+Suggestions:
+- Did you mean "#submit_btn"? (Button, visible)
+- Check if the element has the correct identifier
+- The element may not have loaded yet - try increasing timeout
+```
+
+**Timeout:**
+```
+Timeout after 10000ms waiting for visibility of "#loading_complete"
+- 20 attempts made
+- Last state: element not found
+```
+
+**Text mismatch:**
+```
+Text does not equal "John Doe". Found: label="Jonathan Doe", value=""
+```
+
+### Troubleshooting
+
+#### Assertion Times Out
+
+1. **Increase timeout**: Element may load slower than expected
+   ```
+   /ios.assert_visible #element --timeout 30000
+   ```
+
+2. **Check selector**: Use `/ios.inspect` to verify element exists
+   ```
+   /ios.inspect --app com.example.app
+   ```
+
+3. **Verify simulator state**: Ensure simulator is booted and app is running
+
+#### Flaky Assertions
+
+1. **Add retry**: Handle transient failures
+   ```
+   /ios.assert_visible #element --retry 3
+   ```
+
+2. **Wait for animations**: Add explicit wait before assertion
+   ```
+   /ios.wait_for #animation_complete
+   /ios.assert_visible #result
+   ```
+
+3. **Use appropriate timeout**: Consider app performance characteristics
+
+#### Element Found But Not Hittable
+
+Use `/ios.assert_hittable` to diagnose:
+
+```
+/ios.assert_hittable #button
+```
+
+Common causes:
+- Element obscured by overlay
+- Element outside visible bounds
+- Element has zero size
+- Element is disabled

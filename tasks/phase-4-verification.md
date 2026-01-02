@@ -516,10 +516,28 @@
 
 ## Documentation
 
-- [ ] Document each assertion command
-- [ ] Provide examples for common patterns
-- [ ] Document timeout and retry configuration
-- [ ] Document screen definition format
+- [x] Document each assertion command ✅ *Added comprehensive documentation to `docs/ios-development.md`:*
+  - *Element visibility assertions (assert_visible, assert_not_visible, wait_for)*
+  - *Text & content assertions (assert_text, assert_value)*
+  - *State assertions (assert_enabled, assert_disabled, assert_selected, assert_hittable)*
+  - *Log & crash assertions (assert_no_crash, assert_no_errors, assert_log_contains)*
+  - *Compound assertions (assert_screen)*
+  - *Updated `docs/slash-commands.md` with quick reference table*
+- [x] Provide examples for common patterns ✅ *Included examples for:*
+  - *Target formats (#identifier, @label, "text", Type#id)*
+  - *Match modes (exact, contains, startsWith, endsWith, regex)*
+  - *Auto Run integration with markdown task documents*
+  - *Error handling scenarios and troubleshooting*
+- [x] Document timeout and retry configuration ✅ *Documented:*
+  - *Common options (--simulator, --timeout, --poll-interval, --retry)*
+  - *Timeout behavior with polling loop explanation*
+  - *Retry policy with exponential backoff configuration*
+  - *Backoff calculation examples*
+- [x] Document screen definition format ✅ *Documented:*
+  - *ScreenDefinition YAML format with elements, not_visible, enabled, disabled*
+  - *Shorthand prefixes (#identifier, @label, "text")*
+  - *createScreenDefinition() helper function*
+  - *Full definition TypeScript examples*
 
 ## Acceptance Criteria
 

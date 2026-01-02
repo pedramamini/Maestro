@@ -100,6 +100,19 @@ For iOS development workflows, Maestro provides commands to capture simulator st
 | `/ios.type` | Type text into focused element or specific target |
 | `/ios.scroll` | Scroll in a direction or scroll to an element |
 | `/ios.swipe` | Perform swipe gestures (left/right/up/down) |
+| `/ios.assert_visible` | Assert element is visible on screen |
+| `/ios.assert_not_visible` | Assert element is NOT visible |
+| `/ios.wait_for` | Wait for element to appear (or disappear with --not) |
+| `/ios.assert_text` | Assert element text matches expected value |
+| `/ios.assert_value` | Assert input field value matches expected |
+| `/ios.assert_enabled` | Assert element is enabled for interaction |
+| `/ios.assert_disabled` | Assert element is disabled |
+| `/ios.assert_selected` | Assert element is selected (tabs, toggles) |
+| `/ios.assert_hittable` | Assert element can receive tap events |
+| `/ios.assert_no_crash` | Assert app has not crashed |
+| `/ios.assert_no_errors` | Assert no error patterns in system logs |
+| `/ios.assert_log_contains` | Assert pattern appears in system logs |
+| `/ios.assert_screen` | Assert multiple conditions (compound screen state) |
 
 ### `/ios.run_flow` Options
 
