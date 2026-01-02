@@ -7,7 +7,7 @@
 
 import path from 'path';
 import fs from 'fs/promises';
-import { IOSResult, ScreenshotResult, LogEntry, CrashReport } from './types';
+import { IOSResult, LogEntry, CrashReport } from './types';
 import { screenshot } from './capture';
 import { getSystemLog, getCrashLogs } from './logs';
 import { getSimulator } from './simulator';
@@ -150,7 +150,7 @@ export async function captureSnapshot(options: SnapshotOptions): Promise<IOSResu
     const errorMsg = error instanceof Error ? error.message : String(error);
     // Check for permission errors
     if (errorMsg.toLowerCase().includes('permission') || errorMsg.toLowerCase().includes('eacces')) {
-      return permissionDeniedError(artifactDir || 'artifact directory');
+      return permissionDeniedError('artifact directory');
     }
     return createUserFriendlyError('COMMAND_FAILED', `Failed to create artifact directory: ${errorMsg}`);
   }

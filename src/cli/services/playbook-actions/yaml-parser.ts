@@ -5,7 +5,8 @@
  */
 
 import * as fs from 'fs';
-import * as yaml from 'js-yaml';
+// eslint-disable-next-line @typescript-eslint/no-require-imports
+const yaml = require('js-yaml');
 import type { YamlPlaybook, PlaybookStep } from './types';
 
 /**
@@ -142,11 +143,13 @@ export function parseYamlPlaybook(content: string, file?: string): YamlPlaybook 
     if (error instanceof PlaybookParseError) {
       throw error;
     }
-    if (error instanceof yaml.YAMLException) {
+    // Check for YAML errors (yaml.YAMLException)
+    if (error && typeof error === 'object' && 'name' in error && (error as { name: string }).name === 'YAMLException') {
+      const yamlError = error as unknown as { message: string; mark?: { line: number } };
       throw new PlaybookParseError(
-        `YAML parse error: ${error.message}`,
+        `YAML parse error: ${yamlError.message}`,
         file,
-        error.mark?.line
+        yamlError.mark?.line
       );
     }
     throw new PlaybookParseError(

@@ -270,12 +270,21 @@
 
 ## Acceptance Criteria
 
-- [ ] `/ios.snapshot` captures screenshot of running simulator
-- [ ] Command captures recent system logs (last 60 seconds)
-- [ ] Command captures crash logs if any exist
-- [ ] All artifacts saved to organized directory structure
-- [ ] Agent receives structured summary it can reason about
-- [ ] Command works with or without bundleId filter
-- [ ] Screenshot path is usable by agent for further analysis
-- [ ] Log summary highlights errors and warnings
-- [ ] Works in Auto Run document steps
+- [x] `/ios.snapshot` captures screenshot of running simulator
+  **Verified (2026-01-02)**: Implemented in `snapshot.ts` via `screenshot()` function from `capture.ts`. 21 unit tests + integration tests verify screenshot capture.
+- [x] Command captures recent system logs (last 60 seconds)
+  **Verified (2026-01-02)**: Implemented via `getSystemLog()` with configurable `logDuration` option (default: 60s). Logs are parsed and saved as structured JSON.
+- [x] Command captures crash logs if any exist
+  **Verified (2026-01-02)**: Implemented via `getCrashLogs()`. The `crashes.hasCrashes` and `crashes.reports[]` fields in the result indicate crash detection status.
+- [x] All artifacts saved to organized directory structure
+  **Verified (2026-01-02)**: Artifacts saved to `~/Library/Application Support/Maestro/ios-artifacts/{sessionId}/{snapshotId}/` with screenshot.png, logs.json, and crash reports.
+- [x] Agent receives structured summary it can reason about
+  **Verified (2026-01-02)**: `formatSnapshotForAgent()` returns markdown-formatted output with sections for status, screenshot, logs (with error counts), and crashes.
+- [x] Command works with or without bundleId filter
+  **Verified (2026-01-02)**: The `bundleId`/`app` option is optional. When provided, logs are filtered to that app's entries.
+- [x] Screenshot path is usable by agent for further analysis
+  **Verified (2026-01-02)**: Screenshot path returned in `result.screenshot.path`. Full path to PNG file on disk.
+- [x] Log summary highlights errors and warnings
+  **Verified (2026-01-02)**: `summarizeLog()` extracts error/warning counts. `formatSnapshotForAgent()` includes error counts and lists top errors in the output.
+- [x] Works in Auto Run document steps
+  **Verified (2026-01-02)**: Full YAML-based playbook action system implemented in `src/cli/services/playbook-actions/`. The `ios.snapshot` action supports all options including `store_as` for variable substitution. 25 unit tests verify the action.

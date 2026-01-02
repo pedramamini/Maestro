@@ -6,7 +6,7 @@
  */
 
 import { ipcMain, BrowserWindow } from 'electron';
-import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
+import { withIpcErrorLogging } from '../../utils/ipcHandler';
 import { logger } from '../../utils/logger';
 import * as iosTools from '../../ios-tools';
 import { LogEntry } from '../../ios-tools/types';
@@ -14,10 +14,9 @@ import { LogEntry } from '../../ios-tools/types';
 const LOG_CONTEXT = '[iOS-IPC]';
 
 // Helper to create handler options with consistent context
-const handlerOpts = (operation: string, logSuccess = true): CreateHandlerOptions => ({
+const handlerOpts = (operation: string) => ({
   context: LOG_CONTEXT,
   operation,
-  logSuccess,
 });
 
 /**
@@ -31,7 +30,7 @@ export function registerIOSHandlers(): void {
   // Detect Xcode installation
   ipcMain.handle(
     'ios:xcode:detect',
-    createIpcHandler(handlerOpts('detectXcode'), async () => {
+    withIpcErrorLogging(handlerOpts('detectXcode'), async () => {
       return iosTools.detectXcode();
     })
   );
@@ -39,7 +38,7 @@ export function registerIOSHandlers(): void {
   // Get Xcode version
   ipcMain.handle(
     'ios:xcode:version',
-    createIpcHandler(handlerOpts('getXcodeVersion'), async () => {
+    withIpcErrorLogging(handlerOpts('getXcodeVersion'), async () => {
       return iosTools.getXcodeVersion();
     })
   );
@@ -47,7 +46,7 @@ export function registerIOSHandlers(): void {
   // Get full Xcode info
   ipcMain.handle(
     'ios:xcode:info',
-    createIpcHandler(handlerOpts('getXcodeInfo'), async () => {
+    withIpcErrorLogging(handlerOpts('getXcodeInfo'), async () => {
       return iosTools.getXcodeInfo();
     })
   );
@@ -55,7 +54,7 @@ export function registerIOSHandlers(): void {
   // Validate Xcode installation
   ipcMain.handle(
     'ios:xcode:validate',
-    createIpcHandler(handlerOpts('validateXcode'), async () => {
+    withIpcErrorLogging(handlerOpts('validateXcode'), async () => {
       return iosTools.validateXcodeInstallation();
     })
   );
@@ -63,7 +62,7 @@ export function registerIOSHandlers(): void {
   // List iOS SDKs
   ipcMain.handle(
     'ios:xcode:sdks',
-    createIpcHandler(handlerOpts('listSDKs'), async () => {
+    withIpcErrorLogging(handlerOpts('listSDKs'), async () => {
       return iosTools.listSDKs();
     })
   );
@@ -75,7 +74,7 @@ export function registerIOSHandlers(): void {
   // List all simulators
   ipcMain.handle(
     'ios:simulator:list',
-    createIpcHandler(handlerOpts('listSimulators', false), async () => {
+    withIpcErrorLogging(handlerOpts('listSimulators'), async () => {
       return iosTools.listSimulators();
     })
   );
@@ -83,7 +82,7 @@ export function registerIOSHandlers(): void {
   // Get booted simulators
   ipcMain.handle(
     'ios:simulator:booted',
-    createIpcHandler(handlerOpts('getBootedSimulators', false), async () => {
+    withIpcErrorLogging(handlerOpts('getBootedSimulators'), async () => {
       return iosTools.getBootedSimulators();
     })
   );
@@ -91,7 +90,7 @@ export function registerIOSHandlers(): void {
   // Get specific simulator
   ipcMain.handle(
     'ios:simulator:get',
-    createIpcHandler(handlerOpts('getSimulator'), async (udid: string) => {
+    withIpcErrorLogging(handlerOpts('getSimulator'), async (udid: string) => {
       return iosTools.getSimulator(udid);
     })
   );
@@ -99,7 +98,7 @@ export function registerIOSHandlers(): void {
   // Boot simulator
   ipcMain.handle(
     'ios:simulator:boot',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('bootSimulator'),
       async (udid: string, options?: { timeout?: number; waitForBoot?: boolean }) => {
         return iosTools.bootSimulator({
@@ -113,7 +112,7 @@ export function registerIOSHandlers(): void {
   // Shutdown simulator
   ipcMain.handle(
     'ios:simulator:shutdown',
-    createIpcHandler(handlerOpts('shutdownSimulator'), async (udid: string) => {
+    withIpcErrorLogging(handlerOpts('shutdownSimulator'), async (udid: string) => {
       return iosTools.shutdownSimulator(udid);
     })
   );
@@ -121,7 +120,7 @@ export function registerIOSHandlers(): void {
   // Erase simulator
   ipcMain.handle(
     'ios:simulator:erase',
-    createIpcHandler(handlerOpts('eraseSimulator'), async (udid: string) => {
+    withIpcErrorLogging(handlerOpts('eraseSimulator'), async (udid: string) => {
       return iosTools.eraseSimulator(udid);
     })
   );
@@ -133,7 +132,7 @@ export function registerIOSHandlers(): void {
   // Install app
   ipcMain.handle(
     'ios:app:install',
-    createIpcHandler(handlerOpts('installApp'), async (udid: string, appPath: string) => {
+    withIpcErrorLogging(handlerOpts('installApp'), async (udid: string, appPath: string) => {
       return iosTools.installApp({ udid, appPath });
     })
   );
@@ -141,7 +140,7 @@ export function registerIOSHandlers(): void {
   // Uninstall app
   ipcMain.handle(
     'ios:app:uninstall',
-    createIpcHandler(handlerOpts('uninstallApp'), async (udid: string, bundleId: string) => {
+    withIpcErrorLogging(handlerOpts('uninstallApp'), async (udid: string, bundleId: string) => {
       return iosTools.uninstallApp(udid, bundleId);
     })
   );
@@ -149,7 +148,7 @@ export function registerIOSHandlers(): void {
   // Launch app
   ipcMain.handle(
     'ios:app:launch',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('launchApp'),
       async (
         udid: string,
@@ -168,7 +167,7 @@ export function registerIOSHandlers(): void {
   // Terminate app
   ipcMain.handle(
     'ios:app:terminate',
-    createIpcHandler(handlerOpts('terminateApp'), async (udid: string, bundleId: string) => {
+    withIpcErrorLogging(handlerOpts('terminateApp'), async (udid: string, bundleId: string) => {
       return iosTools.terminateApp(udid, bundleId);
     })
   );
@@ -176,7 +175,7 @@ export function registerIOSHandlers(): void {
   // Get app container
   ipcMain.handle(
     'ios:app:container',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('getAppContainer'),
       async (
         udid: string,
@@ -191,7 +190,7 @@ export function registerIOSHandlers(): void {
   // Open URL
   ipcMain.handle(
     'ios:app:openurl',
-    createIpcHandler(handlerOpts('openURL'), async (udid: string, url: string) => {
+    withIpcErrorLogging(handlerOpts('openURL'), async (udid: string, url: string) => {
       return iosTools.openURL(udid, url);
     })
   );
@@ -203,7 +202,7 @@ export function registerIOSHandlers(): void {
   // Capture screenshot
   ipcMain.handle(
     'ios:capture:screenshot',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('screenshot'),
       async (
         udid: string,
@@ -222,7 +221,7 @@ export function registerIOSHandlers(): void {
   // Capture screenshot with auto-naming
   ipcMain.handle(
     'ios:capture:screenshotAuto',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('captureScreenshot'),
       async (udid: string, directory: string, prefix?: string) => {
         return iosTools.captureScreenshot(udid, directory, prefix);
@@ -233,7 +232,7 @@ export function registerIOSHandlers(): void {
   // Start video recording
   ipcMain.handle(
     'ios:capture:startRecording',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('startRecording'),
       async (
         udid: string,
@@ -252,7 +251,7 @@ export function registerIOSHandlers(): void {
   // Stop video recording
   ipcMain.handle(
     'ios:capture:stopRecording',
-    createIpcHandler(handlerOpts('stopRecording'), async (udid: string) => {
+    withIpcErrorLogging(handlerOpts('stopRecording'), async (udid: string) => {
       return iosTools.stopRecording(udid);
     })
   );
@@ -260,7 +259,7 @@ export function registerIOSHandlers(): void {
   // Check if recording
   ipcMain.handle(
     'ios:capture:isRecording',
-    createIpcHandler(handlerOpts('isRecording', false), async (udid: string) => {
+    withIpcErrorLogging(handlerOpts('isRecording'), async (udid: string) => {
       return { success: true, data: iosTools.isRecording(udid) };
     })
   );
@@ -268,7 +267,7 @@ export function registerIOSHandlers(): void {
   // Get screen size
   ipcMain.handle(
     'ios:capture:screenSize',
-    createIpcHandler(handlerOpts('getScreenSize'), async (udid: string) => {
+    withIpcErrorLogging(handlerOpts('getScreenSize'), async (udid: string) => {
       return iosTools.getScreenSize(udid);
     })
   );
@@ -280,7 +279,7 @@ export function registerIOSHandlers(): void {
   // Get system logs
   ipcMain.handle(
     'ios:logs:system',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('getSystemLog'),
       async (
         udid: string,
@@ -303,7 +302,7 @@ export function registerIOSHandlers(): void {
   // Get system logs as text
   ipcMain.handle(
     'ios:logs:systemText',
-    createIpcHandler(handlerOpts('getSystemLogText'), async (udid: string, since?: string) => {
+    withIpcErrorLogging(handlerOpts('getSystemLogText'), async (udid: string, since?: string) => {
       return iosTools.getSystemLogText(udid, since);
     })
   );
@@ -311,7 +310,7 @@ export function registerIOSHandlers(): void {
   // Get crash logs
   ipcMain.handle(
     'ios:logs:crash',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('getCrashLogs'),
       async (
         udid: string,
@@ -336,7 +335,7 @@ export function registerIOSHandlers(): void {
   // Check for recent crashes
   ipcMain.handle(
     'ios:logs:hasRecentCrashes',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('hasRecentCrashes'),
       async (udid: string, bundleId: string, since: string) => {
         return iosTools.hasRecentCrashes(udid, bundleId, new Date(since));
@@ -347,7 +346,7 @@ export function registerIOSHandlers(): void {
   // Get diagnostics
   ipcMain.handle(
     'ios:logs:diagnostics',
-    createIpcHandler(handlerOpts('getDiagnostics'), async (udid: string, outputPath: string) => {
+    withIpcErrorLogging(handlerOpts('getDiagnostics'), async (udid: string, outputPath: string) => {
       return iosTools.getDiagnostics(udid, outputPath);
     })
   );
@@ -356,7 +355,7 @@ export function registerIOSHandlers(): void {
   // Returns the stream ID; log entries are sent via 'ios:logs:stream:data' events
   ipcMain.handle(
     'ios:logs:stream:start',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('streamLog'),
       async (
         udid: string,
@@ -404,7 +403,7 @@ export function registerIOSHandlers(): void {
   // Stop log streaming
   ipcMain.handle(
     'ios:logs:stream:stop',
-    createIpcHandler(handlerOpts('stopLogStream'), async (streamId: string) => {
+    withIpcErrorLogging(handlerOpts('stopLogStream'), async (streamId: string) => {
       return iosTools.stopLogStream(streamId);
     })
   );
@@ -412,7 +411,7 @@ export function registerIOSHandlers(): void {
   // Get active log streams
   ipcMain.handle(
     'ios:logs:stream:active',
-    createIpcHandler(handlerOpts('getActiveLogStreams', false), async () => {
+    withIpcErrorLogging(handlerOpts('getActiveLogStreams'), async () => {
       const streams = iosTools.getActiveLogStreams();
       // Convert Map to object for serialization
       const result: Record<string, string> = {};
@@ -426,7 +425,7 @@ export function registerIOSHandlers(): void {
   // Stop all log streams (optionally for a specific simulator)
   ipcMain.handle(
     'ios:logs:stream:stopAll',
-    createIpcHandler(handlerOpts('stopAllLogStreams'), async (udid?: string) => {
+    withIpcErrorLogging(handlerOpts('stopAllLogStreams'), async (udid?: string) => {
       const count = iosTools.stopAllLogStreams(udid);
       return { success: true, data: count };
     })
@@ -439,7 +438,7 @@ export function registerIOSHandlers(): void {
   // Capture full snapshot (screenshot + logs + crash detection)
   ipcMain.handle(
     'ios:snapshot:capture',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('captureSnapshot'),
       async (options: {
         udid?: string;
@@ -456,7 +455,7 @@ export function registerIOSHandlers(): void {
   // Format snapshot for agent output
   ipcMain.handle(
     'ios:snapshot:format',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatSnapshot'),
       async (result: iosTools.SnapshotResult) => {
         const formatted = iosTools.formatSnapshotForAgent(result);
@@ -468,7 +467,7 @@ export function registerIOSHandlers(): void {
   // Format snapshot as JSON
   ipcMain.handle(
     'ios:snapshot:formatJson',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatSnapshotJson'),
       async (result: iosTools.SnapshotResult) => {
         const json = iosTools.formatSnapshotAsJson(result);
@@ -480,7 +479,7 @@ export function registerIOSHandlers(): void {
   // List snapshots for a session (convenience alias for ios:artifacts:list)
   ipcMain.handle(
     'ios:snapshot:list',
-    createIpcHandler(handlerOpts('listSnapshots'), async (sessionId: string) => {
+    withIpcErrorLogging(handlerOpts('listSnapshots'), async (sessionId: string) => {
       const snapshots = await iosTools.listSessionArtifacts(sessionId);
       return { success: true, data: snapshots };
     })
@@ -489,7 +488,7 @@ export function registerIOSHandlers(): void {
   // Cleanup old snapshots (convenience alias for ios:artifacts:prune)
   ipcMain.handle(
     'ios:snapshot:cleanup',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('cleanupSnapshots'),
       async (sessionId: string, keepCount?: number) => {
         await iosTools.pruneSessionArtifacts(sessionId, keepCount);
@@ -505,7 +504,7 @@ export function registerIOSHandlers(): void {
   // Get artifact directory for session
   ipcMain.handle(
     'ios:artifacts:getDirectory',
-    createIpcHandler(handlerOpts('getArtifactDirectory'), async (sessionId: string) => {
+    withIpcErrorLogging(handlerOpts('getArtifactDirectory'), async (sessionId: string) => {
       const dir = await iosTools.getArtifactDirectory(sessionId);
       return { success: true, data: dir };
     })
@@ -514,7 +513,7 @@ export function registerIOSHandlers(): void {
   // List artifacts for session
   ipcMain.handle(
     'ios:artifacts:list',
-    createIpcHandler(handlerOpts('listArtifacts'), async (sessionId: string) => {
+    withIpcErrorLogging(handlerOpts('listArtifacts'), async (sessionId: string) => {
       const artifacts = await iosTools.listSessionArtifacts(sessionId);
       return { success: true, data: artifacts };
     })
@@ -523,7 +522,7 @@ export function registerIOSHandlers(): void {
   // Prune old artifacts
   ipcMain.handle(
     'ios:artifacts:prune',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('pruneArtifacts'),
       async (sessionId: string, keepCount?: number) => {
         await iosTools.pruneSessionArtifacts(sessionId, keepCount);
@@ -535,7 +534,7 @@ export function registerIOSHandlers(): void {
   // Get artifacts size
   ipcMain.handle(
     'ios:artifacts:size',
-    createIpcHandler(handlerOpts('getArtifactsSize'), async (sessionId: string) => {
+    withIpcErrorLogging(handlerOpts('getArtifactsSize'), async (sessionId: string) => {
       const size = await iosTools.getSessionArtifactsSize(sessionId);
       return { success: true, data: size };
     })
@@ -548,7 +547,7 @@ export function registerIOSHandlers(): void {
   // Inspect UI hierarchy
   ipcMain.handle(
     'ios:inspect',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('inspect'),
       async (options: {
         udid?: string;
@@ -565,7 +564,7 @@ export function registerIOSHandlers(): void {
   // Format inspection result for agent
   ipcMain.handle(
     'ios:inspect:format',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatInspect'),
       async (result: iosTools.InspectResult, options?: iosTools.FormatOptions) => {
         const formatted = iosTools.formatInspectForAgent(result, options);
@@ -577,7 +576,7 @@ export function registerIOSHandlers(): void {
   // Format inspection result as JSON
   ipcMain.handle(
     'ios:inspect:formatJson',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatInspectJson'),
       async (result: iosTools.InspectResult) => {
         const json = iosTools.formatInspectAsJson(result);
@@ -589,7 +588,7 @@ export function registerIOSHandlers(): void {
   // Format inspection result as element list
   ipcMain.handle(
     'ios:inspect:formatList',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatInspectList'),
       async (result: iosTools.InspectResult) => {
         const list = iosTools.formatInspectAsElementList(result);
@@ -601,7 +600,7 @@ export function registerIOSHandlers(): void {
   // Format inspection result compact
   ipcMain.handle(
     'ios:inspect:formatCompact',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatInspectCompact'),
       async (result: iosTools.InspectResult) => {
         const compact = iosTools.formatInspectCompact(result);
@@ -617,7 +616,7 @@ export function registerIOSHandlers(): void {
   // Find elements matching query
   ipcMain.handle(
     'ios:ui:findElements',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('findElements'),
       async (tree: iosTools.UIElement, query: iosTools.ElementQuery) => {
         const result = iosTools.findElements(tree, query);
@@ -629,7 +628,7 @@ export function registerIOSHandlers(): void {
   // Find single element
   ipcMain.handle(
     'ios:ui:findElement',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('findElement'),
       async (tree: iosTools.UIElement, query: iosTools.ElementQuery) => {
         const element = iosTools.findElement(tree, query);
@@ -641,7 +640,7 @@ export function registerIOSHandlers(): void {
   // Find by identifier
   ipcMain.handle(
     'ios:ui:findByIdentifier',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('findByIdentifier'),
       async (tree: iosTools.UIElement, identifier: string) => {
         const element = iosTools.findByIdentifier(tree, identifier);
@@ -653,7 +652,7 @@ export function registerIOSHandlers(): void {
   // Find by label
   ipcMain.handle(
     'ios:ui:findByLabel',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('findByLabel'),
       async (tree: iosTools.UIElement, label: string) => {
         const element = iosTools.findByLabel(tree, label);
@@ -665,7 +664,7 @@ export function registerIOSHandlers(): void {
   // Get interactable elements
   ipcMain.handle(
     'ios:ui:getInteractables',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('getInteractables'),
       async (tree: iosTools.UIElement, visibleOnly?: boolean) => {
         const elements = iosTools.getInteractableElements(tree, visibleOnly);
@@ -677,7 +676,7 @@ export function registerIOSHandlers(): void {
   // Get buttons
   ipcMain.handle(
     'ios:ui:getButtons',
-    createIpcHandler(handlerOpts('getButtons'), async (tree: iosTools.UIElement) => {
+    withIpcErrorLogging(handlerOpts('getButtons'), async (tree: iosTools.UIElement) => {
       const buttons = iosTools.getButtons(tree);
       return { success: true, data: buttons };
     })
@@ -686,7 +685,7 @@ export function registerIOSHandlers(): void {
   // Get text fields
   ipcMain.handle(
     'ios:ui:getTextFields',
-    createIpcHandler(handlerOpts('getTextFields'), async (tree: iosTools.UIElement) => {
+    withIpcErrorLogging(handlerOpts('getTextFields'), async (tree: iosTools.UIElement) => {
       const fields = iosTools.getTextFields(tree);
       return { success: true, data: fields };
     })
@@ -695,7 +694,7 @@ export function registerIOSHandlers(): void {
   // Get text elements
   ipcMain.handle(
     'ios:ui:getTextElements',
-    createIpcHandler(handlerOpts('getTextElements'), async (tree: iosTools.UIElement) => {
+    withIpcErrorLogging(handlerOpts('getTextElements'), async (tree: iosTools.UIElement) => {
       const texts = iosTools.getTextElements(tree);
       return { success: true, data: texts };
     })
@@ -704,7 +703,7 @@ export function registerIOSHandlers(): void {
   // Describe element
   ipcMain.handle(
     'ios:ui:describeElement',
-    createIpcHandler(handlerOpts('describeElement'), async (element: iosTools.UIElement) => {
+    withIpcErrorLogging(handlerOpts('describeElement'), async (element: iosTools.UIElement) => {
       const description = iosTools.describeElement(element);
       return { success: true, data: description };
     })
@@ -713,7 +712,7 @@ export function registerIOSHandlers(): void {
   // Get best identifier for element
   ipcMain.handle(
     'ios:ui:getBestIdentifier',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('getBestIdentifier'),
       async (element: iosTools.UIElement, elements?: iosTools.UIElement[]) => {
         const identifier = iosTools.getBestIdentifier(element, elements);
@@ -729,7 +728,7 @@ export function registerIOSHandlers(): void {
   // Detect Maestro CLI installation
   ipcMain.handle(
     'ios:maestro:detect',
-    createIpcHandler(handlerOpts('detectMaestroCli'), async () => {
+    withIpcErrorLogging(handlerOpts('detectMaestroCli'), async () => {
       return iosTools.detectMaestroCli();
     })
   );
@@ -737,7 +736,7 @@ export function registerIOSHandlers(): void {
   // Quick check if Maestro is available
   ipcMain.handle(
     'ios:maestro:isAvailable',
-    createIpcHandler(handlerOpts('isMaestroAvailable', false), async () => {
+    withIpcErrorLogging(handlerOpts('isMaestroAvailable'), async () => {
       const available = await iosTools.isMaestroAvailable();
       return { success: true, data: available };
     })
@@ -746,7 +745,7 @@ export function registerIOSHandlers(): void {
   // Get full Maestro CLI info
   ipcMain.handle(
     'ios:maestro:info',
-    createIpcHandler(handlerOpts('getMaestroInfo'), async () => {
+    withIpcErrorLogging(handlerOpts('getMaestroInfo'), async () => {
       return iosTools.getMaestroInfo();
     })
   );
@@ -754,7 +753,7 @@ export function registerIOSHandlers(): void {
   // Validate Maestro version meets minimum requirements
   ipcMain.handle(
     'ios:maestro:validateVersion',
-    createIpcHandler(handlerOpts('validateMaestroVersion'), async (minVersion: string) => {
+    withIpcErrorLogging(handlerOpts('validateMaestroVersion'), async (minVersion: string) => {
       return iosTools.validateMaestroVersion(minVersion);
     })
   );
@@ -762,7 +761,7 @@ export function registerIOSHandlers(): void {
   // Get installation instructions
   ipcMain.handle(
     'ios:maestro:installInstructions',
-    createIpcHandler(handlerOpts('getInstallInstructions', false), async () => {
+    withIpcErrorLogging(handlerOpts('getInstallInstructions'), async () => {
       const instructions = iosTools.getInstallInstructions();
       return { success: true, data: instructions };
     })
@@ -775,7 +774,7 @@ export function registerIOSHandlers(): void {
   // Generate flow YAML from steps
   ipcMain.handle(
     'ios:flow:generate',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('generateFlow'),
       async (steps: iosTools.FlowStep[], config?: iosTools.FlowConfig) => {
         return iosTools.generateFlow(steps, config);
@@ -786,7 +785,7 @@ export function registerIOSHandlers(): void {
   // Generate and save flow to file
   ipcMain.handle(
     'ios:flow:generateFile',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('generateFlowFile'),
       async (steps: iosTools.FlowStep[], outputPath: string, config?: iosTools.FlowConfig) => {
         return iosTools.generateFlowFile(steps, outputPath, config);
@@ -797,7 +796,7 @@ export function registerIOSHandlers(): void {
   // Generate flow from action strings
   ipcMain.handle(
     'ios:flow:generateFromStrings',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('generateFlowFromStrings'),
       async (actions: string[], config?: iosTools.FlowConfig) => {
         return iosTools.generateFlowFromStrings(actions, config);
@@ -808,7 +807,7 @@ export function registerIOSHandlers(): void {
   // Parse a single action string
   ipcMain.handle(
     'ios:flow:parseAction',
-    createIpcHandler(handlerOpts('parseActionString', false), async (actionString: string) => {
+    withIpcErrorLogging(handlerOpts('parseActionString'), async (actionString: string) => {
       const step = iosTools.parseActionString(actionString);
       return { success: true, data: step };
     })
@@ -821,7 +820,7 @@ export function registerIOSHandlers(): void {
   // Run a Maestro flow
   ipcMain.handle(
     'ios:flow:run',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('runFlow'),
       async (options: iosTools.FlowRunOptions) => {
         return iosTools.runFlow(options);
@@ -832,7 +831,7 @@ export function registerIOSHandlers(): void {
   // Run a flow with retry support
   ipcMain.handle(
     'ios:flow:runWithRetry',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('runFlowWithRetry'),
       async (options: iosTools.FlowRunWithRetryOptions) => {
         return iosTools.runFlowWithRetry(options);
@@ -843,7 +842,7 @@ export function registerIOSHandlers(): void {
   // Run multiple flows in sequence
   ipcMain.handle(
     'ios:flow:runBatch',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('runFlows'),
       async (flowPaths: string[], options: Omit<iosTools.FlowRunOptions, 'flowPath'>) => {
         return iosTools.runFlows(flowPaths, options);
@@ -854,7 +853,7 @@ export function registerIOSHandlers(): void {
   // Validate a flow file
   ipcMain.handle(
     'ios:flow:validate',
-    createIpcHandler(handlerOpts('validateFlow'), async (flowPath: string) => {
+    withIpcErrorLogging(handlerOpts('validateFlow'), async (flowPath: string) => {
       return iosTools.validateFlow(flowPath);
     })
   );
@@ -862,7 +861,7 @@ export function registerIOSHandlers(): void {
   // Validate a flow file using Maestro CLI
   ipcMain.handle(
     'ios:flow:validateWithMaestro',
-    createIpcHandler(handlerOpts('validateFlowWithMaestro'), async (flowPath: string) => {
+    withIpcErrorLogging(handlerOpts('validateFlowWithMaestro'), async (flowPath: string) => {
       return iosTools.validateFlowWithMaestro(flowPath);
     })
   );
@@ -874,7 +873,7 @@ export function registerIOSHandlers(): void {
   // Format flow result for agent output
   ipcMain.handle(
     'ios:flow:formatResult',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatFlowResult'),
       async (result: iosTools.FlowRunResult, options?: iosTools.FlowFormatOptions) => {
         const formatted = iosTools.formatFlowResult(result, options);
@@ -886,7 +885,7 @@ export function registerIOSHandlers(): void {
   // Format flow result as JSON
   ipcMain.handle(
     'ios:flow:formatResultJson',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatFlowResultAsJson'),
       async (result: iosTools.FlowRunResult) => {
         const json = iosTools.formatFlowResultAsJson(result);
@@ -898,7 +897,7 @@ export function registerIOSHandlers(): void {
   // Format flow result compact
   ipcMain.handle(
     'ios:flow:formatResultCompact',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatFlowResultCompact'),
       async (result: iosTools.FlowRunResult) => {
         const compact = iosTools.formatFlowResultCompact(result);
@@ -910,7 +909,7 @@ export function registerIOSHandlers(): void {
   // Format batch flow result
   ipcMain.handle(
     'ios:flow:formatBatchResult',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatBatchFlowResult'),
       async (result: iosTools.BatchFlowResult, options?: iosTools.FlowFormatOptions) => {
         const formatted = iosTools.formatBatchFlowResult(result, options);
@@ -926,7 +925,7 @@ export function registerIOSHandlers(): void {
   // Assert element is visible
   ipcMain.handle(
     'ios:assert:visible',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('assertVisible'),
       async (options: iosTools.AssertVisibleOptions) => {
         return iosTools.assertVisible(options);
@@ -937,7 +936,7 @@ export function registerIOSHandlers(): void {
   // Assert element is visible by identifier
   ipcMain.handle(
     'ios:assert:visibleById',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('assertVisibleById'),
       async (identifier: string, options: Omit<iosTools.AssertVisibleOptions, 'target'>) => {
         return iosTools.assertVisibleById(identifier, options);
@@ -948,7 +947,7 @@ export function registerIOSHandlers(): void {
   // Assert element is visible by label
   ipcMain.handle(
     'ios:assert:visibleByLabel',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('assertVisibleByLabel'),
       async (label: string, options: Omit<iosTools.AssertVisibleOptions, 'target'>) => {
         return iosTools.assertVisibleByLabel(label, options);
@@ -959,7 +958,7 @@ export function registerIOSHandlers(): void {
   // Assert element is visible by text
   ipcMain.handle(
     'ios:assert:visibleByText',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('assertVisibleByText'),
       async (text: string, options: Omit<iosTools.AssertVisibleOptions, 'target'>) => {
         return iosTools.assertVisibleByText(text, options);
@@ -970,7 +969,7 @@ export function registerIOSHandlers(): void {
   // Assert element is NOT visible
   ipcMain.handle(
     'ios:assert:notVisible',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('assertNotVisible'),
       async (options: iosTools.AssertVisibleOptions) => {
         return iosTools.assertNotVisible(options);
@@ -981,7 +980,7 @@ export function registerIOSHandlers(): void {
   // Assert no crash for app
   ipcMain.handle(
     'ios:assert:noCrash',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('assertNoCrash'),
       async (options: iosTools.AssertNoCrashOptions) => {
         return iosTools.assertNoCrash(options);
@@ -992,7 +991,7 @@ export function registerIOSHandlers(): void {
   // Quick check if app has crashed
   ipcMain.handle(
     'ios:assert:hasCrashed',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('hasCrashed'),
       async (bundleId: string, udid: string, since: string) => {
         return iosTools.hasCrashed(bundleId, udid, new Date(since));
@@ -1003,7 +1002,7 @@ export function registerIOSHandlers(): void {
   // Wait for app to not crash for duration
   ipcMain.handle(
     'ios:assert:waitForNoCrash',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('waitForNoCrash'),
       async (options: iosTools.AssertNoCrashOptions & { monitorDuration: number }) => {
         return iosTools.waitForNoCrash(options);
@@ -1014,7 +1013,7 @@ export function registerIOSHandlers(): void {
   // Format verification result for agent
   ipcMain.handle(
     'ios:verify:formatResult',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatVerificationResult'),
       async (result: iosTools.VerificationResult, options?: iosTools.VerificationFormatOptions) => {
         const formatted = iosTools.formatVerificationResult(result, options);
@@ -1026,7 +1025,7 @@ export function registerIOSHandlers(): void {
   // Format verification result as JSON
   ipcMain.handle(
     'ios:verify:formatResultJson',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatVerificationAsJson'),
       async (result: iosTools.VerificationResult) => {
         const json = iosTools.formatVerificationAsJson(result);
@@ -1038,7 +1037,7 @@ export function registerIOSHandlers(): void {
   // Format verification result compact
   ipcMain.handle(
     'ios:verify:formatResultCompact',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatVerificationCompact'),
       async (result: iosTools.VerificationResult) => {
         const compact = iosTools.formatVerificationCompact(result);
@@ -1050,7 +1049,7 @@ export function registerIOSHandlers(): void {
   // Format batch verification results
   ipcMain.handle(
     'ios:verify:formatBatch',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatVerificationBatch'),
       async (results: iosTools.VerificationResult[], options?: iosTools.VerificationFormatOptions) => {
         const formatted = iosTools.formatVerificationBatch(results, options);
@@ -1066,7 +1065,7 @@ export function registerIOSHandlers(): void {
   // Run the Feature Ship Loop
   ipcMain.handle(
     'ios:shipLoop:run',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('runShipLoop'),
       async (options: iosTools.ShipLoopOptions) => {
         return iosTools.runShipLoop(options);
@@ -1077,7 +1076,7 @@ export function registerIOSHandlers(): void {
   // Format ship loop result for agent output
   ipcMain.handle(
     'ios:shipLoop:formatResult',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatShipLoopResult'),
       async (result: iosTools.ShipLoopResult) => {
         const formatted = iosTools.formatShipLoopResult(result);
@@ -1089,7 +1088,7 @@ export function registerIOSHandlers(): void {
   // Format ship loop result as JSON
   ipcMain.handle(
     'ios:shipLoop:formatResultJson',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatShipLoopResultAsJson'),
       async (result: iosTools.ShipLoopResult) => {
         const json = iosTools.formatShipLoopResultAsJson(result);
@@ -1101,7 +1100,7 @@ export function registerIOSHandlers(): void {
   // Format ship loop result compact
   ipcMain.handle(
     'ios:shipLoop:formatResultCompact',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('formatShipLoopResultCompact'),
       async (result: iosTools.ShipLoopResult) => {
         const compact = iosTools.formatShipLoopResultCompact(result);
@@ -1117,7 +1116,7 @@ export function registerIOSHandlers(): void {
   // Run XCTest unit tests
   ipcMain.handle(
     'ios:test:run',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('runTests'),
       async (options: iosTools.TestRunOptions) => {
         return iosTools.runTests(options);
@@ -1128,7 +1127,7 @@ export function registerIOSHandlers(): void {
   // Run XCUITest UI tests
   ipcMain.handle(
     'ios:test:runUI',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('runUITests'),
       async (options: iosTools.TestRunOptions) => {
         return iosTools.runUITests(options);
@@ -1139,7 +1138,7 @@ export function registerIOSHandlers(): void {
   // Parse test results from xcresult bundle
   ipcMain.handle(
     'ios:test:parseResults',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('parseTestResults'),
       async (resultBundlePath: string) => {
         return iosTools.parseTestResults(resultBundlePath);
@@ -1150,7 +1149,7 @@ export function registerIOSHandlers(): void {
   // List available tests in a project
   ipcMain.handle(
     'ios:test:list',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('listTests'),
       async (projectPath: string, scheme: string) => {
         return iosTools.listTests(projectPath, scheme);
@@ -1165,7 +1164,7 @@ export function registerIOSHandlers(): void {
   // Execute /ios.snapshot slash command
   ipcMain.handle(
     'ios:slashCommand:snapshot',
-    createIpcHandler(
+    withIpcErrorLogging(
       handlerOpts('executeSnapshotCommand'),
       async (commandText: string, sessionId: string) => {
         const { executeSnapshotCommand } = await import('../../slash-commands/ios-snapshot');

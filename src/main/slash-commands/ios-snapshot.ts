@@ -186,7 +186,7 @@ export async function executeSnapshotCommand(
 
   // Parse arguments
   const args = parseSnapshotArgs(commandText);
-  logger.debug(`${LOG_CONTEXT} Parsed args:`, args);
+  logger.debug(`${LOG_CONTEXT} Parsed args`, LOG_CONTEXT, args);
 
   // Resolve simulator UDID if name was provided
   let udid = args.simulator;

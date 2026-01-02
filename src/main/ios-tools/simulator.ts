@@ -406,7 +406,7 @@ export async function uninstallApp(udid: string, bundleId: string): Promise<IOSR
  * @returns Success or error
  */
 export async function launchApp(options: LaunchAppOptions): Promise<IOSResult<void>> {
-  const { udid, bundleId, args = [], env = {}, waitForLaunch = true } = options;
+  const { udid, bundleId, args = [], env: _env = {}, waitForLaunch = true } = options;
 
   // Verify simulator is booted
   const simResult = await getSimulator(udid);

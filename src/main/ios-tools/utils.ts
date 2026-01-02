@@ -286,7 +286,7 @@ export function createError(
  * @param message - Human-readable message
  */
 export function createFailure<T>(
-  result: ExecResult,
+  _result: ExecResult,
   code: IOSErrorCode,
   message: string
 ): IOSResult<T> {

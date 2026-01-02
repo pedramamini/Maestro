@@ -6,7 +6,7 @@
  */
 
 import { SnapshotResult } from './snapshot';
-import { LogEntry, CrashReport } from './types';
+import { LogEntry } from './types';
 
 // =============================================================================
 // Types

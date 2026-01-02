@@ -196,8 +196,6 @@ export const ERROR_PATTERNS = {
  * @returns Detected error code or undefined
  */
 export function detectErrorType(output: string): IOSErrorCode | undefined {
-  const lowerOutput = output.toLowerCase();
-
   // Check each error pattern category
   if (ERROR_PATTERNS.simulatorNotBooted.some((p) => p.test(output))) {
     return 'SIMULATOR_NOT_BOOTED';
