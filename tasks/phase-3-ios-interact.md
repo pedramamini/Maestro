@@ -186,8 +186,19 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
   - [x] Unit tests (104 tests) in `src/__tests__/main/slash-commands/ios-scroll.test.ts`
   - Note: Uses the NativeDriver from native-driver.ts. Currently returns "not yet implemented" since NativeDriver execution requires building XCUITest project dynamically. Recommends using Maestro Mobile CLI (`/ios.run_flow`) for actual interactions until NativeDriver is fully implemented.
 
-- [ ] Create `src/main/slash-commands/ios-swipe.ts`
-  - [ ] `/ios.swipe <direction>` - swipe gesture
+- [x] Create `src/main/slash-commands/ios-swipe.ts`
+  - [x] `/ios.swipe <direction>` - swipe gesture
+  - [x] Arguments:
+    - `--app, -a <bundleId>` - target app (required)
+    - `--simulator, -s <name|udid>` - target simulator
+    - `--velocity, -v <slow|normal|fast>` - swipe velocity (default: normal)
+    - `--from <target>` - start swipe from specific element (#identifier or "label")
+    - `--timeout <ms>` - element wait timeout (default: 10000)
+    - `--debug` - verbose output mode
+  - [x] Registered IPC handler in `src/main/ipc/handlers/ios.ts`
+  - [x] Exported from `src/main/slash-commands/index.ts`
+  - [x] Unit tests (93 tests) in `src/__tests__/main/slash-commands/ios-swipe.test.ts`
+  - Note: Uses the NativeDriver from native-driver.ts. Currently returns "not yet implemented" since NativeDriver execution requires building XCUITest project dynamically. Recommends using Maestro Mobile CLI (`/ios.run_flow`) for actual interactions until NativeDriver is fully implemented.
 
 ---
 

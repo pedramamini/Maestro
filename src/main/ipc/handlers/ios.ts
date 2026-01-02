@@ -1328,6 +1328,18 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // Execute /ios.swipe slash command
+  ipcMain.handle(
+    'ios:slashCommand:swipe',
+    withIpcErrorLogging(
+      handlerOpts('executeSwipeCommand'),
+      async (commandText: string, sessionId: string, cwd?: string) => {
+        const { executeSwipeCommand } = await import('../../slash-commands/ios-swipe');
+        return executeSwipeCommand(commandText, sessionId, cwd);
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }
 

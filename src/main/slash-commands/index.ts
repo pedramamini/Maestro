@@ -74,6 +74,21 @@ export {
   type ScrollDirection,
 } from './ios-scroll';
 
+// iOS Swipe Command
+export {
+  executeSwipeCommand,
+  parseSwipeArgs,
+  parseSwipeTarget,
+  parseSwipeDirection,
+  parseVelocity,
+  swipeCommandMetadata,
+  type SwipeCommandArgs,
+  type SwipeCommandResult,
+  type SwipeTarget,
+  type SwipeTargetType,
+  type SwipeDirection,
+} from './ios-swipe';
+
 // Command registry for all slash commands
 export interface SlashCommandMetadata {
   command: string;
@@ -94,6 +109,7 @@ import { runFlowCommandMetadata } from './ios-run-flow';
 import { tapCommandMetadata } from './ios-tap';
 import { typeCommandMetadata } from './ios-type';
 import { scrollCommandMetadata } from './ios-scroll';
+import { swipeCommandMetadata } from './ios-swipe';
 
 export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   snapshotCommandMetadata,
@@ -102,4 +118,5 @@ export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   tapCommandMetadata,
   typeCommandMetadata,
   scrollCommandMetadata,
+  swipeCommandMetadata,
 ];
