@@ -214,10 +214,11 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
 
 ### Action Validation
 
-- [ ] Create `src/main/ios-tools/action-validator.ts`
-  - [ ] Implement `validateTarget(target, uiTree)` - check target exists
-  - [ ] Implement `suggestAlternatives(target, uiTree)` - suggest similar elements
-  - [ ] Implement `checkHittable(target, uiTree)` - verify element can receive taps
+- [x] Create `src/main/ios-tools/action-validator.ts`
+  - [x] Implement `validateTarget(target, uiTree)` - check target exists
+  - [x] Implement `suggestAlternatives(target, uiTree)` - suggest similar elements
+  - [x] Implement `checkHittable(target, uiTree)` - verify element can receive taps
+  - Note: Full implementation with target finding (by identifier, label, text, predicate, coordinates, type), validation options (requireVisible, requireEnabled, checkHittable), fuzzy string matching for suggestions using Levenshtein distance, hittability checks (visibility, enabled, size, obscured elements, off-screen detection), and convenience functions (validateForAction, targetExists, getElementCenter). Includes 63 unit tests. Exported from index.ts.
 
 ### Action Result Formatting
 

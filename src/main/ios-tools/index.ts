@@ -639,3 +639,23 @@ export type {
   StopRecordingResult as StopActionRecordingResult,
   StopRecordingOptions as StopActionRecordingOptions,
 } from './action-recorder';
+
+// =============================================================================
+// Action Validation
+// =============================================================================
+
+export {
+  validateTarget,
+  suggestAlternatives,
+  checkHittable,
+  validateForAction,
+  targetExists,
+  getElementCenter,
+} from './action-validator';
+export type {
+  NotHittableReason,
+  ValidationResult,
+  SuggestedTarget,
+  HittabilityResult,
+  ValidationOptions,
+} from './action-validator';
