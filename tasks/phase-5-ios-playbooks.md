@@ -589,13 +589,24 @@
 
 ### Slash Commands
 
-- [ ] Create `/ios.playbook` slash command
-  - [ ] `/ios.playbook list` - list available playbooks
-  - [ ] `/ios.playbook run <name>` - run a playbook
-  - [ ] `/ios.playbook info <name>` - show playbook details
-  - [ ] Arguments:
+- [x] Create `/ios.playbook` slash command
+  - [x] `/ios.playbook list` - list available playbooks
+  - [x] `/ios.playbook run <name>` - run a playbook
+  - [x] `/ios.playbook info <name>` - show playbook details
+  - [x] Arguments:
     - `--inputs <json>` - provide inputs
     - `--dry-run` - validate without executing
+  > Created comprehensive `/ios.playbook` slash command (`src/main/slash-commands/ios-playbook.ts`) with full implementation including:
+  > - `parsePlaybookArgs()` - argument parser supporting subcommands (list, run, info), flags (--dry-run, --continue), and options (--inputs, --simulator, --timeout)
+  > - `executePlaybookCommand()` - main executor dispatching to list/run/info subcommands
+  > - `executeListCommand()` - lists all available playbooks with metadata table (ID, description, version, type)
+  > - `executeInfoCommand()` - shows detailed playbook info including inputs, variables, steps, validation status, and usage examples
+  > - `executeRunCommand()` - executes a playbook with simulator resolution, input handling, and progress reporting
+  > - Simulator UDID resolution for name-based targeting
+  > - Rich markdown output formatting with error messages, troubleshooting hints, and examples
+  > - Command metadata for autocomplete with 7 examples
+  > - Exported from `slash-commands/index.ts` and registered in `slashCommands.ts` for UI autocomplete
+  > - 37 unit tests covering argument parsing (subcommands, flags, inputs, quoted strings), command execution (list, info, run), metadata validation, and edge cases
 
 ### Auto Run Integration
 

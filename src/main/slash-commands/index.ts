@@ -89,6 +89,16 @@ export {
   type SwipeDirection,
 } from './ios-swipe';
 
+// iOS Playbook Command
+export {
+  executePlaybookCommand,
+  parsePlaybookArgs,
+  playbookCommandMetadata,
+  type PlaybookSubcommand,
+  type PlaybookCommandArgs,
+  type PlaybookCommandResult,
+} from './ios-playbook';
+
 // Command registry for all slash commands
 export interface SlashCommandMetadata {
   command: string;
@@ -110,6 +120,7 @@ import { tapCommandMetadata } from './ios-tap';
 import { typeCommandMetadata } from './ios-type';
 import { scrollCommandMetadata } from './ios-scroll';
 import { swipeCommandMetadata } from './ios-swipe';
+import { playbookCommandMetadata } from './ios-playbook';
 
 export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   snapshotCommandMetadata,
@@ -119,4 +130,5 @@ export const iosSlashCommandMetadata: SlashCommandMetadata[] = [
   typeCommandMetadata,
   scrollCommandMetadata,
   swipeCommandMetadata,
+  playbookCommandMetadata,
 ];

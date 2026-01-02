@@ -56,6 +56,11 @@ export const iosSlashCommands: SlashCommand[] = [
     description: 'Run closed-loop development: launch → flow → verify → snapshot',
     aiOnly: true,
   },
+  {
+    command: '/ios.playbook',
+    description: 'Run an iOS playbook (list, run, info) for automated workflows',
+    aiOnly: true,
+  },
 ];
 
 // All slash commands (for autocomplete)
