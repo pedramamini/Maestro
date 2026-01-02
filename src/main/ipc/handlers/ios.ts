@@ -620,5 +620,51 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // ==========================================================================
+  // Maestro CLI
+  // ==========================================================================
+
+  // Detect Maestro CLI installation
+  ipcMain.handle(
+    'ios:maestro:detect',
+    createIpcHandler(handlerOpts('detectMaestroCli'), async () => {
+      return iosTools.detectMaestroCli();
+    })
+  );
+
+  // Quick check if Maestro is available
+  ipcMain.handle(
+    'ios:maestro:isAvailable',
+    createIpcHandler(handlerOpts('isMaestroAvailable', false), async () => {
+      const available = await iosTools.isMaestroAvailable();
+      return { success: true, data: available };
+    })
+  );
+
+  // Get full Maestro CLI info
+  ipcMain.handle(
+    'ios:maestro:info',
+    createIpcHandler(handlerOpts('getMaestroInfo'), async () => {
+      return iosTools.getMaestroInfo();
+    })
+  );
+
+  // Validate Maestro version meets minimum requirements
+  ipcMain.handle(
+    'ios:maestro:validateVersion',
+    createIpcHandler(handlerOpts('validateMaestroVersion'), async (minVersion: string) => {
+      return iosTools.validateMaestroVersion(minVersion);
+    })
+  );
+
+  // Get installation instructions
+  ipcMain.handle(
+    'ios:maestro:installInstructions',
+    createIpcHandler(handlerOpts('getInstallInstructions', false), async () => {
+      const instructions = iosTools.getInstallInstructions();
+      return { success: true, data: instructions };
+    })
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }

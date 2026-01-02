@@ -186,3 +186,20 @@ export {
   parseIOSVersionFromRuntime,
   parseDeviceTypeName,
 } from './utils';
+
+// =============================================================================
+// Maestro CLI Integration
+// =============================================================================
+
+export {
+  runMaestro,
+  detectMaestroCli,
+  isMaestroAvailable,
+  getMaestroInfo,
+  validateMaestroVersion,
+  getInstallInstructions,
+} from './maestro-cli';
+export type {
+  MaestroInfo,
+  MaestroDetectResult,
+} from './maestro-cli';
