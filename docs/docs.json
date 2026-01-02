@@ -69,6 +69,7 @@
               "group-chat",
               "remote-access",
               "ssh-remote-execution",
+              "ios-development",
               "configuration"
             ]
           },

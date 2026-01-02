@@ -253,10 +253,20 @@
 
 ## Documentation
 
-- [ ] Document `/ios.snapshot` command in README
-- [ ] Add usage examples
-- [ ] Document artifact directory structure
-- [ ] Document integration with Auto Run
+- [x] Document `/ios.snapshot` command in README
+  **Note (2026-01-01)**: Created comprehensive documentation page `docs/ios-development.md` covering:
+  - Command overview with all options and examples
+  - Auto Run integration with YAML playbook examples
+  - Artifact directory structure with file format details
+  - UI panel features (screenshot viewer, log viewer, crash alerts)
+  - Troubleshooting guide
+  Also added to navigation in `docs/docs.json` and cross-referenced in `docs/slash-commands.md` and `docs/autorun-playbooks.md`.
+- [x] Add usage examples
+  **Note (2026-01-01)**: Included in `docs/ios-development.md` under "Examples" section with basic, simulator-targeted, app-filtered, and combined option examples.
+- [x] Document artifact directory structure
+  **Note (2026-01-01)**: Documented in `docs/ios-development.md` under "Artifact Directory Structure" section with tree diagram, file descriptions, and log entry JSON format.
+- [x] Document integration with Auto Run
+  **Note (2026-01-01)**: Documented in both `docs/ios-development.md` (full YAML example with action inputs/outputs) and `docs/autorun-playbooks.md` (iOS Development Actions subsection).
 
 ## Acceptance Criteria
 

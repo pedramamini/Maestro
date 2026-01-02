@@ -87,3 +87,33 @@ Maestro bundles [OpenSpec](https://github.com/Fission-AI/OpenSpec) for spec-driv
 | `/openspec.help` | Get help with OpenSpec workflow and concepts |
 
 See [OpenSpec Commands](/openspec-commands) for the complete workflow guide and directory structure.
+
+## iOS Development Commands
+
+For iOS development workflows, Maestro provides commands to capture simulator state:
+
+| Command | Description |
+|---------|-------------|
+| `/ios.snapshot` | Capture screenshot, logs, and crash data from iOS simulator |
+
+### `/ios.snapshot` Options
+
+```
+/ios.snapshot [--simulator <name|udid>] [--app <bundleId>] [--duration <seconds>]
+```
+
+| Option | Short | Description |
+|--------|-------|-------------|
+| `--simulator` | `-s` | Target simulator by name or UDID |
+| `--app` | `-a` | Filter logs to specific bundle ID |
+| `--duration` | `-d` | Seconds of logs to capture (default: 60) |
+| `--include-crash` | | Include full crash log content |
+
+**Examples**:
+```
+/ios.snapshot
+/ios.snapshot --simulator "iPhone 15 Pro"
+/ios.snapshot --app com.example.myapp -d 120
+```
+
+See [iOS Development Tools](/ios-development) for complete documentation.

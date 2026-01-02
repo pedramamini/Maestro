@@ -152,3 +152,39 @@ Click the **Stop** button at any time. The runner will:
 Auto Run can execute in parallel across different agents without conflicts — each agent works in its own project directory, so there's no risk of clobbering each other's work.
 
 **Same project, parallel work:** To run multiple Auto Runs in the same repository simultaneously, create worktree sub-agents from the git branch menu (see [Git Worktrees](./git-worktrees)). Each worktree operates in an isolated directory with its own branch, enabling true parallel task execution on the same codebase.
+
+## YAML Playbook Actions
+
+Playbooks can also be defined in YAML format with specialized actions. This enables automated workflows that go beyond simple markdown task execution.
+
+### iOS Development Actions
+
+For iOS development workflows, playbooks support the `ios.snapshot` action:
+
+```yaml
+name: iOS Debug Workflow
+steps:
+  - action: ios.snapshot
+    simulator: "iPhone 15 Pro"
+    app: com.example.myapp
+    duration: 120
+    include_crash: true
+    store_as: snapshot_result
+
+  - action: message
+    content: |
+      Analyze the iOS snapshot:
+      - Screenshot: {{snapshot_result.screenshotPath}}
+      - Errors found: {{snapshot_result.summary.errorCount}}
+      - Crashes: {{snapshot_result.hasCrashes}}
+```
+
+| Input | Type | Description |
+|-------|------|-------------|
+| `simulator` | string | Simulator name or UDID (default: first booted) |
+| `app` | string | Bundle ID to filter logs |
+| `duration` | number | Seconds of log history (default: 60) |
+| `include_crash` | boolean | Include full crash content (default: false) |
+| `store_as` | string | Variable name to store results |
+
+See [iOS Development Tools](/ios-development) for complete documentation on iOS snapshot capabilities.
