@@ -319,9 +319,20 @@
 ## Testing
 
 - [x] Write unit tests for ui-analyzer.ts
-- [ ] Write unit tests for inspect-formatter.ts
+- [x] Write unit tests for inspect-formatter.ts
 - [ ] Write unit tests for element query parsing
 - [ ] Write integration test with sample app
+
+> **Completed**: Created comprehensive unit tests for `inspect-formatter.ts` (78 tests):
+> - `src/__tests__/main/ios-tools/inspect-formatter.test.ts`
+> - Tests for `formatInspectForAgent()` - verifies structure, sections, summary, simulator info, screenshot handling
+> - Tests for `formatInspectAsJson()` - JSON output validation, element serialization, screenshot info
+> - Tests for `formatInspectAsElementList()` - numbered list format, action suggestions
+> - Tests for `formatInspectCompact()` - compact format, button/text field listing, truncation
+> - Tests for `formatElementQuery()` - query criteria display, match results, position/state info, pagination
+> - Tests for `formatElementQueryTable()` - markdown table generation, missing field handling
+> - Tests for `formatActionSuggestions()` - action suggestions for buttons, text fields, switches, sliders, scroll views, pickers, steppers, segmented controls; disabled/hidden element warnings
+> - Edge cases: empty tree, multiple types, zero-size frames, long lists
 
 ## Acceptance Criteria
 
