@@ -499,6 +499,15 @@ export {
   assertNotSelectedById,
   assertNotSelectedByLabel,
   assertNotSelectedByText,
+  // Hittable assertions
+  assertHittable,
+  assertHittableById,
+  assertHittableByLabel,
+  assertHittableByText,
+  assertNotHittable,
+  assertNotHittableById,
+  assertNotHittableByLabel,
+  assertNotHittableByText,
   // Crash assertions
   assertNoCrash,
   hasCrashed,
@@ -532,6 +541,12 @@ export type {
   SelectedElementTarget,
   AssertSelectedOptions,
   SelectedAssertionData,
+  // Hittable assertion types
+  HittableElementTarget,
+  AssertHittableOptions,
+  ElementPosition,
+  ObscuringElementInfo,
+  HittableAssertionData,
   // Crash types
   AssertNoCrashOptions,
   NoCrashAssertionData,

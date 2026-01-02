@@ -190,12 +190,24 @@
 
 ### /ios.assert_hittable
 
-- [ ] Create `src/main/ios-tools/assertions/hittable.ts`
-  - [ ] Implement `assertHittable(target, options)`
-  - [ ] Verify element can receive tap events
-  - [ ] Helps diagnose "why can't I tap this" issues
+- [x] Create `src/main/ios-tools/assertions/hittable.ts` ✅ *Implemented with comprehensive hittability checking*
+  - [x] Implement `assertHittable(target, options)` ✅
+  - [x] Implement `assertNotHittable(target, options)` ✅
+  - [x] Verify element can receive tap events ✅
+  - [x] Helps diagnose "why can't I tap this" issues ✅
+  - [x] Checks: visibility, enabled state, non-zero size, off-screen, obscured by overlays ✅
+  - [x] Convenience functions: `assertHittableById`, `assertHittableByLabel`, `assertHittableByText`, `assertNotHittableById`, `assertNotHittableByLabel`, `assertNotHittableByText` ✅
+  - [x] Returns detailed diagnostics including position, reason code, and suggested action ✅
 
-- [ ] Create slash command `/ios.assert_hittable`
+- [x] Create slash command `/ios.assert_hittable` ✅ *IPC handlers registered:*
+  - *`ios:assert:hittable` - main assertion*
+  - *`ios:assert:hittableById` - by identifier*
+  - *`ios:assert:hittableByLabel` - by label*
+  - *`ios:assert:hittableByText` - by text*
+  - *`ios:assert:notHittable` - not hittable assertion*
+  - *`ios:assert:notHittableById` - by identifier*
+  - *`ios:assert:notHittableByLabel` - by label*
+  - *`ios:assert:notHittableByText` - by text*
 
 ---
 

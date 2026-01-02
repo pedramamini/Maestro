@@ -124,6 +124,29 @@ export type {
 } from './selected';
 
 // =============================================================================
+// Hittable Assertions
+// =============================================================================
+
+export {
+  assertHittable,
+  assertHittableById,
+  assertHittableByLabel,
+  assertHittableByText,
+  assertNotHittable,
+  assertNotHittableById,
+  assertNotHittableByLabel,
+  assertNotHittableByText,
+} from './hittable';
+export type {
+  // NotHittableReason is exported from action-validator.ts to avoid duplicate declarations
+  HittableElementTarget,
+  AssertHittableOptions,
+  ElementPosition,
+  ObscuringElementInfo,
+  HittableAssertionData,
+} from './hittable';
+
+// =============================================================================
 // Crash Assertions
 // =============================================================================
 

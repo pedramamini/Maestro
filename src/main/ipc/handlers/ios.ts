@@ -1466,6 +1466,98 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // =========================================================================
+  // Hittable Assertions
+  // =========================================================================
+
+  // Assert element is hittable (can receive tap events)
+  ipcMain.handle(
+    'ios:assert:hittable',
+    withIpcErrorLogging(
+      handlerOpts('assertHittable'),
+      async (options: iosTools.AssertHittableOptions) => {
+        return iosTools.assertHittable(options);
+      }
+    )
+  );
+
+  // Assert element is hittable by identifier
+  ipcMain.handle(
+    'ios:assert:hittableById',
+    withIpcErrorLogging(
+      handlerOpts('assertHittableById'),
+      async (identifier: string, options: Omit<iosTools.AssertHittableOptions, 'target'>) => {
+        return iosTools.assertHittableById(identifier, options);
+      }
+    )
+  );
+
+  // Assert element is hittable by label
+  ipcMain.handle(
+    'ios:assert:hittableByLabel',
+    withIpcErrorLogging(
+      handlerOpts('assertHittableByLabel'),
+      async (label: string, options: Omit<iosTools.AssertHittableOptions, 'target'>) => {
+        return iosTools.assertHittableByLabel(label, options);
+      }
+    )
+  );
+
+  // Assert element is hittable by text
+  ipcMain.handle(
+    'ios:assert:hittableByText',
+    withIpcErrorLogging(
+      handlerOpts('assertHittableByText'),
+      async (text: string, options: Omit<iosTools.AssertHittableOptions, 'target'>) => {
+        return iosTools.assertHittableByText(text, options);
+      }
+    )
+  );
+
+  // Assert element is NOT hittable
+  ipcMain.handle(
+    'ios:assert:notHittable',
+    withIpcErrorLogging(
+      handlerOpts('assertNotHittable'),
+      async (options: iosTools.AssertHittableOptions) => {
+        return iosTools.assertNotHittable(options);
+      }
+    )
+  );
+
+  // Assert element is NOT hittable by identifier
+  ipcMain.handle(
+    'ios:assert:notHittableById',
+    withIpcErrorLogging(
+      handlerOpts('assertNotHittableById'),
+      async (identifier: string, options: Omit<iosTools.AssertHittableOptions, 'target'>) => {
+        return iosTools.assertNotHittableById(identifier, options);
+      }
+    )
+  );
+
+  // Assert element is NOT hittable by label
+  ipcMain.handle(
+    'ios:assert:notHittableByLabel',
+    withIpcErrorLogging(
+      handlerOpts('assertNotHittableByLabel'),
+      async (label: string, options: Omit<iosTools.AssertHittableOptions, 'target'>) => {
+        return iosTools.assertNotHittableByLabel(label, options);
+      }
+    )
+  );
+
+  // Assert element is NOT hittable by text
+  ipcMain.handle(
+    'ios:assert:notHittableByText',
+    withIpcErrorLogging(
+      handlerOpts('assertNotHittableByText'),
+      async (text: string, options: Omit<iosTools.AssertHittableOptions, 'target'>) => {
+        return iosTools.assertNotHittableByText(text, options);
+      }
+    )
+  );
+
   // Format verification result for agent
   ipcMain.handle(
     'ios:verify:formatResult',
