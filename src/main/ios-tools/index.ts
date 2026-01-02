@@ -77,6 +77,11 @@ export {
   getCrashLogs,
   getDiagnostics,
   hasRecentCrashes,
+  // Real-time log streaming
+  streamLog,
+  stopLogStream,
+  getActiveLogStreams,
+  stopAllLogStreams,
 } from './logs';
 
 // =============================================================================

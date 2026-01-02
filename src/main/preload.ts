@@ -1233,6 +1233,28 @@ contextBridge.exposeInMainWorld('maestro', {
         ipcRenderer.invoke('ios:logs:hasRecentCrashes', udid, bundleId, since),
       diagnostics: (udid: string, outputPath: string) =>
         ipcRenderer.invoke('ios:logs:diagnostics', udid, outputPath),
+      // Real-time log streaming
+      stream: {
+        start: (udid: string, options?: { level?: 'default' | 'info' | 'debug' | 'error' | 'fault'; process?: string; predicate?: string; subsystem?: string }) =>
+          ipcRenderer.invoke('ios:logs:stream:start', udid, options),
+        stop: (streamId: string) =>
+          ipcRenderer.invoke('ios:logs:stream:stop', streamId),
+        active: () =>
+          ipcRenderer.invoke('ios:logs:stream:active'),
+        stopAll: (udid?: string) =>
+          ipcRenderer.invoke('ios:logs:stream:stopAll', udid),
+        // Event listeners for stream data
+        onData: (callback: (streamId: string, entry: any) => void) => {
+          const handler = (_: any, streamId: string, entry: any) => callback(streamId, entry);
+          ipcRenderer.on('ios:logs:stream:data', handler);
+          return () => ipcRenderer.removeListener('ios:logs:stream:data', handler);
+        },
+        onError: (callback: (streamId: string, error: string) => void) => {
+          const handler = (_: any, streamId: string, error: string) => callback(streamId, error);
+          ipcRenderer.on('ios:logs:stream:error', handler);
+          return () => ipcRenderer.removeListener('ios:logs:stream:error', handler);
+        },
+      },
     },
     // Snapshot
     snapshot: {
@@ -3213,6 +3235,14 @@ export interface MaestroAPI {
       crash: (udid: string, options?: { bundleId?: string; since?: string; limit?: number; includeContent?: boolean }) => Promise<any>;
       hasRecentCrashes: (udid: string, bundleId: string, since: string) => Promise<any>;
       diagnostics: (udid: string, outputPath: string) => Promise<any>;
+      stream: {
+        start: (udid: string, options?: { level?: string; process?: string; predicate?: string; subsystem?: string }) => Promise<any>;
+        stop: (streamId: string) => Promise<any>;
+        active: () => Promise<any>;
+        stopAll: (udid?: string) => Promise<any>;
+        onData: (callback: (streamId: string, entry: any) => void) => () => void;
+        onError: (callback: (streamId: string, error: string) => void) => () => void;
+      };
     };
     snapshot: {
       capture: (options: { udid?: string; bundleId?: string; sessionId: string; logDuration?: number; includeCrashContent?: boolean }) => Promise<any>;

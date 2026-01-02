@@ -5,10 +5,11 @@
  * Exposes iOS simulator, screenshot, and log functionality to the renderer.
  */
 
-import { ipcMain } from 'electron';
+import { ipcMain, BrowserWindow } from 'electron';
 import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
 import { logger } from '../../utils/logger';
 import * as iosTools from '../../ios-tools';
+import { LogEntry } from '../../ios-tools/types';
 
 const LOG_CONTEXT = '[iOS-IPC]';
 
@@ -348,6 +349,86 @@ export function registerIOSHandlers(): void {
     'ios:logs:diagnostics',
     createIpcHandler(handlerOpts('getDiagnostics'), async (udid: string, outputPath: string) => {
       return iosTools.getDiagnostics(udid, outputPath);
+    })
+  );
+
+  // Start log streaming
+  // Returns the stream ID; log entries are sent via 'ios:logs:stream:data' events
+  ipcMain.handle(
+    'ios:logs:stream:start',
+    createIpcHandler(
+      handlerOpts('streamLog'),
+      async (
+        udid: string,
+        options?: {
+          level?: 'default' | 'info' | 'debug' | 'error' | 'fault';
+          process?: string;
+          predicate?: string;
+          subsystem?: string;
+        }
+      ) => {
+        const mainWindow = BrowserWindow.getAllWindows()[0];
+
+        const result = await iosTools.streamLog(
+          {
+            udid,
+            ...options,
+          },
+          // onLog callback - send to renderer
+          (entry: LogEntry) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('ios:logs:stream:data', result.data?.id, entry);
+            }
+          },
+          // onError callback - send to renderer
+          (error: string) => {
+            if (mainWindow && !mainWindow.isDestroyed()) {
+              mainWindow.webContents.send('ios:logs:stream:error', result.data?.id, error);
+            }
+          }
+        );
+
+        if (!result.success) {
+          return result;
+        }
+
+        // Return just the stream ID (handle methods aren't serializable)
+        return {
+          success: true,
+          data: { id: result.data!.id },
+        };
+      }
+    )
+  );
+
+  // Stop log streaming
+  ipcMain.handle(
+    'ios:logs:stream:stop',
+    createIpcHandler(handlerOpts('stopLogStream'), async (streamId: string) => {
+      return iosTools.stopLogStream(streamId);
+    })
+  );
+
+  // Get active log streams
+  ipcMain.handle(
+    'ios:logs:stream:active',
+    createIpcHandler(handlerOpts('getActiveLogStreams', false), async () => {
+      const streams = iosTools.getActiveLogStreams();
+      // Convert Map to object for serialization
+      const result: Record<string, string> = {};
+      for (const [id, udid] of streams) {
+        result[id] = udid;
+      }
+      return { success: true, data: result };
+    })
+  );
+
+  // Stop all log streams (optionally for a specific simulator)
+  ipcMain.handle(
+    'ios:logs:stream:stopAll',
+    createIpcHandler(handlerOpts('stopAllLogStreams'), async (udid?: string) => {
+      const count = iosTools.stopAllLogStreams(udid);
+      return { success: true, data: count };
     })
   );
 

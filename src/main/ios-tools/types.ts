@@ -259,6 +259,34 @@ export interface CrashLogOptions {
   includeContent?: boolean;
 }
 
+/**
+ * Options for streaming real-time logs
+ */
+export interface StreamLogOptions {
+  /** Simulator UDID */
+  udid: string;
+  /** Log level to filter */
+  level?: 'default' | 'info' | 'debug' | 'error' | 'fault';
+  /** Process name to filter */
+  process?: string;
+  /** Predicate for filtering (NSPredicate format) */
+  predicate?: string;
+  /** Subsystem to filter (e.g., "com.apple.UIKit") */
+  subsystem?: string;
+}
+
+/**
+ * Handle returned from streamLog for controlling the stream
+ */
+export interface LogStreamHandle {
+  /** Unique identifier for this stream */
+  id: string;
+  /** Stop the log stream */
+  stop: () => void;
+  /** Whether the stream is active */
+  isActive: () => boolean;
+}
+
 // =============================================================================
 // App Container Types
 // =============================================================================
