@@ -566,14 +566,26 @@
 
 ## Playbook Runner Integration
 
-- [ ] Create `src/main/ios-tools/playbook-runner.ts`
-  - [ ] Implement `runPlaybook(name, inputs)` - execute a playbook
-  - [ ] Implement step execution engine
-  - [ ] Implement variable resolution
-  - [ ] Implement loop handling
-  - [ ] Implement condition evaluation
-  - [ ] Implement artifact collection
-  - [ ] Implement progress reporting
+- [x] Create `src/main/ios-tools/playbook-runner.ts`
+  - [x] Implement `runPlaybook(name, inputs)` - execute a playbook
+  - [x] Implement step execution engine
+  - [x] Implement variable resolution
+  - [x] Implement loop handling
+  - [x] Implement condition evaluation
+  - [x] Implement artifact collection
+  - [x] Implement progress reporting
+  > Created comprehensive playbook runner with full implementation including:
+  > - `runPlaybook()` - main entry point that loads, validates, and executes playbooks
+  > - Step execution engine with `executeSteps()` and `executeStep()` for sequential/conditional step execution
+  > - Variable resolution with `resolveValue()`, `resolveObject()`, and `evaluateExpression()` supporting template syntax (`{{ inputs.name }}`, `{{ outputs.build.bundle_id }}`, etc.)
+  > - Loop handling with `executeLoopStep()` supporting array iteration (`loop: "{{ inputs.items }}"`, `as: "item"`) and range syntax (`range(5)`)
+  > - Condition evaluation with `evaluateCondition()` for conditional step execution
+  > - Artifact collection via integration with artifacts module and `collected` data accumulation
+  > - Progress reporting via `onProgress` callback with phases: initializing, validating, executing, complete, failed
+  > - Built-in actions: complete_loop, exit_loop, increment_iteration, wait, report_status, record_diff, record_crash, etc.
+  > - Custom action handler support via `ActionRegistry`
+  > - Result formatters: `formatPlaybookResult()` (markdown), `formatPlaybookResultAsJson()`, `formatPlaybookResultAsText()`, `formatPlaybookResultCompact()`
+  > - 46 unit tests covering variable resolution, step execution, loops, conditions, error handling, and result formatting
 
 ### Slash Commands
 
