@@ -382,9 +382,37 @@ For failed flows, the output includes:
 
 ### Maestro Mobile YAML Format
 
-Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported actions:
+Flow files use Maestro Mobile's YAML syntax. This section provides a comprehensive reference of all supported actions and configuration options.
 
-#### Basic Actions
+#### Flow Structure
+
+A Maestro flow file consists of an optional configuration header followed by a list of steps:
+
+```yaml
+# Configuration (optional)
+appId: com.example.myapp
+name: My Flow Name
+tags:
+  - smoke
+  - regression
+env:
+  USERNAME: testuser
+  PASSWORD: secret123
+---
+# Steps (required)
+- launchApp
+- tapOn: "Login"
+- inputText: "${USERNAME}"
+```
+
+| Config Option | Description |
+|---------------|-------------|
+| `appId` | Bundle ID of the app to target |
+| `name` | Human-readable flow name |
+| `tags` | Array of tags for filtering flows |
+| `env` | Environment variables accessible as `${VAR_NAME}` |
+
+#### Tap Actions
 
 ```yaml
 # Tap on element by text
@@ -398,14 +426,46 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
 - tapOn:
     point: "150,300"
 
+# Tap with partial text match
+- tapOn:
+    containsText: "Log"
+
+# Tap on nth element when multiple matches exist
+- tapOn:
+    text: "Item"
+    index: 0  # 0-based index
+
+# Tap without waiting for element to settle
+- tapOn:
+    text: "Button"
+    waitToSettle: false
+
+# Double tap
+- doubleTapOn: "Image"
+
+# Long press
+- longPressOn: "Delete"
+```
+
+#### Text Input Actions
+
+```yaml
 # Input text (into focused element)
 - inputText: "hello@example.com"
 
-# Erase text from focused field
+# Erase all text from focused field
 - eraseText
+
+# Erase specific number of characters
+- eraseText: 10
 
 # Hide keyboard
 - hideKeyboard
+
+# Copy text from element
+- copyTextFrom: "Username"
+- copyTextFrom:
+    id: "username_label"
 ```
 
 #### Scrolling and Swiping
@@ -413,6 +473,11 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
 ```yaml
 # Scroll in direction
 - scroll:
+    direction: DOWN  # UP, DOWN, LEFT, RIGHT
+
+# Scroll within a specific element
+- scroll:
+    elementId: "scroll_view"
     direction: DOWN
 
 # Scroll until element visible
@@ -421,11 +486,17 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
       text: "Terms of Service"
     direction: DOWN
 
-# Swipe gesture
+# Scroll until element with ID visible
+- scrollUntilVisible:
+    element:
+      id: "footer"
+    direction: DOWN
+
+# Swipe gesture with start/end points
 - swipe:
     start: "50%, 80%"
     end: "50%, 20%"
-    duration: 500
+    duration: 500  # milliseconds
 ```
 
 #### Assertions and Waiting
@@ -438,14 +509,37 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
 - assertVisible:
     id: "welcome_message"
 
+# Assert with partial text match
+- assertVisible:
+    containsText: "Welc"
+
+# Assert with timeout
+- assertVisible:
+    text: "Loading Complete"
+    timeout: 15000  # milliseconds
+
 # Assert element is NOT visible
 - assertNotVisible: "Loading..."
+
+# Assert by ID not visible
+- assertNotVisible:
+    id: "error_message"
 
 # Wait for element (with timeout)
 - extendedWaitUntil:
     visible:
       text: "Dashboard"
     timeout: 10000
+
+# Wait for element by ID
+- extendedWaitUntil:
+    visible:
+      id: "main_content"
+    timeout: 10000
+
+# Wait for animation to complete
+- waitForAnimationToEnd:
+    timeout: 5000
 ```
 
 #### App Control
@@ -457,20 +551,25 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
 # Launch specific app with options
 - launchApp:
     appId: "com.example.myapp"
-    clearState: true
-    clearKeychain: true
+    clearState: true      # Reset app data
+    clearKeychain: true   # Clear keychain entries
+    stopApp: true         # Stop if running first
 
-# Stop app
+# Stop current app
 - stopApp
 
-# Open deep link
+# Stop specific app
+- stopApp: "com.example.myapp"
+
+# Open deep link or URL
 - openLink: "myapp://settings"
+- openLink: "https://example.com/login"
 ```
 
 #### Screenshots and Utility
 
 ```yaml
-# Take screenshot
+# Take screenshot (auto-named)
 - takeScreenshot
 
 # Take named screenshot
@@ -479,7 +578,10 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
 # Press hardware keys
 - pressKey: home
 - pressKey: back
+- pressKey: enter
+- pressKey: backspace
 - pressKey: volume_up
+- pressKey: volume_down
 
 # Wait (in milliseconds)
 - wait: 2000
@@ -490,6 +592,12 @@ Flow files use Maestro Mobile's YAML syntax. Here's a reference of supported act
 ```yaml
 appId: com.example.myapp
 name: Login Flow
+tags:
+  - auth
+  - smoke
+env:
+  TEST_EMAIL: test@example.com
+  TEST_PASSWORD: password123
 ---
 # Launch the app fresh
 - launchApp:
@@ -501,15 +609,21 @@ name: Login Flow
 # Enter credentials
 - tapOn:
     id: "email_field"
-- inputText: "test@example.com"
+- inputText: "${TEST_EMAIL}"
 - tapOn:
     id: "password_field"
-- inputText: "password123"
+- inputText: "${TEST_PASSWORD}"
 
 # Submit
 - tapOn: "Sign In"
 
-# Verify success
+# Wait for dashboard
+- extendedWaitUntil:
+    visible:
+      text: "Welcome"
+    timeout: 10000
+
+# Verify success and capture
 - assertVisible: "Welcome"
 - takeScreenshot: "login_success"
 ```
