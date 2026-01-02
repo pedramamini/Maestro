@@ -206,10 +206,11 @@ In comments/docs, always use "Maestro Mobile (mobile-dev-inc)" when referring to
 
 ### Action Recording (Optional)
 
-- [ ] Create `src/main/ios-tools/action-recorder.ts`
-  - [ ] Implement `startRecording(options)` - begin recording actions
-  - [ ] Implement `stopRecording()` - end recording, return flow
-  - [ ] Convert recorded actions to Maestro Mobile YAML or native driver actions
+- [x] Create `src/main/ios-tools/action-recorder.ts`
+  - [x] Implement `startRecording(options)` - begin recording actions
+  - [x] Implement `stopRecording()` - end recording, return flow
+  - [x] Convert recorded actions to Maestro Mobile YAML or native driver actions
+  - Note: Implemented with full session management (start, stop, pause, resume, cancel), individual action recording (tap, doubleTap, longPress, type, scroll, swipe, launchApp, terminateApp, screenshot), and conversion to both Maestro YAML flows and native driver actions. Includes 63 unit tests. Exported with "Action" prefix to avoid conflicts with video recording functions (e.g., `startActionRecording`, `stopActionRecording`).
 
 ### Action Validation
 

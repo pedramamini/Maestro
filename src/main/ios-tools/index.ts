@@ -597,3 +597,45 @@ export type {
   ActionDetails as NativeActionDetails,
   NativeDriverOptions,
 } from './native-driver';
+
+// =============================================================================
+// Action Recording
+// =============================================================================
+
+export {
+  // Session management (renamed to avoid conflicts with video recording)
+  startRecording as startActionRecording,
+  stopRecording as stopActionRecording,
+  pauseRecording as pauseActionRecording,
+  resumeRecording as resumeActionRecording,
+  cancelRecording as cancelActionRecording,
+  isRecordingActive as isActionRecordingActive,
+  getCurrentSession as getActionRecordingSession,
+  getRecordingStats as getActionRecordingStats,
+  // Individual action recording
+  recordTap,
+  recordDoubleTap,
+  recordLongPress,
+  recordType,
+  recordScroll,
+  recordSwipe,
+  recordLaunchApp,
+  recordTerminateApp,
+  recordScreenshot,
+  annotateLastAction,
+  // Conversion functions
+  convertToFlowSteps,
+  convertToNativeActions,
+  exportToMaestroYaml,
+  exportToNativeActions,
+} from './action-recorder';
+export type {
+  RecordedActionType,
+  RecordedAction,
+  RecordedElement,
+  RecordingOptions as ActionRecordingOptions,
+  RecordingState as ActionRecordingState,
+  RecordingSession as ActionRecordingSession,
+  StopRecordingResult as StopActionRecordingResult,
+  StopRecordingOptions as StopActionRecordingOptions,
+} from './action-recorder';
