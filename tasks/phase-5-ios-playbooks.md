@@ -657,11 +657,25 @@
 
 - [x] Write unit tests for playbook loader
   > 38 tests covering directory creation, playbook loading, validation, listing, and helper functions in `src/main/ios-tools/__tests__/playbook-loader.test.ts`
-- [ ] Write unit tests for playbook runner
+- [x] Write unit tests for playbook runner
+  > 46 tests covering the full playbook runner functionality in `src/main/ios-tools/__tests__/playbook-runner.test.ts`. Tests include:
+  > - Variable resolution (`resolveValue`, `resolveObject`, `evaluateExpression`, `evaluateCondition`)
+  > - Playbook execution (loading, step execution, progress reporting, dry run mode)
+  > - Custom action handlers and store_as outputs
+  > - Conditional execution (condition evaluation, step skipping)
+  > - Loop execution (array loops, empty loops, range() syntax)
+  > - Error handling (load failure, on_failure handlers, continue_on_error)
+  > - Data collection (record_diff action)
+  > - Result formatters (markdown, JSON, text, compact)
+  > - Input validation (type checking, required fields, defaults)
+  > - Wait action (timed waits, dry run bypass)
 - [ ] Write integration tests for each playbook
-- [ ] Test variable resolution
-- [ ] Test loop handling
-- [ ] Test error handling
+- [x] Test variable resolution
+  > Covered by `resolveValue`, `resolveObject`, and `evaluateExpression` tests in playbook-runner.test.ts (14 tests covering input references, variable references, output references with nested properties, special context values, embedded templates, missing references, arrays, objects, loop variables, filters like default/length/json)
+- [x] Test loop handling
+  > Covered by `loop execution` tests in playbook-runner.test.ts (3 tests covering array loops with item processing, empty loop arrays, and range() syntax)
+- [x] Test error handling
+  > Covered by `error handling` tests in playbook-runner.test.ts (4 tests covering playbook load failure, on_failure handler execution, continue_on_error step flag, and execution stopping on failure)
 
 ## Documentation
 
