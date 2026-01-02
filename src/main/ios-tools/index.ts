@@ -494,3 +494,25 @@ export {
   screenshotTimeoutError,
   logParsingWarning,
 } from './errors';
+
+// =============================================================================
+// XCUITest Project Management
+// =============================================================================
+
+export {
+  createInspectorProject,
+  buildInspector,
+  runInspector,
+  parseInspectorOutput,
+  cleanupInspectorProject,
+  getCachedInspector,
+  clearInspectorCache,
+} from './xcuitest-project';
+export type {
+  CreateProjectOptions,
+  CreateProjectResult,
+  BuildInspectorOptions,
+  BuildInspectorResult,
+  RunInspectorOptions,
+  RunInspectorResult,
+} from './xcuitest-project';
