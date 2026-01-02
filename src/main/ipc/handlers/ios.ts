@@ -666,5 +666,51 @@ export function registerIOSHandlers(): void {
     })
   );
 
+  // ==========================================================================
+  // Flow Generation
+  // ==========================================================================
+
+  // Generate flow YAML from steps
+  ipcMain.handle(
+    'ios:flow:generate',
+    createIpcHandler(
+      handlerOpts('generateFlow'),
+      async (steps: iosTools.FlowStep[], config?: iosTools.FlowConfig) => {
+        return iosTools.generateFlow(steps, config);
+      }
+    )
+  );
+
+  // Generate and save flow to file
+  ipcMain.handle(
+    'ios:flow:generateFile',
+    createIpcHandler(
+      handlerOpts('generateFlowFile'),
+      async (steps: iosTools.FlowStep[], outputPath: string, config?: iosTools.FlowConfig) => {
+        return iosTools.generateFlowFile(steps, outputPath, config);
+      }
+    )
+  );
+
+  // Generate flow from action strings
+  ipcMain.handle(
+    'ios:flow:generateFromStrings',
+    createIpcHandler(
+      handlerOpts('generateFlowFromStrings'),
+      async (actions: string[], config?: iosTools.FlowConfig) => {
+        return iosTools.generateFlowFromStrings(actions, config);
+      }
+    )
+  );
+
+  // Parse a single action string
+  ipcMain.handle(
+    'ios:flow:parseAction',
+    createIpcHandler(handlerOpts('parseActionString', false), async (actionString: string) => {
+      const step = iosTools.parseActionString(actionString);
+      return { success: true, data: step };
+    })
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }

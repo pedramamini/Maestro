@@ -203,3 +203,57 @@ export type {
   MaestroInfo,
   MaestroDetectResult,
 } from './maestro-cli';
+
+// =============================================================================
+// Flow Generation
+// =============================================================================
+
+export {
+  // Main generators
+  generateFlow,
+  generateFlowFile,
+  generateFlowFromStrings,
+  parseActionString,
+  // Step helper functions (some suffixed with "Step" to avoid conflicts)
+  tap,
+  inputText,
+  scroll,
+  screenshotStep,
+  assertVisible,
+  assertNotVisible,
+  waitForStep,
+  swipe,
+  launchAppStep,
+  stopApp as stopAppStep,  // Also rename for consistency
+  openLink,
+  pressKey,
+  hideKeyboard,
+  eraseText,
+  wait,
+  copyTextFrom,
+} from './flow-generator';
+export type {
+  // Step types
+  FlowStep,
+  FlowStepBase,
+  TapStep,
+  InputTextStep,
+  ScrollStep,
+  ScreenshotStep,
+  AssertVisibleStep,
+  AssertNotVisibleStep,
+  WaitForStep,
+  SwipeStep,
+  LaunchAppStep,
+  StopAppStep,
+  OpenLinkStep,
+  PressKeyStep,
+  HideKeyboardStep,
+  EraseTextStep,
+  WaitStep,
+  CopyTextStep,
+  // Configuration types
+  FlowConfig,
+  FlowDefinition,
+  GeneratedFlow,
+} from './flow-generator';
