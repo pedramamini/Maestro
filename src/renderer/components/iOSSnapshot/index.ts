@@ -14,5 +14,5 @@ export type { SnapshotViewerProps } from './SnapshotViewer';
 export { IOSLogViewer } from './iOSLogViewer';
 export type { iOSLogViewerProps, iOSLogEntry, LogCounts } from './iOSLogViewer';
 
-export { iOSSnapshotPanel } from './iOSSnapshotPanel';
+export { iOSSnapshotPanel, iOSSnapshotPanel as IOSSnapshotPanel } from './iOSSnapshotPanel';
 export type { iOSSnapshotPanelProps, SnapshotData } from './iOSSnapshotPanel';

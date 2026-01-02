@@ -42,7 +42,7 @@ import type { AgentError } from '../../shared/types';
 
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
-export type RightPanelTab = 'files' | 'history' | 'autorun';
+export type RightPanelTab = 'files' | 'history' | 'autorun' | 'ios';
 export type SettingsTab = 'general' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands';
 // Note: ScratchPadMode was removed as part of the Scratchpad → Auto Run migration
 export type FocusArea = 'sidebar' | 'main' | 'right';

@@ -8,6 +8,7 @@ import { AutoRun, AutoRunHandle } from './AutoRun';
 import type { DocumentTaskCount } from './AutoRunDocumentSelector';
 import { AutoRunExpandedModal } from './AutoRunExpandedModal';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { IOSSnapshotPanel } from './iOSSnapshot';
 
 export interface RightPanelHandle {
   refreshHistoryPanel: () => void;
@@ -105,6 +106,10 @@ interface RightPanelProps {
   lastGraphFocusFile?: string;
   /** Callback to open the last document graph */
   onOpenLastDocumentGraph?: () => void;
+  /** Whether to show the iOS tab (requires macOS and Xcode) */
+  showIOSTab?: boolean;
+  /** Optional bundle ID to filter iOS logs */
+  iosBundleId?: string;
 }
 
 export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(function RightPanel(props, ref) {
@@ -126,7 +131,8 @@ export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(fun
     onJumpToAgentSession, onResumeSession,
     onOpenSessionAsTab, onOpenAboutModal, onFileClick,
     onOpenMarketplace,
-    onFocusFileInGraph, lastGraphFocusFile, onOpenLastDocumentGraph
+    onFocusFileInGraph, lastGraphFocusFile, onOpenLastDocumentGraph,
+    showIOSTab, iosBundleId
   } = props;
 
   const historyPanelRef = useRef<HistoryPanelHandle>(null);
@@ -341,10 +347,10 @@ export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(fun
 
       {/* Tab Header */}
       <div className="flex border-b h-16" style={{ borderColor: theme.colors.border }}>
-        {['files', 'history', 'autorun'].map(tab => (
+        {(['files', 'history', 'autorun', ...(showIOSTab ? ['ios'] : [])] as RightPanelTab[]).map(tab => (
           <button
             key={tab}
-            onClick={() => setActiveRightTab(tab as RightPanelTab)}
+            onClick={() => setActiveRightTab(tab)}
             className="flex-1 text-xs font-bold border-b-2 transition-colors"
             style={{
               borderColor: activeRightTab === tab ? theme.colors.accent : 'transparent',
@@ -352,7 +358,7 @@ export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(fun
             }}
             data-tour={`${tab}-tab`}
           >
-            {tab === 'autorun' ? 'Auto Run' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+            {tab === 'autorun' ? 'Auto Run' : tab === 'ios' ? 'iOS' : tab.charAt(0).toUpperCase() + tab.slice(1)}
           </button>
         ))}
 
@@ -445,6 +451,16 @@ export const RightPanel = memo(forwardRef<RightPanelHandle, RightPanelProps>(fun
             {...autoRunSharedProps}
             onExpand={handleExpandAutoRun}
           />
+          </div>
+        )}
+
+        {activeRightTab === 'ios' && showIOSTab && (
+          <div data-tour="ios-panel" className="h-full">
+            <IOSSnapshotPanel
+              session={session}
+              theme={theme}
+              bundleId={iosBundleId}
+            />
           </div>
         )}
       </div>

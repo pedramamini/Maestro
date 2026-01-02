@@ -200,8 +200,17 @@
   - Simulator info header showing device name, iOS version, and relative time
 - [x] Create `index.ts` - exports all components
   **Note (2026-01-01)**: Exports SnapshotViewer, IOSLogViewer, iOSSnapshotPanel with types
-- [ ] Add snapshot tab to Right Bar for iOS sessions
-  **Note (2026-01-01)**: Left as optional stretch - requires iOS session detection and RightPanel modification. The `iOSSnapshotPanel` component is ready for integration.
+- [x] Add snapshot tab to Right Bar for iOS sessions
+  **Note (2026-01-01)**: Implemented iOS tab in Right Bar with the following changes:
+  - Added `'ios'` to `RightPanelTab` type in `src/renderer/types/index.ts`
+  - Added `IOSSnapshotPanel` alias export in `src/renderer/components/iOSSnapshot/index.ts`
+  - Modified `src/renderer/components/RightPanel.tsx` to:
+    - Import `IOSSnapshotPanel` component
+    - Add `showIOSTab` and `iosBundleId` props
+    - Conditionally render iOS tab when `showIOSTab` is true
+    - Render `IOSSnapshotPanel` when iOS tab is active
+  - Updated `src/renderer/hooks/batch/useAutoRunHandlers.ts` to use `RightPanelTab` type for `setActiveRightTab`
+  - Tab only appears when `showIOSTab` prop is true (caller decides based on platform/Xcode availability)
 
 ## Error Handling
 
