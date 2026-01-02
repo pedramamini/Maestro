@@ -1,0 +1,355 @@
+/**
+ * iOS IPC Handlers
+ *
+ * IPC handlers for iOS tooling operations.
+ * Exposes iOS simulator, screenshot, and log functionality to the renderer.
+ */
+
+import { ipcMain } from 'electron';
+import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
+import { logger } from '../../utils/logger';
+import * as iosTools from '../../ios-tools';
+
+const LOG_CONTEXT = '[iOS-IPC]';
+
+// Helper to create handler options with consistent context
+const handlerOpts = (operation: string, logSuccess = true): CreateHandlerOptions => ({
+  context: LOG_CONTEXT,
+  operation,
+  logSuccess,
+});
+
+/**
+ * Register all iOS-related IPC handlers.
+ */
+export function registerIOSHandlers(): void {
+  // ==========================================================================
+  // Xcode Detection
+  // ==========================================================================
+
+  // Detect Xcode installation
+  ipcMain.handle(
+    'ios:xcode:detect',
+    createIpcHandler(handlerOpts('detectXcode'), async () => {
+      return iosTools.detectXcode();
+    })
+  );
+
+  // Get Xcode version
+  ipcMain.handle(
+    'ios:xcode:version',
+    createIpcHandler(handlerOpts('getXcodeVersion'), async () => {
+      return iosTools.getXcodeVersion();
+    })
+  );
+
+  // Get full Xcode info
+  ipcMain.handle(
+    'ios:xcode:info',
+    createIpcHandler(handlerOpts('getXcodeInfo'), async () => {
+      return iosTools.getXcodeInfo();
+    })
+  );
+
+  // Validate Xcode installation
+  ipcMain.handle(
+    'ios:xcode:validate',
+    createIpcHandler(handlerOpts('validateXcode'), async () => {
+      return iosTools.validateXcodeInstallation();
+    })
+  );
+
+  // List iOS SDKs
+  ipcMain.handle(
+    'ios:xcode:sdks',
+    createIpcHandler(handlerOpts('listSDKs'), async () => {
+      return iosTools.listSDKs();
+    })
+  );
+
+  // ==========================================================================
+  // Simulator Management
+  // ==========================================================================
+
+  // List all simulators
+  ipcMain.handle(
+    'ios:simulator:list',
+    createIpcHandler(handlerOpts('listSimulators', false), async () => {
+      return iosTools.listSimulators();
+    })
+  );
+
+  // Get booted simulators
+  ipcMain.handle(
+    'ios:simulator:booted',
+    createIpcHandler(handlerOpts('getBootedSimulators', false), async () => {
+      return iosTools.getBootedSimulators();
+    })
+  );
+
+  // Get specific simulator
+  ipcMain.handle(
+    'ios:simulator:get',
+    createIpcHandler(handlerOpts('getSimulator'), async (udid: string) => {
+      return iosTools.getSimulator(udid);
+    })
+  );
+
+  // Boot simulator
+  ipcMain.handle(
+    'ios:simulator:boot',
+    createIpcHandler(
+      handlerOpts('bootSimulator'),
+      async (udid: string, options?: { timeout?: number; waitForBoot?: boolean }) => {
+        return iosTools.bootSimulator({
+          udid,
+          ...options,
+        });
+      }
+    )
+  );
+
+  // Shutdown simulator
+  ipcMain.handle(
+    'ios:simulator:shutdown',
+    createIpcHandler(handlerOpts('shutdownSimulator'), async (udid: string) => {
+      return iosTools.shutdownSimulator(udid);
+    })
+  );
+
+  // Erase simulator
+  ipcMain.handle(
+    'ios:simulator:erase',
+    createIpcHandler(handlerOpts('eraseSimulator'), async (udid: string) => {
+      return iosTools.eraseSimulator(udid);
+    })
+  );
+
+  // ==========================================================================
+  // App Installation & Lifecycle
+  // ==========================================================================
+
+  // Install app
+  ipcMain.handle(
+    'ios:app:install',
+    createIpcHandler(handlerOpts('installApp'), async (udid: string, appPath: string) => {
+      return iosTools.installApp({ udid, appPath });
+    })
+  );
+
+  // Uninstall app
+  ipcMain.handle(
+    'ios:app:uninstall',
+    createIpcHandler(handlerOpts('uninstallApp'), async (udid: string, bundleId: string) => {
+      return iosTools.uninstallApp(udid, bundleId);
+    })
+  );
+
+  // Launch app
+  ipcMain.handle(
+    'ios:app:launch',
+    createIpcHandler(
+      handlerOpts('launchApp'),
+      async (
+        udid: string,
+        bundleId: string,
+        options?: { args?: string[]; env?: Record<string, string> }
+      ) => {
+        return iosTools.launchApp({
+          udid,
+          bundleId,
+          ...options,
+        });
+      }
+    )
+  );
+
+  // Terminate app
+  ipcMain.handle(
+    'ios:app:terminate',
+    createIpcHandler(handlerOpts('terminateApp'), async (udid: string, bundleId: string) => {
+      return iosTools.terminateApp(udid, bundleId);
+    })
+  );
+
+  // Get app container
+  ipcMain.handle(
+    'ios:app:container',
+    createIpcHandler(
+      handlerOpts('getAppContainer'),
+      async (
+        udid: string,
+        bundleId: string,
+        containerType?: 'app' | 'data' | 'groups'
+      ) => {
+        return iosTools.getAppContainer(udid, bundleId, containerType);
+      }
+    )
+  );
+
+  // Open URL
+  ipcMain.handle(
+    'ios:app:openurl',
+    createIpcHandler(handlerOpts('openURL'), async (udid: string, url: string) => {
+      return iosTools.openURL(udid, url);
+    })
+  );
+
+  // ==========================================================================
+  // Screenshot & Recording
+  // ==========================================================================
+
+  // Capture screenshot
+  ipcMain.handle(
+    'ios:capture:screenshot',
+    createIpcHandler(
+      handlerOpts('screenshot'),
+      async (
+        udid: string,
+        outputPath: string,
+        options?: { display?: 'internal' | 'external'; mask?: 'ignored' | 'alpha' | 'black' }
+      ) => {
+        return iosTools.screenshot({
+          udid,
+          outputPath,
+          ...options,
+        });
+      }
+    )
+  );
+
+  // Capture screenshot with auto-naming
+  ipcMain.handle(
+    'ios:capture:screenshotAuto',
+    createIpcHandler(
+      handlerOpts('captureScreenshot'),
+      async (udid: string, directory: string, prefix?: string) => {
+        return iosTools.captureScreenshot(udid, directory, prefix);
+      }
+    )
+  );
+
+  // Start video recording
+  ipcMain.handle(
+    'ios:capture:startRecording',
+    createIpcHandler(
+      handlerOpts('startRecording'),
+      async (
+        udid: string,
+        outputPath: string,
+        options?: { codec?: 'h264' | 'hevc' }
+      ) => {
+        return iosTools.startRecording({
+          udid,
+          outputPath,
+          ...options,
+        });
+      }
+    )
+  );
+
+  // Stop video recording
+  ipcMain.handle(
+    'ios:capture:stopRecording',
+    createIpcHandler(handlerOpts('stopRecording'), async (udid: string) => {
+      return iosTools.stopRecording(udid);
+    })
+  );
+
+  // Check if recording
+  ipcMain.handle(
+    'ios:capture:isRecording',
+    createIpcHandler(handlerOpts('isRecording', false), async (udid: string) => {
+      return { success: true, data: iosTools.isRecording(udid) };
+    })
+  );
+
+  // Get screen size
+  ipcMain.handle(
+    'ios:capture:screenSize',
+    createIpcHandler(handlerOpts('getScreenSize'), async (udid: string) => {
+      return iosTools.getScreenSize(udid);
+    })
+  );
+
+  // ==========================================================================
+  // Log Collection
+  // ==========================================================================
+
+  // Get system logs
+  ipcMain.handle(
+    'ios:logs:system',
+    createIpcHandler(
+      handlerOpts('getSystemLog'),
+      async (
+        udid: string,
+        options?: {
+          since?: string;
+          level?: 'default' | 'info' | 'debug' | 'error' | 'fault';
+          process?: string;
+          predicate?: string;
+          limit?: number;
+        }
+      ) => {
+        return iosTools.getSystemLog({
+          udid,
+          ...options,
+        });
+      }
+    )
+  );
+
+  // Get system logs as text
+  ipcMain.handle(
+    'ios:logs:systemText',
+    createIpcHandler(handlerOpts('getSystemLogText'), async (udid: string, since?: string) => {
+      return iosTools.getSystemLogText(udid, since);
+    })
+  );
+
+  // Get crash logs
+  ipcMain.handle(
+    'ios:logs:crash',
+    createIpcHandler(
+      handlerOpts('getCrashLogs'),
+      async (
+        udid: string,
+        options?: {
+          bundleId?: string;
+          since?: string;
+          limit?: number;
+          includeContent?: boolean;
+        }
+      ) => {
+        return iosTools.getCrashLogs({
+          udid,
+          since: options?.since ? new Date(options.since) : undefined,
+          bundleId: options?.bundleId,
+          limit: options?.limit,
+          includeContent: options?.includeContent,
+        });
+      }
+    )
+  );
+
+  // Check for recent crashes
+  ipcMain.handle(
+    'ios:logs:hasRecentCrashes',
+    createIpcHandler(
+      handlerOpts('hasRecentCrashes'),
+      async (udid: string, bundleId: string, since: string) => {
+        return iosTools.hasRecentCrashes(udid, bundleId, new Date(since));
+      }
+    )
+  );
+
+  // Get diagnostics
+  ipcMain.handle(
+    'ios:logs:diagnostics',
+    createIpcHandler(handlerOpts('getDiagnostics'), async (udid: string, outputPath: string) => {
+      return iosTools.getDiagnostics(udid, outputPath);
+    })
+  );
+
+  logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
+}

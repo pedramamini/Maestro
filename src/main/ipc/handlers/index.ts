@@ -28,6 +28,7 @@ import { registerMarketplaceHandlers, MarketplaceHandlerDependencies } from './m
 import { registerStatsHandlers, StatsHandlerDependencies } from './stats';
 import { registerDocumentGraphHandlers, DocumentGraphHandlerDependencies } from './documentGraph';
 import { registerSshRemoteHandlers, SshRemoteHandlerDependencies } from './ssh-remote';
+import { registerIOSHandlers } from './ios';
 import { AgentDetector } from '../../agent-detector';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -57,6 +58,7 @@ export type { MarketplaceHandlerDependencies };
 export { registerStatsHandlers };
 export { registerDocumentGraphHandlers };
 export { registerSshRemoteHandlers };
+export { registerIOSHandlers };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -197,6 +199,8 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
   registerSshRemoteHandlers({
     settingsStore: deps.settingsStore,
   });
+  // Register iOS tools handlers (no dependencies needed - uses xcrun/simctl directly)
+  registerIOSHandlers();
   // Setup logger event forwarding to renderer
   setupLoggerEventForwarding(deps.getMainWindow);
 }
