@@ -19,6 +19,11 @@ import { runXcodebuild, parseXcodebuildOutput } from './utils';
 import { execFileNoThrow } from '../utils/execFile';
 import { logger } from '../utils/logger';
 import { ElementNode, AccessibilityWarning, OUTPUT_START_MARKER, OUTPUT_END_MARKER } from './inspect';
+import {
+  detectInspectError,
+  formatInspectError,
+  formatInspectErrorCompact,
+} from './inspect-errors';
 import * as os from 'os';
 
 const LOG_CONTEXT = '[iOS-XCUITest-Project]';
@@ -860,12 +865,24 @@ export async function buildInspector(
   // Parse the output
   const parsed = parseXcodebuildOutput(result.stdout + '\n' + result.stderr);
 
+  // Normalize exit code for error detection (ExecResult can return string or number)
+  const exitCode = typeof result.exitCode === 'number' ? result.exitCode : -1;
+
   if (result.exitCode !== 0 || !parsed.success) {
-    const errorMessages = parsed.errors.map(e => e.message).join('; ');
+    // Use enhanced error detection for build failures
+    const inspectError = detectInspectError(
+      parsed.errors.map(e => e.message).join('; ') || 'Build failed',
+      result.stdout,
+      result.stderr,
+      exitCode
+    );
+
+    logger.error(`${LOG_CONTEXT} Build failed: ${formatInspectErrorCompact(inspectError)}`);
+
     return {
       success: false,
-      error: errorMessages || 'Build failed',
-      errorCode: 'COMMAND_FAILED',
+      error: formatInspectError(inspectError),
+      errorCode: inspectError.code,
     };
   }
 
@@ -982,31 +999,44 @@ export async function runInspector(
     mergedEnv
   );
 
+  // Normalize exit code for error detection (ExecResult can return string or number)
+  const exitCode = typeof result.exitCode === 'number' ? result.exitCode : -1;
+
   // Parse the output to find the JSON result
-  const inspectorResult = parseInspectorOutput(result.stdout + '\n' + result.stderr);
+  const combinedOutput = `${result.stdout}\n${result.stderr}`;
+  const inspectorResult = parseInspectorOutput(combinedOutput);
 
   if (!inspectorResult) {
-    // Check for common errors
-    if (result.stdout.includes('Application is not running')) {
-      return {
-        success: false,
-        error: 'Target application is not running. Launch the app first.',
-        errorCode: 'COMMAND_FAILED',
-      };
-    }
+    // Use enhanced error detection
+    const inspectError = detectInspectError(
+      'Failed to parse inspector output',
+      result.stdout,
+      result.stderr,
+      exitCode
+    );
 
-    if (result.exitCode !== 0) {
-      return {
-        success: false,
-        error: `Test execution failed with exit code ${result.exitCode}`,
-        errorCode: 'COMMAND_FAILED',
-      };
-    }
+    logger.error(`${LOG_CONTEXT} Inspector failed: ${formatInspectErrorCompact(inspectError)}`);
 
     return {
       success: false,
-      error: 'Failed to parse inspector output',
-      errorCode: 'PARSE_ERROR',
+      error: formatInspectError(inspectError),
+      errorCode: inspectError.code,
+    };
+  }
+
+  // Check if inspection itself reported an error
+  if (!inspectorResult.success) {
+    const inspectError = detectInspectError(
+      inspectorResult.error || 'Inspection returned error',
+      result.stdout,
+      result.stderr,
+      exitCode
+    );
+
+    return {
+      success: false,
+      error: formatInspectError(inspectError),
+      errorCode: inspectError.code,
     };
   }
 

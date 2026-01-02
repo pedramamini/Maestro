@@ -246,6 +246,34 @@ export type {
 } from './inspect-formatter';
 
 // =============================================================================
+// Inspect Error Handling
+// =============================================================================
+
+export {
+  detectInspectError,
+  createAppNotRunningError,
+  createAppCrashedError,
+  createBuildFailedError,
+  createSigningError,
+  createDependencyMissingError,
+  createTimeoutError,
+  createEmptyUITreeError,
+  createLoadingStateError,
+  createGenericInspectError,
+  formatInspectError,
+  formatInspectErrorCompact,
+  wrapInspectError,
+  isInspectErrorType,
+  isRecoverableError,
+  getRetryDelay,
+  analyzeInspectionOutput,
+} from './inspect-errors';
+export type {
+  InspectErrorCode,
+  InspectError,
+} from './inspect-errors';
+
+// =============================================================================
 // Utility Functions
 // =============================================================================
 

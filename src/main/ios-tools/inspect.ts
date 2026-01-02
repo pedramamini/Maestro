@@ -14,6 +14,12 @@ import { getSimulator, getBootedSimulators } from './simulator';
 import { screenshot } from './capture';
 import { getSnapshotDirectory, generateSnapshotId } from './artifacts';
 import { logger } from '../utils/logger';
+import {
+  InspectError,
+  detectInspectError,
+  createEmptyUITreeError,
+  formatInspectError,
+} from './inspect-errors';
 
 const LOG_CONTEXT = '[iOS-Inspect-XCUITest]';
 
@@ -180,6 +186,15 @@ interface RawInspectorResult {
   timestamp: string;
 }
 
+/**
+ * Extended IOSResult with debug information for error detection
+ */
+interface ExtendedIOSResult<T> extends IOSResult<T> {
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+}
+
 // =============================================================================
 // Output Markers
 // =============================================================================
@@ -291,21 +306,77 @@ export async function inspectWithXCUITest(
   });
 
   if (!inspectorResult.success || !inspectorResult.data) {
+    // Use enhanced error detection
+    const inspectError = detectInspectError(
+      inspectorResult.error || 'Failed to run XCUITest inspector',
+      inspectorResult.stdout,
+      inspectorResult.stderr,
+      inspectorResult.exitCode
+    );
+    logger.warn(`${LOG_CONTEXT} Inspection failed: ${inspectError.code} - ${inspectError.message}`);
     return {
       success: false,
-      error: inspectorResult.error || 'Failed to run XCUITest inspector',
-      errorCode: inspectorResult.errorCode || 'COMMAND_FAILED',
+      error: formatInspectError(inspectError),
+      errorCode: inspectError.code,
     };
   }
 
   const rawResult = inspectorResult.data;
 
+  // Handle empty UI tree (potential loading state)
   if (!rawResult.success || !rawResult.rootElement) {
+    let inspectError: InspectError;
+
+    if (rawResult.error) {
+      // Detect specific error type from the error message
+      inspectError = detectInspectError(rawResult.error);
+    } else {
+      // No elements - check if this might be a loading state
+      inspectError = createEmptyUITreeError('Inspection returned no elements');
+    }
+
+    logger.warn(`${LOG_CONTEXT} Inspection issue: ${inspectError.code}`);
     return {
       success: false,
-      error: rawResult.error || 'Inspection returned no elements',
-      errorCode: 'COMMAND_FAILED',
+      error: formatInspectError(inspectError),
+      errorCode: inspectError.code,
     };
+  }
+
+  // Check for effectively empty tree (only root element with no real children)
+  const hasRealContent = rawResult.stats &&
+    (rawResult.stats.totalElements > 1 ||
+     rawResult.stats.buttons > 0 ||
+     rawResult.stats.textFields > 0 ||
+     rawResult.stats.textElements > 0);
+
+  if (!hasRealContent && !includeHidden) {
+    // Check if there are loading indicators (still allow the result but add warning)
+    const hasLoadingIndicator = checkForLoadingIndicators(rawResult.rootElement);
+    if (hasLoadingIndicator) {
+      logger.info(`${LOG_CONTEXT} App appears to be in loading state - UI may be incomplete`);
+      // Add warning to stats
+      rawResult.stats = rawResult.stats || {
+        totalElements: 0,
+        interactableElements: 0,
+        identifiedElements: 0,
+        labeledElements: 0,
+        buttons: 0,
+        textFields: 0,
+        textElements: 0,
+        images: 0,
+        scrollViews: 0,
+        tables: 0,
+        alerts: 0,
+        warnings: [],
+      };
+      rawResult.stats.warnings.push({
+        type: 'loading_state',
+        elementType: 'application',
+        description: 'App appears to be in a loading state. UI elements may be incomplete.',
+        suggestedFix: 'Wait for the app to finish loading and retry inspection.',
+      });
+    }
   }
 
   // Save UI tree JSON
@@ -402,8 +473,8 @@ interface RunInspectorOptions {
  */
 async function runXCUITestInspector(
   options: RunInspectorOptions
-): Promise<IOSResult<RawInspectorResult>> {
-  const { udid, bundleId, includeHidden, includeFrames } = options;
+): Promise<ExtendedIOSResult<RawInspectorResult>> {
+  const { udid, bundleId, includeHidden, includeFrames, timeout } = options;
 
   logger.info(`${LOG_CONTEXT} Running XCUITest inspector for ${bundleId}`);
 
@@ -414,13 +485,16 @@ async function runXCUITestInspector(
   // 4. Parse stdout for JSON between OUTPUT_START_MARKER and OUTPUT_END_MARKER
 
   // For now, fall back to simctl approach with type conversion
-  const simctlResult = await runSimctlInspector(udid, bundleId);
+  const simctlResult = await runSimctlInspector(udid, bundleId, timeout);
 
   if (!simctlResult.success || !simctlResult.data) {
     return {
       success: false,
       error: simctlResult.error || 'Failed to run simctl inspector',
       errorCode: simctlResult.errorCode || 'COMMAND_FAILED',
+      stdout: simctlResult.stdout,
+      stderr: simctlResult.stderr,
+      exitCode: simctlResult.exitCode,
     };
   }
 
@@ -430,7 +504,27 @@ async function runXCUITestInspector(
   return {
     success: true,
     data: result,
+    stdout: simctlResult.stdout,
+    stderr: simctlResult.stderr,
+    exitCode: simctlResult.exitCode,
   };
+}
+
+interface ExtendedSimctlResult extends ExtendedIOSResult<RawSimctlOutput> {
+  stdout?: string;
+  stderr?: string;
+  exitCode?: number;
+}
+
+/**
+ * Normalize an exit code from ExecResult (string | number) to number | undefined.
+ * String exit codes (like 'ENOENT') are converted to -1.
+ */
+function normalizeExitCode(exitCode: string | number | undefined): number | undefined {
+  if (exitCode === undefined) return undefined;
+  if (typeof exitCode === 'number') return exitCode;
+  // String exit codes (error codes like 'ENOENT') are treated as -1
+  return -1;
 }
 
 /**
@@ -438,11 +532,13 @@ async function runXCUITestInspector(
  */
 async function runSimctlInspector(
   udid: string,
-  bundleId: string
-): Promise<IOSResult<RawSimctlOutput>> {
+  bundleId: string,
+  timeout: number = 30000
+): Promise<ExtendedSimctlResult> {
   const { runSimctl } = await import('./utils');
 
   // Try simctl ui describe (Xcode 15+)
+  // Note: runSimctl uses execFileNoThrow which has default timeout
   const result = await runSimctl(['ui', udid, 'describe', '--format', 'json']);
 
   if (result.exitCode === 0 && result.stdout) {
@@ -455,6 +551,9 @@ async function runSimctlInspector(
           output: parsed,
           bundleId,
         },
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: normalizeExitCode(result.exitCode),
       };
     } catch {
       // JSON parse failed, return raw
@@ -465,8 +564,45 @@ async function runSimctlInspector(
           output: result.stdout,
           bundleId,
         },
+        stdout: result.stdout,
+        stderr: result.stderr,
+        exitCode: normalizeExitCode(result.exitCode),
       };
     }
+  }
+
+  // Check for specific error conditions
+  const combinedOutput = `${result.stdout || ''}\n${result.stderr || ''}`;
+
+  // Check for "app not running" in the output
+  if (
+    combinedOutput.includes('Application is not running') ||
+    combinedOutput.includes('Target application is not running') ||
+    combinedOutput.includes('Unable to find bundle')
+  ) {
+    return {
+      success: false,
+      error: 'Target application is not running. Launch the app first.',
+      errorCode: 'APP_NOT_RUNNING',
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: normalizeExitCode(result.exitCode),
+    };
+  }
+
+  // Check for timeout
+  if (
+    combinedOutput.includes('timed out') ||
+    combinedOutput.includes('timeout')
+  ) {
+    return {
+      success: false,
+      error: `UI inspection timed out after ${timeout}ms`,
+      errorCode: 'TIMEOUT',
+      stdout: result.stdout,
+      stderr: result.stderr,
+      exitCode: normalizeExitCode(result.exitCode),
+    };
   }
 
   // Try alternate approach - get accessibility hierarchy for specific app
@@ -477,6 +613,9 @@ async function runSimctlInspector(
       success: false,
       error: 'Failed to access simulator. Ensure app is running.',
       errorCode: 'COMMAND_FAILED',
+      stdout: launchResult.stdout,
+      stderr: launchResult.stderr,
+      exitCode: normalizeExitCode(launchResult.exitCode),
     };
   }
 
@@ -488,6 +627,9 @@ async function runSimctlInspector(
       output: null,
       bundleId,
     },
+    stdout: result.stdout,
+    stderr: result.stderr,
+    exitCode: normalizeExitCode(result.exitCode),
   };
 }
 
@@ -1006,6 +1148,65 @@ function isInteractableType(type: string): boolean {
     'segmentedcontrol', 'menuitem', 'tab', 'cell',
   ];
   return interactableTypes.includes(type.toLowerCase());
+}
+
+// =============================================================================
+// Loading State Detection
+// =============================================================================
+
+/**
+ * Loading indicator element types and patterns
+ */
+const LOADING_INDICATOR_TYPES = [
+  'activityindicator',
+  'progressindicator',
+  'progressview',
+  'progressbar',
+  'spinner',
+];
+
+const LOADING_INDICATOR_LABELS = [
+  'loading',
+  'please wait',
+  'spinner',
+  'progress',
+];
+
+/**
+ * Check if the element tree contains loading indicators.
+ * Used to detect if the app is in a loading state.
+ */
+function checkForLoadingIndicators(root: ElementNode): boolean {
+  let hasLoadingIndicator = false;
+
+  function checkElement(element: ElementNode): void {
+    if (hasLoadingIndicator) return; // Early exit if found
+
+    const type = element.type.toLowerCase();
+    const label = (element.label || '').toLowerCase();
+    const identifier = (element.identifier || '').toLowerCase();
+
+    // Check element type
+    if (LOADING_INDICATOR_TYPES.some((t) => type.includes(t))) {
+      hasLoadingIndicator = true;
+      return;
+    }
+
+    // Check label and identifier for loading patterns
+    if (LOADING_INDICATOR_LABELS.some((l) => label.includes(l) || identifier.includes(l))) {
+      hasLoadingIndicator = true;
+      return;
+    }
+
+    // Recurse into children
+    for (const child of element.children) {
+      checkElement(child);
+      if (hasLoadingIndicator) return;
+    }
+  }
+
+  checkElement(root);
+  return hasLoadingIndicator;
 }
 
 // =============================================================================
