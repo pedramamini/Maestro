@@ -1263,6 +1263,11 @@ contextBridge.exposeInMainWorld('maestro', {
       format: (result: any) => ipcRenderer.invoke('ios:snapshot:format', result),
       formatJson: (result: any) => ipcRenderer.invoke('ios:snapshot:formatJson', result),
     },
+    // Slash Commands
+    slashCommand: {
+      snapshot: (commandText: string, sessionId: string) =>
+        ipcRenderer.invoke('ios:slashCommand:snapshot', commandText, sessionId),
+    },
     // Artifacts
     artifacts: {
       getDirectory: (sessionId: string) => ipcRenderer.invoke('ios:artifacts:getDirectory', sessionId),

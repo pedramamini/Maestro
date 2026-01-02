@@ -1158,5 +1158,21 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // ==========================================================================
+  // Slash Command Handlers
+  // ==========================================================================
+
+  // Execute /ios.snapshot slash command
+  ipcMain.handle(
+    'ios:slashCommand:snapshot',
+    createIpcHandler(
+      handlerOpts('executeSnapshotCommand'),
+      async (commandText: string, sessionId: string) => {
+        const { executeSnapshotCommand } = await import('../../slash-commands/ios-snapshot');
+        return executeSnapshotCommand(commandText, sessionId);
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }
