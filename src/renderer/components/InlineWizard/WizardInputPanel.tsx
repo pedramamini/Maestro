@@ -120,6 +120,17 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
     }
   }, [inputValue, inputRef]);
 
+  // Auto-focus input when wizard mode becomes active
+  useEffect(() => {
+    if (session.wizardState?.isActive && inputRef.current) {
+      // Small delay to ensure DOM is ready
+      const timer = setTimeout(() => {
+        inputRef.current?.focus();
+      }, 100);
+      return () => clearTimeout(timer);
+    }
+  }, [session.wizardState?.isActive, inputRef]);
+
   // Handle Escape key to show exit confirmation
   const handleEscapeKey = useCallback((e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Escape') {

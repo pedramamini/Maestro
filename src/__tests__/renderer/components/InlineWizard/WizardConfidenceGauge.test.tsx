@@ -78,7 +78,7 @@ describe('WizardConfidenceGauge', () => {
         <WizardConfidenceGauge confidence={50} theme={mockTheme} />
       );
       const wrapper = container.firstChild as HTMLElement;
-      expect(wrapper).toHaveAttribute('title', 'Confidence: 50%');
+      expect(wrapper).toHaveAttribute('title', 'Project Understanding Confidence: 50%');
     });
 
     it('shows ready message in tooltip when at threshold', () => {
@@ -88,7 +88,7 @@ describe('WizardConfidenceGauge', () => {
       const wrapper = container.firstChild as HTMLElement;
       expect(wrapper).toHaveAttribute(
         'title',
-        'Confidence: 80% - Ready to proceed'
+        'Project Understanding Confidence: 80% - Ready to proceed'
       );
     });
 
@@ -99,8 +99,21 @@ describe('WizardConfidenceGauge', () => {
       const wrapper = container.firstChild as HTMLElement;
       expect(wrapper).toHaveAttribute(
         'title',
-        'Confidence: 95% - Ready to proceed'
+        'Project Understanding Confidence: 95% - Ready to proceed'
       );
+    });
+  });
+
+  describe('label display', () => {
+    it('displays the Project Understanding Confidence label', () => {
+      render(<WizardConfidenceGauge confidence={50} theme={mockTheme} />);
+      expect(screen.getByText('Project Understanding Confidence')).toBeInTheDocument();
+    });
+
+    it('styles the label with dim text color', () => {
+      render(<WizardConfidenceGauge confidence={50} theme={mockTheme} />);
+      const label = screen.getByText('Project Understanding Confidence');
+      expect(label).toHaveStyle({ color: mockTheme.colors.textDim });
     });
   });
 

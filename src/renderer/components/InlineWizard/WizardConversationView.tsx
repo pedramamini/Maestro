@@ -431,18 +431,76 @@ export function WizardConversationView({
       style={{ backgroundColor: theme.colors.bgMain }}
       data-testid="wizard-conversation-view"
     >
-      {/* Empty state */}
+      {/* Empty state - informative introduction similar to Group Chat */}
       {conversationHistory.length === 0 && !isLoading && (
         <div
-          className="flex items-center justify-center h-full"
+          className="flex items-center justify-center h-full px-6"
           data-testid="wizard-conversation-empty"
         >
-          <p
-            className="text-sm italic"
-            style={{ color: theme.colors.textDim }}
-          >
-            Start your conversation with the wizard...
-          </p>
+          <div className="text-center max-w-lg space-y-4">
+            {/* Wizard badge */}
+            <div className="flex justify-center mb-4">
+              <span
+                className="text-[10px] font-semibold tracking-wide uppercase px-3 py-1 rounded-full"
+                style={{
+                  backgroundColor: `${theme.colors.accent}20`,
+                  color: theme.colors.accent,
+                  border: `1px solid ${theme.colors.accent}40`,
+                }}
+              >
+                🧙 Project Wizard
+              </span>
+            </div>
+
+            {/* Main description */}
+            <div className="space-y-3">
+              <p className="text-sm" style={{ color: theme.colors.textMain }}>
+                The wizard will help you create an{' '}
+                <span style={{ color: theme.colors.accent, fontWeight: 500 }}>Auto Run action plan</span>
+                {' '}for your project.
+              </p>
+
+              <p className="text-sm" style={{ color: theme.colors.textDim }}>
+                Through a short conversation, I&apos;ll learn about your project goals,
+                current state, and what you want to accomplish.
+              </p>
+            </div>
+
+            {/* Expected outputs */}
+            <div
+              className="mt-6 p-4 rounded-lg text-left"
+              style={{
+                backgroundColor: theme.colors.bgActivity,
+                border: `1px solid ${theme.colors.border}`,
+              }}
+            >
+              <p
+                className="text-[10px] font-semibold tracking-wide uppercase mb-3"
+                style={{ color: theme.colors.textDim }}
+              >
+                What You&apos;ll Get
+              </p>
+              <ul className="space-y-2 text-sm" style={{ color: theme.colors.textMain }}>
+                <li className="flex items-start gap-2">
+                  <span style={{ color: theme.colors.success }}>✓</span>
+                  <span>Phased markdown documents with actionable tasks</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span style={{ color: theme.colors.success }}>✓</span>
+                  <span>Auto Run-ready checkboxes the AI can execute</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <span style={{ color: theme.colors.success }}>✓</span>
+                  <span>A clear roadmap tailored to your project</span>
+                </li>
+              </ul>
+            </div>
+
+            {/* Hint */}
+            <p className="text-xs mt-4" style={{ color: theme.colors.textDim }}>
+              Press <span style={{ color: theme.colors.accent }}>Escape</span> at any time to exit the wizard
+            </p>
+          </div>
         </div>
       )}
 

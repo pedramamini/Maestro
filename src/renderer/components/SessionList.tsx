@@ -580,15 +580,35 @@ function SessionTooltipContent({
         {/* Location Indicator Pills */}
         {session.toolType !== 'terminal' && (
           <>
-            {session.isGitRepo ? (
-              /* Git repo: Show server icon pill (if remote) + GIT pill */
+            {/* SSH connection failure badge - red server icon (shown for any remote session with failed connection) */}
+            {/* For git repos, this shows alongside GIT badge; for non-git, this replaces REMOTE badge */}
+            {session.sessionSshRemoteConfig?.enabled && session.sshConnectionFailed && (
+              <span
+                className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold"
+                style={{
+                  backgroundColor: theme.colors.error + '30',
+                  color: theme.colors.error
+                }}
+                title="SSH connection failed"
+              >
+                <Server className="w-3 h-3" />
+                {/* Show REMOTE text only for non-git sessions (git sessions show GIT badge separately) */}
+                {!(session.isGitRepo || session.worktreeBranch) && (
+                  <span className="uppercase">REMOTE</span>
+                )}
+              </span>
+            )}
+            {/* Worktree children are always git repos; also check isGitRepo for regular sessions */}
+            {(session.isGitRepo || session.worktreeBranch) ? (
+              /* Git repo: Show server icon pill (if remote & connected) + GIT pill */
               <>
-                {session.sessionSshRemoteConfig?.enabled && (
+                {/* Server icon for remote git repos - only when connected (failure shows red server above) */}
+                {session.sessionSshRemoteConfig?.enabled && !session.sshConnectionFailed && (
                   <span
-                    className="px-1.5 py-0.5 rounded text-[9px] font-bold"
+                    className="flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold"
                     style={{
-                      backgroundColor: theme.colors.warning + '30',
-                      color: theme.colors.warning
+                      backgroundColor: theme.colors.success + '30',
+                      color: theme.colors.success
                     }}
                     title="Remote SSH"
                   >
@@ -606,20 +626,33 @@ function SessionTooltipContent({
                 </span>
               </>
             ) : (
-              /* Plain directory: Show REMOTE or LOCAL (not both) */
-              <span
-                className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
-                style={{
-                  backgroundColor: session.sessionSshRemoteConfig?.enabled
-                    ? theme.colors.warning + '30'
-                    : theme.colors.textDim + '20',
-                  color: session.sessionSshRemoteConfig?.enabled
-                    ? theme.colors.warning
-                    : theme.colors.textDim
-                }}
-              >
-                {session.sessionSshRemoteConfig?.enabled ? 'REMOTE' : 'LOCAL'}
-              </span>
+              /* Plain directory: Show REMOTE (with server icon if failed) or LOCAL */
+              session.sessionSshRemoteConfig?.enabled ? (
+                /* Remote non-git: show REMOTE badge (red if failed, orange if connected) */
+                /* Note: failure server icon already shown above */
+                !session.sshConnectionFailed && (
+                  <span
+                    className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+                    style={{
+                      backgroundColor: theme.colors.warning + '30',
+                      color: theme.colors.warning
+                    }}
+                  >
+                    REMOTE
+                  </span>
+                )
+              ) : (
+                /* Local non-git: show LOCAL badge */
+                <span
+                  className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+                  style={{
+                    backgroundColor: theme.colors.textDim + '20',
+                    color: theme.colors.textDim
+                  }}
+                >
+                  LOCAL
+                </span>
+              )
             )}
           </>
         )}

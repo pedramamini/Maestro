@@ -683,6 +683,49 @@ function MaestroConsoleInner() {
   }, [activeSessionId]);
 
   // Restore a persisted session by respawning its process
+  /**
+   * Fetch git info (isRepo, branches, tags) for a session in the background.
+   * This is called after initial session restore to avoid blocking app startup
+   * on SSH timeouts for remote sessions.
+   */
+  const fetchGitInfoInBackground = useCallback(async (
+    sessionId: string,
+    cwd: string,
+    sshRemoteId: string | undefined
+  ) => {
+    try {
+      // Check if the working directory is a Git repository (via SSH for remote sessions)
+      const isGitRepo = await gitService.isRepo(cwd, sshRemoteId);
+
+      // Fetch git branches and tags if it's a git repo
+      let gitBranches: string[] | undefined;
+      let gitTags: string[] | undefined;
+      let gitRefsCacheTime: number | undefined;
+      if (isGitRepo) {
+        [gitBranches, gitTags] = await Promise.all([
+          gitService.getBranches(cwd, sshRemoteId),
+          gitService.getTags(cwd, sshRemoteId)
+        ]);
+        gitRefsCacheTime = Date.now();
+      }
+
+      // Update the session with git info and mark SSH as connected
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId
+          ? { ...s, isGitRepo, gitBranches, gitTags, gitRefsCacheTime, sshConnectionFailed: false }
+          : s
+      ));
+    } catch (error) {
+      console.warn(`[fetchGitInfoInBackground] Failed to fetch git info for session ${sessionId}:`, error);
+      // Mark SSH connection as failed so UI can show error state
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId
+          ? { ...s, sshConnectionFailed: true }
+          : s
+      ));
+    }
+  }, []);
+
   const restoreSession = async (session: Session): Promise<Session> => {
     try {
       // Migration: ensure projectRoot is set (for sessions created before this field was added)
@@ -758,20 +801,29 @@ function MaestroConsoleInner() {
         // we must fall back to sessionSshRemoteConfig.remoteId. See CLAUDE.md "SSH Remote Sessions".
         const sshRemoteId = correctedSession.sshRemoteId || correctedSession.sessionSshRemoteConfig?.remoteId || undefined;
 
-        // Check if the working directory is a Git repository (via SSH for remote sessions)
-        const isGitRepo = await gitService.isRepo(correctedSession.cwd, sshRemoteId);
+        // For SSH remote sessions, defer git operations to background to avoid blocking
+        // app startup on SSH connection timeouts (which can be 10+ seconds per session)
+        const isRemoteSession = !!sshRemoteId;
 
-        // Fetch git branches and tags if it's a git repo
-        let gitBranches: string[] | undefined;
-        let gitTags: string[] | undefined;
-        let gitRefsCacheTime: number | undefined;
-        if (isGitRepo) {
-          [gitBranches, gitTags] = await Promise.all([
-            gitService.getBranches(correctedSession.cwd, sshRemoteId),
-            gitService.getTags(correctedSession.cwd, sshRemoteId)
-          ]);
-          gitRefsCacheTime = Date.now();
+        // For local sessions, check git status synchronously (fast, sub-100ms)
+        // For remote sessions, use persisted value or default to false, then update in background
+        let isGitRepo = correctedSession.isGitRepo ?? false;
+        let gitBranches = correctedSession.gitBranches;
+        let gitTags = correctedSession.gitTags;
+        let gitRefsCacheTime = correctedSession.gitRefsCacheTime;
+
+        if (!isRemoteSession) {
+          // Local session - check git status synchronously (fast)
+          isGitRepo = await gitService.isRepo(correctedSession.cwd, undefined);
+          if (isGitRepo) {
+            [gitBranches, gitTags] = await Promise.all([
+              gitService.getBranches(correctedSession.cwd, undefined),
+              gitService.getTags(correctedSession.cwd, undefined)
+            ]);
+            gitRefsCacheTime = Date.now();
+          }
         }
+        // For remote sessions, we'll fetch git info in background after session restore
 
         // Reset all tab states to idle - processes don't survive app restart
         const resetAiTabs = correctedSession.aiTabs.map(tab => ({
@@ -792,7 +844,7 @@ function MaestroConsoleInner() {
           currentCycleTokens: undefined,
           currentCycleBytes: undefined,
           statusMessage: undefined,
-          isGitRepo,  // Update Git status
+          isGitRepo,  // Update Git status (or use persisted value for remote)
           gitBranches,
           gitTags,
           gitRefsCacheTime,
@@ -865,6 +917,16 @@ function MaestroConsoleInner() {
           // Set active session to first session if current activeSessionId is invalid
           if (restoredSessions.length > 0 && !restoredSessions.find(s => s.id === activeSessionId)) {
             setActiveSessionId(restoredSessions[0].id);
+          }
+
+          // For remote (SSH) sessions, fetch git info in background to avoid blocking
+          // startup on SSH connection timeouts. This runs after UI is shown.
+          for (const session of restoredSessions) {
+            const sshRemoteId = session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId;
+            if (sshRemoteId) {
+              // Fire and forget - don't await, let it update sessions when done
+              fetchGitInfoInBackground(session.id, session.cwd, sshRemoteId);
+            }
           }
         } else {
           setSessions([]);
@@ -3503,11 +3565,11 @@ You are taking over this conversation. Based on the context above, provide a bri
     const targetTabId = tabId || activeSession.activeTabId;
     const targetTab = activeSession.aiTabs.find(t => t.id === targetTabId);
 
-    if (!targetTab || !canSummarize(activeSession.contextUsage)) {
+    if (!targetTab || !canSummarize(activeSession.contextUsage, targetTab.logs)) {
       addToast({
         type: 'warning',
         title: 'Cannot Compact',
-        message: `Context usage too low. Need at least ${minContextUsagePercent}% to compact.`,
+        message: `Context too small. Need at least ${minContextUsagePercent}% usage or ~10k tokens to compact.`,
       });
       return;
     }
@@ -4543,7 +4605,8 @@ You are taking over this conversation. Based on the context above, provide a bri
       activeSession.projectRoot || activeSession.cwd, // Project path for Auto Run folder detection
       activeSession.toolType, // Agent type for AI conversation
       activeSession.name, // Session/project name
-      activeTab.id // Tab ID for per-tab isolation
+      activeTab.id, // Tab ID for per-tab isolation
+      activeSession.id // Session ID for playbook creation
     );
 
     // Show a system log entry indicating wizard started
@@ -8640,7 +8703,8 @@ You are taking over this conversation. Based on the context above, provide a bri
     // Summarize and continue
     canSummarizeActiveTab: (() => {
       if (!activeSession || !activeSession.activeTabId) return false;
-      return canSummarize(activeSession.contextUsage);
+      const activeTab = activeSession.aiTabs.find(t => t.id === activeSession.activeTabId);
+      return canSummarize(activeSession.contextUsage, activeTab?.logs);
     })(),
     summarizeAndContinue: handleSummarizeAndContinue,
 
@@ -9064,7 +9128,7 @@ You are taking over this conversation. Based on the context above, provide a bri
         onOpenSendToAgent={handleQuickActionsOpenSendToAgent}
         onOpenCreatePR={handleQuickActionsOpenCreatePR}
         onSummarizeAndContinue={handleQuickActionsSummarizeAndContinue}
-        canSummarizeActiveTab={activeSession ? canSummarize(activeSession.contextUsage) : false}
+        canSummarizeActiveTab={activeSession ? canSummarize(activeSession.contextUsage, activeSession.aiTabs.find(t => t.id === activeSession.activeTabId)?.logs) : false}
         onToggleRemoteControl={handleQuickActionsToggleRemoteControl}
         autoRunSelectedDocument={activeSession?.autoRunSelectedFile ?? null}
         autoRunCompletedTaskCount={rightPanelRef.current?.getAutoRunCompletedTaskCount() ?? 0}

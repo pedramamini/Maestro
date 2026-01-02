@@ -2849,11 +2849,11 @@ describe('MainPanel', () => {
       expect(screen.queryByTestId('wizard-conversation-view')).not.toBeInTheDocument();
     });
 
-    it('should show loading indicator when session is busy during wizard mode', () => {
+    it('should show loading indicator when wizard isWaiting is true', () => {
       const session = createSession({
-        state: 'busy',
         wizardState: {
           isActive: true,
+          isWaiting: true,
           mode: 'new',
           confidence: 30,
           conversationHistory: [

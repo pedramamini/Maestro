@@ -125,6 +125,8 @@ export interface InlineWizardState {
   sessionName: string | null;
   /** Tab ID the wizard was started on (for per-tab isolation) */
   tabId: string | null;
+  /** Session ID for playbook creation */
+  sessionId: string | null;
   /** Whether the initial greeting has been sent to kick off the conversation */
   initialGreetingSent: boolean;
   /** Streaming content being generated (accumulates as AI outputs) */
@@ -179,6 +181,7 @@ export interface UseInlineWizardReturn {
    * @param agentType - The AI agent type to use for conversation
    * @param sessionName - The session name (used as project name)
    * @param tabId - The tab ID to associate the wizard with
+   * @param sessionId - The session ID for playbook creation
    */
   startWizard: (
     naturalLanguageInput?: string,
@@ -186,7 +189,8 @@ export interface UseInlineWizardReturn {
     projectPath?: string,
     agentType?: ToolType,
     sessionName?: string,
-    tabId?: string
+    tabId?: string,
+    sessionId?: string
   ) => Promise<void>;
   /** End the wizard and restore previous UI state */
   endWizard: () => Promise<PreviousUIState | null>;
@@ -265,6 +269,7 @@ const initialState: InlineWizardState = {
   agentType: null,
   sessionName: null,
   tabId: null,
+  sessionId: null,
   initialGreetingSent: false,
   streamingContent: '',
   generationProgress: null,
@@ -368,7 +373,8 @@ export function useInlineWizard(): UseInlineWizardReturn {
       projectPath?: string,
       agentType?: ToolType,
       sessionName?: string,
-      tabId?: string
+      tabId?: string,
+      sessionId?: string
     ): Promise<void> => {
       // Store current UI state for later restoration
       if (currentUIState) {
@@ -395,6 +401,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
         agentType: agentType || null,
         sessionName: sessionName || null,
         tabId: tabId || null,
+        sessionId: sessionId || null,
       }));
 
       try {
@@ -814,6 +821,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
           mode: state.mode === 'iterate' ? 'iterate' : 'new',
           goal: state.goal || undefined,
           autoRunFolderPath,
+          sessionId: state.sessionId || undefined,
           callbacks: {
             onStart: () => {
               console.log('[useInlineWizard] Document generation started');

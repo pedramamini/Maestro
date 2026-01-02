@@ -42,8 +42,16 @@ export function WizardConfidenceGauge({
   return (
     <div
       className="flex items-center gap-2"
-      title={`Confidence: ${clampedConfidence}%${isReady ? ' - Ready to proceed' : ''}`}
+      title={`Project Understanding Confidence: ${clampedConfidence}%${isReady ? ' - Ready to proceed' : ''}`}
     >
+      {/* Label */}
+      <span
+        className="text-[10px] uppercase tracking-wide"
+        style={{ color: theme.colors.textDim }}
+      >
+        Project Understanding Confidence
+      </span>
+
       {/* Percentage display */}
       <span
         className="text-xs font-medium tabular-nums min-w-[2.5rem] text-right"

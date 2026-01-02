@@ -126,7 +126,7 @@ describe('WizardConversationView', () => {
   });
 
   describe('empty state', () => {
-    it('shows empty state message when no messages and not loading', () => {
+    it('shows empty state with wizard badge when no messages and not loading', () => {
       render(
         <WizardConversationView
           theme={mockTheme}
@@ -135,9 +135,44 @@ describe('WizardConversationView', () => {
         />
       );
       expect(screen.getByTestId('wizard-conversation-empty')).toBeInTheDocument();
-      expect(
-        screen.getByText('Start your conversation with the wizard...')
-      ).toBeInTheDocument();
+      expect(screen.getByText('🧙 Project Wizard')).toBeInTheDocument();
+    });
+
+    it('shows description about Auto Run action plan', () => {
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[]}
+          isLoading={false}
+        />
+      );
+      expect(screen.getByText(/Auto Run action plan/)).toBeInTheDocument();
+    });
+
+    it('shows What You\'ll Get section with benefits', () => {
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[]}
+          isLoading={false}
+        />
+      );
+      expect(screen.getByText("What You'll Get")).toBeInTheDocument();
+      expect(screen.getByText('Phased markdown documents with actionable tasks')).toBeInTheDocument();
+      expect(screen.getByText('Auto Run-ready checkboxes the AI can execute')).toBeInTheDocument();
+      expect(screen.getByText('A clear roadmap tailored to your project')).toBeInTheDocument();
+    });
+
+    it('shows Escape hint for exiting wizard', () => {
+      render(
+        <WizardConversationView
+          theme={mockTheme}
+          conversationHistory={[]}
+          isLoading={false}
+        />
+      );
+      expect(screen.getByText(/Escape/)).toBeInTheDocument();
+      expect(screen.getByText(/at any time to exit the wizard/)).toBeInTheDocument();
     });
 
     it('does not show empty state when loading', () => {

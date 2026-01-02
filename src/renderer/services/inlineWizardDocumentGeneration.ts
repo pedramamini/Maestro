@@ -64,8 +64,10 @@ export interface DocumentGenerationConfig {
   mode: 'new' | 'iterate';
   /** Goal for iterate mode */
   goal?: string;
-  /** Auto Run folder path */
+  /** Auto Run folder path (base path, subfolder will be created) */
   autoRunFolderPath: string;
+  /** Session ID for playbook creation */
+  sessionId?: string;
   /** Optional callbacks */
   callbacks?: DocumentGenerationCallbacks;
 }
@@ -82,6 +84,15 @@ export interface DocumentGenerationResult {
   error?: string;
   /** Raw agent output (for debugging) */
   rawOutput?: string;
+  /** Subfolder path where documents were saved (relative to Auto Run Docs) */
+  subfolderName?: string;
+  /** Full path to the subfolder */
+  subfolderPath?: string;
+  /** Created playbook (if sessionId was provided) */
+  playbook?: {
+    id: string;
+    name: string;
+  };
 }
 
 /**
@@ -115,6 +126,37 @@ export function sanitizeFilename(filename: string): string {
     .trim()
     // Ensure we have something left, default to 'document' if empty
     || 'document';
+}
+
+/**
+ * Sanitize a project name for use as a subfolder name.
+ * More restrictive than filename sanitization to ensure valid directory names.
+ *
+ * @param projectName - The project name from wizard
+ * @returns A safe folder name
+ */
+export function sanitizeFolderName(projectName: string): string {
+  return projectName
+    // Replace spaces with hyphens
+    .replace(/\s+/g, '-')
+    // Remove path separators
+    .replace(/[\/\\]/g, '-')
+    // Remove special characters that are problematic in folder names
+    .replace(/[<>:"|?*]/g, '')
+    // Remove directory traversal sequences
+    .replace(/\.\./g, '')
+    // Remove null bytes and control characters
+    .replace(/[\x00-\x1f\x7f]/g, '')
+    // Remove leading dots
+    .replace(/^\.+/, '')
+    // Collapse multiple hyphens
+    .replace(/-+/g, '-')
+    // Remove leading/trailing hyphens
+    .replace(/^-+|-+$/g, '')
+    // Trim whitespace
+    .trim()
+    // Ensure we have something left
+    || 'wizard-project';
 }
 
 /**
@@ -469,16 +511,22 @@ async function saveDocument(
  * 1. Constructs a prompt using wizard-document-generation.md
  * 2. Spawns the AI agent and collects streamed output
  * 3. Parses document markers from the response
- * 4. Saves each document to the Auto Run folder
- * 5. Returns the list of generated documents
+ * 4. Creates a project subfolder within Auto Run Docs
+ * 5. Saves each document to the subfolder
+ * 6. Creates a playbook for the generated documents (if sessionId provided)
+ * 7. Returns the list of generated documents and playbook info
  *
  * @param config - Configuration for document generation
- * @returns Result containing generated documents or error
+ * @returns Result containing generated documents, subfolder path, and playbook info
  */
 export async function generateInlineDocuments(
   config: DocumentGenerationConfig
 ): Promise<DocumentGenerationResult> {
-  const { agentType, directoryPath, autoRunFolderPath, callbacks } = config;
+  const { agentType, directoryPath, autoRunFolderPath, projectName, callbacks } = config;
+
+  // Create a sanitized subfolder name from the project name
+  const subfolderName = sanitizeFolderName(projectName);
+  const subfolderPath = `${autoRunFolderPath}/${subfolderName}`;
 
   callbacks?.onStart?.();
   callbacks?.onProgress?.('Preparing to generate your action plan...');
@@ -617,7 +665,7 @@ export async function generateInlineDocuments(
     if (documents.length === 0 || totalTasks === 0) {
       // Check for files on disk (agent may have written directly)
       callbacks?.onProgress?.('Checking for documents on disk...');
-      const diskDocs = await readDocumentsFromDisk(autoRunFolderPath);
+      const diskDocs = await readDocumentsFromDisk(subfolderPath);
       if (diskDocs.length > 0) {
         console.log('[InlineWizardDocGen] Found documents on disk:', diskDocs.length);
         documents = diskDocs;
@@ -628,13 +676,13 @@ export async function generateInlineDocuments(
       throw new Error('No documents were generated. Please try again.');
     }
 
-    // Save each document and collect results
-    callbacks?.onProgress?.(`Saving ${documents.length} document(s)...`);
+    // Save each document to the project subfolder
+    callbacks?.onProgress?.(`Saving ${documents.length} document(s) to ${subfolderName}/...`);
 
     const savedDocuments: InlineGeneratedDocument[] = [];
     for (const doc of documents) {
       try {
-        const savedDoc = await saveDocument(autoRunFolderPath, doc);
+        const savedDoc = await saveDocument(subfolderPath, doc);
         savedDocuments.push(savedDoc);
         callbacks?.onDocumentComplete?.(savedDoc);
       } catch (error) {
@@ -647,6 +695,24 @@ export async function generateInlineDocuments(
       throw new Error('Failed to save any documents. Please check permissions and try again.');
     }
 
+    // Create a playbook for the generated documents (if sessionId provided)
+    let playbookInfo: { id: string; name: string } | undefined;
+    if (sessionId && savedDocuments.length > 0) {
+      callbacks?.onProgress?.('Creating playbook configuration...');
+      try {
+        playbookInfo = await createPlaybookForDocuments(
+          sessionId,
+          projectName,
+          subfolderName,
+          savedDocuments
+        );
+        console.log('[InlineWizardDocGen] Created playbook:', playbookInfo);
+      } catch (error) {
+        console.error('[InlineWizardDocGen] Failed to create playbook:', error);
+        // Don't fail the overall operation if playbook creation fails
+      }
+    }
+
     callbacks?.onProgress?.(`Generated ${savedDocuments.length} Auto Run document(s)`);
     callbacks?.onComplete?.(savedDocuments);
 
@@ -654,6 +720,9 @@ export async function generateInlineDocuments(
       success: true,
       documents: savedDocuments,
       rawOutput,
+      subfolderName,
+      subfolderPath,
+      playbook: playbookInfo,
     };
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Unknown error occurred';
@@ -664,6 +733,66 @@ export async function generateInlineDocuments(
       error: errorMessage,
     };
   }
+}
+
+/**
+ * Default prompt for wizard-generated playbooks.
+ * This provides sensible defaults that can be customized by the user later.
+ */
+const DEFAULT_PLAYBOOK_PROMPT = `Complete the tasks in this document thoroughly and carefully.
+
+Guidelines:
+- Work through tasks in order from top to bottom
+- Check off each task as you complete it (mark [ ] as [x])
+- If a task requires clarification, make a reasonable decision and proceed
+- Focus on quality over speed
+- Test your changes when appropriate`;
+
+/**
+ * Create a playbook configuration for the generated documents.
+ *
+ * This creates a fully-featured playbook that the user can customize:
+ * - Documents ordered by phase number
+ * - Sensible default prompt
+ * - Looping disabled by default
+ * - Reset on completion disabled by default
+ *
+ * @param sessionId - The session ID for playbook storage
+ * @param projectName - Name of the project/playbook
+ * @param subfolderName - Subfolder within Auto Run Docs where documents are stored
+ * @param documents - The generated documents in order
+ * @returns Created playbook info (id and name)
+ */
+async function createPlaybookForDocuments(
+  sessionId: string,
+  projectName: string,
+  subfolderName: string,
+  documents: InlineGeneratedDocument[]
+): Promise<{ id: string; name: string }> {
+  // Build document entries for the playbook
+  // Documents are already sorted by phase from generation
+  const documentEntries = documents.map((doc) => ({
+    // Include subfolder in the filename path so playbook can find them
+    filename: `${subfolderName}/${doc.filename}`,
+    resetOnCompletion: false,
+  }));
+
+  // Create the playbook via IPC
+  const result = await window.maestro.playbooks.create(sessionId, {
+    name: projectName,
+    documents: documentEntries,
+    loopEnabled: false,
+    prompt: DEFAULT_PLAYBOOK_PROMPT,
+  });
+
+  if (!result.success || !result.playbook) {
+    throw new Error('Failed to create playbook');
+  }
+
+  return {
+    id: result.playbook.id,
+    name: result.playbook.name,
+  };
 }
 
 /**

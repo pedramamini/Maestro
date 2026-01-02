@@ -590,6 +590,10 @@ export interface Session {
     remoteId: string | null;     // SSH remote config ID to use
     workingDirOverride?: string; // Override remote working directory
   };
+
+  // SSH connection status - runtime only, not persisted
+  // Set when background SSH operations fail (e.g., git info fetch on startup)
+  sshConnectionFailed?: boolean;
 }
 
 export interface AgentConfigOption {
