@@ -22,6 +22,26 @@ export type {
 } from './visible';
 
 // =============================================================================
+// Wait For Assertions
+// =============================================================================
+
+export {
+  waitFor,
+  waitForById,
+  waitForByLabel,
+  waitForByText,
+  waitForNot,
+  waitForNotById,
+  waitForNotByLabel,
+  waitForNotByText,
+} from './wait-for';
+export type {
+  WaitForTarget,
+  WaitForOptions,
+  WaitForData,
+} from './wait-for';
+
+// =============================================================================
 // Crash Assertions
 // =============================================================================
 

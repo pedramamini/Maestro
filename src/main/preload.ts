@@ -1337,6 +1337,25 @@ contextBridge.exposeInMainWorld('maestro', {
         ipcRenderer.invoke('ios:assert:hasCrashed', bundleId, udid, since),
       waitForNoCrash: (options: any) => ipcRenderer.invoke('ios:assert:waitForNoCrash', options),
     },
+    // Wait for element operations
+    wait: {
+      /** Wait for element to appear */
+      for: (options: any) => ipcRenderer.invoke('ios:wait:for', options),
+      /** Wait for element by identifier */
+      forById: (identifier: string, options: any) => ipcRenderer.invoke('ios:wait:forById', identifier, options),
+      /** Wait for element by label */
+      forByLabel: (label: string, options: any) => ipcRenderer.invoke('ios:wait:forByLabel', label, options),
+      /** Wait for element by text */
+      forByText: (text: string, options: any) => ipcRenderer.invoke('ios:wait:forByText', text, options),
+      /** Wait for element to disappear */
+      forNot: (options: any) => ipcRenderer.invoke('ios:wait:forNot', options),
+      /** Wait for element by identifier to disappear */
+      forNotById: (identifier: string, options: any) => ipcRenderer.invoke('ios:wait:forNotById', identifier, options),
+      /** Wait for element by label to disappear */
+      forNotByLabel: (label: string, options: any) => ipcRenderer.invoke('ios:wait:forNotByLabel', label, options),
+      /** Wait for element by text to disappear */
+      forNotByText: (text: string, options: any) => ipcRenderer.invoke('ios:wait:forNotByText', text, options),
+    },
     // Verification Formatting
     verify: {
       formatResult: (result: any, options?: any) => ipcRenderer.invoke('ios:verify:formatResult', result, options),

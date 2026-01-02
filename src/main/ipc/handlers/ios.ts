@@ -1010,6 +1010,94 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // Wait for element to appear
+  ipcMain.handle(
+    'ios:wait:for',
+    withIpcErrorLogging(
+      handlerOpts('waitForElement'),
+      async (options: iosTools.WaitForOptions) => {
+        return iosTools.waitForElement(options);
+      }
+    )
+  );
+
+  // Wait for element by identifier
+  ipcMain.handle(
+    'ios:wait:forById',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementById'),
+      async (identifier: string, options: Omit<iosTools.WaitForOptions, 'target'>) => {
+        return iosTools.waitForElementById(identifier, options);
+      }
+    )
+  );
+
+  // Wait for element by label
+  ipcMain.handle(
+    'ios:wait:forByLabel',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementByLabel'),
+      async (label: string, options: Omit<iosTools.WaitForOptions, 'target'>) => {
+        return iosTools.waitForElementByLabel(label, options);
+      }
+    )
+  );
+
+  // Wait for element by text
+  ipcMain.handle(
+    'ios:wait:forByText',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementByText'),
+      async (text: string, options: Omit<iosTools.WaitForOptions, 'target'>) => {
+        return iosTools.waitForElementByText(text, options);
+      }
+    )
+  );
+
+  // Wait for element to disappear
+  ipcMain.handle(
+    'ios:wait:forNot',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementNot'),
+      async (options: iosTools.WaitForOptions) => {
+        return iosTools.waitForElementNot(options);
+      }
+    )
+  );
+
+  // Wait for element by identifier to disappear
+  ipcMain.handle(
+    'ios:wait:forNotById',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementNotById'),
+      async (identifier: string, options: Omit<iosTools.WaitForOptions, 'target' | 'not'>) => {
+        return iosTools.waitForElementNotById(identifier, options);
+      }
+    )
+  );
+
+  // Wait for element by label to disappear
+  ipcMain.handle(
+    'ios:wait:forNotByLabel',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementNotByLabel'),
+      async (label: string, options: Omit<iosTools.WaitForOptions, 'target' | 'not'>) => {
+        return iosTools.waitForElementNotByLabel(label, options);
+      }
+    )
+  );
+
+  // Wait for element by text to disappear
+  ipcMain.handle(
+    'ios:wait:forNotByText',
+    withIpcErrorLogging(
+      handlerOpts('waitForElementNotByText'),
+      async (text: string, options: Omit<iosTools.WaitForOptions, 'target' | 'not'>) => {
+        return iosTools.waitForElementNotByText(text, options);
+      }
+    )
+  );
+
   // Format verification result for agent
   ipcMain.handle(
     'ios:verify:formatResult',

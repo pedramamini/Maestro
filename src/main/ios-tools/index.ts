@@ -454,6 +454,15 @@ export {
   assertVisibleByLabel,
   assertVisibleByText,
   assertNotVisible,
+  // Wait for assertions (renamed to avoid conflict with utils.waitFor)
+  waitFor as waitForElement,
+  waitForById as waitForElementById,
+  waitForByLabel as waitForElementByLabel,
+  waitForByText as waitForElementByText,
+  waitForNot as waitForElementNot,
+  waitForNotById as waitForElementNotById,
+  waitForNotByLabel as waitForElementNotByLabel,
+  waitForNotByText as waitForElementNotByText,
   // Crash assertions
   assertNoCrash,
   hasCrashed,
@@ -465,6 +474,10 @@ export type {
   ElementTarget,
   AssertVisibleOptions,
   VisibleAssertionData,
+  // Wait for types
+  WaitForTarget,
+  WaitForOptions,
+  WaitForData,
   // Crash types
   AssertNoCrashOptions,
   NoCrashAssertionData,
