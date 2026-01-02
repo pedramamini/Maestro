@@ -47,10 +47,14 @@ export {
 // Import and register all actions
 import { registerAction } from './action-registry';
 import { iosSnapshotAction } from './actions/ios-snapshot';
+import { iosInspectAction } from './actions/ios-inspect';
 
 // Register built-in actions
 registerAction(iosSnapshotAction);
+registerAction(iosInspectAction);
 
 // Export action definitions for reference
 export { iosSnapshotAction } from './actions/ios-snapshot';
 export type { IosSnapshotInputs } from './actions/ios-snapshot';
+export { iosInspectAction } from './actions/ios-inspect';
+export type { IosInspectInputs } from './actions/ios-inspect';

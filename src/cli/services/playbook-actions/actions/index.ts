@@ -6,3 +6,4 @@
  */
 
 export { iosSnapshotAction } from './ios-snapshot';
+export { iosInspectAction } from './ios-inspect';
