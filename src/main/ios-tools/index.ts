@@ -219,8 +219,8 @@ export {
   inputText,
   scroll,
   screenshotStep,
-  assertVisible,
-  assertNotVisible,
+  assertVisible as assertVisibleStep,  // Renamed to avoid conflict with assertions
+  assertNotVisible as assertNotVisibleStep,  // Renamed to avoid conflict with assertions
   waitForStep,
   swipe,
   launchAppStep,
@@ -295,3 +295,76 @@ export type {
   FlowFormatOptions,
   FormattedFlowResult,
 } from './action-formatter';
+
+// =============================================================================
+// Verification Infrastructure
+// =============================================================================
+
+export {
+  pollUntil,
+  withRetry,
+  verifyWithPollingAndRetry,
+  generateVerificationId,
+  buildVerificationResult,
+  createPassedResult,
+  createFailedResult,
+  createTimeoutResult,
+  createErrorResult,
+  calculateRetryDelay,
+  mergePollingOptions,
+  mergeRetryPolicy,
+} from './verification';
+export type {
+  RetryPolicy,
+  PollingOptions,
+  AssertionBaseOptions,
+  VerificationStatus,
+  VerificationAttempt,
+  VerificationResult,
+  VerificationCheck,
+} from './verification';
+
+// =============================================================================
+// Assertions
+// =============================================================================
+
+export {
+  // Visibility assertions
+  assertVisible,
+  assertVisibleById,
+  assertVisibleByLabel,
+  assertVisibleByText,
+  assertNotVisible,
+  // Crash assertions
+  assertNoCrash,
+  hasCrashed,
+  waitForNoCrash,
+  assertNoCrashInWindow,
+} from './assertions';
+export type {
+  // Visibility types
+  ElementTarget,
+  AssertVisibleOptions,
+  VisibleAssertionData,
+  // Crash types
+  AssertNoCrashOptions,
+  NoCrashAssertionData,
+} from './assertions';
+
+// =============================================================================
+// Verification Formatting
+// =============================================================================
+
+export {
+  formatVerificationResult,
+  formatVerificationAsJson,
+  formatVerificationCompact,
+  formatVerificationBatch,
+  formatDuration as formatVerificationDuration,
+  formatProgressBar as formatVerificationProgressBar,
+  formatStatusBadge as formatVerificationStatusBadge,
+} from './verification-formatter';
+export type {
+  VerificationFormatOptions,
+  FormattedVerification,
+} from './verification-formatter';

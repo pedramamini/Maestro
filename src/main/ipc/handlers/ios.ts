@@ -817,5 +817,145 @@ export function registerIOSHandlers(): void {
     )
   );
 
+  // ==========================================================================
+  // Verification & Assertions
+  // ==========================================================================
+
+  // Assert element is visible
+  ipcMain.handle(
+    'ios:assert:visible',
+    createIpcHandler(
+      handlerOpts('assertVisible'),
+      async (options: iosTools.AssertVisibleOptions) => {
+        return iosTools.assertVisible(options);
+      }
+    )
+  );
+
+  // Assert element is visible by identifier
+  ipcMain.handle(
+    'ios:assert:visibleById',
+    createIpcHandler(
+      handlerOpts('assertVisibleById'),
+      async (identifier: string, options: Omit<iosTools.AssertVisibleOptions, 'target'>) => {
+        return iosTools.assertVisibleById(identifier, options);
+      }
+    )
+  );
+
+  // Assert element is visible by label
+  ipcMain.handle(
+    'ios:assert:visibleByLabel',
+    createIpcHandler(
+      handlerOpts('assertVisibleByLabel'),
+      async (label: string, options: Omit<iosTools.AssertVisibleOptions, 'target'>) => {
+        return iosTools.assertVisibleByLabel(label, options);
+      }
+    )
+  );
+
+  // Assert element is visible by text
+  ipcMain.handle(
+    'ios:assert:visibleByText',
+    createIpcHandler(
+      handlerOpts('assertVisibleByText'),
+      async (text: string, options: Omit<iosTools.AssertVisibleOptions, 'target'>) => {
+        return iosTools.assertVisibleByText(text, options);
+      }
+    )
+  );
+
+  // Assert element is NOT visible
+  ipcMain.handle(
+    'ios:assert:notVisible',
+    createIpcHandler(
+      handlerOpts('assertNotVisible'),
+      async (options: iosTools.AssertVisibleOptions) => {
+        return iosTools.assertNotVisible(options);
+      }
+    )
+  );
+
+  // Assert no crash for app
+  ipcMain.handle(
+    'ios:assert:noCrash',
+    createIpcHandler(
+      handlerOpts('assertNoCrash'),
+      async (options: iosTools.AssertNoCrashOptions) => {
+        return iosTools.assertNoCrash(options);
+      }
+    )
+  );
+
+  // Quick check if app has crashed
+  ipcMain.handle(
+    'ios:assert:hasCrashed',
+    createIpcHandler(
+      handlerOpts('hasCrashed'),
+      async (bundleId: string, udid: string, since: string) => {
+        return iosTools.hasCrashed(bundleId, udid, new Date(since));
+      }
+    )
+  );
+
+  // Wait for app to not crash for duration
+  ipcMain.handle(
+    'ios:assert:waitForNoCrash',
+    createIpcHandler(
+      handlerOpts('waitForNoCrash'),
+      async (options: iosTools.AssertNoCrashOptions & { monitorDuration: number }) => {
+        return iosTools.waitForNoCrash(options);
+      }
+    )
+  );
+
+  // Format verification result for agent
+  ipcMain.handle(
+    'ios:verify:formatResult',
+    createIpcHandler(
+      handlerOpts('formatVerificationResult'),
+      async (result: iosTools.VerificationResult, options?: iosTools.VerificationFormatOptions) => {
+        const formatted = iosTools.formatVerificationResult(result, options);
+        return { success: true, data: formatted };
+      }
+    )
+  );
+
+  // Format verification result as JSON
+  ipcMain.handle(
+    'ios:verify:formatResultJson',
+    createIpcHandler(
+      handlerOpts('formatVerificationAsJson'),
+      async (result: iosTools.VerificationResult) => {
+        const json = iosTools.formatVerificationAsJson(result);
+        return { success: true, data: json };
+      }
+    )
+  );
+
+  // Format verification result compact
+  ipcMain.handle(
+    'ios:verify:formatResultCompact',
+    createIpcHandler(
+      handlerOpts('formatVerificationCompact'),
+      async (result: iosTools.VerificationResult) => {
+        const compact = iosTools.formatVerificationCompact(result);
+        return { success: true, data: compact };
+      }
+    )
+  );
+
+  // Format batch verification results
+  ipcMain.handle(
+    'ios:verify:formatBatch',
+    createIpcHandler(
+      handlerOpts('formatVerificationBatch'),
+      async (results: iosTools.VerificationResult[], options?: iosTools.VerificationFormatOptions) => {
+        const formatted = iosTools.formatVerificationBatch(results, options);
+        return { success: true, data: formatted };
+      }
+    )
+  );
+
   logger.debug(`${LOG_CONTEXT} iOS IPC handlers registered`);
 }
