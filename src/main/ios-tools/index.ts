@@ -236,6 +236,9 @@ export {
   formatInspectAsJson,
   formatInspectAsElementList,
   formatInspectCompact,
+  formatElementQuery,
+  formatElementQueryTable,
+  formatActionSuggestions,
 } from './inspect-formatter';
 export type {
   FormattedInspect,
