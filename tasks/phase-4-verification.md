@@ -460,7 +460,7 @@
 
 ## Testing
 
-- [x] Write unit tests for each assertion type ✅ *Created `src/main/ios-tools/assertions/__tests__/assertions.test.ts` with 53 unit tests covering:*
+- [x] Write unit tests for each assertion type ✅ *Created `src/main/ios-tools/assertions/__tests__/assertions.test.ts` with 89 unit tests covering:*
   - *Visibility assertions (assertVisible, assertNotVisible, convenience functions)*
   - *Text assertions (assertText with all match modes: exact, contains, regex, startsWith, endsWith, case-insensitive)*
   - *Value assertions (assertValue, assertValueEmpty, assertValueNotEmpty)*
@@ -470,9 +470,39 @@
   - *Verification infrastructure (pollUntil, generateVerificationId, result builders)*
   - *Error handling (simulator not found, not booted, inspect failures)*
 - [ ] Write integration tests with sample app
-- [ ] Test timeout behavior
-- [ ] Test retry logic
-- [ ] Test compound assertions
+- [x] Test timeout behavior ✅ *Added 7 tests covering:*
+  - *Custom timeout value handling*
+  - *Early termination when condition is met*
+  - *Duration measurement accuracy*
+  - *Poll interval frequency verification*
+  - *Assertion timeout integration*
+  - *Recording attempts during timeout*
+  - *Handling slow checks without exceeding timeout*
+- [x] Test retry logic ✅ *Added 12 tests covering:*
+  - *Success on first attempt*
+  - *Transient failure recovery*
+  - *Max attempt exhaustion*
+  - *Exception handling in operations*
+  - *Last error reporting*
+  - *Exponential backoff calculation*
+  - *maxDelay cap enforcement*
+  - *Constant delay mode*
+  - *Combined polling + retry verification*
+  - *Retry of entire polling cycle on timeout*
+  - *Default policy values*
+  - *Custom value merging*
+- [x] Test compound assertions ✅ *Added 17 tests covering:*
+  - *assertScreen with visible elements*
+  - *assertScreen with missing elements*
+  - *assertScreen with notVisible checks*
+  - *assertScreen with enabled/disabled checks*
+  - *requireAll=false mode*
+  - *Detailed element check results*
+  - *createScreenDefinition helper*
+  - *parseScreenDefinition helper*
+  - *assertScreenByName with registry*
+  - *Registry lookup failures*
+  - *Complex compound scenarios*
 
 ## Documentation
 
