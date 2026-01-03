@@ -49,7 +49,7 @@ const prepareSessionForPersistence = (session: Session): Session => {
 
   // Return session without runtime-only fields
   // eslint-disable-next-line @typescript-eslint/no-unused-vars
-  const { closedTabHistory, agentError, agentErrorPaused, agentErrorTabId, ...sessionWithoutRuntimeFields } = session;
+  const { closedTabHistory, agentError, agentErrorPaused, agentErrorTabId, sshConnectionFailed, ...sessionWithoutRuntimeFields } = session;
 
   return {
     ...sessionWithoutRuntimeFields,

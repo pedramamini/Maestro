@@ -24,7 +24,7 @@ import {
   getSessionStorage,
   type SessionMessagesResult,
 } from '../../agent-session-storage';
-import { groomContext } from '../../utils/context-groomer';
+import { groomContext, cancelAllGroomingSessions } from '../../utils/context-groomer';
 import type { ProcessManager } from '../../process-manager';
 import type { AgentDetector } from '../../agent-detector';
 
@@ -144,6 +144,18 @@ export function registerContextHandlers(deps: ContextHandlerDependencies): void 
         );
 
         return result.response;
+      }
+    )
+  );
+
+  // Cancel all active grooming sessions
+  ipcMain.handle(
+    'context:cancelGrooming',
+    withIpcErrorLogging(
+      handlerOpts('cancelGrooming'),
+      async (): Promise<void> => {
+        logger.info('Cancelling all grooming sessions via IPC', LOG_CONTEXT);
+        cancelAllGroomingSessions();
       }
     )
   );

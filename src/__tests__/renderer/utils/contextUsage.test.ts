@@ -20,17 +20,31 @@ describe('estimateContextUsage', () => {
     it('should calculate percentage from provided context window', () => {
       const stats = createStats({ contextWindow: 100000 });
       const result = estimateContextUsage(stats, 'claude-code');
-      // (10000 + 5000) / 100000 = 15%
+      // (10000 + 5000 + 0) / 100000 = 15%
       expect(result).toBe(15);
+    });
+
+    it('should include cacheReadInputTokens in calculation', () => {
+      const stats = createStats({
+        inputTokens: 1000,
+        outputTokens: 500,
+        cacheReadInputTokens: 50000,
+        contextWindow: 100000,
+      });
+      const result = estimateContextUsage(stats, 'claude-code');
+      // (1000 + 500 + 50000) / 100000 = 51.5% -> 52%
+      expect(result).toBe(52);
     });
 
     it('should cap at 100%', () => {
       const stats = createStats({
-        inputTokens: 150000,
-        outputTokens: 100000,
+        inputTokens: 50000,
+        outputTokens: 50000,
+        cacheReadInputTokens: 150000,
         contextWindow: 200000,
       });
       const result = estimateContextUsage(stats, 'claude-code');
+      // (50000 + 50000 + 150000) / 200000 = 125% -> capped at 100%
       expect(result).toBe(100);
     });
 
@@ -38,6 +52,7 @@ describe('estimateContextUsage', () => {
       const stats = createStats({
         inputTokens: 33333,
         outputTokens: 0,
+        cacheReadInputTokens: 0,
         contextWindow: 100000,
       });
       const result = estimateContextUsage(stats, 'claude-code');
@@ -50,7 +65,7 @@ describe('estimateContextUsage', () => {
     it('should use claude-code default context window (200k)', () => {
       const stats = createStats({ contextWindow: 0 });
       const result = estimateContextUsage(stats, 'claude-code');
-      // (10000 + 5000) / 200000 = 7.5% -> 8%
+      // (10000 + 5000 + 0) / 200000 = 7.5% -> 8%
       expect(result).toBe(8);
     });
 
@@ -69,7 +84,7 @@ describe('estimateContextUsage', () => {
     it('should use opencode default context window (128k)', () => {
       const stats = createStats({ contextWindow: 0 });
       const result = estimateContextUsage(stats, 'opencode');
-      // (10000 + 5000) / 128000 = 11.7% -> 12%
+      // (10000 + 5000 + 0) / 128000 = 11.7% -> 12%
       expect(result).toBe(12);
     });
 
@@ -95,10 +110,39 @@ describe('estimateContextUsage', () => {
       const stats = createStats({
         inputTokens: 0,
         outputTokens: 0,
+        cacheReadInputTokens: 0,
         contextWindow: 0,
       });
       const result = estimateContextUsage(stats, 'claude-code');
       expect(result).toBe(0);
+    });
+  });
+
+  describe('cacheReadInputTokens handling', () => {
+    it('should handle undefined cacheReadInputTokens', () => {
+      const stats = createStats({
+        inputTokens: 10000,
+        outputTokens: 5000,
+        contextWindow: 100000,
+      });
+      // @ts-expect-error - testing undefined case
+      stats.cacheReadInputTokens = undefined;
+      const result = estimateContextUsage(stats, 'claude-code');
+      // (10000 + 5000 + 0) / 100000 = 15%
+      expect(result).toBe(15);
+    });
+
+    it('should correctly calculate with large cache read tokens', () => {
+      // This simulates a real scenario: small new input but large cached history
+      const stats = createStats({
+        inputTokens: 500,      // small new turn input
+        outputTokens: 1000,    // small response
+        cacheReadInputTokens: 180000,  // large cached conversation
+        contextWindow: 200000,
+      });
+      const result = estimateContextUsage(stats, 'claude-code');
+      // (500 + 1000 + 180000) / 200000 = 90.75% -> 91%
+      expect(result).toBe(91);
     });
   });
 
@@ -121,12 +165,13 @@ describe('estimateContextUsage', () => {
 
     it('should handle very large token counts', () => {
       const stats = createStats({
-        inputTokens: 1000000,
+        inputTokens: 500000,
         outputTokens: 500000,
+        cacheReadInputTokens: 500000,
         contextWindow: 0,
       });
       const result = estimateContextUsage(stats, 'claude-code');
-      // (1000000 + 500000) / 200000 = 750% -> capped at 100%
+      // (500000 + 500000 + 500000) / 200000 = 750% -> capped at 100%
       expect(result).toBe(100);
     });
 
@@ -134,10 +179,11 @@ describe('estimateContextUsage', () => {
       const stats = createStats({
         inputTokens: 100,
         outputTokens: 50,
+        cacheReadInputTokens: 0,
         contextWindow: 0,
       });
       const result = estimateContextUsage(stats, 'claude-code');
-      // (100 + 50) / 200000 = 0.075% -> 0%
+      // (100 + 50 + 0) / 200000 = 0.075% -> 0%
       expect(result).toBe(0);
     });
   });

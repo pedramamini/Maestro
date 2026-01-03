@@ -203,6 +203,115 @@ describe('useInputProcessing', () => {
     });
   });
 
+  describe('built-in /wizard command', () => {
+    const mockOnWizardCommand = vi.fn();
+
+    it('intercepts /wizard command and calls handler with empty args', async () => {
+      const deps = createDeps({
+        inputValue: '/wizard',
+        onWizardCommand: mockOnWizardCommand,
+      });
+      const { result } = renderHook(() => useInputProcessing(deps));
+
+      await act(async () => {
+        await result.current.processInput();
+      });
+
+      expect(mockOnWizardCommand).toHaveBeenCalledTimes(1);
+      expect(mockOnWizardCommand).toHaveBeenCalledWith('');
+      expect(mockSetInputValue).toHaveBeenCalledWith('');
+      expect(mockSetSlashCommandOpen).toHaveBeenCalledWith(false);
+      expect(mockSyncAiInputToSession).toHaveBeenCalledWith('');
+    });
+
+    it('intercepts /wizard with arguments and passes them to handler', async () => {
+      const deps = createDeps({
+        inputValue: '/wizard create a new feature for user authentication',
+        onWizardCommand: mockOnWizardCommand,
+      });
+      const { result } = renderHook(() => useInputProcessing(deps));
+
+      await act(async () => {
+        await result.current.processInput();
+      });
+
+      expect(mockOnWizardCommand).toHaveBeenCalledTimes(1);
+      expect(mockOnWizardCommand).toHaveBeenCalledWith('create a new feature for user authentication');
+      expect(mockSetInputValue).toHaveBeenCalledWith('');
+    });
+
+    it('handles /wizard with only whitespace after command', async () => {
+      const deps = createDeps({
+        inputValue: '/wizard   ',
+        onWizardCommand: mockOnWizardCommand,
+      });
+      const { result } = renderHook(() => useInputProcessing(deps));
+
+      await act(async () => {
+        await result.current.processInput();
+      });
+
+      expect(mockOnWizardCommand).toHaveBeenCalledTimes(1);
+      expect(mockOnWizardCommand).toHaveBeenCalledWith('');
+    });
+
+    it('does not intercept /wizard in terminal mode', async () => {
+      const session = createMockSession({ inputMode: 'terminal' });
+      const deps = createDeps({
+        activeSession: session,
+        inputValue: '/wizard',
+        isAiMode: false,
+        onWizardCommand: mockOnWizardCommand,
+      });
+      const { result } = renderHook(() => useInputProcessing(deps));
+
+      await act(async () => {
+        await result.current.processInput();
+      });
+
+      // Should not call wizard handler in terminal mode
+      expect(mockOnWizardCommand).not.toHaveBeenCalled();
+    });
+
+    it('does not intercept /wizard when handler is not provided', async () => {
+      const deps = createDeps({
+        inputValue: '/wizard',
+        onWizardCommand: undefined, // Handler not provided
+      });
+      const { result } = renderHook(() => useInputProcessing(deps));
+
+      await act(async () => {
+        await result.current.processInput();
+      });
+
+      // Should fall through to be processed as regular message
+      expect(mockSetSessions).toHaveBeenCalled();
+    });
+
+    it('does not match /wizardry or other similar commands', async () => {
+      const deps = createDeps({
+        inputValue: '/wizardry',
+        onWizardCommand: mockOnWizardCommand,
+      });
+      const { result } = renderHook(() => useInputProcessing(deps));
+
+      await act(async () => {
+        await result.current.processInput();
+      });
+
+      // /wizardry should NOT trigger the wizard handler
+      // because it starts with /wizard but is a different command
+      // The implementation correctly matches "/wizard" or "/wizard " (with space) only
+      expect(mockOnWizardCommand).not.toHaveBeenCalled();
+      // Should fall through to be processed as regular message
+      expect(mockSetSessions).toHaveBeenCalled();
+    });
+
+    beforeEach(() => {
+      mockOnWizardCommand.mockClear();
+    });
+  });
+
   describe('custom AI commands', () => {
     const customCommands: CustomAICommand[] = [
       {

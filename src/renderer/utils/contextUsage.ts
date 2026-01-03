@@ -25,6 +25,15 @@ export const DEFAULT_CONTEXT_WINDOWS: Record<ToolType, number> = {
  * Estimate context usage percentage when the agent doesn't provide it directly.
  * Uses agent-specific default context window sizes for accurate estimation.
  *
+ * IMPORTANT: The actual prompt sent to the API includes:
+ * - inputTokens: new tokens in this turn
+ * - outputTokens: response tokens
+ * - cacheReadInputTokens: cached conversation history sent with each request
+ *
+ * The cacheReadInputTokens are critical because they represent the full
+ * conversation context being sent, even though they're served from cache
+ * for billing purposes.
+ *
  * @param stats - The usage statistics containing token counts
  * @param agentId - The agent identifier for agent-specific context window size
  * @returns Estimated context usage percentage (0-100), or null if cannot be estimated
@@ -33,10 +42,13 @@ export function estimateContextUsage(
   stats: Pick<UsageStats, 'inputTokens' | 'outputTokens' | 'cacheReadInputTokens' | 'cacheCreationInputTokens' | 'contextWindow'>,
   agentId?: ToolType
 ): number | null {
+  // Calculate total context: new input + output + cached conversation history
+  // The cacheReadInputTokens represent previous conversation being sent with each request
+  const totalContextTokens = stats.inputTokens + stats.outputTokens + (stats.cacheReadInputTokens || 0);
+
   // If context window is provided and valid, use it
   if (stats.contextWindow && stats.contextWindow > 0) {
-    const totalTokens = stats.inputTokens + stats.outputTokens;
-    return Math.min(100, Math.round((totalTokens / stats.contextWindow) * 100));
+    return Math.min(100, Math.round((totalContextTokens / stats.contextWindow) * 100));
   }
 
   // If no agent specified or terminal, cannot estimate
@@ -50,11 +62,9 @@ export function estimateContextUsage(
     return null;
   }
 
-  // Calculate context usage using total tokens (input + output)
-  const totalTokens = stats.inputTokens + stats.outputTokens;
-  if (totalTokens <= 0) {
+  if (totalContextTokens <= 0) {
     return 0;
   }
 
-  return Math.min(100, Math.round((totalTokens / defaultContextWindow) * 100));
+  return Math.min(100, Math.round((totalContextTokens / defaultContextWindow) * 100));
 }

@@ -34,6 +34,7 @@ import { GroupChatRightPanel, type GroupChatRightTab } from './components/GroupC
 import {
   // Batch processing
   useBatchProcessor,
+  type PreviousUIState,
   // Settings
   useSettings,
   useDebouncedPersistence,
@@ -87,6 +88,7 @@ import { InputProvider, useInputContext } from './contexts/InputContext';
 import { GroupChatProvider, useGroupChat } from './contexts/GroupChatContext';
 import { AutoRunProvider, useAutoRun } from './contexts/AutoRunContext';
 import { SessionProvider, useSession } from './contexts/SessionContext';
+import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
 
 // Import services
@@ -681,6 +683,49 @@ function MaestroConsoleInner() {
   }, [activeSessionId]);
 
   // Restore a persisted session by respawning its process
+  /**
+   * Fetch git info (isRepo, branches, tags) for a session in the background.
+   * This is called after initial session restore to avoid blocking app startup
+   * on SSH timeouts for remote sessions.
+   */
+  const fetchGitInfoInBackground = useCallback(async (
+    sessionId: string,
+    cwd: string,
+    sshRemoteId: string | undefined
+  ) => {
+    try {
+      // Check if the working directory is a Git repository (via SSH for remote sessions)
+      const isGitRepo = await gitService.isRepo(cwd, sshRemoteId);
+
+      // Fetch git branches and tags if it's a git repo
+      let gitBranches: string[] | undefined;
+      let gitTags: string[] | undefined;
+      let gitRefsCacheTime: number | undefined;
+      if (isGitRepo) {
+        [gitBranches, gitTags] = await Promise.all([
+          gitService.getBranches(cwd, sshRemoteId),
+          gitService.getTags(cwd, sshRemoteId)
+        ]);
+        gitRefsCacheTime = Date.now();
+      }
+
+      // Update the session with git info and mark SSH as connected
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId
+          ? { ...s, isGitRepo, gitBranches, gitTags, gitRefsCacheTime, sshConnectionFailed: false }
+          : s
+      ));
+    } catch (error) {
+      console.warn(`[fetchGitInfoInBackground] Failed to fetch git info for session ${sessionId}:`, error);
+      // Mark SSH connection as failed so UI can show error state
+      setSessions(prev => prev.map(s =>
+        s.id === sessionId
+          ? { ...s, sshConnectionFailed: true }
+          : s
+      ));
+    }
+  }, []);
+
   const restoreSession = async (session: Session): Promise<Session> => {
     try {
       // Migration: ensure projectRoot is set (for sessions created before this field was added)
@@ -756,20 +801,29 @@ function MaestroConsoleInner() {
         // we must fall back to sessionSshRemoteConfig.remoteId. See CLAUDE.md "SSH Remote Sessions".
         const sshRemoteId = correctedSession.sshRemoteId || correctedSession.sessionSshRemoteConfig?.remoteId || undefined;
 
-        // Check if the working directory is a Git repository (via SSH for remote sessions)
-        const isGitRepo = await gitService.isRepo(correctedSession.cwd, sshRemoteId);
+        // For SSH remote sessions, defer git operations to background to avoid blocking
+        // app startup on SSH connection timeouts (which can be 10+ seconds per session)
+        const isRemoteSession = !!sshRemoteId;
 
-        // Fetch git branches and tags if it's a git repo
-        let gitBranches: string[] | undefined;
-        let gitTags: string[] | undefined;
-        let gitRefsCacheTime: number | undefined;
-        if (isGitRepo) {
-          [gitBranches, gitTags] = await Promise.all([
-            gitService.getBranches(correctedSession.cwd, sshRemoteId),
-            gitService.getTags(correctedSession.cwd, sshRemoteId)
-          ]);
-          gitRefsCacheTime = Date.now();
+        // For local sessions, check git status synchronously (fast, sub-100ms)
+        // For remote sessions, use persisted value or default to false, then update in background
+        let isGitRepo = correctedSession.isGitRepo ?? false;
+        let gitBranches = correctedSession.gitBranches;
+        let gitTags = correctedSession.gitTags;
+        let gitRefsCacheTime = correctedSession.gitRefsCacheTime;
+
+        if (!isRemoteSession) {
+          // Local session - check git status synchronously (fast)
+          isGitRepo = await gitService.isRepo(correctedSession.cwd, undefined);
+          if (isGitRepo) {
+            [gitBranches, gitTags] = await Promise.all([
+              gitService.getBranches(correctedSession.cwd, undefined),
+              gitService.getTags(correctedSession.cwd, undefined)
+            ]);
+            gitRefsCacheTime = Date.now();
+          }
         }
+        // For remote sessions, we'll fetch git info in background after session restore
 
         // Reset all tab states to idle - processes don't survive app restart
         const resetAiTabs = correctedSession.aiTabs.map(tab => ({
@@ -790,7 +844,7 @@ function MaestroConsoleInner() {
           currentCycleTokens: undefined,
           currentCycleBytes: undefined,
           statusMessage: undefined,
-          isGitRepo,  // Update Git status
+          isGitRepo,  // Update Git status (or use persisted value for remote)
           gitBranches,
           gitTags,
           gitRefsCacheTime,
@@ -863,6 +917,16 @@ function MaestroConsoleInner() {
           // Set active session to first session if current activeSessionId is invalid
           if (restoredSessions.length > 0 && !restoredSessions.find(s => s.id === activeSessionId)) {
             setActiveSessionId(restoredSessions[0].id);
+          }
+
+          // For remote (SSH) sessions, fetch git info in background to avoid blocking
+          // startup on SSH connection timeouts. This runs after UI is shown.
+          for (const session of restoredSessions) {
+            const sshRemoteId = session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId;
+            if (sshRemoteId) {
+              // Fire and forget - don't await, let it update sessions when done
+              fetchGitInfoInBackground(session.id, session.cwd, sshRemoteId);
+            }
           }
         } else {
           setSessions([]);
@@ -3501,11 +3565,11 @@ You are taking over this conversation. Based on the context above, provide a bri
     const targetTabId = tabId || activeSession.activeTabId;
     const targetTab = activeSession.aiTabs.find(t => t.id === targetTabId);
 
-    if (!targetTab || !canSummarize(activeSession.contextUsage)) {
+    if (!targetTab || !canSummarize(activeSession.contextUsage, targetTab.logs)) {
       addToast({
         type: 'warning',
         title: 'Cannot Compact',
-        message: `Context usage too low. Need at least ${minContextUsagePercent}% to compact.`,
+        message: `Context too small. Need at least ${minContextUsagePercent}% usage or ~10k tokens to compact.`,
       });
       return;
     }
@@ -4236,6 +4300,137 @@ You are taking over this conversation. Based on the context above, provide a bri
     return activeSession ? getBatchState(activeSession.id) : getBatchState('');
   }, [activeBatchSessionIds, activeSession, getBatchState]);
 
+  // Inline wizard context for /wizard command
+  // This manages the state for the inline wizard that creates/iterates on Auto Run documents
+  const {
+    startWizard: startInlineWizard,
+    endWizard: endInlineWizard,
+    clearError: clearInlineWizardError,
+    retryLastMessage: retryInlineWizardMessage,
+    generateDocuments: generateInlineWizardDocuments,
+    sendMessage: sendInlineWizardMessage,
+    // State for syncing to session.wizardState
+    isWizardActive: inlineWizardActive,
+    isWaiting: inlineWizardIsWaiting,
+    wizardMode: inlineWizardMode,
+    wizardGoal: inlineWizardGoal,
+    confidence: inlineWizardConfidence,
+    ready: inlineWizardReady,
+    conversationHistory: inlineWizardConversationHistory,
+    error: inlineWizardError,
+    isGeneratingDocs: inlineWizardIsGeneratingDocs,
+    generatedDocuments: inlineWizardGeneratedDocuments,
+    streamingContent: inlineWizardStreamingContent,
+    generationProgress: inlineWizardGenerationProgress,
+    state: inlineWizardState,
+    wizardTabId: inlineWizardTabId,
+    agentSessionId: inlineWizardAgentSessionId,
+    // Per-tab wizard state accessors
+    getStateForTab: getInlineWizardStateForTab,
+    isWizardActiveForTab: isInlineWizardActiveForTab,
+  } = useInlineWizardContext();
+
+  // Sync inline wizard context state to activeTab.wizardState (per-tab wizard state)
+  // This bridges the gap between the context-based state and tab-based UI rendering
+  // Each tab maintains its own independent wizard state
+  useEffect(() => {
+    if (!activeSession) return;
+
+    const activeTab = getActiveTab(activeSession);
+    const activeTabId = activeTab?.id;
+    if (!activeTabId) return;
+
+    // Get the wizard state for the CURRENT tab using the per-tab accessor
+    const tabWizardState = getInlineWizardStateForTab(activeTabId);
+    const hasWizardOnThisTab = tabWizardState?.isActive || tabWizardState?.isGeneratingDocs;
+    const currentTabWizardState = activeTab?.wizardState;
+
+    if (!hasWizardOnThisTab && !currentTabWizardState) {
+      // Neither active nor has state on this tab - nothing to do
+      return;
+    }
+
+    if (!hasWizardOnThisTab && currentTabWizardState) {
+      // Wizard was deactivated on this tab - clear the tab's wizard state
+      setSessions(prev => prev.map(s => {
+        if (s.id !== activeSession.id) return s;
+        return {
+          ...s,
+          aiTabs: s.aiTabs.map(tab =>
+            tab.id === activeTabId
+              ? { ...tab, wizardState: undefined }
+              : tab
+          ),
+        };
+      }));
+      return;
+    }
+
+    if (!tabWizardState) {
+      // No wizard state for this tab - nothing to sync
+      return;
+    }
+
+    // Sync the wizard state to this specific tab
+    const newWizardState = {
+      isActive: tabWizardState.isActive,
+      isWaiting: tabWizardState.isWaiting,
+      mode: tabWizardState.mode === 'ask' ? 'new' : tabWizardState.mode, // Map 'ask' to 'new' for session state
+      goal: tabWizardState.goal ?? undefined,
+      confidence: tabWizardState.confidence,
+      ready: tabWizardState.ready,
+      conversationHistory: tabWizardState.conversationHistory.map(msg => ({
+        id: msg.id,
+        role: msg.role,
+        content: msg.content,
+        timestamp: msg.timestamp,
+        confidence: msg.confidence,
+        ready: msg.ready,
+      })),
+      previousUIState: tabWizardState.previousUIState ?? {
+        readOnlyMode: false,
+        saveToHistory: true,
+        showThinking: false,
+      },
+      error: tabWizardState.error,
+      isGeneratingDocs: tabWizardState.isGeneratingDocs,
+      generatedDocuments: tabWizardState.generatedDocuments.map(doc => ({
+        filename: doc.filename,
+        content: doc.content,
+        taskCount: doc.taskCount,
+        savedPath: doc.savedPath,
+      })),
+      streamingContent: tabWizardState.streamingContent,
+      currentGeneratingIndex: tabWizardState.generationProgress?.current,
+      totalDocuments: tabWizardState.generationProgress?.total,
+      autoRunFolderPath: tabWizardState.projectPath
+        ? `${tabWizardState.projectPath}/Auto Run Docs`
+        : undefined,
+      agentSessionId: tabWizardState.agentSessionId ?? undefined,
+      // Track the subfolder name for tab naming after wizard completes
+      subfolderName: tabWizardState.subfolderName ?? undefined,
+    };
+
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: s.aiTabs.map(tab =>
+          tab.id === activeTabId
+            ? { ...tab, wizardState: newWizardState }
+            : tab
+        ),
+      };
+    }));
+  }, [
+    activeSession?.id,
+    activeSession?.activeTabId,
+    // getInlineWizardStateForTab changes when tabStates Map changes (new wizard state for any tab)
+    // This ensures we re-sync when the active tab's wizard state changes
+    getInlineWizardStateForTab,
+    setSessions,
+  ]);
+
   // Handler for the built-in /history command
   // Requests a synopsis from the current agent session and saves to history
   const handleHistoryCommand = useCallback(async () => {
@@ -4390,6 +4585,60 @@ You are taking over this conversation. Based on the context above, provide a bri
     }
   }, [activeSession, groups, spawnBackgroundSynopsis, addHistoryEntry, addLogToActiveTab, setSessions, addToast]);
 
+  // Handler for the built-in /wizard command
+  // Starts the inline wizard for creating/iterating on Auto Run documents
+  const handleWizardCommand = useCallback((args: string) => {
+    if (!activeSession) {
+      console.warn('[handleWizardCommand] No active session');
+      return;
+    }
+
+    const activeTab = getActiveTab(activeSession);
+    if (!activeTab) {
+      console.warn('[handleWizardCommand] No active tab');
+      return;
+    }
+
+    // Capture current UI state for restoration when wizard ends
+    const currentUIState: PreviousUIState = {
+      readOnlyMode: activeTab.readOnlyMode ?? false,
+      saveToHistory: activeTab.saveToHistory ?? true,
+      showThinking: activeTab.showThinking ?? false,
+    };
+
+    // Start the inline wizard with the argument text (natural language input)
+    // The wizard will use the intent parser to determine mode (new/iterate/ask)
+    startInlineWizard(
+      args || undefined,
+      currentUIState,
+      activeSession.projectRoot || activeSession.cwd, // Project path for Auto Run folder detection
+      activeSession.toolType, // Agent type for AI conversation
+      activeSession.name, // Session/project name
+      activeTab.id, // Tab ID for per-tab isolation
+      activeSession.id // Session ID for playbook creation
+    );
+
+    // Show a system log entry indicating wizard started
+    const wizardLog: LogEntry = {
+      id: generateId(),
+      timestamp: Date.now(),
+      source: 'system',
+      text: args
+        ? `Starting wizard with: "${args}"`
+        : 'Starting wizard for Auto Run documents...',
+    };
+    addLogToActiveTab(activeSession.id, wizardLog);
+  }, [activeSession, startInlineWizard, addLogToActiveTab]);
+
+  // Determine if wizard is active for the current tab
+  // We need to check both the context state and that we're on the wizard's tab
+  // IMPORTANT: Include activeSession?.activeTabId in deps to recompute when user switches tabs
+  const isWizardActiveForCurrentTab = useMemo(() => {
+    if (!activeSession || !inlineWizardActive) return false;
+    const activeTab = getActiveTab(activeSession);
+    return activeTab?.id === inlineWizardTabId;
+  }, [activeSession, activeSession?.activeTabId, inlineWizardActive, inlineWizardTabId]);
+
   // Input processing hook - handles sending messages and commands
   const { processInput, processInputRef: _processInputRef } = useInputProcessing({
     activeSession,
@@ -4411,6 +4660,9 @@ You are taking over this conversation. Based on the context above, provide a bri
     processQueuedItemRef,
     flushBatchedUpdates: batchedUpdater.flushNow,
     onHistoryCommand: handleHistoryCommand,
+    onWizardCommand: handleWizardCommand,
+    onWizardSendMessage: sendInlineWizardMessage,
+    isWizardActive: isWizardActiveForCurrentTab,
   });
 
   // Initialize activity tracker for per-session time tracking
@@ -8471,7 +8723,8 @@ You are taking over this conversation. Based on the context above, provide a bri
     // Summarize and continue
     canSummarizeActiveTab: (() => {
       if (!activeSession || !activeSession.activeTabId) return false;
-      return canSummarize(activeSession.contextUsage);
+      const activeTab = activeSession.aiTabs.find(t => t.id === activeSession.activeTabId);
+      return canSummarize(activeSession.contextUsage, activeTab?.logs);
     })(),
     summarizeAndContinue: handleSummarizeAndContinue,
 
@@ -8895,7 +9148,7 @@ You are taking over this conversation. Based on the context above, provide a bri
         onOpenSendToAgent={handleQuickActionsOpenSendToAgent}
         onOpenCreatePR={handleQuickActionsOpenCreatePR}
         onSummarizeAndContinue={handleQuickActionsSummarizeAndContinue}
-        canSummarizeActiveTab={activeSession ? canSummarize(activeSession.contextUsage) : false}
+        canSummarizeActiveTab={activeSession ? canSummarize(activeSession.contextUsage, activeSession.aiTabs.find(t => t.id === activeSession.activeTabId)?.logs) : false}
         onToggleRemoteControl={handleQuickActionsToggleRemoteControl}
         autoRunSelectedDocument={activeSession?.autoRunSelectedFile ?? null}
         autoRunCompletedTaskCount={rightPanelRef.current?.getAutoRunCompletedTaskCount() ?? 0}
@@ -9987,6 +10240,94 @@ You are taking over this conversation. Based on the context above, provide a bri
             setIsGraphViewOpen(true);
           }
         }}
+        // Inline wizard completion callback - switches tab to wizard session for context continuity
+        onWizardComplete={() => {
+          if (!activeSession) return;
+          // Get wizard state from the active tab (not session level)
+          const activeTab = getActiveTab(activeSession);
+          const wizardState = activeTab?.wizardState;
+          if (!wizardState) return;
+
+          // Convert wizard conversation history to log entries
+          const wizardLogEntries: import('./types').LogEntry[] = wizardState.conversationHistory.map(msg => ({
+            id: `wizard-${msg.id}`,
+            timestamp: msg.timestamp,
+            source: msg.role === 'user' ? 'user' : 'ai',
+            text: msg.content,
+            delivered: true,
+          }));
+
+          // Create summary message with next steps
+          const generatedDocs = wizardState.generatedDocuments || [];
+          const totalTasks = generatedDocs.reduce((sum, doc) => sum + doc.taskCount, 0);
+          const docNames = generatedDocs.map(d => d.filename).join(', ');
+
+          const summaryMessage: import('./types').LogEntry = {
+            id: `wizard-summary-${Date.now()}`,
+            timestamp: Date.now(),
+            source: 'ai',
+            text: `## Wizard Complete\n\n` +
+              `Created ${generatedDocs.length} document${generatedDocs.length !== 1 ? 's' : ''} with ${totalTasks} task${totalTasks !== 1 ? 's' : ''}:\n` +
+              `${docNames}\n\n` +
+              `**Next steps:**\n` +
+              `1. Open the **Auto Run** tab in the right panel to view your playbook\n` +
+              `2. Review and edit tasks as needed\n` +
+              `3. Click **Run** to start executing tasks automatically\n\n` +
+              `You can continue chatting to iterate on your playbook - the AI has full context of what was created.`,
+            delivered: true,
+          };
+
+          // Derive tab name from the subfolder where documents were saved
+          // The subfolderName is stored in the wizard state after generation completes
+          // Format: "Project: Subfolder-Name" (e.g., "Project: Maestro-Marketing")
+          const subfolderName = wizardState.subfolderName || '';
+          const tabName = subfolderName ? `Project: ${subfolderName}` : 'Wizard Session';
+
+          // Get the wizard's agentSessionId for tab context switching
+          const wizardAgentSessionId = wizardState.agentSessionId;
+
+          // Add wizard logs to active tab, switch to wizard session, rename tab, and clear wizard state
+          const activeTabId = activeTab.id;
+          setSessions(prev => prev.map(s => {
+            if (s.id !== activeSession.id) return s;
+
+            // Update tab: add logs, switch agentSessionId, rename, and clear wizard state
+            const updatedTabs = s.aiTabs.map(tab => {
+              if (tab.id !== activeTabId) return tab;
+              return {
+                ...tab,
+                logs: [...tab.logs, ...wizardLogEntries, summaryMessage],
+                // Switch to wizard's agentSessionId so user can continue iterating with full context
+                agentSessionId: wizardAgentSessionId || tab.agentSessionId,
+                // Name the tab to indicate it's a project from the wizard
+                name: tabName,
+                // Clear wizard state from the tab
+                wizardState: undefined,
+              };
+            });
+
+            return {
+              ...s,
+              aiTabs: updatedTabs,
+            };
+          }));
+
+          // CRITICAL: Also reset the useInlineWizard hook state
+          // Without this, the hook remains active and will re-sync its state back to session.wizardState
+          endInlineWizard();
+
+          // Refresh the Auto Run panel to show newly generated documents
+          handleAutoRunRefresh();
+
+          // Clear the input value that may have wizard-related text
+          setInputValue('');
+        }}
+        // Inline wizard callbacks
+        onWizardLetsGo={generateInlineWizardDocuments}
+        onWizardRetry={retryInlineWizardMessage}
+        onWizardClearError={clearInlineWizardError}
+        // Inline wizard exit handler (for WizardInputPanel)
+        onExitWizard={endInlineWizard}
       />
       )}
 
@@ -10317,6 +10658,7 @@ You are taking over this conversation. Based on the context above, provide a bri
  * Phase 4: GroupChatProvider - centralized group chat state management
  * Phase 5: AutoRunProvider - centralized Auto Run and batch processing state management
  * Phase 6: SessionProvider - centralized session and group state management
+ * Phase 7: InlineWizardProvider - inline /wizard command state management
  * See refactor-details-2.md for full plan.
  */
 export default function MaestroConsole() {
@@ -10324,9 +10666,11 @@ export default function MaestroConsole() {
     <SessionProvider>
       <AutoRunProvider>
         <GroupChatProvider>
-          <InputProvider>
-            <MaestroConsoleInner />
-          </InputProvider>
+          <InlineWizardProvider>
+            <InputProvider>
+              <MaestroConsoleInner />
+            </InputProvider>
+          </InlineWizardProvider>
         </GroupChatProvider>
       </AutoRunProvider>
     </SessionProvider>

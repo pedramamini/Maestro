@@ -82,13 +82,16 @@ function CostTracker({ usageStats }: { usageStats?: UsageStats | null }) {
 /**
  * Calculate context usage percentage from usage stats
  * Returns the percentage of context window used (0-100)
+ *
+ * IMPORTANT: Includes cacheReadInputTokens because they represent the
+ * full conversation history sent with each API request.
  */
 function calculateContextUsage(usageStats?: UsageStats | null): number | null {
   if (!usageStats) return null;
 
-  const { inputTokens, outputTokens, contextWindow } = usageStats;
+  const { inputTokens, outputTokens, cacheReadInputTokens, contextWindow } = usageStats;
 
-  // Need all three values to calculate percentage
+  // Need input/output and context window to calculate percentage
   if (
     inputTokens === undefined || inputTokens === null ||
     outputTokens === undefined || outputTokens === null ||
@@ -98,8 +101,9 @@ function calculateContextUsage(usageStats?: UsageStats | null): number | null {
     return null;
   }
 
-  // Context usage = (input + output tokens) / context window
-  const contextTokens = inputTokens + outputTokens;
+  // Context usage = (input + output + cache read tokens) / context window
+  // Cache read tokens represent the conversation history sent with each request
+  const contextTokens = inputTokens + outputTokens + (cacheReadInputTokens || 0);
   const percentage = Math.min(Math.round((contextTokens / contextWindow) * 100), 100);
 
   return percentage;

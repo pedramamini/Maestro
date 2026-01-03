@@ -44,8 +44,29 @@ const DEFAULT_CONFIG: Required<SummarizationConfig> = {
 /**
  * Maximum tokens to summarize in a single pass.
  * Larger contexts may need chunked summarization.
+ * Set conservatively at 50k to leave room for system prompt and response.
  */
 const MAX_SUMMARIZE_TOKENS = 50000;
+
+/**
+ * Target token count for the final compacted output.
+ * If combined chunk summaries exceed this, we'll do a final consolidation pass.
+ * Set to ~20% of typical context window to leave room for new conversation.
+ */
+const TARGET_COMPACTED_TOKENS = 40000;
+
+/**
+ * Minimum estimated tokens to allow summarization when context usage is unknown.
+ * This serves as a fallback when the agent doesn't report context usage percentage.
+ * 10k tokens is roughly 40k characters, indicating a substantial conversation.
+ */
+const MIN_TOKENS_FOR_SUMMARIZATION = 10000;
+
+/**
+ * Maximum recursion depth for consolidation passes.
+ * Prevents infinite loops if summarization doesn't reduce size.
+ */
+const MAX_CONSOLIDATION_DEPTH = 3;
 
 /**
  * Service for summarizing and compacting conversation contexts.
@@ -163,6 +184,8 @@ export class ContextSummarizationService {
 
   /**
    * Summarize large contexts by breaking them into chunks.
+   * If the combined chunk summaries are still too large, performs
+   * additional consolidation passes until under the target size.
    */
   private async summarizeInChunks(
     request: SummarizeRequest,
@@ -197,15 +220,78 @@ export class ContextSummarizationService {
     }
 
     // Combine chunk summaries
-    const combinedSummary = chunkSummaries.join('\n\n---\n\n');
+    let combinedSummary = chunkSummaries.join('\n\n---\n\n');
+    let compactedTokens = estimateTextTokenCount(combinedSummary);
+
+    // If combined summaries are still too large, do consolidation passes
+    let consolidationDepth = 0;
+    while (compactedTokens > TARGET_COMPACTED_TOKENS && consolidationDepth < MAX_CONSOLIDATION_DEPTH) {
+      consolidationDepth++;
+
+      onProgress({
+        stage: 'summarizing',
+        progress: 70 + consolidationDepth * 5,
+        message: `Consolidation pass ${consolidationDepth}/${MAX_CONSOLIDATION_DEPTH}...`,
+      });
+
+      console.log(`[ContextSummarizer] Consolidation pass ${consolidationDepth}: ${compactedTokens} tokens > ${TARGET_COMPACTED_TOKENS} target`);
+
+      // Build a consolidation prompt that asks for a more aggressive summary
+      const consolidationPrompt = this.buildConsolidationPrompt(combinedSummary, compactedTokens);
+
+      const consolidated = await window.maestro.context.groomContext(
+        request.projectRoot,
+        this.config.defaultAgentType,
+        consolidationPrompt
+      );
+
+      const newTokens = estimateTextTokenCount(consolidated);
+
+      // Only accept if we actually reduced the size
+      if (newTokens < compactedTokens * 0.9) {
+        combinedSummary = consolidated;
+        compactedTokens = newTokens;
+        console.log(`[ContextSummarizer] Consolidation reduced to ${compactedTokens} tokens`);
+      } else {
+        // Not making progress, stop trying
+        console.log(`[ContextSummarizer] Consolidation not reducing size, stopping`);
+        break;
+      }
+    }
+
     const summarizedLogs = parseGroomedOutput(combinedSummary);
-    const compactedTokens = estimateTextTokenCount(combinedSummary);
 
     return {
       summarizedLogs,
       originalTokens: totalOriginalTokens,
       compactedTokens,
     };
+  }
+
+  /**
+   * Build a prompt for consolidation passes when summaries are still too large.
+   */
+  private buildConsolidationPrompt(currentSummary: string, currentTokens: number): string {
+    const targetTokens = Math.round(TARGET_COMPACTED_TOKENS * 0.8); // Aim for 80% of target
+    return `The following is a summary of a conversation that is still too large (approximately ${currentTokens.toLocaleString()} tokens). Please create a more concise version targeting approximately ${targetTokens.toLocaleString()} tokens while preserving:
+
+1. All key technical decisions and their rationale
+2. Important code changes and file paths
+3. Critical errors and how they were resolved
+4. Any unfinished tasks or next steps
+
+Be ruthless about removing:
+- Redundant information
+- Verbose explanations that can be shortened
+- Intermediate steps that led to wrong approaches
+- Repeated context that appears in multiple sections
+
+CURRENT SUMMARY TO CONSOLIDATE:
+---
+${currentSummary}
+---
+
+Please provide the consolidated summary:`;
   }
 
   /**
@@ -266,13 +352,33 @@ Please provide a comprehensive but compacted summary of the above conversation, 
 
   /**
    * Check if a session has enough context to warrant summarization.
-   * Summarization is only worthwhile when context usage is above the minimum threshold.
+   * Summarization is allowed when EITHER:
+   * 1. Context usage percentage is above the minimum threshold, OR
+   * 2. Estimated token count from logs exceeds the minimum token threshold
+   *
+   * The second condition handles cases where the agent doesn't report context usage
+   * but the conversation is large enough to warrant compaction.
    *
    * @param contextUsage - The current context usage percentage (0-100)
-   * @returns True if context usage is high enough for summarization
+   * @param logs - Optional array of log entries to estimate tokens from
+   * @returns True if context is large enough for summarization
    */
-  canSummarize(contextUsage: number): boolean {
-    return contextUsage >= this.config.minContextUsagePercent;
+  canSummarize(contextUsage: number, logs?: LogEntry[]): boolean {
+    // Primary check: context usage percentage
+    if (contextUsage >= this.config.minContextUsagePercent) {
+      return true;
+    }
+
+    // Fallback check: estimate tokens from logs if provided
+    if (logs && logs.length > 0) {
+      const formattedContext = formatLogsForGrooming(logs);
+      const estimatedTokens = estimateTextTokenCount(formattedContext);
+      if (estimatedTokens >= MIN_TOKENS_FOR_SUMMARIZATION) {
+        return true;
+      }
+    }
+
+    return false;
   }
 
   /**
@@ -284,12 +390,14 @@ Please provide a comprehensive but compacted summary of the above conversation, 
 
   /**
    * Cancel any active summarization operation.
-   * Note: With the groomContext API, cancellation is handled by the caller.
-   * This method is kept for API compatibility but is a no-op.
+   * Calls the main process to kill all active grooming sessions.
    */
   async cancelSummarization(): Promise<void> {
-    // groomContext handles its own lifecycle - cancellation happens via the caller's
-    // cancel token or by not awaiting the promise
+    try {
+      await window.maestro.context.cancelGrooming();
+    } catch (error) {
+      console.error('[ContextSummarizer] Failed to cancel grooming:', error);
+    }
   }
 
   /**

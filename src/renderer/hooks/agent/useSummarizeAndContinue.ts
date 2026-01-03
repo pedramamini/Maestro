@@ -65,8 +65,8 @@ export interface UseSummarizeAndContinueResult {
   cancel: () => void;
   /** Clear the state for a specific tab (call after handling completion) */
   clearTabState: (tabId: string) => void;
-  /** Check if summarization is allowed based on context usage */
-  canSummarize: (contextUsage: number) => boolean;
+  /** Check if summarization is allowed based on context usage or log size */
+  canSummarize: (contextUsage: number, logs?: LogEntry[]) => boolean;
   /** Get the minimum context usage percentage required for summarization */
   minContextUsagePercent: number;
 }
@@ -176,8 +176,8 @@ export function useSummarizeAndContinue(
       return null;
     }
 
-    // Check if context usage is high enough to warrant summarization
-    if (!contextSummarizationService.canSummarize(session.contextUsage)) {
+    // Check if context is large enough to warrant summarization (by usage % or log size)
+    if (!contextSummarizationService.canSummarize(session.contextUsage, sourceTab.logs)) {
       return null;
     }
 
@@ -357,10 +357,10 @@ export function useSummarizeAndContinue(
   }, []);
 
   /**
-   * Check if summarization is allowed based on context usage.
+   * Check if summarization is allowed based on context usage or log size.
    */
-  const canSummarize = useCallback((contextUsage: number): boolean => {
-    return contextSummarizationService.canSummarize(contextUsage);
+  const canSummarize = useCallback((contextUsage: number, logs?: LogEntry[]): boolean => {
+    return contextSummarizationService.canSummarize(contextUsage, logs);
   }, []);
 
   return {

@@ -343,8 +343,9 @@ export function HistoryDetailModal({
                     </span>
                   </div>
                   {(() => {
-                    // Context usage = (input + output) / context window
-                    const contextTokens = entry.usageStats!.inputTokens + entry.usageStats!.outputTokens;
+                    // Context usage = (input + output + cache read) / context window
+                    // Cache read tokens represent the conversation history sent with each request
+                    const contextTokens = entry.usageStats!.inputTokens + entry.usageStats!.outputTokens + (entry.usageStats!.cacheReadInputTokens || 0);
                     const contextUsage = Math.min(100, Math.round((contextTokens / entry.usageStats!.contextWindow) * 100));
                     return (
                       <div className="flex flex-col gap-1">

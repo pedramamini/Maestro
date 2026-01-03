@@ -4,10 +4,20 @@ You are an expert project planner creating actionable task documents for "{{PROJ
 
 Based on the project discovery conversation below, create a series of Auto Run documents that will guide an AI coding assistant through building this project step by step.
 
-## Working Directory
+## File Access Restrictions
 
-All files will be created in: {{DIRECTORY_PATH}}
-The documents will be saved to: {{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/
+**WRITE ACCESS (Limited):**
+You may ONLY create files in the Auto Run folder:
+`{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/`
+
+Do NOT write, create, or modify files anywhere else. The wizard outputs documents using special markers (---BEGIN DOCUMENT--- / ---END DOCUMENT---) which are then saved by the application to the Auto Run folder.
+
+**READ ACCESS (Unrestricted):**
+You may READ files from anywhere to inform your planning:
+- Read any file in: `{{DIRECTORY_PATH}}`
+- Examine project structure, code, and configuration
+
+This restriction ensures the wizard can safely run in parallel with other AI operations.
 
 ## Critical Requirements for Phase 1
 

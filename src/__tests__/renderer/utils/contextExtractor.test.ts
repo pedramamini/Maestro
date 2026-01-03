@@ -210,6 +210,138 @@ describe('formatLogsForGrooming', () => {
     expect(result).toContain('## Output');
     expect(result).toContain('## Error Output');
   });
+
+  describe('file content stripping', () => {
+    it('should strip full file contents from code blocks with file paths', () => {
+      const fileContent = 'line\n'.repeat(20); // 20 lines - above threshold
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'ai',
+          text: `Here's the file:\n\`\`\`typescript:src/utils/helper.ts\n${fileContent}\`\`\``,
+        }),
+      ];
+
+      const result = formatLogsForGrooming(logs);
+
+      expect(result).toContain('[File: src/utils/helper.ts');
+      expect(result).toContain('20 lines');
+      expect(result).toContain('content available on disk');
+      expect(result).not.toContain(fileContent);
+    });
+
+    it('should preserve small code snippets (under 15 lines)', () => {
+      const smallSnippet = 'const x = 1;\nconst y = 2;\n';
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'ai',
+          text: `Example:\n\`\`\`typescript:src/example.ts\n${smallSnippet}\`\`\``,
+        }),
+      ];
+
+      const result = formatLogsForGrooming(logs);
+
+      // Small snippets should be preserved
+      expect(result).toContain(smallSnippet);
+      expect(result).not.toContain('content available on disk');
+    });
+
+    it('should handle Read tool output patterns', () => {
+      const fileContent = 'line\n'.repeat(25);
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'ai',
+          text: `Contents of /Users/test/project/src/main.ts:\n\`\`\`typescript\n${fileContent}\`\`\``,
+        }),
+      ];
+
+      const result = formatLogsForGrooming(logs);
+
+      expect(result).toContain('[Read: /Users/test/project/src/main.ts');
+      expect(result).toContain('content available on disk');
+    });
+
+    it('should preserve code blocks without file paths', () => {
+      const codeExample = 'function example() {\n  return 42;\n}\n'.repeat(10);
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'ai',
+          text: `Here's how to do it:\n\`\`\`typescript\n${codeExample}\`\`\``,
+        }),
+      ];
+
+      const result = formatLogsForGrooming(logs);
+
+      // Code blocks without file paths should be preserved
+      expect(result).toContain(codeExample);
+    });
+  });
+
+  describe('image stripping', () => {
+    it('should strip all images by default (maxImageTokens = 0)', () => {
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'user',
+          text: 'Check this screenshot',
+          images: ['/path/to/image1.png', '/path/to/image2.png'],
+          timestamp: 1000,
+        }),
+      ];
+
+      const result = formatLogsForGrooming(logs);
+
+      expect(result).toContain('[Note: 2 image(s) stripped');
+      expect(result).toContain('Images can be re-referenced by path');
+    });
+
+    it('should strip oldest images first when over budget', () => {
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'user',
+          text: 'Old image',
+          images: ['/path/to/old.png'],
+          timestamp: 1000, // oldest
+        }),
+        createMockLog({
+          source: 'user',
+          text: 'New image',
+          images: ['/path/to/new.png'],
+          timestamp: 2000, // newer
+        }),
+      ];
+
+      // Allow 1500 tokens (1 image worth)
+      const result = formatLogsForGrooming(logs, { maxImageTokens: 1500 });
+
+      // Should strip 1 image (the oldest one)
+      expect(result).toContain('[Note: 1 image(s) stripped');
+    });
+
+    it('should not add note when no images present', () => {
+      const logs: LogEntry[] = [
+        createMockLog({ source: 'user', text: 'No images here' }),
+      ];
+
+      const result = formatLogsForGrooming(logs);
+
+      expect(result).not.toContain('image(s) stripped');
+    });
+
+    it('should keep all images when under budget', () => {
+      const logs: LogEntry[] = [
+        createMockLog({
+          source: 'user',
+          text: 'Single image',
+          images: ['/path/to/image.png'],
+          timestamp: 1000,
+        }),
+      ];
+
+      // Allow 5000 tokens (more than 1 image)
+      const result = formatLogsForGrooming(logs, { maxImageTokens: 5000 });
+
+      expect(result).not.toContain('image(s) stripped');
+    });
+  });
 });
 
 describe('parseGroomedOutput', () => {

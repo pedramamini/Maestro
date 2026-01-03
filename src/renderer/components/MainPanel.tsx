@@ -8,6 +8,7 @@ import { ErrorBoundary } from './ErrorBoundary';
 import { GitStatusWidget } from './GitStatusWidget';
 import { AgentSessionsBrowser } from './AgentSessionsBrowser';
 import { TabBar } from './TabBar';
+import { WizardConversationView, DocumentGenerationView } from './InlineWizard';
 import { gitService } from '../services/git';
 import { useGitStatus } from '../contexts/GitStatusContext';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
@@ -230,6 +231,22 @@ interface MainPanelProps {
 
   // Document Graph
   onOpenInGraph?: () => void;
+
+  // Wizard document generation callbacks
+  /** Called when wizard document generation completes and user clicks Done */
+  onWizardComplete?: () => void;
+  /** Called when user selects a different document in the wizard */
+  onWizardDocumentSelect?: (index: number) => void;
+  /** Called when user edits document content in the wizard */
+  onWizardContentChange?: (content: string, docIndex: number) => void;
+  /** Called when user clicks "Let's Go" in wizard to start document generation */
+  onWizardLetsGo?: () => void;
+  /** Called when user clicks "Retry" in wizard after an error */
+  onWizardRetry?: () => void;
+  /** Called when user dismisses an error in the wizard */
+  onWizardClearError?: () => void;
+  /** Called when user exits inline wizard mode (Escape or clicks pill) */
+  onExitWizard?: () => void;
 }
 
 // PERFORMANCE: Wrap with React.memo to prevent re-renders when parent (App.tsx) re-renders
@@ -281,6 +298,8 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
     mergeSourceName,
     mergeTargetName,
     onCancelMerge,
+    // Inline wizard exit handler
+    onExitWizard,
   } = props;
 
   // isCurrentSessionAutoMode: THIS session has active batch run (for all UI indicators)
@@ -1101,46 +1120,79 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
             </div>
           ) : (
             <>
-              {/* Logs Area */}
+              {/* Logs Area - Show DocumentGenerationView when generating docs, WizardConversationView when wizard is active, otherwise show TerminalOutput */}
+              {/* Note: wizardState is per-tab (stored on activeTab), not per-session */}
               <div className="flex-1 overflow-hidden flex flex-col" data-tour="main-terminal">
-              <TerminalOutput
-                key={`${activeSession.id}-${activeSession.activeTabId}`}
-                ref={terminalOutputRef}
-                session={activeSession}
-                theme={theme}
-                fontFamily={props.fontFamily}
-                activeFocus={activeFocus}
-                outputSearchOpen={outputSearchOpen}
-                outputSearchQuery={outputSearchQuery}
-                setOutputSearchOpen={setOutputSearchOpen}
-                setOutputSearchQuery={setOutputSearchQuery}
-                setActiveFocus={setActiveFocus}
-                setLightboxImage={setLightboxImage}
-                inputRef={inputRef}
-                logsEndRef={logsEndRef}
-                maxOutputLines={maxOutputLines}
-                onDeleteLog={props.onDeleteLog}
-                onRemoveQueuedItem={onRemoveQueuedItem}
-                onInterrupt={handleInterrupt}
-                audioFeedbackCommand={props.audioFeedbackCommand}
-                onScrollPositionChange={props.onScrollPositionChange}
-                onAtBottomChange={props.onAtBottomChange}
-                initialScrollTop={
-                  activeSession.inputMode === 'ai'
-                    ? activeTab?.scrollTop
-                    : activeSession.terminalScrollTop
-                }
-                markdownEditMode={markdownEditMode}
-                setMarkdownEditMode={setMarkdownEditMode}
-                onReplayMessage={props.onReplayMessage}
-                fileTree={props.fileTree}
-                cwd={activeSession.cwd.startsWith(activeSession.fullPath)
-                  ? activeSession.cwd.slice(activeSession.fullPath.length + 1)
-                  : ''}
-                projectRoot={activeSession.fullPath}
-                onFileClick={props.onFileClick}
-                onShowErrorDetails={props.onShowAgentErrorModal}
-              />
+              {activeSession.inputMode === 'ai' && activeTab?.wizardState?.isGeneratingDocs ? (
+                <DocumentGenerationView
+                  key={`wizard-gen-${activeSession.id}-${activeSession.activeTabId}`}
+                  theme={theme}
+                  documents={activeTab?.wizardState?.generatedDocuments ?? []}
+                  currentDocumentIndex={activeTab?.wizardState?.currentDocumentIndex ?? 0}
+                  isGenerating={activeSession.state === 'busy' || Boolean(activeTab?.wizardState?.streamingContent)}
+                  streamingContent={activeTab?.wizardState?.streamingContent}
+                  onComplete={props.onWizardComplete || (() => {})}
+                  onDocumentSelect={props.onWizardDocumentSelect || (() => {})}
+                  folderPath={activeTab?.wizardState?.autoRunFolderPath}
+                  onContentChange={props.onWizardContentChange}
+                  progressMessage={activeTab?.wizardState?.progressMessage}
+                  currentGeneratingIndex={activeTab?.wizardState?.currentGeneratingIndex}
+                  totalDocuments={activeTab?.wizardState?.totalDocuments}
+                />
+              ) : activeSession.inputMode === 'ai' && activeTab?.wizardState?.isActive ? (
+                <WizardConversationView
+                  key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
+                  theme={theme}
+                  conversationHistory={activeTab.wizardState.conversationHistory}
+                  isLoading={activeTab.wizardState.isWaiting ?? false}
+                  agentName={activeSession.name}
+                  confidence={activeTab.wizardState.confidence}
+                  ready={activeTab.wizardState.ready}
+                  onLetsGo={props.onWizardLetsGo}
+                  error={activeTab.wizardState.error}
+                  onRetry={props.onWizardRetry}
+                  onClearError={props.onWizardClearError}
+                />
+              ) : (
+                <TerminalOutput
+                  key={`${activeSession.id}-${activeSession.activeTabId}`}
+                  ref={terminalOutputRef}
+                  session={activeSession}
+                  theme={theme}
+                  fontFamily={props.fontFamily}
+                  activeFocus={activeFocus}
+                  outputSearchOpen={outputSearchOpen}
+                  outputSearchQuery={outputSearchQuery}
+                  setOutputSearchOpen={setOutputSearchOpen}
+                  setOutputSearchQuery={setOutputSearchQuery}
+                  setActiveFocus={setActiveFocus}
+                  setLightboxImage={setLightboxImage}
+                  inputRef={inputRef}
+                  logsEndRef={logsEndRef}
+                  maxOutputLines={maxOutputLines}
+                  onDeleteLog={props.onDeleteLog}
+                  onRemoveQueuedItem={onRemoveQueuedItem}
+                  onInterrupt={handleInterrupt}
+                  audioFeedbackCommand={props.audioFeedbackCommand}
+                  onScrollPositionChange={props.onScrollPositionChange}
+                  onAtBottomChange={props.onAtBottomChange}
+                  initialScrollTop={
+                    activeSession.inputMode === 'ai'
+                      ? activeTab?.scrollTop
+                      : activeSession.terminalScrollTop
+                  }
+                  markdownEditMode={markdownEditMode}
+                  setMarkdownEditMode={setMarkdownEditMode}
+                  onReplayMessage={props.onReplayMessage}
+                  fileTree={props.fileTree}
+                  cwd={activeSession.cwd.startsWith(activeSession.fullPath)
+                    ? activeSession.cwd.slice(activeSession.fullPath.length + 1)
+                    : ''}
+                  projectRoot={activeSession.fullPath}
+                  onFileClick={props.onFileClick}
+                  onShowErrorDetails={props.onShowAgentErrorModal}
+                />
+              )}
               </div>
 
               {/* Input Area (hidden in mobile landscape for focused reading) */}
@@ -1228,6 +1280,8 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
                 mergeSourceName={mergeSourceName}
                 mergeTargetName={mergeTargetName}
                 onCancelMerge={onCancelMerge}
+                // Inline wizard mode
+                onExitWizard={onExitWizard}
               />
               </div>
               )}

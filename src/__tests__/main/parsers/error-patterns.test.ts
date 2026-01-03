@@ -227,6 +227,52 @@ describe('error-patterns', () => {
     });
 
     describe('token_exhaustion patterns', () => {
+      it('should match "Prompt is too long" with token counts and show dynamic message', () => {
+        const result = matchErrorPattern(
+          CLAUDE_ERROR_PATTERNS,
+          'prompt is too long: 206491 tokens > 200000 maximum'
+        );
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('token_exhaustion');
+        expect(result?.recoverable).toBe(true);
+        // Should show the actual token counts in the message
+        expect(result?.message).toContain('206,491');
+        expect(result?.message).toContain('200,000');
+        expect(result?.message).toBe('Prompt is too long: 206,491 tokens exceeds the 200,000 token limit. Start a new session.');
+      });
+
+      it('should match token exhaustion with different token counts', () => {
+        const result = matchErrorPattern(
+          CLAUDE_ERROR_PATTERNS,
+          'prompt is too long: 150000 tokens > 128000 maximum'
+        );
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('token_exhaustion');
+        expect(result?.message).toContain('150,000');
+        expect(result?.message).toContain('128,000');
+      });
+
+      it('should match "Prompt is too long" without token counts (fallback)', () => {
+        const result = matchErrorPattern(
+          CLAUDE_ERROR_PATTERNS,
+          'Prompt is too long'
+        );
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('token_exhaustion');
+        expect(result?.recoverable).toBe(true);
+        // Fallback should use generic message
+        expect(result?.message).toBe('Prompt is too long. Try a shorter message or start a new session.');
+      });
+
+      it('should match "prompt too long" case-insensitively', () => {
+        const result = matchErrorPattern(
+          CLAUDE_ERROR_PATTERNS,
+          'Error: prompt too long for this model'
+        );
+        expect(result).not.toBeNull();
+        expect(result?.type).toBe('token_exhaustion');
+      });
+
       it('should match "context too long"', () => {
         const result = matchErrorPattern(
           CLAUDE_ERROR_PATTERNS,

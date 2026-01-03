@@ -35,6 +35,7 @@ export interface GroomingProcessManager {
   }): { pid: number; success?: boolean } | null;
   on(event: string, handler: (...args: unknown[]) => void): void;
   off(event: string, handler: (...args: unknown[]) => void): void;
+  kill(sessionId: string): void;
 }
 
 /**
@@ -53,12 +54,30 @@ const IDLE_TIMEOUT_MS = 5000;
 const MIN_RESPONSE_LENGTH = 100;
 
 /**
- * Track active grooming sessions for debugging/monitoring
+ * Track active grooming sessions for debugging/monitoring and cancellation
  */
 const activeGroomingSessions = new Map<string, {
   groomerSessionId: string;
   startTime: number;
+  cancel?: () => void;
 }>();
+
+/**
+ * Cancel all active grooming sessions.
+ * Called when user cancels a summarization operation.
+ */
+export function cancelAllGroomingSessions(): void {
+  logger.info('Cancelling all grooming sessions', LOG_CONTEXT, {
+    count: activeGroomingSessions.size,
+  });
+
+  for (const [sessionId, session] of activeGroomingSessions) {
+    if (session.cancel) {
+      logger.debug('Cancelling grooming session', LOG_CONTEXT, { sessionId });
+      session.cancel();
+    }
+  }
+}
 
 /**
  * Options for grooming context
@@ -143,12 +162,6 @@ export async function groomContext(
     agentSessionId,
   });
 
-  // Track this grooming session
-  activeGroomingSessions.set(groomerSessionId, {
-    groomerSessionId,
-    startTime,
-  });
-
   // Create a promise that collects the response
   return new Promise<GroomContextResult>((resolve, reject) => {
     let responseBuffer = '';
@@ -156,6 +169,7 @@ export async function groomContext(
     let idleCheckInterval: NodeJS.Timeout | null = null;
     let resolved = false;
     let chunkCount = 0;
+    let cancelled = false;
 
     const cleanup = () => {
       if (idleCheckInterval) {
@@ -168,8 +182,33 @@ export async function groomContext(
       activeGroomingSessions.delete(groomerSessionId);
     };
 
-    const finishWithResponse = (reason: string) => {
+    const cancelOperation = () => {
       if (resolved) return;
+      cancelled = true;
+      resolved = true;
+
+      logger.info('Grooming cancelled by user', LOG_CONTEXT, { groomerSessionId });
+
+      // Kill the process
+      try {
+        processManager.kill(groomerSessionId);
+      } catch {
+        // Process may have already exited
+      }
+
+      cleanup();
+      reject(new Error('Grooming cancelled by user'));
+    };
+
+    // Track this grooming session with cancel function
+    activeGroomingSessions.set(groomerSessionId, {
+      groomerSessionId,
+      startTime,
+      cancel: cancelOperation,
+    });
+
+    const finishWithResponse = (reason: string) => {
+      if (resolved || cancelled) return;
       resolved = true;
       cleanup();
 

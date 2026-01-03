@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, startTransition } from 'react';
-import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, Eye, History, File, Folder, GitBranch, Tag, PenLine, Brain } from 'lucide-react';
+import { Terminal, Cpu, Keyboard, ImageIcon, X, ArrowUp, Eye, History, File, Folder, GitBranch, Tag, PenLine, Brain, Wand2 } from 'lucide-react';
 import type { Session, Theme, BatchRunState, Shortcut } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks';
@@ -9,6 +9,7 @@ import { MergeProgressOverlay } from './MergeProgressOverlay';
 import { ExecutionQueueIndicator } from './ExecutionQueueIndicator';
 import { ContextWarningSash } from './ContextWarningSash';
 import { SummarizeProgressOverlay } from './SummarizeProgressOverlay';
+import { WizardInputPanel } from './InlineWizard';
 import { useAgentCapabilities, useScrollIntoView } from '../hooks';
 import { getProviderDisplayName } from '../utils/sessionValidation';
 
@@ -113,6 +114,8 @@ interface InputAreaProps {
   mergeSourceName?: string;
   mergeTargetName?: string;
   onCancelMerge?: () => void;
+  // Inline wizard mode props
+  onExitWizard?: () => void;
 }
 
 export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
@@ -162,7 +165,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
     isMerging = false,
     mergeSourceName,
     mergeTargetName,
-    onCancelMerge
+    onCancelMerge,
+    // Inline wizard mode props
+    onExitWizard
   } = props;
 
   // Get agent capabilities for conditional feature rendering
@@ -173,6 +178,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
     () => session.aiTabs?.find(tab => tab.id === session.activeTabId),
     [session.aiTabs, session.activeTabId]
   );
+
+  // Get wizardState from active tab (not session level - wizard state is per-tab)
+  const wizardState = activeTab?.wizardState;
 
   // PERF: Memoize derived state to avoid recalculation on every render
   const isResumingSession = !!activeTab?.agentSessionId;
@@ -294,6 +302,36 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
         targetName={mergeTargetName}
         onCancel={onCancelMerge}
         startTime={mergeStartTime}
+      />
+    );
+  }
+
+  // Show WizardInputPanel when wizard is active (wizardState is per-tab)
+  if (wizardState?.isActive && onExitWizard) {
+    return (
+      <WizardInputPanel
+        session={session}
+        theme={theme}
+        inputValue={inputValue}
+        setInputValue={setInputValue}
+        inputRef={inputRef}
+        handleInputKeyDown={handleInputKeyDown}
+        handlePaste={handlePaste}
+        processInput={processInput}
+        stagedImages={stagedImages}
+        setStagedImages={setStagedImages}
+        onOpenPromptComposer={onOpenPromptComposer}
+        toggleInputMode={toggleInputMode}
+        confidence={wizardState.confidence}
+        canAttachImages={canAttachImages}
+        isBusy={wizardState.isWaiting || session.state === 'busy'}
+        onExitWizard={onExitWizard}
+        enterToSend={enterToSend}
+        setEnterToSend={setEnterToSend}
+        onInputFocus={onInputFocus}
+        onInputBlur={onInputBlur}
+        showFlashNotification={showFlashNotification}
+        setLightboxImage={setLightboxImage}
       />
     );
   }
@@ -866,7 +904,13 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
             }}
             title="Toggle Mode (Cmd+J)"
           >
-            {session.inputMode === 'terminal' ? <Terminal className="w-4 h-4" /> : <Cpu className="w-4 h-4" />}
+            {session.inputMode === 'terminal' ? (
+              <Terminal className="w-4 h-4" />
+            ) : wizardState?.isActive ? (
+              <Wand2 className="w-4 h-4" style={{ color: theme.colors.accent }} />
+            ) : (
+              <Cpu className="w-4 h-4" />
+            )}
           </button>
           {/* Send button - always visible. Stop button is now in ThinkingStatusPill */}
           <button

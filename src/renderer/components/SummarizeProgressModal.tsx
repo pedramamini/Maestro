@@ -141,13 +141,9 @@ function CancelConfirmDialog({
         <div className="flex items-center gap-3 mb-4">
           <AlertTriangle className="w-5 h-5" style={{ color: theme.colors.warning }} />
           <h3 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-            Cancel Summarization?
+            Cancel Compaction?
           </h3>
         </div>
-        <p className="text-xs mb-4" style={{ color: theme.colors.textDim }}>
-          This will abort the summarization and discard any progress.
-          Your original tab will remain unchanged.
-        </p>
         <div className="flex justify-end gap-2">
           <button
             type="button"
@@ -158,7 +154,7 @@ function CancelConfirmDialog({
               color: theme.colors.textMain,
             }}
           >
-            Continue
+            No
           </button>
           <button
             type="button"
@@ -169,7 +165,7 @@ function CancelConfirmDialog({
               color: '#fff',
             }}
           >
-            Cancel
+            Yes
           </button>
         </div>
       </div>

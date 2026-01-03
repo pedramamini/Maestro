@@ -31,8 +31,12 @@ const VALID_TOOL_TYPES = new Set<string>(['claude', 'claude-code', 'aider', 'ope
 export interface ErrorPattern {
   /** Regex to match against agent output */
   pattern: RegExp;
-  /** User-friendly error message to display */
-  message: string;
+  /**
+   * User-friendly error message to display.
+   * Can be a string or a function that receives the regex match array
+   * to dynamically construct the message from captured groups.
+   */
+  message: string | ((match: RegExpMatchArray) => string);
   /** Whether this error is recoverable */
   recoverable: boolean;
 }
@@ -111,6 +115,23 @@ export const CLAUDE_ERROR_PATTERNS: AgentErrorPatterns = {
   ],
 
   token_exhaustion: [
+    {
+      // Match "prompt is too long: 206491 tokens > 200000 maximum"
+      // Captures the actual vs maximum token counts for display
+      pattern: /prompt.*too\s+long:\s*(\d+)\s*tokens?\s*>\s*(\d+)\s*maximum/i,
+      message: (match: RegExpMatchArray) => {
+        const actual = parseInt(match[1], 10).toLocaleString();
+        const max = parseInt(match[2], 10).toLocaleString();
+        return `Prompt is too long: ${actual} tokens exceeds the ${max} token limit. Start a new session.`;
+      },
+      recoverable: true,
+    },
+    {
+      // Fallback for "prompt too long" without token details
+      pattern: /prompt.*too\s+long/i,
+      message: 'Prompt is too long. Try a shorter message or start a new session.',
+      recoverable: true,
+    },
     {
       pattern: /context.*too long/i,
       message: 'The conversation has exceeded the context limit. Start a new session.',
@@ -740,10 +761,15 @@ export function matchErrorPattern(
     if (!typePatterns) continue;
 
     for (const pattern of typePatterns) {
-      if (pattern.pattern.test(line)) {
+      const match = line.match(pattern.pattern);
+      if (match) {
+        // Support dynamic message functions that can use captured groups
+        const message = typeof pattern.message === 'function'
+          ? pattern.message(match)
+          : pattern.message;
         return {
           type: errorType,
-          message: pattern.message,
+          message,
           recoverable: pattern.recoverable,
         };
       }

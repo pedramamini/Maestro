@@ -317,6 +317,9 @@ contextBridge.exposeInMainWorld('maestro', {
     // NEW: Single-call grooming (recommended) - spawns batch process and returns response
     groomContext: (projectRoot: string, agentType: string, prompt: string) =>
       ipcRenderer.invoke('context:groomContext', projectRoot, agentType, prompt) as Promise<string>,
+    // Cancel all active grooming sessions
+    cancelGrooming: () =>
+      ipcRenderer.invoke('context:cancelGrooming') as Promise<void>,
     // DEPRECATED: Create a temporary session for context grooming
     createGroomingSession: (projectRoot: string, agentType: string) =>
       ipcRenderer.invoke('context:createGroomingSession', projectRoot, agentType) as Promise<string>,
@@ -1205,6 +1208,8 @@ contextBridge.exposeInMainWorld('maestro', {
   autorun: {
     listDocs: (folderPath: string, sshRemoteId?: string) =>
       ipcRenderer.invoke('autorun:listDocs', folderPath, sshRemoteId),
+    hasDocuments: (folderPath: string): Promise<{ hasDocuments: boolean }> =>
+      ipcRenderer.invoke('autorun:hasDocuments', folderPath),
     readDoc: (folderPath: string, filename: string, sshRemoteId?: string) =>
       ipcRenderer.invoke('autorun:readDoc', folderPath, filename, sshRemoteId),
     writeDoc: (folderPath: string, filename: string, content: string, sshRemoteId?: string) =>
@@ -2505,6 +2510,9 @@ export interface MaestroAPI {
     listDocs: (
       folderPath: string
     ) => Promise<{ success: boolean; files: string[]; error?: string }>;
+    hasDocuments: (
+      folderPath: string
+    ) => Promise<{ hasDocuments: boolean }>;
     readDoc: (
       folderPath: string,
       filename: string

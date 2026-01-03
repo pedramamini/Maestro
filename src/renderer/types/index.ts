@@ -48,6 +48,98 @@ export type SettingsTab = 'general' | 'shortcuts' | 'theme' | 'notifications' | 
 export type FocusArea = 'sidebar' | 'main' | 'right';
 export type LLMProvider = 'openrouter' | 'anthropic' | 'ollama';
 
+// Inline wizard types for per-session/per-tab wizard state
+export type WizardMode = 'new' | 'iterate' | null;
+
+/**
+ * Message in an inline wizard conversation.
+ * Stores conversation history for the /wizard command.
+ */
+export interface WizardMessage {
+  id: string;
+  role: 'user' | 'assistant' | 'system';
+  content: string;
+  timestamp: number;
+  /** Parsed confidence from assistant responses */
+  confidence?: number;
+  /** Parsed ready flag from assistant responses */
+  ready?: boolean;
+}
+
+/**
+ * Previous UI state to restore when wizard ends.
+ * These settings are temporarily overridden during wizard mode.
+ */
+export interface WizardPreviousUIState {
+  readOnlyMode: boolean;
+  saveToHistory: boolean;
+  showThinking: boolean;
+}
+
+/**
+ * Generated document from wizard.
+ * Stores document content and metadata for display and editing.
+ */
+export interface WizardGeneratedDocument {
+  /** Filename (e.g., "phase-01.md") */
+  filename: string;
+  /** Document content (markdown) */
+  content: string;
+  /** Number of tasks in the document */
+  taskCount: number;
+  /** Absolute path after saving */
+  savedPath?: string;
+}
+
+/**
+ * Per-session/per-tab wizard state.
+ * Keeps track of inline wizard state for the /wizard command.
+ */
+export interface SessionWizardState {
+  /** Whether wizard is currently active */
+  isActive: boolean;
+  /** Whether waiting for AI response */
+  isWaiting?: boolean;
+  /** Current wizard mode: 'new' for creating documents, 'iterate' for modifying existing */
+  mode: WizardMode;
+  /** Goal for iterate mode (what the user wants to add/change) */
+  goal?: string;
+  /** Confidence level from agent responses (0-100) */
+  confidence: number;
+  /** Whether the AI is ready to proceed with document generation */
+  ready?: boolean;
+  /** Conversation history for this wizard session */
+  conversationHistory: WizardMessage[];
+  /** Previous UI state to restore when wizard ends */
+  previousUIState: WizardPreviousUIState;
+
+  // Error handling state
+  /** Error message if an error occurred during wizard conversation */
+  error?: string | null;
+
+  // Document generation state
+  /** Whether documents are currently being generated (triggers takeover view) */
+  isGeneratingDocs?: boolean;
+  /** Generated documents */
+  generatedDocuments?: WizardGeneratedDocument[];
+  /** Currently selected document index */
+  currentDocumentIndex?: number;
+  /** Streaming content for document being generated */
+  streamingContent?: string;
+  /** Progress message during generation */
+  progressMessage?: string;
+  /** Index of document currently being generated (for progress indicator) */
+  currentGeneratingIndex?: number;
+  /** Total number of documents to generate (for progress indicator) */
+  totalDocuments?: number;
+  /** Folder path for Auto Run docs */
+  autoRunFolderPath?: string;
+  /** The Claude agent session ID (from session_id in output) - used to switch tab after wizard completes */
+  agentSessionId?: string;
+  /** Subfolder name where documents were saved (e.g., "Maestro-Marketing") - used for tab naming */
+  subfolderName?: string;
+}
+
 export interface Shortcut {
   id: string;
   label: string;
@@ -318,6 +410,7 @@ export interface AITab {
   hasUnread?: boolean;             // True when tab has new messages user hasn't seen
   isAtBottom?: boolean;            // True when user is scrolled to bottom of output
   pendingMergedContext?: string;   // Context from merge that needs to be sent with next message
+  wizardState?: SessionWizardState; // Per-tab inline wizard state for /wizard command
 }
 
 // Closed tab entry for undo functionality (Cmd+Shift+T)
@@ -483,6 +576,10 @@ export interface Session {
   sshRemoteId?: string;           // ID of SSH remote config being used (flattened from sshRemote.id)
   remoteCwd?: string;             // Current working directory on remote host
 
+  // Inline wizard state for /wizard command
+  // Keeps per-session/per-tab wizard state for creating or iterating on Auto Run documents
+  wizardState?: SessionWizardState;
+
   // Per-session agent configuration overrides
   // These override the global agent-level settings for this specific session
   customPath?: string;           // Custom path to agent binary (overrides agent-level)
@@ -498,6 +595,10 @@ export interface Session {
     remoteId: string | null;     // SSH remote config ID to use
     workingDirOverride?: string; // Override remote working directory
   };
+
+  // SSH connection status - runtime only, not persisted
+  // Set when background SSH operations fail (e.g., git info fetch on startup)
+  sshConnectionFailed?: boolean;
 }
 
 export interface AgentConfigOption {

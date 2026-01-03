@@ -131,6 +131,44 @@ When your conversation approaches context limits, you can compress it while pres
 - Important technical details and constraints
 - Current task state and next steps
 
+### How Compaction Works
+
+Compaction uses a multi-pass approach to handle conversations of any size:
+
+**Eligibility Check:**
+Compaction requires either:
+- Context usage ≥ 25% (as reported by the agent), OR
+- Estimated conversation size ≥ 10,000 tokens (~40k characters)
+
+The second condition handles cases where the agent doesn't report context usage but the conversation is clearly large enough to benefit from compaction.
+
+**Single-Pass Compaction (< 50k tokens):**
+For smaller conversations, the entire context is sent to a fresh AI agent in batch mode, which returns a compressed summary.
+
+**Chunked Compaction (≥ 50k tokens):**
+For larger conversations that exceed 50,000 tokens:
+
+1. **Chunking** — The conversation is split into chunks of ~50k tokens each
+2. **Parallel summarization** — Each chunk is sent to a separate batch-mode agent process
+3. **Combination** — Chunk summaries are combined together
+4. **Consolidation** — If the combined result exceeds 40k tokens, additional passes reduce it further
+
+**Consolidation Passes:**
+When chunk summaries combine to more than 40k tokens, the system performs up to 3 consolidation passes:
+
+- Each pass asks the AI to aggressively reduce the summary while preserving key information
+- A pass is only accepted if it reduces size by at least 10%
+- Consolidation stops early if no meaningful reduction is achieved
+
+This ensures that even a conversation at 95%+ context capacity (e.g., 190k tokens) will be compacted to a manageable size (~40k tokens or less) that leaves room for continued work.
+
+**Progress Indicators:**
+During compaction, you'll see status updates:
+- "Extracting context..." — Preparing the conversation
+- "Summarizing chunk 1/4..." — Processing large conversations in parts
+- "Consolidation pass 1/3..." — Additional reduction passes if needed
+- "Finalizing compacted context..." — Creating the new tab
+
 ## Merging Sessions
 
 Combine context from multiple sessions or tabs into one:

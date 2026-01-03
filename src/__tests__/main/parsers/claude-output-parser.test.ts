@@ -504,6 +504,23 @@ describe('ClaudeOutputParser', () => {
       expect(error?.type).toBe('rate_limited');
     });
 
+    it('should extract error from embedded JSON in stderr-style output', () => {
+      // This is the format from stderr when streaming fails
+      const line = 'Error streaming, falling back to non-streaming mode: 400 {"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 206491 tokens > 200000 maximum"}}';
+      const error = parser.detectErrorFromLine(line);
+      expect(error).not.toBeNull();
+      expect(error?.type).toBe('token_exhaustion');
+      expect(error?.message).toContain('206,491');
+      expect(error?.message).toContain('200,000');
+    });
+
+    it('should extract error from embedded JSON with nested error structure', () => {
+      const line = 'Some prefix text {"type":"error","error":{"message":"rate limit exceeded"}}';
+      const error = parser.detectErrorFromLine(line);
+      expect(error).not.toBeNull();
+      expect(error?.type).toBe('rate_limited');
+    });
+
     it('should NOT detect errors from plain text (only JSON)', () => {
       // Plain text errors should come through stderr or exit codes, not stdout
       expect(parser.detectErrorFromLine('Error: Invalid API key')).toBeNull();
@@ -536,6 +553,16 @@ describe('ClaudeOutputParser', () => {
       const error = parser.detectErrorFromExit(1, '', 'rate limit exceeded');
       expect(error).not.toBeNull();
       expect(error?.type).toBe('rate_limited');
+    });
+
+    it('should extract detailed token counts from embedded JSON in stderr', () => {
+      const stderr = 'Error streaming, falling back to non-streaming mode: 400 {"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 206491 tokens > 200000 maximum"}}';
+      const error = parser.detectErrorFromExit(1, stderr, '');
+      expect(error).not.toBeNull();
+      expect(error?.type).toBe('token_exhaustion');
+      expect(error?.message).toContain('206,491');
+      expect(error?.message).toContain('200,000');
+      expect(error?.raw?.stderr).toBe(stderr);
     });
 
     it('should return agent_crashed for unrecognized non-zero exit', () => {
