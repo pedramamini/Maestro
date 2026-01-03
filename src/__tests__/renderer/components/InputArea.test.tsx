@@ -102,17 +102,13 @@ const mockTheme: Theme = {
 };
 
 // Default session for tests
-const createMockSession = (overrides: Partial<Session> = {}): Session => ({
-  id: 'session-1',
-  name: 'Test Session',
-  toolType: 'claude-code',
-  state: 'idle',
-  inputMode: 'ai',
-  cwd: '/Users/test/project',
-  projectRoot: '/Users/test/project',
-  aiPid: 0,
-  terminalPid: 0,
-  aiTabs: [{
+// Note: wizardState is per-tab, so pass it separately or via aiTabs override
+const createMockSession = (overrides: Partial<Session> & { wizardState?: any } = {}): Session => {
+  // Extract wizardState from overrides (it should go on the tab, not session)
+  const { wizardState, ...sessionOverrides } = overrides;
+
+  // Build aiTabs - if wizardState is provided, add it to the first tab
+  const defaultTab = {
     id: 'tab-1',
     logs: [],
     agentSessionId: null,
@@ -126,22 +122,36 @@ const createMockSession = (overrides: Partial<Session> = {}): Session => ({
     readOnlyMode: false,
     draftInput: '',
     saveToHistory: false,
-  }],
-  activeTabId: 'tab-1',
-  shellLogs: [],
-  usageStats: { inputTokens: 0, outputTokens: 0, totalCost: 0 },
-  agentSessionId: null,
-  isGitRepo: false,
-  fileTree: [],
-  fileExplorerExpanded: [],
-  messageQueue: [],
-  shellCommandHistory: [],
-  aiCommandHistory: [],
-  closedTabHistory: [],
-  shellCwd: '/Users/test/project',
-  busySource: null,
-  ...overrides,
-});
+    ...(wizardState ? { wizardState } : {}),
+  };
+
+  return {
+    id: 'session-1',
+    name: 'Test Session',
+    toolType: 'claude-code',
+    state: 'idle',
+    inputMode: 'ai',
+    cwd: '/Users/test/project',
+    projectRoot: '/Users/test/project',
+    aiPid: 0,
+    terminalPid: 0,
+    aiTabs: [defaultTab],
+    activeTabId: 'tab-1',
+    shellLogs: [],
+    usageStats: { inputTokens: 0, outputTokens: 0, totalCost: 0 },
+    agentSessionId: null,
+    isGitRepo: false,
+    fileTree: [],
+    fileExplorerExpanded: [],
+    messageQueue: [],
+    shellCommandHistory: [],
+    aiCommandHistory: [],
+    closedTabHistory: [],
+    shellCwd: '/Users/test/project',
+    busySource: null,
+    ...sessionOverrides,
+  };
+};
 
 // Default props factory
 const createDefaultProps = (overrides: Partial<Parameters<typeof InputArea>[0]> = {}) => {

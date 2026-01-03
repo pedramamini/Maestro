@@ -10243,7 +10243,9 @@ You are taking over this conversation. Based on the context above, provide a bri
         // Inline wizard completion callback - switches tab to wizard session for context continuity
         onWizardComplete={() => {
           if (!activeSession) return;
-          const wizardState = activeSession.wizardState;
+          // Get wizard state from the active tab (not session level)
+          const activeTab = getActiveTab(activeSession);
+          const wizardState = activeTab?.wizardState;
           if (!wizardState) return;
 
           // Convert wizard conversation history to log entries
@@ -10285,17 +10287,13 @@ You are taking over this conversation. Based on the context above, provide a bri
           const wizardAgentSessionId = wizardState.agentSessionId;
 
           // Add wizard logs to active tab, switch to wizard session, rename tab, and clear wizard state
+          const activeTabId = activeTab.id;
           setSessions(prev => prev.map(s => {
             if (s.id !== activeSession.id) return s;
 
-            const activeTab = getActiveTab(s);
-            if (!activeTab) {
-              return { ...s, wizardState: undefined };
-            }
-
-            // Update tab: add logs, switch agentSessionId, and rename
+            // Update tab: add logs, switch agentSessionId, rename, and clear wizard state
             const updatedTabs = s.aiTabs.map(tab => {
-              if (tab.id !== activeTab.id) return tab;
+              if (tab.id !== activeTabId) return tab;
               return {
                 ...tab,
                 logs: [...tab.logs, ...wizardLogEntries, summaryMessage],
@@ -10303,13 +10301,14 @@ You are taking over this conversation. Based on the context above, provide a bri
                 agentSessionId: wizardAgentSessionId || tab.agentSessionId,
                 // Name the tab to indicate it's a project from the wizard
                 name: tabName,
+                // Clear wizard state from the tab
+                wizardState: undefined,
               };
             });
 
             return {
               ...s,
               aiTabs: updatedTabs,
-              wizardState: undefined,
             };
           }));
 

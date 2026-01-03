@@ -2792,21 +2792,30 @@ describe('MainPanel', () => {
   });
 
   describe('Wizard Mode', () => {
+    // Helper to create a session with wizardState on the active tab (not session level)
+    const createSessionWithTabWizardState = (wizardState: any, sessionOverrides: Partial<Session> = {}): Session => {
+      const baseSession = createSession(sessionOverrides);
+      return {
+        ...baseSession,
+        aiTabs: baseSession.aiTabs.map((tab, index) =>
+          index === 0 ? { ...tab, wizardState } : tab
+        ),
+      };
+    };
+
     it('should render WizardConversationView when wizard is active', () => {
-      const session = createSession({
-        wizardState: {
-          isActive: true,
-          mode: 'new',
-          confidence: 50,
-          conversationHistory: [
-            { id: 'msg-1', role: 'system', content: 'Welcome', timestamp: Date.now() },
-            { id: 'msg-2', role: 'user', content: 'Hello', timestamp: Date.now() },
-          ],
-          previousUIState: {
-            readOnlyMode: false,
-            saveToHistory: true,
-            showThinking: false,
-          },
+      const session = createSessionWithTabWizardState({
+        isActive: true,
+        mode: 'new',
+        confidence: 50,
+        conversationHistory: [
+          { id: 'msg-1', role: 'system', content: 'Welcome', timestamp: Date.now() },
+          { id: 'msg-2', role: 'user', content: 'Hello', timestamp: Date.now() },
+        ],
+        previousUIState: {
+          readOnlyMode: false,
+          saveToHistory: true,
+          showThinking: false,
         },
       });
 
@@ -2818,9 +2827,7 @@ describe('MainPanel', () => {
     });
 
     it('should render TerminalOutput when wizard is not active', () => {
-      const session = createSession({
-        wizardState: undefined,
-      });
+      const session = createSessionWithTabWizardState(undefined);
 
       render(<MainPanel {...defaultProps} activeSession={session} />);
 
@@ -2829,17 +2836,15 @@ describe('MainPanel', () => {
     });
 
     it('should render TerminalOutput when wizard is inactive', () => {
-      const session = createSession({
-        wizardState: {
-          isActive: false,
-          mode: 'new',
-          confidence: 0,
-          conversationHistory: [],
-          previousUIState: {
-            readOnlyMode: false,
-            saveToHistory: true,
-            showThinking: false,
-          },
+      const session = createSessionWithTabWizardState({
+        isActive: false,
+        mode: 'new',
+        confidence: 0,
+        conversationHistory: [],
+        previousUIState: {
+          readOnlyMode: false,
+          saveToHistory: true,
+          showThinking: false,
         },
       });
 
@@ -2850,20 +2855,18 @@ describe('MainPanel', () => {
     });
 
     it('should show loading indicator when wizard isWaiting is true', () => {
-      const session = createSession({
-        wizardState: {
-          isActive: true,
-          isWaiting: true,
-          mode: 'new',
-          confidence: 30,
-          conversationHistory: [
-            { id: 'msg-1', role: 'user', content: 'What should I build?', timestamp: Date.now() },
-          ],
-          previousUIState: {
-            readOnlyMode: false,
-            saveToHistory: true,
-            showThinking: false,
-          },
+      const session = createSessionWithTabWizardState({
+        isActive: true,
+        isWaiting: true,
+        mode: 'new',
+        confidence: 30,
+        conversationHistory: [
+          { id: 'msg-1', role: 'user', content: 'What should I build?', timestamp: Date.now() },
+        ],
+        previousUIState: {
+          readOnlyMode: false,
+          saveToHistory: true,
+          showThinking: false,
         },
       });
 
@@ -2874,17 +2877,15 @@ describe('MainPanel', () => {
     });
 
     it('should still render header and tabs when wizard is active', () => {
-      const session = createSession({
-        wizardState: {
-          isActive: true,
-          mode: 'new',
-          confidence: 50,
-          conversationHistory: [],
-          previousUIState: {
-            readOnlyMode: false,
-            saveToHistory: true,
-            showThinking: false,
-          },
+      const session = createSessionWithTabWizardState({
+        isActive: true,
+        mode: 'new',
+        confidence: 50,
+        conversationHistory: [],
+        previousUIState: {
+          readOnlyMode: false,
+          saveToHistory: true,
+          showThinking: false,
         },
       });
 
@@ -2899,20 +2900,19 @@ describe('MainPanel', () => {
     });
 
     it('should pass agentName to WizardConversationView', () => {
-      const session = createSession({
-        name: 'My Custom Agent',
-        wizardState: {
-          isActive: true,
-          mode: 'iterate',
-          goal: 'Add dark mode',
-          confidence: 75,
-          conversationHistory: [],
-          previousUIState: {
-            readOnlyMode: false,
-            saveToHistory: true,
-            showThinking: false,
-          },
+      const session = createSessionWithTabWizardState({
+        isActive: true,
+        mode: 'iterate',
+        goal: 'Add dark mode',
+        confidence: 75,
+        conversationHistory: [],
+        previousUIState: {
+          readOnlyMode: false,
+          saveToHistory: true,
+          showThinking: false,
         },
+      }, {
+        name: 'My Custom Agent',
       });
 
       render(<MainPanel {...defaultProps} activeSession={session} />);

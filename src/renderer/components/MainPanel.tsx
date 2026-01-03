@@ -1121,34 +1121,35 @@ export const MainPanel = React.memo(forwardRef<MainPanelHandle, MainPanelProps>(
           ) : (
             <>
               {/* Logs Area - Show DocumentGenerationView when generating docs, WizardConversationView when wizard is active, otherwise show TerminalOutput */}
+              {/* Note: wizardState is per-tab (stored on activeTab), not per-session */}
               <div className="flex-1 overflow-hidden flex flex-col" data-tour="main-terminal">
-              {activeSession.inputMode === 'ai' && activeSession.wizardState?.isGeneratingDocs ? (
+              {activeSession.inputMode === 'ai' && activeTab?.wizardState?.isGeneratingDocs ? (
                 <DocumentGenerationView
                   key={`wizard-gen-${activeSession.id}-${activeSession.activeTabId}`}
                   theme={theme}
-                  documents={activeSession.wizardState?.generatedDocuments ?? []}
-                  currentDocumentIndex={activeSession.wizardState?.currentDocumentIndex ?? 0}
-                  isGenerating={activeSession.state === 'busy' || Boolean(activeSession.wizardState?.streamingContent)}
-                  streamingContent={activeSession.wizardState?.streamingContent}
+                  documents={activeTab?.wizardState?.generatedDocuments ?? []}
+                  currentDocumentIndex={activeTab?.wizardState?.currentDocumentIndex ?? 0}
+                  isGenerating={activeSession.state === 'busy' || Boolean(activeTab?.wizardState?.streamingContent)}
+                  streamingContent={activeTab?.wizardState?.streamingContent}
                   onComplete={props.onWizardComplete || (() => {})}
                   onDocumentSelect={props.onWizardDocumentSelect || (() => {})}
-                  folderPath={activeSession.wizardState?.autoRunFolderPath}
+                  folderPath={activeTab?.wizardState?.autoRunFolderPath}
                   onContentChange={props.onWizardContentChange}
-                  progressMessage={activeSession.wizardState?.progressMessage}
-                  currentGeneratingIndex={activeSession.wizardState?.currentGeneratingIndex}
-                  totalDocuments={activeSession.wizardState?.totalDocuments}
+                  progressMessage={activeTab?.wizardState?.progressMessage}
+                  currentGeneratingIndex={activeTab?.wizardState?.currentGeneratingIndex}
+                  totalDocuments={activeTab?.wizardState?.totalDocuments}
                 />
-              ) : activeSession.inputMode === 'ai' && activeSession.wizardState?.isActive ? (
+              ) : activeSession.inputMode === 'ai' && activeTab?.wizardState?.isActive ? (
                 <WizardConversationView
                   key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
                   theme={theme}
-                  conversationHistory={activeSession.wizardState.conversationHistory}
-                  isLoading={activeSession.wizardState.isWaiting ?? false}
+                  conversationHistory={activeTab.wizardState.conversationHistory}
+                  isLoading={activeTab.wizardState.isWaiting ?? false}
                   agentName={activeSession.name}
-                  confidence={activeSession.wizardState.confidence}
-                  ready={activeSession.wizardState.ready}
+                  confidence={activeTab.wizardState.confidence}
+                  ready={activeTab.wizardState.ready}
                   onLetsGo={props.onWizardLetsGo}
-                  error={activeSession.wizardState.error}
+                  error={activeTab.wizardState.error}
                   onRetry={props.onWizardRetry}
                   onClearError={props.onWizardClearError}
                 />

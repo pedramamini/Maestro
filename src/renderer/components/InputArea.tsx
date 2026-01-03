@@ -179,6 +179,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
     [session.aiTabs, session.activeTabId]
   );
 
+  // Get wizardState from active tab (not session level - wizard state is per-tab)
+  const wizardState = activeTab?.wizardState;
+
   // PERF: Memoize derived state to avoid recalculation on every render
   const isResumingSession = !!activeTab?.agentSessionId;
   const canAttachImages = useMemo(() => {
@@ -303,8 +306,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
     );
   }
 
-  // Show WizardInputPanel when wizard is active
-  if (session.wizardState?.isActive && onExitWizard) {
+  // Show WizardInputPanel when wizard is active (wizardState is per-tab)
+  if (wizardState?.isActive && onExitWizard) {
     return (
       <WizardInputPanel
         session={session}
@@ -319,9 +322,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
         setStagedImages={setStagedImages}
         onOpenPromptComposer={onOpenPromptComposer}
         toggleInputMode={toggleInputMode}
-        confidence={session.wizardState.confidence}
+        confidence={wizardState.confidence}
         canAttachImages={canAttachImages}
-        isBusy={session.wizardState.isWaiting || session.state === 'busy'}
+        isBusy={wizardState.isWaiting || session.state === 'busy'}
         onExitWizard={onExitWizard}
         enterToSend={enterToSend}
         setEnterToSend={setEnterToSend}
@@ -903,7 +906,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
           >
             {session.inputMode === 'terminal' ? (
               <Terminal className="w-4 h-4" />
-            ) : session.wizardState?.isActive ? (
+            ) : wizardState?.isActive ? (
               <Wand2 className="w-4 h-4" style={{ color: theme.colors.accent }} />
             ) : (
               <Cpu className="w-4 h-4" />
