@@ -154,12 +154,9 @@ export const SummarizeProgressOverlay = memo(function SummarizeProgressOverlay({
               <div className="flex items-center gap-2 mb-3">
                 <AlertTriangle className="w-4 h-4" style={{ color: theme.colors.warning }} />
                 <span className="text-xs font-medium" style={{ color: theme.colors.textMain }}>
-                  Cancel Summarization?
+                  Cancel Compaction?
                 </span>
               </div>
-              <p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
-                This will abort the operation and discard progress.
-              </p>
               <div className="flex justify-end gap-2">
                 <button
                   type="button"
@@ -170,7 +167,7 @@ export const SummarizeProgressOverlay = memo(function SummarizeProgressOverlay({
                     color: theme.colors.textMain,
                   }}
                 >
-                  Continue
+                  No
                 </button>
                 <button
                   type="button"
@@ -181,7 +178,7 @@ export const SummarizeProgressOverlay = memo(function SummarizeProgressOverlay({
                     color: '#fff',
                   }}
                 >
-                  Cancel
+                  Yes
                 </button>
               </div>
             </div>

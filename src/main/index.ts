@@ -2923,16 +2923,16 @@ function setupProcessListeners() {
       if (participantUsageInfo) {
         const { groupChatId, participantName } = participantUsageInfo;
 
-        // Calculate context usage percentage
-        const totalTokens = usageStats.inputTokens + usageStats.outputTokens;
+        // Calculate context usage percentage (include cache read tokens for actual prompt size)
+        const totalContextTokens = usageStats.inputTokens + usageStats.outputTokens + (usageStats.cacheReadInputTokens || 0);
         const contextUsage = usageStats.contextWindow > 0
-          ? Math.round((totalTokens / usageStats.contextWindow) * 100)
+          ? Math.round((totalContextTokens / usageStats.contextWindow) * 100)
           : 0;
 
         // Update participant with usage stats
         updateParticipant(groupChatId, participantName, {
           contextUsage,
-          tokenCount: totalTokens,
+          tokenCount: totalContextTokens,
           totalCost: usageStats.totalCostUsd,
         }).then(async () => {
           // Emit participants changed so UI updates
@@ -2953,17 +2953,17 @@ function setupProcessListeners() {
       const moderatorMatch = sessionId.match(/^group-chat-(.+)-moderator-/);
       if (moderatorMatch) {
         const groupChatId = moderatorMatch[1];
-        // Calculate context usage percentage for moderator display
-        const totalTokens = usageStats.inputTokens + usageStats.outputTokens;
+        // Calculate context usage percentage for moderator display (include cache read tokens)
+        const totalContextTokens = usageStats.inputTokens + usageStats.outputTokens + (usageStats.cacheReadInputTokens || 0);
         const contextUsage = usageStats.contextWindow > 0
-          ? Math.round((totalTokens / usageStats.contextWindow) * 100)
+          ? Math.round((totalContextTokens / usageStats.contextWindow) * 100)
           : 0;
 
         // Emit moderator usage for the moderator card
         groupChatEmitters.emitModeratorUsage?.(groupChatId, {
           contextUsage,
           totalCost: usageStats.totalCostUsd,
-          tokenCount: totalTokens,
+          tokenCount: totalContextTokens,
         });
       }
 

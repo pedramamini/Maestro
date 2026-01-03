@@ -160,6 +160,51 @@ export function sanitizeFolderName(projectName: string): string {
 }
 
 /**
+ * Generate a unique subfolder name within Auto Run Docs.
+ * If the base folder name already exists, appends a numeric suffix (e.g., "-2", "-3").
+ *
+ * @param autoRunFolderPath - The Auto Run Docs folder path
+ * @param baseName - The sanitized base folder name
+ * @returns A unique folder name that doesn't conflict with existing folders
+ */
+async function generateUniqueSubfolderName(
+  autoRunFolderPath: string,
+  baseName: string
+): Promise<string> {
+  // List existing folders in the Auto Run Docs directory
+  const listResult = await window.maestro.autorun.listDocs(autoRunFolderPath);
+
+  if (!listResult.success || !listResult.tree) {
+    // If we can't list, just use the base name (folder may not exist yet)
+    return baseName;
+  }
+
+  // Extract folder names from the tree structure (top-level items that are directories)
+  const existingFolders = new Set<string>();
+  for (const item of listResult.tree) {
+    // Tree items with children are directories
+    if (item && typeof item === 'object' && 'name' in item) {
+      existingFolders.add((item as { name: string }).name);
+    }
+  }
+
+  // If base name doesn't conflict, use it
+  if (!existingFolders.has(baseName)) {
+    return baseName;
+  }
+
+  // Find an available name with numeric suffix
+  let suffix = 2;
+  let candidateName = `${baseName}-${suffix}`;
+  while (existingFolders.has(candidateName) && suffix < 1000) {
+    suffix++;
+    candidateName = `${baseName}-${suffix}`;
+  }
+
+  return candidateName;
+}
+
+/**
  * Count tasks (checkbox items) in document content.
  */
 export function countTasks(content: string): number {
@@ -534,12 +579,16 @@ export async function generateInlineDocuments(
 ): Promise<DocumentGenerationResult> {
   const { agentType, directoryPath, autoRunFolderPath, projectName, callbacks } = config;
 
-  // Create a sanitized subfolder name from the project name
-  const subfolderName = sanitizeFolderName(projectName);
-  const subfolderPath = `${autoRunFolderPath}/${subfolderName}`;
-
   callbacks?.onStart?.();
   callbacks?.onProgress?.('Preparing to generate your Playbook...');
+
+  // Create a sanitized subfolder name from the project name
+  // Use unique name generation to avoid conflicts with existing folders
+  const baseFolderName = sanitizeFolderName(projectName);
+  const subfolderName = await generateUniqueSubfolderName(autoRunFolderPath, baseFolderName);
+  const subfolderPath = `${autoRunFolderPath}/${subfolderName}`;
+
+  console.log(`[InlineWizardDocGen] Using subfolder: ${subfolderName} (base: ${baseFolderName})`);
 
   try {
     // Get the agent configuration

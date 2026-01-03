@@ -4325,51 +4325,61 @@ You are taking over this conversation. Based on the context above, provide a bri
     state: inlineWizardState,
     wizardTabId: inlineWizardTabId,
     agentSessionId: inlineWizardAgentSessionId,
+    // Per-tab wizard state accessors
+    getStateForTab: getInlineWizardStateForTab,
+    isWizardActiveForTab: isInlineWizardActiveForTab,
   } = useInlineWizardContext();
 
-  // Sync inline wizard context state to session.wizardState
-  // This bridges the gap between the context-based state and session-based UI rendering
-  // The wizard is per-tab, so only sync when the active tab matches the wizard's tab
+  // Sync inline wizard context state to activeTab.wizardState (per-tab wizard state)
+  // This bridges the gap between the context-based state and tab-based UI rendering
+  // Each tab maintains its own independent wizard state
   useEffect(() => {
     if (!activeSession) return;
 
     const activeTab = getActiveTab(activeSession);
     const activeTabId = activeTab?.id;
+    if (!activeTabId) return;
 
-    // Only sync if the active tab is the wizard's tab
-    const isWizardTab = inlineWizardTabId && activeTabId === inlineWizardTabId;
-    const currentWizardState = activeSession.wizardState;
-    const shouldHaveWizardState = isWizardTab && (inlineWizardActive || inlineWizardIsGeneratingDocs);
+    // Get the wizard state for the CURRENT tab using the per-tab accessor
+    const tabWizardState = getInlineWizardStateForTab(activeTabId);
+    const hasWizardOnThisTab = tabWizardState?.isActive || tabWizardState?.isGeneratingDocs;
+    const currentTabWizardState = activeTab?.wizardState;
 
-    if (!shouldHaveWizardState && !currentWizardState) {
-      // Neither active nor has state - nothing to do
+    if (!hasWizardOnThisTab && !currentTabWizardState) {
+      // Neither active nor has state on this tab - nothing to do
       return;
     }
 
-    if (!shouldHaveWizardState && currentWizardState) {
-      // Wizard was deactivated or we switched to a different tab - clear the state
-      setSessions(prev => prev.map(s =>
-        s.id === activeSession.id
-          ? { ...s, wizardState: undefined }
-          : s
-      ));
+    if (!hasWizardOnThisTab && currentTabWizardState) {
+      // Wizard was deactivated on this tab - clear the tab's wizard state
+      setSessions(prev => prev.map(s => {
+        if (s.id !== activeSession.id) return s;
+        return {
+          ...s,
+          aiTabs: s.aiTabs.map(tab =>
+            tab.id === activeTabId
+              ? { ...tab, wizardState: undefined }
+              : tab
+          ),
+        };
+      }));
       return;
     }
 
-    if (!isWizardTab) {
-      // Not the wizard's tab - don't sync
+    if (!tabWizardState) {
+      // No wizard state for this tab - nothing to sync
       return;
     }
 
-    // Sync the wizard state to the session
+    // Sync the wizard state to this specific tab
     const newWizardState = {
-      isActive: inlineWizardActive,
-      isWaiting: inlineWizardIsWaiting,
-      mode: inlineWizardMode === 'ask' ? 'new' : inlineWizardMode, // Map 'ask' to 'new' for session state
-      goal: inlineWizardGoal ?? undefined,
-      confidence: inlineWizardConfidence,
-      ready: inlineWizardReady,
-      conversationHistory: inlineWizardConversationHistory.map(msg => ({
+      isActive: tabWizardState.isActive,
+      isWaiting: tabWizardState.isWaiting,
+      mode: tabWizardState.mode === 'ask' ? 'new' : tabWizardState.mode, // Map 'ask' to 'new' for session state
+      goal: tabWizardState.goal ?? undefined,
+      confidence: tabWizardState.confidence,
+      ready: tabWizardState.ready,
+      conversationHistory: tabWizardState.conversationHistory.map(msg => ({
         id: msg.id,
         role: msg.role,
         content: msg.content,
@@ -4377,52 +4387,47 @@ You are taking over this conversation. Based on the context above, provide a bri
         confidence: msg.confidence,
         ready: msg.ready,
       })),
-      previousUIState: inlineWizardState.previousUIState ?? {
+      previousUIState: tabWizardState.previousUIState ?? {
         readOnlyMode: false,
         saveToHistory: true,
         showThinking: false,
       },
-      error: inlineWizardError,
-      isGeneratingDocs: inlineWizardIsGeneratingDocs,
-      generatedDocuments: inlineWizardGeneratedDocuments.map(doc => ({
+      error: tabWizardState.error,
+      isGeneratingDocs: tabWizardState.isGeneratingDocs,
+      generatedDocuments: tabWizardState.generatedDocuments.map(doc => ({
         filename: doc.filename,
         content: doc.content,
         taskCount: doc.taskCount,
         savedPath: doc.savedPath,
       })),
-      streamingContent: inlineWizardStreamingContent,
-      currentGeneratingIndex: inlineWizardGenerationProgress?.current,
-      totalDocuments: inlineWizardGenerationProgress?.total,
-      autoRunFolderPath: inlineWizardState.projectPath
-        ? `${inlineWizardState.projectPath}/Auto Run Docs`
+      streamingContent: tabWizardState.streamingContent,
+      currentGeneratingIndex: tabWizardState.generationProgress?.current,
+      totalDocuments: tabWizardState.generationProgress?.total,
+      autoRunFolderPath: tabWizardState.projectPath
+        ? `${tabWizardState.projectPath}/Auto Run Docs`
         : undefined,
-      agentSessionId: inlineWizardAgentSessionId ?? undefined,
+      agentSessionId: tabWizardState.agentSessionId ?? undefined,
+      // Track the subfolder name for tab naming after wizard completes
+      subfolderName: tabWizardState.subfolderName ?? undefined,
     };
 
-    setSessions(prev => prev.map(s =>
-      s.id === activeSession.id
-        ? { ...s, wizardState: newWizardState }
-        : s
-    ));
+    setSessions(prev => prev.map(s => {
+      if (s.id !== activeSession.id) return s;
+      return {
+        ...s,
+        aiTabs: s.aiTabs.map(tab =>
+          tab.id === activeTabId
+            ? { ...tab, wizardState: newWizardState }
+            : tab
+        ),
+      };
+    }));
   }, [
     activeSession?.id,
     activeSession?.activeTabId,
-    inlineWizardTabId,
-    inlineWizardActive,
-    inlineWizardIsWaiting,
-    inlineWizardMode,
-    inlineWizardGoal,
-    inlineWizardConfidence,
-    inlineWizardReady,
-    inlineWizardConversationHistory,
-    inlineWizardError,
-    inlineWizardIsGeneratingDocs,
-    inlineWizardGeneratedDocuments,
-    inlineWizardStreamingContent,
-    inlineWizardGenerationProgress,
-    inlineWizardState.previousUIState,
-    inlineWizardState.projectPath,
-    inlineWizardAgentSessionId,
+    // getInlineWizardStateForTab changes when tabStates Map changes (new wizard state for any tab)
+    // This ensures we re-sync when the active tab's wizard state changes
+    getInlineWizardStateForTab,
     setSessions,
   ]);
 
@@ -10270,10 +10275,11 @@ You are taking over this conversation. Based on the context above, provide a bri
             delivered: true,
           };
 
-          // Derive tab name from Auto Run folder path (e.g., "Auto Run Docs" -> "Wizard: Auto Run Docs")
-          const folderPath = wizardState.autoRunFolderPath || '';
-          const folderName = folderPath.split('/').pop() || 'Auto Run Docs';
-          const tabName = `Wizard: ${folderName}`;
+          // Derive tab name from the subfolder where documents were saved
+          // The subfolderName is stored in the wizard state after generation completes
+          // Format: "Project: Subfolder-Name" (e.g., "Project: Maestro-Marketing")
+          const subfolderName = wizardState.subfolderName || '';
+          const tabName = subfolderName ? `Project: ${subfolderName}` : 'Wizard Session';
 
           // Get the wizard's agentSessionId for tab context switching
           const wizardAgentSessionId = wizardState.agentSessionId;
@@ -10295,7 +10301,7 @@ You are taking over this conversation. Based on the context above, provide a bri
                 logs: [...tab.logs, ...wizardLogEntries, summaryMessage],
                 // Switch to wizard's agentSessionId so user can continue iterating with full context
                 agentSessionId: wizardAgentSessionId || tab.agentSessionId,
-                // Name the tab to indicate it's a wizard session
+                // Name the tab to indicate it's a project from the wizard
                 name: tabName,
               };
             });
@@ -10307,8 +10313,15 @@ You are taking over this conversation. Based on the context above, provide a bri
             };
           }));
 
+          // CRITICAL: Also reset the useInlineWizard hook state
+          // Without this, the hook remains active and will re-sync its state back to session.wizardState
+          endInlineWizard();
+
           // Refresh the Auto Run panel to show newly generated documents
           handleAutoRunRefresh();
+
+          // Clear the input value that may have wizard-related text
+          setInputValue('');
         }}
         // Inline wizard callbacks
         onWizardLetsGo={generateInlineWizardDocuments}

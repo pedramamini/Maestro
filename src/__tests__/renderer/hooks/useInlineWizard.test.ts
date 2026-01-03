@@ -48,10 +48,12 @@ vi.mock('../../../renderer/services/inlineWizardDocumentGeneration', () => ({
         filename: 'Phase-01-Setup.md',
         content: '# Phase 01\n\n- [ ] Task 1',
         taskCount: 1,
-        savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+        savedPath: '/test/project/Auto Run Docs/Test-Project/Phase-01-Setup.md',
       },
     ],
     rawOutput: 'test output',
+    subfolderName: 'Test-Project',
+    subfolderPath: '/test/project/Auto Run Docs/Test-Project',
   }),
 }));
 
@@ -409,6 +411,45 @@ describe('useInlineWizard', () => {
       expect(result.current.conversationHistory).toHaveLength(1);
       expect(result.current.conversationHistory[0].role).toBe('user');
       expect(result.current.conversationHistory[0].content).toBe('Hello wizard');
+    });
+
+    it('should auto-create session when sending message in ask mode', async () => {
+      const { startInlineWizardConversation } = await import(
+        '../../../renderer/services/inlineWizardConversation'
+      );
+      const mockStartConversation = vi.mocked(startInlineWizardConversation);
+      mockStartConversation.mockClear();
+
+      // Setup: existing docs exist, so we get 'ask' mode
+      mockHasExistingAutoRunDocs.mockResolvedValue(true);
+
+      const { result } = renderHook(() => useInlineWizard());
+
+      // Start wizard in 'ask' mode (no session created)
+      await act(async () => {
+        await result.current.startWizard(undefined, undefined, '/test/project', 'claude-code', 'Test Project');
+      });
+
+      expect(result.current.wizardMode).toBe('ask');
+      const callCountBefore = mockStartConversation.mock.calls.length;
+      expect(callCountBefore).toBe(0); // No session in 'ask' mode
+
+      // Send a message - should auto-create session and switch to 'new' mode
+      await act(async () => {
+        await result.current.sendMessage('Help me plan my project');
+      });
+
+      // Session should have been created
+      expect(mockStartConversation.mock.calls.length).toBe(1);
+      expect(mockStartConversation).toHaveBeenCalledWith(
+        expect.objectContaining({
+          mode: 'new',
+          agentType: 'claude-code',
+          directoryPath: '/test/project',
+        })
+      );
+      // Mode should have changed to 'new'
+      expect(result.current.wizardMode).toBe('new');
     });
   });
 
@@ -1017,6 +1058,54 @@ describe('useInlineWizard', () => {
           current: 1,
           total: 1,
         });
+      });
+
+      it('should capture subfolderName from generation result', async () => {
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // subfolderName should be captured from the result
+        expect(result.current.state.subfolderName).toBe('Test-Project');
+      });
+
+      it('should set subfolderName to null when result does not include it', async () => {
+        mockGenerateInlineDocuments.mockResolvedValueOnce({
+          success: true,
+          documents: [
+            {
+              filename: 'Phase-01-Setup.md',
+              content: '# Phase 01\n\n- [ ] Task 1',
+              taskCount: 1,
+              savedPath: '/test/project/Auto Run Docs/Phase-01-Setup.md',
+            },
+          ],
+          rawOutput: 'test output',
+          // No subfolderName provided
+        });
+
+        const { result } = renderHook(() => useInlineWizard());
+
+        // Start wizard with required params
+        await act(async () => {
+          await result.current.startWizard('test', undefined, '/test/project', 'claude-code', 'Test Project');
+        });
+
+        // Generate documents
+        await act(async () => {
+          await result.current.generateDocuments();
+        });
+
+        // subfolderName should be null when not provided
+        expect(result.current.state.subfolderName).toBe(null);
       });
     });
   });

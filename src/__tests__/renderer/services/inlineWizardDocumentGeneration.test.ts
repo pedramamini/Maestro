@@ -9,6 +9,7 @@ import {
   parseGeneratedDocuments,
   splitIntoPhases,
   sanitizeFilename,
+  sanitizeFolderName,
   countTasks,
 } from '../../../renderer/services/inlineWizardDocumentGeneration';
 
@@ -355,6 +356,52 @@ CONTENT:
 
     it('should handle empty content', () => {
       expect(countTasks('')).toBe(0);
+    });
+  });
+
+  describe('sanitizeFolderName', () => {
+    it('should replace spaces with hyphens', () => {
+      expect(sanitizeFolderName('My Project Name')).toBe('My-Project-Name');
+    });
+
+    it('should collapse multiple hyphens', () => {
+      expect(sanitizeFolderName('My - - Project')).toBe('My-Project');
+    });
+
+    it('should remove path separators', () => {
+      expect(sanitizeFolderName('path/to/project')).toBe('path-to-project');
+      expect(sanitizeFolderName('path\\to\\project')).toBe('path-to-project');
+    });
+
+    it('should remove special characters', () => {
+      expect(sanitizeFolderName('My:Project<Name>?')).toBe('MyProjectName');
+    });
+
+    it('should remove directory traversal sequences', () => {
+      // '..' is removed, '/' becomes '-', then hyphens collapse and leading/trailing stripped
+      expect(sanitizeFolderName('../parent/../other')).toBe('parent-other');
+    });
+
+    it('should remove leading dots', () => {
+      expect(sanitizeFolderName('.hidden-folder')).toBe('hidden-folder');
+    });
+
+    it('should remove leading/trailing hyphens', () => {
+      expect(sanitizeFolderName('-project-')).toBe('project');
+    });
+
+    it('should trim whitespace', () => {
+      expect(sanitizeFolderName('  My Project  ')).toBe('My-Project');
+    });
+
+    it('should return wizard-project for empty result', () => {
+      expect(sanitizeFolderName('')).toBe('wizard-project');
+      expect(sanitizeFolderName('...')).toBe('wizard-project');
+    });
+
+    it('should handle real project names', () => {
+      expect(sanitizeFolderName('Maestro Marketing')).toBe('Maestro-Marketing');
+      expect(sanitizeFolderName('AI Todo App v2.0')).toBe('AI-Todo-App-v2.0');
     });
   });
 });

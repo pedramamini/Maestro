@@ -390,12 +390,14 @@ Please provide a comprehensive but compacted summary of the above conversation, 
 
   /**
    * Cancel any active summarization operation.
-   * Note: With the groomContext API, cancellation is handled by the caller.
-   * This method is kept for API compatibility but is a no-op.
+   * Calls the main process to kill all active grooming sessions.
    */
   async cancelSummarization(): Promise<void> {
-    // groomContext handles its own lifecycle - cancellation happens via the caller's
-    // cancel token or by not awaiting the promise
+    try {
+      await window.maestro.context.cancelGrooming();
+    } catch (error) {
+      console.error('[ContextSummarizer] Failed to cancel grooming:', error);
+    }
   }
 
   /**

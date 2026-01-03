@@ -211,7 +211,7 @@ export function AustinFactsDisplay({
       style={{
         backgroundColor: `${theme.colors.accent}10`,
         border: `1px solid ${theme.colors.accent}30`,
-        maxWidth: '320px',
+        width: '320px',
         opacity: isFading ? 0 : 1,
         transition: 'opacity 300ms ease-in-out',
       }}

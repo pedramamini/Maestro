@@ -16,11 +16,13 @@ import type { LogEntry } from '../../../renderer/types';
 
 // Mock window.maestro for IPC calls
 const mockGroomContext = vi.fn();
+const mockCancelGrooming = vi.fn();
 
 vi.stubGlobal('window', {
   maestro: {
     context: {
       groomContext: mockGroomContext,
+      cancelGrooming: mockCancelGrooming,
     },
   },
 });
@@ -373,7 +375,14 @@ Continue with implementation.`);
   });
 
   describe('cancelSummarization', () => {
-    it('should not throw when called', async () => {
+    it('should call cancelGrooming IPC', async () => {
+      mockCancelGrooming.mockResolvedValue(undefined);
+      await service.cancelSummarization();
+      expect(mockCancelGrooming).toHaveBeenCalled();
+    });
+
+    it('should not throw when IPC call fails', async () => {
+      mockCancelGrooming.mockRejectedValue(new Error('IPC error'));
       await expect(service.cancelSummarization()).resolves.not.toThrow();
     });
   });

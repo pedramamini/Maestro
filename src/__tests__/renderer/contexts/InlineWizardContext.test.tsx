@@ -115,10 +115,11 @@ describe('InlineWizardContext', () => {
         sessionName: null,
         tabId: null,
         sessionId: null,
-        initialGreetingSent: false,
         streamingContent: '',
         generationProgress: null,
         lastUserMessageContent: null,
+        agentSessionId: null,
+        subfolderName: null,
       });
     });
   });
@@ -292,10 +293,11 @@ describe('InlineWizardContext', () => {
         sessionName: null,
         tabId: null,
         sessionId: null,
-        initialGreetingSent: false,
         streamingContent: '',
         generationProgress: null,
         lastUserMessageContent: null,
+        agentSessionId: null,
+        subfolderName: null,
       });
     });
   });

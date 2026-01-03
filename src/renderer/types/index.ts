@@ -136,6 +136,8 @@ export interface SessionWizardState {
   autoRunFolderPath?: string;
   /** The Claude agent session ID (from session_id in output) - used to switch tab after wizard completes */
   agentSessionId?: string;
+  /** Subfolder name where documents were saved (e.g., "Maestro-Marketing") - used for tab naming */
+  subfolderName?: string;
 }
 
 export interface Shortcut {
@@ -408,6 +410,7 @@ export interface AITab {
   hasUnread?: boolean;             // True when tab has new messages user hasn't seen
   isAtBottom?: boolean;            // True when user is scrolled to bottom of output
   pendingMergedContext?: string;   // Context from merge that needs to be sent with next message
+  wizardState?: SessionWizardState; // Per-tab inline wizard state for /wizard command
 }
 
 // Closed tab entry for undo functionality (Cmd+Shift+T)

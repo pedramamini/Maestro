@@ -314,9 +314,9 @@ export class ClaudeOutputParser implements AgentOutputParser {
       }
       // If no error field in JSON, this is normal output - don't check it
     } catch {
-      // Not JSON - skip pattern matching entirely
-      // Errors should come through structured JSON, stderr, or exit codes
-      // Pattern matching on arbitrary text causes false positives
+      // Not pure JSON - try to extract embedded JSON from stderr messages
+      // Example: "Error streaming...: 400 {"type":"error","error":{"type":"invalid_request_error","message":"..."}}"
+      errorText = this.extractErrorFromMixedLine(line);
     }
 
     // If no error text was extracted, no error to detect
@@ -345,6 +345,37 @@ export class ClaudeOutputParser implements AgentOutputParser {
   }
 
   /**
+   * Extract error message from a line that contains embedded JSON.
+   * Handles stderr output like:
+   * "Error streaming, falling back to non-streaming mode: 400 {"type":"error","error":{"type":"invalid_request_error","message":"prompt is too long: 206491 tokens > 200000 maximum"}}"
+   */
+  private extractErrorFromMixedLine(line: string): string | null {
+    // Look for embedded JSON in the line
+    const jsonStart = line.indexOf('{');
+    if (jsonStart === -1) {
+      return null;
+    }
+
+    try {
+      const jsonPart = line.substring(jsonStart);
+      const parsed = JSON.parse(jsonPart);
+
+      // Handle nested error structure from API: { "type": "error", "error": { "message": "..." } }
+      if (parsed.error?.message) {
+        return parsed.error.message;
+      }
+      // Handle flat error structure: { "type": "error", "message": "..." }
+      if (parsed.message) {
+        return parsed.message;
+      }
+    } catch {
+      // JSON parsing failed, ignore
+    }
+
+    return null;
+  }
+
+  /**
    * Detect an error from process exit information
    */
   detectErrorFromExit(
@@ -357,7 +388,29 @@ export class ClaudeOutputParser implements AgentOutputParser {
       return null;
     }
 
-    // Check stderr and stdout for error patterns
+    // First try to extract detailed error from embedded JSON in stderr
+    // This handles messages like: "Error streaming...: 400 {"type":"error","error":{"message":"prompt is too long: 206491 tokens > 200000 maximum"}}"
+    const extractedError = this.extractErrorFromMixedLine(stderr);
+    if (extractedError) {
+      const patterns = getErrorPatterns(this.agentId);
+      const match = matchErrorPattern(patterns, extractedError);
+      if (match) {
+        return {
+          type: match.type,
+          message: match.message,
+          recoverable: match.recoverable,
+          agentId: this.agentId,
+          timestamp: Date.now(),
+          raw: {
+            exitCode,
+            stderr,
+            stdout,
+          },
+        };
+      }
+    }
+
+    // Check stderr and stdout for error patterns (fallback to raw text matching)
     const combined = `${stderr}\n${stdout}`;
     const patterns = getErrorPatterns(this.agentId);
     const match = matchErrorPattern(patterns, combined);

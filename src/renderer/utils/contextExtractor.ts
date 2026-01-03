@@ -162,7 +162,12 @@ function truncateForDisplay(text: string, maxLength: number): string {
  * Format log entries into a text summary suitable for grooming.
  * Produces a structured markdown-like format that preserves conversation flow.
  *
+ * Optimizations applied:
+ * - Full file contents in code blocks are replaced with file path references
+ * - Images are stripped (oldest first) based on token budget
+ *
  * @param logs - Array of log entries to format
+ * @param options - Optional configuration for stripping content
  * @returns Formatted text representation of the logs
  *
  * @example
@@ -174,10 +179,22 @@ function truncateForDisplay(text: string, maxLength: number): string {
  * // ## Assistant
  * // To implement feature X, you should...
  */
-export function formatLogsForGrooming(logs: LogEntry[]): string {
+export function formatLogsForGrooming(
+  logs: LogEntry[],
+  options: {
+    /** Maximum tokens for images before stripping oldest (default: 0 = strip all) */
+    maxImageTokens?: number;
+  } = {}
+): string {
+  const { maxImageTokens = 0 } = options;
   const sections: string[] = [];
 
-  for (const log of logs) {
+  // Track images for potential stripping (oldest first)
+  const imageEntries: Array<{ logIndex: number; images: string[]; timestamp: number }> = [];
+
+  for (let i = 0; i < logs.length; i++) {
+    const log = logs[i];
+
     // Skip empty or system-only logs that don't carry meaningful context
     if (!log.text || log.text.trim() === '') {
       continue;
@@ -188,12 +205,108 @@ export function formatLogsForGrooming(logs: LogEntry[]): string {
       continue;
     }
 
-    // Map source to a readable header
+    // Track images for this log entry
+    if (log.images && log.images.length > 0) {
+      imageEntries.push({
+        logIndex: i,
+        images: log.images,
+        timestamp: log.timestamp,
+      });
+    }
+
+    // Strip full file contents from code blocks and map source to header
+    const processedText = stripFullFileContents(log.text);
     const header = getSourceHeader(log.source);
-    sections.push(`## ${header}\n${log.text}`);
+    sections.push(`## ${header}\n${processedText}`);
   }
 
-  return sections.join('\n\n');
+  // Calculate image tokens and strip if over budget
+  let result = sections.join('\n\n');
+
+  if (imageEntries.length > 0) {
+    // Sort by timestamp (oldest first) for stripping
+    imageEntries.sort((a, b) => a.timestamp - b.timestamp);
+
+    // Calculate total image tokens (estimate ~1500 tokens per image)
+    const TOKENS_PER_IMAGE = 1500;
+    let totalImageTokens = imageEntries.reduce(
+      (sum, entry) => sum + entry.images.length * TOKENS_PER_IMAGE,
+      0
+    );
+
+    // Strip images oldest-first until under budget
+    const strippedImages: string[] = [];
+    for (const entry of imageEntries) {
+      if (totalImageTokens <= maxImageTokens) {
+        break;
+      }
+      for (const imagePath of entry.images) {
+        strippedImages.push(imagePath);
+        totalImageTokens -= TOKENS_PER_IMAGE;
+        if (totalImageTokens <= maxImageTokens) {
+          break;
+        }
+      }
+    }
+
+    // Add note about stripped images if any were removed
+    if (strippedImages.length > 0) {
+      result += `\n\n---\n[Note: ${strippedImages.length} image(s) stripped from context to reduce tokens. Images can be re-referenced by path if needed.]`;
+    }
+  }
+
+  return result;
+}
+
+/**
+ * Minimum lines for a code block to be considered a "full file"
+ * Small snippets (< 15 lines) are kept as they're likely examples or diffs
+ */
+const MIN_FULL_FILE_LINES = 15;
+
+/**
+ * Pattern to detect code blocks with file paths.
+ * Matches: ```language:path/to/file.ext or ```language path/to/file.ext
+ * Also matches Read tool output patterns like "Contents of /path/to/file:"
+ */
+const FILE_PATH_CODE_BLOCK_PATTERN = /```(\w+)?[:\s]+([^\n`]+\.\w+)\n([\s\S]*?)```/g;
+const READ_TOOL_PATTERN = /(?:Contents of|File:|Reading) ([^\n:]+):\n```[\s\S]*?```/g;
+
+/**
+ * Strip full file contents from text, replacing with file path references.
+ * Preserves small code snippets and diffs.
+ */
+function stripFullFileContents(text: string): string {
+  let result = text;
+
+  // Replace code blocks with file paths that have substantial content
+  result = result.replace(FILE_PATH_CODE_BLOCK_PATTERN, (match, lang, filePath, content) => {
+    const lineCount = content.split('\n').length;
+
+    // Keep small snippets (likely examples, not full files)
+    if (lineCount < MIN_FULL_FILE_LINES) {
+      return match;
+    }
+
+    // Replace with reference
+    const langStr = lang ? `${lang} ` : '';
+    return `\`\`\`${langStr}[File: ${filePath.trim()} - ${lineCount} lines, content available on disk]\`\`\``;
+  });
+
+  // Handle Read tool output patterns
+  result = result.replace(READ_TOOL_PATTERN, (match, filePath) => {
+    // Extract line count from the original match
+    const codeBlockMatch = match.match(/```[\s\S]*?```/);
+    if (codeBlockMatch) {
+      const lineCount = codeBlockMatch[0].split('\n').length - 2; // Subtract ``` lines
+      if (lineCount >= MIN_FULL_FILE_LINES) {
+        return `[Read: ${filePath.trim()} - ${lineCount} lines, content available on disk]`;
+      }
+    }
+    return match;
+  });
+
+  return result;
 }
 
 /**
