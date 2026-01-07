@@ -47,6 +47,7 @@ export interface AgentConfig {
   imageArgs?: (imagePath: string) => string[]; // Function to build image attachment args (e.g., ['-i', imagePath] for Codex)
   promptArgs?: (prompt: string) => string[]; // Function to build prompt args (e.g., ['-p', prompt] for OpenCode)
   noPromptSeparator?: boolean; // If true, don't add '--' before the prompt in batch mode (OpenCode doesn't support it)
+  defaultEnvVars?: Record<string, string>; // Default environment variables for this agent (merged with user customEnvVars)
 }
 
 const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'>[] = [
@@ -122,8 +123,9 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'
     command: 'opencode',
     args: [], // Base args (none for OpenCode - batch mode uses 'run' subcommand)
     // OpenCode CLI argument builders
-    // Batch mode: opencode run --format json [--model provider/model] [--session <id>] [--agent plan] -- "prompt"
-    // The 'run' subcommand auto-approves all permissions (YOLO mode is implicit).
+    // Batch mode: opencode run --format json [--model provider/model] [--session <id>] [--agent plan] "prompt"
+    // YOLO mode (auto-approve all permissions) is enabled via OPENCODE_CONFIG_CONTENT env var.
+    // This prevents OpenCode from prompting for permission on external_directory access, which would hang in batch mode.
     batchModePrefix: ['run'], // OpenCode uses 'run' subcommand for batch mode
     jsonOutputArgs: ['--format', 'json'], // JSON output format
     resumeArgs: (sessionId: string) => ['--session', sessionId], // Resume with session ID
@@ -131,6 +133,11 @@ const AGENT_DEFINITIONS: Omit<AgentConfig, 'available' | 'path' | 'capabilities'
     modelArgs: (modelId: string) => ['--model', modelId], // Model selection (e.g., 'ollama/qwen3:8b')
     imageArgs: (imagePath: string) => ['-f', imagePath], // Image/file attachment: opencode run -f /path/to/image.png -- "prompt"
     noPromptSeparator: true, // OpenCode doesn't need '--' before prompt - yargs handles positional args
+    // Default env vars: enable YOLO mode (allow all permissions including external_directory)
+    // Users can override by setting customEnvVars in agent config
+    defaultEnvVars: {
+      OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"allow","external_directory":"allow"}}',
+    },
     // Agent-specific configuration options shown in UI
     configOptions: [
       {

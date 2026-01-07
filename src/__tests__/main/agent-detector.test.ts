@@ -99,6 +99,7 @@ describe('agent-detector', () => {
         requiresPty: true,
         configOptions: [{ key: 'k', type: 'text', label: 'L', description: 'D', default: '' }],
         hidden: true,
+        defaultEnvVars: { TEST_VAR: 'test-value' },
         capabilities: {
           supportsResume: true,
           supportsReadOnlyMode: false,
@@ -119,6 +120,7 @@ describe('agent-detector', () => {
       expect(config.customPath).toBe('/custom/path');
       expect(config.requiresPty).toBe(true);
       expect(config.hidden).toBe(true);
+      expect(config.defaultEnvVars).toEqual({ TEST_VAR: 'test-value' });
       expect(config.capabilities.supportsResume).toBe(true);
     });
 

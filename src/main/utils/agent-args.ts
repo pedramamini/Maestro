@@ -135,7 +135,20 @@ export function applyAgentConfigOverrides(
     customArgsSource = 'none';
   }
 
-  const effectiveCustomEnvVars = overrides.sessionCustomEnvVars ?? agentConfigValues.customEnvVars as Record<string, string> | undefined;
+  // Merge env vars: agent defaults (lowest) < agent config (medium) < session overrides (highest)
+  // User-configured vars override agent defaults; session vars override both
+  const userEnvVars = overrides.sessionCustomEnvVars ?? agentConfigValues.customEnvVars as Record<string, string> | undefined;
+  const agentDefaultEnvVars = agent?.defaultEnvVars;
+
+  // Start with agent defaults, then layer on user config
+  let effectiveCustomEnvVars: Record<string, string> | undefined;
+  if (agentDefaultEnvVars || userEnvVars) {
+    effectiveCustomEnvVars = {
+      ...(agentDefaultEnvVars || {}),
+      ...(userEnvVars || {}),
+    };
+  }
+
   const hasEnvVars = effectiveCustomEnvVars && Object.keys(effectiveCustomEnvVars).length > 0;
   const customEnvSource: AgentConfigResolution['customEnvSource'] = overrides.sessionCustomEnvVars
     ? 'session'
