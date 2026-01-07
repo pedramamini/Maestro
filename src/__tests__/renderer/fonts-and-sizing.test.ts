@@ -56,7 +56,9 @@ describe('Cross-platform Fonts and Sizing', () => {
     originalFontSize = document.documentElement.style.fontSize;
     originalProcessPlatform = Object.getOwnPropertyDescriptor(process, 'platform');
 
-    // Reset all mocks to return undefined (default behavior)
+    // Reset all mocks to return empty/default (default behavior)
+    // PERF: Implementation now uses batch loading via getAll() instead of individual get() calls
+    vi.mocked(window.maestro.settings.getAll).mockResolvedValue({});
     vi.mocked(window.maestro.settings.get).mockResolvedValue(undefined);
     vi.mocked(window.maestro.logger.getLogLevel).mockResolvedValue('info');
     vi.mocked(window.maestro.logger.getMaxLogBuffer).mockResolvedValue(5000);
@@ -177,9 +179,8 @@ describe('Cross-platform Fonts and Sizing', () => {
     });
 
     it('should load saved font size from settings', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'fontSize') return 20;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        fontSize: 20,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -281,9 +282,8 @@ describe('Cross-platform Fonts and Sizing', () => {
     });
 
     it('should load saved fontFamily from settings', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'fontFamily') return 'Monaco, monospace';
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        fontFamily: 'Monaco, monospace',
       });
 
       const { result } = renderHook(() => useSettings());

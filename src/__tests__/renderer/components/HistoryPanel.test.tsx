@@ -1266,10 +1266,10 @@ describe('HistoryPanel', () => {
     });
   });
 
-  // ===== PAGINATION =====
-  describe('pagination', () => {
-    it('should initially display INITIAL_DISPLAY_COUNT entries', async () => {
-      // Create 60 entries (more than initial 50)
+  // ===== VIRTUALIZATION =====
+  describe('virtualization', () => {
+    it('should render entries using virtualization', async () => {
+      // Create 60 entries
       const entries = Array.from({ length: 60 }, (_, i) =>
         createMockEntry({ id: `entry-${i}`, summary: `Entry ${i}` })
       );
@@ -1282,15 +1282,18 @@ describe('HistoryPanel', () => {
         />
       );
 
+      // First entry should be visible (virtualization renders visible entries)
       await waitFor(() => {
         expect(screen.getByText('Entry 0')).toBeInTheDocument();
-        expect(screen.getByText('Entry 49')).toBeInTheDocument();
-        expect(screen.queryByText('Entry 50')).not.toBeInTheDocument();
       });
+
+      // All entries are accessible in the virtualized list, but only visible ones are in DOM
+      // The virtualizer will render a subset based on scroll position and overscan
     });
 
-    it('should show "load more" indicator when there are more entries', async () => {
-      const entries = Array.from({ length: 60 }, (_, i) =>
+    it('should handle many entries efficiently with virtualization', async () => {
+      // Create many entries to test virtualization handles large lists
+      const entries = Array.from({ length: 500 }, (_, i) =>
         createMockEntry({ id: `entry-${i}`, summary: `Entry ${i}` })
       );
       mockHistoryGetAll.mockResolvedValue(entries);
@@ -1302,8 +1305,9 @@ describe('HistoryPanel', () => {
         />
       );
 
+      // Should render without performance issues and show first entries
       await waitFor(() => {
-        expect(screen.getByText(/Showing 50 of 60 entries/)).toBeInTheDocument();
+        expect(screen.getByText('Entry 0')).toBeInTheDocument();
       });
     });
   });
@@ -1584,10 +1588,10 @@ describe('HistoryPanel', () => {
         />
       );
 
-      // Should display entries but limit stored ones
+      // Should display entries (virtualized) with the first one visible
+      // The MAX_HISTORY_IN_MEMORY limit (500) is applied when storing entries
       await waitFor(() => {
-        // Due to pagination, we'll see message about entries
-        expect(screen.getByText(/Showing 50 of 500 entries/)).toBeInTheDocument();
+        expect(screen.getByText('Entry 0')).toBeInTheDocument();
       });
     });
 
@@ -1798,8 +1802,8 @@ describe('HistoryPanel', () => {
       });
     });
 
-    it('should expand displayCount when navigating to entry beyond current display', async () => {
-      // Create many entries to test pagination
+    it('should navigate to any entry in the virtualized list', async () => {
+      // Create many entries to test virtualized navigation
       const entries = Array.from({ length: 100 }, (_, i) =>
         createMockEntry({
           id: `entry-${i}`,
@@ -1817,8 +1821,8 @@ describe('HistoryPanel', () => {
       );
 
       await waitFor(() => {
-        // Initially only shows first 50 entries due to pagination
-        expect(screen.getByText(/Showing 50 of 100/)).toBeInTheDocument();
+        // First entry should be visible with virtualization
+        expect(screen.getByText('Entry number 0')).toBeInTheDocument();
       });
 
       // Open detail modal for first entry
@@ -1828,7 +1832,8 @@ describe('HistoryPanel', () => {
         expect(screen.getByTestId('history-detail-modal')).toBeInTheDocument();
       });
 
-      // Click "Navigate Far" to go to entry at index 60 (beyond displayCount of 50)
+      // Click "Navigate Far" to go to entry at index 60
+      // With virtualization, all entries are accessible without pagination
       fireEvent.click(screen.getByTestId('modal-navigate-far'));
 
       await waitFor(() => {
@@ -1836,9 +1841,6 @@ describe('HistoryPanel', () => {
         expect(screen.getByTestId('modal-entry-summary')).toHaveTextContent('Entry number 60');
         expect(screen.getByTestId('modal-current-index')).toHaveTextContent('60');
       });
-
-      // After navigating far, displayCount should have been expanded
-      // The list should now show more entries
     });
   });
 

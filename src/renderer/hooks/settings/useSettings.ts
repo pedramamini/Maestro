@@ -1167,66 +1167,72 @@ export function useSettings(): UseSettingsReturn {
   }, []);
 
   // Load settings from electron-store on mount
+  // PERF: Use batch loading to reduce IPC calls from ~60 to 3
   useEffect(() => {
     const loadSettings = async () => {
       try {
-      const savedEnterToSendAI = await window.maestro.settings.get('enterToSendAI');
-      const savedEnterToSendTerminal = await window.maestro.settings.get('enterToSendTerminal');
-      const savedDefaultSaveToHistory = await window.maestro.settings.get('defaultSaveToHistory');
-      const savedDefaultShowThinking = await window.maestro.settings.get('defaultShowThinking');
+      // Batch load all settings in a single IPC call
+      const allSettings = await window.maestro.settings.getAll() as Record<string, unknown>;
 
-      const savedLlmProvider = await window.maestro.settings.get('llmProvider');
-      const savedModelSlug = await window.maestro.settings.get('modelSlug');
-      const savedApiKey = await window.maestro.settings.get('apiKey');
-      const savedDefaultShell = await window.maestro.settings.get('defaultShell');
-      const savedCustomShellPath = await window.maestro.settings.get('customShellPath');
-      const savedShellArgs = await window.maestro.settings.get('shellArgs');
-      const savedShellEnvVars = await window.maestro.settings.get('shellEnvVars');
-      const savedGhPath = await window.maestro.settings.get('ghPath');
-      const savedFontSize = await window.maestro.settings.get('fontSize');
-      const savedFontFamily = await window.maestro.settings.get('fontFamily');
-      const savedLeftSidebarWidth = await window.maestro.settings.get('leftSidebarWidth');
-      const savedRightPanelWidth = await window.maestro.settings.get('rightPanelWidth');
-      const savedMarkdownEditMode = await window.maestro.settings.get('markdownEditMode');
-      const savedShowHiddenFiles = await window.maestro.settings.get('showHiddenFiles');
-      const savedShortcuts = await window.maestro.settings.get('shortcuts');
-      const savedTabShortcuts = await window.maestro.settings.get('tabShortcuts');
-      const savedActiveThemeId = await window.maestro.settings.get('activeThemeId');
-      const savedCustomThemeColors = await window.maestro.settings.get('customThemeColors');
-      const savedCustomThemeBaseId = await window.maestro.settings.get('customThemeBaseId');
-      const savedTerminalWidth = await window.maestro.settings.get('terminalWidth');
+      // Extract settings from the batch response
+      const savedEnterToSendAI = allSettings['enterToSendAI'];
+      const savedEnterToSendTerminal = allSettings['enterToSendTerminal'];
+      const savedDefaultSaveToHistory = allSettings['defaultSaveToHistory'];
+      const savedDefaultShowThinking = allSettings['defaultShowThinking'];
+
+      const savedLlmProvider = allSettings['llmProvider'];
+      const savedModelSlug = allSettings['modelSlug'];
+      const savedApiKey = allSettings['apiKey'];
+      const savedDefaultShell = allSettings['defaultShell'];
+      const savedCustomShellPath = allSettings['customShellPath'];
+      const savedShellArgs = allSettings['shellArgs'];
+      const savedShellEnvVars = allSettings['shellEnvVars'];
+      const savedGhPath = allSettings['ghPath'];
+      const savedFontSize = allSettings['fontSize'];
+      const savedFontFamily = allSettings['fontFamily'];
+      const savedLeftSidebarWidth = allSettings['leftSidebarWidth'];
+      const savedRightPanelWidth = allSettings['rightPanelWidth'];
+      const savedMarkdownEditMode = allSettings['markdownEditMode'];
+      const savedShowHiddenFiles = allSettings['showHiddenFiles'];
+      const savedShortcuts = allSettings['shortcuts'];
+      const savedTabShortcuts = allSettings['tabShortcuts'];
+      const savedActiveThemeId = allSettings['activeThemeId'];
+      const savedCustomThemeColors = allSettings['customThemeColors'];
+      const savedCustomThemeBaseId = allSettings['customThemeBaseId'];
+      const savedTerminalWidth = allSettings['terminalWidth'];
+      // These two still need separate calls as they go through the logger API
       const savedLogLevel = await window.maestro.logger.getLogLevel();
       const savedMaxLogBuffer = await window.maestro.logger.getMaxLogBuffer();
-      const savedMaxOutputLines = await window.maestro.settings.get('maxOutputLines');
-      const savedOsNotificationsEnabled = await window.maestro.settings.get('osNotificationsEnabled');
-      const savedAudioFeedbackEnabled = await window.maestro.settings.get('audioFeedbackEnabled');
-      const savedAudioFeedbackCommand = await window.maestro.settings.get('audioFeedbackCommand');
-      const savedToastDuration = await window.maestro.settings.get('toastDuration');
-      const savedCheckForUpdatesOnStartup = await window.maestro.settings.get('checkForUpdatesOnStartup');
-      const savedEnableBetaUpdates = await window.maestro.settings.get('enableBetaUpdates');
-      const savedCrashReportingEnabled = await window.maestro.settings.get('crashReportingEnabled');
-      const savedLogViewerSelectedLevels = await window.maestro.settings.get('logViewerSelectedLevels');
-      const savedCustomAICommands = await window.maestro.settings.get('customAICommands');
-      const savedGlobalStats = await window.maestro.settings.get('globalStats');
-      const savedAutoRunStats = await window.maestro.settings.get('autoRunStats');
-      const savedUsageStats = await window.maestro.settings.get('usageStats');
-      const concurrentAutoRunTimeMigrationApplied = await window.maestro.settings.get('concurrentAutoRunTimeMigrationApplied');
-      const savedUngroupedCollapsed = await window.maestro.settings.get('ungroupedCollapsed');
-      const savedTourCompleted = await window.maestro.settings.get('tourCompleted');
-      const savedFirstAutoRunCompleted = await window.maestro.settings.get('firstAutoRunCompleted');
-      const savedOnboardingStats = await window.maestro.settings.get('onboardingStats');
-      const savedLeaderboardRegistration = await window.maestro.settings.get('leaderboardRegistration');
-      const savedWebInterfaceUseCustomPort = await window.maestro.settings.get('webInterfaceUseCustomPort');
-      const savedWebInterfaceCustomPort = await window.maestro.settings.get('webInterfaceCustomPort');
-      const savedContextManagementSettings = await window.maestro.settings.get('contextManagementSettings');
-      const savedKeyboardMasteryStats = await window.maestro.settings.get('keyboardMasteryStats');
-      const savedColorBlindMode = await window.maestro.settings.get('colorBlindMode');
-      const savedDocumentGraphShowExternalLinks = await window.maestro.settings.get('documentGraphShowExternalLinks');
-      const savedDocumentGraphMaxNodes = await window.maestro.settings.get('documentGraphMaxNodes');
-      const savedDocumentGraphPreviewCharLimit = await window.maestro.settings.get('documentGraphPreviewCharLimit');
-      const savedStatsCollectionEnabled = await window.maestro.settings.get('statsCollectionEnabled');
-      const savedDefaultStatsTimeRange = await window.maestro.settings.get('defaultStatsTimeRange');
-      const savedPreventSleepEnabled = await window.maestro.settings.get('preventSleepEnabled');
+      const savedMaxOutputLines = allSettings['maxOutputLines'];
+      const savedOsNotificationsEnabled = allSettings['osNotificationsEnabled'];
+      const savedAudioFeedbackEnabled = allSettings['audioFeedbackEnabled'];
+      const savedAudioFeedbackCommand = allSettings['audioFeedbackCommand'];
+      const savedToastDuration = allSettings['toastDuration'];
+      const savedCheckForUpdatesOnStartup = allSettings['checkForUpdatesOnStartup'];
+      const savedEnableBetaUpdates = allSettings['enableBetaUpdates'];
+      const savedCrashReportingEnabled = allSettings['crashReportingEnabled'];
+      const savedLogViewerSelectedLevels = allSettings['logViewerSelectedLevels'];
+      const savedCustomAICommands = allSettings['customAICommands'];
+      const savedGlobalStats = allSettings['globalStats'];
+      const savedAutoRunStats = allSettings['autoRunStats'];
+      const savedUsageStats = allSettings['usageStats'];
+      const concurrentAutoRunTimeMigrationApplied = allSettings['concurrentAutoRunTimeMigrationApplied'];
+      const savedUngroupedCollapsed = allSettings['ungroupedCollapsed'];
+      const savedTourCompleted = allSettings['tourCompleted'];
+      const savedFirstAutoRunCompleted = allSettings['firstAutoRunCompleted'];
+      const savedOnboardingStats = allSettings['onboardingStats'];
+      const savedLeaderboardRegistration = allSettings['leaderboardRegistration'];
+      const savedWebInterfaceUseCustomPort = allSettings['webInterfaceUseCustomPort'];
+      const savedWebInterfaceCustomPort = allSettings['webInterfaceCustomPort'];
+      const savedContextManagementSettings = allSettings['contextManagementSettings'];
+      const savedKeyboardMasteryStats = allSettings['keyboardMasteryStats'];
+      const savedColorBlindMode = allSettings['colorBlindMode'];
+      const savedDocumentGraphShowExternalLinks = allSettings['documentGraphShowExternalLinks'];
+      const savedDocumentGraphMaxNodes = allSettings['documentGraphMaxNodes'];
+      const savedDocumentGraphPreviewCharLimit = allSettings['documentGraphPreviewCharLimit'];
+      const savedStatsCollectionEnabled = allSettings['statsCollectionEnabled'];
+      const savedDefaultStatsTimeRange = allSettings['defaultStatsTimeRange'];
+      const savedPreventSleepEnabled = allSettings['preventSleepEnabled'];
 
       if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI as boolean);
       if (savedEnterToSendTerminal !== undefined) setEnterToSendTerminalState(savedEnterToSendTerminal as boolean);

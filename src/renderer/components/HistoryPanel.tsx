@@ -1,5 +1,6 @@
-import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useMemo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, useImperativeHandle, forwardRef, useMemo, memo } from 'react';
 import { Bot, User, ExternalLink, Check, X, Clock, HelpCircle, Award } from 'lucide-react';
+import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Session, Theme, HistoryEntry, HistoryEntryType } from '../types';
 import { HistoryDetailModal } from './HistoryDetailModal';
 import { HistoryHelpModal } from './HistoryHelpModal';
@@ -411,11 +412,227 @@ export interface HistoryPanelHandle {
 
 // Constants for history pagination
 const MAX_HISTORY_IN_MEMORY = 500;  // Maximum entries to keep in memory
-const INITIAL_DISPLAY_COUNT = 50;   // Initial entries to render
-const LOAD_MORE_COUNT = 50;         // Entries to add when scrolling
+// Note: With virtualization, display count is managed by the virtualizer
+const _INITIAL_DISPLAY_COUNT = 50;  // Kept for reference, prefixed to satisfy linter
+
+// Estimated row heights for virtualization
+const ESTIMATED_ROW_HEIGHT = 120; // Base height for entry with footer
+const ESTIMATED_ROW_HEIGHT_SIMPLE = 90; // Height for entry without footer
 
 // Module-level storage for scroll positions (persists across session switches)
 const scrollPositionCache = new Map<string, number>();
+
+// ============================================================================
+// HistoryEntryItem - Memoized component for individual history entries
+// ============================================================================
+
+interface HistoryEntryItemProps {
+  entry: HistoryEntry;
+  index: number;
+  isSelected: boolean;
+  theme: Theme;
+  onOpenDetailModal: (entry: HistoryEntry, index: number) => void;
+  onOpenSessionAsTab?: (agentSessionId: string) => void;
+  onOpenAboutModal?: () => void;
+}
+
+const HistoryEntryItem = memo(function HistoryEntryItem({
+  entry,
+  index,
+  isSelected,
+  theme,
+  onOpenDetailModal,
+  onOpenSessionAsTab,
+  onOpenAboutModal,
+}: HistoryEntryItemProps) {
+  // Get pill color based on type
+  const getPillColor = (type: HistoryEntryType) => {
+    switch (type) {
+      case 'AUTO':
+        return { bg: theme.colors.warning + '20', text: theme.colors.warning, border: theme.colors.warning + '40' };
+      case 'USER':
+        return { bg: theme.colors.accent + '20', text: theme.colors.accent, border: theme.colors.accent + '40' };
+      default:
+        return { bg: theme.colors.bgActivity, text: theme.colors.textDim, border: theme.colors.border };
+    }
+  };
+
+  // Get icon for entry type
+  const getEntryIcon = (type: HistoryEntryType) => {
+    switch (type) {
+      case 'AUTO':
+        return Bot;
+      case 'USER':
+        return User;
+      default:
+        return Bot;
+    }
+  };
+
+  // Format timestamp
+  const formatTime = (timestamp: number) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const isToday = date.toDateString() === now.toDateString();
+
+    if (isToday) {
+      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    } else {
+      return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+        ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+    }
+  };
+
+  const colors = getPillColor(entry.type);
+  const Icon = getEntryIcon(entry.type);
+
+  return (
+    <div
+      onClick={() => onOpenDetailModal(entry, index)}
+      className="p-3 rounded border transition-colors cursor-pointer hover:bg-white/5"
+      style={{
+        borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+        backgroundColor: isSelected ? theme.colors.accent + '10' : 'transparent',
+        outline: isSelected ? `2px solid ${theme.colors.accent}` : 'none',
+        outlineOffset: '1px'
+      }}
+    >
+      {/* Header Row */}
+      <div className="flex items-center justify-between mb-2">
+        <div className="flex items-center gap-2">
+          {/* Success/Failure Indicator for AUTO entries */}
+          {entry.type === 'AUTO' && entry.success !== undefined && (
+            <span
+              className="flex items-center justify-center w-5 h-5 rounded-full"
+              style={{
+                backgroundColor: entry.success
+                  ? (entry.validated ? theme.colors.success : theme.colors.success + '20')
+                  : theme.colors.error + '20',
+                border: `1px solid ${entry.success
+                  ? (entry.validated ? theme.colors.success : theme.colors.success + '40')
+                  : theme.colors.error + '40'}`
+              }}
+              title={entry.success
+                ? (entry.validated ? 'Task completed successfully and human-validated' : 'Task completed successfully')
+                : 'Task failed'}
+            >
+              {entry.success ? (
+                entry.validated ? (
+                  <DoubleCheck className="w-3 h-3" style={{ color: '#ffffff' }} />
+                ) : (
+                  <Check className="w-3 h-3" style={{ color: theme.colors.success }} />
+                )
+              ) : (
+                <X className="w-3 h-3" style={{ color: theme.colors.error }} />
+              )}
+            </span>
+          )}
+
+          {/* Type Pill */}
+          <span
+            className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
+            style={{
+              backgroundColor: colors.bg,
+              color: colors.text,
+              border: `1px solid ${colors.border}`
+            }}
+          >
+            <Icon className="w-2.5 h-2.5" />
+            {entry.type}
+          </span>
+
+          {/* Session Name or ID Octet (clickable) - opens session as new tab */}
+          {entry.agentSessionId && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenSessionAsTab?.(entry.agentSessionId!);
+              }}
+              className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors hover:opacity-80 min-w-0 ${entry.sessionName ? '' : 'font-mono uppercase'}`}
+              style={{
+                backgroundColor: theme.colors.accent + '20',
+                color: theme.colors.accent,
+                border: `1px solid ${theme.colors.accent}40`,
+              }}
+              title={`Open session ${entry.sessionName || entry.agentSessionId.split('-')[0]} as new tab`}
+            >
+              <span className="truncate">
+                {entry.sessionName || entry.agentSessionId.split('-')[0].toUpperCase()}
+              </span>
+              <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
+            </button>
+          )}
+
+        </div>
+
+        {/* Timestamp */}
+        <span className="text-[10px]" style={{ color: theme.colors.textDim }}>
+          {formatTime(entry.timestamp)}
+        </span>
+      </div>
+
+      {/* Summary - 3 lines max, strip markdown for list view */}
+      <p
+        className="text-xs leading-relaxed overflow-hidden"
+        style={{
+          color: theme.colors.textMain,
+          display: '-webkit-box',
+          WebkitLineClamp: 3,
+          WebkitBoxOrient: 'vertical' as const
+        }}
+      >
+        {entry.summary ? stripMarkdown(entry.summary) : 'No summary available'}
+      </p>
+
+      {/* Footer Row - Time, Cost, and Achievement Action */}
+      {(entry.elapsedTimeMs !== undefined || (entry.usageStats && entry.usageStats.totalCostUsd > 0) || entry.achievementAction) && (
+        <div className="flex items-center gap-3 mt-2 pt-2 border-t" style={{ borderColor: theme.colors.border }}>
+          {/* Elapsed Time */}
+          {entry.elapsedTimeMs !== undefined && (
+            <div className="flex items-center gap-1">
+              <Clock className="w-3 h-3" style={{ color: theme.colors.textDim }} />
+              <span className="text-[10px] font-mono" style={{ color: theme.colors.textDim }}>
+                {formatElapsedTime(entry.elapsedTimeMs)}
+              </span>
+            </div>
+          )}
+          {/* Cost */}
+          {entry.usageStats && entry.usageStats.totalCostUsd > 0 && (
+            <span
+              className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full"
+              style={{
+                backgroundColor: theme.colors.success + '15',
+                color: theme.colors.success,
+                border: `1px solid ${theme.colors.success}30`
+              }}
+            >
+              ${entry.usageStats.totalCostUsd.toFixed(2)}
+            </span>
+          )}
+          {/* Achievement Action Button */}
+          {entry.achievementAction === 'openAbout' && onOpenAboutModal && (
+            <button
+              onClick={(e) => {
+                e.stopPropagation();
+                onOpenAboutModal();
+              }}
+              className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors hover:opacity-80 ml-auto"
+              style={{
+                backgroundColor: theme.colors.warning + '20',
+                color: theme.colors.warning,
+                border: `1px solid ${theme.colors.warning}40`
+              }}
+              title="View achievements"
+            >
+              <Award className="w-3 h-3" />
+              View Achievements
+            </button>
+          )}
+        </div>
+      )}
+    </div>
+  );
+});
 
 export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPanelProps>(function HistoryPanel({ session, theme, onJumpToAgentSession, onResumeSession, onOpenSessionAsTab, onOpenAboutModal, fileTree, onFileClick }, ref) {
   const [historyEntries, setHistoryEntries] = useState<HistoryEntry[]>([]);
@@ -424,7 +641,6 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
   const [detailModalEntry, setDetailModalEntry] = useState<HistoryEntry | null>(null);
   const [searchFilter, setSearchFilter] = useState('');
   const [searchFilterOpen, setSearchFilterOpen] = useState(false);
-  const [displayCount, setDisplayCount] = useState(INITIAL_DISPLAY_COUNT);
   const [graphReferenceTime, setGraphReferenceTime] = useState<number | undefined>(undefined);
   const [helpModalOpen, setHelpModalOpen] = useState(false);
   const [graphLookbackHours, setGraphLookbackHours] = useState<number | null>(null); // default to "All time"
@@ -435,7 +651,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
   const hasRestoredScroll = useRef<boolean>(false);
 
   // Load history entries function - reusable for initial load and refresh
-  // When isRefresh=true, preserve scroll position and displayCount
+  // When isRefresh=true, preserve scroll position
   const loadHistory = useCallback(async (isRefresh = false) => {
     // Save current scroll position before loading
     const currentScrollTop = listRef.current?.scrollTop ?? 0;
@@ -452,17 +668,15 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
       setHistoryEntries(validEntries.slice(0, MAX_HISTORY_IN_MEMORY));
 
       if (isRefresh) {
-        // On refresh, preserve displayCount and restore scroll position
+        // On refresh, restore scroll position
         // Use RAF to ensure DOM has updated before restoring scroll
         requestAnimationFrame(() => {
           if (listRef.current) {
             listRef.current.scrollTop = currentScrollTop;
           }
         });
-      } else {
-        // Only reset display count on initial load, not refresh
-        setDisplayCount(INITIAL_DISPLAY_COUNT);
       }
+      // Note: With virtualization, display count is managed automatically
     } catch (error) {
       console.error('Failed to load history:', error);
       setHistoryEntries([]);
@@ -471,7 +685,6 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
         setIsLoading(false);
       }
     }
-  // Note: displayCount intentionally NOT in deps - we don't want to reload history when it changes
   }, [session.cwd, session.id]);
 
   // Load history entries on mount and when session changes
@@ -531,21 +744,44 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     return true;
   }), [historyEntries, activeFilters, searchFilter]);
 
-  // Slice to only display up to displayCount for performance
-  const filteredEntries = useMemo(() =>
-    allFilteredEntries.slice(0, displayCount),
-    [allFilteredEntries, displayCount]
-  );
+  // Note: With virtualization, we no longer need to slice entries
+  // The virtualizer handles rendering only visible items efficiently
+  // filteredEntries is kept as an alias for backwards compatibility with some handlers
+  const filteredEntries = allFilteredEntries;
 
-  // Check if there are more entries to load
-  const hasMore = allFilteredEntries.length > displayCount;
+  // ============================================================================
+  // Virtualization Setup (must be before handlers that use it)
+  // ============================================================================
+
+  // Estimate row height based on entry content
+  const estimateSize = useCallback((index: number) => {
+    const entry = allFilteredEntries[index];
+    if (!entry) return ESTIMATED_ROW_HEIGHT;
+    // Entries with footer (elapsed time, cost, or achievement) are taller
+    const hasFooter = entry.elapsedTimeMs !== undefined ||
+      (entry.usageStats && entry.usageStats.totalCostUsd > 0) ||
+      entry.achievementAction;
+    return hasFooter ? ESTIMATED_ROW_HEIGHT : ESTIMATED_ROW_HEIGHT_SIMPLE;
+  }, [allFilteredEntries]);
+
+  // Create virtualizer
+  const virtualizer = useVirtualizer({
+    count: allFilteredEntries.length,
+    getScrollElement: () => listRef.current,
+    estimateSize,
+    overscan: 5, // Render 5 extra items above/below viewport
+    gap: 12, // Space between items (equivalent to space-y-3)
+  });
+
+  // Get virtual items for rendering
+  const virtualItems = virtualizer.getVirtualItems();
 
   // Handle Enter key selection - opens detail modal for selected entry
   const handleSelectByIndex = useCallback((index: number) => {
-    if (index >= 0 && index < filteredEntries.length) {
-      setDetailModalEntry(filteredEntries[index]);
+    if (index >= 0 && index < allFilteredEntries.length) {
+      setDetailModalEntry(allFilteredEntries[index]);
     }
-  }, [filteredEntries]);
+  }, [allFilteredEntries]);
 
   // Use list navigation hook for ArrowUp/ArrowDown/Enter handling
   // Note: initialIndex is -1 to support "no selection" state
@@ -554,7 +790,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     setSelectedIndex,
     handleKeyDown: listNavHandleKeyDown,
   } = useListNavigation({
-    listLength: filteredEntries.length,
+    listLength: allFilteredEntries.length,
     onSelect: handleSelectByIndex,
     initialIndex: -1,
   });
@@ -571,13 +807,13 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     },
     refreshHistory: () => {
       // Pass true to indicate this is a refresh, not initial load
-      // This preserves scroll position and displayCount
+      // This preserves scroll position
       loadHistory(true);
     }
   }), [selectedIndex, setSelectedIndex, historyEntries.length, loadHistory]);
 
-  // Handle graph bar click - scroll to first entry in that time range
-  const handleGraphBarClick = useCallback((bucketStart: number, bucketEnd: number) => {
+  // Update graph bar click handler to use virtualizer for scrolling
+  const handleGraphBarClickVirtualized = useCallback((bucketStart: number, bucketEnd: number) => {
     // Find entries within this time bucket (entries are sorted newest first)
     const entriesInBucket = historyEntries.filter(
       entry => entry.timestamp >= bucketStart && entry.timestamp < bucketEnd
@@ -589,82 +825,42 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     const targetEntry = entriesInBucket[0];
 
     // Find its index in the filtered list
-    // We need to look at allFilteredEntries (not just currently displayed ones)
-    // and potentially expand displayCount to show it
     const indexInAllFiltered = allFilteredEntries.findIndex(e => e.id === targetEntry.id);
 
     if (indexInAllFiltered === -1) {
-      // Entry exists but is filtered out - try finding any entry from the bucket in filtered list
+      // Entry exists but is filtered out - try finding any entry from the bucket
       const anyMatch = allFilteredEntries.findIndex(e =>
         e.timestamp >= bucketStart && e.timestamp < bucketEnd
       );
       if (anyMatch === -1) return;
 
-      // Expand display count if needed
-      if (anyMatch >= displayCount) {
-        setDisplayCount(Math.min(anyMatch + LOAD_MORE_COUNT, allFilteredEntries.length));
-      }
-
-      // Set selection and scroll after a brief delay for state to update
-      setTimeout(() => {
-        setSelectedIndex(anyMatch);
-        const itemEl = itemRefs.current[anyMatch];
-        if (itemEl) {
-          itemEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        }
-      }, 50);
+      setSelectedIndex(anyMatch);
+      virtualizer.scrollToIndex(anyMatch, { align: 'center', behavior: 'smooth' });
     } else {
-      // Expand display count if needed
-      if (indexInAllFiltered >= displayCount) {
-        setDisplayCount(Math.min(indexInAllFiltered + LOAD_MORE_COUNT, allFilteredEntries.length));
-      }
-
-      // Set selection and scroll after a brief delay for state to update
-      setTimeout(() => {
-        setSelectedIndex(indexInAllFiltered);
-        const itemEl = itemRefs.current[indexInAllFiltered];
-        if (itemEl) {
-          itemEl.scrollIntoView({ block: 'center', behavior: 'smooth' });
-        }
-      }, 50);
+      setSelectedIndex(indexInAllFiltered);
+      virtualizer.scrollToIndex(indexInAllFiltered, { align: 'center', behavior: 'smooth' });
     }
-  }, [historyEntries, allFilteredEntries, displayCount]);
+  }, [historyEntries, allFilteredEntries, setSelectedIndex, virtualizer]);
 
   // PERF: Store scroll target ref for throttled handler
   const scrollTargetRef = useRef<HTMLDivElement | null>(null);
 
-  // Handle scroll to load more entries AND update graph reference time
+  // Handle scroll to update graph reference time
   // PERF: Inner handler contains the actual logic
+  // Note: With virtualization, we no longer need to load more entries on scroll
   const handleScrollInner = useCallback(() => {
     const target = scrollTargetRef.current;
     if (!target) return;
 
-    const scrollBottom = target.scrollHeight - target.scrollTop - target.clientHeight;
-
     // Save scroll position to module-level cache (persists across session switches)
     scrollPositionCache.set(session.id, target.scrollTop);
 
-    // Load more when within 100px of bottom
-    if (scrollBottom < 100 && hasMore) {
-      setDisplayCount(prev => Math.min(prev + LOAD_MORE_COUNT, allFilteredEntries.length));
-    }
-
     // Find the topmost visible entry to update the graph's reference time
     // This creates the "sliding window" effect as you scroll through history
-    const containerRect = target.getBoundingClientRect();
-    let topmostVisibleEntry: HistoryEntry | null = null;
-
-    for (let i = 0; i < filteredEntries.length; i++) {
-      const itemEl = itemRefs.current[i];
-      if (itemEl) {
-        const itemRect = itemEl.getBoundingClientRect();
-        // Check if this item is at or below the top of the container
-        if (itemRect.top >= containerRect.top - 20) {
-          topmostVisibleEntry = filteredEntries[i];
-          break;
-        }
-      }
-    }
+    // With virtualization, we use the virtualizer's visible range
+    const visibleItems = virtualizer.getVirtualItems();
+    const firstVisibleIndex = visibleItems[0]?.index ?? 0;
+    const topmostVisibleEntry = allFilteredEntries[firstVisibleIndex];
 
     // Update the graph reference time to the topmost visible entry's timestamp
     // If at the very top (no scrolling), use undefined to show "now"
@@ -673,7 +869,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     } else if (topmostVisibleEntry) {
       setGraphReferenceTime(topmostVisibleEntry.timestamp);
     }
-  }, [session.id, hasMore, allFilteredEntries.length, filteredEntries]);
+  }, [session.id, allFilteredEntries, virtualizer]);
 
   // PERF: Throttle scroll handler to 4ms (~240fps) for smooth scrollbar
   const throttledScrollHandler = useThrottledCallback(handleScrollInner, 4);
@@ -705,22 +901,17 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     hasRestoredScroll.current = false;
   }, [session.id]);
 
-  // Reset selected index, display count, and graph reference time when filters change
+  // Reset selected index and graph reference time when filters change
   useEffect(() => {
     setSelectedIndex(-1);
-    setDisplayCount(INITIAL_DISPLAY_COUNT);
     setGraphReferenceTime(undefined); // Reset to "now" when filters change
-  }, [activeFilters, searchFilter]);
-
-  // Scroll selected item into view
-  useEffect(() => {
-    if (selectedIndex >= 0) {
-      const itemEl = itemRefs.current[selectedIndex];
-      if (itemEl) {
-        itemEl.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
+    // Scroll to top when filters change
+    if (listRef.current) {
+      listRef.current.scrollTop = 0;
     }
-  }, [selectedIndex]);
+  }, [activeFilters, searchFilter, setSelectedIndex]);
+
+  // Note: Scroll-to-selected is now handled by the virtualizer effect above
 
   // Keyboard navigation handler - combines hook handler with custom Escape/Cmd+F logic
   const handleKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -772,21 +963,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     }
   }, [session.id, setSelectedIndex]);
 
-  // Format timestamp
-  const formatTime = (timestamp: number) => {
-    const date = new Date(timestamp);
-    const now = new Date();
-    const isToday = date.toDateString() === now.toDateString();
-
-    if (isToday) {
-      return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    } else {
-      return date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
-        ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-    }
-  };
-
-  // Get pill color based on type
+  // Get pill color based on type (used by filter buttons in header)
   const getPillColor = (type: HistoryEntryType) => {
     switch (type) {
       case 'AUTO':
@@ -798,7 +975,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
     }
   };
 
-  // Get icon for entry type
+  // Get icon for entry type (used by filter buttons in header)
   const getEntryIcon = (type: HistoryEntryType) => {
     switch (type) {
       case 'AUTO':
@@ -846,7 +1023,7 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
           entries={historyEntries}
           theme={theme}
           referenceTime={graphReferenceTime}
-          onBarClick={handleGraphBarClick}
+          onBarClick={handleGraphBarClickVirtualized}
           lookbackHours={graphLookbackHours}
           onLookbackChange={handleLookbackChange}
         />
@@ -901,17 +1078,17 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
         </div>
       )}
 
-      {/* History List */}
+      {/* History List - Virtualized */}
       <div
         ref={listRef}
-        className="flex-1 overflow-y-auto space-y-3 outline-none scrollbar-thin"
+        className="flex-1 overflow-y-auto outline-none scrollbar-thin"
         tabIndex={0}
         onKeyDown={handleKeyDown}
         onScroll={handleScroll}
       >
         {isLoading ? (
           <div className="text-center py-8 text-xs opacity-50">Loading history...</div>
-        ) : filteredEntries.length === 0 ? (
+        ) : allFilteredEntries.length === 0 ? (
           <div className="text-center py-8 text-xs opacity-50">
             {historyEntries.length === 0
               ? 'No history yet. Run batch tasks or use /history to add entries.'
@@ -920,173 +1097,44 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
                 : 'No entries match the selected filters.'}
           </div>
         ) : (
-          <>
-          {filteredEntries.map((entry, index) => {
-            const colors = getPillColor(entry.type);
-            const Icon = getEntryIcon(entry.type);
-            const isSelected = index === selectedIndex;
+          <div
+            style={{
+              height: `${virtualizer.getTotalSize()}px`,
+              width: '100%',
+              position: 'relative',
+            }}
+          >
+            {virtualItems.map((virtualItem) => {
+              const entry = allFilteredEntries[virtualItem.index];
+              if (!entry) return null;
 
-            return (
-              <div
-                key={entry.id || `entry-${index}`}
-                ref={(el) => {
-                  itemRefs.current[index] = el;
-                }}
-                onClick={() => openDetailModal(entry, index)}
-                className="p-3 rounded border transition-colors cursor-pointer hover:bg-white/5"
-                style={{
-                  borderColor: isSelected ? theme.colors.accent : theme.colors.border,
-                  backgroundColor: isSelected ? theme.colors.accent + '10' : 'transparent',
-                  outline: isSelected ? `2px solid ${theme.colors.accent}` : 'none',
-                  outlineOffset: '1px'
-                }}
-              >
-                {/* Header Row */}
-                <div className="flex items-center justify-between mb-2">
-                  <div className="flex items-center gap-2">
-                    {/* Success/Failure Indicator for AUTO entries */}
-                    {entry.type === 'AUTO' && entry.success !== undefined && (
-                      <span
-                        className="flex items-center justify-center w-5 h-5 rounded-full"
-                        style={{
-                          backgroundColor: entry.success
-                            ? (entry.validated ? theme.colors.success : theme.colors.success + '20')
-                            : theme.colors.error + '20',
-                          border: `1px solid ${entry.success
-                            ? (entry.validated ? theme.colors.success : theme.colors.success + '40')
-                            : theme.colors.error + '40'}`
-                        }}
-                        title={entry.success
-                          ? (entry.validated ? 'Task completed successfully and human-validated' : 'Task completed successfully')
-                          : 'Task failed'}
-                      >
-                        {entry.success ? (
-                          entry.validated ? (
-                            <DoubleCheck className="w-3 h-3" style={{ color: '#ffffff' }} />
-                          ) : (
-                            <Check className="w-3 h-3" style={{ color: theme.colors.success }} />
-                          )
-                        ) : (
-                          <X className="w-3 h-3" style={{ color: theme.colors.error }} />
-                        )}
-                      </span>
-                    )}
-
-                    {/* Type Pill */}
-                    <span
-                      className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
-                      style={{
-                        backgroundColor: colors.bg,
-                        color: colors.text,
-                        border: `1px solid ${colors.border}`
-                      }}
-                    >
-                      <Icon className="w-2.5 h-2.5" />
-                      {entry.type}
-                    </span>
-
-                    {/* Session Name or ID Octet (clickable) - opens session as new tab */}
-                    {entry.agentSessionId && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenSessionAsTab?.(entry.agentSessionId!);
-                        }}
-                        className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors hover:opacity-80 min-w-0 ${entry.sessionName ? '' : 'font-mono uppercase'}`}
-                        style={{
-                          backgroundColor: theme.colors.accent + '20',
-                          color: theme.colors.accent,
-                          border: `1px solid ${theme.colors.accent}40`,
-                        }}
-                        title={`Open session ${entry.sessionName || entry.agentSessionId.split('-')[0]} as new tab`}
-                      >
-                        <span className="truncate">
-                          {entry.sessionName || entry.agentSessionId.split('-')[0].toUpperCase()}
-                        </span>
-                        <ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-                      </button>
-                    )}
-
-                  </div>
-
-                  {/* Timestamp */}
-                  <span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-                    {formatTime(entry.timestamp)}
-                  </span>
-                </div>
-
-                {/* Summary - 3 lines max, strip markdown for list view */}
-                <p
-                  className="text-xs leading-relaxed overflow-hidden"
+              return (
+                <div
+                  key={entry.id || `entry-${virtualItem.index}`}
+                  ref={(el) => {
+                    itemRefs.current[virtualItem.index] = el;
+                  }}
                   style={{
-                    color: theme.colors.textMain,
-                    display: '-webkit-box',
-                    WebkitLineClamp: 3,
-                    WebkitBoxOrient: 'vertical' as const
+                    position: 'absolute',
+                    top: 0,
+                    left: 0,
+                    width: '100%',
+                    transform: `translateY(${virtualItem.start}px)`,
                   }}
                 >
-                  {entry.summary ? stripMarkdown(entry.summary) : 'No summary available'}
-                </p>
-
-                {/* Footer Row - Time, Cost, and Achievement Action */}
-                {(entry.elapsedTimeMs !== undefined || (entry.usageStats && entry.usageStats.totalCostUsd > 0) || entry.achievementAction) && (
-                  <div className="flex items-center gap-3 mt-2 pt-2 border-t" style={{ borderColor: theme.colors.border }}>
-                    {/* Elapsed Time */}
-                    {entry.elapsedTimeMs !== undefined && (
-                      <div className="flex items-center gap-1">
-                        <Clock className="w-3 h-3" style={{ color: theme.colors.textDim }} />
-                        <span className="text-[10px] font-mono" style={{ color: theme.colors.textDim }}>
-                          {formatElapsedTime(entry.elapsedTimeMs)}
-                        </span>
-                      </div>
-                    )}
-                    {/* Cost */}
-                    {entry.usageStats && entry.usageStats.totalCostUsd > 0 && (
-                      <span
-                        className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full"
-                        style={{
-                          backgroundColor: theme.colors.success + '15',
-                          color: theme.colors.success,
-                          border: `1px solid ${theme.colors.success}30`
-                        }}
-                      >
-                        ${entry.usageStats.totalCostUsd.toFixed(2)}
-                      </span>
-                    )}
-                    {/* Achievement Action Button */}
-                    {entry.achievementAction === 'openAbout' && onOpenAboutModal && (
-                      <button
-                        onClick={(e) => {
-                          e.stopPropagation();
-                          onOpenAboutModal();
-                        }}
-                        className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors hover:opacity-80 ml-auto"
-                        style={{
-                          backgroundColor: theme.colors.warning + '20',
-                          color: theme.colors.warning,
-                          border: `1px solid ${theme.colors.warning}40`
-                        }}
-                        title="View achievements"
-                      >
-                        <Award className="w-3 h-3" />
-                        View Achievements
-                      </button>
-                    )}
-                  </div>
-                )}
-              </div>
-            );
-          })}
-          {/* Load more indicator */}
-          {hasMore && (
-            <div
-              className="text-center py-4 text-xs"
-              style={{ color: theme.colors.textDim }}
-            >
-              Showing {filteredEntries.length} of {allFilteredEntries.length} entries. Scroll for more...
-            </div>
-          )}
-          </>
+                  <HistoryEntryItem
+                    entry={entry}
+                    index={virtualItem.index}
+                    isSelected={virtualItem.index === selectedIndex}
+                    theme={theme}
+                    onOpenDetailModal={openDetailModal}
+                    onOpenSessionAsTab={onOpenSessionAsTab}
+                    onOpenAboutModal={onOpenAboutModal}
+                  />
+                </div>
+              );
+            })}
+          </div>
         )}
       </div>
 
@@ -1118,10 +1166,8 @@ export const HistoryPanel = React.memo(forwardRef<HistoryPanelHandle, HistoryPan
           onNavigate={(entry, index) => {
             setSelectedIndex(index);
             setDetailModalEntry(entry);
-            // Ensure the entry is visible in the list (expand displayCount if needed)
-            if (index >= displayCount) {
-              setDisplayCount(Math.min(index + LOAD_MORE_COUNT, allFilteredEntries.length));
-            }
+            // With virtualization, scrolling is handled automatically via the selectedIndex effect
+            virtualizer.scrollToIndex(index, { align: 'center', behavior: 'smooth' });
           }}
           // File linking props for markdown rendering
           fileTree={fileTree}

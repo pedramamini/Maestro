@@ -161,7 +161,7 @@ const result = await execFileNoThrow('git', ['status'], cwd);
 
 Add new settings in `useSettings.ts`:
 ```typescript
-// 1. Add state
+// 1. Add state with default value
 const [mySetting, setMySettingState] = useState(defaultValue);
 
 // 2. Add wrapper that persists
@@ -170,9 +170,11 @@ const setMySetting = (value) => {
   window.maestro.settings.set('mySetting', value);
 };
 
-// 3. Load in useEffect
-const saved = await window.maestro.settings.get('mySetting');
-if (saved !== undefined) setMySettingState(saved);
+// 3. Load from batch response in useEffect (settings use batch loading)
+// In the loadSettings useEffect, extract from allSettings object:
+const allSettings = await window.maestro.settings.getAll();
+const savedMySetting = allSettings['mySetting'];
+if (savedMySetting !== undefined) setMySettingState(savedMySetting);
 ```
 
 ### 4. Adding Modals

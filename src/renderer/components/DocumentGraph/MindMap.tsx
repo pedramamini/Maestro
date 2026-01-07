@@ -637,9 +637,13 @@ function calculateMindMapLayout(
     // Sort alphabetically by domain
     externalNodes.sort((a, b) => (a.domain || '').localeCompare(b.domain || ''));
 
-    const externalY = centerY + Math.max(
-      ...positionedNodes.filter(n => n.side !== 'external').map(n => Math.abs(n.y - centerY))
-    ) + EXTERNAL_CLUSTER_OFFSET;
+    // PERF: Single-pass filter+map using reduce instead of chained filter().map()
+    const maxYDistance = positionedNodes.reduce((max, n) => {
+      if (n.side === 'external') return max;
+      const dist = Math.abs(n.y - centerY);
+      return dist > max ? dist : max;
+    }, 0);
+    const externalY = centerY + maxYDistance + EXTERNAL_CLUSTER_OFFSET;
 
     const totalExternalWidth = externalNodes.length * (EXTERNAL_NODE_WIDTH + 20);
     const externalStartX = centerX - totalExternalWidth / 2 + EXTERNAL_NODE_WIDTH / 2;

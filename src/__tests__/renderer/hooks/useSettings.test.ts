@@ -18,7 +18,9 @@ describe('useSettings', () => {
   beforeEach(() => {
     vi.clearAllMocks();
     originalFontSize = document.documentElement.style.fontSize;
-    // Reset all mocks to return undefined (default behavior)
+    // Reset all mocks to return empty/default (default behavior)
+    // PERF: Implementation now uses batch loading via getAll() instead of individual get() calls
+    vi.mocked(window.maestro.settings.getAll).mockResolvedValue({});
     vi.mocked(window.maestro.settings.get).mockResolvedValue(undefined);
     vi.mocked(window.maestro.logger.getLogLevel).mockResolvedValue('info');
     vi.mocked(window.maestro.logger.getMaxLogBuffer).mockResolvedValue(5000);
@@ -169,13 +171,10 @@ describe('useSettings', () => {
 
   describe('loading saved settings', () => {
     it('should load saved LLM settings', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        const values: Record<string, unknown> = {
-          llmProvider: 'anthropic',
-          modelSlug: 'claude-3-opus',
-          apiKey: 'test-api-key',
-        };
-        return values[key];
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        llmProvider: 'anthropic',
+        modelSlug: 'claude-3-opus',
+        apiKey: 'test-api-key',
       });
 
       const { result } = renderHook(() => useSettings());
@@ -187,17 +186,14 @@ describe('useSettings', () => {
     });
 
     it('should load saved UI settings', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        const values: Record<string, unknown> = {
-          activeThemeId: 'gruvbox',
-          enterToSendAI: true,
-          enterToSendTerminal: false,
-          defaultSaveToHistory: true,
-          leftSidebarWidth: 300,
-          rightPanelWidth: 400,
-          markdownEditMode: true,
-        };
-        return values[key];
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        activeThemeId: 'gruvbox',
+        enterToSendAI: true,
+        enterToSendTerminal: false,
+        defaultSaveToHistory: true,
+        leftSidebarWidth: 300,
+        rightPanelWidth: 400,
+        markdownEditMode: true,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -213,14 +209,11 @@ describe('useSettings', () => {
     });
 
     it('should load saved notification settings', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        const values: Record<string, unknown> = {
-          osNotificationsEnabled: false,
-          audioFeedbackEnabled: true,
-          audioFeedbackCommand: 'espeak',
-          toastDuration: 30,
-        };
-        return values[key];
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        osNotificationsEnabled: false,
+        audioFeedbackEnabled: true,
+        audioFeedbackCommand: 'espeak',
+        toastDuration: 30,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -237,9 +230,8 @@ describe('useSettings', () => {
         toggleSidebar: { id: 'toggleSidebar', label: 'Toggle Left Panel', keys: ['Meta', 'b'] },
       };
 
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'shortcuts') return customShortcuts;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        shortcuts: customShortcuts,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -257,9 +249,8 @@ describe('useSettings', () => {
         { id: 'custom', command: '/custom', description: 'Custom command', prompt: 'custom' },
       ];
 
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'customAICommands') return savedCommands;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        customAICommands: savedCommands,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -282,9 +273,8 @@ describe('useSettings', () => {
         { id: 'custom', command: '/custom', description: 'Custom command', prompt: 'custom' },
       ];
 
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'customAICommands') return savedCommands;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        customAICommands: savedCommands,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -314,9 +304,8 @@ describe('useSettings', () => {
         totalMessages: 500,
       };
 
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'globalStats') return savedStats;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        globalStats: savedStats,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -335,10 +324,9 @@ describe('useSettings', () => {
         currentBadgeLevel: 2,
       };
 
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'autoRunStats') return savedStats;
-        if (key === 'concurrentAutoRunTimeMigrationApplied') return true; // Skip migration in tests
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        autoRunStats: savedStats,
+        concurrentAutoRunTimeMigrationApplied: true, // Skip migration in tests
       });
 
       const { result } = renderHook(() => useSettings());
@@ -838,21 +826,18 @@ describe('useSettings', () => {
 
       it('should unlock badge level 1 when cumulative time already at 15 minutes', async () => {
         // Pre-load cumulative time (simulating updateAutoRunProgress having been called)
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'autoRunStats') {
-            return {
-              cumulativeTimeMs: 15 * 60 * 1000, // 15 minutes already accumulated
-              longestRunMs: 0,
-              longestRunTimestamp: 0,
-              totalRuns: 0,
-              currentBadgeLevel: 0,
-              lastBadgeUnlockLevel: 0,
-              lastAcknowledgedBadgeLevel: 0,
-              badgeHistory: [],
-            };
-          }
-          if (key === 'concurrentAutoRunTimeMigrationApplied') return true; // Skip migration in tests
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          autoRunStats: {
+            cumulativeTimeMs: 15 * 60 * 1000, // 15 minutes already accumulated
+            longestRunMs: 0,
+            longestRunTimestamp: 0,
+            totalRuns: 0,
+            currentBadgeLevel: 0,
+            lastBadgeUnlockLevel: 0,
+            lastAcknowledgedBadgeLevel: 0,
+            badgeHistory: [],
+          },
+          concurrentAutoRunTimeMigrationApplied: true, // Skip migration in tests
         });
 
         const { result } = renderHook(() => useSettings());
@@ -871,20 +856,17 @@ describe('useSettings', () => {
 
       it('should unlock badge level 2 at 1 hour', async () => {
         // Pre-load with cumulative time at 1 hour
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'autoRunStats') {
-            return {
-              cumulativeTimeMs: 60 * 60 * 1000, // 60 minutes already accumulated
-              longestRunMs: 0,
-              longestRunTimestamp: 0,
-              totalRuns: 0,
-              currentBadgeLevel: 1,
-              lastBadgeUnlockLevel: 1,
-              lastAcknowledgedBadgeLevel: 0,
-              badgeHistory: [{ level: 1, unlockedAt: Date.now() - 10000 }],
-            };
-          }
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          autoRunStats: {
+            cumulativeTimeMs: 60 * 60 * 1000, // 60 minutes already accumulated
+            longestRunMs: 0,
+            longestRunTimestamp: 0,
+            totalRuns: 0,
+            currentBadgeLevel: 1,
+            lastBadgeUnlockLevel: 1,
+            lastAcknowledgedBadgeLevel: 0,
+            badgeHistory: [{ level: 1, unlockedAt: Date.now() - 10000 }],
+          },
         });
 
         const { result } = renderHook(() => useSettings());
@@ -903,21 +885,18 @@ describe('useSettings', () => {
 
       it('should add badge to history when new badge unlocked', async () => {
         // Pre-load with cumulative time at 15 minutes
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'autoRunStats') {
-            return {
-              cumulativeTimeMs: 15 * 60 * 1000, // 15 minutes already accumulated
-              longestRunMs: 0,
-              longestRunTimestamp: 0,
-              totalRuns: 0,
-              currentBadgeLevel: 0,
-              lastBadgeUnlockLevel: 0,
-              lastAcknowledgedBadgeLevel: 0,
-              badgeHistory: [],
-            };
-          }
-          if (key === 'concurrentAutoRunTimeMigrationApplied') return true; // Skip migration in tests
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          autoRunStats: {
+            cumulativeTimeMs: 15 * 60 * 1000, // 15 minutes already accumulated
+            longestRunMs: 0,
+            longestRunTimestamp: 0,
+            totalRuns: 0,
+            currentBadgeLevel: 0,
+            lastBadgeUnlockLevel: 0,
+            lastAcknowledgedBadgeLevel: 0,
+            badgeHistory: [],
+          },
+          concurrentAutoRunTimeMigrationApplied: true, // Skip migration in tests
         });
 
         const { result } = renderHook(() => useSettings());
@@ -964,20 +943,17 @@ describe('useSettings', () => {
       });
 
       it('should not decrease lastAcknowledgedBadgeLevel', async () => {
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'autoRunStats') {
-            return {
-              cumulativeTimeMs: 0,
-              longestRunMs: 0,
-              longestRunTimestamp: 0,
-              totalRuns: 0,
-              currentBadgeLevel: 5,
-              lastBadgeUnlockLevel: 5,
-              lastAcknowledgedBadgeLevel: 5,
-              badgeHistory: [],
-            };
-          }
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          autoRunStats: {
+            cumulativeTimeMs: 0,
+            longestRunMs: 0,
+            longestRunTimestamp: 0,
+            totalRuns: 0,
+            currentBadgeLevel: 5,
+            lastBadgeUnlockLevel: 5,
+            lastAcknowledgedBadgeLevel: 5,
+            badgeHistory: [],
+          },
         });
 
         const { result } = renderHook(() => useSettings());
@@ -1013,20 +989,17 @@ describe('useSettings', () => {
       });
 
       it('should return current level when higher than acknowledged', async () => {
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'autoRunStats') {
-            return {
-              cumulativeTimeMs: 3600000, // 1 hour
-              longestRunMs: 0,
-              longestRunTimestamp: 0,
-              totalRuns: 5,
-              currentBadgeLevel: 3,
-              lastBadgeUnlockLevel: 3,
-              lastAcknowledgedBadgeLevel: 1,
-              badgeHistory: [],
-            };
-          }
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          autoRunStats: {
+            cumulativeTimeMs: 3600000, // 1 hour
+            longestRunMs: 0,
+            longestRunTimestamp: 0,
+            totalRuns: 5,
+            currentBadgeLevel: 3,
+            lastBadgeUnlockLevel: 3,
+            lastAcknowledgedBadgeLevel: 1,
+            badgeHistory: [],
+          },
         });
 
         const { result } = renderHook(() => useSettings());
@@ -1036,20 +1009,17 @@ describe('useSettings', () => {
       });
 
       it('should return null when current equals acknowledged', async () => {
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'autoRunStats') {
-            return {
-              cumulativeTimeMs: 3600000,
-              longestRunMs: 0,
-              longestRunTimestamp: 0,
-              totalRuns: 5,
-              currentBadgeLevel: 3,
-              lastBadgeUnlockLevel: 3,
-              lastAcknowledgedBadgeLevel: 3,
-              badgeHistory: [],
-            };
-          }
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          autoRunStats: {
+            cumulativeTimeMs: 3600000,
+            longestRunMs: 0,
+            longestRunTimestamp: 0,
+            totalRuns: 5,
+            currentBadgeLevel: 3,
+            lastBadgeUnlockLevel: 3,
+            lastAcknowledgedBadgeLevel: 3,
+            badgeHistory: [],
+          },
         });
 
         const { result } = renderHook(() => useSettings());
@@ -1231,9 +1201,8 @@ describe('useSettings', () => {
     });
 
     it('should apply saved font size on load', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'fontSize') return 20;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        fontSize: 20,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -1244,9 +1213,9 @@ describe('useSettings', () => {
   });
 
   describe('edge cases', () => {
-    it('should handle undefined values from settings.get gracefully', async () => {
-      // All settings return undefined
-      vi.mocked(window.maestro.settings.get).mockResolvedValue(undefined);
+    it('should handle undefined values from settings.getAll gracefully', async () => {
+      // All settings return empty object (uses defaults)
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({});
 
       const { result } = renderHook(() => useSettings());
       await waitForSettingsLoaded(result);
@@ -1258,20 +1227,17 @@ describe('useSettings', () => {
 
     it('should handle null lastAcknowledgedBadgeLevel in acknowledgeBadge', async () => {
       // Set up stats with undefined/null lastAcknowledgedBadgeLevel
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'autoRunStats') {
-          return {
-            cumulativeTimeMs: 0,
-            longestRunMs: 0,
-            longestRunTimestamp: 0,
-            totalRuns: 0,
-            currentBadgeLevel: 0,
-            lastBadgeUnlockLevel: 0,
-            // lastAcknowledgedBadgeLevel is undefined
-            badgeHistory: [],
-          };
-        }
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        autoRunStats: {
+          cumulativeTimeMs: 0,
+          longestRunMs: 0,
+          longestRunTimestamp: 0,
+          totalRuns: 0,
+          currentBadgeLevel: 0,
+          lastBadgeUnlockLevel: 0,
+          // lastAcknowledgedBadgeLevel is undefined
+          badgeHistory: [],
+        },
       });
 
       const { result } = renderHook(() => useSettings());
@@ -1287,20 +1253,17 @@ describe('useSettings', () => {
 
     it('should handle null badgeHistory in updateAutoRunProgress', async () => {
       // Set up stats with undefined/null badgeHistory
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'autoRunStats') {
-          return {
-            cumulativeTimeMs: 14 * 60 * 1000, // Just below badge 1
-            longestRunMs: 0,
-            longestRunTimestamp: 0,
-            totalRuns: 0,
-            currentBadgeLevel: 0,
-            lastBadgeUnlockLevel: 0,
-            lastAcknowledgedBadgeLevel: 0,
-            // badgeHistory is undefined
-          };
-        }
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        autoRunStats: {
+          cumulativeTimeMs: 14 * 60 * 1000, // Just below badge 1
+          longestRunMs: 0,
+          longestRunTimestamp: 0,
+          totalRuns: 0,
+          currentBadgeLevel: 0,
+          lastBadgeUnlockLevel: 0,
+          lastAcknowledgedBadgeLevel: 0,
+          // badgeHistory is undefined
+        },
       });
 
       const { result } = renderHook(() => useSettings());
@@ -1315,20 +1278,17 @@ describe('useSettings', () => {
     });
 
     it('should handle getUnacknowledgedBadgeLevel with null lastAcknowledgedBadgeLevel', async () => {
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'autoRunStats') {
-          return {
-            cumulativeTimeMs: 3600000,
-            longestRunMs: 0,
-            longestRunTimestamp: 0,
-            totalRuns: 5,
-            currentBadgeLevel: 3,
-            lastBadgeUnlockLevel: 3,
-            // lastAcknowledgedBadgeLevel is undefined
-            badgeHistory: [],
-          };
-        }
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        autoRunStats: {
+          cumulativeTimeMs: 3600000,
+          longestRunMs: 0,
+          longestRunTimestamp: 0,
+          totalRuns: 5,
+          currentBadgeLevel: 3,
+          lastBadgeUnlockLevel: 3,
+          // lastAcknowledgedBadgeLevel is undefined
+          badgeHistory: [],
+        },
       });
 
       const { result } = renderHook(() => useSettings());
@@ -1375,9 +1335,8 @@ describe('useSettings', () => {
         tourCompletionCount: 2,
       };
 
-      vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-        if (key === 'onboardingStats') return savedStats;
-        return undefined;
+      vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+        onboardingStats: savedStats,
       });
 
       const { result } = renderHook(() => useSettings());
@@ -1407,9 +1366,8 @@ describe('useSettings', () => {
       });
 
       it('should increment from existing count', async () => {
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'onboardingStats') return { wizardStartCount: 5 };
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          onboardingStats: { wizardStartCount: 5 },
         });
 
         const { result } = renderHook(() => useSettings());
@@ -1607,18 +1565,15 @@ describe('useSettings', () => {
       });
 
       it('should calculate correct completion rates', async () => {
-        vi.mocked(window.maestro.settings.get).mockImplementation(async (key: string) => {
-          if (key === 'onboardingStats') {
-            return {
-              wizardStartCount: 10,
-              wizardCompletionCount: 7,
-              tourStartCount: 8,
-              tourCompletionCount: 6,
-              averageConversationExchanges: 12.5,
-              averagePhasesPerWizard: 3.2,
-            };
-          }
-          return undefined;
+        vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+          onboardingStats: {
+            wizardStartCount: 10,
+            wizardCompletionCount: 7,
+            tourStartCount: 8,
+            tourCompletionCount: 6,
+            averageConversationExchanges: 12.5,
+            averagePhasesPerWizard: 3.2,
+          },
         });
 
         const { result } = renderHook(() => useSettings());

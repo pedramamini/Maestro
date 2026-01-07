@@ -111,15 +111,19 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 
   // Build list of mentionable agents from sessions (excluding terminal-only)
   // Uses normalized names (spaces -> hyphens) for @mention compatibility
+  // PERF: Single-pass using reduce instead of filter().map()
   const mentionableAgents = useMemo(() => {
-    return sessions
-      .filter(s => s.toolType !== 'terminal')
-      .map(s => ({
-        name: s.name,
-        mentionName: normalizeMentionName(s.name), // Name used in @mentions
-        agentId: s.toolType,
-        sessionId: s.id,
-      }));
+    return sessions.reduce<Array<{ name: string; mentionName: string; agentId: string; sessionId: string }>>((acc, s) => {
+      if (s.toolType !== 'terminal') {
+        acc.push({
+          name: s.name,
+          mentionName: normalizeMentionName(s.name), // Name used in @mentions
+          agentId: s.toolType,
+          sessionId: s.id,
+        });
+      }
+      return acc;
+    }, []);
   }, [sessions]);
 
   // Filter agents based on mention filter (matches both original and hyphenated names)
