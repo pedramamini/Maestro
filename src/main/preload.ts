@@ -1773,7 +1773,11 @@ contextBridge.exposeInMainWorld('maestro', {
       repoName: string;
       issueNumber: number;
       issueTitle: string;
-      documentPaths: string[];
+      documentPaths: Array<{
+        name: string;
+        path: string;
+        isExternal: boolean;
+      }>;
       agentType: string;
       sessionId: string;
       baseBranch?: string;

@@ -1750,7 +1750,11 @@ interface MaestroAPI {
         author: string;
         createdAt: string;
         updatedAt: string;
-        documentPaths: string[];
+        documentPaths: Array<{
+          name: string;
+          path: string;
+          isExternal: boolean;
+        }>;
         status: 'available' | 'in_progress' | 'completed';
         claimedByPr?: {
           number: number;
@@ -1923,7 +1927,11 @@ interface MaestroAPI {
       repoName: string;
       issueNumber: number;
       issueTitle: string;
-      documentPaths: string[];
+      documentPaths: Array<{
+        name: string;
+        path: string;
+        isExternal: boolean;
+      }>;
       agentType: string;
       sessionId: string;
       baseBranch?: string;

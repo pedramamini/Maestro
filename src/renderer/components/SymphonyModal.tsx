@@ -290,8 +290,8 @@ function IssueCard({
 
       {issue.documentPaths.length > 0 && (
         <div className="mt-2 text-xs" style={{ color: theme.colors.textDim }}>
-          {issue.documentPaths.slice(0, 2).map((path, i) => (
-            <div key={i} className="truncate">• {path}</div>
+          {issue.documentPaths.slice(0, 2).map((doc, i) => (
+            <div key={i} className="truncate">• {doc.name}</div>
           ))}
           {issue.documentPaths.length > 2 && (
             <div>...and {issue.documentPaths.length - 2} more</div>
@@ -491,17 +491,17 @@ function RepositoryDetailView({
 
               {/* Document tabs */}
               <div className="flex items-center gap-1 px-4 py-2 border-b overflow-x-auto" style={{ borderColor: theme.colors.border }}>
-                {selectedIssue.documentPaths.map((path) => (
+                {selectedIssue.documentPaths.map((doc) => (
                   <button
-                    key={path}
-                    onClick={() => handleSelectDoc(path)}
+                    key={doc.name}
+                    onClick={() => handleSelectDoc(doc.path)}
                     className="px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
                     style={{
-                      backgroundColor: selectedDocPath === path ? theme.colors.accent + '20' : 'transparent',
-                      color: selectedDocPath === path ? theme.colors.accent : theme.colors.textDim,
+                      backgroundColor: selectedDocPath === doc.path ? theme.colors.accent + '20' : 'transparent',
+                      color: selectedDocPath === doc.path ? theme.colors.accent : theme.colors.textDim,
                     }}
                   >
-                    {path.split('/').pop()}
+                    {doc.name}
                   </button>
                 ))}
               </div>
@@ -1079,7 +1079,7 @@ export function SymphonyModal({
         aria-modal="true"
         aria-labelledby="symphony-modal-title"
         tabIndex={-1}
-        className="w-[1000px] max-w-[95vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[85vh] outline-none"
+        className="w-[1200px] max-w-[95vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[85vh] outline-none"
         style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
       >
         {/* Detail view for projects */}
