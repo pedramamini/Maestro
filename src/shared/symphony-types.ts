@@ -70,6 +70,22 @@ export type SymphonyCategory =
 // ============================================================================
 
 /**
+ * Reference to an Auto Run document.
+ * Supports both repository-relative paths and external URLs (e.g., GitHub attachments).
+ */
+export interface DocumentReference {
+  /** Display name (filename without path) */
+  name: string;
+  /**
+   * For repo-relative paths: the path within the repository (e.g., "docs/task.md")
+   * For external files: the download URL
+   */
+  path: string;
+  /** Whether this is an external URL that needs to be downloaded */
+  isExternal: boolean;
+}
+
+/**
  * A GitHub issue with the `runmaestro.ai` label.
  * Represents a contribution opportunity.
  */
@@ -90,8 +106,8 @@ export interface SymphonyIssue {
   createdAt: string;
   /** When issue was last updated */
   updatedAt: string;
-  /** Parsed Auto Run document paths from issue body */
-  documentPaths: string[];
+  /** Parsed Auto Run document references from issue body */
+  documentPaths: DocumentReference[];
   /** Availability status */
   status: IssueStatus;
   /** If in progress, the PR working on it */

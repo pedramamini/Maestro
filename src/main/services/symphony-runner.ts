@@ -5,12 +5,24 @@
  */
 
 import path from 'path';
+import fs from 'fs/promises';
 import { logger } from '../utils/logger';
 import { execFileNoThrow } from '../utils/execFile';
-// Types imported for documentation and future use
-// import type { ActiveContribution, SymphonyIssue } from '../../shared/symphony-types';
+import type { DocumentReference } from '../../shared/symphony-types';
 
 const LOG_CONTEXT = '[SymphonyRunner]';
+
+/**
+ * Clean up local repository directory on failure.
+ */
+async function cleanupLocalRepo(localPath: string): Promise<void> {
+  try {
+    await fs.rm(localPath, { recursive: true, force: true });
+    logger.info('Cleaned up local repository', LOG_CONTEXT, { localPath });
+  } catch (error) {
+    logger.warn('Failed to cleanup local repository', LOG_CONTEXT, { localPath, error });
+  }
+}
 
 export interface SymphonyRunnerOptions {
   contributionId: string;
@@ -18,7 +30,7 @@ export interface SymphonyRunnerOptions {
   repoUrl: string;
   issueNumber: number;
   issueTitle: string;
-  documentPaths: string[];
+  documentPaths: DocumentReference[];
   localPath: string;
   branchName: string;
   onProgress?: (progress: { completedDocuments: number; totalDocuments: number }) => void;
@@ -40,6 +52,23 @@ async function cloneRepo(repoUrl: string, localPath: string): Promise<boolean> {
 async function createBranch(localPath: string, branchName: string): Promise<boolean> {
   const result = await execFileNoThrow('git', ['checkout', '-b', branchName], localPath);
   return result.exitCode === 0;
+}
+
+/**
+ * Configure git user for commits (required for users without global git config).
+ */
+async function configureGitUser(localPath: string): Promise<boolean> {
+  const nameResult = await execFileNoThrow('git', ['config', 'user.name', 'Maestro Symphony'], localPath);
+  if (nameResult.exitCode !== 0) {
+    logger.warn('Failed to set git user.name', LOG_CONTEXT, { error: nameResult.stderr });
+    return false;
+  }
+  const emailResult = await execFileNoThrow('git', ['config', 'user.email', 'symphony@runmaestro.ai'], localPath);
+  if (emailResult.exitCode !== 0) {
+    logger.warn('Failed to set git user.email', LOG_CONTEXT, { error: emailResult.stderr });
+    return false;
+  }
+  return true;
 }
 
 /**
@@ -98,19 +127,58 @@ Closes #${issueNumber}
 }
 
 /**
- * Copy Auto Run documents from repo to local Auto Run Docs folder.
+ * Download a file from a URL.
+ */
+async function downloadFile(url: string, destPath: string): Promise<boolean> {
+  try {
+    const response = await fetch(url);
+    if (!response.ok) {
+      logger.error('Failed to download file', LOG_CONTEXT, { url, status: response.status });
+      return false;
+    }
+    const buffer = await response.arrayBuffer();
+    await fs.writeFile(destPath, Buffer.from(buffer));
+    return true;
+  } catch (error) {
+    logger.error('Error downloading file', LOG_CONTEXT, { url, error });
+    return false;
+  }
+}
+
+/**
+ * Copy or download Auto Run documents to local Auto Run Docs folder.
+ * Handles both repo-relative paths and external URLs (GitHub attachments).
  */
 async function setupAutoRunDocs(
   localPath: string,
-  documentPaths: string[]
+  documentPaths: DocumentReference[]
 ): Promise<string> {
   const autoRunPath = path.join(localPath, 'Auto Run Docs');
-  await execFileNoThrow('mkdir', ['-p', autoRunPath]);
+  await fs.mkdir(autoRunPath, { recursive: true });
 
-  for (const docPath of documentPaths) {
-    const sourcePath = path.join(localPath, docPath);
-    const destPath = path.join(autoRunPath, path.basename(docPath));
-    await execFileNoThrow('cp', [sourcePath, destPath]);
+  for (const doc of documentPaths) {
+    const destPath = path.join(autoRunPath, doc.name);
+
+    if (doc.isExternal) {
+      // Download external file (GitHub attachment)
+      logger.info('Downloading external document', LOG_CONTEXT, { name: doc.name, url: doc.path });
+      const success = await downloadFile(doc.path, destPath);
+      if (!success) {
+        logger.warn('Failed to download document, skipping', LOG_CONTEXT, { name: doc.name });
+      }
+    } else {
+      // Copy from repo using Node.js fs API
+      const sourcePath = path.join(localPath, doc.path);
+      try {
+        await fs.copyFile(sourcePath, destPath);
+      } catch (error) {
+        logger.warn('Failed to copy document', LOG_CONTEXT, {
+          name: doc.name,
+          source: sourcePath,
+          error: error instanceof Error ? error.message : String(error)
+        });
+      }
+    }
   }
 
   return autoRunPath;
@@ -154,23 +222,30 @@ export async function startContribution(options: SymphonyRunnerOptions): Promise
     // 2. Create branch
     onStatusChange?.('setting_up');
     if (!await createBranch(localPath, branchName)) {
+      await cleanupLocalRepo(localPath);
       return { success: false, error: 'Branch creation failed' };
     }
+
+    // 2.5. Configure git user for commits
+    await configureGitUser(localPath);
 
     // 3. Empty commit
     const commitMessage = `[Symphony] Start contribution for #${issueNumber}`;
     if (!await createEmptyCommit(localPath, commitMessage)) {
+      await cleanupLocalRepo(localPath);
       return { success: false, error: 'Empty commit failed' };
     }
 
     // 4. Push branch
     if (!await pushBranch(localPath, branchName)) {
+      await cleanupLocalRepo(localPath);
       return { success: false, error: 'Push failed' };
     }
 
     // 5. Create draft PR
     const prResult = await createDraftPR(localPath, issueNumber, issueTitle);
     if (!prResult.success) {
+      await cleanupLocalRepo(localPath);
       return { success: false, error: prResult.error };
     }
 
@@ -187,6 +262,7 @@ export async function startContribution(options: SymphonyRunnerOptions): Promise
       autoRunPath,
     };
   } catch (error) {
+    await cleanupLocalRepo(localPath);
     return {
       success: false,
       error: error instanceof Error ? error.message : 'Unknown error',
@@ -203,6 +279,9 @@ export async function finalizeContribution(
   issueNumber: number,
   issueTitle: string
 ): Promise<{ success: boolean; prUrl?: string; error?: string }> {
+  // Configure git user for commits (in case not already configured)
+  await configureGitUser(localPath);
+
   // Commit all changes
   await execFileNoThrow('git', ['add', '-A'], localPath);
 
@@ -281,9 +360,9 @@ export async function cancelContribution(
     logger.warn('Failed to close PR', LOG_CONTEXT, { prNumber, error: closeResult.stderr });
   }
 
-  // Clean up local directory
+  // Clean up local directory using Node.js fs API
   if (cleanup) {
-    await execFileNoThrow('rm', ['-rf', localPath]);
+    await cleanupLocalRepo(localPath);
   }
 
   return { success: true };

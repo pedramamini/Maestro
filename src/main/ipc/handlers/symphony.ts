@@ -43,6 +43,7 @@ import type {
   StartContributionResponse,
   CompleteContributionResponse,
   IssueStatus,
+  DocumentReference,
 } from '../../../shared/symphony-types';
 import { SymphonyError } from '../../../shared/symphony-types';
 
@@ -126,7 +127,7 @@ function validateContributionParams(params: {
   repoUrl: string;
   repoName: string;
   issueNumber: number;
-  documentPaths: string[];
+  documentPaths: DocumentReference[];
 }): { valid: boolean; error?: string } {
   // Validate repo slug
   const slugValidation = validateRepoSlug(params.repoSlug);
@@ -150,10 +151,12 @@ function validateContributionParams(params: {
     return { valid: false, error: 'Invalid issue number' };
   }
 
-  // Validate document paths (check for path traversal)
-  for (const docPath of params.documentPaths) {
-    if (docPath.includes('..') || docPath.startsWith('/')) {
-      return { valid: false, error: `Invalid document path: ${docPath}` };
+  // Validate document paths (check for path traversal in repo-relative paths)
+  for (const doc of params.documentPaths) {
+    // Skip validation for external URLs (they're downloaded, not file paths)
+    if (doc.isExternal) continue;
+    if (doc.path.includes('..') || doc.path.startsWith('/')) {
+      return { valid: false, error: `Invalid document path: ${doc.path}` };
     }
   }
 
@@ -280,25 +283,69 @@ function generateBranchName(issueNumber: number): string {
     .replace('{timestamp}', timestamp);
 }
 
-/**
- * Parse document paths from issue body.
- */
-function parseDocumentPaths(body: string): string[] {
-  const paths: Set<string> = new Set();
+/** Maximum body size to parse (1MB) to prevent performance issues */
+const MAX_BODY_SIZE = 1024 * 1024;
 
-  for (const pattern of DOCUMENT_PATH_PATTERNS) {
-    // Reset lastIndex for global regex
-    pattern.lastIndex = 0;
-    let match;
-    while ((match = pattern.exec(body)) !== null) {
-      const docPath = match[1];
-      if (docPath && !docPath.startsWith('http')) {
-        paths.add(docPath);
+/**
+ * Parse document references from issue body.
+ * Supports both repository-relative paths and GitHub attachment links.
+ */
+function parseDocumentPaths(body: string): DocumentReference[] {
+  // Guard against extremely large bodies that could cause performance issues
+  if (body.length > MAX_BODY_SIZE) {
+    logger.warn('Issue body too large, truncating for document parsing', LOG_CONTEXT, {
+      bodyLength: body.length,
+      maxSize: MAX_BODY_SIZE,
+    });
+    body = body.substring(0, MAX_BODY_SIZE);
+  }
+
+  const docs: Map<string, DocumentReference> = new Map();
+
+  // Pattern for markdown links: [filename.md](url)
+  // Captures: [1] = filename (link text), [2] = URL
+  const markdownLinkPattern = /\[([^\]]+\.md)\]\(([^)]+)\)/gi;
+
+  // First, check for markdown links (GitHub attachments)
+  let match;
+  while ((match = markdownLinkPattern.exec(body)) !== null) {
+    const filename = match[1];
+    const url = match[2];
+    // Only add if it's a GitHub attachment URL or similar external URL
+    if (url.startsWith('http')) {
+      const key = filename.toLowerCase(); // Dedupe by filename
+      if (!docs.has(key)) {
+        docs.set(key, {
+          name: filename,
+          path: url,
+          isExternal: true,
+        });
       }
     }
   }
 
-  return Array.from(paths);
+  // Then check for repo-relative paths using existing patterns
+  for (const pattern of DOCUMENT_PATH_PATTERNS) {
+    // Reset lastIndex for global regex
+    pattern.lastIndex = 0;
+    while ((match = pattern.exec(body)) !== null) {
+      const docPath = match[1];
+      if (docPath && !docPath.startsWith('http')) {
+        const filename = docPath.split('/').pop() || docPath;
+        const key = filename.toLowerCase();
+        // Don't overwrite external links with same filename
+        if (!docs.has(key)) {
+          docs.set(key, {
+            name: filename,
+            path: docPath,
+            isExternal: false,
+          });
+        }
+      }
+    }
+  }
+
+  return Array.from(docs.values());
 }
 
 // ============================================================================
@@ -751,7 +798,7 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
         repoName: string;
         issueNumber: number;
         issueTitle: string;
-        documentPaths: string[];
+        documentPaths: DocumentReference[];
         agentType: string;
         sessionId: string;
         baseBranch?: string;
@@ -1151,7 +1198,7 @@ This PR will be updated automatically when the Auto Run completes.`;
         issueNumber: number;
         issueTitle: string;
         localPath: string;
-        documentPaths: string[];
+        documentPaths: DocumentReference[];
       }): Promise<{
         success: boolean;
         branchName?: string;
@@ -1172,10 +1219,10 @@ This PR will be updated automatically when the Auto Run completes.`;
           return { success: false, error: 'Invalid issue number' };
         }
 
-        // Validate document paths for path traversal
-        for (const docPath of documentPaths) {
-          if (docPath.includes('..') || docPath.startsWith('/')) {
-            return { success: false, error: `Invalid document path: ${docPath}` };
+        // Validate document paths for path traversal (only repo-relative paths)
+        for (const doc of documentPaths) {
+          if (!doc.isExternal && (doc.path.includes('..') || doc.path.startsWith('/'))) {
+            return { success: false, error: `Invalid document path: ${doc.path}` };
           }
         }
 
@@ -1235,19 +1282,37 @@ This PR will be updated automatically when the Auto Run completes.`;
           const autoRunDir = path.join(localPath, 'Auto Run Docs');
           await fs.mkdir(autoRunDir, { recursive: true });
 
-          for (const docPath of documentPaths) {
-            // Ensure the path doesn't escape the localPath
-            const resolvedSource = path.resolve(localPath, docPath);
-            if (!resolvedSource.startsWith(localPath)) {
-              logger.error('Attempted path traversal in document copy', LOG_CONTEXT, { docPath });
-              continue;
-            }
-            const destPath = path.join(autoRunDir, path.basename(docPath));
-            try {
-              await fs.copyFile(resolvedSource, destPath);
-              logger.info('Copied document', LOG_CONTEXT, { from: resolvedSource, to: destPath });
-            } catch (e) {
-              logger.warn('Failed to copy document', LOG_CONTEXT, { docPath, error: e instanceof Error ? e.message : String(e) });
+          for (const doc of documentPaths) {
+            const destPath = path.join(autoRunDir, doc.name);
+
+            if (doc.isExternal) {
+              // Download external file (GitHub attachment)
+              try {
+                logger.info('Downloading external document', LOG_CONTEXT, { name: doc.name, url: doc.path });
+                const response = await fetch(doc.path);
+                if (!response.ok) {
+                  logger.warn('Failed to download document', LOG_CONTEXT, { name: doc.name, status: response.status });
+                  continue;
+                }
+                const buffer = await response.arrayBuffer();
+                await fs.writeFile(destPath, Buffer.from(buffer));
+                logger.info('Downloaded document', LOG_CONTEXT, { name: doc.name, to: destPath });
+              } catch (e) {
+                logger.warn('Failed to download document', LOG_CONTEXT, { name: doc.name, error: e instanceof Error ? e.message : String(e) });
+              }
+            } else {
+              // Copy from repo - ensure the path doesn't escape the localPath
+              const resolvedSource = path.resolve(localPath, doc.path);
+              if (!resolvedSource.startsWith(localPath)) {
+                logger.error('Attempted path traversal in document copy', LOG_CONTEXT, { docPath: doc.path });
+                continue;
+              }
+              try {
+                await fs.copyFile(resolvedSource, destPath);
+                logger.info('Copied document', LOG_CONTEXT, { from: resolvedSource, to: destPath });
+              } catch (e) {
+                logger.warn('Failed to copy document', LOG_CONTEXT, { docPath: doc.path, error: e instanceof Error ? e.message : String(e) });
+              }
             }
           }
 
