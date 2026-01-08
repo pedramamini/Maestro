@@ -1808,6 +1808,14 @@ contextBridge.exposeInMainWorld('maestro', {
     // Cache operations
     clearCache: () => ipcRenderer.invoke('symphony:clearCache'),
 
+    // Document fetching (via main process to avoid CORS)
+    fetchDocumentContent: (url: string) =>
+      ipcRenderer.invoke('symphony:fetchDocumentContent', { url }) as Promise<{
+        success: boolean;
+        content?: string;
+        error?: string;
+      }>,
+
     // Real-time updates
     onUpdated: (callback: () => void) => {
       const handler = () => callback();

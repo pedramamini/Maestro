@@ -203,6 +203,8 @@ useEffect(() => {
 }, [isOpen, registerLayer, unregisterLayer]);
 ```
 
+**Note:** `SymphonyModal.tsx` and `MarketplaceModal.tsx` should maintain consistent styling (same width: 1200px, same left column width: w-80, same overall layout). When modifying one, check if the other needs matching updates.
+
 ### 5. Theme Colors
 
 Themes have 13 required colors. Use inline styles for theme colors:

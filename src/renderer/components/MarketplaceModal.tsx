@@ -372,7 +372,7 @@ function PlaybookDetailView({
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left sidebar with playbook metadata */}
         <div
-          className="w-64 shrink-0 p-4 border-r overflow-y-auto"
+          className="w-80 shrink-0 p-4 border-r overflow-y-auto"
           style={{ borderColor: theme.colors.border }}
         >
           {/* Description */}

@@ -1981,6 +1981,12 @@ interface MaestroAPI {
       cleared?: boolean;
       error?: string;
     }>;
+    // Document fetching (via main process to avoid CORS)
+    fetchDocumentContent: (url: string) => Promise<{
+      success: boolean;
+      content?: string;
+      error?: string;
+    }>;
     // Real-time updates
     onUpdated: (callback: () => void) => () => void;
     onContributionStarted: (callback: (data: {

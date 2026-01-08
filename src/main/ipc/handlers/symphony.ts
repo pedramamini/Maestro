@@ -1354,5 +1354,47 @@ This PR will be updated automatically when the Auto Run completes.`;
     )
   );
 
+  // Handler for fetching document content (from main process to avoid CORS)
+  ipcMain.handle(
+    'symphony:fetchDocumentContent',
+    createIpcHandler(
+      handlerOpts('fetchDocumentContent'),
+      async (params: { url: string }): Promise<{ success: boolean; content?: string; error?: string }> => {
+        const { url } = params;
+
+        // Validate URL - only allow GitHub URLs
+        try {
+          const parsed = new URL(url);
+          if (!['github.com', 'raw.githubusercontent.com', 'objects.githubusercontent.com'].some(
+            host => parsed.hostname === host || parsed.hostname.endsWith('.' + host)
+          )) {
+            return { success: false, error: 'Only GitHub URLs are allowed' };
+          }
+          if (parsed.protocol !== 'https:') {
+            return { success: false, error: 'Only HTTPS URLs are allowed' };
+          }
+        } catch {
+          return { success: false, error: 'Invalid URL' };
+        }
+
+        try {
+          logger.info('Fetching document content', LOG_CONTEXT, { url });
+          const response = await fetch(url);
+          if (!response.ok) {
+            return { success: false, error: `HTTP ${response.status}: ${response.statusText}` };
+          }
+          const content = await response.text();
+          return { success: true, content };
+        } catch (error) {
+          logger.error('Failed to fetch document content', LOG_CONTEXT, { url, error });
+          return {
+            success: false,
+            error: error instanceof Error ? error.message : 'Failed to fetch document',
+          };
+        }
+      }
+    )
+  );
+
   logger.info('Symphony handlers registered', LOG_CONTEXT);
 }

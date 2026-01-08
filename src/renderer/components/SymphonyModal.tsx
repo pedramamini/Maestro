@@ -27,7 +27,6 @@ import {
   GitMerge,
   Clock,
   Zap,
-  Star,
   Play,
   Pause,
   AlertCircle,
@@ -36,6 +35,7 @@ import {
   Flame,
   FileText,
   Hash,
+  ChevronDown,
 } from 'lucide-react';
 import type { Theme } from '../types';
 import type {
@@ -53,6 +53,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useSymphony } from '../hooks/symphony';
 import { useContributorStats, type Achievement } from '../hooks/symphony/useContributorStats';
 import { AgentCreationDialog, type AgentCreationConfig } from './AgentCreationDialog';
+import { generateProseStyles, createMarkdownComponents } from '../utils/markdownConfig';
 
 // ============================================================================
 // Types
@@ -207,7 +208,6 @@ function RepositoryTile({
           <span>{categoryInfo.emoji}</span>
           <span>{categoryInfo.label}</span>
         </span>
-        {repo.featured && <Star className="w-3 h-3" style={{ color: '#eab308' }} />}
       </div>
 
       <h3 className="font-semibold mb-1 line-clamp-1" style={{ color: theme.colors.textMain }} title={repo.name}>
@@ -255,7 +255,7 @@ function IssueCard({
         !isAvailable ? 'opacity-60 cursor-not-allowed' : 'hover:bg-white/5'
       } ${isSelected ? 'ring-2' : ''}`}
       style={{
-        backgroundColor: isSelected ? theme.colors.bgActivity : 'transparent',
+        backgroundColor: isSelected ? theme.colors.bgActivity : theme.colors.bgMain,
         borderColor: isSelected ? theme.colors.accent : theme.colors.border,
         ...(isSelected && { boxShadow: `0 0 0 2px ${theme.colors.accent}` }),
       }}
@@ -331,15 +331,92 @@ function RepositoryDetailView({
   onBack: () => void;
   onSelectIssue: (issue: SymphonyIssue) => void;
   onStartContribution: () => void;
-  onPreviewDocument: (path: string) => void;
+  onPreviewDocument: (path: string, isExternal: boolean) => void;
 }) {
   const categoryInfo = SYMPHONY_CATEGORIES[repo.category] ?? { label: repo.category, emoji: '📦' };
   const availableIssues = issues.filter(i => i.status === 'available');
-  const [selectedDocPath, setSelectedDocPath] = useState<string | null>(null);
+  const [selectedDocIndex, setSelectedDocIndex] = useState<number>(0);
+  const [showDocDropdown, setShowDocDropdown] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null);
 
-  const handleSelectDoc = (path: string) => {
-    setSelectedDocPath(path);
-    onPreviewDocument(path);
+  // Generate prose styles scoped to symphony preview panel
+  const proseStyles = useMemo(
+    () =>
+      generateProseStyles({
+        theme,
+        coloredHeadings: true,
+        compactSpacing: false,
+        includeCheckboxStyles: true,
+        scopeSelector: '.symphony-preview',
+      }),
+    [theme]
+  );
+
+  // Create markdown components with link handling
+  const markdownComponents = useMemo(
+    () =>
+      createMarkdownComponents({
+        theme,
+        onExternalLinkClick: (href) => window.maestro.shell?.openExternal?.(href),
+      }),
+    [theme]
+  );
+
+  // Close dropdown when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(e.target as Node)) {
+        setShowDocDropdown(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // Auto-load first document when issue is selected
+  useEffect(() => {
+    if (selectedIssue && selectedIssue.documentPaths.length > 0) {
+      const firstDoc = selectedIssue.documentPaths[0];
+      setSelectedDocIndex(0);
+      onPreviewDocument(firstDoc.path, firstDoc.isExternal);
+    }
+  }, [selectedIssue, onPreviewDocument]);
+
+  // Keyboard shortcuts for document navigation: Cmd+Shift+[ and Cmd+Shift+]
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (!selectedIssue || selectedIssue.documentPaths.length === 0) return;
+
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '[' || e.key === ']')) {
+        e.preventDefault();
+
+        const docCount = selectedIssue.documentPaths.length;
+        let newIndex: number;
+
+        if (e.key === '[') {
+          // Go backwards, wrap around
+          newIndex = selectedDocIndex <= 0 ? docCount - 1 : selectedDocIndex - 1;
+        } else {
+          // Go forwards, wrap around
+          newIndex = selectedDocIndex >= docCount - 1 ? 0 : selectedDocIndex + 1;
+        }
+
+        const doc = selectedIssue.documentPaths[newIndex];
+        setSelectedDocIndex(newIndex);
+        onPreviewDocument(doc.path, doc.isExternal);
+      }
+    };
+
+    window.addEventListener('keydown', handleKeyDown);
+    return () => window.removeEventListener('keydown', handleKeyDown);
+  }, [selectedIssue, selectedDocIndex, onPreviewDocument]);
+
+  const handleSelectDoc = (index: number) => {
+    if (!selectedIssue) return;
+    const doc = selectedIssue.documentPaths[index];
+    setSelectedDocIndex(index);
+    setShowDocDropdown(false);
+    onPreviewDocument(doc.path, doc.isExternal);
   };
 
   const handleOpenExternal = useCallback((url: string) => {
@@ -362,7 +439,6 @@ function RepositoryDetailView({
               <span>{categoryInfo.emoji}</span>
               <span>{categoryInfo.label}</span>
             </span>
-            {repo.featured && <Star className="w-3 h-3" style={{ color: '#eab308' }} />}
           </div>
           <h2 className="text-lg font-semibold truncate" style={{ color: theme.colors.textMain }}>
             {repo.name}
@@ -475,10 +551,10 @@ function RepositoryDetailView({
         </div>
 
         {/* Right: Issue preview */}
-        <div className="flex-1 flex flex-col min-w-0 overflow-hidden">
+        <div className="flex-1 flex flex-col min-w-0 min-h-0 overflow-hidden">
           {selectedIssue ? (
             <>
-              <div className="px-4 py-3 border-b" style={{ borderColor: theme.colors.border }}>
+              <div className="px-4 py-3 border-b shrink-0" style={{ borderColor: theme.colors.border }}>
                 <div className="flex items-center gap-2 mb-1">
                   <span className="text-sm" style={{ color: theme.colors.textDim }}>#{selectedIssue.number}</span>
                   <h3 className="font-semibold" style={{ color: theme.colors.textMain }}>{selectedIssue.title}</h3>
@@ -489,46 +565,66 @@ function RepositoryDetailView({
                 </div>
               </div>
 
-              {/* Document tabs */}
-              <div className="flex items-center gap-1 px-4 py-2 border-b overflow-x-auto" style={{ borderColor: theme.colors.border }}>
-                {selectedIssue.documentPaths.map((doc) => (
+              {/* Document selector dropdown */}
+              <div className="px-4 py-3 border-b shrink-0" style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}>
+                <div className="relative" ref={dropdownRef}>
                   <button
-                    key={doc.name}
-                    onClick={() => handleSelectDoc(doc.path)}
-                    className="px-2 py-1 rounded text-xs whitespace-nowrap transition-colors"
+                    onClick={() => setShowDocDropdown(!showDocDropdown)}
+                    className="w-full flex items-center justify-between px-3 py-2 rounded text-sm"
                     style={{
-                      backgroundColor: selectedDocPath === doc.path ? theme.colors.accent + '20' : 'transparent',
-                      color: selectedDocPath === doc.path ? theme.colors.accent : theme.colors.textDim,
+                      backgroundColor: theme.colors.bgActivity,
+                      color: theme.colors.textMain,
+                      border: `1px solid ${theme.colors.border}`,
                     }}
                   >
-                    {doc.name}
+                    <span>{selectedIssue.documentPaths[selectedDocIndex]?.name || 'Select document'}</span>
+                    <ChevronDown
+                      className={`w-4 h-4 transition-transform ${showDocDropdown ? 'rotate-180' : ''}`}
+                    />
                   </button>
-                ))}
+
+                  {showDocDropdown && (
+                    <div
+                      className="absolute top-full left-0 right-0 mt-1 rounded shadow-lg z-10 overflow-hidden max-h-64 overflow-y-auto"
+                      style={{
+                        backgroundColor: theme.colors.bgSidebar,
+                        border: `1px solid ${theme.colors.border}`,
+                      }}
+                    >
+                      {selectedIssue.documentPaths.map((doc, index) => (
+                        <button
+                          key={doc.name}
+                          onClick={() => handleSelectDoc(index)}
+                          className="w-full px-3 py-2 text-sm text-left hover:bg-white/5 transition-colors"
+                          style={{
+                            color: selectedDocIndex === index ? theme.colors.accent : theme.colors.textMain,
+                            backgroundColor: selectedDocIndex === index ? theme.colors.bgActivity : 'transparent',
+                          }}
+                        >
+                          {doc.name}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
 
-              <div className="flex-1 overflow-y-auto p-4">
+              {/* Document preview - Markdown preview scrollable container with prose styles */}
+              <div
+                className="symphony-preview flex-1 min-h-0 p-4"
+                style={{ backgroundColor: theme.colors.bgMain, overflowY: 'auto' }}
+              >
+                <style>{proseStyles}</style>
                 {isLoadingDocument ? (
                   <div className="flex items-center justify-center h-32">
                     <Loader2 className="w-6 h-6 animate-spin" style={{ color: theme.colors.accent }} />
                   </div>
                 ) : documentPreview ? (
-                  <div
-                    className="prose prose-sm max-w-none"
-                    style={{
-                      color: theme.colors.textMain,
-                      '--tw-prose-body': theme.colors.textMain,
-                      '--tw-prose-headings': theme.colors.textMain,
-                      '--tw-prose-links': theme.colors.accent,
-                      '--tw-prose-bold': theme.colors.textMain,
-                      '--tw-prose-code': theme.colors.textMain,
-                    } as React.CSSProperties}
-                  >
-                    <ReactMarkdown remarkPlugins={[remarkGfm]}>{documentPreview}</ReactMarkdown>
+                  <div className="prose prose-sm max-w-none" style={{ color: theme.colors.textMain }}>
+                    <ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
+                      {documentPreview}
+                    </ReactMarkdown>
                   </div>
-                ) : selectedDocPath ? (
-                  <p className="text-center" style={{ color: theme.colors.textDim }}>
-                    Document preview unavailable
-                  </p>
                 ) : (
                   <div className="flex flex-col items-center justify-center h-full">
                     <FileText className="w-12 h-12 mb-3" style={{ color: theme.colors.textDim }} />
@@ -538,7 +634,10 @@ function RepositoryDetailView({
               </div>
             </>
           ) : (
-            <div className="flex-1 flex items-center justify-center">
+            <div
+              className="flex-1 flex items-center justify-center"
+              style={{ backgroundColor: theme.colors.bgMain }}
+            >
               <div className="text-center">
                 <Music className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.textDim }} />
                 <p style={{ color: theme.colors.textDim }}>Select an issue to see details</p>
@@ -963,14 +1062,31 @@ export function SymphonyModal({
     setDocumentPreview(null);
   }, []);
 
-  // Preview document (stub - not yet implemented in IPC)
-  const handlePreviewDocument = useCallback(async (path: string) => {
+  // Preview document - fetches content from external URLs (GitHub attachments)
+  const handlePreviewDocument = useCallback(async (path: string, isExternal: boolean) => {
     if (!selectedRepo) return;
     setIsLoadingDocument(true);
-    // TODO: Implement document preview via IPC
-    // const content = await window.maestro.symphony.previewDocument(selectedRepo.slug, path);
-    setDocumentPreview(`# Document Preview\n\nPreview for \`${path}\` is not yet available.\n\nThis document will be processed when you start the Symphony contribution.`);
-    setIsLoadingDocument(false);
+    setDocumentPreview(null);
+
+    try {
+      if (isExternal && path.startsWith('http')) {
+        // Fetch content from external URL via main process (to avoid CORS)
+        const result = await window.maestro.symphony.fetchDocumentContent(path);
+        if (result.success && result.content) {
+          setDocumentPreview(result.content);
+        } else {
+          setDocumentPreview(`*Failed to load document: ${result.error || 'Unknown error'}*`);
+        }
+      } else {
+        // For repo-relative paths, we can't preview until contribution starts
+        setDocumentPreview(`*This document is located at \`${path}\` in the repository and will be available when you start the contribution.*`);
+      }
+    } catch (error) {
+      console.error('Failed to fetch document:', error);
+      setDocumentPreview(`*Failed to load document: ${error instanceof Error ? error.message : 'Unknown error'}*`);
+    } finally {
+      setIsLoadingDocument(false);
+    }
   }, [selectedRepo]);
 
   // Start contribution - opens agent creation dialog
@@ -1154,7 +1270,10 @@ export function SymphonyModal({
               {activeTab === 'projects' && (
                 <>
                   {/* Search + Category tabs */}
-                  <div className="px-4 py-3 border-b" style={{ borderColor: theme.colors.border }}>
+                  <div
+                    className="px-4 py-3 border-b"
+                    style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+                  >
                     <div className="flex items-center gap-4">
                       <div className="relative flex-1 max-w-xs">
                         <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -1164,8 +1283,12 @@ export function SymphonyModal({
                           value={searchQuery}
                           onChange={(e) => setSearchQuery(e.target.value)}
                           placeholder="Search repositories..."
-                          className="w-full pl-9 pr-3 py-2 rounded border bg-transparent outline-none text-sm focus:ring-1"
-                          style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+                          className="w-full pl-9 pr-3 py-2 rounded border outline-none text-sm focus:ring-1"
+                          style={{
+                            borderColor: theme.colors.border,
+                            color: theme.colors.textMain,
+                            backgroundColor: theme.colors.bgActivity,
+                          }}
                         />
                       </div>
 
@@ -1174,8 +1297,9 @@ export function SymphonyModal({
                           onClick={() => setSelectedCategory('all')}
                           className={`px-3 py-1.5 rounded text-sm transition-colors ${selectedCategory === 'all' ? 'font-semibold' : ''}`}
                           style={{
-                            backgroundColor: selectedCategory === 'all' ? theme.colors.accent + '20' : 'transparent',
+                            backgroundColor: selectedCategory === 'all' ? theme.colors.bgActivity : 'transparent',
                             color: selectedCategory === 'all' ? theme.colors.accent : theme.colors.textDim,
+                            border: selectedCategory === 'all' ? `1px solid ${theme.colors.accent}` : '1px solid transparent',
                           }}
                         >
                           All
@@ -1190,8 +1314,9 @@ export function SymphonyModal({
                                 selectedCategory === cat ? 'font-semibold' : ''
                               }`}
                               style={{
-                                backgroundColor: selectedCategory === cat ? theme.colors.accent + '20' : 'transparent',
+                                backgroundColor: selectedCategory === cat ? theme.colors.bgActivity : 'transparent',
                                 color: selectedCategory === cat ? theme.colors.accent : theme.colors.textDim,
+                                border: selectedCategory === cat ? `1px solid ${theme.colors.accent}` : '1px solid transparent',
                               }}
                             >
                               <span>{info?.emoji}</span>
@@ -1204,7 +1329,7 @@ export function SymphonyModal({
                   </div>
 
                   {/* Repository grid */}
-                  <div className="flex-1 overflow-y-auto p-4">
+                  <div className="flex-1 overflow-y-auto p-4" style={{ backgroundColor: theme.colors.bgMain }}>
                     {isLoading ? (
                       <div className="grid grid-cols-3 gap-4">
                         {[1, 2, 3, 4, 5, 6].map((i) => <RepositoryTileSkeleton key={i} theme={theme} />)}
