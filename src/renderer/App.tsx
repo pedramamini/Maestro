@@ -1935,11 +1935,12 @@ function MaestroConsoleInner() {
 
           // Suppress toast if user is already viewing this tab (they'll see the response directly)
           // Only show toasts for out-of-view completions (different session or different tab)
+          // Also suppress if synopsis is coming - the synopsis toast will be shown instead
           const currentActiveSession = sessionsRef.current.find(s => s.id === activeSessionIdRef.current);
           const isViewingCompletedTab = currentActiveSession?.id === actualSessionId
             && (!tabIdFromSession || currentActiveSession.activeTabId === tabIdFromSession);
 
-          if (!isViewingCompletedTab) {
+          if (!isViewingCompletedTab && !synopsisData) {
             addToastRef.current({
               type: 'success',
               title: toastData!.title,

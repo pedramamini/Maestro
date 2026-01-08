@@ -906,6 +906,48 @@ describe('HistoryPanel', () => {
         expect(card).toHaveStyle({ outlineOffset: '1px' });
       });
     });
+
+    it('should scroll selected item into view during keyboard navigation', async () => {
+      // Create enough entries that scrolling would be needed
+      const entries = Array.from({ length: 30 }, (_, i) =>
+        createMockEntry({ id: `entry-${i}`, summary: `Entry ${i}` })
+      );
+      mockHistoryGetAll.mockResolvedValue(entries);
+
+      const { container } = render(
+        <HistoryPanel
+          session={createMockSession()}
+          theme={mockTheme}
+        />
+      );
+
+      await waitFor(() => {
+        expect(screen.getByText('Entry 0')).toBeInTheDocument();
+      });
+
+      const listContainer = container.querySelector('[tabIndex="0"]');
+      expect(listContainer).toBeTruthy();
+
+      // Mock scrollTo on the list container (used by @tanstack/react-virtual)
+      const scrollToMock = vi.fn();
+      if (listContainer) {
+        Object.defineProperty(listContainer, 'scrollTo', {
+          value: scrollToMock,
+          writable: true,
+        });
+      }
+
+      // Navigate down multiple times to trigger scroll-into-view
+      for (let i = 0; i < 10; i++) {
+        fireEvent.keyDown(listContainer!, { key: 'ArrowDown' });
+      }
+
+      // The virtualizer should have attempted to scroll to keep the selected item in view
+      // scrollTo is called by the virtualizer's scrollToIndex method
+      await waitFor(() => {
+        expect(scrollToMock).toHaveBeenCalled();
+      });
+    });
   });
 
   // ===== DETAIL MODAL =====
