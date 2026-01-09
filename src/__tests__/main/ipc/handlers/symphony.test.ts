@@ -2032,4 +2032,212 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Update Status Tests (symphony:updateStatus)
+  // ============================================================================
+
+  describe('symphony:updateStatus', () => {
+    const getUpdateStatusHandler = () => handlers.get('symphony:updateStatus');
+
+    const createStateWithContribution = (overrides?: Partial<{
+      id: string;
+      status: string;
+      progress: { totalDocuments: number; completedDocuments: number; totalTasks: number; completedTasks: number };
+      tokenUsage: { inputTokens: number; outputTokens: number; estimatedCost: number };
+      timeSpent: number;
+      draftPrNumber?: number;
+      draftPrUrl?: string;
+      error?: string;
+    }>) => ({
+      active: [
+        {
+          id: 'contrib_test123',
+          repoSlug: 'owner/repo',
+          repoName: 'repo',
+          issueNumber: 42,
+          issueTitle: 'Test Issue',
+          localPath: '/tmp/symphony/repos/repo',
+          branchName: 'symphony/issue-42-abc',
+          startedAt: '2024-01-01T00:00:00Z',
+          status: 'running',
+          progress: { totalDocuments: 5, completedDocuments: 1, totalTasks: 10, completedTasks: 3 },
+          tokenUsage: { inputTokens: 1000, outputTokens: 500, estimatedCost: 0.10 },
+          timeSpent: 60000,
+          sessionId: 'session-123',
+          agentType: 'claude-code',
+          ...overrides,
+        },
+      ],
+      history: [],
+      stats: {},
+    });
+
+    describe('field updates', () => {
+      it('should update contribution status field', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          status: 'paused',
+        });
+
+        expect(result.updated).toBe(true);
+
+        // Verify state was written with updated status
+        expect(fs.writeFile).toHaveBeenCalled();
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active[0].status).toBe('paused');
+      });
+
+      it('should update progress fields (partial update)', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          progress: { completedDocuments: 3, completedTasks: 7 },
+        });
+
+        expect(result.updated).toBe(true);
+
+        // Verify state was written with updated progress
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        // Should preserve original fields and merge new ones
+        expect(writtenState.active[0].progress).toEqual({
+          totalDocuments: 5,
+          completedDocuments: 3,
+          totalTasks: 10,
+          completedTasks: 7,
+        });
+      });
+
+      it('should update token usage fields (partial update)', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          tokenUsage: { inputTokens: 2500, estimatedCost: 0.25 },
+        });
+
+        expect(result.updated).toBe(true);
+
+        // Verify state was written with updated token usage
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        // Should preserve original fields and merge new ones
+        expect(writtenState.active[0].tokenUsage).toEqual({
+          inputTokens: 2500,
+          outputTokens: 500,  // unchanged
+          estimatedCost: 0.25,
+        });
+      });
+
+      it('should update timeSpent', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          timeSpent: 180000,  // 3 minutes
+        });
+
+        expect(result.updated).toBe(true);
+
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active[0].timeSpent).toBe(180000);
+      });
+
+      it('should update draftPrNumber and draftPrUrl', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          draftPrNumber: 99,
+          draftPrUrl: 'https://github.com/owner/repo/pull/99',
+        });
+
+        expect(result.updated).toBe(true);
+
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active[0].draftPrNumber).toBe(99);
+        expect(writtenState.active[0].draftPrUrl).toBe('https://github.com/owner/repo/pull/99');
+      });
+
+      it('should update error field', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          error: 'Rate limit exceeded',
+        });
+
+        expect(result.updated).toBe(true);
+
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active[0].error).toBe('Rate limit exceeded');
+      });
+    });
+
+    describe('contribution not found', () => {
+      it('should return updated:false if contribution not found', async () => {
+        // State with no active contributions
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({
+          active: [],
+          history: [],
+          stats: {},
+        }));
+
+        const handler = getUpdateStatusHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'nonexistent_contrib',
+          status: 'paused',
+        });
+
+        expect(result.updated).toBe(false);
+      });
+    });
+
+    describe('broadcast behavior', () => {
+      it('should broadcast update after successful update', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithContribution()));
+
+        const handler = getUpdateStatusHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_test123',
+          status: 'completing',
+        });
+
+        // Verify broadcast was sent
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('symphony:updated');
+      });
+    });
+  });
 });
