@@ -2864,4 +2864,412 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Check PR Statuses Tests (symphony:checkPRStatuses)
+  // ============================================================================
+
+  describe('symphony:checkPRStatuses', () => {
+    const getCheckPRStatusesHandler = () => handlers.get('symphony:checkPRStatuses');
+
+    const createStateWithHistory = (historyOverrides?: Array<{
+      id?: string;
+      repoSlug?: string;
+      prNumber?: number;
+      wasMerged?: boolean;
+      wasClosed?: boolean;
+    }>) => ({
+      active: [],
+      history: historyOverrides?.map((override, i) => ({
+        id: override.id || `contrib_${i + 1}`,
+        repoSlug: override.repoSlug || 'owner/repo',
+        repoName: 'repo',
+        issueNumber: i + 1,
+        issueTitle: `Issue ${i + 1}`,
+        startedAt: '2024-01-01T00:00:00Z',
+        completedAt: '2024-01-02T00:00:00Z',
+        prUrl: `https://github.com/${override.repoSlug || 'owner/repo'}/pull/${override.prNumber || i + 1}`,
+        prNumber: override.prNumber || i + 1,
+        tokenUsage: { inputTokens: 1000, outputTokens: 500, totalCost: 0.10 },
+        timeSpent: 60000,
+        documentsProcessed: 1,
+        tasksCompleted: 5,
+        wasMerged: override.wasMerged,
+        wasClosed: override.wasClosed,
+      })) || [],
+      stats: {
+        totalContributions: 0,
+        totalMerged: 0,
+        totalIssuesResolved: 0,
+        totalDocumentsProcessed: 0,
+        totalTasksCompleted: 0,
+        totalTokensUsed: 0,
+        totalTimeSpent: 0,
+        estimatedCostDonated: 0,
+        repositoriesContributed: [],
+        uniqueMaintainersHelped: 0,
+        currentStreak: 0,
+        longestStreak: 0,
+      },
+    });
+
+    describe('history entry checking', () => {
+      it('should check all history entries without wasMerged flag', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_1', prNumber: 101, wasMerged: undefined },
+          { id: 'pr_2', prNumber: 102, wasMerged: undefined },
+          { id: 'pr_3', prNumber: 103, wasMerged: true }, // Already tracked
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        // Mock fetch to return open status for all PRs
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ state: 'open', merged: false, merged_at: null }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        // Should only check entries without wasMerged (2 entries)
+        expect(result.checked).toBe(2);
+        // Verify fetch was called for each unchecked PR
+        expect(mockFetch).toHaveBeenCalledTimes(2);
+      });
+
+      it('should fetch PR status from GitHub API', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_1', repoSlug: 'myorg/myrepo', prNumber: 123 },
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ state: 'open', merged: false, merged_at: null }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        await handler!({} as any);
+
+        // Verify correct GitHub API endpoint was called
+        expect(mockFetch).toHaveBeenCalledWith(
+          expect.stringContaining('/repos/myorg/myrepo/pulls/123'),
+          expect.objectContaining({
+            headers: expect.objectContaining({
+              'Accept': 'application/vnd.github.v3+json',
+            }),
+          })
+        );
+      });
+
+      it('should mark PR as merged when API confirms merge', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_merged', prNumber: 200 },
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({
+            state: 'closed',
+            merged: true,
+            merged_at: '2024-01-15T12:00:00Z',
+          }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        expect(result.merged).toBe(1);
+
+        // Verify state was updated
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.history[0].wasMerged).toBe(true);
+      });
+
+      it('should set mergedAt timestamp on merge', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_merged', prNumber: 200 },
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        const mergeTimestamp = '2024-02-20T14:30:00Z';
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({
+            state: 'closed',
+            merged: true,
+            merged_at: mergeTimestamp,
+          }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        await handler!({} as any);
+
+        // Verify mergedAt was set
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.history[0].mergedAt).toBe(mergeTimestamp);
+      });
+
+      it('should increment totalMerged stat on merge', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_1', prNumber: 101 },
+          { id: 'pr_2', prNumber: 102 },
+        ]);
+        state.stats.totalMerged = 5; // Start with 5
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        // Both PRs merged
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({
+            state: 'closed',
+            merged: true,
+            merged_at: '2024-01-15T12:00:00Z',
+          }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        await handler!({} as any);
+
+        // Verify totalMerged was incremented by 2
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.stats.totalMerged).toBe(7); // 5 + 2
+      });
+
+      it('should mark PR as closed when API shows closed state', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_closed', prNumber: 300 },
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({
+            state: 'closed',
+            merged: false, // Closed but not merged
+            merged_at: null,
+          }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        expect(result.closed).toBe(1);
+
+        // Verify state was updated
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.history[0].wasClosed).toBe(true);
+        expect(writtenState.history[0].wasMerged).toBeUndefined();
+      });
+
+      it('should handle GitHub API errors gracefully', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_1', prNumber: 101 },
+          { id: 'pr_2', prNumber: 102 },
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        // First PR succeeds, second fails
+        mockFetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ state: 'open', merged: false, merged_at: null }),
+          })
+          .mockResolvedValueOnce({
+            ok: false,
+            status: 404,
+          });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        // Both were checked
+        expect(result.checked).toBe(2);
+        // One error recorded
+        expect(result.errors).toHaveLength(1);
+        expect(result.errors[0]).toContain('102'); // PR number in error
+        expect(result.errors[0]).toContain('404');
+      });
+    });
+
+    describe('active contribution checking', () => {
+      it('should check active ready_for_review contributions', async () => {
+        const state = {
+          active: [
+            {
+              id: 'active_1',
+              repoSlug: 'owner/repo',
+              repoName: 'repo',
+              issueNumber: 1,
+              issueTitle: 'Active Issue',
+              localPath: '/tmp/repo',
+              branchName: 'symphony/issue-1-abc',
+              draftPrNumber: 500,
+              draftPrUrl: 'https://github.com/owner/repo/pull/500',
+              startedAt: '2024-01-01T00:00:00Z',
+              status: 'ready_for_review', // Only this status is checked
+              progress: { totalDocuments: 1, completedDocuments: 1, totalTasks: 5, completedTasks: 5 },
+              tokenUsage: { inputTokens: 1000, outputTokens: 500, estimatedCost: 0.10 },
+              timeSpent: 60000,
+              sessionId: 'session-123',
+              agentType: 'claude-code',
+            },
+            {
+              id: 'active_2',
+              repoSlug: 'owner/repo',
+              repoName: 'repo',
+              issueNumber: 2,
+              draftPrNumber: 501,
+              status: 'running', // Not ready_for_review - should not be checked
+            },
+          ],
+          history: [],
+          stats: { totalMerged: 0 },
+        };
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({ state: 'open', merged: false, merged_at: null }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        // Should only check the ready_for_review contribution
+        expect(result.checked).toBe(1);
+      });
+
+      it('should move merged active contributions to history', async () => {
+        const state = {
+          active: [
+            {
+              id: 'active_merged',
+              repoSlug: 'owner/repo',
+              repoName: 'repo',
+              issueNumber: 42,
+              issueTitle: 'Merged Active',
+              localPath: '/tmp/repo',
+              branchName: 'symphony/issue-42-abc',
+              draftPrNumber: 600,
+              draftPrUrl: 'https://github.com/owner/repo/pull/600',
+              startedAt: '2024-01-01T00:00:00Z',
+              status: 'ready_for_review',
+              progress: { totalDocuments: 2, completedDocuments: 2, totalTasks: 10, completedTasks: 8 },
+              tokenUsage: { inputTokens: 2000, outputTokens: 1000, estimatedCost: 0.20 },
+              timeSpent: 120000,
+              sessionId: 'session-456',
+              agentType: 'claude-code',
+            },
+          ],
+          history: [],
+          stats: { totalMerged: 3 },
+        };
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({
+            state: 'closed',
+            merged: true,
+            merged_at: '2024-02-01T10:00:00Z',
+          }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        expect(result.merged).toBe(1);
+
+        // Verify contribution was moved to history
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+
+        // Active should be empty
+        expect(writtenState.active).toHaveLength(0);
+
+        // History should have the contribution
+        expect(writtenState.history).toHaveLength(1);
+        expect(writtenState.history[0].id).toBe('active_merged');
+        expect(writtenState.history[0].wasMerged).toBe(true);
+        expect(writtenState.history[0].prNumber).toBe(600);
+
+        // totalMerged should be incremented
+        expect(writtenState.stats.totalMerged).toBe(4);
+      });
+
+      it('should broadcast update when changes occur', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_1', prNumber: 101 },
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch.mockResolvedValue({
+          ok: true,
+          json: () => Promise.resolve({
+            state: 'closed',
+            merged: true,
+            merged_at: '2024-01-15T12:00:00Z',
+          }),
+        });
+
+        const handler = getCheckPRStatusesHandler();
+        await handler!({} as any);
+
+        // Verify broadcast was sent
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('symphony:updated');
+      });
+
+      it('should return summary with checked, merged, closed counts', async () => {
+        const state = createStateWithHistory([
+          { id: 'pr_1', prNumber: 101 }, // Will be merged
+          { id: 'pr_2', prNumber: 102 }, // Will be closed
+          { id: 'pr_3', prNumber: 103 }, // Will be open
+        ]);
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(state));
+
+        mockFetch
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ state: 'closed', merged: true, merged_at: '2024-01-15T12:00:00Z' }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ state: 'closed', merged: false, merged_at: null }),
+          })
+          .mockResolvedValueOnce({
+            ok: true,
+            json: () => Promise.resolve({ state: 'open', merged: false, merged_at: null }),
+          });
+
+        const handler = getCheckPRStatusesHandler();
+        const result = await handler!({} as any);
+
+        expect(result.checked).toBe(3);
+        expect(result.merged).toBe(1);
+        expect(result.closed).toBe(1);
+        expect(result.errors).toEqual([]);
+      });
+    });
+  });
 });
