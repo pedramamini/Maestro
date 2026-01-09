@@ -394,6 +394,54 @@ const mockMaestro = {
       configPath: '~/.ssh/config',
     }),
   },
+  symphony: {
+    getRegistry: vi.fn().mockResolvedValue({
+      registry: { schemaVersion: '1.0', lastUpdated: '2025-01-01T00:00:00Z', repositories: [] },
+      fromCache: false,
+      cacheAge: 0,
+    }),
+    getState: vi.fn().mockResolvedValue({
+      state: {
+        active: [],
+        history: [],
+        stats: {
+          totalContributions: 0,
+          totalMerged: 0,
+          totalIssuesResolved: 0,
+          totalDocumentsProcessed: 0,
+          totalTasksCompleted: 0,
+          totalTokensUsed: 0,
+          totalTimeSpent: 0,
+          estimatedCostDonated: 0,
+          repositoriesContributed: [],
+          uniqueMaintainersHelped: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+        },
+      },
+    }),
+    getIssues: vi.fn().mockResolvedValue({
+      issues: [],
+      fromCache: false,
+      cacheAge: 0,
+    }),
+    cloneRepo: vi.fn().mockResolvedValue({ success: true }),
+    startContribution: vi.fn().mockResolvedValue({
+      success: true,
+      branchName: 'symphony/issue-1-abc123',
+      autoRunPath: '/path/to/autorun',
+    }),
+    createDraftPR: vi.fn().mockResolvedValue({
+      success: true,
+      prUrl: 'https://github.com/test/repo/pull/1',
+      prNumber: 1,
+    }),
+    complete: vi.fn().mockResolvedValue({
+      prUrl: 'https://github.com/test/repo/pull/1',
+    }),
+    cancel: vi.fn().mockResolvedValue({ cancelled: true }),
+    onUpdated: vi.fn().mockReturnValue(() => {}),
+  },
 };
 
 Object.defineProperty(window, 'maestro', {
