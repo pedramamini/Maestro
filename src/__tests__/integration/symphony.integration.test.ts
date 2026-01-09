@@ -856,6 +856,98 @@ describe('Symphony Integration Tests', () => {
       const state = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
       expect(state.state.active.some(c => c.id === 'encoded_path_test')).toBe(true);
     });
+
+    it('should handle issue body at exactly MAX_BODY_SIZE (1MB)', async () => {
+      // MAX_BODY_SIZE is 1024 * 1024 = 1,048,576 bytes
+      const MAX_BODY_SIZE = 1024 * 1024;
+
+      // Create a body that is exactly MAX_BODY_SIZE
+      // Include a document path at the beginning so we can verify parsing still works
+      const docPrefix = '- `docs/test-file.md`\n';
+      const padding = 'x'.repeat(MAX_BODY_SIZE - docPrefix.length);
+      const exactSizeBody = docPrefix + padding;
+
+      expect(exactSizeBody.length).toBe(MAX_BODY_SIZE);
+
+      mockFetch.mockImplementationOnce(async () => ({
+        ok: true,
+        json: async () => [{
+          number: 1,
+          title: 'Exact Size Body Test',
+          body: exactSizeBody,
+          url: 'https://api.github.com/repos/owner/repo/issues/1',
+          html_url: 'https://github.com/owner/repo/issues/1',
+          user: { login: 'test-user' },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }],
+      }));
+
+      // Force fresh fetch (not from cache)
+      const result = await invokeHandler(handlers, 'symphony:getIssues', 'owner/exact-size-test', true) as {
+        issues: SymphonyIssue[];
+        fromCache: boolean;
+      };
+
+      // Should succeed and parse the document path
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].documentPaths).toBeDefined();
+      // The document path at the beginning should be found
+      expect(result.issues[0].documentPaths.some(d => d.path === 'docs/test-file.md')).toBe(true);
+    });
+
+    it('should handle issue body slightly over MAX_BODY_SIZE', async () => {
+      // MAX_BODY_SIZE is 1024 * 1024 = 1,048,576 bytes
+      const MAX_BODY_SIZE = 1024 * 1024;
+      const OVER_SIZE = MAX_BODY_SIZE + 1000; // Slightly over
+
+      // Create a body that exceeds MAX_BODY_SIZE
+      // Include document paths at both the beginning (should be found)
+      // and at the very end (should be truncated away)
+      const docAtStart = '- `docs/start-file.md`\n';
+      const docAtEnd = '\n- `docs/end-file.md`';
+
+      // Calculate padding to push end doc past MAX_BODY_SIZE
+      const paddingLength = OVER_SIZE - docAtStart.length - docAtEnd.length;
+      const padding = 'x'.repeat(paddingLength);
+      const oversizeBody = docAtStart + padding + docAtEnd;
+
+      expect(oversizeBody.length).toBe(OVER_SIZE);
+      expect(oversizeBody.length).toBeGreaterThan(MAX_BODY_SIZE);
+
+      mockFetch.mockImplementationOnce(async () => ({
+        ok: true,
+        json: async () => [{
+          number: 1,
+          title: 'Oversize Body Test',
+          body: oversizeBody,
+          url: 'https://api.github.com/repos/owner/repo/issues/1',
+          html_url: 'https://github.com/owner/repo/issues/1',
+          user: { login: 'test-user' },
+          created_at: new Date().toISOString(),
+          updated_at: new Date().toISOString(),
+        }],
+      }));
+
+      // Force fresh fetch
+      const result = await invokeHandler(handlers, 'symphony:getIssues', 'owner/oversize-test', true) as {
+        issues: SymphonyIssue[];
+        fromCache: boolean;
+      };
+
+      // Should succeed without throwing/hanging
+      expect(result.issues).toHaveLength(1);
+      expect(result.issues[0].documentPaths).toBeDefined();
+
+      // The document at the start should be found
+      expect(result.issues[0].documentPaths.some(d => d.path === 'docs/start-file.md')).toBe(true);
+
+      // The document at the end is past MAX_BODY_SIZE, so it may or may not be found
+      // depending on implementation. The key test is that parsing completes without error.
+      // (Implementation truncates at MAX_BODY_SIZE, so end doc should NOT be found)
+      const endDocFound = result.issues[0].documentPaths.some(d => d.path === 'docs/end-file.md');
+      expect(endDocFound).toBe(false);
+    });
   });
 
   // ==========================================================================
