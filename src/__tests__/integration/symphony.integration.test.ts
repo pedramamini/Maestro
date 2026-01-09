@@ -2516,6 +2516,25 @@ error: failed to push some refs to 'https://github.com/owner/protected-repo.git'
       expect(result.success).toBe(false);
       expect(result.error).toContain('document path');
     });
+
+    it('should reject document paths with embedded traversal sequences', async () => {
+      // This tests a more subtle path traversal where a valid-looking path
+      // contains ../ sequences that could escape the repo directory
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'embedded_traversal_test',
+        sessionId: 'session-embedded',
+        repoSlug: 'owner/repo',
+        issueNumber: 1,
+        issueTitle: 'Embedded Traversal Test',
+        localPath: path.join(testTempDir, 'embedded-repo'),
+        documentPaths: [
+          { name: 'evil.md', path: 'foo/../../../etc/passwd', isExternal: false },
+        ],
+      }) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('document path');
+    });
   });
 
   // ==========================================================================
