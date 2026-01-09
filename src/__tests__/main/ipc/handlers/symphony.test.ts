@@ -3906,4 +3906,329 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Create Draft PR (Deferred) Tests (symphony:createDraftPR)
+  // ============================================================================
+
+  describe('symphony:createDraftPR', () => {
+    const getCreateDraftPRHandler = () => handlers.get('symphony:createDraftPR');
+
+    const createValidMetadata = (overrides?: Partial<{
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      issueNumber: number;
+      issueTitle: string;
+      branchName: string;
+      localPath: string;
+      prCreated: boolean;
+      draftPrNumber?: number;
+      draftPrUrl?: string;
+    }>) => ({
+      contributionId: 'contrib_draft_test',
+      sessionId: 'session-789',
+      repoSlug: 'owner/repo',
+      issueNumber: 42,
+      issueTitle: 'Test Issue for Draft PR',
+      branchName: 'symphony/issue-42-abc123',
+      localPath: '/tmp/symphony/repos/repo-contrib_draft_test',
+      prCreated: false,
+      ...overrides,
+    });
+
+    describe('metadata reading', () => {
+      it('should read contribution metadata from disk', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '0', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        // Verify fs.readFile was called with metadata path
+        expect(fs.readFile).toHaveBeenCalledWith(
+          expect.stringContaining('contrib_draft_test'),
+          'utf-8'
+        );
+      });
+
+      it('should return error if metadata not found', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+        const handler = getCreateDraftPRHandler();
+        const result = await handler!({} as any, { contributionId: 'nonexistent_contrib' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('metadata not found');
+      });
+    });
+
+    describe('existing PR handling', () => {
+      it('should return existing PR info if already created', async () => {
+        const metadataWithPR = createValidMetadata({
+          prCreated: true,
+          draftPrNumber: 123,
+          draftPrUrl: 'https://github.com/owner/repo/pull/123',
+        });
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadataWithPR);
+          }
+          throw new Error('ENOENT');
+        });
+
+        const handler = getCreateDraftPRHandler();
+        const result = await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        expect(result.success).toBe(true);
+        expect(result.draftPrNumber).toBe(123);
+        expect(result.draftPrUrl).toBe('https://github.com/owner/repo/pull/123');
+        // No git operations should be attempted
+        expect(execFileNoThrow).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('gh CLI authentication', () => {
+      it('should check gh CLI authentication', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: '', stderr: 'not logged in', exitCode: 1 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        const result = await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('not authenticated');
+        expect(execFileNoThrow).toHaveBeenCalledWith('gh', ['auth', 'status']);
+      });
+    });
+
+    describe('commit counting', () => {
+      it('should count commits on branch vs base branch', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') {
+            // Verify the correct arguments for counting commits
+            expect(args).toContain('--count');
+            expect(args?.[2]).toBe('main..HEAD');
+            return { stdout: '3', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc123', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/99', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        // Verify commit count was checked
+        expect(execFileNoThrow).toHaveBeenCalledWith(
+          'git',
+          ['rev-list', '--count', 'main..HEAD'],
+          expect.any(String)
+        );
+      });
+
+      it('should return success without PR if no commits yet', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '0', stderr: '', exitCode: 0 }; // No commits
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        const result = await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        expect(result.success).toBe(true);
+        // No PR info - indicates no PR was created
+        expect(result.draftPrNumber).toBeUndefined();
+        expect(result.draftPrUrl).toBeUndefined();
+        // git push should not have been called
+        const pushCalls = vi.mocked(execFileNoThrow).mock.calls.filter(
+          call => call[0] === 'git' && call[1]?.[0] === 'push'
+        );
+        expect(pushCalls).toHaveLength(0);
+      });
+    });
+
+    describe('PR creation', () => {
+      it('should push branch and create draft PR when commits exist', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '2', stderr: '', exitCode: 0 }; // 2 commits
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc123', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+            expect(args).toContain('--draft');
+            return { stdout: 'https://github.com/owner/repo/pull/55', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        const result = await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        expect(result.success).toBe(true);
+        expect(result.draftPrNumber).toBe(55);
+        expect(result.draftPrUrl).toBe('https://github.com/owner/repo/pull/55');
+
+        // Verify push was called
+        expect(execFileNoThrow).toHaveBeenCalledWith(
+          'git',
+          expect.arrayContaining(['push', '-u', 'origin']),
+          expect.any(String)
+        );
+
+        // Verify PR creation was called with --draft
+        const prCreateCall = vi.mocked(execFileNoThrow).mock.calls.find(
+          call => call[0] === 'gh' && call[1]?.[0] === 'pr' && call[1]?.[1] === 'create'
+        );
+        expect(prCreateCall).toBeDefined();
+        expect(prCreateCall![1]).toContain('--draft');
+      });
+    });
+
+    describe('metadata updates', () => {
+      it('should update metadata.json with PR info', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '1', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc123', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/77', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        // Verify metadata.json was updated with PR info
+        const metadataWriteCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('metadata.json')
+        );
+        expect(metadataWriteCall).toBeDefined();
+
+        const updatedMetadata = JSON.parse(metadataWriteCall![1] as string);
+        expect(updatedMetadata.prCreated).toBe(true);
+        expect(updatedMetadata.draftPrNumber).toBe(77);
+        expect(updatedMetadata.draftPrUrl).toBe('https://github.com/owner/repo/pull/77');
+      });
+    });
+
+    describe('event broadcasting', () => {
+      it('should broadcast symphony:prCreated event', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '5', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc123', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/88', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        // Verify broadcast was sent
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+          'symphony:prCreated',
+          expect.objectContaining({
+            contributionId: 'contrib_draft_test',
+            sessionId: 'session-789',
+            draftPrNumber: 88,
+            draftPrUrl: 'https://github.com/owner/repo/pull/88',
+          })
+        );
+      });
+    });
+
+    describe('return values', () => {
+      it('should return draftPrNumber and draftPrUrl on success', async () => {
+        const metadata = createValidMetadata();
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '3', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc123', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/101', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        const result = await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        expect(result.success).toBe(true);
+        expect(result.draftPrNumber).toBe(101);
+        expect(result.draftPrUrl).toBe('https://github.com/owner/repo/pull/101');
+        expect(result.error).toBeUndefined();
+      });
+    });
+  });
 });
