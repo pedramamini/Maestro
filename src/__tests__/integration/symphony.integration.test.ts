@@ -1159,6 +1159,118 @@ describe('Symphony Integration Tests', () => {
       expect(result.success).toBe(false);
       expect(result.error).toContain('PR');
     });
+
+    it('should handle push when remote branch exists with different content', async () => {
+      // Setup metadata
+      const metadataDir = path.join(testTempDir, 'symphony', 'contributions', 'push_conflict_test');
+      await fs.mkdir(metadataDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'push_conflict_test',
+          sessionId: 'session-conflict',
+          repoSlug: 'owner/repo',
+          issueNumber: 1,
+          issueTitle: 'Push Conflict Test',
+          branchName: 'symphony/issue-1-test',
+          localPath: '/tmp/repo',
+          prCreated: false,
+        })
+      );
+
+      // Mock push failure due to diverged remote branch (non-fast-forward update)
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'push') {
+          // Simulate the error when remote branch has different content
+          // This happens when someone else pushed to the same branch, or force-push was done remotely
+          return {
+            stdout: '',
+            stderr: `To https://github.com/owner/repo.git
+ ! [rejected]        symphony/issue-1-test -> symphony/issue-1-test (non-fast-forward)
+error: failed to push some refs to 'https://github.com/owner/repo.git'
+hint: Updates were rejected because the tip of your current branch is behind
+hint: its remote counterpart. Integrate the remote changes (e.g.
+hint: 'git pull ...') before pushing again.`,
+            exitCode: 1,
+          };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') {
+          return { stdout: '1', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-parse') {
+          return { stdout: 'symphony/issue-1-test', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:createDraftPR', {
+        contributionId: 'push_conflict_test',
+      }) as { success: boolean; error?: string };
+
+      // Push should fail, which means PR creation fails
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('push');
+    });
+
+    it('should handle push failure due to remote branch force-push (fetch-first)', async () => {
+      // Another variant: remote was force-pushed, local ref is stale
+      const metadataDir = path.join(testTempDir, 'symphony', 'contributions', 'fetch_first_test');
+      await fs.mkdir(metadataDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'fetch_first_test',
+          sessionId: 'session-fetch',
+          repoSlug: 'owner/repo',
+          issueNumber: 2,
+          issueTitle: 'Fetch First Test',
+          branchName: 'symphony/issue-2-test',
+          localPath: '/tmp/repo2',
+          prCreated: false,
+        })
+      );
+
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'push') {
+          // Simulate error when remote history has been rewritten
+          return {
+            stdout: '',
+            stderr: `error: failed to push some refs to 'https://github.com/owner/repo.git'
+hint: Updates were rejected because the remote contains work that you do
+hint: not have locally. This is usually caused by another repository pushing
+hint: to the same ref. You may want to first integrate the remote changes
+hint: (e.g., 'git pull ...') before pushing again.`,
+            exitCode: 1,
+          };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') {
+          return { stdout: '1', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-parse') {
+          return { stdout: 'symphony/issue-2-test', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:createDraftPR', {
+        contributionId: 'fetch_first_test',
+      }) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('push');
+    });
   });
 
   // ==========================================================================
