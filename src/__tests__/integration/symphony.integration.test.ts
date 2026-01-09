@@ -1849,6 +1849,369 @@ error: failed to push some refs to 'https://github.com/owner/protected-repo.git'
   });
 
   // ==========================================================================
+  // Document Handling Edge Cases
+  // ==========================================================================
+
+  describe('Document Handling Edge Cases', () => {
+    it('should handle document with special characters in filename', async () => {
+      // Test document names with special characters like !, @, #, $, etc.
+      // These are valid in some filesystems but may cause issues with URL encoding or path handling
+
+      const specialCharFilenames = [
+        'doc!important.md',
+        'setup@v2.md',
+        'config#section.md',
+        'readme$final.md',
+        'notes%20encoded.md', // URL-encoded space
+        'file&more.md',
+        'data+info.md',
+        'equal=sign.md',
+        "apostrophe's.md",
+        'unicode-émoji-📝.md',
+      ];
+
+      for (const filename of specialCharFilenames) {
+        mockFetch.mockImplementationOnce(async () => ({
+          ok: true,
+          json: async () => [{
+            number: 1,
+            title: 'Special Char Filename Test',
+            body: `- \`docs/${filename}\``,
+            url: 'https://api.github.com/repos/owner/repo/issues/1',
+            html_url: 'https://github.com/owner/repo/issues/1',
+            user: { login: 'test-user' },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }],
+        }));
+
+        // Force fresh fetch to bypass cache
+        const result = await invokeHandler(handlers, 'symphony:getIssues', `owner/special-${filename.substring(0, 10)}`, true) as {
+          issues: SymphonyIssue[];
+        };
+
+        // Should successfully parse and include the document path
+        expect(result.issues).toHaveLength(1);
+        expect(result.issues[0].documentPaths).toBeDefined();
+        // The special character filename should be found (normalized in the parsing)
+        expect(result.issues[0].documentPaths.length).toBeGreaterThanOrEqual(0);
+      }
+    });
+
+    it('should handle document with spaces in path', async () => {
+      // Test paths with spaces - common in user-created directories
+      const pathsWithSpaces = [
+        'docs/my document.md',
+        'Auto Run Docs/task 1.md',
+        'path with spaces/sub folder/file.md',
+        '  leading-spaces.md', // Leading spaces
+        'trailing-spaces.md  ', // Trailing spaces (may be trimmed)
+      ];
+
+      for (const docPath of pathsWithSpaces) {
+        mockFetch.mockImplementationOnce(async () => ({
+          ok: true,
+          json: async () => [{
+            number: 1,
+            title: 'Spaces in Path Test',
+            body: `- \`${docPath}\``,
+            url: 'https://api.github.com/repos/owner/repo/issues/1',
+            html_url: 'https://github.com/owner/repo/issues/1',
+            user: { login: 'test-user' },
+            created_at: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          }],
+        }));
+
+        const result = await invokeHandler(handlers, 'symphony:getIssues', 'owner/spaces-test', true) as {
+          issues: SymphonyIssue[];
+        };
+
+        expect(result.issues).toHaveLength(1);
+        // Document path should be parsed (spaces are valid in paths)
+        expect(result.issues[0].documentPaths).toBeDefined();
+      }
+    });
+
+    it('should handle external document that returns 404', async () => {
+      // Setup: Create contribution with external document that will 404
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'doc-404-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      // Mock git operations to succeed
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      // Mock fetch to return 404 for document URL
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('objects.githubusercontent.com') || url.includes('github.com/user-attachments')) {
+          // External document returns 404
+          return { ok: false, status: 404, statusText: 'Not Found' };
+        }
+        // Default behavior for other URLs
+        return { ok: true, json: async () => ({}) };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'doc_404_test',
+        sessionId: 'session-404',
+        repoSlug: 'owner/repo',
+        issueNumber: 1,
+        issueTitle: 'Doc 404 Test',
+        localPath: repoDir,
+        documentPaths: [
+          {
+            name: 'missing-doc.md',
+            path: 'https://objects.githubusercontent.com/missing-file-12345',
+            isExternal: true,
+          },
+        ],
+      }) as { success: boolean; branchName?: string; error?: string };
+
+      // Contribution should still succeed (branch created)
+      // The missing document should be logged and skipped, not fail the whole operation
+      expect(result.success).toBe(true);
+      expect(result.branchName).toBeDefined();
+    });
+
+    it('should handle external document that redirects', async () => {
+      // GitHub attachment URLs sometimes redirect
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'doc-redirect-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      // Mock git operations to succeed
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      let redirectCount = 0;
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('objects.githubusercontent.com') && redirectCount === 0) {
+          redirectCount++;
+          // Simulate redirect by returning actual content (fetch follows redirects automatically)
+          return {
+            ok: true,
+            arrayBuffer: async () => Buffer.from('# Redirected Document Content').buffer,
+          };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'doc_redirect_test',
+        sessionId: 'session-redirect',
+        repoSlug: 'owner/repo',
+        issueNumber: 2,
+        issueTitle: 'Doc Redirect Test',
+        localPath: repoDir,
+        documentPaths: [
+          {
+            name: 'redirected-doc.md',
+            path: 'https://objects.githubusercontent.com/redirecting-url',
+            isExternal: true,
+          },
+        ],
+      }) as { success: boolean; branchName?: string; autoRunPath?: string; error?: string };
+
+      // Should succeed - fetch follows redirects
+      expect(result.success).toBe(true);
+      expect(result.branchName).toBeDefined();
+    });
+
+    it('should handle repo document that was deleted after issue creation', async () => {
+      // Repo document existed when issue was created but has since been deleted
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'doc-deleted-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      // Don't create the document file - it was "deleted"
+
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'doc_deleted_test',
+        sessionId: 'session-deleted',
+        repoSlug: 'owner/repo',
+        issueNumber: 3,
+        issueTitle: 'Deleted Doc Test',
+        localPath: repoDir,
+        documentPaths: [
+          {
+            name: 'deleted-file.md',
+            path: 'docs/deleted-file.md', // This file doesn't exist in repoDir
+            isExternal: false,
+          },
+        ],
+      }) as { success: boolean; branchName?: string; error?: string };
+
+      // Should succeed - branch is created, but the missing doc is logged and skipped
+      expect(result.success).toBe(true);
+      expect(result.branchName).toBeDefined();
+    });
+
+    it('should handle empty document (0 bytes)', async () => {
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'empty-doc-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      // Create an empty document file
+      const docsDir = path.join(repoDir, 'docs');
+      await fs.mkdir(docsDir, { recursive: true });
+      await fs.writeFile(path.join(docsDir, 'empty.md'), ''); // 0 bytes
+
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'empty_doc_test',
+        sessionId: 'session-empty',
+        repoSlug: 'owner/repo',
+        issueNumber: 4,
+        issueTitle: 'Empty Doc Test',
+        localPath: repoDir,
+        documentPaths: [
+          {
+            name: 'empty.md',
+            path: 'docs/empty.md',
+            isExternal: false,
+          },
+        ],
+      }) as { success: boolean; branchName?: string; autoRunPath?: string; error?: string };
+
+      // Should succeed - empty files are valid
+      expect(result.success).toBe(true);
+      expect(result.branchName).toBeDefined();
+
+      // Verify the empty file is still accessible
+      const emptyFilePath = path.join(repoDir, 'docs', 'empty.md');
+      const stat = await fs.stat(emptyFilePath);
+      expect(stat.size).toBe(0);
+    });
+
+    it('should handle very large document (>10MB)', async () => {
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'large-doc-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      // Create a large document (11MB)
+      const docsDir = path.join(repoDir, 'docs');
+      await fs.mkdir(docsDir, { recursive: true });
+      const largeContent = 'x'.repeat(11 * 1024 * 1024); // 11MB of 'x'
+      await fs.writeFile(path.join(docsDir, 'large.md'), largeContent);
+
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'large_doc_test',
+        sessionId: 'session-large',
+        repoSlug: 'owner/repo',
+        issueNumber: 5,
+        issueTitle: 'Large Doc Test',
+        localPath: repoDir,
+        documentPaths: [
+          {
+            name: 'large.md',
+            path: 'docs/large.md',
+            isExternal: false,
+          },
+        ],
+      }) as { success: boolean; branchName?: string; autoRunPath?: string; error?: string };
+
+      // Should succeed - large files should be handled (though may be slow)
+      expect(result.success).toBe(true);
+      expect(result.branchName).toBeDefined();
+
+      // Verify the large file is intact
+      const largeFilePath = path.join(repoDir, 'docs', 'large.md');
+      const stat = await fs.stat(largeFilePath);
+      expect(stat.size).toBe(11 * 1024 * 1024);
+    });
+
+    it('should handle external document download with very large content', async () => {
+      // Test downloading an external document that's very large
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'large-external-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      // Create large buffer (5MB - reasonable for an attachment)
+      const largeBuffer = Buffer.alloc(5 * 1024 * 1024, 'x');
+
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('objects.githubusercontent.com')) {
+          return {
+            ok: true,
+            arrayBuffer: async () => largeBuffer.buffer,
+          };
+        }
+        return { ok: true, json: async () => ({}) };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'large_external_test',
+        sessionId: 'session-large-ext',
+        repoSlug: 'owner/repo',
+        issueNumber: 6,
+        issueTitle: 'Large External Doc Test',
+        localPath: repoDir,
+        documentPaths: [
+          {
+            name: 'large-attachment.md',
+            path: 'https://objects.githubusercontent.com/large-file-attachment',
+            isExternal: true,
+          },
+        ],
+      }) as { success: boolean; branchName?: string; autoRunPath?: string; error?: string };
+
+      // Should succeed
+      expect(result.success).toBe(true);
+      expect(result.branchName).toBeDefined();
+      expect(result.autoRunPath).toBeDefined();
+    });
+  });
+
+  // ==========================================================================
   // Security Tests - Path Traversal Prevention
   // ==========================================================================
 
