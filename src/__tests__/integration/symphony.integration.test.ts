@@ -1271,6 +1271,193 @@ hint: (e.g., 'git pull ...') before pushing again.`,
       expect(result.success).toBe(false);
       expect(result.error).toContain('push');
     });
+
+    it('should handle git hooks that modify commits', async () => {
+      // Scenario: A pre-push hook runs and modifies/amends commits, or a pre-commit hook
+      // adds auto-generated files, changing the commit state. This can cause the commit
+      // count to change between when we check and when we push, or cause push to fail
+      // due to hook modifications.
+
+      // Setup metadata for a contribution
+      const metadataDir = path.join(testTempDir, 'symphony', 'contributions', 'hook_modified_test');
+      await fs.mkdir(metadataDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'hook_modified_test',
+          sessionId: 'session-hook',
+          repoSlug: 'owner/hook-test-repo',
+          issueNumber: 42,
+          issueTitle: 'Hook Modified Test',
+          branchName: 'symphony/issue-42-hook',
+          localPath: '/tmp/hook-repo',
+          prCreated: false,
+        })
+      );
+
+      // Test Case 1: Pre-push hook that rejects the push with a custom message
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'push') {
+          // Simulate pre-push hook rejection
+          // Pre-push hooks can run arbitrary checks and reject the push
+          return {
+            stdout: '',
+            stderr: `remote: Running pre-push hooks...
+remote: error: Hook failed: commit message does not meet standards
+remote: Please ensure commit messages follow the conventional commits format.
+To https://github.com/owner/hook-test-repo.git
+ ! [remote rejected] symphony/issue-42-hook -> symphony/issue-42-hook (pre-receive hook declined)
+error: failed to push some refs to 'https://github.com/owner/hook-test-repo.git'`,
+            exitCode: 1,
+          };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') {
+          return { stdout: '2', stderr: '', exitCode: 0 }; // 2 commits
+        }
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-parse') {
+          return { stdout: 'symphony/issue-42-hook', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result1 = await invokeHandler(handlers, 'symphony:createDraftPR', {
+        contributionId: 'hook_modified_test',
+      }) as { success: boolean; error?: string };
+
+      // Push should fail due to hook rejection
+      expect(result1.success).toBe(false);
+      expect(result1.error).toContain('push');
+
+      // Test Case 2: Hook that amends commits, causing a mismatch between local and what was pushed
+      // Reset mock for second test case
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'push') {
+          // Simulate a hook that modifies commits during push (e.g., auto-sign)
+          // The hook succeeds but modifies the commit, which could theoretically
+          // cause issues with subsequent operations
+          return {
+            stdout: 'To https://github.com/owner/hook-test-repo.git\n   abc123..def456  symphony/issue-42-hook -> symphony/issue-42-hook',
+            stderr: 'remote: Running commit hooks...\nremote: Auto-signing commits...\nremote: Done.',
+            exitCode: 0,
+          };
+        }
+        if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+          return { stdout: 'https://github.com/owner/hook-test-repo/pull/123', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') {
+          return { stdout: '2', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-parse') {
+          return { stdout: 'symphony/issue-42-hook', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      // Reset the metadata (simulate fresh state)
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'hook_modified_test',
+          sessionId: 'session-hook',
+          repoSlug: 'owner/hook-test-repo',
+          issueNumber: 42,
+          issueTitle: 'Hook Modified Test',
+          branchName: 'symphony/issue-42-hook',
+          localPath: '/tmp/hook-repo',
+          prCreated: false,
+        })
+      );
+
+      const result2 = await invokeHandler(handlers, 'symphony:createDraftPR', {
+        contributionId: 'hook_modified_test',
+      }) as { success: boolean; draftPrNumber?: number; draftPrUrl?: string; error?: string };
+
+      // Should succeed even with hook output in stderr (hooks that don't fail the push)
+      expect(result2.success).toBe(true);
+      expect(result2.draftPrNumber).toBe(123);
+      expect(result2.draftPrUrl).toBe('https://github.com/owner/hook-test-repo/pull/123');
+    });
+
+    it('should handle pre-receive hook that rejects based on commit content', async () => {
+      // Scenario: Server-side pre-receive hook rejects push due to large files,
+      // secrets detection, or other content-based rules
+
+      const metadataDir = path.join(testTempDir, 'symphony', 'contributions', 'pre_receive_test');
+      await fs.mkdir(metadataDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'pre_receive_test',
+          sessionId: 'session-prereceive',
+          repoSlug: 'owner/protected-repo',
+          issueNumber: 99,
+          issueTitle: 'Pre-receive Hook Test',
+          branchName: 'symphony/issue-99-test',
+          localPath: '/tmp/protected-repo',
+          prCreated: false,
+        })
+      );
+
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'git' && args?.[0] === 'push') {
+          // Simulate pre-receive hook rejection due to detected secrets
+          return {
+            stdout: '',
+            stderr: `remote: Scanning for secrets...
+remote: ==============================
+remote: GitGuardian has detected the following potential secret in your commit:
+remote:
+remote:   +++ b/config.json
+remote:   @@ -1,3 +1,4 @@
+remote:    {
+remote:   +  "api_key": "sk-****************************"
+remote:    }
+remote:
+remote: To fix this issue, please remove the secret from your commit history.
+remote: See: https://docs.github.com/en/code-security/secret-scanning
+remote: ==============================
+remote: error: GH013: Secret scanning detected a secret
+To https://github.com/owner/protected-repo.git
+ ! [remote rejected] symphony/issue-99-test -> symphony/issue-99-test (pre-receive hook declined)
+error: failed to push some refs to 'https://github.com/owner/protected-repo.git'`,
+            exitCode: 1,
+          };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') {
+          return { stdout: '1', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-parse') {
+          return { stdout: 'symphony/issue-99-test', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:createDraftPR', {
+        contributionId: 'pre_receive_test',
+      }) as { success: boolean; error?: string };
+
+      // Push should fail due to pre-receive hook rejection
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('push');
+    });
   });
 
   // ==========================================================================
