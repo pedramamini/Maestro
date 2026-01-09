@@ -3454,4 +3454,456 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Start Contribution Tests (symphony:startContribution - Session Workflow)
+  // ============================================================================
+
+  describe('symphony:startContribution', () => {
+    const getStartContributionHandler = () => handlers.get('symphony:startContribution');
+
+    const validStartContributionParams = {
+      contributionId: 'contrib_test123_abc',
+      sessionId: 'session-456',
+      repoSlug: 'owner/repo',
+      issueNumber: 42,
+      issueTitle: 'Test Issue Title',
+      localPath: '/tmp/symphony/repos/repo-contrib_test123_abc',
+      documentPaths: [] as { name: string; path: string; isExternal: boolean }[],
+    };
+
+    describe('input validation', () => {
+      it('should validate repo slug format', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          repoSlug: 'invalid-no-slash',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('owner/repo');
+      });
+
+      it('should reject empty repo slug', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          repoSlug: '',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('required');
+      });
+
+      it('should reject repo slug with invalid owner name', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          repoSlug: '-invalid/repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid owner');
+      });
+
+      it('should validate issue number is positive integer', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          issueNumber: 0,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid issue number');
+      });
+
+      it('should reject negative issue number', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          issueNumber: -5,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid issue number');
+      });
+
+      it('should reject non-integer issue number', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          issueNumber: 3.14,
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid issue number');
+      });
+
+      it('should validate document paths for traversal', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'evil.md', path: '../../../etc/passwd', isExternal: false }],
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid document path');
+      });
+
+      it('should reject document paths starting with slash', async () => {
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'doc.md', path: '/absolute/path/doc.md', isExternal: false }],
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid document path');
+      });
+
+      it('should skip validation for external document URLs', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        mockFetch.mockResolvedValue({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'doc.md', path: 'https://github.com/attachments/doc.md', isExternal: true }],
+        });
+
+        // External URLs should not trigger path validation error
+        // Either success or an error that is NOT about path validation
+        if (result.error) {
+          expect(result.error).not.toContain('Invalid document path');
+        } else {
+          expect(result.success).toBe(true);
+        }
+      });
+    });
+
+    describe('gh CLI authentication', () => {
+      it('should check gh CLI authentication', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: 'Logged in to github.com', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'checkout') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        await handler!({} as any, validStartContributionParams);
+
+        // First call should be gh auth status
+        expect(execFileNoThrow).toHaveBeenCalledWith('gh', ['auth', 'status']);
+      });
+
+      it('should fail early if not authenticated', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: '', stderr: 'not logged in', exitCode: 1 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, validStartContributionParams);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('not authenticated');
+        // Should only call gh auth status, no branch creation
+        expect(execFileNoThrow).toHaveBeenCalledTimes(1);
+      });
+
+      it('should fail if gh CLI is not installed', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: '', stderr: 'command not found', exitCode: 127 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, validStartContributionParams);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('not installed');
+      });
+    });
+
+    describe('branch creation', () => {
+      it('should create branch and check it out', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, validStartContributionParams);
+
+        // Verify git checkout -b was called with branch containing issue number
+        const checkoutCall = vi.mocked(execFileNoThrow).mock.calls.find(
+          call => call[0] === 'git' && call[1]?.[0] === 'checkout' && call[1]?.[1] === '-b'
+        );
+        expect(checkoutCall).toBeDefined();
+        const branchName = checkoutCall![1]![2] as string;
+        expect(branchName).toMatch(/^symphony\/issue-42-/);
+        expect(result.success).toBe(true);
+        expect(result.branchName).toContain('42');
+      });
+
+      it('should handle branch creation failure', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout' && args?.[1] === '-b') {
+            return { stdout: '', stderr: 'fatal: A branch named symphony/issue-42 already exists', exitCode: 128 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, validStartContributionParams);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Failed to create branch');
+      });
+    });
+
+    describe('docs cache directory', () => {
+      it('should create docs cache directory for external docs', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        mockFetch.mockResolvedValue({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(new ArrayBuffer(10)),
+        });
+
+        const handler = getStartContributionHandler();
+        await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'task.md', path: 'https://github.com/attachments/task.md', isExternal: true }],
+        });
+
+        // Verify mkdir was called for the docs directory
+        expect(fs.mkdir).toHaveBeenCalledWith(
+          expect.stringContaining('docs'),
+          { recursive: true }
+        );
+      });
+    });
+
+    describe('external document downloading', () => {
+      it('should download external documents (GitHub attachments)', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        const testContent = new TextEncoder().encode('# Test Document\nContent here');
+        mockFetch.mockResolvedValue({
+          ok: true,
+          arrayBuffer: () => Promise.resolve(testContent.buffer),
+        });
+
+        const handler = getStartContributionHandler();
+        await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'external.md', path: 'https://github.com/attachments/external.md', isExternal: true }],
+        });
+
+        // Verify fetch was called for the external URL
+        expect(mockFetch).toHaveBeenCalledWith('https://github.com/attachments/external.md');
+
+        // Verify file was written
+        expect(fs.writeFile).toHaveBeenCalledWith(
+          expect.stringContaining('external.md'),
+          expect.any(Buffer)
+        );
+      });
+
+      it('should handle download failures gracefully', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        mockFetch.mockResolvedValue({
+          ok: false,
+          status: 404,
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'missing.md', path: 'https://github.com/attachments/missing.md', isExternal: true }],
+        });
+
+        // Should still succeed overall, just skip the failed download
+        expect(result.success).toBe(true);
+        // Verify the file was not written (download failed)
+        const writeCallsForMissing = vi.mocked(fs.writeFile).mock.calls.filter(
+          call => (call[0] as string).includes('missing.md')
+        );
+        expect(writeCallsForMissing).toHaveLength(0);
+      });
+    });
+
+    describe('repo-internal documents', () => {
+      it('should verify repo-internal documents exist', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        vi.mocked(fs.access).mockResolvedValue(undefined); // File exists
+
+        const handler = getStartContributionHandler();
+        await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'internal.md', path: 'docs/internal.md', isExternal: false }],
+        });
+
+        // Verify fs.access was called to check if file exists
+        expect(fs.access).toHaveBeenCalled();
+      });
+
+      it('should handle non-existent repo-internal documents gracefully', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+        vi.mocked(fs.access).mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'nonexistent.md', path: 'docs/nonexistent.md', isExternal: false }],
+        });
+
+        // Should still succeed, just skip the missing file
+        expect(result.success).toBe(true);
+      });
+
+      it('should reject document paths with traversal patterns in resolution', async () => {
+        // This tests the path resolution check, not just the initial validation
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, {
+          ...validStartContributionParams,
+          documentPaths: [{ name: 'evil.md', path: 'docs/../../etc/passwd', isExternal: false }],
+        });
+
+        // Should be rejected due to path traversal
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid document path');
+      });
+    });
+
+    describe('metadata writing', () => {
+      it('should write metadata.json with contribution info', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        await handler!({} as any, validStartContributionParams);
+
+        // Verify metadata.json was written
+        const metadataWriteCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('metadata.json')
+        );
+        expect(metadataWriteCall).toBeDefined();
+
+        // Parse and verify the metadata content
+        const metadataContent = JSON.parse(metadataWriteCall![1] as string);
+        expect(metadataContent.contributionId).toBe('contrib_test123_abc');
+        expect(metadataContent.sessionId).toBe('session-456');
+        expect(metadataContent.repoSlug).toBe('owner/repo');
+        expect(metadataContent.issueNumber).toBe(42);
+        expect(metadataContent.issueTitle).toBe('Test Issue Title');
+        expect(metadataContent.prCreated).toBe(false);
+        expect(metadataContent.startedAt).toBeDefined();
+      });
+    });
+
+    describe('event broadcasting', () => {
+      it('should broadcast symphony:contributionStarted event', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        await handler!({} as any, validStartContributionParams);
+
+        // Verify broadcast was sent
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith(
+          'symphony:contributionStarted',
+          expect.objectContaining({
+            contributionId: 'contrib_test123_abc',
+            sessionId: 'session-456',
+            branchName: expect.stringContaining('symphony/issue-42'),
+          })
+        );
+      });
+    });
+
+    describe('return values', () => {
+      it('should return branchName and autoRunPath on success', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, validStartContributionParams);
+
+        expect(result.success).toBe(true);
+        expect(result.branchName).toMatch(/^symphony\/issue-42-[a-z0-9]+$/);
+        expect(result.autoRunPath).toBeDefined();
+        // No PR fields yet (deferred PR creation)
+        expect(result.draftPrNumber).toBeUndefined();
+        expect(result.draftPrUrl).toBeUndefined();
+      });
+
+      it('should return error on failure', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: '', stderr: 'not logged in', exitCode: 1 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartContributionHandler();
+        const result = await handler!({} as any, validStartContributionParams);
+
+        expect(result.success).toBe(false);
+        expect(result.error).toBeDefined();
+        expect(result.branchName).toBeUndefined();
+      });
+    });
+  });
 });
