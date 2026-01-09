@@ -1177,4 +1177,312 @@ describe('Symphony IPC handlers', () => {
       expect(writtenData.registry).toBeUndefined();
     });
   });
+
+  // ============================================================================
+  // State Operations Tests
+  // ============================================================================
+
+  describe('symphony:getState', () => {
+    it('should return default state when no state file exists', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+      const handler = handlers.get('symphony:getState');
+      const result = await handler!({} as any);
+
+      expect(result.state).toBeDefined();
+      expect(result.state.active).toEqual([]);
+      expect(result.state.history).toEqual([]);
+      expect(result.state.stats).toBeDefined();
+      expect(result.state.stats.totalContributions).toBe(0);
+      expect(result.state.stats.totalMerged).toBe(0);
+      expect(result.state.stats.repositoriesContributed).toEqual([]);
+    });
+
+    it('should return persisted state from disk', async () => {
+      const persistedState = {
+        active: [
+          {
+            id: 'contrib_123',
+            repoSlug: 'owner/repo',
+            repoName: 'repo',
+            issueNumber: 42,
+            issueTitle: 'Test Issue',
+            localPath: '/tmp/repo',
+            branchName: 'symphony/issue-42-abc',
+            startedAt: '2024-01-01T00:00:00Z',
+            status: 'running',
+            progress: { totalDocuments: 1, completedDocuments: 0, totalTasks: 0, completedTasks: 0 },
+            tokenUsage: { inputTokens: 100, outputTokens: 50, estimatedCost: 0.01 },
+            timeSpent: 1000,
+            sessionId: 'session-123',
+            agentType: 'claude-code',
+          },
+        ],
+        history: [
+          {
+            id: 'contrib_old',
+            repoSlug: 'other/repo',
+            repoName: 'repo',
+            issueNumber: 10,
+            issueTitle: 'Old Issue',
+            startedAt: '2023-12-01T00:00:00Z',
+            completedAt: '2023-12-01T01:00:00Z',
+            prUrl: 'https://github.com/other/repo/pull/1',
+            prNumber: 1,
+            tokenUsage: { inputTokens: 500, outputTokens: 250, totalCost: 0.05 },
+            timeSpent: 3600000,
+            documentsProcessed: 2,
+            tasksCompleted: 5,
+          },
+        ],
+        stats: {
+          totalContributions: 1,
+          totalMerged: 1,
+          totalIssuesResolved: 1,
+          totalDocumentsProcessed: 2,
+          totalTasksCompleted: 5,
+          totalTokensUsed: 750,
+          totalTimeSpent: 3600000,
+          estimatedCostDonated: 0.05,
+          repositoriesContributed: ['other/repo'],
+          uniqueMaintainersHelped: 1,
+          currentStreak: 1,
+          longestStreak: 3,
+        },
+      };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(persistedState));
+
+      const handler = handlers.get('symphony:getState');
+      const result = await handler!({} as any);
+
+      expect(result.state).toEqual(persistedState);
+      expect(result.state.active).toHaveLength(1);
+      expect(result.state.active[0].id).toBe('contrib_123');
+      expect(result.state.history).toHaveLength(1);
+      expect(result.state.stats.totalContributions).toBe(1);
+    });
+
+    it('should handle file read errors gracefully', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('Permission denied'));
+
+      const handler = handlers.get('symphony:getState');
+      const result = await handler!({} as any);
+
+      // Should return default state on error
+      expect(result.state).toBeDefined();
+      expect(result.state.active).toEqual([]);
+      expect(result.state.history).toEqual([]);
+    });
+  });
+
+  describe('symphony:getActive', () => {
+    it('should return empty array when no active contributions', async () => {
+      const emptyState = { active: [], history: [], stats: {} };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(emptyState));
+
+      const handler = handlers.get('symphony:getActive');
+      const result = await handler!({} as any);
+
+      expect(result.contributions).toEqual([]);
+    });
+
+    it('should return all active contributions from state', async () => {
+      const stateWithActive = {
+        active: [
+          {
+            id: 'contrib_1',
+            repoSlug: 'owner/repo1',
+            issueNumber: 1,
+            status: 'running',
+          },
+          {
+            id: 'contrib_2',
+            repoSlug: 'owner/repo2',
+            issueNumber: 2,
+            status: 'paused',
+          },
+        ],
+        history: [],
+        stats: {},
+      };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithActive));
+
+      const handler = handlers.get('symphony:getActive');
+      const result = await handler!({} as any);
+
+      expect(result.contributions).toHaveLength(2);
+      expect(result.contributions[0].id).toBe('contrib_1');
+      expect(result.contributions[1].id).toBe('contrib_2');
+    });
+  });
+
+  describe('symphony:getCompleted', () => {
+    it('should return empty array when no history', async () => {
+      const emptyState = { active: [], history: [], stats: {} };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(emptyState));
+
+      const handler = handlers.get('symphony:getCompleted');
+      const result = await handler!({} as any);
+
+      expect(result.contributions).toEqual([]);
+    });
+
+    it('should return all completed contributions sorted by date descending', async () => {
+      const stateWithHistory = {
+        active: [],
+        history: [
+          { id: 'old', completedAt: '2024-01-01T00:00:00Z' },
+          { id: 'newest', completedAt: '2024-01-03T00:00:00Z' },
+          { id: 'middle', completedAt: '2024-01-02T00:00:00Z' },
+        ],
+        stats: {},
+      };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithHistory));
+
+      const handler = handlers.get('symphony:getCompleted');
+      const result = await handler!({} as any);
+
+      expect(result.contributions).toHaveLength(3);
+      // Should be sorted newest first
+      expect(result.contributions[0].id).toBe('newest');
+      expect(result.contributions[1].id).toBe('middle');
+      expect(result.contributions[2].id).toBe('old');
+    });
+
+    it('should respect limit parameter', async () => {
+      const stateWithHistory = {
+        active: [],
+        history: [
+          { id: 'a', completedAt: '2024-01-05T00:00:00Z' },
+          { id: 'b', completedAt: '2024-01-04T00:00:00Z' },
+          { id: 'c', completedAt: '2024-01-03T00:00:00Z' },
+          { id: 'd', completedAt: '2024-01-02T00:00:00Z' },
+          { id: 'e', completedAt: '2024-01-01T00:00:00Z' },
+        ],
+        stats: {},
+      };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithHistory));
+
+      const handler = handlers.get('symphony:getCompleted');
+      const result = await handler!({} as any, 2);
+
+      expect(result.contributions).toHaveLength(2);
+      expect(result.contributions[0].id).toBe('a'); // newest
+      expect(result.contributions[1].id).toBe('b');
+    });
+  });
+
+  describe('symphony:getStats', () => {
+    it('should return default stats for new users', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+      const handler = handlers.get('symphony:getStats');
+      const result = await handler!({} as any);
+
+      expect(result.stats).toBeDefined();
+      expect(result.stats.totalContributions).toBe(0);
+      expect(result.stats.totalMerged).toBe(0);
+      expect(result.stats.totalTokensUsed).toBe(0);
+      expect(result.stats.totalTimeSpent).toBe(0);
+      expect(result.stats.estimatedCostDonated).toBe(0);
+      expect(result.stats.repositoriesContributed).toEqual([]);
+      expect(result.stats.currentStreak).toBe(0);
+      expect(result.stats.longestStreak).toBe(0);
+    });
+
+    it('should include real-time stats from active contributions', async () => {
+      const stateWithActive = {
+        active: [
+          {
+            id: 'contrib_1',
+            tokenUsage: { inputTokens: 1000, outputTokens: 500, estimatedCost: 0.10 },
+            timeSpent: 60000,
+            progress: { completedDocuments: 1, completedTasks: 3, totalDocuments: 2, totalTasks: 5 },
+          },
+        ],
+        history: [],
+        stats: {
+          totalContributions: 5,
+          totalMerged: 3,
+          totalIssuesResolved: 4,
+          totalDocumentsProcessed: 10,
+          totalTasksCompleted: 25,
+          totalTokensUsed: 50000,
+          totalTimeSpent: 3600000,
+          estimatedCostDonated: 5.00,
+          repositoriesContributed: ['repo1', 'repo2'],
+          uniqueMaintainersHelped: 2,
+          currentStreak: 2,
+          longestStreak: 5,
+        },
+      };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithActive));
+
+      const handler = handlers.get('symphony:getStats');
+      const result = await handler!({} as any);
+
+      // Should include active contribution stats in totals
+      expect(result.stats.totalTokensUsed).toBe(50000 + 1000 + 500); // base + active input + output
+      expect(result.stats.totalTimeSpent).toBe(3600000 + 60000); // base + active
+      expect(result.stats.estimatedCostDonated).toBe(5.00 + 0.10); // base + active
+      expect(result.stats.totalDocumentsProcessed).toBe(10 + 1); // base + active completed
+      expect(result.stats.totalTasksCompleted).toBe(25 + 3); // base + active completed
+    });
+
+    it('should aggregate tokens, time, cost from active contributions', async () => {
+      const stateWithMultipleActive = {
+        active: [
+          {
+            id: 'contrib_1',
+            tokenUsage: { inputTokens: 1000, outputTokens: 500, estimatedCost: 0.10 },
+            timeSpent: 60000,
+            progress: { completedDocuments: 1, completedTasks: 2, totalDocuments: 2, totalTasks: 5 },
+          },
+          {
+            id: 'contrib_2',
+            tokenUsage: { inputTokens: 2000, outputTokens: 1000, estimatedCost: 0.20 },
+            timeSpent: 120000,
+            progress: { completedDocuments: 3, completedTasks: 7, totalDocuments: 4, totalTasks: 10 },
+          },
+          {
+            id: 'contrib_3',
+            tokenUsage: { inputTokens: 500, outputTokens: 250, estimatedCost: 0.05 },
+            timeSpent: 30000,
+            progress: { completedDocuments: 0, completedTasks: 1, totalDocuments: 1, totalTasks: 2 },
+          },
+        ],
+        history: [],
+        stats: {
+          totalContributions: 0,
+          totalMerged: 0,
+          totalIssuesResolved: 0,
+          totalDocumentsProcessed: 0,
+          totalTasksCompleted: 0,
+          totalTokensUsed: 0,
+          totalTimeSpent: 0,
+          estimatedCostDonated: 0,
+          repositoriesContributed: [],
+          uniqueMaintainersHelped: 0,
+          currentStreak: 0,
+          longestStreak: 0,
+        },
+      };
+      vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithMultipleActive));
+
+      const handler = handlers.get('symphony:getStats');
+      const result = await handler!({} as any);
+
+      // Aggregate across all active contributions
+      // Tokens: (1000+500) + (2000+1000) + (500+250) = 5250
+      expect(result.stats.totalTokensUsed).toBe(5250);
+      // Time: 60000 + 120000 + 30000 = 210000
+      expect(result.stats.totalTimeSpent).toBe(210000);
+      // Cost: 0.10 + 0.20 + 0.05 = 0.35
+      expect(result.stats.estimatedCostDonated).toBeCloseTo(0.35, 2);
+      // Docs: 1 + 3 + 0 = 4
+      expect(result.stats.totalDocumentsProcessed).toBe(4);
+      // Tasks: 2 + 7 + 1 = 10
+      expect(result.stats.totalTasksCompleted).toBe(10);
+    });
+  });
 });
