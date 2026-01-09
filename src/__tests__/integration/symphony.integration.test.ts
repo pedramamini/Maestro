@@ -1461,6 +1461,394 @@ error: failed to push some refs to 'https://github.com/owner/protected-repo.git'
   });
 
   // ==========================================================================
+  // State Edge Cases
+  // ==========================================================================
+
+  describe('State Edge Cases', () => {
+    it('should handle state with maximum contributions (100+)', async () => {
+      const state = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+      // Add 100+ contributions to history
+      for (let i = 0; i < 150; i++) {
+        state.state.history.push({
+          id: `contrib_${i}`,
+          repoSlug: `owner/repo-${i}`,
+          repoName: `repo-${i}`,
+          issueNumber: i + 1,
+          issueTitle: `Issue ${i + 1}`,
+          startedAt: new Date(Date.now() - i * 86400000).toISOString(), // One day apart
+          completedAt: new Date(Date.now() - i * 86400000 + 3600000).toISOString(),
+          prUrl: `https://github.com/owner/repo-${i}/pull/${i + 1}`,
+          prNumber: i + 1,
+          tokenUsage: {
+            inputTokens: 1000,
+            outputTokens: 500,
+            totalCost: 0.05,
+          },
+          timeSpent: 60000,
+          documentsProcessed: 1,
+          tasksCompleted: 5,
+        });
+      }
+
+      // Update stats to reflect 150 contributions
+      state.state.stats.totalContributions = 150;
+      state.state.stats.totalDocumentsProcessed = 150;
+      state.state.stats.totalTasksCompleted = 750;
+
+      // Write state to disk
+      const stateFile = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFile), { recursive: true });
+      await fs.writeFile(stateFile, JSON.stringify(state.state, null, 2));
+
+      // Re-register handlers to reload state
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Read state back
+      const result = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+      // Verify all contributions are preserved
+      expect(result.state.history.length).toBe(150);
+      expect(result.state.stats.totalContributions).toBe(150);
+
+      // Verify completed list operation works with pagination
+      const completedResult = await invokeHandler(handlers, 'symphony:getCompleted', 10) as {
+        contributions: CompletedContribution[];
+      };
+      expect(completedResult.contributions.length).toBe(10);
+    });
+
+    it('should handle stats overflow for large token counts', async () => {
+      const state = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+      // Set extremely large token counts (near Number.MAX_SAFE_INTEGER would be unrealistic,
+      // but billions of tokens is plausible for long-running usage)
+      state.state.stats.totalTokensUsed = 999_999_999_999; // ~1 trillion tokens
+      state.state.stats.totalTimeSpent = 999_999_999_999; // ~31 years in ms
+      state.state.stats.estimatedCostDonated = 99_999_999.99; // ~$100M
+      state.state.stats.totalContributions = 999_999;
+      state.state.stats.totalTasksCompleted = 9_999_999;
+
+      // Write to disk
+      const stateFile = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFile), { recursive: true });
+      await fs.writeFile(stateFile, JSON.stringify(state.state, null, 2));
+
+      // Re-register handlers
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Add one more contribution to test increment
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'overflow-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      await invokeHandler(handlers, 'symphony:registerActive', {
+        contributionId: 'overflow_contrib',
+        sessionId: 'session-overflow',
+        repoSlug: 'owner/overflow-repo',
+        repoName: 'overflow-repo',
+        issueNumber: 1,
+        issueTitle: 'Overflow Test',
+        localPath: repoDir,
+        branchName: 'symphony/issue-1',
+        documentPaths: [],
+        agentType: 'claude-code',
+      });
+
+      // Update with large token usage
+      await invokeHandler(handlers, 'symphony:updateStatus', {
+        contributionId: 'overflow_contrib',
+        tokenUsage: {
+          inputTokens: 1_000_000,
+          outputTokens: 500_000,
+        },
+      });
+
+      // Get stats (includes active contribution stats)
+      const statsResult = await invokeHandler(handlers, 'symphony:getStats') as {
+        stats: ContributorStats;
+      };
+
+      // Verify no overflow or NaN issues
+      expect(Number.isFinite(statsResult.stats.totalTokensUsed)).toBe(true);
+      expect(statsResult.stats.totalTokensUsed).toBeGreaterThan(999_999_999_999);
+      expect(Number.isNaN(statsResult.stats.totalTokensUsed)).toBe(false);
+    });
+
+    it('should handle streak calculation across year boundary', async () => {
+      // Test streak that spans December 31 -> January 1
+      const state = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+      // Set last contribution to December 31, 2024
+      const dec31 = new Date('2024-12-31T23:59:59Z');
+      state.state.stats.lastContributionDate = dec31.toDateString();
+      state.state.stats.currentStreak = 5;
+      state.state.stats.longestStreak = 5;
+      state.state.stats.totalContributions = 5;
+
+      // Write to disk
+      const stateFile = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFile), { recursive: true });
+      await fs.writeFile(stateFile, JSON.stringify(state.state, null, 2));
+
+      // Re-register handlers
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Set up a contribution to complete on January 1, 2025
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'year-boundary-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      // Create metadata for PR creation
+      const metadataDir = path.join(testTempDir, 'symphony', 'contributions', 'year_boundary_contrib');
+      await fs.mkdir(metadataDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'year_boundary_contrib',
+          sessionId: 'session-year',
+          repoSlug: 'owner/year-repo',
+          issueNumber: 1,
+          issueTitle: 'Year Boundary Test',
+          branchName: 'symphony/issue-1',
+          localPath: repoDir,
+          prCreated: true,
+          draftPrNumber: 42,
+          draftPrUrl: 'https://github.com/owner/year-repo/pull/42',
+        })
+      );
+
+      // Register the active contribution
+      await invokeHandler(handlers, 'symphony:registerActive', {
+        contributionId: 'year_boundary_contrib',
+        sessionId: 'session-year',
+        repoSlug: 'owner/year-repo',
+        repoName: 'year-repo',
+        issueNumber: 1,
+        issueTitle: 'Year Boundary Test',
+        localPath: repoDir,
+        branchName: 'symphony/issue-1',
+        documentPaths: [],
+        agentType: 'claude-code',
+      });
+
+      // Update with PR info
+      await invokeHandler(handlers, 'symphony:updateStatus', {
+        contributionId: 'year_boundary_contrib',
+        draftPrNumber: 42,
+        draftPrUrl: 'https://github.com/owner/year-repo/pull/42',
+      });
+
+      // Mock the date to be January 1, 2025 (one day after Dec 31)
+      const originalDate = global.Date;
+      const mockDate = class extends Date {
+        constructor(...args: Parameters<typeof Date>) {
+          if (args.length === 0) {
+            super('2025-01-01T12:00:00Z');
+          } else {
+            // @ts-expect-error - spread args
+            super(...args);
+          }
+        }
+        static now() {
+          return new Date('2025-01-01T12:00:00Z').getTime();
+        }
+      };
+      // @ts-expect-error - mock Date
+      global.Date = mockDate;
+
+      try {
+        // Complete the contribution
+        const completeResult = await invokeHandler(handlers, 'symphony:complete', {
+          contributionId: 'year_boundary_contrib',
+          stats: {
+            inputTokens: 1000,
+            outputTokens: 500,
+            estimatedCost: 0.05,
+            timeSpentMs: 60000,
+            documentsProcessed: 1,
+            tasksCompleted: 3,
+          },
+        }) as { prUrl?: string; prNumber?: number };
+
+        expect(completeResult.prNumber).toBe(42);
+
+        // Check that streak was maintained across year boundary
+        const finalState = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+        // Streak should have increased since Jan 1 is the day after Dec 31
+        expect(finalState.state.stats.currentStreak).toBe(6);
+        expect(finalState.state.stats.longestStreak).toBe(6);
+      } finally {
+        global.Date = originalDate;
+      }
+    });
+
+    it('should handle streak calculation with timezone edge cases', async () => {
+      // Test when contribution is made near midnight in different timezone interpretation
+      const state = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+      // Last contribution was "today" according to local time
+      const today = new Date();
+      state.state.stats.lastContributionDate = today.toDateString();
+      state.state.stats.currentStreak = 3;
+      state.state.stats.longestStreak = 10;
+
+      // Write to disk
+      const stateFile = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFile), { recursive: true });
+      await fs.writeFile(stateFile, JSON.stringify(state.state, null, 2));
+
+      // Re-register handlers
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Set up a contribution
+      const repoDir = path.join(testTempDir, 'symphony-repos', 'tz-test');
+      await fs.mkdir(repoDir, { recursive: true });
+
+      const metadataDir = path.join(testTempDir, 'symphony', 'contributions', 'tz_contrib');
+      await fs.mkdir(metadataDir, { recursive: true });
+      await fs.writeFile(
+        path.join(metadataDir, 'metadata.json'),
+        JSON.stringify({
+          contributionId: 'tz_contrib',
+          sessionId: 'session-tz',
+          repoSlug: 'owner/tz-repo',
+          issueNumber: 1,
+          issueTitle: 'Timezone Test',
+          branchName: 'symphony/issue-1',
+          localPath: repoDir,
+          prCreated: true,
+          draftPrNumber: 99,
+          draftPrUrl: 'https://github.com/owner/tz-repo/pull/99',
+        })
+      );
+
+      await invokeHandler(handlers, 'symphony:registerActive', {
+        contributionId: 'tz_contrib',
+        sessionId: 'session-tz',
+        repoSlug: 'owner/tz-repo',
+        repoName: 'tz-repo',
+        issueNumber: 1,
+        issueTitle: 'Timezone Test',
+        localPath: repoDir,
+        branchName: 'symphony/issue-1',
+        documentPaths: [],
+        agentType: 'claude-code',
+      });
+
+      await invokeHandler(handlers, 'symphony:updateStatus', {
+        contributionId: 'tz_contrib',
+        draftPrNumber: 99,
+        draftPrUrl: 'https://github.com/owner/tz-repo/pull/99',
+      });
+
+      // Complete on the same day - streak should stay the same (not increment)
+      await invokeHandler(handlers, 'symphony:complete', {
+        contributionId: 'tz_contrib',
+        stats: {
+          inputTokens: 500,
+          outputTokens: 250,
+          estimatedCost: 0.02,
+          timeSpentMs: 30000,
+          documentsProcessed: 1,
+          tasksCompleted: 2,
+        },
+      });
+
+      const finalState = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+
+      // Same day contribution should increment streak (behavior: today or yesterday counts)
+      // The implementation checks: if lastDate === yesterday || lastDate === today, increment
+      expect(finalState.state.stats.currentStreak).toBe(4);
+      // Longest streak should not change since current < longest
+      expect(finalState.state.stats.longestStreak).toBe(10);
+    });
+
+    it('should handle concurrent state updates without file corruption', async () => {
+      // Test that concurrent operations don't corrupt the state file (malformed JSON)
+      // Note: Due to read-modify-write race conditions, some entries may be lost,
+      // but the file structure should remain valid JSON
+
+      const concurrentUpdates = 10;
+
+      // First, register contributions sequentially to ensure they're all in state
+      for (let i = 0; i < concurrentUpdates; i++) {
+        const repoDir = path.join(testTempDir, 'symphony-repos', `concurrent-${i}`);
+        await fs.mkdir(repoDir, { recursive: true });
+
+        await invokeHandler(handlers, 'symphony:registerActive', {
+          contributionId: `concurrent_${i}`,
+          sessionId: `session-concurrent-${i}`,
+          repoSlug: `owner/concurrent-repo-${i}`,
+          repoName: `concurrent-repo-${i}`,
+          issueNumber: i + 1,
+          issueTitle: `Concurrent Test ${i}`,
+          localPath: repoDir,
+          branchName: `symphony/issue-${i + 1}`,
+          documentPaths: [],
+          agentType: 'claude-code',
+        });
+      }
+
+      // Verify all registrations succeeded
+      const initialState = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+      expect(initialState.state.active.length).toBe(concurrentUpdates);
+
+      // Now do concurrent status updates - this is where race conditions could corrupt the file
+      const updatePromises: Promise<unknown>[] = [];
+      for (let i = 0; i < concurrentUpdates; i++) {
+        updatePromises.push(
+          invokeHandler(handlers, 'symphony:updateStatus', {
+            contributionId: `concurrent_${i}`,
+            progress: {
+              totalTasks: 10,
+              completedTasks: i,
+            },
+            tokenUsage: {
+              inputTokens: 100 * (i + 1),
+              outputTokens: 50 * (i + 1),
+            },
+          })
+        );
+      }
+
+      await Promise.all(updatePromises);
+
+      // Verify state file is not corrupted (can still be parsed as valid JSON)
+      const stateFile = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      const stateContent = await fs.readFile(stateFile, 'utf-8');
+
+      // Should parse without error - this is the key test
+      let state: SymphonyState;
+      try {
+        state = JSON.parse(stateContent);
+      } catch (error) {
+        throw new Error(`State file corrupted after concurrent writes: ${error}`);
+      }
+
+      // Verify structure is intact (regardless of which updates "won")
+      expect(Array.isArray(state.active)).toBe(true);
+      expect(Array.isArray(state.history)).toBe(true);
+      expect(state.stats).toBeDefined();
+      expect(typeof state.stats.totalContributions).toBe('number');
+
+      // All contributions should still be present (updates don't remove entries)
+      expect(state.active.length).toBe(concurrentUpdates);
+
+      // Verify no data corruption (all active contributions should have valid structure)
+      for (const contrib of state.active) {
+        expect(typeof contrib.id).toBe('string');
+        expect(typeof contrib.repoSlug).toBe('string');
+        expect(typeof contrib.progress.totalTasks).toBe('number');
+        expect(typeof contrib.tokenUsage.inputTokens).toBe('number');
+      }
+    });
+  });
+
+  // ==========================================================================
   // Security Tests - Path Traversal Prevention
   // ==========================================================================
 
