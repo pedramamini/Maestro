@@ -2212,6 +2212,263 @@ error: failed to push some refs to 'https://github.com/owner/protected-repo.git'
   });
 
   // ==========================================================================
+  // PR Status Edge Cases
+  // ==========================================================================
+
+  describe('PR Status Edge Cases', () => {
+    it('should handle checking status of PR that was force-merged', async () => {
+      // Setup: Add a completed contribution to history
+      // Note: SYMPHONY_STATE_PATH = 'symphony-state.json'
+      const stateFilePath = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFilePath), { recursive: true });
+      await fs.writeFile(stateFilePath, JSON.stringify({
+        active: [],
+        history: [{
+          id: 'force_merged_test',
+          repoSlug: 'owner/force-merged-repo',
+          repoName: 'force-merged-repo',
+          issueNumber: 42,
+          issueTitle: 'Force Merged PR',
+          documentsProcessed: 1,
+          tasksCompleted: 2,
+          timeSpent: 60000,
+          startedAt: new Date(Date.now() - 3600000).toISOString(),
+          completedAt: new Date().toISOString(),
+          prUrl: 'https://github.com/owner/force-merged-repo/pull/99',
+          prNumber: 99,
+          tokenUsage: { inputTokens: 1000, outputTokens: 500, totalCost: 0.05 },
+          wasMerged: false, // Not yet tracked as merged
+        }],
+        stats: {
+          ...DEFAULT_CONTRIBUTOR_STATS,
+          totalContributions: 1,
+        },
+      }));
+
+      // Re-register handlers to pick up the new state file
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Mock GitHub API to return a force-merged PR
+      // Force-merge shows as merged=true with a merge_commit_sha, same as normal merge
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/pulls/99')) {
+          return {
+            ok: true,
+            json: async () => ({
+              state: 'closed',
+              merged: true, // Force-merge still sets merged=true
+              merged_at: new Date().toISOString(),
+              merge_commit_sha: 'abc123def456', // Force-merge has a commit SHA
+            }),
+          };
+        }
+        return { ok: false, status: 404 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:checkPRStatuses') as {
+        checked: number;
+        merged: number;
+        closed: number;
+        errors: string[];
+      };
+
+      expect(result.checked).toBe(1);
+      expect(result.merged).toBe(1);
+      expect(result.closed).toBe(0);
+      expect(result.errors.length).toBe(0);
+
+      // Verify state was updated
+      const stateAfter = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+      expect(stateAfter.state.history[0].wasMerged).toBe(true);
+      expect(stateAfter.state.history[0].mergedAt).toBeDefined();
+      expect(stateAfter.state.stats.totalMerged).toBe(1);
+    });
+
+    it('should handle checking status of PR that was reverted', async () => {
+      // A reverted PR shows as merged (it was merged), but another PR reverted it
+      // The API still shows merged=true for the original PR
+      const stateFilePath = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFilePath), { recursive: true });
+      await fs.writeFile(stateFilePath, JSON.stringify({
+        active: [],
+        history: [{
+          id: 'reverted_test',
+          repoSlug: 'owner/reverted-repo',
+          repoName: 'reverted-repo',
+          issueNumber: 50,
+          issueTitle: 'Reverted PR',
+          documentsProcessed: 1,
+          tasksCompleted: 2,
+          timeSpent: 60000,
+          startedAt: new Date(Date.now() - 3600000).toISOString(),
+          completedAt: new Date().toISOString(),
+          prUrl: 'https://github.com/owner/reverted-repo/pull/100',
+          prNumber: 100,
+          tokenUsage: { inputTokens: 1000, outputTokens: 500, totalCost: 0.05 },
+          wasMerged: false,
+        }],
+        stats: {
+          ...DEFAULT_CONTRIBUTOR_STATS,
+          totalContributions: 1,
+        },
+      }));
+
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Mock GitHub API - reverted PRs still show as merged
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/pulls/100')) {
+          return {
+            ok: true,
+            json: async () => ({
+              state: 'closed',
+              merged: true, // Even reverted PRs show as merged
+              merged_at: new Date(Date.now() - 7200000).toISOString(), // Merged 2 hours ago
+            }),
+          };
+        }
+        return { ok: false, status: 404 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:checkPRStatuses') as {
+        checked: number;
+        merged: number;
+        closed: number;
+        errors: string[];
+      };
+
+      // PR was merged (even if later reverted, the API shows it as merged)
+      expect(result.checked).toBe(1);
+      expect(result.merged).toBe(1);
+      expect(result.closed).toBe(0);
+      expect(result.errors.length).toBe(0);
+
+      const stateAfter = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+      expect(stateAfter.state.history[0].wasMerged).toBe(true);
+    });
+
+    it('should handle checking status of deleted repository', async () => {
+      const stateFilePath = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFilePath), { recursive: true });
+      await fs.writeFile(stateFilePath, JSON.stringify({
+        active: [],
+        history: [{
+          id: 'deleted_repo_test',
+          repoSlug: 'owner/deleted-repo',
+          repoName: 'deleted-repo',
+          issueNumber: 1,
+          issueTitle: 'PR in Deleted Repo',
+          documentsProcessed: 1,
+          tasksCompleted: 1,
+          timeSpent: 30000,
+          startedAt: new Date(Date.now() - 3600000).toISOString(),
+          completedAt: new Date().toISOString(),
+          prUrl: 'https://github.com/owner/deleted-repo/pull/1',
+          prNumber: 1,
+          tokenUsage: { inputTokens: 500, outputTokens: 250, totalCost: 0.02 },
+          wasMerged: false,
+        }],
+        stats: {
+          ...DEFAULT_CONTRIBUTOR_STATS,
+          totalContributions: 1,
+        },
+      }));
+
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Mock GitHub API to return 404 for deleted repository
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/pulls/1')) {
+          return {
+            ok: false,
+            status: 404,
+            statusText: 'Not Found',
+          };
+        }
+        return { ok: false, status: 404 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:checkPRStatuses') as {
+        checked: number;
+        merged: number;
+        closed: number;
+        errors: string[];
+      };
+
+      expect(result.checked).toBe(1);
+      expect(result.merged).toBe(0);
+      expect(result.closed).toBe(0);
+      // Should record an error for the 404
+      expect(result.errors.length).toBe(1);
+      expect(result.errors[0]).toContain('404');
+    });
+
+    it('should handle checking status when GitHub API is down', async () => {
+      const stateFilePath = path.join(testTempDir, 'symphony', 'symphony-state.json');
+      await fs.mkdir(path.dirname(stateFilePath), { recursive: true });
+      await fs.writeFile(stateFilePath, JSON.stringify({
+        active: [],
+        history: [{
+          id: 'api_down_test',
+          repoSlug: 'owner/api-down-repo',
+          repoName: 'api-down-repo',
+          issueNumber: 5,
+          issueTitle: 'PR When API Down',
+          documentsProcessed: 1,
+          tasksCompleted: 1,
+          timeSpent: 30000,
+          startedAt: new Date(Date.now() - 3600000).toISOString(),
+          completedAt: new Date().toISOString(),
+          prUrl: 'https://github.com/owner/api-down-repo/pull/5',
+          prNumber: 5,
+          tokenUsage: { inputTokens: 500, outputTokens: 250, totalCost: 0.02 },
+          wasMerged: false,
+        }],
+        stats: {
+          ...DEFAULT_CONTRIBUTOR_STATS,
+          totalContributions: 1,
+        },
+      }));
+
+      handlers.clear();
+      registerSymphonyHandlers(mockDeps);
+
+      // Mock GitHub API to return 503 Service Unavailable
+      mockFetch.mockImplementation(async (url: string) => {
+        if (url.includes('/pulls/5')) {
+          return {
+            ok: false,
+            status: 503,
+            statusText: 'Service Unavailable',
+          };
+        }
+        return { ok: false, status: 503 };
+      });
+
+      const result = await invokeHandler(handlers, 'symphony:checkPRStatuses') as {
+        checked: number;
+        merged: number;
+        closed: number;
+        errors: string[];
+      };
+
+      expect(result.checked).toBe(1);
+      expect(result.merged).toBe(0);
+      expect(result.closed).toBe(0);
+      // Should record an error for the 503
+      expect(result.errors.length).toBe(1);
+      expect(result.errors[0]).toContain('503');
+
+      // State should remain unchanged (PR still shows as not merged)
+      const stateAfter = await invokeHandler(handlers, 'symphony:getState') as { state: SymphonyState };
+      expect(stateAfter.state.history[0].wasMerged).toBe(false);
+    });
+  });
+
+  // ==========================================================================
   // Security Tests - Path Traversal Prevention
   // ==========================================================================
 
