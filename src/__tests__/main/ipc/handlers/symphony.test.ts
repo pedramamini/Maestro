@@ -2240,4 +2240,628 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Complete Contribution Tests (symphony:complete)
+  // ============================================================================
+
+  describe('symphony:complete', () => {
+    const getCompleteHandler = () => handlers.get('symphony:complete');
+
+    // Helper to get the final state write (last one with state.json)
+    // Complete handler writes state twice: once for 'completing' status, once for final state
+    const getFinalStateWrite = () => {
+      const writeCalls = vi.mocked(fs.writeFile).mock.calls.filter(
+        call => (call[0] as string).includes('state.json')
+      );
+      const lastCall = writeCalls[writeCalls.length - 1];
+      return lastCall ? JSON.parse(lastCall[1] as string) : null;
+    };
+
+    const createActiveContribution = (overrides?: Partial<{
+      id: string;
+      repoSlug: string;
+      repoName: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      branchName: string;
+      draftPrNumber: number;
+      draftPrUrl: string;
+      status: string;
+      progress: { totalDocuments: number; completedDocuments: number; totalTasks: number; completedTasks: number };
+      tokenUsage: { inputTokens: number; outputTokens: number; estimatedCost: number };
+      timeSpent: number;
+      sessionId: string;
+      agentType: string;
+      startedAt: string;
+    }>) => ({
+      id: 'contrib_complete_test',
+      repoSlug: 'owner/repo',
+      repoName: 'repo',
+      issueNumber: 42,
+      issueTitle: 'Test Issue',
+      localPath: '/tmp/symphony/repos/repo-contrib_complete_test',
+      branchName: 'symphony/issue-42-abc',
+      draftPrNumber: 99,
+      draftPrUrl: 'https://github.com/owner/repo/pull/99',
+      startedAt: '2024-01-01T00:00:00Z',
+      status: 'running',
+      progress: { totalDocuments: 3, completedDocuments: 2, totalTasks: 10, completedTasks: 8 },
+      tokenUsage: { inputTokens: 5000, outputTokens: 2500, estimatedCost: 0.50 },
+      timeSpent: 180000,
+      sessionId: 'session-123',
+      agentType: 'claude-code',
+      ...overrides,
+    });
+
+    const createStateWithActiveContribution = (contribution?: ReturnType<typeof createActiveContribution>) => ({
+      active: [contribution || createActiveContribution()],
+      history: [],
+      stats: {
+        totalContributions: 5,
+        totalMerged: 3,
+        totalIssuesResolved: 4,
+        totalDocumentsProcessed: 20,
+        totalTasksCompleted: 50,
+        totalTokensUsed: 100000,
+        totalTimeSpent: 7200000,
+        estimatedCostDonated: 10.00,
+        repositoriesContributed: ['other/repo1', 'other/repo2'],
+        uniqueMaintainersHelped: 2,
+        currentStreak: 2,
+        longestStreak: 5,
+        lastContributionDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString(), // yesterday
+      },
+    });
+
+    describe('contribution lookup', () => {
+      it('should fail if contribution not found', async () => {
+        // State with no active contributions
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({
+          active: [],
+          history: [],
+          stats: {},
+        }));
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'nonexistent_contrib',
+        });
+
+        expect(result.error).toContain('Contribution not found');
+      });
+
+      it('should fail if contribution exists but ID does not match', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'wrong_contrib_id',
+        });
+
+        expect(result.error).toContain('Contribution not found');
+      });
+    });
+
+    describe('draft PR validation', () => {
+      it('should fail if no draft PR exists', async () => {
+        const contributionWithoutPR = createActiveContribution({
+          draftPrNumber: undefined,
+          draftPrUrl: undefined,
+        });
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({
+          active: [contributionWithoutPR],
+          history: [],
+          stats: {},
+        }));
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        expect(result.error).toContain('No draft PR exists');
+      });
+
+      it('should fail if draftPrNumber is missing but draftPrUrl exists', async () => {
+        const contributionWithPartialPR = createActiveContribution({
+          draftPrNumber: undefined,
+          draftPrUrl: 'https://github.com/owner/repo/pull/99',
+        });
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({
+          active: [contributionWithPartialPR],
+          history: [],
+          stats: {},
+        }));
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        expect(result.error).toContain('No draft PR exists');
+      });
+    });
+
+    describe('PR ready marking', () => {
+      it('should mark PR as ready for review via gh CLI', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'ready') {
+            expect(args?.[2]).toBe('99'); // PR number
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'comment') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.prUrl).toBe('https://github.com/owner/repo/pull/99');
+        expect(result.prNumber).toBe(99);
+      });
+
+      it('should handle PR ready failure gracefully', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'ready') {
+            return { stdout: '', stderr: 'Pull request #99 is not a draft', exitCode: 1 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        expect(result.error).toContain('Pull request #99 is not a draft');
+
+        // Verify contribution status was updated to failed (get the last/final state write)
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+        expect(writtenState.active[0].status).toBe('failed');
+        expect(writtenState.active[0].error).toContain('Pull request #99 is not a draft');
+      });
+    });
+
+    describe('PR comment posting', () => {
+      it('should post PR comment with contribution stats', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        let commentBody = '';
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'ready') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'comment') {
+            commentBody = args?.[4] as string; // --body argument
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        // Verify comment was posted with stats
+        expect(commentBody).toContain('Symphony Contribution Summary');
+        expect(commentBody).toContain('5,000'); // inputTokens
+        expect(commentBody).toContain('2,500'); // outputTokens
+        expect(commentBody).toContain('$0.50'); // estimatedCost
+        expect(commentBody).toContain('Documents Processed');
+        expect(commentBody).toContain('Tasks Completed');
+      });
+
+      it('should use provided stats over stored values', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        let commentBody = '';
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'ready') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'comment') {
+            commentBody = args?.[4] as string;
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+          stats: {
+            inputTokens: 10000,
+            outputTokens: 5000,
+            estimatedCost: 1.25,
+            timeSpentMs: 300000,
+            documentsProcessed: 5,
+            tasksCompleted: 15,
+          },
+        });
+
+        // Verify comment used provided stats
+        expect(commentBody).toContain('10,000'); // provided inputTokens, not 5,000
+        expect(commentBody).toContain('5,000'); // provided outputTokens, not 2,500
+        expect(commentBody).toContain('$1.25'); // provided cost, not $0.50
+      });
+    });
+
+    describe('state transitions', () => {
+      it('should move contribution from active to history', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Active should be empty
+        expect(writtenState.active).toHaveLength(0);
+
+        // History should have the completed contribution
+        expect(writtenState.history).toHaveLength(1);
+        expect(writtenState.history[0].id).toBe('contrib_complete_test');
+        expect(writtenState.history[0].prUrl).toBe('https://github.com/owner/repo/pull/99');
+        expect(writtenState.history[0].prNumber).toBe(99);
+        expect(writtenState.history[0].completedAt).toBeDefined();
+      });
+    });
+
+    describe('contributor stats updates', () => {
+      it('should update contributor stats (totals, streak, timestamps)', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // totalContributions should be incremented
+        expect(writtenState.stats.totalContributions).toBe(6); // was 5
+
+        // totalDocumentsProcessed should be incremented by completed docs
+        expect(writtenState.stats.totalDocumentsProcessed).toBe(22); // was 20, +2 completedDocuments
+
+        // totalTasksCompleted should be incremented by completed tasks
+        expect(writtenState.stats.totalTasksCompleted).toBe(58); // was 50, +8 completedTasks
+
+        // totalTokensUsed should be incremented
+        expect(writtenState.stats.totalTokensUsed).toBe(107500); // was 100000, +(5000+2500)
+
+        // totalTimeSpent should be incremented
+        expect(writtenState.stats.totalTimeSpent).toBe(7380000); // was 7200000, +180000
+
+        // estimatedCostDonated should be incremented
+        expect(writtenState.stats.estimatedCostDonated).toBeCloseTo(10.50, 2); // was 10.00, +0.50
+
+        // lastContributionAt should be set
+        expect(writtenState.stats.lastContributionAt).toBeDefined();
+      });
+
+      it('should add repository to repositoriesContributed if new', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Should have added owner/repo to the list
+        expect(writtenState.stats.repositoriesContributed).toContain('owner/repo');
+        expect(writtenState.stats.repositoriesContributed).toHaveLength(3); // was 2, now 3
+      });
+
+      it('should not duplicate repository in repositoriesContributed', async () => {
+        const stateWithExistingRepo = createStateWithActiveContribution();
+        stateWithExistingRepo.stats.repositoriesContributed.push('owner/repo'); // Already in list
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithExistingRepo));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Should not have duplicated the repo
+        const repoCount = writtenState.stats.repositoriesContributed.filter(
+          (r: string) => r === 'owner/repo'
+        ).length;
+        expect(repoCount).toBe(1);
+      });
+    });
+
+    describe('streak calculations', () => {
+      it('should calculate streak correctly (same day)', async () => {
+        const today = new Date().toDateString();
+        const stateWithTodayContribution = createStateWithActiveContribution();
+        stateWithTodayContribution.stats.lastContributionDate = today;
+        stateWithTodayContribution.stats.currentStreak = 3;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithTodayContribution));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Same day should continue streak (increment by 1)
+        expect(writtenState.stats.currentStreak).toBe(4);
+      });
+
+      it('should calculate streak correctly (consecutive day)', async () => {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+        const stateWithYesterdayContribution = createStateWithActiveContribution();
+        stateWithYesterdayContribution.stats.lastContributionDate = yesterday;
+        stateWithYesterdayContribution.stats.currentStreak = 5;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithYesterdayContribution));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Consecutive day should continue streak
+        expect(writtenState.stats.currentStreak).toBe(6);
+      });
+
+      it('should reset streak on gap', async () => {
+        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toDateString();
+        const stateWithOldContribution = createStateWithActiveContribution();
+        stateWithOldContribution.stats.lastContributionDate = twoDaysAgo;
+        stateWithOldContribution.stats.currentStreak = 10;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithOldContribution));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Gap should reset streak to 1
+        expect(writtenState.stats.currentStreak).toBe(1);
+      });
+
+      it('should update longestStreak when current exceeds it', async () => {
+        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+        const stateAboutToBreakRecord = createStateWithActiveContribution();
+        stateAboutToBreakRecord.stats.lastContributionDate = yesterday;
+        stateAboutToBreakRecord.stats.currentStreak = 5; // Equal to longest
+        stateAboutToBreakRecord.stats.longestStreak = 5;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateAboutToBreakRecord));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Should update longest streak to 6
+        expect(writtenState.stats.currentStreak).toBe(6);
+        expect(writtenState.stats.longestStreak).toBe(6);
+      });
+
+      it('should not update longestStreak when current does not exceed it', async () => {
+        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toDateString();
+        const stateWithHighLongest = createStateWithActiveContribution();
+        stateWithHighLongest.stats.lastContributionDate = twoDaysAgo; // Gap - will reset
+        stateWithHighLongest.stats.currentStreak = 3;
+        stateWithHighLongest.stats.longestStreak = 15;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithHighLongest));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        const writtenState = getFinalStateWrite();
+        expect(writtenState).toBeDefined();
+
+        // Current should reset to 1, longest should stay at 15
+        expect(writtenState.stats.currentStreak).toBe(1);
+        expect(writtenState.stats.longestStreak).toBe(15);
+      });
+    });
+
+    describe('return values', () => {
+      it('should return prUrl and prNumber on success', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        const result = await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.prUrl).toBe('https://github.com/owner/repo/pull/99');
+        expect(result.prNumber).toBe(99);
+        expect(result.error).toBeUndefined();
+      });
+    });
+
+    describe('broadcast behavior', () => {
+      it('should broadcast symphony:updated on completion', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContribution()));
+        vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
+
+        const handler = getCompleteHandler();
+        await handler!({} as any, {
+          contributionId: 'contrib_complete_test',
+        });
+
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('symphony:updated');
+      });
+    });
+  });
+
+  // ============================================================================
+  // Cancel Contribution Tests (symphony:cancel)
+  // ============================================================================
+
+  describe('symphony:cancel', () => {
+    const getCancelHandler = () => handlers.get('symphony:cancel');
+
+    const createStateWithActiveContributions = () => ({
+      active: [
+        {
+          id: 'contrib_to_cancel',
+          repoSlug: 'owner/repo',
+          repoName: 'repo',
+          issueNumber: 42,
+          issueTitle: 'Test Issue',
+          localPath: '/tmp/symphony/repos/repo-contrib_to_cancel',
+          branchName: 'symphony/issue-42-abc',
+          draftPrNumber: 99,
+          draftPrUrl: 'https://github.com/owner/repo/pull/99',
+          startedAt: '2024-01-01T00:00:00Z',
+          status: 'running',
+          progress: { totalDocuments: 3, completedDocuments: 1, totalTasks: 10, completedTasks: 5 },
+          tokenUsage: { inputTokens: 2000, outputTokens: 1000, estimatedCost: 0.20 },
+          timeSpent: 60000,
+          sessionId: 'session-456',
+          agentType: 'claude-code',
+        },
+        {
+          id: 'contrib_other',
+          repoSlug: 'other/repo',
+          repoName: 'repo',
+          issueNumber: 10,
+          status: 'running',
+        },
+      ],
+      history: [],
+      stats: {},
+    });
+
+    describe('contribution removal', () => {
+      it('should remove contribution from active list', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContributions()));
+
+        const handler = getCancelHandler();
+        const result = await handler!({} as any, 'contrib_to_cancel', false);
+
+        expect(result.cancelled).toBe(true);
+
+        // Verify state was written without the cancelled contribution
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+
+        // Should have removed the contribution
+        expect(writtenState.active).toHaveLength(1);
+        expect(writtenState.active[0].id).toBe('contrib_other');
+        expect(writtenState.active.find((c: { id: string }) => c.id === 'contrib_to_cancel')).toBeUndefined();
+      });
+
+      it('should return cancelled:false if contribution not found', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify({
+          active: [],
+          history: [],
+          stats: {},
+        }));
+
+        const handler = getCancelHandler();
+        const result = await handler!({} as any, 'nonexistent_contrib', false);
+
+        expect(result.cancelled).toBe(false);
+      });
+    });
+
+    describe('local directory cleanup', () => {
+      it('should clean up local directory when cleanup=true', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContributions()));
+        vi.mocked(fs.rm).mockResolvedValue(undefined);
+
+        const handler = getCancelHandler();
+        await handler!({} as any, 'contrib_to_cancel', true);
+
+        // Verify fs.rm was called with the local path
+        expect(fs.rm).toHaveBeenCalledWith(
+          '/tmp/symphony/repos/repo-contrib_to_cancel',
+          { recursive: true, force: true }
+        );
+      });
+
+      it('should preserve local directory when cleanup=false', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContributions()));
+        vi.mocked(fs.rm).mockResolvedValue(undefined);
+
+        const handler = getCancelHandler();
+        await handler!({} as any, 'contrib_to_cancel', false);
+
+        // Verify fs.rm was NOT called
+        expect(fs.rm).not.toHaveBeenCalled();
+      });
+
+      it('should handle directory cleanup errors gracefully', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContributions()));
+        vi.mocked(fs.rm).mockRejectedValue(new Error('Permission denied'));
+
+        const handler = getCancelHandler();
+        const result = await handler!({} as any, 'contrib_to_cancel', true);
+
+        // Should still succeed even if cleanup fails
+        expect(result.cancelled).toBe(true);
+
+        // State should still be updated
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active).toHaveLength(1);
+      });
+    });
+
+    describe('broadcast behavior', () => {
+      it('should broadcast update after cancellation', async () => {
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(createStateWithActiveContributions()));
+
+        const handler = getCancelHandler();
+        await handler!({} as any, 'contrib_to_cancel', false);
+
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('symphony:updated');
+      });
+    });
+  });
 });
