@@ -3272,4 +3272,186 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Clone Repo Tests (symphony:cloneRepo)
+  // ============================================================================
+
+  describe('symphony:cloneRepo', () => {
+    const getCloneRepoHandler = () => handlers.get('symphony:cloneRepo');
+
+    describe('URL validation', () => {
+      it('should validate GitHub URL before cloning', async () => {
+        vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockResolvedValue({
+          stdout: '',
+          stderr: '',
+          exitCode: 0,
+        });
+
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'https://github.com/owner/repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(true);
+        // Verify clone was called (validation passed)
+        expect(execFileNoThrow).toHaveBeenCalledWith(
+          'git',
+          expect.arrayContaining(['clone'])
+        );
+      });
+
+      it('should reject non-GitHub URLs', async () => {
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'https://gitlab.com/owner/repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('GitHub');
+        // Verify clone was NOT attempted
+        expect(execFileNoThrow).not.toHaveBeenCalled();
+      });
+
+      it('should reject HTTP protocol (non-HTTPS)', async () => {
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'http://github.com/owner/repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('HTTPS');
+        expect(execFileNoThrow).not.toHaveBeenCalled();
+      });
+
+      it('should reject invalid URL formats', async () => {
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'not-a-valid-url',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid URL');
+        expect(execFileNoThrow).not.toHaveBeenCalled();
+      });
+
+      it('should reject URLs without owner/repo path', async () => {
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'https://github.com/only-one-part',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid repository path');
+        expect(execFileNoThrow).not.toHaveBeenCalled();
+      });
+    });
+
+    describe('directory creation', () => {
+      it('should create parent directory if needed', async () => {
+        vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockResolvedValue({
+          stdout: '',
+          stderr: '',
+          exitCode: 0,
+        });
+
+        const handler = getCloneRepoHandler();
+        await handler!({} as any, {
+          repoUrl: 'https://github.com/owner/repo',
+          localPath: '/tmp/nested/deep/path/test-repo',
+        });
+
+        // Verify parent directory creation was called
+        expect(fs.mkdir).toHaveBeenCalledWith(
+          '/tmp/nested/deep/path',
+          { recursive: true }
+        );
+      });
+    });
+
+    describe('clone operation', () => {
+      it('should perform shallow clone (depth=1)', async () => {
+        vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockResolvedValue({
+          stdout: '',
+          stderr: '',
+          exitCode: 0,
+        });
+
+        const handler = getCloneRepoHandler();
+        await handler!({} as any, {
+          repoUrl: 'https://github.com/owner/repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        // Verify shallow clone was used
+        expect(execFileNoThrow).toHaveBeenCalledWith(
+          'git',
+          ['clone', '--depth=1', 'https://github.com/owner/repo', '/tmp/test-repo']
+        );
+      });
+
+      it('should return success:true on successful clone', async () => {
+        vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockResolvedValue({
+          stdout: "Cloning into '/tmp/test-repo'...",
+          stderr: '',
+          exitCode: 0,
+        });
+
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'https://github.com/owner/repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(true);
+        expect(result.error).toBeUndefined();
+      });
+
+      it('should return error message on clone failure', async () => {
+        vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockResolvedValue({
+          stdout: '',
+          stderr: 'fatal: repository not found',
+          exitCode: 128,
+        });
+
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'https://github.com/owner/nonexistent-repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Clone failed');
+        expect(result.error).toContain('repository not found');
+      });
+
+      it('should handle network errors during clone', async () => {
+        vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockResolvedValue({
+          stdout: '',
+          stderr: 'fatal: unable to access: Could not resolve host',
+          exitCode: 128,
+        });
+
+        const handler = getCloneRepoHandler();
+        const result = await handler!({} as any, {
+          repoUrl: 'https://github.com/owner/repo',
+          localPath: '/tmp/test-repo',
+        });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Clone failed');
+      });
+    });
+  });
 });
