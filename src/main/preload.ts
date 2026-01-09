@@ -1808,11 +1808,42 @@ contextBridge.exposeInMainWorld('maestro', {
     // Cache operations
     clearCache: () => ipcRenderer.invoke('symphony:clearCache'),
 
+    // Session creation workflow (new deferred PR flow)
+    cloneRepo: (params: { repoUrl: string; localPath: string }) =>
+      ipcRenderer.invoke('symphony:cloneRepo', params) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+    startContribution: (params: {
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+    }) =>
+      ipcRenderer.invoke('symphony:startContribution', params) as Promise<{
+        success: boolean;
+        branchName?: string;
+        autoRunPath?: string;
+        error?: string;
+      }>,
+
     // Document fetching (via main process to avoid CORS)
     fetchDocumentContent: (url: string) =>
       ipcRenderer.invoke('symphony:fetchDocumentContent', { url }) as Promise<{
         success: boolean;
         content?: string;
+        error?: string;
+      }>,
+
+    // PR creation (called on first commit)
+    createDraftPR: (contributionId: string) =>
+      ipcRenderer.invoke('symphony:createDraftPR', { contributionId }) as Promise<{
+        success: boolean;
+        draftPrNumber?: number;
+        draftPrUrl?: string;
         error?: string;
       }>,
 
@@ -1826,20 +1857,33 @@ contextBridge.exposeInMainWorld('maestro', {
       contributionId: string;
       sessionId: string;
       branchName: string;
-      draftPrNumber: number;
-      draftPrUrl: string;
       autoRunPath: string;
+      // Note: draftPrNumber and draftPrUrl are no longer included here
+      // They come later via onPRCreated when the first commit is made
     }) => void) => {
       const handler = (_event: Electron.IpcRendererEvent, data: {
         contributionId: string;
         sessionId: string;
         branchName: string;
-        draftPrNumber: number;
-        draftPrUrl: string;
         autoRunPath: string;
       }) => callback(data);
       ipcRenderer.on('symphony:contributionStarted', handler);
       return () => ipcRenderer.removeListener('symphony:contributionStarted', handler);
+    },
+    onPRCreated: (callback: (data: {
+      contributionId: string;
+      sessionId: string;
+      draftPrNumber: number;
+      draftPrUrl: string;
+    }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: {
+        contributionId: string;
+        sessionId: string;
+        draftPrNumber: number;
+        draftPrUrl: string;
+      }) => callback(data);
+      ipcRenderer.on('symphony:prCreated', handler);
+      return () => ipcRenderer.removeListener('symphony:prCreated', handler);
     },
   },
 });

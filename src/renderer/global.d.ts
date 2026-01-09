@@ -1964,7 +1964,18 @@ interface MaestroAPI {
       updated?: boolean;
       error?: string;
     }>;
-    complete: (params: { contributionId: string; prBody?: string }) => Promise<{
+    complete: (params: {
+      contributionId: string;
+      prBody?: string;
+      stats?: {
+        inputTokens: number;
+        outputTokens: number;
+        estimatedCost: number;
+        timeSpentMs: number;
+        documentsProcessed: number;
+        tasksCompleted: number;
+      };
+    }) => Promise<{
       success: boolean;
       prUrl?: string;
       prNumber?: number;
@@ -1981,10 +1992,36 @@ interface MaestroAPI {
       cleared?: boolean;
       error?: string;
     }>;
+    // Session creation workflow (new deferred PR flow)
+    cloneRepo: (params: { repoUrl: string; localPath: string }) => Promise<{
+      success: boolean;
+      error?: string;
+    }>;
+    startContribution: (params: {
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+    }) => Promise<{
+      success: boolean;
+      branchName?: string;
+      autoRunPath?: string;
+      error?: string;
+    }>;
     // Document fetching (via main process to avoid CORS)
     fetchDocumentContent: (url: string) => Promise<{
       success: boolean;
       content?: string;
+      error?: string;
+    }>;
+    // PR creation (called on first commit)
+    createDraftPR: (contributionId: string) => Promise<{
+      success: boolean;
+      draftPrNumber?: number;
+      draftPrUrl?: string;
       error?: string;
     }>;
     // Real-time updates
@@ -1993,9 +2030,13 @@ interface MaestroAPI {
       contributionId: string;
       sessionId: string;
       branchName: string;
+      autoRunPath: string;
+    }) => void) => () => void;
+    onPRCreated: (callback: (data: {
+      contributionId: string;
+      sessionId: string;
       draftPrNumber: number;
       draftPrUrl: string;
-      autoRunPath: string;
     }) => void) => () => void;
   };
 }
