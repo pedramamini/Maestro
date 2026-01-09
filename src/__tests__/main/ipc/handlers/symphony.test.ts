@@ -1901,4 +1901,135 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Register Active Tests (symphony:registerActive)
+  // ============================================================================
+
+  describe('symphony:registerActive', () => {
+    const getRegisterActiveHandler = () => handlers.get('symphony:registerActive');
+
+    const validRegisterParams = {
+      contributionId: 'contrib_abc123_xyz',
+      sessionId: 'session-456',
+      repoSlug: 'owner/repo',
+      repoName: 'repo',
+      issueNumber: 42,
+      issueTitle: 'Test Issue Title',
+      localPath: '/tmp/symphony/repos/repo-contrib_abc123_xyz',
+      branchName: 'symphony/issue-42-abc123',
+      documentPaths: ['docs/task1.md', 'docs/task2.md'],
+      agentType: 'claude-code',
+    };
+
+    describe('creation', () => {
+      it('should create new active contribution entry', async () => {
+        // Start with empty state
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+        const handler = getRegisterActiveHandler();
+        const result = await handler!({} as any, validRegisterParams);
+
+        expect(result.success).toBe(true);
+
+        // Verify state was written with the new contribution
+        expect(fs.writeFile).toHaveBeenCalled();
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active).toHaveLength(1);
+        expect(writtenState.active[0].id).toBe('contrib_abc123_xyz');
+        expect(writtenState.active[0].repoSlug).toBe('owner/repo');
+        expect(writtenState.active[0].repoName).toBe('repo');
+        expect(writtenState.active[0].issueNumber).toBe(42);
+        expect(writtenState.active[0].issueTitle).toBe('Test Issue Title');
+        expect(writtenState.active[0].localPath).toBe('/tmp/symphony/repos/repo-contrib_abc123_xyz');
+        expect(writtenState.active[0].branchName).toBe('symphony/issue-42-abc123');
+        expect(writtenState.active[0].sessionId).toBe('session-456');
+        expect(writtenState.active[0].agentType).toBe('claude-code');
+        expect(writtenState.active[0].status).toBe('running');
+      });
+
+      it('should skip if contribution already registered', async () => {
+        // Mock state with existing contribution
+        const existingState = {
+          active: [
+            {
+              id: 'contrib_abc123_xyz',
+              repoSlug: 'owner/repo',
+              issueNumber: 42,
+              status: 'running',
+            },
+          ],
+          history: [],
+          stats: {},
+        };
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(existingState));
+
+        const handler = getRegisterActiveHandler();
+        const result = await handler!({} as any, validRegisterParams);
+
+        // Should succeed but not add duplicate
+        expect(result.success).toBe(true);
+
+        // Should not write new state (contribution already exists)
+        // Actually the handler reads state, finds existing, and returns early
+        // Let's verify by checking that no new contribution was added
+        // The handler returns early before writing
+        const writeCalls = vi.mocked(fs.writeFile).mock.calls.filter(
+          call => (call[0] as string).includes('state.json')
+        );
+        // If any state write happened, it should still only have 1 contribution
+        if (writeCalls.length > 0) {
+          const writtenState = JSON.parse(writeCalls[writeCalls.length - 1][1] as string);
+          expect(writtenState.active).toHaveLength(1);
+        }
+      });
+
+      it('should initialize progress and token usage to zero', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+        const handler = getRegisterActiveHandler();
+        await handler!({} as any, validRegisterParams);
+
+        // Verify the contribution has zeroed progress and token usage
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        const contribution = writtenState.active[0];
+
+        // Progress should be initialized with document count and zeroes
+        expect(contribution.progress).toEqual({
+          totalDocuments: 2, // from documentPaths.length
+          completedDocuments: 0,
+          totalTasks: 0,
+          completedTasks: 0,
+        });
+
+        // Token usage should be zeroed
+        expect(contribution.tokenUsage).toEqual({
+          inputTokens: 0,
+          outputTokens: 0,
+          estimatedCost: 0,
+        });
+
+        // Time spent should also be zero
+        expect(contribution.timeSpent).toBe(0);
+      });
+
+      it('should broadcast update after registration', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+
+        const handler = getRegisterActiveHandler();
+        await handler!({} as any, validRegisterParams);
+
+        // Verify broadcast was sent
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('symphony:updated');
+      });
+    });
+  });
 });
