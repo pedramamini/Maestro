@@ -3294,6 +3294,7 @@ function MaestroConsoleInner() {
 
     // Listen for PR creation (happens on first commit)
     const unsubscribePR = window.maestro.symphony.onPRCreated((data) => {
+      // Update session's symphonyMetadata
       setSessions(prev => prev.map(session => {
         if (session.id === data.sessionId && session.symphonyMetadata) {
           return {
@@ -3307,6 +3308,15 @@ function MaestroConsoleInner() {
         }
         return session;
       }));
+
+      // Also update the persistent Symphony state with PR info
+      window.maestro.symphony.updateStatus({
+        contributionId: data.contributionId,
+        draftPrNumber: data.draftPrNumber,
+        draftPrUrl: data.draftPrUrl,
+      }).catch((err: unknown) => {
+        console.error('[Symphony] Failed to update contribution PR info:', err);
+      });
     });
 
     return () => {
@@ -10135,6 +10145,23 @@ You are taking over this conversation. Based on the context above, provide a bri
           setActiveSessionId(newId);
           setSymphonyModalOpen(false);
 
+          // Register active contribution in Symphony persistent state
+          // This makes it show up in the Active tab of the Symphony modal
+          window.maestro.symphony.registerActive({
+            contributionId: data.contributionId,
+            sessionId: newId,
+            repoSlug: data.repo.slug,
+            repoName: data.repo.name,
+            issueNumber: data.issue.number,
+            issueTitle: data.issue.title,
+            localPath: data.localPath,
+            branchName: data.branchName || '',
+            documentPaths: data.issue.documentPaths.map(d => d.path),
+            agentType: data.agentType,
+          }).catch((err: unknown) => {
+            console.error('[Symphony] Failed to register active contribution:', err);
+          });
+
           // Track stats
           updateGlobalStats({ totalSessions: 1 });
           window.maestro.stats.recordSessionCreated({
@@ -10162,8 +10189,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 
           // Auto-start batch run with all documents from the issue
           if (data.autoRunPath && data.issue.documentPaths.length > 0) {
+            // Sort documents using natural number ordering (Terminal-1, Terminal-2, ... Terminal-10, Terminal-11)
+            // instead of lexicographic (Terminal-1, Terminal-10, Terminal-11, ... Terminal-2)
+            const sortedDocs = [...data.issue.documentPaths].sort((a, b) => {
+              return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
             const batchConfig: BatchRunConfig = {
-              documents: data.issue.documentPaths.map((doc) => ({
+              documents: sortedDocs.map((doc) => ({
                 id: generateId(),
                 filename: doc.name.replace(/\.md$/, ''),
                 resetOnCompletion: false,
@@ -10175,7 +10208,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
             // Small delay to ensure session state is fully propagated
             setTimeout(() => {
-              console.log('[Symphony] Auto-starting batch run with documents:', data.issue.documentPaths.map(d => d.name));
+              console.log('[Symphony] Auto-starting batch run with documents:', sortedDocs.map(d => d.name));
               startBatchRun(newId, batchConfig, data.autoRunPath!);
             }, 500);
           }

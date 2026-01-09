@@ -186,6 +186,13 @@ export function useContributorStats(): UseContributorStatsReturn {
 
   useEffect(() => {
     fetchStats();
+
+    // Poll for updates every 5 seconds to capture real-time stats from active contributions
+    const pollInterval = setInterval(() => {
+      fetchStats();
+    }, 5000);
+
+    return () => clearInterval(pollInterval);
   }, [fetchStats]);
 
   // Compute achievements

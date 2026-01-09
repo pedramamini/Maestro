@@ -1798,12 +1798,22 @@ contextBridge.exposeInMainWorld('maestro', {
         estimatedCost?: number;
       };
       timeSpent?: number;
+      draftPrNumber?: number;
+      draftPrUrl?: string;
       error?: string;
     }) => ipcRenderer.invoke('symphony:updateStatus', params),
     complete: (params: { contributionId: string; prBody?: string }) =>
       ipcRenderer.invoke('symphony:complete', params),
     cancel: (contributionId: string, cleanup?: boolean) =>
       ipcRenderer.invoke('symphony:cancel', contributionId, cleanup),
+
+    // PR status checking
+    checkPRStatuses: () => ipcRenderer.invoke('symphony:checkPRStatuses') as Promise<{
+      checked: number;
+      merged: number;
+      closed: number;
+      errors: string[];
+    }>,
 
     // Cache operations
     clearCache: () => ipcRenderer.invoke('symphony:clearCache'),
@@ -1835,6 +1845,24 @@ contextBridge.exposeInMainWorld('maestro', {
       ipcRenderer.invoke('symphony:fetchDocumentContent', { url }) as Promise<{
         success: boolean;
         content?: string;
+        error?: string;
+      }>,
+
+    // Register active contribution (called when session is created)
+    registerActive: (params: {
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      repoName: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      branchName: string;
+      documentPaths: string[];
+      agentType: string;
+    }) =>
+      ipcRenderer.invoke('symphony:registerActive', params) as Promise<{
+        success: boolean;
         error?: string;
       }>,
 

@@ -292,14 +292,23 @@ function IssueCard({
         )}
       </div>
 
-      <div className="flex items-center gap-3 text-xs" style={{ color: theme.colors.textDim }}>
+      <div className="flex flex-wrap items-center gap-3 text-xs" style={{ color: theme.colors.textDim }}>
         <span className="flex items-center gap-1">
           <FileText className="w-3 h-3" />
           {issue.documentPaths.length} {issue.documentPaths.length === 1 ? 'document' : 'documents'}
         </span>
         {isClaimed && issue.claimedByPr && (
-          <span className="flex items-center gap-1">
-            PR #{issue.claimedByPr.number} by {issue.claimedByPr.author}
+          <span
+            className="flex items-center gap-1 cursor-pointer hover:underline"
+            style={{ color: theme.colors.accent }}
+            onClick={(e) => {
+              e.stopPropagation();
+              window.maestro.shell?.openExternal?.(issue.claimedByPr!.url);
+            }}
+          >
+            <GitPullRequest className="w-3 h-3" />
+            {issue.claimedByPr.isDraft ? 'Draft ' : ''}PR #{issue.claimedByPr.number} by @{issue.claimedByPr.author}
+            <ExternalLink className="w-2.5 h-2.5" />
           </span>
         )}
       </div>
@@ -351,6 +360,7 @@ function RepositoryDetailView({
 }) {
   const categoryInfo = SYMPHONY_CATEGORIES[repo.category] ?? { label: repo.category, emoji: '📦' };
   const availableIssues = issues.filter(i => i.status === 'available');
+  const inProgressIssues = issues.filter(i => i.status === 'in_progress');
   const [selectedDocIndex, setSelectedDocIndex] = useState<number>(0);
   const [showDocDropdown, setShowDocDropdown] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null);
@@ -536,37 +546,69 @@ function RepositoryDetailView({
 
           <div className="border-t my-4" style={{ borderColor: theme.colors.border }} />
 
-          <div>
-            <h4
-              className="text-xs font-semibold mb-2 uppercase tracking-wide flex items-center justify-between"
-              style={{ color: theme.colors.textDim }}
-            >
-              <span>Available Issues ({availableIssues.length})</span>
-              {isLoadingIssues && <Loader2 className="w-3 h-3 animate-spin" style={{ color: theme.colors.accent }} />}
-            </h4>
+          {isLoadingIssues ? (
+            <div className="space-y-2">
+              {[1, 2, 3].map(i => (
+                <div key={i} className="h-20 rounded animate-pulse" style={{ backgroundColor: theme.colors.bgMain }} />
+              ))}
+            </div>
+          ) : issues.length === 0 ? (
+            <p className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>No issues with runmaestro.ai label</p>
+          ) : (
+            <>
+              {/* In-Progress Issues Section */}
+              {inProgressIssues.length > 0 && (
+                <div className="mb-4">
+                  <h4
+                    className="text-xs font-semibold mb-2 uppercase tracking-wide flex items-center gap-2"
+                    style={{ color: STATUS_COLORS.running }}
+                  >
+                    <GitPullRequest className="w-3 h-3" />
+                    <span>In Progress ({inProgressIssues.length})</span>
+                  </h4>
+                  <div className="space-y-2">
+                    {inProgressIssues.map((issue) => (
+                      <IssueCard
+                        key={issue.number}
+                        issue={issue}
+                        theme={theme}
+                        isSelected={selectedIssue?.number === issue.number}
+                        onSelect={() => onSelectIssue(issue)}
+                      />
+                    ))}
+                  </div>
+                </div>
+              )}
 
-            {isLoadingIssues ? (
-              <div className="space-y-2">
-                {[1, 2, 3].map(i => (
-                  <div key={i} className="h-20 rounded animate-pulse" style={{ backgroundColor: theme.colors.bgMain }} />
-                ))}
+              {/* Available Issues Section */}
+              <div>
+                <h4
+                  className="text-xs font-semibold mb-2 uppercase tracking-wide flex items-center justify-between"
+                  style={{ color: theme.colors.textDim }}
+                >
+                  <span>Available Issues ({availableIssues.length})</span>
+                  {isLoadingIssues && <Loader2 className="w-3 h-3 animate-spin" style={{ color: theme.colors.accent }} />}
+                </h4>
+                {availableIssues.length === 0 ? (
+                  <p className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>
+                    All issues are currently being worked on
+                  </p>
+                ) : (
+                  <div className="space-y-2">
+                    {availableIssues.map((issue) => (
+                      <IssueCard
+                        key={issue.number}
+                        issue={issue}
+                        theme={theme}
+                        isSelected={selectedIssue?.number === issue.number}
+                        onSelect={() => onSelectIssue(issue)}
+                      />
+                    ))}
+                  </div>
+                )}
               </div>
-            ) : issues.length === 0 ? (
-              <p className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>No issues with runmaestro.ai label</p>
-            ) : (
-              <div className="space-y-2">
-                {issues.map((issue) => (
-                  <IssueCard
-                    key={issue.number}
-                    issue={issue}
-                    theme={theme}
-                    isSelected={selectedIssue?.number === issue.number}
-                    onSelect={() => onSelectIssue(issue)}
-                  />
-                ))}
-              </div>
-            )}
-          </div>
+            </>
+          )}
         </div>
 
         {/* Right: Issue preview */}
@@ -769,7 +811,7 @@ function ActiveContributionCard({
         </div>
       </div>
 
-      {contribution.draftPrUrl && (
+      {contribution.draftPrUrl ? (
         <a
           href={contribution.draftPrUrl}
           target="_blank"
@@ -778,13 +820,18 @@ function ActiveContributionCard({
           style={{ color: theme.colors.accent }}
           onClick={(e) => {
             e.preventDefault();
-            handleOpenExternal(contribution.draftPrUrl);
+            handleOpenExternal(contribution.draftPrUrl!);
           }}
         >
           <GitPullRequest className="w-3 h-3" />
           Draft PR #{contribution.draftPrNumber}
           <ExternalLink className="w-3 h-3" />
         </a>
+      ) : (
+        <div className="flex items-center gap-1 text-xs mb-2" style={{ color: theme.colors.textDim }}>
+          <GitBranch className="w-3 h-3" />
+          <span>PR will be created on first commit</span>
+        </div>
       )}
 
       <div className="mb-2">
@@ -1034,6 +1081,8 @@ export function SymphonyModal({
   const [isStarting, setIsStarting] = useState(false);
   const [showAgentDialog, setShowAgentDialog] = useState(false);
   const [showHelp, setShowHelp] = useState(false);
+  const [isCheckingPRStatuses, setIsCheckingPRStatuses] = useState(false);
+  const [prStatusMessage, setPrStatusMessage] = useState<string | null>(null);
 
   const searchInputRef = useRef<HTMLInputElement>(null);
   const tileGridRef = useRef<HTMLDivElement>(null);
@@ -1196,6 +1245,37 @@ export function SymphonyModal({
   const handleFinalize = useCallback(async (contributionId: string) => {
     await finalizeContribution(contributionId);
   }, [finalizeContribution]);
+
+  // Check PR statuses (merged/closed) and update history
+  const handleCheckPRStatuses = useCallback(async () => {
+    setIsCheckingPRStatuses(true);
+    setPrStatusMessage(null);
+    try {
+      const result = await window.maestro.symphony.checkPRStatuses();
+      const messages: string[] = [];
+      if (result.merged > 0) {
+        messages.push(`${result.merged} PR${result.merged > 1 ? 's' : ''} merged`);
+      }
+      if (result.closed > 0) {
+        messages.push(`${result.closed} PR${result.closed > 1 ? 's' : ''} closed`);
+      }
+      if (messages.length > 0) {
+        setPrStatusMessage(messages.join(', '));
+      } else if (result.checked > 0) {
+        setPrStatusMessage('All PRs up to date');
+      } else {
+        setPrStatusMessage('No PRs to check');
+      }
+      // Clear message after 5 seconds
+      setTimeout(() => setPrStatusMessage(null), 5000);
+    } catch (err) {
+      console.error('Failed to check PR statuses:', err);
+      setPrStatusMessage('Failed to check statuses');
+      setTimeout(() => setPrStatusMessage(null), 5000);
+    } finally {
+      setIsCheckingPRStatuses(false);
+    }
+  }, []);
 
   // Keyboard navigation
   useEffect(() => {
@@ -1540,37 +1620,67 @@ export function SymphonyModal({
 
               {/* Active Tab */}
               {activeTab === 'active' && (
-                <div className="flex-1 overflow-y-auto p-4">
-                  {activeContributions.length === 0 ? (
-                    <div className="flex flex-col items-center justify-center h-64">
-                      <Music className="w-12 h-12 mb-3" style={{ color: theme.colors.textDim }} />
-                      <p className="text-sm mb-1" style={{ color: theme.colors.textMain }}>No active contributions</p>
-                      <p className="text-xs mb-4" style={{ color: theme.colors.textDim }}>
-                        Start a contribution from the Projects tab
-                      </p>
+                <div className="flex-1 flex flex-col overflow-hidden">
+                  {/* Header with refresh button */}
+                  <div
+                    className="px-4 py-2 border-b flex items-center justify-between"
+                    style={{ borderColor: theme.colors.border }}
+                  >
+                    <span className="text-sm" style={{ color: theme.colors.textMain }}>
+                      {activeContributions.length} active contribution{activeContributions.length !== 1 ? 's' : ''}
+                    </span>
+                    <div className="flex items-center gap-2">
+                      {prStatusMessage && (
+                        <span className="text-xs" style={{ color: theme.colors.textDim }}>
+                          {prStatusMessage}
+                        </span>
+                      )}
                       <button
-                        onClick={() => setActiveTab('projects')}
-                        className="px-3 py-1.5 rounded text-sm"
-                        style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
+                        onClick={handleCheckPRStatuses}
+                        disabled={isCheckingPRStatuses}
+                        className="flex items-center gap-1.5 px-2 py-1 rounded text-xs hover:opacity-80 transition-opacity disabled:opacity-50"
+                        style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textMain }}
+                        title="Check for merged or closed PRs"
                       >
-                        Browse Projects
+                        <RefreshCw className={`w-3 h-3 ${isCheckingPRStatuses ? 'animate-spin' : ''}`} />
+                        Check PR Status
                       </button>
                     </div>
-                  ) : (
-                    <div className="grid grid-cols-2 gap-4">
-                      {activeContributions.map((contribution) => (
-                        <ActiveContributionCard
-                          key={contribution.id}
-                          contribution={contribution}
-                          theme={theme}
-                          onPause={() => handlePause(contribution.id)}
-                          onResume={() => handleResume(contribution.id)}
-                          onCancel={() => handleCancel(contribution.id)}
-                          onFinalize={() => handleFinalize(contribution.id)}
-                        />
-                      ))}
-                    </div>
-                  )}
+                  </div>
+
+                  {/* Content */}
+                  <div className="flex-1 overflow-y-auto p-4">
+                    {activeContributions.length === 0 ? (
+                      <div className="flex flex-col items-center justify-center h-64">
+                        <Music className="w-12 h-12 mb-3" style={{ color: theme.colors.textDim }} />
+                        <p className="text-sm mb-1" style={{ color: theme.colors.textMain }}>No active contributions</p>
+                        <p className="text-xs mb-4" style={{ color: theme.colors.textDim }}>
+                          Start a contribution from the Projects tab
+                        </p>
+                        <button
+                          onClick={() => setActiveTab('projects')}
+                          className="px-3 py-1.5 rounded text-sm"
+                          style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
+                        >
+                          Browse Projects
+                        </button>
+                      </div>
+                    ) : (
+                      <div className="grid grid-cols-2 gap-4">
+                        {activeContributions.map((contribution) => (
+                          <ActiveContributionCard
+                            key={contribution.id}
+                            contribution={contribution}
+                            theme={theme}
+                            onPause={() => handlePause(contribution.id)}
+                            onResume={() => handleResume(contribution.id)}
+                            onCancel={() => handleCancel(contribution.id)}
+                            onFinalize={() => handleFinalize(contribution.id)}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
                 </div>
               )}
 

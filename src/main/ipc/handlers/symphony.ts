@@ -419,7 +419,7 @@ async function fetchIssues(repoSlug: string): Promise<SymphonyIssue[]> {
       updated_at: string;
     }>;
 
-    // Transform to SymphonyIssue format
+    // Transform to SymphonyIssue format (initially all as available)
     const issues: SymphonyIssue[] = rawIssues.map(issue => ({
       number: issue.number,
       title: issue.title,
@@ -430,11 +430,12 @@ async function fetchIssues(repoSlug: string): Promise<SymphonyIssue[]> {
       createdAt: issue.created_at,
       updatedAt: issue.updated_at,
       documentPaths: parseDocumentPaths(issue.body || ''),
-      status: 'available' as IssueStatus, // Will be updated with PR status
+      status: 'available' as IssueStatus,
     }));
 
-    // TODO: In a future enhancement, fetch linked PRs for each issue to determine
-    // the actual status. For now, mark all as available.
+    // Fetch linked PRs to determine actual status
+    // Use GitHub's search API to find draft PRs that mention each issue
+    await enrichIssuesWithPRStatus(repoSlug, issues);
 
     logger.info(`Fetched ${issues.length} issues for ${repoSlug}`, LOG_CONTEXT);
     return issues;
@@ -445,6 +446,72 @@ async function fetchIssues(repoSlug: string): Promise<SymphonyIssue[]> {
       'github_api',
       error
     );
+  }
+}
+
+/**
+ * Enrich issues with PR status by searching for linked PRs.
+ * Modifies issues in place.
+ */
+async function enrichIssuesWithPRStatus(repoSlug: string, issues: SymphonyIssue[]): Promise<void> {
+  if (issues.length === 0) return;
+
+  try {
+    // Fetch open PRs for the repository
+    const prsUrl = `${GITHUB_API_BASE}/repos/${repoSlug}/pulls?state=open&per_page=100`;
+    const response = await fetch(prsUrl, {
+      headers: {
+        'Accept': 'application/vnd.github.v3+json',
+        'User-Agent': 'Maestro-Symphony',
+      },
+    });
+
+    if (!response.ok) {
+      logger.warn(`Failed to fetch PRs for issue status: ${response.status}`, LOG_CONTEXT);
+      return;
+    }
+
+    const prs = await response.json() as Array<{
+      number: number;
+      title: string;
+      body: string | null;
+      html_url: string;
+      user: { login: string };
+      draft: boolean;
+    }>;
+
+    // Build a map of issue numbers to PRs that reference them
+    // Look for patterns like "#123", "fixes #123", "closes #123", or "Symphony: ... (#123)" in title/body
+    for (const pr of prs) {
+      const prText = `${pr.title} ${pr.body || ''}`;
+
+      for (const issue of issues) {
+        // Match various patterns that reference the issue number
+        const patterns = [
+          new RegExp(`#${issue.number}\\b`),  // #123
+          new RegExp(`\\(#${issue.number}\\)`),  // (#123) - Symphony PR title format
+        ];
+
+        const isLinked = patterns.some(pattern => pattern.test(prText));
+
+        if (isLinked) {
+          issue.status = 'in_progress';
+          issue.claimedByPr = {
+            number: pr.number,
+            url: pr.html_url,
+            author: pr.user.login,
+            isDraft: pr.draft,
+          };
+          logger.debug(`Issue #${issue.number} linked to PR #${pr.number}`, LOG_CONTEXT);
+          break; // One PR per issue is enough
+        }
+      }
+    }
+  } catch (error) {
+    // Non-fatal - just log and continue with issues as available
+    logger.warn('Failed to enrich issues with PR status', LOG_CONTEXT, {
+      error: error instanceof Error ? error.message : String(error),
+    });
   }
 }
 
@@ -836,6 +903,7 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
 
   /**
    * Get contributor statistics.
+   * Includes real-time stats from active contributions for live updates.
    */
   ipcMain.handle(
     'symphony:getStats',
@@ -843,7 +911,37 @@ export function registerSymphonyHandlers({ app, getMainWindow }: SymphonyHandler
       handlerOpts('getStats', false),
       async (): Promise<{ stats: ContributorStats }> => {
         const state = await readState(app);
-        return { stats: state.stats };
+
+        // Start with base completed stats
+        const baseStats = state.stats;
+
+        // Aggregate stats from active contributions for real-time display
+        let activeTokens = 0;
+        let activeTime = 0;
+        let activeCost = 0;
+        let activeDocs = 0;
+        let activeTasks = 0;
+
+        for (const contribution of state.active) {
+          activeTokens += (contribution.tokenUsage.inputTokens + contribution.tokenUsage.outputTokens);
+          activeTime += contribution.timeSpent;
+          activeCost += contribution.tokenUsage.estimatedCost;
+          activeDocs += contribution.progress.completedDocuments;
+          activeTasks += contribution.progress.completedTasks;
+        }
+
+        // Return combined stats (completed + active in-progress)
+        return {
+          stats: {
+            ...baseStats,
+            // Add active contribution stats to totals
+            totalTokensUsed: baseStats.totalTokensUsed + activeTokens,
+            totalTimeSpent: baseStats.totalTimeSpent + activeTime,
+            estimatedCostDonated: baseStats.estimatedCostDonated + activeCost,
+            totalDocumentsProcessed: baseStats.totalDocumentsProcessed + activeDocs,
+            totalTasksCompleted: baseStats.totalTasksCompleted + activeTasks,
+          }
+        };
       }
     )
   );
@@ -1012,6 +1110,94 @@ This PR will be updated automatically when the Auto Run completes.`;
   );
 
   /**
+   * Register an active contribution (called when Symphony session is created).
+   * Creates an entry in the persistent state for tracking in the Active tab.
+   */
+  ipcMain.handle(
+    'symphony:registerActive',
+    createIpcHandler(
+      handlerOpts('registerActive'),
+      async (params: {
+        contributionId: string;
+        sessionId: string;
+        repoSlug: string;
+        repoName: string;
+        issueNumber: number;
+        issueTitle: string;
+        localPath: string;
+        branchName: string;
+        documentPaths: string[];
+        agentType: string;
+      }): Promise<{ success: boolean; error?: string }> => {
+        const {
+          contributionId,
+          sessionId,
+          repoSlug,
+          repoName,
+          issueNumber,
+          issueTitle,
+          localPath,
+          branchName,
+          documentPaths,
+          agentType,
+        } = params;
+
+        const state = await readState(app);
+
+        // Check if already registered
+        const existing = state.active.find(c => c.id === contributionId);
+        if (existing) {
+          logger.debug('Contribution already registered', LOG_CONTEXT, { contributionId });
+          return { success: true };
+        }
+
+        // Create active contribution entry (without PR info initially)
+        const contribution: ActiveContribution = {
+          id: contributionId,
+          repoSlug,
+          repoName,
+          issueNumber,
+          issueTitle,
+          localPath,
+          branchName,
+          // PR info will be set later when first commit creates the draft PR
+          draftPrNumber: undefined,
+          draftPrUrl: undefined,
+          startedAt: new Date().toISOString(),
+          status: 'running',
+          progress: {
+            totalDocuments: documentPaths.length,
+            completedDocuments: 0,
+            totalTasks: 0,
+            completedTasks: 0,
+          },
+          tokenUsage: {
+            inputTokens: 0,
+            outputTokens: 0,
+            estimatedCost: 0,
+          },
+          timeSpent: 0,
+          sessionId,
+          agentType,
+        };
+
+        state.active.push(contribution);
+        await writeState(app, state);
+
+        logger.info('Active contribution registered', LOG_CONTEXT, {
+          contributionId,
+          sessionId,
+          repoSlug,
+          issueNumber,
+        });
+
+        broadcastSymphonyUpdate(getMainWindow);
+        return { success: true };
+      }
+    )
+  );
+
+  /**
    * Update contribution status.
    */
   ipcMain.handle(
@@ -1024,9 +1210,11 @@ This PR will be updated automatically when the Auto Run completes.`;
         progress?: Partial<ActiveContribution['progress']>;
         tokenUsage?: Partial<ActiveContribution['tokenUsage']>;
         timeSpent?: number;
+        draftPrNumber?: number;
+        draftPrUrl?: string;
         error?: string;
       }): Promise<{ updated: boolean }> => {
-        const { contributionId, status, progress, tokenUsage, timeSpent, error } = params;
+        const { contributionId, status, progress, tokenUsage, timeSpent, draftPrNumber, draftPrUrl, error } = params;
         const state = await readState(app);
         const contribution = state.active.find(c => c.id === contributionId);
 
@@ -1038,6 +1226,8 @@ This PR will be updated automatically when the Auto Run completes.`;
         if (progress) contribution.progress = { ...contribution.progress, ...progress };
         if (tokenUsage) contribution.tokenUsage = { ...contribution.tokenUsage, ...tokenUsage };
         if (timeSpent !== undefined) contribution.timeSpent = timeSpent;
+        if (draftPrNumber !== undefined) contribution.draftPrNumber = draftPrNumber;
+        if (draftPrUrl !== undefined) contribution.draftPrUrl = draftPrUrl;
         if (error) contribution.error = error;
 
         await writeState(app, state);
@@ -1076,6 +1266,12 @@ This PR will be updated automatically when the Auto Run completes.`;
         }
 
         const contribution = state.active[contributionIndex];
+
+        // Can't complete if there's no draft PR yet
+        if (!contribution.draftPrNumber || !contribution.draftPrUrl) {
+          return { error: 'No draft PR exists yet. Make a commit to create the PR first.' };
+        }
+
         contribution.status = 'completing';
         await writeState(app, state);
 
@@ -1232,6 +1428,170 @@ This PR will be updated automatically when the Auto Run completes.`;
         broadcastSymphonyUpdate(getMainWindow);
 
         return { cancelled: true };
+      }
+    )
+  );
+
+  /**
+   * Check PR statuses for all completed contributions and update merged status.
+   * Moves PRs that are merged/closed from active to history (for ready_for_review PRs).
+   * Returns summary of what changed.
+   */
+  ipcMain.handle(
+    'symphony:checkPRStatuses',
+    createIpcHandler(
+      handlerOpts('checkPRStatuses'),
+      async (): Promise<{
+        checked: number;
+        merged: number;
+        closed: number;
+        errors: string[];
+      }> => {
+        const state = await readState(app);
+        const results = {
+          checked: 0,
+          merged: 0,
+          closed: 0,
+          errors: [] as string[],
+        };
+
+        // Check history entries that might have been merged
+        for (const completed of state.history) {
+          if (!completed.prNumber || !completed.repoSlug) continue;
+          if (completed.wasMerged) continue; // Already tracked as merged
+
+          results.checked++;
+
+          try {
+            // Fetch PR status from GitHub API
+            const prUrl = `${GITHUB_API_BASE}/repos/${completed.repoSlug}/pulls/${completed.prNumber}`;
+            const response = await fetch(prUrl, {
+              headers: {
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'Maestro-Symphony',
+              },
+            });
+
+            if (!response.ok) {
+              results.errors.push(`Failed to check PR #${completed.prNumber}: ${response.status}`);
+              continue;
+            }
+
+            const pr = await response.json() as { state: string; merged: boolean; merged_at: string | null };
+
+            if (pr.merged) {
+              // PR was merged - update history entry and stats
+              completed.wasMerged = true;
+              completed.mergedAt = pr.merged_at || new Date().toISOString();
+              state.stats.totalMerged += 1;
+              results.merged++;
+
+              logger.info('PR merged detected', LOG_CONTEXT, {
+                prNumber: completed.prNumber,
+                repoSlug: completed.repoSlug,
+              });
+            } else if (pr.state === 'closed') {
+              // PR was closed without merge
+              completed.wasClosed = true;
+              results.closed++;
+
+              logger.info('PR closed detected', LOG_CONTEXT, {
+                prNumber: completed.prNumber,
+                repoSlug: completed.repoSlug,
+              });
+            }
+          } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            results.errors.push(`Error checking PR #${completed.prNumber}: ${errMsg}`);
+          }
+        }
+
+        // Also check active contributions that are ready_for_review
+        // These might have been merged/closed externally
+        const activeToMove: number[] = [];
+        for (let i = 0; i < state.active.length; i++) {
+          const contribution = state.active[i];
+          if (!contribution.draftPrNumber || contribution.status !== 'ready_for_review') continue;
+
+          results.checked++;
+
+          try {
+            const prUrl = `${GITHUB_API_BASE}/repos/${contribution.repoSlug}/pulls/${contribution.draftPrNumber}`;
+            const response = await fetch(prUrl, {
+              headers: {
+                'Accept': 'application/vnd.github.v3+json',
+                'User-Agent': 'Maestro-Symphony',
+              },
+            });
+
+            if (!response.ok) {
+              results.errors.push(`Failed to check PR #${contribution.draftPrNumber}: ${response.status}`);
+              continue;
+            }
+
+            const pr = await response.json() as { state: string; merged: boolean; merged_at: string | null };
+
+            if (pr.merged || pr.state === 'closed') {
+              // Move to history
+              const completed: CompletedContribution = {
+                id: contribution.id,
+                repoSlug: contribution.repoSlug,
+                repoName: contribution.repoName,
+                issueNumber: contribution.issueNumber,
+                issueTitle: contribution.issueTitle,
+                documentsProcessed: contribution.progress.completedDocuments,
+                tasksCompleted: contribution.progress.completedTasks,
+                timeSpent: contribution.timeSpent,
+                startedAt: contribution.startedAt,
+                completedAt: new Date().toISOString(),
+                prUrl: contribution.draftPrUrl || '',
+                prNumber: contribution.draftPrNumber,
+                tokenUsage: {
+                  inputTokens: contribution.tokenUsage.inputTokens,
+                  outputTokens: contribution.tokenUsage.outputTokens,
+                  totalCost: contribution.tokenUsage.estimatedCost,
+                },
+                wasMerged: pr.merged,
+                mergedAt: pr.merged ? (pr.merged_at || new Date().toISOString()) : undefined,
+                wasClosed: pr.state === 'closed' && !pr.merged,
+              };
+
+              state.history.push(completed);
+              activeToMove.push(i);
+
+              if (pr.merged) {
+                state.stats.totalMerged += 1;
+                results.merged++;
+              } else {
+                results.closed++;
+              }
+
+              logger.info('Active contribution moved to history', LOG_CONTEXT, {
+                contributionId: contribution.id,
+                merged: pr.merged,
+                closed: pr.state === 'closed',
+              });
+            }
+          } catch (error) {
+            const errMsg = error instanceof Error ? error.message : String(error);
+            results.errors.push(`Error checking PR #${contribution.draftPrNumber}: ${errMsg}`);
+          }
+        }
+
+        // Remove moved contributions from active (in reverse order to preserve indices)
+        for (let i = activeToMove.length - 1; i >= 0; i--) {
+          state.active.splice(activeToMove[i], 1);
+        }
+
+        await writeState(app, state);
+
+        if (results.merged > 0 || results.closed > 0) {
+          broadcastSymphonyUpdate(getMainWindow);
+        }
+
+        logger.info('PR status check complete', LOG_CONTEXT, results);
+
+        return results;
       }
     )
   );

@@ -1958,6 +1958,8 @@ interface MaestroAPI {
         estimatedCost?: number;
       };
       timeSpent?: number;
+      draftPrNumber?: number;
+      draftPrUrl?: string;
       error?: string;
     }) => Promise<{
       success: boolean;
@@ -1985,6 +1987,13 @@ interface MaestroAPI {
       success: boolean;
       cancelled?: boolean;
       error?: string;
+    }>;
+    // PR status checking - check for merged/closed PRs and move to history
+    checkPRStatuses: () => Promise<{
+      checked: number;
+      merged: number;
+      closed: number;
+      errors: string[];
     }>;
     // Cache operations
     clearCache: () => Promise<{
@@ -2015,6 +2024,22 @@ interface MaestroAPI {
     fetchDocumentContent: (url: string) => Promise<{
       success: boolean;
       content?: string;
+      error?: string;
+    }>;
+    // Register active contribution (called when session is created)
+    registerActive: (params: {
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      repoName: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      branchName: string;
+      documentPaths: string[];
+      agentType: string;
+    }) => Promise<{
+      success: boolean;
       error?: string;
     }>;
     // PR creation (called on first commit)

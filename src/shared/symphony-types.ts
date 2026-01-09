@@ -147,10 +147,10 @@ export interface ActiveContribution {
   localPath: string;
   /** Branch name created for this contribution */
   branchName: string;
-  /** Draft PR number (created immediately) */
-  draftPrNumber: number;
-  /** Draft PR URL */
-  draftPrUrl: string;
+  /** Draft PR number (set after first commit with deferred PR creation) */
+  draftPrNumber?: number;
+  /** Draft PR URL (set after first commit with deferred PR creation) */
+  draftPrUrl?: string;
   /** When contribution was started */
   startedAt: string;
   /** Current status */
@@ -255,10 +255,14 @@ export interface CompletedContribution {
   documentsProcessed: number;
   /** Tasks completed (checkboxes) */
   tasksCompleted: number;
-  /** Was PR merged? */
+  /** Was PR merged? (legacy: use wasMerged) */
   merged?: boolean;
+  /** Was PR merged? */
+  wasMerged?: boolean;
   /** Merge date if merged */
   mergedAt?: string;
+  /** Was PR closed without merge? */
+  wasClosed?: boolean;
 }
 
 // ============================================================================
