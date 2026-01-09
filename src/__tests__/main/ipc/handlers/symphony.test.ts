@@ -4231,4 +4231,367 @@ describe('Symphony IPC handlers', () => {
       });
     });
   });
+
+  // ============================================================================
+  // Fetch Document Content Tests (symphony:fetchDocumentContent)
+  // ============================================================================
+
+  describe('symphony:fetchDocumentContent', () => {
+    const getFetchDocumentContentHandler = () => handlers.get('symphony:fetchDocumentContent');
+
+    describe('URL validation', () => {
+      it('should accept github.com URLs', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('# Document Content'),
+        });
+
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'https://github.com/owner/repo/blob/main/README.md' });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('# Document Content');
+      });
+
+      it('should accept raw.githubusercontent.com URLs', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('Raw file content'),
+        });
+
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'https://raw.githubusercontent.com/owner/repo/main/file.md' });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('Raw file content');
+      });
+
+      it('should accept objects.githubusercontent.com URLs', async () => {
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve('Object storage content'),
+        });
+
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'https://objects.githubusercontent.com/storage/file.md' });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe('Object storage content');
+      });
+
+      it('should reject non-GitHub domains', async () => {
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'https://gitlab.com/owner/repo/file.md' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('GitHub');
+      });
+
+      it('should reject HTTP protocol', async () => {
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'http://github.com/owner/repo/file.md' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('HTTPS');
+      });
+
+      it('should reject invalid URL formats', async () => {
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'not-a-valid-url' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Invalid URL');
+      });
+    });
+
+    describe('fetch behavior', () => {
+      it('should fetch and return document text content', async () => {
+        const documentContent = `# Task Description
+
+This is a Symphony task document.
+
+## Requirements
+- Complete feature X
+- Add tests
+`;
+        mockFetch.mockResolvedValueOnce({
+          ok: true,
+          text: () => Promise.resolve(documentContent),
+        });
+
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'https://raw.githubusercontent.com/owner/repo/main/task.md' });
+
+        expect(result.success).toBe(true);
+        expect(result.content).toBe(documentContent);
+        expect(mockFetch).toHaveBeenCalledWith('https://raw.githubusercontent.com/owner/repo/main/task.md');
+      });
+
+      it('should handle fetch errors gracefully', async () => {
+        mockFetch.mockRejectedValueOnce(new Error('Network timeout'));
+
+        const handler = getFetchDocumentContentHandler();
+        const result = await handler!({} as any, { url: 'https://raw.githubusercontent.com/owner/repo/main/file.md' });
+
+        expect(result.success).toBe(false);
+        expect(result.error).toContain('Network timeout');
+      });
+    });
+  });
+
+  // ============================================================================
+  // Git Helper Function Tests (via mocked execFileNoThrow)
+  // ============================================================================
+
+  describe('checkGhAuthentication (via symphony:startContribution)', () => {
+    const getStartContributionHandler = () => handlers.get('symphony:startContribution');
+
+    it('should return authenticated:true when gh auth status succeeds', async () => {
+      // Setup mocks for a successful flow - gh auth check passes
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+      vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: 'Logged in to github.com', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'checkout') {
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getStartContributionHandler();
+      const result = await handler!({} as any, {
+        contributionId: 'contrib_auth_test',
+        sessionId: 'session-auth',
+        repoSlug: 'owner/repo',
+        issueNumber: 1,
+        issueTitle: 'Test',
+        localPath: '/tmp/test',
+        documentPaths: [],
+      });
+
+      // If auth passed, handler should continue (success depends on subsequent operations)
+      // The key is that it doesn't fail with auth error
+      // Either success is true, or if there's an error, it's not about authentication
+      if (result.error) {
+        expect(result.error).not.toContain('authenticated');
+        expect(result.error).not.toContain('gh auth login');
+        expect(result.error).not.toContain('not installed');
+      }
+      // Auth passed - the operation continued past the auth check
+      expect(result.success === true || !result.error?.includes('auth')).toBe(true);
+    });
+
+    it('should return authenticated:false with proper message when not logged in', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: '', stderr: 'not logged in', exitCode: 1 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getStartContributionHandler();
+      const result = await handler!({} as any, {
+        contributionId: 'contrib_no_auth',
+        sessionId: 'session-auth',
+        repoSlug: 'owner/repo',
+        issueNumber: 1,
+        issueTitle: 'Test',
+        localPath: '/tmp/test',
+        documentPaths: [],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('gh auth login');
+    });
+
+    it('should return error when gh CLI is not installed', async () => {
+      vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') {
+          return { stdout: '', stderr: 'command not found', exitCode: 127 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getStartContributionHandler();
+      const result = await handler!({} as any, {
+        contributionId: 'contrib_no_gh',
+        sessionId: 'session-auth',
+        repoSlug: 'owner/repo',
+        issueNumber: 1,
+        issueTitle: 'Test',
+        localPath: '/tmp/test',
+        documentPaths: [],
+      });
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('not installed');
+    });
+  });
+
+  describe('getDefaultBranch (via symphony:createDraftPR)', () => {
+    const getCreateDraftPRHandler = () => handlers.get('symphony:createDraftPR');
+
+    const createMetadataForBranchTest = (localPath: string) => ({
+      contributionId: 'contrib_branch_test',
+      sessionId: 'session-branch',
+      repoSlug: 'owner/repo',
+      issueNumber: 42,
+      issueTitle: 'Test Issue',
+      branchName: 'symphony/issue-42-xyz',
+      localPath,
+      prCreated: false,
+    });
+
+    it('should return branch from symbolic-ref when available', async () => {
+      const metadata = createMetadataForBranchTest('/tmp/repo-with-develop');
+      vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+        if ((filePath as string).includes('metadata.json')) {
+          return JSON.stringify(metadata);
+        }
+        throw new Error('ENOENT');
+      });
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: 'refs/remotes/origin/develop', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '1', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-xyz', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+        if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+          // Verify the base branch is 'develop' from symbolic-ref
+          const baseIndex = args?.indexOf('--base');
+          if (baseIndex !== undefined && baseIndex >= 0 && args?.[baseIndex + 1] === 'develop') {
+            return { stdout: 'https://github.com/owner/repo/pull/1', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: 'Wrong base branch', exitCode: 1 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getCreateDraftPRHandler();
+      const result = await handler!({} as any, { contributionId: 'contrib_branch_test' });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should fall back to checking for main branch', async () => {
+      const metadata = createMetadataForBranchTest('/tmp/repo-fallback-main');
+      vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+        if ((filePath as string).includes('metadata.json')) {
+          return JSON.stringify(metadata);
+        }
+        throw new Error('ENOENT');
+      });
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          // Symbolic-ref fails (no HEAD set)
+          return { stdout: '', stderr: 'fatal: ref refs/remotes/origin/HEAD is not a symbolic ref', exitCode: 1 };
+        }
+        if (cmd === 'git' && args?.[0] === 'ls-remote' && args?.includes('main')) {
+          return { stdout: 'abc123\trefs/heads/main', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '1', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-xyz', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+        if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+          const baseIndex = args?.indexOf('--base');
+          if (baseIndex !== undefined && baseIndex >= 0 && args?.[baseIndex + 1] === 'main') {
+            return { stdout: 'https://github.com/owner/repo/pull/2', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: 'Wrong base branch', exitCode: 1 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getCreateDraftPRHandler();
+      const result = await handler!({} as any, { contributionId: 'contrib_branch_test' });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should fall back to checking for master branch', async () => {
+      const metadata = createMetadataForBranchTest('/tmp/repo-fallback-master');
+      vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+        if ((filePath as string).includes('metadata.json')) {
+          return JSON.stringify(metadata);
+        }
+        throw new Error('ENOENT');
+      });
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: '', stderr: 'fatal: ref refs/remotes/origin/HEAD is not a symbolic ref', exitCode: 1 };
+        }
+        if (cmd === 'git' && args?.[0] === 'ls-remote' && args?.includes('main')) {
+          // main branch doesn't exist
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'ls-remote' && args?.includes('master')) {
+          return { stdout: 'def456\trefs/heads/master', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '1', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-xyz', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+        if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+          const baseIndex = args?.indexOf('--base');
+          if (baseIndex !== undefined && baseIndex >= 0 && args?.[baseIndex + 1] === 'master') {
+            return { stdout: 'https://github.com/owner/repo/pull/3', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: 'Wrong base branch', exitCode: 1 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getCreateDraftPRHandler();
+      const result = await handler!({} as any, { contributionId: 'contrib_branch_test' });
+
+      expect(result.success).toBe(true);
+    });
+
+    it('should default to main if detection fails', async () => {
+      const metadata = createMetadataForBranchTest('/tmp/repo-default-main');
+      vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+        if ((filePath as string).includes('metadata.json')) {
+          return JSON.stringify(metadata);
+        }
+        throw new Error('ENOENT');
+      });
+      vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+        if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+          return { stdout: '', stderr: 'error', exitCode: 1 };
+        }
+        if (cmd === 'git' && args?.[0] === 'ls-remote') {
+          // Both main and master checks fail
+          return { stdout: '', stderr: '', exitCode: 0 };
+        }
+        if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '1', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-xyz', stderr: '', exitCode: 0 };
+        if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+        if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+          // When detection fails, should default to 'main'
+          const baseIndex = args?.indexOf('--base');
+          if (baseIndex !== undefined && baseIndex >= 0 && args?.[baseIndex + 1] === 'main') {
+            return { stdout: 'https://github.com/owner/repo/pull/4', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: 'Wrong base branch', exitCode: 1 };
+        }
+        return { stdout: '', stderr: '', exitCode: 0 };
+      });
+
+      const handler = getCreateDraftPRHandler();
+      const result = await handler!({} as any, { contributionId: 'contrib_branch_test' });
+
+      expect(result.success).toBe(true);
+    });
+  });
 });
