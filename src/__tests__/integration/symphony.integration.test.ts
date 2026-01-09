@@ -2535,6 +2535,25 @@ error: failed to push some refs to 'https://github.com/owner/protected-repo.git'
       expect(result.success).toBe(false);
       expect(result.error).toContain('document path');
     });
+
+    it('should reject external URL to non-GitHub domain', async () => {
+      // External document URLs should only be allowed from GitHub domains
+      // to prevent SSRF attacks and data exfiltration
+      const result = await invokeHandler(handlers, 'symphony:startContribution', {
+        contributionId: 'non_github_url_test',
+        sessionId: 'session-nongithub',
+        repoSlug: 'owner/repo',
+        issueNumber: 1,
+        issueTitle: 'Non-GitHub URL Test',
+        localPath: path.join(testTempDir, 'nongithub-repo'),
+        documentPaths: [
+          { name: 'malicious.md', path: 'https://evil.com/malware.md', isExternal: true },
+        ],
+      }) as { success: boolean; error?: string };
+
+      expect(result.success).toBe(false);
+      expect(result.error).toContain('GitHub');
+    });
   });
 
   // ==========================================================================

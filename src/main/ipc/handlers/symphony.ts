@@ -153,10 +153,26 @@ function validateContributionParams(params: {
 
   // Validate document paths (check for path traversal in repo-relative paths)
   for (const doc of params.documentPaths) {
-    // Skip validation for external URLs (they're downloaded, not file paths)
-    if (doc.isExternal) continue;
-    if (doc.path.includes('..') || doc.path.startsWith('/')) {
-      return { valid: false, error: `Invalid document path: ${doc.path}` };
+    if (doc.isExternal) {
+      // Validate external URLs are from trusted domains (GitHub)
+      try {
+        const parsed = new URL(doc.path);
+        if (parsed.protocol !== 'https:') {
+          return { valid: false, error: `External document URL must use HTTPS: ${doc.path}` };
+        }
+        // Allow GitHub domains for external documents (attachments, raw content, etc.)
+        const allowedHosts = ['github.com', 'www.github.com', 'raw.githubusercontent.com', 'user-images.githubusercontent.com', 'camo.githubusercontent.com'];
+        if (!allowedHosts.includes(parsed.hostname)) {
+          return { valid: false, error: `External document URL must be from GitHub: ${doc.path}` };
+        }
+      } catch {
+        return { valid: false, error: `Invalid external document URL: ${doc.path}` };
+      }
+    } else {
+      // Check repo-relative paths for path traversal
+      if (doc.path.includes('..') || doc.path.startsWith('/')) {
+        return { valid: false, error: `Invalid document path: ${doc.path}` };
+      }
     }
   }
 
@@ -1688,10 +1704,28 @@ This PR will be updated automatically when the Auto Run completes.`;
           return { success: false, error: 'Invalid issue number' };
         }
 
-        // Validate document paths for path traversal (only repo-relative paths)
+        // Validate document paths
         for (const doc of documentPaths) {
-          if (!doc.isExternal && (doc.path.includes('..') || doc.path.startsWith('/'))) {
-            return { success: false, error: `Invalid document path: ${doc.path}` };
+          if (doc.isExternal) {
+            // Validate external URLs are from trusted domains (GitHub)
+            try {
+              const parsed = new URL(doc.path);
+              if (parsed.protocol !== 'https:') {
+                return { success: false, error: `External document URL must use HTTPS: ${doc.path}` };
+              }
+              // Allow GitHub domains for external documents (attachments, raw content, etc.)
+              const allowedHosts = ['github.com', 'www.github.com', 'raw.githubusercontent.com', 'user-images.githubusercontent.com', 'camo.githubusercontent.com'];
+              if (!allowedHosts.includes(parsed.hostname)) {
+                return { success: false, error: `External document URL must be from GitHub: ${doc.path}` };
+              }
+            } catch {
+              return { success: false, error: `Invalid external document URL: ${doc.path}` };
+            }
+          } else {
+            // Check repo-relative paths for path traversal
+            if (doc.path.includes('..') || doc.path.startsWith('/')) {
+              return { success: false, error: `Invalid document path: ${doc.path}` };
+            }
           }
         }
 
