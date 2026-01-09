@@ -1485,4 +1485,420 @@ describe('Symphony IPC handlers', () => {
       expect(result.stats.totalTasksCompleted).toBe(10);
     });
   });
+
+  // ============================================================================
+  // Contribution Start Tests (symphony:start)
+  // ============================================================================
+
+  describe('symphony:start', () => {
+    const getStartHandler = () => handlers.get('symphony:start');
+
+    const validStartParams = {
+      repoSlug: 'owner/repo',
+      repoUrl: 'https://github.com/owner/repo',
+      repoName: 'repo',
+      issueNumber: 42,
+      issueTitle: 'Test Issue',
+      documentPaths: [] as { name: string; path: string; isExternal: boolean }[],
+      agentType: 'claude-code',
+      sessionId: 'session-123',
+    };
+
+    describe('input validation', () => {
+      // Note: The handler returns { error: '...' } which the createIpcHandler wrapper
+      // transforms to { success: true, error: '...' }. We check for the error field presence.
+      it('should validate input parameters before proceeding', async () => {
+        const handler = getStartHandler();
+        const result = await handler!({} as any, {
+          ...validStartParams,
+          repoSlug: 'invalid-no-slash',
+        });
+
+        expect(result.error).toContain('owner/repo');
+        // Verify no git operations were attempted
+        expect(execFileNoThrow).not.toHaveBeenCalled();
+      });
+
+      it('should fail with invalid repo slug format', async () => {
+        const handler = getStartHandler();
+        const result = await handler!({} as any, {
+          ...validStartParams,
+          repoSlug: '',
+        });
+
+        expect(result.error).toContain('required');
+      });
+
+      it('should fail with invalid repo URL', async () => {
+        const handler = getStartHandler();
+        const result = await handler!({} as any, {
+          ...validStartParams,
+          repoUrl: 'http://github.com/owner/repo', // HTTP not allowed
+        });
+
+        expect(result.error).toContain('HTTPS');
+      });
+
+      it('should fail with non-positive issue number', async () => {
+        const handler = getStartHandler();
+        const result = await handler!({} as any, {
+          ...validStartParams,
+          issueNumber: 0,
+        });
+
+        expect(result.error).toContain('Invalid issue number');
+      });
+
+      it('should fail with path traversal in document paths', async () => {
+        const handler = getStartHandler();
+        const result = await handler!({} as any, {
+          ...validStartParams,
+          documentPaths: [{ name: 'evil.md', path: '../../../etc/passwd', isExternal: false }],
+        });
+
+        expect(result.error).toContain('Invalid document path');
+      });
+    });
+
+    describe('gh CLI authentication', () => {
+      it('should check gh CLI authentication', async () => {
+        // Use mockImplementation for sequential calls
+        let callCount = 0;
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          callCount++;
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'clone') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+            return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'checkout') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'rev-parse') {
+            return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'push') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+            return { stdout: 'https://github.com/owner/repo/pull/1', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        await handler!({} as any, validStartParams);
+
+        // First call should be gh auth status
+        expect(execFileNoThrow).toHaveBeenCalledWith('gh', ['auth', 'status']);
+      });
+
+      it('should fail early if not authenticated', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: '', stderr: 'not logged in', exitCode: 1 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.error).toContain('not authenticated');
+        // Should only call gh auth status, no git clone
+        expect(execFileNoThrow).toHaveBeenCalledTimes(1);
+      });
+
+      it('should fail if gh CLI is not installed', async () => {
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: '', stderr: 'command not found', exitCode: 127 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.error).toContain('not installed');
+      });
+    });
+
+    describe('duplicate prevention', () => {
+      it('should prevent duplicate contributions to same issue', async () => {
+        // Mock state with existing active contribution for same issue
+        const stateWithActive = {
+          active: [
+            {
+              id: 'existing_contrib_123',
+              repoSlug: 'owner/repo',
+              issueNumber: 42,
+              status: 'running',
+            },
+          ],
+          history: [],
+          stats: {},
+        };
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithActive));
+
+        // Mock gh auth to succeed
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.error).toContain('Already working on this issue');
+        expect(result.error).toContain('existing_contrib_123');
+      });
+    });
+
+    describe('repository operations', () => {
+      it('should clone repository to sanitized local path', async () => {
+        // Reset fs.readFile to reject (no existing state)
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') {
+            return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'clone') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') {
+            return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'checkout') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'rev-parse') {
+            return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'git' && args?.[0] === 'push') {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+            return { stdout: 'https://github.com/owner/repo/pull/1', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        await handler!({} as any, validStartParams);
+
+        // Verify git clone was called with sanitized path
+        const cloneCall = vi.mocked(execFileNoThrow).mock.calls.find(
+          call => call[0] === 'git' && call[1]?.[0] === 'clone'
+        );
+        expect(cloneCall).toBeDefined();
+        expect(cloneCall![1]).toContain('https://github.com/owner/repo');
+        // Path should be sanitized (no path traversal)
+        const targetPath = cloneCall![1]![3] as string;
+        expect(targetPath).not.toContain('..');
+        expect(targetPath).toContain('repo');
+      });
+
+      it('should create branch with generated name', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/1', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        // Verify git checkout -b was called with branch containing issue number
+        const checkoutCall = vi.mocked(execFileNoThrow).mock.calls.find(
+          call => call[0] === 'git' && call[1]?.[0] === 'checkout' && call[1]?.[1] === '-b'
+        );
+        expect(checkoutCall).toBeDefined();
+        const branchName = checkoutCall![1]![2] as string;
+        expect(branchName).toMatch(/^symphony\/issue-42-/);
+        expect(result.success).toBe(true);
+      });
+
+      it('should fail on clone failure', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: 'fatal: repository not found', exitCode: 128 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.error).toContain('Clone failed');
+        // No branch creation should be attempted after failed clone
+        const branchCalls = vi.mocked(execFileNoThrow).mock.calls.filter(
+          call => call[0] === 'git' && call[1]?.[0] === 'checkout'
+        );
+        expect(branchCalls).toHaveLength(0);
+      });
+
+      it('should clean up on branch creation failure', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(fs.rm).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: 'fatal: branch already exists', exitCode: 128 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.error).toContain('Branch creation failed');
+        // Verify cleanup was attempted
+        expect(fs.rm).toHaveBeenCalled();
+      });
+    });
+
+    describe('draft PR creation', () => {
+      it('should create draft PR after branch setup', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+            return { stdout: 'https://github.com/owner/repo/pull/99', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        // Verify gh pr create was called
+        const prCreateCall = vi.mocked(execFileNoThrow).mock.calls.find(
+          call => call[0] === 'gh' && call[1]?.[0] === 'pr' && call[1]?.[1] === 'create'
+        );
+        expect(prCreateCall).toBeDefined();
+        expect(prCreateCall![1]).toContain('--draft');
+        expect(result.success).toBe(true);
+        expect(result.draftPrNumber).toBe(99);
+        expect(result.draftPrUrl).toBe('https://github.com/owner/repo/pull/99');
+      });
+
+      it('should clean up on PR creation failure', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(fs.rm).mockResolvedValue(undefined);
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr' && args?.[1] === 'create') {
+            return { stdout: '', stderr: 'error creating PR', exitCode: 1 };
+          }
+          if (cmd === 'git' && args?.[0] === 'push' && args?.includes('--delete')) {
+            return { stdout: '', stderr: '', exitCode: 0 };
+          }
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.error).toContain('PR creation failed');
+        // Verify cleanup was attempted
+        expect(fs.rm).toHaveBeenCalled();
+      });
+    });
+
+    describe('state management', () => {
+      it('should save active contribution to state', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/1', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        await handler!({} as any, validStartParams);
+
+        // Verify state was written with new active contribution
+        expect(fs.writeFile).toHaveBeenCalled();
+        const writeCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(writeCall).toBeDefined();
+        const writtenState = JSON.parse(writeCall![1] as string);
+        expect(writtenState.active).toHaveLength(1);
+        expect(writtenState.active[0].repoSlug).toBe('owner/repo');
+        expect(writtenState.active[0].issueNumber).toBe(42);
+        expect(writtenState.active[0].status).toBe('running');
+      });
+
+      it('should broadcast update via symphony:updated', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/1', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        await handler!({} as any, validStartParams);
+
+        // Verify broadcast was sent
+        expect(mockMainWindow.webContents.send).toHaveBeenCalledWith('symphony:updated');
+      });
+
+      it('should return contributionId, draftPrUrl, draftPrNumber on success', async () => {
+        vi.mocked(fs.readFile).mockRejectedValue(new Error('ENOENT'));
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'clone') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'checkout') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-test', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/123', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getStartHandler();
+        const result = await handler!({} as any, validStartParams);
+
+        expect(result.success).toBe(true);
+        expect(result.contributionId).toMatch(/^contrib_/);
+        expect(result.draftPrUrl).toBe('https://github.com/owner/repo/pull/123');
+        expect(result.draftPrNumber).toBe(123);
+      });
+    });
+  });
 });
