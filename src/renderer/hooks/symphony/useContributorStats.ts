@@ -36,8 +36,8 @@ export interface UseContributorStatsReturn {
   formattedTotalTokens: string;
   formattedTotalTime: string;
   uniqueRepos: number;
-  currentStreakDays: number;
-  longestStreakDays: number;
+  currentStreakWeeks: number;
+  longestStreakWeeks: number;
 }
 
 // ============================================================================
@@ -97,18 +97,18 @@ const ACHIEVEMENT_DEFINITIONS: AchievementDefinition[] = [
   {
     id: 'token-millionaire',
     title: 'Token Millionaire',
-    description: 'Donate over 1 million tokens',
+    description: 'Donate over 10 million tokens',
     icon: '💎',
-    check: (stats: ContributorStats) => stats.totalTokensUsed >= 1_000_000,
-    progress: (stats: ContributorStats) => Math.min(100, (stats.totalTokensUsed / 1_000_000) * 100),
+    check: (stats: ContributorStats) => stats.totalTokensUsed >= 10_000_000,
+    progress: (stats: ContributorStats) => Math.min(100, (stats.totalTokensUsed / 10_000_000) * 100),
   },
   {
-    id: 'hundred-tasks',
+    id: 'thousand-tasks',
     title: 'Virtuoso',
-    description: 'Complete 100 tasks across all contributions',
+    description: 'Complete 1000 tasks across all contributions',
     icon: '🏆',
-    check: (stats: ContributorStats) => stats.totalTasksCompleted >= 100,
-    progress: (stats: ContributorStats) => Math.min(100, stats.totalTasksCompleted),
+    check: (stats: ContributorStats) => stats.totalTasksCompleted >= 1000,
+    progress: (stats: ContributorStats) => Math.min(100, (stats.totalTasksCompleted / 1000) * 100),
   },
   {
     id: 'early-adopter',
@@ -233,8 +233,8 @@ export function useContributorStats(): UseContributorStatsReturn {
     return stats?.repositoriesContributed.length ?? 0;
   }, [stats]);
 
-  const currentStreakDays = stats?.currentStreak ?? 0;
-  const longestStreakDays = stats?.longestStreak ?? 0;
+  const currentStreakWeeks = stats?.currentStreak ?? 0;
+  const longestStreakWeeks = stats?.longestStreak ?? 0;
 
   return {
     stats,
@@ -246,7 +246,7 @@ export function useContributorStats(): UseContributorStatsReturn {
     formattedTotalTokens,
     formattedTotalTime,
     uniqueRepos,
-    currentStreakDays,
-    longestStreakDays,
+    currentStreakWeeks,
+    longestStreakWeeks,
   };
 }

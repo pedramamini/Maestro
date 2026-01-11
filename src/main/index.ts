@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
@@ -733,6 +733,15 @@ function createWindow() {
   mainWindow.on('closed', () => {
     logger.info('Browser window closed', 'Window');
     mainWindow = null;
+  });
+
+  // Intercept target="_blank" links and open them in the system browser
+  // This prevents Electron from opening a new BrowserWindow for external links
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Open the URL in the system default browser
+    shell.openExternal(url);
+    // Deny opening a new Electron window
+    return { action: 'deny' };
   });
 
   // Initialize auto-updater (only in production)

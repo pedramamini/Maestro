@@ -1374,20 +1374,35 @@ This PR will be updated automatically when the Auto Run completes.`;
           state.stats.firstContributionAt = completed.completedAt;
         }
 
-        // Update streak (simplified - just check if last contribution was yesterday or today)
-        const today = new Date().toDateString();
-        const lastDate = state.stats.lastContributionDate;
-        if (lastDate) {
-          const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
-          if (lastDate === yesterday || lastDate === today) {
-            state.stats.currentStreak += 1;
+        // Update streak by week (check if last contribution was this week or last week)
+        const getWeekNumber = (date: Date): string => {
+          const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+          const dayNum = d.getUTCDay() || 7;
+          d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+          const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+          const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+          return `${d.getUTCFullYear()}-W${weekNo}`;
+        };
+        const currentWeek = getWeekNumber(new Date());
+        const lastWeek = state.stats.lastContributionDate;
+        if (lastWeek) {
+          // Calculate previous week
+          const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+          const previousWeek = getWeekNumber(oneWeekAgo);
+          if (lastWeek === previousWeek || lastWeek === currentWeek) {
+            // Only increment if this is a new week (not same week contribution)
+            if (lastWeek !== currentWeek) {
+              state.stats.currentStreak += 1;
+            }
+            // If same week, streak stays the same (already counted this week)
           } else {
+            // Gap of more than one week, reset streak
             state.stats.currentStreak = 1;
           }
         } else {
           state.stats.currentStreak = 1;
         }
-        state.stats.lastContributionDate = today;
+        state.stats.lastContributionDate = currentWeek;
         if (state.stats.currentStreak > state.stats.longestStreak) {
           state.stats.longestStreak = state.stats.currentStreak;
         }

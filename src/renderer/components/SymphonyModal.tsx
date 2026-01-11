@@ -896,6 +896,16 @@ function CompletedContributionCard({
     window.maestro.shell.openExternal(contribution.prUrl);
   }, [contribution.prUrl]);
 
+  // Check both wasMerged (preferred) and merged (legacy) for backward compatibility
+  const isMerged = contribution.wasMerged ?? contribution.merged ?? false;
+  const isClosed = contribution.wasClosed ?? false;
+
+  // Format token count (e.g., 666.0K)
+  const totalTokens = contribution.tokenUsage.inputTokens + contribution.tokenUsage.outputTokens;
+  const formattedTokens = totalTokens >= 1000
+    ? `${(totalTokens / 1000).toFixed(1)}K`
+    : String(totalTokens);
+
   return (
     <div className="p-4 rounded-lg border" style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}>
       <div className="flex items-start justify-between mb-2">
@@ -906,9 +916,13 @@ function CompletedContributionCard({
           </h4>
           <p className="text-xs truncate" style={{ color: theme.colors.textDim }}>{contribution.repoSlug}</p>
         </div>
-        {contribution.merged ? (
+        {isMerged ? (
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: `${STATUS_COLORS.ready_for_review}20`, color: STATUS_COLORS.ready_for_review }}>
             <GitMerge className="w-3 h-3" /> Merged
+          </span>
+        ) : isClosed ? (
+          <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: `${STATUS_COLORS.cancelled}20`, color: STATUS_COLORS.cancelled }}>
+            <X className="w-3 h-3" /> Closed
           </span>
         ) : (
           <span className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs" style={{ backgroundColor: `${STATUS_COLORS.running}20`, color: STATUS_COLORS.running }}>
@@ -917,30 +931,39 @@ function CompletedContributionCard({
         )}
       </div>
 
-      <div className="grid grid-cols-3 gap-2 text-xs mb-2">
-        <div>
-          <span style={{ color: theme.colors.textDim }}>Completed</span>
-          <p style={{ color: theme.colors.textMain }}>{formatDate(contribution.completedAt)}</p>
-        </div>
+      <div className="flex items-center gap-3 text-xs mb-2">
+        <span style={{ color: theme.colors.textDim }}>
+          Completed {formatDate(contribution.completedAt)}
+        </span>
+        <button
+          onClick={handleOpenPR}
+          className="flex items-center gap-1 hover:underline"
+          style={{ color: theme.colors.accent }}
+        >
+          <GitPullRequest className="w-3 h-3" />
+          PR #{contribution.prNumber}
+          <ExternalLink className="w-2.5 h-2.5" />
+        </button>
+      </div>
+
+      <div className="grid grid-cols-4 gap-2 text-xs">
         <div>
           <span style={{ color: theme.colors.textDim }}>Documents</span>
           <p style={{ color: theme.colors.textMain }}>{contribution.documentsProcessed}</p>
+        </div>
+        <div>
+          <span style={{ color: theme.colors.textDim }}>Tasks</span>
+          <p style={{ color: theme.colors.textMain }}>{contribution.tasksCompleted}</p>
+        </div>
+        <div>
+          <span style={{ color: theme.colors.textDim }}>Tokens</span>
+          <p style={{ color: theme.colors.textMain }}>{formattedTokens}</p>
         </div>
         <div>
           <span style={{ color: theme.colors.textDim }}>Cost</span>
           <p style={{ color: theme.colors.accent }}>${contribution.tokenUsage.totalCost.toFixed(2)}</p>
         </div>
       </div>
-
-      <button
-        onClick={handleOpenPR}
-        className="flex items-center gap-2 text-xs hover:underline"
-        style={{ color: theme.colors.accent }}
-      >
-        <GitPullRequest className="w-3 h-3" />
-        PR #{contribution.prNumber}
-        <ExternalLink className="w-3 h-3" />
-      </button>
     </div>
   );
 }
@@ -1037,8 +1060,8 @@ export function SymphonyModal({
     formattedTotalTokens,
     formattedTotalTime,
     uniqueRepos,
-    currentStreakDays,
-    longestStreakDays,
+    currentStreakWeeks,
+    longestStreakWeeks,
   } = useContributorStats();
 
   // UI state
@@ -1644,7 +1667,7 @@ export function SymphonyModal({
                 <div className="flex-1 overflow-y-auto">
                   {/* Stats summary */}
                   {stats && stats.totalContributions > 0 && (
-                    <div className="grid grid-cols-4 gap-4 p-4 border-b" style={{ borderColor: theme.colors.border }}>
+                    <div className="grid grid-cols-5 gap-4 p-4 border-b" style={{ borderColor: theme.colors.border }}>
                       <div className="text-center">
                         <p className="text-2xl font-semibold" style={{ color: theme.colors.textMain }}>{stats.totalContributions}</p>
                         <p className="text-xs" style={{ color: theme.colors.textDim }}>PRs Created</p>
@@ -1652,6 +1675,10 @@ export function SymphonyModal({
                       <div className="text-center">
                         <p className="text-2xl font-semibold" style={{ color: STATUS_COLORS.running }}>{stats.totalMerged}</p>
                         <p className="text-xs" style={{ color: theme.colors.textDim }}>Merged</p>
+                      </div>
+                      <div className="text-center">
+                        <p className="text-2xl font-semibold" style={{ color: theme.colors.textMain }}>{stats.totalTasksCompleted}</p>
+                        <p className="text-xs" style={{ color: theme.colors.textDim }}>Tasks</p>
                       </div>
                       <div className="text-center">
                         <p className="text-2xl font-semibold" style={{ color: theme.colors.textMain }}>
@@ -1715,8 +1742,8 @@ export function SymphonyModal({
                         <Flame className="w-5 h-5" style={{ color: '#f97316' }} />
                         <span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>Streak</span>
                       </div>
-                      <p className="text-2xl font-semibold" style={{ color: theme.colors.textMain }}>{currentStreakDays} days</p>
-                      <p className="text-xs" style={{ color: theme.colors.textDim }}>Best: {longestStreakDays} days</p>
+                      <p className="text-2xl font-semibold" style={{ color: theme.colors.textMain }}>{currentStreakWeeks} weeks</p>
+                      <p className="text-xs" style={{ color: theme.colors.textDim }}>Best: {longestStreakWeeks} weeks</p>
                     </div>
                   </div>
 

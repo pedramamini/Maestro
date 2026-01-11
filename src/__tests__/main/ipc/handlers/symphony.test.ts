@@ -2295,6 +2295,16 @@ describe('Symphony IPC handlers', () => {
       ...overrides,
     });
 
+    // Helper to get ISO week number string (matches implementation in symphony.ts)
+    const getWeekNumberHelper = (date: Date): string => {
+      const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+      const dayNum = d.getUTCDay() || 7;
+      d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+      const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+      const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+      return `${d.getUTCFullYear()}-W${weekNo}`;
+    };
+
     const createStateWithActiveContribution = (contribution?: ReturnType<typeof createActiveContribution>) => ({
       active: [contribution || createActiveContribution()],
       history: [],
@@ -2311,7 +2321,7 @@ describe('Symphony IPC handlers', () => {
         uniqueMaintainersHelped: 2,
         currentStreak: 2,
         longestStreak: 5,
-        lastContributionDate: new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString(), // yesterday
+        lastContributionDate: getWeekNumberHelper(new Date(Date.now() - 7 * 24 * 60 * 60 * 1000)), // last week
       },
     });
 
@@ -2594,13 +2604,23 @@ describe('Symphony IPC handlers', () => {
       });
     });
 
-    describe('streak calculations', () => {
-      it('should calculate streak correctly (same day)', async () => {
-        const today = new Date().toDateString();
-        const stateWithTodayContribution = createStateWithActiveContribution();
-        stateWithTodayContribution.stats.lastContributionDate = today;
-        stateWithTodayContribution.stats.currentStreak = 3;
-        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithTodayContribution));
+    describe('streak calculations (by week)', () => {
+      // Helper to get ISO week number string (matches implementation in symphony.ts)
+      const getWeekNumber = (date: Date): string => {
+        const d = new Date(Date.UTC(date.getFullYear(), date.getMonth(), date.getDate()));
+        const dayNum = d.getUTCDay() || 7;
+        d.setUTCDate(d.getUTCDate() + 4 - dayNum);
+        const yearStart = new Date(Date.UTC(d.getUTCFullYear(), 0, 1));
+        const weekNo = Math.ceil((((d.getTime() - yearStart.getTime()) / 86400000) + 1) / 7);
+        return `${d.getUTCFullYear()}-W${weekNo}`;
+      };
+
+      it('should keep streak same for same week contribution', async () => {
+        const currentWeek = getWeekNumber(new Date());
+        const stateWithSameWeekContribution = createStateWithActiveContribution();
+        stateWithSameWeekContribution.stats.lastContributionDate = currentWeek;
+        stateWithSameWeekContribution.stats.currentStreak = 3;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithSameWeekContribution));
         vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
 
         const handler = getCompleteHandler();
@@ -2611,16 +2631,17 @@ describe('Symphony IPC handlers', () => {
         const writtenState = getFinalStateWrite();
         expect(writtenState).toBeDefined();
 
-        // Same day should continue streak (increment by 1)
-        expect(writtenState.stats.currentStreak).toBe(4);
+        // Same week should keep streak the same (already counted this week)
+        expect(writtenState.stats.currentStreak).toBe(3);
       });
 
-      it('should calculate streak correctly (consecutive day)', async () => {
-        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
-        const stateWithYesterdayContribution = createStateWithActiveContribution();
-        stateWithYesterdayContribution.stats.lastContributionDate = yesterday;
-        stateWithYesterdayContribution.stats.currentStreak = 5;
-        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithYesterdayContribution));
+      it('should increment streak for consecutive week contribution', async () => {
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const lastWeek = getWeekNumber(oneWeekAgo);
+        const stateWithLastWeekContribution = createStateWithActiveContribution();
+        stateWithLastWeekContribution.stats.lastContributionDate = lastWeek;
+        stateWithLastWeekContribution.stats.currentStreak = 5;
+        vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithLastWeekContribution));
         vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
 
         const handler = getCompleteHandler();
@@ -2631,14 +2652,15 @@ describe('Symphony IPC handlers', () => {
         const writtenState = getFinalStateWrite();
         expect(writtenState).toBeDefined();
 
-        // Consecutive day should continue streak
+        // Consecutive week should continue streak
         expect(writtenState.stats.currentStreak).toBe(6);
       });
 
-      it('should reset streak on gap', async () => {
-        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toDateString();
+      it('should reset streak on gap of more than one week', async () => {
+        const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        const oldWeek = getWeekNumber(twoWeeksAgo);
         const stateWithOldContribution = createStateWithActiveContribution();
-        stateWithOldContribution.stats.lastContributionDate = twoDaysAgo;
+        stateWithOldContribution.stats.lastContributionDate = oldWeek;
         stateWithOldContribution.stats.currentStreak = 10;
         vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithOldContribution));
         vi.mocked(execFileNoThrow).mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 });
@@ -2656,9 +2678,10 @@ describe('Symphony IPC handlers', () => {
       });
 
       it('should update longestStreak when current exceeds it', async () => {
-        const yesterday = new Date(Date.now() - 24 * 60 * 60 * 1000).toDateString();
+        const oneWeekAgo = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+        const lastWeek = getWeekNumber(oneWeekAgo);
         const stateAboutToBreakRecord = createStateWithActiveContribution();
-        stateAboutToBreakRecord.stats.lastContributionDate = yesterday;
+        stateAboutToBreakRecord.stats.lastContributionDate = lastWeek;
         stateAboutToBreakRecord.stats.currentStreak = 5; // Equal to longest
         stateAboutToBreakRecord.stats.longestStreak = 5;
         vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateAboutToBreakRecord));
@@ -2678,9 +2701,10 @@ describe('Symphony IPC handlers', () => {
       });
 
       it('should not update longestStreak when current does not exceed it', async () => {
-        const twoDaysAgo = new Date(Date.now() - 2 * 24 * 60 * 60 * 1000).toDateString();
+        const twoWeeksAgo = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000);
+        const oldWeek = getWeekNumber(twoWeeksAgo);
         const stateWithHighLongest = createStateWithActiveContribution();
-        stateWithHighLongest.stats.lastContributionDate = twoDaysAgo; // Gap - will reset
+        stateWithHighLongest.stats.lastContributionDate = oldWeek; // Gap - will reset
         stateWithHighLongest.stats.currentStreak = 3;
         stateWithHighLongest.stats.longestStreak = 15;
         vi.mocked(fs.readFile).mockResolvedValue(JSON.stringify(stateWithHighLongest));
