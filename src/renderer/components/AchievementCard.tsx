@@ -438,7 +438,6 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
 
     // Check if we have Symphony stats to include
     const hasSymphonyStats = symphonyStats && symphonyStats.totalContributions > 0;
-    const earnedAchievements = symphonyAchievements.filter(a => a.earned);
 
     // High-DPI rendering for crisp text
     const scale = 3;  // 3x resolution for sharp output
@@ -446,7 +445,7 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
     // Calculate height based on content - add space for Symphony section if user has stats
     let baseHeight = hasSocialHandles ? 580 : 540;
     if (hasSymphonyStats) {
-      baseHeight += 180; // Add space for Symphony stats section
+      baseHeight += 110; // Add space for Symphony stats section
     }
     const height = baseHeight;
     canvas.width = width * scale;
@@ -725,13 +724,13 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
 
     // --- Symphony Section (if user has Symphony contributions) ---
     if (hasSymphonyStats) {
-      const symphonySectionY = row3Y + row3Height + rowGap + 10;
+      const symphonySectionY = row3Y + row3Height + rowGap + 24; // Extra padding above Symphony section
 
       // Symphony section header
       ctx.font = '600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
       ctx.fillStyle = '#EC4899'; // Pink for Symphony branding
       ctx.textAlign = 'center';
-      ctx.fillText('🎵 SYMPHONY CONTRIBUTIONS 🎵', width / 2, symphonySectionY);
+      ctx.fillText('🎵 Maestro Symphony Token Donation Participant 🎵', width / 2, symphonySectionY);
 
       // Symphony stats row (3 columns: Tokens Donated, Time Contributed, Streak)
       const symphonyRow1Y = symphonySectionY + 20;
@@ -775,53 +774,6 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
       drawSymphonyStat(30 + symphonyColWidth * 0.5, symphonyRowCenterY, symphonyTokens, 'Tokens Donated', `Worth ${symphonyCost}`);
       drawSymphonyStat(30 + symphonyColWidth * 1.5, symphonyRowCenterY, symphonyTime, 'Time Contributed', `${uniqueRepos} repositories`);
       drawSymphonyStat(30 + symphonyColWidth * 2.5, symphonyRowCenterY, streakDisplay, 'Streak', `${streakUnit}`);
-
-      // Symphony achievements row
-      const symphonyRow2Y = symphonyRow1Y + symphonyRowHeight + rowGap;
-      const achievementRowHeight = 50;
-
-      ctx.fillStyle = 'rgba(236, 72, 153, 0.10)';
-      ctx.beginPath();
-      ctx.roundRect(30, symphonyRow2Y, width - 60, achievementRowHeight, 12);
-      ctx.fill();
-      ctx.strokeStyle = 'rgba(236, 72, 153, 0.3)';
-      ctx.lineWidth = 1;
-      ctx.beginPath();
-      ctx.roundRect(30, symphonyRow2Y, width - 60, achievementRowHeight, 12);
-      ctx.stroke();
-
-      // Achievements header
-      ctx.font = '600 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.textAlign = 'center';
-      ctx.fillText('ACHIEVEMENTS', width / 2, symphonyRow2Y + 14);
-
-      // Draw achievement icons in a row
-      const achievementCenterY = symphonyRow2Y + achievementRowHeight / 2 + 8;
-      const achievementIconSize = 20;
-      const achievementGap = 8;
-      const totalAchievementsWidth = symphonyAchievements.length * achievementIconSize + (symphonyAchievements.length - 1) * achievementGap;
-      let achievementX = (width - totalAchievementsWidth) / 2 + achievementIconSize / 2;
-
-      symphonyAchievements.forEach((achievement) => {
-        // Draw emoji with opacity based on earned status
-        ctx.font = `${achievementIconSize}px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif`;
-        ctx.textAlign = 'center';
-        ctx.textBaseline = 'middle';
-        ctx.globalAlpha = achievement.earned ? 1 : 0.3;
-        ctx.fillText(achievement.icon, achievementX, achievementCenterY);
-        ctx.globalAlpha = 1;
-
-        achievementX += achievementIconSize + achievementGap;
-      });
-
-      // Show count of earned achievements
-      const earnedCount = earnedAchievements.length;
-      const totalCount = symphonyAchievements.length;
-      ctx.font = '500 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
-      ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
-      ctx.textAlign = 'center';
-      ctx.fillText(`${earnedCount}/${totalCount} earned`, width / 2, symphonyRow2Y + achievementRowHeight - 6);
     }
 
     // --- Social Handles Row (if personalized) - positioned closer to footer ---
@@ -966,7 +918,7 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
     ctx.fillText('RunMaestro.ai • Agent Orchestration Command Center', width / 2, footerY);
 
     return canvas;
-  }, [currentBadge, autoRunStats.cumulativeTimeMs, autoRunStats.longestRunMs, globalStats, usageStats, handsOnTimeMs, wrapText, leaderboardRegistration, loadImage, symphonyStats, symphonyAchievements, symphonyTokens, symphonyTime, symphonyCost, currentStreakWeeks, uniqueRepos]);
+  }, [currentBadge, autoRunStats.cumulativeTimeMs, autoRunStats.longestRunMs, globalStats, usageStats, handsOnTimeMs, wrapText, leaderboardRegistration, loadImage, symphonyStats, symphonyTokens, symphonyTime, symphonyCost, currentStreakWeeks, uniqueRepos]);
 
   // Copy to clipboard
   const copyToClipboard = useCallback(async () => {
