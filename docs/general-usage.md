@@ -22,7 +22,7 @@ Maestro features a three-panel layout:
 Each agent shows a color-coded status indicator:
 
 - 🟢 **Green** - Ready and waiting
-- 🟡 **Yellow** - Agent is thinking
+- 🟡 **Yellow** - Agent is thinking or waiting for user input
 - 🔴 **Red** - No connection with agent
 - 🟠 **Pulsing Orange** - Attempting to establish connection
 - 🔴 **Red Badge** - Unread messages (small red dot overlapping top-right of status indicator, iPhone-style)
@@ -46,7 +46,7 @@ When you open a file, a **breadcrumb trail** appears showing your navigation his
 
 ### File Editing
 
-Files can be edited directly in the preview. Changes are saved automatically when you navigate away or close the preview.
+Files can be edited directly in the preview. Press `Cmd+S` / `Ctrl+S` to save changes. If you navigate away or close the preview with unsaved changes, a confirmation dialog will ask whether to discard them.
 
 ### Publish as GitHub Gist
 
@@ -89,6 +89,7 @@ Reference files in your AI prompts using `@` mentions:
 For complex prompts that need more editing space, use the **Prompt Composer** — a fullscreen editing modal.
 
 **To open the Prompt Composer:**
+- Press `Cmd+Shift+P` / `Ctrl+Shift+P`, or
 - Click the **pencil icon** (✏️) in the bottom-left corner of the AI input box
 
 ![Prompt Composer Button](./screenshots/prompt-composer-button.png)
@@ -318,7 +319,7 @@ Drag the right edge of the sidebar to resize it. The width is persisted across s
 
 ### Collapsed Mode
 
-Click the sidebar toggle (`Cmd+B` / `Ctrl+B`) to collapse the sidebar to icon-only mode. In collapsed mode:
+Click the sidebar toggle (`Opt+Cmd+Left` / `Alt+Ctrl+Left`) to collapse the sidebar to icon-only mode. In collapsed mode:
 - Agents show as icons with status indicators
 - Hover for agent name tooltip
 - Click to select an agent
