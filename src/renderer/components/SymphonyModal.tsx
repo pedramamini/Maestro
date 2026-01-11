@@ -93,6 +93,7 @@ const STATUS_COLORS: Record<string, string> = {
   creating_pr: COLORBLIND_AGENT_PALETTE[0],   // #0077BB
   running: COLORBLIND_AGENT_PALETTE[2],       // #009988 (Teal - success)
   paused: COLORBLIND_AGENT_PALETTE[1],        // #EE7733 (Orange - warning)
+  completed: COLORBLIND_AGENT_PALETTE[2],     // #009988 (Teal - success)
   completing: COLORBLIND_AGENT_PALETTE[0],    // #0077BB
   ready_for_review: COLORBLIND_AGENT_PALETTE[8], // #AA4499 (Purple)
   failed: COLORBLIND_AGENT_PALETTE[3],        // #CC3311 (Vermillion - error)
@@ -113,12 +114,11 @@ function formatCacheAge(cacheAgeMs: number | null): string {
   return 'just now';
 }
 
-function formatDuration(startedAt: string): string {
-  const start = new Date(startedAt).getTime();
-  const diff = Math.floor((Date.now() - start) / 1000);
-  if (diff < 60) return `${diff}s`;
-  if (diff < 3600) return `${Math.floor(diff / 60)}m`;
-  return `${Math.floor(diff / 3600)}h ${Math.floor((diff % 3600) / 60)}m`;
+function formatDurationMs(ms: number): string {
+  const totalSeconds = Math.floor(ms / 1000);
+  if (totalSeconds < 60) return `${totalSeconds}s`;
+  if (totalSeconds < 3600) return `${Math.floor(totalSeconds / 60)}m`;
+  return `${Math.floor(totalSeconds / 3600)}h ${Math.floor((totalSeconds % 3600) / 60)}m`;
 }
 
 function formatDate(isoString: string): string {
@@ -135,6 +135,7 @@ function getStatusInfo(status: ContributionStatus): { label: string; color: stri
     creating_pr: <Loader2 className="w-3 h-3 animate-spin" />,
     running: <Play className="w-3 h-3" />,
     paused: <Pause className="w-3 h-3" />,
+    completed: <CheckCircle className="w-3 h-3" />,
     completing: <Loader2 className="w-3 h-3 animate-spin" />,
     ready_for_review: <GitPullRequest className="w-3 h-3" />,
     failed: <AlertCircle className="w-3 h-3" />,
@@ -145,6 +146,7 @@ function getStatusInfo(status: ContributionStatus): { label: string; color: stri
     creating_pr: 'Creating PR',
     running: 'Running',
     paused: 'Paused',
+    completed: 'Completed',
     completing: 'Completing',
     ready_for_review: 'Ready for Review',
     failed: 'Failed',
@@ -298,18 +300,22 @@ function IssueCard({
           {issue.documentPaths.length} {issue.documentPaths.length === 1 ? 'document' : 'documents'}
         </span>
         {isClaimed && issue.claimedByPr && (
-          <span
+          <a
+            href={issue.claimedByPr.url}
+            target="_blank"
+            rel="noopener noreferrer"
             className="flex items-center gap-1 cursor-pointer hover:underline"
             style={{ color: theme.colors.accent }}
             onClick={(e) => {
+              e.preventDefault();
               e.stopPropagation();
-              window.maestro.shell?.openExternal?.(issue.claimedByPr!.url);
+              window.maestro.shell.openExternal(issue.claimedByPr!.url);
             }}
           >
             <GitPullRequest className="w-3 h-3" />
             {issue.claimedByPr.isDraft ? 'Draft ' : ''}PR #{issue.claimedByPr.number} by @{issue.claimedByPr.author}
             <ExternalLink className="w-2.5 h-2.5" />
-          </span>
+          </a>
         )}
       </div>
 
@@ -383,7 +389,7 @@ function RepositoryDetailView({
     () =>
       createMarkdownComponents({
         theme,
-        onExternalLinkClick: (href) => window.maestro.shell?.openExternal?.(href),
+        onExternalLinkClick: (href) => window.maestro.shell.openExternal(href),
       }),
     [theme]
   );
@@ -446,7 +452,7 @@ function RepositoryDetailView({
   };
 
   const handleOpenExternal = useCallback((url: string) => {
-    window.maestro.shell?.openExternal?.(url);
+    window.maestro.shell.openExternal(url);
   }, []);
 
   return (
@@ -766,16 +772,10 @@ function RepositoryDetailView({
 function ActiveContributionCard({
   contribution,
   theme,
-  onPause,
-  onResume,
-  onCancel,
   onFinalize,
 }: {
   contribution: ActiveContribution;
   theme: Theme;
-  onPause: () => void;
-  onResume: () => void;
-  onCancel: () => void;
   onFinalize: () => void;
 }) {
   const statusInfo = getStatusInfo(contribution.status);
@@ -783,13 +783,10 @@ function ActiveContributionCard({
     ? Math.round((contribution.progress.completedDocuments / contribution.progress.totalDocuments) * 100)
     : 0;
 
-  const canPause = contribution.status === 'running';
-  const canResume = contribution.status === 'paused';
   const canFinalize = contribution.status === 'ready_for_review';
-  const canCancel = !['ready_for_review', 'completing', 'cancelled'].includes(contribution.status);
 
   const handleOpenExternal = useCallback((url: string) => {
-    window.maestro.shell?.openExternal?.(url);
+    window.maestro.shell.openExternal(url);
   }, []);
 
   return (
@@ -841,7 +838,7 @@ function ActiveContributionCard({
           </span>
           <span style={{ color: theme.colors.textDim }}>
             <Clock className="w-3 h-3 inline mr-1" />
-            {formatDuration(contribution.startedAt)}
+            {formatDurationMs(contribution.timeSpent)}
           </span>
         </div>
         <div className="h-1.5 rounded-full overflow-hidden" style={{ backgroundColor: theme.colors.bgMain }}>
@@ -871,45 +868,15 @@ function ActiveContributionCard({
         </p>
       )}
 
-      <div className="flex items-center gap-2">
-        {canPause && (
-          <button
-            onClick={onPause}
-            className="flex-1 py-1.5 rounded text-xs flex items-center justify-center gap-1 hover:bg-white/10"
-            style={{ backgroundColor: theme.colors.bgMain, color: theme.colors.textDim }}
-          >
-            <Pause className="w-3 h-3" /> Pause
-          </button>
-        )}
-        {canResume && (
-          <button
-            onClick={onResume}
-            className="flex-1 py-1.5 rounded text-xs flex items-center justify-center gap-1"
-            style={{ backgroundColor: theme.colors.accent + '20', color: theme.colors.accent }}
-          >
-            <Play className="w-3 h-3" /> Resume
-          </button>
-        )}
-        {canFinalize && (
-          <button
-            onClick={onFinalize}
-            className="flex-1 py-1.5 rounded text-xs flex items-center justify-center gap-1"
-            style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
-          >
-            <GitPullRequest className="w-3 h-3" /> Finalize PR
-          </button>
-        )}
-        {canCancel && (
-          <button
-            onClick={onCancel}
-            className="py-1.5 px-2 rounded text-xs hover:bg-white/10"
-            style={{ color: theme.colors.textDim }}
-            title="Cancel"
-          >
-            <X className="w-3 h-3" />
-          </button>
-        )}
-      </div>
+      {canFinalize && (
+        <button
+          onClick={onFinalize}
+          className="w-full py-1.5 rounded text-xs flex items-center justify-center gap-1"
+          style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
+        >
+          <GitPullRequest className="w-3 h-3" /> Finalize PR
+        </button>
+      )}
     </div>
   );
 }
@@ -926,7 +893,7 @@ function CompletedContributionCard({
   theme: Theme;
 }) {
   const handleOpenPR = useCallback(() => {
-    window.maestro.shell?.openExternal?.(contribution.prUrl);
+    window.maestro.shell.openExternal(contribution.prUrl);
   }, [contribution.prUrl]);
 
   return (
@@ -991,11 +958,15 @@ function AchievementCard({
 }) {
   return (
     <div
-      className={`p-3 rounded-lg border ${achievement.earned ? '' : 'opacity-50'}`}
-      style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
+      className="p-3 rounded-lg border"
+      style={{
+        backgroundColor: theme.colors.bgActivity,
+        borderColor: achievement.earned ? theme.colors.accent : theme.colors.border,
+        opacity: achievement.earned ? 1 : 0.5,
+      }}
     >
       <div className="flex items-center gap-3">
-        <div className="text-2xl">{achievement.icon}</div>
+        <div className="text-2xl" style={{ opacity: achievement.earned ? 1 : 0.7 }}>{achievement.icon}</div>
         <div className="flex-1 min-w-0">
           <h4 className="font-medium text-sm" style={{ color: theme.colors.textMain }}>
             {achievement.title}
@@ -1056,7 +1027,6 @@ export function SymphonyModal({
     startContribution,
     activeContributions,
     completedContributions,
-    cancelContribution,
     finalizeContribution,
   } = useSymphony();
 
@@ -1230,18 +1200,6 @@ export function SymphonyModal({
   }, [selectedRepo, selectedIssue, startContribution, onStartContribution, handleBack]);
 
   // Contribution actions
-  const handlePause = useCallback(async (contributionId: string) => {
-    await window.maestro.symphony.updateStatus({ contributionId, status: 'paused' });
-  }, []);
-
-  const handleResume = useCallback(async (contributionId: string) => {
-    await window.maestro.symphony.updateStatus({ contributionId, status: 'running' });
-  }, []);
-
-  const handleCancel = useCallback(async (contributionId: string) => {
-    await cancelContribution(contributionId, true);
-  }, [cancelContribution]);
-
   const handleFinalize = useCallback(async (contributionId: string) => {
     await finalizeContribution(contributionId);
   }, [finalizeContribution]);
@@ -1672,9 +1630,6 @@ export function SymphonyModal({
                             key={contribution.id}
                             contribution={contribution}
                             theme={theme}
-                            onPause={() => handlePause(contribution.id)}
-                            onResume={() => handleResume(contribution.id)}
-                            onCancel={() => handleCancel(contribution.id)}
                             onFinalize={() => handleFinalize(contribution.id)}
                           />
                         ))}

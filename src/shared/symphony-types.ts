@@ -216,6 +216,7 @@ export type ContributionStatus =
   | 'creating_pr'       // Creating draft PR
   | 'running'           // Auto Run in progress
   | 'paused'            // User paused
+  | 'completed'         // Auto Run finished, PR still in draft
   | 'completing'        // Pushing final changes
   | 'ready_for_review'  // PR marked ready
   | 'failed'            // Failed (see error field)

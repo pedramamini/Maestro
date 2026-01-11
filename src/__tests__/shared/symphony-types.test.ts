@@ -110,6 +110,7 @@ describe('shared/symphony-types', () => {
       'creating_pr',
       'running',
       'paused',
+      'completed',
       'completing',
       'ready_for_review',
       'failed',
@@ -121,8 +122,8 @@ describe('shared/symphony-types', () => {
       expect(testStatus).toBe(status);
     });
 
-    it('should have 8 valid contribution statuses', () => {
-      expect(validStatuses).toHaveLength(8);
+    it('should have 9 valid contribution statuses', () => {
+      expect(validStatuses).toHaveLength(9);
     });
   });
 

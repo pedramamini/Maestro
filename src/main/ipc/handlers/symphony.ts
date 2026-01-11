@@ -1522,12 +1522,42 @@ This PR will be updated automatically when the Auto Run completes.`;
           }
         }
 
-        // Also check active contributions that are ready_for_review
+        // First, sync PR info from metadata.json for any active contributions missing it
+        // This handles cases where PR was created but state.json wasn't updated (migration)
+        let prInfoSynced = false;
+        for (const contribution of state.active) {
+          if (!contribution.draftPrNumber) {
+            try {
+              const metadataPath = path.join(getSymphonyDir(app), 'contributions', contribution.id, 'metadata.json');
+              const metadataContent = await fs.readFile(metadataPath, 'utf-8');
+              const metadata = JSON.parse(metadataContent) as {
+                prCreated?: boolean;
+                draftPrNumber?: number;
+                draftPrUrl?: string;
+              };
+              if (metadata.prCreated && metadata.draftPrNumber) {
+                // Sync PR info from metadata to state
+                contribution.draftPrNumber = metadata.draftPrNumber;
+                contribution.draftPrUrl = metadata.draftPrUrl;
+                prInfoSynced = true;
+                logger.info('Synced PR info from metadata to state', LOG_CONTEXT, {
+                  contributionId: contribution.id,
+                  draftPrNumber: metadata.draftPrNumber,
+                });
+              }
+            } catch {
+              // Metadata file might not exist - that's okay
+            }
+          }
+        }
+
+        // Also check active contributions that have a draft PR
         // These might have been merged/closed externally
         const activeToMove: number[] = [];
         for (let i = 0; i < state.active.length; i++) {
           const contribution = state.active[i];
-          if (!contribution.draftPrNumber || contribution.status !== 'ready_for_review') continue;
+          // Check any active contribution with a PR (not just ready_for_review)
+          if (!contribution.draftPrNumber) continue;
 
           results.checked++;
 
@@ -1601,11 +1631,11 @@ This PR will be updated automatically when the Auto Run completes.`;
 
         await writeState(app, state);
 
-        if (results.merged > 0 || results.closed > 0) {
+        if (results.merged > 0 || results.closed > 0 || prInfoSynced) {
           broadcastSymphonyUpdate(getMainWindow);
         }
 
-        logger.info('PR status check complete', LOG_CONTEXT, results);
+        logger.info('PR status check complete', LOG_CONTEXT, { ...results, prInfoSynced });
 
         return results;
       }
@@ -1949,6 +1979,16 @@ This PR will be updated automatically when the Auto Run completes.`;
         metadata.draftPrNumber = prResult.prNumber;
         metadata.draftPrUrl = prResult.prUrl;
         await fs.writeFile(metadataPath, JSON.stringify(metadata, null, 2));
+
+        // Also update the active contribution in state with PR info
+        // This is critical for checkPRStatuses to find the PR
+        const state = await readState(app);
+        const activeContrib = state.active.find(c => c.id === contributionId);
+        if (activeContrib) {
+          activeContrib.draftPrNumber = prResult.prNumber;
+          activeContrib.draftPrUrl = prResult.prUrl;
+          await writeState(app, state);
+        }
 
         // Broadcast PR creation event
         const mainWindow = getMainWindow?.();

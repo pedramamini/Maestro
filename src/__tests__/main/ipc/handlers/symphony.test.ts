@@ -3110,7 +3110,7 @@ describe('Symphony IPC handlers', () => {
     });
 
     describe('active contribution checking', () => {
-      it('should check active ready_for_review contributions', async () => {
+      it('should check all active contributions with a draft PR', async () => {
         const state = {
           active: [
             {
@@ -3124,7 +3124,7 @@ describe('Symphony IPC handlers', () => {
               draftPrNumber: 500,
               draftPrUrl: 'https://github.com/owner/repo/pull/500',
               startedAt: '2024-01-01T00:00:00Z',
-              status: 'ready_for_review', // Only this status is checked
+              status: 'ready_for_review',
               progress: { totalDocuments: 1, completedDocuments: 1, totalTasks: 5, completedTasks: 5 },
               tokenUsage: { inputTokens: 1000, outputTokens: 500, estimatedCost: 0.10 },
               timeSpent: 60000,
@@ -3137,7 +3137,15 @@ describe('Symphony IPC handlers', () => {
               repoName: 'repo',
               issueNumber: 2,
               draftPrNumber: 501,
-              status: 'running', // Not ready_for_review - should not be checked
+              status: 'running', // Running contributions with PR should also be checked
+            },
+            {
+              id: 'active_3',
+              repoSlug: 'owner/repo',
+              repoName: 'repo',
+              issueNumber: 3,
+              // No draftPrNumber - should not be checked
+              status: 'running',
             },
           ],
           history: [],
@@ -3153,8 +3161,8 @@ describe('Symphony IPC handlers', () => {
         const handler = getCheckPRStatusesHandler();
         const result = await handler!({} as any);
 
-        // Should only check the ready_for_review contribution
-        expect(result.checked).toBe(1);
+        // Should check all contributions with a draft PR (both ready_for_review and running)
+        expect(result.checked).toBe(2);
       });
 
       it('should move merged active contributions to history', async () => {
@@ -4025,9 +4033,22 @@ describe('Symphony IPC handlers', () => {
     describe('commit counting', () => {
       it('should count commits on branch vs base branch', async () => {
         const metadata = createValidMetadata();
+        const stateWithActiveContrib = {
+          active: [{
+            id: 'contrib_draft_test',
+            repoSlug: 'owner/repo',
+            issueNumber: 42,
+            status: 'running',
+          }],
+          history: [],
+          stats: {},
+        };
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
           if ((filePath as string).includes('metadata.json')) {
             return JSON.stringify(metadata);
+          }
+          if ((filePath as string).includes('state.json')) {
+            return JSON.stringify(stateWithActiveContrib);
           }
           throw new Error('ENOENT');
         });
@@ -4090,9 +4111,22 @@ describe('Symphony IPC handlers', () => {
     describe('PR creation', () => {
       it('should push branch and create draft PR when commits exist', async () => {
         const metadata = createValidMetadata();
+        const stateWithActiveContrib = {
+          active: [{
+            id: 'contrib_draft_test',
+            repoSlug: 'owner/repo',
+            issueNumber: 42,
+            status: 'running',
+          }],
+          history: [],
+          stats: {},
+        };
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
           if ((filePath as string).includes('metadata.json')) {
             return JSON.stringify(metadata);
+          }
+          if ((filePath as string).includes('state.json')) {
+            return JSON.stringify(stateWithActiveContrib);
           }
           throw new Error('ENOENT');
         });
@@ -4135,9 +4169,22 @@ describe('Symphony IPC handlers', () => {
     describe('metadata updates', () => {
       it('should update metadata.json with PR info', async () => {
         const metadata = createValidMetadata();
+        const stateWithActiveContrib = {
+          active: [{
+            id: 'contrib_draft_test',
+            repoSlug: 'owner/repo',
+            issueNumber: 42,
+            status: 'running',
+          }],
+          history: [],
+          stats: {},
+        };
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
           if ((filePath as string).includes('metadata.json')) {
             return JSON.stringify(metadata);
+          }
+          if ((filePath as string).includes('state.json')) {
+            return JSON.stringify(stateWithActiveContrib);
           }
           throw new Error('ENOENT');
         });
@@ -4165,14 +4212,74 @@ describe('Symphony IPC handlers', () => {
         expect(updatedMetadata.draftPrNumber).toBe(77);
         expect(updatedMetadata.draftPrUrl).toBe('https://github.com/owner/repo/pull/77');
       });
+
+      it('should update state.json active contribution with PR info', async () => {
+        const metadata = createValidMetadata();
+        const stateWithActiveContrib = {
+          active: [{
+            id: 'contrib_draft_test',
+            repoSlug: 'owner/repo',
+            issueNumber: 42,
+            status: 'running',
+          }],
+          history: [],
+          stats: {},
+        };
+        vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
+          if ((filePath as string).includes('metadata.json')) {
+            return JSON.stringify(metadata);
+          }
+          if ((filePath as string).includes('state.json')) {
+            return JSON.stringify(stateWithActiveContrib);
+          }
+          throw new Error('ENOENT');
+        });
+        vi.mocked(execFileNoThrow).mockImplementation(async (cmd, args) => {
+          if (cmd === 'gh' && args?.[0] === 'auth') return { stdout: 'Logged in', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'symbolic-ref') return { stdout: 'refs/remotes/origin/main', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-list') return { stdout: '1', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'rev-parse') return { stdout: 'symphony/issue-42-abc123', stderr: '', exitCode: 0 };
+          if (cmd === 'git' && args?.[0] === 'push') return { stdout: '', stderr: '', exitCode: 0 };
+          if (cmd === 'gh' && args?.[0] === 'pr') return { stdout: 'https://github.com/owner/repo/pull/100', stderr: '', exitCode: 0 };
+          return { stdout: '', stderr: '', exitCode: 0 };
+        });
+
+        const handler = getCreateDraftPRHandler();
+        await handler!({} as any, { contributionId: 'contrib_draft_test' });
+
+        // Verify state.json was updated with PR info
+        const stateWriteCall = vi.mocked(fs.writeFile).mock.calls.find(
+          call => (call[0] as string).includes('state.json')
+        );
+        expect(stateWriteCall).toBeDefined();
+
+        const updatedState = JSON.parse(stateWriteCall![1] as string);
+        const activeContrib = updatedState.active.find((c: any) => c.id === 'contrib_draft_test');
+        expect(activeContrib).toBeDefined();
+        expect(activeContrib.draftPrNumber).toBe(100);
+        expect(activeContrib.draftPrUrl).toBe('https://github.com/owner/repo/pull/100');
+      });
     });
 
     describe('event broadcasting', () => {
       it('should broadcast symphony:prCreated event', async () => {
         const metadata = createValidMetadata();
+        const stateWithActiveContrib = {
+          active: [{
+            id: 'contrib_draft_test',
+            repoSlug: 'owner/repo',
+            issueNumber: 42,
+            status: 'running',
+          }],
+          history: [],
+          stats: {},
+        };
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
           if ((filePath as string).includes('metadata.json')) {
             return JSON.stringify(metadata);
+          }
+          if ((filePath as string).includes('state.json')) {
+            return JSON.stringify(stateWithActiveContrib);
           }
           throw new Error('ENOENT');
         });
@@ -4205,9 +4312,22 @@ describe('Symphony IPC handlers', () => {
     describe('return values', () => {
       it('should return draftPrNumber and draftPrUrl on success', async () => {
         const metadata = createValidMetadata();
+        const stateWithActiveContrib = {
+          active: [{
+            id: 'contrib_draft_test',
+            repoSlug: 'owner/repo',
+            issueNumber: 42,
+            status: 'running',
+          }],
+          history: [],
+          stats: {},
+        };
         vi.mocked(fs.readFile).mockImplementation(async (filePath) => {
           if ((filePath as string).includes('metadata.json')) {
             return JSON.stringify(metadata);
+          }
+          if ((filePath as string).includes('state.json')) {
+            return JSON.stringify(stateWithActiveContrib);
           }
           throw new Error('ENOENT');
         });
