@@ -8,17 +8,18 @@ icon: download
 
 Download the latest release for your platform from the [Releases](https://github.com/pedramamini/maestro/releases) page:
 
-- **macOS**: `.dmg` or `.zip`
-- **Windows**: `.exe` installer
-- **Linux**: `.AppImage`, `.deb`, or `.rpm`
+- **macOS**: `.dmg` or `.zip` (available for both Intel and Apple Silicon)
+- **Windows**: `.exe` installer or portable `.exe` (no installation required)
+- **Linux**: `.AppImage`, `.deb`, or `.rpm` (available for both x86_64 and arm64)
 - **Upgrading**: Simply replace the old binary with the new one. All your data (sessions, settings, playbooks, history) persists in your [config directory](./configuration).
 
 ## Requirements
 
 - At least one supported AI coding agent installed and authenticated:
-  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) - Anthropic's AI coding assistant
-  - [OpenAI Codex](https://github.com/openai/codex) - OpenAI's coding agent
-  - [OpenCode](https://github.com/sst/opencode) - Open-source AI coding assistant
+  - [Claude Code](https://docs.anthropic.com/en/docs/claude-code) — Anthropic's AI coding assistant (fully integrated)
+  - [Codex](https://github.com/openai/codex) — OpenAI's coding agent (fully integrated)
+  - [OpenCode](https://github.com/sst/opencode) — Open-source AI coding assistant (fully integrated)
+  - [Aider](https://github.com/paul-gauthier/aider), [Gemini CLI](https://github.com/google-gemini/gemini-cli), [Qwen3 Coder](https://github.com/QwenLM/Qwen-Agent) — Planned support
 - Git (optional, for git-aware features)
 
 ## WSL2 Users (Windows Subsystem for Linux)
@@ -65,4 +66,31 @@ If you encounter `electron-rebuild` failures, try setting the temp directory:
 TMPDIR=/tmp npm run rebuild
 ```
 
-For persistent issues, see [Troubleshooting](./troubleshooting) for additional WSL-specific guidance
+For persistent issues, see [Troubleshooting](./troubleshooting) for additional WSL-specific guidance.
+
+## Building from Source
+
+If you prefer to build Maestro from source:
+
+```bash
+# Prerequisites: Node.js 22.0.0 or higher
+node --version  # Verify version
+
+# Clone the repository
+git clone https://github.com/pedramamini/maestro.git
+cd maestro
+
+# Install dependencies
+npm install
+
+# Run in development mode
+npm run dev
+
+# Or build for production
+npm run build
+npm run package
+```
+
+<Note>
+Building from source requires native module compilation (node-pty, better-sqlite3). On Windows, you'll need the [Visual Studio Build Tools](https://visualstudio.microsoft.com/visual-cpp-build-tools/). On macOS, you'll need Xcode Command Line Tools (`xcode-select --install`).
+</Note>
