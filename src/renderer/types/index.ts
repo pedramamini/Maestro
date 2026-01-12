@@ -768,6 +768,7 @@ export interface LeaderboardRegistration {
   githubUsername?: string;       // GitHub username
   linkedinHandle?: string;       // LinkedIn handle
   discordUsername?: string;      // Discord username (for @mentions in Discord posts)
+  blueskyHandle?: string;        // Bluesky handle (username.bsky.social or custom domain)
   // Registration state
   registeredAt: number;          // Timestamp when registered
   emailConfirmed: boolean;       // Whether email has been confirmed

@@ -1692,6 +1692,7 @@ contextBridge.exposeInMainWorld('maestro', {
       twitterHandle?: string;
       linkedinHandle?: string;
       discordUsername?: string;
+      blueskyHandle?: string;
       badgeLevel: number;
       badgeName: string;
       // Stats fields are optional for profile-only submissions (multi-device safe)
@@ -2902,6 +2903,7 @@ export interface MaestroAPI {
       twitterHandle?: string;
       linkedinHandle?: string;
       discordUsername?: string;
+      blueskyHandle?: string;
       badgeLevel: number;
       badgeName: string;
       // Stats fields are optional for profile-only submissions (multi-device safe)
