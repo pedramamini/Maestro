@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron';
+import { app, BrowserWindow, ipcMain, shell } from 'electron';
 import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
@@ -15,7 +15,7 @@ import { powerManager } from './power-manager';
 import { getThemeById } from './themes';
 import Store from 'electron-store';
 import { getHistoryManager } from './history-manager';
-import { registerGitHandlers, registerAutorunHandlers, registerPlaybooksHandlers, registerHistoryHandlers, registerAgentsHandlers, registerProcessHandlers, registerPersistenceHandlers, registerSystemHandlers, registerClaudeHandlers, registerAgentSessionsHandlers, registerGroupChatHandlers, registerDebugHandlers, registerSpeckitHandlers, registerOpenSpecHandlers, registerContextHandlers, registerMarketplaceHandlers, registerStatsHandlers, registerDocumentGraphHandlers, registerSshRemoteHandlers, setupLoggerEventForwarding, cleanupAllGroomingSessions, getActiveGroomingSessionCount } from './ipc/handlers';
+import { registerGitHandlers, registerAutorunHandlers, registerPlaybooksHandlers, registerHistoryHandlers, registerAgentsHandlers, registerProcessHandlers, registerPersistenceHandlers, registerSystemHandlers, registerClaudeHandlers, registerAgentSessionsHandlers, registerGroupChatHandlers, registerDebugHandlers, registerSpeckitHandlers, registerOpenSpecHandlers, registerContextHandlers, registerMarketplaceHandlers, registerStatsHandlers, registerDocumentGraphHandlers, registerSshRemoteHandlers, registerSymphonyHandlers, setupLoggerEventForwarding, cleanupAllGroomingSessions, getActiveGroomingSessionCount } from './ipc/handlers';
 import { initializeStatsDB, closeStatsDB, getStatsDB } from './stats-db';
 import { groupChatEmitters } from './ipc/handlers/groupChat';
 import { routeModeratorResponse, routeAgentResponse, setGetSessionsCallback, setGetCustomEnvVarsCallback, setGetAgentConfigCallback, markParticipantResponded, spawnModeratorSynthesis, getGroupChatReadOnlyState, respawnParticipantWithRecovery } from './group-chat/group-chat-router';
@@ -735,6 +735,15 @@ function createWindow() {
     mainWindow = null;
   });
 
+  // Intercept target="_blank" links and open them in the system browser
+  // This prevents Electron from opening a new BrowserWindow for external links
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    // Open the URL in the system default browser
+    shell.openExternal(url);
+    // Deny opening a new Electron window
+    return { action: 'deny' };
+  });
+
   // Initialize auto-updater (only in production)
   if (process.env.NODE_ENV !== 'development') {
     initAutoUpdater(mainWindow);
@@ -1199,6 +1208,12 @@ function setupIpcHandlers() {
   // Register SSH Remote handlers for managing SSH configurations
   registerSshRemoteHandlers({
     settingsStore: store,
+  });
+
+  // Register Symphony handlers for token donation / open source contributions
+  registerSymphonyHandlers({
+    app,
+    getMainWindow: () => mainWindow,
   });
 
   // Set up callback for group chat router to lookup sessions for auto-add @mentions

@@ -1750,6 +1750,170 @@ contextBridge.exposeInMainWorld('maestro', {
         };
       }>,
   },
+
+  // Symphony API (token donations / open source contributions)
+  symphony: {
+    // Registry operations
+    getRegistry: (forceRefresh?: boolean) =>
+      ipcRenderer.invoke('symphony:getRegistry', forceRefresh),
+    getIssues: (repoSlug: string, forceRefresh?: boolean) =>
+      ipcRenderer.invoke('symphony:getIssues', repoSlug, forceRefresh),
+
+    // State operations
+    getState: () => ipcRenderer.invoke('symphony:getState'),
+    getActive: () => ipcRenderer.invoke('symphony:getActive'),
+    getCompleted: (limit?: number) =>
+      ipcRenderer.invoke('symphony:getCompleted', limit),
+    getStats: () => ipcRenderer.invoke('symphony:getStats'),
+
+    // Contribution lifecycle
+    start: (params: {
+      repoSlug: string;
+      repoUrl: string;
+      repoName: string;
+      issueNumber: number;
+      issueTitle: string;
+      documentPaths: Array<{
+        name: string;
+        path: string;
+        isExternal: boolean;
+      }>;
+      agentType: string;
+      sessionId: string;
+      baseBranch?: string;
+    }) => ipcRenderer.invoke('symphony:start', params),
+    updateStatus: (params: {
+      contributionId: string;
+      status?: string;
+      progress?: {
+        totalDocuments?: number;
+        completedDocuments?: number;
+        currentDocument?: string;
+        totalTasks?: number;
+        completedTasks?: number;
+      };
+      tokenUsage?: {
+        inputTokens?: number;
+        outputTokens?: number;
+        estimatedCost?: number;
+      };
+      timeSpent?: number;
+      draftPrNumber?: number;
+      draftPrUrl?: string;
+      error?: string;
+    }) => ipcRenderer.invoke('symphony:updateStatus', params),
+    complete: (params: { contributionId: string; prBody?: string }) =>
+      ipcRenderer.invoke('symphony:complete', params),
+    cancel: (contributionId: string, cleanup?: boolean) =>
+      ipcRenderer.invoke('symphony:cancel', contributionId, cleanup),
+
+    // PR status checking
+    checkPRStatuses: () => ipcRenderer.invoke('symphony:checkPRStatuses') as Promise<{
+      checked: number;
+      merged: number;
+      closed: number;
+      errors: string[];
+    }>,
+
+    // Cache operations
+    clearCache: () => ipcRenderer.invoke('symphony:clearCache'),
+
+    // Session creation workflow (new deferred PR flow)
+    cloneRepo: (params: { repoUrl: string; localPath: string }) =>
+      ipcRenderer.invoke('symphony:cloneRepo', params) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+    startContribution: (params: {
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+    }) =>
+      ipcRenderer.invoke('symphony:startContribution', params) as Promise<{
+        success: boolean;
+        branchName?: string;
+        autoRunPath?: string;
+        error?: string;
+      }>,
+
+    // Document fetching (via main process to avoid CORS)
+    fetchDocumentContent: (url: string) =>
+      ipcRenderer.invoke('symphony:fetchDocumentContent', { url }) as Promise<{
+        success: boolean;
+        content?: string;
+        error?: string;
+      }>,
+
+    // Register active contribution (called when session is created)
+    registerActive: (params: {
+      contributionId: string;
+      sessionId: string;
+      repoSlug: string;
+      repoName: string;
+      issueNumber: number;
+      issueTitle: string;
+      localPath: string;
+      branchName: string;
+      documentPaths: string[];
+      agentType: string;
+    }) =>
+      ipcRenderer.invoke('symphony:registerActive', params) as Promise<{
+        success: boolean;
+        error?: string;
+      }>,
+
+    // PR creation (called on first commit)
+    createDraftPR: (contributionId: string) =>
+      ipcRenderer.invoke('symphony:createDraftPR', { contributionId }) as Promise<{
+        success: boolean;
+        draftPrNumber?: number;
+        draftPrUrl?: string;
+        error?: string;
+      }>,
+
+    // Real-time updates
+    onUpdated: (callback: () => void) => {
+      const handler = () => callback();
+      ipcRenderer.on('symphony:updated', handler);
+      return () => ipcRenderer.removeListener('symphony:updated', handler);
+    },
+    onContributionStarted: (callback: (data: {
+      contributionId: string;
+      sessionId: string;
+      branchName: string;
+      autoRunPath: string;
+      // Note: draftPrNumber and draftPrUrl are no longer included here
+      // They come later via onPRCreated when the first commit is made
+    }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: {
+        contributionId: string;
+        sessionId: string;
+        branchName: string;
+        autoRunPath: string;
+      }) => callback(data);
+      ipcRenderer.on('symphony:contributionStarted', handler);
+      return () => ipcRenderer.removeListener('symphony:contributionStarted', handler);
+    },
+    onPRCreated: (callback: (data: {
+      contributionId: string;
+      sessionId: string;
+      draftPrNumber: number;
+      draftPrUrl: string;
+    }) => void) => {
+      const handler = (_event: Electron.IpcRendererEvent, data: {
+        contributionId: string;
+        sessionId: string;
+        draftPrNumber: number;
+        draftPrUrl: string;
+      }) => callback(data);
+      ipcRenderer.on('symphony:prCreated', handler);
+      return () => ipcRenderer.removeListener('symphony:prCreated', handler);
+    },
+  },
 });
 
 // Type definitions for TypeScript

@@ -14,6 +14,7 @@ import {
 import { MaestroSilhouette } from './MaestroSilhouette';
 import { formatTokensCompact } from '../utils/formatters';
 import maestroWandIcon from '../assets/icon-wand.png';
+import { useContributorStats, type Achievement } from '../hooks/symphony/useContributorStats';
 
 /**
  * Circular progress ring with 11 segments that fill as badges are unlocked
@@ -272,6 +273,17 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
   const badgeContainerRef = useRef<HTMLDivElement>(null);
   const shareMenuRef = useRef<HTMLDivElement>(null);
 
+  // Get Symphony contributor stats for the achievement image
+  const {
+    stats: symphonyStats,
+    achievements: symphonyAchievements,
+    formattedTotalTokens: symphonyTokens,
+    formattedTotalTime: symphonyTime,
+    formattedTotalCost: symphonyCost,
+    currentStreakWeeks,
+    uniqueRepos,
+  } = useContributorStats();
+
   // Register escape handler with parent when badge is selected
   useEffect(() => {
     if (onEscapeWithBadgeOpen) {
@@ -424,11 +436,18 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
     // Calculate height based on whether we have social handles
     const hasSocialHandles = socialHandles.length > 0;
 
+    // Check if we have Symphony stats to include
+    const hasSymphonyStats = symphonyStats && symphonyStats.totalContributions > 0;
+
     // High-DPI rendering for crisp text
     const scale = 3;  // 3x resolution for sharp output
     const width = 600;
-    // Reduced height - tighter layout with social handles integrated into footer area
-    const height = hasSocialHandles ? 580 : 540;
+    // Calculate height based on content - add space for Symphony section if user has stats
+    let baseHeight = hasSocialHandles ? 580 : 540;
+    if (hasSymphonyStats) {
+      baseHeight += 110; // Add space for Symphony stats section
+    }
+    const height = baseHeight;
     canvas.width = width * scale;
     canvas.height = height * scale;
     canvas.style.width = `${width}px`;
@@ -703,6 +722,60 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
     drawPeakStat(30 + row3ColWidth * 2.5, maxQueries, 'Parallel Queries');
     drawPeakStat(30 + row3ColWidth * 3.5, maxQueue, 'Queue Depth');
 
+    // --- Symphony Section (if user has Symphony contributions) ---
+    if (hasSymphonyStats) {
+      const symphonySectionY = row3Y + row3Height + rowGap + 24; // Extra padding above Symphony section
+
+      // Symphony section header
+      ctx.font = '600 14px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+      ctx.fillStyle = '#EC4899'; // Pink for Symphony branding
+      ctx.textAlign = 'center';
+      ctx.fillText('🎵 Maestro Symphony Token Donation Participant 🎵', width / 2, symphonySectionY);
+
+      // Symphony stats row (3 columns: Tokens Donated, Time Contributed, Streak)
+      const symphonyRow1Y = symphonySectionY + 20;
+      const symphonyRowHeight = 56;
+
+      ctx.fillStyle = 'rgba(236, 72, 153, 0.15)'; // Pink-tinted background
+      ctx.beginPath();
+      ctx.roundRect(30, symphonyRow1Y, width - 60, symphonyRowHeight, 12);
+      ctx.fill();
+      ctx.strokeStyle = 'rgba(236, 72, 153, 0.4)';
+      ctx.lineWidth = 1;
+      ctx.beginPath();
+      ctx.roundRect(30, symphonyRow1Y, width - 60, symphonyRowHeight, 12);
+      ctx.stroke();
+
+      const symphonyColWidth = (width - 60) / 3;
+      const symphonyRowCenterY = symphonyRow1Y + symphonyRowHeight / 2;
+
+      // Helper to draw symphony stat with pink accent
+      const drawSymphonyStat = (x: number, centerY: number, value: string, label: string, subLabel?: string) => {
+        ctx.font = '700 20px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = '#FFFFFF';
+        ctx.textAlign = 'center';
+        ctx.fillText(value, x, centerY - (subLabel ? 6 : 3));
+
+        if (subLabel) {
+          ctx.font = '400 9px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+          ctx.fillStyle = 'rgba(255, 255, 255, 0.5)';
+          ctx.fillText(subLabel, x, centerY + 6);
+        }
+
+        ctx.font = '500 10px -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif';
+        ctx.fillStyle = 'rgba(255, 255, 255, 0.6)';
+        ctx.fillText(label, x, centerY + (subLabel ? 18 : 14));
+      };
+
+      // Format Symphony stats for display
+      const streakDisplay = currentStreakWeeks > 0 ? `${currentStreakWeeks}` : '—';
+      const streakUnit = currentStreakWeeks === 1 ? 'week' : 'weeks';
+
+      drawSymphonyStat(30 + symphonyColWidth * 0.5, symphonyRowCenterY, symphonyTokens, 'Tokens Donated', `Worth ${symphonyCost}`);
+      drawSymphonyStat(30 + symphonyColWidth * 1.5, symphonyRowCenterY, symphonyTime, 'Time Contributed', `${uniqueRepos} repositories`);
+      drawSymphonyStat(30 + symphonyColWidth * 2.5, symphonyRowCenterY, streakDisplay, 'Streak', `${streakUnit}`);
+    }
+
     // --- Social Handles Row (if personalized) - positioned closer to footer ---
     if (hasSocialHandles) {
       // Position social handles right above the footer, not after the stats
@@ -845,7 +918,7 @@ export function AchievementCard({ theme, autoRunStats, globalStats, usageStats, 
     ctx.fillText('RunMaestro.ai • Agent Orchestration Command Center', width / 2, footerY);
 
     return canvas;
-  }, [currentBadge, autoRunStats.cumulativeTimeMs, autoRunStats.longestRunMs, globalStats, usageStats, handsOnTimeMs, wrapText, leaderboardRegistration, loadImage]);
+  }, [currentBadge, autoRunStats.cumulativeTimeMs, autoRunStats.longestRunMs, globalStats, usageStats, handsOnTimeMs, wrapText, leaderboardRegistration, loadImage, symphonyStats, symphonyTokens, symphonyTime, symphonyCost, currentStreakWeeks, uniqueRepos]);
 
   // Copy to clipboard
   const copyToClipboard = useCallback(async () => {

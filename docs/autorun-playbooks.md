@@ -133,6 +133,7 @@ For editing complex Auto Run documents, use the **Expanded Editor** — a fullsc
 
 **To open the Expanded Editor:**
 - Click the **expand icon** (↗️) in the top-right corner of the Auto Run panel
+- Or press `Cmd+Shift+E` (Mac) / `Ctrl+Shift+E` (Windows/Linux) to toggle
 
 ![Expanded Auto Run Editor](./screenshots/autorun-expanded.png)
 
@@ -145,9 +146,11 @@ The Expanded Editor provides:
 
 Click **Collapse** or press `Esc` to return to the sidebar panel view.
 
-## Auto-Save
+## Saving Documents
 
-Documents auto-save after 5 seconds of inactivity, and immediately when switching documents. Full undo/redo support with `Cmd+Z` / `Cmd+Shift+Z`.
+Save your changes with `Cmd+S` (Mac) or `Ctrl+S` (Windows/Linux), or click the **Save** button in the editor footer. The editor shows "Unsaved changes" and a **Revert** button when you have pending edits. Full undo/redo support with `Cmd+Z` / `Cmd+Shift+Z`.
+
+**Note**: Switching documents discards unsaved changes. Save before switching if you want to preserve your edits.
 
 ## Image Support
 

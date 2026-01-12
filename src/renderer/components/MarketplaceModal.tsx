@@ -372,7 +372,7 @@ function PlaybookDetailView({
       <div className="flex-1 flex min-h-0 overflow-hidden">
         {/* Left sidebar with playbook metadata */}
         <div
-          className="w-64 shrink-0 p-4 border-r overflow-y-auto"
+          className="w-80 shrink-0 p-4 border-r overflow-y-auto"
           style={{ borderColor: theme.colors.border }}
         >
           {/* Description */}
@@ -1025,7 +1025,7 @@ export function MarketplaceModal({
         aria-modal="true"
         aria-labelledby="marketplace-title"
         tabIndex={-1}
-        className="w-[900px] max-w-[90vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col h-[80vh] outline-none"
+        className="w-[1200px] max-w-[95vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col h-[80vh] outline-none"
         style={{
           backgroundColor: theme.colors.bgActivity,
           borderColor: theme.colors.border,

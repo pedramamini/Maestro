@@ -203,6 +203,8 @@ useEffect(() => {
 }, [isOpen, registerLayer, unregisterLayer]);
 ```
 
+**Note:** `SymphonyModal.tsx` and `MarketplaceModal.tsx` should maintain consistent styling (same width: 1200px, same left column width: w-80, same overall layout). When modifying one, check if the other needs matching updates.
+
 ### 5. Theme Colors
 
 Themes have 13 required colors. Use inline styles for theme colors:
@@ -384,6 +386,79 @@ const isRemote = !!session.sshRemoteId;
 // CORRECT
 const isRemote = !!session.sshRemoteId || !!session.sessionSshRemoteConfig?.enabled;
 ```
+
+### 11. Symphony (Token Donations)
+
+Symphony connects open source projects with AI-powered contributors. Sessions can be "Symphony sessions" that track contribution metadata.
+
+**Architecture:**
+```
+src/main/ipc/handlers/symphony.ts     # IPC handlers for Symphony operations
+src/renderer/components/SymphonyModal.tsx  # Main Symphony UI
+src/renderer/hooks/symphony/useSymphony.ts # Symphony state management hook
+src/shared/symphony-types.ts          # Type definitions
+src/shared/symphony-constants.ts      # Constants (URLs, labels, etc.)
+```
+
+**Session Metadata:**
+```typescript
+// Sessions with symphonyMetadata are Symphony contributions
+session.symphonyMetadata?: {
+  isSymphonySession: true;
+  contributionId: string;      // Unique contribution ID
+  repoSlug: string;            // e.g., "owner/repo"
+  issueNumber: number;
+  issueTitle: string;
+  draftPrNumber?: number;      // Set after first commit
+  draftPrUrl?: string;
+  documentPaths: string[];
+  status: ContributionStatus;
+};
+```
+
+**Deferred PR Creation Flow:**
+Symphony uses a deferred PR strategy to avoid "no commits between branches" errors:
+
+1. `symphony:startContribution` - Clones repo, creates branch, sets up Auto Run docs, writes metadata
+2. Agent works and makes commits
+3. On AI task completion (`onProcessExit`), if session has `symphonyMetadata.contributionId` but no `draftPrNumber`:
+   - Calls `symphony:createDraftPR`
+   - Backend checks for commits via `git rev-list --count {baseBranch}..HEAD`
+   - If commits exist, pushes branch and creates draft PR
+   - Broadcasts `symphony:prCreated` event
+4. App.tsx listens to `symphony:prCreated` and updates session metadata
+
+**Auto-Completion Flow:**
+When Auto Run batch finishes successfully for a Symphony session:
+
+1. `onComplete` callback in `useBatchProcessor` fires
+2. If session has `symphonyMetadata.draftPrNumber` and batch wasn't stopped:
+   - Calls `symphony:complete` with runtime stats (tokens, cost, time, tasks)
+   - Backend marks PR as ready for review via `gh pr ready`
+   - Posts PR comment with contribution summary and Maestro/Symphony attribution
+   - Updates session `symphonyMetadata.status` to `'ready_for_review'`
+3. Shows toast notification on success/failure
+
+**Key IPC Handlers:**
+| Handler | Purpose |
+|---------|---------|
+| `symphony:getRegistry` | Fetch registered projects (cached 2hr) |
+| `symphony:getIssues` | Fetch issues for a repo (cached 5min) |
+| `symphony:cloneRepo` | Clone a repository |
+| `symphony:startContribution` | Create branch, set up docs, write metadata |
+| `symphony:createDraftPR` | Create draft PR on first commit |
+| `symphony:complete` | Mark PR as ready, post stats comment |
+| `symphony:cancel` | Cancel and cleanup contribution |
+
+**External Docs Storage:**
+Documents attached to GitHub issues (external URLs) are downloaded to a cache directory rather than the repo:
+```
+{userData}/symphony/contributions/{contributionId}/
+├── docs/           # Downloaded external documents
+└── metadata.json   # Contribution tracking
+```
+
+Repo-internal documents (paths like `.maestro/autorun/task.md`) are referenced in place.
 
 ## Code Conventions
 

@@ -904,6 +904,36 @@ export function useBatchProcessor({
               }
             }
 
+            // Symphony: Check if we need to create a draft PR after this task
+            // This runs after each batch task since the main onExit handler skips batch tasks
+            const currentSessionForPR = sessionsRef.current.find(s => s.id === sessionId);
+            if (currentSessionForPR?.symphonyMetadata?.contributionId && !currentSessionForPR.symphonyMetadata.draftPrNumber) {
+              try {
+                console.log('[BatchProcessor:Symphony] Checking for commits to create draft PR', {
+                  sessionId,
+                  contributionId: currentSessionForPR.symphonyMetadata.contributionId,
+                });
+
+                const prResult = await window.maestro.symphony.createDraftPR(
+                  currentSessionForPR.symphonyMetadata.contributionId
+                );
+
+                if (prResult.success && prResult.draftPrNumber) {
+                  console.log('[BatchProcessor:Symphony] Draft PR created successfully', {
+                    prNumber: prResult.draftPrNumber,
+                    prUrl: prResult.draftPrUrl,
+                  });
+                  // Note: Session state update happens via symphony:prCreated event listener in App.tsx
+                } else if (prResult.success) {
+                  console.log('[BatchProcessor:Symphony] No commits yet, PR will be created after next task');
+                } else {
+                  console.warn('[BatchProcessor:Symphony] Failed to create draft PR:', prResult.error);
+                }
+              } catch (prError) {
+                console.warn('[BatchProcessor:Symphony] Error creating draft PR:', prError);
+              }
+            }
+
             // Track token usage for loop summary and cumulative totals
             if (usageStats) {
               loopTotalInputTokens += usageStats.inputTokens || 0;
@@ -913,6 +943,33 @@ export function useBatchProcessor({
               totalInputTokens += usageStats.inputTokens || 0;
               totalOutputTokens += usageStats.outputTokens || 0;
               totalCost += usageStats.totalCostUsd || 0;
+            }
+
+            // Symphony: Update real-time stats for Stats tab display
+            const currentSessionForStats = sessionsRef.current.find(s => s.id === sessionId);
+            if (currentSessionForStats?.symphonyMetadata?.contributionId) {
+              try {
+                // Calculate elapsed time from tracking service
+                const currentElapsedMs = timeTracking.getElapsedTime(sessionId);
+                await window.maestro.symphony.updateStatus({
+                  contributionId: currentSessionForStats.symphonyMetadata.contributionId,
+                  tokenUsage: {
+                    inputTokens: totalInputTokens,
+                    outputTokens: totalOutputTokens,
+                    estimatedCost: totalCost,
+                  },
+                  timeSpent: currentElapsedMs,
+                  progress: {
+                    completedDocuments: docIndex + 1, // Current document being processed (1-indexed)
+                    totalDocuments: documents.length,
+                    completedTasks: totalCompletedTasks,
+                    totalTasks: initialTotalTasks,
+                  },
+                });
+              } catch (statsError) {
+                // Non-fatal: don't fail batch if Symphony stats update fails
+                console.warn('[BatchProcessor:Symphony] Failed to update stats:', statsError);
+              }
             }
 
             // Track non-reset document completions for loop exit logic

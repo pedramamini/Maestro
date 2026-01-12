@@ -12,7 +12,7 @@ Follow the [Installation](./installation) instructions for your platform, then l
 
 ## 2. Create an agent (or use the Wizard)
 
-Maestro supports **Claude Code**, **OpenAI Codex**, and **OpenCode** as providers. Make sure at least one is installed and authenticated.
+Maestro supports **Claude Code**, **Codex** (OpenAI), and **OpenCode** as providers. Make sure at least one is installed and authenticated.
 
 **Option A: Quick Setup**
 Create your first agent manually using the **+** button in the sidebar.

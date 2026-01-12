@@ -24,6 +24,7 @@ import { TourOverlay } from './components/Wizard/tour';
 import { CONDUCTOR_BADGES, getBadgeForTime } from './constants/conductorBadges';
 import { EmptyStateView } from './components/EmptyStateView';
 import { MarketplaceModal } from './components/MarketplaceModal';
+import { SymphonyModal, SymphonyContributionData } from './components/SymphonyModal';
 import { DocumentGraphView } from './components/DocumentGraph/DocumentGraphView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
 
@@ -251,6 +252,8 @@ function MaestroConsoleInner() {
     gitLogOpen, setGitLogOpen,
     // Tour Overlay
     tourOpen, setTourOpen, tourFromWizard, setTourFromWizard,
+    // Symphony Modal
+    symphonyModalOpen, setSymphonyModalOpen,
   } = useModalContext();
 
   // --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -1909,6 +1912,42 @@ function MaestroConsoleInner() {
         });
       }
 
+      // Symphony: Check if we need to create a draft PR on first commit
+      // Only for AI-initiated exits (not terminal), for Symphony sessions without a PR yet
+      // The backend handler checks if commits exist and only creates PR if there are commits
+      if (isFromAi) {
+        const currentSession = sessionsRef.current.find(s => s.id === actualSessionId);
+        if (currentSession?.symphonyMetadata?.contributionId && !currentSession.symphonyMetadata.draftPrNumber) {
+          (async () => {
+            try {
+              console.log('[Symphony] Checking for commits to create draft PR', {
+                sessionId: actualSessionId,
+                contributionId: currentSession.symphonyMetadata!.contributionId,
+              });
+
+              // Call createDraftPR - it checks for commits internally
+              const result = await window.maestro.symphony.createDraftPR(
+                currentSession.symphonyMetadata!.contributionId
+              );
+
+              if (result.success && result.draftPrNumber) {
+                console.log('[Symphony] Draft PR created successfully', {
+                  prNumber: result.draftPrNumber,
+                  prUrl: result.draftPrUrl,
+                });
+              } else if (result.success) {
+                // Success but no PR - means no commits yet
+                console.log('[Symphony] No commits yet, PR will be created on first commit');
+              } else {
+                console.warn('[Symphony] Failed to create draft PR:', result.error);
+              }
+            } catch (err) {
+              console.warn('[Symphony] Error creating draft PR:', err);
+            }
+          })();
+        }
+      }
+
       if (queuedItemToProcess) {
         setTimeout(() => {
           processQueuedItem(queuedItemToProcess!.sessionId, queuedItemToProcess!.item);
@@ -1932,11 +1971,12 @@ function MaestroConsoleInner() {
 
           // Suppress toast if user is already viewing this tab (they'll see the response directly)
           // Only show toasts for out-of-view completions (different session or different tab)
+          // Also suppress if synopsis is coming - the synopsis toast will be shown instead
           const currentActiveSession = sessionsRef.current.find(s => s.id === activeSessionIdRef.current);
           const isViewingCompletedTab = currentActiveSession?.id === actualSessionId
             && (!tabIdFromSession || currentActiveSession.activeTabId === tabIdFromSession);
 
-          if (!isViewingCompletedTab) {
+          if (!isViewingCompletedTab && !synopsisData) {
             addToastRef.current({
               type: 'success',
               title: toastData!.title,
@@ -3231,6 +3271,60 @@ function MaestroConsoleInner() {
     return unsubscribe;
   }, [sessions]);
 
+  // Symphony contribution started handler - updates session state when contribution starts
+  useEffect(() => {
+    // Listen for contribution start (branch created, docs set up, but NO PR yet)
+    const unsubscribeStart = window.maestro.symphony.onContributionStarted((data) => {
+      setSessions(prev => prev.map(session => {
+        if (session.id === data.sessionId && session.symphonyMetadata) {
+          return {
+            ...session,
+            symphonyMetadata: {
+              ...session.symphonyMetadata,
+              branchName: data.branchName,
+              status: 'running',
+            },
+            // Set up Auto Run with the document folder
+            autoRunFolderPath: data.autoRunPath,
+          };
+        }
+        return session;
+      }));
+    });
+
+    // Listen for PR creation (happens on first commit)
+    const unsubscribePR = window.maestro.symphony.onPRCreated((data) => {
+      // Update session's symphonyMetadata
+      setSessions(prev => prev.map(session => {
+        if (session.id === data.sessionId && session.symphonyMetadata) {
+          return {
+            ...session,
+            symphonyMetadata: {
+              ...session.symphonyMetadata,
+              draftPrNumber: data.draftPrNumber,
+              draftPrUrl: data.draftPrUrl,
+            },
+          };
+        }
+        return session;
+      }));
+
+      // Also update the persistent Symphony state with PR info
+      window.maestro.symphony.updateStatus({
+        contributionId: data.contributionId,
+        draftPrNumber: data.draftPrNumber,
+        draftPrUrl: data.draftPrUrl,
+      }).catch((err: unknown) => {
+        console.error('[Symphony] Failed to update contribution PR info:', err);
+      });
+    });
+
+    return () => {
+      unsubscribeStart();
+      unsubscribePR();
+    };
+  }, []);
+
   // Theme styles hook - manages CSS variables and scrollbar fade animations
   useThemeStyles({
     themeColors: theme.colors,
@@ -4456,6 +4550,60 @@ You are taking over this conversation. Based on the context above, provide a bri
             });
           }
         }
+      }
+
+      // Symphony auto-completion: mark PR as ready when batch finishes
+      if (!info.wasStopped && session?.symphonyMetadata?.contributionId && session.symphonyMetadata.draftPrNumber) {
+        console.log('[Symphony] Batch complete, auto-completing PR for contribution:', session.symphonyMetadata.contributionId);
+
+        // Get session usage stats for the PR comment
+        const usageStats = session.usageStats;
+
+        window.maestro.symphony.complete({
+          contributionId: session.symphonyMetadata.contributionId,
+          stats: {
+            inputTokens: usageStats?.inputTokens || 0,
+            outputTokens: usageStats?.outputTokens || 0,
+            estimatedCost: usageStats?.totalCostUsd || 0,
+            timeSpentMs: info.elapsedTimeMs,
+            documentsProcessed: info.totalTasks, // Each document is a "task" in batch processing
+            tasksCompleted: info.completedTasks,
+          },
+        }).then(result => {
+          if (result.success) {
+            addToastRef.current({
+              type: 'success',
+              title: 'Symphony Contribution Complete',
+              message: `PR #${result.prNumber} is now ready for review`,
+              group: groupName,
+              project: info.sessionName,
+              sessionId: info.sessionId,
+            });
+
+            // Update session metadata to reflect completion
+            setSessions(prev => prev.map(s => {
+              if (s.id !== info.sessionId || !s.symphonyMetadata) return s;
+              return {
+                ...s,
+                symphonyMetadata: {
+                  ...s.symphonyMetadata,
+                  status: 'ready_for_review' as const,
+                },
+              };
+            }));
+          } else {
+            addToastRef.current({
+              type: 'warning',
+              title: 'Symphony PR Update Failed',
+              message: result.error || 'Failed to mark PR as ready for review',
+              group: groupName,
+              project: info.sessionName,
+              sessionId: info.sessionId,
+            });
+          }
+        }).catch(err => {
+          console.error('[Symphony] Failed to complete contribution:', err);
+        });
       }
     },
     onPRResult: (info) => {
@@ -9283,8 +9431,10 @@ You are taking over this conversation. Based on the context above, provide a bri
     handleCloseAllTabs, handleCloseOtherTabs, handleCloseTabsLeft, handleCloseTabsRight,
 
     // Session bookmark toggle
-    toggleBookmark
+    toggleBookmark,
 
+    // Symphony modal
+    setShowSymphonyModal: setSymphonyModalOpen,
   };
 
   // Update flat file list when active session's tree, expanded folders, filter, or hidden files setting changes
@@ -9708,6 +9858,7 @@ You are taking over this conversation. Based on the context above, provide a bri
         autoRunSelectedDocument={activeSession?.autoRunSelectedFile ?? null}
         autoRunCompletedTaskCount={rightPanelRef.current?.getAutoRunCompletedTaskCount() ?? 0}
         onAutoRunResetTasks={handleQuickActionsAutoRunResetTasks}
+        onOpenSymphony={() => setSymphonyModalOpen(true)}
         isFilePreviewOpen={previewFile !== null}
         ghCliAvailable={ghCliAvailable}
         onPublishGist={() => setGistPublishModalOpen(true)}
@@ -9873,6 +10024,196 @@ You are taking over this conversation. Based on the context above, provide a bri
           onImportComplete={handleMarketplaceImportComplete}
         />
       )}
+
+      {/* --- SYMPHONY MODAL --- */}
+      <SymphonyModal
+        theme={theme}
+        isOpen={symphonyModalOpen}
+        onClose={() => setSymphonyModalOpen(false)}
+        onStartContribution={async (data: SymphonyContributionData) => {
+          console.log('[Symphony] Creating session for contribution:', data);
+
+          // Get agent definition
+          const agent = await window.maestro.agents.get(data.agentType);
+          if (!agent) {
+            console.error(`Agent not found: ${data.agentType}`);
+            addToast({
+              type: 'error',
+              title: 'Symphony Error',
+              message: `Agent not found: ${data.agentType}`,
+            });
+            return;
+          }
+
+          // Validate uniqueness
+          const validation = validateNewSession(data.sessionName, data.localPath, data.agentType as ToolType, sessions);
+          if (!validation.valid) {
+            console.error(`Session validation failed: ${validation.error}`);
+            addToast({
+              type: 'error',
+              title: 'Session Creation Failed',
+              message: validation.error || 'Cannot create duplicate session',
+            });
+            return;
+          }
+
+          const newId = generateId();
+          const initialTabId = generateId();
+
+          // Check git repo status
+          const isGitRepo = await gitService.isRepo(data.localPath);
+          let gitBranches: string[] | undefined;
+          let gitTags: string[] | undefined;
+          let gitRefsCacheTime: number | undefined;
+
+          if (isGitRepo) {
+            [gitBranches, gitTags] = await Promise.all([
+              gitService.getBranches(data.localPath),
+              gitService.getTags(data.localPath)
+            ]);
+            gitRefsCacheTime = Date.now();
+          }
+
+          // Create initial tab
+          const initialTab: AITab = {
+            id: initialTabId,
+            agentSessionId: null,
+            name: null,
+            starred: false,
+            logs: [],
+            inputValue: '',
+            stagedImages: [],
+            createdAt: Date.now(),
+            state: 'idle',
+            saveToHistory: defaultSaveToHistory
+          };
+
+          // Create session with Symphony metadata
+          const newSession: Session = {
+            id: newId,
+            name: data.sessionName,
+            toolType: data.agentType as ToolType,
+            state: 'idle',
+            cwd: data.localPath,
+            fullPath: data.localPath,
+            projectRoot: data.localPath,
+            isGitRepo,
+            gitBranches,
+            gitTags,
+            gitRefsCacheTime,
+            aiLogs: [],
+            shellLogs: [{ id: generateId(), timestamp: Date.now(), source: 'system', text: 'Shell Session Ready.' }],
+            workLog: [],
+            contextUsage: 0,
+            inputMode: 'ai',
+            aiPid: 0,
+            terminalPid: 0,
+            port: 3000 + Math.floor(Math.random() * 100),
+            isLive: false,
+            changedFiles: [],
+            fileTree: [],
+            fileExplorerExpanded: [],
+            fileExplorerScrollPos: 0,
+            fileTreeAutoRefreshInterval: 180,
+            shellCwd: data.localPath,
+            aiCommandHistory: [],
+            shellCommandHistory: [],
+            executionQueue: [],
+            activeTimeMs: 0,
+            aiTabs: [initialTab],
+            activeTabId: initialTabId,
+            closedTabHistory: [],
+            // Custom agent config
+            customPath: data.customPath,
+            customArgs: data.customArgs,
+            customEnvVars: data.customEnvVars,
+            // Auto Run setup - use autoRunPath from contribution
+            autoRunFolderPath: data.autoRunPath,
+            // Symphony metadata for tracking
+            symphonyMetadata: {
+              isSymphonySession: true,
+              contributionId: data.contributionId,
+              repoSlug: data.repo.slug,
+              issueNumber: data.issue.number,
+              issueTitle: data.issue.title,
+              documentPaths: data.issue.documentPaths.map(d => d.path),
+              status: 'running',
+            },
+          };
+
+          setSessions(prev => [...prev, newSession]);
+          setActiveSessionId(newId);
+          setSymphonyModalOpen(false);
+
+          // Register active contribution in Symphony persistent state
+          // This makes it show up in the Active tab of the Symphony modal
+          window.maestro.symphony.registerActive({
+            contributionId: data.contributionId,
+            sessionId: newId,
+            repoSlug: data.repo.slug,
+            repoName: data.repo.name,
+            issueNumber: data.issue.number,
+            issueTitle: data.issue.title,
+            localPath: data.localPath,
+            branchName: data.branchName || '',
+            documentPaths: data.issue.documentPaths.map(d => d.path),
+            agentType: data.agentType,
+          }).catch((err: unknown) => {
+            console.error('[Symphony] Failed to register active contribution:', err);
+          });
+
+          // Track stats
+          updateGlobalStats({ totalSessions: 1 });
+          window.maestro.stats.recordSessionCreated({
+            sessionId: newId,
+            agentType: data.agentType,
+            projectPath: data.localPath,
+            createdAt: Date.now(),
+            isRemote: false,
+          });
+
+          // Focus input
+          setActiveFocus('main');
+          setTimeout(() => inputRef.current?.focus(), 50);
+
+          // Switch to Auto Run tab so user sees the documents
+          setActiveRightTab('autorun');
+
+          addToast({
+            type: 'success',
+            title: 'Symphony Contribution Started',
+            message: `Working on: ${data.issue.title}`,
+          });
+
+          console.log('[Symphony] Session created:', newId);
+
+          // Auto-start batch run with all documents from the issue
+          if (data.autoRunPath && data.issue.documentPaths.length > 0) {
+            // Sort documents using natural number ordering (Terminal-1, Terminal-2, ... Terminal-10, Terminal-11)
+            // instead of lexicographic (Terminal-1, Terminal-10, Terminal-11, ... Terminal-2)
+            const sortedDocs = [...data.issue.documentPaths].sort((a, b) => {
+              return a.name.localeCompare(b.name, undefined, { numeric: true, sensitivity: 'base' });
+            });
+
+            const batchConfig: BatchRunConfig = {
+              documents: sortedDocs.map((doc) => ({
+                id: generateId(),
+                filename: doc.name.replace(/\.md$/, ''),
+                resetOnCompletion: false,
+                isDuplicate: false,
+              })),
+              prompt: DEFAULT_BATCH_PROMPT,
+              loopEnabled: false,
+            };
+
+            // Small delay to ensure session state is fully propagated
+            setTimeout(() => {
+              console.log('[Symphony] Auto-starting batch run with documents:', sortedDocs.map(d => d.name));
+              startBatchRun(newId, batchConfig, data.autoRunPath!);
+            }, 500);
+          }
+        }}
+      />
 
       {/* --- GIST PUBLISH MODAL --- */}
       {/* Supports both file preview and tab context gist publishing */}
@@ -10079,6 +10420,7 @@ You are taking over this conversation. Based on the context above, provide a bri
             visibleSessions={visibleSessions}
             autoRunStats={autoRunStats}
             openWizard={openWizardModal}
+            openSymphony={() => setSymphonyModalOpen(true)}
             startTour={() => {
               setTourFromWizard(false);
               setTourOpen(true);

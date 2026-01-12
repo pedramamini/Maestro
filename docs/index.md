@@ -10,7 +10,7 @@ Maestro is a cross-platform desktop app for orchestrating your fleet of AI agent
 
 Collaborate with AI to create detailed specification documents, then let Auto Run execute them automatically, each task in a fresh session with clean context. Allowing for long-running unattended sessions, my current record is nearly 24 hours of continuous runtime.
 
-Run multiple agents in parallel with a Linear/Superhuman-level responsive interface. Currently supporting **Claude Code**, **OpenAI Codex**, and **OpenCode** with plans for additional agentic coding tools (Aider, Gemini CLI, Qwen3 Coder) based on user demand.
+Run multiple agents in parallel with a Linear/Superhuman-level responsive interface. Currently supporting **Claude Code**, **Codex** (OpenAI), and **OpenCode** with plans for additional agentic coding tools (Aider, Gemini CLI, Qwen3 Coder) based on user demand.
 
 ![Main screen](./screenshots/main-screen.png)
 

@@ -325,6 +325,40 @@ export class ProcessManager extends EventEmitter {
     // Detect Windows early for logging decisions throughout the function
     const isWindows = process.platform === 'win32';
 
+    // Validate that the working directory exists before attempting to spawn
+    // Node.js spawn() emits a confusing "spawn <command> ENOENT" error when cwd doesn't exist
+    // We provide a clearer error message here
+    const expandedCwd = expandTilde(cwd);
+    if (!fs.existsSync(expandedCwd)) {
+      logger.error('[ProcessManager] Working directory does not exist', 'ProcessManager', {
+        sessionId,
+        cwd,
+        expandedCwd,
+        toolType,
+      });
+
+      // Emit an agent error with clear message about the missing directory
+      const agentError: AgentError = {
+        type: 'agent_crashed',
+        message: `Working directory does not exist: ${cwd}`,
+        recoverable: false, // Can't recover without user action
+        agentId: toolType,
+        sessionId,
+        timestamp: Date.now(),
+        raw: {
+          stderr: `The project directory "${cwd}" has been deleted or moved. Please delete this session and create a new one.`,
+        },
+      };
+
+      // Emit the error asynchronously to allow caller to set up listeners
+      setImmediate(() => {
+        this.emit('agent-error', sessionId, agentError);
+        this.emit('exit', sessionId, 1);
+      });
+
+      return { pid: -1, success: false };
+    }
+
     // For batch mode with images, use stream-json mode and send message via stdin
     // For batch mode without images, append prompt to args with -- separator (unless noPromptSeparator is true)
     // For agents with promptArgs (like OpenCode -p), use the promptArgs function to build prompt CLI args
@@ -502,7 +536,7 @@ export class ProcessManager extends EventEmitter {
           name: 'xterm-256color',
           cols: 100,
           rows: 30,
-          cwd: cwd,
+          cwd: expandedCwd,
           env: ptyEnv as any,
         });
 
@@ -510,7 +544,7 @@ export class ProcessManager extends EventEmitter {
           sessionId,
           toolType,
           ptyProcess,
-          cwd,
+          cwd: expandedCwd,
           pid: ptyProcess.pid,
           isTerminal: true,
           startTime: Date.now(),
@@ -705,7 +739,7 @@ export class ProcessManager extends EventEmitter {
         });
 
         const childProcess = spawn(spawnCommand, spawnArgs, {
-          cwd,
+          cwd: expandedCwd,
           env,
           shell: useShell, // Enable shell only when needed (batch files, extensionless commands on Windows)
           stdio: ['pipe', 'pipe', 'pipe'], // Explicitly set stdio to pipe
@@ -755,7 +789,7 @@ export class ProcessManager extends EventEmitter {
           sessionId,
           toolType,
           childProcess,
-          cwd,
+          cwd: expandedCwd,
           pid: childProcess.pid || -1,
           isTerminal: false,
           isBatchMode,

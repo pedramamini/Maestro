@@ -10,16 +10,20 @@ Hover over any tab with an established session to access the tab menu overlay:
 
 ![Tab Menu](./screenshots/tab-menu.png)
 
-| Action | Description |
-|--------|-------------|
-| **Copy Session ID** | Copy the session ID to clipboard (for session continuity) |
-| **Star Session** | Bookmark this session for quick access |
-| **Rename Tab** | Give the tab a descriptive name |
-| **Mark as Unread** | Add unread indicator to the tab |
-| **Context: Copy to Clipboard** | Copy the full conversation to clipboard |
-| **Context: Compact** | Compress context while preserving key information |
-| **Context: Merge Into** | Merge this context into another session |
-| **Context: Send to Agent** | Transfer context to a different agent |
+| Action | Requires Session | Description |
+|--------|------------------|-------------|
+| **Copy Session ID** | Yes | Copy the session ID to clipboard (for session continuity) |
+| **Star Session** | Yes | Bookmark this session for quick access |
+| **Rename Tab** | Yes | Give the tab a descriptive name |
+| **Mark as Unread** | Yes | Add unread indicator to the tab |
+| **Export as HTML** | No (1+ logs) | Export conversation as self-contained HTML file |
+| **Context: Copy to Clipboard** | No (1+ logs) | Copy the full conversation to clipboard |
+| **Context: Compact** | No (5+ logs) | Compress context while preserving key information |
+| **Context: Merge Into** | Yes | Merge this context into another session |
+| **Context: Send to Agent** | Yes | Transfer context to a different agent |
+| **Context: Publish as GitHub Gist** | No (1+ logs) | Share conversation as a public or secret GitHub Gist (requires `gh` CLI) |
+| **Move to First Position** | No | Move this tab to the first position |
+| **Move to Last Position** | No | Move this tab to the last position |
 
 ### Tab Close Operations
 
@@ -54,8 +58,8 @@ These actions are also available via **Quick Actions** (`Cmd+K` / `Ctrl+K`) with
 
 Export any tab conversation as a self-contained HTML file:
 
-1. Right-click the tab → **Context: Copy to Clipboard**
-2. Or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Export tab to HTML"
+1. Hover over the tab → **Export as HTML**
+2. Choose a save location when prompted
 
 The exported HTML file includes:
 - **Full conversation history** with all messages
@@ -65,6 +69,10 @@ The exported HTML file includes:
 - **Rendered markdown** — code blocks, tables, and formatting preserved
 
 This is useful for sharing conversations, creating documentation, or archiving important sessions.
+
+**Alternative sharing options:**
+- **Context: Copy to Clipboard** — Copy the raw conversation text to clipboard (for pasting into documents or chat)
+- **Context: Publish as GitHub Gist** — Share as a public or secret GitHub Gist (requires `gh` CLI to be installed)
 
 ---
 
@@ -116,7 +124,7 @@ Customize warning thresholds in **Settings** (`Cmd+,` / `Ctrl+,`) → **General*
 
 When your conversation approaches context limits, you can compress it while preserving essential information:
 
-1. **Right-click** a tab → **"Context: Compact"**, or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Context: Compact"
+1. **Hover over** a tab → **"Context: Compact"**, or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Context: Compact"
 2. The AI compacts the conversation, extracting key decisions, code changes, and context
 3. A new tab opens with the compressed context, ready to continue working
 
@@ -174,7 +182,7 @@ During compaction, you'll see status updates:
 
 Combine context from multiple sessions or tabs into one:
 
-1. **Right-click** a tab → **"Context: Merge Into"**, or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Merge with another session"
+1. **Hover over** a tab → **"Context: Merge Into"**, or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Context: Merge Into"
 2. Search for or select the target session/tab from the modal
 3. Review the merge preview showing estimated token count
 4. Optionally enable **Clean context** to remove duplicates and reduce size
@@ -204,7 +212,7 @@ The merged context creates a new tab in the target session with conversation his
 
 Transfer your context to a different AI agent:
 
-1. **Right-click** a tab → **"Context: Send to Agent"**, or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Send to another agent"
+1. **Hover over** a tab → **"Context: Send to Agent"**, or use **Command Palette** (`Cmd+K` / `Ctrl+K`) → "Context: Send to Agent"
 2. Search for or select the target agent from the list
 3. Review the token estimate and cleaning options
 4. Click **"Send to Session"**
