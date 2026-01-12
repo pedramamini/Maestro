@@ -1258,6 +1258,37 @@ export function SymphonyModal({
     }
   }, []);
 
+  // Tab cycling with Cmd+Shift+[ and Cmd+Shift+]
+  const tabs: ModalTab[] = useMemo(() => ['projects', 'active', 'history', 'stats'], []);
+
+  useEffect(() => {
+    const handleTabCycle = (e: KeyboardEvent) => {
+      // Cmd+Shift+[ or Cmd+Shift+] to cycle tabs
+      if ((e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '[' || e.key === ']')) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const currentIndex = tabs.indexOf(activeTab);
+        let newIndex: number;
+
+        if (e.key === '[') {
+          // Go backwards, wrap around
+          newIndex = currentIndex <= 0 ? tabs.length - 1 : currentIndex - 1;
+        } else {
+          // Go forwards, wrap around
+          newIndex = currentIndex >= tabs.length - 1 ? 0 : currentIndex + 1;
+        }
+
+        setActiveTab(tabs[newIndex]);
+      }
+    };
+
+    if (isOpen) {
+      window.addEventListener('keydown', handleTabCycle);
+      return () => window.removeEventListener('keydown', handleTabCycle);
+    }
+  }, [isOpen, activeTab, tabs]);
+
   // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
@@ -1594,7 +1625,7 @@ export function SymphonyModal({
                     style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
                   >
                     <span>{filteredRepositories.length} repositories • Contribute to open source with AI</span>
-                    <span>↑↓←→ navigate • Enter select • / search</span>
+                    <span>↑↓←→ navigate • Enter select • / search • ⌘⇧[] tabs</span>
                   </div>
                 </>
               )}
