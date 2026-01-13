@@ -286,6 +286,7 @@ function MaestroConsoleInner() {
     customShellPath, setCustomShellPath,
     shellArgs, setShellArgs,
     shellEnvVars, setShellEnvVars,
+    direnvEnabled, setDirenvEnabled,
     ghPath, setGhPath,
     fontFamily, setFontFamily,
     fontSize, setFontSize,
@@ -2705,6 +2706,22 @@ function MaestroConsoleInner() {
       thinkingChunkBuffer.clear();
     };
      
+  }, []);
+
+  // --- DIRENV WARNING LISTENER ---
+  // Listen for direnv warnings (e.g., direnv not installed, .envrc not allowed)
+  useEffect(() => {
+    const unsubscribeDirenv = window.maestro.direnv?.onWarning((sessionId: string, warning: string) => {
+      addToastRef.current({
+        type: 'warning',
+        title: 'direnv',
+        message: warning,
+      });
+    });
+
+    return () => {
+      unsubscribeDirenv?.();
+    };
   }, []);
 
   // --- GROUP CHAT EVENT LISTENERS ---
@@ -11112,6 +11129,8 @@ You are taking over this conversation. Based on the context above, provide a bri
         setShellArgs={setShellArgs}
         shellEnvVars={shellEnvVars}
         setShellEnvVars={setShellEnvVars}
+        direnvEnabled={direnvEnabled}
+        setDirenvEnabled={setDirenvEnabled}
         ghPath={ghPath}
         setGhPath={setGhPath}
         enterToSendAI={enterToSendAI}
