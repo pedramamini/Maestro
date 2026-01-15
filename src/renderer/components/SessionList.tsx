@@ -14,7 +14,6 @@ import { SessionItem } from './SessionItem';
 import { GroupChatList } from './GroupChatList';
 import { useLiveOverlay, useClickOutside } from '../hooks';
 import { useGitStatus } from '../contexts/GitStatusContext';
-import maestroLogo from '../assets/maestro-logo.png';
 
 // ============================================================================
 // SessionContextMenu - Right-click context menu for session items
@@ -1594,7 +1593,7 @@ function SessionListInner(props: SessionListProps) {
         {leftSidebarOpen ? (
           <>
             <div className="flex items-center gap-2">
-              <img src={maestroLogo} className="w-5 h-5 object-contain" alt="Maestro" />
+              <Wand2 className="w-5 h-5" style={{ color: theme.colors.accent }} />
               <h1 className="font-bold tracking-widest text-lg" style={{ color: theme.colors.textMain }}>MAESTRO</h1>
               {/* Badge Level Indicator */}
               {autoRunStats && autoRunStats.currentBadgeLevel > 0 && (
@@ -2037,7 +2036,7 @@ function SessionListInner(props: SessionListProps) {
               className="p-2 rounded hover:bg-white/10 transition-colors"
               title="Menu"
             >
-              <img src={maestroLogo} className="w-6 h-6 object-contain" alt="Maestro" />
+              <Wand2 className="w-6 h-6" style={{ color: theme.colors.accent }} />
             </button>
             {/* Menu Overlay for Collapsed Sidebar */}
             {menuOpen && (
