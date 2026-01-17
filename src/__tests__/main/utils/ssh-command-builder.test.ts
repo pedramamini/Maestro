@@ -322,8 +322,8 @@ describe('ssh-command-builder', () => {
       });
 
       const wrappedCommand = result.args[result.args.length - 1];
-      // The command is wrapped in $SHELL -ilc "..." (-i ensures .bashrc runs fully)
-      expect(wrappedCommand).toBe('$SHELL -ilc "claude \'--print\' \'hello\'"');
+      // The command uses bash -lc with explicit profile sourcing for reliability
+      expect(wrappedCommand).toBe('bash -lc "source ~/.bash_profile 2>/dev/null || source ~/.profile 2>/dev/null; source ~/.bashrc 2>/dev/null; claude \'--print\' \'hello\'"');
       expect(wrappedCommand).not.toContain('cd');
     });
 

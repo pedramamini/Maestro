@@ -230,8 +230,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
       }
 
       // Directory exists, now check if it's a git repo
-      // For SSH remotes, pass the path as remoteCwd so git can operate in the correct directory
-      const isRepo = await window.maestro.git.isRepo(path, sshRemoteId, sshRemoteId ? path : undefined);
+      const isRepo = await window.maestro.git.isRepo(path, sshRemoteId);
       setIsGitRepo(isRepo);
       setDirectoryError(null);
 
