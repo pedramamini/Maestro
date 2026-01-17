@@ -16,6 +16,12 @@ interface ProcessConfig {
   readOnlyMode?: boolean;   // For read-only/plan mode (uses agent's readOnlyArgs)
   modelId?: string;         // For model selection (uses agent's modelArgs builder)
   yoloMode?: boolean;       // For YOLO/full-access mode (uses agent's yoloModeArgs)
+  // Per-session SSH remote config (takes precedence over agent-level SSH config)
+  sessionSshRemoteConfig?: {
+    enabled: boolean;
+    remoteId: string | null;
+    workingDirOverride?: string;
+  };
   // Stats tracking options
   querySource?: 'user' | 'auto'; // Whether this query is user-initiated or from Auto Run
   tabId?: string; // Tab ID for multi-tab tracking
@@ -561,7 +567,7 @@ contextBridge.exposeInMainWorld('maestro', {
   agents: {
     detect: (sshRemoteId?: string) => ipcRenderer.invoke('agents:detect', sshRemoteId),
     refresh: (agentId?: string, sshRemoteId?: string) => ipcRenderer.invoke('agents:refresh', agentId, sshRemoteId),
-    get: (agentId: string) => ipcRenderer.invoke('agents:get', agentId),
+    get: (agentId: string, sshRemoteId?: string) => ipcRenderer.invoke('agents:get', agentId, sshRemoteId),
     getCapabilities: (agentId: string) => ipcRenderer.invoke('agents:getCapabilities', agentId),
     getConfig: (agentId: string) => ipcRenderer.invoke('agents:getConfig', agentId),
     setConfig: (agentId: string, config: Record<string, any>) =>
@@ -1977,7 +1983,7 @@ export interface MaestroAPI {
   agents: {
     detect: (sshRemoteId?: string) => Promise<AgentConfig[]>;
     refresh: (agentId?: string, sshRemoteId?: string) => Promise<{ agents: AgentConfig[]; debugInfo: any }>;
-    get: (agentId: string) => Promise<AgentConfig | null>;
+    get: (agentId: string, sshRemoteId?: string) => Promise<AgentConfig | null>;
     getCapabilities: (agentId: string) => Promise<AgentCapabilities>;
     getConfig: (agentId: string) => Promise<Record<string, any>>;
     setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;

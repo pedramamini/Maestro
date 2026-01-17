@@ -25,6 +25,12 @@ export interface GenerationConfig {
   conversationHistory: WizardMessage[];
   /** Optional subfolder within Auto Run Docs (e.g., "Initiation") */
   subfolder?: string;
+  /** SSH remote configuration (for remote execution) */
+  sshRemoteConfig?: {
+    enabled: boolean;
+    remoteId: string | null;
+    workingDirOverride?: string;
+  };
 }
 
 /**
@@ -563,9 +569,43 @@ class PhaseGenerator {
       // Get the agent configuration
       wizardDebugLogger.log('info', 'Fetching agent configuration', { agentType: config.agentType });
       const agent = await window.maestro.agents.get(config.agentType);
-      if (!agent || !agent.available) {
-        wizardDebugLogger.log('error', 'Agent not available', { agentType: config.agentType, agent });
-        throw new Error(`Agent ${config.agentType} is not available`);
+
+      // For SSH remote sessions, skip the availability check since we're executing remotely
+      // The agent detector checks for binaries locally, but we need to execute on the remote host
+      const isRemoteSession = config.sshRemoteConfig?.enabled && config.sshRemoteConfig?.remoteId;
+
+      if (!agent) {
+        wizardDebugLogger.log('error', 'Agent configuration not found', { agentType: config.agentType });
+        throw new Error(`Agent ${config.agentType} configuration not found`);
+      }
+
+      // Only check availability for local sessions
+      if (!isRemoteSession && !agent.available) {
+        wizardDebugLogger.log('error', 'Agent not available locally', { agentType: config.agentType, agent });
+
+        // Provide helpful error message with guidance
+        let errorMsg = `The ${config.agentType} agent is not available locally.`;
+
+        if (agent?.customPath) {
+          errorMsg += `\n\nThe custom path "${agent.customPath}" is not valid. The file may not exist or may not be executable.`;
+          errorMsg += `\n\nTo fix this:\n1. Click "Go Back" to return to agent selection\n2. Click the settings icon on the agent tile\n3. Update the custom path or clear it to use the system PATH\n4. Click "Refresh" to re-detect the agent`;
+        } else {
+          errorMsg += `\n\nThe agent was not found in your system PATH.`;
+          errorMsg += `\n\nTo fix this:\n1. Install ${config.agentType} on your system\n2. Or click "Go Back" and configure a custom path in the agent settings`;
+        }
+
+        throw new Error(errorMsg);
+      }
+
+      // For remote sessions, log that we're skipping the availability check
+      if (isRemoteSession) {
+        wizardDebugLogger.log('info', 'Executing agent on SSH remote (skipping local availability check)', {
+          agentType: config.agentType,
+          remoteId: config.sshRemoteConfig?.remoteId,
+          agentCommand: agent.command,
+          agentPath: agent.path,
+          agentCustomPath: (agent as any).customPath,
+        });
       }
       wizardDebugLogger.log('info', 'Agent configuration retrieved', {
         command: agent.command,
@@ -1025,6 +1065,8 @@ class PhaseGenerator {
         agentCommand: agent.command,
         argsCount: argsForSpawn.length,
         promptLength: prompt.length,
+        hasRemoteSsh: !!config.sshRemoteConfig?.enabled,
+        remoteId: config.sshRemoteConfig?.remoteId || null,
       });
       window.maestro.process
         .spawn({
@@ -1034,6 +1076,8 @@ class PhaseGenerator {
           command: commandToUse,
           args: argsForSpawn,
           prompt,
+          // Pass SSH configuration for remote execution
+          sessionSshRemoteConfig: config.sshRemoteConfig,
         })
         .then(() => {
           console.log('[PhaseGenerator] Agent spawned successfully');

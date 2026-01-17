@@ -20,14 +20,30 @@ const FILE_TREE_RETRY_DELAY_MS = 20000;
  * we must fall back to sessionSshRemoteConfig.remoteId. See CLAUDE.md "SSH Remote Sessions".
  */
 function getSshContext(session: Session): SshContext | undefined {
-  const sshRemoteId = session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+  // First check if there's a spawned sshRemoteId (set by agent spawn)
+  let sshRemoteId: string | undefined = session.sshRemoteId;
+
+  // Fall back to sessionSshRemoteConfig if enabled and has a valid remoteId
+  // Note: remoteId can be `null` per the type definition, so we explicitly check for truthiness
+  if (!sshRemoteId && session.sessionSshRemoteConfig?.enabled && session.sessionSshRemoteConfig?.remoteId) {
+    sshRemoteId = session.sessionSshRemoteConfig.remoteId;
+  }
+
+  console.log('[getSshContext] session.sshRemoteId:', session.sshRemoteId);
+  console.log('[getSshContext] session.sessionSshRemoteConfig:', session.sessionSshRemoteConfig);
+  console.log('[getSshContext] resolved sshRemoteId:', sshRemoteId);
+
   if (!sshRemoteId) {
+    console.log('[getSshContext] No SSH remote ID found, returning undefined');
     return undefined;
   }
-  return {
+
+  const context = {
     sshRemoteId,
     remoteCwd: session.remoteCwd || session.sessionSshRemoteConfig?.workingDirOverride,
   };
+  console.log('[getSshContext] Returning context:', context);
+  return context;
 }
 
 export type { RightPanelHandle } from '../../components/RightPanel';

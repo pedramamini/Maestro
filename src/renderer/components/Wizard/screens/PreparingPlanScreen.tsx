@@ -628,12 +628,12 @@ function ErrorDisplay({
       >
         Generation Failed
       </h3>
-      <p
-        className="text-sm text-center max-w-md mb-6"
-        style={{ color: theme.colors.error }}
+      <div
+        className="text-sm text-left max-w-md mb-6"
+        style={{ color: theme.colors.error, whiteSpace: 'pre-line' }}
       >
         {error}
-      </p>
+      </div>
 
       {/* Action buttons */}
       <div className="flex items-center gap-4">
@@ -754,6 +754,7 @@ export function PreparingPlanScreen({
           projectName: state.agentName || 'My Project',
           conversationHistory: state.conversationHistory,
           subfolder: 'Initiation',
+          sshRemoteConfig: state.sessionSshRemoteConfig,
         },
         {
           onStart: () => {

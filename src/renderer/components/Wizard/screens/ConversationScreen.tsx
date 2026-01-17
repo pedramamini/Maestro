@@ -674,6 +674,7 @@ export function ConversationScreen({ theme, showThinking, setShowThinking }: Con
           directoryPath: state.directoryPath,
           projectName: state.agentName || 'My Project',
           existingDocs: existingDocs.length > 0 ? existingDocs : undefined,
+          sshRemoteConfig: state.sessionSshRemoteConfig,
         });
 
         if (mounted) {
@@ -743,6 +744,16 @@ export function ConversationScreen({ theme, showThinking, setShowThinking }: Con
       return;
     }
 
+    // Log message send to main process for debugging
+    console.log('[Wizard] User sending message:', {
+      messageLength: trimmedInput.length,
+      selectedAgent: state.selectedAgent,
+      directoryPath: state.directoryPath,
+      hasRemoteSsh: !!state.sessionSshRemoteConfig?.enabled,
+      remoteId: state.sessionSshRemoteConfig?.remoteId || null,
+      conversationHistoryLength: state.conversationHistory.length,
+    });
+
     // Set immediate guard before any async work
     isSendingRef.current = true;
 
@@ -801,6 +812,7 @@ export function ConversationScreen({ theme, showThinking, setShowThinking }: Con
           agentType: state.selectedAgent,
           directoryPath: state.directoryPath,
           projectName: state.agentName || 'My Project',
+          sshRemoteConfig: state.sessionSshRemoteConfig,
         });
       }
 
@@ -1045,6 +1057,7 @@ export function ConversationScreen({ theme, showThinking, setShowThinking }: Con
           directoryPath: state.directoryPath,
           projectName: state.agentName || 'My Project',
           existingDocs: existingDocs.length > 0 ? existingDocs : undefined,
+          sshRemoteConfig: state.sessionSshRemoteConfig,
         });
       }
 

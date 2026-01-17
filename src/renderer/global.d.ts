@@ -80,6 +80,7 @@ interface AgentConfig {
   binaryName?: string;
   available: boolean;
   path?: string;
+  customPath?: string;
   command: string;
   args?: string[];
   hidden?: boolean;
@@ -443,7 +444,7 @@ interface MaestroAPI {
         error: string | null;
       } | null;
     }>;
-    get: (agentId: string) => Promise<AgentConfig | null>;
+    get: (agentId: string, sshRemoteId?: string) => Promise<AgentConfig | null>;
     getCapabilities: (agentId: string) => Promise<AgentCapabilities>;
     getConfig: (agentId: string) => Promise<Record<string, any>>;
     setConfig: (agentId: string, config: Record<string, any>) => Promise<boolean>;

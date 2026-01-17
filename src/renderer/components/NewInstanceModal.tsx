@@ -535,6 +535,17 @@ export function NewInstanceModal({ isOpen, onClose, onCreate, theme, existingSes
     }
   }, [isOpen]);
 
+  // Transfer pending SSH config to selected agent automatically
+  // This ensures SSH config is preserved when agent is auto-selected or manually clicked
+  useEffect(() => {
+    if (selectedAgent && agentSshRemoteConfigs['_pending_'] && !agentSshRemoteConfigs[selectedAgent]) {
+      setAgentSshRemoteConfigs(prev => ({
+        ...prev,
+        [selectedAgent]: prev['_pending_'],
+      }));
+    }
+  }, [selectedAgent, agentSshRemoteConfigs]);
+
   // Track the current SSH remote ID for re-detection
   // Uses _pending_ key when no agent is selected, which is the shared SSH config
   const currentSshRemoteId = useMemo(() => {

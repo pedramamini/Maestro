@@ -60,6 +60,7 @@ export interface ProcessHandlerDependencies {
   agentConfigsStore: Store<AgentConfigsData>;
   settingsStore: Store<MaestroSettings>;
   getMainWindow: () => BrowserWindow | null;
+  sessionsStore: Store<{ sessions: any[] }>;
 }
 
 /**
@@ -75,7 +76,7 @@ export interface ProcessHandlerDependencies {
  * - runCommand: Execute a single command and capture output
  */
 export function registerProcessHandlers(deps: ProcessHandlerDependencies): void {
-  const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore, getMainWindow } = deps;
+  const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore, getMainWindow, sessionsStore } = deps;
 
   // Spawn a new process for a session
   // Supports agent-specific argument builders for batch mode, JSON output, resume, read-only mode, YOLO mode
@@ -114,6 +115,26 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       const processManager = requireProcessManager(getProcessManager);
       const agentDetector = requireDependency(getAgentDetector, 'Agent detector');
 
+      // Synopsis SSH Fix: If this is a synopsis session and it's missing SSH config,
+      // try to inherit it from the parent session. This is a backend workaround for
+      // a suspected frontend state issue where the remote config isn't passed.
+      const synopsisMatch = config.sessionId.match(/^(.+)-synopsis-\d+$/);
+      if (synopsisMatch && (!config.sessionSshRemoteConfig || !config.sessionSshRemoteConfig.enabled)) {
+        const originalSessionId = synopsisMatch[1];
+        const sessions = sessionsStore.get('sessions', []);
+        const originalSession = sessions.find(s => s.id === originalSessionId);
+
+        if (originalSession && originalSession.sessionSshRemoteConfig?.enabled) {
+          const sshConfig = originalSession.sessionSshRemoteConfig;
+          config.sessionSshRemoteConfig = sshConfig;
+          logger.info(`Inferred SSH config for synopsis session from parent session`, LOG_CONTEXT, {
+            sessionId: config.sessionId,
+            originalSessionId: originalSessionId,
+            sshRemoteId: sshConfig.remoteId,
+          });
+        }
+      }
+
       // Get agent definition to access config options and argument builders
       const agent = await agentDetector.getAgent(config.toolType);
       // Use INFO level on Windows for better visibility in logs
@@ -137,6 +158,13 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
           containsHash: config.prompt.includes('#'),
           containsNewline: config.prompt.includes('\n'),
         } : undefined,
+        // SSH remote config logging
+        hasSessionSshRemoteConfig: !!config.sessionSshRemoteConfig,
+        sessionSshRemoteConfig: config.sessionSshRemoteConfig ? {
+          enabled: config.sessionSshRemoteConfig.enabled,
+          remoteId: config.sessionSshRemoteConfig.remoteId,
+          hasWorkingDirOverride: !!config.sessionSshRemoteConfig.workingDirOverride,
+        } : null,
       });
       let finalArgs = buildAgentArgs(agent, {
         baseArgs: config.args,
@@ -225,6 +253,13 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       // ========================================================================
       // Command Resolution: Apply session-level custom path override if set
       // This allows users to override the detected agent path per-session
+      //
+      // WINDOWS FIX: On Windows, prefer the resolved agent path with .exe extension
+      // to avoid using shell:true in ProcessManager. When shell:true is used,
+      // stdin piping through cmd.exe is unreliable - data written to stdin may not
+      // be forwarded to the child process. This breaks stream-json input mode.
+      // By using the full path with .exe extension, ProcessManager will spawn
+      // the process directly without cmd.exe wrapper, ensuring stdin works correctly.
       // ========================================================================
       let commandToSpawn = config.sessionCustomPath || config.command;
       let argsToSpawn = finalArgs;
@@ -234,6 +269,20 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
           customPath: config.sessionCustomPath,
           originalCommand: config.command,
         });
+      } else if (isWindows && agent?.path && !config.sessionSshRemoteConfig?.enabled) {
+        // On Windows LOCAL execution, use the full resolved agent path if it ends with .exe or .com
+        // This avoids ProcessManager setting shell:true for extensionless commands,
+        // which breaks stdin piping (needed for stream-json input mode)
+        // NOTE: Skip this for SSH sessions - SSH uses the remote agent path, not local
+        const pathExt = require('path').extname(agent.path).toLowerCase();
+        if (pathExt === '.exe' || pathExt === '.com') {
+          commandToSpawn = agent.path;
+          logger.debug(`Using full agent path on Windows to avoid shell wrapper`, LOG_CONTEXT, {
+            originalCommand: config.command,
+            resolvedPath: agent.path,
+            reason: 'stdin-reliability',
+          });
+        }
       }
 
       // ========================================================================
@@ -241,12 +290,23 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
       // Terminal sessions are always local (they need PTY for shell interaction)
       // ========================================================================
       let sshRemoteUsed: SshRemoteConfig | null = null;
+      let shouldSendPromptViaStdin = false;
 
       // Only consider SSH remote for non-terminal AI agent sessions
       // SSH is session-level ONLY - no agent-level or global defaults
-      if (config.toolType !== 'terminal' && config.sessionSshRemoteConfig) {
+      // Log SSH evaluation on Windows for debugging
+      if (isWindows) {
+        logger.info(`Evaluating SSH remote config`, LOG_CONTEXT, {
+          toolType: config.toolType,
+          isTerminal: config.toolType === 'terminal',
+          hasSessionSshRemoteConfig: !!config.sessionSshRemoteConfig,
+          sshEnabled: config.sessionSshRemoteConfig?.enabled,
+          willUseSsh: config.toolType !== 'terminal' && config.sessionSshRemoteConfig?.enabled,
+        });
+      }
+      if (config.toolType !== 'terminal' && config.sessionSshRemoteConfig?.enabled) {
         // Session-level SSH config provided - resolve and use it
-        logger.debug(`Using session-level SSH config`, LOG_CONTEXT, {
+        logger.info(`Using session-level SSH config`, LOG_CONTEXT, {
           sessionId: config.sessionId,
           enabled: config.sessionSshRemoteConfig.enabled,
           remoteId: config.sessionSshRemoteConfig.remoteId,
@@ -265,8 +325,14 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
           // For SSH execution, we need to include the prompt in the args here
           // because ProcessManager.spawn() won't add it (we pass prompt: undefined for SSH)
           // Use promptArgs if available (e.g., OpenCode -p), otherwise use positional arg
+          //
+          // IMPORTANT: For large prompts (>4000 chars), don't embed in command line to avoid
+          // Windows command line length limits (~8191 chars). SSH wrapping adds significant overhead.
+          // Instead, add --input-format stream-json and let ProcessManager send via stdin.
+          const isLargePrompt = config.prompt && config.prompt.length > 4000;
           let sshArgs = finalArgs;
-          if (config.prompt) {
+          if (config.prompt && !isLargePrompt) {
+            // Small prompt - embed in command line as usual
             if (agent?.promptArgs) {
               sshArgs = [...finalArgs, ...agent.promptArgs(config.prompt)];
             } else if (agent?.noPromptSeparator) {
@@ -274,6 +340,15 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
             } else {
               sshArgs = [...finalArgs, '--', config.prompt];
             }
+          } else if (config.prompt && isLargePrompt) {
+            // Large prompt - use stdin mode
+            // Add --input-format stream-json flag so agent reads from stdin
+            sshArgs = [...finalArgs, '--input-format', 'stream-json'];
+            logger.info(`Using stdin for large prompt in SSH remote execution`, LOG_CONTEXT, {
+              sessionId: config.sessionId,
+              promptLength: config.prompt.length,
+              reason: 'avoid-command-line-length-limit',
+            });
           }
 
           // Build the SSH command that wraps the agent execution
@@ -284,6 +359,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
           //    the remote shell's PATH resolve it. This avoids using local paths like
           //    '/opt/homebrew/bin/codex' which don't exist on the remote host.
           const remoteCommand = config.sessionCustomPath || agent?.binaryName || config.command;
+          // Decide whether we'll send input via stdin to the remote command
+          const useStdin = sshArgs.includes('--input-format') && sshArgs.includes('stream-json');
+
           const sshCommand = await buildSshCommand(sshResult.config, {
             command: remoteCommand,
             args: sshArgs,
@@ -291,6 +369,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
             cwd: config.cwd,
             // Pass custom environment variables to the remote command
             env: effectiveCustomEnvVars,
+            // Explicitly indicate whether stdin will be used so ssh-command-builder
+            // can avoid forcing a TTY for stream-json modes.
+            useStdin,
           });
 
           commandToSpawn = sshCommand.command;
@@ -307,6 +388,45 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
             customPath: config.sessionCustomPath || null,
             hasCustomEnvVars: !!effectiveCustomEnvVars && Object.keys(effectiveCustomEnvVars).length > 0,
             sshCommand: `${sshCommand.command} ${sshCommand.args.join(' ')}`,
+            promptViaStdin: shouldSendPromptViaStdin,
+          });
+
+          // Detailed debug logging to diagnose SSH command execution issues
+          logger.debug(`SSH command details for debugging`, LOG_CONTEXT, {
+            sessionId: config.sessionId,
+            toolType: config.toolType,
+            sshBinary: sshCommand.command,
+            sshArgsCount: sshCommand.args.length,
+            sshArgsArray: sshCommand.args,
+            // Show the last arg which contains the wrapped remote command
+            remoteCommandString: sshCommand.args[sshCommand.args.length - 1],
+            // Show the agent command that will execute remotely
+            agentBinary: remoteCommand,
+            agentArgs: sshArgs,
+            agentCwd: config.cwd,
+            // Full invocation for copy-paste debugging
+            fullSshInvocation: `${sshCommand.command} ${sshCommand.args.map(arg =>
+              arg.includes(' ') ? `'${arg}'` : arg
+            ).join(' ')}`,
+          });
+
+          // Detailed debug logging to diagnose SSH command execution issues
+          logger.debug(`SSH command details for debugging`, LOG_CONTEXT, {
+            sessionId: config.sessionId,
+            toolType: config.toolType,
+            sshBinary: sshCommand.command,
+            sshArgsCount: sshCommand.args.length,
+            sshArgsArray: sshCommand.args,
+            // Show the last arg which contains the wrapped remote command
+            remoteCommandString: sshCommand.args[sshCommand.args.length - 1],
+            // Show the agent command that will execute remotely
+            agentBinary: remoteCommand,
+            agentArgs: sshArgs,
+            agentCwd: config.cwd,
+            // Full invocation for copy-paste debugging
+            fullSshInvocation: `${sshCommand.command} ${sshCommand.args.map(arg =>
+              arg.includes(' ') ? `'${arg}'` : arg
+            ).join(' ')}`,
           });
         }
       }
@@ -322,9 +442,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
         // When using SSH, disable PTY (SSH provides its own terminal handling)
         // and env vars are passed via the remote command string
         requiresPty: sshRemoteUsed ? false : agent?.requiresPty,
-        // When using SSH, the prompt was already added to sshArgs above before
-        // building the SSH command, so don't let ProcessManager add it again
-        prompt: sshRemoteUsed ? undefined : config.prompt,
+        // When using SSH with small prompts, the prompt was already added to sshArgs above
+        // For large prompts, pass it to ProcessManager so it can send via stdin
+        prompt: (sshRemoteUsed && config.prompt && config.prompt.length > 4000) ? config.prompt : (sshRemoteUsed ? undefined : config.prompt),
         shell: shellToUse,
         shellArgs: shellArgsStr,         // Shell-specific CLI args (for terminal sessions)
         shellEnvVars: shellEnvVars,      // Shell-specific env vars (for terminal sessions)
@@ -337,6 +457,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
         // Stats tracking: use cwd as projectPath if not explicitly provided
         projectPath: config.cwd,
         // SSH remote context (for SSH-specific error messages)
+        sshRemoteConfig: sshRemoteUsed,
         sshRemoteId: sshRemoteUsed?.id,
         sshRemoteHost: sshRemoteUsed?.host,
       });

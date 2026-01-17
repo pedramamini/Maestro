@@ -143,6 +143,12 @@ export interface InlineWizardState {
   subfolderPath: string | null;
   /** User-configured Auto Run folder path (overrides default projectPath/Auto Run Docs) */
   autoRunFolderPath: string | null;
+  /** SSH remote configuration (for remote execution) */
+  sessionSshRemoteConfig?: {
+    enabled: boolean;
+    remoteId: string | null;
+    workingDirOverride?: string;
+  };
 }
 
 /**
@@ -199,6 +205,7 @@ export interface UseInlineWizardReturn {
    * @param tabId - The tab ID to associate the wizard with
    * @param sessionId - The session ID for playbook creation
    * @param autoRunFolderPath - User-configured Auto Run folder path (if set, overrides default projectPath/Auto Run Docs)
+   * @param sessionSshRemoteConfig - SSH remote configuration (for remote execution)
    */
   startWizard: (
     naturalLanguageInput?: string,
@@ -208,7 +215,12 @@ export interface UseInlineWizardReturn {
     sessionName?: string,
     tabId?: string,
     sessionId?: string,
-    autoRunFolderPath?: string
+    autoRunFolderPath?: string,
+    sessionSshRemoteConfig?: {
+      enabled: boolean;
+      remoteId: string | null;
+      workingDirOverride?: string;
+    }
   ) => Promise<void>;
   /** End the wizard and restore previous UI state */
   endWizard: () => Promise<PreviousUIState | null>;
@@ -450,7 +462,12 @@ export function useInlineWizard(): UseInlineWizardReturn {
       sessionName?: string,
       tabId?: string,
       sessionId?: string,
-      configuredAutoRunFolderPath?: string
+      configuredAutoRunFolderPath?: string,
+      sessionSshRemoteConfig?: {
+        enabled: boolean;
+        remoteId: string | null;
+        workingDirOverride?: string;
+      }
     ): Promise<void> => {
       // Tab ID is required for per-tab wizard management
       const effectiveTabId = tabId || 'default';
@@ -510,6 +527,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
         subfolderName: null,
         subfolderPath: null,
         autoRunFolderPath: effectiveAutoRunFolderPath,
+        sessionSshRemoteConfig,
       }));
 
       try {
@@ -578,6 +596,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
             goal: goal || undefined,
             existingDocs: docsWithContent.length > 0 ? docsWithContent : undefined,
             autoRunFolderPath: effectiveAutoRunFolderPath,
+            sessionSshRemoteConfig,
           });
 
           // Store conversation session per-tab
@@ -713,6 +732,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
             goal: currentState.goal || undefined,
             existingDocs: undefined,
             autoRunFolderPath: effectiveAutoRunFolderPath,
+            sessionSshRemoteConfig: currentState.sessionSshRemoteConfig,
           });
           conversationSessionsMap.current.set(tabId, session);
           // Update mode to 'new' since we're proceeding with a new plan
@@ -890,6 +910,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
           goal: currentState.goal || undefined,
           existingDocs: undefined, // Will be loaded separately if needed
           autoRunFolderPath: effectiveAutoRunFolderPath,
+          sessionSshRemoteConfig: currentState.sessionSshRemoteConfig,
         });
 
         conversationSessionsMap.current.set(tabId, session);

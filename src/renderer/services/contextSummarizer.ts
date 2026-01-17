@@ -159,7 +159,7 @@ export class ContextSummarizationService {
 
       const summarizedText = await window.maestro.context.groomContext(
         request.projectRoot,
-        this.config.defaultAgentType,
+        request.agentType,
         prompt
       );
       console.log('[ContextSummarizer] Received response, length:', summarizedText?.length || 0);
@@ -222,7 +222,7 @@ export class ContextSummarizationService {
       // Use the new single-call groomContext API (spawns batch process with prompt)
       const summary = await window.maestro.context.groomContext(
         request.projectRoot,
-        this.config.defaultAgentType,
+        request.agentType,
         prompt
       );
       chunkSummaries.push(summary);
@@ -250,7 +250,7 @@ export class ContextSummarizationService {
 
       const consolidated = await window.maestro.context.groomContext(
         request.projectRoot,
-        this.config.defaultAgentType,
+        request.agentType,
         consolidationPrompt
       );
 

@@ -1114,6 +1114,7 @@ function setupIpcHandlers() {
     agentConfigsStore,
     settingsStore: store,
     getMainWindow: () => mainWindow,
+    sessionsStore,
   });
 
   // Persistence operations - extracted to src/main/ipc/handlers/persistence.ts
@@ -1376,26 +1377,35 @@ function setupIpcHandlers() {
   // Calculate total size of a directory recursively
   // Respects the same ignore patterns as loadFileTree (node_modules, __pycache__)
   ipcMain.handle('fs:directorySize', async (_, dirPath: string, sshRemoteId?: string) => {
+    logger.debug(`fs:directorySize called - dirPath: ${dirPath}, sshRemoteId: ${sshRemoteId}`, 'fs:directorySize');
+
     // SSH remote: dispatch to remote fs operations
     if (sshRemoteId) {
+      logger.debug(`Looking up SSH remote config for ID: ${sshRemoteId}`, 'fs:directorySize');
       const sshConfig = getSshRemoteById(sshRemoteId);
       if (!sshConfig) {
+        logger.error(`SSH remote not found: ${sshRemoteId}`, 'fs:directorySize');
         throw new Error(`SSH remote not found: ${sshRemoteId}`);
       }
+      logger.debug(`Found SSH config, dispatching to remote operations`, 'fs:directorySize');
       // Fetch size and counts in parallel for SSH remotes
       const [sizeResult, countResult] = await Promise.all([
         directorySizeRemote(dirPath, sshConfig),
         countItemsRemote(dirPath, sshConfig),
       ]);
       if (!sizeResult.success) {
+        logger.error(`Remote directory size failed: ${sizeResult.error}`, 'fs:directorySize');
         throw new Error(sizeResult.error || 'Failed to get remote directory size');
       }
+      logger.debug(`Successfully got remote directory size`, 'fs:directorySize');
       return {
         totalSize: sizeResult.data!,
         fileCount: countResult.success ? countResult.data!.fileCount : 0,
         folderCount: countResult.success ? countResult.data!.folderCount : 0,
       };
     }
+
+    logger.debug(`No sshRemoteId provided, using local fs operations`, 'fs:directorySize');
 
     // Local: use standard fs operations
     let totalSize = 0;
