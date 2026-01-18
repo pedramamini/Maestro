@@ -68,6 +68,11 @@ export * from './settings';
 export * from './utils';
 
 // ============================================================================
+// Props Module - Memoized props hooks for major components
+// ============================================================================
+export * from './props';
+
+// ============================================================================
 // Stats Module - Usage statistics and dashboard data
 // ============================================================================
 export { useStats, useComputedStats } from './useStats';
