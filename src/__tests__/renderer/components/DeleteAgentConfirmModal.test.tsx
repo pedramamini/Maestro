@@ -446,6 +446,111 @@ describe('DeleteAgentConfirmModal', () => {
     });
   });
 
+  describe('edge cases', () => {
+    it('renders long agent names with wrapping support', () => {
+      const longAgentName = `Agent-${'A'.repeat(60)}`;
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName={longAgentName}
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const warningParagraph = screen.getByText(/Deleting the agent/);
+      expect(warningParagraph).toHaveClass('break-words');
+      expect(warningParagraph.textContent).toContain(longAgentName);
+    });
+
+    it('renders long working directory paths with break-all', () => {
+      const longWorkingDirectory = `/var/${'a'.repeat(120)}/workspace`;
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="TestAgent"
+          workingDirectory={longWorkingDirectory}
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const pathElement = screen.getByText(longWorkingDirectory);
+      expect(pathElement).toHaveClass('break-all');
+    });
+
+    it('supports special characters in the agent name', () => {
+      const specialAgentName = 'Agent "Alpha" & Co <Test>';
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName={specialAgentName}
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const warningParagraph = screen.getByText(
+        (_, element) =>
+          element?.tagName === 'P' &&
+          Boolean(element?.textContent?.includes(specialAgentName))
+      );
+      expect(warningParagraph).toBeInTheDocument();
+
+      const input = screen.getByPlaceholderText(
+        'Type the agent name here to confirm directory deletion.'
+      );
+      fireEvent.change(input, { target: { value: specialAgentName } });
+      expect(
+        screen.getByRole('button', { name: 'Agent + Work Directory' })
+      ).toBeEnabled();
+    });
+
+    it('trims the agent name before comparing confirmation input', () => {
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="  TestAgent  "
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(
+        'Type the agent name here to confirm directory deletion.'
+      );
+      fireEvent.change(input, { target: { value: 'TestAgent' } });
+      expect(
+        screen.getByRole('button', { name: 'Agent + Work Directory' })
+      ).toBeEnabled();
+    });
+
+    it('sets a maxLength on the confirmation input', () => {
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="TestAgent"
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(
+        'Type the agent name here to confirm directory deletion.'
+      );
+      expect(input).toHaveAttribute('maxlength', '256');
+    });
+  });
+
   describe('keyboard interaction', () => {
     it('stops propagation of keydown events', () => {
       const parentHandler = vi.fn();

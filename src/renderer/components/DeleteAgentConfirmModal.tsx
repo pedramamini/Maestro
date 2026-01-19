@@ -24,9 +24,10 @@ export function DeleteAgentConfirmModal({
   const confirmButtonRef = useRef<HTMLButtonElement>(null);
   const [confirmationText, setConfirmationText] = useState('');
 
+  const normalizedAgentName = useMemo(() => agentName.trim().toLowerCase(), [agentName]);
   const isAgentNameMatch = useMemo(() => {
-    return confirmationText.trim().toLowerCase() === agentName.trim().toLowerCase();
-  }, [confirmationText, agentName]);
+    return confirmationText.trim().toLowerCase() === normalizedAgentName;
+  }, [confirmationText, normalizedAgentName]);
 
   const handleConfirm = useCallback(() => {
     onConfirm();
@@ -110,7 +111,7 @@ export function DeleteAgentConfirmModal({
           >
             <AlertTriangle className="h-4 w-4" style={{ color: '#ffa500' }} />
           </div>
-          <p className="leading-relaxed" style={{ color: '#ffffff' }}>
+          <p className="leading-relaxed break-words" style={{ color: '#ffffff' }}>
             <span className="font-semibold" style={{ color: '#ffd700' }}>
               Danger:
             </span>{' '}
@@ -134,6 +135,7 @@ export function DeleteAgentConfirmModal({
           onChange={(e) => setConfirmationText(e.target.value)}
           placeholder="Type the agent name here to confirm directory deletion."
           aria-label="Type the agent name here to confirm directory deletion."
+          maxLength={256}
           className="mt-2.5 w-full px-3 py-2 rounded text-sm outline-none placeholder:text-[color:var(--placeholder-color)]"
           style={{
             backgroundColor: theme.colors.bgActivity,
