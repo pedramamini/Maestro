@@ -180,6 +180,23 @@ describe('DeleteAgentConfirmModal', () => {
   });
 
   describe('button handlers', () => {
+    it('disables Agent + Work Directory by default', () => {
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="TestAgent"
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      expect(
+        screen.getByRole('button', { name: 'Agent + Work Directory' })
+      ).toBeDisabled();
+    });
+
     it('calls onClose when X button is clicked', () => {
       const onClose = vi.fn();
       renderWithLayerStack(
@@ -306,6 +323,72 @@ describe('DeleteAgentConfirmModal', () => {
     });
   });
 
+  describe('confirmation input', () => {
+    it('keeps Agent + Work Directory disabled with partial or wrong input', () => {
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="TestAgent"
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(
+        'Type the agent name here to confirm directory deletion.'
+      );
+      const eraseButton = screen.getByRole('button', { name: 'Agent + Work Directory' });
+
+      fireEvent.change(input, { target: { value: 'Test' } });
+      expect(eraseButton).toBeDisabled();
+
+      fireEvent.change(input, { target: { value: 'AnotherAgent' } });
+      expect(eraseButton).toBeDisabled();
+    });
+
+    it('enables Agent + Work Directory when the agent name matches (case-insensitive)', () => {
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="TestAgent"
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(
+        'Type the agent name here to confirm directory deletion.'
+      );
+      const eraseButton = screen.getByRole('button', { name: 'Agent + Work Directory' });
+
+      fireEvent.change(input, { target: { value: ' testagent ' } });
+      expect(eraseButton).toBeEnabled();
+    });
+
+    it('updates the input value on change', () => {
+      renderWithLayerStack(
+        <DeleteAgentConfirmModal
+          theme={testTheme}
+          agentName="TestAgent"
+          workingDirectory="/home/user/project"
+          onConfirm={vi.fn()}
+          onConfirmAndErase={vi.fn()}
+          onClose={vi.fn()}
+        />
+      );
+
+      const input = screen.getByPlaceholderText(
+        'Type the agent name here to confirm directory deletion.'
+      ) as HTMLInputElement;
+      fireEvent.change(input, { target: { value: 'TestAgent' } });
+      expect(input.value).toBe('TestAgent');
+    });
+  });
+
   describe('keyboard interaction', () => {
     it('stops propagation of keydown events', () => {
       const parentHandler = vi.fn();
@@ -376,8 +459,11 @@ describe('DeleteAgentConfirmModal', () => {
         />
       );
 
-      // X, Cancel, Agent Only, Agent + Work Directory
-      expect(screen.getAllByRole('button')).toHaveLength(4);
+      // X, Cancel, Agent Only, Agent + Work Directory, text input
+      const buttons = screen.getAllByRole('button');
+      const textbox = screen.getByRole('textbox');
+      expect(buttons).toHaveLength(4);
+      expect(textbox).toBeInTheDocument();
     });
 
     it('has heading for modal title', () => {
