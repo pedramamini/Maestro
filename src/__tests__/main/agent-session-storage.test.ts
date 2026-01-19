@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, beforeAll, afterAll, vi } from 'vitest';
+import os from 'os';
+import path from 'path';
 import {
   AgentSessionStorage,
   AgentSessionInfo,
@@ -13,6 +15,19 @@ import {
   clearStorageRegistry,
 } from '../../main/agent-session-storage';
 import type { ToolType } from '../../shared/types';
+
+const CODEX_SESSIONS_DIR = path.join(
+  os.tmpdir(),
+  `maestro-codex-sessions-${process.pid}-${Date.now()}`
+);
+
+beforeAll(() => {
+  process.env.MAESTRO_CODEX_SESSIONS_DIR = CODEX_SESSIONS_DIR;
+});
+
+afterAll(() => {
+  delete process.env.MAESTRO_CODEX_SESSIONS_DIR;
+});
 
 // Mock storage implementation for testing
 class MockSessionStorage implements AgentSessionStorage {

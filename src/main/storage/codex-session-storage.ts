@@ -46,6 +46,10 @@ const LOG_CONTEXT = '[CodexSessionStorage]';
  * - Windows: %USERPROFILE%\.codex\sessions (Codex uses dotfile convention on all platforms)
  */
 function getCodexSessionsDir(): string {
+  const overrideDir = process.env.MAESTRO_CODEX_SESSIONS_DIR;
+  if (overrideDir) {
+    return path.resolve(overrideDir);
+  }
   // Codex CLI uses ~/.codex on all platforms (including Windows)
   return path.join(os.homedir(), '.codex', 'sessions');
 }
