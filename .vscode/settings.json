@@ -20,6 +20,9 @@
 	// Don't let ESLint format - let Prettier handle it
 	"eslint.format.enable": false,
 
+	// Disable biome for this workspace
+	"biome.enabled": false,
+
 	// File-specific formatters
 	"[typescript]": {
 		"editor.defaultFormatter": "esbenp.prettier-vscode"
