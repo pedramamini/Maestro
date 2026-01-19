@@ -22,7 +22,7 @@ See [Performance Guidelines](#performance-guidelines) for specific practices.
 - [Project Structure](#project-structure)
 - [Development Scripts](#development-scripts)
 - [Testing](#testing)
-- [Linting](#linting)
+- [Linting & Pre-commit Hooks](#linting--pre-commit-hooks)
 - [Common Development Tasks](#common-development-tasks)
 - [Adding a New AI Agent](#adding-a-new-ai-agent)
 - [Code Style](#code-style)
