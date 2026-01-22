@@ -12,12 +12,12 @@ Settings are organized into tabs:
 
 | Tab | Contents |
 |-----|----------|
-| **General** | Theme, input behavior, toggles defaults, context warnings, log level, storage location, power management |
+| **General** | Font family and size, terminal width, log level and buffer, max output lines, shell configuration, input send behavior, default toggles (history, thinking), power management, updates, privacy, context warnings, usage stats, document graph, storage location |
 | **Shortcuts** | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts)) |
-| **Appearance** | Font size, UI density |
-| **Notifications** | Sound alerts, text-to-speech settings |
+| **Themes** | Dark, light, and vibe mode themes, custom theme builder with import/export |
+| **Notifications** | OS notifications, audio feedback (text-to-speech), toast notification duration |
 | **AI Commands** | View and edit slash commands, [Spec-Kit](./speckit-commands), and [OpenSpec](./openspec-commands) prompts |
-| **SSH Remotes** | Configure remote hosts for [SSH agent execution](./ssh-remote-execution) |
+| **SSH Hosts** | Configure remote hosts for [SSH agent execution](./ssh-remote-execution) |
 
 ## Checking for Updates
 

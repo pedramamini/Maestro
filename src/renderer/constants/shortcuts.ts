@@ -67,6 +67,7 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 	openWizard: { id: 'openWizard', label: 'New Agent Wizard', keys: ['Meta', 'Shift', 'n'] },
 	fuzzyFileSearch: { id: 'fuzzyFileSearch', label: 'Fuzzy File Search', keys: ['Meta', 'g'] },
 	toggleBookmark: { id: 'toggleBookmark', label: 'Toggle Bookmark', keys: ['Meta', 'Shift', 'b'] },
+	openSymphony: { id: 'openSymphony', label: 'Maestro Symphony', keys: ['Meta', 'Shift', 'y'] },
 };
 
 // Non-editable shortcuts (displayed in help but not configurable)

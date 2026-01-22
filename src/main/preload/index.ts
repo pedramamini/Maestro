@@ -46,6 +46,7 @@ import { createProcessApi } from './process';
 import { createGitApi } from './git';
 import { createFsApi } from './fs';
 import { createAgentsApi } from './agents';
+import { createSymphonyApi } from './symphony';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -172,6 +173,9 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// Leaderboard API
 	leaderboard: createLeaderboardApi(),
+
+	// Symphony API (token donations / open source contributions)
+	symphony: createSymphonyApi(),
 });
 
 // Re-export factory functions for external consumers (e.g., tests)
@@ -237,6 +241,8 @@ export {
 	createFsApi,
 	// Agents
 	createAgentsApi,
+	// Symphony
+	createSymphonyApi,
 };
 
 // Re-export types for TypeScript consumers
@@ -405,3 +411,25 @@ export type {
 	AgentConfig,
 	AgentRefreshResult,
 } from './agents';
+export type {
+	// From symphony
+	SymphonyApi,
+	SymphonyRegistry,
+	SymphonyRepository,
+	SymphonyIssue,
+	DocumentReference,
+	ClaimedByPR,
+	ActiveContribution,
+	CompletedContribution,
+	ContributorStats,
+	ContributionProgress,
+	ContributionTokenUsage,
+	SymphonyState,
+	GetRegistryResponse,
+	GetIssuesResponse,
+	GetStateResponse,
+	StartContributionParams,
+	StartContributionResponse,
+	CreateDraftPRResponse,
+	CompleteContributionResponse,
+} from './symphony';

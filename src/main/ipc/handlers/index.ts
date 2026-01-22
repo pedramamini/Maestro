@@ -48,6 +48,7 @@ import { registerAttachmentsHandlers, AttachmentsHandlerDependencies } from './a
 import { registerWebHandlers, WebHandlerDependencies } from './web';
 import { registerLeaderboardHandlers, LeaderboardHandlerDependencies } from './leaderboard';
 import { registerNotificationsHandlers } from './notifications';
+import { registerSymphonyHandlers, SymphonyHandlerDependencies } from './symphony';
 import { AgentDetector } from '../../agent-detector';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -85,6 +86,7 @@ export type { WebHandlerDependencies };
 export { registerLeaderboardHandlers };
 export type { LeaderboardHandlerDependencies };
 export { registerNotificationsHandlers };
+export { registerSymphonyHandlers };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -98,6 +100,7 @@ export type { StatsHandlerDependencies };
 export type { DocumentGraphHandlerDependencies };
 export type { SshRemoteHandlerDependencies };
 export type { GitHandlerDependencies };
+export type { SymphonyHandlerDependencies };
 export type { MaestroSettings, SessionsData, GroupsData };
 
 /**
@@ -246,6 +249,11 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	});
 	// Register notification handlers (OS notifications and TTS)
 	registerNotificationsHandlers();
+	// Register Symphony handlers for token donation / open source contributions
+	registerSymphonyHandlers({
+		app: deps.app,
+		getMainWindow: deps.getMainWindow,
+	});
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(deps.getMainWindow);
 }

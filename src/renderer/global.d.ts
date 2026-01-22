@@ -2217,6 +2217,322 @@ interface MaestroAPI {
 			}) => void
 		) => () => void;
 	};
+	// Symphony API (token donations / open source contributions)
+	symphony: {
+		// Registry operations
+		getRegistry: (forceRefresh?: boolean) => Promise<{
+			success: boolean;
+			registry?: {
+				schemaVersion: '1.0';
+				lastUpdated: string;
+				repositories: Array<{
+					slug: string;
+					name: string;
+					description: string;
+					url: string;
+					category: string;
+					tags?: string[];
+					maintainer: { name: string; url?: string };
+					isActive: boolean;
+					featured?: boolean;
+					addedAt: string;
+				}>;
+			};
+			fromCache?: boolean;
+			cacheAge?: number;
+			error?: string;
+		}>;
+		getIssues: (
+			repoSlug: string,
+			forceRefresh?: boolean
+		) => Promise<{
+			success: boolean;
+			issues?: Array<{
+				number: number;
+				title: string;
+				body: string;
+				url: string;
+				htmlUrl: string;
+				author: string;
+				createdAt: string;
+				updatedAt: string;
+				documentPaths: Array<{
+					name: string;
+					path: string;
+					isExternal: boolean;
+				}>;
+				status: 'available' | 'in_progress' | 'completed';
+				claimedByPr?: {
+					number: number;
+					url: string;
+					author: string;
+					isDraft: boolean;
+				};
+			}>;
+			fromCache?: boolean;
+			cacheAge?: number;
+			error?: string;
+		}>;
+		// State operations
+		getState: () => Promise<{
+			success: boolean;
+			state?: {
+				active: Array<{
+					id: string;
+					repoSlug: string;
+					repoName: string;
+					issueNumber: number;
+					issueTitle: string;
+					localPath: string;
+					branchName: string;
+					draftPrNumber?: number;
+					draftPrUrl?: string;
+					startedAt: string;
+					status: string;
+					progress: {
+						totalDocuments: number;
+						completedDocuments: number;
+						currentDocument?: string;
+						totalTasks: number;
+						completedTasks: number;
+					};
+					tokenUsage: {
+						inputTokens: number;
+						outputTokens: number;
+						estimatedCost: number;
+					};
+					timeSpent: number;
+					sessionId: string;
+					agentType: string;
+					error?: string;
+				}>;
+				history: Array<{
+					id: string;
+					repoSlug: string;
+					repoName: string;
+					issueNumber: number;
+					issueTitle: string;
+					startedAt: string;
+					completedAt: string;
+					prUrl: string;
+					prNumber: number;
+					tokenUsage: {
+						inputTokens: number;
+						outputTokens: number;
+						totalCost: number;
+					};
+					timeSpent: number;
+					documentsProcessed: number;
+					tasksCompleted: number;
+					outcome?: 'merged' | 'closed' | 'open' | 'unknown';
+				}>;
+				stats: {
+					totalContributions: number;
+					totalDocumentsProcessed: number;
+					totalTasksCompleted: number;
+					totalTokensUsed: number;
+					totalTimeSpent: number;
+					estimatedCostDonated: number;
+					repositoriesContributed: string[];
+					firstContributionAt?: string;
+					lastContributionAt?: string;
+					currentStreak: number;
+					longestStreak: number;
+					lastContributionDate?: string;
+				};
+			};
+			error?: string;
+		}>;
+		getActive: () => Promise<{
+			success: boolean;
+			contributions?: Array<{
+				id: string;
+				repoSlug: string;
+				repoName: string;
+				issueNumber: number;
+				issueTitle: string;
+				localPath: string;
+				branchName: string;
+				draftPrNumber?: number;
+				draftPrUrl?: string;
+				startedAt: string;
+				status: string;
+				progress: {
+					totalDocuments: number;
+					completedDocuments: number;
+					currentDocument?: string;
+					totalTasks: number;
+					completedTasks: number;
+				};
+				tokenUsage: {
+					inputTokens: number;
+					outputTokens: number;
+					estimatedCost: number;
+				};
+				timeSpent: number;
+				sessionId: string;
+				agentType: string;
+				error?: string;
+			}>;
+			error?: string;
+		}>;
+		getCompleted: (limit?: number) => Promise<{
+			success: boolean;
+			contributions?: Array<{
+				id: string;
+				repoSlug: string;
+				repoName: string;
+				issueNumber: number;
+				issueTitle: string;
+				startedAt: string;
+				completedAt: string;
+				prUrl: string;
+				prNumber: number;
+				tokenUsage: {
+					inputTokens: number;
+					outputTokens: number;
+					totalCost: number;
+				};
+				timeSpent: number;
+				documentsProcessed: number;
+				tasksCompleted: number;
+				outcome?: 'merged' | 'closed' | 'open' | 'unknown';
+			}>;
+			error?: string;
+		}>;
+		getStats: () => Promise<{
+			success: boolean;
+			stats?: {
+				totalContributions: number;
+				totalDocumentsProcessed: number;
+				totalTasksCompleted: number;
+				totalTokensUsed: number;
+				totalTimeSpent: number;
+				estimatedCostDonated: number;
+				repositoriesContributed: string[];
+				firstContributionAt?: string;
+				lastContributionAt?: string;
+				currentStreak: number;
+				longestStreak: number;
+				lastContributionDate?: string;
+			};
+			error?: string;
+		}>;
+		// Contribution lifecycle
+		start: (params: {
+			repoSlug: string;
+			repoUrl: string;
+			repoName: string;
+			issueNumber: number;
+			issueTitle: string;
+			documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+			agentType: string;
+			sessionId: string;
+			baseBranch?: string;
+			autoRunFolderPath?: string;
+		}) => Promise<{
+			success: boolean;
+			contributionId?: string;
+			localPath?: string;
+			branchName?: string;
+			error?: string;
+		}>;
+		registerActive: (params: {
+			contributionId: string;
+			repoSlug: string;
+			repoName: string;
+			issueNumber: number;
+			issueTitle: string;
+			localPath: string;
+			branchName: string;
+			sessionId: string;
+			agentType: string;
+			totalDocuments: number;
+		}) => Promise<{ success: boolean; error?: string }>;
+		updateStatus: (params: {
+			contributionId: string;
+			status?: string;
+			progress?: {
+				totalDocuments?: number;
+				completedDocuments?: number;
+				currentDocument?: string;
+				totalTasks?: number;
+				completedTasks?: number;
+			};
+			tokenUsage?: {
+				inputTokens?: number;
+				outputTokens?: number;
+				estimatedCost?: number;
+			};
+			timeSpent?: number;
+			error?: string;
+			draftPrNumber?: number;
+			draftPrUrl?: string;
+		}) => Promise<{ success: boolean; updated?: boolean; error?: string }>;
+		complete: (params: { contributionId: string; prBody?: string }) => Promise<{
+			success: boolean;
+			prUrl?: string;
+			prNumber?: number;
+			error?: string;
+		}>;
+		cancel: (
+			contributionId: string,
+			cleanup?: boolean
+		) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
+		checkPRStatuses: () => Promise<{
+			success: boolean;
+			checked?: number;
+			merged?: number;
+			closed?: number;
+			errors?: string[];
+			error?: string;
+		}>;
+		// Cache operations
+		clearCache: () => Promise<{ success: boolean; cleared?: boolean; error?: string }>;
+		// Clone and contribution start helpers
+		cloneRepo: (params: {
+			repoUrl: string;
+			localPath: string;
+		}) => Promise<{ success: boolean; error?: string }>;
+		startContribution: (params: {
+			contributionId: string;
+			sessionId: string;
+			repoSlug: string;
+			issueNumber: number;
+			issueTitle: string;
+			localPath: string;
+			documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+		}) => Promise<{
+			success: boolean;
+			branchName?: string;
+			draftPrNumber?: number;
+			draftPrUrl?: string;
+			autoRunPath?: string;
+			error?: string;
+		}>;
+		createDraftPR: (params: { contributionId: string; title: string; body: string }) => Promise<{
+			success: boolean;
+			prUrl?: string;
+			prNumber?: number;
+			error?: string;
+		}>;
+		fetchDocumentContent: (
+			url: string
+		) => Promise<{ success: boolean; content?: string; error?: string }>;
+		// Real-time updates
+		onUpdated: (callback: () => void) => () => void;
+		onContributionStarted: (
+			callback: (data: {
+				contributionId: string;
+				sessionId: string;
+				localPath: string;
+				branchName: string;
+			}) => void
+		) => () => void;
+		onPRCreated: (
+			callback: (data: { contributionId: string; prNumber: number; prUrl: string }) => void
+		) => () => void;
+	};
 }
 
 declare global {

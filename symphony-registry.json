@@ -5,9 +5,9 @@
     {
       "slug": "pedramamini/Maestro",
       "name": "Maestro",
-      "description": "Desktop app for managing multiple AI coding assistants with a keyboard-first interface.",
+      "description": "Desktop app for managing multiple AI agents with a keyboard-first interface.",
       "url": "https://github.com/pedramamini/Maestro",
-      "category": "developer-tools",
+      "category": "ai-ml",
       "tags": ["electron", "ai", "productivity", "typescript"],
       "maintainer": {
         "name": "Pedram Amini",
