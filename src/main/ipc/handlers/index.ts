@@ -43,6 +43,11 @@ import { registerMarketplaceHandlers, MarketplaceHandlerDependencies } from './m
 import { registerStatsHandlers, StatsHandlerDependencies } from './stats';
 import { registerDocumentGraphHandlers, DocumentGraphHandlerDependencies } from './documentGraph';
 import { registerSshRemoteHandlers, SshRemoteHandlerDependencies } from './ssh-remote';
+import { registerFilesystemHandlers } from './filesystem';
+import { registerAttachmentsHandlers, AttachmentsHandlerDependencies } from './attachments';
+import { registerWebHandlers, WebHandlerDependencies } from './web';
+import { registerLeaderboardHandlers, LeaderboardHandlerDependencies } from './leaderboard';
+import { registerNotificationsHandlers } from './notifications';
 import { AgentDetector } from '../../agent-detector';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -72,6 +77,14 @@ export type { MarketplaceHandlerDependencies };
 export { registerStatsHandlers };
 export { registerDocumentGraphHandlers };
 export { registerSshRemoteHandlers };
+export { registerFilesystemHandlers };
+export { registerAttachmentsHandlers };
+export type { AttachmentsHandlerDependencies };
+export { registerWebHandlers };
+export type { WebHandlerDependencies };
+export { registerLeaderboardHandlers };
+export type { LeaderboardHandlerDependencies };
+export { registerNotificationsHandlers };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -134,6 +147,11 @@ export interface HandlerDependencies {
 /**
  * Register all IPC handlers.
  * Call this once during app initialization.
+ *
+ * Note: registerWebHandlers is NOT called here because it requires access to
+ * module-level webServer state with getter/setter functions for proper lifecycle
+ * management (create, start, stop). The web handlers are registered separately
+ * in main/index.ts where the webServer variable is defined.
  */
 export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerGitHandlers({
@@ -215,6 +233,19 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerSshRemoteHandlers({
 		settingsStore: deps.settingsStore,
 	});
+	// Register filesystem handlers (no dependencies needed - uses stores directly)
+	registerFilesystemHandlers();
+	// Register attachments handlers
+	registerAttachmentsHandlers({
+		app: deps.app,
+	});
+	// Register leaderboard handlers
+	registerLeaderboardHandlers({
+		app: deps.app,
+		settingsStore: deps.settingsStore,
+	});
+	// Register notification handlers (OS notifications and TTS)
+	registerNotificationsHandlers();
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(deps.getMainWindow);
 }
