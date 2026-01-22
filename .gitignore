@@ -55,5 +55,6 @@ yarn-debug.log*
 yarn-error.log*
 
 #VS Code
+.vscode
 .VSCodeCounter
 .qodo
