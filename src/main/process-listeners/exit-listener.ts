@@ -8,6 +8,12 @@ import type { ProcessManager } from '../process-manager';
 import type { ProcessListenerDependencies } from './types';
 
 /**
+ * Prefix for group chat session IDs.
+ * Used for fast string check before expensive regex matching.
+ */
+const GROUP_CHAT_PREFIX = 'group-chat-';
+
+/**
  * Sets up the exit listener for process termination.
  * Handles:
  * - Power management cleanup
@@ -59,13 +65,17 @@ export function setupExitListener(
 		// This allows system sleep when no AI sessions are active
 		powerManager.removeBlockReason(`session:${sessionId}`);
 
+		// Fast path: skip regex for non-group-chat sessions (performance optimization)
+		// Most sessions don't start with 'group-chat-', so this avoids expensive regex matching
+		const isGroupChatSession = sessionId.startsWith(GROUP_CHAT_PREFIX);
+
 		// Handle group chat moderator exit - route buffered output and set state back to idle
 		// Session ID format: group-chat-{groupChatId}-moderator-{uuid}
 		// This handles BOTH initial moderator responses AND synthesis responses.
 		// The routeModeratorResponse function will check for @mentions:
 		// - If @mentions present: route to agents (continue conversation)
 		// - If no @mentions: final response to user (conversation complete for this turn)
-		const moderatorMatch = sessionId.match(REGEX_MODERATOR_SESSION);
+		const moderatorMatch = isGroupChatSession ? sessionId.match(REGEX_MODERATOR_SESSION) : null;
 		if (moderatorMatch) {
 			const groupChatId = moderatorMatch[1];
 			debugLog('GroupChat:Debug', ` ========== MODERATOR PROCESS EXIT ==========`);
@@ -189,7 +199,10 @@ export function setupExitListener(
 
 		// Handle group chat participant exit - route buffered output and update participant state
 		// Session ID format: group-chat-{groupChatId}-participant-{name}-{uuid|timestamp}
-		const participantExitInfo = outputParser.parseParticipantSessionId(sessionId);
+		// Only parse if it's a group chat session (performance optimization)
+		const participantExitInfo = isGroupChatSession
+			? outputParser.parseParticipantSessionId(sessionId)
+			: null;
 		if (participantExitInfo) {
 			const { groupChatId, participantName } = participantExitInfo;
 			debugLog('GroupChat:Debug', ` ========== PARTICIPANT PROCESS EXIT ==========`);
@@ -342,8 +355,12 @@ export function setupExitListener(
 								'GroupChat:Debug',
 								` Successfully routed agent response from ${participantName}`
 							);
+							// Mark participant AFTER routing completes successfully
+							markAndMaybeSynthesize();
 						} else {
 							debugLog('GroupChat:Debug', ` WARNING: Parsed text is empty for ${participantName}!`);
+							// No response to route, mark participant as done
+							markAndMaybeSynthesize();
 						}
 					} catch (err) {
 						debugLog('GroupChat:Debug', ` ERROR loading chat for participant:`, err);
@@ -362,6 +379,11 @@ export function setupExitListener(
 									parsedText,
 									pm ?? undefined
 								);
+								// Mark participant AFTER routing completes successfully
+								markAndMaybeSynthesize();
+							} else {
+								// No response to route, mark participant as done
+								markAndMaybeSynthesize();
 							}
 						} catch (routeErr) {
 							debugLog('GroupChat:Debug', ` ERROR routing agent response (fallback):`, routeErr);
@@ -369,13 +391,16 @@ export function setupExitListener(
 								error: String(routeErr),
 								participant: participantName,
 							});
+							// Mark participant as done even after error (can't retry)
+							markAndMaybeSynthesize();
 						}
 					}
 				})().finally(() => {
 					outputBuffer.clearGroupChatBuffer(sessionId);
 					debugLog('GroupChat:Debug', ` Cleared output buffer for participant session`);
-					// Mark participant and trigger synthesis AFTER logging is complete
-					markAndMaybeSynthesize();
+					// Note: markAndMaybeSynthesize() is called explicitly in each code path above
+					// to ensure proper sequencing - NOT in finally() which would cause race conditions
+					// with session recovery (where we DON'T want to mark until recovery completes)
 				});
 			} else {
 				debugLog(

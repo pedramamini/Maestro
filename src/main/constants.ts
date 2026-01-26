@@ -26,6 +26,11 @@ export const REGEX_PARTICIPANT_FALLBACK = /^group-chat-(.+)-participant-([^-]+)-
 export const REGEX_AI_SUFFIX = /-ai-[^-]+$/;
 export const REGEX_AI_TAB_ID = /-ai-([^-]+)$/;
 
+// Auto Run session ID patterns (batch and synopsis operations)
+// Format: {sessionId}-batch-{timestamp} or {sessionId}-synopsis-{timestamp}
+export const REGEX_BATCH_SESSION = /-batch-\d+$/;
+export const REGEX_SYNOPSIS_SESSION = /-synopsis-\d+$/;
+
 // ============================================================================
 // Buffer Size Limits
 // ============================================================================

@@ -7,6 +7,12 @@ import type { ProcessManager } from '../process-manager';
 import type { ProcessListenerDependencies } from './types';
 
 /**
+ * Prefix for group chat session IDs.
+ * Used for fast string check before expensive regex matching.
+ */
+const GROUP_CHAT_PREFIX = 'group-chat-';
+
+/**
  * Sets up the session-id listener.
  * Handles:
  * - Group chat participant session ID storage
@@ -24,20 +30,23 @@ export function setupSessionIdListener(
 	const { REGEX_MODERATOR_SESSION_TIMESTAMP } = patterns;
 
 	processManager.on('session-id', (sessionId: string, agentSessionId: string) => {
+		// Fast path: skip regex for non-group-chat sessions (performance optimization)
+		const isGroupChatSession = sessionId.startsWith(GROUP_CHAT_PREFIX);
+
 		// Handle group chat participant session ID - store the agent's session ID
 		// Session ID format: group-chat-{groupChatId}-participant-{name}-{uuid|timestamp}
-		const participantSessionInfo = outputParser.parseParticipantSessionId(sessionId);
+		const participantSessionInfo = isGroupChatSession
+			? outputParser.parseParticipantSessionId(sessionId)
+			: null;
 		if (participantSessionInfo) {
 			const { groupChatId, participantName } = participantSessionInfo;
 			// Update the participant with the agent's session ID
 			groupChatStorage
 				.updateParticipant(groupChatId, participantName, { agentSessionId })
-				.then(async () => {
+				.then((updatedChat) => {
 					// Emit participants changed so UI updates with the new session ID
-					const chat = await groupChatStorage.loadGroupChat(groupChatId);
-					if (chat) {
-						groupChatEmitters.emitParticipantsChanged?.(groupChatId, chat.participants);
-					}
+					// Note: updateParticipant returns the updated chat, avoiding extra DB read
+					groupChatEmitters.emitParticipantsChanged?.(groupChatId, updatedChat.participants);
 				})
 				.catch((err) => {
 					logger.error(
@@ -51,7 +60,9 @@ export function setupSessionIdListener(
 
 		// Handle group chat moderator session ID - store the real agent session ID
 		// Session ID format: group-chat-{groupChatId}-moderator-{timestamp}
-		const moderatorMatch = sessionId.match(REGEX_MODERATOR_SESSION_TIMESTAMP);
+		const moderatorMatch = isGroupChatSession
+			? sessionId.match(REGEX_MODERATOR_SESSION_TIMESTAMP)
+			: null;
 		if (moderatorMatch) {
 			const groupChatId = moderatorMatch[1];
 			// Update the group chat with the moderator's real agent session ID

@@ -139,6 +139,10 @@ export interface ProcessListenerDependencies {
 		REGEX_MODERATOR_SESSION_TIMESTAMP: RegExp;
 		REGEX_AI_SUFFIX: RegExp;
 		REGEX_AI_TAB_ID: RegExp;
+		/** Matches batch session IDs: {id}-batch-{timestamp} */
+		REGEX_BATCH_SESSION: RegExp;
+		/** Matches synopsis session IDs: {id}-synopsis-{timestamp} */
+		REGEX_SYNOPSIS_SESSION: RegExp;
 	};
 	/** Logger instance */
 	logger: {

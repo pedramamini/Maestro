@@ -76,6 +76,8 @@ import {
 	REGEX_MODERATOR_SESSION_TIMESTAMP,
 	REGEX_AI_SUFFIX,
 	REGEX_AI_TAB_ID,
+	REGEX_BATCH_SESSION,
+	REGEX_SYNOPSIS_SESSION,
 	debugLog,
 } from './constants';
 // initAutoUpdater is now used by window-manager.ts (Phase 4 refactoring)
@@ -662,6 +664,8 @@ function setupProcessListeners() {
 				REGEX_MODERATOR_SESSION_TIMESTAMP,
 				REGEX_AI_SUFFIX,
 				REGEX_AI_TAB_ID,
+				REGEX_BATCH_SESSION,
+				REGEX_SYNOPSIS_SESSION,
 			},
 			logger,
 		});

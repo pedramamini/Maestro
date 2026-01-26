@@ -4,7 +4,13 @@
  */
 
 import type { ProcessManager } from '../process-manager';
-import type { ProcessListenerDependencies } from './types';
+import type { ProcessListenerDependencies, UsageStats } from './types';
+
+/**
+ * Prefix for group chat session IDs.
+ * Used for fast string check before expensive regex matching.
+ */
+const GROUP_CHAT_PREFIX = 'group-chat-';
 
 /**
  * Sets up the usage listener for token/cost statistics.
@@ -38,77 +44,68 @@ export function setupUsageListener(
 	const { REGEX_MODERATOR_SESSION } = patterns;
 
 	// Handle usage statistics from AI responses
-	processManager.on(
-		'usage',
-		(
-			sessionId: string,
-			usageStats: {
-				inputTokens: number;
-				outputTokens: number;
-				cacheReadInputTokens: number;
-				cacheCreationInputTokens: number;
-				totalCostUsd: number;
-				contextWindow: number;
-				reasoningTokens?: number; // Separate reasoning tokens (Codex o3/o4-mini)
-			}
-		) => {
-			// Handle group chat participant usage - update participant stats
-			const participantUsageInfo = outputParser.parseParticipantSessionId(sessionId);
-			if (participantUsageInfo) {
-				const { groupChatId, participantName } = participantUsageInfo;
+	processManager.on('usage', (sessionId: string, usageStats: UsageStats) => {
+		// Fast path: skip regex for non-group-chat sessions (performance optimization)
+		const isGroupChatSession = sessionId.startsWith(GROUP_CHAT_PREFIX);
 
-				// Calculate context usage percentage using agent-specific logic
-				// Note: For group chat, we don't have agent type here, defaults to Claude behavior
-				const totalContextTokens = usageAggregator.calculateContextTokens(usageStats);
-				const contextUsage =
-					usageStats.contextWindow > 0
-						? Math.round((totalContextTokens / usageStats.contextWindow) * 100)
-						: 0;
+		// Handle group chat participant usage - update participant stats
+		const participantUsageInfo = isGroupChatSession
+			? outputParser.parseParticipantSessionId(sessionId)
+			: null;
+		if (participantUsageInfo) {
+			const { groupChatId, participantName } = participantUsageInfo;
 
-				// Update participant with usage stats
-				groupChatStorage
-					.updateParticipant(groupChatId, participantName, {
-						contextUsage,
-						tokenCount: totalContextTokens,
-						totalCost: usageStats.totalCostUsd,
-					})
-					.then(async () => {
-						// Emit participants changed so UI updates
-						const chat = await groupChatStorage.loadGroupChat(groupChatId);
-						if (chat) {
-							groupChatEmitters.emitParticipantsChanged?.(groupChatId, chat.participants);
-						}
-					})
-					.catch((err) => {
-						logger.error('[GroupChat] Failed to update participant usage', 'ProcessListener', {
-							error: String(err),
-							participant: participantName,
-						});
-					});
-				// Still send to renderer for consistency
-			}
+			// Calculate context usage percentage using agent-specific logic
+			// Note: For group chat, we don't have agent type here, defaults to Claude behavior
+			const totalContextTokens = usageAggregator.calculateContextTokens(usageStats);
+			const contextUsage =
+				usageStats.contextWindow > 0
+					? Math.round((totalContextTokens / usageStats.contextWindow) * 100)
+					: 0;
 
-			// Handle group chat moderator usage - emit for UI
-			const moderatorUsageMatch = sessionId.match(REGEX_MODERATOR_SESSION);
-			if (moderatorUsageMatch) {
-				const groupChatId = moderatorUsageMatch[1];
-				// Calculate context usage percentage using agent-specific logic
-				// Note: Moderator is typically Claude, defaults to Claude behavior
-				const totalContextTokens = usageAggregator.calculateContextTokens(usageStats);
-				const contextUsage =
-					usageStats.contextWindow > 0
-						? Math.round((totalContextTokens / usageStats.contextWindow) * 100)
-						: 0;
-
-				// Emit moderator usage for the moderator card
-				groupChatEmitters.emitModeratorUsage?.(groupChatId, {
+			// Update participant with usage stats
+			groupChatStorage
+				.updateParticipant(groupChatId, participantName, {
 					contextUsage,
-					totalCost: usageStats.totalCostUsd,
 					tokenCount: totalContextTokens,
+					totalCost: usageStats.totalCostUsd,
+				})
+				.then((updatedChat) => {
+					// Emit participants changed so UI updates
+					// Note: updateParticipant returns the updated chat, avoiding extra DB read
+					groupChatEmitters.emitParticipantsChanged?.(groupChatId, updatedChat.participants);
+				})
+				.catch((err) => {
+					logger.error('[GroupChat] Failed to update participant usage', 'ProcessListener', {
+						error: String(err),
+						participant: participantName,
+					});
 				});
-			}
-
-			safeSend('process:usage', sessionId, usageStats);
+			// Still send to renderer for consistency
 		}
-	);
+
+		// Handle group chat moderator usage - emit for UI
+		const moderatorUsageMatch = isGroupChatSession
+			? sessionId.match(REGEX_MODERATOR_SESSION)
+			: null;
+		if (moderatorUsageMatch) {
+			const groupChatId = moderatorUsageMatch[1];
+			// Calculate context usage percentage using agent-specific logic
+			// Note: Moderator is typically Claude, defaults to Claude behavior
+			const totalContextTokens = usageAggregator.calculateContextTokens(usageStats);
+			const contextUsage =
+				usageStats.contextWindow > 0
+					? Math.round((totalContextTokens / usageStats.contextWindow) * 100)
+					: 0;
+
+			// Emit moderator usage for the moderator card
+			groupChatEmitters.emitModeratorUsage?.(groupChatId, {
+				contextUsage,
+				totalCost: usageStats.totalCostUsd,
+				tokenCount: totalContextTokens,
+			});
+		}
+
+		safeSend('process:usage', sessionId, usageStats);
+	});
 }

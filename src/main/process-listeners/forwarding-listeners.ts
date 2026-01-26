@@ -4,7 +4,7 @@
  */
 
 import type { ProcessManager } from '../process-manager';
-import type { ProcessListenerDependencies } from './types';
+import type { ProcessListenerDependencies, ToolExecution } from './types';
 
 /**
  * Sets up simple forwarding listeners that pass events directly to renderer.
@@ -29,12 +29,9 @@ export function setupForwardingListeners(
 	});
 
 	// Handle tool execution events (OpenCode, Codex)
-	processManager.on(
-		'tool-execution',
-		(sessionId: string, toolEvent: { toolName: string; state?: unknown; timestamp: number }) => {
-			safeSend('process:tool-execution', sessionId, toolEvent);
-		}
-	);
+	processManager.on('tool-execution', (sessionId: string, toolEvent: ToolExecution) => {
+		safeSend('process:tool-execution', sessionId, toolEvent);
+	});
 
 	// Handle stderr separately from runCommand (for clean command execution)
 	processManager.on('stderr', (sessionId: string, data: string) => {

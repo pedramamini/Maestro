@@ -7,6 +7,24 @@ import type { ProcessManager } from '../process-manager';
 import type { ProcessListenerDependencies } from './types';
 
 /**
+ * Maximum buffer size per session (10MB).
+ * Prevents unbounded memory growth from long-running or misbehaving processes.
+ */
+const MAX_BUFFER_SIZE = 10 * 1024 * 1024;
+
+/**
+ * Prefix for group chat session IDs.
+ * Used for fast string check before expensive regex matching.
+ */
+const GROUP_CHAT_PREFIX = 'group-chat-';
+
+/**
+ * Length of random suffix in message IDs (9 characters of base36).
+ * Combined with timestamp provides uniqueness for web broadcast deduplication.
+ */
+const MSG_ID_RANDOM_LENGTH = 9;
+
+/**
  * Sets up the data listener for process output.
  * Handles:
  * - Group chat moderator/participant output buffering
@@ -21,12 +39,22 @@ export function setupDataListener(
 	>
 ): void {
 	const { safeSend, getWebServer, outputBuffer, outputParser, debugLog, patterns } = deps;
-	const { REGEX_MODERATOR_SESSION, REGEX_AI_SUFFIX, REGEX_AI_TAB_ID } = patterns;
+	const {
+		REGEX_MODERATOR_SESSION,
+		REGEX_AI_SUFFIX,
+		REGEX_AI_TAB_ID,
+		REGEX_BATCH_SESSION,
+		REGEX_SYNOPSIS_SESSION,
+	} = patterns;
 
 	processManager.on('data', (sessionId: string, data: string) => {
+		// Fast path: skip regex for non-group-chat sessions (performance optimization)
+		// Most sessions don't start with 'group-chat-', so this avoids expensive regex matching
+		const isGroupChatSession = sessionId.startsWith(GROUP_CHAT_PREFIX);
+
 		// Handle group chat moderator output - buffer it
 		// Session ID format: group-chat-{groupChatId}-moderator-{uuid} or group-chat-{groupChatId}-moderator-synthesis-{uuid}
-		const moderatorMatch = sessionId.match(REGEX_MODERATOR_SESSION);
+		const moderatorMatch = isGroupChatSession ? sessionId.match(REGEX_MODERATOR_SESSION) : null;
 		if (moderatorMatch) {
 			const groupChatId = moderatorMatch[1];
 			debugLog('GroupChat:Debug', `MODERATOR DATA received for chat ${groupChatId}`);
@@ -35,12 +63,22 @@ export function setupDataListener(
 			// Buffer the output - will be routed on process exit
 			const totalLength = outputBuffer.appendToGroupChatBuffer(sessionId, data);
 			debugLog('GroupChat:Debug', `Buffered total: ${totalLength} chars`);
+			// Warn if buffer is growing too large (potential memory leak)
+			if (totalLength > MAX_BUFFER_SIZE) {
+				debugLog(
+					'GroupChat:Debug',
+					`WARNING: Buffer size ${totalLength} exceeds ${MAX_BUFFER_SIZE} bytes for moderator session ${sessionId}`
+				);
+			}
 			return; // Don't send to regular process:data handler
 		}
 
 		// Handle group chat participant output - buffer it
 		// Session ID format: group-chat-{groupChatId}-participant-{name}-{uuid|timestamp}
-		const participantInfo = outputParser.parseParticipantSessionId(sessionId);
+		// Only parse if it's a group chat session (performance optimization)
+		const participantInfo = isGroupChatSession
+			? outputParser.parseParticipantSessionId(sessionId)
+			: null;
 		if (participantInfo) {
 			debugLog('GroupChat:Debug', 'PARTICIPANT DATA received');
 			debugLog(
@@ -52,6 +90,13 @@ export function setupDataListener(
 			// Buffer the output - will be routed on process exit
 			const totalLength = outputBuffer.appendToGroupChatBuffer(sessionId, data);
 			debugLog('GroupChat:Debug', `Buffered total: ${totalLength} chars`);
+			// Warn if buffer is growing too large (potential memory leak)
+			if (totalLength > MAX_BUFFER_SIZE) {
+				debugLog(
+					'GroupChat:Debug',
+					`WARNING: Buffer size ${totalLength} exceeds ${MAX_BUFFER_SIZE} bytes for participant ${participantInfo.participantName}`
+				);
+			}
 			return; // Don't send to regular process:data handler
 		}
 
@@ -70,7 +115,8 @@ export function setupDataListener(
 
 			// Don't broadcast background batch/synopsis output to web clients
 			// These are internal Auto Run operations that should only appear in history, not as chat messages
-			if (sessionId.includes('-batch-') || sessionId.includes('-synopsis-')) {
+			// Use proper regex patterns to avoid false positives from UUIDs containing "batch" or "synopsis"
+			if (REGEX_BATCH_SESSION.test(sessionId) || REGEX_SYNOPSIS_SESSION.test(sessionId)) {
 				debugLog('WebBroadcast', `SKIPPING batch/synopsis output for web: session=${sessionId}`);
 				return;
 			}
@@ -83,7 +129,10 @@ export function setupDataListener(
 			const tabIdMatch = sessionId.match(REGEX_AI_TAB_ID);
 			const tabId = tabIdMatch ? tabIdMatch[1] : undefined;
 
-			const msgId = `${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+			// Generate unique message ID: timestamp + random suffix for deduplication
+			const msgId = `${Date.now()}-${Math.random()
+				.toString(36)
+				.substring(2, 2 + MSG_ID_RANDOM_LENGTH)}`;
 			debugLog(
 				'WebBroadcast',
 				`Broadcasting session_output: msgId=${msgId}, session=${baseSessionId}, tabId=${tabId || 'none'}, source=${isAiOutput ? 'ai' : 'terminal'}, dataLen=${data.length}`
