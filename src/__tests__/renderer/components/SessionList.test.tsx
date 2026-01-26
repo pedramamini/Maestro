@@ -58,6 +58,8 @@ vi.mock('lucide-react', () => ({
 	Globe: () => <span data-testid="icon-globe" />,
 	BookOpen: () => <span data-testid="icon-book-open" />,
 	BarChart3: () => <span data-testid="icon-bar-chart" />,
+	Server: () => <span data-testid="icon-server" />,
+	Music: () => <span data-testid="icon-music" />,
 }));
 
 // Mock gitService
@@ -194,6 +196,7 @@ const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]
 	setLogViewerOpen: vi.fn(),
 	setProcessMonitorOpen: vi.fn(),
 	setUsageDashboardOpen: vi.fn(),
+	setSymphonyModalOpen: vi.fn(),
 	toggleGroup: vi.fn(),
 	handleDragStart: vi.fn(),
 	handleDragOver: vi.fn(),

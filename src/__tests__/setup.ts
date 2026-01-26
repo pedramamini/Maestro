@@ -444,6 +444,34 @@ const mockMaestro = {
 		sync: vi.fn().mockResolvedValue({ success: true }),
 		getInstallationId: vi.fn().mockResolvedValue('test-installation-id'),
 	},
+	symphony: {
+		getRegistry: vi.fn().mockResolvedValue({
+			success: true,
+			registry: { schemaVersion: '1.0', lastUpdated: '2025-01-01T00:00:00Z', repositories: [] },
+			fromCache: false,
+		}),
+		getIssues: vi.fn().mockResolvedValue({ success: true, issues: [], fromCache: false }),
+		getState: vi.fn().mockResolvedValue({
+			success: true,
+			state: { active: [], history: [], stats: {} },
+		}),
+		getActive: vi.fn().mockResolvedValue({ success: true, contributions: [] }),
+		getCompleted: vi.fn().mockResolvedValue({ success: true, contributions: [] }),
+		getStats: vi.fn().mockResolvedValue({ success: true, stats: {} }),
+		start: vi.fn().mockResolvedValue({ success: true, contributionId: 'test-id' }),
+		registerActive: vi.fn().mockResolvedValue({ success: true }),
+		updateStatus: vi.fn().mockResolvedValue({ success: true, updated: true }),
+		complete: vi.fn().mockResolvedValue({ success: true }),
+		cancel: vi.fn().mockResolvedValue({ success: true, cancelled: true }),
+		checkPRStatuses: vi.fn().mockResolvedValue({ success: true, checked: 0, merged: 0, closed: 0 }),
+		clearCache: vi.fn().mockResolvedValue({ success: true, cleared: true }),
+		cloneRepo: vi.fn().mockResolvedValue({ success: true }),
+		startContribution: vi.fn().mockResolvedValue({ success: true, branchName: 'test-branch' }),
+		createDraftPR: vi.fn().mockResolvedValue({ success: true }),
+		fetchDocumentContent: vi.fn().mockResolvedValue({ success: true, content: '# Test' }),
+		onUpdated: vi.fn().mockReturnValue(() => {}),
+		onContributionStarted: vi.fn().mockReturnValue(() => {}),
+	},
 };
 
 Object.defineProperty(window, 'maestro', {
