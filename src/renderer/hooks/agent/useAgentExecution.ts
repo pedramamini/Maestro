@@ -530,6 +530,15 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 					);
 
 					// Spawn with session resume - the IPC handler will use the agent's resumeArgs builder
+					// If no sessionConfig or no sessionSshRemoteConfig, try to get it from the main session (by sessionId)
+					let effectiveSessionSshRemoteConfig = sessionConfig?.sessionSshRemoteConfig;
+					if (!effectiveSessionSshRemoteConfig) {
+						// Try to find the main session and use its SSH config
+						const mainSession = sessionsRef.current.find((s) => s.id === sessionId);
+						if (mainSession && mainSession.sessionSshRemoteConfig) {
+							effectiveSessionSshRemoteConfig = mainSession.sessionSshRemoteConfig;
+						}
+					}
 					const commandToUse = sessionConfig?.customPath || agent.path || agent.command;
 					window.maestro.process
 						.spawn({
@@ -546,8 +555,8 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 							sessionCustomEnvVars: sessionConfig?.customEnvVars,
 							sessionCustomModel: sessionConfig?.customModel,
 							sessionCustomContextWindow: sessionConfig?.customContextWindow,
-							// Per-session SSH remote config (takes precedence over agent-level SSH config)
-							sessionSshRemoteConfig: sessionConfig?.sessionSshRemoteConfig,
+							// Always use effective SSH remote config if available
+							sessionSshRemoteConfig: effectiveSessionSshRemoteConfig,
 						})
 						.catch(() => {
 							cleanup();

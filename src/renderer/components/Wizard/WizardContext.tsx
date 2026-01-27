@@ -409,6 +409,12 @@ export interface SerializableWizardState {
 	generatedDocuments: GeneratedDocument[];
 	editedPhase1Content: string | null;
 	wantsTour: boolean;
+  	/** Per-session SSH remote configuration (for remote execution) */
+  	sessionSshRemoteConfig?: {
+    enabled: boolean;
+    remoteId: string | null;
+    workingDirOverride?: string;
+  };
 }
 
 /**
@@ -755,6 +761,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
 			generatedDocuments: state.generatedDocuments,
 			editedPhase1Content: state.editedPhase1Content,
 			wantsTour: state.wantsTour,
+      		sessionSshRemoteConfig: state.sessionSshRemoteConfig,
 		};
 	}, [
 		state.currentStep,
@@ -768,6 +775,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
 		state.generatedDocuments,
 		state.editedPhase1Content,
 		state.wantsTour,
+    	state.sessionSshRemoteConfig,
 	]);
 
 	const saveStateForResume = useCallback(() => {

@@ -319,7 +319,7 @@ export class ContextGroomingService {
 			// Use the new single-call groomContext API (spawns batch process with prompt)
 			const groomedText = await window.maestro.context.groomContext(
 				targetProjectRoot,
-				this.config.defaultAgentType,
+				request.targetAgent,
 				prompt
 			);
 

@@ -6331,6 +6331,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					customEnvVars: activeSession.customEnvVars,
 					customModel: activeSession.customModel,
 					customContextWindow: activeSession.customContextWindow,
+					sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
 				}
 			);
 
@@ -6511,7 +6512,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				activeSession.name, // Session/project name
 				activeTab.id, // Tab ID for per-tab isolation
 				activeSession.id, // Session ID for playbook creation
-				activeSession.autoRunFolderPath // User-configured Auto Run folder path (if set)
+				activeSession.autoRunFolderPath, // User-configured Auto Run folder path (if set)
+				activeSession.sessionSshRemoteConfig // SSH remote config for remote execution
 			);
 
 			// Rename the tab to "Wizard" immediately when wizard starts
@@ -6593,7 +6595,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				activeSession.name,
 				newTab.id,
 				activeSession.id,
-				activeSession.autoRunFolderPath // User-configured Auto Run folder path (if set)
+				activeSession.autoRunFolderPath, // User-configured Auto Run folder path (if set)
+				activeSession.sessionSshRemoteConfig // SSH remote config for remote execution
 			);
 
 			// Show a system log entry

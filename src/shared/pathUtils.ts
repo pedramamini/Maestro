@@ -46,7 +46,8 @@ export function expandTilde(filePath: string, homeDir?: string): string {
 	}
 
 	if (filePath.startsWith('~/')) {
-		return path.join(home, filePath.slice(2));
+		// Use POSIX path separator for consistency, especially for SSH remote paths
+		return `${home}/${filePath.slice(2)}`;
 	}
 
 	return filePath;

@@ -575,9 +575,50 @@ function buildArgsForAgent(agent: { id: string; args?: string[] }): string[] {
 			return args;
 		}
 
-		case 'codex':
+		case 'codex': {
+			// Codex requires exec batch mode with JSON output for document generation
+			// Must include these explicitly since wizard pre-builds args before IPC handler
+			const args = [];
+
+			// Add batch mode prefix: 'exec'
+			if ((agent as any).batchModePrefix) {
+				args.push(...(agent as any).batchModePrefix);
+			}
+
+			// Add base args (if any)
+			args.push(...(agent.args || []));
+
+			// Add batch mode args: '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'
+			if ((agent as any).batchModeArgs) {
+				args.push(...(agent as any).batchModeArgs);
+			}
+
+			// Add JSON output: '--json'
+			if ((agent as any).jsonOutputArgs) {
+				args.push(...(agent as any).jsonOutputArgs);
+			}
+
+			return args;
+		}
+
 		case 'opencode': {
-			return [...(agent.args || [])];
+			// OpenCode requires 'run' batch mode with JSON output for document generation
+			const args = [];
+
+			// Add batch mode prefix: 'run'
+			if ((agent as any).batchModePrefix) {
+				args.push(...(agent as any).batchModePrefix);
+			}
+
+			// Add base args (if any)
+			args.push(...(agent.args || []));
+
+			// Add JSON output: '--format json'
+			if ((agent as any).jsonOutputArgs) {
+				args.push(...(agent as any).jsonOutputArgs);
+			}
+
+			return args;
 		}
 
 		default: {

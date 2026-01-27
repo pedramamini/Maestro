@@ -376,7 +376,7 @@ export class ChildProcessSpawner {
 				this.exitHandler.handleError(sessionId, error);
 			});
 
-			// Handle stdin for batch mode
+			// Handle stdin for batch mode and stream-json
 			if (isStreamJsonMode && prompt && images) {
 				// Stream-json mode with images: send the message via stdin
 				const streamJsonMessage = buildStreamJsonMessage(prompt, images);
@@ -385,6 +385,19 @@ export class ChildProcessSpawner {
 					messageLength: streamJsonMessage.length,
 					imageCount: images.length,
 				});
+				childProcess.stdin?.write(streamJsonMessage + '\n');
+				childProcess.stdin?.end();
+			} else if (isStreamJsonMode && prompt) {
+				// Stream-json mode with prompt but no images: send JSON via stdin
+				const streamJsonMessage = buildStreamJsonMessage(prompt, []);
+				logger.debug(
+					'[ProcessManager] Sending stream-json prompt via stdin (no images)',
+					'ProcessManager',
+					{
+						sessionId,
+						promptLength: prompt.length,
+					}
+				);
 				childProcess.stdin?.write(streamJsonMessage + '\n');
 				childProcess.stdin?.end();
 			} else if (isBatchMode) {
