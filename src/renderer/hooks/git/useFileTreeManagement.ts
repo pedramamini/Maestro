@@ -11,6 +11,7 @@ import {
 } from '../../utils/fileExplorer';
 import { fuzzyMatch } from '../../utils/search';
 import { gitService } from '../../services/git';
+import { logger } from '../../utils/logger';
 
 /**
  * Retry delay for file tree errors (20 seconds).
@@ -26,14 +27,41 @@ const FILE_TREE_RETRY_DELAY_MS = 20000;
  * we must fall back to sessionSshRemoteConfig.remoteId. See CLAUDE.md "SSH Remote Sessions".
  */
 function getSshContext(session: Session): SshContext | undefined {
-	const sshRemoteId = session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+	// First check if there's a spawned sshRemoteId (set by agent spawn)
+	let sshRemoteId: string | undefined = session.sshRemoteId;
+
+	// Fall back to sessionSshRemoteConfig if enabled and has a valid remoteId
+	// Note: remoteId can be `null` per the type definition, so we explicitly check for truthiness
+	if (
+		!sshRemoteId &&
+		session.sessionSshRemoteConfig?.enabled &&
+		session.sessionSshRemoteConfig?.remoteId
+	) {
+		sshRemoteId = session.sessionSshRemoteConfig.remoteId;
+	}
+
+	logger.debug('getSshContext: session.sshRemoteId', 'FileTreeManagement', {
+		sshRemoteId: session.sshRemoteId,
+	});
+	logger.debug('getSshContext: session.sessionSshRemoteConfig', 'FileTreeManagement', {
+		sessionSshRemoteConfig: session.sessionSshRemoteConfig,
+	});
+	logger.debug('getSshContext: resolved sshRemoteId', 'FileTreeManagement', { sshRemoteId });
+
 	if (!sshRemoteId) {
+		logger.debug(
+			'getSshContext: No SSH remote ID found, returning undefined',
+			'FileTreeManagement'
+		);
 		return undefined;
 	}
-	return {
+
+	const context = {
 		sshRemoteId,
 		remoteCwd: session.remoteCwd || session.sessionSshRemoteConfig?.workingDirOverride,
 	};
+	logger.debug('getSshContext: Returning context', 'FileTreeManagement', context);
+	return context;
 }
 
 export type { RightPanelHandle } from '../../components/RightPanel';
@@ -143,7 +171,9 @@ export function useFileTreeManagement(
 
 				return changes;
 			} catch (error) {
-				console.error('File tree refresh error:', error);
+				logger.error('File tree refresh error', 'FileTreeManagement', {
+					error: (error as Error)?.message || 'Unknown error',
+				});
 				const errorMsg = (error as Error)?.message || 'Unknown error';
 				setSessions((prev) =>
 					prev.map((s) =>
@@ -229,7 +259,9 @@ export function useFileTreeManagement(
 				await window.maestro.history.reload();
 				rightPanelRef.current?.refreshHistoryPanel();
 			} catch (error) {
-				console.error('Git/file state refresh error:', error);
+				logger.error('Git/file state refresh error', 'FileTreeManagement', {
+					error: (error as Error)?.message || 'Unknown error',
+				});
 				const errorMsg = (error as Error)?.message || 'Unknown error';
 				setSessions((prev) =>
 					prev.map((s) =>
@@ -353,7 +385,9 @@ export function useFileTreeManagement(
 					);
 				})
 				.catch((error) => {
-					console.error('File tree error:', error);
+					logger.error('File tree error', 'FileTreeManagement', {
+						error: error?.message || 'Unknown error',
+					});
 					const errorMsg = error?.message || 'Unknown error';
 					setSessions((prev) =>
 						prev.map((s) =>

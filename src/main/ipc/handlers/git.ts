@@ -90,13 +90,16 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 	gitSettingsStore = deps.settingsStore;
 	// Basic Git operations
 	// All handlers accept optional sshRemoteId and remoteCwd for remote execution
+
+	// --- FIX: Always pass cwd as remoteCwd for remote git operations ---
 	ipcMain.handle(
 		'git:status',
 		withIpcErrorLogging(
 			handlerOpts('status'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
-				const result = await execGit(['status', '--porcelain'], cwd, sshRemote, remoteCwd);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
+				const result = await execGit(['status', '--porcelain'], cwd, sshRemote, effectiveRemoteCwd);
 				return { stdout: result.stdout, stderr: result.stderr };
 			}
 		)
@@ -109,7 +112,8 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			async (cwd: string, file?: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const args = file ? ['diff', file] : ['diff'];
 				const sshRemote = getSshRemoteById(sshRemoteId);
-				const result = await execGit(args, cwd, sshRemote, remoteCwd);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
+				const result = await execGit(args, cwd, sshRemote, effectiveRemoteCwd);
 				return { stdout: result.stdout, stderr: result.stderr };
 			}
 		)
@@ -121,11 +125,12 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			handlerOpts('isRepo'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['rev-parse', '--is-inside-work-tree'],
 					cwd,
 					sshRemote,
-					remoteCwd
+					effectiveRemoteCwd
 				);
 				return result.exitCode === 0;
 			}
@@ -138,7 +143,8 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			handlerOpts('numstat'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
-				const result = await execGit(['diff', '--numstat'], cwd, sshRemote, remoteCwd);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
+				const result = await execGit(['diff', '--numstat'], cwd, sshRemote, effectiveRemoteCwd);
 				return { stdout: result.stdout, stderr: result.stderr };
 			}
 		)
@@ -150,11 +156,12 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			handlerOpts('branch'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['rev-parse', '--abbrev-ref', 'HEAD'],
 					cwd,
 					sshRemote,
-					remoteCwd
+					effectiveRemoteCwd
 				);
 				return { stdout: result.stdout.trim(), stderr: result.stderr };
 			}
@@ -167,26 +174,30 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			handlerOpts('remote'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
-				const result = await execGit(['remote', 'get-url', 'origin'], cwd, sshRemote, remoteCwd);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
+				const result = await execGit(
+					['remote', 'get-url', 'origin'],
+					cwd,
+					sshRemote,
+					effectiveRemoteCwd
+				);
 				return { stdout: result.stdout.trim(), stderr: result.stderr };
 			}
 		)
 	);
 
-	// Get all local and remote branches
 	ipcMain.handle(
 		'git:branches',
 		withIpcErrorLogging(
 			handlerOpts('branches'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
-				// Get all branches (local and remote) in a simple format
-				// -a for all branches, --format to get clean names
 				const sshRemote = getSshRemoteById(sshRemoteId);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				const result = await execGit(
 					['branch', '-a', '--format=%(refname:short)'],
 					cwd,
 					sshRemote,
-					remoteCwd
+					effectiveRemoteCwd
 				);
 				if (result.exitCode !== 0) {
 					return { branches: [], stderr: result.stderr };
@@ -198,14 +209,14 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 		)
 	);
 
-	// Get all tags
 	ipcMain.handle(
 		'git:tags',
 		withIpcErrorLogging(
 			handlerOpts('tags'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
-				const result = await execGit(['tag', '--list'], cwd, sshRemote, remoteCwd);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
+				const result = await execGit(['tag', '--list'], cwd, sshRemote, effectiveRemoteCwd);
 				if (result.exitCode !== 0) {
 					return { tags: [], stderr: result.stderr };
 				}
@@ -222,16 +233,17 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 			handlerOpts('info'),
 			async (cwd: string, sshRemoteId?: string, remoteCwd?: string) => {
 				const sshRemote = getSshRemoteById(sshRemoteId);
+				const effectiveRemoteCwd = sshRemote ? remoteCwd || cwd : undefined;
 				// Get comprehensive git info in a single call
 				const [branchResult, remoteResult, statusResult, behindAheadResult] = await Promise.all([
-					execGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd, sshRemote, remoteCwd),
-					execGit(['remote', 'get-url', 'origin'], cwd, sshRemote, remoteCwd),
-					execGit(['status', '--porcelain'], cwd, sshRemote, remoteCwd),
+					execGit(['rev-parse', '--abbrev-ref', 'HEAD'], cwd, sshRemote, effectiveRemoteCwd),
+					execGit(['remote', 'get-url', 'origin'], cwd, sshRemote, effectiveRemoteCwd),
+					execGit(['status', '--porcelain'], cwd, sshRemote, effectiveRemoteCwd),
 					execGit(
 						['rev-list', '--left-right', '--count', '@{upstream}...HEAD'],
 						cwd,
 						sshRemote,
-						remoteCwd
+						effectiveRemoteCwd
 					),
 				]);
 

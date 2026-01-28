@@ -93,6 +93,9 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 	const continueButtonRef = useRef<HTMLButtonElement>(null);
 	const containerRef = useRef<HTMLDivElement>(null);
 
+	// Ref for debouncing validation
+	const validationTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+
 	/**
 	 * Fetch agent config when selected agent changes
 	 */
@@ -123,6 +126,17 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 	useEffect(() => {
 		// No pre-fill - user should browse to select their project folder
 		setIsDetecting(false);
+	}, []);
+
+	/**
+	 * Cleanup validation timeout on unmount
+	 */
+	useEffect(() => {
+		return () => {
+			if (validationTimeoutRef.current) {
+				clearTimeout(validationTimeoutRef.current);
+			}
+		};
 	}, []);
 
 	/**
@@ -288,18 +302,31 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 			const newPath = e.target.value;
 			setDirectoryPath(newPath);
 
-			// Debounce validation to avoid excessive API calls while typing
+			// Clear any pending validation
+			if (validationTimeoutRef.current) {
+				clearTimeout(validationTimeoutRef.current);
+				validationTimeoutRef.current = null;
+			}
+
+			// Debounce validation to avoid excessive API calls while typing (especially over SSH)
 			if (newPath.trim()) {
-				const timeoutId = setTimeout(() => {
+				validationTimeoutRef.current = setTimeout(() => {
 					validateDirectory(newPath);
-				}, 500);
-				return () => clearTimeout(timeoutId);
+					validationTimeoutRef.current = null;
+				}, 800); // 800ms debounce for SSH remote checks
 			} else {
 				setDirectoryError(null);
 				setIsGitRepo(false);
+				setHasExistingAutoRunDocs(false, 0);
 			}
 		},
-		[setDirectoryPath, setDirectoryError, setIsGitRepo, validateDirectory]
+		[
+			setDirectoryPath,
+			setDirectoryError,
+			setIsGitRepo,
+			setHasExistingAutoRunDocs,
+			validateDirectory,
+		]
 	);
 
 	/**

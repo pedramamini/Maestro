@@ -80,6 +80,7 @@ interface AgentConfig {
 	binaryName?: string;
 	available: boolean;
 	path?: string;
+  	customPath?: string;
 	command: string;
 	args?: string[];
 	hidden?: boolean;

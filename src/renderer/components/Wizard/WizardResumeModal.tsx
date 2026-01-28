@@ -74,11 +74,21 @@ export function WizardResumeModal({
 			let dirValid = true;
 			if (resumeState.directoryPath) {
 				try {
+          	// Get SSH remote ID from resume state (for remote execution)
+          	const sshRemoteId = resumeState.sessionSshRemoteConfig?.enabled
+				? resumeState.sessionSshRemoteConfig.remoteId ?? undefined
+				: undefined;
+
 					// Use git.isRepo which will fail if directory doesn't exist
-					await window.maestro.git.isRepo(resumeState.directoryPath);
-				} catch {
+          			// For SSH remotes, pass the path as remoteCwd so git can operate in the correct directory
+					await window.maestro.git.isRepo(
+						resumeState.directoryPath,
+						sshRemoteId,
+						sshRemoteId ? resumeState.directoryPath : undefined
+					);
+					} catch {
 					// Directory doesn't exist or is inaccessible
-					dirValid = false;
+						dirValid = false;
 				}
 			}
 

@@ -14,6 +14,7 @@ import { execFileNoThrow, ExecResult } from './execFile';
 import { shellEscape } from './shell-escape';
 import { sshRemoteManager } from '../ssh-remote-manager';
 import { logger } from './logger';
+import { resolveSshPath } from './cliDetection';
 
 /**
  * File or directory entry returned from readDir operations.
@@ -147,6 +148,9 @@ async function execRemoteCommand(
 	const { maxRetries, baseDelayMs, maxDelayMs } = DEFAULT_RETRY_CONFIG;
 	let lastResult: ExecResult | null = null;
 
+	// Resolve SSH binary path (critical for Windows where spawn() doesn't search PATH)
+	const sshPath = await resolveSshPath();
+
 	for (let attempt = 0; attempt <= maxRetries; attempt++) {
 		const sshArgs = deps.buildSshArgs(config);
 		sshArgs.push(remoteCommand);
@@ -154,11 +158,11 @@ async function execRemoteCommand(
 		// Log SSH command for debugging connection issues
 		if (attempt === 0) {
 			logger.debug(
-				`[remote-fs] SSH to ${config.host}: ssh ${sshArgs.slice(0, -1).join(' ')} "<command>"`
+				`[remote-fs] SSH to ${config.host}: ${sshPath} ${sshArgs.slice(0, -1).join(' ')} "<command>"`
 			);
 		}
 
-		const result = await deps.execSsh('ssh', sshArgs);
+		const result = await deps.execSsh(sshPath, sshArgs);
 		lastResult = result;
 
 		// Success - return immediately

@@ -27,6 +27,7 @@ export function getExpandedEnv(): NodeJS.ProcessEnv {
 		const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
 		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
 		const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+    	const systemRoot = process.env.SystemRoot || 'C:\\Windows';
 
 		additionalPaths = [
 			path.join(appData, 'npm'),
@@ -34,7 +35,9 @@ export function getExpandedEnv(): NodeJS.ProcessEnv {
 			path.join(programFiles, 'cloudflared'),
 			path.join(home, 'scoop', 'shims'),
 			path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
-			path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
+			path.join(systemRoot, 'System32'),
+			// Windows OpenSSH (placed last so it's checked first due to unshift loop)
+			path.join(systemRoot, 'System32', 'OpenSSH'),
 		];
 	} else {
 		additionalPaths = [
@@ -207,6 +210,20 @@ export async function detectSshPath(): Promise<string | null> {
 
 	if (result.exitCode === 0 && result.stdout.trim()) {
 		sshPathCache = result.stdout.trim().split('\n')[0];
+  	} else if (process.platform === 'win32') {
+    // Fallback for Windows: Check the built-in OpenSSH location directly
+    // This is the standard location for Windows 10/11 OpenSSH
+    const fs = await import('fs');
+    const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+    const opensshPath = path.join(systemRoot, 'System32', 'OpenSSH', 'ssh.exe');
+
+    try {
+      if (fs.existsSync(opensshPath)) {
+        sshPathCache = opensshPath;
+      }
+    } catch {
+      // If check fails, leave sshPathCache as null
+    }
 	}
 
 	sshDetectionDone = true;

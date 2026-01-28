@@ -427,6 +427,7 @@ function setupIpcHandlers() {
 		agentConfigsStore,
 		settingsStore: store,
 		getMainWindow: () => mainWindow,
+		sessionsStore,
 	});
 
 	// Persistence operations - extracted to src/main/ipc/handlers/persistence.ts
