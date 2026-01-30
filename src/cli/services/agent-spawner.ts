@@ -2,12 +2,12 @@
 // Spawns agent CLIs (Claude Code, Codex) and parses their output
 
 import { spawn, SpawnOptions } from 'child_process';
-import * as os from 'os';
 import * as fs from 'fs';
 import type { ToolType, UsageStats } from '../../shared/types';
 import { CodexOutputParser } from '../../main/parsers/codex-output-parser';
 import { getAgentCustomPath } from './storage';
 import { generateUUID } from '../../shared/uuid';
+import { buildExpandedPath, buildExpandedEnv } from '../../shared/pathUtils';
 
 // Claude Code default command and arguments (same as Electron app)
 const CLAUDE_DEFAULT_COMMAND = 'claude';
@@ -47,32 +47,7 @@ export interface AgentResult {
  * Build an expanded PATH that includes common binary installation locations
  */
 function getExpandedPath(): string {
-	const home = os.homedir();
-	const additionalPaths = [
-		'/opt/homebrew/bin',
-		'/opt/homebrew/sbin',
-		'/usr/local/bin',
-		'/usr/local/sbin',
-		`${home}/.local/bin`,
-		`${home}/.npm-global/bin`,
-		`${home}/bin`,
-		`${home}/.claude/local`,
-		'/usr/bin',
-		'/bin',
-		'/usr/sbin',
-		'/sbin',
-	];
-
-	const currentPath = process.env.PATH || '';
-	const pathParts = currentPath.split(':');
-
-	for (const p of additionalPaths) {
-		if (!pathParts.includes(p)) {
-			pathParts.unshift(p);
-		}
-	}
-
-	return pathParts.join(':');
+	return buildExpandedPath();
 }
 
 /**
@@ -250,10 +225,7 @@ async function spawnClaudeAgent(
 	agentSessionId?: string
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
-		const env: NodeJS.ProcessEnv = {
-			...process.env,
-			PATH: getExpandedPath(),
-		};
+		const env = buildExpandedEnv();
 
 		// Build args: base args + session handling + prompt
 		const args = [...CLAUDE_ARGS];
@@ -433,10 +405,7 @@ async function spawnCodexAgent(
 	agentSessionId?: string
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
-		const env: NodeJS.ProcessEnv = {
-			...process.env,
-			PATH: getExpandedPath(),
-		};
+		const env = buildExpandedEnv();
 
 		const args = [...CODEX_ARGS];
 		args.push('-C', cwd);

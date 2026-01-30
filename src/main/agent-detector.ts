@@ -4,7 +4,7 @@ import * as os from 'os';
 import * as fs from 'fs';
 import * as path from 'path';
 import { AgentCapabilities, getAgentCapabilities } from './agent-capabilities';
-import { expandTilde, detectNodeVersionManagerBinPaths } from '../shared/pathUtils';
+import { expandTilde, detectNodeVersionManagerBinPaths, buildExpandedEnv } from '../shared/pathUtils';
 
 // Re-export AgentCapabilities for convenience
 export { AgentCapabilities } from './agent-capabilities';
@@ -472,96 +472,7 @@ export class AgentDetector {
 	 * This is necessary because packaged Electron apps don't inherit shell environment.
 	 */
 	private getExpandedEnv(): NodeJS.ProcessEnv {
-		const home = os.homedir();
-		const env = { ...process.env };
-		const isWindows = process.platform === 'win32';
-
-		// Platform-specific paths
-		let additionalPaths: string[];
-
-		if (isWindows) {
-			// Windows-specific paths
-			const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-			const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-			const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-			const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
-
-			additionalPaths = [
-				// Claude Code PowerShell installer (irm https://claude.ai/install.ps1 | iex)
-				// This is the primary installation method - installs claude.exe to ~/.local/bin
-				path.join(home, '.local', 'bin'),
-				// Claude Code winget install (winget install --id Anthropic.ClaudeCode)
-				path.join(localAppData, 'Microsoft', 'WinGet', 'Links'),
-				path.join(programFiles, 'WinGet', 'Links'),
-				path.join(localAppData, 'Microsoft', 'WinGet', 'Packages'),
-				path.join(programFiles, 'WinGet', 'Packages'),
-				// npm global installs (Claude Code, Codex CLI, Gemini CLI)
-				path.join(appData, 'npm'),
-				path.join(localAppData, 'npm'),
-				// Claude Code CLI install location (npm global)
-				path.join(appData, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli'),
-				// Codex CLI install location (npm global)
-				path.join(appData, 'npm', 'node_modules', '@openai', 'codex', 'bin'),
-				// User local programs
-				path.join(localAppData, 'Programs'),
-				path.join(localAppData, 'Microsoft', 'WindowsApps'),
-				// Python/pip user installs
-				path.join(appData, 'Python', 'Scripts'),
-				path.join(localAppData, 'Programs', 'Python', 'Python312', 'Scripts'),
-				path.join(localAppData, 'Programs', 'Python', 'Python311', 'Scripts'),
-				path.join(localAppData, 'Programs', 'Python', 'Python310', 'Scripts'),
-				// Git for Windows (provides bash, common tools)
-				path.join(programFiles, 'Git', 'cmd'),
-				path.join(programFiles, 'Git', 'bin'),
-				path.join(programFiles, 'Git', 'usr', 'bin'),
-				path.join(programFilesX86, 'Git', 'cmd'),
-				path.join(programFilesX86, 'Git', 'bin'),
-				// Node.js
-				path.join(programFiles, 'nodejs'),
-				path.join(localAppData, 'Programs', 'node'),
-				// Scoop package manager (OpenCode, other tools)
-				path.join(home, 'scoop', 'shims'),
-				path.join(home, 'scoop', 'apps', 'opencode', 'current'),
-				// Chocolatey (OpenCode, other tools)
-				path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
-				// Go binaries (some tools installed via 'go install')
-				path.join(home, 'go', 'bin'),
-				// Windows system paths
-				path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
-				path.join(process.env.SystemRoot || 'C:\\Windows'),
-			];
-		} else {
-			// Unix-like paths (macOS/Linux)
-			additionalPaths = [
-				'/opt/homebrew/bin', // Homebrew on Apple Silicon
-				'/opt/homebrew/sbin',
-				'/usr/local/bin', // Homebrew on Intel, common install location
-				'/usr/local/sbin',
-				`${home}/.local/bin`, // User local installs (pip, etc.)
-				`${home}/.npm-global/bin`, // npm global with custom prefix
-				`${home}/bin`, // User bin directory
-				`${home}/.claude/local`, // Claude local install location
-				`${home}/.opencode/bin`, // OpenCode installer default location
-				'/usr/bin',
-				'/bin',
-				'/usr/sbin',
-				'/sbin',
-			];
-		}
-
-		const currentPath = env.PATH || '';
-		// Use platform-appropriate path delimiter
-		const pathParts = currentPath.split(path.delimiter);
-
-		// Add paths that aren't already present
-		for (const p of additionalPaths) {
-			if (!pathParts.includes(p)) {
-				pathParts.unshift(p);
-			}
-		}
-
-		env.PATH = pathParts.join(path.delimiter);
-		return env;
+		return buildExpandedEnv();
 	}
 
 	/**

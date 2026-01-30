@@ -8,6 +8,7 @@
  * - Participants -> Moderator
  */
 
+import * as os from 'os';
 import {
 	GroupChatParticipant,
 	loadGroupChat,
@@ -419,7 +420,7 @@ ${message}`;
 			const baseArgs = buildAgentArgs(agent, {
 				baseArgs: args,
 				prompt: fullPrompt,
-				cwd: process.env.HOME || '/tmp',
+				cwd: os.homedir(),
 				readOnlyMode: true,
 			});
 			const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -434,7 +435,7 @@ ${message}`;
 			console.log(`[GroupChat:Debug] ========== SPAWNING MODERATOR PROCESS ==========`);
 			console.log(`[GroupChat:Debug] Session ID: ${sessionId}`);
 			console.log(`[GroupChat:Debug] Tool Type: ${chat.moderatorAgentId}`);
-			console.log(`[GroupChat:Debug] CWD: ${process.env.HOME || '/tmp'}`);
+			console.log(`[GroupChat:Debug] CWD: ${os.homedir()}`);
 			console.log(`[GroupChat:Debug] Command: ${command}`);
 			console.log(`[GroupChat:Debug] ReadOnly: true`);
 
@@ -450,7 +451,7 @@ ${message}`;
 				const spawnResult = processManager.spawn({
 					sessionId,
 					toolType: chat.moderatorAgentId,
-					cwd: process.env.HOME || '/tmp',
+					cwd: os.homedir(),
 					command,
 					args: finalArgs,
 					readOnlyMode: true,
@@ -690,7 +691,7 @@ export async function routeModeratorResponse(
 			const matchingSession = sessions.find(
 				(s) => mentionMatches(s.name, participantName) || s.name === participantName
 			);
-			const cwd = matchingSession?.cwd || process.env.HOME || '/tmp';
+			const cwd = matchingSession?.cwd || os.homedir();
 			console.log(`[GroupChat:Debug] CWD for participant: ${cwd}`);
 
 			// Resolve agent configuration
@@ -1038,7 +1039,7 @@ Review the agent responses above. Either:
 	const baseArgs = buildAgentArgs(agent, {
 		baseArgs: args,
 		prompt: synthesisPrompt,
-		cwd: process.env.HOME || '/tmp',
+		cwd: os.homedir(),
 		readOnlyMode: true,
 	});
 	const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -1061,7 +1062,7 @@ Review the agent responses above. Either:
 		const spawnResult = processManager.spawn({
 			sessionId,
 			toolType: chat.moderatorAgentId,
-			cwd: process.env.HOME || '/tmp',
+			cwd: os.homedir(),
 			command,
 			args: finalArgs,
 			readOnlyMode: true,
@@ -1152,7 +1153,7 @@ export async function respawnParticipantWithRecovery(
 	const matchingSession = sessions.find(
 		(s) => mentionMatches(s.name, participantName) || s.name === participantName
 	);
-	const cwd = matchingSession?.cwd || process.env.HOME || '/tmp';
+	const cwd = matchingSession?.cwd || os.homedir();
 
 	// Build the prompt with recovery context
 	const readOnlyNote = readOnly
