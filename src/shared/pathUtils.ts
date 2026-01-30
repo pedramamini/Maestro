@@ -226,3 +226,159 @@ export function detectNodeVersionManagerBinPaths(): string[] {
 
 	return detectedPaths;
 }
+
+/**
+ * Build an expanded PATH string with common binary installation locations.
+ *
+ * This consolidates PATH building logic used across the application to ensure
+ * consistency and prevent duplication. Handles platform differences automatically.
+ *
+ * @param customPaths - Optional additional paths to prepend to PATH
+ * @returns Expanded PATH string with platform-appropriate paths included
+ *
+ * @example
+ * ```typescript
+ * const expandedPath = buildExpandedPath();
+ * // Returns PATH with common binary locations added
+ *
+ * const customPath = buildExpandedPath(['/custom/bin']);
+ * // Returns PATH with custom paths + common locations
+ * ```
+ */
+export function buildExpandedPath(customPaths?: string[]): string {
+	const isWindows = process.platform === 'win32';
+	const delimiter = path.delimiter;
+	const home = os.homedir();
+
+	// Start with current PATH
+	const currentPath = process.env.PATH || '';
+	const pathParts = currentPath.split(delimiter);
+
+	// Platform-specific additional paths
+	let additionalPaths: string[];
+
+	if (isWindows) {
+		const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
+		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
+		const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
+		const programFilesX86 = process.env['ProgramFiles(x86)'] || 'C:\\Program Files (x86)';
+		const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+
+		additionalPaths = [
+			// .NET SDK installations
+			path.join(programFiles, 'dotnet'),
+			path.join(programFilesX86, 'dotnet'),
+			// Claude Code PowerShell installer
+			path.join(home, '.local', 'bin'),
+			// Claude Code winget install
+			path.join(localAppData, 'Microsoft', 'WinGet', 'Links'),
+			path.join(programFiles, 'WinGet', 'Links'),
+			path.join(localAppData, 'Microsoft', 'WinGet', 'Packages'),
+			path.join(programFiles, 'WinGet', 'Packages'),
+			// npm global installs
+			path.join(appData, 'npm'),
+			path.join(localAppData, 'npm'),
+			// Claude Code CLI install location (npm global)
+			path.join(appData, 'npm', 'node_modules', '@anthropic-ai', 'claude-code', 'cli'),
+			// Codex CLI install location (npm global)
+			path.join(appData, 'npm', 'node_modules', '@openai', 'codex', 'bin'),
+			// User local programs
+			path.join(localAppData, 'Programs'),
+			path.join(localAppData, 'Microsoft', 'WindowsApps'),
+			// Python/pip user installs
+			path.join(appData, 'Python', 'Scripts'),
+			path.join(localAppData, 'Programs', 'Python', 'Python312', 'Scripts'),
+			path.join(localAppData, 'Programs', 'Python', 'Python311', 'Scripts'),
+			path.join(localAppData, 'Programs', 'Python', 'Python310', 'Scripts'),
+			// Git for Windows
+			path.join(programFiles, 'Git', 'cmd'),
+			path.join(programFiles, 'Git', 'bin'),
+			path.join(programFiles, 'Git', 'usr', 'bin'),
+			path.join(programFilesX86, 'Git', 'cmd'),
+			path.join(programFilesX86, 'Git', 'bin'),
+			// Node.js
+			path.join(programFiles, 'nodejs'),
+			path.join(localAppData, 'Programs', 'node'),
+			// Cloudflared
+			path.join(programFiles, 'cloudflared'),
+			// Scoop package manager
+			path.join(home, 'scoop', 'shims'),
+			path.join(home, 'scoop', 'apps', 'opencode', 'current'),
+			// Chocolatey
+			path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
+			// Go binaries
+			path.join(home, 'go', 'bin'),
+			// Windows system paths
+			path.join(systemRoot, 'System32'),
+			path.join(systemRoot),
+			// Windows OpenSSH
+			path.join(systemRoot, 'System32', 'OpenSSH'),
+		];
+	} else {
+		// Unix-like paths (macOS/Linux)
+		additionalPaths = [
+			'/opt/homebrew/bin', // Homebrew on Apple Silicon
+			'/opt/homebrew/sbin',
+			'/usr/local/bin', // Homebrew on Intel, common install location
+			'/usr/local/sbin',
+			`${home}/.local/bin`, // User local installs (pip, etc.)
+			`${home}/.npm-global/bin`, // npm global with custom prefix
+			`${home}/bin`, // User bin directory
+			`${home}/.claude/local`, // Claude local install location
+			`${home}/.opencode/bin`, // OpenCode installer default location
+			'/usr/bin',
+			'/bin',
+			'/usr/sbin',
+			'/sbin',
+		];
+	}
+
+	// Add custom paths first (if provided)
+	if (customPaths && customPaths.length > 0) {
+		for (const p of customPaths) {
+			if (!pathParts.includes(p)) {
+				pathParts.unshift(p);
+			}
+		}
+	}
+
+	// Add standard additional paths
+	for (const p of additionalPaths) {
+		if (!pathParts.includes(p)) {
+			pathParts.unshift(p);
+		}
+	}
+
+	return pathParts.join(delimiter);
+}
+
+/**
+ * Build an expanded environment object with common binary installation locations in PATH.
+ *
+ * This creates a complete environment object (copy of process.env) with an expanded PATH
+ * that includes platform-specific binary locations. Useful for spawning processes that
+ * need access to tools not in the default PATH.
+ *
+ * @param customEnvVars - Optional additional environment variables to set
+ * @returns Complete environment object with expanded PATH
+ *
+ * @example
+ * ```typescript
+ * const env = buildExpandedEnv({ NODE_ENV: 'development' });
+ * // Returns process.env copy with expanded PATH + custom vars
+ * ```
+ */
+export function buildExpandedEnv(customEnvVars?: Record<string, string>): NodeJS.ProcessEnv {
+	const env = { ...process.env };
+	env.PATH = buildExpandedPath();
+
+	// Apply custom environment variables
+	if (customEnvVars && Object.keys(customEnvVars).length > 0) {
+		const home = os.homedir();
+		for (const [key, value] of Object.entries(customEnvVars)) {
+			env[key] = value.startsWith('~/') ? path.join(home, value.slice(2)) : value;
+		}
+	}
+
+	return env;
+}

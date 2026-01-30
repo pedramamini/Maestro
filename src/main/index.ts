@@ -1,5 +1,6 @@
 import { app, BrowserWindow } from 'electron';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 // Sentry is imported dynamically below to avoid module-load-time access to electron.app
 // which causes "Cannot read properties of undefined (reading 'getAppPath')" errors
@@ -550,7 +551,7 @@ function setupIpcHandlers() {
 				id: s.id,
 				name: s.name,
 				toolType: s.toolType,
-				cwd: s.cwd || s.fullPath || process.env.HOME || '/tmp',
+				cwd: s.cwd || s.fullPath || os.homedir(),
 				customArgs: s.customArgs,
 				customEnvVars: s.customEnvVars,
 				customModel: s.customModel,

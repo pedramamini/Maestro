@@ -1,6 +1,6 @@
 import { execFileNoThrow } from './execFile';
-import * as os from 'os';
 import * as path from 'path';
+import { buildExpandedEnv } from '../../shared/pathUtils';
 
 let cloudflaredInstalledCache: boolean | null = null;
 let cloudflaredPathCache: string | null = null;
@@ -16,55 +16,7 @@ const GH_STATUS_CACHE_TTL_MS = 60000; // 1 minute TTL for auth status
  * This is necessary because packaged Electron apps don't inherit shell environment.
  */
 export function getExpandedEnv(): NodeJS.ProcessEnv {
-	const home = os.homedir();
-	const env = { ...process.env };
-	const isWindows = process.platform === 'win32';
-
-	// Platform-specific paths
-	let additionalPaths: string[];
-
-	if (isWindows) {
-		const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-		const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-    	const systemRoot = process.env.SystemRoot || 'C:\\Windows';
-
-		additionalPaths = [
-			path.join(appData, 'npm'),
-			path.join(localAppData, 'npm'),
-			path.join(programFiles, 'cloudflared'),
-			path.join(home, 'scoop', 'shims'),
-			path.join(process.env.ChocolateyInstall || 'C:\\ProgramData\\chocolatey', 'bin'),
-			path.join(systemRoot, 'System32'),
-			// Windows OpenSSH (placed last so it's checked first due to unshift loop)
-			path.join(systemRoot, 'System32', 'OpenSSH'),
-		];
-	} else {
-		additionalPaths = [
-			'/opt/homebrew/bin', // Homebrew on Apple Silicon
-			'/opt/homebrew/sbin',
-			'/usr/local/bin', // Homebrew on Intel, common install location
-			'/usr/local/sbin',
-			`${home}/.local/bin`, // User local installs
-			`${home}/bin`, // User bin directory
-			'/usr/bin',
-			'/bin',
-			'/usr/sbin',
-			'/sbin',
-		];
-	}
-
-	const currentPath = env.PATH || '';
-	const pathParts = currentPath.split(path.delimiter);
-
-	for (const p of additionalPaths) {
-		if (!pathParts.includes(p)) {
-			pathParts.unshift(p);
-		}
-	}
-
-	env.PATH = pathParts.join(path.delimiter);
-	return env;
+	return buildExpandedEnv();
 }
 
 export async function isCloudflaredInstalled(): Promise<boolean> {

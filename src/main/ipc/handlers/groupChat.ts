@@ -9,6 +9,7 @@
  * - Participant management (add, send, remove)
  */
 
+import * as os from 'os';
 import { ipcMain, BrowserWindow } from 'electron';
 import { withIpcErrorLogging, CreateHandlerOptions } from '../../utils/ipcHandler';
 import { logger } from '../../utils/logger';
@@ -480,7 +481,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 					name,
 					agentId,
 					processManager,
-					cwd || process.env.HOME || '/tmp',
+					cwd || os.homedir(),
 					agentDetector ?? undefined,
 					agentConfigValues,
 					customEnvVars
@@ -558,7 +559,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 
 				// Get the group chat folder for file access
 				const groupChatFolder = getGroupChatDir(groupChatId);
-				const effectiveCwd = cwd || process.env.HOME || '/tmp';
+				const effectiveCwd = cwd || os.homedir();
 
 				// Build a context summary prompt to ask the agent to summarize its current state
 				const summaryPrompt = `You are "${participantName}" in the group chat "${chat.name}".

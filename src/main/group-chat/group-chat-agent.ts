@@ -8,6 +8,7 @@
  * - Participants can collaborate by referencing the shared chat log
  */
 
+import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import {
 	GroupChatParticipant,
@@ -93,7 +94,7 @@ export async function addParticipant(
 	name: string,
 	agentId: string,
 	processManager: IProcessManager,
-	cwd: string = process.env.HOME || '/tmp',
+	cwd: string = os.homedir(),
 	agentDetector?: AgentDetector,
 	agentConfigValues?: Record<string, any>,
 	customEnvVars?: Record<string, string>,

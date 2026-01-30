@@ -1,7 +1,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import { STANDARD_UNIX_PATHS } from '../constants';
-import { detectNodeVersionManagerBinPaths } from '../../../shared/pathUtils';
+import { detectNodeVersionManagerBinPaths, buildExpandedPath } from '../../../shared/pathUtils';
 
 /**
  * Build the base PATH for macOS/Linux with detected Node version manager paths.
@@ -58,40 +58,10 @@ export function buildChildProcessEnv(
 	customEnvVars?: Record<string, string>,
 	isResuming?: boolean
 ): NodeJS.ProcessEnv {
-	const isWindows = process.platform === 'win32';
-	const home = os.homedir();
 	const env = { ...process.env };
 
-	// Platform-specific standard paths
-	let standardPaths: string;
-	let checkPath: string;
-
-	if (isWindows) {
-		const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
-		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
-		const programFiles = process.env.ProgramFiles || 'C:\\Program Files';
-
-		standardPaths = [
-			path.join(appData, 'npm'),
-			path.join(localAppData, 'npm'),
-			path.join(programFiles, 'nodejs'),
-			path.join(programFiles, 'Git', 'cmd'),
-			path.join(programFiles, 'Git', 'bin'),
-			path.join(process.env.SystemRoot || 'C:\\Windows', 'System32'),
-		].join(';');
-		checkPath = path.join(appData, 'npm');
-	} else {
-		standardPaths = buildUnixBasePath();
-		checkPath = '/opt/homebrew/bin';
-	}
-
-	if (env.PATH) {
-		if (!env.PATH.includes(checkPath)) {
-			env.PATH = `${standardPaths}${path.delimiter}${env.PATH}`;
-		}
-	} else {
-		env.PATH = standardPaths;
-	}
+	// Use the shared expanded PATH
+	env.PATH = buildExpandedPath();
 
 	if (isResuming) {
 		env.MAESTRO_SESSION_RESUMED = '1';
@@ -99,6 +69,7 @@ export function buildChildProcessEnv(
 
 	// Apply custom environment variables
 	if (customEnvVars && Object.keys(customEnvVars).length > 0) {
+		const home = os.homedir();
 		for (const [key, value] of Object.entries(customEnvVars)) {
 			env[key] = value.startsWith('~/') ? path.join(home, value.slice(2)) : value;
 		}
