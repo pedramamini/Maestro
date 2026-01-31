@@ -1208,7 +1208,11 @@ interface MaestroAPI {
 		reload: () => Promise<boolean>;
 	};
 	notification: {
-		show: (title: string, body: string) => Promise<{ success: boolean; error?: string }>;
+		show: (
+			title: string,
+			body: string,
+			metadata?: { sessionId?: string; windowId?: string }
+		) => Promise<{ success: boolean; error?: string }>;
 		speak: (
 			text: string,
 			command?: string
@@ -1596,6 +1600,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string;
 		}>;
 		list: () => Promise<
 			Array<{
@@ -1612,6 +1617,7 @@ interface MaestroAPI {
 				logPath: string;
 				imagesDir: string;
 				createdAt: number;
+				initiatorWindowId?: string;
 			}>
 		>;
 		load: (id: string) => Promise<{
@@ -1628,6 +1634,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string;
 		} | null>;
 		delete: (id: string) => Promise<boolean>;
 		rename: (
@@ -1647,6 +1654,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string;
 		}>;
 		update: (
 			id: string,
@@ -1658,6 +1666,7 @@ interface MaestroAPI {
 					customArgs?: string;
 					customEnvVars?: Record<string, string>;
 				};
+				initiatorWindowId?: string;
 			}
 		) => Promise<{
 			id: string;
@@ -1673,6 +1682,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string;
 		}>;
 		// Chat log
 		appendMessage: (id: string, from: string, content: string) => Promise<void>;

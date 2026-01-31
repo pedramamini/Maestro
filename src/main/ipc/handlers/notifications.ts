@@ -13,6 +13,7 @@
 import { ipcMain, Notification, BrowserWindow } from 'electron';
 import { spawn, type ChildProcess } from 'child_process';
 import { logger } from '../../utils/logger';
+import { windowRegistry } from '../../window-registry';
 
 // ==========================================================================
 // Constants
@@ -61,6 +62,16 @@ const DEFAULT_TTS_COMMAND = 'say';
 // ==========================================================================
 // Types
 // ==========================================================================
+
+/**
+ * Optional metadata for OS notifications
+ */
+export interface NotificationMetadata {
+	/** Session ID that triggered the notification */
+	sessionId?: string;
+	/** Window ID containing the session */
+	windowId?: string;
+}
 
 /**
  * Response from showing a notification
@@ -381,7 +392,12 @@ export function registerNotificationsHandlers(): void {
 	// Show OS notification
 	ipcMain.handle(
 		'notification:show',
-		async (_event, title: string, body: string): Promise<NotificationShowResponse> => {
+		async (
+			_event,
+			title: string,
+			body: string,
+			metadata?: NotificationMetadata
+		): Promise<NotificationShowResponse> => {
 			try {
 				if (Notification.isSupported()) {
 					const notification = new Notification({
@@ -389,8 +405,65 @@ export function registerNotificationsHandlers(): void {
 						body,
 						silent: true, // Don't play system sound - we have our own audio feedback option
 					});
+
+					// Add click handler to focus the window containing the session
+					notification.on('click', () => {
+						logger.debug('Notification clicked', 'Notification', {
+							title,
+							sessionId: metadata?.sessionId,
+							windowId: metadata?.windowId,
+						});
+
+						// Determine which window to focus
+						let targetWindowId = metadata?.windowId;
+
+						// If we have a sessionId but no windowId, look up the window for that session
+						if (!targetWindowId && metadata?.sessionId) {
+							targetWindowId = windowRegistry.getWindowForSession(metadata.sessionId);
+							logger.debug('Looked up window for session', 'Notification', {
+								sessionId: metadata.sessionId,
+								foundWindowId: targetWindowId,
+							});
+						}
+
+						if (targetWindowId) {
+							const entry = windowRegistry.get(targetWindowId);
+							if (entry && !entry.browserWindow.isDestroyed()) {
+								const win = entry.browserWindow;
+								if (win.isMinimized()) {
+									win.restore();
+								}
+								win.show();
+								win.focus();
+								logger.debug('Focused window from notification click', 'Notification', {
+									windowId: targetWindowId,
+								});
+							}
+						} else {
+							// Fallback: focus the primary window
+							const primary = windowRegistry.getPrimary();
+							if (primary && !primary.browserWindow.isDestroyed()) {
+								const win = primary.browserWindow;
+								if (win.isMinimized()) {
+									win.restore();
+								}
+								win.show();
+								win.focus();
+								logger.debug(
+									'Focused primary window (fallback) from notification click',
+									'Notification'
+								);
+							}
+						}
+					});
+
 					notification.show();
-					logger.debug('Showed OS notification', 'Notification', { title, body });
+					logger.debug('Showed OS notification', 'Notification', {
+						title,
+						body,
+						sessionId: metadata?.sessionId,
+						windowId: metadata?.windowId,
+					});
 					return { success: true };
 				} else {
 					logger.warn('OS notifications not supported on this platform', 'Notification');

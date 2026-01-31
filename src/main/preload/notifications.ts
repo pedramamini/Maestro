@@ -10,6 +10,16 @@
 import { ipcRenderer } from 'electron';
 
 /**
+ * Optional metadata for OS notifications
+ */
+export interface NotificationMetadata {
+	/** Session ID that triggered the notification */
+	sessionId?: string;
+	/** Window ID containing the session */
+	windowId?: string;
+}
+
+/**
  * Response from showing a notification
  */
 export interface NotificationShowResponse {
@@ -35,9 +45,14 @@ export function createNotificationApi() {
 		 * Show an OS notification
 		 * @param title - Notification title
 		 * @param body - Notification body text
+		 * @param metadata - Optional metadata (sessionId, windowId) for click handling
 		 */
-		show: (title: string, body: string): Promise<NotificationShowResponse> =>
-			ipcRenderer.invoke('notification:show', title, body),
+		show: (
+			title: string,
+			body: string,
+			metadata?: NotificationMetadata
+		): Promise<NotificationShowResponse> =>
+			ipcRenderer.invoke('notification:show', title, body, metadata),
 
 		/**
 		 * Speak text using system TTS

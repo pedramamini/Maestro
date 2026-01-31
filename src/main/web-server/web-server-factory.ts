@@ -1,6 +1,12 @@
 /**
  * Web server factory for creating and configuring the web server.
  * Extracted from main/index.ts for better modularity.
+ *
+ * Multi-window support (GitHub issue #133):
+ * - Remote commands from web interface (executeCommand, switchMode, etc.)
+ *   are broadcast to ALL windows, not just the main window
+ * - Each renderer window filters commands based on its WindowContext.sessionIds
+ * - This ensures commands reach the window containing the target session
  */
 
 import { BrowserWindow, ipcMain } from 'electron';
@@ -8,6 +14,7 @@ import { WebServer } from './WebServer';
 import { getThemeById } from '../themes';
 import { getHistoryManager } from '../history-manager';
 import { logger } from '../utils/logger';
+import { windowRegistry } from '../window-registry';
 import type { ProcessManager } from '../process-manager';
 import type { StoredSession } from '../stores/types';
 import type { Group } from '../../shared/types';
@@ -39,6 +46,60 @@ export interface WebServerFactoryDependencies {
 	getMainWindow: () => BrowserWindow | null;
 	/** Function to get the process manager reference */
 	getProcessManager: () => ProcessManager | null;
+}
+
+/**
+ * Broadcasts an IPC message to all renderer windows.
+ * Used for remote commands from web interface to reach the window containing the target session.
+ * Falls back to mainWindow if WindowRegistry is empty (edge case during startup).
+ *
+ * @param channel - IPC channel name
+ * @param getMainWindow - Fallback function to get main window
+ * @param args - Arguments to send with the IPC message
+ * @returns True if message was sent to at least one window
+ */
+function broadcastToAllWindows(
+	channel: string,
+	getMainWindow: () => BrowserWindow | null,
+	...args: unknown[]
+): boolean {
+	const allWindows = windowRegistry.getAll();
+
+	if (allWindows.length > 0) {
+		let sentCount = 0;
+		for (const [_windowId, entry] of allWindows) {
+			const browserWindow = entry.browserWindow;
+			if (
+				browserWindow &&
+				!browserWindow.isDestroyed() &&
+				browserWindow.webContents &&
+				!browserWindow.webContents.isDestroyed()
+			) {
+				browserWindow.webContents.send(channel, ...args);
+				sentCount++;
+			}
+		}
+
+		if (sentCount > 1) {
+			logger.debug(`[Web→Desktop] Broadcast ${channel} to ${sentCount} windows`, 'WebServer');
+		}
+
+		return sentCount > 0;
+	}
+
+	// Fallback: single-window mode (pre-multi-window compatibility)
+	const mainWindow = getMainWindow();
+	if (
+		mainWindow &&
+		!mainWindow.isDestroyed() &&
+		mainWindow.webContents &&
+		!mainWindow.webContents.isDestroyed()
+	) {
+		mainWindow.webContents.send(channel, ...args);
+		return true;
+	}
+
+	return false;
 }
 
 /**
@@ -240,108 +301,119 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 		// Set up callback for web server to execute commands through the desktop
 		// This forwards AI commands to the renderer, ensuring single source of truth
 		// The renderer handles all spawn logic, state management, and broadcasts
+		// Multi-window: Broadcasts to ALL windows; renderer filters by WindowContext.sessionIds
 		server.setExecuteCommandCallback(
 			async (sessionId: string, command: string, inputMode?: 'ai' | 'terminal') => {
-				const mainWindow = getMainWindow();
-				if (!mainWindow) {
-					logger.warn('mainWindow is null for executeCommand', 'WebServer');
-					return false;
-				}
-
 				// Look up the session to get Claude session ID for logging
 				const sessions = sessionsStore.get<StoredSession[]>('sessions', []);
 				const session = sessions.find((s) => s.id === sessionId);
 				const agentSessionId = session?.agentSessionId || 'none';
 
-				// Forward to renderer - it will handle spawn, state, and everything else
-				// This ensures web commands go through exact same code path as desktop commands
-				// Pass inputMode so renderer uses the web's intended mode (avoids sync issues)
+				// Broadcast to all windows - the window containing this session will handle it
+				// Other windows will ignore the command (filtered by WindowContext.sessionIds)
 				logger.info(
-					`[Web → Renderer] Forwarding command | Maestro: ${sessionId} | Claude: ${agentSessionId} | Mode: ${inputMode || 'auto'} | Command: ${command.substring(0, 100)}`,
+					`[Web → Renderer] Broadcasting command | Maestro: ${sessionId} | Claude: ${agentSessionId} | Mode: ${inputMode || 'auto'} | Command: ${command.substring(0, 100)}`,
 					'WebServer'
 				);
-				mainWindow.webContents.send('remote:executeCommand', sessionId, command, inputMode);
-				return true;
+				const sent = broadcastToAllWindows(
+					'remote:executeCommand',
+					getMainWindow,
+					sessionId,
+					command,
+					inputMode
+				);
+				if (!sent) {
+					logger.warn('No windows available for executeCommand', 'WebServer');
+				}
+				return sent;
 			}
 		);
 
 		// Set up callback for web server to interrupt sessions through the desktop
 		// This forwards to the renderer which handles state updates and broadcasts
+		// Multi-window: Broadcasts to ALL windows; renderer filters by WindowContext.sessionIds
 		server.setInterruptSessionCallback(async (sessionId: string) => {
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for interrupt', 'WebServer');
-				return false;
+			// Broadcast to all windows - the window containing this session will handle it
+			logger.debug(`Broadcasting interrupt for session ${sessionId}`, 'WebServer');
+			const sent = broadcastToAllWindows('remote:interrupt', getMainWindow, sessionId);
+			if (!sent) {
+				logger.warn('No windows available for interrupt', 'WebServer');
 			}
-
-			// Forward to renderer - it will handle interrupt, state update, and broadcasts
-			// This ensures web interrupts go through exact same code path as desktop interrupts
-			logger.debug(`Forwarding interrupt to renderer for session ${sessionId}`, 'WebServer');
-			mainWindow.webContents.send('remote:interrupt', sessionId);
-			return true;
+			return sent;
 		});
 
 		// Set up callback for web server to switch session mode through the desktop
 		// This forwards to the renderer which handles state updates and broadcasts
+		// Multi-window: Broadcasts to ALL windows; renderer filters by WindowContext.sessionIds
 		server.setSwitchModeCallback(async (sessionId: string, mode: 'ai' | 'terminal') => {
 			logger.info(
 				`[Web→Desktop] Mode switch callback invoked: session=${sessionId}, mode=${mode}`,
 				'WebServer'
 			);
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for switchMode', 'WebServer');
-				return false;
+			// Broadcast to all windows - the window containing this session will handle it
+			logger.info(`[Web→Desktop] Broadcasting remote:switchMode`, 'WebServer');
+			const sent = broadcastToAllWindows('remote:switchMode', getMainWindow, sessionId, mode);
+			if (!sent) {
+				logger.warn('No windows available for switchMode', 'WebServer');
 			}
-
-			// Forward to renderer - it will handle mode switch and broadcasts
-			// This ensures web mode switches go through exact same code path as desktop
-			logger.info(`[Web→Desktop] Sending IPC remote:switchMode to renderer`, 'WebServer');
-			mainWindow.webContents.send('remote:switchMode', sessionId, mode);
-			return true;
+			return sent;
 		});
 
 		// Set up callback for web server to select/switch to a session in the desktop
 		// This forwards to the renderer which handles state updates and broadcasts
 		// If tabId is provided, also switches to that tab within the session
+		// Multi-window: Broadcasts to ALL windows; renderer filters by WindowContext.sessionIds
 		server.setSelectSessionCallback(async (sessionId: string, tabId?: string) => {
 			logger.info(
 				`[Web→Desktop] Session select callback invoked: session=${sessionId}, tab=${tabId || 'none'}`,
 				'WebServer'
 			);
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for selectSession', 'WebServer');
-				return false;
+			// Broadcast to all windows - the window containing this session will handle it
+			logger.info(`[Web→Desktop] Broadcasting remote:selectSession`, 'WebServer');
+			const sent = broadcastToAllWindows('remote:selectSession', getMainWindow, sessionId, tabId);
+			if (!sent) {
+				logger.warn('No windows available for selectSession', 'WebServer');
 			}
-
-			// Forward to renderer - it will handle session selection and broadcasts
-			logger.info(`[Web→Desktop] Sending IPC remote:selectSession to renderer`, 'WebServer');
-			mainWindow.webContents.send('remote:selectSession', sessionId, tabId);
-			return true;
+			return sent;
 		});
 
 		// Tab operation callbacks
+		// Multi-window: Broadcasts to ALL windows; renderer filters by WindowContext.sessionIds
 		server.setSelectTabCallback(async (sessionId: string, tabId: string) => {
 			logger.info(
 				`[Web→Desktop] Tab select callback invoked: session=${sessionId}, tab=${tabId}`,
 				'WebServer'
 			);
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for selectTab', 'WebServer');
-				return false;
+			const sent = broadcastToAllWindows('remote:selectTab', getMainWindow, sessionId, tabId);
+			if (!sent) {
+				logger.warn('No windows available for selectTab', 'WebServer');
 			}
-
-			mainWindow.webContents.send('remote:selectTab', sessionId, tabId);
-			return true;
+			return sent;
 		});
 
+		// newTab requires a synchronous response, so we need to target the specific window
+		// that contains the session. Broadcast wouldn't work as we'd get multiple responses.
 		server.setNewTabCallback(async (sessionId: string) => {
 			logger.info(`[Web→Desktop] New tab callback invoked: session=${sessionId}`, 'WebServer');
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for newTab', 'WebServer');
+
+			// Find the window containing this session
+			const targetWindowId = windowRegistry.getWindowForSession(sessionId);
+			let targetWindow: BrowserWindow | null = null;
+
+			if (targetWindowId) {
+				const entry = windowRegistry.get(targetWindowId);
+				if (entry && !entry.browserWindow.isDestroyed()) {
+					targetWindow = entry.browserWindow;
+				}
+			}
+
+			// Fall back to main window if session's window not found
+			if (!targetWindow) {
+				targetWindow = getMainWindow();
+			}
+
+			if (!targetWindow) {
+				logger.warn('No window available for newTab', 'WebServer');
 				return null;
 			}
 
@@ -358,7 +430,7 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				};
 
 				ipcMain.once(responseChannel, handleResponse);
-				mainWindow.webContents.send('remote:newTab', sessionId, responseChannel);
+				targetWindow!.webContents.send('remote:newTab', sessionId, responseChannel);
 
 				// Timeout after 5 seconds - clean up the listener to prevent memory leak
 				const timeoutId = setTimeout(() => {
@@ -376,14 +448,11 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				`[Web→Desktop] Close tab callback invoked: session=${sessionId}, tab=${tabId}`,
 				'WebServer'
 			);
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for closeTab', 'WebServer');
-				return false;
+			const sent = broadcastToAllWindows('remote:closeTab', getMainWindow, sessionId, tabId);
+			if (!sent) {
+				logger.warn('No windows available for closeTab', 'WebServer');
 			}
-
-			mainWindow.webContents.send('remote:closeTab', sessionId, tabId);
-			return true;
+			return sent;
 		});
 
 		server.setRenameTabCallback(async (sessionId: string, tabId: string, newName: string) => {
@@ -391,14 +460,17 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				`[Web→Desktop] Rename tab callback invoked: session=${sessionId}, tab=${tabId}, newName=${newName}`,
 				'WebServer'
 			);
-			const mainWindow = getMainWindow();
-			if (!mainWindow) {
-				logger.warn('mainWindow is null for renameTab', 'WebServer');
-				return false;
+			const sent = broadcastToAllWindows(
+				'remote:renameTab',
+				getMainWindow,
+				sessionId,
+				tabId,
+				newName
+			);
+			if (!sent) {
+				logger.warn('No windows available for renameTab', 'WebServer');
 			}
-
-			mainWindow.webContents.send('remote:renameTab', sessionId, tabId, newName);
-			return true;
+			return sent;
 		});
 
 		return server;

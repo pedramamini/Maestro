@@ -1,6 +1,7 @@
 /**
  * @file safe-send.test.ts
  * @description Unit tests for safe IPC message sending utility.
+ * Tests multi-window broadcast functionality (GitHub issue #133).
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
@@ -16,8 +17,17 @@ vi.mock('../../../main/utils/logger', () => ({
 	},
 }));
 
+// Mock the window registry - use factory with inline mock object
+// Note: vi.mock is hoisted, so we must define the mock inline
+vi.mock('../../../main/window-registry', () => ({
+	windowRegistry: {
+		getAll: vi.fn().mockReturnValue([]),
+	},
+}));
+
 import { createSafeSend, type GetMainWindow, type SafeSendFn } from '../../../main/utils/safe-send';
 import { logger } from '../../../main/utils/logger';
+import { windowRegistry } from '../../../main/window-registry';
 
 describe('utils/safe-send', () => {
 	let mockWebContents: Partial<WebContents>;
@@ -42,6 +52,9 @@ describe('utils/safe-send', () => {
 
 		// Default getter returns the mock window
 		getMainWindow = vi.fn().mockReturnValue(mockWindow as BrowserWindow);
+
+		// Reset window registry mock - default to empty (triggers fallback to mainWindow)
+		vi.mocked(windowRegistry.getAll).mockReturnValue([]);
 
 		// Create safeSend with the mock
 		safeSend = createSafeSend(getMainWindow);
@@ -248,6 +261,187 @@ describe('utils/safe-send', () => {
 
 				safeSend('channel_with_underscores', 'data');
 				expect(mockWebContents.send).toHaveBeenCalledWith('channel_with_underscores', 'data');
+			});
+		});
+
+		describe('multi-window broadcast (GitHub issue #133)', () => {
+			it('should broadcast to all registered windows', () => {
+				const mockWebContents1: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+				const mockWebContents2: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+
+				const mockWindow1: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents1 as WebContents,
+				};
+				const mockWindow2: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents2 as WebContents,
+				};
+
+				// Set up window registry to return two windows
+				vi.mocked(windowRegistry.getAll).mockReturnValue([
+					['window-1', { browserWindow: mockWindow1, sessionIds: ['session-1'] }],
+					['window-2', { browserWindow: mockWindow2, sessionIds: ['session-2'] }],
+				]);
+
+				safeSend('process:data', 'session-1-ai-tab1', 'test data');
+
+				// Both windows should receive the message
+				expect(mockWebContents1.send).toHaveBeenCalledWith(
+					'process:data',
+					'session-1-ai-tab1',
+					'test data'
+				);
+				expect(mockWebContents2.send).toHaveBeenCalledWith(
+					'process:data',
+					'session-1-ai-tab1',
+					'test data'
+				);
+			});
+
+			it('should skip destroyed windows in multi-window broadcast', () => {
+				const mockWebContents1: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+				const mockWebContents2: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+
+				const mockWindow1: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false), // Window 1 is OK
+					webContents: mockWebContents1 as WebContents,
+				};
+				const mockWindow2: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(true), // Window 2 is destroyed
+					webContents: mockWebContents2 as WebContents,
+				};
+
+				vi.mocked(windowRegistry.getAll).mockReturnValue([
+					['window-1', { browserWindow: mockWindow1, sessionIds: ['session-1'] }],
+					['window-2', { browserWindow: mockWindow2, sessionIds: ['session-2'] }],
+				]);
+
+				safeSend('test-channel', 'data');
+
+				// Only window 1 should receive the message
+				expect(mockWebContents1.send).toHaveBeenCalledWith('test-channel', 'data');
+				expect(mockWebContents2.send).not.toHaveBeenCalled();
+			});
+
+			it('should fall back to mainWindow when registry is empty', () => {
+				// Registry returns empty array
+				vi.mocked(windowRegistry.getAll).mockReturnValue([]);
+
+				safeSend('test-channel', 'data');
+
+				// Should fall back to mainWindow
+				expect(mockWebContents.send).toHaveBeenCalledWith('test-channel', 'data');
+			});
+
+			it('should log when broadcasting to multiple windows', () => {
+				const mockWebContents1: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+				const mockWebContents2: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+
+				const mockWindow1: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents1 as WebContents,
+				};
+				const mockWindow2: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents2 as WebContents,
+				};
+
+				vi.mocked(windowRegistry.getAll).mockReturnValue([
+					['window-1', { browserWindow: mockWindow1, sessionIds: ['session-1'] }],
+					['window-2', { browserWindow: mockWindow2, sessionIds: ['session-2'] }],
+				]);
+
+				safeSend('test-channel', 'data');
+
+				// Should log when broadcasting to multiple windows
+				expect(logger.debug).toHaveBeenCalledWith(
+					expect.stringContaining('Broadcast IPC message to 2 windows'),
+					'IPC'
+				);
+			});
+
+			it('should not log when broadcasting to single window', () => {
+				const mockWebContents1: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+
+				const mockWindow1: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents1 as WebContents,
+				};
+
+				vi.mocked(windowRegistry.getAll).mockReturnValue([
+					['window-1', { browserWindow: mockWindow1, sessionIds: ['session-1'] }],
+				]);
+
+				safeSend('test-channel', 'data');
+
+				// Should NOT log for single window
+				expect(logger.debug).not.toHaveBeenCalledWith(
+					expect.stringContaining('Broadcast IPC message'),
+					'IPC'
+				);
+			});
+
+			it('should handle mixed valid and invalid windows gracefully', () => {
+				const mockWebContents1: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+				const mockWebContents2: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(true), // WebContents destroyed
+				};
+				const mockWebContents3: Partial<WebContents> = {
+					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
+				};
+
+				const mockWindow1: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents1 as WebContents,
+				};
+				const mockWindow2: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents2 as WebContents, // Has destroyed webContents
+				};
+				const mockWindow3: Partial<BrowserWindow> = {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					webContents: mockWebContents3 as WebContents,
+				};
+
+				vi.mocked(windowRegistry.getAll).mockReturnValue([
+					['window-1', { browserWindow: mockWindow1, sessionIds: ['session-1'] }],
+					['window-2', { browserWindow: mockWindow2, sessionIds: ['session-2'] }],
+					['window-3', { browserWindow: mockWindow3, sessionIds: ['session-3'] }],
+				]);
+
+				safeSend('test-channel', 'data');
+
+				// Windows 1 and 3 should receive, window 2 should be skipped
+				expect(mockWebContents1.send).toHaveBeenCalledWith('test-channel', 'data');
+				expect(mockWebContents2.send).not.toHaveBeenCalled();
+				expect(mockWebContents3.send).toHaveBeenCalledWith('test-channel', 'data');
 			});
 		});
 	});

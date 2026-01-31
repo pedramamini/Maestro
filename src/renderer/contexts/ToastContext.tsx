@@ -31,6 +31,8 @@ interface ToastContextType {
 	setAudioFeedback: (enabled: boolean, command: string) => void;
 	// OS notifications configuration
 	setOsNotifications: (enabled: boolean) => void;
+	// Window ID for notification click handling (multi-window support)
+	setWindowId: (windowId: string | null) => void;
 }
 
 const ToastContext = createContext<ToastContextType | undefined>(undefined);
@@ -52,6 +54,8 @@ export function ToastProvider({
 	const audioFeedbackRef = useRef({ enabled: false, command: '' });
 	// OS notifications state (configured from App.tsx via setOsNotifications)
 	const osNotificationsRef = useRef({ enabled: true }); // Default: on (matches useSettings default)
+	// Window ID for notification click handling (multi-window support)
+	const windowIdRef = useRef<string | null>(null);
 	// Ref for defaultDuration to avoid re-creating addToast callback when duration changes
 	const defaultDurationRef = useRef(defaultDuration);
 	defaultDurationRef.current = defaultDuration;
@@ -62,6 +66,10 @@ export function ToastProvider({
 
 	const setOsNotifications = useCallback((enabled: boolean) => {
 		osNotificationsRef.current = { enabled };
+	}, []);
+
+	const setWindowId = useCallback((windowId: string | null) => {
+		windowIdRef.current = windowId;
 	}, []);
 
 	const addToast = useCallback((toast: Omit<Toast, 'id' | 'timestamp'>) => {
@@ -162,7 +170,16 @@ export function ToastProvider({
 			const prefix = bodyParts.length > 0 ? `${bodyParts.join(' > ')}: ` : '';
 			const notifBody = prefix + firstSentence;
 
-			window.maestro.notification.show(notifTitle, notifBody).catch((err) => {
+			// Build metadata for notification click handling (multi-window support)
+			const notifMetadata: { sessionId?: string; windowId?: string } = {};
+			if (toast.sessionId) {
+				notifMetadata.sessionId = toast.sessionId;
+			}
+			if (windowIdRef.current) {
+				notifMetadata.windowId = windowIdRef.current;
+			}
+
+			window.maestro.notification.show(notifTitle, notifBody, notifMetadata).catch((err) => {
 				console.error('[ToastContext] Failed to show OS notification:', err);
 			});
 		}
@@ -194,6 +211,7 @@ export function ToastProvider({
 				setDefaultDuration,
 				setAudioFeedback,
 				setOsNotifications,
+				setWindowId,
 			}}
 		>
 			{children}

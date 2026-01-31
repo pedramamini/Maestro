@@ -23,6 +23,12 @@ export interface UseRemoteIntegrationDeps {
 	defaultSaveToHistory: boolean;
 	/** Default value for showThinking on new tabs */
 	defaultShowThinking: boolean;
+	/**
+	 * Ref to session IDs assigned to this window (multi-window support).
+	 * Commands for sessions not in this list will be ignored (handled by another window).
+	 * If empty/undefined, all sessions are handled (single-window mode or fallback).
+	 */
+	windowSessionIdsRef?: React.MutableRefObject<string[]>;
 }
 
 /**
@@ -60,7 +66,22 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		setActiveSessionId,
 		defaultSaveToHistory,
 		defaultShowThinking,
+		windowSessionIdsRef,
 	} = deps;
+
+	/**
+	 * Helper to check if this window should handle a command for the given session.
+	 * Multi-window support: Only handle commands for sessions assigned to this window.
+	 * Falls back to handling all sessions if windowSessionIdsRef is not provided
+	 * (single-window mode) or empty (no sessions explicitly assigned).
+	 */
+	const shouldHandleSession = (sessionId: string): boolean => {
+		if (!windowSessionIdsRef?.current || windowSessionIdsRef.current.length === 0) {
+			// Single-window mode or fallback - handle all sessions
+			return true;
+		}
+		return windowSessionIdsRef.current.includes(sessionId);
+	};
 
 	// Broadcast active session change to web clients
 	useEffect(() => {
@@ -71,6 +92,7 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 	// Handle remote commands from web interface
 	// This allows web commands to go through the exact same code path as desktop commands
+	// Multi-window: Only handle commands for sessions assigned to this window
 	useEffect(() => {
 		console.log('[useRemoteIntegration] Setting up onRemoteCommand listener');
 		const unsubscribeRemote = window.maestro.process.onRemoteCommand(
@@ -80,6 +102,15 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 					command: command?.substring(0, 50),
 					inputMode,
 				});
+
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					console.log(
+						'[useRemoteIntegration] Session not in this window, ignoring command:',
+						sessionId
+					);
+					return;
+				}
 
 				// Verify the session exists
 				const targetSession = sessionsRef.current.find((s) => s.id === sessionId);
@@ -138,9 +169,15 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 	// Handle remote mode switches from web interface
 	// This allows web mode switches to go through the same code path as desktop
+	// Multi-window: Only handle for sessions assigned to this window
 	useEffect(() => {
 		const unsubscribeSwitchMode = window.maestro.process.onRemoteSwitchMode(
 			(sessionId: string, mode: 'ai' | 'terminal') => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					return;
+				}
+
 				// Find the session and update its mode
 				setSessions((prev) => {
 					const session = prev.find((s) => s.id === sessionId);
@@ -168,9 +205,15 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 	// Handle remote interrupts from web interface
 	// This allows web interrupts to go through the same code path as desktop (handleInterrupt)
+	// Multi-window: Only handle for sessions assigned to this window
 	useEffect(() => {
 		const unsubscribeInterrupt = window.maestro.process.onRemoteInterrupt(
 			async (sessionId: string) => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					return;
+				}
+
 				// Find the session
 				const session = sessionsRef.current.find((s) => s.id === sessionId);
 				if (!session) {
@@ -212,9 +255,15 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 	// Handle remote session selection from web interface
 	// This allows web clients to switch the active session in the desktop app
 	// If tabId is provided, also switches to that tab within the session
+	// Multi-window: Only handle for sessions assigned to this window
 	useEffect(() => {
 		const unsubscribeSelectSession = window.maestro.process.onRemoteSelectSession(
 			(sessionId: string, tabId?: string) => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					return;
+				}
+
 				// Check if session exists
 				const session = sessionsRef.current.find((s) => s.id === sessionId);
 				if (!session) {
@@ -242,8 +291,14 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 		// Handle remote tab selection from web interface
 		// This also switches to the session if not already active
+		// Multi-window: Only handle for sessions assigned to this window
 		const unsubscribeSelectTab = window.maestro.process.onRemoteSelectTab(
 			(sessionId: string, tabId: string) => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					return;
+				}
+
 				// First, switch to the session if not already active
 				const currentActiveId = activeSessionIdRef.current;
 				if (currentActiveId !== sessionId) {
@@ -265,8 +320,16 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		);
 
 		// Handle remote new tab from web interface
+		// Multi-window: Only handle for sessions assigned to this window
 		const unsubscribeNewTab = window.maestro.process.onRemoteNewTab(
 			(sessionId: string, responseChannel: string) => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					// Send null response so caller doesn't wait forever
+					window.maestro.process.sendRemoteNewTabResponse(responseChannel, null);
+					return;
+				}
+
 				let newTabId: string | null = null;
 
 				setSessions((prev) =>
@@ -294,8 +357,14 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		);
 
 		// Handle remote close tab from web interface
+		// Multi-window: Only handle for sessions assigned to this window
 		const unsubscribeCloseTab = window.maestro.process.onRemoteCloseTab(
 			(sessionId: string, tabId: string) => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					return;
+				}
+
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== sessionId) return s;
@@ -309,8 +378,14 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 		);
 
 		// Handle remote rename tab from web interface
+		// Multi-window: Only handle for sessions assigned to this window
 		const unsubscribeRenameTab = window.maestro.process.onRemoteRenameTab(
 			(sessionId: string, tabId: string, newName: string) => {
+				// Multi-window: Skip if this session is not assigned to this window
+				if (!shouldHandleSession(sessionId)) {
+					return;
+				}
+
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== sessionId) return s;

@@ -12,17 +12,32 @@ import { ipcMain } from 'electron';
 const mocks = vi.hoisted(() => ({
 	mockNotificationShow: vi.fn(),
 	mockNotificationIsSupported: vi.fn().mockReturnValue(true),
+	mockNotificationOn: vi.fn(),
+	mockWindowRegistryGet: vi.fn(),
+	mockWindowRegistryGetPrimary: vi.fn(),
+	mockWindowRegistryGetWindowForSession: vi.fn(),
 }));
 
 // Mock electron with a proper class for Notification
 vi.mock('electron', () => {
 	// Create a proper class for Notification
 	class MockNotification {
+		private eventHandlers: Map<string, Function> = new Map();
+
 		constructor(_options: { title: string; body: string; silent?: boolean }) {
 			// Store options if needed for assertions
 		}
 		show() {
 			mocks.mockNotificationShow();
+		}
+		on(event: string, handler: Function) {
+			this.eventHandlers.set(event, handler);
+			mocks.mockNotificationOn(event, handler);
+		}
+		// Helper to trigger click event for testing
+		simulateClick() {
+			const clickHandler = this.eventHandlers.get('click');
+			if (clickHandler) clickHandler();
 		}
 		static isSupported() {
 			return mocks.mockNotificationIsSupported();
@@ -39,6 +54,15 @@ vi.mock('electron', () => {
 		},
 	};
 });
+
+// Mock window registry
+vi.mock('../../../../main/window-registry', () => ({
+	windowRegistry: {
+		get: mocks.mockWindowRegistryGet,
+		getPrimary: mocks.mockWindowRegistryGetPrimary,
+		getWindowForSession: mocks.mockWindowRegistryGetWindowForSession,
+	},
+}));
 
 // Mock logger
 vi.mock('../../../../main/utils/logger', () => ({
@@ -102,7 +126,11 @@ describe('Notification IPC Handlers', () => {
 
 		// Reset mocks
 		mocks.mockNotificationIsSupported.mockReturnValue(true);
-		mocks.mockNotificationShow.mockClear();
+		mocks.mockNotificationShow.mockReset(); // Use mockReset to clear implementation
+		mocks.mockNotificationOn.mockClear();
+		mocks.mockWindowRegistryGet.mockReset();
+		mocks.mockWindowRegistryGetPrimary.mockReset();
+		mocks.mockWindowRegistryGetWindowForSession.mockReset();
 
 		// Capture registered handlers
 		vi.mocked(ipcMain.handle).mockImplementation((channel: string, handler: Function) => {
@@ -179,6 +207,57 @@ describe('Notification IPC Handlers', () => {
 
 			expect(result.success).toBe(false);
 			expect(result.error).toBe('Error: Notification failed');
+		});
+
+		it('should register click handler on notification', async () => {
+			const handler = handlers.get('notification:show')!;
+			await handler({}, 'Test Title', 'Test Body');
+
+			expect(mocks.mockNotificationOn).toHaveBeenCalledWith('click', expect.any(Function));
+		});
+
+		it('should accept optional metadata with sessionId and windowId', async () => {
+			const handler = handlers.get('notification:show')!;
+			const result = await handler({}, 'Test Title', 'Test Body', {
+				sessionId: 'session-123',
+				windowId: 'window-456',
+			});
+
+			expect(result.success).toBe(true);
+			expect(mocks.mockNotificationShow).toHaveBeenCalled();
+			expect(mocks.mockNotificationOn).toHaveBeenCalledWith('click', expect.any(Function));
+		});
+
+		it('should work with only sessionId in metadata', async () => {
+			const handler = handlers.get('notification:show')!;
+			const result = await handler({}, 'Test Title', 'Test Body', {
+				sessionId: 'session-123',
+			});
+
+			expect(result.success).toBe(true);
+		});
+
+		it('should work with only windowId in metadata', async () => {
+			const handler = handlers.get('notification:show')!;
+			const result = await handler({}, 'Test Title', 'Test Body', {
+				windowId: 'window-456',
+			});
+
+			expect(result.success).toBe(true);
+		});
+
+		it('should work with empty metadata object', async () => {
+			const handler = handlers.get('notification:show')!;
+			const result = await handler({}, 'Test Title', 'Test Body', {});
+
+			expect(result.success).toBe(true);
+		});
+
+		it('should work without metadata parameter', async () => {
+			const handler = handlers.get('notification:show')!;
+			const result = await handler({}, 'Test Title', 'Test Body');
+
+			expect(result.success).toBe(true);
 		});
 	});
 

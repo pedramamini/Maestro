@@ -386,9 +386,11 @@ describe('ToastContext', () => {
 
 			// Title is project field or fallback to toast title
 			// Body is [Group > ] [TabName: ] First sentence of message
+			// Third argument is metadata (empty when no sessionId)
 			expect(window.maestro.notification.show).toHaveBeenCalledWith(
 				'Notification Test',
-				'MyGroup > MyTab: OS notification message'
+				'MyGroup > MyTab: OS notification message',
+				{}
 			);
 		});
 
@@ -416,9 +418,11 @@ describe('ToastContext', () => {
 
 			// Title is project field or fallback to toast title
 			// Body uses first 8 chars of agentSessionId when no tabName
+			// Third argument is metadata (empty when no sessionId)
 			expect(window.maestro.notification.show).toHaveBeenCalledWith(
 				'Session ID Test',
-				'ErrorGroup > 12345678: Error message'
+				'ErrorGroup > 12345678: Error message',
+				{}
 			);
 		});
 
@@ -445,9 +449,11 @@ describe('ToastContext', () => {
 
 			// Title is project field or fallback to toast title
 			// Body is [Group: ] First sentence of message
+			// Third argument is metadata (empty when no sessionId)
 			expect(window.maestro.notification.show).toHaveBeenCalledWith(
 				'Group Only Test',
-				'OnlyGroup: Warning message'
+				'OnlyGroup: Warning message',
+				{}
 			);
 		});
 
@@ -473,9 +479,11 @@ describe('ToastContext', () => {
 
 			// Title is project field or fallback to toast title
 			// Body is just the first sentence when no group/tab
+			// Third argument is metadata (empty when no sessionId)
 			expect(window.maestro.notification.show).toHaveBeenCalledWith(
 				'Fallback Title',
-				'Info message'
+				'Info message',
+				{}
 			);
 		});
 
@@ -1099,9 +1107,40 @@ describe('ToastContext', () => {
 
 			// Title is project field or fallback to toast title
 			// Body is [TabName: ] First sentence of message
+			// Third argument is metadata (empty when no sessionId)
 			expect(window.maestro.notification.show).toHaveBeenCalledWith(
 				'Tab Only',
-				'OnlyTabName: Message'
+				'OnlyTabName: Message',
+				{}
+			);
+		});
+
+		it('includes sessionId in metadata when provided', async () => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
+			let contextValue: ReturnType<typeof useToast> | null = null;
+
+			renderWithProvider(
+				<ToastConsumer
+					onMount={(ctx) => {
+						contextValue = ctx;
+					}}
+				/>
+			);
+
+			await act(async () => {
+				contextValue!.addToast({
+					type: 'success',
+					title: 'With Session',
+					message: 'Session message',
+					sessionId: 'session-123',
+				});
+			});
+
+			// Third argument should include sessionId for notification click handling
+			expect(window.maestro.notification.show).toHaveBeenCalledWith(
+				'With Session',
+				'Session message',
+				{ sessionId: 'session-123' }
 			);
 		});
 	});

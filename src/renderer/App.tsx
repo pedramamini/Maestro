@@ -196,6 +196,7 @@ function MaestroConsoleInner() {
 		setDefaultDuration: setToastDefaultDuration,
 		setAudioFeedback,
 		setOsNotifications,
+		setWindowId: setToastWindowId,
 	} = useToast();
 
 	// --- MODAL STATE (centralized modal state management) ---
@@ -560,6 +561,13 @@ function MaestroConsoleInner() {
 		activeSessionId: windowActiveSessionId,
 		isLoaded: windowIsLoaded,
 	} = useWindow();
+
+	// Ref to track windowSessionIds for multi-window remote integration
+	// Used by useRemoteIntegration to filter commands by window ownership
+	const windowSessionIdsRef = useRef<string[]>([]);
+	useEffect(() => {
+		windowSessionIdsRef.current = windowSessionIds || [];
+	}, [windowSessionIds]);
 
 	/**
 	 * Sessions filtered for this window's tab bar.
@@ -976,6 +984,11 @@ function MaestroConsoleInner() {
 	useEffect(() => {
 		setOsNotifications(osNotificationsEnabled);
 	}, [osNotificationsEnabled, setOsNotifications]);
+
+	// Sync window ID to ToastContext for multi-window notification click handling
+	useEffect(() => {
+		setToastWindowId(windowId);
+	}, [windowId, setToastWindowId]);
 
 	// Expose playground() function for developer console
 	useEffect(() => {
@@ -3861,6 +3874,7 @@ function MaestroConsoleInner() {
 	const { getSuggestions: getAtMentionSuggestions } = useAtMentionCompletion(activeSession);
 
 	// Remote integration hook - handles web interface communication
+	// Multi-window: Pass windowSessionIdsRef so remote commands are filtered by window ownership
 	useRemoteIntegration({
 		activeSessionId,
 		isLiveMode,
@@ -3870,6 +3884,7 @@ function MaestroConsoleInner() {
 		setActiveSessionId,
 		defaultSaveToHistory,
 		defaultShowThinking,
+		windowSessionIdsRef,
 	});
 
 	// Web broadcasting hook - handles external history change notifications
@@ -4650,9 +4665,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// PERF: Memoize thinkingSessions at App level to avoid passing full sessions array to children.
 	// This prevents InputArea from re-rendering on unrelated session updates (e.g., terminal output).
 	// The computation is O(n) but only runs when sessions array changes, not on every keystroke.
+	// Multi-window support (GitHub issue #133): Only show thinking sessions that are in this window.
+	// Other windows should not show ThinkingStatusPill indicators for sessions they don't contain.
 	const thinkingSessions = useMemo(
-		() => sessions.filter((s) => s.state === 'busy' && s.busySource === 'ai'),
-		[sessions]
+		() =>
+			sessions.filter((s) => {
+				// Must be busy with AI source
+				if (s.state !== 'busy' || s.busySource !== 'ai') return false;
+				// If window state isn't loaded yet or no sessions assigned, show all
+				if (!windowIsLoaded || !windowSessionIds || windowSessionIds.length === 0) {
+					return true;
+				}
+				// Only include sessions that are in this window
+				return windowSessionIds.includes(s.id);
+			}),
+		[sessions, windowIsLoaded, windowSessionIds]
 	);
 
 	// Images are stored per-tab and only used in AI mode
@@ -6176,16 +6203,30 @@ You are taking over this conversation. Based on the context above, provide a bri
 		return activeSession ? getBatchState(activeSession.id) : null;
 	}, [activeSession, getBatchState]);
 
-	// Get batch state for display - prioritize the session with an active batch run,
-	// falling back to the active session's state. This ensures AutoRun progress is
-	// displayed correctly regardless of which tab/session the user is viewing.
+	// Get batch state for display - prioritize the session with an active batch run
+	// that is IN THIS WINDOW, falling back to the active session's state.
+	// Multi-window support (GitHub issue #133): Only show Auto Run indicators for
+	// sessions that are open in this window. Other windows should not show Auto Run
+	// indicators for sessions they don't contain.
 	// Quick Win 4: Memoized to prevent unnecessary re-calculations
 	const activeBatchRunState = useMemo(() => {
 		if (activeBatchSessionIds.length > 0) {
-			return getBatchState(activeBatchSessionIds[0]);
+			// Filter active batch sessions to only those in this window
+			const windowBatchSessionIds = activeBatchSessionIds.filter((sessionId) => {
+				// If window state isn't loaded yet or no sessions assigned, show all
+				if (!windowIsLoaded || !windowSessionIds || windowSessionIds.length === 0) {
+					return true;
+				}
+				return windowSessionIds.includes(sessionId);
+			});
+
+			// Return the first active batch session that's in this window
+			if (windowBatchSessionIds.length > 0) {
+				return getBatchState(windowBatchSessionIds[0]);
+			}
 		}
 		return activeSession ? getBatchState(activeSession.id) : getBatchState('');
-	}, [activeBatchSessionIds, activeSession, getBatchState]);
+	}, [activeBatchSessionIds, activeSession, getBatchState, windowIsLoaded, windowSessionIds]);
 
 	// Inline wizard context for /wizard command
 	// This manages the state for the inline wizard that creates/iterates on Auto Run documents
@@ -7533,6 +7574,15 @@ You are taking over this conversation. Based on the context above, provide a bri
 					);
 				}
 
+				// Set this window as the initiator for multi-window support
+				// Group Chat panel only shows in the initiating window
+				if (windowId && chat.initiatorWindowId !== windowId) {
+					await window.maestro.groupChat.update(id, { initiatorWindowId: windowId });
+					setGroupChats((prev) =>
+						prev.map((c) => (c.id === id ? { ...c, initiatorWindowId: windowId } : c))
+					);
+				}
+
 				// Focus the input after the component renders
 				setTimeout(() => {
 					setActiveFocus('main');
@@ -7540,7 +7590,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				}, 100);
 			}
 		},
-		[groupChatStates, allGroupChatParticipantStates]
+		[groupChatStates, allGroupChatParticipantStates, windowId]
 	);
 
 	const handleCloseGroupChat = useCallback(() => {
@@ -12393,6 +12443,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleOpenLastDocumentGraph,
 	});
 
+	// Determine if the active group chat panel should show in this window
+	// In multi-window mode, the Group Chat panel only appears in the initiating window.
+	// Sessions in other windows can participate in the chat but won't see the panel UI.
+	const activeGroupChat = activeGroupChatId
+		? groupChats.find((c) => c.id === activeGroupChatId)
+		: null;
+	const showGroupChatPanel =
+		activeGroupChatId &&
+		activeGroupChat &&
+		// Show if no initiatorWindowId set (legacy/single-window mode) or if this window initiated it
+		(!activeGroupChat.initiatorWindowId || activeGroupChat.initiatorWindowId === windowId);
+
 	return (
 		<GitStatusProvider sessions={sessions} activeSessionId={activeSessionId}>
 			<div
@@ -13013,124 +13075,121 @@ You are taking over this conversation. Based on the context above, provide a bri
 				)}
 
 				{/* --- GROUP CHAT VIEW (shown when a group chat is active, hidden when log viewer open) --- */}
-				{!logViewerOpen &&
-					activeGroupChatId &&
-					groupChats.find((c) => c.id === activeGroupChatId) && (
-						<>
-							<div className="flex-1 flex flex-col min-w-0">
-								<GroupChatPanel
-									theme={theme}
-									groupChat={groupChats.find((c) => c.id === activeGroupChatId)!}
-									messages={groupChatMessages}
-									state={groupChatState}
-									totalCost={(() => {
-										const chat = groupChats.find((c) => c.id === activeGroupChatId);
-										const participantsCost = (chat?.participants || []).reduce(
-											(sum, p) => sum + (p.totalCost || 0),
-											0
-										);
-										const modCost = moderatorUsage?.totalCost || 0;
-										return participantsCost + modCost;
-									})()}
-									costIncomplete={(() => {
-										const chat = groupChats.find((c) => c.id === activeGroupChatId);
-										const participants = chat?.participants || [];
-										// Check if any participant is missing cost data
-										const anyParticipantMissingCost = participants.some(
-											(p) => p.totalCost === undefined || p.totalCost === null
-										);
-										// Moderator is also considered - if no usage stats yet, cost is incomplete
-										const moderatorMissingCost =
-											moderatorUsage?.totalCost === undefined || moderatorUsage?.totalCost === null;
-										return anyParticipantMissingCost || moderatorMissingCost;
-									})()}
-									onSendMessage={handleSendGroupChatMessage}
-									onClose={handleCloseGroupChat}
-									onRename={() => setShowRenameGroupChatModal(activeGroupChatId)}
-									onShowInfo={() => setShowGroupChatInfo(true)}
-									rightPanelOpen={rightPanelOpen}
-									onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
-									shortcuts={shortcuts}
-									sessions={sessions}
-									onDraftChange={handleGroupChatDraftChange}
-									onOpenPromptComposer={() => setPromptComposerOpen(true)}
-									stagedImages={groupChatStagedImages}
-									setStagedImages={setGroupChatStagedImages}
-									readOnlyMode={groupChatReadOnlyMode}
-									setReadOnlyMode={setGroupChatReadOnlyMode}
-									inputRef={groupChatInputRef}
-									handlePaste={handlePaste}
-									handleDrop={handleDrop}
-									onOpenLightbox={handleSetLightboxImage}
-									executionQueue={groupChatExecutionQueue.filter(
-										(item) => item.tabId === activeGroupChatId
-									)}
-									onRemoveQueuedItem={handleRemoveGroupChatQueueItem}
-									onReorderQueuedItems={handleReorderGroupChatQueueItems}
-									markdownEditMode={markdownEditMode}
-									onToggleMarkdownEditMode={() => setMarkdownEditMode(!markdownEditMode)}
-									maxOutputLines={maxOutputLines}
-									enterToSendAI={enterToSendAI}
-									setEnterToSendAI={setEnterToSendAI}
-									showFlashNotification={(message: string) => {
-										setSuccessFlashNotification(message);
-										setTimeout(() => setSuccessFlashNotification(null), 2000);
-									}}
-									participantColors={groupChatParticipantColors}
-									messagesRef={groupChatMessagesRef}
-								/>
-							</div>
-							<GroupChatRightPanel
+				{/* In multi-window mode, Group Chat panel only shows in the initiating window */}
+				{!logViewerOpen && showGroupChatPanel && (
+					<>
+						<div className="flex-1 flex flex-col min-w-0">
+							<GroupChatPanel
 								theme={theme}
-								groupChatId={activeGroupChatId}
-								participants={
-									groupChats.find((c) => c.id === activeGroupChatId)?.participants || []
-								}
-								participantStates={participantStates}
-								participantSessionPaths={
-									new Map(
-										sessions
-											.filter((s) =>
-												groupChats
-													.find((c) => c.id === activeGroupChatId)
-													?.participants.some((p) => p.sessionId === s.id)
-											)
-											.map((s) => [s.id, s.projectRoot])
-									)
-								}
-								sessionSshRemoteNames={sessionSshRemoteNames}
-								isOpen={rightPanelOpen}
-								onToggle={() => setRightPanelOpen(!rightPanelOpen)}
-								width={rightPanelWidth}
-								setWidthState={setRightPanelWidth}
+								groupChat={groupChats.find((c) => c.id === activeGroupChatId)!}
+								messages={groupChatMessages}
+								state={groupChatState}
+								totalCost={(() => {
+									const chat = groupChats.find((c) => c.id === activeGroupChatId);
+									const participantsCost = (chat?.participants || []).reduce(
+										(sum, p) => sum + (p.totalCost || 0),
+										0
+									);
+									const modCost = moderatorUsage?.totalCost || 0;
+									return participantsCost + modCost;
+								})()}
+								costIncomplete={(() => {
+									const chat = groupChats.find((c) => c.id === activeGroupChatId);
+									const participants = chat?.participants || [];
+									// Check if any participant is missing cost data
+									const anyParticipantMissingCost = participants.some(
+										(p) => p.totalCost === undefined || p.totalCost === null
+									);
+									// Moderator is also considered - if no usage stats yet, cost is incomplete
+									const moderatorMissingCost =
+										moderatorUsage?.totalCost === undefined || moderatorUsage?.totalCost === null;
+									return anyParticipantMissingCost || moderatorMissingCost;
+								})()}
+								onSendMessage={handleSendGroupChatMessage}
+								onClose={handleCloseGroupChat}
+								onRename={() => setShowRenameGroupChatModal(activeGroupChatId)}
+								onShowInfo={() => setShowGroupChatInfo(true)}
+								rightPanelOpen={rightPanelOpen}
+								onToggleRightPanel={() => setRightPanelOpen(!rightPanelOpen)}
 								shortcuts={shortcuts}
-								moderatorAgentId={
-									groupChats.find((c) => c.id === activeGroupChatId)?.moderatorAgentId ||
-									'claude-code'
-								}
-								moderatorSessionId={
-									groupChats.find((c) => c.id === activeGroupChatId)?.moderatorSessionId || ''
-								}
-								moderatorAgentSessionId={
-									groupChats.find((c) => c.id === activeGroupChatId)?.moderatorAgentSessionId
-								}
-								moderatorState={groupChatState === 'moderator-thinking' ? 'busy' : 'idle'}
-								moderatorUsage={moderatorUsage}
-								activeTab={groupChatRightTab}
-								onTabChange={handleGroupChatRightTabChange}
-								onJumpToMessage={handleJumpToGroupChatMessage}
-								onColorsComputed={setGroupChatParticipantColors}
+								sessions={sessions}
+								onDraftChange={handleGroupChatDraftChange}
+								onOpenPromptComposer={() => setPromptComposerOpen(true)}
+								stagedImages={groupChatStagedImages}
+								setStagedImages={setGroupChatStagedImages}
+								readOnlyMode={groupChatReadOnlyMode}
+								setReadOnlyMode={setGroupChatReadOnlyMode}
+								inputRef={groupChatInputRef}
+								handlePaste={handlePaste}
+								handleDrop={handleDrop}
+								onOpenLightbox={handleSetLightboxImage}
+								executionQueue={groupChatExecutionQueue.filter(
+									(item) => item.tabId === activeGroupChatId
+								)}
+								onRemoveQueuedItem={handleRemoveGroupChatQueueItem}
+								onReorderQueuedItems={handleReorderGroupChatQueueItems}
+								markdownEditMode={markdownEditMode}
+								onToggleMarkdownEditMode={() => setMarkdownEditMode(!markdownEditMode)}
+								maxOutputLines={maxOutputLines}
+								enterToSendAI={enterToSendAI}
+								setEnterToSendAI={setEnterToSendAI}
+								showFlashNotification={(message: string) => {
+									setSuccessFlashNotification(message);
+									setTimeout(() => setSuccessFlashNotification(null), 2000);
+								}}
+								participantColors={groupChatParticipantColors}
+								messagesRef={groupChatMessagesRef}
 							/>
-						</>
-					)}
+						</div>
+						<GroupChatRightPanel
+							theme={theme}
+							groupChatId={activeGroupChatId}
+							participants={groupChats.find((c) => c.id === activeGroupChatId)?.participants || []}
+							participantStates={participantStates}
+							participantSessionPaths={
+								new Map(
+									sessions
+										.filter((s) =>
+											groupChats
+												.find((c) => c.id === activeGroupChatId)
+												?.participants.some((p) => p.sessionId === s.id)
+										)
+										.map((s) => [s.id, s.projectRoot])
+								)
+							}
+							sessionSshRemoteNames={sessionSshRemoteNames}
+							isOpen={rightPanelOpen}
+							onToggle={() => setRightPanelOpen(!rightPanelOpen)}
+							width={rightPanelWidth}
+							setWidthState={setRightPanelWidth}
+							shortcuts={shortcuts}
+							moderatorAgentId={
+								groupChats.find((c) => c.id === activeGroupChatId)?.moderatorAgentId ||
+								'claude-code'
+							}
+							moderatorSessionId={
+								groupChats.find((c) => c.id === activeGroupChatId)?.moderatorSessionId || ''
+							}
+							moderatorAgentSessionId={
+								groupChats.find((c) => c.id === activeGroupChatId)?.moderatorAgentSessionId
+							}
+							moderatorState={groupChatState === 'moderator-thinking' ? 'busy' : 'idle'}
+							moderatorUsage={moderatorUsage}
+							activeTab={groupChatRightTab}
+							onTabChange={handleGroupChatRightTabChange}
+							onJumpToMessage={handleJumpToGroupChatMessage}
+							onColorsComputed={setGroupChatParticipantColors}
+						/>
+					</>
+				)}
 
-				{/* --- CENTER WORKSPACE (hidden when no sessions, group chat is active, or log viewer is open) --- */}
-				{sessions.length > 0 && !activeGroupChatId && !logViewerOpen && (
+				{/* --- CENTER WORKSPACE (hidden when no sessions, group chat panel is showing, or log viewer is open) --- */}
+				{sessions.length > 0 && !showGroupChatPanel && !logViewerOpen && (
 					<MainPanel ref={mainPanelRef} {...mainPanelProps} />
 				)}
 
-				{/* --- RIGHT PANEL (hidden in mobile landscape, when no sessions, group chat is active, or log viewer is open) --- */}
-				{!isMobileLandscape && sessions.length > 0 && !activeGroupChatId && !logViewerOpen && (
+				{/* --- RIGHT PANEL (hidden in mobile landscape, when no sessions, group chat panel is showing, or log viewer is open) --- */}
+				{!isMobileLandscape && sessions.length > 0 && !showGroupChatPanel && !logViewerOpen && (
 					<ErrorBoundary>
 						<RightPanel ref={rightPanelRef} {...rightPanelProps} />
 					</ErrorBoundary>

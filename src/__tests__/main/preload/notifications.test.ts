@@ -33,7 +33,27 @@ describe('Notification Preload API', () => {
 
 			const result = await api.show('Test Title', 'Test Body');
 
-			expect(mockInvoke).toHaveBeenCalledWith('notification:show', 'Test Title', 'Test Body');
+			expect(mockInvoke).toHaveBeenCalledWith(
+				'notification:show',
+				'Test Title',
+				'Test Body',
+				undefined
+			);
+			expect(result).toEqual({ success: true });
+		});
+
+		it('should invoke notification:show with metadata', async () => {
+			mockInvoke.mockResolvedValue({ success: true });
+
+			const result = await api.show('Test Title', 'Test Body', {
+				sessionId: 'session-123',
+				windowId: 'window-456',
+			});
+
+			expect(mockInvoke).toHaveBeenCalledWith('notification:show', 'Test Title', 'Test Body', {
+				sessionId: 'session-123',
+				windowId: 'window-456',
+			});
 			expect(result).toEqual({ success: true });
 		});
 
