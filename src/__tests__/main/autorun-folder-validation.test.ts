@@ -323,7 +323,9 @@ describe('Auto Run Folder Validation', () => {
 				const filePath = '/test/autorun//document.md';
 				const resolved = path.resolve(filePath);
 
-				expect(resolved).toBe('/test/autorun/document.md');
+				// Normalize expected path to use platform separators
+				const expectedPath = path.resolve('/test/autorun/document.md');
+				expect(resolved).toBe(expectedPath);
 				expect(validatePathWithinFolder(filePath, folderPath)).toBe(true);
 			});
 
@@ -332,7 +334,9 @@ describe('Auto Run Folder Validation', () => {
 				const filePath = '/test/autorun/./document.md';
 				const resolved = path.resolve(filePath);
 
-				expect(resolved).toBe('/test/autorun/document.md');
+				// Normalize expected path to use platform separators
+				const expectedPath = path.resolve('/test/autorun/document.md');
+				expect(resolved).toBe(expectedPath);
 				expect(validatePathWithinFolder(filePath, folderPath)).toBe(true);
 			});
 
@@ -341,7 +345,9 @@ describe('Auto Run Folder Validation', () => {
 				const filePath = '/test/autorun/subfolder/../document.md';
 				const resolved = path.resolve(filePath);
 
-				expect(resolved).toBe('/test/autorun/document.md');
+				// Normalize expected path to use platform separators
+				const expectedPath = path.resolve('/test/autorun/document.md');
+				expect(resolved).toBe(expectedPath);
 				expect(validatePathWithinFolder(filePath, folderPath)).toBe(true);
 			});
 
@@ -350,19 +356,29 @@ describe('Auto Run Folder Validation', () => {
 				const filePath = '/test/autorun/../secret.md';
 				const resolved = path.resolve(filePath);
 
-				expect(resolved).toBe('/test/secret.md');
+				// Normalize expected path to use platform separators
+				const expectedPath = path.resolve('/test/secret.md');
+				expect(resolved).toBe(expectedPath);
 				expect(validatePathWithinFolder(filePath, folderPath)).toBe(false);
 			});
 
 			it('should handle path.join with potentially malicious input', () => {
 				const folderPath = '/test/autorun';
 				// path.join is dangerous with absolute paths in the second argument
-				const maliciousInput = '/etc/passwd';
+				const maliciousInput = process.platform === 'win32' ? 'C:\\etc\\passwd' : '/etc/passwd';
 				const joined = path.join(folderPath, maliciousInput);
 
-				// path.join treats absolute second arg as root - this is why validation is needed
-				expect(joined).toBe('/test/autorun/etc/passwd');
-				expect(validatePathWithinFolder(joined, folderPath)).toBe(true);
+				// On Unix, path.join treats absolute second arg as root
+				// On Windows, path.join concatenates since the second arg is not considered absolute in the same way
+				if (process.platform === 'win32') {
+					// On Windows, the result is concatenated
+					expect(joined).toBe('\\test\\autorun\\C:\\etc\\passwd');
+					expect(validatePathWithinFolder(joined, folderPath)).toBe(true); // It's still within the folder
+				} else {
+					// On Unix, path.join with absolute second arg gives the absolute path
+					expect(joined).toBe('/etc/passwd');
+					expect(validatePathWithinFolder(joined, folderPath)).toBe(false);
+				}
 
 				// But if someone bypasses join and uses the raw path:
 				expect(validatePathWithinFolder(maliciousInput, folderPath)).toBe(false);

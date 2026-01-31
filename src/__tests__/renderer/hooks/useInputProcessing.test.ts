@@ -540,14 +540,15 @@ describe('useInputProcessing', () => {
 		const speckitCommandsWithArgs: CustomAICommand[] = [
 			{
 				id: 'speckit-plan',
-				command: '/speckit.plan',
+				command: '/speckit.constitution',
 				description: 'Plan a feature',
-				prompt: '## User Input\n\n```text\n$ARGUMENTS\n```\n\nYou must plan based on the above input.',
+				prompt:
+					'## User Input\n\n```text\n$ARGUMENTS\n```\n\nYou must plan based on the above input.',
 				isBuiltIn: true,
 			},
 			{
 				id: 'speckit-specify',
-				command: '/speckit.specify',
+				command: '/commit',
 				description: 'Create a feature spec',
 				prompt: 'Create a spec for: $ARGUMENTS',
 				isBuiltIn: true,
@@ -558,7 +559,7 @@ describe('useInputProcessing', () => {
 			vi.useFakeTimers();
 
 			const deps = createDeps({
-				inputValue: '/speckit.plan Blah blah blah',
+				inputValue: '/speckit.constitution Blah blah blah',
 				customAICommands: speckitCommandsWithArgs,
 			});
 			const { result } = renderHook(() => useInputProcessing(deps));
@@ -582,7 +583,7 @@ describe('useInputProcessing', () => {
 			const queuedItem = callArgs[1] as QueuedItem;
 
 			expect(queuedItem.type).toBe('command');
-			expect(queuedItem.command).toBe('/speckit.plan');
+			expect(queuedItem.command).toBe('/speckit.constitution');
 			expect(queuedItem.commandArgs).toBe('Blah blah blah');
 
 			vi.useRealTimers();
@@ -592,7 +593,7 @@ describe('useInputProcessing', () => {
 			vi.useFakeTimers();
 
 			const deps = createDeps({
-				inputValue: '/speckit.plan',
+				inputValue: '/speckit.constitution',
 				customAICommands: speckitCommandsWithArgs,
 			});
 			const { result } = renderHook(() => useInputProcessing(deps));
@@ -608,7 +609,7 @@ describe('useInputProcessing', () => {
 			});
 
 			const queuedItem = mockProcessQueuedItemRef.current.mock.calls[0][1] as QueuedItem;
-			expect(queuedItem.command).toBe('/speckit.plan');
+			expect(queuedItem.command).toBe('/speckit.constitution');
 			expect(queuedItem.commandArgs).toBe('');
 
 			vi.useRealTimers();
@@ -618,7 +619,7 @@ describe('useInputProcessing', () => {
 			vi.useFakeTimers();
 
 			const deps = createDeps({
-				inputValue: '/speckit.specify Add user authentication with OAuth 2.0 support',
+				inputValue: '/commit Add user authentication with OAuth 2.0 support',
 				customAICommands: speckitCommandsWithArgs,
 			});
 			const { result } = renderHook(() => useInputProcessing(deps));
@@ -632,7 +633,7 @@ describe('useInputProcessing', () => {
 			});
 
 			const queuedItem = mockProcessQueuedItemRef.current.mock.calls[0][1] as QueuedItem;
-			expect(queuedItem.command).toBe('/speckit.specify');
+			expect(queuedItem.command).toBe('/commit');
 			expect(queuedItem.commandArgs).toBe('Add user authentication with OAuth 2.0 support');
 
 			vi.useRealTimers();
@@ -645,7 +646,7 @@ describe('useInputProcessing', () => {
 			});
 			const deps = createDeps({
 				activeSession: busySession,
-				inputValue: '/speckit.plan create a new feature',
+				inputValue: '/speckit.constitution create a new feature',
 				customAICommands: speckitCommandsWithArgs,
 			});
 			const { result } = renderHook(() => useInputProcessing(deps));
@@ -659,7 +660,7 @@ describe('useInputProcessing', () => {
 			const setSessionsCall = mockSetSessions.mock.calls[0][0];
 			const updatedSessions = setSessionsCall([busySession]);
 			expect(updatedSessions[0].executionQueue.length).toBe(1);
-			expect(updatedSessions[0].executionQueue[0].command).toBe('/speckit.plan');
+			expect(updatedSessions[0].executionQueue[0].command).toBe('/speckit.constitution');
 			expect(updatedSessions[0].executionQueue[0].commandArgs).toBe('create a new feature');
 		});
 	});

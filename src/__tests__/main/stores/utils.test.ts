@@ -150,7 +150,7 @@ describe('stores/utils', () => {
 		});
 
 		it('should reject paths in sensitive system directories', () => {
-			const sensitivePath = '/etc/maestro';
+			const sensitivePath = process.platform === 'win32' ? 'C:\\Windows\\maestro' : '/etc/maestro';
 			const mockStore = {
 				get: vi.fn().mockReturnValue(sensitivePath),
 			} as unknown as Store<BootstrapSettings>;

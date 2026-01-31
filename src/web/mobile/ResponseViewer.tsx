@@ -68,7 +68,7 @@ export interface ResponseViewerProps {
  */
 function formatTimestamp(timestamp: number): string {
 	const date = new Date(timestamp);
-	return date.toLocaleString(undefined, {
+	return date.toLocaleString('en-US', {
 		month: 'short',
 		day: 'numeric',
 		hour: '2-digit',

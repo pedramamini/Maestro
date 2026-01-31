@@ -130,6 +130,7 @@ diff --git a/src/test.ts b/src/test.ts
 
 	afterEach(() => {
 		vi.useRealTimers();
+		vi.restoreAllMocks();
 	});
 
 	describe('Initial render', () => {

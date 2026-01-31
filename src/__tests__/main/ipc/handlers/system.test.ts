@@ -1188,8 +1188,9 @@ describe('system IPC handlers', () => {
 			// Target directory exists
 			vi.mocked(fsSync.existsSync).mockImplementation((path: any) => {
 				if (path === '/new/path') return true;
-				// Source files exist
-				if (path.startsWith('/default/path/')) return true;
+				// Source files exist (handle both forward and back slashes)
+				const normalizedPath = path.replace(/\\/g, '/');
+				if (normalizedPath.startsWith('/default/path/')) return true;
 				return false;
 			});
 

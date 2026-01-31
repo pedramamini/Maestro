@@ -6,6 +6,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import path from 'path';
 
 // Mock electron modules
 vi.mock('electron', () => ({
@@ -157,7 +158,9 @@ describe('Group Chat getImages Handler', () => {
 
 			expect(result).toHaveProperty('screenshot.png');
 			expect(result['screenshot.png']).toMatch(/^data:image\/png;base64,/);
-			expect(mockReadFile).toHaveBeenCalledWith('/path/to/images/screenshot.png');
+			// Normalize expected path to use platform separators
+			const expectedPath = path.join('/path/to/images', 'screenshot.png');
+			expect(mockReadFile).toHaveBeenCalledWith(expectedPath);
 		});
 
 		it('reads JPG images with correct MIME type', async () => {

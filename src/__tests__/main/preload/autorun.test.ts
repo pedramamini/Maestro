@@ -112,7 +112,8 @@ describe('Autorun Preload API', () => {
 					'/project/.maestro',
 					'doc1',
 					'base64data',
-					'png'
+					'png',
+					undefined
 				);
 			});
 		});
@@ -126,7 +127,8 @@ describe('Autorun Preload API', () => {
 				expect(mockInvoke).toHaveBeenCalledWith(
 					'autorun:deleteImage',
 					'/project/.maestro',
-					'images/image.png'
+					'images/image.png',
+					undefined
 				);
 			});
 		});
@@ -137,7 +139,12 @@ describe('Autorun Preload API', () => {
 
 				const result = await api.listImages('/project/.maestro', 'doc1');
 
-				expect(mockInvoke).toHaveBeenCalledWith('autorun:listImages', '/project/.maestro', 'doc1');
+				expect(mockInvoke).toHaveBeenCalledWith(
+					'autorun:listImages',
+					'/project/.maestro',
+					'doc1',
+					undefined
+				);
 				expect(result).toEqual(['image1.png', 'image2.jpg']);
 			});
 		});
@@ -225,7 +232,8 @@ describe('Autorun Preload API', () => {
 				expect(mockInvoke).toHaveBeenCalledWith(
 					'autorun:createBackup',
 					'/project/.maestro',
-					'tasks.md'
+					'tasks.md',
+					undefined
 				);
 			});
 		});
@@ -239,7 +247,8 @@ describe('Autorun Preload API', () => {
 				expect(mockInvoke).toHaveBeenCalledWith(
 					'autorun:restoreBackup',
 					'/project/.maestro',
-					'tasks.md'
+					'tasks.md',
+					undefined
 				);
 			});
 		});
@@ -250,7 +259,11 @@ describe('Autorun Preload API', () => {
 
 				await api.deleteBackups('/project/.maestro');
 
-				expect(mockInvoke).toHaveBeenCalledWith('autorun:deleteBackups', '/project/.maestro');
+				expect(mockInvoke).toHaveBeenCalledWith(
+					'autorun:deleteBackups',
+					'/project/.maestro',
+					undefined
+				);
 			});
 		});
 
@@ -267,7 +280,8 @@ describe('Autorun Preload API', () => {
 					'autorun:createWorkingCopy',
 					'/project/.maestro',
 					'tasks.md',
-					1
+					1,
+					undefined
 				);
 				expect(result.workingCopyPath).toContain('loop-1');
 			});

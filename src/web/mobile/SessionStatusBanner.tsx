@@ -312,8 +312,8 @@ function TokenCount({ usageStats }: { usageStats?: UsageStats | null }) {
 				lineHeight: 1,
 				flexShrink: 0,
 			}}
-			title={`Input: ${inputTokens.toLocaleString()} | Output: ${outputTokens.toLocaleString()} | Total: ${totalTokens.toLocaleString()} tokens`}
-			aria-label={`${totalTokens.toLocaleString()} tokens used`}
+			title={`Input: ${inputTokens.toLocaleString('en-US')} | Output: ${outputTokens.toLocaleString('en-US')} | Total: ${totalTokens.toLocaleString('en-US')} tokens`}
+			aria-label={`${totalTokens.toLocaleString('en-US')} tokens used`}
 		>
 			<span style={{ fontSize: '10px' }}>📊</span>
 			<span>{formatTokens(totalTokens)}</span>

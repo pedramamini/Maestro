@@ -18,6 +18,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain, BrowserWindow, App } from 'electron';
 import { registerAutorunHandlers } from '../../../../main/ipc/handlers/autorun';
 import fs from 'fs/promises';
+import path from 'path';
 import Store from 'electron-store';
 import type { SshRemoteConfig } from '../../../../shared/types';
 
@@ -673,7 +674,7 @@ describe('autorun IPC handlers', () => {
 			const result = await handler!({} as any, '/test/project');
 
 			expect(result.success).toBe(true);
-			expect(fs.rm).toHaveBeenCalledWith('/test/project/Auto Run Docs', {
+			expect(fs.rm).toHaveBeenCalledWith(path.join('/test/project', 'Auto Run Docs'), {
 				recursive: true,
 				force: true,
 			});
@@ -1159,7 +1160,11 @@ describe('autorun IPC handlers', () => {
 
 				// Verify remote operations were called
 				expect(mockExistsRemote).toHaveBeenCalledWith('/remote/folder/images', sampleSshRemote);
-				expect(mockMkdirRemote).toHaveBeenCalledWith('/remote/folder/images', sampleSshRemote, true);
+				expect(mockMkdirRemote).toHaveBeenCalledWith(
+					'/remote/folder/images',
+					sampleSshRemote,
+					true
+				);
 				expect(mockWriteFileRemote).toHaveBeenCalledWith(
 					expect.stringContaining('/remote/folder/images/doc1-'),
 					expect.any(Buffer),
@@ -1287,10 +1292,7 @@ describe('autorun IPC handlers', () => {
 				expect(result.backupFilename).toBe('doc1.backup.md');
 
 				// Verify remote operations were called
-				expect(mockReadFileRemote).toHaveBeenCalledWith(
-					'/remote/folder/doc1.md',
-					sampleSshRemote
-				);
+				expect(mockReadFileRemote).toHaveBeenCalledWith('/remote/folder/doc1.md', sampleSshRemote);
 				expect(mockWriteFileRemote).toHaveBeenCalledWith(
 					'/remote/folder/doc1.backup.md',
 					'# Original Content',
@@ -1391,10 +1393,7 @@ describe('autorun IPC handlers', () => {
 				expect(result.originalPath).toBe('doc1');
 
 				// Verify remote operations were called
-				expect(mockReadFileRemote).toHaveBeenCalledWith(
-					'/remote/folder/doc1.md',
-					sampleSshRemote
-				);
+				expect(mockReadFileRemote).toHaveBeenCalledWith('/remote/folder/doc1.md', sampleSshRemote);
 				expect(mockMkdirRemote).toHaveBeenCalledWith('/remote/folder/Runs', sampleSshRemote, true);
 				expect(mockWriteFileRemote).toHaveBeenCalledWith(
 					expect.stringContaining('/remote/folder/Runs/doc1-'),
@@ -1562,12 +1561,7 @@ describe('autorun IPC handlers', () => {
 				mockWriteFileRemote.mockResolvedValue({ success: true });
 
 				const handler = handlers.get('autorun:createBackup');
-				const result = await handler!(
-					{} as any,
-					'/remote/folder',
-					'doc1',
-					'ssh-remote-1'
-				);
+				const result = await handler!({} as any, '/remote/folder', 'doc1', 'ssh-remote-1');
 
 				// The handler uses the disabled remote (doesn't check enabled status)
 				// Remote operations are called with the disabled remote config

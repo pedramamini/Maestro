@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain, App } from 'electron';
 import fs from 'fs/promises';
 import crypto from 'crypto';
+import path from 'path';
 import Store from 'electron-store';
 import {
 	registerMarketplaceHandlers,
@@ -230,7 +231,7 @@ describe('marketplace IPC handlers', () => {
 
 			// Verify cache was written
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/mock/userData/marketplace-cache.json',
+				path.join('/mock/userData', 'marketplace-cache.json'),
 				expect.any(String),
 				'utf-8'
 			);
@@ -508,18 +509,18 @@ describe('marketplace IPC handlers', () => {
 			);
 
 			// Verify target folder was created
-			expect(fs.mkdir).toHaveBeenCalledWith('/autorun/folder/My Test Playbook', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/autorun/folder', 'My Test Playbook'), {
 				recursive: true,
 			});
 
 			// Verify documents were written
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/My Test Playbook/phase-1.md',
+				path.join('/autorun/folder', 'My Test Playbook', 'phase-1.md'),
 				'# Phase 1 Content',
 				'utf-8'
 			);
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/My Test Playbook/phase-2.md',
+				path.join('/autorun/folder', 'My Test Playbook', 'phase-2.md'),
 				'# Phase 2 Content',
 				'utf-8'
 			);
@@ -624,13 +625,13 @@ describe('marketplace IPC handlers', () => {
 			await handler!({} as any, 'test-playbook-2', 'Test', '/autorun', 'session-123');
 
 			// Verify playbooks directory was created
-			expect(fs.mkdir).toHaveBeenCalledWith('/mock/userData/playbooks', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/mock/userData', 'playbooks'), {
 				recursive: true,
 			});
 
 			// Verify playbook was saved to session file
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/mock/userData/playbooks/session-123.json',
+				path.join('/mock/userData', 'playbooks', 'session-123.json'),
 				expect.any(String),
 				'utf-8'
 			);
@@ -764,13 +765,13 @@ describe('marketplace IPC handlers', () => {
 			expect(result.importedDocs).toEqual(['local-phase-1']);
 
 			// Verify target folder was created
-			expect(fs.mkdir).toHaveBeenCalledWith('/autorun/folder/My Local Playbook', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/autorun/folder', 'My Local Playbook'), {
 				recursive: true,
 			});
 
 			// Verify document was written
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/My Local Playbook/local-phase-1.md',
+				path.join('/autorun/folder', 'My Local Playbook', 'local-phase-1.md'),
 				'# Local Phase 1 Content',
 				'utf-8'
 			);
@@ -844,11 +845,11 @@ describe('marketplace IPC handlers', () => {
 			// Verify documents were READ FROM LOCAL FILESYSTEM (not fetched from GitHub)
 			// The fs.readFile mock should have been called for the document paths
 			expect(fs.readFile).toHaveBeenCalledWith(
-				'/Users/test/custom-playbooks/my-playbook/phase-1.md',
+				path.normalize('/Users/test/custom-playbooks/my-playbook/phase-1.md'),
 				'utf-8'
 			);
 			expect(fs.readFile).toHaveBeenCalledWith(
-				'/Users/test/custom-playbooks/my-playbook/phase-2.md',
+				path.normalize('/Users/test/custom-playbooks/my-playbook/phase-2.md'),
 				'utf-8'
 			);
 
@@ -858,13 +859,18 @@ describe('marketplace IPC handlers', () => {
 
 			// Verify documents were written to the target folder
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/Imported Filesystem Playbook/phase-1.md',
+				path.join('/autorun/folder', 'Imported Filesystem Playbook', 'phase-1.md'),
 				'# Phase 1 from filesystem\n\n- [ ] Task 1',
 				'utf-8'
 			);
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/Imported Filesystem Playbook/phase-2.md',
+				path.join('/autorun/folder', 'Imported Filesystem Playbook', 'phase-2.md'),
 				'# Phase 2 from filesystem\n\n- [ ] Task 2',
+				'utf-8'
+			);
+			expect(fs.writeFile).toHaveBeenCalledWith(
+				path.join('/mock/userData', 'playbooks', 'session-123.json'),
+				expect.stringContaining('"playbooks":'),
 				'utf-8'
 			);
 
@@ -1234,17 +1240,20 @@ describe('marketplace IPC handlers', () => {
 				);
 
 				// Verify assets directory was created
-				expect(fs.mkdir).toHaveBeenCalledWith('/autorun/folder/With Assets/assets', {
-					recursive: true,
-				});
+				expect(fs.mkdir).toHaveBeenCalledWith(
+					path.join('/autorun/folder', 'With Assets', 'assets'),
+					{
+						recursive: true,
+					}
+				);
 
 				// Verify assets were written
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					'/autorun/folder/With Assets/assets/config.yaml',
+					path.join('/autorun/folder', 'With Assets', 'assets', 'config.yaml'),
 					expect.any(Buffer)
 				);
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					'/autorun/folder/With Assets/assets/logo.png',
+					path.join('/autorun/folder', 'With Assets', 'assets', 'logo.png'),
 					expect.any(Buffer)
 				);
 

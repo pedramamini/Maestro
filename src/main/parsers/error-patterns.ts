@@ -127,8 +127,8 @@ export const CLAUDE_ERROR_PATTERNS: AgentErrorPatterns = {
 			// Captures the actual vs maximum token counts for display
 			pattern: /prompt.*too\s+long:\s*(\d+)\s*tokens?\s*>\s*(\d+)\s*maximum/i,
 			message: (match: RegExpMatchArray) => {
-				const actual = parseInt(match[1], 10).toLocaleString();
-				const max = parseInt(match[2], 10).toLocaleString();
+				const actual = parseInt(match[1], 10).toLocaleString('en-US');
+				const max = parseInt(match[2], 10).toLocaleString('en-US');
 				return `Prompt is too long: ${actual} tokens exceeds the ${max} token limit. Start a new session.`;
 			},
 			recoverable: true,

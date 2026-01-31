@@ -403,6 +403,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						commandToSpawn = sshCommand.command;
 						argsToSpawn = sshCommand.args;
 
+						// For SSH, env vars are passed in the remote command string, not locally
+						customEnvVarsToPass = undefined;
+
 						// Detailed debug logging to diagnose SSH command execution issues
 						logger.debug(`SSH command details for debugging`, LOG_CONTEXT, {
 							sessionId: config.sessionId,

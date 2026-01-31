@@ -332,7 +332,7 @@ export function PromptComposerModal({
 							style={{ color: theme.colors.textDim }}
 						>
 							<span>{value.length} characters</span>
-							<span>~{tokenCount.toLocaleString()} tokens</span>
+							<span>~{tokenCount.toLocaleString('en-US')} tokens</span>
 						</div>
 					</div>
 

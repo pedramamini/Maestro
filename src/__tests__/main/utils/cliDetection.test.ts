@@ -8,6 +8,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as path from 'path';
+import * as os from 'os';
 
 // Mock execFileNoThrow before importing the module
 vi.mock('../../../main/utils/execFile', () => ({
@@ -342,7 +344,12 @@ describe('cliDetection.ts', () => {
 		it('should not duplicate paths that already exist in PATH', async () => {
 			// Set up process.env.PATH to include some of the additional paths
 			const originalPath = process.env.PATH;
-			process.env.PATH = '/opt/homebrew/bin:/usr/bin:/custom/path';
+			const testPath =
+				process.platform === 'win32'
+					? path.join(os.homedir(), '.local', 'bin')
+					: '/opt/homebrew/bin';
+			const delimiter = process.platform === 'win32' ? ';' : ':';
+			process.env.PATH = `${testPath}${delimiter}/usr/bin${delimiter}/custom/path`;
 
 			mockedExecFileNoThrow.mockResolvedValue({
 				stdout: '/usr/bin/cloudflared\n',
@@ -355,11 +362,11 @@ describe('cliDetection.ts', () => {
 			await isCloudflaredInstalled();
 
 			const callEnv = mockedExecFileNoThrow.mock.calls[0][3] as NodeJS.ProcessEnv;
-			const pathParts = (callEnv.PATH || '').split(':');
+			const pathParts = (callEnv.PATH || '').split(delimiter);
 
-			// Count occurrences of /opt/homebrew/bin - should be 1
-			const homebrewCount = pathParts.filter((p) => p === '/opt/homebrew/bin').length;
-			expect(homebrewCount).toBe(1);
+			// Count occurrences of the test path - should be 1
+			const testPathCount = pathParts.filter((p) => p === testPath).length;
+			expect(testPathCount).toBe(1);
 
 			// Restore original PATH
 			process.env.PATH = originalPath;
@@ -406,8 +413,13 @@ describe('cliDetection.ts', () => {
 			const path = callEnv.PATH || '';
 
 			// Should still have the additional paths
-			expect(path).toContain('/opt/homebrew/bin');
-			expect(path).toContain('/usr/local/bin');
+			if (process.platform === 'win32') {
+				expect(path).toContain('C:\\Program Files\\dotnet');
+				expect(path).toContain('C:\\WINDOWS\\System32\\OpenSSH');
+			} else {
+				expect(path).toContain('/opt/homebrew/bin');
+				expect(path).toContain('/usr/local/bin');
+			}
 
 			process.env.PATH = originalPath;
 		});

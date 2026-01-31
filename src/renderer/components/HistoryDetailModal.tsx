@@ -246,130 +246,130 @@ export function HistoryDetailModal({
 					<div className="flex items-center justify-between">
 						<div className="flex items-center gap-3 flex-wrap">
 							{/* Success/Failure Indicator for AUTO entries */}
-						{entry.type === 'AUTO' && entry.success !== undefined && (
-							<span
-								className="flex items-center justify-center w-6 h-6 rounded-full"
-								style={{
-									backgroundColor: entry.success
-										? entry.validated
-											? theme.colors.success
-											: theme.colors.success + '20'
-										: theme.colors.error + '20',
-									border: `1px solid ${
-										entry.success
+							{entry.type === 'AUTO' && entry.success !== undefined && (
+								<span
+									className="flex items-center justify-center w-6 h-6 rounded-full"
+									style={{
+										backgroundColor: entry.success
 											? entry.validated
 												? theme.colors.success
-												: theme.colors.success + '40'
-											: theme.colors.error + '40'
-									}`,
-								}}
-								title={
-									entry.success
-										? entry.validated
-											? 'Task completed successfully and human-validated'
-											: 'Task completed successfully'
-										: 'Task failed'
-								}
-							>
-								{entry.success ? (
-									entry.validated ? (
-										<DoubleCheck className="w-4 h-4" style={{ color: '#ffffff' }} />
-									) : (
-										<CheckCircle className="w-4 h-4" style={{ color: theme.colors.success }} />
-									)
-								) : (
-									<XCircle className="w-4 h-4" style={{ color: theme.colors.error }} />
-								)}
-							</span>
-						)}
-
-						{/* Type Pill */}
-						<span
-							className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
-							style={{
-								backgroundColor: colors.bg,
-								color: colors.text,
-								border: `1px solid ${colors.border}`,
-							}}
-						>
-							<Icon className="w-2.5 h-2.5" />
-							{entry.type}
-						</span>
-
-						{/* Session ID Octet - copyable */}
-						{entry.agentSessionId && (
-							<div className="flex items-center gap-2">
-								{/* Copy button */}
-								<button
-									onClick={async () => {
-										await navigator.clipboard.writeText(entry.agentSessionId!);
-										setCopiedSessionId(true);
-										setTimeout(() => setCopiedSessionId(false), 2000);
+												: theme.colors.success + '20'
+											: theme.colors.error + '20',
+										border: `1px solid ${
+											entry.success
+												? entry.validated
+													? theme.colors.success
+													: theme.colors.success + '40'
+												: theme.colors.error + '40'
+										}`,
 									}}
-									className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase transition-colors hover:opacity-80"
-									style={{
-										backgroundColor: theme.colors.accent + '20',
-										color: theme.colors.accent,
-										border: `1px solid ${theme.colors.accent}40`,
-									}}
-									title={`Copy session ID: ${entry.agentSessionId}`}
+									title={
+										entry.success
+											? entry.validated
+												? 'Task completed successfully and human-validated'
+												: 'Task completed successfully'
+											: 'Task failed'
+									}
 								>
-									{entry.agentSessionId.split('-')[0].toUpperCase()}
-									{copiedSessionId ? (
-										<Check className="w-2.5 h-2.5" />
+									{entry.success ? (
+										entry.validated ? (
+											<DoubleCheck className="w-4 h-4" style={{ color: '#ffffff' }} />
+										) : (
+											<CheckCircle className="w-4 h-4" style={{ color: theme.colors.success }} />
+										)
 									) : (
-										<Copy className="w-2.5 h-2.5" />
+										<XCircle className="w-4 h-4" style={{ color: theme.colors.error }} />
 									)}
-								</button>
-								{/* Resume button - styled with same padding as other pills */}
-								{onResumeSession && (
-									<button
-										onClick={() => {
-											onResumeSession(entry.agentSessionId!);
-											onClose();
-										}}
-										className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-colors hover:opacity-80"
-										style={{
-											backgroundColor: theme.colors.success + '20',
-											color: theme.colors.success,
-											border: `1px solid ${theme.colors.success}40`,
-										}}
-										title={`Resume session ${entry.agentSessionId}`}
-									>
-										<Play className="w-2.5 h-2.5" />
-										Resume
-									</button>
-								)}
-							</div>
-						)}
+								</span>
+							)}
 
-						{/* Timestamp */}
-						<span className="text-xs" style={{ color: theme.colors.textDim }}>
-							{formatTime(entry.timestamp)}
-						</span>
-
-						{/* Validated toggle for AUTO entries */}
-						{entry.type === 'AUTO' && entry.success && onUpdate && (
-							<button
-								onClick={() => onUpdate(entry.id, { validated: !entry.validated })}
-								className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-colors hover:opacity-80"
+							{/* Type Pill */}
+							<span
+								className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase"
 								style={{
-									backgroundColor: entry.validated
-										? theme.colors.success + '20'
-										: theme.colors.bgActivity,
-									color: entry.validated ? theme.colors.success : theme.colors.textDim,
-									border: `1px solid ${entry.validated ? theme.colors.success + '40' : theme.colors.border}`,
+									backgroundColor: colors.bg,
+									color: colors.text,
+									border: `1px solid ${colors.border}`,
 								}}
-								title={entry.validated ? 'Mark as not validated' : 'Mark as human-validated'}
 							>
-								{entry.validated ? (
-									<DoubleCheck className="w-3 h-3" />
-								) : (
-									<Check className="w-3 h-3" />
-								)}
-								Validated
-							</button>
-						)}
+								<Icon className="w-2.5 h-2.5" />
+								{entry.type}
+							</span>
+
+							{/* Session ID Octet - copyable */}
+							{entry.agentSessionId && (
+								<div className="flex items-center gap-2">
+									{/* Copy button */}
+									<button
+										onClick={async () => {
+											await navigator.clipboard.writeText(entry.agentSessionId!);
+											setCopiedSessionId(true);
+											setTimeout(() => setCopiedSessionId(false), 2000);
+										}}
+										className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-mono font-bold uppercase transition-colors hover:opacity-80"
+										style={{
+											backgroundColor: theme.colors.accent + '20',
+											color: theme.colors.accent,
+											border: `1px solid ${theme.colors.accent}40`,
+										}}
+										title={`Copy session ID: ${entry.agentSessionId}`}
+									>
+										{entry.agentSessionId.split('-')[0].toUpperCase()}
+										{copiedSessionId ? (
+											<Check className="w-2.5 h-2.5" />
+										) : (
+											<Copy className="w-2.5 h-2.5" />
+										)}
+									</button>
+									{/* Resume button - styled with same padding as other pills */}
+									{onResumeSession && (
+										<button
+											onClick={() => {
+												onResumeSession(entry.agentSessionId!);
+												onClose();
+											}}
+											className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-colors hover:opacity-80"
+											style={{
+												backgroundColor: theme.colors.success + '20',
+												color: theme.colors.success,
+												border: `1px solid ${theme.colors.success}40`,
+											}}
+											title={`Resume session ${entry.agentSessionId}`}
+										>
+											<Play className="w-2.5 h-2.5" />
+											Resume
+										</button>
+									)}
+								</div>
+							)}
+
+							{/* Timestamp */}
+							<span className="text-xs" style={{ color: theme.colors.textDim }}>
+								{formatTime(entry.timestamp)}
+							</span>
+
+							{/* Validated toggle for AUTO entries */}
+							{entry.type === 'AUTO' && entry.success && onUpdate && (
+								<button
+									onClick={() => onUpdate(entry.id, { validated: !entry.validated })}
+									className="flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase transition-colors hover:opacity-80"
+									style={{
+										backgroundColor: entry.validated
+											? theme.colors.success + '20'
+											: theme.colors.bgActivity,
+										color: entry.validated ? theme.colors.success : theme.colors.textDim,
+										border: `1px solid ${entry.validated ? theme.colors.success + '40' : theme.colors.border}`,
+									}}
+									title={entry.validated ? 'Mark as not validated' : 'Mark as human-validated'}
+								>
+									{entry.validated ? (
+										<DoubleCheck className="w-3 h-3" />
+									) : (
+										<Check className="w-3 h-3" />
+									)}
+									Validated
+								</button>
+							)}
 						</div>
 
 						{/* Close button */}
@@ -464,11 +464,11 @@ export function HistoryDetailModal({
 									<div className="flex items-center gap-3 text-xs font-mono">
 										<span style={{ color: theme.colors.accent }}>
 											<span style={{ color: theme.colors.textDim }}>In:</span>{' '}
-											{entry.usageStats.inputTokens.toLocaleString()}
+											{entry.usageStats.inputTokens.toLocaleString('en-US')}
 										</span>
 										<span style={{ color: theme.colors.success }}>
 											<span style={{ color: theme.colors.textDim }}>Out:</span>{' '}
-											{entry.usageStats.outputTokens.toLocaleString()}
+											{entry.usageStats.outputTokens.toLocaleString('en-US')}
 										</span>
 									</div>
 								</div>

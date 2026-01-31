@@ -567,26 +567,37 @@ export const MainPanel = React.memo(
 		const activeTabContextUsage = useMemo(() => {
 			if (!activeTabContextWindow || activeTabContextWindow === 0) return 0;
 			if (activeTabContextTokens === 0) return 0;
-			const percentage = Math.min(Math.round((activeTabContextTokens / activeTabContextWindow) * 100), 100);
+			const percentage = Math.min(
+				Math.round((activeTabContextTokens / activeTabContextWindow) * 100),
+				100
+			);
 
 			// DEBUG: Log MainPanel context display calculation
 			console.log('[MainPanel] Context display calculation', {
 				sessionId: activeSession?.id,
 				tabId: activeTab?.id,
-				usageStats: activeTab?.usageStats ? {
-					inputTokens: activeTab.usageStats.inputTokens,
-					outputTokens: activeTab.usageStats.outputTokens,
-					cacheReadInputTokens: activeTab.usageStats.cacheReadInputTokens,
-					cacheCreationInputTokens: activeTab.usageStats.cacheCreationInputTokens,
-					contextWindow: activeTab.usageStats.contextWindow,
-				} : null,
+				usageStats: activeTab?.usageStats
+					? {
+							inputTokens: activeTab.usageStats.inputTokens,
+							outputTokens: activeTab.usageStats.outputTokens,
+							cacheReadInputTokens: activeTab.usageStats.cacheReadInputTokens,
+							cacheCreationInputTokens: activeTab.usageStats.cacheCreationInputTokens,
+							contextWindow: activeTab.usageStats.contextWindow,
+						}
+					: null,
 				activeTabContextTokens,
 				activeTabContextWindow,
 				displayedPercentage: percentage,
 			});
 
 			return percentage;
-		}, [activeTabContextTokens, activeTabContextWindow, activeSession?.id, activeTab?.id, activeTab?.usageStats]);
+		}, [
+			activeTabContextTokens,
+			activeTabContextWindow,
+			activeSession?.id,
+			activeTab?.id,
+			activeTab?.usageStats,
+		]);
 
 		// PERF: Track panel width for responsive widget hiding with threshold-based updates
 		// Only update state when width crosses a meaningful threshold (20px) to prevent
@@ -1226,7 +1237,9 @@ export const MainPanel = React.memo(
 																			className="text-xs font-mono"
 																			style={{ color: theme.colors.textMain }}
 																		>
-																			{(activeTab?.usageStats?.inputTokens ?? 0).toLocaleString()}
+																			{(activeTab?.usageStats?.inputTokens ?? 0).toLocaleString(
+																				'en-US'
+																			)}
 																		</span>
 																	</div>
 																	<div className="flex justify-between items-center">
@@ -1240,7 +1253,9 @@ export const MainPanel = React.memo(
 																			className="text-xs font-mono"
 																			style={{ color: theme.colors.textMain }}
 																		>
-																			{(activeTab?.usageStats?.outputTokens ?? 0).toLocaleString()}
+																			{(activeTab?.usageStats?.outputTokens ?? 0).toLocaleString(
+																				'en-US'
+																			)}
 																		</span>
 																	</div>
 																	{/* Reasoning tokens - only shown for agents that report them (e.g., Codex o3/o4-mini) */}
@@ -1261,7 +1276,7 @@ export const MainPanel = React.memo(
 																			>
 																				{(
 																					activeTab?.usageStats?.reasoningTokens ?? 0
-																				).toLocaleString()}
+																				).toLocaleString('en-US')}
 																			</span>
 																		</div>
 																	)}
@@ -1278,7 +1293,7 @@ export const MainPanel = React.memo(
 																		>
 																			{(
 																				activeTab?.usageStats?.cacheReadInputTokens ?? 0
-																			).toLocaleString()}
+																			).toLocaleString('en-US')}
 																		</span>
 																	</div>
 																	<div className="flex justify-between items-center">
@@ -1294,7 +1309,7 @@ export const MainPanel = React.memo(
 																		>
 																			{(
 																				activeTab?.usageStats?.cacheCreationInputTokens ?? 0
-																			).toLocaleString()}
+																			).toLocaleString('en-US')}
 																		</span>
 																	</div>
 
@@ -1315,7 +1330,7 @@ export const MainPanel = React.memo(
 																					className="text-xs font-mono font-bold"
 																					style={{ color: theme.colors.accent }}
 																				>
-																					{activeTabContextTokens.toLocaleString()}
+																					{activeTabContextTokens.toLocaleString('en-US')}
 																				</span>
 																			</div>
 																			<div className="flex justify-between items-center mt-1">
@@ -1329,7 +1344,7 @@ export const MainPanel = React.memo(
 																					className="text-xs font-mono font-bold"
 																					style={{ color: theme.colors.textMain }}
 																				>
-																					{activeTabContextWindow.toLocaleString()}
+																					{activeTabContextWindow.toLocaleString('en-US')}
 																				</span>
 																			</div>
 																			<div className="flex justify-between items-center mt-1">

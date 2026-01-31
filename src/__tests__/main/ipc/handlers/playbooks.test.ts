@@ -10,6 +10,7 @@ import { ipcMain, dialog, BrowserWindow, App } from 'electron';
 import fs from 'fs/promises';
 import { createWriteStream } from 'fs';
 import crypto from 'crypto';
+import path from 'path';
 import archiver from 'archiver';
 import AdmZip from 'adm-zip';
 import { PassThrough } from 'stream';
@@ -161,7 +162,7 @@ describe('playbooks IPC handlers', () => {
 			const result = await handler!({} as any, 'session-123');
 
 			expect(fs.readFile).toHaveBeenCalledWith(
-				'/mock/userData/playbooks/session-123.json',
+				path.join('/mock/userData', 'playbooks', 'session-123.json'),
 				'utf-8'
 			);
 			expect(result).toEqual({ success: true, playbooks: mockPlaybooks });
@@ -280,7 +281,7 @@ describe('playbooks IPC handlers', () => {
 				prompt: '',
 			});
 
-			expect(fs.mkdir).toHaveBeenCalledWith('/mock/userData/playbooks', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/mock/userData', 'playbooks'), {
 				recursive: true,
 			});
 		});
@@ -382,7 +383,9 @@ describe('playbooks IPC handlers', () => {
 			const handler = handlers.get('playbooks:deleteAll');
 			const result = await handler!({} as any, 'session-123');
 
-			expect(fs.unlink).toHaveBeenCalledWith('/mock/userData/playbooks/session-123.json');
+			expect(fs.unlink).toHaveBeenCalledWith(
+				path.join('/mock/userData', 'playbooks', 'session-123.json')
+			);
 			expect(result).toEqual({ success: true });
 		});
 

@@ -929,7 +929,11 @@ describe('AutoRun', () => {
 			renderWithProvider(<AutoRun {...props} />);
 
 			await waitFor(() => {
-				expect(mockMaestro.autorun.listImages).toHaveBeenCalledWith('/test/folder', 'test-doc');
+				expect(mockMaestro.autorun.listImages).toHaveBeenCalledWith(
+					'/test/folder',
+					'test-doc',
+					undefined
+				);
 			});
 		});
 
@@ -1651,7 +1655,8 @@ describe('Lightbox Functionality', () => {
 		await waitFor(() => {
 			expect(mockMaestro.autorun.deleteImage).toHaveBeenCalledWith(
 				'/test/folder',
-				'images/test.png'
+				'images/test.png',
+				undefined
 			);
 		});
 
@@ -1704,7 +1709,8 @@ describe('Lightbox Functionality', () => {
 		await waitFor(() => {
 			expect(mockMaestro.autorun.deleteImage).toHaveBeenCalledWith(
 				'/test/folder',
-				'images/test.png'
+				'images/test.png',
+				undefined
 			);
 		});
 	});
@@ -1923,7 +1929,8 @@ describe('Attachment Management', () => {
 		await waitFor(() => {
 			expect(mockMaestro.autorun.deleteImage).toHaveBeenCalledWith(
 				'/test/folder',
-				'images/test.png'
+				'images/test.png',
+				undefined
 			);
 		});
 	});

@@ -574,10 +574,11 @@ export function registerAutorunHandlers(
 			async (folderPath: string, relativePath: string, sshRemoteId?: string) => {
 				// Sanitize relativePath to prevent directory traversal
 				const normalizedPath = path.normalize(relativePath);
+				const normalizedPathPosix = normalizedPath.replace(/\\/g, '/');
 				if (
 					normalizedPath.includes('..') ||
 					path.isAbsolute(normalizedPath) ||
-					!normalizedPath.startsWith('images/')
+					!normalizedPathPosix.startsWith('images/')
 				) {
 					throw new Error('Invalid image path');
 				}
@@ -590,7 +591,7 @@ export function registerAutorunHandlers(
 					}
 
 					// Construct remote path (use forward slashes)
-					const remotePath = `${folderPath}/${normalizedPath}`;
+					const remotePath = `${folderPath}/${normalizedPathPosix}`;
 
 					logger.debug(`${LOG_CONTEXT} deleteImage via SSH: ${remotePath}`, LOG_CONTEXT);
 
@@ -922,7 +923,10 @@ export function registerAutorunHandlers(
 					const remoteSourcePath = `${folderPath}/${fullFilename}`;
 					const remoteBackupPath = `${folderPath}/${backupFilename}`;
 
-					logger.debug(`${LOG_CONTEXT} createBackup via SSH: ${remoteSourcePath} -> ${remoteBackupPath}`, LOG_CONTEXT);
+					logger.debug(
+						`${LOG_CONTEXT} createBackup via SSH: ${remoteSourcePath} -> ${remoteBackupPath}`,
+						LOG_CONTEXT
+					);
 
 					// Read source file from remote
 					const readResult = await readFileRemote(remoteSourcePath, sshConfig);
@@ -1097,9 +1101,7 @@ export function registerAutorunHandlers(
 
 					// Construct remote paths (use forward slashes)
 					const remoteSourcePath = `${folderPath}/${fullFilename}`;
-					const remoteRunsDir = subDir
-						? `${folderPath}/Runs/${subDir}`
-						: `${folderPath}/Runs`;
+					const remoteRunsDir = subDir ? `${folderPath}/Runs/${subDir}` : `${folderPath}/Runs`;
 					const remoteWorkingCopyPath = `${remoteRunsDir}/${workingCopyName}`;
 
 					logger.debug(
@@ -1120,7 +1122,11 @@ export function registerAutorunHandlers(
 					}
 
 					// Write working copy to remote
-					const writeResult = await writeFileRemote(remoteWorkingCopyPath, readResult.data, sshConfig);
+					const writeResult = await writeFileRemote(
+						remoteWorkingCopyPath,
+						readResult.data,
+						sshConfig
+					);
 					if (!writeResult.success) {
 						throw new Error(writeResult.error || 'Failed to write working copy');
 					}

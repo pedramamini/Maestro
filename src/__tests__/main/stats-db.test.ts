@@ -4318,7 +4318,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const { StatsDB } = await import('../../main/stats-db');
 			const db = new StatsDB();
 
-			expect(path.dirname(db.getDbPath())).toBe(testUserData);
+			// Normalize expected path to use platform separators
+			const expectedDir = path.dirname(path.join(testUserData, 'stats.db'));
+			expect(path.dirname(db.getDbPath())).toBe(expectedDir);
 		});
 	});
 
@@ -4333,7 +4335,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const db = new StatsDB();
 			db.initialize();
 
-			expect(mockFsMkdirSync).toHaveBeenCalledWith(macOsUserData, { recursive: true });
+			// Normalize expected path to use platform separators
+			const expectedDir = path.dirname(path.join(macOsUserData, 'stats.db'));
+			expect(mockFsMkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
 		});
 
 		it('should create directory on Windows if it does not exist', async () => {
@@ -4359,7 +4363,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const db = new StatsDB();
 			db.initialize();
 
-			expect(mockFsMkdirSync).toHaveBeenCalledWith(linuxUserData, { recursive: true });
+			// Normalize expected path to use platform separators
+			const expectedDir = path.dirname(path.join(linuxUserData, 'stats.db'));
+			expect(mockFsMkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
 		});
 
 		it('should use recursive option for deeply nested paths', async () => {
@@ -4372,7 +4378,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 			const db = new StatsDB();
 			db.initialize();
 
-			expect(mockFsMkdirSync).toHaveBeenCalledWith(deepPath, { recursive: true });
+			// Normalize expected path to use platform separators
+			const expectedDir = path.normalize(deepPath);
+			expect(mockFsMkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
 		});
 	});
 
@@ -4519,7 +4527,9 @@ describe('Cross-platform database path resolution (macOS, Windows, Linux)', () =
 				const db = new StatsDB();
 				db.initialize();
 
-				expect(mockFsMkdirSync).toHaveBeenCalledWith(platformPath, { recursive: true });
+				// Normalize expected path to use platform separators
+				const expectedDir = path.normalize(platformPath);
+				expect(mockFsMkdirSync).toHaveBeenCalledWith(expectedDir, { recursive: true });
 			}
 		});
 	});

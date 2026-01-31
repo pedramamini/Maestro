@@ -44,7 +44,11 @@ describe('shellDetector', () => {
 			const shells = await detectShells();
 			const ids = shells.map((s) => s.id);
 
-			expect(ids).toEqual(['zsh', 'bash', 'sh', 'fish', 'tcsh']);
+			if (process.platform === 'win32') {
+				expect(ids).toEqual(['powershell', 'pwsh', 'cmd', 'bash', 'wsl']);
+			} else {
+				expect(ids).toEqual(['zsh', 'bash', 'sh', 'fish', 'tcsh']);
+			}
 		});
 
 		it('should return the correct shell names', async () => {
@@ -57,7 +61,17 @@ describe('shellDetector', () => {
 			const shells = await detectShells();
 			const names = shells.map((s) => s.name);
 
-			expect(names).toEqual(['Zsh', 'Bash', 'Bourne Shell (sh)', 'Fish', 'Tcsh']);
+			if (process.platform === 'win32') {
+				expect(names).toEqual([
+					'PowerShell',
+					'PowerShell Core',
+					'Command Prompt',
+					'Bash (Git Bash/WSL)',
+					'WSL',
+				]);
+			} else {
+				expect(names).toEqual(['Zsh', 'Bash', 'Bourne Shell (sh)', 'Fish', 'Tcsh']);
+			}
 		});
 
 		it('should handle shells that are not available', async () => {

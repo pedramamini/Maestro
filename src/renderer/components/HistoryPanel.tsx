@@ -543,12 +543,12 @@ const HistoryEntryItem = memo(function HistoryEntryItem({
 		const isToday = date.toDateString() === now.toDateString();
 
 		if (isToday) {
-			return date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+			return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
 		} else {
 			return (
-				date.toLocaleDateString([], { month: 'short', day: 'numeric' }) +
+				date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
 				' ' +
-				date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
+				date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
 			);
 		}
 	};

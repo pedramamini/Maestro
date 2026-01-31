@@ -6,6 +6,16 @@ import {
 } from '../../main/ssh-remote-manager';
 import { SshRemoteConfig } from '../../shared/types';
 import { ExecResult } from '../../main/utils/execFile';
+import * as os from 'os';
+
+// Mock os.homedir for consistent test behavior
+vi.mock('os', async () => {
+	const actual = await vi.importActual<typeof os>('os');
+	return {
+		...actual,
+		homedir: vi.fn(() => '/home/testuser'),
+	};
+});
 
 describe('SshRemoteManager', () => {
 	// Mock dependencies

@@ -16,6 +16,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach, type Mock } from 'vitest';
 import * as fs from 'fs';
 import * as os from 'os';
+import * as path from 'path';
 import { EventEmitter } from 'events';
 
 // Create mock spawn function at module level
@@ -1048,22 +1049,30 @@ Some text with [x] in it that's not a checkbox
 		});
 
 		it('should include expanded PATH in environment', async () => {
-			const resultPromise = spawnAgent('claude-code', '/project', 'prompt');
+			// Mock platform to darwin to test Unix PATH expansion
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, 'platform', { value: 'darwin', writable: true });
 
-			await new Promise((resolve) => setTimeout(resolve, 0));
+			try {
+				const resultPromise = spawnAgent('claude-code', '/project', 'prompt');
 
-			const [, , options] = mockSpawn.mock.calls[0];
-			const pathEnv = options.env.PATH;
+				await new Promise((resolve) => setTimeout(resolve, 0));
 
-			// Should include common paths
-			expect(pathEnv).toContain('/opt/homebrew/bin');
-			expect(pathEnv).toContain('/usr/local/bin');
-			expect(pathEnv).toContain('/Users/testuser/.local/bin');
+				const [, , options] = mockSpawn.mock.calls[0];
+				const pathEnv = options.env.PATH;
 
-			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
-			mockChild.emit('close', 0);
+				// Should include common paths
+				expect(pathEnv).toContain('/opt/homebrew/bin');
+				expect(pathEnv).toContain('/usr/local/bin');
+				expect(pathEnv).toContain('/Users/testuser/.local/bin');
 
-			await resultPromise;
+				mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
+				mockChild.emit('close', 0);
+
+				await resultPromise;
+			} finally {
+				Object.defineProperty(process, 'platform', { value: originalPlatform, writable: true });
+			}
 		});
 
 		it('should generate unique session-id for each spawn', async () => {
@@ -1114,8 +1123,18 @@ Some text with [x] in it that's not a checkbox
 	});
 
 	describe('PATH expansion (via spawnAgent)', () => {
+		let originalPlatform: string;
+
 		beforeEach(() => {
+			originalPlatform = process.platform;
 			mockSpawn.mockReturnValue(mockChild);
+			// Mock platform to darwin for Unix path testing
+			Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
+		});
+
+		afterEach(() => {
+			// Restore original platform
+			Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
 		});
 
 		it('should include homebrew paths', async () => {
@@ -1164,28 +1183,38 @@ Some text with [x] in it that's not a checkbox
 		});
 
 		it('should not duplicate existing paths', async () => {
-			// Set PATH to include a path that would be added
-			const originalPath = process.env.PATH;
-			process.env.PATH = '/opt/homebrew/bin:/usr/bin';
+			// Mock platform to darwin to test Unix PATH expansion
+			const originalPlatform = process.platform;
+			Object.defineProperty(process, 'platform', { value: 'darwin', configurable: true });
 
-			const resultPromise = spawnAgent('claude-code', '/project', 'prompt');
-			await new Promise((resolve) => setTimeout(resolve, 0));
+			try {
+				// Set PATH to include a path that would be added
+				const originalPath = process.env.PATH;
+				const delimiter = process.platform === 'win32' ? ';' : ':';
+				process.env.PATH = `/opt/homebrew/bin${delimiter}/usr/bin`;
 
-			const pathEnv = mockSpawn.mock.calls[0][2].env.PATH;
+				mockSpawn.mockReturnValue(mockChild);
+				const resultPromise = spawnAgent('claude-code', '/project', 'prompt');
+				await new Promise((resolve) => setTimeout(resolve, 0));
 
-			// Count occurrences of /opt/homebrew/bin
-			const parts = pathEnv.split(':');
-			const homebrewCount = parts.filter((p: string) => p === '/opt/homebrew/bin').length;
+				const pathEnv = mockSpawn.mock.calls[0][2].env.PATH;
 
-			// Should only appear once
-			expect(homebrewCount).toBe(1);
+				// Count occurrences of /opt/homebrew/bin
+				const parts = pathEnv.split(path.delimiter);
+				const homebrewCount = parts.filter((p: string) => p === '/opt/homebrew/bin').length;
 
-			// Restore
-			process.env.PATH = originalPath;
+				// Should only appear once
+				expect(homebrewCount).toBe(1);
 
-			mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
-			mockChild.emit('close', 0);
-			await resultPromise;
+				// Restore
+				process.env.PATH = originalPath;
+
+				mockStdout.emit('data', Buffer.from('{"type":"result","result":"Done"}\n'));
+				mockChild.emit('close', 0);
+				await resultPromise;
+			} finally {
+				Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
+			}
 		});
 	});
 

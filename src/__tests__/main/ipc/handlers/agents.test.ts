@@ -58,7 +58,13 @@ vi.mock('../../../../main/utils/execFile', () => ({
 	execFileNoThrow: vi.fn(),
 }));
 
+// Mock fs
+vi.mock('fs', () => ({
+	existsSync: vi.fn(),
+}));
+
 import { execFileNoThrow } from '../../../../main/utils/execFile';
+import * as fs from 'fs';
 
 describe('agents IPC handlers', () => {
 	let handlers: Map<string, Function>;
@@ -917,6 +923,7 @@ describe('agents IPC handlers', () => {
 				slash_commands: ['/help', '/compact', '/clear'],
 			});
 
+			vi.mocked(fs.existsSync).mockReturnValue(true);
 			vi.mocked(execFileNoThrow).mockResolvedValue({
 				stdout: initMessage + '\n',
 				stderr: '',
@@ -959,6 +966,7 @@ describe('agents IPC handlers', () => {
 				slash_commands: ['/help'],
 			});
 
+			vi.mocked(fs.existsSync).mockReturnValue(true);
 			vi.mocked(execFileNoThrow).mockResolvedValue({
 				stdout: initMessage + '\n',
 				stderr: '',

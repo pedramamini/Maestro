@@ -621,10 +621,10 @@ function HistoryDetailView({
 							}}
 						>
 							<span style={{ color: colors.accent }}>
-								In: {entry.usageStats.inputTokens.toLocaleString()}
+								In: {entry.usageStats.inputTokens.toLocaleString('en-US')}
 							</span>
 							<span style={{ color: colors.success }}>
-								Out: {entry.usageStats.outputTokens.toLocaleString()}
+								Out: {entry.usageStats.outputTokens.toLocaleString('en-US')}
 							</span>
 						</div>
 					)}

@@ -113,6 +113,16 @@ function encodeProjectPath(projectPath: string): string {
 }
 
 /**
+ * Encode a project path for remote Factory Droid storage
+ * Uses the original path without Windows resolution
+ */
+function encodeProjectPathForRemote(projectPath: string): string {
+	// For remote paths, don't resolve - use the path as-is but normalize slashes
+	const normalized = projectPath.replace(/\\/g, '/');
+	return normalized.replace(/\//g, '-');
+}
+
+/**
  * Read a JSON file safely
  */
 async function readJsonFile<T>(filePath: string): Promise<T | null> {
@@ -164,7 +174,10 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 	 * Uses POSIX-style paths with ~ expansion for remote Linux hosts
 	 */
 	private getRemoteProjectSessionDir(projectPath: string): string {
-		const encodedPath = encodeProjectPath(projectPath);
+		// For remote paths, use the original path without Windows resolution
+		// Normalize to forward slashes for POSIX compatibility
+		const normalizedPath = projectPath.replace(/\\/g, '/');
+		const encodedPath = encodeProjectPathForRemote(normalizedPath);
 		return `~/.factory/sessions/${encodedPath}`;
 	}
 
@@ -174,7 +187,10 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 	private async loadSessionMessages(sessionPath: string): Promise<FactoryMessage[]> {
 		try {
 			const content = await fs.readFile(sessionPath, 'utf-8');
-			const lines = content.trim().split('\n').filter((l) => l.trim());
+			const lines = content
+				.trim()
+				.split('\n')
+				.filter((l) => l.trim());
 			const messages: FactoryMessage[] = [];
 
 			for (const line of lines) {
@@ -212,7 +228,10 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 				return [];
 			}
 
-			const lines = result.data.trim().split('\n').filter((l) => l.trim());
+			const lines = result.data
+				.trim()
+				.split('\n')
+				.filter((l) => l.trim());
 			const messages: FactoryMessage[] = [];
 
 			for (const line of lines) {
@@ -328,11 +347,9 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 				}
 
 				// Get timestamps from messages or file stat
-				const createdAt =
-					messages[0]?.timestamp || new Date(statResult.data.mtime).toISOString();
+				const createdAt = messages[0]?.timestamp || new Date(statResult.data.mtime).toISOString();
 				const modifiedAt =
-					messages[messages.length - 1]?.timestamp ||
-					new Date(statResult.data.mtime).toISOString();
+					messages[messages.length - 1]?.timestamp || new Date(statResult.data.mtime).toISOString();
 
 				sessions.push({
 					sessionId,
@@ -504,10 +521,7 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 			const sessionPath = `${projectDir}/${sessionId}.jsonl`;
 			factoryMessages = await this.loadSessionMessagesRemote(sessionPath, sshConfig);
 		} else {
-			const sessionPath = path.join(
-				this.getProjectSessionDir(projectPath),
-				`${sessionId}.jsonl`
-			);
+			const sessionPath = path.join(this.getProjectSessionDir(projectPath), `${sessionId}.jsonl`);
 			factoryMessages = await this.loadSessionMessages(sessionPath);
 		}
 
@@ -693,10 +707,7 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 		}
 
 		try {
-			const sessionPath = path.join(
-				this.getProjectSessionDir(projectPath),
-				`${sessionId}.jsonl`
-			);
+			const sessionPath = path.join(this.getProjectSessionDir(projectPath), `${sessionId}.jsonl`);
 
 			const content = await fs.readFile(sessionPath, 'utf-8');
 			const lines = content.trim().split('\n');
@@ -720,9 +731,8 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 						const isTargetByContent =
 							fallbackContent &&
 							parsed.message?.role === 'user' &&
-							extractTextFromContent(parsed.message.content)
-								.trim()
-								.toLowerCase() === fallbackContent.trim().toLowerCase();
+							extractTextFromContent(parsed.message.content).trim().toLowerCase() ===
+								fallbackContent.trim().toLowerCase();
 
 						if (isTargetByUuid || isTargetByContent) {
 							foundUserMessage = true;

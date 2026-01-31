@@ -231,7 +231,11 @@ describe('useAutoRunImageHandling', () => {
 				expect(result.current.attachmentsList).toHaveLength(2);
 			});
 
-			expect(window.maestro.autorun.listImages).toHaveBeenCalledWith('/test/autorun', 'Phase 1');
+			expect(window.maestro.autorun.listImages).toHaveBeenCalledWith(
+				'/test/autorun',
+				'Phase 1',
+				undefined
+			);
 			expect(result.current.attachmentsList).toContain('images/Phase 1-123.png');
 			expect(result.current.attachmentsList).toContain('images/Phase 1-456.jpg');
 		});
@@ -351,7 +355,8 @@ describe('useAutoRunImageHandling', () => {
 
 			expect(window.maestro.autorun.listImages).toHaveBeenLastCalledWith(
 				'/test/autorun',
-				'Phase 2'
+				'Phase 2',
+				undefined
 			);
 		});
 	});
@@ -389,7 +394,8 @@ describe('useAutoRunImageHandling', () => {
 				'/test/autorun',
 				'Phase 1',
 				expect.any(String), // base64 content
-				'png'
+				'png',
+				undefined
 			);
 		});
 
@@ -462,7 +468,8 @@ describe('useAutoRunImageHandling', () => {
 				'/test/autorun',
 				'Phase 1',
 				expect.any(String),
-				'jpeg'
+				'jpeg',
+				undefined
 			);
 		});
 
@@ -607,7 +614,8 @@ describe('useAutoRunImageHandling', () => {
 				'/test/autorun',
 				'Phase 1',
 				expect.any(String),
-				'png'
+				'png',
+				undefined
 			);
 		});
 
@@ -748,7 +756,8 @@ describe('useAutoRunImageHandling', () => {
 				'/test/autorun',
 				'Phase 1',
 				expect.any(String),
-				'gif'
+				'gif',
+				undefined
 			);
 		});
 	});
@@ -780,7 +789,8 @@ describe('useAutoRunImageHandling', () => {
 
 			expect(window.maestro.autorun.deleteImage).toHaveBeenCalledWith(
 				'/test/autorun',
-				'images/test.png'
+				'images/test.png',
+				undefined
 			);
 			expect(result.current.attachmentsList).not.toContain('images/test.png');
 		});
@@ -875,7 +885,8 @@ describe('useAutoRunImageHandling', () => {
 
 			expect(window.maestro.autorun.deleteImage).toHaveBeenCalledWith(
 				'/test/autorun',
-				'images/file (1).png'
+				'images/file (1).png',
+				undefined
 			);
 			const newContent = (mockDeps.setLocalContent as any).mock.calls[0][0];
 			expect(newContent).not.toContain('file (1).png');
@@ -1061,7 +1072,8 @@ describe('useAutoRunImageHandling', () => {
 
 				expect(window.maestro.autorun.deleteImage).toHaveBeenCalledWith(
 					'/test/autorun',
-					'images/img.png'
+					'images/img.png',
+					undefined
 				);
 				expect(mockDeps.pushUndoState).toHaveBeenCalled();
 				expect(mockDeps.setLocalContent).toHaveBeenCalled();
