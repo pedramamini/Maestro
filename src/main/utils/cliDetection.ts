@@ -32,7 +32,9 @@ export async function isCloudflaredInstalled(): Promise<boolean> {
 
 	if (result.exitCode === 0 && result.stdout.trim()) {
 		cloudflaredInstalledCache = true;
-		cloudflaredPathCache = result.stdout.trim().split('\n')[0];
+		// Handle Windows CRLF line endings properly
+		const lines = result.stdout.trim().split(/\r?\n/);
+		cloudflaredPathCache = lines[0]?.trim() || null;
 	} else {
 		cloudflaredInstalledCache = false;
 	}
@@ -67,7 +69,9 @@ export async function isGhInstalled(): Promise<boolean> {
 	if (result.exitCode === 0 && result.stdout.trim()) {
 		ghInstalledCache = true;
 		// On Windows, 'where' can return multiple paths - take the first one
-		ghPathCache = result.stdout.trim().split('\n')[0];
+		// Handle Windows CRLF line endings properly
+		const lines = result.stdout.trim().split(/\r?\n/);
+		ghPathCache = lines[0]?.trim() || null;
 	} else {
 		ghInstalledCache = false;
 	}
@@ -161,21 +165,24 @@ export async function detectSshPath(): Promise<string | null> {
 	const result = await execFileNoThrow(command, ['ssh'], undefined, env);
 
 	if (result.exitCode === 0 && result.stdout.trim()) {
-		sshPathCache = result.stdout.trim().split('\n')[0];
-  	} else if (process.platform === 'win32') {
-    // Fallback for Windows: Check the built-in OpenSSH location directly
-    // This is the standard location for Windows 10/11 OpenSSH
-    const fs = await import('fs');
-    const systemRoot = process.env.SystemRoot || 'C:\\Windows';
-    const opensshPath = path.join(systemRoot, 'System32', 'OpenSSH', 'ssh.exe');
+		// Handle Windows CRLF line endings properly
+		// On Windows, 'where' returns paths with \r\n, so we need to split on \r?\n
+		const lines = result.stdout.trim().split(/\r?\n/);
+		sshPathCache = lines[0]?.trim() || null;
+	} else if (process.platform === 'win32') {
+		// Fallback for Windows: Check the built-in OpenSSH location directly
+		// This is the standard location for Windows 10/11 OpenSSH
+		const fs = await import('fs');
+		const systemRoot = process.env.SystemRoot || 'C:\\Windows';
+		const opensshPath = path.join(systemRoot, 'System32', 'OpenSSH', 'ssh.exe');
 
-    try {
-      if (fs.existsSync(opensshPath)) {
-        sshPathCache = opensshPath;
-      }
-    } catch {
-      // If check fails, leave sshPathCache as null
-    }
+		try {
+			if (fs.existsSync(opensshPath)) {
+				sshPathCache = opensshPath;
+			}
+		} catch {
+			// If check fails, leave sshPathCache as null
+		}
 	}
 
 	sshDetectionDone = true;
