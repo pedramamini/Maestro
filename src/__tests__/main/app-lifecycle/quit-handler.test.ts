@@ -58,6 +58,38 @@ vi.mock('../../../main/tunnel-manager', () => ({
 	},
 }));
 
+// Mock window registry
+const mockWindowEntry = {
+	browserWindow: {
+		isDestroyed: vi.fn().mockReturnValue(false),
+		getBounds: vi.fn().mockReturnValue({ x: 100, y: 100, width: 1200, height: 800 }),
+		isMaximized: vi.fn().mockReturnValue(false),
+		isFullScreen: vi.fn().mockReturnValue(false),
+	},
+	sessionIds: ['session-1', 'session-2'],
+	isMain: true,
+	activeSessionId: 'session-1',
+};
+
+const mockWindowRegistry = {
+	getAll: vi.fn().mockReturnValue([['window-1', mockWindowEntry]]),
+	getPrimaryId: vi.fn().mockReturnValue('window-1'),
+};
+
+vi.mock('../../../main/window-registry', () => ({
+	windowRegistry: mockWindowRegistry,
+}));
+
+// Mock multi-window state store
+const mockMultiWindowStore = {
+	set: vi.fn(),
+	get: vi.fn().mockReturnValue(1),
+};
+
+vi.mock('../../../main/stores', () => ({
+	getMultiWindowStateStore: () => mockMultiWindowStore,
+}));
+
 describe('app-lifecycle/quit-handler', () => {
 	let mockMainWindow: {
 		isDestroyed: ReturnType<typeof vi.fn>;
@@ -374,6 +406,221 @@ describe('app-lifecycle/quit-handler', () => {
 			expect(quitHandler.isQuitConfirmed()).toBe(false);
 			quitHandler.confirmQuit();
 			expect(quitHandler.isQuitConfirmed()).toBe(true);
+		});
+	});
+
+	describe('window state saving', () => {
+		it('should save window states when quit is confirmed', async () => {
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+			beforeQuitHandler!(mockEvent);
+
+			// Should call windowRegistry.getAll() to get all windows
+			expect(mockWindowRegistry.getAll).toHaveBeenCalled();
+
+			// Should save window state to store
+			expect(mockMultiWindowStore.set).toHaveBeenCalledWith({
+				windows: [
+					{
+						id: 'window-1',
+						x: 100,
+						y: 100,
+						width: 1200,
+						height: 800,
+						isMaximized: false,
+						isFullScreen: false,
+						sessionIds: ['session-1', 'session-2'],
+						activeSessionId: 'session-1',
+						leftPanelCollapsed: false,
+						rightPanelCollapsed: false,
+					},
+				],
+				primaryWindowId: 'window-1',
+				version: 1,
+			});
+		});
+
+		it('should skip destroyed windows when saving state', async () => {
+			// Make the window appear destroyed
+			mockWindowEntry.browserWindow.isDestroyed.mockReturnValue(true);
+
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+			beforeQuitHandler!(mockEvent);
+
+			// Should save with empty windows array since the window was destroyed
+			expect(mockMultiWindowStore.set).toHaveBeenCalledWith({
+				windows: [],
+				primaryWindowId: 'window-1',
+				version: 1,
+			});
+
+			// Reset the mock for other tests
+			mockWindowEntry.browserWindow.isDestroyed.mockReturnValue(false);
+		});
+
+		it('should handle empty window registry gracefully', async () => {
+			mockWindowRegistry.getAll.mockReturnValue([]);
+
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+
+			// Should not throw
+			expect(() => beforeQuitHandler!(mockEvent)).not.toThrow();
+
+			// Should log that there are no windows to save
+			expect(mockLogger.debug).toHaveBeenCalledWith('No windows to save state for', 'Shutdown');
+
+			// Reset the mock for other tests
+			mockWindowRegistry.getAll.mockReturnValue([['window-1', mockWindowEntry]]);
+		});
+
+		it('should save maximized window state correctly', async () => {
+			mockWindowEntry.browserWindow.isMaximized.mockReturnValue(true);
+
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+			beforeQuitHandler!(mockEvent);
+
+			expect(mockMultiWindowStore.set).toHaveBeenCalledWith(
+				expect.objectContaining({
+					windows: [
+						expect.objectContaining({
+							isMaximized: true,
+						}),
+					],
+				})
+			);
+
+			// Reset the mock for other tests
+			mockWindowEntry.browserWindow.isMaximized.mockReturnValue(false);
+		});
+
+		it('should save fullscreen window state correctly', async () => {
+			mockWindowEntry.browserWindow.isFullScreen.mockReturnValue(true);
+
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+			beforeQuitHandler!(mockEvent);
+
+			expect(mockMultiWindowStore.set).toHaveBeenCalledWith(
+				expect.objectContaining({
+					windows: [
+						expect.objectContaining({
+							isFullScreen: true,
+						}),
+					],
+				})
+			);
+
+			// Reset the mock for other tests
+			mockWindowEntry.browserWindow.isFullScreen.mockReturnValue(false);
+		});
+
+		it('should save multiple windows when present', async () => {
+			const secondWindowEntry = {
+				browserWindow: {
+					isDestroyed: vi.fn().mockReturnValue(false),
+					getBounds: vi.fn().mockReturnValue({ x: 200, y: 200, width: 1000, height: 700 }),
+					isMaximized: vi.fn().mockReturnValue(true),
+					isFullScreen: vi.fn().mockReturnValue(false),
+				},
+				sessionIds: ['session-3'],
+				isMain: false,
+				activeSessionId: 'session-3',
+			};
+
+			mockWindowRegistry.getAll.mockReturnValue([
+				['window-1', mockWindowEntry],
+				['window-2', secondWindowEntry],
+			]);
+
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+			beforeQuitHandler!(mockEvent);
+
+			expect(mockMultiWindowStore.set).toHaveBeenCalledWith({
+				windows: [
+					{
+						id: 'window-1',
+						x: 100,
+						y: 100,
+						width: 1200,
+						height: 800,
+						isMaximized: false,
+						isFullScreen: false,
+						sessionIds: ['session-1', 'session-2'],
+						activeSessionId: 'session-1',
+						leftPanelCollapsed: false,
+						rightPanelCollapsed: false,
+					},
+					{
+						id: 'window-2',
+						x: 200,
+						y: 200,
+						width: 1000,
+						height: 700,
+						isMaximized: true,
+						isFullScreen: false,
+						sessionIds: ['session-3'],
+						activeSessionId: 'session-3',
+						leftPanelCollapsed: false,
+						rightPanelCollapsed: false,
+					},
+				],
+				primaryWindowId: 'window-1',
+				version: 1,
+			});
+
+			// Reset the mock for other tests
+			mockWindowRegistry.getAll.mockReturnValue([['window-1', mockWindowEntry]]);
+		});
+
+		it('should log window state save progress', async () => {
+			const { createQuitHandler } = await import('../../../main/app-lifecycle/quit-handler');
+
+			const quitHandler = createQuitHandler(deps as Parameters<typeof createQuitHandler>[0]);
+			quitHandler.setup();
+			quitHandler.confirmQuit();
+
+			const mockEvent = { preventDefault: vi.fn() };
+			beforeQuitHandler!(mockEvent);
+
+			expect(mockLogger.info).toHaveBeenCalledWith('Saving state for 1 window(s)', 'Shutdown');
+			expect(mockLogger.info).toHaveBeenCalledWith(
+				'Successfully saved 1 window state(s)',
+				'Shutdown'
+			);
 		});
 	});
 });

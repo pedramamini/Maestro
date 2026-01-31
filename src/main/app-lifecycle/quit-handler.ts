@@ -9,6 +9,9 @@ import type { ProcessManager } from '../process-manager';
 import type { WebServer } from '../web-server';
 import { tunnelManager as tunnelManagerInstance } from '../tunnel-manager';
 import type { HistoryManager } from '../history-manager';
+import { windowRegistry } from '../window-registry';
+import { getMultiWindowStateStore } from '../stores';
+import type { MultiWindowWindowState } from '../stores/types';
 
 /** Dependencies for quit handler */
 export interface QuitHandlerDependencies {
@@ -148,6 +151,9 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 	function performCleanup(): void {
 		logger.info('Application shutting down', 'Shutdown');
 
+		// Save all window states before shutdown
+		saveAllWindowStates();
+
 		// Stop history manager watcher
 		getHistoryManager().stopWatching();
 
@@ -188,5 +194,81 @@ export function createQuitHandler(deps: QuitHandlerDependencies): QuitHandler {
 		closeStatsDB();
 
 		logger.info('Shutdown complete', 'Shutdown');
+	}
+
+	/**
+	 * Saves all window states to the multi-window state store.
+	 * Iterates through WindowRegistry.getAll() and collects bounds, maximized/fullscreen state,
+	 * sessionIds, and activeSessionId for each window.
+	 */
+	function saveAllWindowStates(): void {
+		try {
+			const allWindows = windowRegistry.getAll();
+			const primaryWindowId = windowRegistry.getPrimaryId();
+
+			if (allWindows.length === 0) {
+				logger.debug('No windows to save state for', 'Shutdown');
+				return;
+			}
+
+			logger.info(`Saving state for ${allWindows.length} window(s)`, 'Shutdown');
+
+			const windowStates: MultiWindowWindowState[] = [];
+
+			for (const [windowId, entry] of allWindows) {
+				const browserWindow = entry.browserWindow;
+
+				// Skip if window is destroyed
+				if (browserWindow.isDestroyed()) {
+					logger.debug(`Skipping destroyed window: ${windowId}`, 'Shutdown');
+					continue;
+				}
+
+				// Get window bounds
+				const bounds = browserWindow.getBounds();
+
+				// Get maximized/fullscreen state
+				const isMaximized = browserWindow.isMaximized();
+				const isFullScreen = browserWindow.isFullScreen();
+
+				// Create window state entry
+				const windowState: MultiWindowWindowState = {
+					id: windowId,
+					x: bounds.x,
+					y: bounds.y,
+					width: bounds.width,
+					height: bounds.height,
+					isMaximized,
+					isFullScreen,
+					sessionIds: [...entry.sessionIds],
+					activeSessionId: entry.activeSessionId,
+					// Panel states will be populated in Phase 4 Task 7
+					leftPanelCollapsed: false,
+					rightPanelCollapsed: false,
+				};
+
+				windowStates.push(windowState);
+
+				logger.debug(`Saved state for window: ${windowId}`, 'Shutdown', {
+					bounds,
+					isMaximized,
+					isFullScreen,
+					sessionCount: entry.sessionIds.length,
+					activeSessionId: entry.activeSessionId,
+				});
+			}
+
+			// Save to store
+			const multiWindowStore = getMultiWindowStateStore();
+			multiWindowStore.set({
+				windows: windowStates,
+				primaryWindowId: primaryWindowId || '',
+				version: multiWindowStore.get('version', 1),
+			});
+
+			logger.info(`Successfully saved ${windowStates.length} window state(s)`, 'Shutdown');
+		} catch (error) {
+			logger.error(`Failed to save window states: ${error}`, 'Shutdown');
+		}
 	}
 }
