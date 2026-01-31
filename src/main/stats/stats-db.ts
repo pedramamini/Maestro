@@ -18,6 +18,8 @@ import type {
 	AutoRunSession,
 	AutoRunTask,
 	SessionLifecycleEvent,
+	WindowEvent,
+	WindowEventType,
 	StatsTimeRange,
 	StatsFilters,
 	StatsAggregation,
@@ -52,6 +54,17 @@ import {
 	getSessionLifecycleEvents,
 	clearSessionLifecycleCache,
 } from './session-lifecycle';
+import {
+	recordWindowCreated,
+	recordWindowClosed,
+	recordSessionMoved,
+	getWindowEvents,
+	getWindowStatsAggregation,
+	clearWindowEventsCache,
+	type WindowCreatedInput,
+	type WindowClosedInput,
+	type SessionMovedInput,
+} from './window-events';
 import { getAggregatedStats } from './aggregations';
 import { clearOldData, exportToCsv } from './data-management';
 
@@ -148,6 +161,7 @@ export class StatsDB {
 			clearQueryEventCache();
 			clearAutoRunCache();
 			clearSessionLifecycleCache();
+			clearWindowEventsCache();
 
 			logger.info('Stats database closed', LOG_CONTEXT);
 		}
@@ -509,6 +523,30 @@ export class StatsDB {
 
 	getSessionLifecycleEvents(range: StatsTimeRange): SessionLifecycleEvent[] {
 		return getSessionLifecycleEvents(this.database, range);
+	}
+
+	// ============================================================================
+	// Window Events (delegated)
+	// ============================================================================
+
+	recordWindowCreated(input: WindowCreatedInput): string {
+		return recordWindowCreated(this.database, input);
+	}
+
+	recordWindowClosed(input: WindowClosedInput): string {
+		return recordWindowClosed(this.database, input);
+	}
+
+	recordSessionMoved(input: SessionMovedInput): string {
+		return recordSessionMoved(this.database, input);
+	}
+
+	getWindowEvents(range: StatsTimeRange, eventType?: WindowEventType): WindowEvent[] {
+		return getWindowEvents(this.database, range, eventType);
+	}
+
+	getWindowStatsAggregation(range: StatsTimeRange) {
+		return getWindowStatsAggregation(this.database, range);
 	}
 
 	// ============================================================================

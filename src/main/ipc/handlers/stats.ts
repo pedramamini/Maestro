@@ -21,6 +21,7 @@ import {
 	AutoRunSession,
 	AutoRunTask,
 	SessionLifecycleEvent,
+	WindowEventType,
 	StatsTimeRange,
 	StatsFilters,
 } from '../../../shared/stats-types';
@@ -290,6 +291,108 @@ export function registerStatsHandlers(deps: StatsHandlerDependencies): void {
 		withIpcErrorLogging(handlerOpts('getSessionLifecycle'), async (range: StatsTimeRange) => {
 			const db = getStatsDB();
 			return db.getSessionLifecycleEvents(range);
+		})
+	);
+
+	// =========================================================================
+	// Window Events (Multi-window analytics)
+	// =========================================================================
+
+	// Record a window being created
+	ipcMain.handle(
+		'stats:record-window-created',
+		withIpcErrorLogging(
+			handlerOpts('recordWindowCreated'),
+			async (input: { windowId: string; isPrimary: boolean; windowCount: number }) => {
+				// Check if stats collection is enabled
+				if (!isStatsCollectionEnabled(settingsStore)) {
+					logger.debug('Stats collection disabled, skipping window created event', LOG_CONTEXT);
+					return null;
+				}
+
+				const db = getStatsDB();
+				const id = db.recordWindowCreated(input);
+				logger.debug(`Recorded window created: ${input.windowId}`, LOG_CONTEXT, {
+					isPrimary: input.isPrimary,
+					windowCount: input.windowCount,
+				});
+				broadcastStatsUpdate(getMainWindow);
+				return id;
+			}
+		)
+	);
+
+	// Record a window being closed
+	ipcMain.handle(
+		'stats:record-window-closed',
+		withIpcErrorLogging(
+			handlerOpts('recordWindowClosed'),
+			async (input: { windowId: string; isPrimary: boolean; windowCount: number }) => {
+				// Check if stats collection is enabled
+				if (!isStatsCollectionEnabled(settingsStore)) {
+					logger.debug('Stats collection disabled, skipping window closed event', LOG_CONTEXT);
+					return null;
+				}
+
+				const db = getStatsDB();
+				const id = db.recordWindowClosed(input);
+				logger.debug(`Recorded window closed: ${input.windowId}`, LOG_CONTEXT, {
+					isPrimary: input.isPrimary,
+					windowCount: input.windowCount,
+				});
+				broadcastStatsUpdate(getMainWindow);
+				return id;
+			}
+		)
+	);
+
+	// Record a session being moved between windows
+	ipcMain.handle(
+		'stats:record-session-moved',
+		withIpcErrorLogging(
+			handlerOpts('recordSessionMoved'),
+			async (input: {
+				sessionId: string;
+				sourceWindowId: string;
+				destWindowId: string;
+				windowCount: number;
+			}) => {
+				// Check if stats collection is enabled
+				if (!isStatsCollectionEnabled(settingsStore)) {
+					logger.debug('Stats collection disabled, skipping session moved event', LOG_CONTEXT);
+					return null;
+				}
+
+				const db = getStatsDB();
+				const id = db.recordSessionMoved(input);
+				logger.debug(
+					`Recorded session moved: ${input.sessionId} from ${input.sourceWindowId} to ${input.destWindowId}`,
+					LOG_CONTEXT
+				);
+				broadcastStatsUpdate(getMainWindow);
+				return id;
+			}
+		)
+	);
+
+	// Get window events within a time range
+	ipcMain.handle(
+		'stats:get-window-events',
+		withIpcErrorLogging(
+			handlerOpts('getWindowEvents'),
+			async (range: StatsTimeRange, eventType?: WindowEventType) => {
+				const db = getStatsDB();
+				return db.getWindowEvents(range, eventType);
+			}
+		)
+	);
+
+	// Get window stats aggregation
+	ipcMain.handle(
+		'stats:get-window-stats',
+		withIpcErrorLogging(handlerOpts('getWindowStats'), async (range: StatsTimeRange) => {
+			const db = getStatsDB();
+			return db.getWindowStatsAggregation(range);
 		})
 	);
 }

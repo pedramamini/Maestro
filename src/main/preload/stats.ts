@@ -61,6 +61,50 @@ export interface SessionCreatedEvent {
 }
 
 /**
+ * Window event types
+ */
+export type WindowEventType = 'created' | 'closed' | 'session_moved';
+
+/**
+ * Window created event input
+ */
+export interface WindowCreatedEvent {
+	windowId: string;
+	isPrimary: boolean;
+	windowCount: number;
+}
+
+/**
+ * Window closed event input
+ */
+export interface WindowClosedEvent {
+	windowId: string;
+	isPrimary: boolean;
+	windowCount: number;
+}
+
+/**
+ * Session moved event input
+ */
+export interface SessionMovedEvent {
+	sessionId: string;
+	sourceWindowId: string;
+	destWindowId: string;
+	windowCount: number;
+}
+
+/**
+ * Window stats aggregation result
+ */
+export interface WindowStatsAggregation {
+	totalWindowsCreated: number;
+	totalSessionMoves: number;
+	peakConcurrentWindows: number;
+	windowsByDay: Array<{ date: string; created: number; closed: number }>;
+	avgSessionMovesPerWindow: number;
+}
+
+/**
  * Aggregation result
  */
 export interface StatsAggregation {
@@ -201,6 +245,45 @@ export function createStatsApi() {
 				isRemote?: boolean;
 			}>
 		> => ipcRenderer.invoke('stats:get-session-lifecycle', range),
+
+		// =========================================================================
+		// Window Events (Multi-window analytics)
+		// =========================================================================
+
+		// Record a window being created
+		recordWindowCreated: (event: WindowCreatedEvent): Promise<string | null> =>
+			ipcRenderer.invoke('stats:record-window-created', event),
+
+		// Record a window being closed
+		recordWindowClosed: (event: WindowClosedEvent): Promise<string | null> =>
+			ipcRenderer.invoke('stats:record-window-closed', event),
+
+		// Record a session being moved between windows
+		recordSessionMoved: (event: SessionMovedEvent): Promise<string | null> =>
+			ipcRenderer.invoke('stats:record-session-moved', event),
+
+		// Get window events within a time range
+		getWindowEvents: (
+			range: 'day' | 'week' | 'month' | 'year' | 'all',
+			eventType?: WindowEventType
+		): Promise<
+			Array<{
+				id: string;
+				eventType: WindowEventType;
+				windowId: string;
+				isPrimary: boolean;
+				timestamp: number;
+				sessionId?: string;
+				sourceWindowId?: string;
+				destWindowId?: string;
+				windowCount: number;
+			}>
+		> => ipcRenderer.invoke('stats:get-window-events', range, eventType),
+
+		// Get window stats aggregation
+		getWindowStats: (
+			range: 'day' | 'week' | 'month' | 'year' | 'all'
+		): Promise<WindowStatsAggregation> => ipcRenderer.invoke('stats:get-window-stats', range),
 	};
 }
 

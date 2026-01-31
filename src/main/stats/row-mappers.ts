@@ -10,6 +10,8 @@ import type {
 	AutoRunSession,
 	AutoRunTask,
 	SessionLifecycleEvent,
+	WindowEvent,
+	WindowEventType,
 } from '../../shared/stats-types';
 import type { MigrationRecord } from './types';
 
@@ -70,6 +72,18 @@ export interface MigrationRecordRow {
 	applied_at: number;
 	status: 'success' | 'failed';
 	error_message: string | null;
+}
+
+export interface WindowEventRow {
+	id: string;
+	event_type: WindowEventType;
+	window_id: string;
+	is_primary: number;
+	timestamp: number;
+	session_id: string | null;
+	source_window_id: string | null;
+	dest_window_id: string | null;
+	window_count: number;
 }
 
 // ============================================================================
@@ -138,5 +152,19 @@ export function mapMigrationRecordRow(row: MigrationRecordRow): MigrationRecord 
 		appliedAt: row.applied_at,
 		status: row.status,
 		errorMessage: row.error_message ?? undefined,
+	};
+}
+
+export function mapWindowEventRow(row: WindowEventRow): WindowEvent {
+	return {
+		id: row.id,
+		eventType: row.event_type,
+		windowId: row.window_id,
+		isPrimary: row.is_primary === 1,
+		timestamp: row.timestamp,
+		sessionId: row.session_id ?? undefined,
+		sourceWindowId: row.source_window_id ?? undefined,
+		destWindowId: row.dest_window_id ?? undefined,
+		windowCount: row.window_count,
 	};
 }

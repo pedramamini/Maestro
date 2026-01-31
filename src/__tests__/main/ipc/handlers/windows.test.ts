@@ -82,6 +82,32 @@ let mockRegistryState: Map<
 >;
 let mockPrimaryWindowId: string | null = null;
 
+// Helper function for moveSession logic (shared between sync and async mocks)
+const doMoveSession = (sessionId: string, fromWindowId: string, toWindowId: string): boolean => {
+	const toEntry = mockRegistryState.get(toWindowId);
+	if (!toEntry) return false;
+
+	if (fromWindowId) {
+		const fromEntry = mockRegistryState.get(fromWindowId);
+		if (fromEntry) {
+			const index = fromEntry.sessionIds.indexOf(sessionId);
+			if (index !== -1) {
+				fromEntry.sessionIds.splice(index, 1);
+				if (fromEntry.activeSessionId === sessionId) {
+					fromEntry.activeSessionId = fromEntry.sessionIds[0];
+				}
+			}
+		}
+	}
+
+	if (!toEntry.sessionIds.includes(sessionId)) {
+		toEntry.sessionIds.push(sessionId);
+		toEntry.activeSessionId = sessionId;
+	}
+
+	return true;
+};
+
 // Mock window registry
 vi.mock('../../../../main/window-registry', () => ({
 	windowRegistry: {
@@ -97,29 +123,15 @@ vi.mock('../../../../main/window-registry', () => ({
 			return undefined;
 		}),
 		moveSession: vi.fn((sessionId: string, fromWindowId: string, toWindowId: string) => {
-			const toEntry = mockRegistryState.get(toWindowId);
-			if (!toEntry) return false;
-
-			if (fromWindowId) {
-				const fromEntry = mockRegistryState.get(fromWindowId);
-				if (fromEntry) {
-					const index = fromEntry.sessionIds.indexOf(sessionId);
-					if (index !== -1) {
-						fromEntry.sessionIds.splice(index, 1);
-						if (fromEntry.activeSessionId === sessionId) {
-							fromEntry.activeSessionId = fromEntry.sessionIds[0];
-						}
-					}
-				}
-			}
-
-			if (!toEntry.sessionIds.includes(sessionId)) {
-				toEntry.sessionIds.push(sessionId);
-				toEntry.activeSessionId = sessionId;
-			}
-
-			return true;
+			return doMoveSession(sessionId, fromWindowId, toWindowId);
 		}),
+		// Async version with mutex protection (mocked)
+		moveSessionAsync: vi.fn(async (sessionId: string, fromWindowId: string, toWindowId: string) => {
+			return doMoveSession(sessionId, fromWindowId, toWindowId);
+		}),
+		// Methods for race condition prevention diagnostics
+		isSessionOperationInProgress: vi.fn(() => false),
+		getSessionOperationQueueLength: vi.fn(() => 0),
 		setActiveSession: vi.fn((windowId: string, sessionId: string) => {
 			const entry = mockRegistryState.get(windowId);
 			if (!entry || !entry.sessionIds.includes(sessionId)) return false;

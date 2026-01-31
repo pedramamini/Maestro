@@ -126,6 +126,30 @@ export const CREATE_SESSION_LIFECYCLE_INDEXES_SQL = `
 `;
 
 // ============================================================================
+// Window Events (Migration v4)
+// ============================================================================
+
+export const CREATE_WINDOW_EVENTS_SQL = `
+  CREATE TABLE IF NOT EXISTS window_events (
+    id TEXT PRIMARY KEY,
+    event_type TEXT NOT NULL CHECK(event_type IN ('created', 'closed', 'session_moved')),
+    window_id TEXT NOT NULL,
+    is_primary INTEGER NOT NULL CHECK(is_primary IN (0, 1)),
+    timestamp INTEGER NOT NULL,
+    session_id TEXT,
+    source_window_id TEXT,
+    dest_window_id TEXT,
+    window_count INTEGER NOT NULL
+  )
+`;
+
+export const CREATE_WINDOW_EVENTS_INDEXES_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_window_event_timestamp ON window_events(timestamp);
+  CREATE INDEX IF NOT EXISTS idx_window_event_type ON window_events(event_type);
+  CREATE INDEX IF NOT EXISTS idx_window_event_window_id ON window_events(window_id)
+`;
+
+// ============================================================================
 // Utilities
 // ============================================================================
 

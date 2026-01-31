@@ -67,6 +67,34 @@ export interface SessionLifecycleEvent {
 }
 
 /**
+ * Window event types for multi-window analytics
+ */
+export type WindowEventType = 'created' | 'closed' | 'session_moved';
+
+/**
+ * Window event - tracks multi-window usage patterns
+ */
+export interface WindowEvent {
+	id: string;
+	/** The type of window event */
+	eventType: WindowEventType;
+	/** Window ID (primary or secondary window identifier) */
+	windowId: string;
+	/** Whether this is the primary window */
+	isPrimary: boolean;
+	/** Event timestamp */
+	timestamp: number;
+	/** For session_moved events: the session that was moved */
+	sessionId?: string;
+	/** For session_moved events: the source window ID */
+	sourceWindowId?: string;
+	/** For session_moved events: the destination window ID */
+	destWindowId?: string;
+	/** Current total window count at time of event */
+	windowCount: number;
+}
+
+/**
  * Time range for querying stats
  */
 export type StatsTimeRange = 'day' | 'week' | 'month' | 'year' | 'all';
@@ -97,6 +125,19 @@ export interface StatsAggregation {
 	byAgentByDay: Record<string, Array<{ date: string; count: number; duration: number }>>;
 	/** Queries and duration by Maestro session per day (for agent usage chart) */
 	bySessionByDay: Record<string, Array<{ date: string; count: number; duration: number }>>;
+	/** Multi-window usage statistics */
+	windowStats?: {
+		/** Total number of secondary windows created in the time period */
+		totalWindowsCreated: number;
+		/** Total number of session moves between windows */
+		totalSessionMoves: number;
+		/** Peak concurrent window count observed */
+		peakConcurrentWindows: number;
+		/** Windows created by day */
+		windowsByDay: Array<{ date: string; created: number; closed: number }>;
+		/** Average session moves per window */
+		avgSessionMovesPerWindow: number;
+	};
 }
 
 /**
@@ -112,4 +153,4 @@ export interface StatsFilters {
 /**
  * Database schema version for migrations
  */
-export const STATS_DB_VERSION = 3;
+export const STATS_DB_VERSION = 4;

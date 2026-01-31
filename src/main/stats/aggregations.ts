@@ -299,6 +299,84 @@ function queryBySessionByDay(
 	return result;
 }
 
+function queryWindowStats(
+	db: Database.Database,
+	startTime: number
+): StatsAggregation['windowStats'] {
+	const perfStart = perfMetrics.start();
+
+	// Check if window_events table exists (might not exist if migration hasn't run yet)
+	const tableExists = db
+		.prepare("SELECT name FROM sqlite_master WHERE type='table' AND name='window_events'")
+		.get();
+
+	if (!tableExists) {
+		perfMetrics.end(perfStart, 'getAggregatedStats:windowStats:noTable');
+		return undefined;
+	}
+
+	// Query with the correct startTime
+	// We need to use the same startTime for consistency
+	const createdResult = db
+		.prepare(
+			`
+      SELECT COUNT(*) as count FROM window_events
+      WHERE timestamp >= ? AND event_type = 'created' AND is_primary = 0
+    `
+		)
+		.get(startTime) as { count: number };
+
+	const movesResult = db
+		.prepare(
+			`
+      SELECT COUNT(*) as count FROM window_events
+      WHERE timestamp >= ? AND event_type = 'session_moved'
+    `
+		)
+		.get(startTime) as { count: number };
+
+	const peakResult = db
+		.prepare(
+			`
+      SELECT MAX(window_count) as peak FROM window_events
+      WHERE timestamp >= ?
+    `
+		)
+		.get(startTime) as { peak: number | null };
+
+	const byDayRows = db
+		.prepare(
+			`
+      SELECT
+        date(timestamp / 1000, 'unixepoch', 'localtime') as date,
+        SUM(CASE WHEN event_type = 'created' AND is_primary = 0 THEN 1 ELSE 0 END) as created,
+        SUM(CASE WHEN event_type = 'closed' AND is_primary = 0 THEN 1 ELSE 0 END) as closed
+      FROM window_events
+      WHERE timestamp >= ?
+      GROUP BY date(timestamp / 1000, 'unixepoch', 'localtime')
+      ORDER BY date ASC
+    `
+		)
+		.all(startTime) as Array<{ date: string; created: number; closed: number }>;
+
+	const totalWindowsCreated = createdResult?.count ?? 0;
+	const totalSessionMoves = movesResult?.count ?? 0;
+
+	perfMetrics.end(perfStart, 'getAggregatedStats:windowStats');
+
+	return {
+		totalWindowsCreated,
+		totalSessionMoves,
+		peakConcurrentWindows: peakResult?.peak ?? 1,
+		windowsByDay: byDayRows.map((row) => ({
+			date: row.date,
+			created: row.created ?? 0,
+			closed: row.closed ?? 0,
+		})),
+		avgSessionMovesPerWindow: totalWindowsCreated > 0 ? totalSessionMoves / totalWindowsCreated : 0,
+	};
+}
+
 // ============================================================================
 // Orchestrator
 // ============================================================================
@@ -322,6 +400,7 @@ export function getAggregatedStats(db: Database.Database, range: StatsTimeRange)
 	const byHour = queryByHour(db, startTime);
 	const sessionStats = querySessionStats(db, startTime);
 	const bySessionByDay = queryBySessionByDay(db, startTime);
+	const windowStats = queryWindowStats(db, startTime);
 
 	const totalDuration = perfMetrics.end(perfStart, 'getAggregatedStats:total', {
 		range,
@@ -349,5 +428,6 @@ export function getAggregatedStats(db: Database.Database, range: StatsTimeRange)
 		...sessionStats,
 		byAgentByDay,
 		bySessionByDay,
+		windowStats,
 	};
 }

@@ -14,6 +14,7 @@ icon: sparkles
 - 🌐 **[Remote Access](./remote-access)** - Built-in web server with QR code access. Monitor and control all your agents from your phone. Supports local network access and remote tunneling via Cloudflare for access from anywhere.
 - 🔗 **[SSH Remote Execution](./ssh-remote-execution)** - Run AI agents on remote hosts via SSH. Leverage powerful cloud VMs, access tools not installed locally, or work with projects requiring specific environments — all while controlling everything from your local Maestro instance.
 - 💻 **[Command Line Interface](./cli)** - Full CLI (`maestro-cli`) for headless operation. List agents/groups, run playbooks from cron jobs or CI/CD pipelines, with human-readable or JSONL output for scripting.
+- 🪟 **[Multi-Window Support](./multi-window)** - Spread your workspace across multiple windows and displays. Drag tabs out to create new windows, move sessions between windows, and let Maestro automatically restore windows to the correct display on restart.
 - 🚀 **Multi-Agent Management** - Run unlimited agents in parallel. Each agent has its own workspace, conversation history, and isolated context.
 - 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when the agent becomes ready. Never lose a thought.
 

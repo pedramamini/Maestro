@@ -24,10 +24,90 @@ import type {
 	SessionsTransferredEvent,
 } from '../../../shared/types/window';
 import { logger } from '../../utils/logger';
-import { getMultiWindowStateStore } from '../../stores/getters';
+import { getMultiWindowStateStore, getSettingsStore } from '../../stores/getters';
 import type { MultiWindowWindowState } from '../../stores/types';
+import { getStatsDB } from '../../stats';
 
 const LOG_CONTEXT = 'WindowsIPC';
+
+/**
+ * Check if stats collection is enabled for window telemetry
+ */
+function isStatsCollectionEnabled(): boolean {
+	try {
+		const settingsStore = getSettingsStore();
+		if (!settingsStore) return false;
+		const enabled = settingsStore.get('statsCollectionEnabled');
+		// Default to true if not explicitly set to false
+		return enabled !== false;
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Records a window telemetry event if stats collection is enabled.
+ * Non-blocking - errors are logged but don't affect window operations.
+ */
+function recordWindowTelemetry(
+	type: 'created' | 'closed',
+	windowId: string,
+	isPrimary: boolean
+): void {
+	if (!isStatsCollectionEnabled()) {
+		return;
+	}
+
+	try {
+		const db = getStatsDB();
+		const windowCount = windowRegistry.getAll().length;
+
+		if (type === 'created') {
+			db.recordWindowCreated({ windowId, isPrimary, windowCount });
+		} else {
+			db.recordWindowClosed({ windowId, isPrimary, windowCount });
+		}
+	} catch (error) {
+		logger.debug('Failed to record window telemetry', LOG_CONTEXT, {
+			type,
+			windowId,
+			error: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
+
+/**
+ * Records a session move telemetry event if stats collection is enabled.
+ * Non-blocking - errors are logged but don't affect session operations.
+ */
+function recordSessionMoveTelemetry(
+	sessionId: string,
+	fromWindowId: string,
+	toWindowId: string
+): void {
+	if (!isStatsCollectionEnabled()) {
+		return;
+	}
+
+	try {
+		const db = getStatsDB();
+		const windowCount = windowRegistry.getAll().length;
+
+		db.recordSessionMoved({
+			sessionId,
+			sourceWindowId: fromWindowId,
+			destWindowId: toWindowId,
+			windowCount,
+		});
+	} catch (error) {
+		logger.debug('Failed to record session move telemetry', LOG_CONTEXT, {
+			sessionId,
+			fromWindowId,
+			toWindowId,
+			error: error instanceof Error ? error.message : String(error),
+		});
+	}
+}
 
 /**
  * Callback type for creating secondary windows.
@@ -149,6 +229,9 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 					windowRegistry.setActiveSession(result.windowId, request.activeSessionId);
 				}
 
+				// Record window creation telemetry (non-blocking)
+				recordWindowTelemetry('created', result.windowId, false);
+
 				logger.info('Window created successfully', LOG_CONTEXT, {
 					windowId: result.windowId,
 				});
@@ -214,6 +297,9 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 					}
 				}
 
+				// Record window close telemetry (non-blocking) - record before closing
+				recordWindowTelemetry('closed', windowId, false);
+
 				// Close the BrowserWindow - registry cleanup happens automatically via 'closed' event
 				entry.browserWindow.close();
 				logger.info('Window closed successfully', LOG_CONTEXT, { windowId });
@@ -258,6 +344,7 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 
 	// ============ windows:moveSession ============
 	// Move a session from one window to another
+	// Uses mutex-protected async version to prevent race conditions during rapid drags
 	ipcMain.handle(
 		'windows:moveSession',
 		async (_event, request: MoveSessionRequest): Promise<{ success: boolean; error?: string }> => {
@@ -267,6 +354,7 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 				sessionId,
 				fromWindowId: fromWindowId || '(none)',
 				toWindowId,
+				queueLength: windowRegistry.getSessionOperationQueueLength(),
 			});
 
 			// Validate target window exists
@@ -285,7 +373,12 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 				}
 			}
 
-			const success = windowRegistry.moveSession(sessionId, fromWindowId || '', toWindowId);
+			// Use mutex-protected async version to serialize concurrent moves
+			const success = await windowRegistry.moveSessionAsync(
+				sessionId,
+				fromWindowId || '',
+				toWindowId
+			);
 
 			if (success) {
 				logger.info('Session moved successfully', LOG_CONTEXT, {
@@ -294,12 +387,20 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 					toWindowId,
 				});
 
-				// Notify both windows about the change
-				notifyWindowOfSessionChange(toWindowId, toEntry);
+				// Record session move telemetry (non-blocking)
 				if (fromWindowId) {
-					const fromEntry = windowRegistry.get(fromWindowId);
-					if (fromEntry) {
-						notifyWindowOfSessionChange(fromWindowId, fromEntry);
+					recordSessionMoveTelemetry(sessionId, fromWindowId, toWindowId);
+				}
+
+				// Re-fetch entries after move (state may have changed during async operation)
+				const updatedToEntry = windowRegistry.get(toWindowId);
+				if (updatedToEntry) {
+					notifyWindowOfSessionChange(toWindowId, updatedToEntry);
+				}
+				if (fromWindowId) {
+					const updatedFromEntry = windowRegistry.get(fromWindowId);
+					if (updatedFromEntry) {
+						notifyWindowOfSessionChange(fromWindowId, updatedFromEntry);
 					}
 				}
 
