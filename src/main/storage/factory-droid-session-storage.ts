@@ -29,6 +29,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
 import { logger } from '../utils/logger';
+import { readDirRemote, readFileRemote, statRemote } from '../utils/remote-fs';
 import type {
 	AgentSessionStorage,
 	AgentSessionInfo,
@@ -159,6 +160,15 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 	}
 
 	/**
+	 * Get the remote session directory for a project (SSH)
+	 * Uses POSIX-style paths with ~ expansion for remote Linux hosts
+	 */
+	private getRemoteProjectSessionDir(projectPath: string): string {
+		const encodedPath = encodeProjectPath(projectPath);
+		return `~/.factory/sessions/${encodedPath}`;
+	}
+
+	/**
 	 * Load and parse messages from a session JSONL file
 	 */
 	private async loadSessionMessages(sessionPath: string): Promise<FactoryMessage[]> {
@@ -185,11 +195,185 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 		}
 	}
 
+	/**
+	 * Load and parse messages from a remote session JSONL file via SSH
+	 */
+	private async loadSessionMessagesRemote(
+		sessionPath: string,
+		sshConfig: SshRemoteConfig
+	): Promise<FactoryMessage[]> {
+		try {
+			const result = await readFileRemote(sessionPath, sshConfig);
+			if (!result.success || !result.data) {
+				logger.debug(
+					`Failed to load remote session messages: ${sessionPath} - ${result.error}`,
+					LOG_CONTEXT
+				);
+				return [];
+			}
+
+			const lines = result.data.trim().split('\n').filter((l) => l.trim());
+			const messages: FactoryMessage[] = [];
+
+			for (const line of lines) {
+				try {
+					const parsed = JSON.parse(line);
+					if (parsed.type === 'message' && parsed.message) {
+						messages.push(parsed as FactoryMessage);
+					}
+				} catch (error) {
+					logger.debug('Skipping unparseable JSONL line (remote)', LOG_CONTEXT, { error });
+				}
+			}
+
+			return messages;
+		} catch (error) {
+			logger.debug(`Failed to load remote session messages: ${sessionPath}`, LOG_CONTEXT, {
+				error,
+			});
+			return [];
+		}
+	}
+
+	/**
+	 * Read JSON file from remote host via SSH
+	 */
+	private async readJsonFileRemote<T>(
+		filePath: string,
+		sshConfig: SshRemoteConfig
+	): Promise<T | null> {
+		try {
+			const result = await readFileRemote(filePath, sshConfig);
+			if (!result.success || !result.data) {
+				logger.debug(`Failed to read remote JSON file: ${filePath}`, LOG_CONTEXT);
+				return null;
+			}
+			return JSON.parse(result.data) as T;
+		} catch (error) {
+			logger.debug(`Failed to parse remote JSON file: ${filePath}`, LOG_CONTEXT, { error });
+			return null;
+		}
+	}
+
+	/**
+	 * List sessions from remote host via SSH
+	 */
+	private async listSessionsRemote(
+		projectPath: string,
+		sshConfig: SshRemoteConfig
+	): Promise<AgentSessionInfo[]> {
+		const projectDir = this.getRemoteProjectSessionDir(projectPath);
+
+		// List directory via SSH
+		const dirResult = await readDirRemote(projectDir, sshConfig);
+		if (!dirResult.success || !dirResult.data) {
+			logger.info(
+				`No Factory Droid sessions directory found on remote for project: ${projectPath}`,
+				LOG_CONTEXT
+			);
+			return [];
+		}
+
+		// Filter for .jsonl files
+		const sessionFiles = dirResult.data.filter(
+			(entry) => !entry.isDirectory && entry.name.endsWith('.jsonl')
+		);
+
+		const sessions: AgentSessionInfo[] = [];
+
+		for (const entry of sessionFiles) {
+			const sessionId = entry.name.replace('.jsonl', '');
+			const jsonlPath = `${projectDir}/${entry.name}`;
+			const settingsPath = `${projectDir}/${sessionId}.settings.json`;
+
+			try {
+				// Get file stats via SSH
+				const statResult = await statRemote(jsonlPath, sshConfig);
+				if (!statResult.success || !statResult.data) {
+					logger.error(`Failed to stat remote file: ${jsonlPath}`, LOG_CONTEXT);
+					continue;
+				}
+
+				// Load settings via SSH
+				const settings = await this.readJsonFileRemote<FactorySettings>(settingsPath, sshConfig);
+
+				// Load messages to get first message and count
+				const messages = await this.loadSessionMessagesRemote(jsonlPath, sshConfig);
+
+				// Get first user message for preview
+				let firstMessage = '';
+				for (const msg of messages) {
+					if (msg.message.role === 'user') {
+						const textContent = extractTextFromContent(msg.message.content);
+						if (textContent.trim()) {
+							firstMessage = textContent.slice(0, 200);
+							break;
+						}
+					}
+				}
+
+				// Count user and assistant messages
+				const messageCount = messages.filter(
+					(m) => m.message.role === 'user' || m.message.role === 'assistant'
+				).length;
+
+				// Calculate duration from settings or timestamps
+				let durationSeconds = 0;
+				if (settings?.assistantActiveTimeMs) {
+					durationSeconds = Math.round(settings.assistantActiveTimeMs / 1000);
+				} else if (messages.length >= 2) {
+					const firstTime = new Date(messages[0].timestamp).getTime();
+					const lastTime = new Date(messages[messages.length - 1].timestamp).getTime();
+					durationSeconds = Math.max(0, Math.floor((lastTime - firstTime) / 1000));
+				}
+
+				// Get timestamps from messages or file stat
+				const createdAt =
+					messages[0]?.timestamp || new Date(statResult.data.mtime).toISOString();
+				const modifiedAt =
+					messages[messages.length - 1]?.timestamp ||
+					new Date(statResult.data.mtime).toISOString();
+
+				sessions.push({
+					sessionId,
+					projectPath,
+					timestamp: createdAt,
+					modifiedAt,
+					firstMessage: firstMessage || 'Factory Droid session',
+					messageCount,
+					sizeBytes: statResult.data.size,
+					inputTokens: settings?.tokenUsage?.inputTokens || 0,
+					outputTokens: settings?.tokenUsage?.outputTokens || 0,
+					cacheReadTokens: settings?.tokenUsage?.cacheReadTokens || 0,
+					cacheCreationTokens: settings?.tokenUsage?.cacheCreationTokens || 0,
+					durationSeconds,
+				});
+			} catch (e) {
+				logger.warn(`Error reading remote Factory Droid session ${sessionId}`, LOG_CONTEXT, {
+					error: e,
+				});
+			}
+		}
+
+		// Sort by modified date (newest first)
+		sessions.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
+
+		logger.info(
+			`Found ${sessions.length} Factory Droid sessions for project: ${projectPath} (remote via SSH)`,
+			LOG_CONTEXT
+		);
+		return sessions;
+	}
+
 	async listSessions(
 		projectPath: string,
-		_sshConfig?: SshRemoteConfig
+		sshConfig?: SshRemoteConfig
 	): Promise<AgentSessionInfo[]> {
-		// TODO: Implement SSH remote support
+		// Use SSH remote access if config provided
+		if (sshConfig) {
+			return this.listSessionsRemote(projectPath, sshConfig);
+		}
+
 		const projectDir = this.getProjectSessionDir(projectPath);
 
 		try {
@@ -310,14 +494,22 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 		projectPath: string,
 		sessionId: string,
 		options?: SessionReadOptions,
-		_sshConfig?: SshRemoteConfig
+		sshConfig?: SshRemoteConfig
 	): Promise<SessionMessagesResult> {
-		const sessionPath = path.join(
-			this.getProjectSessionDir(projectPath),
-			`${sessionId}.jsonl`
-		);
+		// Load messages either locally or via SSH
+		let factoryMessages: FactoryMessage[];
 
-		const factoryMessages = await this.loadSessionMessages(sessionPath);
+		if (sshConfig) {
+			const projectDir = this.getRemoteProjectSessionDir(projectPath);
+			const sessionPath = `${projectDir}/${sessionId}.jsonl`;
+			factoryMessages = await this.loadSessionMessagesRemote(sessionPath, sshConfig);
+		} else {
+			const sessionPath = path.join(
+				this.getProjectSessionDir(projectPath),
+				`${sessionId}.jsonl`
+			);
+			factoryMessages = await this.loadSessionMessages(sessionPath);
+		}
 
 		const sessionMessages: SessionMessage[] = [];
 
@@ -379,12 +571,21 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 		const searchLower = query.toLowerCase();
 		const results: SessionSearchResult[] = [];
 
+		// Determine paths based on SSH config
+		const projectDir = sshConfig
+			? this.getRemoteProjectSessionDir(projectPath)
+			: this.getProjectSessionDir(projectPath);
+
 		for (const session of sessions) {
-			const sessionPath = path.join(
-				this.getProjectSessionDir(projectPath),
-				`${session.sessionId}.jsonl`
-			);
-			const messages = await this.loadSessionMessages(sessionPath);
+			// Get session path based on local vs remote
+			const sessionPath = sshConfig
+				? `${projectDir}/${session.sessionId}.jsonl`
+				: path.join(projectDir, `${session.sessionId}.jsonl`);
+
+			// Load messages either locally or via SSH
+			const messages = sshConfig
+				? await this.loadSessionMessagesRemote(sessionPath, sshConfig)
+				: await this.loadSessionMessages(sessionPath);
 
 			let titleMatch = false;
 			let userMatches = 0;
@@ -468,8 +669,12 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 	getSessionPath(
 		projectPath: string,
 		sessionId: string,
-		_sshConfig?: SshRemoteConfig
+		sshConfig?: SshRemoteConfig
 	): string | null {
+		if (sshConfig) {
+			const projectDir = this.getRemoteProjectSessionDir(projectPath);
+			return `${projectDir}/${sessionId}.jsonl`;
+		}
 		return path.join(this.getProjectSessionDir(projectPath), `${sessionId}.jsonl`);
 	}
 
@@ -478,8 +683,15 @@ export class FactoryDroidSessionStorage implements AgentSessionStorage {
 		sessionId: string,
 		userMessageUuid: string,
 		fallbackContent?: string,
-		_sshConfig?: SshRemoteConfig
+		sshConfig?: SshRemoteConfig
 	): Promise<{ success: boolean; error?: string; linesRemoved?: number }> {
+		// Note: Delete operations on remote sessions are not supported yet
+		// This would require implementing writeFileRemote
+		if (sshConfig) {
+			logger.warn('Delete message pair not supported for SSH remote sessions', LOG_CONTEXT);
+			return { success: false, error: 'Delete not supported for remote sessions' };
+		}
+
 		try {
 			const sessionPath = path.join(
 				this.getProjectSessionDir(projectPath),
