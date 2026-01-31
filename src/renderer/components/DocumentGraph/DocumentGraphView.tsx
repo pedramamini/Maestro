@@ -53,6 +53,8 @@ import {
 } from './MindMap';
 import { NodeContextMenu } from './NodeContextMenu';
 import { GraphLegend } from './GraphLegend';
+import { MarkdownRenderer } from '../MarkdownRenderer';
+import { generateProseStyles } from '../../utils/markdownConfig';
 
 /** Debounce delay for graph rebuilds when settings change (ms) */
 const GRAPH_REBUILD_DEBOUNCE_DELAY = 300;
@@ -163,6 +165,16 @@ export function DocumentGraphView({
 	const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(null);
 	const [searchQuery, setSearchQuery] = useState('');
 
+	// Preview panel state
+	const [previewFile, setPreviewFile] = useState<{
+		path: string;
+		relativePath: string;
+		name: string;
+		content: string;
+	} | null>(null);
+	const [previewError, setPreviewError] = useState<string | null>(null);
+	const [previewLoading, setPreviewLoading] = useState(false);
+
 	// Pagination state
 	const [totalDocuments, setTotalDocuments] = useState(0);
 	const [loadedDocuments, setLoadedDocuments] = useState(0);
@@ -196,6 +208,7 @@ export function DocumentGraphView({
 	const graphContainerRef = useRef<HTMLDivElement>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const mindMapContainerRef = useRef<HTMLDivElement>(null);
+	const previewContentRef = useRef<HTMLDivElement>(null);
 	const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 });
 
 	// Layer stack for escape handling
@@ -906,6 +919,90 @@ export function DocumentGraphView({
 	);
 
 	/**
+	 * Open a markdown preview panel inside the graph view (Enter key).
+	 */
+	const handlePreviewFile = useCallback(
+		async (filePath: string) => {
+			const isAbsolutePath = filePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(filePath);
+			const fullPath = isAbsolutePath ? filePath : `${rootPath}/${filePath}`;
+			const relativePath =
+				rootPath && fullPath.startsWith(`${rootPath}/`)
+					? fullPath.slice(rootPath.length + 1)
+					: filePath;
+
+			setPreviewLoading(true);
+			setPreviewError(null);
+
+			try {
+				const content = await window.maestro.fs.readFile(fullPath, sshRemoteId);
+
+				if (content === null) {
+					throw new Error('Unable to read file contents.');
+				}
+
+				setPreviewFile({
+					path: fullPath,
+					relativePath,
+					name: relativePath.split('/').pop() || relativePath,
+					content,
+				});
+			} catch (err) {
+				setPreviewFile(null);
+				setPreviewError(err instanceof Error ? err.message : 'Failed to load preview.');
+			} finally {
+				setPreviewLoading(false);
+			}
+		},
+		[rootPath, sshRemoteId]
+	);
+
+	/**
+	 * Close the preview panel
+	 */
+	const handlePreviewClose = useCallback(() => {
+		setPreviewFile(null);
+		setPreviewLoading(false);
+		setPreviewError(null);
+	}, []);
+
+	/**
+	 * Register preview panel with layer stack when open.
+	 * Escape closes the preview and returns focus to the graph.
+	 */
+	useEffect(() => {
+		if (previewFile || previewLoading || previewError) {
+			const id = registerLayer({
+				type: 'overlay',
+				priority: MODAL_PRIORITIES.DOCUMENT_GRAPH + 1,
+				blocksLowerLayers: false,
+				capturesFocus: true,
+				focusTrap: 'lenient',
+				allowClickOutside: true,
+				onEscape: () => {
+					handlePreviewClose();
+					// Return focus to the mind map container
+					requestAnimationFrame(() => {
+						mindMapContainerRef.current?.focus();
+					});
+				},
+			});
+			return () => unregisterLayer(id);
+		}
+	}, [previewFile, previewLoading, previewError, registerLayer, unregisterLayer, handlePreviewClose]);
+
+	/**
+	 * Focus the preview content area when preview file loads.
+	 * This enables immediate keyboard scrolling.
+	 */
+	useEffect(() => {
+		if (previewFile && !previewLoading && !previewError) {
+			requestAnimationFrame(() => {
+				previewContentRef.current?.focus();
+			});
+		}
+	}, [previewFile, previewLoading, previewError]);
+
+	/**
 	 * Handle search input escape key
 	 * First Escape: clear search if there's content
 	 * Second Escape (or first if empty): blur search, return focus to graph, select center node
@@ -1422,6 +1519,11 @@ export function DocumentGraphView({
 							selectedNodeId={selectedNodeId}
 							onNodeSelect={handleNodeSelect}
 							onNodeDoubleClick={handleNodeDoubleClick}
+							onNodePreview={(node) => {
+								if (node.nodeType === 'document' && node.filePath) {
+									handlePreviewFile(node.filePath);
+								}
+							}}
 							onNodeContextMenu={handleNodeContextMenu}
 							onOpenFile={handleOpenFile}
 							searchQuery={searchQuery}
@@ -1463,6 +1565,93 @@ export function DocumentGraphView({
 							onFocus={handleContextMenuFocus}
 							onDismiss={() => setContextMenu(null)}
 						/>
+					)}
+
+					{/* In-Graph Preview Panel */}
+					{(previewFile || previewLoading || previewError) && (
+						<div
+							className="absolute top-0 right-0 h-full overflow-hidden shadow-xl animate-in slide-in-from-right duration-200"
+							style={{
+								backgroundColor: theme.colors.bgActivity,
+								borderLeft: `1px solid ${theme.colors.border}`,
+								width: 'min(50%, 600px)',
+								zIndex: 25,
+							}}
+							role="dialog"
+							aria-label="Document preview"
+						>
+							{/* Preview Header */}
+							<div
+								className="sticky top-0 flex items-center justify-between px-4 py-3 border-b"
+								style={{
+									backgroundColor: theme.colors.bgActivity,
+									borderColor: theme.colors.border,
+								}}
+							>
+								<div className="flex items-center gap-2 min-w-0 flex-1">
+									<h3
+										className="text-sm font-medium truncate"
+										style={{ color: theme.colors.textMain }}
+										title={previewFile?.relativePath}
+									>
+										{previewFile?.name || 'Loading...'}
+									</h3>
+								</div>
+								<button
+									onClick={handlePreviewClose}
+									className="p-1 rounded transition-colors flex-shrink-0"
+									style={{ color: theme.colors.textDim }}
+									onMouseEnter={(e) =>
+										(e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+									}
+									onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+									title="Close preview (Esc)"
+								>
+									<X className="w-4 h-4" />
+								</button>
+							</div>
+
+							{/* Preview Content */}
+							<div
+								ref={previewContentRef}
+								className="h-full overflow-y-auto p-4 outline-none"
+								style={{ paddingBottom: 60 }}
+								tabIndex={0}
+							>
+								{previewLoading && (
+									<div className="flex items-center justify-center py-8">
+										<Loader2
+											className="w-6 h-6 animate-spin"
+											style={{ color: theme.colors.accent }}
+										/>
+									</div>
+								)}
+								{previewError && (
+									<div
+										className="flex flex-col items-center justify-center py-8 text-center"
+										style={{ color: theme.colors.textDim }}
+									>
+										<AlertCircle className="w-8 h-8 mb-2 opacity-50" />
+										<p className="text-sm">{previewError}</p>
+									</div>
+								)}
+								{previewFile && !previewLoading && !previewError && (
+									<>
+										<style>{generateProseStyles({ theme })}</style>
+										<div className="prose prose-sm max-w-none">
+											<MarkdownRenderer
+												content={previewFile.content}
+												theme={theme}
+												onCopy={(text) => {
+													navigator.clipboard.writeText(text);
+												}}
+												projectRoot={rootPath}
+											/>
+										</div>
+									</>
+								)}
+							</div>
+						</div>
 					)}
 				</div>
 
