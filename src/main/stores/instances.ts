@@ -20,6 +20,8 @@ import type {
 	GroupsData,
 	AgentConfigsData,
 	WindowState,
+	MultiWindowStoreData,
+	MultiWindowWindowState,
 	ClaudeSessionOriginsData,
 	AgentSessionOriginsData,
 } from './types';
@@ -30,6 +32,8 @@ import {
 	GROUPS_DEFAULTS,
 	AGENT_CONFIGS_DEFAULTS,
 	WINDOW_STATE_DEFAULTS,
+	MULTI_WINDOW_STATE_DEFAULTS,
+	MULTI_WINDOW_SCHEMA_VERSION,
 	CLAUDE_SESSION_ORIGINS_DEFAULTS,
 	AGENT_SESSION_ORIGINS_DEFAULTS,
 } from './defaults';
@@ -46,6 +50,7 @@ let _sessionsStore: Store<SessionsData> | null = null;
 let _groupsStore: Store<GroupsData> | null = null;
 let _agentConfigsStore: Store<AgentConfigsData> | null = null;
 let _windowStateStore: Store<WindowState> | null = null;
+let _multiWindowStateStore: Store<MultiWindowStoreData> | null = null;
 let _claudeSessionOriginsStore: Store<ClaudeSessionOriginsData> | null = null;
 let _agentSessionOriginsStore: Store<AgentSessionOriginsData> | null = null;
 
@@ -118,10 +123,21 @@ export function initializeStores(options: StoreInitOptions): {
 	});
 
 	// Window state is intentionally NOT synced - it's per-device
+	// This is the legacy single-window store, kept for migration
 	_windowStateStore = new Store<WindowState>({
 		name: 'maestro-window-state',
 		defaults: WINDOW_STATE_DEFAULTS,
 	});
+
+	// Multi-window state store with migration from legacy single-window format
+	_multiWindowStateStore = new Store<MultiWindowStoreData>({
+		name: 'maestro-multi-window-state',
+		defaults: MULTI_WINDOW_STATE_DEFAULTS,
+	});
+
+	// Perform migration from legacy single-window state if needed
+	// Pass sessions store to include all existing sessions in the migrated primary window
+	migrateFromLegacyWindowState(_windowStateStore, _multiWindowStateStore, _sessionsStore);
 
 	// Claude session origins - tracks which sessions were created by Maestro
 	_claudeSessionOriginsStore = new Store<ClaudeSessionOriginsData>({
@@ -161,9 +177,106 @@ export function getStoreInstances() {
 		groupsStore: _groupsStore,
 		agentConfigsStore: _agentConfigsStore,
 		windowStateStore: _windowStateStore,
+		multiWindowStateStore: _multiWindowStateStore,
 		claudeSessionOriginsStore: _claudeSessionOriginsStore,
 		agentSessionOriginsStore: _agentSessionOriginsStore,
 	};
+}
+
+// ============================================================================
+// Migration Functions
+// ============================================================================
+
+/**
+ * Migrate from legacy single-window state to multi-window state.
+ *
+ * This migration runs on every startup but only performs work if:
+ * 1. The multi-window store is empty or uninitialized
+ * 2. The legacy window state store has data
+ *
+ * The legacy data is preserved (not deleted) for rollback safety.
+ *
+ * @param legacyStore - The legacy single-window state store
+ * @param multiStore - The new multi-window state store
+ * @param sessionsStore - Optional sessions store to retrieve existing session IDs
+ * @returns true if migration was performed, false otherwise
+ */
+export function migrateFromLegacyWindowState(
+	legacyStore: Store<WindowState>,
+	multiStore: Store<MultiWindowStoreData>,
+	sessionsStore?: Store<SessionsData>
+): boolean {
+	// Check if multi-window store already has data
+	const existingWindows = multiStore.get('windows', []);
+	const existingVersion = multiStore.get('version', 0);
+
+	// If multi-window store already has windows, no migration needed
+	if (existingWindows.length > 0 || existingVersion === MULTI_WINDOW_SCHEMA_VERSION) {
+		return false;
+	}
+
+	// Check if legacy store has meaningful data
+	const legacyWidth = legacyStore.get('width');
+	const legacyHeight = legacyStore.get('height');
+
+	// If legacy store is just defaults with no actual saved position, skip migration
+	// We detect this by checking if x/y are undefined (never saved)
+	const legacyX = legacyStore.get('x');
+	const legacyY = legacyStore.get('y');
+
+	if (legacyX === undefined && legacyY === undefined) {
+		// No saved position data - just set version and return
+		multiStore.set('version', MULTI_WINDOW_SCHEMA_VERSION);
+		console.log('[MIGRATION] No legacy window state to migrate (first run or defaults only)');
+		return false;
+	}
+
+	// Generate a window ID for the migrated primary window
+	const primaryWindowId = 'primary-' + Date.now().toString(36);
+
+	// Get all existing session IDs from the sessions store
+	// In the old single-window model, all sessions belonged to the single window
+	let sessionIds: string[] = [];
+	let activeSessionId: string | undefined;
+
+	if (sessionsStore) {
+		const sessions = sessionsStore.get('sessions', []);
+		// Filter out any sessions without valid IDs (defensive coding)
+		sessionIds = sessions
+			.filter((s: { id?: string }) => typeof s?.id === 'string' && s.id.length > 0)
+			.map((s: { id: string }) => s.id);
+		// Set the first session as active (reasonable default for migration)
+		if (sessionIds.length > 0) {
+			activeSessionId = sessionIds[0];
+		}
+	}
+
+	// Create migrated window state
+	const migratedWindow: MultiWindowWindowState = {
+		id: primaryWindowId,
+		x: legacyX ?? 0,
+		y: legacyY ?? 0,
+		width: legacyWidth ?? WINDOW_STATE_DEFAULTS.width,
+		height: legacyHeight ?? WINDOW_STATE_DEFAULTS.height,
+		isMaximized: legacyStore.get('isMaximized', false),
+		isFullScreen: legacyStore.get('isFullScreen', false),
+		sessionIds,
+		activeSessionId,
+		leftPanelCollapsed: false,
+		rightPanelCollapsed: false,
+	};
+
+	// Save migrated state
+	multiStore.set({
+		windows: [migratedWindow],
+		primaryWindowId,
+		version: MULTI_WINDOW_SCHEMA_VERSION,
+	});
+
+	console.log(
+		`[MIGRATION] Migrated legacy window state to multi-window format (primary: ${primaryWindowId}, sessions: ${sessionIds.length})`
+	);
+	return true;
 }
 
 /** Get cached paths (for getters.ts) */
