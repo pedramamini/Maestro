@@ -155,7 +155,7 @@ export function useAutoRunImageHandling({
 			setAttachmentPreviews(new Map());
 
 			window.maestro.autorun
-				.listImages(folderPath, selectedFile)
+				.listImages(folderPath, selectedFile, sshRemoteId)
 				.then(
 					(result: {
 						success: boolean;
@@ -245,7 +245,8 @@ export function useAutoRunImageHandling({
 							folderPath,
 							selectedFile,
 							base64Content,
-							extension
+							extension,
+							sshRemoteId
 						);
 						if (result.success && result.relativePath) {
 							// Update attachments list with the relative path
@@ -310,6 +311,7 @@ export function useAutoRunImageHandling({
 			setLocalContent,
 			textareaRef,
 			lastUndoSnapshotRef,
+			sshRemoteId,
 		]
 	);
 
@@ -333,7 +335,8 @@ export function useAutoRunImageHandling({
 					folderPath,
 					selectedFile,
 					base64Content,
-					extension
+					extension,
+					sshRemoteId
 				);
 				if (result.success && result.relativePath) {
 					const filename = result.relativePath.split('/').pop() || result.relativePath;
@@ -369,6 +372,7 @@ export function useAutoRunImageHandling({
 			pushUndoState,
 			setLocalContent,
 			lastUndoSnapshotRef,
+			sshRemoteId,
 		]
 	);
 
@@ -378,7 +382,7 @@ export function useAutoRunImageHandling({
 			if (!folderPath) return;
 
 			// Delete the image file
-			await window.maestro.autorun.deleteImage(folderPath, relativePath);
+			await window.maestro.autorun.deleteImage(folderPath, relativePath, sshRemoteId);
 			setAttachmentsList((prev) => prev.filter((f) => f !== relativePath));
 			setAttachmentPreviews((prev) => {
 				const newMap = new Map(prev);
@@ -406,6 +410,7 @@ export function useAutoRunImageHandling({
 			pushUndoState,
 			setLocalContent,
 			lastUndoSnapshotRef,
+			sshRemoteId,
 		]
 	);
 
@@ -442,7 +447,7 @@ export function useAutoRunImageHandling({
 			if (!folderPath) return;
 
 			// Delete the image file using autorun API
-			await window.maestro.autorun.deleteImage(folderPath, relativePath);
+			await window.maestro.autorun.deleteImage(folderPath, relativePath, sshRemoteId);
 			setAttachmentsList((prev) => prev.filter((f) => f !== relativePath));
 			setAttachmentPreviews((prev) => {
 				const newMap = new Map(prev);
@@ -470,6 +475,7 @@ export function useAutoRunImageHandling({
 			pushUndoState,
 			setLocalContent,
 			lastUndoSnapshotRef,
+			sshRemoteId,
 		]
 	);
 

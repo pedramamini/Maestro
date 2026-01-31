@@ -1282,15 +1282,18 @@ interface MaestroAPI {
 			folderPath: string,
 			docName: string,
 			base64Data: string,
-			extension: string
+			extension: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; relativePath?: string; error?: string }>;
 		deleteImage: (
 			folderPath: string,
-			relativePath: string
+			relativePath: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; error?: string }>;
 		listImages: (
 			folderPath: string,
-			docName: string
+			docName: string,
+			sshRemoteId?: string
 		) => Promise<{
 			success: boolean;
 			images?: Array<{ filename: string; relativePath: string }>;
@@ -1310,21 +1313,25 @@ interface MaestroAPI {
 		// Backup operations for reset-on-completion documents (legacy)
 		createBackup: (
 			folderPath: string,
-			filename: string
+			filename: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; backupFilename?: string; error?: string }>;
 		restoreBackup: (
 			folderPath: string,
-			filename: string
+			filename: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; error?: string }>;
 		deleteBackups: (
-			folderPath: string
+			folderPath: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
 		// Working copy operations for reset-on-completion documents (preferred)
 		// Creates a copy in /Runs/ subdirectory: {name}-{timestamp}-loop-{N}.md
 		createWorkingCopy: (
 			folderPath: string,
 			filename: string,
-			loopNumber: number
+			loopNumber: number,
+			sshRemoteId?: string
 		) => Promise<{ workingCopyPath: string; originalPath: string }>;
 	};
 	// Playbooks API (saved batch run configurations)

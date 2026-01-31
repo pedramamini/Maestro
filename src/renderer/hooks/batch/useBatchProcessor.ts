@@ -931,7 +931,8 @@ export function useBatchProcessor({
 							const { workingCopyPath } = await window.maestro.autorun.createWorkingCopy(
 								folderPath,
 								docEntry.filename,
-								loopIteration + 1 // 1-indexed loop number
+								loopIteration + 1, // 1-indexed loop number
+								sshRemoteId
 							);
 							workingCopies.set(docEntry.filename, workingCopyPath);
 							effectiveFilename = workingCopyPath;
