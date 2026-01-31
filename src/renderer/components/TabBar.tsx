@@ -17,6 +17,8 @@ import {
 	Share2,
 	ChevronsLeft,
 	ChevronsRight,
+	ExternalLink,
+	Square,
 } from 'lucide-react';
 import type { AITab, Theme } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
@@ -79,6 +81,16 @@ interface TabBarProps {
 	 * Set to true when another window is dragging a tab over this window.
 	 */
 	dropZoneHighlighted?: boolean;
+	/**
+	 * Handler to move a tab to a new window.
+	 * Called when user selects "Move to New Window" from tab context menu.
+	 */
+	onMoveToNewWindow?: (tabId: string) => void;
+	/**
+	 * Window number for identification badge (1 for primary, 2+ for secondary).
+	 * When provided and > 1, displays a badge to help identify this window.
+	 */
+	windowNumber?: number;
 }
 
 interface TabProps {
@@ -143,6 +155,8 @@ interface TabProps {
 	totalTabs?: number;
 	/** Tab index in the full list (0-based) */
 	tabIndex?: number;
+	/** Stable callback - receives tabId to move to a new window */
+	onMoveToNewWindow?: (tabId: string) => void;
 }
 
 /**
@@ -230,6 +244,7 @@ const Tab = memo(function Tab({
 	onCloseTabsRight,
 	totalTabs,
 	tabIndex,
+	onMoveToNewWindow,
 }: TabProps) {
 	const [isHovered, setIsHovered] = useState(false);
 	const [overlayOpen, setOverlayOpen] = useState(false);
@@ -454,6 +469,15 @@ const Tab = memo(function Tab({
 			setOverlayOpen(false);
 		},
 		[onCloseTabsRight, tabId]
+	);
+
+	const handleMoveToNewWindowClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onMoveToNewWindow?.(tabId);
+			setOverlayOpen(false);
+		},
+		[onMoveToNewWindow, tabId]
 	);
 
 	// Handlers for drag events using stable tabId
@@ -840,6 +864,18 @@ const Tab = memo(function Tab({
 									</button>
 								)}
 
+								{/* Move to New Window - only show if handler is provided */}
+								{onMoveToNewWindow && (
+									<button
+										onClick={handleMoveToNewWindowClick}
+										className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors hover:bg-white/10"
+										style={{ color: theme.colors.textMain }}
+									>
+										<ExternalLink className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+										Move to New Window
+									</button>
+								)}
+
 								{/* Tab Close Actions Section - divider and close options */}
 								<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
 
@@ -946,6 +982,8 @@ function TabBarInner({
 	onCloseTabsRight,
 	onTabDragOut,
 	dropZoneHighlighted,
+	onMoveToNewWindow,
+	windowNumber,
 }: TabBarProps) {
 	const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
 	const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
@@ -1307,6 +1345,13 @@ function TabBarInner({
 		[onCloseTabsRight]
 	);
 
+	const handleTabMoveToNewWindow = useCallback(
+		(tabId: string) => {
+			onMoveToNewWindow?.(tabId);
+		},
+		[onMoveToNewWindow]
+	);
+
 	// Stable registerRef callback that manages tab refs
 	const registerTabRef = useCallback((tabId: string, el: HTMLDivElement | null) => {
 		if (el) {
@@ -1332,11 +1377,25 @@ function TabBarInner({
 				} as React.CSSProperties
 			}
 		>
-			{/* Tab search and unread filter - sticky at the beginning with full-height opaque background */}
+			{/* Window number badge, tab search and unread filter - sticky at the beginning with full-height opaque background */}
 			<div
 				className="sticky left-0 flex items-center shrink-0 pl-2 pr-1 gap-1 self-stretch"
 				style={{ backgroundColor: theme.colors.bgSidebar, zIndex: 5 }}
 			>
+				{/* Window number badge - only shown for secondary windows (windowNumber > 1) */}
+				{windowNumber !== undefined && windowNumber > 1 && (
+					<div
+						className="flex items-center gap-0.5 px-1.5 py-0.5 rounded text-[10px] font-medium"
+						style={{
+							backgroundColor: `color-mix(in srgb, ${theme.colors.accent} 20%, transparent)`,
+							color: theme.colors.accent,
+						}}
+						title={`Window ${windowNumber}`}
+					>
+						<Square className="w-2.5 h-2.5" />
+						<span>W{windowNumber}</span>
+					</div>
+				)}
 				{/* Tab search button */}
 				{onOpenTabSearch && (
 					<button
@@ -1445,6 +1504,7 @@ function TabBarInner({
 							onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
 							onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
 							onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
+							onMoveToNewWindow={onMoveToNewWindow ? handleTabMoveToNewWindow : undefined}
 							totalTabs={tabs.length}
 							tabIndex={originalIndex}
 						/>

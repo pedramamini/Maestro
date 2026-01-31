@@ -86,6 +86,16 @@ vi.mock('lucide-react', () => ({
 			»
 		</span>
 	),
+	ExternalLink: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="external-link-icon" className={className} style={style}>
+			↗
+		</span>
+	),
+	Square: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="square-icon" className={className} style={style}>
+			□
+		</span>
+	),
 }));
 
 // Mock react-dom createPortal
@@ -2212,6 +2222,152 @@ describe('TabBar', () => {
 			expect(screen.getByText('Move to First Position')).toBeInTheDocument();
 			expect(screen.getByText('Move to Last Position')).toBeInTheDocument();
 		});
+
+		describe('Move to New Window', () => {
+			const mockOnMoveToNewWindow = vi.fn();
+
+			beforeEach(() => {
+				mockOnMoveToNewWindow.mockClear();
+			});
+
+			it('shows "Move to New Window" button when onMoveToNewWindow is provided', () => {
+				const tabs = [
+					createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+					createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+				];
+
+				render(
+					<TabBar
+						tabs={tabs}
+						activeTabId="tab-1"
+						theme={mockTheme}
+						onTabSelect={mockOnTabSelect}
+						onTabClose={mockOnTabClose}
+						onNewTab={mockOnNewTab}
+						onMoveToNewWindow={mockOnMoveToNewWindow}
+					/>
+				);
+
+				const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+				fireEvent.mouseEnter(tab);
+
+				act(() => {
+					vi.advanceTimersByTime(450);
+				});
+
+				expect(screen.getByText('Move to New Window')).toBeInTheDocument();
+			});
+
+			it('does not show "Move to New Window" when onMoveToNewWindow is not provided', () => {
+				const tabs = [createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' })];
+
+				render(
+					<TabBar
+						tabs={tabs}
+						activeTabId="tab-1"
+						theme={mockTheme}
+						onTabSelect={mockOnTabSelect}
+						onTabClose={mockOnTabClose}
+						onNewTab={mockOnNewTab}
+						// onMoveToNewWindow not provided
+					/>
+				);
+
+				const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+				fireEvent.mouseEnter(tab);
+
+				act(() => {
+					vi.advanceTimersByTime(450);
+				});
+
+				expect(screen.queryByText('Move to New Window')).not.toBeInTheDocument();
+			});
+
+			it('calls onMoveToNewWindow with tabId when "Move to New Window" is clicked', () => {
+				const tabs = [
+					createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' }),
+					createTab({ id: 'tab-2', name: 'Tab 2', agentSessionId: 'session-2' }),
+				];
+
+				render(
+					<TabBar
+						tabs={tabs}
+						activeTabId="tab-1"
+						theme={mockTheme}
+						onTabSelect={mockOnTabSelect}
+						onTabClose={mockOnTabClose}
+						onNewTab={mockOnNewTab}
+						onMoveToNewWindow={mockOnMoveToNewWindow}
+					/>
+				);
+
+				const tab = screen.getByText('Tab 2').closest('[data-tab-id]')!;
+				fireEvent.mouseEnter(tab);
+
+				act(() => {
+					vi.advanceTimersByTime(450);
+				});
+
+				fireEvent.click(screen.getByText('Move to New Window'));
+
+				expect(mockOnMoveToNewWindow).toHaveBeenCalledWith('tab-2');
+			});
+
+			it('closes overlay after clicking "Move to New Window"', () => {
+				const tabs = [createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' })];
+
+				render(
+					<TabBar
+						tabs={tabs}
+						activeTabId="tab-1"
+						theme={mockTheme}
+						onTabSelect={mockOnTabSelect}
+						onTabClose={mockOnTabClose}
+						onNewTab={mockOnNewTab}
+						onMoveToNewWindow={mockOnMoveToNewWindow}
+					/>
+				);
+
+				const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+				fireEvent.mouseEnter(tab);
+
+				act(() => {
+					vi.advanceTimersByTime(450);
+				});
+
+				expect(screen.getByText('Move to New Window')).toBeInTheDocument();
+
+				fireEvent.click(screen.getByText('Move to New Window'));
+
+				// Overlay should be closed after clicking
+				expect(screen.queryByText('Move to New Window')).not.toBeInTheDocument();
+			});
+
+			it('renders ExternalLink icon for Move to New Window', () => {
+				const tabs = [createTab({ id: 'tab-1', name: 'Tab 1', agentSessionId: 'session-1' })];
+
+				render(
+					<TabBar
+						tabs={tabs}
+						activeTabId="tab-1"
+						theme={mockTheme}
+						onTabSelect={mockOnTabSelect}
+						onTabClose={mockOnTabClose}
+						onNewTab={mockOnNewTab}
+						onMoveToNewWindow={mockOnMoveToNewWindow}
+					/>
+				);
+
+				const tab = screen.getByText('Tab 1').closest('[data-tab-id]')!;
+				fireEvent.mouseEnter(tab);
+
+				act(() => {
+					vi.advanceTimersByTime(450);
+				});
+
+				expect(screen.getByTestId('external-link-icon')).toBeInTheDocument();
+			});
+		});
 	});
 
 	describe('Send to Agent', () => {
@@ -2631,6 +2787,89 @@ describe('TabBar', () => {
 			});
 
 			expect(screen.getByTestId('share2-icon')).toBeInTheDocument();
+		});
+	});
+
+	describe('window number badge', () => {
+		it('does not show window number badge when windowNumber is undefined', () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					// windowNumber not provided
+				/>
+			);
+
+			// Badge should not be shown
+			expect(screen.queryByTitle(/^Window \d+$/)).not.toBeInTheDocument();
+			expect(screen.queryByText(/^W\d+$/)).not.toBeInTheDocument();
+		});
+
+		it('does not show window number badge for primary window (windowNumber=1)', () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					windowNumber={1}
+				/>
+			);
+
+			// Badge should not be shown for primary window (windowNumber=1)
+			expect(screen.queryByTitle('Window 1')).not.toBeInTheDocument();
+			expect(screen.queryByText('W1')).not.toBeInTheDocument();
+		});
+
+		it('shows window number badge for secondary windows (windowNumber > 1)', () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					windowNumber={2}
+				/>
+			);
+
+			// Badge should be shown for secondary window
+			expect(screen.getByTitle('Window 2')).toBeInTheDocument();
+			expect(screen.getByText('W2')).toBeInTheDocument();
+			expect(screen.getByTestId('square-icon')).toBeInTheDocument();
+		});
+
+		it('shows correct window number for higher-numbered windows', () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					windowNumber={5}
+				/>
+			);
+
+			// Badge should show the correct window number
+			expect(screen.getByTitle('Window 5')).toBeInTheDocument();
+			expect(screen.getByText('W5')).toBeInTheDocument();
 		});
 	});
 });

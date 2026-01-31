@@ -217,6 +217,11 @@ interface MainPanelProps {
 	 * Set to true when another window is dragging a tab over this window.
 	 */
 	dropZoneHighlighted?: boolean;
+	/**
+	 * Handler to move a tab to a new window.
+	 * Called when user selects "Move to New Window" from tab context menu.
+	 */
+	onMoveToNewWindow?: (tabId: string) => void;
 	// Scroll position persistence
 	onScrollPositionChange?: (scrollTop: number) => void;
 	// Scroll bottom state change handler (for hasUnread logic)
@@ -447,7 +452,7 @@ export const MainPanel = React.memo(
 
 		// Multi-window support: check if the active session belongs to this window
 		// If window has assigned sessions, only show TabBar for sessions in this window
-		const { sessionIds: windowSessionIds, isLoaded: windowIsLoaded } = useWindow();
+		const { sessionIds: windowSessionIds, isLoaded: windowIsLoaded, windowNumber } = useWindow();
 
 		// Determine if active session is in this window's assigned sessions
 		// Returns true if:
@@ -488,6 +493,7 @@ export const MainPanel = React.memo(
 			onCloseTabsLeft,
 			onCloseTabsRight,
 			onTabDragOut,
+			onMoveToNewWindow,
 		} = props;
 
 		// Get the active tab for header display
@@ -1445,6 +1451,8 @@ export const MainPanel = React.memo(
 									onCloseTabsRight={onCloseTabsRight}
 									onTabDragOut={onTabDragOut}
 									dropZoneHighlighted={props.dropZoneHighlighted}
+									onMoveToNewWindow={onMoveToNewWindow}
+									windowNumber={windowNumber}
 								/>
 							)}
 

@@ -2241,6 +2241,7 @@ interface MaestroAPI {
 				isMain: boolean;
 				sessionIds: string[];
 				activeSessionId?: string;
+				windowNumber: number;
 			}>
 		>;
 		getForSession: (sessionId: string) => Promise<string | null>;
@@ -2303,6 +2304,13 @@ interface MaestroAPI {
 		) => Promise<{ windowId: string; isMain: boolean } | null>;
 		highlightDropZone: (windowId: string, highlight: boolean) => Promise<{ success: boolean }>;
 		onDropZoneHighlight: (callback: (event: { highlight: boolean }) => void) => () => void;
+		onSessionsTransferred: (
+			callback: (event: {
+				sessionCount: number;
+				sessionIds: string[];
+				fromWindowId: string;
+			}) => void
+		) => () => void;
 	};
 }
 

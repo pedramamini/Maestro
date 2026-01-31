@@ -75,6 +75,13 @@ export interface WindowInfo {
 
 	/** ID of the currently active session in this window */
 	activeSessionId?: string;
+
+	/**
+	 * Display number for window identification (1 for primary, 2+ for secondary).
+	 * Used in OS window titles and UI badges to help users identify windows
+	 * in Cmd+Tab/Mission Control. Primary window is always 1.
+	 */
+	windowNumber: number;
 }
 
 /**
@@ -117,6 +124,21 @@ export interface MoveSessionRequest {
 
 	/** The target window ID */
 	toWindowId: string;
+}
+
+/**
+ * Event sent to the primary window when sessions are transferred from a closing secondary window.
+ * Used to display a toast notification about the moved sessions.
+ */
+export interface SessionsTransferredEvent {
+	/** Number of sessions that were transferred */
+	sessionCount: number;
+
+	/** The IDs of sessions that were transferred */
+	sessionIds: string[];
+
+	/** The window ID that was closed */
+	fromWindowId: string;
 }
 
 /**

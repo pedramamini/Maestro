@@ -300,6 +300,131 @@ describe('Windows IPC Handlers', () => {
 			expect(result.success).toBe(false);
 			expect(result.error).toBe('Window not found');
 		});
+
+		it('should move sessions to primary window when closing secondary window with sessions', async () => {
+			const primaryWindow = createMockBrowserWindow();
+			const secondaryWindow = createMockBrowserWindow();
+
+			mockRegistryState.set('primary-window', {
+				browserWindow: primaryWindow,
+				sessionIds: ['session-0'],
+				isMain: true,
+				activeSessionId: 'session-0',
+			});
+			mockRegistryState.set('secondary-window', {
+				browserWindow: secondaryWindow,
+				sessionIds: ['session-1', 'session-2'],
+				isMain: false,
+				activeSessionId: 'session-1',
+			});
+			mockPrimaryWindowId = 'primary-window';
+
+			const { windowRegistry } = await import('../../../../main/window-registry');
+
+			const handler = (ipcMain as any)._getHandler('windows:close');
+			const result = await handler({}, 'secondary-window');
+
+			expect(result.success).toBe(true);
+			expect(secondaryWindow.close).toHaveBeenCalled();
+
+			// Verify sessions were moved to primary window
+			expect(windowRegistry.moveSession).toHaveBeenCalledWith(
+				'session-1',
+				'secondary-window',
+				'primary-window'
+			);
+			expect(windowRegistry.moveSession).toHaveBeenCalledWith(
+				'session-2',
+				'secondary-window',
+				'primary-window'
+			);
+		});
+
+		it('should send sessionsTransferred event to primary window', async () => {
+			const primaryWindow = createMockBrowserWindow();
+			const secondaryWindow = createMockBrowserWindow();
+
+			mockRegistryState.set('primary-window', {
+				browserWindow: primaryWindow,
+				sessionIds: [],
+				isMain: true,
+			});
+			mockRegistryState.set('secondary-window', {
+				browserWindow: secondaryWindow,
+				sessionIds: ['session-1', 'session-2'],
+				isMain: false,
+				activeSessionId: 'session-1',
+			});
+			mockPrimaryWindowId = 'primary-window';
+
+			const handler = (ipcMain as any)._getHandler('windows:close');
+			await handler({}, 'secondary-window');
+
+			// Verify sessionsTransferred event was sent to primary window
+			expect(primaryWindow.webContents.send).toHaveBeenCalledWith('windows:sessionsTransferred', {
+				sessionCount: 2,
+				sessionIds: ['session-1', 'session-2'],
+				fromWindowId: 'secondary-window',
+			});
+		});
+
+		it('should not send sessionsTransferred event when closing window with no sessions', async () => {
+			const primaryWindow = createMockBrowserWindow();
+			const secondaryWindow = createMockBrowserWindow();
+
+			mockRegistryState.set('primary-window', {
+				browserWindow: primaryWindow,
+				sessionIds: ['session-0'],
+				isMain: true,
+			});
+			mockRegistryState.set('secondary-window', {
+				browserWindow: secondaryWindow,
+				sessionIds: [], // No sessions
+				isMain: false,
+			});
+			mockPrimaryWindowId = 'primary-window';
+
+			const handler = (ipcMain as any)._getHandler('windows:close');
+			await handler({}, 'secondary-window');
+
+			expect(secondaryWindow.close).toHaveBeenCalled();
+
+			// Verify sessionsTransferred event was NOT sent
+			const sendCalls = primaryWindow.webContents.send.mock.calls;
+			const transferredCalls = sendCalls.filter(
+				(call: [string, unknown]) => call[0] === 'windows:sessionsTransferred'
+			);
+			expect(transferredCalls.length).toBe(0);
+		});
+
+		it('should also send sessionsChanged event to primary window after transfer', async () => {
+			const primaryWindow = createMockBrowserWindow();
+			const secondaryWindow = createMockBrowserWindow();
+
+			mockRegistryState.set('primary-window', {
+				browserWindow: primaryWindow,
+				sessionIds: [],
+				isMain: true,
+			});
+			mockRegistryState.set('secondary-window', {
+				browserWindow: secondaryWindow,
+				sessionIds: ['session-1'],
+				isMain: false,
+				activeSessionId: 'session-1',
+			});
+			mockPrimaryWindowId = 'primary-window';
+
+			const handler = (ipcMain as any)._getHandler('windows:close');
+			await handler({}, 'secondary-window');
+
+			// Verify sessionsChanged event was sent to primary window
+			expect(primaryWindow.webContents.send).toHaveBeenCalledWith(
+				'windows:sessionsChanged',
+				expect.objectContaining({
+					windowId: 'primary-window',
+				})
+			);
+		});
 	});
 
 	describe('windows:list', () => {
@@ -327,6 +452,9 @@ describe('Windows IPC Handlers', () => {
 				activeSessionId: 'session-b',
 			});
 
+			// Set primary window ID so window numbering works correctly
+			mockPrimaryWindowId = 'window-1';
+
 			const handler = (ipcMain as any)._getHandler('windows:list');
 			const result = await handler({});
 
@@ -336,12 +464,14 @@ describe('Windows IPC Handlers', () => {
 				isMain: true,
 				sessionIds: ['session-a'],
 				activeSessionId: 'session-a',
+				windowNumber: 1, // Primary window is always 1
 			});
 			expect(result).toContainEqual({
 				id: 'window-2',
 				isMain: false,
 				sessionIds: ['session-b', 'session-c'],
 				activeSessionId: 'session-b',
+				windowNumber: 2, // Secondary window gets 2
 			});
 		});
 	});
@@ -1137,6 +1267,90 @@ describe('Windows IPC Handlers', () => {
 			const handler = (ipcMain as any)._getHandler('windows:highlightDropZone');
 			expect(handler).toBeDefined();
 			expect(typeof handler).toBe('function');
+		});
+	});
+
+	describe('window number assignment', () => {
+		it('should assign windowNumber 1 to primary window', async () => {
+			const mockWindow = createMockBrowserWindow();
+			mockRegistryState.set('primary-window', {
+				browserWindow: mockWindow,
+				sessionIds: [],
+				isMain: true,
+			});
+			mockPrimaryWindowId = 'primary-window';
+
+			const handler = (ipcMain as any)._getHandler('windows:list');
+			const result = await handler({});
+
+			expect(result).toHaveLength(1);
+			expect(result[0].windowNumber).toBe(1);
+		});
+
+		it('should assign incrementing windowNumbers to secondary windows', async () => {
+			const mockWindow1 = createMockBrowserWindow();
+			const mockWindow2 = createMockBrowserWindow();
+			const mockWindow3 = createMockBrowserWindow();
+
+			// Note: window IDs are sorted alphabetically, so use predictable ordering
+			mockRegistryState.set('a-primary', {
+				browserWindow: mockWindow1,
+				sessionIds: [],
+				isMain: true,
+			});
+			mockRegistryState.set('b-secondary-1', {
+				browserWindow: mockWindow2,
+				sessionIds: [],
+				isMain: false,
+			});
+			mockRegistryState.set('c-secondary-2', {
+				browserWindow: mockWindow3,
+				sessionIds: [],
+				isMain: false,
+			});
+			mockPrimaryWindowId = 'a-primary';
+
+			const handler = (ipcMain as any)._getHandler('windows:list');
+			const result = await handler({});
+
+			expect(result).toHaveLength(3);
+
+			// Find each window in results
+			const primary = result.find((w: any) => w.id === 'a-primary');
+			const secondary1 = result.find((w: any) => w.id === 'b-secondary-1');
+			const secondary2 = result.find((w: any) => w.id === 'c-secondary-2');
+
+			expect(primary.windowNumber).toBe(1);
+			expect(secondary1.windowNumber).toBe(2);
+			expect(secondary2.windowNumber).toBe(3);
+		});
+
+		it('should maintain stable window numbers based on ID sorting', async () => {
+			const mockWindow1 = createMockBrowserWindow();
+			const mockWindow2 = createMockBrowserWindow();
+
+			// Create windows with IDs in non-alphabetical order to test sorting
+			mockRegistryState.set('z-primary', {
+				browserWindow: mockWindow1,
+				sessionIds: [],
+				isMain: true,
+			});
+			mockRegistryState.set('a-secondary', {
+				browserWindow: mockWindow2,
+				sessionIds: [],
+				isMain: false,
+			});
+			mockPrimaryWindowId = 'z-primary';
+
+			const handler = (ipcMain as any)._getHandler('windows:list');
+			const result = await handler({});
+
+			// Primary should always be 1, secondary sorted by ID
+			const primary = result.find((w: any) => w.id === 'z-primary');
+			const secondary = result.find((w: any) => w.id === 'a-secondary');
+
+			expect(primary.windowNumber).toBe(1); // Primary always first
+			expect(secondary.windowNumber).toBe(2);
 		});
 	});
 });

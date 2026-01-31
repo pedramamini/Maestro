@@ -41,6 +41,13 @@ export interface WindowContextValue {
 	/** Whether this is the primary (main) window */
 	isMainWindow: boolean;
 
+	/**
+	 * Display number for this window (1 for primary, 2+ for secondary).
+	 * Used in UI badges to help users identify which window they're looking at.
+	 * Matches the number shown in the OS window title (e.g., "Maestro [2]").
+	 */
+	windowNumber: number;
+
 	/** IDs of sessions currently open in this window */
 	sessionIds: string[];
 
@@ -116,6 +123,7 @@ export function WindowProvider({ children }: WindowProviderProps) {
 	// Window state from main process
 	const [windowId, setWindowId] = useState<string | null>(null);
 	const [isMainWindow, setIsMainWindow] = useState<boolean>(true);
+	const [windowNumber, setWindowNumber] = useState<number>(1);
 	const [sessionIds, setSessionIds] = useState<string[]>([]);
 	const [activeSessionId, setActiveSessionIdState] = useState<string | undefined>(undefined);
 	const [isLoaded, setIsLoaded] = useState<boolean>(false);
@@ -142,11 +150,12 @@ export function WindowProvider({ children }: WindowProviderProps) {
 				setSessionIds(state.sessionIds);
 				setActiveSessionIdState(state.activeSessionId);
 
-				// Determine if this is the main window by checking with registry
+				// Determine if this is the main window and get window number by checking with registry
 				const windowInfo = await window.maestro.windows.list();
 				const thisWindow = windowInfo.find((w) => w.id === state.id);
 				if (thisWindow && isMountedRef.current) {
 					setIsMainWindow(thisWindow.isMain);
+					setWindowNumber(thisWindow.windowNumber);
 				}
 			} else {
 				// Fallback: try to get just the window ID
@@ -332,11 +341,38 @@ export function WindowProvider({ children }: WindowProviderProps) {
 		return cleanup;
 	}, [loadWindowState]);
 
+	// Subscribe to sessions transferred events (when a secondary window is closed)
+	// This dispatches a custom event that App.tsx listens for to show a toast
+	useEffect(() => {
+		const cleanup = window.maestro.windows.onSessionsTransferred((event) => {
+			if (isMountedRef.current) {
+				// Refresh state to get the new sessions
+				void loadWindowState();
+
+				// Dispatch custom event for toast notification
+				// This allows the toast to be shown without requiring ToastProvider as a parent
+				const sessionWord = event.sessionCount === 1 ? 'session' : 'sessions';
+				const customEvent = new CustomEvent('maestro:sessionsTransferred', {
+					detail: {
+						type: 'info',
+						title: 'Sessions Moved',
+						message: `${event.sessionCount} ${sessionWord} moved to main window`,
+						duration: 4000, // 4 seconds - brief but visible
+					},
+				});
+				window.dispatchEvent(customEvent);
+			}
+		});
+
+		return cleanup;
+	}, [loadWindowState]);
+
 	// Build context value
 	const value = useMemo<WindowContextValue>(
 		() => ({
 			windowId,
 			isMainWindow,
+			windowNumber,
 			sessionIds,
 			activeSessionId,
 			isLoaded,
@@ -349,6 +385,7 @@ export function WindowProvider({ children }: WindowProviderProps) {
 		[
 			windowId,
 			isMainWindow,
+			windowNumber,
 			sessionIds,
 			activeSessionId,
 			isLoaded,

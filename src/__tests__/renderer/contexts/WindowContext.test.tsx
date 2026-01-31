@@ -33,6 +33,7 @@ const mockWindowsApi = {
 	moveSession: vi.fn(),
 	onSessionsChanged: vi.fn(),
 	onSessionMoved: vi.fn(),
+	onSessionsTransferred: vi.fn(),
 };
 
 // Set up global mock
@@ -62,6 +63,7 @@ beforeEach(() => {
 			isMain: true,
 			sessionIds: ['session-1', 'session-2'],
 			activeSessionId: 'session-1',
+			windowNumber: 1,
 		},
 	] satisfies WindowInfo[]);
 
@@ -73,6 +75,7 @@ beforeEach(() => {
 	mockWindowsApi.moveSession.mockResolvedValue({ success: true });
 	mockWindowsApi.onSessionsChanged.mockReturnValue(() => {});
 	mockWindowsApi.onSessionMoved.mockReturnValue(() => {});
+	mockWindowsApi.onSessionsTransferred.mockReturnValue(() => {});
 
 	// Assign to window object
 	(window as unknown as { maestro: { windows: typeof mockWindowsApi } }).maestro = {
@@ -689,6 +692,7 @@ describe('WindowContext', () => {
 					isMain: false,
 					sessionIds: ['session-1'],
 					activeSessionId: 'session-1',
+					windowNumber: 2,
 				},
 			] satisfies WindowInfo[]);
 

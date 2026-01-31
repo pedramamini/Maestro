@@ -21,6 +21,7 @@ import type {
 	CreateWindowResponse,
 	MoveSessionRequest,
 	WindowState,
+	SessionsTransferredEvent,
 } from '../../../shared/types/window';
 import { logger } from '../../utils/logger';
 import { getMultiWindowStateStore } from '../../stores/getters';
@@ -46,6 +47,37 @@ export interface WindowsHandlerDependencies {
 }
 
 /**
+ * Computes a stable window number for display purposes.
+ * Primary window is always 1, secondary windows get 2, 3, etc.
+ * Numbers are assigned based on window creation order (registry insertion order).
+ *
+ * @param windowId - The window ID to get the number for
+ * @returns Window number (1 for primary, 2+ for secondary)
+ */
+function computeWindowNumber(windowId: string): number {
+	const primaryId = windowRegistry.getPrimaryId();
+
+	// Primary window is always 1
+	if (windowId === primaryId) {
+		return 1;
+	}
+
+	// Get all windows and sort: primary first, then others by ID
+	const allWindows = windowRegistry.getAll();
+
+	// Sort: primary window first, then by ID alphabetically for stable ordering
+	const sortedWindows = allWindows.sort(([idA, entryA], [idB, entryB]) => {
+		if (entryA.isMain) return -1;
+		if (entryB.isMain) return 1;
+		return idA.localeCompare(idB);
+	});
+
+	// Find position of this window in the sorted list
+	const index = sortedWindows.findIndex(([id]) => id === windowId);
+	return index >= 0 ? index + 1 : 1;
+}
+
+/**
  * Converts a WindowEntry to a WindowInfo object for IPC responses.
  *
  * @param windowId - The window ID
@@ -58,6 +90,7 @@ function entryToWindowInfo(windowId: string, entry: WindowEntry): WindowInfo {
 		isMain: entry.isMain,
 		sessionIds: [...entry.sessionIds],
 		activeSessionId: entry.activeSessionId,
+		windowNumber: computeWindowNumber(windowId),
 	};
 }
 
@@ -131,6 +164,7 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 
 	// ============ windows:close ============
 	// Close a window by ID (prevents closing primary window)
+	// When closing a secondary window with sessions, moves sessions back to primary window
 	ipcMain.handle(
 		'windows:close',
 		async (_event, windowId: string): Promise<{ success: boolean; error?: string }> => {
@@ -149,6 +183,37 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 			}
 
 			try {
+				// If the window has sessions, move them back to the primary window
+				const sessionsToMove = [...entry.sessionIds];
+				if (sessionsToMove.length > 0) {
+					const primaryId = windowRegistry.getPrimaryId();
+					const primaryEntry = primaryId ? windowRegistry.get(primaryId) : undefined;
+
+					if (primaryEntry && primaryId) {
+						logger.info('Moving sessions from closing window to primary', LOG_CONTEXT, {
+							windowId,
+							primaryId,
+							sessionCount: sessionsToMove.length,
+							sessionIds: sessionsToMove,
+						});
+
+						// Move each session to the primary window
+						for (const sessionId of sessionsToMove) {
+							windowRegistry.moveSession(sessionId, windowId, primaryId);
+						}
+
+						// Notify primary window of the transferred sessions
+						notifySessionsTransferred(primaryId, primaryEntry, {
+							sessionCount: sessionsToMove.length,
+							sessionIds: sessionsToMove,
+							fromWindowId: windowId,
+						});
+
+						// Also notify the primary window of its new session list
+						notifyWindowOfSessionChange(primaryId, primaryEntry);
+					}
+				}
+
 				// Close the BrowserWindow - registry cleanup happens automatically via 'closed' event
 				entry.browserWindow.close();
 				logger.info('Window closed successfully', LOG_CONTEXT, { windowId });
@@ -700,5 +765,34 @@ function broadcastSessionMoved(sessionId: string, fromWindowId: string, toWindow
 				error: error instanceof Error ? error.message : String(error),
 			});
 		}
+	}
+}
+
+/**
+ * Notifies a window that sessions have been transferred to it from a closing window.
+ * This is used to trigger a toast notification in the receiving window.
+ *
+ * @param windowId - The target window ID
+ * @param entry - The WindowEntry for the target window
+ * @param event - The sessions transferred event data
+ */
+function notifySessionsTransferred(
+	windowId: string,
+	entry: WindowEntry,
+	event: SessionsTransferredEvent
+): void {
+	try {
+		if (!entry.browserWindow.isDestroyed()) {
+			entry.browserWindow.webContents.send('windows:sessionsTransferred', event);
+			logger.debug('Notified window of sessions transferred', LOG_CONTEXT, {
+				windowId,
+				sessionCount: event.sessionCount,
+			});
+		}
+	} catch (error) {
+		logger.debug('Failed to notify window of sessions transferred', LOG_CONTEXT, {
+			windowId,
+			error: error instanceof Error ? error.message : String(error),
+		});
 	}
 }
