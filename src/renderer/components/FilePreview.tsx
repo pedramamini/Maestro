@@ -2086,18 +2086,18 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 						{/* TOC Overlay */}
 						{showTocOverlay && (
 							<div
-								className="absolute bottom-16 right-4 rounded-lg shadow-xl overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2 duration-200"
+								className="absolute bottom-16 right-4 rounded-lg shadow-xl overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2 duration-200 flex flex-col"
 								style={{
 									backgroundColor: theme.colors.bgSidebar,
 									border: `1px solid ${theme.colors.border}`,
-									maxHeight: '70%',
+									maxHeight: 'calc(70vh - 80px)',
 									minWidth: '200px',
 									maxWidth: '350px',
 								}}
 							>
 								{/* TOC Header */}
 								<div
-									className="px-3 py-2 border-b flex items-center justify-between"
+									className="px-3 py-2 border-b flex items-center justify-between flex-shrink-0"
 									style={{ borderColor: theme.colors.border }}
 								>
 									<span
@@ -2120,7 +2120,7 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 										scrollMarkdownToBoundary('top');
 										setShowTocOverlay(false);
 									}}
-									className="w-full px-3 py-2 text-left text-xs border-b transition-colors flex items-center gap-2 hover:brightness-110"
+									className="w-full px-3 py-2 text-left text-xs border-b transition-colors flex items-center gap-2 hover:brightness-110 flex-shrink-0"
 									style={{
 										backgroundColor: `${theme.colors.accent}15`,
 										borderColor: theme.colors.border,
@@ -2133,7 +2133,7 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 								</button>
 
 								{/* TOC Entries - scrollable middle section */}
-								<div className="overflow-y-auto px-1 py-1" style={{ maxHeight: 'calc(70vh - 120px)' }}>
+								<div className="overflow-y-auto px-1 py-1 flex-1 min-h-0">
 									{tocEntries.map((entry, index) => {
 										// Get color based on heading level (match the prose styles)
 										const levelColors: Record<number, string> = {
@@ -2181,7 +2181,7 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 										scrollMarkdownToBoundary('bottom');
 										setShowTocOverlay(false);
 									}}
-									className="w-full px-3 py-2 text-left text-xs border-t transition-colors flex items-center gap-2 hover:brightness-110"
+									className="w-full px-3 py-2 text-left text-xs border-t transition-colors flex items-center gap-2 hover:brightness-110 flex-shrink-0"
 									style={{
 										backgroundColor: `${theme.colors.accent}15`,
 										borderColor: theme.colors.border,
