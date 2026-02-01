@@ -696,7 +696,21 @@ When investigating performance issues:
 
 ### DevTools
 
-Open via Quick Actions (`Cmd+K` → "Toggle DevTools") or set `DEBUG=true` env var.
+**Electron DevTools:** Open via Quick Actions (`Cmd+K` → "Toggle DevTools") or set `DEBUG=true` env var.
+
+**React DevTools (Standalone):** For profiling React renders and inspecting component trees:
+
+```bash
+# Install globally (once)
+npm install -g react-devtools
+
+# Launch the standalone app
+npx react-devtools
+```
+
+The app automatically connects when running `npm run dev` (connection script in `src/renderer/index.html`). Provides:
+- **Components tab** — Inspect React component tree, props, state, hooks
+- **Profiler tab** — Record and analyze render performance, identify unnecessary re-renders
 
 ## Commit Messages
 
