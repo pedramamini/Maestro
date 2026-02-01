@@ -30,12 +30,12 @@ function TourIcon({
 	label,
 }: {
 	icon: React.ComponentType<{ className?: string }>;
-	label: string;
+	label?: string;
 }) {
 	return (
 		<span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded bg-white/10 text-xs whitespace-nowrap">
 			<Icon className="w-3 h-3" />
-			<span>{label}</span>
+			{label && <span>{label}</span>}
 		</span>
 	);
 }
@@ -46,11 +46,11 @@ function TourIcon({
 const inputAreaIconsContent = (
 	<div className="text-xs leading-relaxed space-y-1.5">
 		<div>
-			Look for these controls: <TourIcon icon={PenLine} label="Pencil" /> opens an expanded prompt
-			editor, <TourIcon icon={ImageIcon} label="Image" /> lets you attach files (or just paste),{' '}
+			Look for these controls: <TourIcon icon={PenLine} /> opens an expanded prompt editor,{' '}
+			<TourIcon icon={ImageIcon} /> lets you attach files (or just paste),{' '}
 			<TourIcon icon={History} label="History" /> toggles session history,{' '}
 			<TourIcon icon={Eye} label="Read-only" /> prevents file changes,{' '}
-			<TourIcon icon={Brain} label="Thinking" /> enables extended thinking, and{' '}
+			<TourIcon icon={Brain} label="Thinking" /> toggles display of agent thinking, and{' '}
 			<TourIcon icon={Keyboard} label="Enter" /> switches the submit hotkey.
 		</div>
 		<div className="opacity-70">Defaults for these toggles can be changed in Settings → General.</div>

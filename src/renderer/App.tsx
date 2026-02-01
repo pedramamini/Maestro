@@ -5675,6 +5675,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 		}
 	}, []);
 
+	const handleClearFilePreviewHistory = useCallback(() => {
+		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
+		if (!currentSession) return;
+		setSessions((prev) =>
+			prev.map((s) =>
+				s.id === currentSession.id
+					? { ...s, filePreviewHistory: [], filePreviewHistoryIndex: -1 }
+					: s
+			)
+		);
+	}, []);
+
 	const handleMergeWith = useCallback((tabId: string) => {
 		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
 		if (currentSession) {
@@ -12233,6 +12245,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleNavigateBack,
 		handleNavigateForward,
 		handleNavigateToIndex,
+		handleClearFilePreviewHistory,
 		handleClearAgentErrorForMainPanel,
 		handleShowAgentErrorModal,
 		showSuccessFlash,

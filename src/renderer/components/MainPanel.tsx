@@ -231,6 +231,7 @@ interface MainPanelProps {
 	forwardHistory?: { name: string; content: string; path: string }[];
 	currentHistoryIndex?: number;
 	onNavigateToIndex?: (index: number) => void;
+	onClearFilePreviewHistory?: () => void;
 
 	// Agent error handling
 	onClearAgentError?: () => void;
@@ -1515,6 +1516,7 @@ export const MainPanel = React.memo(
 									file={previewFile}
 									onClose={() => {
 										setPreviewFile(null);
+										props.onClearFilePreviewHistory?.();
 										setActiveFocus('right');
 										setTimeout(() => {
 											// If file tree filter is open, focus it; otherwise focus the file tree container

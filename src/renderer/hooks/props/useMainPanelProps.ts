@@ -228,6 +228,7 @@ export interface UseMainPanelPropsDeps {
 	handleNavigateBack: () => void;
 	handleNavigateForward: () => void;
 	handleNavigateToIndex: (index: number) => void;
+	handleClearFilePreviewHistory: () => void;
 	handleClearAgentErrorForMainPanel: () => void;
 	handleShowAgentErrorModal: () => void;
 	showSuccessFlash: (message: string) => void;
@@ -418,6 +419,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			forwardHistory: deps.forwardHistory,
 			currentHistoryIndex: deps.filePreviewHistoryIndex,
 			onNavigateToIndex: deps.handleNavigateToIndex,
+			onClearFilePreviewHistory: deps.handleClearFilePreviewHistory,
 			onClearAgentError: deps.activeTab?.agentError
 				? deps.handleClearAgentErrorForMainPanel
 				: undefined,
@@ -635,6 +637,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.handleNavigateBack,
 			deps.handleNavigateForward,
 			deps.handleNavigateToIndex,
+			deps.handleClearFilePreviewHistory,
 			deps.handleClearAgentErrorForMainPanel,
 			deps.handleShowAgentErrorModal,
 			deps.showSuccessFlash,
