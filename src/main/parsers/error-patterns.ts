@@ -854,6 +854,15 @@ export const SSH_ERROR_PATTERNS: AgentErrorPatterns = {
 			message: 'SSH protocol error. The connection may be unstable.',
 			recoverable: true,
 		},
+		{
+			// Shell parse error - indicates profile/rc file syntax issues on the remote
+			// zsh format: "zsh:35: parse error near `do'"
+			// bash format: "bash: line 35: syntax error near unexpected token `do'"
+			pattern: /zsh:\d+:\s*parse error|bash:\s*line\s*\d+:\s*syntax error/i,
+			message: (match: RegExpMatchArray) =>
+				`Shell profile syntax error on remote host: ${match[0]}. Check .zshrc or .bashrc on the remote server.`,
+			recoverable: false,
+		},
 	],
 };
 
