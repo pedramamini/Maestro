@@ -316,7 +316,7 @@ describe('Chart Accessibility - SummaryCards', () => {
 	it('each metric card has role="group"', () => {
 		render(<SummaryCards data={mockStatsData} theme={mockTheme} />);
 		const groups = screen.getAllByRole('group');
-		expect(groups).toHaveLength(6); // 6 metric cards
+		expect(groups).toHaveLength(9); // 9 metric cards
 	});
 
 	it('metric cards have descriptive aria-labels', () => {
@@ -326,10 +326,13 @@ describe('Chart Accessibility - SummaryCards', () => {
 		const expectedLabels = [
 			/Sessions/i,
 			/Total Queries/i,
+			/Queries\/Session/i,
 			/Total Time/i,
 			/Avg Duration/i,
+			/Peak Hour/i,
 			/Top Agent/i,
 			/Interactive %/i,
+			/Local %/i,
 		];
 
 		groups.forEach((group, index) => {

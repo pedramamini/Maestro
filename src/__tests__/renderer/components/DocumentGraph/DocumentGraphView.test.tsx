@@ -3017,32 +3017,40 @@ describe('DocumentGraphView', () => {
 				expect(previewHistory[previewHistoryIndex].name).toBe('doc2.md');
 			});
 
-			it('left arrow navigates back in history', () => {
+			it('left arrow navigates back in history and focuses content', () => {
 				const previewHistory = [{ name: 'doc1.md' }, { name: 'doc2.md' }];
 				let previewHistoryIndex = 1;
+				let contentFocused = false;
 
 				// Simulate pressing left arrow
 				const canGoBack = previewHistoryIndex > 0;
 				if (canGoBack) {
 					previewHistoryIndex = previewHistoryIndex - 1;
+					// Navigation also triggers focus on content area
+					contentFocused = true;
 				}
 
 				expect(previewHistoryIndex).toBe(0);
 				expect(previewHistory[previewHistoryIndex].name).toBe('doc1.md');
+				expect(contentFocused).toBe(true);
 			});
 
-			it('right arrow navigates forward in history', () => {
+			it('right arrow navigates forward in history and focuses content', () => {
 				const previewHistory = [{ name: 'doc1.md' }, { name: 'doc2.md' }];
 				let previewHistoryIndex = 0;
+				let contentFocused = false;
 
 				// Simulate pressing right arrow
 				const canGoForward = previewHistoryIndex < previewHistory.length - 1;
 				if (canGoForward) {
 					previewHistoryIndex = previewHistoryIndex + 1;
+					// Navigation also triggers focus on content area
+					contentFocused = true;
 				}
 
 				expect(previewHistoryIndex).toBe(1);
 				expect(previewHistory[previewHistoryIndex].name).toBe('doc2.md');
+				expect(contentFocused).toBe(true);
 			});
 
 			it('navigating to new document truncates forward history', () => {

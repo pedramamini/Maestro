@@ -1055,6 +1055,10 @@ export function DocumentGraphView({
 			const newIndex = previewHistoryIndex - 1;
 			setPreviewHistoryIndex(newIndex);
 			setPreviewFile(previewHistory[newIndex]);
+			// Focus the content area for keyboard scrolling
+			requestAnimationFrame(() => {
+				previewContentRef.current?.focus();
+			});
 		}
 	}, [previewHistoryIndex, previewHistory]);
 
@@ -1066,6 +1070,10 @@ export function DocumentGraphView({
 			const newIndex = previewHistoryIndex + 1;
 			setPreviewHistoryIndex(newIndex);
 			setPreviewFile(previewHistory[newIndex]);
+			// Focus the content area for keyboard scrolling
+			requestAnimationFrame(() => {
+				previewContentRef.current?.focus();
+			});
 		}
 	}, [previewHistoryIndex, previewHistory]);
 
