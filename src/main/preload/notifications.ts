@@ -3,8 +3,8 @@
  *
  * Provides the window.maestro.notification namespace for:
  * - Showing OS notifications
- * - Text-to-speech (TTS) functionality
- * - TTS completion events
+ * - Custom notification commands (e.g., TTS, logging, etc.)
+ * - Notification command completion events
  */
 
 import { ipcRenderer } from 'electron';
@@ -18,11 +18,11 @@ export interface NotificationShowResponse {
 }
 
 /**
- * Response from TTS operations
+ * Response from notification command operations
  */
-export interface TtsResponse {
+export interface NotificationCommandResponse {
 	success: boolean;
-	ttsId?: number;
+	ttsId?: number; // Legacy name kept for backward compatibility
 	error?: string;
 }
 
@@ -40,29 +40,30 @@ export function createNotificationApi() {
 			ipcRenderer.invoke('notification:show', title, body),
 
 		/**
-		 * Speak text using system TTS
-		 * @param text - Text to speak
-		 * @param command - Optional TTS command (default: 'say' on macOS)
+		 * Execute a custom notification command (e.g., TTS, logging)
+		 * @param text - Text to pass to the command via stdin
+		 * @param command - Command to execute (default: 'say' on macOS)
 		 */
-		speak: (text: string, command?: string): Promise<TtsResponse> =>
+		speak: (text: string, command?: string): Promise<NotificationCommandResponse> =>
 			ipcRenderer.invoke('notification:speak', text, command),
 
 		/**
-		 * Stop a running TTS process
-		 * @param ttsId - ID of the TTS process to stop
+		 * Stop a running notification command process
+		 * @param notificationId - ID of the notification process to stop
 		 */
-		stopSpeak: (ttsId: number): Promise<TtsResponse> =>
-			ipcRenderer.invoke('notification:stopSpeak', ttsId),
+		stopSpeak: (notificationId: number): Promise<NotificationCommandResponse> =>
+			ipcRenderer.invoke('notification:stopSpeak', notificationId),
 
 		/**
-		 * Subscribe to TTS completion events
-		 * @param handler - Callback when a TTS process completes
+		 * Subscribe to notification command completion events
+		 * @param handler - Callback when a notification command completes
 		 * @returns Cleanup function to unsubscribe
 		 */
-		onTtsCompleted: (handler: (ttsId: number) => void): (() => void) => {
-			const wrappedHandler = (_event: Electron.IpcRendererEvent, ttsId: number) => handler(ttsId);
-			ipcRenderer.on('tts:completed', wrappedHandler);
-			return () => ipcRenderer.removeListener('tts:completed', wrappedHandler);
+		onTtsCompleted: (handler: (notificationId: number) => void): (() => void) => {
+			const wrappedHandler = (_event: Electron.IpcRendererEvent, notificationId: number) =>
+				handler(notificationId);
+			ipcRenderer.on('notification:commandCompleted', wrappedHandler);
+			return () => ipcRenderer.removeListener('notification:commandCompleted', wrappedHandler);
 		},
 	};
 }

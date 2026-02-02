@@ -182,9 +182,6 @@ interface MainPanelProps {
 	onStopBatchRun?: (sessionId?: string) => void;
 	showConfirmation?: (message: string, onConfirm: () => void) => void;
 
-	// TTS settings
-	audioFeedbackCommand?: string;
-
 	// Tab management for AI sessions
 	onTabSelect?: (tabId: string) => void;
 	onTabClose?: (tabId: string) => void;
@@ -1641,7 +1638,6 @@ export const MainPanel = React.memo(
 											onDeleteLog={props.onDeleteLog}
 											onRemoveQueuedItem={onRemoveQueuedItem}
 											onInterrupt={handleInterrupt}
-											audioFeedbackCommand={props.audioFeedbackCommand}
 											onScrollPositionChange={props.onScrollPositionChange}
 											onAtBottomChange={props.onAtBottomChange}
 											initialScrollTop={

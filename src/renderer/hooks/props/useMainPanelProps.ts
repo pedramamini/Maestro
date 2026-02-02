@@ -133,9 +133,6 @@ export interface UseMainPanelPropsDeps {
 	// Unread filter
 	showUnreadOnly: boolean;
 
-	// Audio feedback
-	audioFeedbackCommand: string;
-
 	// Setters (these are stable callbacks - should be memoized at definition site)
 	setLogViewerSelectedLevels: (levels: string[]) => void;
 	setGitDiffPreview: (preview: string | null) => void;
@@ -384,7 +381,6 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			onDeleteLog: deps.handleDeleteLog,
 			onRemoveQueuedItem: deps.handleRemoveQueuedItem,
 			onOpenQueueBrowser: deps.handleOpenQueueBrowser,
-			audioFeedbackCommand: deps.audioFeedbackCommand,
 			// Tab management handlers
 			onTabSelect: deps.handleTabSelect,
 			onTabClose: deps.handleTabClose,
@@ -563,7 +559,6 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.ghCliAvailable,
 			deps.hasGist,
 			deps.showUnreadOnly,
-			deps.audioFeedbackCommand,
 			// Stable callbacks (shouldn't cause re-renders, but included for completeness)
 			deps.setLogViewerSelectedLevels,
 			deps.setGitDiffPreview,

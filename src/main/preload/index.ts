@@ -352,7 +352,7 @@ export type {
 	// From notifications
 	NotificationApi,
 	NotificationShowResponse,
-	TtsResponse,
+	NotificationCommandResponse,
 } from './notifications';
 export type {
 	// From leaderboard

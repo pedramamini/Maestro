@@ -3,11 +3,11 @@
  *
  * Handles all notification-related IPC operations:
  * - Showing OS notifications
- * - Text-to-speech (TTS) functionality with queueing
- * - Stopping active TTS processes
+ * - Custom notification commands with queueing
+ * - Stopping active notification processes
  *
- * Security Note: TTS commands are validated against a whitelist to prevent
- * command injection attacks from the renderer process.
+ * Note: Custom notification commands are user-configured and can be any command
+ * that accepts text via stdin. The user has full control over what command is executed.
  */
 
 import { ipcMain, Notification, BrowserWindow } from 'electron';
@@ -20,44 +20,28 @@ import { isWebContentsAvailable } from '../../utils/safe-send';
 // ==========================================================================
 
 /**
- * Minimum delay between TTS calls to prevent audio overlap.
+ * Minimum delay between notification command calls to prevent audio overlap.
  *
  * 15 seconds was chosen to:
- * 1. Allow sufficient time for most TTS messages to complete naturally
+ * 1. Allow sufficient time for most messages to complete naturally
  * 2. Prevent rapid-fire notifications from overwhelming the user
- * 3. Give users time to process each audio message before the next one
+ * 3. Give users time to process each notification before the next one
  *
- * This value balances responsiveness with preventing audio chaos when
+ * This value balances responsiveness with preventing notification chaos when
  * multiple notifications trigger in quick succession.
  */
-const TTS_MIN_DELAY_MS = 15000;
+const NOTIFICATION_MIN_DELAY_MS = 15000;
 
 /**
- * Maximum number of items allowed in the TTS queue.
- * Prevents memory issues if TTS requests accumulate faster than they can be processed.
+ * Maximum number of items allowed in the notification queue.
+ * Prevents memory issues if requests accumulate faster than they can be processed.
  */
-const TTS_MAX_QUEUE_SIZE = 10;
+const NOTIFICATION_MAX_QUEUE_SIZE = 10;
 
 /**
- * Whitelist of allowed TTS commands to prevent command injection.
- *
- * These are common TTS commands across different platforms:
- * - say: macOS built-in TTS
- * - espeak: Linux TTS (common on Ubuntu/Debian)
- * - espeak-ng: Modern fork of espeak
- * - spd-say: Speech Dispatcher client (Linux)
- * - festival: Festival TTS system (Linux)
- * - flite: Lightweight TTS (Linux)
- *
- * SECURITY: Only the base command name is checked. Arguments are NOT allowed
- * to be passed through the command parameter to prevent injection attacks.
+ * Default notification command (macOS TTS)
  */
-const ALLOWED_TTS_COMMANDS = ['say', 'espeak', 'espeak-ng', 'spd-say', 'festival', 'flite'];
-
-/**
- * Default TTS command (macOS)
- */
-const DEFAULT_TTS_COMMAND = 'say';
+const DEFAULT_NOTIFICATION_COMMAND = 'say';
 
 // ==========================================================================
 // Types
@@ -72,27 +56,27 @@ export interface NotificationShowResponse {
 }
 
 /**
- * Response from TTS operations
+ * Response from custom notification command operations
  */
-export interface TtsResponse {
+export interface NotificationCommandResponse {
 	success: boolean;
-	ttsId?: number;
+	notificationId?: number;
 	error?: string;
 }
 
 /**
- * Item in the TTS queue
+ * Item in the notification command queue
  */
-interface TtsQueueItem {
+interface NotificationQueueItem {
 	text: string;
 	command?: string;
-	resolve: (result: TtsResponse) => void;
+	resolve: (result: NotificationCommandResponse) => void;
 }
 
 /**
- * Active TTS process tracking
+ * Active notification command process tracking
  */
-interface ActiveTtsProcess {
+interface ActiveNotificationProcess {
 	process: ChildProcess;
 	command: string;
 }
@@ -101,90 +85,52 @@ interface ActiveTtsProcess {
 // Module State
 // ==========================================================================
 
-/** Track active TTS processes by ID for stopping */
-const activeTtsProcesses = new Map<number, ActiveTtsProcess>();
+/** Track active notification command processes by ID for stopping */
+const activeNotificationProcesses = new Map<number, ActiveNotificationProcess>();
 
-/** Counter for generating unique TTS process IDs */
-let ttsProcessIdCounter = 0;
+/** Counter for generating unique notification process IDs */
+let notificationProcessIdCounter = 0;
 
-/** Timestamp when the last TTS completed */
-let lastTtsEndTime = 0;
+/** Timestamp when the last notification command completed */
+let lastNotificationEndTime = 0;
 
-/** Queue of pending TTS requests */
-const ttsQueue: TtsQueueItem[] = [];
+/** Queue of pending notification command requests */
+const notificationQueue: NotificationQueueItem[] = [];
 
-/** Flag indicating if TTS is currently being processed */
-let isTtsProcessing = false;
+/** Flag indicating if notification command is currently being processed */
+let isNotificationProcessing = false;
 
 // ==========================================================================
 // Helper Functions
 // ==========================================================================
 
 /**
- * Validate and sanitize TTS command to prevent command injection.
+ * Parse the notification command configuration.
  *
- * SECURITY: This function is critical for preventing arbitrary command execution.
- * It ensures only whitelisted commands can be executed, with no arguments allowed
- * through the command parameter.
+ * The user can configure any command they want - this is intentional.
+ * The command is executed with shell: true to support pipes and command chains.
  *
- * @param command - The requested TTS command
- * @returns Object with validated command or error
+ * @param command - The user-configured notification command
+ * @returns The command to execute (or default if empty)
  */
-export function validateTtsCommand(command?: string): {
-	valid: boolean;
-	command: string;
-	error?: string;
-} {
+export function parseNotificationCommand(command?: string): string {
 	// Use default if no command provided
 	if (!command || command.trim() === '') {
-		return { valid: true, command: DEFAULT_TTS_COMMAND };
+		return DEFAULT_NOTIFICATION_COMMAND;
 	}
 
-	// Extract the base command (first word only, no arguments allowed)
-	const trimmedCommand = command.trim();
-	const baseCommand = trimmedCommand.split(/\s+/)[0];
-
-	// Check if the base command is in the whitelist
-	if (!ALLOWED_TTS_COMMANDS.includes(baseCommand)) {
-		logger.warn('TTS command rejected - not in whitelist', 'TTS', {
-			requestedCommand: baseCommand,
-			allowedCommands: ALLOWED_TTS_COMMANDS,
-		});
-		return {
-			valid: false,
-			command: DEFAULT_TTS_COMMAND,
-			error: `Invalid TTS command '${baseCommand}'. Allowed commands: ${ALLOWED_TTS_COMMANDS.join(', ')}`,
-		};
-	}
-
-	// If the command has arguments, reject it for security
-	if (trimmedCommand !== baseCommand) {
-		logger.warn('TTS command rejected - arguments not allowed', 'TTS', {
-			requestedCommand: trimmedCommand,
-			baseCommand,
-		});
-		return {
-			valid: false,
-			command: DEFAULT_TTS_COMMAND,
-			error: `TTS command arguments are not allowed for security reasons. Use only the command name: ${baseCommand}`,
-		};
-	}
-
-	return { valid: true, command: baseCommand };
+	return command.trim();
 }
 
 /**
- * Execute TTS - the actual implementation
- * Returns a Promise that resolves when the TTS process completes (not just when it starts)
+ * Execute notification command - the actual implementation
+ * Returns a Promise that resolves when the process completes (not just when it starts)
  */
-async function executeTts(text: string, command?: string): Promise<TtsResponse> {
-	// Validate and sanitize the command
-	const validation = validateTtsCommand(command);
-	if (!validation.valid) {
-		return { success: false, error: validation.error };
-	}
-
-	const fullCommand = validation.command;
+async function executeNotificationCommand(
+	text: string,
+	command?: string
+): Promise<NotificationCommandResponse> {
+	const fullCommand = parseNotificationCommand(command);
 	const textLength = text?.length || 0;
 	const textPreview = text
 		? text.length > 200
@@ -193,7 +139,7 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 		: '(no text)';
 
 	// Log the incoming request with full details for debugging
-	logger.info('TTS speak request received', 'TTS', {
+	logger.info('Notification command request received', 'Notification', {
 		command: fullCommand,
 		textLength,
 		textPreview,
@@ -201,23 +147,23 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 
 	try {
 		// Log the full command being executed
-		logger.debug('TTS executing command', 'TTS', {
+		logger.debug('Notification executing command', 'Notification', {
 			command: fullCommand,
 			textLength,
 		});
 
-		// Spawn the TTS process WITHOUT shell mode to prevent injection
+		// Spawn the process with shell mode to support pipes and command chains
 		// The text is passed via stdin, not as command arguments
 		const child = spawn(fullCommand, [], {
 			stdio: ['pipe', 'ignore', 'pipe'], // stdin: pipe, stdout: ignore, stderr: pipe for errors
-			shell: false, // SECURITY: shell: false prevents command injection
+			shell: true, // Enable shell mode to support pipes (e.g., "cmd1 | cmd2")
 		});
 
-		// Generate a unique ID for this TTS process
-		const ttsId = ++ttsProcessIdCounter;
-		activeTtsProcesses.set(ttsId, { process: child, command: fullCommand });
+		// Generate a unique ID for this notification process
+		const notificationId = ++notificationProcessIdCounter;
+		activeNotificationProcesses.set(notificationId, { process: child, command: fullCommand });
 
-		// Return a Promise that resolves when the TTS process completes
+		// Return a Promise that resolves when the process completes
 		return new Promise((resolve) => {
 			let resolved = false;
 			let stderrOutput = '';
@@ -233,27 +179,33 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 							: undefined;
 
 					if (errorCode === 'EPIPE') {
-						logger.debug('TTS stdin EPIPE - process closed before write completed', 'TTS');
+						logger.debug(
+							'Notification stdin EPIPE - process closed before write completed',
+							'Notification'
+						);
 					} else {
-						logger.error('TTS stdin error', 'TTS', { error: String(err), code: errorCode });
+						logger.error('Notification stdin error', 'Notification', {
+							error: String(err),
+							code: errorCode,
+						});
 					}
 				});
 
-				logger.debug('TTS writing to stdin', 'TTS', { textLength });
+				logger.debug('Notification writing to stdin', 'Notification', { textLength });
 				child.stdin.write(text, 'utf8', (err) => {
 					if (err) {
-						logger.error('TTS stdin write error', 'TTS', { error: String(err) });
+						logger.error('Notification stdin write error', 'Notification', { error: String(err) });
 					} else {
-						logger.debug('TTS stdin write completed', 'TTS');
+						logger.debug('Notification stdin write completed', 'Notification');
 					}
 					child.stdin!.end();
 				});
 			} else {
-				logger.error('TTS no stdin available on child process', 'TTS');
+				logger.error('Notification no stdin available on child process', 'Notification');
 			}
 
 			child.on('error', (err) => {
-				logger.error('TTS spawn error', 'TTS', {
+				logger.error('Notification spawn error', 'Notification', {
 					error: String(err),
 					command: fullCommand,
 					textPreview: text
@@ -262,10 +214,10 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 							: text
 						: '(no text)',
 				});
-				activeTtsProcesses.delete(ttsId);
+				activeNotificationProcesses.delete(notificationId);
 				if (!resolved) {
 					resolved = true;
-					resolve({ success: false, ttsId, error: String(err) });
+					resolve({ success: false, notificationId, error: String(err) });
 				}
 			});
 
@@ -278,8 +230,8 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 
 			child.on('close', (code, signal) => {
 				// Always log close event for debugging production issues
-				logger.info('TTS process closed', 'TTS', {
-					ttsId,
+				logger.info('Notification process closed', 'Notification', {
+					notificationId,
 					exitCode: code,
 					signal,
 					stderr: stderrOutput || '(none)',
@@ -287,37 +239,37 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 				});
 
 				if (code !== 0 && stderrOutput) {
-					logger.error('TTS process error output', 'TTS', {
+					logger.error('Notification process error output', 'Notification', {
 						exitCode: code,
 						stderr: stderrOutput,
 						command: fullCommand,
 					});
 				}
 
-				activeTtsProcesses.delete(ttsId);
+				activeNotificationProcesses.delete(notificationId);
 
-				// Notify renderer that TTS has completed
+				// Notify renderer that notification command has completed
 				BrowserWindow.getAllWindows().forEach((win) => {
 					if (isWebContentsAvailable(win)) {
-						win.webContents.send('tts:completed', ttsId);
+						win.webContents.send('notification:commandCompleted', notificationId);
 					}
 				});
 
-				// Resolve the promise now that TTS has completed
+				// Resolve the promise now that process has completed
 				if (!resolved) {
 					resolved = true;
-					resolve({ success: code === 0, ttsId });
+					resolve({ success: code === 0, notificationId });
 				}
 			});
 
-			logger.info('TTS process spawned successfully', 'TTS', {
-				ttsId,
+			logger.info('Notification process spawned successfully', 'Notification', {
+				notificationId,
 				command: fullCommand,
 				textLength,
 			});
 		});
 	} catch (error) {
-		logger.error('TTS error starting audio feedback', 'TTS', {
+		logger.error('Notification error starting command', 'Notification', {
 			error: String(error),
 			command: fullCommand,
 			textPreview,
@@ -327,50 +279,50 @@ async function executeTts(text: string, command?: string): Promise<TtsResponse> 
 }
 
 /**
- * Process the next item in the TTS queue.
+ * Process the next item in the notification queue.
  *
  * Uses a flag-first approach to prevent race conditions:
  * 1. Check and set the processing flag atomically
  * 2. Then check the queue
- * This ensures only one processNextTts call can proceed at a time.
+ * This ensures only one processNextNotification call can proceed at a time.
  */
-async function processNextTts(): Promise<void> {
+async function processNextNotification(): Promise<void> {
 	// Check queue first - if empty, nothing to do
-	if (ttsQueue.length === 0) return;
+	if (notificationQueue.length === 0) return;
 
 	// Set flag BEFORE processing to prevent race condition
-	// where multiple calls could pass the isTtsProcessing check simultaneously
-	if (isTtsProcessing) return;
-	isTtsProcessing = true;
+	// where multiple calls could pass the isNotificationProcessing check simultaneously
+	if (isNotificationProcessing) return;
+	isNotificationProcessing = true;
 
 	// Double-check queue after setting flag (another call might have emptied it)
-	if (ttsQueue.length === 0) {
-		isTtsProcessing = false;
+	if (notificationQueue.length === 0) {
+		isNotificationProcessing = false;
 		return;
 	}
 
-	const item = ttsQueue.shift()!;
+	const item = notificationQueue.shift()!;
 
 	// Calculate delay needed to maintain minimum gap
 	const now = Date.now();
-	const timeSinceLastTts = now - lastTtsEndTime;
-	const delayNeeded = Math.max(0, TTS_MIN_DELAY_MS - timeSinceLastTts);
+	const timeSinceLastNotification = now - lastNotificationEndTime;
+	const delayNeeded = Math.max(0, NOTIFICATION_MIN_DELAY_MS - timeSinceLastNotification);
 
 	if (delayNeeded > 0) {
-		logger.debug(`TTS queue waiting ${delayNeeded}ms before next speech`, 'TTS');
+		logger.debug(`Notification queue waiting ${delayNeeded}ms before next command`, 'Notification');
 		await new Promise((resolve) => setTimeout(resolve, delayNeeded));
 	}
 
-	// Execute the TTS
-	const result = await executeTts(item.text, item.command);
+	// Execute the notification command
+	const result = await executeNotificationCommand(item.text, item.command);
 	item.resolve(result);
 
-	// Record when this TTS ended
-	lastTtsEndTime = Date.now();
-	isTtsProcessing = false;
+	// Record when this notification ended
+	lastNotificationEndTime = Date.now();
+	isNotificationProcessing = false;
 
 	// Process next item in queue
-	processNextTts();
+	processNextNotification();
 }
 
 // ==========================================================================
@@ -406,60 +358,63 @@ export function registerNotificationsHandlers(): void {
 		}
 	);
 
-	// Audio feedback using system TTS command - queued to prevent overlap
+	// Custom notification command - queued to prevent overlap
 	ipcMain.handle(
 		'notification:speak',
-		async (_event, text: string, command?: string): Promise<TtsResponse> => {
+		async (_event, text: string, command?: string): Promise<NotificationCommandResponse> => {
 			// Check queue size limit to prevent memory issues
-			if (ttsQueue.length >= TTS_MAX_QUEUE_SIZE) {
-				logger.warn('TTS queue is full, rejecting request', 'TTS', {
-					queueLength: ttsQueue.length,
-					maxSize: TTS_MAX_QUEUE_SIZE,
+			if (notificationQueue.length >= NOTIFICATION_MAX_QUEUE_SIZE) {
+				logger.warn('Notification queue is full, rejecting request', 'Notification', {
+					queueLength: notificationQueue.length,
+					maxSize: NOTIFICATION_MAX_QUEUE_SIZE,
 				});
 				return {
 					success: false,
-					error: `TTS queue is full (max ${TTS_MAX_QUEUE_SIZE} items). Please wait for current items to complete.`,
+					error: `Notification queue is full (max ${NOTIFICATION_MAX_QUEUE_SIZE} items). Please wait for current items to complete.`,
 				};
 			}
 
-			// Add to queue and return a promise that resolves when this TTS completes
-			return new Promise<TtsResponse>((resolve) => {
-				ttsQueue.push({ text, command, resolve });
-				logger.debug(`TTS queued, queue length: ${ttsQueue.length}`, 'TTS');
-				processNextTts();
+			// Add to queue and return a promise that resolves when this notification completes
+			return new Promise<NotificationCommandResponse>((resolve) => {
+				notificationQueue.push({ text, command, resolve });
+				logger.debug(`Notification queued, queue length: ${notificationQueue.length}`, 'Notification');
+				processNextNotification();
 			});
 		}
 	);
 
-	// Stop a running TTS process
-	ipcMain.handle('notification:stopSpeak', async (_event, ttsId: number): Promise<TtsResponse> => {
-		logger.debug('TTS stop requested', 'TTS', { ttsId });
+	// Stop a running notification command process
+	ipcMain.handle(
+		'notification:stopSpeak',
+		async (_event, notificationId: number): Promise<NotificationCommandResponse> => {
+			logger.debug('Notification stop requested', 'Notification', { notificationId });
 
-		const ttsProcess = activeTtsProcesses.get(ttsId);
-		if (!ttsProcess) {
-			logger.debug('TTS no active process found', 'TTS', { ttsId });
-			return { success: false, error: 'No active TTS process with that ID' };
+			const notificationProcess = activeNotificationProcesses.get(notificationId);
+			if (!notificationProcess) {
+				logger.debug('Notification no active process found', 'Notification', { notificationId });
+				return { success: false, error: 'No active notification process with that ID' };
+			}
+
+			try {
+				// Kill the process and all its children
+				notificationProcess.process.kill('SIGTERM');
+				activeNotificationProcesses.delete(notificationId);
+
+				logger.info('Notification process stopped', 'Notification', {
+					notificationId,
+					command: notificationProcess.command,
+				});
+
+				return { success: true };
+			} catch (error) {
+				logger.error('Notification error stopping process', 'Notification', {
+					notificationId,
+					error: String(error),
+				});
+				return { success: false, error: String(error) };
+			}
 		}
-
-		try {
-			// Kill the process and all its children
-			ttsProcess.process.kill('SIGTERM');
-			activeTtsProcesses.delete(ttsId);
-
-			logger.info('TTS process stopped', 'TTS', {
-				ttsId,
-				command: ttsProcess.command,
-			});
-
-			return { success: true };
-		} catch (error) {
-			logger.error('TTS error stopping process', 'TTS', {
-				ttsId,
-				error: String(error),
-			});
-			return { success: false, error: String(error) };
-		}
-	});
+	);
 }
 
 // ==========================================================================
@@ -467,47 +422,47 @@ export function registerNotificationsHandlers(): void {
 // ==========================================================================
 
 /**
- * Get the current TTS queue length (for testing)
+ * Get the current notification queue length (for testing)
  */
-export function getTtsQueueLength(): number {
-	return ttsQueue.length;
+export function getNotificationQueueLength(): number {
+	return notificationQueue.length;
 }
 
 /**
- * Get the count of active TTS processes (for testing)
+ * Get the count of active notification processes (for testing)
  */
-export function getActiveTtsCount(): number {
-	return activeTtsProcesses.size;
+export function getActiveNotificationCount(): number {
+	return activeNotificationProcesses.size;
 }
 
 /**
- * Clear the TTS queue (for testing)
+ * Clear the notification queue (for testing)
  */
-export function clearTtsQueue(): void {
-	ttsQueue.length = 0;
+export function clearNotificationQueue(): void {
+	notificationQueue.length = 0;
 }
 
 /**
- * Reset TTS state (for testing)
+ * Reset notification state (for testing)
  */
-export function resetTtsState(): void {
-	ttsQueue.length = 0;
-	activeTtsProcesses.clear();
-	ttsProcessIdCounter = 0;
-	lastTtsEndTime = 0;
-	isTtsProcessing = false;
+export function resetNotificationState(): void {
+	notificationQueue.length = 0;
+	activeNotificationProcesses.clear();
+	notificationProcessIdCounter = 0;
+	lastNotificationEndTime = 0;
+	isNotificationProcessing = false;
 }
 
 /**
- * Get the maximum TTS queue size (for testing)
+ * Get the maximum notification queue size (for testing)
  */
-export function getTtsMaxQueueSize(): number {
-	return TTS_MAX_QUEUE_SIZE;
+export function getNotificationMaxQueueSize(): number {
+	return NOTIFICATION_MAX_QUEUE_SIZE;
 }
 
-/**
- * Get the list of allowed TTS commands (for testing)
- */
-export function getAllowedTtsCommands(): string[] {
-	return [...ALLOWED_TTS_COMMANDS];
-}
+// Legacy aliases for backward compatibility with existing tests
+export const getTtsQueueLength = getNotificationQueueLength;
+export const getActiveTtsCount = getActiveNotificationCount;
+export const clearTtsQueue = clearNotificationQueue;
+export const resetTtsState = resetNotificationState;
+export const getTtsMaxQueueSize = getNotificationMaxQueueSize;

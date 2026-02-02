@@ -65,10 +65,31 @@ describe('Notification Preload API', () => {
 			expect(mockInvoke).toHaveBeenCalledWith('notification:speak', 'Hello', 'espeak');
 			expect(result.ttsId).toBe(456);
 		});
+
+		it('should accept complex command chains with pipes', async () => {
+			mockInvoke.mockResolvedValue({ success: true, ttsId: 789 });
+
+			const complexCommand = 'tee ~/log.txt | say';
+			const result = await api.speak('Test message', complexCommand);
+
+			expect(mockInvoke).toHaveBeenCalledWith('notification:speak', 'Test message', complexCommand);
+			expect(result.ttsId).toBe(789);
+		});
+
+		it('should accept commands with full paths and arguments', async () => {
+			mockInvoke.mockResolvedValue({ success: true, ttsId: 111 });
+
+			const fullPathCommand =
+				'/Users/pedram/go/bin/fabric --pattern ped_summarize_conversational --model gpt-5-mini';
+			const result = await api.speak('Test', fullPathCommand);
+
+			expect(mockInvoke).toHaveBeenCalledWith('notification:speak', 'Test', fullPathCommand);
+			expect(result.success).toBe(true);
+		});
 	});
 
 	describe('stopSpeak', () => {
-		it('should invoke notification:stopSpeak with ttsId', async () => {
+		it('should invoke notification:stopSpeak with notificationId', async () => {
 			mockInvoke.mockResolvedValue({ success: true });
 
 			const result = await api.stopSpeak(123);
@@ -84,16 +105,16 @@ describe('Notification Preload API', () => {
 
 			const cleanup = api.onTtsCompleted(callback);
 
-			expect(mockOn).toHaveBeenCalledWith('tts:completed', expect.any(Function));
+			expect(mockOn).toHaveBeenCalledWith('notification:commandCompleted', expect.any(Function));
 			expect(typeof cleanup).toBe('function');
 		});
 
 		it('should call callback when event is received', () => {
 			const callback = vi.fn();
-			let registeredHandler: (event: unknown, ttsId: number) => void;
+			let registeredHandler: (event: unknown, notificationId: number) => void;
 
 			mockOn.mockImplementation(
-				(_channel: string, handler: (event: unknown, ttsId: number) => void) => {
+				(_channel: string, handler: (event: unknown, notificationId: number) => void) => {
 					registeredHandler = handler;
 				}
 			);
@@ -108,10 +129,10 @@ describe('Notification Preload API', () => {
 
 		it('should remove listener when cleanup is called', () => {
 			const callback = vi.fn();
-			let registeredHandler: (event: unknown, ttsId: number) => void;
+			let registeredHandler: (event: unknown, notificationId: number) => void;
 
 			mockOn.mockImplementation(
-				(_channel: string, handler: (event: unknown, ttsId: number) => void) => {
+				(_channel: string, handler: (event: unknown, notificationId: number) => void) => {
 					registeredHandler = handler;
 				}
 			);
@@ -119,7 +140,10 @@ describe('Notification Preload API', () => {
 			const cleanup = api.onTtsCompleted(callback);
 			cleanup();
 
-			expect(mockRemoveListener).toHaveBeenCalledWith('tts:completed', registeredHandler!);
+			expect(mockRemoveListener).toHaveBeenCalledWith(
+				'notification:commandCompleted',
+				registeredHandler!
+			);
 		});
 	});
 });
