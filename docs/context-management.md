@@ -105,7 +105,7 @@ For best results, **compact your context before reaching 60-70% usage** — don'
 
 ### Configuring Warnings
 
-Customize warning thresholds in **Settings** (`Cmd+,` / `Ctrl+,`) → **General** → **Context Window Warnings**:
+Customize warning thresholds in **Settings** (`Cmd+,` / `Ctrl+,`) → **Display** → **Context Window Warnings**:
 
 ![Context Warning Configuration](./screenshots/context-warnings-config.png)
 

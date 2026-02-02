@@ -12,7 +12,8 @@ Settings are organized into tabs:
 
 | Tab | Contents |
 |-----|----------|
-| **General** | Font family and size, terminal width, log level and buffer, max output lines, shell configuration, input send behavior, default toggles (history, thinking), automatic tab naming, power management, updates, privacy, context warnings, usage stats, document graph, storage location |
+| **General** | Font family and size, terminal width, log level and buffer, shell configuration, input send behavior, default toggles (history, thinking), automatic tab naming, power management, updates, privacy, usage stats, storage location |
+| **Display** | Max output lines per response, document graph settings, context window warnings |
 | **Shortcuts** | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts)) |
 | **Themes** | Dark, light, and vibe mode themes, custom theme builder with import/export |
 | **Notifications** | OS notifications, custom command notifications, toast notification duration |
