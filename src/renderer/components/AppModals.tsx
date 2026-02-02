@@ -867,12 +867,15 @@ export interface AppUtilityModalsProps {
 	tabSwitcherOpen: boolean;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
+	onFileTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
 		sessionName: string,
 		starred?: boolean
 	) => void;
+	/** Whether colorblind-friendly colors should be used for extension badges */
+	colorBlindMode?: boolean;
 
 	// FileSearchModal
 	fuzzyFileSearchOpen: boolean;
@@ -1048,7 +1051,9 @@ export function AppUtilityModals({
 	tabSwitcherOpen,
 	onCloseTabSwitcher,
 	onTabSelect,
+	onFileTabSelect,
 	onNamedSessionSelect,
+	colorBlindMode,
 	// FileSearchModal
 	fuzzyFileSearchOpen,
 	filteredFileTree,
@@ -1243,13 +1248,17 @@ export function AppUtilityModals({
 				<TabSwitcherModal
 					theme={theme}
 					tabs={activeSession.aiTabs}
+					fileTabs={activeSession.filePreviewTabs}
 					activeTabId={activeSession.activeTabId}
+					activeFileTabId={activeSession.activeFileTabId}
 					projectRoot={activeSession.projectRoot}
 					agentId={activeSession.toolType}
 					shortcut={tabShortcuts.tabSwitcher}
 					onTabSelect={onTabSelect}
+					onFileTabSelect={onFileTabSelect}
 					onNamedSessionSelect={onNamedSessionSelect}
 					onClose={onCloseTabSwitcher}
+					colorBlindMode={colorBlindMode}
 				/>
 			)}
 
@@ -1928,6 +1937,7 @@ export interface AppModalsProps {
 	tabSwitcherOpen: boolean;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
+	onFileTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
@@ -2545,6 +2555,7 @@ export function AppModals(props: AppModalsProps) {
 				onCloseTabSwitcher={onCloseTabSwitcher}
 				onTabSelect={onTabSelect}
 				onNamedSessionSelect={onNamedSessionSelect}
+				colorBlindMode={colorBlindMode}
 				fuzzyFileSearchOpen={fuzzyFileSearchOpen}
 				filteredFileTree={filteredFileTree}
 				onCloseFileSearch={onCloseFileSearch}

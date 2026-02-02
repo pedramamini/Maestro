@@ -42,7 +42,30 @@ function adjustBrightness(hex: string, percent: number): string {
 }
 
 /**
+ * Blend two hex colors together
+ */
+function blendColors(color1: string, color2: string, ratio: number): string {
+	const rgb1 = hexToRgb(color1);
+	const rgb2 = hexToRgb(color2);
+	if (!rgb1 || !rgb2) return color1;
+
+	const r = Math.round(rgb1.r * (1 - ratio) + rgb2.r * ratio);
+	const g = Math.round(rgb1.g * (1 - ratio) + rgb2.g * ratio);
+	const b = Math.round(rgb1.b * (1 - ratio) + rgb2.b * ratio);
+
+	return `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}`;
+}
+
+/**
+ * Create a semi-transparent version of a color as a solid color blended with background
+ */
+function transparentize(color: string, bgColor: string, alpha: number): string {
+	return blendColors(bgColor, color, alpha);
+}
+
+/**
  * Initialize mermaid with theme-aware settings using the app's color scheme
+ * Designed for beautiful, readable diagrams with clear visual hierarchy
  */
 const initMermaid = (theme: Theme) => {
 	const colors = theme.colors;
@@ -51,120 +74,193 @@ const initMermaid = (theme: Theme) => {
 	const bgRgb = hexToRgb(colors.bgMain);
 	const isDark = bgRgb ? bgRgb.r * 0.299 + bgRgb.g * 0.587 + bgRgb.b * 0.114 < 128 : true;
 
+	// Create vibrant node fills - blend accent with background for a tinted effect
+	const primaryNodeBg = transparentize(colors.accent, colors.bgMain, 0.15);
+	const secondaryNodeBg = transparentize(colors.success, colors.bgMain, 0.15);
+	const tertiaryNodeBg = transparentize(colors.warning, colors.bgMain, 0.12);
+
+	// Create prominent borders that stand out
+	const primaryBorder = colors.accent;
+	const secondaryBorder = colors.success;
+	const tertiaryBorder = colors.warning;
+
+	// Edge label background - slightly lighter/darker than main bg for visibility
+	const edgeLabelBg = isDark
+		? adjustBrightness(colors.bgMain, 10)
+		: adjustBrightness(colors.bgMain, -5);
+
 	// Create theme variables from the app's color scheme
 	const themeVariables = {
-		// Base colors
-		primaryColor: colors.accent,
+		// Base colors - primary nodes get accent color treatment
+		primaryColor: primaryNodeBg,
 		primaryTextColor: colors.textMain,
-		primaryBorderColor: colors.border,
+		primaryBorderColor: primaryBorder,
 
-		// Secondary colors (derived from accent)
-		secondaryColor: adjustBrightness(colors.accent, isDark ? -20 : 20),
+		// Secondary colors - use success color for variety
+		secondaryColor: secondaryNodeBg,
 		secondaryTextColor: colors.textMain,
-		secondaryBorderColor: colors.border,
+		secondaryBorderColor: secondaryBorder,
 
-		// Tertiary colors
-		tertiaryColor: colors.bgActivity,
+		// Tertiary colors - use warning for additional variety
+		tertiaryColor: tertiaryNodeBg,
 		tertiaryTextColor: colors.textMain,
-		tertiaryBorderColor: colors.border,
+		tertiaryBorderColor: tertiaryBorder,
 
 		// Background and text
 		background: colors.bgMain,
-		mainBkg: colors.bgActivity,
+		mainBkg: primaryNodeBg,
 		textColor: colors.textMain,
-		titleColor: colors.textMain,
+		titleColor: colors.accent,
 
-		// Line colors
-		lineColor: colors.textDim,
+		// Line colors - use accent with reduced opacity for connection lines
+		lineColor: colors.accent,
 
-		// Node colors for flowcharts
-		nodeBkg: colors.bgActivity,
+		// Node colors for flowcharts - prominent styling
+		nodeBkg: primaryNodeBg,
 		nodeTextColor: colors.textMain,
-		nodeBorder: colors.border,
+		nodeBorder: primaryBorder,
 
-		// Cluster (subgraph) colors
-		clusterBkg: colors.bgSidebar,
-		clusterBorder: colors.border,
+		// Cluster (subgraph) colors - subtle distinction
+		clusterBkg: transparentize(colors.accent, colors.bgMain, 0.05),
+		clusterBorder: colors.accent,
 
-		// Edge labels
-		edgeLabelBackground: colors.bgMain,
+		// Edge labels - clear background so text is readable
+		edgeLabelBackground: edgeLabelBg,
 
 		// State diagram colors
 		labelColor: colors.textMain,
-		altBackground: colors.bgSidebar,
+		labelBackgroundColor: edgeLabelBg,
+		altBackground: transparentize(colors.accent, colors.bgMain, 0.08),
 
 		// Sequence diagram colors
-		actorBkg: colors.bgActivity,
-		actorBorder: colors.border,
+		actorBkg: primaryNodeBg,
+		actorBorder: primaryBorder,
 		actorTextColor: colors.textMain,
-		actorLineColor: colors.textDim,
+		actorLineColor: colors.accent,
 		signalColor: colors.textMain,
 		signalTextColor: colors.textMain,
-		labelBoxBkgColor: colors.bgActivity,
+		labelBoxBkgColor: edgeLabelBg,
 		labelBoxBorderColor: colors.border,
 		labelTextColor: colors.textMain,
-		loopTextColor: colors.textMain,
-		noteBkgColor: colors.bgActivity,
-		noteBorderColor: colors.border,
+		loopTextColor: colors.accent,
+		noteBkgColor: transparentize(colors.warning, colors.bgMain, 0.15),
+		noteBorderColor: colors.warning,
 		noteTextColor: colors.textMain,
-		activationBkgColor: colors.bgActivity,
+		activationBkgColor: transparentize(colors.accent, colors.bgMain, 0.2),
 		activationBorderColor: colors.accent,
-		sequenceNumberColor: colors.textMain,
+		sequenceNumberColor: colors.bgMain,
 
 		// Class diagram colors
 		classText: colors.textMain,
 
-		// Git graph colors
+		// Git graph colors - use vibrant colors
 		git0: colors.accent,
 		git1: colors.success,
 		git2: colors.warning,
 		git3: colors.error,
+		git4: adjustBrightness(colors.accent, isDark ? 20 : -20),
+		git5: adjustBrightness(colors.success, isDark ? 20 : -20),
+		git6: adjustBrightness(colors.warning, isDark ? 20 : -20),
+		git7: adjustBrightness(colors.error, isDark ? 20 : -20),
 		gitBranchLabel0: colors.textMain,
 		gitBranchLabel1: colors.textMain,
 		gitBranchLabel2: colors.textMain,
 		gitBranchLabel3: colors.textMain,
+		gitInv0: colors.bgMain,
+		gitInv1: colors.bgMain,
+		gitInv2: colors.bgMain,
+		gitInv3: colors.bgMain,
+		commitLabelColor: colors.textMain,
+		commitLabelBackground: edgeLabelBg,
 
 		// Gantt colors
-		sectionBkgColor: colors.bgActivity,
-		altSectionBkgColor: colors.bgSidebar,
-		sectionBkgColor2: colors.bgActivity,
+		sectionBkgColor: transparentize(colors.accent, colors.bgMain, 0.1),
+		altSectionBkgColor: transparentize(colors.accent, colors.bgMain, 0.05),
+		sectionBkgColor2: transparentize(colors.success, colors.bgMain, 0.1),
 		taskBkgColor: colors.accent,
-		taskTextColor: colors.textMain,
+		taskTextColor: colors.bgMain,
 		taskTextLightColor: colors.textMain,
 		taskTextOutsideColor: colors.textMain,
-		activeTaskBkgColor: colors.accent,
-		activeTaskBorderColor: colors.border,
+		activeTaskBkgColor: adjustBrightness(colors.accent, isDark ? 15 : -15),
+		activeTaskBorderColor: colors.accent,
 		doneTaskBkgColor: colors.success,
-		doneTaskBorderColor: colors.border,
+		doneTaskBorderColor: colors.success,
 		critBkgColor: colors.error,
 		critBorderColor: colors.error,
 		gridColor: colors.border,
 		todayLineColor: colors.warning,
 
-		// Pie chart colors
+		// Pie chart colors - vibrant and distinct
 		pie1: colors.accent,
 		pie2: colors.success,
 		pie3: colors.warning,
 		pie4: colors.error,
-		pie5: adjustBrightness(colors.accent, 30),
-		pie6: adjustBrightness(colors.success, 30),
-		pie7: adjustBrightness(colors.warning, 30),
+		pie5: adjustBrightness(colors.accent, isDark ? 25 : -25),
+		pie6: adjustBrightness(colors.success, isDark ? 25 : -25),
+		pie7: adjustBrightness(colors.warning, isDark ? 25 : -25),
+		pie8: adjustBrightness(colors.error, isDark ? 25 : -25),
+		pie9: blendColors(colors.accent, colors.success, 0.5),
+		pie10: blendColors(colors.warning, colors.error, 0.5),
+		pie11: blendColors(colors.accent, colors.warning, 0.5),
+		pie12: blendColors(colors.success, colors.error, 0.5),
 		pieTitleTextColor: colors.textMain,
 		pieSectionTextColor: colors.textMain,
 		pieLegendTextColor: colors.textMain,
+		pieStrokeColor: colors.bgMain,
+		pieStrokeWidth: '2px',
 
 		// Relationship colors for ER diagrams
-		relationColor: colors.textDim,
+		relationColor: colors.accent,
 		relationLabelColor: colors.textMain,
-		relationLabelBackground: colors.bgMain,
+		relationLabelBackground: edgeLabelBg,
 
 		// Requirement diagram
-		requirementBkgColor: colors.bgActivity,
-		requirementBorderColor: colors.border,
+		requirementBkgColor: primaryNodeBg,
+		requirementBorderColor: primaryBorder,
 		requirementTextColor: colors.textMain,
 
-		// Mindmap
-		mindmapBkg: colors.bgActivity,
+		// Mindmap - colorful nodes
+		mindmapBkg: primaryNodeBg,
+
+		// Quadrant chart
+		quadrant1Fill: transparentize(colors.accent, colors.bgMain, 0.15),
+		quadrant2Fill: transparentize(colors.success, colors.bgMain, 0.15),
+		quadrant3Fill: transparentize(colors.warning, colors.bgMain, 0.15),
+		quadrant4Fill: transparentize(colors.error, colors.bgMain, 0.15),
+		quadrant1TextFill: colors.textMain,
+		quadrant2TextFill: colors.textMain,
+		quadrant3TextFill: colors.textMain,
+		quadrant4TextFill: colors.textMain,
+		quadrantPointFill: colors.accent,
+		quadrantPointTextFill: colors.textMain,
+		quadrantXAxisTextFill: colors.textMain,
+		quadrantYAxisTextFill: colors.textMain,
+		quadrantTitleFill: colors.accent,
+
+		// XY Chart
+		xyChart: {
+			backgroundColor: 'transparent',
+			titleColor: colors.accent,
+			xAxisTitleColor: colors.textMain,
+			yAxisTitleColor: colors.textMain,
+			xAxisLabelColor: colors.textDim,
+			yAxisLabelColor: colors.textDim,
+			xAxisLineColor: colors.border,
+			yAxisLineColor: colors.border,
+			plotColorPalette: `${colors.accent}, ${colors.success}, ${colors.warning}, ${colors.error}`,
+		},
+
+		// Timeline
+		cScale0: colors.accent,
+		cScale1: colors.success,
+		cScale2: colors.warning,
+		cScale3: colors.error,
+		cScale4: adjustBrightness(colors.accent, isDark ? 20 : -20),
+		cScale5: adjustBrightness(colors.success, isDark ? 20 : -20),
+
+		// Sankey diagram
+		sankeyLinkColor: transparentize(colors.accent, colors.bgMain, 0.3),
+		sankeyNodeColor: colors.accent,
 	};
 
 	mermaid.initialize({
@@ -178,14 +274,41 @@ const initMermaid = (theme: Theme) => {
 			useMaxWidth: true,
 			htmlLabels: true,
 			curve: 'basis',
+			padding: 15,
+			nodeSpacing: 50,
+			rankSpacing: 50,
 		},
 		sequence: {
 			useMaxWidth: true,
 			diagramMarginX: 8,
 			diagramMarginY: 8,
+			actorMargin: 50,
+			boxMargin: 10,
+			boxTextMargin: 5,
+			noteMargin: 10,
+			messageMargin: 35,
 		},
 		gantt: {
 			useMaxWidth: true,
+			barHeight: 20,
+			barGap: 4,
+			topPadding: 50,
+			leftPadding: 75,
+		},
+		er: {
+			useMaxWidth: true,
+			layoutDirection: 'TB',
+			minEntityWidth: 100,
+			minEntityHeight: 75,
+			entityPadding: 15,
+		},
+		pie: {
+			useMaxWidth: true,
+			textPosition: 0.75,
+		},
+		gitGraph: {
+			useMaxWidth: true,
+			mainBranchName: 'main',
 		},
 	});
 };

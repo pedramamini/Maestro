@@ -346,6 +346,10 @@ export interface UseSettingsReturn {
 	// Automatic tab naming settings
 	automaticTabNamingEnabled: boolean;
 	setAutomaticTabNamingEnabled: (value: boolean) => void;
+
+	// File tab auto-refresh settings
+	fileTabAutoRefreshEnabled: boolean;
+	setFileTabAutoRefreshEnabled: (value: boolean) => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -500,6 +504,9 @@ export function useSettings(): UseSettingsReturn {
 
 	// Automatic tab naming settings
 	const [automaticTabNamingEnabled, setAutomaticTabNamingEnabledState] = useState(true); // Default: enabled
+
+	// File tab auto-refresh settings
+	const [fileTabAutoRefreshEnabled, setFileTabAutoRefreshEnabledState] = useState(false); // Default: disabled
 
 	// Wrapper functions that persist to electron-store
 	// PERF: All wrapped in useCallback to prevent re-renders
@@ -1309,6 +1316,12 @@ export function useSettings(): UseSettingsReturn {
 		window.maestro.settings.set('automaticTabNamingEnabled', value);
 	}, []);
 
+	// File tab auto-refresh toggle
+	const setFileTabAutoRefreshEnabled = useCallback((value: boolean) => {
+		setFileTabAutoRefreshEnabledState(value);
+		window.maestro.settings.set('fileTabAutoRefreshEnabled', value);
+	}, []);
+
 	// Load settings from electron-store
 	// This function is called on mount and on system resume (after sleep/suspend)
 	// PERF: Use batch loading to reduce IPC calls from ~60 to 3
@@ -1382,6 +1395,7 @@ export function useSettings(): UseSettingsReturn {
 				const savedSshRemoteIgnorePatterns = allSettings['sshRemoteIgnorePatterns'];
 				const savedSshRemoteHonorGitignore = allSettings['sshRemoteHonorGitignore'];
 				const savedAutomaticTabNamingEnabled = allSettings['automaticTabNamingEnabled'];
+				const savedFileTabAutoRefreshEnabled = allSettings['fileTabAutoRefreshEnabled'];
 
 				if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI as boolean);
 				if (savedEnterToSendTerminal !== undefined)
@@ -1741,6 +1755,11 @@ export function useSettings(): UseSettingsReturn {
 				if (savedAutomaticTabNamingEnabled !== undefined) {
 					setAutomaticTabNamingEnabledState(savedAutomaticTabNamingEnabled as boolean);
 				}
+
+				// File tab auto-refresh settings
+				if (savedFileTabAutoRefreshEnabled !== undefined) {
+					setFileTabAutoRefreshEnabledState(savedFileTabAutoRefreshEnabled as boolean);
+				}
 			} catch (error) {
 				console.error('[Settings] Failed to load settings:', error);
 			} finally {
@@ -1917,6 +1936,8 @@ export function useSettings(): UseSettingsReturn {
 			setSshRemoteHonorGitignore,
 			automaticTabNamingEnabled,
 			setAutomaticTabNamingEnabled,
+			fileTabAutoRefreshEnabled,
+			setFileTabAutoRefreshEnabled,
 		}),
 		[
 			// State values
@@ -2060,6 +2081,8 @@ export function useSettings(): UseSettingsReturn {
 			setSshRemoteHonorGitignore,
 			automaticTabNamingEnabled,
 			setAutomaticTabNamingEnabled,
+			fileTabAutoRefreshEnabled,
+			setFileTabAutoRefreshEnabled,
 		]
 	);
 }

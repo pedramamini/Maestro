@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useMemo, useCallback } from 'react';
-import { Search, Star } from 'lucide-react';
-import type { AITab, Theme, Shortcut, ToolType } from '../types';
+import { Search, Star, FileText } from 'lucide-react';
+import type { AITab, FilePreviewTab, Theme, Shortcut, ToolType } from '../types';
 import { fuzzyMatchWithScore } from '../utils/search';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { useListNavigation } from '../hooks';
@@ -9,6 +9,7 @@ import { getContextColor } from '../utils/theme';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { formatTokensCompact, formatRelativeTime, formatCost } from '../utils/formatters';
 import { calculateContextTokens } from '../utils/contextUsage';
+import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
 
 /** Named session from the store (not currently open) */
 interface NamedSession {
@@ -21,16 +22,25 @@ interface NamedSession {
 }
 
 /** Union type for items in the list */
-type ListItem = { type: 'open'; tab: AITab } | { type: 'named'; session: NamedSession };
+type ListItem =
+	| { type: 'open'; tab: AITab }
+	| { type: 'file'; tab: FilePreviewTab }
+	| { type: 'named'; session: NamedSession };
 
 interface TabSwitcherModalProps {
 	theme: Theme;
 	tabs: AITab[];
+	/** File preview tabs to include in "Open Tabs" view */
+	fileTabs?: FilePreviewTab[];
 	activeTabId: string;
+	/** Currently active file tab ID (if a file tab is active) */
+	activeFileTabId?: string | null;
 	projectRoot: string; // The initial project directory (used for Claude session storage)
 	agentId?: string;
 	shortcut?: Shortcut;
 	onTabSelect: (tabId: string) => void;
+	/** Handler to select a file tab */
+	onFileTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
@@ -38,6 +48,8 @@ interface TabSwitcherModalProps {
 		starred?: boolean
 	) => void;
 	onClose: () => void;
+	/** Whether colorblind-friendly colors should be used for extension badges */
+	colorBlindMode?: boolean;
 }
 
 // formatTokensCompact, formatRelativeTime, and formatCost imported from ../utils/formatters
@@ -94,6 +106,55 @@ function getTabDisplayName(tab: AITab): string {
 function getUuidPill(agentSessionId: string | undefined | null): string | null {
 	if (!agentSessionId) return null;
 	return agentSessionId.split('-')[0].toUpperCase();
+}
+
+/**
+ * Get color for file extension badge.
+ * Returns a muted color based on file type for visual differentiation.
+ * When colorBlindMode is enabled, uses Wong's colorblind-safe palette.
+ * (Synchronized with TabBar.tsx for consistency)
+ */
+function getExtensionColor(
+	extension: string,
+	theme: Theme,
+	colorBlindMode?: boolean
+): { bg: string; text: string } {
+	const isLightTheme = theme.mode === 'light';
+
+	// Use colorblind-safe colors when enabled
+	if (colorBlindMode) {
+		const colorBlindColors = getColorBlindExtensionColor(extension, isLightTheme);
+		if (colorBlindColors) {
+			return colorBlindColors;
+		}
+		// Fall through to default for unknown extensions
+		return { bg: theme.colors.border, text: theme.colors.textDim };
+	}
+
+	// Standard color scheme (dark theme only for backward compatibility)
+	const ext = extension.toLowerCase();
+	// TypeScript/JavaScript - blue tones
+	if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+		return { bg: 'rgba(59, 130, 246, 0.3)', text: 'rgba(147, 197, 253, 0.9)' };
+	}
+	// Markdown/Docs - green tones
+	if (['.md', '.mdx', '.txt', '.rst'].includes(ext)) {
+		return { bg: 'rgba(34, 197, 94, 0.3)', text: 'rgba(134, 239, 172, 0.9)' };
+	}
+	// JSON/Config - yellow tones
+	if (['.json', '.yaml', '.yml', '.toml', '.ini', '.env'].includes(ext)) {
+		return { bg: 'rgba(234, 179, 8, 0.3)', text: 'rgba(253, 224, 71, 0.9)' };
+	}
+	// CSS/Styles - purple tones
+	if (['.css', '.scss', '.sass', '.less', '.styl'].includes(ext)) {
+		return { bg: 'rgba(168, 85, 247, 0.3)', text: 'rgba(216, 180, 254, 0.9)' };
+	}
+	// HTML/Templates - orange tones
+	if (['.html', '.htm', '.xml', '.svg'].includes(ext)) {
+		return { bg: 'rgba(249, 115, 22, 0.3)', text: 'rgba(253, 186, 116, 0.9)' };
+	}
+	// Default - use theme's dim colors
+	return { bg: theme.colors.border, text: theme.colors.textDim };
 }
 
 /**
@@ -154,20 +215,25 @@ function ContextGauge({
 type ViewMode = 'open' | 'all-named' | 'starred';
 
 /**
- * Tab Switcher Modal - Quick navigation between AI tabs with fuzzy search.
- * Shows context window consumption, cost, custom name, and UUID pill for each tab.
- * Supports switching between "Open Tabs" and "All Named" sessions.
+ * Tab Switcher Modal - Quick navigation between AI and file tabs with fuzzy search.
+ * Shows context window consumption, cost, custom name, and UUID pill for AI tabs.
+ * Shows filename, extension badge, and file icon for file tabs.
+ * Supports switching between "Open Tabs", "All Named" sessions, and "Starred".
  */
 export function TabSwitcherModal({
 	theme,
 	tabs,
+	fileTabs = [],
 	activeTabId,
+	activeFileTabId,
 	projectRoot,
 	agentId = 'claude-code',
 	shortcut,
 	onTabSelect,
+	onFileTabSelect,
 	onNamedSessionSelect,
 	onClose,
+	colorBlindMode,
 }: TabSwitcherModalProps) {
 	const [search, setSearch] = useState('');
 	const [firstVisibleIndex, setFirstVisibleIndex] = useState(0);
@@ -270,13 +336,37 @@ export function TabSwitcherModal({
 	// Build the list items based on view mode
 	const listItems: ListItem[] = useMemo(() => {
 		if (viewMode === 'open') {
-			// Open tabs mode - show all currently open tabs
-			const sorted = [...tabs].sort((a, b) => {
-				const nameA = getTabDisplayName(a).toLowerCase();
-				const nameB = getTabDisplayName(b).toLowerCase();
+			// Open tabs mode - show all currently open tabs (AI and file tabs)
+			const items: ListItem[] = [];
+
+			// Add AI tabs
+			for (const tab of tabs) {
+				items.push({ type: 'open' as const, tab });
+			}
+
+			// Add file tabs
+			for (const tab of fileTabs) {
+				items.push({ type: 'file' as const, tab });
+			}
+
+			// Sort alphabetically by display name
+			items.sort((a, b) => {
+				const nameA =
+					a.type === 'open'
+						? getTabDisplayName(a.tab).toLowerCase()
+						: a.type === 'file'
+							? a.tab.name.toLowerCase()
+							: '';
+				const nameB =
+					b.type === 'open'
+						? getTabDisplayName(b.tab).toLowerCase()
+						: b.type === 'file'
+							? b.tab.name.toLowerCase()
+							: '';
 				return nameA.localeCompare(nameB);
 			});
-			return sorted.map((tab) => ({ type: 'open' as const, tab }));
+
+			return items;
 		} else if (viewMode === 'starred') {
 			// Starred mode - show all starred sessions (open or closed) for the current project
 			const items: ListItem[] = [];
@@ -304,11 +394,15 @@ export function TabSwitcherModal({
 				const nameA =
 					a.type === 'open'
 						? getTabDisplayName(a.tab).toLowerCase()
-						: a.session.sessionName.toLowerCase();
+						: a.type === 'named'
+							? a.session.sessionName.toLowerCase()
+							: '';
 				const nameB =
 					b.type === 'open'
 						? getTabDisplayName(b.tab).toLowerCase()
-						: b.session.sessionName.toLowerCase();
+						: b.type === 'named'
+							? b.session.sessionName.toLowerCase()
+							: '';
 				return nameA.localeCompare(nameB);
 			});
 
@@ -345,17 +439,21 @@ export function TabSwitcherModal({
 				const nameA =
 					a.type === 'open'
 						? getTabDisplayName(a.tab).toLowerCase()
-						: a.session.sessionName.toLowerCase();
+						: a.type === 'named'
+							? a.session.sessionName.toLowerCase()
+							: '';
 				const nameB =
 					b.type === 'open'
 						? getTabDisplayName(b.tab).toLowerCase()
-						: b.session.sessionName.toLowerCase();
+						: b.type === 'named'
+							? b.session.sessionName.toLowerCase()
+							: '';
 				return nameA.localeCompare(nameB);
 			});
 
 			return items;
 		}
-	}, [viewMode, tabs, namedSessions, openTabSessionIds, projectRoot]);
+	}, [viewMode, tabs, fileTabs, namedSessions, openTabSessionIds, projectRoot]);
 
 	// Filter items based on search query
 	const filteredItems = useMemo(() => {
@@ -366,21 +464,25 @@ export function TabSwitcherModal({
 		// Fuzzy search
 		const results = listItems.map((item) => {
 			let displayName: string;
-			let uuid: string;
+			let searchableId: string;
 
 			if (item.type === 'open') {
 				displayName = getTabDisplayName(item.tab);
-				uuid = item.tab.agentSessionId || '';
+				searchableId = item.tab.agentSessionId || '';
+			} else if (item.type === 'file') {
+				// For file tabs, search by name and extension
+				displayName = item.tab.name;
+				searchableId = item.tab.extension + ' ' + item.tab.path;
 			} else {
 				displayName = item.session.sessionName;
-				uuid = item.session.agentSessionId;
+				searchableId = item.session.agentSessionId;
 			}
 
 			const nameResult = fuzzyMatchWithScore(displayName, search);
-			const uuidResult = fuzzyMatchWithScore(uuid, search);
+			const idResult = fuzzyMatchWithScore(searchableId, search);
 
-			const bestScore = Math.max(nameResult.score, uuidResult.score);
-			const matches = nameResult.matches || uuidResult.matches;
+			const bestScore = Math.max(nameResult.score, idResult.score);
+			const matches = nameResult.matches || idResult.matches;
 
 			return { item, score: bestScore, matches };
 		});
@@ -398,6 +500,8 @@ export function TabSwitcherModal({
 			if (item) {
 				if (item.type === 'open') {
 					onTabSelect(item.tab.id);
+				} else if (item.type === 'file') {
+					onFileTabSelect?.(item.tab.id);
 				} else {
 					onNamedSessionSelect(
 						item.session.agentSessionId,
@@ -409,7 +513,7 @@ export function TabSwitcherModal({
 				onClose();
 			}
 		},
-		[filteredItems, onTabSelect, onNamedSessionSelect, onClose]
+		[filteredItems, onTabSelect, onFileTabSelect, onNamedSessionSelect, onClose]
 	);
 
 	// Use the list navigation hook for keyboard navigation
@@ -528,7 +632,7 @@ export function TabSwitcherModal({
 							color: viewMode === 'open' ? theme.colors.accentForeground : theme.colors.textDim,
 						}}
 					>
-						Open Tabs ({tabs.length})
+						Open Tabs ({tabs.length + fileTabs.length})
 					</button>
 					<button
 						onClick={() => setViewMode('all-named')}
@@ -688,6 +792,97 @@ export function TabSwitcherModal({
 											<ContextGauge percentage={contextPct} theme={theme} />
 										</div>
 									)}
+								</button>
+							);
+						} else if (item.type === 'file') {
+							// File preview tab
+							const { tab } = item;
+							const isActive = tab.id === activeFileTabId;
+							const extColors = getExtensionColor(tab.extension, theme, colorBlindMode);
+							const hasUnsavedEdits = !!tab.editContent;
+
+							return (
+								<button
+									key={tab.id}
+									ref={isSelected ? selectedItemRef : null}
+									onClick={() => handleSelectByIndex(i)}
+									className="w-full text-left px-4 py-3 flex items-center gap-3 hover:bg-opacity-10"
+									style={{
+										backgroundColor: isSelected ? theme.colors.accent : 'transparent',
+										color: isSelected ? theme.colors.accentForeground : theme.colors.textMain,
+									}}
+								>
+									{/* Number Badge */}
+									{showNumber ? (
+										<div
+											className="flex-shrink-0 w-5 h-5 rounded flex items-center justify-center text-xs font-bold"
+											style={{ backgroundColor: theme.colors.bgMain, color: theme.colors.textDim }}
+										>
+											{numberBadge}
+										</div>
+									) : (
+										<div className="flex-shrink-0 w-5 h-5" />
+									)}
+
+									{/* File Icon - shows active indicator or file icon */}
+									<div className="flex-shrink-0 w-4 h-4 flex items-center justify-center">
+										{isActive ? (
+											<div
+												className="w-2 h-2 rounded-full"
+												style={{ backgroundColor: theme.colors.success }}
+											/>
+										) : (
+											<FileText
+												className="w-3.5 h-3.5"
+												style={{ color: theme.colors.textDim }}
+											/>
+										)}
+									</div>
+
+									{/* File Info */}
+									<div className="flex flex-col flex-1 min-w-0">
+										<div className="flex items-center gap-2">
+											<span className="font-medium truncate">{tab.name}</span>
+											{/* Extension badge - uppercase without leading dot */}
+											<span
+												className="text-[9px] px-1 py-0.5 rounded font-semibold uppercase flex-shrink-0"
+												style={{
+													backgroundColor: isSelected
+														? 'rgba(255,255,255,0.2)'
+														: extColors.bg,
+													color: isSelected
+														? theme.colors.accentForeground
+														: extColors.text,
+												}}
+											>
+												{tab.extension.replace(/^\./, '').toUpperCase()}
+											</span>
+											{/* Unsaved indicator */}
+											{hasUnsavedEdits && (
+												<span
+													className="text-[10px] opacity-80"
+													style={{ color: theme.colors.warning }}
+												>
+													●
+												</span>
+											)}
+										</div>
+										{/* File path (truncated) */}
+										<div className="flex items-center gap-3 text-[10px] opacity-60 truncate">
+											<span className="truncate">{tab.path}</span>
+										</div>
+									</div>
+
+									{/* File indicator instead of gauge */}
+									<div
+										className="flex-shrink-0 text-[10px] px-2 py-1 rounded"
+										style={{
+											backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : theme.colors.bgMain,
+											color: isSelected ? theme.colors.accentForeground : theme.colors.textDim,
+										}}
+									>
+										File
+									</div>
 								</button>
 							);
 						} else {

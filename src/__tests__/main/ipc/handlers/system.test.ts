@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 	},
 	shell: {
 		openExternal: vi.fn(),
+		showItemInFolder: vi.fn(),
 	},
 	BrowserWindow: {
 		getFocusedWindow: vi.fn(),
@@ -210,6 +211,7 @@ describe('system IPC handlers', () => {
 				'shells:detect',
 				'shell:openExternal',
 				'shell:trashItem',
+				'shell:showItemInFolder',
 				// Tunnel handlers
 				'tunnel:isCloudflaredInstalled',
 				'tunnel:start',
@@ -510,6 +512,32 @@ describe('system IPC handlers', () => {
 			await handler!({} as any, 'mailto:test@example.com');
 
 			expect(shell.openExternal).toHaveBeenCalledWith('mailto:test@example.com');
+		});
+	});
+
+	describe('shell:showItemInFolder', () => {
+		it('should reveal file in system file manager', async () => {
+			// Mock existsSync to return true
+			vi.mocked(fsSync.existsSync).mockReturnValue(true);
+
+			const handler = handlers.get('shell:showItemInFolder');
+			await handler!({} as any, '/path/to/file.txt');
+
+			expect(shell.showItemInFolder).toHaveBeenCalledWith('/path/to/file.txt');
+		});
+
+		it('should throw error for empty path', async () => {
+			const handler = handlers.get('shell:showItemInFolder');
+
+			await expect(handler!({} as any, '')).rejects.toThrow('Invalid path');
+		});
+
+		it('should throw error for non-existent path', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(false);
+
+			const handler = handlers.get('shell:showItemInFolder');
+
+			await expect(handler!({} as any, '/non/existent/path')).rejects.toThrow('Path does not exist');
 		});
 	});
 

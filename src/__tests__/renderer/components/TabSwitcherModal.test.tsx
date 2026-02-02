@@ -22,6 +22,7 @@ import type { Theme, AITab } from '../../../renderer/types';
 vi.mock('lucide-react', () => ({
 	Search: () => <svg data-testid="search-icon" />,
 	Star: () => <svg data-testid="star-icon" />,
+	FileText: () => <svg data-testid="file-text-icon" />,
 }));
 
 // Create a test theme
@@ -2102,6 +2103,263 @@ describe('TabSwitcherModal', () => {
 
 			// In All Named mode, footer shows "sessions"
 			expect(screen.getByText('1 sessions')).toBeInTheDocument();
+		});
+	});
+
+	describe('file tab support', () => {
+		// Helper to create a test file tab
+		const createTestFileTab = (overrides: Partial<import('../../../renderer/types').FilePreviewTab> = {}) => ({
+			id: `file-tab-${Math.random().toString(36).substr(2, 9)}`,
+			path: '/test/project/src/example.ts',
+			name: 'example',
+			extension: '.ts',
+			content: 'export const example = 1;',
+			scrollTop: 0,
+			searchQuery: '',
+			editMode: false,
+			editContent: undefined,
+			createdAt: Date.now(),
+			lastModified: Date.now(),
+			...overrides,
+		});
+
+		it('includes file tabs in Open Tabs count', () => {
+			const aiTabs = [createTestTab({ name: 'AI Tab' })];
+			const fileTabs = [
+				createTestFileTab({ name: 'file1', extension: '.ts' }),
+				createTestFileTab({ name: 'file2', extension: '.md' }),
+			];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={aiTabs}
+					fileTabs={fileTabs}
+					activeTabId={aiTabs[0].id}
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			// Should show 3 total tabs (1 AI + 2 file)
+			expect(screen.getByText('Open Tabs (3)')).toBeInTheDocument();
+		});
+
+		it('renders file tabs with extension badge', () => {
+			const fileTabs = [createTestFileTab({ name: 'example', extension: '.ts' })];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			expect(screen.getByText('example')).toBeInTheDocument();
+			expect(screen.getByText('TS')).toBeInTheDocument(); // Extension badge: uppercase, no leading dot
+			expect(screen.getByText('File')).toBeInTheDocument();
+		});
+
+		it('calls onFileTabSelect when clicking a file tab', () => {
+			const fileTabs = [createTestFileTab({ name: 'myfile' })];
+			const onFileTabSelect = vi.fn();
+			const onClose = vi.fn();
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onFileTabSelect={onFileTabSelect}
+					onNamedSessionSelect={vi.fn()}
+					onClose={onClose}
+				/>
+			);
+
+			fireEvent.click(screen.getByText('myfile'));
+
+			expect(onFileTabSelect).toHaveBeenCalledWith(fileTabs[0].id);
+			expect(onClose).toHaveBeenCalled();
+		});
+
+		it('filters file tabs by search query', () => {
+			const fileTabs = [
+				createTestFileTab({ name: 'component', extension: '.tsx' }),
+				createTestFileTab({ name: 'utils', extension: '.ts' }),
+			];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			const input = screen.getByPlaceholderText('Search open tabs...');
+			fireEvent.change(input, { target: { value: 'component' } });
+
+			expect(screen.getByText('component')).toBeInTheDocument();
+			expect(screen.queryByText('utils')).not.toBeInTheDocument();
+		});
+
+		it('shows unsaved indicator for file tabs with edits', () => {
+			const fileTabs = [
+				createTestFileTab({ name: 'unsaved', editContent: 'some edited content' }),
+			];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			// Unsaved indicator should be shown
+			expect(screen.getByText('●')).toBeInTheDocument();
+		});
+
+		it('shows active indicator for active file tab', () => {
+			const fileTabs = [createTestFileTab({ id: 'active-file-tab' })];
+
+			const { container } = renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					activeFileTabId="active-file-tab"
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			// Active file tab should show a green dot instead of file icon
+			const dots = container.querySelectorAll('.w-2.h-2.rounded-full');
+			const greenDot = Array.from(dots).find((d) => {
+				const style = d.getAttribute('style') || '';
+				return style.includes('rgb(137, 209, 133)') || style.includes(theme.colors.success);
+			});
+			expect(greenDot).toBeTruthy();
+		});
+
+		it('sorts file tabs alphabetically with AI tabs', () => {
+			const aiTabs = [createTestTab({ name: 'Beta AI' })];
+			const fileTabs = [
+				createTestFileTab({ name: 'Zeta' }),
+				createTestFileTab({ name: 'Alpha' }),
+			];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={aiTabs}
+					fileTabs={fileTabs}
+					activeTabId={aiTabs[0].id}
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			const buttons = screen
+				.getAllByRole('button')
+				.filter(
+					(b) =>
+						b.textContent?.includes('Alpha') ||
+						b.textContent?.includes('Beta AI') ||
+						b.textContent?.includes('Zeta')
+				);
+
+			// Should be sorted: Alpha (file), Beta AI (ai), Zeta (file)
+			expect(buttons[0]).toHaveTextContent('Alpha');
+			expect(buttons[1]).toHaveTextContent('Beta AI');
+			expect(buttons[2]).toHaveTextContent('Zeta');
+		});
+
+		it('shows file extension badge for non-selected file tabs', () => {
+			// Create two file tabs - the second one won't be selected by default
+			const fileTabs = [
+				createTestFileTab({ name: 'aaa', extension: '.ts' }),
+				createTestFileTab({ name: 'readme', extension: '.md' }),
+			];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			// Extension badges should be uppercase without leading dot
+			const mdBadge = screen.getByText('MD');
+			expect(mdBadge).toBeInTheDocument();
+
+			const tsBadge = screen.getByText('TS');
+			expect(tsBadge).toBeInTheDocument();
+
+			// Check second file tab's (readme.md) extension has green-ish color
+			// (first item is selected, so it has a different color)
+			const mdStyle = mdBadge.getAttribute('style') || '';
+			expect(mdStyle).toContain('background-color');
+			// Green color for markdown files
+			expect(mdStyle).toMatch(/34,\s*197,\s*94/);
+		});
+
+		it('renders file path in file tab item', () => {
+			const fileTabs = [
+				createTestFileTab({
+					name: 'example',
+					extension: '.ts',
+					path: '/project/src/components/example.ts',
+				}),
+			];
+
+			renderWithLayerStack(
+				<TabSwitcherModal
+					theme={theme}
+					tabs={[]}
+					fileTabs={fileTabs}
+					activeTabId=""
+					projectRoot="/test"
+					onTabSelect={vi.fn()}
+					onNamedSessionSelect={vi.fn()}
+					onClose={vi.fn()}
+				/>
+			);
+
+			expect(screen.getByText('/project/src/components/example.ts')).toBeInTheDocument();
 		});
 	});
 });

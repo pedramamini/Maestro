@@ -617,10 +617,10 @@ describe('SettingsModal', () => {
 		});
 	});
 
-	describe('Display tab - Log level buttons', () => {
+	describe('General tab - Log level buttons', () => {
 		it('should call setLogLevel with debug', async () => {
 			const setLogLevel = vi.fn();
-			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'display' })} />);
+			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'general' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -632,7 +632,7 @@ describe('SettingsModal', () => {
 
 		it('should call setLogLevel with info', async () => {
 			const setLogLevel = vi.fn();
-			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'display' })} />);
+			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'general' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -644,7 +644,7 @@ describe('SettingsModal', () => {
 
 		it('should call setLogLevel with warn', async () => {
 			const setLogLevel = vi.fn();
-			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'display' })} />);
+			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'general' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -656,7 +656,7 @@ describe('SettingsModal', () => {
 
 		it('should call setLogLevel with error', async () => {
 			const setLogLevel = vi.fn();
-			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'display' })} />);
+			render(<SettingsModal {...createDefaultProps({ setLogLevel, initialTab: 'general' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);

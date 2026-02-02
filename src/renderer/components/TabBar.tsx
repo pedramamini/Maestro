@@ -18,9 +18,12 @@ import {
 	ChevronsLeft,
 	ChevronsRight,
 	Loader2,
+	ExternalLink,
+	FolderOpen,
 } from 'lucide-react';
-import type { AITab, Theme } from '../types';
+import type { AITab, Theme, FilePreviewTab, UnifiedTab } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
+import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
 
 interface TabBarProps {
 	tabs: AITab[];
@@ -31,6 +34,8 @@ interface TabBarProps {
 	onNewTab: () => void;
 	onRequestRename?: (tabId: string) => void;
 	onTabReorder?: (fromIndex: number, toIndex: number) => void;
+	/** Handler to reorder tabs in unified tab order (AI + file tabs) */
+	onUnifiedTabReorder?: (fromIndex: number, toIndex: number) => void;
 	onTabStar?: (tabId: string, starred: boolean) => void;
 	onTabMarkUnread?: (tabId: string) => void;
 	/** Handler to open merge session modal with this tab as source */
@@ -58,6 +63,20 @@ interface TabBarProps {
 	onCloseTabsLeft?: () => void;
 	/** Handler to close tabs to the right of active tab */
 	onCloseTabsRight?: () => void;
+
+	// === Unified Tab System Props (Phase 3) ===
+	/** Merged ordered list of AI and file preview tabs for unified rendering */
+	unifiedTabs?: UnifiedTab[];
+	/** Currently active file tab ID (null if an AI tab is active) */
+	activeFileTabId?: string | null;
+	/** Handler to select a file preview tab */
+	onFileTabSelect?: (tabId: string) => void;
+	/** Handler to close a file preview tab */
+	onFileTabClose?: (tabId: string) => void;
+
+	// === Accessibility ===
+	/** Whether colorblind-friendly colors should be used for extension badges */
+	colorBlindMode?: boolean;
 }
 
 interface TabProps {
@@ -461,6 +480,9 @@ const Tab = memo(function Tab({
 	// Memoize display name to avoid recalculation on every render
 	const displayName = useMemo(() => getTabDisplayName(tab), [tab.name, tab.agentSessionId]);
 
+	// Hover background varies by theme mode for proper contrast
+	const hoverBgColor = theme.mode === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.08)';
+
 	// Memoize tab styles to avoid creating new object references on every render
 	const tabStyle = useMemo(
 		() =>
@@ -470,11 +492,7 @@ const Tab = memo(function Tab({
 				borderTopRightRadius: '6px',
 				// Active tab: bright background matching content area
 				// Inactive tabs: transparent with subtle hover
-				backgroundColor: isActive
-					? theme.colors.bgMain
-					: isHovered
-						? 'rgba(255, 255, 255, 0.08)'
-						: 'transparent',
+				backgroundColor: isActive ? theme.colors.bgMain : isHovered ? hoverBgColor : 'transparent',
 				// Active tab has visible borders, inactive tabs have no borders (cleaner look)
 				borderTop: isActive ? `1px solid ${theme.colors.border}` : '1px solid transparent',
 				borderLeft: isActive ? `1px solid ${theme.colors.border}` : '1px solid transparent',
@@ -487,7 +505,7 @@ const Tab = memo(function Tab({
 				zIndex: isActive ? 1 : 0,
 				'--tw-ring-color': isDragOver ? theme.colors.accent : 'transparent',
 			}) as React.CSSProperties,
-		[isActive, isHovered, isDragOver, theme.colors.bgMain, theme.colors.border, theme.colors.accent]
+		[isActive, isHovered, isDragOver, theme.colors.bgMain, theme.colors.border, theme.colors.accent, hoverBgColor]
 	);
 
 	// Browser-style tab: all tabs have borders, active tab "connects" to content
@@ -893,6 +911,643 @@ const Tab = memo(function Tab({
 });
 
 /**
+ * Props for the FileTab component.
+ * Similar to TabProps but tailored for file preview tabs.
+ */
+interface FileTabProps {
+	tab: FilePreviewTab;
+	isActive: boolean;
+	theme: Theme;
+	/** Stable callback - receives tabId as first argument */
+	onSelect: (tabId: string) => void;
+	/** Stable callback - receives tabId as first argument */
+	onClose: (tabId: string) => void;
+	/** Stable callback - receives tabId and event */
+	onDragStart: (tabId: string, e: React.DragEvent) => void;
+	/** Stable callback - receives tabId and event */
+	onDragOver: (tabId: string, e: React.DragEvent) => void;
+	onDragEnd: () => void;
+	/** Stable callback - receives tabId and event */
+	onDrop: (tabId: string, e: React.DragEvent) => void;
+	isDragging: boolean;
+	isDragOver: boolean;
+	registerRef?: (el: HTMLDivElement | null) => void;
+	/** Stable callback - receives tabId */
+	onMoveToFirst?: (tabId: string) => void;
+	/** Stable callback - receives tabId */
+	onMoveToLast?: (tabId: string) => void;
+	/** Is this the first tab? */
+	isFirstTab?: boolean;
+	/** Is this the last tab? */
+	isLastTab?: boolean;
+	/** Stable callback - receives tabId - closes all tabs except this one */
+	onCloseOtherTabs?: (tabId: string) => void;
+	/** Stable callback - receives tabId - closes tabs to the left */
+	onCloseTabsLeft?: (tabId: string) => void;
+	/** Stable callback - receives tabId - closes tabs to the right */
+	onCloseTabsRight?: (tabId: string) => void;
+	/** Total number of unified tabs */
+	totalTabs?: number;
+	/** Tab index in the full unified list (0-based) */
+	tabIndex?: number;
+	/** Whether colorblind-friendly colors should be used for extension badges */
+	colorBlindMode?: boolean;
+}
+
+/**
+ * Get color for file extension badge.
+ * Returns a muted color based on file type for visual differentiation.
+ * Colors are adapted for both light and dark themes for good contrast.
+ * When colorBlindMode is enabled, uses Wong's colorblind-safe palette.
+ */
+function getExtensionColor(
+	extension: string,
+	theme: Theme,
+	colorBlindMode?: boolean
+): { bg: string; text: string } {
+	const isLightTheme = theme.mode === 'light';
+
+	// Use colorblind-safe colors when enabled
+	if (colorBlindMode) {
+		const colorBlindColors = getColorBlindExtensionColor(extension, isLightTheme);
+		if (colorBlindColors) {
+			return colorBlindColors;
+		}
+		// Fall through to default for unknown extensions
+		return { bg: theme.colors.border, text: theme.colors.textDim };
+	}
+
+	// Standard color scheme
+	const ext = extension.toLowerCase();
+
+	// TypeScript/JavaScript - blue tones
+	if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(37, 99, 235, 0.15)', text: 'rgba(29, 78, 216, 0.9)' }
+			: { bg: 'rgba(59, 130, 246, 0.3)', text: 'rgba(147, 197, 253, 0.9)' };
+	}
+	// Markdown/Docs - green tones
+	if (['.md', '.mdx', '.txt', '.rst'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(22, 163, 74, 0.15)', text: 'rgba(21, 128, 61, 0.9)' }
+			: { bg: 'rgba(34, 197, 94, 0.3)', text: 'rgba(134, 239, 172, 0.9)' };
+	}
+	// JSON/Config - yellow/amber tones
+	if (['.json', '.yaml', '.yml', '.toml', '.ini', '.env'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(217, 119, 6, 0.15)', text: 'rgba(180, 83, 9, 0.9)' }
+			: { bg: 'rgba(234, 179, 8, 0.3)', text: 'rgba(253, 224, 71, 0.9)' };
+	}
+	// CSS/Styles - purple tones
+	if (['.css', '.scss', '.sass', '.less', '.styl'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(147, 51, 234, 0.15)', text: 'rgba(126, 34, 206, 0.9)' }
+			: { bg: 'rgba(168, 85, 247, 0.3)', text: 'rgba(216, 180, 254, 0.9)' };
+	}
+	// HTML/Templates - orange tones
+	if (['.html', '.htm', '.xml', '.svg'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(234, 88, 12, 0.15)', text: 'rgba(194, 65, 12, 0.9)' }
+			: { bg: 'rgba(249, 115, 22, 0.3)', text: 'rgba(253, 186, 116, 0.9)' };
+	}
+	// Python - teal/cyan tones
+	if (['.py', '.pyw', '.pyi'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(13, 148, 136, 0.15)', text: 'rgba(15, 118, 110, 0.9)' }
+			: { bg: 'rgba(20, 184, 166, 0.3)', text: 'rgba(94, 234, 212, 0.9)' };
+	}
+	// Rust - rust/orange-red tones
+	if (['.rs'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(185, 28, 28, 0.15)', text: 'rgba(153, 27, 27, 0.9)' }
+			: { bg: 'rgba(239, 68, 68, 0.3)', text: 'rgba(252, 165, 165, 0.9)' };
+	}
+	// Go - cyan tones
+	if (['.go'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(8, 145, 178, 0.15)', text: 'rgba(14, 116, 144, 0.9)' }
+			: { bg: 'rgba(6, 182, 212, 0.3)', text: 'rgba(103, 232, 249, 0.9)' };
+	}
+	// Shell scripts - gray/slate tones
+	if (['.sh', '.bash', '.zsh', '.fish'].includes(ext)) {
+		return isLightTheme
+			? { bg: 'rgba(71, 85, 105, 0.15)', text: 'rgba(51, 65, 85, 0.9)' }
+			: { bg: 'rgba(100, 116, 139, 0.3)', text: 'rgba(203, 213, 225, 0.9)' };
+	}
+	// Default - use theme's dim colors
+	return { bg: theme.colors.border, text: theme.colors.textDim };
+}
+
+/**
+ * Individual file tab component for file preview tabs.
+ * Similar to AI Tab but with file-specific rendering:
+ * - Shows filename without extension as label
+ * - Displays extension as a colored badge
+ * - Shows pencil icon when tab has unsaved edits
+ * - Includes hover overlay with file-specific actions
+ *
+ * Wrapped with React.memo to prevent unnecessary re-renders when sibling tabs change.
+ */
+const FileTab = memo(function FileTab({
+	tab,
+	isActive,
+	theme,
+	onSelect,
+	onClose,
+	onDragStart,
+	onDragOver,
+	onDragEnd,
+	onDrop,
+	isDragging,
+	isDragOver,
+	registerRef,
+	onMoveToFirst,
+	onMoveToLast,
+	isFirstTab,
+	isLastTab,
+	onCloseOtherTabs,
+	onCloseTabsLeft,
+	onCloseTabsRight,
+	totalTabs,
+	tabIndex,
+	colorBlindMode,
+}: FileTabProps) {
+	const [isHovered, setIsHovered] = useState(false);
+	const [overlayOpen, setOverlayOpen] = useState(false);
+	const [showCopied, setShowCopied] = useState<'path' | 'name' | null>(null);
+	const [overlayPosition, setOverlayPosition] = useState<{
+		top: number;
+		left: number;
+		tabWidth?: number;
+	} | null>(null);
+	const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const tabRef = useRef<HTMLDivElement>(null);
+
+	// Register ref with parent for scroll-into-view functionality
+	const setTabRef = useCallback(
+		(el: HTMLDivElement | null) => {
+			(tabRef as React.MutableRefObject<HTMLDivElement | null>).current = el;
+			registerRef?.(el);
+		},
+		[registerRef]
+	);
+
+	const handleMouseEnter = () => {
+		setIsHovered(true);
+		// Open overlay after delay
+		hoverTimeoutRef.current = setTimeout(() => {
+			// Calculate position for fixed overlay - connect directly to tab bottom
+			if (tabRef.current) {
+				const rect = tabRef.current.getBoundingClientRect();
+				// Position overlay directly at tab bottom (no gap) for connected appearance
+				// Store tab width for connector sizing
+				setOverlayPosition({ top: rect.bottom, left: rect.left, tabWidth: rect.width });
+			}
+			setOverlayOpen(true);
+		}, 400);
+	};
+
+	// Ref to track if mouse is over the overlay
+	const isOverOverlayRef = useRef(false);
+
+	const handleMouseLeave = () => {
+		setIsHovered(false);
+		if (hoverTimeoutRef.current) {
+			clearTimeout(hoverTimeoutRef.current);
+			hoverTimeoutRef.current = null;
+		}
+		// Delay closing overlay to allow mouse to reach it (there's a gap between tab and overlay)
+		hoverTimeoutRef.current = setTimeout(() => {
+			if (!isOverOverlayRef.current) {
+				setOverlayOpen(false);
+			}
+		}, 100);
+	};
+
+	// Event handlers using stable tabId to avoid inline closure captures
+	const handleMouseDown = useCallback(
+		(e: React.MouseEvent) => {
+			// Middle-click to close
+			if (e.button === 1) {
+				e.preventDefault();
+				onClose(tab.id);
+			}
+		},
+		[onClose, tab.id]
+	);
+
+	const handleCloseClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onClose(tab.id);
+		},
+		[onClose, tab.id]
+	);
+
+	// File-specific action handlers
+	const handleCopyFilePath = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			navigator.clipboard.writeText(tab.path);
+			setShowCopied('path');
+			setTimeout(() => setShowCopied(null), 1500);
+		},
+		[tab.path]
+	);
+
+	const handleCopyFileName = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			// Copy filename with extension
+			const fullName = tab.name + tab.extension;
+			navigator.clipboard.writeText(fullName);
+			setShowCopied('name');
+			setTimeout(() => setShowCopied(null), 1500);
+		},
+		[tab.name, tab.extension]
+	);
+
+	const handleOpenInDefaultApp = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			window.maestro?.shell?.openExternal(`file://${tab.path}`);
+			setOverlayOpen(false);
+		},
+		[tab.path]
+	);
+
+	const handleRevealInFinder = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			window.maestro?.shell?.showItemInFolder(tab.path);
+			setOverlayOpen(false);
+		},
+		[tab.path]
+	);
+
+	const handleMoveToFirstClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onMoveToFirst?.(tab.id);
+			setOverlayOpen(false);
+		},
+		[onMoveToFirst, tab.id]
+	);
+
+	const handleMoveToLastClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onMoveToLast?.(tab.id);
+			setOverlayOpen(false);
+		},
+		[onMoveToLast, tab.id]
+	);
+
+	const handleCloseTabClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onClose(tab.id);
+			setOverlayOpen(false);
+		},
+		[onClose, tab.id]
+	);
+
+	const handleCloseOtherTabsClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onCloseOtherTabs?.(tab.id);
+			setOverlayOpen(false);
+		},
+		[onCloseOtherTabs, tab.id]
+	);
+
+	const handleCloseTabsLeftClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onCloseTabsLeft?.(tab.id);
+			setOverlayOpen(false);
+		},
+		[onCloseTabsLeft, tab.id]
+	);
+
+	const handleCloseTabsRightClick = useCallback(
+		(e: React.MouseEvent) => {
+			e.stopPropagation();
+			onCloseTabsRight?.(tab.id);
+			setOverlayOpen(false);
+		},
+		[onCloseTabsRight, tab.id]
+	);
+
+	// Handlers for drag events using stable tabId
+	const handleTabSelect = useCallback(() => {
+		onSelect(tab.id);
+	}, [onSelect, tab.id]);
+
+	const handleTabDragStart = useCallback(
+		(e: React.DragEvent) => {
+			onDragStart(tab.id, e);
+		},
+		[onDragStart, tab.id]
+	);
+
+	const handleTabDragOver = useCallback(
+		(e: React.DragEvent) => {
+			onDragOver(tab.id, e);
+		},
+		[onDragOver, tab.id]
+	);
+
+	const handleTabDrop = useCallback(
+		(e: React.DragEvent) => {
+			onDrop(tab.id, e);
+		},
+		[onDrop, tab.id]
+	);
+
+	// Get extension badge colors
+	const extensionColors = useMemo(
+		() => getExtensionColor(tab.extension, theme, colorBlindMode),
+		[tab.extension, theme, colorBlindMode]
+	);
+
+	// Hover background varies by theme mode for proper contrast
+	const hoverBgColor = theme.mode === 'light' ? 'rgba(0, 0, 0, 0.06)' : 'rgba(255, 255, 255, 0.08)';
+
+	// Memoize tab styles to avoid creating new object references on every render
+	const tabStyle = useMemo(
+		() =>
+			({
+				// All tabs have rounded top corners
+				borderTopLeftRadius: '6px',
+				borderTopRightRadius: '6px',
+				// Active tab: bright background matching content area
+				// Inactive tabs: transparent with subtle hover
+				backgroundColor: isActive ? theme.colors.bgMain : isHovered ? hoverBgColor : 'transparent',
+				// Active tab has visible borders, inactive tabs have no borders (cleaner look)
+				borderTop: isActive ? `1px solid ${theme.colors.border}` : '1px solid transparent',
+				borderLeft: isActive ? `1px solid ${theme.colors.border}` : '1px solid transparent',
+				borderRight: isActive ? `1px solid ${theme.colors.border}` : '1px solid transparent',
+				// Active tab has no bottom border (connects to content)
+				borderBottom: isActive ? `1px solid ${theme.colors.bgMain}` : '1px solid transparent',
+				// Active tab sits on top of the tab bar's bottom border
+				marginBottom: isActive ? '-1px' : '0',
+				// Slight z-index for active tab to cover border properly
+				zIndex: isActive ? 1 : 0,
+				'--tw-ring-color': isDragOver ? theme.colors.accent : 'transparent',
+			}) as React.CSSProperties,
+		[isActive, isHovered, isDragOver, theme.colors.bgMain, theme.colors.border, theme.colors.accent, hoverBgColor]
+	);
+
+	// Check if tab has unsaved edits
+	const hasUnsavedEdits = tab.editContent !== undefined;
+
+	return (
+		<div
+			ref={setTabRef}
+			data-tab-id={tab.id}
+			className={`
+        relative flex items-center gap-1.5 px-3 py-1.5 cursor-pointer
+        transition-all duration-150 select-none
+        ${isDragging ? 'opacity-50' : ''}
+        ${isDragOver ? 'ring-2 ring-inset' : ''}
+      `}
+			style={tabStyle}
+			onClick={handleTabSelect}
+			onMouseDown={handleMouseDown}
+			onMouseEnter={handleMouseEnter}
+			onMouseLeave={handleMouseLeave}
+			draggable
+			onDragStart={handleTabDragStart}
+			onDragOver={handleTabDragOver}
+			onDragEnd={onDragEnd}
+			onDrop={handleTabDrop}
+		>
+			{/* Unsaved edits indicator - pencil icon */}
+			{hasUnsavedEdits && (
+				<span title="Has unsaved changes">
+					<Pencil className="w-3 h-3 shrink-0" style={{ color: theme.colors.warning }} />
+				</span>
+			)}
+
+			{/* Tab name - filename without extension */}
+			<span
+				className={`text-xs font-medium ${isActive ? 'whitespace-nowrap' : 'truncate max-w-[120px]'}`}
+				style={{ color: isActive ? theme.colors.textMain : theme.colors.textDim }}
+			>
+				{tab.name}
+			</span>
+
+			{/* Extension badge - small rounded pill, uppercase without leading dot */}
+			<span
+				className="px-1 rounded text-[9px] font-semibold uppercase leading-none shrink-0"
+				style={{
+					backgroundColor: extensionColors.bg,
+					color: extensionColors.text,
+					paddingTop: '2px',
+					paddingBottom: '2px',
+				}}
+			>
+				{tab.extension.replace(/^\./, '').toUpperCase()}
+			</span>
+
+			{/* Close button - visible on hover or when active */}
+			{(isHovered || isActive) && (
+				<button
+					onClick={handleCloseClick}
+					className="p-0.5 rounded hover:bg-white/10 transition-colors shrink-0"
+					title="Close tab"
+				>
+					<X className="w-3 h-3" style={{ color: theme.colors.textDim }} />
+				</button>
+			)}
+
+			{/* Hover overlay with file info and actions - rendered via portal to escape stacking context */}
+			{overlayOpen &&
+				overlayPosition &&
+				createPortal(
+					<div
+						className="fixed z-[100]"
+						style={{
+							top: overlayPosition.top,
+							left: overlayPosition.left,
+						}}
+						onClick={(e) => e.stopPropagation()}
+						onMouseEnter={() => {
+							// Keep overlay open when mouse enters it
+							isOverOverlayRef.current = true;
+							if (hoverTimeoutRef.current) {
+								clearTimeout(hoverTimeoutRef.current);
+								hoverTimeoutRef.current = null;
+							}
+						}}
+						onMouseLeave={() => {
+							// Close overlay when mouse leaves it
+							isOverOverlayRef.current = false;
+							setOverlayOpen(false);
+							setIsHovered(false);
+						}}
+					>
+						{/* Main overlay content - connects directly to tab like an open folder */}
+						<div
+							className="shadow-xl overflow-hidden"
+							style={{
+								backgroundColor: theme.colors.bgSidebar,
+								borderLeft: `1px solid ${theme.colors.border}`,
+								borderRight: `1px solid ${theme.colors.border}`,
+								borderBottom: `1px solid ${theme.colors.border}`,
+								borderBottomLeftRadius: '8px',
+								borderBottomRightRadius: '8px',
+								minWidth: '220px',
+							}}
+						>
+							{/* Actions */}
+							<div className="p-1">
+								{/* Copy File Path */}
+								<button
+									onClick={handleCopyFilePath}
+									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+									style={{ color: theme.colors.textMain }}
+									title={tab.path}
+								>
+									<Copy className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+									{showCopied === 'path' ? 'Copied!' : 'Copy File Path'}
+								</button>
+
+								{/* Copy File Name */}
+								<button
+									onClick={handleCopyFileName}
+									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+									style={{ color: theme.colors.textMain }}
+								>
+									<Clipboard className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+									{showCopied === 'name' ? 'Copied!' : 'Copy File Name'}
+								</button>
+
+								{/* Open in Default App */}
+								<button
+									onClick={handleOpenInDefaultApp}
+									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+									style={{ color: theme.colors.textMain }}
+								>
+									<ExternalLink className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+									Open in Default App
+								</button>
+
+								{/* Reveal in Finder */}
+								<button
+									onClick={handleRevealInFinder}
+									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+									style={{ color: theme.colors.textMain }}
+								>
+									<FolderOpen className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+									Reveal in Finder
+								</button>
+
+								{/* Tab Move Actions Section - divider and move options */}
+								{(onMoveToFirst || onMoveToLast) && (
+									<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
+								)}
+
+								{/* Move to First Position - suppressed if already first tab or no handler */}
+								{onMoveToFirst && !isFirstTab && (
+									<button
+										onClick={handleMoveToFirstClick}
+										className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors hover:bg-white/10"
+										style={{ color: theme.colors.textMain }}
+									>
+										<ChevronsLeft className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+										Move to First Position
+									</button>
+								)}
+
+								{/* Move to Last Position - suppressed if already last tab or no handler */}
+								{onMoveToLast && !isLastTab && (
+									<button
+										onClick={handleMoveToLastClick}
+										className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors hover:bg-white/10"
+										style={{ color: theme.colors.textMain }}
+									>
+										<ChevronsRight
+											className="w-3.5 h-3.5"
+											style={{ color: theme.colors.textDim }}
+										/>
+										Move to Last Position
+									</button>
+								)}
+
+								{/* Tab Close Actions Section - divider and close options */}
+								<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
+
+								{/* Close Tab */}
+								<button
+									onClick={handleCloseTabClick}
+									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors hover:bg-white/10"
+									style={{ color: theme.colors.textMain }}
+								>
+									<X className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+									Close Tab
+								</button>
+
+								{/* Close Other Tabs */}
+								{onCloseOtherTabs && (
+									<button
+										onClick={handleCloseOtherTabsClick}
+										className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+											totalTabs === 1 ? 'opacity-40 cursor-default' : 'hover:bg-white/10'
+										}`}
+										style={{ color: theme.colors.textMain }}
+										disabled={totalTabs === 1}
+									>
+										<X className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+										Close Other Tabs
+									</button>
+								)}
+
+								{/* Close Tabs to Left */}
+								{onCloseTabsLeft && (
+									<button
+										onClick={handleCloseTabsLeftClick}
+										className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+											tabIndex === 0 ? 'opacity-40 cursor-default' : 'hover:bg-white/10'
+										}`}
+										style={{ color: theme.colors.textMain }}
+										disabled={tabIndex === 0}
+									>
+										<ChevronsLeft className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+										Close Tabs to Left
+									</button>
+								)}
+
+								{/* Close Tabs to Right */}
+								{onCloseTabsRight && (
+									<button
+										onClick={handleCloseTabsRightClick}
+										className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs transition-colors ${
+											tabIndex === (totalTabs ?? 1) - 1
+												? 'opacity-40 cursor-default'
+												: 'hover:bg-white/10'
+										}`}
+										style={{ color: theme.colors.textMain }}
+										disabled={tabIndex === (totalTabs ?? 1) - 1}
+									>
+										<ChevronsRight
+											className="w-3.5 h-3.5"
+											style={{ color: theme.colors.textDim }}
+										/>
+										Close Tabs to Right
+									</button>
+								)}
+							</div>
+						</div>
+					</div>,
+					document.body
+				)}
+		</div>
+	);
+});
+
+/**
  * TabBar component for displaying AI session tabs.
  * Shows tabs for each Claude Code conversation within a Maestro session.
  * Appears only in AI mode (hidden in terminal mode).
@@ -922,6 +1577,14 @@ function TabBarInner({
 	onCloseOtherTabs,
 	onCloseTabsLeft,
 	onCloseTabsRight,
+	// Unified tab system props (Phase 3)
+	unifiedTabs,
+	activeFileTabId,
+	onFileTabSelect,
+	onFileTabClose,
+	onUnifiedTabReorder,
+	// Accessibility
+	colorBlindMode,
 }: TabBarProps) {
 	const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
 	const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
@@ -964,6 +1627,21 @@ function TabBarInner({
 		? tabs.filter((t) => t.hasUnread || t.id === activeTabId || hasDraft(t))
 		: tabs;
 
+	// When unifiedTabs is provided, filter it similarly for display
+	// File tabs don't have "unread" state, so they only show in filtered mode if active
+	const displayedUnifiedTabs = useMemo(() => {
+		if (!unifiedTabs) return null;
+		if (!showUnreadOnly) return unifiedTabs;
+		// In filter mode: show AI tabs that are unread/active/have drafts, plus file tabs that are active
+		return unifiedTabs.filter((ut) => {
+			if (ut.type === 'ai') {
+				return ut.data.hasUnread || ut.id === activeTabId || hasDraft(ut.data);
+			}
+			// File tabs: only show if active
+			return ut.id === activeFileTabId;
+		});
+	}, [unifiedTabs, showUnreadOnly, activeTabId, activeFileTabId]);
+
 	const handleDragStart = useCallback((tabId: string, e: React.DragEvent) => {
 		e.dataTransfer.effectAllowed = 'move';
 		e.dataTransfer.setData('text/plain', tabId);
@@ -991,19 +1669,30 @@ function TabBarInner({
 			e.preventDefault();
 			const sourceTabId = e.dataTransfer.getData('text/plain');
 
-			if (sourceTabId && sourceTabId !== targetTabId && onTabReorder) {
-				const sourceIndex = tabs.findIndex((t) => t.id === sourceTabId);
-				const targetIndex = tabs.findIndex((t) => t.id === targetTabId);
+			if (sourceTabId && sourceTabId !== targetTabId) {
+				// When unified tabs are used, prefer onUnifiedTabReorder
+				if (unifiedTabs && onUnifiedTabReorder) {
+					const sourceIndex = unifiedTabs.findIndex((ut) => ut.id === sourceTabId);
+					const targetIndex = unifiedTabs.findIndex((ut) => ut.id === targetTabId);
 
-				if (sourceIndex !== -1 && targetIndex !== -1) {
-					onTabReorder(sourceIndex, targetIndex);
+					if (sourceIndex !== -1 && targetIndex !== -1) {
+						onUnifiedTabReorder(sourceIndex, targetIndex);
+					}
+				} else if (onTabReorder) {
+					// Fallback to legacy AI-tab-only reorder
+					const sourceIndex = tabs.findIndex((t) => t.id === sourceTabId);
+					const targetIndex = tabs.findIndex((t) => t.id === targetTabId);
+
+					if (sourceIndex !== -1 && targetIndex !== -1) {
+						onTabReorder(sourceIndex, targetIndex);
+					}
 				}
 			}
 
 			setDraggingTabId(null);
 			setDragOverTabId(null);
 		},
-		[tabs, onTabReorder]
+		[tabs, onTabReorder, unifiedTabs, onUnifiedTabReorder]
 	);
 
 	const handleRenameRequest = useCallback(
@@ -1034,28 +1723,44 @@ function TabBarInner({
 			clearTimeout(timeoutId);
 			window.removeEventListener('resize', checkOverflow);
 		};
-	}, [tabs.length, displayedTabs.length]);
+	}, [tabs.length, displayedTabs.length, unifiedTabs?.length, displayedUnifiedTabs?.length]);
 
 	const handleMoveToFirst = useCallback(
 		(tabId: string) => {
-			// Find the current index in the FULL tabs array (not filtered)
-			const currentIndex = tabs.findIndex((t) => t.id === tabId);
-			if (currentIndex > 0 && onTabReorder) {
-				onTabReorder(currentIndex, 0);
+			// When unified tabs are used, prefer onUnifiedTabReorder
+			if (unifiedTabs && onUnifiedTabReorder) {
+				const currentIndex = unifiedTabs.findIndex((ut) => ut.id === tabId);
+				if (currentIndex > 0) {
+					onUnifiedTabReorder(currentIndex, 0);
+				}
+			} else if (onTabReorder) {
+				// Fallback to legacy AI-tab-only reorder
+				const currentIndex = tabs.findIndex((t) => t.id === tabId);
+				if (currentIndex > 0) {
+					onTabReorder(currentIndex, 0);
+				}
 			}
 		},
-		[tabs, onTabReorder]
+		[tabs, onTabReorder, unifiedTabs, onUnifiedTabReorder]
 	);
 
 	const handleMoveToLast = useCallback(
 		(tabId: string) => {
-			// Find the current index in the FULL tabs array (not filtered)
-			const currentIndex = tabs.findIndex((t) => t.id === tabId);
-			if (currentIndex < tabs.length - 1 && onTabReorder) {
-				onTabReorder(currentIndex, tabs.length - 1);
+			// When unified tabs are used, prefer onUnifiedTabReorder
+			if (unifiedTabs && onUnifiedTabReorder) {
+				const currentIndex = unifiedTabs.findIndex((ut) => ut.id === tabId);
+				if (currentIndex < unifiedTabs.length - 1) {
+					onUnifiedTabReorder(currentIndex, unifiedTabs.length - 1);
+				}
+			} else if (onTabReorder) {
+				// Fallback to legacy AI-tab-only reorder
+				const currentIndex = tabs.findIndex((t) => t.id === tabId);
+				if (currentIndex < tabs.length - 1) {
+					onTabReorder(currentIndex, tabs.length - 1);
+				}
 			}
 		},
-		[tabs, onTabReorder]
+		[tabs, onTabReorder, unifiedTabs, onUnifiedTabReorder]
 	);
 
 	// Stable callback wrappers that receive tabId from the Tab component
@@ -1194,88 +1899,226 @@ function TabBarInner({
 			</div>
 
 			{/* Empty state when filter is on but no unread tabs */}
-			{showUnreadOnly && displayedTabs.length === 0 && (
-				<div
-					className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
-					style={{ color: theme.colors.textDim }}
-				>
-					No unread tabs
-				</div>
-			)}
+			{showUnreadOnly &&
+				(displayedUnifiedTabs ? displayedUnifiedTabs.length === 0 : displayedTabs.length === 0) && (
+					<div
+						className="flex items-center px-3 py-1.5 text-xs italic shrink-0 self-center mb-1"
+						style={{ color: theme.colors.textDim }}
+					>
+						No unread tabs
+					</div>
+				)}
 
 			{/* Tabs with separators between inactive tabs */}
-			{displayedTabs.map((tab, index) => {
-				const isActive = tab.id === activeTabId;
-				const prevTab = index > 0 ? displayedTabs[index - 1] : null;
-				const isPrevActive = prevTab?.id === activeTabId;
-				// Get original index for shortcut hints (Cmd+1-9)
-				const originalIndex = tabs.findIndex((t) => t.id === tab.id);
+			{/* When unifiedTabs is provided, render both AI and file tabs from unified list */}
+			{displayedUnifiedTabs
+				? displayedUnifiedTabs.map((unifiedTab, index) => {
+						// Determine if this tab is active (based on type)
+						// AI tabs are active when: they match activeTabId AND no file tab is selected
+						// File tabs are active when: they match activeFileTabId
+						const isActive =
+							unifiedTab.type === 'ai'
+								? unifiedTab.id === activeTabId && !activeFileTabId
+								: unifiedTab.id === activeFileTabId;
 
-				// Show separator between inactive tabs (not adjacent to active tab)
-				const showSeparator = index > 0 && !isActive && !isPrevActive;
+						// Check previous tab's active state for separator logic
+						const prevUnifiedTab = index > 0 ? displayedUnifiedTabs[index - 1] : null;
+						const isPrevActive = prevUnifiedTab
+							? prevUnifiedTab.type === 'ai'
+								? prevUnifiedTab.id === activeTabId && !activeFileTabId
+								: prevUnifiedTab.id === activeFileTabId
+							: false;
 
-				// Calculate position info for move actions (within FULL tabs array, not filtered)
-				const isFirstTab = originalIndex === 0;
-				const isLastTab = originalIndex === tabs.length - 1;
+						// Get original index in the FULL unified list (not filtered)
+						const originalIndex = unifiedTabs!.findIndex((ut) => ut.id === unifiedTab.id);
 
-				return (
-					<React.Fragment key={tab.id}>
-						{showSeparator && (
-							<div
-								className="w-px h-4 self-center shrink-0"
-								style={{ backgroundColor: theme.colors.border }}
-							/>
-						)}
-						<Tab
-							tab={tab}
-							tabId={tab.id}
-							isActive={isActive}
-							theme={theme}
-							canClose={canClose}
-							onSelect={onTabSelect}
-							onClose={onTabClose}
-							onDragStart={handleDragStart}
-							onDragOver={handleDragOver}
-							onDragEnd={handleDragEnd}
-							onDrop={handleDrop}
-							isDragging={draggingTabId === tab.id}
-							isDragOver={dragOverTabId === tab.id}
-							onRename={handleRenameRequest}
-							onStar={onTabStar && tab.agentSessionId ? handleTabStar : undefined}
-							onMarkUnread={onTabMarkUnread ? handleTabMarkUnread : undefined}
-							onMergeWith={onMergeWith && tab.agentSessionId ? handleTabMergeWith : undefined}
-							onSendToAgent={onSendToAgent && tab.agentSessionId ? handleTabSendToAgent : undefined}
-							onSummarizeAndContinue={
-								onSummarizeAndContinue && (tab.logs?.length ?? 0) >= 5
-									? handleTabSummarizeAndContinue
-									: undefined
-							}
-							onCopyContext={
-								onCopyContext && (tab.logs?.length ?? 0) >= 1 ? handleTabCopyContext : undefined
-							}
-							onExportHtml={onExportHtml ? handleTabExportHtml : undefined}
-							onPublishGist={
-								onPublishGist && ghCliAvailable && (tab.logs?.length ?? 0) >= 1
-									? handleTabPublishGist
-									: undefined
-							}
-							onMoveToFirst={!isFirstTab && onTabReorder ? handleMoveToFirst : undefined}
-							onMoveToLast={!isLastTab && onTabReorder ? handleMoveToLast : undefined}
-							isFirstTab={isFirstTab}
-							isLastTab={isLastTab}
-							shortcutHint={!showUnreadOnly && originalIndex < 9 ? originalIndex + 1 : null}
-							hasDraft={hasDraft(tab)}
-							registerRef={(el) => registerTabRef(tab.id, el)}
-							onCloseAllTabs={onCloseAllTabs}
-							onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
-							onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
-							onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
-							totalTabs={tabs.length}
-							tabIndex={originalIndex}
-						/>
-					</React.Fragment>
-				);
-			})}
+						// Show separator between inactive tabs
+						const showSeparator = index > 0 && !isActive && !isPrevActive;
+
+						// Position info for move actions
+						const isFirstTab = originalIndex === 0;
+						const isLastTab = originalIndex === unifiedTabs!.length - 1;
+
+						if (unifiedTab.type === 'ai') {
+							const tab = unifiedTab.data;
+							return (
+								<React.Fragment key={unifiedTab.id}>
+									{showSeparator && (
+										<div
+											className="w-px h-4 self-center shrink-0"
+											style={{ backgroundColor: theme.colors.border }}
+										/>
+									)}
+									<Tab
+										tab={tab}
+										tabId={tab.id}
+										isActive={isActive}
+										theme={theme}
+										canClose={canClose}
+										onSelect={onTabSelect}
+										onClose={onTabClose}
+										onDragStart={handleDragStart}
+										onDragOver={handleDragOver}
+										onDragEnd={handleDragEnd}
+										onDrop={handleDrop}
+										isDragging={draggingTabId === tab.id}
+										isDragOver={dragOverTabId === tab.id}
+										onRename={handleRenameRequest}
+										onStar={onTabStar && tab.agentSessionId ? handleTabStar : undefined}
+										onMarkUnread={onTabMarkUnread ? handleTabMarkUnread : undefined}
+										onMergeWith={onMergeWith && tab.agentSessionId ? handleTabMergeWith : undefined}
+										onSendToAgent={
+											onSendToAgent && tab.agentSessionId ? handleTabSendToAgent : undefined
+										}
+										onSummarizeAndContinue={
+											onSummarizeAndContinue && (tab.logs?.length ?? 0) >= 5
+												? handleTabSummarizeAndContinue
+												: undefined
+										}
+										onCopyContext={
+											onCopyContext && (tab.logs?.length ?? 0) >= 1
+												? handleTabCopyContext
+												: undefined
+										}
+										onExportHtml={onExportHtml ? handleTabExportHtml : undefined}
+										onPublishGist={
+											onPublishGist && ghCliAvailable && (tab.logs?.length ?? 0) >= 1
+												? handleTabPublishGist
+												: undefined
+										}
+										onMoveToFirst={!isFirstTab && onUnifiedTabReorder ? handleMoveToFirst : undefined}
+										onMoveToLast={!isLastTab && onUnifiedTabReorder ? handleMoveToLast : undefined}
+										isFirstTab={isFirstTab}
+										isLastTab={isLastTab}
+										shortcutHint={!showUnreadOnly && originalIndex < 9 ? originalIndex + 1 : null}
+										hasDraft={hasDraft(tab)}
+										registerRef={(el) => registerTabRef(tab.id, el)}
+										onCloseAllTabs={onCloseAllTabs}
+										onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
+										onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
+										onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
+										totalTabs={unifiedTabs!.length}
+										tabIndex={originalIndex}
+									/>
+								</React.Fragment>
+							);
+						} else {
+							// File tab
+							const fileTab = unifiedTab.data;
+							return (
+								<React.Fragment key={unifiedTab.id}>
+									{showSeparator && (
+										<div
+											className="w-px h-4 self-center shrink-0"
+											style={{ backgroundColor: theme.colors.border }}
+										/>
+									)}
+									<FileTab
+										tab={fileTab}
+										isActive={isActive}
+										theme={theme}
+										onSelect={onFileTabSelect || (() => {})}
+										onClose={onFileTabClose || (() => {})}
+										onDragStart={handleDragStart}
+										onDragOver={handleDragOver}
+										onDragEnd={handleDragEnd}
+										onDrop={handleDrop}
+										isDragging={draggingTabId === fileTab.id}
+										isDragOver={dragOverTabId === fileTab.id}
+										registerRef={(el) => registerTabRef(fileTab.id, el)}
+										onMoveToFirst={!isFirstTab && onUnifiedTabReorder ? handleMoveToFirst : undefined}
+										onMoveToLast={!isLastTab && onUnifiedTabReorder ? handleMoveToLast : undefined}
+										isFirstTab={isFirstTab}
+										isLastTab={isLastTab}
+										onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
+										onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
+										onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
+										totalTabs={unifiedTabs!.length}
+										tabIndex={originalIndex}
+										colorBlindMode={colorBlindMode}
+									/>
+								</React.Fragment>
+							);
+						}
+					})
+				: // Fallback: render AI tabs only (legacy mode when unifiedTabs not provided)
+					displayedTabs.map((tab, index) => {
+						// AI tabs are active when: they match activeTabId AND no file tab is selected
+						const isActive = tab.id === activeTabId && !activeFileTabId;
+						const prevTab = index > 0 ? displayedTabs[index - 1] : null;
+						const isPrevActive = prevTab?.id === activeTabId && !activeFileTabId;
+						// Get original index for shortcut hints (Cmd+1-9)
+						const originalIndex = tabs.findIndex((t) => t.id === tab.id);
+
+						// Show separator between inactive tabs (not adjacent to active tab)
+						const showSeparator = index > 0 && !isActive && !isPrevActive;
+
+						// Calculate position info for move actions (within FULL tabs array, not filtered)
+						const isFirstTab = originalIndex === 0;
+						const isLastTab = originalIndex === tabs.length - 1;
+
+						return (
+							<React.Fragment key={tab.id}>
+								{showSeparator && (
+									<div
+										className="w-px h-4 self-center shrink-0"
+										style={{ backgroundColor: theme.colors.border }}
+									/>
+								)}
+								<Tab
+									tab={tab}
+									tabId={tab.id}
+									isActive={isActive}
+									theme={theme}
+									canClose={canClose}
+									onSelect={onTabSelect}
+									onClose={onTabClose}
+									onDragStart={handleDragStart}
+									onDragOver={handleDragOver}
+									onDragEnd={handleDragEnd}
+									onDrop={handleDrop}
+									isDragging={draggingTabId === tab.id}
+									isDragOver={dragOverTabId === tab.id}
+									onRename={handleRenameRequest}
+									onStar={onTabStar && tab.agentSessionId ? handleTabStar : undefined}
+									onMarkUnread={onTabMarkUnread ? handleTabMarkUnread : undefined}
+									onMergeWith={onMergeWith && tab.agentSessionId ? handleTabMergeWith : undefined}
+									onSendToAgent={
+										onSendToAgent && tab.agentSessionId ? handleTabSendToAgent : undefined
+									}
+									onSummarizeAndContinue={
+										onSummarizeAndContinue && (tab.logs?.length ?? 0) >= 5
+											? handleTabSummarizeAndContinue
+											: undefined
+									}
+									onCopyContext={
+										onCopyContext && (tab.logs?.length ?? 0) >= 1
+											? handleTabCopyContext
+											: undefined
+									}
+									onExportHtml={onExportHtml ? handleTabExportHtml : undefined}
+									onPublishGist={
+										onPublishGist && ghCliAvailable && (tab.logs?.length ?? 0) >= 1
+											? handleTabPublishGist
+											: undefined
+									}
+									onMoveToFirst={!isFirstTab && onTabReorder ? handleMoveToFirst : undefined}
+									onMoveToLast={!isLastTab && onTabReorder ? handleMoveToLast : undefined}
+									isFirstTab={isFirstTab}
+									isLastTab={isLastTab}
+									shortcutHint={!showUnreadOnly && originalIndex < 9 ? originalIndex + 1 : null}
+									hasDraft={hasDraft(tab)}
+									registerRef={(el) => registerTabRef(tab.id, el)}
+									onCloseAllTabs={onCloseAllTabs}
+									onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
+									onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
+									onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
+									totalTabs={tabs.length}
+									tabIndex={originalIndex}
+								/>
+							</React.Fragment>
+						);
+					})}
 
 			{/* New Tab Button - sticky on right when tabs overflow, with full-height opaque background */}
 			<div

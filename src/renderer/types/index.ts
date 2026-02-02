@@ -436,11 +436,71 @@ export interface AITab {
 
 // Closed tab entry for undo functionality (Cmd+Shift+T)
 // Stores tab data with original position for restoration
+// This is the legacy interface for AI tabs only - kept for backwards compatibility
 export interface ClosedTab {
 	tab: AITab; // The closed tab data
 	index: number; // Original position in the tab array
 	closedAt: number; // Timestamp when closed
 }
+
+/**
+ * File Preview Tab for in-tab file viewing.
+ * Designed to coexist with AITab and future terminal tabs in the unified tab system.
+ * File tabs persist across session switches and app restarts.
+ */
+/**
+ * Navigation history entry for file preview breadcrumb navigation.
+ * Tracks the files visited within a single file preview tab.
+ */
+export interface FilePreviewHistoryEntry {
+	path: string; // Full file path
+	name: string; // Filename for display
+	scrollTop?: number; // Optional scroll position to restore
+}
+
+export interface FilePreviewTab {
+	id: string; // Unique tab ID (UUID)
+	path: string; // Full file path
+	name: string; // Filename without extension (displayed as tab name)
+	extension: string; // File extension with dot (e.g., '.md', '.ts') - shown as badge
+	content: string; // File content (stored directly for simplicity - file previews are typically small)
+	scrollTop: number; // Saved scroll position
+	searchQuery: string; // Preserved search query
+	editMode: boolean; // Whether tab was in edit mode
+	editContent: string | undefined; // Unsaved edit content (undefined if no pending changes)
+	createdAt: number; // Timestamp for ordering
+	lastModified: number; // Timestamp (ms) when file was last modified on disk (for refresh detection)
+	// SSH remote support
+	sshRemoteId?: string; // SSH remote ID for re-fetching content if needed
+	isLoading?: boolean; // True while content is being loaded (for SSH remote files)
+	// Navigation history for breadcrumb navigation (per-tab)
+	navigationHistory?: FilePreviewHistoryEntry[]; // Stack of visited files
+	navigationIndex?: number; // Current position in history (-1 or undefined = at end)
+}
+
+/**
+ * Reference to any tab in the unified tab system.
+ * Used for unified tab ordering across different tab types.
+ */
+export type UnifiedTabRef = { type: 'ai' | 'file'; id: string };
+
+/**
+ * Unified tab entry for rendering in TabBar.
+ * Discriminated union that includes the full tab data for each type.
+ * Used by TabBar to render both AI and file tabs in a single list.
+ */
+export type UnifiedTab =
+	| { type: 'ai'; id: string; data: AITab }
+	| { type: 'file'; id: string; data: FilePreviewTab };
+
+/**
+ * Unified closed tab entry for undo functionality (Cmd+Shift+T).
+ * Can hold either an AITab or FilePreviewTab with type discrimination.
+ * Uses unifiedIndex for restoring position in the unified tab order.
+ */
+export type ClosedTabEntry =
+	| { type: 'ai'; tab: AITab; unifiedIndex: number; closedAt: number }
+	| { type: 'file'; tab: FilePreviewTab; unifiedIndex: number; closedAt: number };
 
 export interface Session {
 	id: string;
@@ -559,6 +619,18 @@ export interface Session {
 	activeTabId: string;
 	// Stack of recently closed tabs for undo (max 25, runtime-only, not persisted)
 	closedTabHistory: ClosedTab[];
+
+	// File Preview Tabs - in-tab file viewing (coexists with AI tabs and future terminal tabs)
+	// Tabs are interspersed visually but stored separately for type safety
+	filePreviewTabs: FilePreviewTab[];
+	// Currently active file tab ID (null if an AI tab is active)
+	activeFileTabId: string | null;
+	// Unified tab ordering - determines visual order of all tabs (AI and file)
+	unifiedTabOrder: UnifiedTabRef[];
+	// Stack of recently closed tabs (both AI and file) for undo (max 25, runtime-only, not persisted)
+	// Used by Cmd+Shift+T to restore any recently closed tab
+	unifiedClosedTabHistory: ClosedTabEntry[];
+
 	// Saved scroll position for terminal/shell output view
 	terminalScrollTop?: number;
 	// Draft input for terminal mode (persisted across session switches)

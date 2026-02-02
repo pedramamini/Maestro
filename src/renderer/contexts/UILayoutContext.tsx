@@ -56,10 +56,6 @@ export interface UILayoutContextValue {
 	setSelectedSidebarIndex: React.Dispatch<React.SetStateAction<number>>;
 
 	// File Explorer State
-	previewFile: { name: string; content: string; path: string } | null;
-	setPreviewFile: React.Dispatch<
-		React.SetStateAction<{ name: string; content: string; path: string } | null>
-	>;
 	selectedFileIndex: number;
 	setSelectedFileIndex: React.Dispatch<React.SetStateAction<number>>;
 	flatFileList: FlatFileItem[];
@@ -137,11 +133,6 @@ export function UILayoutProvider({ children }: UILayoutProviderProps) {
 	const [selectedSidebarIndex, setSelectedSidebarIndex] = useState(0);
 
 	// File Explorer State
-	const [previewFile, setPreviewFile] = useState<{
-		name: string;
-		content: string;
-		path: string;
-	} | null>(null);
 	const [selectedFileIndex, setSelectedFileIndex] = useState(0);
 	const [flatFileList, setFlatFileList] = useState<FlatFileItem[]>([]);
 	const [fileTreeFilter, setFileTreeFilter] = useState('');
@@ -221,8 +212,6 @@ export function UILayoutProvider({ children }: UILayoutProviderProps) {
 			setSelectedSidebarIndex,
 
 			// File Explorer State
-			previewFile,
-			setPreviewFile,
 			selectedFileIndex,
 			setSelectedFileIndex,
 			flatFileList,
@@ -277,7 +266,6 @@ export function UILayoutProvider({ children }: UILayoutProviderProps) {
 			// Session sidebar selection
 			selectedSidebarIndex,
 			// File Explorer State
-			previewFile,
 			selectedFileIndex,
 			flatFileList,
 			fileTreeFilter,

@@ -168,6 +168,7 @@ src/
 | Add performance metrics | `src/shared/performance-metrics.ts` |
 | Add power management | `src/main/power-manager.ts`, `src/main/ipc/handlers/system.ts` |
 | Spawn agent with SSH support | `src/main/utils/ssh-spawn-wrapper.ts` (required for SSH remote execution) |
+| Modify file preview tabs | `TabBar.tsx`, `FilePreview.tsx`, `MainPanel.tsx` (see ARCHITECTURE.md → File Preview Tab System) |
 
 ---
 

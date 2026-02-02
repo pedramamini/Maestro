@@ -88,7 +88,7 @@ const [aiInputValueLocal, setAiInputValueLocal] = useState('');
 
 #### File Explorer State (lines 398-402)
 ```typescript
-const [previewFile, setPreviewFile] = useState<{name: string; content: string; path: string} | null>(null);
+// Note: previewFile state removed - file preview now uses tab-based system via session.filePreviewTabs
 const [selectedFileIndex, setSelectedFileIndex] = useState(0);
 const [flatFileList, setFlatFileList] = useState<any[]>([]);
 const [fileTreeFilter, setFileTreeFilter] = useState('');
@@ -647,10 +647,10 @@ const handleFileClick = useCallback(async (node: any, path: string) => { ... }, 
 - Guards against null session
 - For files with external associations (images, docs, etc.), shows confirmation modal via `setConfirmModalMessage/setConfirmModalOnConfirm/setConfirmModalOpen`, then opens with `window.maestro.shell.openExternal()`
 - For text files, reads content via `window.maestro.fs.readFile(fullPath)`
-- Manages file preview history stack (truncates forward history on new selection)
-- Updates `filePreviewHistory`, `filePreviewHistoryIndex`, `previewFile`, `activeFocus`
+- Opens file in tab-based preview system via `onOpenFileTab` callback
+- Updates `activeFocus` to main panel
 
-**Dependencies**: `activeSession`, `filePreviewHistory`, `filePreviewHistoryIndex`, confirmation modal setters, `setPreviewFile`, `setActiveFocus`
+**Dependencies**: `activeSession`, confirmation modal setters, `setActiveFocus`, `onOpenFileTab`
 
 #### `updateSessionWorkingDirectory` (lines 6798-6812)
 ```typescript

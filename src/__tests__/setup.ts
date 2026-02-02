@@ -393,6 +393,8 @@ const mockMaestro = {
 	},
 	shell: {
 		openExternal: vi.fn().mockResolvedValue(undefined),
+		trashItem: vi.fn().mockResolvedValue(undefined),
+		showItemInFolder: vi.fn().mockResolvedValue(undefined),
 	},
 	sync: {
 		getDefaultPath: vi.fn().mockResolvedValue('/default/path'),

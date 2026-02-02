@@ -53,7 +53,6 @@ interface RightPanelProps {
 	filteredFileTree: any[];
 	selectedFileIndex: number;
 	setSelectedFileIndex: (index: number) => void;
-	previewFile: { name: string; content: string; path: string } | null;
 	fileTreeContainerRef: React.RefObject<HTMLDivElement>;
 	fileTreeFilterInputRef: React.RefObject<HTMLInputElement>;
 
@@ -157,7 +156,6 @@ export const RightPanel = memo(
 			filteredFileTree,
 			selectedFileIndex,
 			setSelectedFileIndex,
-			previewFile,
 			fileTreeContainerRef,
 			fileTreeFilterInputRef,
 			toggleFolder,
@@ -496,7 +494,6 @@ export const RightPanel = memo(
 								setSelectedFileIndex={setSelectedFileIndex}
 								activeFocus={activeFocus}
 								activeRightTab={activeRightTab}
-								previewFile={previewFile}
 								setActiveFocus={setActiveFocus}
 								fileTreeFilterInputRef={fileTreeFilterInputRef}
 								toggleFolder={toggleFolder}

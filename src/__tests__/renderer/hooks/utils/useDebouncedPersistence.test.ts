@@ -4,7 +4,7 @@ import {
 	useDebouncedPersistence,
 	DEFAULT_DEBOUNCE_DELAY,
 } from '../../../../renderer/hooks/utils/useDebouncedPersistence';
-import type { Session, AITab, LogEntry } from '../../../../renderer/types';
+import type { Session, AITab, LogEntry, FilePreviewTab, UnifiedTabRef } from '../../../../renderer/types';
 
 // ---------------------------------------------------------------------------
 // Helpers
@@ -16,6 +16,23 @@ const makeLog = (id: string): LogEntry => ({
 	timestamp: Date.now(),
 	source: 'ai',
 	text: `log-${id}`,
+});
+
+/** Create a minimal FilePreviewTab for testing */
+const makeFilePreviewTab = (overrides: Partial<FilePreviewTab> = {}): FilePreviewTab => ({
+	id: overrides.id ?? `file-tab-${Math.random().toString(36).slice(2, 8)}`,
+	path: overrides.path ?? '/test/file.ts',
+	name: overrides.name ?? 'file',
+	extension: overrides.extension ?? '.ts',
+	content: overrides.content ?? 'console.log("test");',
+	scrollTop: overrides.scrollTop ?? 0,
+	searchQuery: overrides.searchQuery ?? '',
+	editMode: overrides.editMode ?? false,
+	editContent: overrides.editContent ?? undefined,
+	createdAt: overrides.createdAt ?? Date.now(),
+	lastModified: overrides.lastModified ?? Date.now(),
+	sshRemoteId: overrides.sshRemoteId,
+	isLoading: overrides.isLoading,
 });
 
 /** Create a minimal AITab with sensible defaults */
@@ -1182,6 +1199,321 @@ describe('useDebouncedPersistence', () => {
 				unmount();
 
 				expect(window.maestro.sessions.setAll).not.toHaveBeenCalled();
+			});
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// File Preview Tab Persistence
+	// -----------------------------------------------------------------------
+	describe('file preview tab persistence', () => {
+		describe('preserves file tab state', () => {
+			it('should preserve file preview tabs with all their state', () => {
+				const fileTab = makeFilePreviewTab({
+					id: 'file-1',
+					path: '/test/document.md',
+					name: 'document',
+					extension: '.md',
+					content: '# Hello World',
+					scrollTop: 350,
+					searchQuery: 'world',
+					editMode: false,
+					editContent: undefined,
+				});
+				const session = makeSession({
+					filePreviewTabs: [fileTab],
+					activeFileTabId: 'file-1',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs).toHaveLength(1);
+				const persistedTab = persisted[0].filePreviewTabs![0];
+				expect(persistedTab.id).toBe('file-1');
+				expect(persistedTab.path).toBe('/test/document.md');
+				expect(persistedTab.scrollTop).toBe(350);
+				expect(persistedTab.searchQuery).toBe('world');
+				expect(persistedTab.content).toBe('# Hello World');
+			});
+
+			it('should preserve scroll position across persistence cycles', () => {
+				const fileTab = makeFilePreviewTab({
+					id: 'scrolled-file',
+					scrollTop: 1200, // User scrolled to line 1200 pixels
+				});
+				const session = makeSession({
+					filePreviewTabs: [fileTab],
+					activeFileTabId: 'scrolled-file',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs![0].scrollTop).toBe(1200);
+			});
+
+			it('should preserve search query in file tabs', () => {
+				const fileTab = makeFilePreviewTab({
+					id: 'searched-file',
+					searchQuery: 'function calculateTotal',
+				});
+				const session = makeSession({
+					filePreviewTabs: [fileTab],
+					activeFileTabId: 'searched-file',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs![0].searchQuery).toBe('function calculateTotal');
+			});
+
+			it('should preserve edit mode and unsaved content', () => {
+				const fileTab = makeFilePreviewTab({
+					id: 'editing-file',
+					content: 'original content',
+					editMode: true,
+					editContent: 'modified content with changes',
+				});
+				const session = makeSession({
+					filePreviewTabs: [fileTab],
+					activeFileTabId: 'editing-file',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				const persistedTab = persisted[0].filePreviewTabs![0];
+				expect(persistedTab.editMode).toBe(true);
+				expect(persistedTab.editContent).toBe('modified content with changes');
+				expect(persistedTab.content).toBe('original content');
+			});
+
+			it('should preserve activeFileTabId', () => {
+				const fileTab1 = makeFilePreviewTab({ id: 'file-1' });
+				const fileTab2 = makeFilePreviewTab({ id: 'file-2' });
+				const session = makeSession({
+					filePreviewTabs: [fileTab1, fileTab2],
+					activeFileTabId: 'file-2',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].activeFileTabId).toBe('file-2');
+			});
+		});
+
+		describe('preserves multiple file tabs', () => {
+			it('should persist all file tabs in a session', () => {
+				const fileTabs = [
+					makeFilePreviewTab({ id: 'f1', path: '/a.ts', scrollTop: 100 }),
+					makeFilePreviewTab({ id: 'f2', path: '/b.ts', scrollTop: 200 }),
+					makeFilePreviewTab({ id: 'f3', path: '/c.ts', scrollTop: 300 }),
+				];
+				const session = makeSession({
+					filePreviewTabs: fileTabs,
+					activeFileTabId: 'f2',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs).toHaveLength(3);
+				expect(persisted[0].filePreviewTabs![0].scrollTop).toBe(100);
+				expect(persisted[0].filePreviewTabs![1].scrollTop).toBe(200);
+				expect(persisted[0].filePreviewTabs![2].scrollTop).toBe(300);
+			});
+
+			it('should preserve file tabs across multiple sessions', () => {
+				const session1 = makeSession({
+					id: 's1',
+					filePreviewTabs: [makeFilePreviewTab({ id: 'f1', scrollTop: 500 })],
+					activeFileTabId: 'f1',
+				});
+				const session2 = makeSession({
+					id: 's2',
+					filePreviewTabs: [makeFilePreviewTab({ id: 'f2', scrollTop: 1000 })],
+					activeFileTabId: 'f2',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session1, session2], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs![0].scrollTop).toBe(500);
+				expect(persisted[1].filePreviewTabs![0].scrollTop).toBe(1000);
+			});
+		});
+
+		describe('preserves unified tab order', () => {
+			it('should preserve unifiedTabOrder with mixed AI and file tabs', () => {
+				const aiTab = makeTab({ id: 'ai-1' });
+				const fileTab = makeFilePreviewTab({ id: 'file-1' });
+				const unifiedOrder: UnifiedTabRef[] = [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'file', id: 'file-1' },
+				];
+				const session = makeSession({
+					aiTabs: [aiTab],
+					activeTabId: 'ai-1',
+					filePreviewTabs: [fileTab],
+					activeFileTabId: null,
+					unifiedTabOrder: unifiedOrder,
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].unifiedTabOrder).toEqual([
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'file', id: 'file-1' },
+				]);
+			});
+		});
+
+		describe('handles edge cases', () => {
+			it('should handle empty filePreviewTabs array', () => {
+				const session = makeSession({
+					filePreviewTabs: [],
+					activeFileTabId: null,
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs).toEqual([]);
+				expect(persisted[0].activeFileTabId).toBeNull();
+			});
+
+			it('should handle undefined filePreviewTabs', () => {
+				const session = makeSession();
+				// Remove filePreviewTabs to simulate legacy session without file tabs
+				delete (session as Partial<Session>).filePreviewTabs;
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				// Should pass through without error
+				expect(persisted).toHaveLength(1);
+			});
+
+			it('should preserve SSH remote file metadata', () => {
+				const fileTab = makeFilePreviewTab({
+					id: 'ssh-file',
+					path: '/remote/server/app.ts',
+					sshRemoteId: 'my-remote-server',
+					isLoading: false,
+				});
+				const session = makeSession({
+					filePreviewTabs: [fileTab],
+					activeFileTabId: 'ssh-file',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs![0].sshRemoteId).toBe('my-remote-server');
+			});
+
+			it('should preserve large scroll positions (>10000 pixels)', () => {
+				const fileTab = makeFilePreviewTab({
+					id: 'long-file',
+					scrollTop: 150000, // Very long file
+				});
+				const session = makeSession({
+					filePreviewTabs: [fileTab],
+					activeFileTabId: 'long-file',
+				});
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() =>
+					useDebouncedPersistence([session], initialLoadRef)
+				);
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].filePreviewTabs![0].scrollTop).toBe(150000);
 			});
 		});
 	});

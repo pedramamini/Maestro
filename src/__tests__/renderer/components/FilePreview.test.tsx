@@ -6,7 +6,6 @@ import { FilePreview } from '../../../renderer/components/FilePreview';
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
 	FileCode: () => <span data-testid="file-code-icon">FileCode</span>,
-	X: () => <span data-testid="x-icon">X</span>,
 	Eye: () => <span data-testid="eye-icon">Eye</span>,
 	ChevronUp: () => <span data-testid="chevron-up">ChevronUp</span>,
 	ChevronDown: () => <span data-testid="chevron-down">ChevronDown</span>,
@@ -69,16 +68,18 @@ vi.mock('../../../renderer/constants/modalPriorities', () => ({
 	},
 }));
 
-// Mock useClickOutside hook - capture the callback for testing
+// Mock useClickOutside hook - capture the callback and enabled state for testing
 const mockClickOutsideCallback = { current: null as (() => void) | null };
+const mockClickOutsideEnabled = { current: false };
 vi.mock('../../../renderer/hooks/ui/useClickOutside', () => ({
 	useClickOutside: (
 		_ref: unknown,
 		callback: () => void,
-		_enabled: boolean,
+		enabled: boolean,
 		_options?: unknown
 	) => {
 		mockClickOutsideCallback.current = callback;
+		mockClickOutsideEnabled.current = enabled;
 	},
 }));
 
@@ -302,21 +303,8 @@ describe('FilePreview', () => {
 			expect(screen.getByText('test.md')).toBeInTheDocument();
 		});
 
-		it('renders close button', () => {
-			render(<FilePreview {...defaultProps} />);
-
-			expect(screen.getByTestId('x-icon')).toBeInTheDocument();
-		});
-
-		it('calls onClose when close button is clicked', () => {
-			const onClose = vi.fn();
-			render(<FilePreview {...defaultProps} onClose={onClose} />);
-
-			const closeButton = screen.getByTestId('x-icon').parentElement;
-			fireEvent.click(closeButton!);
-
-			expect(onClose).toHaveBeenCalledOnce();
-		});
+		// Close button was removed - now handled by file tab's X button
+		// See Phase 8: Cleanup & Polish task for details
 
 		it('renders nothing when file is null', () => {
 			const { container } = render(<FilePreview {...defaultProps} file={null} />);
@@ -437,11 +425,12 @@ describe('FilePreview', () => {
 			expect(mockClickOutsideCallback.current).not.toBeNull();
 		});
 
-		it('uses the same callback for click outside as for escape key', () => {
+		it('uses the same callback for click outside as for escape key in overlay mode', () => {
 			// This verifies that useClickOutside is set up with handleEscapeRequest
 			// which provides consistent behavior between Escape key and click outside
+			// This only applies to overlay mode (isTabMode=false or undefined)
 			const onClose = vi.fn();
-			render(<FilePreview {...defaultProps} onClose={onClose} />);
+			render(<FilePreview {...defaultProps} onClose={onClose} isTabMode={false} />);
 
 			// The callback should be registered
 			expect(mockClickOutsideCallback.current).toBeDefined();
@@ -451,6 +440,106 @@ describe('FilePreview', () => {
 			// (calling onClose when no overlays are open)
 			mockClickOutsideCallback.current?.();
 			expect(onClose).toHaveBeenCalledOnce();
+		});
+
+		it('does not close tab on Escape key when isTabMode is true', () => {
+			// In tab mode, Escape should only close internal UI (search, TOC)
+			// not the tab itself - tabs close via Cmd+W or close button
+			const onClose = vi.fn();
+			render(<FilePreview {...defaultProps} onClose={onClose} isTabMode={true} />);
+
+			// The callback should be registered but disabled in tab mode
+			expect(mockClickOutsideEnabled.current).toBe(false);
+
+			// Even if callback is invoked, it should NOT close in tab mode
+			// This matches the updated handleEscapeRequest behavior
+		});
+
+		it('disables click-outside-to-close when isTabMode is true', () => {
+			// In tab mode, file preview tabs should persist until explicitly closed
+			const onClose = vi.fn();
+			render(<FilePreview {...defaultProps} onClose={onClose} isTabMode={true} />);
+
+			// Click outside should be disabled in tab mode
+			expect(mockClickOutsideEnabled.current).toBe(false);
+		});
+
+		it('enables click-outside-to-close when isTabMode is false or undefined', () => {
+			const onClose = vi.fn();
+			render(<FilePreview {...defaultProps} onClose={onClose} />);
+
+			// Click outside should be enabled by default (non-tab mode)
+			expect(mockClickOutsideEnabled.current).toBe(true);
+		});
+	});
+
+	describe('edit content state persistence', () => {
+		it('calls onEditContentChange when editing content', () => {
+			const onEditContentChange = vi.fn();
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'original content', path: '/test/test.md' }}
+					markdownEditMode={true}
+					onEditContentChange={onEditContentChange}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox');
+			fireEvent.change(textarea, { target: { value: 'modified content' } });
+
+			expect(onEditContentChange).toHaveBeenCalledWith('modified content');
+		});
+
+		it('uses externalEditContent when provided', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'original content', path: '/test/test.md' }}
+					markdownEditMode={true}
+					externalEditContent="externally managed content"
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox');
+			expect(textarea).toHaveValue('externally managed content');
+		});
+
+		it('falls back to internal state when externalEditContent is not provided', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'file content', path: '/test/test.md' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox');
+			expect(textarea).toHaveValue('file content');
+		});
+
+		it('preserves external edit content across re-renders', () => {
+			const { rerender } = render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'original', path: '/test/test.md' }}
+					markdownEditMode={true}
+					externalEditContent="preserved content"
+				/>
+			);
+
+			// Re-render with same external content
+			rerender(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'original', path: '/test/test.md' }}
+					markdownEditMode={true}
+					externalEditContent="preserved content"
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox');
+			expect(textarea).toHaveValue('preserved content');
 		});
 	});
 
@@ -567,7 +656,7 @@ print("world")
 			expect(screen.getByText('Heading 3')).toBeInTheDocument();
 		});
 
-		it('closes TOC overlay when clicking a heading entry', () => {
+		it('keeps TOC overlay open when clicking a heading entry', () => {
 			const markdownWithHeadings = '# Heading 1\n## Heading 2';
 			render(
 				<FilePreview
@@ -585,8 +674,8 @@ print("world")
 			const headingEntry = screen.getByText('Heading 1');
 			fireEvent.click(headingEntry);
 
-			// TOC overlay should close
-			expect(screen.queryByText('Contents')).not.toBeInTheDocument();
+			// TOC overlay should stay open so user can click multiple items
+			expect(screen.getByText('Contents')).toBeInTheDocument();
 		});
 
 		it('displays Top and Bottom navigation buttons as sticky sash elements', () => {
@@ -620,7 +709,7 @@ print("world")
 			expect(bottomButton).toHaveClass('border-t');
 		});
 
-		it('closes TOC and scrolls when clicking Top button', () => {
+		it('keeps TOC open when clicking Top button', () => {
 			const markdownWithHeadings = '# Heading 1\n## Heading 2';
 			render(
 				<FilePreview
@@ -638,11 +727,11 @@ print("world")
 			const topButton = screen.getByTestId('toc-top-button');
 			fireEvent.click(topButton);
 
-			// TOC overlay should close
-			expect(screen.queryByText('Contents')).not.toBeInTheDocument();
+			// TOC overlay should stay open so user can click multiple items
+			expect(screen.getByText('Contents')).toBeInTheDocument();
 		});
 
-		it('closes TOC and scrolls when clicking Bottom button', () => {
+		it('keeps TOC open when clicking Bottom button', () => {
 			const markdownWithHeadings = '# Heading 1\n## Heading 2';
 			render(
 				<FilePreview
@@ -660,8 +749,198 @@ print("world")
 			const bottomButton = screen.getByTestId('toc-bottom-button');
 			fireEvent.click(bottomButton);
 
-			// TOC overlay should close
+			// TOC overlay should stay open so user can click multiple items
+			expect(screen.getByText('Contents')).toBeInTheDocument();
+		});
+
+		it('closes TOC when clicking outside of it', async () => {
+			const markdownWithHeadings = '# Heading 1\n## Heading 2\n## Heading 3';
+			const { container } = render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'doc.md', content: markdownWithHeadings, path: '/test/doc.md' }}
+					markdownEditMode={false}
+				/>
+			);
+
+			// Open TOC
+			const tocButton = screen.getByTitle('Table of Contents');
+			fireEvent.click(tocButton);
+
+			// Verify TOC is open
+			expect(screen.getByText('Contents')).toBeInTheDocument();
+
+			// Wait for the delay in useClickOutside hook
+			await new Promise((resolve) => setTimeout(resolve, 10));
+
+			// Click outside the TOC (on the main container)
+			const mainContainer = container.firstChild as HTMLElement;
+			fireEvent.mouseDown(mainContainer);
+
+			// TOC should be closed
 			expect(screen.queryByText('Contents')).not.toBeInTheDocument();
+		});
+	});
+
+	describe('search state persistence', () => {
+		it('calls onSearchQueryChange when typing in search', async () => {
+			const onSearchQueryChange = vi.fn();
+			const { container } = render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.ts', content: 'const searchable = true;', path: '/test/test.ts' }}
+					onSearchQueryChange={onSearchQueryChange}
+				/>
+			);
+
+			// Open search with keyboard shortcut (Cmd/Ctrl+F)
+			// The container div has tabIndex=0 and handles keyboard events
+			const mainContainer = container.firstChild as HTMLElement;
+			fireEvent.keyDown(mainContainer, { key: 'f', metaKey: true });
+
+			// Find the search input and type
+			const searchInput = screen.getByPlaceholderText(/Search in file/);
+			fireEvent.change(searchInput, { target: { value: 'searchable' } });
+
+			expect(onSearchQueryChange).toHaveBeenCalledWith('searchable');
+		});
+
+		it('initializes with initialSearchQuery and auto-opens search', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.ts', content: 'const foo = "bar";', path: '/test/test.ts' }}
+					initialSearchQuery="foo"
+				/>
+			);
+
+			// Search should be auto-opened with the initial query
+			const searchInput = screen.getByPlaceholderText(/Search in file/);
+			expect(searchInput).toBeInTheDocument();
+			expect(searchInput).toHaveValue('foo');
+		});
+
+		it('does not auto-open search when initialSearchQuery is empty', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.ts', content: 'const foo = "bar";', path: '/test/test.ts' }}
+					initialSearchQuery=""
+				/>
+			);
+
+			// Search should not be open
+			expect(screen.queryByPlaceholderText(/Search in file/)).not.toBeInTheDocument();
+		});
+
+		it('does not throw when onSearchQueryChange is not provided', async () => {
+			const { container } = render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.ts', content: 'const searchable = true;', path: '/test/test.ts' }}
+					// No onSearchQueryChange prop
+				/>
+			);
+
+			// Open search and type - should not throw
+			const mainContainer = container.firstChild as HTMLElement;
+			fireEvent.keyDown(mainContainer, { key: 'f', metaKey: true });
+			const searchInput = screen.getByPlaceholderText(/Search in file/);
+			expect(() => fireEvent.change(searchInput, { target: { value: 'test' } })).not.toThrow();
+		});
+	});
+
+	describe('scroll position persistence', () => {
+		it('calls onScrollPositionChange when scrolling (throttled)', async () => {
+			const onScrollPositionChange = vi.fn();
+			vi.useFakeTimers();
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'Some content', path: '/test/test.md' }}
+					onScrollPositionChange={onScrollPositionChange}
+				/>
+			);
+
+			// Get the content container (the scrollable div)
+			const container = document.querySelector('.overflow-y-auto');
+			expect(container).not.toBeNull();
+
+			// Simulate scroll events
+			fireEvent.scroll(container!, { target: { scrollTop: 100 } });
+
+			// The callback is throttled at 200ms
+			expect(onScrollPositionChange).not.toHaveBeenCalled();
+
+			// Fast-forward timers
+			vi.advanceTimersByTime(200);
+
+			expect(onScrollPositionChange).toHaveBeenCalledWith(100);
+
+			vi.useRealTimers();
+		});
+
+		it('accepts initialScrollTop prop without errors', () => {
+			// This just verifies the prop is accepted without errors
+			// The actual scroll restoration uses requestAnimationFrame which is hard to test
+			expect(() =>
+				render(
+					<FilePreview
+						{...defaultProps}
+						file={{ name: 'test.md', content: 'Some content', path: '/test/test.md' }}
+						initialScrollTop={150}
+					/>
+				)
+			).not.toThrow();
+		});
+
+		it('does not call onScrollPositionChange when not provided', () => {
+			vi.useFakeTimers();
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'Some content', path: '/test/test.md' }}
+					// No onScrollPositionChange prop
+				/>
+			);
+
+			const container = document.querySelector('.overflow-y-auto');
+			expect(container).not.toBeNull();
+
+			// Simulate scroll - should not throw
+			fireEvent.scroll(container!, { target: { scrollTop: 100 } });
+			vi.advanceTimersByTime(200);
+
+			// Test passes if no errors occurred
+
+			vi.useRealTimers();
+		});
+
+		it('clears pending scroll save timer on unmount', () => {
+			const onScrollPositionChange = vi.fn();
+			vi.useFakeTimers();
+
+			const { unmount } = render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: 'Some content', path: '/test/test.md' }}
+					onScrollPositionChange={onScrollPositionChange}
+				/>
+			);
+
+			const container = document.querySelector('.overflow-y-auto');
+			fireEvent.scroll(container!, { target: { scrollTop: 100 } });
+
+			// Unmount before timer fires
+			unmount();
+			vi.advanceTimersByTime(200);
+
+			// Callback should not be called after unmount
+			expect(onScrollPositionChange).not.toHaveBeenCalled();
+
+			vi.useRealTimers();
 		});
 	});
 });

@@ -41,4 +41,4 @@ export type { UseThemeStylesDeps, UseThemeStylesReturn, ThemeColors } from './us
 
 // App-level handlers (drag, file, folder operations)
 export { useAppHandlers } from './useAppHandlers';
-export type { UseAppHandlersDeps, UseAppHandlersReturn, FilePreview } from './useAppHandlers';
+export type { UseAppHandlersDeps, UseAppHandlersReturn } from './useAppHandlers';

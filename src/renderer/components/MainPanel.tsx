@@ -39,7 +39,7 @@ import { useGitBranch, useGitDetail, useGitFileStatus } from '../contexts/GitSta
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { calculateContextTokens } from '../utils/contextUsage';
 import { useAgentCapabilities, useHoverTooltip } from '../hooks';
-import type { Session, Theme, Shortcut, FocusArea, BatchRunState } from '../types';
+import type { Session, Theme, Shortcut, FocusArea, BatchRunState, UnifiedTab, FilePreviewTab } from '../types';
 
 interface SlashCommand {
 	command: string;
@@ -97,7 +97,6 @@ interface MainPanelProps {
 		fullPath: string;
 	}>;
 	selectedAtMentionIndex?: number;
-	previewFile: { name: string; content: string; path: string } | null;
 	filePreviewLoading?: { name: string; path: string } | null;
 	markdownEditMode: boolean; // FilePreview: whether editing file content
 	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses
@@ -149,7 +148,6 @@ interface MainPanelProps {
 	setAtMentionFilter?: (filter: string) => void;
 	setAtMentionStartIndex?: (index: number) => void;
 	setSelectedAtMentionIndex?: (index: number) => void;
-	setPreviewFile: (file: { name: string; content: string; path: string } | null) => void;
 	setMarkdownEditMode: (mode: boolean) => void;
 	setChatRawTextMode: (mode: boolean) => void;
 	setAboutModalOpen: (open: boolean) => void;
@@ -188,6 +186,7 @@ interface MainPanelProps {
 	onNewTab?: () => void;
 	onRequestTabRename?: (tabId: string) => void;
 	onTabReorder?: (fromIndex: number, toIndex: number) => void;
+	onUnifiedTabReorder?: (fromIndex: number, toIndex: number) => void;
 	onTabStar?: (tabId: string, starred: boolean) => void;
 	onTabMarkUnread?: (tabId: string) => void;
 	onUpdateTabByClaudeSessionId?: (
@@ -198,6 +197,8 @@ interface MainPanelProps {
 	onToggleTabSaveToHistory?: () => void;
 	onToggleTabShowThinking?: () => void;
 	showUnreadOnly?: boolean;
+	/** Whether colorblind-friendly colors should be used for extension badges */
+	colorBlindMode?: boolean;
 	onToggleUnreadFilter?: () => void;
 	onOpenTabSearch?: () => void;
 	// Bulk tab close operations
@@ -205,6 +206,23 @@ interface MainPanelProps {
 	onCloseOtherTabs?: () => void;
 	onCloseTabsLeft?: () => void;
 	onCloseTabsRight?: () => void;
+
+	// Unified tab system (Phase 4) - file preview tabs integrated with AI tabs
+	unifiedTabs?: UnifiedTab[];
+	activeFileTabId?: string | null;
+	activeFileTab?: FilePreviewTab | null;
+	onFileTabSelect?: (tabId: string) => void;
+	onFileTabClose?: (tabId: string) => void;
+	onOpenFileTab?: (filePath: string) => void;
+	/** Handler to update file tab editMode when toggled in FilePreview */
+	onFileTabEditModeChange?: (tabId: string, editMode: boolean) => void;
+	/** Handler to update file tab editContent when changed in FilePreview */
+	onFileTabEditContentChange?: (tabId: string, editContent: string | undefined, savedContent?: string) => void;
+	/** Handler to update file tab scrollTop when scrolling in FilePreview */
+	onFileTabScrollPositionChange?: (tabId: string, scrollTop: number) => void;
+	/** Handler to update file tab searchQuery when searching in FilePreview */
+	onFileTabSearchQueryChange?: (tabId: string, searchQuery: string) => void;
+
 	// Scroll position persistence
 	onScrollPositionChange?: (scrollTop: number) => void;
 	// Scroll bottom state change handler (for hasUnread logic)
@@ -218,14 +236,15 @@ interface MainPanelProps {
 	// File tree for linking file references in AI responses
 	fileTree?: import('../types/fileTree').FileNode[];
 	// Callback when a file link is clicked in AI response
-	onFileClick?: (relativePath: string) => void;
+	// options.openInNewTab: true = open in new tab adjacent to current, false = replace current tab content
+	onFileClick?: (relativePath: string, options?: { openInNewTab?: boolean }) => void;
 	// File preview navigation
 	canGoBack?: boolean;
 	canGoForward?: boolean;
 	onNavigateBack?: () => void;
 	onNavigateForward?: () => void;
-	backHistory?: { name: string; content: string; path: string }[];
-	forwardHistory?: { name: string; content: string; path: string }[];
+	backHistory?: { name: string; path: string; scrollTop?: number }[];
+	forwardHistory?: { name: string; path: string; scrollTop?: number }[];
 	currentHistoryIndex?: number;
 	onNavigateToIndex?: (index: number) => void;
 	onClearFilePreviewHistory?: () => void;
@@ -346,7 +365,6 @@ export const MainPanel = React.memo(
 			setAtMentionFilter,
 			setAtMentionStartIndex,
 			setSelectedAtMentionIndex,
-			previewFile,
 			filePreviewLoading,
 			markdownEditMode,
 			chatRawTextMode,
@@ -375,7 +393,6 @@ export const MainPanel = React.memo(
 			setCommandHistorySelectedIndex,
 			setSlashCommandOpen,
 			setSelectedSlashCommandIndex,
-			setPreviewFile,
 			setMarkdownEditMode,
 			setChatRawTextMode,
 			setAboutModalOpen: _setAboutModalOpen,
@@ -453,15 +470,27 @@ export const MainPanel = React.memo(
 			onNewTab,
 			onRequestTabRename,
 			onTabReorder,
+			onUnifiedTabReorder,
 			onTabStar,
 			onTabMarkUnread,
 			showUnreadOnly,
+			colorBlindMode,
 			onToggleUnreadFilter,
 			onOpenTabSearch,
 			onCloseAllTabs,
 			onCloseOtherTabs,
 			onCloseTabsLeft,
 			onCloseTabsRight,
+			// Unified tab system props (Phase 4)
+			unifiedTabs,
+			activeFileTabId,
+			activeFileTab,
+			onFileTabSelect,
+			onFileTabClose,
+			onFileTabEditModeChange,
+			onFileTabEditContentChange,
+			onFileTabScrollPositionChange,
+			onFileTabSearchQueryChange,
 		} = props;
 
 		// Get the active tab for header display
@@ -1408,9 +1437,8 @@ export const MainPanel = React.memo(
 							</div>
 						)}
 
-						{/* Tab Bar - only shown in AI mode when we have tabs (hidden during file preview) */}
-						{!previewFile &&
-							activeSession.inputMode === 'ai' &&
+						{/* Tab Bar - always shown in AI mode when we have tabs (includes both AI and file tabs) */}
+						{activeSession.inputMode === 'ai' &&
 							activeSession.aiTabs &&
 							activeSession.aiTabs.length > 0 &&
 							onTabSelect &&
@@ -1425,6 +1453,7 @@ export const MainPanel = React.memo(
 									onNewTab={onNewTab}
 									onRequestRename={onRequestTabRename}
 									onTabReorder={onTabReorder}
+									onUnifiedTabReorder={onUnifiedTabReorder}
 									onTabStar={onTabStar}
 									onTabMarkUnread={onTabMarkUnread}
 									onMergeWith={onMergeWith}
@@ -1441,6 +1470,13 @@ export const MainPanel = React.memo(
 									onCloseOtherTabs={onCloseOtherTabs}
 									onCloseTabsLeft={onCloseTabsLeft}
 									onCloseTabsRight={onCloseTabsRight}
+									// Unified tab system props (Phase 4)
+									unifiedTabs={unifiedTabs}
+									activeFileTabId={activeFileTabId}
+									onFileTabSelect={onFileTabSelect}
+									onFileTabClose={onFileTabClose}
+									// Accessibility
+									colorBlindMode={colorBlindMode}
 								/>
 							)}
 
@@ -1485,8 +1521,10 @@ export const MainPanel = React.memo(
 							</div>
 						)}
 
-						{/* Show File Preview loading state when fetching remote file */}
-						{filePreviewLoading && !previewFile && (
+						{/* Show loading state for file tabs (SSH remote file loading) */}
+						{/* Content area: Show FilePreview when file tab is active, otherwise show terminal output */}
+						{/* Skip rendering when loading remote file - loading state takes over entire main area */}
+						{(filePreviewLoading && !activeFileTabId) || activeFileTab?.isLoading ? (
 							<div
 								className="flex-1 flex items-center justify-center"
 								style={{ backgroundColor: theme.colors.bgMain }}
@@ -1498,7 +1536,7 @@ export const MainPanel = React.memo(
 									/>
 									<div className="text-center">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Loading {filePreviewLoading.name}
+											Loading {activeFileTab ? `${activeFileTab.name}${activeFileTab.extension}` : filePreviewLoading?.name}
 										</div>
 										<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
 											Fetching from remote server...
@@ -1506,11 +1544,8 @@ export const MainPanel = React.memo(
 									</div>
 								</div>
 							</div>
-						)}
-
-						{/* Show File Preview in main area when open, otherwise show terminal output and input */}
-						{/* Skip rendering terminal/preview when loading remote file - loading state takes over entire main area */}
-						{filePreviewLoading && !previewFile ? null : previewFile ? (
+						) : activeFileTabId && activeFileTab ? (
+							// New file tab system - FilePreview rendered as tab content (no close button, tab handles closing)
 							<div
 								ref={filePreviewContainerRef}
 								tabIndex={-1}
@@ -1518,43 +1553,44 @@ export const MainPanel = React.memo(
 							>
 								<FilePreview
 									ref={filePreviewRef}
-									file={previewFile}
-									onClose={() => {
-										setPreviewFile(null);
-										props.onClearFilePreviewHistory?.();
-										setActiveFocus('right');
-										setTimeout(() => {
-											// If file tree filter is open, focus it; otherwise focus the file tree container
-											if (fileTreeFilterOpen && fileTreeFilterInputRef.current) {
-												fileTreeFilterInputRef.current.focus();
-											} else if (fileTreeContainerRef.current) {
-												fileTreeContainerRef.current.focus();
-											}
-										}, 0);
+									file={{
+										name: activeFileTab.name + activeFileTab.extension,
+										// Always pass original content - editContent is passed separately for edit mode state
+										content: activeFileTab.content,
+										path: activeFileTab.path,
 									}}
+									onClose={() => {
+										// When rendered as tab, close via tab close handler
+										onFileTabClose?.(activeFileTabId);
+									}}
+									isTabMode={true}
 									theme={theme}
-									markdownEditMode={markdownEditMode}
-									setMarkdownEditMode={setMarkdownEditMode}
+									markdownEditMode={activeFileTab.editMode}
+									setMarkdownEditMode={(editMode) => {
+										// Update both the file tab's editMode and the legacy markdownEditMode setting
+										onFileTabEditModeChange?.(activeFileTabId, editMode);
+									}}
 									onSave={async (path, content) => {
 										await window.maestro.fs.writeFile(path, content);
-										// Update the preview file content after save
-										setPreviewFile({ ...previewFile, content });
+										// After save, clear editContent and update base content to saved value
+										onFileTabEditContentChange?.(activeFileTabId, undefined, content);
 									}}
 									shortcuts={shortcuts}
 									fileTree={props.fileTree}
 									cwd={(() => {
-										// Compute relative directory from preview file path for proximity matching
+										// Compute relative directory from file path for proximity matching
 										if (
 											!activeSession?.fullPath ||
-											!previewFile.path.startsWith(activeSession.fullPath)
+											!activeFileTab.path.startsWith(activeSession.fullPath)
 										) {
 											return '';
 										}
-										const relativePath = previewFile.path.slice(activeSession.fullPath.length + 1);
+										const relativePath = activeFileTab.path.slice(activeSession.fullPath.length + 1);
 										const lastSlash = relativePath.lastIndexOf('/');
 										return lastSlash > 0 ? relativePath.slice(0, lastSlash) : '';
 									})()}
 									onFileClick={props.onFileClick}
+									// Per-tab navigation history for breadcrumb navigation
 									canGoBack={props.canGoBack}
 									canGoForward={props.canGoForward}
 									onNavigateBack={props.onNavigateBack}
@@ -1574,6 +1610,23 @@ export const MainPanel = React.memo(
 										activeSession?.sessionSshRemoteConfig?.remoteId ||
 										undefined
 									}
+									// Pass external edit content for persistence across tab switches
+									externalEditContent={activeFileTab.editContent}
+									onEditContentChange={(content) => {
+										// Store edit content on the tab - undefined means no changes (content matches file)
+										const hasChanges = content !== activeFileTab.content;
+										onFileTabEditContentChange?.(activeFileTabId, hasChanges ? content : undefined);
+									}}
+									// Pass scroll position props for persistence across tab switches
+									initialScrollTop={activeFileTab.scrollTop}
+									onScrollPositionChange={(scrollTop) => {
+										onFileTabScrollPositionChange?.(activeFileTabId, scrollTop);
+									}}
+									// Pass search query props for persistence across tab switches
+									initialSearchQuery={activeFileTab.searchQuery}
+									onSearchQueryChange={(query) => {
+										onFileTabSearchQueryChange?.(activeFileTabId, query);
+									}}
 								/>
 							</div>
 						) : (

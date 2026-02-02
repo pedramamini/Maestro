@@ -334,6 +334,132 @@ describe('useMainKeyboardHandler', () => {
 			// Layout shortcuts should work even when modal is open
 			expect(mockSetLeftSidebar).toHaveBeenCalled();
 		});
+
+		it('should allow tab management shortcuts (Cmd+T) when only overlays are open', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockSetSessions = vi.fn();
+			const mockSetActiveFocus = vi.fn();
+			const mockInputRef = { current: { focus: vi.fn() } };
+			const mockActiveSession = {
+				id: 'test-session',
+				name: 'Test',
+				inputMode: 'ai',
+				aiTabs: [],
+				activeTabId: 'tab-1',
+				unifiedTabOrder: [],
+			};
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				hasOpenLayers: () => true, // Overlay is open (e.g., file preview)
+				hasOpenModal: () => false, // But no true modal
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'newTab',
+				activeSessionId: 'test-session',
+				activeSession: mockActiveSession,
+				createTab: vi.fn().mockReturnValue({
+					session: { ...mockActiveSession, aiTabs: [{ id: 'new-tab' }] },
+				}),
+				setSessions: mockSetSessions,
+				setActiveFocus: mockSetActiveFocus,
+				inputRef: mockInputRef,
+				defaultSaveToHistory: true,
+				defaultShowThinking: 'on',
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 't',
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			// Cmd+T should create a new tab even when file preview overlay is open
+			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockSetActiveFocus).toHaveBeenCalledWith('main');
+		});
+
+		it('should allow tab switcher shortcut (Alt+Cmd+T) when only overlays are open', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockSetTabSwitcherOpen = vi.fn();
+			const mockActiveSession = {
+				id: 'test-session',
+				name: 'Test',
+				inputMode: 'ai',
+				aiTabs: [],
+				activeTabId: 'tab-1',
+				unifiedTabOrder: [],
+			};
+			result.current.keyboardHandlerRef.current = createMockContext({
+				hasOpenLayers: () => true, // Overlay is open (e.g., file preview)
+				hasOpenModal: () => false, // But no true modal
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'tabSwitcher',
+				activeSessionId: 'test-session',
+				activeSession: mockActiveSession,
+				setTabSwitcherOpen: mockSetTabSwitcherOpen,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 't', // Alt key changes the key on macOS, but we use code
+						code: 'KeyT',
+						altKey: true,
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			// Alt+Cmd+T should open tab switcher even when file preview overlay is open
+			expect(mockSetTabSwitcherOpen).toHaveBeenCalledWith(true);
+		});
+
+		it('should allow reopen closed tab shortcut (Cmd+Shift+T) when only overlays are open', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockSetSessions = vi.fn();
+			const mockReopenUnifiedClosedTab = vi.fn().mockReturnValue({
+				session: { id: 'test-session', unifiedClosedTabHistory: [] },
+				type: 'file',
+				tab: { id: 'restored-tab' },
+			});
+			const mockActiveSession = {
+				id: 'test-session',
+				name: 'Test',
+				inputMode: 'ai',
+				aiTabs: [],
+				unifiedClosedTabHistory: [{ type: 'file', tab: { id: 'closed-tab' } }],
+			};
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				hasOpenLayers: () => true, // Overlay is open (e.g., file preview)
+				hasOpenModal: () => false, // But no true modal
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'reopenClosedTab',
+				activeSessionId: 'test-session',
+				activeSession: mockActiveSession,
+				reopenUnifiedClosedTab: mockReopenUnifiedClosedTab,
+				setSessions: mockSetSessions,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 't',
+						shiftKey: true,
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			// Cmd+Shift+T should reopen closed tab even when file preview overlay is open
+			expect(mockReopenUnifiedClosedTab).toHaveBeenCalledWith(mockActiveSession);
+			expect(mockSetSessions).toHaveBeenCalled();
+		});
 	});
 
 	describe('navigation handlers delegation', () => {
@@ -578,6 +704,519 @@ describe('useMainKeyboardHandler', () => {
 
 			// toggleInputMode SHOULD be called when wizard is not active
 			expect(mockToggleInputMode).toHaveBeenCalled();
+		});
+	});
+
+	describe('unified tab shortcuts - file tab vs AI tab context', () => {
+		/**
+		 * Helper to create a session context with both AI tabs and file tabs.
+		 * Uses unifiedTabOrder to establish combined ordering.
+		 */
+		function createUnifiedTabContext(overrides: Record<string, unknown> = {}) {
+			const aiTab1 = { id: 'ai-tab-1', name: 'AI Tab 1', logs: [] };
+			const aiTab2 = { id: 'ai-tab-2', name: 'AI Tab 2', logs: [] };
+			const fileTab1 = { id: 'file-tab-1', path: '/test/file1.ts', name: 'file1', extension: '.ts' };
+			const fileTab2 = { id: 'file-tab-2', path: '/test/file2.ts', name: 'file2', extension: '.ts' };
+
+			return createMockContext({
+				activeSession: {
+					id: 'session-1',
+					aiTabs: [aiTab1, aiTab2],
+					activeTabId: 'ai-tab-1',
+					filePreviewTabs: [fileTab1, fileTab2],
+					activeFileTabId: null,
+					unifiedTabOrder: ['ai-tab-1', 'file-tab-1', 'ai-tab-2', 'file-tab-2'],
+					unifiedClosedTabHistory: [],
+					inputMode: 'ai',
+				},
+				activeSessionId: 'session-1',
+				showUnreadOnly: false,
+				...overrides,
+			});
+		}
+
+		describe('Cmd+W (closeTab)', () => {
+			it('should close file tab when a file tab is active', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockHandleCloseCurrentTab = vi.fn().mockReturnValue({ type: 'file' });
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'closeTab',
+					handleCloseCurrentTab: mockHandleCloseCurrentTab,
+					setSessions: mockSetSessions,
+					activeSession: {
+						id: 'session-1',
+						aiTabs: [{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] }],
+						activeTabId: 'ai-tab-1',
+						filePreviewTabs: [{ id: 'file-tab-1', path: '/test/file.ts', name: 'file', extension: '.ts' }],
+						activeFileTabId: 'file-tab-1', // File tab is active
+						unifiedTabOrder: ['ai-tab-1', 'file-tab-1'],
+						inputMode: 'ai',
+					},
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 'w',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockHandleCloseCurrentTab).toHaveBeenCalled();
+			});
+
+			it('should close AI tab when no file tab is active', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockHandleCloseCurrentTab = vi.fn().mockReturnValue({
+					type: 'ai',
+					tabId: 'ai-tab-2',
+					isWizardTab: false,
+				});
+				const mockCloseTab = vi.fn().mockReturnValue({ session: { id: 'session-1' } });
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'closeTab',
+					handleCloseCurrentTab: mockHandleCloseCurrentTab,
+					closeTab: mockCloseTab,
+					setSessions: mockSetSessions,
+					activeSession: {
+						id: 'session-1',
+						aiTabs: [
+							{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] },
+							{ id: 'ai-tab-2', name: 'AI Tab 2', logs: [] },
+						],
+						activeTabId: 'ai-tab-2',
+						filePreviewTabs: [],
+						activeFileTabId: null, // No file tab active
+						unifiedTabOrder: ['ai-tab-1', 'ai-tab-2'],
+						inputMode: 'ai',
+					},
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 'w',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockHandleCloseCurrentTab).toHaveBeenCalled();
+				expect(mockCloseTab).toHaveBeenCalledWith(
+					expect.objectContaining({ id: 'session-1' }),
+					'ai-tab-2',
+					false,
+					{ skipHistory: false }
+				);
+			});
+
+			it('should prevent closing when it is the last AI tab', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockHandleCloseCurrentTab = vi.fn().mockReturnValue({ type: 'prevented' });
+				const mockCloseTab = vi.fn();
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'closeTab',
+					handleCloseCurrentTab: mockHandleCloseCurrentTab,
+					closeTab: mockCloseTab,
+					setSessions: mockSetSessions,
+					activeSession: {
+						id: 'session-1',
+						aiTabs: [{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] }],
+						activeTabId: 'ai-tab-1',
+						filePreviewTabs: [],
+						activeFileTabId: null,
+						unifiedTabOrder: ['ai-tab-1'],
+						inputMode: 'ai',
+					},
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 'w',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				// closeTab should NOT be called when it's the last AI tab
+				expect(mockCloseTab).not.toHaveBeenCalled();
+			});
+		});
+
+		describe('Cmd+Shift+[ and Cmd+Shift+] (tab cycling)', () => {
+			it('should navigate to next tab in unified order (Cmd+Shift+])', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToNextUnifiedTab = vi.fn().mockReturnValue({
+					session: { id: 'session-1', activeFileTabId: 'file-tab-1' },
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'nextTab',
+					navigateToNextUnifiedTab: mockNavigateToNextUnifiedTab,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: ']',
+							metaKey: true,
+							shiftKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockNavigateToNextUnifiedTab).toHaveBeenCalled();
+				expect(mockSetSessions).toHaveBeenCalled();
+			});
+
+			it('should navigate to previous tab in unified order (Cmd+Shift+[)', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToPrevUnifiedTab = vi.fn().mockReturnValue({
+					session: { id: 'session-1', activeFileTabId: 'file-tab-2' },
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'prevTab',
+					navigateToPrevUnifiedTab: mockNavigateToPrevUnifiedTab,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: '[',
+							metaKey: true,
+							shiftKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockNavigateToPrevUnifiedTab).toHaveBeenCalled();
+				expect(mockSetSessions).toHaveBeenCalled();
+			});
+
+			it('should pass showUnreadOnly filter to navigation', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToNextUnifiedTab = vi.fn().mockReturnValue({
+					session: { id: 'session-1' },
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'nextTab',
+					navigateToNextUnifiedTab: mockNavigateToNextUnifiedTab,
+					setSessions: mockSetSessions,
+					showUnreadOnly: true, // Filter is active
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: ']',
+							metaKey: true,
+							shiftKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockNavigateToNextUnifiedTab).toHaveBeenCalledWith(
+					expect.anything(),
+					true // showUnreadOnly passed
+				);
+			});
+		});
+
+		describe('Cmd+1-9 (tab jumping by index)', () => {
+			it('should jump to AI tab at index 0 with Cmd+1', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToUnifiedTabByIndex = vi.fn().mockReturnValue({
+					session: { id: 'session-1', activeTabId: 'ai-tab-1', activeFileTabId: null },
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'goToTab1',
+					navigateToUnifiedTabByIndex: mockNavigateToUnifiedTabByIndex,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: '1',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockNavigateToUnifiedTabByIndex).toHaveBeenCalledWith(
+					expect.anything(),
+					0 // index 0 for Cmd+1
+				);
+			});
+
+			it('should jump to file tab at index 1 with Cmd+2', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToUnifiedTabByIndex = vi.fn().mockReturnValue({
+					session: { id: 'session-1', activeTabId: 'ai-tab-1', activeFileTabId: 'file-tab-1' },
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'goToTab2',
+					navigateToUnifiedTabByIndex: mockNavigateToUnifiedTabByIndex,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: '2',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockNavigateToUnifiedTabByIndex).toHaveBeenCalledWith(
+					expect.anything(),
+					1 // index 1 for Cmd+2
+				);
+			});
+
+			it('should not execute tab jump when showUnreadOnly is active', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToUnifiedTabByIndex = vi.fn();
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'goToTab1',
+					navigateToUnifiedTabByIndex: mockNavigateToUnifiedTabByIndex,
+					setSessions: mockSetSessions,
+					showUnreadOnly: true, // Filter is active - disables Cmd+1-9
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: '1',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				// Should NOT be called when showUnreadOnly is active
+				expect(mockNavigateToUnifiedTabByIndex).not.toHaveBeenCalled();
+			});
+		});
+
+		describe('Cmd+0 (jump to last tab)', () => {
+			it('should jump to last tab in unified order', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToLastUnifiedTab = vi.fn().mockReturnValue({
+					session: { id: 'session-1', activeFileTabId: 'file-tab-2' },
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'goToLastTab',
+					navigateToLastUnifiedTab: mockNavigateToLastUnifiedTab,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: '0',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockNavigateToLastUnifiedTab).toHaveBeenCalled();
+				expect(mockSetSessions).toHaveBeenCalled();
+			});
+
+			it('should not execute when showUnreadOnly is active', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockNavigateToLastUnifiedTab = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'goToLastTab',
+					navigateToLastUnifiedTab: mockNavigateToLastUnifiedTab,
+					showUnreadOnly: true,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: '0',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				// Should NOT be called when showUnreadOnly is active
+				expect(mockNavigateToLastUnifiedTab).not.toHaveBeenCalled();
+			});
+		});
+
+		describe('Cmd+Shift+T (reopen closed tab)', () => {
+			it('should reopen from unified closed tab history', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockReopenUnifiedClosedTab = vi.fn().mockReturnValue({
+					session: { id: 'session-1' },
+					tab: { id: 'reopened-tab' },
+					wasFile: true,
+				});
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'reopenClosedTab',
+					reopenUnifiedClosedTab: mockReopenUnifiedClosedTab,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 't',
+							metaKey: true,
+							shiftKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockReopenUnifiedClosedTab).toHaveBeenCalled();
+				expect(mockSetSessions).toHaveBeenCalled();
+			});
+
+			it('should not update sessions when no closed tab to reopen', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockReopenUnifiedClosedTab = vi.fn().mockReturnValue(null);
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'reopenClosedTab',
+					reopenUnifiedClosedTab: mockReopenUnifiedClosedTab,
+					setSessions: mockSetSessions,
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 't',
+							metaKey: true,
+							shiftKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				expect(mockReopenUnifiedClosedTab).toHaveBeenCalled();
+				expect(mockSetSessions).not.toHaveBeenCalled();
+			});
+		});
+
+		describe('tab shortcuts disabled in group chat', () => {
+			it('should not execute tab shortcuts when group chat is active', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockCreateTab = vi.fn();
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'newTab',
+					createTab: mockCreateTab,
+					setSessions: mockSetSessions,
+					activeGroupChatId: 'group-chat-123', // Group chat is active
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 't',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				// Tab shortcuts should be disabled in group chat mode
+				expect(mockCreateTab).not.toHaveBeenCalled();
+			});
+		});
+
+		describe('tab shortcuts disabled in terminal mode', () => {
+			it('should not execute tab shortcuts when in terminal/shell mode', () => {
+				const { result } = renderHook(() => useMainKeyboardHandler());
+
+				const mockCreateTab = vi.fn();
+				const mockSetSessions = vi.fn();
+
+				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
+					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'newTab',
+					createTab: mockCreateTab,
+					setSessions: mockSetSessions,
+					activeSession: {
+						id: 'session-1',
+						aiTabs: [{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] }],
+						activeTabId: 'ai-tab-1',
+						filePreviewTabs: [],
+						activeFileTabId: null,
+						unifiedTabOrder: ['ai-tab-1'],
+						inputMode: 'terminal', // Terminal mode - tabs not applicable
+					},
+				});
+
+				act(() => {
+					window.dispatchEvent(
+						new KeyboardEvent('keydown', {
+							key: 't',
+							metaKey: true,
+							bubbles: true,
+						})
+					);
+				});
+
+				// Tab shortcuts should be disabled in terminal mode
+				expect(mockCreateTab).not.toHaveBeenCalled();
+			});
 		});
 	});
 });
