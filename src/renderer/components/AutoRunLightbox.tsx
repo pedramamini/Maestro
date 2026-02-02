@@ -109,12 +109,76 @@ export const AutoRunLightbox = memo(
 			onNavigate(attachmentsList[newIndex]);
 		}, [canNavigate, currentIndex, attachmentsList, onNavigate]);
 
+		// Validate URL to prevent SSRF attacks
+		const isUrlSafe = (url: string): boolean => {
+			try {
+				// Allow data URLs (base64 encoded images)
+				if (url.startsWith('data:')) {
+					return true;
+				}
+
+				const parsedUrl = new URL(url);
+				const protocol = parsedUrl.protocol.toLowerCase();
+				const hostname = parsedUrl.hostname.toLowerCase();
+
+				// Only allow http and https protocols
+				if (protocol !== 'http:' && protocol !== 'https:') {
+					return false;
+				}
+
+				// Block localhost and loopback addresses
+				if (
+					hostname === 'localhost' ||
+					hostname === '127.0.0.1' ||
+					hostname === '::1' ||
+					hostname.startsWith('127.') ||
+					hostname.endsWith('.localhost')
+				) {
+					return false;
+				}
+
+				// Block private IP ranges (RFC 1918)
+				// 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16
+				const ipv4Match = hostname.match(/^(\d{1,3})\.(\d{1,3})\.(\d{1,3})\.(\d{1,3})$/);
+				if (ipv4Match) {
+					const [, a, b] = ipv4Match.map(Number);
+					if (a === 10 || (a === 172 && b >= 16 && b <= 31) || (a === 192 && b === 168)) {
+						return false;
+					}
+					// Block link-local addresses (169.254.0.0/16) - commonly used for cloud metadata
+					if (a === 169 && b === 254) {
+						return false;
+					}
+				}
+
+				// Block IPv6 private addresses
+				if (
+					hostname.startsWith('fc00:') ||
+					hostname.startsWith('fd00:') ||
+					hostname.startsWith('fe80:')
+				) {
+					return false;
+				}
+
+				return true;
+			} catch {
+				// Invalid URL
+				return false;
+			}
+		};
+
 		// Copy image to clipboard
 		const copyToClipboard = useCallback(async () => {
 			if (!lightboxFilename) return;
 
 			const imageUrl = lightboxExternalUrl || attachmentPreviews.get(lightboxFilename);
 			if (!imageUrl) return;
+
+			// Validate URL to prevent SSRF
+			if (!isUrlSafe(imageUrl)) {
+				console.error('Blocked potentially unsafe URL:', imageUrl);
+				return;
+			}
 
 			try {
 				const response = await fetch(imageUrl);
