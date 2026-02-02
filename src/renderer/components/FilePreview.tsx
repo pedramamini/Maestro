@@ -46,6 +46,26 @@ import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import type { FileNode } from '../types/fileTree';
 import { isImageFile } from '../../shared/gitUtils';
 
+// Global cache for loaded images to prevent re-fetching and flickering
+// Maps resolved path -> { dataUrl, dimensions }
+const imageCache = new Map<
+	string,
+	{ dataUrl: string; width?: number; height?: number; loadedAt: number }
+>();
+
+// Cache cleanup interval (clear entries older than 10 minutes)
+const IMAGE_CACHE_TTL = 10 * 60 * 1000;
+
+// Clean up old cache entries periodically
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, value] of imageCache.entries()) {
+		if (now - value.loadedAt > IMAGE_CACHE_TTL) {
+			imageCache.delete(key);
+		}
+	}
+}, IMAGE_CACHE_TTL);
+
 interface FileStats {
 	size: number;
 	createdAt: string;
@@ -332,6 +352,7 @@ const resolveImagePath = (src: string, markdownFilePath: string): string => {
 };
 
 // Custom image component for markdown that loads images from file paths
+// Uses a global cache to prevent re-fetching and flickering on re-renders
 function MarkdownImage({
 	src,
 	alt,
@@ -352,33 +373,63 @@ function MarkdownImage({
 	sshRemoteId?: string; // SSH remote ID for remote file operations
 }) {
 	const [dataUrl, setDataUrl] = useState<string | null>(null);
+	const [dimensions, setDimensions] = useState<{ width?: number; height?: number }>({});
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const isRemoteUrl = src?.startsWith('http://') || src?.startsWith('https://');
 
+	// Compute the cache key based on resolved path
+	const cacheKey = useMemo(() => {
+		if (!src) return null;
+		if (src.startsWith('data:')) return src; // Use data URL itself as key
+		if (isRemoteUrl) return src; // Use URL as key for remote images
+
+		let decodedSrc = src;
+		try {
+			decodedSrc = decodeURIComponent(src);
+		} catch {
+			// Use original if decode fails
+		}
+
+		if (isFromFileTree && projectRoot) {
+			return `${projectRoot}/${decodedSrc}`;
+		}
+		return resolveImagePath(decodedSrc, markdownFilePath);
+	}, [src, markdownFilePath, isFromFileTree, projectRoot, isRemoteUrl]);
+
 	useEffect(() => {
-		// Reset state when src or showRemoteImages changes
 		setError(null);
 
-		if (!src) {
+		if (!src || !cacheKey) {
 			setDataUrl(null);
 			setLoading(false);
 			return;
 		}
 
-		// If it's already a data URL, use it directly
-		if (src.startsWith('data:')) {
-			setDataUrl(src);
+		// Check cache first
+		const cached = imageCache.get(cacheKey);
+		if (cached) {
+			setDataUrl(cached.dataUrl);
+			setDimensions({ width: cached.width, height: cached.height });
 			setLoading(false);
 			return;
 		}
 
+		// If it's already a data URL, use it directly and cache
+		if (src.startsWith('data:')) {
+			setDataUrl(src);
+			setLoading(false);
+			// Cache with current time (dimensions will be set on load)
+			imageCache.set(cacheKey, { dataUrl: src, loadedAt: Date.now() });
+			return;
+		}
+
 		// If it's an HTTP(S) URL, handle based on showRemoteImages setting
-		if (src.startsWith('http://') || src.startsWith('https://')) {
+		if (isRemoteUrl) {
 			if (showRemoteImages) {
 				setDataUrl(src);
+				imageCache.set(cacheKey, { dataUrl: src, loadedAt: Date.now() });
 			} else {
-				// Explicitly clear the dataUrl when hiding remote images
 				setDataUrl(null);
 			}
 			setLoading(false);
@@ -388,36 +439,16 @@ function MarkdownImage({
 		// For local files, we need to load them
 		setLoading(true);
 
-		// Decode URL-encoded characters (e.g., %20 -> space) since file:// URLs encode spaces
-		// but the filesystem needs actual spaces
-		let decodedSrc = src;
-		try {
-			decodedSrc = decodeURIComponent(src);
-		} catch {
-			// If decoding fails, use original src
-		}
-
-		// Resolve the path:
-		// - If isFromFileTree is true, the src is already a path relative to projectRoot (complete path from file tree)
-		// - Otherwise, resolve relative to the markdown file location
-		let resolvedPath: string;
-		if (isFromFileTree && projectRoot) {
-			// Path was found in file tree - combine with projectRoot directly
-			resolvedPath = `${projectRoot}/${decodedSrc}`;
-		} else {
-			// Path is relative to markdown file - use normal resolution
-			resolvedPath = resolveImagePath(decodedSrc, markdownFilePath);
-		}
-
 		// Load the image via IPC (supports SSH remote)
 		window.maestro.fs
-			.readFile(resolvedPath, sshRemoteId)
+			.readFile(cacheKey, sshRemoteId)
 			.then((result) => {
 				// readFile returns a data URL for images
 				if (result.startsWith('data:')) {
 					setDataUrl(result);
+					// Cache the result
+					imageCache.set(cacheKey, { dataUrl: result, loadedAt: Date.now() });
 				} else {
-					// If it's not a data URL, something went wrong
 					setError('Invalid image data');
 				}
 				setLoading(false);
@@ -426,13 +457,37 @@ function MarkdownImage({
 				setError(`Failed to load image: ${err.message || 'Unknown error'}`);
 				setLoading(false);
 			});
-	}, [src, markdownFilePath, showRemoteImages, isFromFileTree, projectRoot, sshRemoteId]);
+	}, [src, cacheKey, showRemoteImages, isRemoteUrl, sshRemoteId]);
+
+	// Handle image load to get dimensions and update cache
+	const handleImageLoad = useCallback(
+		(e: React.SyntheticEvent<HTMLImageElement>) => {
+			const img = e.currentTarget;
+			const width = img.naturalWidth;
+			const height = img.naturalHeight;
+			setDimensions({ width, height });
+
+			// Update cache with dimensions
+			if (cacheKey && dataUrl) {
+				const cached = imageCache.get(cacheKey);
+				if (cached) {
+					imageCache.set(cacheKey, { ...cached, width, height });
+				}
+			}
+		},
+		[cacheKey, dataUrl]
+	);
 
 	if (loading) {
 		return (
 			<span
-				className="inline-flex items-center gap-2 px-3 py-2 rounded"
-				style={{ backgroundColor: theme.colors.bgActivity }}
+				className="inline-flex items-center gap-2 px-3 py-2 rounded my-2"
+				style={{
+					backgroundColor: theme.colors.bgActivity,
+					// Reserve some space to reduce layout shift
+					minHeight: '100px',
+					minWidth: '200px',
+				}}
 			>
 				<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.textDim }} />
 				<span className="text-xs" style={{ color: theme.colors.textDim }}>
@@ -445,7 +500,7 @@ function MarkdownImage({
 	if (error) {
 		return (
 			<span
-				className="inline-flex items-center gap-2 px-3 py-2 rounded"
+				className="inline-flex items-center gap-2 px-3 py-2 rounded my-2"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					border: `1px solid ${theme.colors.error}`,
@@ -463,7 +518,7 @@ function MarkdownImage({
 	if (!dataUrl && isRemoteUrl && !showRemoteImages) {
 		return (
 			<span
-				className="inline-flex items-center gap-2 px-3 py-2 rounded"
+				className="inline-flex items-center gap-2 px-3 py-2 rounded my-2"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					border: `1px dashed ${theme.colors.border}`,
@@ -486,7 +541,14 @@ function MarkdownImage({
 			src={dataUrl}
 			alt={alt || ''}
 			className="max-w-full rounded my-2 block"
-			style={{ border: `1px solid ${theme.colors.border}` }}
+			style={{
+				border: `1px solid ${theme.colors.border}`,
+				// Use cached dimensions if available to prevent layout shift
+				...(dimensions.width && dimensions.height
+					? { aspectRatio: `${dimensions.width} / ${dimensions.height}` }
+					: {}),
+			}}
+			onLoad={handleImageLoad}
 		/>
 	);
 }
