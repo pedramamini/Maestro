@@ -18,6 +18,8 @@ export interface Toast {
 	// Action link - clickable URL shown below message (e.g., PR URL)
 	actionUrl?: string; // URL to open when clicked
 	actionLabel?: string; // Label for the action link (defaults to URL)
+	// Skip custom notification command for this toast (used for synopsis messages)
+	skipCustomNotification?: boolean;
 }
 
 interface ToastContextType {
@@ -118,7 +120,8 @@ export function ToastProvider({
 		});
 
 		// Run custom notification command if enabled and configured
-		if (audioEnabled && audioCommand) {
+		// Skip for toasts that explicitly opt out (e.g., synopsis messages)
+		if (audioEnabled && audioCommand && !toast.skipCustomNotification) {
 			console.log(
 				'[ToastContext] Running custom notification with message:',
 				toast.message,
@@ -128,6 +131,8 @@ export function ToastProvider({
 			window.maestro.notification.speak(toast.message, audioCommand).catch((err) => {
 				console.error('[ToastContext] Custom notification failed:', err);
 			});
+		} else if (toast.skipCustomNotification) {
+			console.log('[ToastContext] Custom notification skipped - toast opted out');
 		} else {
 			console.log('[ToastContext] Custom notification skipped - enabled:', audioEnabled, 'command:', audioCommand);
 		}

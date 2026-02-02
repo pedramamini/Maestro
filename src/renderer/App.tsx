@@ -2549,6 +2549,7 @@ function MaestroConsoleInner() {
 								);
 
 								// Show toast for synopsis completion
+								// Skip custom notification - synopsis is not part of regular AI conversation flow
 								addToastRef.current({
 									type: 'info',
 									title: 'Synopsis',
@@ -2559,6 +2560,7 @@ function MaestroConsoleInner() {
 									sessionId: synopsisData!.sessionId,
 									tabId: synopsisData!.tabId,
 									tabName: synopsisData!.tabName,
+									skipCustomNotification: true,
 								});
 
 								// Refresh history panel if available
