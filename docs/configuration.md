@@ -15,7 +15,7 @@ Settings are organized into tabs:
 | **General** | Font family and size, terminal width, log level and buffer, max output lines, shell configuration, input send behavior, default toggles (history, thinking), power management, updates, privacy, context warnings, usage stats, document graph, storage location |
 | **Shortcuts** | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts)) |
 | **Themes** | Dark, light, and vibe mode themes, custom theme builder with import/export |
-| **Notifications** | OS notifications, audio feedback (text-to-speech), toast notification duration |
+| **Notifications** | OS notifications, custom command notifications, toast notification duration |
 | **AI Commands** | View and edit slash commands, [Spec-Kit](./speckit-commands), and [OpenSpec](./openspec-commands) prompts |
 | **SSH Hosts** | Configure remote hosts for [SSH agent execution](./ssh-remote-execution) |
 
@@ -78,21 +78,23 @@ Enable desktop notifications to be alerted when:
 
 ### Custom Notification
 
-Execute a custom command when AI tasks complete. By default, this uses text-to-speech (TTS), but you can leverage any notification stack you prefer.
+Execute a custom command when AI tasks complete. Use any notification method that fits your workflow.
 
 **To configure:**
 1. Toggle **Enable Custom Notification** on
 2. Set the **Command Chain** — the command(s) that accept text via stdin:
-   - **TTS (default):** `say` (macOS), `espeak` or `festival --tts` (Linux)
-   - **Windows:** Use a PowerShell script or third-party TTS tool
+   - **macOS:** `say` (text-to-speech), `afplay /path/to/sound.wav` (audio file)
+   - **Linux:** `notify-send "Maestro"`, `espeak`, `paplay /path/to/sound.wav`
+   - **Windows:** PowerShell scripts or third-party tools
    - **Custom:** Any command or script that accepts stdin
 3. Click **Test** to verify your command works
 4. Click **Stop** to interrupt a running test
 
 **Command chaining:** Chain multiple commands together using pipes to mix and match tools. Examples:
-- `say` — speak aloud using macOS TTS
+- `say` — speak aloud using macOS text-to-speech
 - `tee ~/log.txt | say` — log to a file AND speak aloud
 - `notify-send "Maestro" && espeak` — show desktop notification and speak (Linux)
+- `afplay ~/sounds/done.wav` — play a sound file (macOS)
 
 ### Toast Notifications
 
