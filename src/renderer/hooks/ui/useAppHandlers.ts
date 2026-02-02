@@ -154,21 +154,37 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 		e.stopPropagation();
 	}, []);
 
-	// Reset drag state when drag ends (e.g., user cancels by pressing Escape or dragging outside window)
+	// Prevent default drag-and-drop behavior at the document level.
+	// This is critical in Electron/Chromium: without preventing default on both
+	// dragover and drop at the document level, the browser can fall into a state
+	// where subsequent drag-and-drop operations are rejected after the first drop.
+	// Both events must have preventDefault() called to maintain a valid drop zone.
 	useEffect(() => {
 		const handleDragEnd = () => {
 			dragCounterRef.current = 0;
 			setIsDraggingImage(false);
 		};
 
+		const handleDocumentDragOver = (e: DragEvent) => {
+			e.preventDefault();
+		};
+
+		const handleDocumentDrop = (e: DragEvent) => {
+			e.preventDefault();
+			handleDragEnd();
+		};
+
 		// dragend fires when the drag operation ends (drop or cancel)
 		document.addEventListener('dragend', handleDragEnd);
-		// Also listen for drop anywhere in case it's not on our drop zone
-		document.addEventListener('drop', handleDragEnd);
+		// Prevent default on dragover to maintain valid drop zone across all elements
+		document.addEventListener('dragover', handleDocumentDragOver);
+		// Prevent default on drop to avoid Electron file-open behavior and maintain drop state
+		document.addEventListener('drop', handleDocumentDrop);
 
 		return () => {
 			document.removeEventListener('dragend', handleDragEnd);
-			document.removeEventListener('drop', handleDragEnd);
+			document.removeEventListener('dragover', handleDocumentDragOver);
+			document.removeEventListener('drop', handleDocumentDrop);
 		};
 	}, []);
 
