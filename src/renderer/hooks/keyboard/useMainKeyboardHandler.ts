@@ -114,6 +114,12 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				// NOTE: Must use e.code for Alt key combos on macOS because e.key produces special characters
 				const isSessionJumpShortcut =
 					e.altKey && (e.metaKey || e.ctrlKey) && /^Digit[0-9]$/.test(e.code || '');
+				// Allow tab management shortcuts (Cmd+T new tab, Cmd+W close tab) even when file preview overlay is open
+				const isTabManagementShortcut =
+					(e.metaKey || e.ctrlKey) &&
+					!e.shiftKey &&
+					!e.altKey &&
+					(keyLower === 't' || keyLower === 'w');
 
 				if (ctx.hasOpenModal()) {
 					// TRUE MODAL is open - block most shortcuts from App.tsx
@@ -133,6 +139,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					// Allow Cmd+Shift+[] to fall through to App.tsx handler
 					// (which will cycle right panel tabs when file tab is active)
 					// Also allow right panel tab shortcuts to switch tabs while overlay is open
+					// Also allow tab management shortcuts (Cmd+T/W) so user can create/close tabs from file preview
 					if (
 						!isCycleShortcut &&
 						!isLayoutShortcut &&
@@ -140,7 +147,8 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						!isSystemUtilShortcut &&
 						!isSessionJumpShortcut &&
 						!isJumpToBottomShortcut &&
-						!isMarkdownToggleShortcut
+						!isMarkdownToggleShortcut &&
+						!isTabManagementShortcut
 					) {
 						return;
 					}

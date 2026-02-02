@@ -334,6 +334,50 @@ describe('useMainKeyboardHandler', () => {
 			// Layout shortcuts should work even when modal is open
 			expect(mockSetLeftSidebar).toHaveBeenCalled();
 		});
+
+		it('should allow tab management shortcuts (Cmd+T) when only overlays are open', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockSetSessions = vi.fn();
+			const mockSetActiveFocus = vi.fn();
+			const mockInputRef = { current: { focus: vi.fn() } };
+			const mockActiveSession = {
+				id: 'test-session',
+				name: 'Test',
+				aiTabs: [],
+				activeTabId: 'tab-1',
+				unifiedTabOrder: [],
+			};
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				hasOpenLayers: () => true, // Overlay is open (e.g., file preview)
+				hasOpenModal: () => false, // But no true modal
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'newTab',
+				activeSession: mockActiveSession,
+				createTab: vi.fn().mockReturnValue({
+					session: { ...mockActiveSession, aiTabs: [{ id: 'new-tab' }] },
+				}),
+				setSessions: mockSetSessions,
+				setActiveFocus: mockSetActiveFocus,
+				inputRef: mockInputRef,
+				defaultSaveToHistory: true,
+				defaultShowThinking: 'on',
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 't',
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			// Cmd+T should create a new tab even when file preview overlay is open
+			expect(mockSetSessions).toHaveBeenCalled();
+			expect(mockSetActiveFocus).toHaveBeenCalledWith('main');
+		});
 	});
 
 	describe('navigation handlers delegation', () => {
