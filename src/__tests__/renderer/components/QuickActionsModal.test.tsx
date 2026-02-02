@@ -37,9 +37,10 @@ vi.mock('../../../renderer/contexts/LayerStackContext', () => ({
 	}),
 }));
 
+const mockAddToast = vi.fn();
 vi.mock('../../../renderer/contexts/ToastContext', () => ({
 	useToast: () => ({
-		addToast: vi.fn(),
+		addToast: mockAddToast,
 	}),
 }));
 
@@ -1271,7 +1272,7 @@ describe('QuickActionsModal', () => {
 			});
 		});
 
-		it('handles git remote URL returning null', async () => {
+		it('handles git remote URL returning null with toast notification', async () => {
 			const { gitService } = await import('../../../renderer/services/git');
 			vi.mocked(gitService.getRemoteBrowserUrl).mockResolvedValueOnce(null);
 
@@ -1282,8 +1283,39 @@ describe('QuickActionsModal', () => {
 
 			await waitFor(() => {
 				expect(window.maestro.shell.openExternal).not.toHaveBeenCalled();
+				expect(mockAddToast).toHaveBeenCalledWith({
+					type: 'error',
+					title: 'No Remote URL',
+					message: 'Could not find a remote URL for this repository',
+				});
 				expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
 			});
+		});
+
+		it('handles error when opening repository in browser', async () => {
+			const { gitService } = await import('../../../renderer/services/git');
+			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+			vi.mocked(gitService.getRemoteBrowserUrl).mockRejectedValueOnce(new Error('Network error'));
+
+			const props = createDefaultProps();
+			render(<QuickActionsModal {...props} />);
+
+			fireEvent.click(screen.getByText('Open Repository in Browser'));
+
+			await waitFor(() => {
+				expect(consoleSpy).toHaveBeenCalledWith(
+					'Failed to open repository in browser:',
+					expect.any(Error)
+				);
+				expect(mockAddToast).toHaveBeenCalledWith({
+					type: 'error',
+					title: 'Error',
+					message: 'Network error',
+				});
+				expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
+			});
+
+			consoleSpy.mockRestore();
 		});
 
 		it('sorts actions alphabetically', () => {
