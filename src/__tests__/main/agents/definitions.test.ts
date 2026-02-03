@@ -70,10 +70,24 @@ describe('agent-definitions', () => {
 			expect(opencode?.noPromptSeparator).toBe(true);
 		});
 
-		it('should have opencode with default env vars for YOLO mode', () => {
+		it('should have opencode with default env vars for YOLO mode and disabled question tool', () => {
 			const opencode = AGENT_DEFINITIONS.find((def) => def.id === 'opencode');
 			expect(opencode?.defaultEnvVars).toBeDefined();
-			expect(opencode?.defaultEnvVars?.OPENCODE_CONFIG_CONTENT).toContain('external_directory');
+			const configContent = opencode?.defaultEnvVars?.OPENCODE_CONFIG_CONTENT;
+			expect(configContent).toBeDefined();
+
+			// Verify it's valid JSON
+			const config = JSON.parse(configContent!);
+
+			// Should have permission settings for YOLO mode
+			expect(config.permission).toBeDefined();
+			expect(config.permission['*']).toBe('allow');
+			expect(config.permission.external_directory).toBe('allow');
+
+			// Should disable the question tool to prevent batch mode hangs
+			// The question tool waits for stdin input which causes hangs in batch mode
+			expect(config.tools).toBeDefined();
+			expect(config.tools.question).toBe(false);
 		});
 	});
 
