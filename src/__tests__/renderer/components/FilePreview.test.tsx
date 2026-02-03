@@ -849,18 +849,18 @@ print("world")
 			fireEvent.keyDown(previewContainer!, { key: 'f', metaKey: true });
 
 			// Search should be open
-			expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
+			expect(screen.getByPlaceholderText(/Search in file/)).toBeInTheDocument();
 
 			// Press Escape - should close TOC first (it's checked first in the handler)
 			fireEvent.keyDown(previewContainer!, { key: 'Escape' });
 
 			// TOC should be closed, search should still be open
 			expect(screen.queryByText('Contents')).not.toBeInTheDocument();
-			expect(screen.getByPlaceholderText('Search...')).toBeInTheDocument();
+			expect(screen.getByPlaceholderText(/Search in file/)).toBeInTheDocument();
 
 			// Press Escape again - should close search
 			fireEvent.keyDown(previewContainer!, { key: 'Escape' });
-			expect(screen.queryByPlaceholderText('Search...')).not.toBeInTheDocument();
+			expect(screen.queryByPlaceholderText(/Search in file/)).not.toBeInTheDocument();
 		});
 	});
 
