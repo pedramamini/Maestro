@@ -22,6 +22,8 @@ export interface SshCommandResult {
 	command: string;
 	/** Arguments for the SSH command */
 	args: string[];
+	/** Script to send via stdin (for stdin-based execution) */
+	stdinScript?: string;
 }
 
 /**
@@ -130,6 +132,133 @@ export function buildRemoteCommand(options: RemoteCommandOptions): string {
 
 	// Join with && to ensure cd succeeds before running command
 	return parts.join(' && ');
+}
+
+/**
+ * Build an SSH command that executes a script via stdin.
+ *
+ * This approach completely bypasses shell escaping issues by:
+ * 1. SSH connects and runs `/bin/bash` on the remote
+ * 2. The script (with PATH setup, cd, env vars, command) is sent via stdin
+ * 3. No shell parsing of command-line arguments occurs
+ *
+ * This is the preferred method for SSH remote execution as it:
+ * - Handles any prompt content (special chars, newlines, quotes, etc.)
+ * - Avoids command-line length limits
+ * - Works regardless of the remote user's login shell (bash, zsh, fish, etc.)
+ * - Eliminates the escaping nightmare of nested shell contexts
+ *
+ * @param config SSH remote configuration
+ * @param remoteOptions Options for the remote command
+ * @returns SSH command/args plus the script to send via stdin
+ *
+ * @example
+ * const result = await buildSshCommandWithStdin(config, {
+ *   command: 'opencode',
+ *   args: ['run', '--format', 'json'],
+ *   cwd: '/home/user/project',
+ *   env: { OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"allow"}}' },
+ *   prompt: 'Write hello world to a file'
+ * });
+ * // result.command = 'ssh'
+ * // result.args = ['-o', 'BatchMode=yes', ..., 'user@host', '/bin/bash']
+ * // result.stdinScript = '#!/bin/bash\nexport PATH=...\ncd /home/user/project\nOPENCODE_CONFIG_CONTENT=... opencode run --format json "Write hello world to a file"\n'
+ */
+export async function buildSshCommandWithStdin(
+	config: SshRemoteConfig,
+	remoteOptions: RemoteCommandOptions & { prompt?: string }
+): Promise<SshCommandResult> {
+	const args: string[] = [];
+
+	// Resolve the SSH binary path
+	const sshPath = await resolveSshPath();
+
+	// For stdin-based execution, we never need TTY (stdin is the script, not user input)
+	// TTY would interfere with piping the script
+
+	// Private key - only add if explicitly provided
+	if (config.privateKeyPath && config.privateKeyPath.trim()) {
+		args.push('-i', expandTilde(config.privateKeyPath));
+	}
+
+	// Default SSH options - but RequestTTY is always 'no' for stdin mode
+	for (const [key, value] of Object.entries(DEFAULT_SSH_OPTIONS)) {
+		args.push('-o', `${key}=${value}`);
+	}
+
+	// Port specification
+	if (!config.useSshConfig || config.port !== 22) {
+		args.push('-p', config.port.toString());
+	}
+
+	// Build destination
+	if (config.username && config.username.trim()) {
+		args.push(`${config.username}@${config.host}`);
+	} else {
+		args.push(config.host);
+	}
+
+	// The remote command is just /bin/bash - it will read the script from stdin
+	args.push('/bin/bash');
+
+	// Build the script to send via stdin
+	const scriptLines: string[] = [];
+
+	// PATH setup - same directories as before
+	scriptLines.push(
+		'export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"'
+	);
+
+	// Change directory if specified
+	if (remoteOptions.cwd) {
+		// In the script context, we can use simple quoting
+		scriptLines.push(`cd ${shellEscape(remoteOptions.cwd)} || exit 1`);
+	}
+
+	// Merge environment variables
+	const mergedEnv: Record<string, string> = {
+		...(config.remoteEnv || {}),
+		...(remoteOptions.env || {}),
+	};
+
+	// Export environment variables
+	for (const [key, value] of Object.entries(mergedEnv)) {
+		if (/^[a-zA-Z_][a-zA-Z0-9_]*$/.test(key)) {
+			scriptLines.push(`export ${key}=${shellEscape(value)}`);
+		}
+	}
+
+	// Build the command line
+	// For the script, we use simple quoting since we're not going through shell parsing layers
+	const cmdParts = [remoteOptions.command, ...remoteOptions.args.map((arg) => shellEscape(arg))];
+
+	// Add prompt as final argument if provided
+	if (remoteOptions.prompt) {
+		cmdParts.push(shellEscape(remoteOptions.prompt));
+	}
+
+	// Use exec to replace the shell with the command (cleaner process tree)
+	scriptLines.push(`exec ${cmdParts.join(' ')}`);
+
+	const stdinScript = scriptLines.join('\n') + '\n';
+
+	logger.info('SSH command built with stdin script', '[ssh-command-builder]', {
+		host: config.host,
+		username: config.username || '(using SSH config/system default)',
+		port: config.port,
+		sshPath,
+		sshArgsCount: args.length,
+		scriptLineCount: scriptLines.length,
+		scriptLength: stdinScript.length,
+		// Show first part of script for debugging (truncate if long)
+		scriptPreview: stdinScript.length > 500 ? stdinScript.substring(0, 500) + '...' : stdinScript,
+	});
+
+	return {
+		command: sshPath,
+		args,
+		stdinScript,
+	};
 }
 
 /**

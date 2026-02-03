@@ -34,6 +34,8 @@ export interface ProcessConfig {
 	sendPromptViaStdin?: boolean;
 	/** If true, send the prompt via stdin as raw text instead of command line */
 	sendPromptViaStdinRaw?: boolean;
+	/** Script to send via stdin for SSH execution (bypasses shell escaping) */
+	sshStdinScript?: string;
 }
 
 /**

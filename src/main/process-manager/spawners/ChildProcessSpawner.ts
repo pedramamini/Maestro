@@ -397,8 +397,17 @@ export class ChildProcessSpawner {
 				this.exitHandler.handleError(sessionId, error);
 			});
 
-			// Handle stdin for batch mode and stream-json
-			if (isStreamJsonMode && prompt) {
+			// Handle stdin for SSH script, stream-json, or batch mode
+			if (config.sshStdinScript) {
+				// SSH stdin script mode: send the entire script to /bin/bash on remote
+				// This bypasses all shell escaping issues by piping the script via stdin
+				logger.debug('[ProcessManager] Sending SSH stdin script', 'ProcessManager', {
+					sessionId,
+					scriptLength: config.sshStdinScript.length,
+				});
+				childProcess.stdin?.write(config.sshStdinScript);
+				childProcess.stdin?.end();
+			} else if (isStreamJsonMode && prompt) {
 				if (config.sendPromptViaStdinRaw) {
 					// Send raw prompt via stdin
 					logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {

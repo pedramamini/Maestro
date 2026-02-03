@@ -1,5 +1,9 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
-import { buildSshCommand, buildRemoteCommand } from '../../../main/utils/ssh-command-builder';
+import {
+	buildSshCommand,
+	buildRemoteCommand,
+	buildSshCommandWithStdin,
+} from '../../../main/utils/ssh-command-builder';
 import type { SshRemoteConfig } from '../../../shared/types';
 import * as os from 'os';
 
@@ -658,6 +662,157 @@ describe('ssh-command-builder', () => {
 			expect(remoteCommand).toContain('line1');
 			expect(remoteCommand).toContain('line2');
 			expect(remoteCommand).toContain('line3');
+		});
+	});
+
+	describe('buildSshCommandWithStdin', () => {
+		/**
+		 * Tests for the stdin-based SSH execution approach.
+		 * This method completely bypasses shell escaping issues by:
+		 * 1. SSH connects and runs /bin/bash on the remote
+		 * 2. The entire script (PATH, cd, env, command) is sent via stdin
+		 * 3. No command-line argument parsing/escaping occurs
+		 */
+
+		it('returns ssh command with /bin/bash as remote command', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run', '--format', 'json'],
+			});
+
+			expect(result.command).toBe('ssh');
+			// Last arg should be /bin/bash (the remote command)
+			expect(result.args[result.args.length - 1]).toBe('/bin/bash');
+		});
+
+		it('includes PATH setup in stdin script', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+			});
+
+			expect(result.stdinScript).toBeDefined();
+			expect(result.stdinScript).toContain('export PATH=');
+			expect(result.stdinScript).toContain('.local/bin');
+			expect(result.stdinScript).toContain('/opt/homebrew/bin');
+		});
+
+		it('includes cd command in stdin script when cwd provided', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+				cwd: '/home/user/project',
+			});
+
+			expect(result.stdinScript).toContain("cd '/home/user/project'");
+		});
+
+		it('includes environment variables in stdin script', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+				env: {
+					OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"allow"},"tools":{"question":false}}',
+					CUSTOM_VAR: 'test-value',
+				},
+			});
+
+			expect(result.stdinScript).toContain('export OPENCODE_CONFIG_CONTENT=');
+			expect(result.stdinScript).toContain('export CUSTOM_VAR=');
+			// The JSON should be in the script (escaped with single quotes)
+			expect(result.stdinScript).toContain('question');
+		});
+
+		it('includes prompt as final argument in stdin script', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run', '--format', 'json'],
+				prompt: 'Write hello world to a file',
+			});
+
+			expect(result.stdinScript).toContain('opencode');
+			expect(result.stdinScript).toContain('Write hello world to a file');
+		});
+
+		it('handles prompts with special characters without escaping issues', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+				prompt: "What's the $PATH? Use `echo` and \"quotes\"",
+			});
+
+			// The script should contain the prompt (escaped for bash)
+			expect(result.stdinScript).toBeDefined();
+			// Single quotes in the prompt should be escaped
+			expect(result.stdinScript).toContain("'\\''");
+		});
+
+		it('handles multi-line prompts', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+				prompt: 'Line 1\nLine 2\nLine 3',
+			});
+
+			expect(result.stdinScript).toContain('Line 1');
+			expect(result.stdinScript).toContain('Line 2');
+			expect(result.stdinScript).toContain('Line 3');
+		});
+
+		it('uses exec to replace shell with command', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+			});
+
+			// The script should use exec to replace the shell process
+			expect(result.stdinScript).toContain('exec ');
+		});
+
+		it('includes SSH options in args', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+			});
+
+			expect(result.args).toContain('-o');
+			expect(result.args).toContain('BatchMode=yes');
+			expect(result.args).toContain('StrictHostKeyChecking=accept-new');
+		});
+
+		it('includes private key when provided', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+			});
+
+			expect(result.args).toContain('-i');
+			expect(result.args).toContain('/Users/testuser/.ssh/id_ed25519');
+		});
+
+		it('includes username@host destination', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+			});
+
+			expect(result.args).toContain('testuser@dev.example.com');
+		});
+
+		it('merges remote config env with option env', async () => {
+			const configWithEnv = {
+				...baseConfig,
+				remoteEnv: { REMOTE_VAR: 'from-config' },
+			};
+
+			const result = await buildSshCommandWithStdin(configWithEnv, {
+				command: 'opencode',
+				args: ['run'],
+				env: { OPTION_VAR: 'from-option' },
+			});
+
+			expect(result.stdinScript).toContain('export REMOTE_VAR=');
+			expect(result.stdinScript).toContain('export OPTION_VAR=');
 		});
 	});
 });

@@ -17,7 +17,7 @@ import {
 	CreateHandlerOptions,
 } from '../../utils/ipcHandler';
 import { getSshRemoteConfig, createSshRemoteStoreAdapter } from '../../utils/ssh-remote-resolver';
-import { buildSshCommand } from '../../utils/ssh-command-builder';
+import { buildSshCommandWithStdin } from '../../utils/ssh-command-builder';
 import { buildExpandedEnv } from '../../../shared/pathUtils';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { powerManager } from '../../power-manager';
@@ -263,11 +263,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				let useShell = false;
 				let sshRemoteUsed: SshRemoteConfig | null = null;
 				let customEnvVarsToPass: Record<string, string> | undefined = effectiveCustomEnvVars;
-				// NOTE: We previously used heredoc for OpenCode prompts over SSH, but this approach
-				// failed because the heredoc syntax (cat << 'EOF' ... EOF) doesn't survive the
-				// single-quote escaping in buildSshCommand. Now we embed the prompt directly
-				// in the args and let buildRemoteCommand handle escaping.
-				// See: https://github.com/pedramamini/Maestro/issues/XXX
+				let sshStdinScript: string | undefined;
 
 				if (config.sessionCustomPath) {
 					logger.debug(`Using session-level custom path for ${config.toolType}`, LOG_CONTEXT, {
@@ -323,8 +319,6 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						willUseSsh: config.toolType !== 'terminal' && config.sessionSshRemoteConfig?.enabled,
 					});
 				}
-				let shouldSendPromptViaStdin = false;
-				let shouldSendPromptViaStdinRaw = false;
 				if (config.toolType !== 'terminal' && config.sessionSshRemoteConfig?.enabled) {
 					// Session-level SSH config provided - resolve and use it
 					logger.info(`Using session-level SSH config`, LOG_CONTEXT, {
@@ -340,108 +334,40 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					});
 
 					if (sshResult.config) {
-						// SSH remote is configured - wrap the command for remote execution
+						// SSH remote is configured - use stdin-based execution
+						// This completely bypasses shell escaping issues by sending the script via stdin
 						sshRemoteUsed = sshResult.config;
 
-						// ALWAYS use stdin for SSH remote execution when there's a prompt.
-						// Embedding prompts in the command line causes shell escaping nightmares:
-						// - Multiple layers of quote escaping (local spawn, SSH, remote zsh, bash -c)
-						// - Embedded newlines in prompts break zsh parsing (e.g., "zsh:35: parse error")
-						// - Special characters like quotes, $, !, etc. need complex escaping
-						// Using stdin with --input-format stream-json completely bypasses all these issues.
-						const hasStreamJsonInput =
-							finalArgs.includes('--input-format') && finalArgs.includes('stream-json');
-						const agentSupportsStreamJson = agent?.capabilities.supportsStreamJsonInput ?? false;
-						let sshArgs = finalArgs;
-						if (config.prompt && agentSupportsStreamJson) {
-							// Agent supports stream-json - always use stdin for prompts
-							if (!hasStreamJsonInput) {
-								sshArgs = [...finalArgs, '--input-format', 'stream-json'];
-							}
-							shouldSendPromptViaStdin = true;
-							logger.info(`Using stdin for prompt in SSH remote execution`, LOG_CONTEXT, {
-								sessionId: config.sessionId,
-								promptLength: config.prompt?.length,
-								reason: 'ssh-stdin-for-reliability',
-								hasStreamJsonInput,
-							});
-						} else if (config.prompt && !agentSupportsStreamJson) {
-							// Agent doesn't support stream-json - embed prompt in command line args
-							// For OpenCode: prompt is a positional argument (no --p flag, no -- separator)
-							// For other agents: send via stdin as raw text (if they support it)
-							if (config.toolType === 'opencode') {
-								// OpenCode: add prompt as positional argument
-								// buildRemoteCommand will properly escape it with shellEscape()
-								sshArgs = [...sshArgs, config.prompt];
-								logger.info(`Embedding prompt in OpenCode command args for SSH`, LOG_CONTEXT, {
-									sessionId: config.sessionId,
-									promptLength: config.prompt?.length,
-								});
-							} else {
-								// Other agents: send via stdin as raw text
-								shouldSendPromptViaStdinRaw = true;
-							}
-						}
-						//
-						// Determine the command to run on the remote host:
-						// 1. If user set a session-specific custom path, use that (they configured it for the remote)
-						// 2. Otherwise, use the agent's binaryName (e.g., 'codex', 'claude') and let
-						//    the remote shell's PATH resolve it. This avoids using local paths like
-						//    '/opt/homebrew/bin/codex' which don't exist on the remote host.
+						// Determine the command to run on the remote host
 						const remoteCommand = config.sessionCustomPath || agent?.binaryName || config.command;
-						// Decide whether we'll send input via stdin to the remote command
-						const useStdin = sshArgs.includes('--input-format') && sshArgs.includes('stream-json');
 
-						const sshCommand = await buildSshCommand(sshResult.config, {
+						// Build the SSH command with stdin script
+						// The script contains PATH setup, cd, env vars, and the actual command
+						// This eliminates all shell escaping issues
+						const sshCommand = await buildSshCommandWithStdin(sshResult.config, {
 							command: remoteCommand,
-							args: sshArgs,
-							// Use the cwd from config - this is the project directory on the remote
+							args: finalArgs,
 							cwd: config.cwd,
-							// Pass custom environment variables to the remote command
 							env: effectiveCustomEnvVars,
-							// Explicitly indicate whether stdin will be used so ssh-command-builder
-							// can avoid forcing a TTY for stream-json modes.
-							useStdin,
+							prompt: config.prompt, // Prompt is included in the stdin script
 						});
 
 						commandToSpawn = sshCommand.command;
 						argsToSpawn = sshCommand.args;
+						sshStdinScript = sshCommand.stdinScript;
 
-						// For SSH, env vars are passed in the remote command string, not locally
+						// For SSH, env vars are passed in the stdin script, not locally
 						customEnvVarsToPass = undefined;
 
-						// On Windows, use PowerShell for SSH commands to avoid cmd.exe's 8191 character limit
-						// PowerShell supports up to 32,767 characters, which is needed for large prompts
-						if (isWindows) {
-							useShell = true;
-							shellToUse = 'powershell.exe';
-							logger.info(
-								`Using PowerShell for SSH command on Windows to support long command lines`,
-								LOG_CONTEXT,
-								{
-									sessionId: config.sessionId,
-									commandLength: sshCommand.args.join(' ').length,
-								}
-							);
-						}
-
-						// Detailed debug logging to diagnose SSH command execution issues
-						logger.debug(`SSH command details for debugging`, LOG_CONTEXT, {
+						logger.info(`SSH command built with stdin script`, LOG_CONTEXT, {
 							sessionId: config.sessionId,
 							toolType: config.toolType,
 							sshBinary: sshCommand.command,
 							sshArgsCount: sshCommand.args.length,
-							sshArgsArray: sshCommand.args,
-							// Show the last arg which contains the wrapped remote command
-							remoteCommandString: sshCommand.args[sshCommand.args.length - 1],
-							// Show the agent command that will execute remotely
-							agentBinary: remoteCommand,
-							agentArgs: sshArgs,
-							agentCwd: config.cwd,
-							// Full invocation for copy-paste debugging
-							fullSshInvocation: `${sshCommand.command} ${sshCommand.args
-								.map((arg) => (arg.includes(' ') ? `'${arg}'` : arg))
-								.join(' ')}`,
+							remoteCommand,
+							remoteCwd: config.cwd,
+							promptLength: config.prompt?.length,
+							scriptLength: sshCommand.stdinScript?.length,
 						});
 					}
 				}
@@ -460,38 +386,31 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					command: commandToSpawn,
 					args: argsToSpawn,
 					// When using SSH, use user's home directory as local cwd
-					// The remote working directory is embedded in the SSH command itself
+					// The remote working directory is embedded in the SSH stdin script
 					// This fixes ENOENT errors when session.cwd is a remote-only path
 					cwd: sshRemoteUsed ? os.homedir() : config.cwd,
 					// When using SSH, disable PTY (SSH provides its own terminal handling)
-					// and env vars are passed via the remote command string
 					requiresPty: sshRemoteUsed ? false : agent?.requiresPty,
-					// When using SSH with small prompts, the prompt was already added to sshArgs above
-					// For large prompts or stream-json input, pass it to ProcessManager so it can send via stdin
-					prompt:
-						sshRemoteUsed && config.prompt && shouldSendPromptViaStdin
-							? config.prompt
-							: sshRemoteUsed
-								? undefined
-								: config.prompt,
+					// For SSH, prompt is included in the stdin script, not passed separately
+					// For local execution, pass prompt as normal
+					prompt: sshRemoteUsed ? undefined : config.prompt,
 					shell: shellToUse,
 					runInShell: useShell,
 					shellArgs: shellArgsStr, // Shell-specific CLI args (for terminal sessions)
 					shellEnvVars: shellEnvVars, // Shell-specific env vars (for terminal sessions)
 					contextWindow, // Pass configured context window to process manager
-					// When using SSH, env vars are passed in the remote command string, not locally
+					// When using SSH, env vars are passed in the stdin script, not locally
 					customEnvVars: customEnvVarsToPass,
 					imageArgs: agent?.imageArgs, // Function to build image CLI args (for Codex, OpenCode)
 					promptArgs: agent?.promptArgs, // Function to build prompt args (e.g., ['-p', prompt] for OpenCode)
 					noPromptSeparator: agent?.noPromptSeparator, // Some agents don't support '--' before prompt
-					// For SSH with stream-json input, send prompt via stdin instead of command line
-					sendPromptViaStdin: shouldSendPromptViaStdin ? true : undefined,
-					sendPromptViaStdinRaw: shouldSendPromptViaStdinRaw ? true : undefined,
 					// Stats tracking: use cwd as projectPath if not explicitly provided
 					projectPath: config.cwd,
 					// SSH remote context (for SSH-specific error messages)
 					sshRemoteId: sshRemoteUsed?.id,
 					sshRemoteHost: sshRemoteUsed?.host,
+					// SSH stdin script - the entire command is sent via stdin to /bin/bash on remote
+					sshStdinScript,
 				});
 
 				logger.info(`Process spawned successfully`, LOG_CONTEXT, {
