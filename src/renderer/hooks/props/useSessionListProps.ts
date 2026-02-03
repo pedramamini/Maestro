@@ -98,6 +98,7 @@ export interface UseSessionListPropsDeps {
 	setRenameInstanceSessionId: (id: string) => void;
 	setDuplicatingSessionId: (id: string | null) => void;
 	setGroupChatsExpanded: (expanded: boolean) => void;
+	setQuickActionOpen: (open: boolean) => void;
 
 	// Handlers (should be memoized with useCallback)
 	toggleGlobalLive: () => void;
@@ -193,6 +194,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			setProcessMonitorOpen: deps.setProcessMonitorOpen,
 			setUsageDashboardOpen: deps.setUsageDashboardOpen,
 			setSymphonyModalOpen: deps.setSymphonyModalOpen,
+			setQuickActionOpen: deps.setQuickActionOpen,
 
 			// Handlers
 			toggleGroup: deps.toggleGroup,
@@ -316,6 +318,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.setProcessMonitorOpen,
 			deps.setUsageDashboardOpen,
 			deps.setSymphonyModalOpen,
+			deps.setQuickActionOpen,
 			deps.setGroups,
 			deps.setSessions,
 			deps.setRenameInstanceModalOpen,
