@@ -333,7 +333,10 @@ describe('SessionStatusBanner', () => {
 			expect(screen.getByText('33%')).toBeInTheDocument();
 		});
 
-		it('caps percentage at 100%', () => {
+		it('does not render bar when accumulated tokens exceed context window', () => {
+			// When total context tokens (input + cacheRead + cacheCreation) exceed the context window,
+			// this indicates accumulated values from multi-tool turns.
+			// estimateContextUsage returns null, so the ContextUsageBar doesn't render.
 			const usageStats = createUsageStats({
 				inputTokens: 150000,
 				outputTokens: 100000,
@@ -344,8 +347,9 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			// (150000 + 100000) / 200000 = 125% capped to 100%
-			expect(screen.getByText('100%')).toBeInTheDocument();
+			// (150000 + 100000) / 200000 = 125% > 100%, estimateContextUsage returns null
+			// So the progress bar should not be rendered
+			expect(screen.queryByRole('progressbar')).toBeNull();
 		});
 
 		it('uses default context window when contextWindow is 0', () => {

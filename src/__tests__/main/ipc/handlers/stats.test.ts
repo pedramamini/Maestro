@@ -127,8 +127,6 @@ describe('stats IPC handlers', () => {
 				'stats:record-session-created',
 				'stats:record-session-closed',
 				'stats:get-session-lifecycle',
-				'stats:get-initialization-result',
-				'stats:clear-initialization-result',
 			];
 
 			for (const channel of expectedChannels) {
@@ -509,50 +507,4 @@ describe('stats IPC handlers', () => {
 		});
 	});
 
-	describe('initialization result handlers', () => {
-		describe('stats:get-initialization-result', () => {
-			it('should be registered', () => {
-				expect(handlers.has('stats:get-initialization-result')).toBe(true);
-			});
-
-			it('should return null when no initialization issues occurred', async () => {
-				vi.mocked(statsDbModule.getInitializationResult).mockReturnValue(null);
-
-				const handler = handlers.get('stats:get-initialization-result');
-				const result = await handler!({} as any);
-
-				expect(result).toBeNull();
-				expect(statsDbModule.getInitializationResult).toHaveBeenCalled();
-			});
-
-			it('should return initialization result with user message when database was reset', async () => {
-				const mockResult = {
-					success: true,
-					wasReset: true,
-					backupPath: '/path/to/backup.db',
-					userMessage: 'The statistics database was corrupted and has been reset.',
-				};
-				vi.mocked(statsDbModule.getInitializationResult).mockReturnValue(mockResult);
-
-				const handler = handlers.get('stats:get-initialization-result');
-				const result = await handler!({} as any);
-
-				expect(result).toEqual(mockResult);
-			});
-		});
-
-		describe('stats:clear-initialization-result', () => {
-			it('should be registered', () => {
-				expect(handlers.has('stats:clear-initialization-result')).toBe(true);
-			});
-
-			it('should call clearInitializationResult and return true', async () => {
-				const handler = handlers.get('stats:clear-initialization-result');
-				const result = await handler!({} as any);
-
-				expect(result).toBe(true);
-				expect(statsDbModule.clearInitializationResult).toHaveBeenCalled();
-			});
-		});
-	});
 });

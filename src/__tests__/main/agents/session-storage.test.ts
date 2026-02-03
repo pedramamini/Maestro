@@ -435,7 +435,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('listSessions with SSH config', () => {
 		it('should accept sshConfig parameter for listSessions', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// With SSH config - should not throw and should return array
@@ -444,7 +444,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should use local file system when sshConfig is undefined', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Without SSH config - should use local operations
@@ -455,7 +455,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('listSessionsPaginated with SSH config', () => {
 		it('should accept sshConfig parameter for listSessionsPaginated', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// With SSH config - should work with pagination options
@@ -468,7 +468,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should support pagination options with SSH config', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Test with specific pagination options
@@ -484,7 +484,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('readSessionMessages with SSH config', () => {
 		it('should accept sshConfig parameter for readSessionMessages', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// With SSH config - should attempt to read remotely
@@ -501,7 +501,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should handle offset and limit options with SSH config', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Test pagination options with SSH config
@@ -518,7 +518,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('searchSessions with SSH config', () => {
 		it('should accept sshConfig parameter for searchSessions', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// With SSH config - should search remotely
@@ -527,7 +527,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should return empty results for empty query with SSH config', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			const results = await storage.searchSessions('/test/path', '', 'all', mockSshConfig);
@@ -538,7 +538,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should support all search modes with SSH config', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Test each search mode works with SSH config
@@ -553,7 +553,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('getSessionPath with SSH config', () => {
 		it('should return null for getSessionPath (sync method cannot do remote lookup)', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// getSessionPath is synchronous and returns null for Codex (requires async file search)
@@ -562,7 +562,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should return null for getSessionPath without SSH config as well', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Even without SSH, Codex getSessionPath returns null (needs async lookup)
@@ -573,7 +573,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('deleteMessagePair with SSH config', () => {
 		it('should return error for SSH remote sessions', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			const result = await storage.deleteMessagePair(
@@ -589,7 +589,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should return session not found for local delete on non-existent session', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Without SSH config, should attempt local delete
@@ -606,7 +606,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('YYYY/MM/DD directory traversal via SSH', () => {
 		it('should handle remote directory structure traversal', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Codex uses YYYY/MM/DD directory structure
@@ -621,7 +621,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('Remote session file parsing', () => {
 		it('should handle session file parsing when content is fetched via SSH', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Test that readSessionMessages handles SSH path correctly
@@ -640,7 +640,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('SSH remote method signatures', () => {
 		it('should accept sshConfig parameter on all public methods', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Verify all public methods accept sshConfig
@@ -679,7 +679,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('SSH config flow verification', () => {
 		it('should differentiate between SSH and local based on sshConfig presence', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Both with and without sshConfig should work (return empty for non-existent)
@@ -691,7 +691,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should verify SshRemoteConfig interface is properly accepted', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Full SshRemoteConfig object
@@ -726,7 +726,7 @@ describe('CodexSessionStorage SSH Remote Support', () => {
 
 	describe('Remote sessions directory path', () => {
 		it('should use ~/.codex/sessions for remote path', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// The private getRemoteSessionsDir returns '~/.codex/sessions'
@@ -817,7 +817,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('getSessionPath with SSH config', () => {
 		it('should return remote message directory path when sshConfig is provided', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			const path = storage.getSessionPath('/home/testuser/project', 'ses_test123', mockSshConfig);
@@ -826,7 +826,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should return local path when sshConfig is not provided', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			const path = storage.getSessionPath('/home/testuser/project', 'ses_test123');
@@ -841,7 +841,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('deleteMessagePair with SSH config', () => {
 		it('should return error for SSH remote sessions', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			const result = await storage.deleteMessagePair(
@@ -859,7 +859,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('searchSessions with SSH config', () => {
 		it('should return empty results for empty search query with SSH config', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			const results = await storage.searchSessions('/home/testuser/project', '', 'all', mockSshConfig);
@@ -877,7 +877,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('Local operations still work without sshConfig', () => {
 		it('should use local file system when sshConfig is undefined', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Without SSH config, should use local operations
@@ -896,7 +896,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should use local file system when sshConfig is null', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Passing undefined (not null, since the type is SshRemoteConfig | undefined)
@@ -907,7 +907,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('SSH remote method signatures', () => {
 		it('should accept sshConfig parameter on all public methods', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Verify that all public methods accept sshConfig parameter
@@ -951,7 +951,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('Remote path construction', () => {
 		it('should construct correct remote paths for OpenCode storage', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Test getSessionPath returns correct remote format
@@ -968,7 +968,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 
 	describe('SSH config flow verification', () => {
 		it('should differentiate between SSH and local based on sshConfig presence', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// With sshConfig - returns remote-style path
@@ -984,7 +984,7 @@ describe('OpenCodeSessionStorage SSH Remote Support', () => {
 		});
 
 		it('should verify SshRemoteConfig interface is properly accepted', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Full SshRemoteConfig object
@@ -1033,7 +1033,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('listSessions with SSH config', () => {
 		it('should accept sshConfig parameter for listSessions', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1044,7 +1044,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should use local file system when sshConfig is undefined', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1057,7 +1057,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('listSessionsPaginated with SSH config', () => {
 		it('should accept sshConfig parameter for listSessionsPaginated', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1072,7 +1072,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should support pagination options with SSH config', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1090,7 +1090,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('readSessionMessages with SSH config', () => {
 		it('should accept sshConfig parameter for readSessionMessages', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1109,7 +1109,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should handle offset and limit options with SSH config', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1128,7 +1128,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('searchSessions with SSH config', () => {
 		it('should accept sshConfig parameter for searchSessions', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1139,7 +1139,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should return empty results for empty query with SSH config', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1152,7 +1152,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should support all search modes with SSH config', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1169,7 +1169,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('getSessionPath with SSH config', () => {
 		it('should return remote JSONL path when sshConfig is provided', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1183,7 +1183,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should return local path when sshConfig is not provided', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1199,7 +1199,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('deleteMessagePair with SSH config', () => {
 		it('should return error for SSH remote sessions', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1217,7 +1217,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should return error for local delete on non-existent session', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1236,7 +1236,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('Remote path encoding for Factory Droid', () => {
 		it('should handle path encoding correctly with `-` substitution for `/`', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1254,7 +1254,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('JSONL parsing with remote content', () => {
 		it('should handle JSONL parsing when content is fetched via SSH', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1275,7 +1275,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('Settings.json loading via SSH', () => {
 		it('should attempt to load settings.json via SSH when listing sessions', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1289,7 +1289,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('SSH remote method signatures', () => {
 		it('should accept sshConfig parameter on all public methods', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1331,7 +1331,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('SSH config flow verification', () => {
 		it('should differentiate between SSH and local based on sshConfig presence', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1349,7 +1349,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should verify SshRemoteConfig interface is properly accepted', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1386,7 +1386,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('Remote sessions directory path', () => {
 		it('should use ~/.factory/sessions for remote path', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1402,7 +1402,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 	describe('Local operations still work without sshConfig', () => {
 		it('should use local file system when sshConfig is undefined', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1423,7 +1423,7 @@ describe('FactoryDroidSessionStorage SSH Remote Support', () => {
 
 		it('should use local file system when sshConfig is null', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1474,7 +1474,7 @@ describe('SSH Config Integration Flow Verification', () => {
 
 	describe('Remote Path Construction Verification', () => {
 		it('should construct correct remote paths for OpenCode storage', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Test with various project paths and session IDs
@@ -1511,7 +1511,7 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should construct correct remote paths for Codex storage', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Codex getSessionPath returns null (requires async file lookup)
@@ -1525,7 +1525,7 @@ describe('SSH Config Integration Flow Verification', () => {
 
 		it('should construct correct remote paths for Factory Droid storage', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1564,7 +1564,7 @@ describe('SSH Config Integration Flow Verification', () => {
 
 	describe('SSH Config Parameter Propagation', () => {
 		it('should propagate sshConfig to all OpenCode methods correctly', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			// Verify all public methods accept and handle sshConfig without throwing
@@ -1591,7 +1591,7 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should propagate sshConfig to all Codex methods correctly', async () => {
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const storage = new CodexSessionStorage();
 
 			// Verify all public methods accept and handle sshConfig without throwing
@@ -1614,7 +1614,7 @@ describe('SSH Config Integration Flow Verification', () => {
 
 		it('should propagate sshConfig to all Factory Droid methods correctly', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1643,7 +1643,7 @@ describe('SSH Config Integration Flow Verification', () => {
 
 	describe('Local vs Remote Operation Differentiation', () => {
 		it('should correctly differentiate local and remote paths for OpenCode', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const storage = new OpenCodeSessionStorage();
 
 			const projectPath = '/home/developer/project';
@@ -1662,7 +1662,7 @@ describe('SSH Config Integration Flow Verification', () => {
 
 		it('should correctly differentiate local and remote paths for Factory Droid', async () => {
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 			const storage = new FactoryDroidSessionStorage();
 
@@ -1695,10 +1695,10 @@ describe('SSH Config Integration Flow Verification', () => {
 				enabled: true,
 			};
 
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1722,10 +1722,10 @@ describe('SSH Config Integration Flow Verification', () => {
 				enabled: true,
 			};
 
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1739,9 +1739,9 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should handle alternative SSH configurations for path construction', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1766,10 +1766,10 @@ describe('SSH Config Integration Flow Verification', () => {
 
 	describe('Local Operations with undefined/null sshConfig', () => {
 		it('should use local file system for all agents when sshConfig is undefined', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1787,9 +1787,9 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should return local paths when sshConfig is not provided', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1809,10 +1809,10 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should handle all pagination options correctly without sshConfig', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1845,10 +1845,10 @@ describe('SSH Config Integration Flow Verification', () => {
 
 	describe('Cross-Agent Consistency', () => {
 		it('should have consistent delete behavior for remote sessions across all agents', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1890,10 +1890,10 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should return consistent empty results for empty search queries across all agents', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1925,10 +1925,10 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should support all search modes with SSH config across all agents', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
-			const { CodexSessionStorage } = await import('../../main/storage/codex-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
+			const { CodexSessionStorage } = await import('../../../main/storage/codex-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1959,9 +1959,9 @@ describe('SSH Config Integration Flow Verification', () => {
 
 	describe('Remote Path Format Verification', () => {
 		it('should use POSIX path separators for all remote paths', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();
@@ -1990,9 +1990,9 @@ describe('SSH Config Integration Flow Verification', () => {
 		});
 
 		it('should use tilde (~) for home directory expansion on remote paths', async () => {
-			const { OpenCodeSessionStorage } = await import('../../main/storage/opencode-session-storage');
+			const { OpenCodeSessionStorage } = await import('../../../main/storage/opencode-session-storage');
 			const { FactoryDroidSessionStorage } = await import(
-				'../../main/storage/factory-droid-session-storage'
+				'../../../main/storage/factory-droid-session-storage'
 			);
 
 			const openCode = new OpenCodeSessionStorage();

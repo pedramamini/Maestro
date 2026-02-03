@@ -23,6 +23,11 @@ vi.mock('electron', () => ({
 // Mock agents module (capabilities exports)
 vi.mock('../../../../main/agents', () => ({
 	getAgentCapabilities: vi.fn(),
+	AGENT_DEFINITIONS: [
+		{ id: 'claude-code', name: 'Claude Code', binaryName: 'claude', configOptions: [] },
+		{ id: 'codex', name: 'Codex', binaryName: 'codex', configOptions: [] },
+		{ id: 'terminal', name: 'Terminal', binaryName: 'bash', configOptions: [] },
+	],
 	DEFAULT_CAPABILITIES: {
 		supportsResume: false,
 		supportsReadOnlyMode: false,

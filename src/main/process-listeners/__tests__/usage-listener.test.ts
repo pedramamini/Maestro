@@ -163,6 +163,8 @@ describe('Usage Listener', () => {
 		});
 
 		it('should handle zero context window gracefully', async () => {
+			// When contextWindow is 0, it falls back to 200000 default
+			// With calculateContextTokens returning 1800, expect (1800/200000)*100 = ~1%
 			setupListener();
 			const handler = eventHandlers.get('usage');
 			const usageStats = createMockUsageStats({ contextWindow: 0 });
@@ -174,7 +176,7 @@ describe('Usage Listener', () => {
 					'test-chat-123',
 					'TestAgent',
 					expect.objectContaining({
-						contextUsage: 0,
+						contextUsage: 1, // 1800/200000 * 100 = 0.9%, rounded to 1%
 					})
 				);
 			});
