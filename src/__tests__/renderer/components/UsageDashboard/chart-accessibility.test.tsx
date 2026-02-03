@@ -324,7 +324,7 @@ describe('Chart Accessibility - SummaryCards', () => {
 		const groups = screen.getAllByRole('group');
 
 		const expectedLabels = [
-			/Sessions/i,
+			/Agents/i,
 			/Total Queries/i,
 			/Queries\/Session/i,
 			/Total Time/i,

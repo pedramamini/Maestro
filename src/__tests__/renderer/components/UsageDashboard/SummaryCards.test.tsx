@@ -380,7 +380,7 @@ describe('SummaryCards', () => {
 
 			// Should render without errors
 			expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
-			// Multiple cards show '0' for empty data (Sessions, Queries)
+			// Multiple cards show '0' for empty data (Agents, Queries)
 			expect(screen.getAllByText('0').length).toBeGreaterThanOrEqual(1);
 		});
 

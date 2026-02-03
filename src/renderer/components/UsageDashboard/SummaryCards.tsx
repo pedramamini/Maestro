@@ -29,7 +29,7 @@ import {
 	Globe,
 	Zap,
 } from 'lucide-react';
-import type { Theme } from '../../types';
+import type { Theme, Session } from '../../types';
 import type { StatsAggregation } from '../../hooks/useStats';
 
 interface SummaryCardsProps {
@@ -39,6 +39,8 @@ interface SummaryCardsProps {
 	theme: Theme;
 	/** Number of columns for responsive layout (default: 3 for 2 rows × 3 cols) */
 	columns?: number;
+	/** Sessions array for accurate agent count (filters terminal sessions) */
+	sessions?: Session[];
 }
 
 /**
@@ -134,7 +136,16 @@ function formatHour(hour: number): string {
 	return `${displayHour} ${suffix}`;
 }
 
-export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
+export function SummaryCards({ data, theme, columns = 3, sessions }: SummaryCardsProps) {
+	// Count agent sessions (exclude terminal-only sessions) for accurate total
+	const agentCount = useMemo(() => {
+		if (sessions) {
+			return sessions.filter((s) => s.toolType !== 'terminal').length;
+		}
+		// Fallback to stats-based count if sessions not provided
+		return data.totalSessions;
+	}, [sessions, data.totalSessions]);
+
 	// Calculate derived metrics
 	const { mostActiveAgent, interactiveRatio, peakHour, localVsRemote, queriesPerSession } =
 		useMemo(() => {
@@ -162,10 +173,10 @@ export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
 					? `${Math.round((data.byLocation.local / totalByLocation) * 100)}%`
 					: 'N/A';
 
-			// Calculate queries per session
+			// Calculate queries per session using agent count for consistency
 			const qps =
-				data.totalSessions > 0
-					? (data.totalQueries / data.totalSessions).toFixed(1)
+				agentCount > 0
+					? (data.totalQueries / agentCount).toFixed(1)
 					: 'N/A';
 
 			return {
@@ -175,13 +186,13 @@ export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
 				localVsRemote: localPercent,
 				queriesPerSession: qps,
 			};
-		}, [data.byAgent, data.bySource, data.byHour, data.byLocation, data.totalSessions, data.totalQueries]);
+		}, [data.byAgent, data.bySource, data.byHour, data.byLocation, agentCount, data.totalQueries]);
 
 	const metrics = [
 		{
 			icon: <Layers className="w-4 h-4" />,
-			label: 'Sessions',
-			value: formatNumber(data.totalSessions),
+			label: 'Agents',
+			value: formatNumber(agentCount),
 		},
 		{
 			icon: <MessageSquare className="w-4 h-4" />,

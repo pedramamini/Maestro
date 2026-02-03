@@ -728,7 +728,7 @@ export function UsageDashboardModal({
 										data-testid="section-summary-cards"
 									>
 										<ChartErrorBoundary theme={theme} chartName="Summary Cards">
-											<SummaryCards data={data} theme={theme} columns={layout.summaryCardsCols} />
+											<SummaryCards data={data} theme={theme} columns={layout.summaryCardsCols} sessions={sessions} />
 										</ChartErrorBoundary>
 									</div>
 
