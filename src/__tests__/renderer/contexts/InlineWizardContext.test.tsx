@@ -175,7 +175,7 @@ describe('InlineWizardContext', () => {
 			const previousUIState: PreviousUIState = {
 				readOnlyMode: true,
 				saveToHistory: false,
-				showThinking: true,
+				showThinking: 'on',
 			};
 
 			await act(async () => {
@@ -237,7 +237,7 @@ describe('InlineWizardContext', () => {
 			const previousUIState: PreviousUIState = {
 				readOnlyMode: true,
 				saveToHistory: false,
-				showThinking: true,
+				showThinking: 'on',
 			};
 
 			await act(async () => {
@@ -673,7 +673,7 @@ describe('InlineWizardContext', () => {
 				await result.current.startWizard('test', {
 					readOnlyMode: true,
 					saveToHistory: false,
-					showThinking: true,
+					showThinking: 'on',
 				});
 			});
 

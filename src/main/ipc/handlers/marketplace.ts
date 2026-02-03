@@ -10,7 +10,7 @@
  * - Force refresh bypasses cache and fetches fresh data
  */
 
-import { ipcMain, App } from 'electron';
+import { ipcMain, App, BrowserWindow } from 'electron';
 import fs from 'fs/promises';
 import fsSync from 'fs';
 import path from 'path';
@@ -18,6 +18,7 @@ import crypto from 'crypto';
 import Store from 'electron-store';
 import { logger } from '../../utils/logger';
 import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
+import { isWebContentsAvailable } from '../../utils/safe-send';
 import type {
 	MarketplaceManifest,
 	MarketplaceCache,
@@ -532,10 +533,11 @@ function setupLocalManifestWatcher(app: App): void {
 				logger.info('Local manifest changed, broadcasting refresh event', LOG_CONTEXT);
 
 				// Send IPC event to all renderer windows
-				const { BrowserWindow } = require('electron');
 				const allWindows = BrowserWindow.getAllWindows();
 				for (const win of allWindows) {
-					win.webContents.send('marketplace:manifestChanged');
+					if (isWebContentsAvailable(win)) {
+						win.webContents.send('marketplace:manifestChanged');
+					}
 				}
 			}, WATCHER_DEBOUNCE_MS);
 		});
@@ -626,12 +628,20 @@ export function registerMarketplaceHandlers(deps: MarketplaceHandlerDependencies
 					officialManifest = await fetchManifest();
 					await writeCache(app, officialManifest);
 				} catch (error) {
-					logger.warn(
-						'Failed to fetch official manifest, continuing with local only',
-						LOG_CONTEXT,
-						{ error }
-					);
-					// Continue - we might still have local playbooks
+					logger.warn('Failed to fetch official manifest from GitHub', LOG_CONTEXT, { error });
+
+					// Fallback to expired cache if available (better than showing nothing)
+					if (cache) {
+						cacheAge = Date.now() - cache.fetchedAt;
+						logger.info(
+							`Using expired cache as fallback (age: ${Math.round(cacheAge / 1000)}s)`,
+							LOG_CONTEXT
+						);
+						officialManifest = cache.manifest;
+						fromCache = true;
+					} else {
+						logger.warn('No cache available, continuing with local only', LOG_CONTEXT);
+					}
 				}
 			}
 
@@ -666,15 +676,22 @@ export function registerMarketplaceHandlers(deps: MarketplaceHandlerDependencies
 			logger.info('Force refreshing manifest (bypass cache)', LOG_CONTEXT);
 
 			let officialManifest: MarketplaceManifest | null = null;
+			let fromCache = false;
 			try {
 				officialManifest = await fetchManifest();
 				await writeCache(app, officialManifest);
 			} catch (error) {
-				logger.warn(
-					'Failed to fetch official manifest during refresh, continuing with local only',
-					LOG_CONTEXT,
-					{ error }
-				);
+				logger.warn('Failed to fetch official manifest during refresh', LOG_CONTEXT, { error });
+
+				// Fallback to existing cache if available (better than showing nothing)
+				const cache = await readCache(app);
+				if (cache) {
+					logger.info('Using existing cache as fallback after refresh failure', LOG_CONTEXT);
+					officialManifest = cache.manifest;
+					fromCache = true;
+				} else {
+					logger.warn('No cache available, continuing with local only', LOG_CONTEXT);
+				}
 			}
 
 			// Read local manifest (always fresh, not cached)
@@ -685,7 +702,7 @@ export function registerMarketplaceHandlers(deps: MarketplaceHandlerDependencies
 
 			return {
 				manifest: mergedManifest,
-				fromCache: false,
+				fromCache,
 			};
 		})
 	);

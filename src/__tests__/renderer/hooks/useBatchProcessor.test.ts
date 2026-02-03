@@ -1568,7 +1568,7 @@ describe('useBatchProcessor hook', () => {
 			});
 
 			// Should have created a working copy for the reset-on-completion document
-			expect(mockCreateWorkingCopy).toHaveBeenCalledWith('/test/folder', 'tasks', 1);
+			expect(mockCreateWorkingCopy).toHaveBeenCalledWith('/test/folder', 'tasks', 1, undefined);
 		});
 	});
 
@@ -3603,7 +3603,7 @@ describe('useBatchProcessor hook', () => {
 			});
 
 			// Should have created a working copy for the reset-on-completion document
-			expect(mockCreateWorkingCopy).toHaveBeenCalledWith('/test/folder', 'tasks', 1);
+			expect(mockCreateWorkingCopy).toHaveBeenCalledWith('/test/folder', 'tasks', 1, undefined);
 		});
 	});
 

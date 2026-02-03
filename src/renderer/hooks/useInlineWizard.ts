@@ -13,8 +13,6 @@ import { useState, useCallback, useRef, useEffect } from 'react';
 import { logger } from '../utils/logger';
 import { parseWizardIntent } from '../services/wizardIntentParser';
 import {
-	hasExistingAutoRunDocs,
-	getExistingAutoRunDocs,
 	getAutoRunFolderPath,
 	type ExistingDocument,
 } from '../utils/existingDocsDetector';
@@ -55,6 +53,8 @@ export interface InlineWizardMessage {
 	ready?: boolean;
 }
 
+import type { ThinkingMode } from '../types';
+
 /**
  * UI state to restore when wizard ends.
  * These settings are temporarily overridden during wizard mode.
@@ -62,7 +62,7 @@ export interface InlineWizardMessage {
 export interface PreviousUIState {
 	readOnlyMode: boolean;
 	saveToHistory: boolean;
-	showThinking: boolean;
+	showThinking: ThinkingMode;
 }
 
 /**
@@ -143,6 +143,12 @@ export interface InlineWizardState {
 	subfolderPath: string | null;
 	/** User-configured Auto Run folder path (overrides default projectPath/Auto Run Docs) */
 	autoRunFolderPath: string | null;
+	/** SSH remote configuration (for remote execution) */
+	sessionSshRemoteConfig?: {
+		enabled: boolean;
+		remoteId: string | null;
+		workingDirOverride?: string;
+	};
 }
 
 /**
@@ -199,6 +205,7 @@ export interface UseInlineWizardReturn {
 	 * @param tabId - The tab ID to associate the wizard with
 	 * @param sessionId - The session ID for playbook creation
 	 * @param autoRunFolderPath - User-configured Auto Run folder path (if set, overrides default projectPath/Auto Run Docs)
+	 * @param sessionSshRemoteConfig - SSH remote configuration (for remote execution)
 	 */
 	startWizard: (
 		naturalLanguageInput?: string,
@@ -208,7 +215,12 @@ export interface UseInlineWizardReturn {
 		sessionName?: string,
 		tabId?: string,
 		sessionId?: string,
-		autoRunFolderPath?: string
+		autoRunFolderPath?: string,
+		sessionSshRemoteConfig?: {
+			enabled: boolean;
+			remoteId: string | null;
+			workingDirOverride?: string;
+		}
 	) => Promise<void>;
 	/** End the wizard and restore previous UI state */
 	endWizard: () => Promise<PreviousUIState | null>;
@@ -450,7 +462,12 @@ export function useInlineWizard(): UseInlineWizardReturn {
 			sessionName?: string,
 			tabId?: string,
 			sessionId?: string,
-			configuredAutoRunFolderPath?: string
+			configuredAutoRunFolderPath?: string,
+			sessionSshRemoteConfig?: {
+				enabled: boolean;
+				remoteId: string | null;
+				workingDirOverride?: string;
+			}
 		): Promise<void> => {
 			// Tab ID is required for per-tab wizard management
 			const effectiveTabId = tabId || 'default';
@@ -506,6 +523,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 				subfolderName: null,
 				subfolderPath: null,
 				autoRunFolderPath: effectiveAutoRunFolderPath,
+				sessionSshRemoteConfig,
 			}));
 
 			try {
@@ -565,7 +583,14 @@ export function useInlineWizard(): UseInlineWizardReturn {
 				}
 
 				// Step 4: Initialize conversation session (only for 'new' or 'iterate' modes)
-				if ((mode === 'new' || mode === 'iterate') && agentType && effectiveAutoRunFolderPath) {
+				// Only allow wizard for agents that support structured output
+				const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
+				if (
+					(mode === 'new' || mode === 'iterate') &&
+					agentType &&
+					supportedWizardAgents.includes(agentType) &&
+					effectiveAutoRunFolderPath
+				) {
 					const session = startInlineWizardConversation({
 						mode,
 						agentType,
@@ -574,6 +599,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 						goal: goal || undefined,
 						existingDocs: docsWithContent.length > 0 ? docsWithContent : undefined,
 						autoRunFolderPath: effectiveAutoRunFolderPath,
+						sessionSshRemoteConfig,
 					});
 
 					// Store conversation session per-tab
@@ -587,6 +613,19 @@ export function useInlineWizard(): UseInlineWizardReturn {
 						existingDocsCount: docsWithContent.length,
 						autoRunFolderPath: effectiveAutoRunFolderPath,
 					});
+				} else if (
+					(mode === 'new' || mode === 'iterate') &&
+					agentType &&
+					!supportedWizardAgents.includes(agentType)
+				) {
+					// Agent not supported for wizard
+					logger.warn(`Wizard not supported for agent type: ${agentType}`, '[InlineWizard]');
+					setTabState(effectiveTabId, (prev) => ({
+						...prev,
+						isInitializing: false,
+						error: `The inline wizard is not supported for ${agentType}. Please use Claude, Claude Code, or Codex.`,
+					}));
+					return; // Don't update state with parsed results
 				}
 
 				// Update state with parsed results
@@ -657,6 +696,9 @@ export function useInlineWizard(): UseInlineWizardReturn {
 	 */
 	const sendMessage = useCallback(
 		async (content: string, callbacks?: ConversationCallbacks): Promise<void> => {
+			// Only allow wizard for agents that support structured output
+			const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
+
 			// Get the tab ID from the current state, ensure currentTabId is set for visibility
 			const tabId = currentTabId || 'default';
 			if (tabId !== currentTabId) {
@@ -698,7 +740,12 @@ export function useInlineWizard(): UseInlineWizardReturn {
 					currentState?.autoRunFolderPath ||
 					(currentState?.projectPath ? getAutoRunFolderPath(currentState.projectPath) : null);
 
-				if (currentState?.mode === 'ask' && currentState.agentType && effectiveAutoRunFolderPath) {
+				if (
+					currentState?.mode === 'ask' &&
+					currentState.agentType &&
+					supportedWizardAgents.includes(currentState.agentType) &&
+					effectiveAutoRunFolderPath
+				) {
 					console.log('[useInlineWizard] Auto-creating session for direct message in ask mode');
 					session = startInlineWizardConversation({
 						mode: 'new',
@@ -708,6 +755,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 						goal: currentState.goal || undefined,
 						existingDocs: undefined,
 						autoRunFolderPath: effectiveAutoRunFolderPath,
+						sessionSshRemoteConfig: currentState.sessionSshRemoteConfig,
 					});
 					conversationSessionsMap.current.set(tabId, session);
 					// Update mode to 'new' since we're proceeding with a new plan
@@ -888,6 +936,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 						goal: currentState.goal || undefined,
 						existingDocs: undefined, // Will be loaded separately if needed
 						autoRunFolderPath: effectiveAutoRunFolderPath,
+						sessionSshRemoteConfig: currentState.sessionSshRemoteConfig,
 					});
 
 					conversationSessionsMap.current.set(tabId, session);
@@ -1141,6 +1190,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 					goal: currentState.goal || undefined,
 					autoRunFolderPath: effectiveAutoRunFolderPath,
 					sessionId: currentState.sessionId || undefined,
+					sessionSshRemoteConfig: currentState.sessionSshRemoteConfig,
 					callbacks: {
 						onStart: () => {
 							console.log('[useInlineWizard] Document generation started');

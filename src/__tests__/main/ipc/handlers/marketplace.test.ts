@@ -13,6 +13,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain, App } from 'electron';
 import fs from 'fs/promises';
 import crypto from 'crypto';
+import path from 'path';
 import Store from 'electron-store';
 import {
 	registerMarketplaceHandlers,
@@ -230,7 +231,7 @@ describe('marketplace IPC handlers', () => {
 
 			// Verify cache was written
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/mock/userData/marketplace-cache.json',
+				path.join('/mock/userData', 'marketplace-cache.json'),
 				expect.any(String),
 				'utf-8'
 			);
@@ -330,7 +331,7 @@ describe('marketplace IPC handlers', () => {
 			expect(result.fromCache).toBe(false);
 		});
 
-		it('should handle network errors gracefully by returning empty merged manifest', async () => {
+		it('should handle network errors gracefully when no cache exists', async () => {
 			// No cache, no local manifest
 			vi.mocked(fs.readFile).mockRejectedValue({ code: 'ENOENT' });
 
@@ -339,14 +340,37 @@ describe('marketplace IPC handlers', () => {
 			const handler = handlers.get('marketplace:getManifest');
 			const result = await handler!({} as any);
 
-			// With local manifest support, network errors are now handled gracefully
-			// Returns empty manifest (merged result of null official + null local)
+			// With no cache to fall back to, returns empty manifest
 			expect(result.manifest).toBeDefined();
 			expect(result.manifest.playbooks).toEqual([]);
 			expect(result.fromCache).toBe(false);
 		});
 
-		it('should handle HTTP error responses gracefully by returning empty merged manifest', async () => {
+		it('should fallback to expired cache when network fetch fails', async () => {
+			const cacheAge = 1000 * 60 * 60 * 7; // 7 hours ago (past 6 hour TTL)
+			const expiredCache: MarketplaceCache = {
+				fetchedAt: Date.now() - cacheAge,
+				manifest: sampleManifest,
+			};
+
+			// First read returns expired cache, second read (local manifest) returns ENOENT
+			vi.mocked(fs.readFile)
+				.mockResolvedValueOnce(JSON.stringify(expiredCache))
+				.mockRejectedValueOnce({ code: 'ENOENT' });
+
+			// Network fetch fails
+			mockFetch.mockRejectedValue(new Error('Network error'));
+
+			const handler = handlers.get('marketplace:getManifest');
+			const result = await handler!({} as any);
+
+			// Should fallback to expired cache data
+			expect(result.manifest.playbooks.length).toBe(sampleManifest.playbooks.length);
+			expect(result.fromCache).toBe(true);
+			expect(result.cacheAge).toBeGreaterThanOrEqual(cacheAge);
+		});
+
+		it('should handle HTTP error responses gracefully when no cache exists', async () => {
 			// No cache, no local manifest
 			vi.mocked(fs.readFile).mockRejectedValue({ code: 'ENOENT' });
 
@@ -359,8 +383,7 @@ describe('marketplace IPC handlers', () => {
 			const handler = handlers.get('marketplace:getManifest');
 			const result = await handler!({} as any);
 
-			// With local manifest support, HTTP errors are now handled gracefully
-			// Returns empty manifest (merged result of null official + null local)
+			// With no cache to fall back to, returns empty manifest
 			expect(result.manifest).toBeDefined();
 			expect(result.manifest.playbooks).toEqual([]);
 			expect(result.fromCache).toBe(false);
@@ -405,6 +428,48 @@ describe('marketplace IPC handlers', () => {
 
 			// Should have updated cache
 			expect(fs.writeFile).toHaveBeenCalled();
+		});
+
+		it('should fallback to existing cache when refresh fails', async () => {
+			const existingCache: MarketplaceCache = {
+				fetchedAt: Date.now() - 1000 * 60 * 60, // 1 hour ago
+				manifest: sampleManifest,
+			};
+
+			// Order of reads in refreshManifest:
+			// 1. Cache read (fallback after fetch failure)
+			// 2. Local manifest read
+			vi.mocked(fs.readFile)
+				.mockResolvedValueOnce(JSON.stringify(existingCache)) // cache fallback
+				.mockRejectedValueOnce({ code: 'ENOENT' }); // local manifest
+
+			// Network fetch fails
+			mockFetch.mockRejectedValue(new Error('Network error'));
+
+			const handler = handlers.get('marketplace:refreshManifest');
+			const result = await handler!({} as any);
+
+			// Should have attempted to fetch
+			expect(mockFetch).toHaveBeenCalled();
+
+			// Should fallback to existing cache
+			expect(result.manifest.playbooks.length).toBe(sampleManifest.playbooks.length);
+			expect(result.fromCache).toBe(true);
+		});
+
+		it('should return empty manifest when refresh fails and no cache exists', async () => {
+			// No cache, no local manifest
+			vi.mocked(fs.readFile).mockRejectedValue({ code: 'ENOENT' });
+
+			// Network fetch fails
+			mockFetch.mockRejectedValue(new Error('Network error'));
+
+			const handler = handlers.get('marketplace:refreshManifest');
+			const result = await handler!({} as any);
+
+			// Should return empty manifest
+			expect(result.manifest.playbooks).toEqual([]);
+			expect(result.fromCache).toBe(false);
 		});
 	});
 
@@ -508,18 +573,18 @@ describe('marketplace IPC handlers', () => {
 			);
 
 			// Verify target folder was created
-			expect(fs.mkdir).toHaveBeenCalledWith('/autorun/folder/My Test Playbook', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/autorun/folder', 'My Test Playbook'), {
 				recursive: true,
 			});
 
 			// Verify documents were written
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/My Test Playbook/phase-1.md',
+				path.join('/autorun/folder', 'My Test Playbook', 'phase-1.md'),
 				'# Phase 1 Content',
 				'utf-8'
 			);
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/My Test Playbook/phase-2.md',
+				path.join('/autorun/folder', 'My Test Playbook', 'phase-2.md'),
 				'# Phase 2 Content',
 				'utf-8'
 			);
@@ -624,13 +689,13 @@ describe('marketplace IPC handlers', () => {
 			await handler!({} as any, 'test-playbook-2', 'Test', '/autorun', 'session-123');
 
 			// Verify playbooks directory was created
-			expect(fs.mkdir).toHaveBeenCalledWith('/mock/userData/playbooks', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/mock/userData', 'playbooks'), {
 				recursive: true,
 			});
 
 			// Verify playbook was saved to session file
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/mock/userData/playbooks/session-123.json',
+				path.join('/mock/userData', 'playbooks', 'session-123.json'),
 				expect.any(String),
 				'utf-8'
 			);
@@ -764,13 +829,13 @@ describe('marketplace IPC handlers', () => {
 			expect(result.importedDocs).toEqual(['local-phase-1']);
 
 			// Verify target folder was created
-			expect(fs.mkdir).toHaveBeenCalledWith('/autorun/folder/My Local Playbook', {
+			expect(fs.mkdir).toHaveBeenCalledWith(path.join('/autorun/folder', 'My Local Playbook'), {
 				recursive: true,
 			});
 
 			// Verify document was written
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/My Local Playbook/local-phase-1.md',
+				path.join('/autorun/folder', 'My Local Playbook', 'local-phase-1.md'),
 				'# Local Phase 1 Content',
 				'utf-8'
 			);
@@ -844,11 +909,11 @@ describe('marketplace IPC handlers', () => {
 			// Verify documents were READ FROM LOCAL FILESYSTEM (not fetched from GitHub)
 			// The fs.readFile mock should have been called for the document paths
 			expect(fs.readFile).toHaveBeenCalledWith(
-				'/Users/test/custom-playbooks/my-playbook/phase-1.md',
+				path.normalize('/Users/test/custom-playbooks/my-playbook/phase-1.md'),
 				'utf-8'
 			);
 			expect(fs.readFile).toHaveBeenCalledWith(
-				'/Users/test/custom-playbooks/my-playbook/phase-2.md',
+				path.normalize('/Users/test/custom-playbooks/my-playbook/phase-2.md'),
 				'utf-8'
 			);
 
@@ -858,13 +923,18 @@ describe('marketplace IPC handlers', () => {
 
 			// Verify documents were written to the target folder
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/Imported Filesystem Playbook/phase-1.md',
+				path.join('/autorun/folder', 'Imported Filesystem Playbook', 'phase-1.md'),
 				'# Phase 1 from filesystem\n\n- [ ] Task 1',
 				'utf-8'
 			);
 			expect(fs.writeFile).toHaveBeenCalledWith(
-				'/autorun/folder/Imported Filesystem Playbook/phase-2.md',
+				path.join('/autorun/folder', 'Imported Filesystem Playbook', 'phase-2.md'),
 				'# Phase 2 from filesystem\n\n- [ ] Task 2',
+				'utf-8'
+			);
+			expect(fs.writeFile).toHaveBeenCalledWith(
+				path.join('/mock/userData', 'playbooks', 'session-123.json'),
+				expect.stringContaining('"playbooks":'),
 				'utf-8'
 			);
 
@@ -1234,17 +1304,20 @@ describe('marketplace IPC handlers', () => {
 				);
 
 				// Verify assets directory was created
-				expect(fs.mkdir).toHaveBeenCalledWith('/autorun/folder/With Assets/assets', {
-					recursive: true,
-				});
+				expect(fs.mkdir).toHaveBeenCalledWith(
+					path.join('/autorun/folder', 'With Assets', 'assets'),
+					{
+						recursive: true,
+					}
+				);
 
 				// Verify assets were written
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					'/autorun/folder/With Assets/assets/config.yaml',
+					path.join('/autorun/folder', 'With Assets', 'assets', 'config.yaml'),
 					expect.any(Buffer)
 				);
 				expect(fs.writeFile).toHaveBeenCalledWith(
-					'/autorun/folder/With Assets/assets/logo.png',
+					path.join('/autorun/folder', 'With Assets', 'assets', 'logo.png'),
 					expect.any(Buffer)
 				);
 

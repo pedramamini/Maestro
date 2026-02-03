@@ -35,6 +35,10 @@ export interface TourStepConfig {
 	description: string;
 	/** Generic description (hamburger menu context - general overview) */
 	descriptionGeneric?: string;
+	/** Optional JSX content to render after description (wizard context) */
+	descriptionContent?: React.ReactNode;
+	/** Optional JSX content to render after description (generic context) */
+	descriptionContentGeneric?: React.ReactNode;
 	/** CSS selector for the element to spotlight, or null for no spotlight */
 	selector: string | null;
 	/** Preferred tooltip position relative to spotlight

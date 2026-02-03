@@ -111,6 +111,19 @@ export interface DuplicateDetectionResult {
 }
 
 /**
+ * SSH remote configuration for summarization/grooming.
+ * When present, the grooming process runs on the remote host.
+ */
+export interface SummarizeRequestSshConfig {
+	/** Whether SSH remote execution is enabled */
+	enabled: boolean;
+	/** The SSH remote ID (from settings) */
+	remoteId: string | null;
+	/** Optional working directory override on the remote host */
+	workingDirOverride?: string;
+}
+
+/**
  * Request to summarize and continue a conversation in a new tab.
  */
 export interface SummarizeRequest {
@@ -122,6 +135,14 @@ export interface SummarizeRequest {
 	projectRoot: string;
 	/** The agent type for the session */
 	agentType: ToolType;
+	/** SSH remote configuration (when session runs on a remote host) */
+	sshRemoteConfig?: SummarizeRequestSshConfig;
+	/** Custom path to the agent binary (for non-standard installations) */
+	customPath?: string;
+	/** Custom arguments for the agent */
+	customArgs?: string;
+	/** Custom environment variables for the agent */
+	customEnvVars?: Record<string, string>;
 }
 
 /**

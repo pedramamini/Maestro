@@ -100,7 +100,7 @@ describe('ipcHandler.ts', () => {
 			});
 		});
 
-		it('should log error with context and error object', async () => {
+		it('should log error with context and serialized error object', async () => {
 			const error = new Error('Test error');
 			const handler = createHandler({ context: '[Git]', operation: 'checkout' }, async () => {
 				throw error;
@@ -108,7 +108,12 @@ describe('ipcHandler.ts', () => {
 
 			await handler();
 
-			expect(logger.error).toHaveBeenCalledWith('checkout error', '[Git]', error);
+			// Error should be serialized (Error objects don't JSON.stringify well)
+			expect(logger.error).toHaveBeenCalledWith('checkout error', '[Git]', {
+				name: error.name,
+				message: error.message,
+				stack: error.stack,
+			});
 		});
 
 		it('should handle multiple arguments', async () => {
@@ -300,7 +305,12 @@ describe('ipcHandler.ts', () => {
 			});
 
 			await expect(handler()).rejects.toThrow('Operation failed');
-			expect(logger.error).toHaveBeenCalledWith('throw error', '[Test]', error);
+			// Error should be serialized (Error objects don't JSON.stringify well)
+			expect(logger.error).toHaveBeenCalledWith('throw error', '[Test]', {
+				name: error.name,
+				message: error.message,
+				stack: error.stack,
+			});
 		});
 
 		it('should not log on success', async () => {
@@ -395,7 +405,12 @@ describe('ipcHandler.ts', () => {
 			);
 
 			await expect(handler({})).rejects.toThrow('Operation failed');
-			expect(logger.error).toHaveBeenCalledWith('getAll error', '[History]', error);
+			// Error should be serialized (Error objects don't JSON.stringify well)
+			expect(logger.error).toHaveBeenCalledWith('getAll error', '[History]', {
+				name: error.name,
+				message: error.message,
+				stack: error.stack,
+			});
 		});
 
 		it('should not log on success', async () => {
@@ -722,7 +737,7 @@ describe('ipcHandler.ts', () => {
 			expect(logger.info).toHaveBeenCalledWith('readDoc success', '[AutoRun]', undefined);
 		});
 
-		it('should log error with context and error object', async () => {
+		it('should log error with context and serialized error object', async () => {
 			const error = new Error('Test error');
 			const handler = createIpcHandler(
 				{ context: '[AutoRun]', operation: 'writeDoc' },
@@ -733,7 +748,12 @@ describe('ipcHandler.ts', () => {
 
 			await handler({});
 
-			expect(logger.error).toHaveBeenCalledWith('writeDoc error', '[AutoRun]', error);
+			// Error should be serialized (Error objects don't JSON.stringify well)
+			expect(logger.error).toHaveBeenCalledWith('writeDoc error', '[AutoRun]', {
+				name: error.name,
+				message: error.message,
+				stack: error.stack,
+			});
 		});
 
 		it('should not log success when logSuccess is false', async () => {

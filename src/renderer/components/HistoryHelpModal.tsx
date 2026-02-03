@@ -1,4 +1,3 @@
-import { useState, useEffect } from 'react';
 import {
 	History,
 	Play,
@@ -20,45 +19,7 @@ interface HistoryHelpModalProps {
 	onClose: () => void;
 }
 
-/**
- * Format the history path for display.
- * Replaces home directory with ~ for shorter display.
- */
-function formatHistoryPath(storagePath: string, homeDir: string): string {
-	// Detect Windows by checking for drive letter or backslash
-	const isWindows = /^[A-Za-z]:/.test(storagePath) || storagePath.includes('\\');
-	const separator = isWindows ? '\\' : '/';
-	const historySubpath = `history${separator}<sessionId>.json`;
-
-	let displayPath = storagePath;
-
-	// Replace home directory with ~ for cleaner display
-	if (homeDir && storagePath.startsWith(homeDir)) {
-		displayPath = '~' + storagePath.slice(homeDir.length);
-	}
-
-	// Ensure proper path separator
-	return `${displayPath}${separator}${historySubpath}`;
-}
-
 export function HistoryHelpModal({ theme, onClose }: HistoryHelpModalProps) {
-	const [historyPath, setHistoryPath] = useState<string>('');
-
-	useEffect(() => {
-		async function loadPath() {
-			try {
-				const [storagePath, homeDir] = await Promise.all([
-					window.maestro.sync.getCurrentStoragePath(),
-					window.maestro.fs.homeDir(),
-				]);
-				setHistoryPath(formatHistoryPath(storagePath, homeDir));
-			} catch {
-				// Fallback to generic path if API unavailable
-				setHistoryPath('<storage-folder>/history/<sessionId>.json');
-			}
-		}
-		loadPath();
-	}, []);
 	return (
 		<Modal
 			theme={theme}
@@ -313,30 +274,22 @@ export function HistoryHelpModal({ theme, onClose }: HistoryHelpModalProps) {
 					</div>
 				</section>
 
-				{/* AI Context Integration */}
+				{/* Cross-Session Memory */}
 				<section>
 					<div className="flex items-center gap-2 mb-3">
 						<Bot className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">AI Context Integration</h3>
+						<h3 className="font-bold">Cross-Session Memory</h3>
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							History files can be passed directly to AI agents as context. Each session's history
-							is stored as a JSON file that the AI can read to understand past work.
+							AI agents are automatically aware of your history files, giving them a form of{' '}
+							<strong style={{ color: theme.colors.textMain }}>cross-tab memory</strong>. This means
+							agents can understand the automatic and manual interactions you've taken across all of
+							your different sessions.
 						</p>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>File location:</strong>{' '}
-							<code
-								className="px-1.5 py-0.5 rounded text-[11px]"
-								style={{ backgroundColor: theme.colors.bgActivity }}
-							>
-								{historyPath || 'Loading...'}
-							</code>
-						</p>
-						<p>
-							<strong style={{ color: theme.colors.textMain }}>Usage with Claude Code:</strong>{' '}
-							Reference the history file in your prompts to give the AI context about completed
-							tasks, decisions made, and work patterns in your session.
+							Each session's history is stored as a JSON file that agents can read to understand
+							completed tasks, decisions made, and work patterns—even from other tabs.
 						</p>
 					</div>
 				</section>

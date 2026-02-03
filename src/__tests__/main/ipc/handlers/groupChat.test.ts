@@ -118,6 +118,7 @@ describe('groupChat IPC handlers', () => {
 		mockMainWindow = {
 			webContents: {
 				send: vi.fn(),
+				isDestroyed: vi.fn().mockReturnValue(false),
 			},
 			isDestroyed: vi.fn().mockReturnValue(false),
 		} as unknown as BrowserWindow;

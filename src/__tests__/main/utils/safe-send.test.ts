@@ -16,7 +16,12 @@ vi.mock('../../../main/utils/logger', () => ({
 	},
 }));
 
-import { createSafeSend, type GetMainWindow, type SafeSendFn } from '../../../main/utils/safe-send';
+import {
+	createSafeSend,
+	isWebContentsAvailable,
+	type GetMainWindow,
+	type SafeSendFn,
+} from '../../../main/utils/safe-send';
 import { logger } from '../../../main/utils/logger';
 
 describe('utils/safe-send', () => {
@@ -249,6 +254,55 @@ describe('utils/safe-send', () => {
 				safeSend('channel_with_underscores', 'data');
 				expect(mockWebContents.send).toHaveBeenCalledWith('channel_with_underscores', 'data');
 			});
+		});
+	});
+
+	describe('isWebContentsAvailable', () => {
+		it('should return true for a valid window with webContents', () => {
+			expect(isWebContentsAvailable(mockWindow as BrowserWindow)).toBe(true);
+		});
+
+		it('should return false for null window', () => {
+			expect(isWebContentsAvailable(null)).toBe(false);
+		});
+
+		it('should return false for undefined window', () => {
+			expect(isWebContentsAvailable(undefined)).toBe(false);
+		});
+
+		it('should return false when window is destroyed', () => {
+			vi.mocked(mockWindow.isDestroyed!).mockReturnValue(true);
+			expect(isWebContentsAvailable(mockWindow as BrowserWindow)).toBe(false);
+		});
+
+		it('should return false when webContents is destroyed', () => {
+			vi.mocked(mockWebContents.isDestroyed!).mockReturnValue(true);
+			expect(isWebContentsAvailable(mockWindow as BrowserWindow)).toBe(false);
+		});
+
+		it('should return false when webContents is null', () => {
+			const windowWithoutWebContents = {
+				isDestroyed: vi.fn().mockReturnValue(false),
+				webContents: null,
+			} as unknown as BrowserWindow;
+			expect(isWebContentsAvailable(windowWithoutWebContents)).toBe(false);
+		});
+
+		it('should return false when webContents is undefined', () => {
+			const windowWithUndefinedWebContents = {
+				isDestroyed: vi.fn().mockReturnValue(false),
+				webContents: undefined,
+			} as unknown as BrowserWindow;
+			expect(isWebContentsAvailable(windowWithUndefinedWebContents)).toBe(false);
+		});
+
+		it('should act as a type guard', () => {
+			// TypeScript compile-time check - if this compiles, the type guard works
+			const maybeWindow: BrowserWindow | null = mockWindow as BrowserWindow;
+			if (isWebContentsAvailable(maybeWindow)) {
+				// Inside this block, maybeWindow should be typed as BrowserWindow
+				expect(maybeWindow.webContents).toBeDefined();
+			}
 		});
 	});
 });

@@ -7,12 +7,14 @@ import { logger } from '../../utils/logger';
 import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
 import { SshRemoteConfig } from '../../../shared/types';
 import { MaestroSettings } from './persistence';
+import { isWebContentsAvailable } from '../../utils/safe-send';
 import {
 	readDirRemote,
 	readFileRemote,
 	writeFileRemote,
 	existsRemote,
 	mkdirRemote,
+	deleteRemote,
 } from '../../utils/remote-fs';
 
 const LOG_CONTEXT = '[AutoRun]';
@@ -473,11 +475,18 @@ export function registerAutorunHandlers(
 	);
 
 	// Save image to Auto Run folder
+	// Supports SSH remote execution via optional sshRemoteId parameter
 	ipcMain.handle(
 		'autorun:saveImage',
 		createIpcHandler(
 			handlerOpts('saveImage'),
-			async (folderPath: string, docName: string, base64Data: string, extension: string) => {
+			async (
+				folderPath: string,
+				docName: string,
+				base64Data: string,
+				extension: string,
+				sshRemoteId?: string
+			) => {
 				// Sanitize docName to prevent directory traversal
 				const sanitizedDocName = path.basename(docName).replace(/\.md$/i, '');
 				if (sanitizedDocName.includes('..') || sanitizedDocName.includes('/')) {
@@ -491,7 +500,45 @@ export function registerAutorunHandlers(
 					throw new Error('Invalid image extension');
 				}
 
-				// Create images subdirectory if it doesn't exist
+				// Generate filename: {docName}-{timestamp}.{ext}
+				const timestamp = Date.now();
+				const filename = `${sanitizedDocName}-${timestamp}.${sanitizedExtension}`;
+				const relativePath = `images/${filename}`;
+
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+
+					// Construct remote paths (use forward slashes)
+					const remoteImagesDir = `${folderPath}/images`;
+					const remotePath = `${folderPath}/${relativePath}`;
+
+					// Create images subdirectory on remote if it doesn't exist
+					const dirExists = await existsRemote(remoteImagesDir, sshConfig);
+					if (!dirExists.success || !dirExists.data) {
+						const mkdirResult = await mkdirRemote(remoteImagesDir, sshConfig, true);
+						if (!mkdirResult.success) {
+							throw new Error(mkdirResult.error || 'Failed to create remote images directory');
+						}
+					}
+
+					logger.debug(`${LOG_CONTEXT} saveImage via SSH: ${remotePath}`, LOG_CONTEXT);
+
+					// Decode base64 and write as buffer - writeFileRemote handles binary via Buffer
+					const imageBuffer = Buffer.from(base64Data, 'base64');
+					const result = await writeFileRemote(remotePath, imageBuffer, sshConfig);
+					if (!result.success) {
+						throw new Error(result.error || 'Failed to write remote image file');
+					}
+
+					logger.info(`Saved remote Auto Run image: ${relativePath}`, LOG_CONTEXT);
+					return { relativePath };
+				}
+
+				// Local: Create images subdirectory if it doesn't exist
 				const imagesDir = path.join(folderPath, 'images');
 				try {
 					await fs.mkdir(imagesDir, { recursive: true });
@@ -499,9 +546,6 @@ export function registerAutorunHandlers(
 					// Directory might already exist, that's fine
 				}
 
-				// Generate filename: {docName}-{timestamp}.{ext}
-				const timestamp = Date.now();
-				const filename = `${sanitizedDocName}-${timestamp}.${sanitizedExtension}`;
 				const filePath = path.join(imagesDir, filename);
 
 				// Validate the file is within the folder path (prevent traversal)
@@ -516,7 +560,6 @@ export function registerAutorunHandlers(
 				await fs.writeFile(filePath, buffer);
 
 				// Return the relative path for markdown insertion
-				const relativePath = `images/${filename}`;
 				logger.info(`Saved Auto Run image: ${relativePath}`, LOG_CONTEXT);
 				return { relativePath };
 			}
@@ -528,17 +571,41 @@ export function registerAutorunHandlers(
 		'autorun:deleteImage',
 		createIpcHandler(
 			handlerOpts('deleteImage'),
-			async (folderPath: string, relativePath: string) => {
+			async (folderPath: string, relativePath: string, sshRemoteId?: string) => {
 				// Sanitize relativePath to prevent directory traversal
 				const normalizedPath = path.normalize(relativePath);
+				const normalizedPathPosix = normalizedPath.replace(/\\/g, '/');
 				if (
 					normalizedPath.includes('..') ||
 					path.isAbsolute(normalizedPath) ||
-					!normalizedPath.startsWith('images/')
+					!normalizedPathPosix.startsWith('images/')
 				) {
 					throw new Error('Invalid image path');
 				}
 
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+
+					// Construct remote path (use forward slashes)
+					const remotePath = `${folderPath}/${normalizedPathPosix}`;
+
+					logger.debug(`${LOG_CONTEXT} deleteImage via SSH: ${remotePath}`, LOG_CONTEXT);
+
+					// Delete the remote file
+					const result = await deleteRemote(remotePath, sshConfig, false);
+					if (!result.success) {
+						throw new Error(result.error || 'Failed to delete remote image file');
+					}
+
+					logger.info(`Deleted remote Auto Run image: ${relativePath}`, LOG_CONTEXT);
+					return {};
+				}
+
+				// Local: Build full path
 				const filePath = path.join(folderPath, normalizedPath);
 
 				// Validate the file is within the folder path (prevent traversal)
@@ -568,13 +635,64 @@ export function registerAutorunHandlers(
 		'autorun:listImages',
 		createIpcHandler(
 			handlerOpts('listImages', false),
-			async (folderPath: string, docName: string) => {
+			async (folderPath: string, docName: string, sshRemoteId?: string) => {
 				// Sanitize docName to prevent directory traversal
 				const sanitizedDocName = path.basename(docName).replace(/\.md$/i, '');
 				if (sanitizedDocName.includes('..') || sanitizedDocName.includes('/')) {
 					throw new Error('Invalid document name');
 				}
 
+				const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
+
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+
+					// Construct remote images directory path (use forward slashes)
+					const remoteImagesDir = `${folderPath}/images`;
+
+					logger.debug(`${LOG_CONTEXT} listImages via SSH: ${remoteImagesDir}`, LOG_CONTEXT);
+
+					// Check if images directory exists on remote
+					const existsResult = await existsRemote(remoteImagesDir, sshConfig);
+					if (!existsResult.success || !existsResult.data) {
+						// No images directory means no images
+						return { images: [] };
+					}
+
+					// Read remote directory contents
+					const dirResult = await readDirRemote(remoteImagesDir, sshConfig);
+					if (!dirResult.success || !dirResult.data) {
+						throw new Error(dirResult.error || 'Failed to read remote images directory');
+					}
+
+					// Filter files that start with the docName prefix
+					const images = dirResult.data
+						.filter((entry) => {
+							// Only include files (not directories or symlinks)
+							if (entry.isDirectory || entry.isSymlink) {
+								return false;
+							}
+							// Check if filename starts with docName-
+							if (!entry.name.startsWith(`${sanitizedDocName}-`)) {
+								return false;
+							}
+							// Check if it has a valid image extension
+							const ext = entry.name.split('.').pop()?.toLowerCase();
+							return ext && imageExtensions.includes(ext);
+						})
+						.map((entry) => ({
+							filename: entry.name,
+							relativePath: `images/${entry.name}`,
+						}));
+
+					return { images };
+				}
+
+				// Local: Build images directory path
 				const imagesDir = path.join(folderPath, 'images');
 
 				// Check if images directory exists
@@ -589,7 +707,6 @@ export function registerAutorunHandlers(
 				const files = await fs.readdir(imagesDir);
 
 				// Filter files that start with the docName prefix
-				const imageExtensions = ['png', 'jpg', 'jpeg', 'gif', 'webp', 'svg'];
 				const images = files
 					.filter((file) => {
 						// Check if filename starts with docName-
@@ -737,7 +854,7 @@ export function registerAutorunHandlers(
 						autoRunWatchDebounceTimer = null;
 						// Send event to renderer
 						const mainWindow = getMainWindow();
-						if (mainWindow && !mainWindow.isDestroyed()) {
+						if (isWebContentsAvailable(mainWindow)) {
 							// Remove .md extension from filename to match autorun conventions
 							const filenameWithoutExt = filename.replace(/\.md$/i, '');
 							mainWindow.webContents.send('autorun:fileChanged', {
@@ -780,93 +897,178 @@ export function registerAutorunHandlers(
 	);
 
 	// Create a backup copy of a document (for reset-on-completion)
+	// Supports SSH remote execution via optional sshRemoteId parameter
 	ipcMain.handle(
 		'autorun:createBackup',
-		createIpcHandler(handlerOpts('createBackup'), async (folderPath: string, filename: string) => {
-			// Reject obvious traversal attempts
-			if (filename.includes('..')) {
-				throw new Error('Invalid filename');
+		createIpcHandler(
+			handlerOpts('createBackup'),
+			async (folderPath: string, filename: string, sshRemoteId?: string) => {
+				// Reject obvious traversal attempts
+				if (filename.includes('..')) {
+					throw new Error('Invalid filename');
+				}
+
+				// Ensure filename has .md extension
+				const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+				const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
+
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+
+					// Construct remote paths (use forward slashes)
+					const remoteSourcePath = `${folderPath}/${fullFilename}`;
+					const remoteBackupPath = `${folderPath}/${backupFilename}`;
+
+					logger.debug(
+						`${LOG_CONTEXT} createBackup via SSH: ${remoteSourcePath} -> ${remoteBackupPath}`,
+						LOG_CONTEXT
+					);
+
+					// Read source file from remote
+					const readResult = await readFileRemote(remoteSourcePath, sshConfig);
+					if (!readResult.success || readResult.data === undefined) {
+						throw new Error(readResult.error || 'Source file not found');
+					}
+
+					// Write backup file to remote
+					const writeResult = await writeFileRemote(remoteBackupPath, readResult.data, sshConfig);
+					if (!writeResult.success) {
+						throw new Error(writeResult.error || 'Failed to write backup file');
+					}
+
+					logger.info(`Created remote Auto Run backup: ${backupFilename}`, LOG_CONTEXT);
+					return { backupFilename };
+				}
+
+				// Local: Construct paths
+				const sourcePath = path.join(folderPath, fullFilename);
+				const backupPath = path.join(folderPath, backupFilename);
+
+				// Validate paths are within folder
+				if (
+					!validatePathWithinFolder(sourcePath, folderPath) ||
+					!validatePathWithinFolder(backupPath, folderPath)
+				) {
+					throw new Error('Invalid file path');
+				}
+
+				// Check if source file exists
+				try {
+					await fs.access(sourcePath);
+				} catch {
+					throw new Error('Source file not found');
+				}
+
+				// Copy the file to backup
+				await fs.copyFile(sourcePath, backupPath);
+
+				logger.info(`Created Auto Run backup: ${backupFilename}`, LOG_CONTEXT);
+				return { backupFilename };
 			}
-
-			// Ensure filename has .md extension
-			const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
-			const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
-
-			const sourcePath = path.join(folderPath, fullFilename);
-			const backupPath = path.join(folderPath, backupFilename);
-
-			// Validate paths are within folder
-			if (
-				!validatePathWithinFolder(sourcePath, folderPath) ||
-				!validatePathWithinFolder(backupPath, folderPath)
-			) {
-				throw new Error('Invalid file path');
-			}
-
-			// Check if source file exists
-			try {
-				await fs.access(sourcePath);
-			} catch {
-				throw new Error('Source file not found');
-			}
-
-			// Copy the file to backup
-			await fs.copyFile(sourcePath, backupPath);
-
-			logger.info(`Created Auto Run backup: ${backupFilename}`, LOG_CONTEXT);
-			return { backupFilename };
-		})
+		)
 	);
 
 	// Restore a document from its backup (for reset-on-completion)
+	// Supports SSH remote execution via optional sshRemoteId parameter
 	ipcMain.handle(
 		'autorun:restoreBackup',
-		createIpcHandler(handlerOpts('restoreBackup'), async (folderPath: string, filename: string) => {
-			// Reject obvious traversal attempts
-			if (filename.includes('..')) {
-				throw new Error('Invalid filename');
+		createIpcHandler(
+			handlerOpts('restoreBackup'),
+			async (folderPath: string, filename: string, sshRemoteId?: string) => {
+				// Reject obvious traversal attempts
+				if (filename.includes('..')) {
+					throw new Error('Invalid filename');
+				}
+
+				// Ensure filename has .md extension
+				const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
+				const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
+
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+
+					// Construct remote paths (use forward slashes)
+					const remoteTargetPath = `${folderPath}/${fullFilename}`;
+					const remoteBackupPath = `${folderPath}/${backupFilename}`;
+
+					logger.debug(
+						`${LOG_CONTEXT} restoreBackup via SSH: ${remoteBackupPath} -> ${remoteTargetPath}`,
+						LOG_CONTEXT
+					);
+
+					// Check if backup file exists by reading it
+					const readResult = await readFileRemote(remoteBackupPath, sshConfig);
+					if (!readResult.success || readResult.data === undefined) {
+						throw new Error('Backup file not found');
+					}
+
+					// Write backup content to original file
+					const writeResult = await writeFileRemote(remoteTargetPath, readResult.data, sshConfig);
+					if (!writeResult.success) {
+						throw new Error(writeResult.error || 'Failed to restore backup');
+					}
+
+					// Delete the backup file
+					const deleteResult = await deleteRemote(remoteBackupPath, sshConfig, false);
+					if (!deleteResult.success) {
+						// Log but don't fail - the restore was successful
+						logger.warn(
+							`${LOG_CONTEXT} Failed to delete remote backup file: ${deleteResult.error}`,
+							LOG_CONTEXT
+						);
+					}
+
+					logger.info(`Restored remote Auto Run backup: ${fullFilename}`, LOG_CONTEXT);
+					return {};
+				}
+
+				// Local: Construct paths
+				const targetPath = path.join(folderPath, fullFilename);
+				const backupPath = path.join(folderPath, backupFilename);
+
+				// Validate paths are within folder
+				if (
+					!validatePathWithinFolder(targetPath, folderPath) ||
+					!validatePathWithinFolder(backupPath, folderPath)
+				) {
+					throw new Error('Invalid file path');
+				}
+
+				// Check if backup file exists
+				try {
+					await fs.access(backupPath);
+				} catch {
+					throw new Error('Backup file not found');
+				}
+
+				// Copy backup back to original
+				await fs.copyFile(backupPath, targetPath);
+
+				// Delete the backup
+				await fs.unlink(backupPath);
+
+				logger.info(`Restored Auto Run backup: ${fullFilename}`, LOG_CONTEXT);
+				return {};
 			}
-
-			// Ensure filename has .md extension
-			const fullFilename = filename.endsWith('.md') ? filename : `${filename}.md`;
-			const backupFilename = fullFilename.replace(/\.md$/, '.backup.md');
-
-			const targetPath = path.join(folderPath, fullFilename);
-			const backupPath = path.join(folderPath, backupFilename);
-
-			// Validate paths are within folder
-			if (
-				!validatePathWithinFolder(targetPath, folderPath) ||
-				!validatePathWithinFolder(backupPath, folderPath)
-			) {
-				throw new Error('Invalid file path');
-			}
-
-			// Check if backup file exists
-			try {
-				await fs.access(backupPath);
-			} catch {
-				throw new Error('Backup file not found');
-			}
-
-			// Copy backup back to original
-			await fs.copyFile(backupPath, targetPath);
-
-			// Delete the backup
-			await fs.unlink(backupPath);
-
-			logger.info(`Restored Auto Run backup: ${fullFilename}`, LOG_CONTEXT);
-			return {};
-		})
+		)
 	);
 
 	// Create a working copy of a document for reset-on-completion loops
 	// Working copies are stored in /Runs/ subdirectory with format: {name}-{timestamp}-loop-{N}.md
+	// Supports SSH remote execution via optional sshRemoteId parameter
 	ipcMain.handle(
 		'autorun:createWorkingCopy',
 		createIpcHandler(
 			handlerOpts('createWorkingCopy'),
-			async (folderPath: string, filename: string, loopNumber: number) => {
+			async (folderPath: string, filename: string, loopNumber: number, sshRemoteId?: string) => {
 				// Reject obvious traversal attempts
 				if (filename.includes('..')) {
 					throw new Error('Invalid filename');
@@ -881,6 +1083,59 @@ export function registerAutorunHandlers(
 				const docName = pathParts[pathParts.length - 1];
 				const subDir = pathParts.length > 1 ? pathParts.slice(0, -1).join('/') : '';
 
+				// Generate working copy filename: {name}-{timestamp}-loop-{N}.md
+				const timestamp = Date.now();
+				const workingCopyName = `${docName}-${timestamp}-loop-${loopNumber}.md`;
+
+				// Return the relative path (without .md for consistency with other APIs)
+				const relativePath = subDir
+					? `Runs/${subDir}/${workingCopyName.slice(0, -3)}`
+					: `Runs/${workingCopyName.slice(0, -3)}`;
+
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+
+					// Construct remote paths (use forward slashes)
+					const remoteSourcePath = `${folderPath}/${fullFilename}`;
+					const remoteRunsDir = subDir ? `${folderPath}/Runs/${subDir}` : `${folderPath}/Runs`;
+					const remoteWorkingCopyPath = `${remoteRunsDir}/${workingCopyName}`;
+
+					logger.debug(
+						`${LOG_CONTEXT} createWorkingCopy via SSH: ${remoteSourcePath} -> ${remoteWorkingCopyPath}`,
+						LOG_CONTEXT
+					);
+
+					// Read source file from remote
+					const readResult = await readFileRemote(remoteSourcePath, sshConfig);
+					if (!readResult.success || readResult.data === undefined) {
+						throw new Error(readResult.error || 'Source file not found');
+					}
+
+					// Create Runs directory on remote (with subdirectory if needed)
+					const mkdirResult = await mkdirRemote(remoteRunsDir, sshConfig, true);
+					if (!mkdirResult.success) {
+						throw new Error(mkdirResult.error || 'Failed to create Runs directory');
+					}
+
+					// Write working copy to remote
+					const writeResult = await writeFileRemote(
+						remoteWorkingCopyPath,
+						readResult.data,
+						sshConfig
+					);
+					if (!writeResult.success) {
+						throw new Error(writeResult.error || 'Failed to write working copy');
+					}
+
+					logger.info(`Created remote Auto Run working copy: ${relativePath}`, LOG_CONTEXT);
+					return { workingCopyPath: relativePath, originalPath: baseName };
+				}
+
+				// Local: Construct paths
 				const sourcePath = path.join(folderPath, fullFilename);
 
 				// Validate source path is within folder
@@ -901,9 +1156,6 @@ export function registerAutorunHandlers(
 					: path.join(folderPath, 'Runs');
 				await fs.mkdir(runsDir, { recursive: true });
 
-				// Generate working copy filename: {name}-{timestamp}-loop-{N}.md
-				const timestamp = Date.now();
-				const workingCopyName = `${docName}-${timestamp}-loop-${loopNumber}.md`;
 				const workingCopyPath = path.join(runsDir, workingCopyName);
 
 				// Validate working copy path is within folder
@@ -914,11 +1166,6 @@ export function registerAutorunHandlers(
 				// Copy the source to working copy
 				await fs.copyFile(sourcePath, workingCopyPath);
 
-				// Return the relative path (without .md for consistency with other APIs)
-				const relativePath = subDir
-					? `Runs/${subDir}/${workingCopyName.slice(0, -3)}`
-					: `Runs/${workingCopyName.slice(0, -3)}`;
-
 				logger.info(`Created Auto Run working copy: ${relativePath}`, LOG_CONTEXT);
 				return { workingCopyPath: relativePath, originalPath: baseName };
 			}
@@ -926,41 +1173,101 @@ export function registerAutorunHandlers(
 	);
 
 	// Delete all backup files in a folder
+	// Supports SSH remote execution via optional sshRemoteId parameter
 	ipcMain.handle(
 		'autorun:deleteBackups',
-		createIpcHandler(handlerOpts('deleteBackups'), async (folderPath: string) => {
-			// Validate folder exists
-			const folderStat = await fs.stat(folderPath);
-			if (!folderStat.isDirectory()) {
-				throw new Error('Path is not a directory');
-			}
-
-			// Find and delete all .backup.md files recursively
-			const deleteBackupsRecursive = async (dirPath: string): Promise<number> => {
-				let deleted = 0;
-				const entries = await fs.readdir(dirPath, { withFileTypes: true });
-
-				for (const entry of entries) {
-					const entryPath = path.join(dirPath, entry.name);
-
-					if (entry.isDirectory()) {
-						// Recurse into subdirectory
-						deleted += await deleteBackupsRecursive(entryPath);
-					} else if (entry.isFile() && entry.name.endsWith('.backup.md')) {
-						// Delete backup file
-						await fs.unlink(entryPath);
-						deleted++;
-						logger.info(`Deleted Auto Run backup: ${entry.name}`, LOG_CONTEXT);
+		createIpcHandler(
+			handlerOpts('deleteBackups'),
+			async (folderPath: string, sshRemoteId?: string) => {
+				// SSH remote: dispatch to remote operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
 					}
+
+					logger.debug(`${LOG_CONTEXT} deleteBackups via SSH: ${folderPath}`, LOG_CONTEXT);
+
+					// Recursive function to find and delete .backup.md files on remote
+					const deleteBackupsRemoteRecursive = async (dirPath: string): Promise<number> => {
+						let deleted = 0;
+
+						// Read remote directory contents
+						const dirResult = await readDirRemote(dirPath, sshConfig);
+						if (!dirResult.success || !dirResult.data) {
+							// Directory doesn't exist or can't be read - skip
+							logger.debug(
+								`${LOG_CONTEXT} Skipping remote directory: ${dirPath} - ${dirResult.error}`,
+								LOG_CONTEXT
+							);
+							return 0;
+						}
+
+						for (const entry of dirResult.data) {
+							const entryPath = `${dirPath}/${entry.name}`;
+
+							if (entry.isDirectory && !entry.isSymlink) {
+								// Recurse into subdirectory
+								deleted += await deleteBackupsRemoteRecursive(entryPath);
+							} else if (!entry.isDirectory && entry.name.endsWith('.backup.md')) {
+								// Delete backup file
+								const deleteResult = await deleteRemote(entryPath, sshConfig, false);
+								if (deleteResult.success) {
+									deleted++;
+									logger.info(`Deleted remote Auto Run backup: ${entry.name}`, LOG_CONTEXT);
+								} else {
+									logger.warn(
+										`${LOG_CONTEXT} Failed to delete remote backup ${entry.name}: ${deleteResult.error}`,
+										LOG_CONTEXT
+									);
+								}
+							}
+						}
+
+						return deleted;
+					};
+
+					const deletedCount = await deleteBackupsRemoteRecursive(folderPath);
+					logger.info(
+						`Deleted ${deletedCount} remote Auto Run backup(s) in ${folderPath}`,
+						LOG_CONTEXT
+					);
+					return { deletedCount };
 				}
 
-				return deleted;
-			};
+				// Local: Validate folder exists
+				const folderStat = await fs.stat(folderPath);
+				if (!folderStat.isDirectory()) {
+					throw new Error('Path is not a directory');
+				}
 
-			const deletedCount = await deleteBackupsRecursive(folderPath);
-			logger.info(`Deleted ${deletedCount} Auto Run backup(s) in ${folderPath}`, LOG_CONTEXT);
-			return { deletedCount };
-		})
+				// Find and delete all .backup.md files recursively
+				const deleteBackupsRecursive = async (dirPath: string): Promise<number> => {
+					let deleted = 0;
+					const entries = await fs.readdir(dirPath, { withFileTypes: true });
+
+					for (const entry of entries) {
+						const entryPath = path.join(dirPath, entry.name);
+
+						if (entry.isDirectory()) {
+							// Recurse into subdirectory
+							deleted += await deleteBackupsRecursive(entryPath);
+						} else if (entry.isFile() && entry.name.endsWith('.backup.md')) {
+							// Delete backup file
+							await fs.unlink(entryPath);
+							deleted++;
+							logger.info(`Deleted Auto Run backup: ${entry.name}`, LOG_CONTEXT);
+						}
+					}
+
+					return deleted;
+				};
+
+				const deletedCount = await deleteBackupsRecursive(folderPath);
+				logger.info(`Deleted ${deletedCount} Auto Run backup(s) in ${folderPath}`, LOG_CONTEXT);
+				return { deletedCount };
+			}
+		)
 	);
 
 	// Clean up all watchers on app quit

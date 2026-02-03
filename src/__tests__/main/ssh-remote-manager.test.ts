@@ -6,6 +6,16 @@ import {
 } from '../../main/ssh-remote-manager';
 import { SshRemoteConfig } from '../../shared/types';
 import { ExecResult } from '../../main/utils/execFile';
+import * as os from 'os';
+
+// Mock os.homedir for consistent test behavior
+vi.mock('os', async () => {
+	const actual = await vi.importActual<typeof os>('os');
+	return {
+		...actual,
+		homedir: vi.fn(() => '/home/testuser'),
+	};
+});
 
 describe('SshRemoteManager', () => {
 	// Mock dependencies
@@ -68,20 +78,18 @@ describe('SshRemoteManager', () => {
 			expect(result.errors).toContain('Host is required');
 		});
 
-		it('requires username field', () => {
+		it('allows empty username (SSH uses config or system defaults)', () => {
 			const config = { ...validConfig, username: '' };
 			const result = manager.validateConfig(config);
 
-			expect(result.valid).toBe(false);
-			expect(result.errors).toContain('Username is required');
+			expect(result.valid).toBe(true);
 		});
 
-		it('requires privateKeyPath field', () => {
+		it('allows empty privateKeyPath (SSH uses config or ssh-agent)', () => {
 			const config = { ...validConfig, privateKeyPath: '' };
 			const result = manager.validateConfig(config);
 
-			expect(result.valid).toBe(false);
-			expect(result.errors).toContain('Private key path is required');
+			expect(result.valid).toBe(true);
 		});
 
 		it('validates port range - too low', () => {

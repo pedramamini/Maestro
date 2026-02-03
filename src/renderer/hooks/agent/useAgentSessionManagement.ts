@@ -1,5 +1,5 @@
 import { useCallback, useRef } from 'react';
-import type { Session, LogEntry, UsageStats } from '../../types';
+import type { Session, LogEntry, UsageStats, ThinkingMode } from '../../types';
 import { createTab, getActiveTab } from '../../utils/tabHelpers';
 import { generateId } from '../../utils/ids';
 import type { RightPanelHandle } from '../../components/RightPanel';
@@ -21,6 +21,8 @@ export interface HistoryEntryInput {
 	sessionName?: string;
 	/** Whether the operation succeeded (false for errors/failures) */
 	success?: boolean;
+	/** Task execution time in milliseconds */
+	elapsedTimeMs?: number;
 }
 
 /**
@@ -40,7 +42,7 @@ export interface UseAgentSessionManagementDeps {
 	/** Default value for saveToHistory on new tabs */
 	defaultSaveToHistory: boolean;
 	/** Default value for showThinking on new tabs */
-	defaultShowThinking: boolean;
+	defaultShowThinking: ThinkingMode;
 }
 
 /**
@@ -127,6 +129,8 @@ export function useAgentSessionManagement(
 				usageStats: entry.usageStats,
 				// Pass through success field for error/failure tracking
 				success: entry.success,
+				// Pass through task execution time
+				elapsedTimeMs: entry.elapsedTimeMs,
 			});
 
 			// Refresh history panel to show the new entry

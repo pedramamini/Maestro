@@ -17,6 +17,7 @@ Deep technical documentation for Maestro's architecture and design patterns. For
 - [Auto Run System](#auto-run-system)
 - [Achievement System](#achievement-system)
 - [AI Tab System](#ai-tab-system)
+- [File Preview Tab System](#file-preview-tab-system)
 - [Execution Queue](#execution-queue)
 - [Navigation History](#navigation-history)
 - [Group Chat System](#group-chat-system)
@@ -725,7 +726,7 @@ File-based document runner for automating multi-step tasks. Users configure a fo
 | `AutoRun.tsx` | Main panel showing current document with edit/preview modes |
 | `AutoRunSetupModal.tsx` | First-time setup for selecting the Runner Docs folder |
 | `AutoRunDocumentSelector.tsx` | Dropdown for switching between markdown documents |
-| `BatchRunnerModal.tsx` | Configuration modal for multi-document batch execution |
+| `BatchRunnerModal.tsx` | Configuration modal for running multiple Auto Run documents |
 | `PlaybookNameModal.tsx` | Modal for naming saved playbook configurations |
 | `PlaybookDeleteConfirmModal.tsx` | Confirmation modal for playbook deletion |
 | `useBatchProcessor.ts` | Hook managing batch execution logic |
@@ -986,6 +987,100 @@ activeAITabId: string;        // Currently active tab ID
 | `Alt+Cmd+T` | Open tab switcher |
 | `Cmd+Shift+]` | Next tab |
 | `Cmd+Shift+[` | Previous tab |
+
+---
+
+## File Preview Tab System
+
+In-tab file viewing that integrates file previews alongside AI conversation tabs. Files open as separate tabs within the tab bar, maintaining their own state and scroll positions.
+
+### Features
+
+- **Unified tab bar**: File tabs appear alongside AI tabs with consistent styling
+- **Deduplication**: Same file opened twice within a session activates existing tab
+- **Multi-session support**: Same file can be open in multiple sessions simultaneously
+- **State persistence**: Scroll position, search query, and edit mode preserved across restarts
+- **SSH remote files**: Supports viewing files from remote SSH hosts with loading states
+- **Extension badges**: Color-coded file extension badges with theme-aware and colorblind-safe palettes
+- **Overlay menu**: Right-click or hover menu for file operations (copy path, reveal in finder, etc.)
+
+### File Tab Interface
+
+```typescript
+interface FilePreviewTab {
+  id: string;                 // Unique tab ID (UUID)
+  path: string;               // Full file path
+  name: string;               // Filename without extension (tab display name)
+  extension: string;          // File extension with dot (e.g., '.md', '.ts')
+  content: string;            // File content (loaded on open)
+  scrollTop: number;          // Preserved scroll position
+  searchQuery: string;        // Preserved search query
+  editMode: boolean;          // Whether tab was in edit mode
+  editContent?: string;       // Unsaved edit content (if pending changes)
+  createdAt: number;          // Timestamp for ordering
+  lastModified: number;       // File modification time (for refresh detection)
+  sshRemoteId?: string;       // SSH remote ID for remote files
+  isLoading?: boolean;        // True while content is being fetched
+}
+```
+
+### Unified Tab System
+
+AI and file tabs share a unified tab order managed by `unifiedTabOrder`:
+
+```typescript
+// Reference to any tab type
+type UnifiedTabRef = { type: 'ai' | 'file'; id: string };
+
+// Discriminated union for rendering
+type UnifiedTab =
+  | { type: 'ai'; id: string; data: AITab }
+  | { type: 'file'; id: string; data: FilePreviewTab };
+```
+
+### Session Fields
+
+```typescript
+// In Session interface
+filePreviewTabs: FilePreviewTab[];   // Array of file preview tabs
+activeFileTabId: string | null;      // Active file tab (null if AI tab active)
+unifiedTabOrder: UnifiedTabRef[];    // Visual order of all tabs
+closedUnifiedTabHistory: ClosedUnifiedTab[]; // Undo stack for Cmd+Shift+T
+```
+
+### Behavior
+
+- **Opening files**: Double-click in file explorer, click file links in AI output, or use Go to File (`Cmd+P`)
+- **Tab switching**: Click tab or use `Cmd+Shift+[`/`]` to navigate
+- **Tab closing**: Click X button, use `Cmd+W`, or right-click → Close
+- **Restore closed**: `Cmd+Shift+T` restores recently closed tabs (both AI and file)
+- **Edit mode**: Toggle edit mode in file preview; unsaved changes prompt on close
+
+### Extension Color Mapping
+
+File tabs display a colored badge based on file extension. Colors are theme-aware (light/dark) and support colorblind-safe palettes:
+
+| Extensions | Light Theme | Dark Theme | Colorblind (Wong palette) |
+|------------|-------------|------------|---------------------------|
+| .ts, .tsx, .js, .jsx | Blue | Light Blue | #0077BB |
+| .md, .mdx, .txt | Green | Light Green | #009988 |
+| .json, .yaml, .toml | Amber | Yellow | #EE7733 |
+| .css, .scss, .less | Purple | Light Purple | #AA4499 |
+| .html, .xml, .svg | Orange | Light Orange | #CC3311 |
+| .py | Teal | Cyan | #33BBEE |
+| .rs | Rust | Light Rust | #EE3377 |
+| .go | Cyan | Light Cyan | #44AA99 |
+| .sh, .bash, .zsh | Gray | Light Gray | #BBBBBB |
+
+### Key Files
+
+| File | Purpose |
+|------|---------|
+| `TabBar.tsx` | Unified tab rendering with AI and file tabs |
+| `FilePreview.tsx` | File content viewer with edit mode |
+| `MainPanel.tsx` | Coordinates tab display and file loading |
+| `App.tsx` | File tab creation (`handleOpenFileTab`) |
+| `useDebouncedPersistence.ts` | Persists file tabs across sessions |
 
 ---
 

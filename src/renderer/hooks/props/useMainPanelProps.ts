@@ -10,7 +10,6 @@
  */
 
 import { useMemo } from 'react';
-import type { MainPanelHandle } from '../../components/MainPanel';
 import type {
 	Session,
 	Theme,
@@ -20,6 +19,8 @@ import type {
 	LogEntry,
 	UsageStats,
 	AITab,
+	UnifiedTab,
+	FilePreviewTab,
 } from '../../types';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../input/useTabCompletion';
 import type {
@@ -58,9 +59,9 @@ export interface UseMainPanelPropsDeps {
 	slashCommandOpen: boolean;
 	slashCommands: Array<{ command: string; description: string }>;
 	selectedSlashCommandIndex: number;
-	previewFile: { name: string; content: string; path: string } | null;
 	filePreviewLoading: { name: string; path: string } | null;
-	markdownEditMode: boolean;
+	markdownEditMode: boolean; // FilePreview: whether editing file content
+	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses
 	shortcuts: Record<string, Shortcut>;
 	rightPanelOpen: boolean;
 	maxOutputLines: number;
@@ -94,11 +95,11 @@ export interface UseMainPanelPropsDeps {
 	// File tree
 	fileTree: FileNode[];
 
-	// File preview navigation
+	// File preview navigation (per-tab)
 	canGoBack: boolean;
 	canGoForward: boolean;
-	backHistory: { name: string; content: string; path: string }[];
-	forwardHistory: { name: string; content: string; path: string }[];
+	backHistory: { name: string; path: string; scrollTop?: number }[];
+	forwardHistory: { name: string; path: string; scrollTop?: number }[];
 	filePreviewHistoryIndex: number;
 
 	// Active tab for error handling
@@ -132,8 +133,8 @@ export interface UseMainPanelPropsDeps {
 	// Unread filter
 	showUnreadOnly: boolean;
 
-	// Audio feedback
-	audioFeedbackCommand: string;
+	// Accessibility
+	colorBlindMode: boolean;
 
 	// Setters (these are stable callbacks - should be memoized at definition site)
 	setLogViewerSelectedLevels: (levels: string[]) => void;
@@ -160,8 +161,8 @@ export interface UseMainPanelPropsDeps {
 	setAtMentionFilter: (filter: string) => void;
 	setAtMentionStartIndex: (index: number) => void;
 	setSelectedAtMentionIndex: (index: number) => void;
-	setPreviewFile: (file: { name: string; content: string; path: string } | null) => void;
 	setMarkdownEditMode: (mode: boolean) => void;
+	setChatRawTextMode: (mode: boolean) => void;
 	setAboutModalOpen: (open: boolean) => void;
 	setRightPanelOpen: (open: boolean) => void;
 	setGitLogOpen: (open: boolean) => void;
@@ -202,6 +203,7 @@ export interface UseMainPanelPropsDeps {
 	handleNewTab: () => void;
 	handleRequestTabRename: (tabId: string) => void;
 	handleTabReorder: (fromIndex: number, toIndex: number) => void;
+	handleUnifiedTabReorder: (fromIndex: number, toIndex: number) => void;
 	handleUpdateTabByClaudeSessionId: (
 		agentSessionId: string,
 		updates: { name?: string | null; starred?: boolean }
@@ -217,6 +219,18 @@ export interface UseMainPanelPropsDeps {
 	handleCloseOtherTabs: () => void;
 	handleCloseTabsLeft: () => void;
 	handleCloseTabsRight: () => void;
+
+	// Unified tab system props (Phase 4)
+	unifiedTabs: UnifiedTab[];
+	activeFileTabId: string | null;
+	activeFileTab: FilePreviewTab | null;
+	handleFileTabSelect: (tabId: string) => void;
+	handleFileTabClose: (tabId: string) => void;
+	handleFileTabEditModeChange: (tabId: string, editMode: boolean) => void;
+	handleFileTabEditContentChange: (tabId: string, editContent: string | undefined, savedContent?: string) => void;
+	handleFileTabScrollPositionChange: (tabId: string, scrollTop: number) => void;
+	handleFileTabSearchQueryChange: (tabId: string, searchQuery: string) => void;
+
 	handleScrollPositionChange: (scrollTop: number) => void;
 	handleAtBottomChange: (isAtBottom: boolean) => void;
 	handleMainPanelInputBlur: () => void;
@@ -226,6 +240,7 @@ export interface UseMainPanelPropsDeps {
 	handleNavigateBack: () => void;
 	handleNavigateForward: () => void;
 	handleNavigateToIndex: (index: number) => void;
+	handleClearFilePreviewHistory: () => void;
 	handleClearAgentErrorForMainPanel: () => void;
 	handleShowAgentErrorModal: () => void;
 	showSuccessFlash: (message: string) => void;
@@ -308,9 +323,9 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			slashCommandOpen: deps.slashCommandOpen,
 			slashCommands: deps.slashCommands,
 			selectedSlashCommandIndex: deps.selectedSlashCommandIndex,
-			previewFile: deps.previewFile,
 			filePreviewLoading: deps.filePreviewLoading,
 			markdownEditMode: deps.markdownEditMode,
+			chatRawTextMode: deps.chatRawTextMode,
 			shortcuts: deps.shortcuts,
 			rightPanelOpen: deps.rightPanelOpen,
 			maxOutputLines: deps.maxOutputLines,
@@ -354,8 +369,8 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			atMentionSuggestions: deps.atMentionSuggestions,
 			selectedAtMentionIndex: deps.selectedAtMentionIndex,
 			setSelectedAtMentionIndex: deps.setSelectedAtMentionIndex,
-			setPreviewFile: deps.setPreviewFile,
 			setMarkdownEditMode: deps.setMarkdownEditMode,
+			setChatRawTextMode: deps.setChatRawTextMode,
 			setAboutModalOpen: deps.setAboutModalOpen,
 			setRightPanelOpen: deps.setRightPanelOpen,
 			setGitLogOpen: deps.setGitLogOpen,
@@ -379,24 +394,35 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			onDeleteLog: deps.handleDeleteLog,
 			onRemoveQueuedItem: deps.handleRemoveQueuedItem,
 			onOpenQueueBrowser: deps.handleOpenQueueBrowser,
-			audioFeedbackCommand: deps.audioFeedbackCommand,
 			// Tab management handlers
 			onTabSelect: deps.handleTabSelect,
 			onTabClose: deps.handleTabClose,
 			onNewTab: deps.handleNewTab,
 			onRequestTabRename: deps.handleRequestTabRename,
 			onTabReorder: deps.handleTabReorder,
+			onUnifiedTabReorder: deps.handleUnifiedTabReorder,
 			onUpdateTabByClaudeSessionId: deps.handleUpdateTabByClaudeSessionId,
 			onTabStar: deps.handleTabStar,
 			onTabMarkUnread: deps.handleTabMarkUnread,
 			onToggleTabReadOnlyMode: deps.handleToggleTabReadOnlyMode,
 			showUnreadOnly: deps.showUnreadOnly,
+			colorBlindMode: deps.colorBlindMode,
 			onToggleUnreadFilter: deps.toggleUnreadFilter,
 			onOpenTabSearch: deps.handleOpenTabSearch,
 			onCloseAllTabs: deps.handleCloseAllTabs,
 			onCloseOtherTabs: deps.handleCloseOtherTabs,
 			onCloseTabsLeft: deps.handleCloseTabsLeft,
 			onCloseTabsRight: deps.handleCloseTabsRight,
+			// Unified tab system props (Phase 4)
+			unifiedTabs: deps.unifiedTabs,
+			activeFileTabId: deps.activeFileTabId,
+			activeFileTab: deps.activeFileTab,
+			onFileTabSelect: deps.handleFileTabSelect,
+			onFileTabClose: deps.handleFileTabClose,
+			onFileTabEditModeChange: deps.handleFileTabEditModeChange,
+			onFileTabEditContentChange: deps.handleFileTabEditContentChange,
+			onFileTabScrollPositionChange: deps.handleFileTabScrollPositionChange,
+			onFileTabSearchQueryChange: deps.handleFileTabSearchQueryChange,
 			onToggleTabSaveToHistory: deps.handleToggleTabSaveToHistory,
 			onToggleTabShowThinking: deps.handleToggleTabShowThinking,
 			onScrollPositionChange: deps.handleScrollPositionChange,
@@ -414,6 +440,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			forwardHistory: deps.forwardHistory,
 			currentHistoryIndex: deps.filePreviewHistoryIndex,
 			onNavigateToIndex: deps.handleNavigateToIndex,
+			onClearFilePreviewHistory: deps.handleClearFilePreviewHistory,
 			onClearAgentError: deps.activeTab?.agentError
 				? deps.handleClearAgentErrorForMainPanel
 				: undefined,
@@ -463,13 +490,13 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			onPublishGist: () => deps.setGistPublishModalOpen(true),
 			hasGist: deps.hasGist,
 			onOpenInGraph: () => {
-				if (deps.previewFile && deps.activeSession) {
+				if (deps.activeFileTab && deps.activeSession) {
 					const graphRootPath = deps.activeSession.projectRoot || deps.activeSession.cwd || '';
-					const relativePath = deps.previewFile.path.startsWith(graphRootPath + '/')
-						? deps.previewFile.path.slice(graphRootPath.length + 1)
-						: deps.previewFile.path.startsWith(graphRootPath)
-							? deps.previewFile.path.slice(graphRootPath.length + 1)
-							: deps.previewFile.name;
+					const relativePath = deps.activeFileTab.path.startsWith(graphRootPath + '/')
+						? deps.activeFileTab.path.slice(graphRootPath.length + 1)
+						: deps.activeFileTab.path.startsWith(graphRootPath)
+							? deps.activeFileTab.path.slice(graphRootPath.length + 1)
+							: deps.activeFileTab.name;
 					deps.setGraphFocusFilePath(relativePath);
 					deps.setLastGraphFocusFilePath(relativePath);
 					deps.setIsGraphViewOpen(true);
@@ -512,9 +539,9 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.slashCommandOpen,
 			deps.slashCommands,
 			deps.selectedSlashCommandIndex,
-			deps.previewFile,
 			deps.filePreviewLoading,
 			deps.markdownEditMode,
+			deps.chatRawTextMode,
 			deps.shortcuts,
 			deps.rightPanelOpen,
 			deps.maxOutputLines,
@@ -556,7 +583,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.ghCliAvailable,
 			deps.hasGist,
 			deps.showUnreadOnly,
-			deps.audioFeedbackCommand,
+			deps.colorBlindMode,
 			// Stable callbacks (shouldn't cause re-renders, but included for completeness)
 			deps.setLogViewerSelectedLevels,
 			deps.setGitDiffPreview,
@@ -585,8 +612,8 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.setAtMentionFilter,
 			deps.setAtMentionStartIndex,
 			deps.setSelectedAtMentionIndex,
-			deps.setPreviewFile,
 			deps.setMarkdownEditMode,
+			deps.setChatRawTextMode,
 			deps.setAboutModalOpen,
 			deps.setRightPanelOpen,
 			deps.setGitLogOpen,
@@ -608,6 +635,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.handleNewTab,
 			deps.handleRequestTabRename,
 			deps.handleTabReorder,
+			deps.handleUnifiedTabReorder,
 			deps.handleUpdateTabByClaudeSessionId,
 			deps.handleTabStar,
 			deps.handleTabMarkUnread,
@@ -620,6 +648,16 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.handleCloseOtherTabs,
 			deps.handleCloseTabsLeft,
 			deps.handleCloseTabsRight,
+			// Unified tab system (Phase 4)
+			deps.unifiedTabs,
+			deps.activeFileTabId,
+			deps.activeFileTab,
+			deps.handleFileTabSelect,
+			deps.handleFileTabClose,
+			deps.handleFileTabEditModeChange,
+			deps.handleFileTabEditContentChange,
+			deps.handleFileTabScrollPositionChange,
+			deps.handleFileTabSearchQueryChange,
 			deps.handleScrollPositionChange,
 			deps.handleAtBottomChange,
 			deps.handleMainPanelInputBlur,
@@ -629,6 +667,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.handleNavigateBack,
 			deps.handleNavigateForward,
 			deps.handleNavigateToIndex,
+			deps.handleClearFilePreviewHistory,
 			deps.handleClearAgentErrorForMainPanel,
 			deps.handleShowAgentErrorModal,
 			deps.showSuccessFlash,

@@ -108,6 +108,8 @@ function getWindowSize(timeRange: StatsTimeRange): number {
 			return 3;
 		case 'month':
 			return 5;
+		case 'quarter':
+			return 7; // Weekly smoothing for quarter
 		case 'year':
 			return 7;
 		case 'all':
@@ -130,6 +132,8 @@ function formatXAxisDate(dateStr: string, timeRange: StatsTimeRange): string {
 			return format(date, 'EEE');
 		case 'month':
 			return format(date, 'MMM d');
+		case 'quarter':
+			return format(date, 'MMM d'); // Show month and day for quarter
 		case 'year':
 			return format(date, 'MMM');
 		case 'all':

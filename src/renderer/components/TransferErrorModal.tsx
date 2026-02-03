@@ -249,7 +249,7 @@ function formatDetails(error: TransferError): string | null {
 
 	if (details.estimatedTokens && details.targetLimit) {
 		parts.push(
-			`Context size: ~${details.estimatedTokens.toLocaleString()} tokens (limit: ${details.targetLimit.toLocaleString()})`
+			`Context size: ~${details.estimatedTokens.toLocaleString('en-US')} tokens (limit: ${details.targetLimit.toLocaleString('en-US')})`
 		);
 	}
 

@@ -81,14 +81,16 @@ View your in-progress Symphony sessions:
 ![Active Contributions](./screenshots/symphony-active.png)
 
 Each active contribution shows:
+- **Issue title and repository** — The GitHub issue being worked on
+- **Status badge** — Running, Paused, Creating PR, etc.
+- **Progress bar** — Documents completed vs. total
+- **Current document** — The document being processed
+- **Time elapsed** — How long the contribution has been running
+- **Token usage** — Input/output tokens and estimated cost
+- **Draft PR link** — Once created on first commit
+- **Controls** — Pause/Resume, Cancel, Finalize PR
 
-- Status indicators (Running, Paused, Creating PR, etc.)
-- Progress bar showing documents completed vs. total
-- Current document being processed
-- Token usage (input/output tokens, estimated cost)
-- Draft PR link (once created on first commit)
-- Controls: Pause/Resume, Cancel, Finalize PR
-- **Check PR Status** button to detect merged/closed PRs
+Click **Check PR Status** to verify your draft PR on GitHub and detect merged/closed PRs.
 
 ### History Tab
 

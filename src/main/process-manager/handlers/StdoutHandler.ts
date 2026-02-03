@@ -15,10 +15,21 @@ interface StdoutHandlerDependencies {
 }
 
 /**
- * Normalize Codex usage stats to handle cumulative vs delta usage reporting.
- * Codex reports cumulative usage, so we need to track the last totals and compute deltas.
+ * Normalize usage stats to handle cumulative vs per-turn usage reporting.
+ *
+ * Claude Code and Codex both report CUMULATIVE session totals rather than per-turn values.
+ * For context window display, we need per-turn values because:
+ * - Anthropic API formula: total_context = input + cacheRead + cacheCreation
+ * - If we use cumulative values, context exceeds 100% after a few turns
+ *
+ * This function detects cumulative reporting (values only increase) and converts to deltas.
+ * On the first usage report, it returns the values as-is.
+ * On subsequent reports, it computes the delta from the previous totals.
+ *
+ * @see https://platform.claude.com/docs/en/build-with-claude/prompt-caching
+ * @see https://codelynx.dev/posts/calculate-claude-code-context
  */
-function normalizeCodexUsage(
+function normalizeUsageToDelta(
 	managedProcess: ManagedProcess,
 	usageStats: {
 		inputTokens: number;
@@ -226,12 +237,34 @@ export class StdoutHandler {
 		// Extract usage
 		const usage = outputParser.extractUsage(event);
 		if (usage) {
+			// DEBUG: Log usage extracted from parser
+			console.log('[StdoutHandler] Usage from parser (line 255 path)', {
+				sessionId,
+				toolType: managedProcess.toolType,
+				parsedUsage: usage,
+			});
+
 			const usageStats = this.buildUsageStats(managedProcess, usage);
-			// Normalize Codex usage (cumulative -> delta)
+			// Claude Code's modelUsage reports the ACTUAL context used for each API call:
+			// - inputTokens: new input for this turn
+			// - cacheReadInputTokens: conversation history read from cache
+			// - cacheCreationInputTokens: new context being cached
+			// These values directly represent current context window usage.
+			//
+			// Codex reports CUMULATIVE session totals that must be normalized to deltas.
+			//
+			// Terminal has no usage reporting.
 			const normalizedUsageStats =
-				managedProcess.toolType === 'codex'
-					? normalizeCodexUsage(managedProcess, usageStats)
+				managedProcess.toolType === 'codex' || managedProcess.toolType === 'claude-code'
+					? normalizeUsageToDelta(managedProcess, usageStats)
 					: usageStats;
+
+			// DEBUG: Log normalized stats being emitted
+			console.log('[StdoutHandler] Emitting usage (line 255 path)', {
+				sessionId,
+				normalizedUsageStats,
+			});
+
 			this.emitter.emit('usage', sessionId, normalizedUsageStats);
 		}
 
@@ -369,11 +402,26 @@ export class StdoutHandler {
 		}
 
 		if (msgRecord.modelUsage || msgRecord.usage || msgRecord.total_cost_usd !== undefined) {
+			// DEBUG: Log raw usage data from Claude Code before aggregation
+			console.log('[StdoutHandler] Raw usage data from Claude Code', {
+				sessionId,
+				modelUsage: msgRecord.modelUsage,
+				usage: msgRecord.usage,
+				totalCostUsd: msgRecord.total_cost_usd,
+			});
+
 			const usageStats = aggregateModelUsage(
 				msgRecord.modelUsage as Record<string, ModelStats> | undefined,
 				(msgRecord.usage as Record<string, unknown>) || {},
 				(msgRecord.total_cost_usd as number) || 0
 			);
+
+			// DEBUG: Log aggregated result
+			console.log('[StdoutHandler] Aggregated usage stats', {
+				sessionId,
+				usageStats,
+			});
+
 			this.emitter.emit('usage', sessionId, usageStats);
 		}
 	}
@@ -396,7 +444,9 @@ export class StdoutHandler {
 			cacheReadInputTokens: usage.cacheReadTokens || 0,
 			cacheCreationInputTokens: usage.cacheCreationTokens || 0,
 			totalCostUsd: usage.costUsd || 0,
-			contextWindow: managedProcess.contextWindow || usage.contextWindow || 0,
+			// Prioritize Claude Code's reported contextWindow over spawn config
+			// This ensures we use the actual model's context limit, not a stale config value
+			contextWindow: usage.contextWindow || managedProcess.contextWindow || 200000,
 			reasoningTokens: usage.reasoningTokens,
 		};
 	}

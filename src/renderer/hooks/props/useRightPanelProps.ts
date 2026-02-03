@@ -46,7 +46,6 @@ export interface UseRightPanelPropsDeps {
 	fileTreeFilterOpen: boolean;
 	filteredFileTree: any[];
 	selectedFileIndex: number;
-	previewFile: { name: string; content: string; path: string } | null;
 	showHiddenFiles: boolean;
 
 	// Auto Run state
@@ -175,7 +174,6 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 			filteredFileTree: deps.filteredFileTree,
 			selectedFileIndex: deps.selectedFileIndex,
 			setSelectedFileIndex: deps.setSelectedFileIndex,
-			previewFile: deps.previewFile,
 			fileTreeContainerRef: deps.fileTreeContainerRef,
 			fileTreeFilterInputRef: deps.fileTreeFilterInputRef,
 
@@ -247,7 +245,6 @@ export function useRightPanelProps(deps: UseRightPanelPropsDeps) {
 			deps.fileTreeFilterOpen,
 			deps.filteredFileTree,
 			deps.selectedFileIndex,
-			deps.previewFile,
 			deps.showHiddenFiles,
 			deps.autoRunDocumentList,
 			deps.autoRunDocumentTree,

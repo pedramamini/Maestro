@@ -207,6 +207,19 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 		await shell.trashItem(absolutePath);
 	});
 
+	// Shell operations - reveal item in system file manager (Finder on macOS, Explorer on Windows)
+	ipcMain.handle('shell:showItemInFolder', async (_event, itemPath: string) => {
+		if (!itemPath || typeof itemPath !== 'string') {
+			throw new Error('Invalid path: path must be a non-empty string');
+		}
+		// Resolve to absolute path and verify it exists
+		const absolutePath = path.resolve(itemPath);
+		if (!fsSync.existsSync(absolutePath)) {
+			throw new Error(`Path does not exist: ${absolutePath}`);
+		}
+		shell.showItemInFolder(absolutePath);
+	});
+
 	// ============ Tunnel Handlers (Cloudflare) ============
 
 	ipcMain.handle('tunnel:isCloudflaredInstalled', async () => {

@@ -17,12 +17,17 @@ interface TextContent {
 type MessageContent = ImageContent | TextContent;
 
 /**
- * Build a stream-json message for Claude Code with images and text
+ * Build a stream-json message for Claude Code with images and text.
+ *
+ * Claude Code expects this format:
+ * {"type":"user","message":{"role":"user","content":[...]}}
+ *
+ * Content array should have images first (Claude convention), then text.
  */
 export function buildStreamJsonMessage(prompt: string, images: string[]): string {
 	const content: MessageContent[] = [];
 
-	// Add images first
+	// Add images first (Claude convention: images before text)
 	for (const dataUrl of images) {
 		const parsed = parseDataUrl(dataUrl);
 		if (parsed) {
@@ -37,7 +42,7 @@ export function buildStreamJsonMessage(prompt: string, images: string[]): string
 		}
 	}
 
-	// Add text prompt
+	// Add text content
 	content.push({
 		type: 'text',
 		text: prompt,

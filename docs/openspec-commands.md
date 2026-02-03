@@ -155,7 +155,7 @@ Access OpenSpec commands via **Settings → AI Commands** tab. Here you can:
 Commands marked with a **Maestro** badge are Maestro-specific additions to the upstream workflow.
 
 <Frame>
-  <img src="/screenshots/openspec-commands.png" alt="OpenSpec commands in the AI Commands panel" />
+  <img src="./screenshots/openspec-commands.png" alt="OpenSpec commands in the AI Commands panel" />
 </Frame>
 
 ## Auto-Updates

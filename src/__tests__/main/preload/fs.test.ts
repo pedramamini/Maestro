@@ -85,9 +85,23 @@ describe('Filesystem Preload API', () => {
 			expect(mockInvoke).toHaveBeenCalledWith(
 				'fs:writeFile',
 				'/home/user/file.txt',
-				'new contents'
+				'new contents',
+				undefined
 			);
 			expect(result.success).toBe(true);
+		});
+
+		it('should invoke fs:writeFile with SSH remote', async () => {
+			mockInvoke.mockResolvedValue({ success: true });
+
+			await api.writeFile('/home/user/file.txt', 'new contents', 'remote-1');
+
+			expect(mockInvoke).toHaveBeenCalledWith(
+				'fs:writeFile',
+				'/home/user/file.txt',
+				'new contents',
+				'remote-1'
+			);
 		});
 	});
 

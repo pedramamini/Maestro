@@ -17,7 +17,7 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from 'react';
 
 // Stats time range type matching the backend API
-export type StatsTimeRange = 'day' | 'week' | 'month' | 'year' | 'all';
+export type StatsTimeRange = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 
 // Aggregation data shape from the stats API
 export interface StatsAggregation {

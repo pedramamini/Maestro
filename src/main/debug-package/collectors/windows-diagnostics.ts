@@ -31,7 +31,7 @@ export interface WindowsDiagnosticsInfo {
 		codex: AgentProbeResult;
 		opencode: AgentProbeResult;
 		gemini: AgentProbeResult;
-		aider: AgentProbeResult;
+		droid: AgentProbeResult;
 	};
 	whereResults?: {
 		// Results from 'where' command for each agent
@@ -39,7 +39,7 @@ export interface WindowsDiagnosticsInfo {
 		codex: WhereResult;
 		opencode: WhereResult;
 		gemini: WhereResult;
-		aider: WhereResult;
+		droid: WhereResult;
 	};
 	npmInfo?: {
 		npmGlobalPrefix: string | null; // npm config get prefix (sanitized)
@@ -105,7 +105,7 @@ export async function collectWindowsDiagnostics(): Promise<WindowsDiagnosticsInf
 		codex: await probeAgentPaths('codex'),
 		opencode: await probeAgentPaths('opencode'),
 		gemini: await probeAgentPaths('gemini'),
-		aider: await probeAgentPaths('aider'),
+		droid: await probeAgentPaths('droid'),
 	};
 
 	// Run 'where' command for each agent
@@ -114,7 +114,7 @@ export async function collectWindowsDiagnostics(): Promise<WindowsDiagnosticsInf
 		codex: await runWhereCommand('codex'),
 		opencode: await runWhereCommand('opencode'),
 		gemini: await runWhereCommand('gemini'),
-		aider: await runWhereCommand('aider'),
+		droid: await runWhereCommand('droid'),
 	};
 
 	// Collect npm info
@@ -179,11 +179,13 @@ async function probeAgentPaths(binaryName: string): Promise<AgentProbeResult> {
 			path.join(appData, 'npm', 'opencode.cmd'),
 		],
 		gemini: [path.join(appData, 'npm', 'gemini.cmd'), path.join(localAppData, 'npm', 'gemini.cmd')],
-		aider: [
-			path.join(appData, 'Python', 'Scripts', 'aider.exe'),
-			path.join(localAppData, 'Programs', 'Python', 'Python312', 'Scripts', 'aider.exe'),
-			path.join(localAppData, 'Programs', 'Python', 'Python311', 'Scripts', 'aider.exe'),
-			path.join(localAppData, 'Programs', 'Python', 'Python310', 'Scripts', 'aider.exe'),
+		droid: [
+			path.join(home, '.factory', 'bin', 'droid.exe'),
+			path.join(localAppData, 'Factory', 'droid.exe'),
+			path.join(appData, 'Factory', 'droid.exe'),
+			path.join(home, '.local', 'bin', 'droid.exe'),
+			path.join(appData, 'npm', 'droid.cmd'),
+			path.join(localAppData, 'npm', 'droid.cmd'),
 		],
 	};
 

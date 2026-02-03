@@ -1,6 +1,6 @@
 {
   "name": "maestro",
-  "version": "0.14.5",
+  "version": "0.15.0",
   "description": "Maestro hones fractured attention into focused intent.",
   "main": "dist/main/index.js",
   "author": {
@@ -23,6 +23,7 @@
     "dev:main:prod-data": "npm run build:prompts && tsc -p tsconfig.main.json && npm run build:preload && NODE_ENV=development USE_PROD_DATA=1 electron .",
     "dev:renderer": "vite",
     "dev:web": "vite --config vite.config.web.mts",
+    "dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
     "build": "npm run build:prompts && npm run build:main && npm run build:preload && npm run build:renderer && npm run build:web && npm run build:cli",
     "build:prompts": "node scripts/generate-prompts.mjs",
     "build:main": "tsc -p tsconfig.main.json",
@@ -36,7 +37,7 @@
     "package:linux": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --linux",
     "start": "electron .",
     "clean": "rm -rf dist release node_modules/.vite",
-    "prepare": "husky || true",
+    "prepare": "echo 'No prepare script'",
     "postinstall": "electron-rebuild -f -w node-pty,better-sqlite3",
     "lint": "tsc -p tsconfig.lint.json && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.cli.json --noEmit",
     "lint:eslint": "eslint src/",
@@ -288,9 +289,7 @@
     "eslint-plugin-react": "^7.37.5",
     "eslint-plugin-react-hooks": "^7.0.1",
     "globals": "^16.5.0",
-    "husky": "^9.1.7",
     "jsdom": "^27.2.0",
-    "lint-staged": "^16.2.7",
     "lucide-react": "^0.303.0",
     "playwright": "^1.57.0",
     "postcss": "^8.4.33",
@@ -308,12 +307,9 @@
     "node": ">=22.0.0"
   },
   "lint-staged": {
-    "src/**/*.{ts,tsx}": [
+    "*.{ts,tsx}": [
       "prettier --write",
       "eslint --fix"
-    ],
-    "src/**/*.{json,css,md}": [
-      "prettier --write"
     ]
   }
 }

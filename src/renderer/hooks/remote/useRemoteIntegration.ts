@@ -1,5 +1,5 @@
 import { useEffect, useRef } from 'react';
-import type { Session, SessionState } from '../../types';
+import type { Session, SessionState, ThinkingMode } from '../../types';
 import { createTab, closeTab } from '../../utils/tabHelpers';
 
 /**
@@ -22,7 +22,7 @@ export interface UseRemoteIntegrationDeps {
 	/** Default value for saveToHistory on new tabs */
 	defaultSaveToHistory: boolean;
 	/** Default value for showThinking on new tabs */
-	defaultShowThinking: boolean;
+	defaultShowThinking: ThinkingMode;
 }
 
 /**

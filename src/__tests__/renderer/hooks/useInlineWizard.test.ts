@@ -59,6 +59,30 @@ vi.mock('../../../renderer/services/inlineWizardDocumentGeneration', () => ({
 	extractDisplayTextFromChunk: vi.fn().mockImplementation((chunk: string) => chunk),
 }));
 
+// Mock window.maestro.agents.get for agent availability checks
+Object.defineProperty(window, 'maestro', {
+	value: {
+		agents: {
+			get: vi.fn().mockResolvedValue({
+				id: 'claude-code',
+				name: 'Claude Code',
+				command: 'claude-code',
+				args: [],
+				available: true,
+				path: '/usr/local/bin/claude-code',
+			}),
+		},
+		autorun: {
+			listDocs: vi.fn().mockResolvedValue({ success: true, files: [] }),
+			readDoc: vi.fn().mockResolvedValue({ success: true, content: '' }),
+			watchFolder: vi.fn().mockResolvedValue({ success: true }),
+			unwatchFolder: vi.fn().mockResolvedValue({ success: true }),
+			onFileChanged: vi.fn(() => vi.fn()),
+		},
+	},
+	writable: true,
+});
+
 import { generateInlineDocuments } from '../../../renderer/services/inlineWizardDocumentGeneration';
 const mockGenerateInlineDocuments = vi.mocked(generateInlineDocuments);
 
@@ -373,7 +397,7 @@ describe('useInlineWizard', () => {
 
 		describe('previousUIState preservation', () => {
 			it('should store and restore previousUIState', async () => {
-				const uiState = { readOnlyMode: true, saveToHistory: false, showThinking: true };
+				const uiState = { readOnlyMode: true, saveToHistory: false, showThinking: 'on' };
 
 				const { result } = renderHook(() => useInlineWizard());
 

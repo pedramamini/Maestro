@@ -94,6 +94,8 @@ export interface MindMapProps {
 	onNodeSelect: (node: MindMapNode | null) => void;
 	/** Callback when a node is double-clicked (recenter on document) */
 	onNodeDoubleClick: (node: MindMapNode) => void;
+	/** Callback when a document node is previewed (Enter or P key) - in-graph preview */
+	onNodePreview?: (node: MindMapNode) => void;
 	/** Callback for context menu */
 	onNodeContextMenu: (node: MindMapNode, event: MouseEvent) => void;
 	/** Callback to open a document in file preview */
@@ -966,6 +968,7 @@ export function MindMap({
 	selectedNodeId,
 	onNodeSelect,
 	onNodeDoubleClick,
+	onNodePreview,
 	onNodeContextMenu,
 	onOpenFile,
 	searchQuery,
@@ -1537,9 +1540,9 @@ export function MindMap({
 					break;
 
 				case 'Enter':
-					// Re-layout with focused document node as center
-					if (focusedNode.nodeType === 'document') {
-						onNodeDoubleClick(focusedNode);
+					// Open in-graph preview for focused document node
+					if (focusedNode.nodeType === 'document' && onNodePreview) {
+						onNodePreview(focusedNode);
 					} else if (focusedNode.nodeType === 'external' && focusedNode.urls?.[0]) {
 						// Open external URL
 						window.open(focusedNode.urls[0], '_blank');
@@ -1547,11 +1550,28 @@ export function MindMap({
 					e.preventDefault();
 					break;
 
+				case ' ':
+					// Recenter graph on focused document node (Space bar)
+					if (focusedNode.nodeType === 'document') {
+						onNodeDoubleClick(focusedNode);
+					}
+					e.preventDefault();
+					break;
+
 				case 'o':
 				case 'O':
-					// Open focused document in file preview
+					// Open focused document in main file preview
 					if (focusedNode.nodeType === 'document' && focusedNode.filePath) {
 						onOpenFile(focusedNode.filePath);
+					}
+					e.preventDefault();
+					break;
+
+				case 'p':
+				case 'P':
+					// Open in-graph preview for focused document node
+					if (focusedNode.nodeType === 'document' && onNodePreview) {
+						onNodePreview(focusedNode);
 					}
 					e.preventDefault();
 					break;
@@ -1589,7 +1609,7 @@ export function MindMap({
 				});
 			}
 		},
-		[focusedNodeId, nodesWithState, onNodeSelect, onNodeDoubleClick, onOpenFile, width, height]
+		[focusedNodeId, nodesWithState, onNodeSelect, onNodeDoubleClick, onNodePreview, onOpenFile, width, height]
 	);
 
 	return (

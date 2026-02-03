@@ -9,9 +9,11 @@
  * - Participant management (add, send, remove)
  */
 
+import * as os from 'os';
 import { ipcMain, BrowserWindow } from 'electron';
 import { withIpcErrorLogging, CreateHandlerOptions } from '../../utils/ipcHandler';
 import { logger } from '../../utils/logger';
+import { isWebContentsAvailable } from '../../utils/safe-send';
 
 // Group chat storage imports
 import {
@@ -479,7 +481,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 					name,
 					agentId,
 					processManager,
-					cwd || process.env.HOME || '/tmp',
+					cwd || os.homedir(),
 					agentDetector ?? undefined,
 					agentConfigValues,
 					customEnvVars
@@ -557,7 +559,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 
 				// Get the group chat folder for file access
 				const groupChatFolder = getGroupChatDir(groupChatId);
-				const effectiveCwd = cwd || process.env.HOME || '/tmp';
+				const effectiveCwd = cwd || os.homedir();
 
 				// Build a context summary prompt to ask the agent to summarize its current state
 				const summaryPrompt = `You are "${participantName}" in the group chat "${chat.name}".
@@ -751,7 +753,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 	 */
 	groupChatEmitters.emitMessage = (groupChatId: string, message: GroupChatMessage): void => {
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send('groupChat:message', groupChatId, message);
 		}
 	};
@@ -762,7 +764,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 	 */
 	groupChatEmitters.emitStateChange = (groupChatId: string, state: GroupChatState): void => {
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send('groupChat:stateChange', groupChatId, state);
 		}
 	};
@@ -776,7 +778,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 		participants: GroupChatParticipant[]
 	): void => {
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send('groupChat:participantsChanged', groupChatId, participants);
 		}
 	};
@@ -787,7 +789,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 	 */
 	groupChatEmitters.emitModeratorUsage = (groupChatId: string, usage: ModeratorUsage): void => {
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send('groupChat:moderatorUsage', groupChatId, usage);
 		}
 	};
@@ -801,7 +803,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 		entry: GroupChatHistoryEntry
 	): void => {
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send('groupChat:historyEntry', groupChatId, entry);
 		}
 	};
@@ -819,7 +821,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 			`[GroupChat:IPC] emitParticipantState: chatId=${groupChatId}, participant=${participantName}, state=${state}`
 		);
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send(
 				'groupChat:participantState',
 				groupChatId,
@@ -843,7 +845,7 @@ Respond with ONLY the summary text, no additional commentary.`;
 		sessionId: string
 	): void => {
 		const mainWindow = getMainWindow();
-		if (mainWindow && !mainWindow.isDestroyed()) {
+		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send('groupChat:moderatorSessionIdChanged', groupChatId, sessionId);
 		}
 	};

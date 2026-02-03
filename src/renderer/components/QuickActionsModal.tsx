@@ -111,6 +111,8 @@ interface QuickActionsModalProps {
 	// Document Graph - quick re-open last graph
 	lastGraphFocusFile?: string;
 	onOpenLastDocumentGraph?: () => void;
+	// Symphony
+	onOpenSymphony?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -193,6 +195,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		onOpenPlaybookExchange,
 		lastGraphFocusFile,
 		onOpenLastDocumentGraph,
+		onOpenSymphony,
 	} = props;
 
 	const [search, setSearch] = useState('');
@@ -774,9 +777,27 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 								activeSession.inputMode === 'terminal'
 									? activeSession.shellCwd || activeSession.cwd
 									: activeSession.cwd;
-							const browserUrl = await gitService.getRemoteBrowserUrl(cwd);
-							if (browserUrl) {
-								window.maestro.shell.openExternal(browserUrl);
+							try {
+								const browserUrl = await gitService.getRemoteBrowserUrl(cwd);
+								if (browserUrl) {
+									await window.maestro.shell.openExternal(browserUrl);
+								} else {
+									addToast({
+										type: 'error',
+										title: 'No Remote URL',
+										message: 'Could not find a remote URL for this repository',
+									});
+								}
+							} catch (error) {
+								console.error('Failed to open repository in browser:', error);
+								addToast({
+									type: 'error',
+									title: 'Error',
+									message:
+										error instanceof Error
+											? error.message
+											: 'Failed to open repository in browser',
+								});
 							}
 							setQuickActionOpen(false);
 						},
@@ -945,6 +966,21 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 						subtext: 'Browse and import community playbooks',
 						action: () => {
 							onOpenPlaybookExchange();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Symphony - contribute to open source projects
+		...(onOpenSymphony
+			? [
+					{
+						id: 'openSymphony',
+						label: 'Maestro Symphony',
+						shortcut: shortcuts.openSymphony,
+						subtext: 'Contribute to open source projects',
+						action: () => {
+							onOpenSymphony();
 							setQuickActionOpen(false);
 						},
 					},

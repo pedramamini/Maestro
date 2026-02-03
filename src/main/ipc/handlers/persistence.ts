@@ -40,6 +40,10 @@ export interface MaestroSettings {
 	// SSH Remote configuration
 	sshRemotes: any[];
 	defaultSshRemoteId: string | null;
+	// SSH Remote file indexing ignore patterns (glob patterns)
+	sshRemoteIgnorePatterns: string[];
+	// Whether to honor .gitignore files on remote hosts
+	sshRemoteHonorGitignore: boolean;
 	// Unique installation identifier (generated once on first run)
 	installationId: string | null;
 	[key: string]: any;

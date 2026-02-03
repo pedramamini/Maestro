@@ -20,7 +20,7 @@
  * positioning in the flex layout and must remain in App.tsx.
  */
 
-import React from 'react';
+import React, { lazy, Suspense } from 'react';
 import type {
 	Theme,
 	Session,
@@ -38,6 +38,7 @@ import type {
 	AgentError,
 	ToolType,
 	LeaderboardRegistration,
+	ThinkingMode,
 } from '../types';
 import type { FileNode } from '../types/fileTree';
 import type { WizardStep } from './Wizard/WizardContext';
@@ -47,8 +48,20 @@ import type { GroomingProgress, MergeResult } from '../types/contextMerge';
 import { AboutModal } from './AboutModal';
 import { ShortcutsHelpModal } from './ShortcutsHelpModal';
 import { UpdateCheckModal } from './UpdateCheckModal';
-import { ProcessMonitor } from './ProcessMonitor';
-import { UsageDashboardModal } from './UsageDashboard';
+
+// Lazy-loaded heavy modals (rarely used, loaded on-demand)
+const ProcessMonitor = lazy(() =>
+	import('./ProcessMonitor').then((m) => ({ default: m.ProcessMonitor }))
+);
+const UsageDashboardModal = lazy(() =>
+	import('./UsageDashboard').then((m) => ({ default: m.UsageDashboardModal }))
+);
+const GitDiffViewer = lazy(() =>
+	import('./GitDiffViewer').then((m) => ({ default: m.GitDiffViewer }))
+);
+const GitLogViewer = lazy(() =>
+	import('./GitLogViewer').then((m) => ({ default: m.GitLogViewer }))
+);
 
 // Confirmation Modal Components
 import { ConfirmModal } from './ConfirmModal';
@@ -78,8 +91,6 @@ import { ExecutionQueueBrowser } from './ExecutionQueueBrowser';
 import { BatchRunnerModal } from './BatchRunnerModal';
 import { AutoRunSetupModal } from './AutoRunSetupModal';
 import { LightboxModal } from './LightboxModal';
-import { GitDiffViewer } from './GitDiffViewer';
-import { GitLogViewer } from './GitLogViewer';
 
 // Group Chat Modal Components
 import { NewGroupChatModal } from './NewGroupChatModal';
@@ -228,29 +239,33 @@ export function AppInfoModals({
 			{/* --- UPDATE CHECK MODAL --- */}
 			{updateCheckModalOpen && <UpdateCheckModal theme={theme} onClose={onCloseUpdateCheckModal} />}
 
-			{/* --- PROCESS MONITOR --- */}
+			{/* --- PROCESS MONITOR (lazy-loaded) --- */}
 			{processMonitorOpen && (
-				<ProcessMonitor
-					theme={theme}
-					sessions={sessions}
-					groups={groups}
-					groupChats={groupChats}
-					onClose={onCloseProcessMonitor}
-					onNavigateToSession={onNavigateToSession}
-					onNavigateToGroupChat={onNavigateToGroupChat}
-				/>
+				<Suspense fallback={null}>
+					<ProcessMonitor
+						theme={theme}
+						sessions={sessions}
+						groups={groups}
+						groupChats={groupChats}
+						onClose={onCloseProcessMonitor}
+						onNavigateToSession={onNavigateToSession}
+						onNavigateToGroupChat={onNavigateToGroupChat}
+					/>
+				</Suspense>
 			)}
 
-			{/* --- USAGE DASHBOARD MODAL --- */}
+			{/* --- USAGE DASHBOARD MODAL (lazy-loaded) --- */}
 			{usageDashboardOpen && (
-				<UsageDashboardModal
-					isOpen={usageDashboardOpen}
-					onClose={onCloseUsageDashboard}
-					theme={theme}
-					defaultTimeRange={defaultStatsTimeRange}
-					colorBlindMode={colorBlindMode}
-					sessions={sessions}
-				/>
+				<Suspense fallback={null}>
+					<UsageDashboardModal
+						isOpen={usageDashboardOpen}
+						onClose={onCloseUsageDashboard}
+						theme={theme}
+						defaultTimeRange={defaultStatsTimeRange}
+						colorBlindMode={colorBlindMode}
+						sessions={sessions}
+					/>
+				</Suspense>
 			)}
 		</>
 	);
@@ -806,6 +821,9 @@ export interface AppUtilityModalsProps {
 	lastGraphFocusFile?: string;
 	onOpenLastDocumentGraph?: () => void;
 
+	// Symphony
+	onOpenSymphony?: () => void;
+
 	// LightboxModal
 	lightboxImage: string | null;
 	lightboxImages: string[];
@@ -849,12 +867,15 @@ export interface AppUtilityModalsProps {
 	tabSwitcherOpen: boolean;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
+	onFileTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
 		sessionName: string,
 		starred?: boolean
 	) => void;
+	/** Whether colorblind-friendly colors should be used for extension badges */
+	colorBlindMode?: boolean;
 
 	// FileSearchModal
 	fuzzyFileSearchOpen: boolean;
@@ -881,7 +902,7 @@ export interface AppUtilityModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
-	promptTabShowThinking: boolean;
+	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
 	promptEnterToSend: boolean;
@@ -995,6 +1016,8 @@ export function AppUtilityModals({
 	// Document Graph - quick re-open last graph
 	lastGraphFocusFile,
 	onOpenLastDocumentGraph,
+	// Symphony
+	onOpenSymphony,
 	// LightboxModal
 	lightboxImage,
 	lightboxImages,
@@ -1028,7 +1051,9 @@ export function AppUtilityModals({
 	tabSwitcherOpen,
 	onCloseTabSwitcher,
 	onTabSelect,
+	onFileTabSelect,
 	onNamedSessionSelect,
+	colorBlindMode,
 	// FileSearchModal
 	fuzzyFileSearchOpen,
 	filteredFileTree,
@@ -1145,6 +1170,7 @@ export function AppUtilityModals({
 					onOpenPlaybookExchange={onOpenMarketplace}
 					lastGraphFocusFile={lastGraphFocusFile}
 					onOpenLastDocumentGraph={onOpenLastDocumentGraph}
+					onOpenSymphony={onOpenSymphony}
 				/>
 			)}
 
@@ -1160,19 +1186,23 @@ export function AppUtilityModals({
 				/>
 			)}
 
-			{/* --- GIT DIFF VIEWER --- */}
+			{/* --- GIT DIFF VIEWER (lazy-loaded) --- */}
 			{gitDiffPreview && activeSession && (
-				<GitDiffViewer
-					diffText={gitDiffPreview}
-					cwd={gitViewerCwd}
-					theme={theme}
-					onClose={onCloseGitDiff}
-				/>
+				<Suspense fallback={null}>
+					<GitDiffViewer
+						diffText={gitDiffPreview}
+						cwd={gitViewerCwd}
+						theme={theme}
+						onClose={onCloseGitDiff}
+					/>
+				</Suspense>
 			)}
 
-			{/* --- GIT LOG VIEWER --- */}
+			{/* --- GIT LOG VIEWER (lazy-loaded) --- */}
 			{gitLogOpen && activeSession && (
-				<GitLogViewer cwd={gitViewerCwd} theme={theme} onClose={onCloseGitLog} />
+				<Suspense fallback={null}>
+					<GitLogViewer cwd={gitViewerCwd} theme={theme} onClose={onCloseGitLog} />
+				</Suspense>
 			)}
 
 			{/* --- AUTO RUN SETUP MODAL --- */}
@@ -1218,13 +1248,17 @@ export function AppUtilityModals({
 				<TabSwitcherModal
 					theme={theme}
 					tabs={activeSession.aiTabs}
+					fileTabs={activeSession.filePreviewTabs}
 					activeTabId={activeSession.activeTabId}
+					activeFileTabId={activeSession.activeFileTabId}
 					projectRoot={activeSession.projectRoot}
 					agentId={activeSession.toolType}
 					shortcut={tabShortcuts.tabSwitcher}
 					onTabSelect={onTabSelect}
+					onFileTabSelect={onFileTabSelect}
 					onNamedSessionSelect={onNamedSessionSelect}
 					onClose={onCloseTabSwitcher}
+					colorBlindMode={colorBlindMode}
 				/>
 			)}
 
@@ -1898,9 +1932,12 @@ export interface AppModalsProps {
 	getDocumentTaskCount: (filename: string) => Promise<number>;
 	onAutoRunRefresh: () => Promise<void>;
 	onOpenMarketplace?: () => void;
+	// Symphony
+	onOpenSymphony?: () => void;
 	tabSwitcherOpen: boolean;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
+	onFileTabSelect?: (tabId: string) => void;
 	onNamedSessionSelect: (
 		agentSessionId: string,
 		projectPath: string,
@@ -1929,7 +1966,7 @@ export interface AppModalsProps {
 	onPromptToggleTabSaveToHistory?: () => void;
 	promptTabReadOnlyMode: boolean;
 	onPromptToggleTabReadOnlyMode: () => void;
-	promptTabShowThinking: boolean;
+	promptTabShowThinking: ThinkingMode;
 	onPromptToggleTabShowThinking?: () => void;
 	promptSupportsThinking: boolean;
 	promptEnterToSend: boolean;
@@ -2210,6 +2247,8 @@ export function AppModals(props: AppModalsProps) {
 		getDocumentTaskCount,
 		onAutoRunRefresh,
 		onOpenMarketplace,
+		// Symphony
+		onOpenSymphony,
 		tabSwitcherOpen,
 		onCloseTabSwitcher,
 		onTabSelect,
@@ -2511,10 +2550,12 @@ export function AppModals(props: AppModalsProps) {
 				getDocumentTaskCount={getDocumentTaskCount}
 				onAutoRunRefresh={onAutoRunRefresh}
 				onOpenMarketplace={onOpenMarketplace}
+				onOpenSymphony={onOpenSymphony}
 				tabSwitcherOpen={tabSwitcherOpen}
 				onCloseTabSwitcher={onCloseTabSwitcher}
 				onTabSelect={onTabSelect}
 				onNamedSessionSelect={onNamedSessionSelect}
+				colorBlindMode={colorBlindMode}
 				fuzzyFileSearchOpen={fuzzyFileSearchOpen}
 				filteredFileTree={filteredFileTree}
 				onCloseFileSearch={onCloseFileSearch}

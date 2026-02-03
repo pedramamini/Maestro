@@ -84,6 +84,22 @@ vi.mock('lucide-react', () => ({
 	Trash2: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<svg data-testid="trash-icon" className={className} style={style} />
 	),
+	// Icons used by tour system (tourSteps.tsx)
+	PenLine: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="pen-line-icon" className={className} style={style} />
+	),
+	ImageIcon: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="image-icon" className={className} style={style} />
+	),
+	History: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="history-icon" className={className} style={style} />
+	),
+	Brain: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="brain-icon" className={className} style={style} />
+	),
+	Keyboard: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="keyboard-icon" className={className} style={style} />
+	),
 }));
 
 // Mock react-markdown

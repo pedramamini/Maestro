@@ -33,6 +33,16 @@ export interface GroomingProcessManager {
 		prompt?: string;
 		promptArgs?: (prompt: string) => string[];
 		noPromptSeparator?: boolean;
+		// SSH remote config for running on a remote host
+		sessionSshRemoteConfig?: {
+			enabled: boolean;
+			remoteId: string | null;
+			workingDirOverride?: string;
+		};
+		// Custom agent configuration
+		sessionCustomPath?: string;
+		sessionCustomArgs?: string;
+		sessionCustomEnvVars?: Record<string, string>;
 	}): { pid: number; success?: boolean } | null;
 	on(event: string, handler: (...args: unknown[]) => void): void;
 	off(event: string, handler: (...args: unknown[]) => void): void;
@@ -84,6 +94,18 @@ export function cancelAllGroomingSessions(): void {
 }
 
 /**
+ * SSH remote configuration for grooming.
+ */
+export interface GroomingSshRemoteConfig {
+	/** Whether SSH remote execution is enabled */
+	enabled: boolean;
+	/** The SSH remote ID (from settings) */
+	remoteId: string | null;
+	/** Optional working directory override on the remote host */
+	workingDirOverride?: string;
+}
+
+/**
  * Options for grooming context
  */
 export interface GroomContextOptions {
@@ -99,6 +121,14 @@ export interface GroomContextOptions {
 	readOnlyMode?: boolean;
 	/** Custom timeout in ms (default: 5 minutes) */
 	timeoutMs?: number;
+	/** SSH remote config for running grooming on a remote host */
+	sessionSshRemoteConfig?: GroomingSshRemoteConfig;
+	/** Custom path to the agent binary */
+	sessionCustomPath?: string;
+	/** Custom arguments for the agent */
+	sessionCustomArgs?: string;
+	/** Custom environment variables for the agent */
+	sessionCustomEnvVars?: Record<string, string>;
 }
 
 /**
@@ -136,6 +166,10 @@ export async function groomContext(
 		agentSessionId,
 		readOnlyMode = false,
 		timeoutMs = DEFAULT_GROOMING_TIMEOUT_MS,
+		sessionSshRemoteConfig,
+		sessionCustomPath,
+		sessionCustomArgs,
+		sessionCustomEnvVars,
 	} = options;
 
 	const groomerSessionId = `groomer-${uuidv4()}`;
@@ -147,6 +181,8 @@ export async function groomContext(
 		agentType,
 		promptLength: prompt.length,
 		hasSessionId: !!agentSessionId,
+		hasSshConfig: !!sessionSshRemoteConfig?.enabled,
+		sshRemoteId: sessionSshRemoteConfig?.remoteId,
 	});
 
 	// Get agent configuration
@@ -291,6 +327,11 @@ export async function groomContext(
 			prompt: prompt, // Triggers batch mode (no PTY)
 			promptArgs: agent.promptArgs, // For agents using flag-based prompt (e.g., OpenCode -p)
 			noPromptSeparator: agent.noPromptSeparator,
+			// Pass SSH config for remote execution support
+			sessionSshRemoteConfig,
+			sessionCustomPath,
+			sessionCustomArgs,
+			sessionCustomEnvVars,
 		});
 
 		if (!spawnResult || spawnResult.pid <= 0) {

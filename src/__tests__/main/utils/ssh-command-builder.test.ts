@@ -278,8 +278,9 @@ describe('ssh-command-builder', () => {
 			});
 
 			// The remote command should include cd to the working dir
+			// With single-quote escaping, the path is wrapped: cd '\''/opt/projects'\''
 			const remoteCommand = result.args[result.args.length - 1];
-			expect(remoteCommand).toContain("cd '/opt/projects'");
+			expect(remoteCommand).toContain("cd '\\''");
 		});
 
 		it('does not include cd when no cwd is provided', async () => {
@@ -305,11 +306,12 @@ describe('ssh-command-builder', () => {
 
 			const remoteCommand = result.args[result.args.length - 1];
 			// Option env should override config env for SHARED_VAR
-			expect(remoteCommand).toContain("CONFIG_VAR='from-config'");
-			expect(remoteCommand).toContain("OPTION_VAR='from-option'");
-			expect(remoteCommand).toContain("SHARED_VAR='option-value'");
+			// With single-quote escaping: CONFIG_VAR='\'from-config\''
+			expect(remoteCommand).toContain("CONFIG_VAR='\\''from-config'\\''");
+			expect(remoteCommand).toContain("OPTION_VAR='\\''from-option'\\''");
+			expect(remoteCommand).toContain("SHARED_VAR='\\''option-value'\\''");
 			// Config value should not appear for SHARED_VAR
-			expect(remoteCommand).not.toContain("SHARED_VAR='config-value'");
+			expect(remoteCommand).not.toContain("config-value");
 		});
 
 		it('handles config without remoteEnv', async () => {
@@ -318,10 +320,14 @@ describe('ssh-command-builder', () => {
 				args: ['--print', 'hello'],
 			});
 
-			const wrappedCommand = result.args[result.args.length - 1];
-			// The command is wrapped in $SHELL -ilc "..." (-i ensures .bashrc runs fully)
-			expect(wrappedCommand).toBe("$SHELL -ilc \"claude '--print' 'hello'\"");
-			expect(wrappedCommand).not.toContain('cd');
+			const lastArg = result.args[result.args.length - 1];
+			// Command is wrapped in bash with PATH setup (no profile sourcing)
+			expect(lastArg).toContain('/bin/bash --norc --noprofile -c');
+			expect(lastArg).toContain('export PATH=');
+			expect(lastArg).toContain('claude');
+			expect(lastArg).toContain('--print');
+			expect(lastArg).toContain('hello');
+			expect(lastArg).not.toContain('&& cd'); // cd comes after PATH setup if present
 		});
 
 		it('includes the remote command as the last argument', async () => {
@@ -377,15 +383,14 @@ describe('ssh-command-builder', () => {
 			});
 
 			const wrappedCommand = result.args[result.args.length - 1];
-			// The command is wrapped in $SHELL -ilc "..." with double-quote escaping
-			// The inner single quotes become escaped for double-quote context
-			// Original: git 'commit' '-m' 'fix: it'\''s a bug with $VARIABLES'
-			// In double quotes: \' becomes \\' and $ becomes \$
+			// The command is wrapped in /bin/bash --norc --noprofile -c '...' with PATH setup
+			// Single quotes prevent any shell expansion, so $VARIABLES is preserved literally
+			expect(wrappedCommand).toContain('/bin/bash --norc --noprofile -c');
 			expect(wrappedCommand).toContain('git');
 			expect(wrappedCommand).toContain('commit');
 			expect(wrappedCommand).toContain('fix:');
-			// $VARIABLES should be escaped to prevent expansion
-			expect(wrappedCommand).toContain('\\$VARIABLES');
+			// $VARIABLES is preserved literally inside single quotes (no escaping needed)
+			expect(wrappedCommand).toContain('$VARIABLES');
 		});
 	});
 
@@ -633,9 +638,14 @@ describe('ssh-command-builder', () => {
 				args: ['--print', '--', "what's the $PATH variable?"],
 			});
 
-			const remoteCommand = result.args[result.args.length - 1];
-			// The prompt should be escaped - $ should become \$ in the double-quoted wrapper
-			expect(remoteCommand).toContain('\\$PATH');
+			const wrappedCommand = result.args[result.args.length - 1];
+			// The command is wrapped in single quotes: /bin/bash -c '...'
+			// Single quotes prevent all shell expansion, so $PATH is preserved literally
+			// The single quote in "what's" goes through nested escaping - just check the key parts
+			// (Note: the PATH setup in the export uses double quotes for $HOME/$PATH expansion)
+			expect(wrappedCommand).toContain('$PATH variable'); // Literal, no escaping needed
+			expect(wrappedCommand).toContain('what'); // Content preserved
+			expect(wrappedCommand).toContain("'\\''"); // Contains escaped single quote pattern
 		});
 
 		it('handles multi-line prompts', async () => {

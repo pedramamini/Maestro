@@ -247,35 +247,6 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	},
 
 	/**
-	 * Aider - AI pair programming in your terminal
-	 * https://github.com/paul-gauthier/aider
-	 *
-	 * PLACEHOLDER: Most capabilities set to false until Aider integration is
-	 * implemented. Update this configuration when integrating the agent.
-	 */
-	aider: {
-		supportsResume: false, // Not yet investigated
-		supportsReadOnlyMode: false, // Not yet investigated
-		supportsJsonOutput: false, // Not yet investigated
-		supportsSessionId: false, // Not yet investigated
-		supportsImageInput: true, // Aider supports vision models
-		supportsImageInputOnResume: false, // Not yet investigated
-		supportsSlashCommands: true, // Aider has /commands
-		supportsSessionStorage: false, // Not yet investigated
-		supportsCostTracking: true, // Aider tracks costs
-		supportsUsageStats: true, // Aider shows token usage
-		supportsBatchMode: false, // Not yet investigated
-		requiresPromptToStart: false, // Not yet investigated
-		supportsStreaming: true, // Likely streams
-		supportsResultMessages: false, // Not yet investigated
-		supportsModelSelection: true, // --model flag
-		supportsStreamJsonInput: false,
-		supportsThinkingDisplay: false, // Not yet investigated
-		supportsContextMerge: false, // Not yet investigated - PLACEHOLDER
-		supportsContextExport: false, // Not yet investigated - PLACEHOLDER
-	},
-
-	/**
 	 * OpenCode - Open source coding assistant
 	 * https://github.com/opencode-ai/opencode
 	 *
@@ -298,10 +269,38 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsStreaming: true, // Streams JSONL events - Verified
 		supportsResultMessages: true, // step_finish with part.reason:"stop" - Verified
 		supportsModelSelection: true, // --model provider/model (e.g., 'ollama/qwen3:8b') - Verified
-		supportsStreamJsonInput: false, // Uses -f, --file flag instead
+		supportsStreamJsonInput: false, // Uses positional arguments for prompt
 		supportsThinkingDisplay: true, // Emits streaming text chunks
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
+	},
+
+	/**
+	 * Factory Droid - Enterprise AI coding assistant from Factory
+	 * https://docs.factory.ai/cli
+	 *
+	 * Verified capabilities based on CLI testing (droid exec --help) and session file analysis.
+	 */
+	'factory-droid': {
+		supportsResume: true, // -s, --session-id <id> (requires a prompt) - Verified
+		supportsReadOnlyMode: true, // Default mode (no --auto flags) - Verified
+		supportsJsonOutput: true, // -o stream-json - Verified
+		supportsSessionId: true, // UUID in session filenames - Verified
+		supportsImageInput: true, // -f, --file flag - Verified
+		supportsImageInputOnResume: true, // -f works with -s flag - Verified
+		supportsSlashCommands: false, // Factory uses different command system
+		supportsSessionStorage: true, // ~/.factory/sessions/ (JSONL files) - Verified
+		supportsCostTracking: false, // Token counts only in settings.json, no USD cost
+		supportsUsageStats: true, // tokenUsage in settings.json - Verified
+		supportsBatchMode: true, // droid exec subcommand - Verified
+		requiresPromptToStart: true, // Requires prompt argument for exec
+		supportsStreaming: true, // stream-json format - Verified
+		supportsResultMessages: true, // Can detect end of conversation
+		supportsModelSelection: true, // -m, --model flag - Verified
+		supportsStreamJsonInput: true, // --input-format stream-json - Verified
+		supportsThinkingDisplay: true, // Emits thinking content in messages - Verified
+		supportsContextMerge: true, // Can receive merged context via prompts
+		supportsContextExport: true, // Session files are exportable
 	},
 };
 

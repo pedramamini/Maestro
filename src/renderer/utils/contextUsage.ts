@@ -6,7 +6,6 @@
  */
 
 import type { ToolType } from '../types';
-import type { UsageStats } from '../../shared/types';
 
 /**
  * Default context window sizes for different agents.
@@ -14,10 +13,9 @@ import type { UsageStats } from '../../shared/types';
  */
 export const DEFAULT_CONTEXT_WINDOWS: Record<ToolType, number> = {
 	'claude-code': 200000, // Claude 3.5 Sonnet/Claude 4 default context
-	claude: 200000, // Legacy Claude
 	codex: 200000, // OpenAI o3/o4-mini context window
 	opencode: 128000, // OpenCode (depends on model, 128k is conservative default)
-	aider: 128000, // Aider (varies by model, 128k is conservative default)
+	'factory-droid': 200000, // Factory Droid (varies by model, defaults to Claude Opus)
 	terminal: 0, // Terminal has no context window
 };
 
@@ -48,21 +46,23 @@ const COMBINED_CONTEXT_AGENTS: Set<ToolType> = new Set(['codex']);
  * @returns Total context tokens used
  */
 export function calculateContextTokens(
-	stats: Pick<
-		UsageStats,
-		'inputTokens' | 'outputTokens' | 'cacheReadInputTokens' | 'cacheCreationInputTokens'
-	>,
-	agentId?: ToolType
+	stats: {
+		inputTokens?: number;
+		outputTokens?: number;
+		cacheReadInputTokens?: number;
+		cacheCreationInputTokens?: number;
+	},
+	agentId?: ToolType | string
 ): number {
 	// OpenAI models have combined input+output context limits
-	if (agentId && COMBINED_CONTEXT_AGENTS.has(agentId)) {
-		return stats.inputTokens + (stats.cacheCreationInputTokens || 0) + stats.outputTokens;
+	if (agentId && COMBINED_CONTEXT_AGENTS.has(agentId as ToolType)) {
+		return (stats.inputTokens || 0) + (stats.cacheCreationInputTokens || 0) + (stats.outputTokens || 0);
 	}
 
 	// Claude models: total input = uncached + cache-hit + newly-cached
 	// Output tokens don't consume the input context window
 	return (
-		stats.inputTokens + (stats.cacheReadInputTokens || 0) + (stats.cacheCreationInputTokens || 0)
+		(stats.inputTokens || 0) + (stats.cacheReadInputTokens || 0) + (stats.cacheCreationInputTokens || 0)
 	);
 }
 
@@ -85,15 +85,14 @@ export function calculateContextTokens(
  * @returns Estimated context usage percentage (0-100), or null if cannot be estimated
  */
 export function estimateContextUsage(
-	stats: Pick<
-		UsageStats,
-		| 'inputTokens'
-		| 'outputTokens'
-		| 'cacheReadInputTokens'
-		| 'cacheCreationInputTokens'
-		| 'contextWindow'
-	>,
-	agentId?: ToolType
+	stats: {
+		inputTokens?: number;
+		outputTokens?: number;
+		cacheReadInputTokens?: number;
+		cacheCreationInputTokens?: number;
+		contextWindow?: number;
+	},
+	agentId?: ToolType | string
 ): number | null {
 	// Calculate total context using agent-specific semantics
 	const totalContextTokens = calculateContextTokens(stats, agentId);
@@ -103,7 +102,7 @@ export function estimateContextUsage(
 		stats.contextWindow && stats.contextWindow > 0
 			? stats.contextWindow
 			: agentId && agentId !== 'terminal'
-				? DEFAULT_CONTEXT_WINDOWS[agentId] || 0
+				? DEFAULT_CONTEXT_WINDOWS[agentId as ToolType] || 0
 				: 0;
 
 	if (!effectiveContextWindow || effectiveContextWindow <= 0) {

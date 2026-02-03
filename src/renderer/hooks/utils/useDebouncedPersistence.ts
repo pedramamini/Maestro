@@ -82,11 +82,12 @@ const prepareSessionForPersistence = (session: Session): Session => {
 	// Return session without runtime-only fields
 	 
 	const {
-		closedTabHistory,
-		agentError,
-		agentErrorPaused,
-		agentErrorTabId,
-		sshConnectionFailed,
+		closedTabHistory: _closedTabHistory,
+		unifiedClosedTabHistory: _unifiedClosedTabHistory,
+		agentError: _agentError,
+		agentErrorPaused: _agentErrorPaused,
+		agentErrorTabId: _agentErrorTabId,
+		sshConnectionFailed: _sshConnectionFailed,
 		...sessionWithoutRuntimeFields
 	} = session;
 

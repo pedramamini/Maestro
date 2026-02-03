@@ -167,6 +167,41 @@ src/
 | Add colorblind palette | `src/renderer/constants/colorblindPalettes.ts` |
 | Add performance metrics | `src/shared/performance-metrics.ts` |
 | Add power management | `src/main/power-manager.ts`, `src/main/ipc/handlers/system.ts` |
+| Spawn agent with SSH support | `src/main/utils/ssh-spawn-wrapper.ts` (required for SSH remote execution) |
+| Modify file preview tabs | `TabBar.tsx`, `FilePreview.tsx`, `MainPanel.tsx` (see ARCHITECTURE.md → File Preview Tab System) |
+
+---
+
+## Critical Implementation Guidelines
+
+### SSH Remote Execution Awareness
+
+**IMPORTANT:** When implementing any feature that spawns agent processes (e.g., context grooming, group chat, batch operations), you MUST support SSH remote execution.
+
+Sessions can be configured to run on remote hosts via SSH. Without proper SSH wrapping, agents will always execute locally, breaking the user's expected behavior.
+
+**Required pattern:**
+1. Check if the session has `sshRemoteConfig` with `enabled: true`
+2. Use `wrapSpawnWithSsh()` from `src/main/utils/ssh-spawn-wrapper.ts` to wrap the spawn config
+3. Pass the SSH store (available via `createSshRemoteStoreAdapter(settingsStore)`)
+
+```typescript
+import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
+import { createSshRemoteStoreAdapter } from '../utils/ssh-remote-resolver';
+
+// Before spawning, wrap the config with SSH if needed
+if (sshStore && session.sshRemoteConfig?.enabled) {
+  const sshWrapped = await wrapSpawnWithSsh(spawnConfig, session.sshRemoteConfig, sshStore);
+  // Use sshWrapped.command, sshWrapped.args, sshWrapped.cwd, etc.
+}
+```
+
+**Also ensure:**
+- The correct agent type is used (don't hardcode `claude-code`)
+- Custom agent configuration (customPath, customArgs, customEnvVars) is passed through
+- Agent's `binaryName` is used for remote execution (not local paths)
+
+See [[CLAUDE-PATTERNS.md]] for detailed SSH patterns.
 
 ---
 

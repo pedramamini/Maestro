@@ -45,3 +45,16 @@ export function createSafeSend(getMainWindow: GetMainWindow) {
 
 /** Type for the safeSend function */
 export type SafeSendFn = ReturnType<typeof createSafeSend>;
+
+/**
+ * Check if a BrowserWindow's webContents is available for IPC.
+ * This is useful for inline checks when safeSend cannot be used.
+ *
+ * @param win - The BrowserWindow to check (can be null or undefined)
+ * @returns true if the window and webContents are available for sending messages
+ */
+export function isWebContentsAvailable(
+	win: BrowserWindow | null | undefined
+): win is BrowserWindow {
+	return !!(win && !win.isDestroyed() && win.webContents && !win.webContents.isDestroyed());
+}

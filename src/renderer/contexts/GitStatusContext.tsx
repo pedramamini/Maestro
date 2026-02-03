@@ -1,4 +1,4 @@
-import { createContext, useContext, useMemo, ReactNode, useCallback } from 'react';
+import { createContext, useContext, useMemo, ReactNode } from 'react';
 import {
 	useGitStatusPolling,
 	type GitStatusData,

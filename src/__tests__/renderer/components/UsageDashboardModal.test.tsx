@@ -34,6 +34,9 @@ vi.mock('lucide-react', () => {
 		Bot: createIcon('bot', '🤖'),
 		Users: createIcon('users', '👥'),
 		Layers: createIcon('layers', '📚'),
+		Sunrise: createIcon('sunrise', '🌅'),
+		Globe: createIcon('globe', '🌐'),
+		Zap: createIcon('zap', '⚡'),
 		// AutoRunStats icons
 		Play: createIcon('play', '▶️'),
 		CheckSquare: createIcon('check-square', '✅'),
@@ -43,6 +46,9 @@ vi.mock('lucide-react', () => {
 		AlertTriangle: createIcon('alert-triangle', '⚠️'),
 		ChevronDown: createIcon('chevron-down', '▼'),
 		ChevronUp: createIcon('chevron-up', '▲'),
+		// WeekdayComparisonChart icons
+		Briefcase: createIcon('briefcase', '💼'),
+		Coffee: createIcon('coffee', '☕'),
 	};
 });
 
@@ -361,12 +367,13 @@ describe('UsageDashboardModal', () => {
 			await waitFor(() => {
 				const select = screen.getByRole('combobox');
 				const options = select.querySelectorAll('option');
-				expect(options).toHaveLength(5);
+				expect(options).toHaveLength(6);
 				expect(options[0]).toHaveValue('day');
 				expect(options[1]).toHaveValue('week');
 				expect(options[2]).toHaveValue('month');
-				expect(options[3]).toHaveValue('year');
-				expect(options[4]).toHaveValue('all');
+				expect(options[3]).toHaveValue('quarter');
+				expect(options[4]).toHaveValue('year');
+				expect(options[5]).toHaveValue('all');
 			});
 		});
 	});
@@ -1951,12 +1958,13 @@ describe('UsageDashboardModal', () => {
 
 			const heatmapSection = screen.getByTestId('section-activity-heatmap');
 
-			// Focus heatmap and Tab to duration trends
+			// Focus heatmap and Tab to weekday comparison (the next section in activity view)
 			heatmapSection.focus();
 			fireEvent.keyDown(heatmapSection, { key: 'Tab' });
 
 			await waitFor(() => {
-				expect(document.activeElement).toBe(screen.getByTestId('section-duration-trends'));
+				// Activity sections order: activity-heatmap -> weekday-comparison -> duration-trends
+				expect(document.activeElement).toBe(screen.getByTestId('section-weekday-comparison'));
 			});
 		});
 

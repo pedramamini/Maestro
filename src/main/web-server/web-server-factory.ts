@@ -8,6 +8,7 @@ import { WebServer } from './WebServer';
 import { getThemeById } from '../themes';
 import { getHistoryManager } from '../history-manager';
 import { logger } from '../utils/logger';
+import { isWebContentsAvailable } from '../utils/safe-send';
 import type { ProcessManager } from '../process-manager';
 import type { StoredSession } from '../stores/types';
 import type { Group } from '../../shared/types';
@@ -260,6 +261,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 					`[Web → Renderer] Forwarding command | Maestro: ${sessionId} | Claude: ${agentSessionId} | Mode: ${inputMode || 'auto'} | Command: ${command.substring(0, 100)}`,
 					'WebServer'
 				);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for executeCommand', 'WebServer');
+					return false;
+				}
 				mainWindow.webContents.send('remote:executeCommand', sessionId, command, inputMode);
 				return true;
 			}
@@ -277,6 +282,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			// Forward to renderer - it will handle interrupt, state update, and broadcasts
 			// This ensures web interrupts go through exact same code path as desktop interrupts
 			logger.debug(`Forwarding interrupt to renderer for session ${sessionId}`, 'WebServer');
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for interrupt', 'WebServer');
+				return false;
+			}
 			mainWindow.webContents.send('remote:interrupt', sessionId);
 			return true;
 		});
@@ -297,6 +306,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 			// Forward to renderer - it will handle mode switch and broadcasts
 			// This ensures web mode switches go through exact same code path as desktop
 			logger.info(`[Web→Desktop] Sending IPC remote:switchMode to renderer`, 'WebServer');
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for switchMode', 'WebServer');
+				return false;
+			}
 			mainWindow.webContents.send('remote:switchMode', sessionId, mode);
 			return true;
 		});
@@ -317,6 +330,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 
 			// Forward to renderer - it will handle session selection and broadcasts
 			logger.info(`[Web→Desktop] Sending IPC remote:selectSession to renderer`, 'WebServer');
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for selectSession', 'WebServer');
+				return false;
+			}
 			mainWindow.webContents.send('remote:selectSession', sessionId, tabId);
 			return true;
 		});
@@ -333,6 +350,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				return false;
 			}
 
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for selectTab', 'WebServer');
+				return false;
+			}
 			mainWindow.webContents.send('remote:selectTab', sessionId, tabId);
 			return true;
 		});
@@ -358,6 +379,12 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				};
 
 				ipcMain.once(responseChannel, handleResponse);
+				if (!isWebContentsAvailable(mainWindow)) {
+					logger.warn('webContents is not available for newTab', 'WebServer');
+					ipcMain.removeListener(responseChannel, handleResponse);
+					resolve(null);
+					return;
+				}
 				mainWindow.webContents.send('remote:newTab', sessionId, responseChannel);
 
 				// Timeout after 5 seconds - clean up the listener to prevent memory leak
@@ -382,6 +409,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				return false;
 			}
 
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for closeTab', 'WebServer');
+				return false;
+			}
 			mainWindow.webContents.send('remote:closeTab', sessionId, tabId);
 			return true;
 		});
@@ -397,6 +428,10 @@ export function createWebServerFactory(deps: WebServerFactoryDependencies) {
 				return false;
 			}
 
+			if (!isWebContentsAvailable(mainWindow)) {
+				logger.warn('webContents is not available for renameTab', 'WebServer');
+				return false;
+			}
 			mainWindow.webContents.send('remote:renameTab', sessionId, tabId, newName);
 			return true;
 		});

@@ -73,7 +73,7 @@ interface EditAgentModalProps {
 }
 
 // Supported agents that are fully implemented
-const SUPPORTED_AGENTS = ['claude-code', 'opencode', 'codex'];
+const SUPPORTED_AGENTS = ['claude-code', 'opencode', 'codex', 'factory-droid'];
 
 export function NewInstanceModal({
 	isOpen,
@@ -241,15 +241,15 @@ export function NewInstanceModal({
 			if (sshRemoteId) {
 				const connectionErrors = detectedAgents
 					.filter((a: AgentConfig) => !a.hidden)
-					 
+
 					.filter((a: any) => a.error)
-					 
+
 					.map((a: any) => a.error);
 				const allHaveErrors =
 					connectionErrors.length > 0 &&
 					detectedAgents
 						.filter((a: AgentConfig) => !a.hidden)
-						 
+
 						.every((a: any) => a.error || !a.available);
 
 				if (allHaveErrors && connectionErrors.length > 0) {
@@ -318,7 +318,8 @@ export function NewInstanceModal({
 			// (hidden agents like 'terminal' should never be auto-selected)
 			if (source) {
 				setSelectedAgent(source.toolType);
-			} else {
+			} else if (!sshRemoteId) {
+				// Only auto-select on initial load, not on SSH remote re-detection
 				const firstAvailable = detectedAgents.find((a: AgentConfig) => a.available && !a.hidden);
 				if (firstAvailable) {
 					setSelectedAgent(firstAvailable.id);
@@ -504,16 +505,15 @@ export function NewInstanceModal({
 		// 2. User specified a custom path for it
 		const hasCustomPath = customAgentPaths[selectedAgent]?.trim();
 		const isAgentUsable = agent?.available || !!hasCustomPath;
-		// For SSH sessions, require remote path validation to succeed
-		const remotePathOk = !isSshEnabled || remotePathValidation.valid;
+		// Remote path validation is informational only - don't block creation
+		// Users may want to set up agent for a remote before the path exists
 		return (
 			selectedAgent &&
 			isAgentUsable &&
 			workingDir.trim() &&
 			instanceName.trim() &&
 			validation.valid &&
-			!hasWarningThatNeedsAck &&
-			remotePathOk
+			!hasWarningThatNeedsAck
 		);
 	}, [
 		selectedAgent,
@@ -524,8 +524,6 @@ export function NewInstanceModal({
 		validation.warning,
 		directoryWarningAcknowledged,
 		customAgentPaths,
-		isSshEnabled,
-		remotePathValidation.valid,
 	]);
 
 	// Handle keyboard shortcuts
@@ -596,6 +594,21 @@ export function NewInstanceModal({
 		}
 	}, [isOpen]);
 
+	// Transfer pending SSH config to selected agent automatically
+	// This ensures SSH config is preserved when agent is auto-selected or manually clicked
+	useEffect(() => {
+		if (
+			selectedAgent &&
+			agentSshRemoteConfigs['_pending_'] &&
+			!agentSshRemoteConfigs[selectedAgent]
+		) {
+			setAgentSshRemoteConfigs((prev) => ({
+				...prev,
+				[selectedAgent]: prev['_pending_'],
+			}));
+		}
+	}, [selectedAgent, agentSshRemoteConfigs]);
+
 	// Track the current SSH remote ID for re-detection
 	// Uses _pending_ key when no agent is selected, which is the shared SSH config
 	const currentSshRemoteId = useMemo(() => {
@@ -633,7 +646,6 @@ export function NewInstanceModal({
 
 		// Re-run agent detection with the new SSH remote ID
 		loadAgents(undefined, currentSshRemoteId ?? undefined);
-		 
 	}, [isOpen, currentSshRemoteId]);
 
 	if (!isOpen) return null;
@@ -1120,11 +1132,16 @@ export function NewInstanceModal({
 								agentSshRemoteConfigs[selectedAgent] || agentSshRemoteConfigs['_pending_']
 							}
 							onSshRemoteConfigChange={(config) => {
-								const key = selectedAgent || '_pending_';
-								setAgentSshRemoteConfigs((prev) => ({
-									...prev,
-									[key]: config,
-								}));
+								setAgentSshRemoteConfigs((prev) => {
+									const newConfigs: Record<string, AgentSshRemoteConfig> = {
+										...prev,
+										_pending_: config,
+									};
+									if (selectedAgent) {
+										newConfigs[selectedAgent] = config;
+									}
+									return newConfigs;
+								});
 							}}
 						/>
 					)}
@@ -1451,10 +1468,10 @@ export function EditAgentModal({
 
 	// Check if form is valid for submission
 	const isFormValid = useMemo(() => {
-		// For SSH sessions, require remote path validation to succeed
-		const remotePathOk = !isSshEnabled || remotePathValidation.valid;
-		return instanceName.trim() && validation.valid && remotePathOk;
-	}, [instanceName, validation.valid, isSshEnabled, remotePathValidation.valid]);
+		// Remote path validation is informational only - don't block save
+		// Users may want to configure SSH remote before the path exists
+		return !!instanceName.trim() && validation.valid;
+	}, [instanceName, validation.valid]);
 
 	// Handle keyboard shortcuts
 	const handleKeyDown = useCallback(
@@ -1479,7 +1496,7 @@ export function EditAgentModal({
 		'claude-code': 'Claude Code',
 		codex: 'Codex',
 		opencode: 'OpenCode',
-		aider: 'Aider',
+		'factory-droid': 'Factory Droid',
 	};
 	const agentName = agentNameMap[session.toolType] || session.toolType;
 

@@ -8,6 +8,8 @@
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import * as path from 'path';
+import * as os from 'os';
 
 // Mock execFileNoThrow before importing the module
 vi.mock('../../../main/utils/execFile', () => ({
@@ -342,7 +344,12 @@ describe('cliDetection.ts', () => {
 		it('should not duplicate paths that already exist in PATH', async () => {
 			// Set up process.env.PATH to include some of the additional paths
 			const originalPath = process.env.PATH;
-			process.env.PATH = '/opt/homebrew/bin:/usr/bin:/custom/path';
+			const testPath =
+				process.platform === 'win32'
+					? path.join(os.homedir(), '.local', 'bin')
+					: '/opt/homebrew/bin';
+			const delimiter = process.platform === 'win32' ? ';' : ':';
+			process.env.PATH = `${testPath}${delimiter}/usr/bin${delimiter}/custom/path`;
 
 			mockedExecFileNoThrow.mockResolvedValue({
 				stdout: '/usr/bin/cloudflared\n',
@@ -355,11 +362,11 @@ describe('cliDetection.ts', () => {
 			await isCloudflaredInstalled();
 
 			const callEnv = mockedExecFileNoThrow.mock.calls[0][3] as NodeJS.ProcessEnv;
-			const pathParts = (callEnv.PATH || '').split(':');
+			const pathParts = (callEnv.PATH || '').split(delimiter);
 
-			// Count occurrences of /opt/homebrew/bin - should be 1
-			const homebrewCount = pathParts.filter((p) => p === '/opt/homebrew/bin').length;
-			expect(homebrewCount).toBe(1);
+			// Count occurrences of the test path - should be 1
+			const testPathCount = pathParts.filter((p) => p === testPath).length;
+			expect(testPathCount).toBe(1);
 
 			// Restore original PATH
 			process.env.PATH = originalPath;
@@ -406,8 +413,13 @@ describe('cliDetection.ts', () => {
 			const path = callEnv.PATH || '';
 
 			// Should still have the additional paths
-			expect(path).toContain('/opt/homebrew/bin');
-			expect(path).toContain('/usr/local/bin');
+			if (process.platform === 'win32') {
+				expect(path).toContain('C:\\Program Files\\dotnet');
+				expect(path).toContain('C:\\WINDOWS\\System32\\OpenSSH');
+			} else {
+				expect(path).toContain('/opt/homebrew/bin');
+				expect(path).toContain('/usr/local/bin');
+			}
 
 			process.env.PATH = originalPath;
 		});
@@ -440,6 +452,55 @@ describe('cliDetection.ts', () => {
 
 			expect(result).toBe(true);
 			expect(getCloudflaredPath()).toBe('C:\\Program Files\\Cloudflared\\cloudflared.exe');
+		});
+
+		it('should handle CRLF line endings from Windows where command', async () => {
+			Object.defineProperty(process, 'platform', { value: 'win32' });
+
+			// Windows 'where' command returns paths with CRLF line endings
+			mockedExecFileNoThrow.mockResolvedValue({
+				stdout: 'C:\\Windows\\System32\\OpenSSH\\ssh.exe\r\nC:\\Program Files\\Git\\usr\\bin\\ssh.exe\r\n',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			clearCloudflaredCache();
+			await isCloudflaredInstalled();
+
+			// Should extract first path without trailing \r
+			const resultPath = getCloudflaredPath();
+			expect(resultPath).not.toContain('\r');
+			expect(resultPath).toBe('C:\\Windows\\System32\\OpenSSH\\ssh.exe');
+		});
+
+		it('should handle mixed LF and CRLF line endings', async () => {
+			mockedExecFileNoThrow.mockResolvedValue({
+				stdout: '/first/path/bin\r\n/second/path/bin\n/third/path/bin\r\n',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			clearCloudflaredCache();
+			await isCloudflaredInstalled();
+
+			const resultPath = getCloudflaredPath();
+			expect(resultPath).not.toContain('\r');
+			expect(resultPath).toBe('/first/path/bin');
+		});
+
+		it('should handle path with only CRLF (no additional lines)', async () => {
+			Object.defineProperty(process, 'platform', { value: 'win32' });
+
+			mockedExecFileNoThrow.mockResolvedValue({
+				stdout: 'C:\\Single\\Path\\binary.exe\r\n',
+				stderr: '',
+				exitCode: 0,
+			});
+
+			clearCloudflaredCache();
+			await isCloudflaredInstalled();
+
+			expect(getCloudflaredPath()).toBe('C:\\Single\\Path\\binary.exe');
 		});
 
 		it('should handle path with special characters', async () => {

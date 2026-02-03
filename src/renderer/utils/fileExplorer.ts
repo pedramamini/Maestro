@@ -116,6 +116,40 @@ export interface SshContext {
 	sshRemoteId?: string;
 	/** Remote working directory */
 	remoteCwd?: string;
+	/** Glob patterns to ignore when indexing (for SSH remotes) */
+	ignorePatterns?: string[];
+	/** Whether to honor .gitignore files on remote */
+	honorGitignore?: boolean;
+}
+
+/**
+ * Simple glob pattern matcher for ignore patterns.
+ * Supports basic glob patterns: *, ?, and character classes.
+ * @param pattern - The glob pattern to match against
+ * @param name - The file/folder name to test
+ * @returns true if the name matches the pattern
+ */
+export function matchGlobPattern(pattern: string, name: string): boolean {
+	// Convert glob pattern to regex
+	// Escape special regex chars except * and ?
+	const regexStr = pattern
+		.replace(/[.+^${}()|[\]\\]/g, '\\$&') // Escape special chars
+		.replace(/\*/g, '.*') // * matches any chars
+		.replace(/\?/g, '.'); // ? matches single char
+
+	// Make it case-insensitive and match full string
+	const regex = new RegExp(`^${regexStr}$`, 'i');
+	return regex.test(name);
+}
+
+/**
+ * Check if a file/folder name should be ignored based on patterns.
+ * @param name - The file/folder name to check
+ * @param patterns - Array of glob patterns to match against
+ * @returns true if the name matches any ignore pattern
+ */
+export function shouldIgnore(name: string, patterns: string[]): boolean {
+	return patterns.some((pattern) => matchGlobPattern(pattern, name));
 }
 
 /**
@@ -142,6 +176,10 @@ interface LoadingState {
 	directoriesScanned: number;
 	filesFound: number;
 	onProgress?: FileTreeProgressCallback;
+	/** Effective ignore patterns (user patterns + gitignore if enabled) */
+	ignorePatterns: string[];
+	/** Whether this is an SSH remote context */
+	isRemote: boolean;
 }
 
 /**
@@ -159,14 +197,98 @@ export async function loadFileTree(
 	sshContext?: SshContext,
 	onProgress?: FileTreeProgressCallback
 ): Promise<FileTreeNode[]> {
+	const isRemote = Boolean(sshContext?.sshRemoteId);
+
+	// Build effective ignore patterns
+	let ignorePatterns: string[] = [];
+
+	if (isRemote) {
+		// For remote: use configurable patterns from settings
+		ignorePatterns = sshContext?.ignorePatterns || [];
+
+		// If honor gitignore is enabled, try to fetch and parse the remote .gitignore
+		if (sshContext?.honorGitignore && sshContext?.sshRemoteId) {
+			try {
+				const gitignorePatterns = await fetchRemoteGitignorePatterns(
+					dirPath,
+					sshContext.sshRemoteId
+				);
+				ignorePatterns = [...ignorePatterns, ...gitignorePatterns];
+			} catch {
+				// Silently ignore - .gitignore may not exist or be readable
+			}
+		}
+	} else {
+		// For local: use default hardcoded patterns (backward compatible)
+		ignorePatterns = ['node_modules', '__pycache__'];
+	}
+
 	// Initialize loading state at the top level
 	const state: LoadingState = {
 		directoriesScanned: 0,
 		filesFound: 0,
 		onProgress,
+		ignorePatterns,
+		isRemote,
 	};
 
 	return loadFileTreeRecursive(dirPath, maxDepth, currentDepth, sshContext, state);
+}
+
+/**
+ * Fetch and parse .gitignore patterns from a remote directory.
+ * @param dirPath - The remote directory path
+ * @param sshRemoteId - The SSH remote config ID
+ * @returns Array of gitignore patterns (only folder patterns, simplified)
+ */
+async function fetchRemoteGitignorePatterns(
+	dirPath: string,
+	sshRemoteId: string
+): Promise<string[]> {
+	try {
+		const gitignorePath = `${dirPath}/.gitignore`;
+		const content = await window.maestro.fs.readFile(gitignorePath, sshRemoteId);
+
+		if (!content) {
+			return [];
+		}
+
+		// Parse gitignore content - extract simple patterns
+		// We focus on folder patterns (lines without extensions or with trailing /)
+		const patterns: string[] = [];
+		const lines = content.split('\n');
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+
+			// Skip empty lines and comments
+			if (!trimmed || trimmed.startsWith('#')) {
+				continue;
+			}
+
+			// Skip negation patterns (we don't support them)
+			if (trimmed.startsWith('!')) {
+				continue;
+			}
+
+			// Remove leading slash (we match against names, not paths)
+			let pattern = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
+
+			// Remove trailing slash (we match the folder name itself)
+			if (pattern.endsWith('/')) {
+				pattern = pattern.slice(0, -1);
+			}
+
+			// Only add non-empty patterns
+			if (pattern) {
+				patterns.push(pattern);
+			}
+		}
+
+		return patterns;
+	} catch {
+		return [];
+	}
 }
 
 /**
@@ -198,8 +320,8 @@ async function loadFileTreeRecursive(
 		}
 
 		for (const entry of entries) {
-			// Skip common ignore patterns (but allow hidden files/directories starting with .)
-			if (entry.name === 'node_modules' || entry.name === '__pycache__') {
+			// Skip entries that match ignore patterns
+			if (shouldIgnore(entry.name, state.ignorePatterns)) {
 				continue;
 			}
 

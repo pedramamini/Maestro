@@ -232,6 +232,90 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		],
 	},
 	{
+		id: 'factory-droid',
+		name: 'Factory Droid',
+		binaryName: 'droid',
+		command: 'droid',
+		args: [], // Base args for interactive mode (none)
+		requiresPty: false, // Batch mode uses child process
+
+		// Batch mode: droid exec [options] "prompt"
+		batchModePrefix: ['exec'],
+		// Always skip permissions in batch mode (like Claude Code's --dangerously-skip-permissions)
+		// Maestro requires full access to work properly
+		batchModeArgs: ['--skip-permissions-unsafe'],
+
+		// JSON output for parsing
+		jsonOutputArgs: ['-o', 'stream-json'],
+
+		// Session resume: -s <id> (requires a prompt)
+		resumeArgs: (sessionId: string) => ['-s', sessionId],
+
+		// Read-only mode is DEFAULT in droid exec (no flag needed)
+		readOnlyArgs: [],
+
+		// YOLO mode (same as batchModeArgs, kept for explicit yoloMode requests)
+		yoloModeArgs: ['--skip-permissions-unsafe'],
+
+		// Working directory
+		workingDirArgs: (dir: string) => ['--cwd', dir],
+
+		// File/image input
+		imageArgs: (imagePath: string) => ['-f', imagePath],
+
+		// Prompt is positional argument (no separator needed)
+		noPromptSeparator: true,
+
+		// Default env vars - don't set NO_COLOR as it conflicts with FORCE_COLOR
+		defaultEnvVars: {},
+
+		// UI config options
+		// Model IDs from droid CLI (exact IDs required)
+		// NOTE: autonomyLevel is NOT configurable - Maestro always uses --skip-permissions-unsafe
+		// which conflicts with --auto. This matches Claude Code's behavior.
+		configOptions: [
+			{
+				key: 'model',
+				type: 'select',
+				label: 'Model',
+				description: 'Model to use for Factory Droid',
+				// Model IDs from `droid exec --help`
+				options: [
+					'', // Empty = use droid's default
+					// OpenAI models
+					'gpt-5.1',
+					'gpt-5.1-codex',
+					'gpt-5.1-codex-max',
+					'gpt-5.2',
+					// Claude models
+					'claude-sonnet-4-5-20250929',
+					'claude-opus-4-5-20251101',
+					'claude-haiku-4-5-20251001',
+					// Google models
+					'gemini-3-pro-preview',
+				],
+				default: '', // Empty = use droid's default
+				argBuilder: (value: string) => (value && value.trim() ? ['-m', value.trim()] : []),
+			},
+			{
+				key: 'reasoningEffort',
+				type: 'select',
+				label: 'Reasoning Effort',
+				description: 'How much the model should reason before responding',
+				options: ['', 'low', 'medium', 'high'],
+				default: '', // Empty = use droid's default reasoning
+				argBuilder: (value: string) => (value && value.trim() ? ['-r', value.trim()] : []),
+			},
+			{
+				key: 'contextWindow',
+				type: 'number',
+				label: 'Context Window Size',
+				description: 'Maximum context window in tokens (for UI display)',
+				default: 200000,
+			},
+		],
+	},
+	{
 		id: 'aider',
 		name: 'Aider',
 		binaryName: 'aider',

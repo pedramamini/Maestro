@@ -2,6 +2,7 @@ import { ipcMain, BrowserWindow, App } from 'electron';
 import chokidar, { FSWatcher } from 'chokidar';
 import { logger } from '../../utils/logger';
 import { createIpcHandler, CreateHandlerOptions } from '../../utils/ipcHandler';
+import { isWebContentsAvailable } from '../../utils/safe-send';
 
 const LOG_CONTEXT = '[DocumentGraph]';
 
@@ -68,7 +69,7 @@ export function registerDocumentGraphHandlers(deps: DocumentGraphHandlerDependen
 		if (!events || events.size === 0) return;
 
 		const mainWindow = getMainWindow();
-		if (!mainWindow || mainWindow.isDestroyed()) {
+		if (!isWebContentsAvailable(mainWindow)) {
 			events.clear();
 			return;
 		}

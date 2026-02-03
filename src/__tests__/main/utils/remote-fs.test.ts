@@ -157,7 +157,11 @@ describe('remote-fs', () => {
 
 			await readDirRemote("/path/with spaces/and'quotes", baseConfig, deps);
 
-			expect(deps.execSsh).toHaveBeenCalledWith('ssh', expect.any(Array));
+			// Accept full SSH binary path (e.g., /usr/bin/ssh or C:\Windows\System32\OpenSSH\ssh.exe) for cross-platform compatibility
+			expect(deps.execSsh).toHaveBeenCalledWith(
+				expect.stringMatching(/ssh(\.exe)?$/),
+				expect.any(Array)
+			);
 			const call = (deps.execSsh as any).mock.calls[0][1];
 			const remoteCommand = call[call.length - 1];
 			// Path should be properly escaped in the command

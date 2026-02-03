@@ -187,6 +187,9 @@ Use your Write tool to save each phase document immediately after you finish wri
 File paths for the Auto Run folder:
 - New files: `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Phase-XX-[Description].md`
 - Updates: Use the exact existing file path to overwrite
+- **Always use two-digit phase numbers** (01, 02, etc.) to ensure correct lexicographic sorting
+
+**Multi-phase efforts:** When creating 3 or more phase documents for a single effort, place them in a dedicated subdirectory prefixed with today's date (e.g., `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/YYYY-MM-DD-Feature-Name/FEATURE-NAME-01.md`). This allows users to add the entire folder at once and keeps related documents organized with a clear creation date.
 
 **IMPORTANT**:
 - Write files one at a time, IN ORDER (lower phase numbers first)
@@ -203,3 +206,14 @@ File paths for the Auto Run folder:
 ## Now Generate the Documents
 
 Based on the conversation above and the existing documents, create new phases and/or update existing phases as appropriate for the user's goal.
+
+## After Document Generation
+
+Once all phase documents are written (new or updated), output a brief message to the user that includes:
+
+1. A summary of what was created or updated
+2. **Remind the user to add documents to Auto Run:**
+
+> **Next Steps:** Open the **Auto Run** panel in the Right Bar and add the phase documents in order to begin execution.
+
+This ensures the user knows how to start executing the newly created or updated phases.

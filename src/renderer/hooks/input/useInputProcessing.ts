@@ -68,6 +68,8 @@ export interface UseInputProcessingDeps {
 	onWizardSendMessage?: (content: string) => Promise<void>;
 	/** Whether the wizard is currently active for the active tab */
 	isWizardActive?: boolean;
+	/** Handler for the /skills built-in command (lists Claude Code skills) */
+	onSkillsCommand?: () => Promise<void>;
 }
 
 /**
@@ -122,6 +124,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 		onWizardCommand,
 		onWizardSendMessage,
 		isWizardActive,
+		onSkillsCommand,
 	} = deps;
 
 	// Ref for the processInput function so external code can access the latest version
@@ -182,9 +185,36 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					return;
 				}
 
+				// Handle built-in /skills command (only in AI mode, only for Claude Code sessions)
+				// This lists available Claude Code skills for the current project
+				if (
+					!isTerminalMode &&
+					commandText === '/skills' &&
+					onSkillsCommand &&
+					activeSession.toolType === 'claude-code'
+				) {
+					setInputValue('');
+					setSlashCommandOpen(false);
+					syncAiInputToSession('');
+					if (inputRef.current) inputRef.current.style.height = 'auto';
+
+					// Execute the skills command handler asynchronously
+					onSkillsCommand().catch((error) => {
+						console.error('[processInput] /skills command failed:', error);
+					});
+					return;
+				}
+
 				// Check for custom AI commands (only in AI mode)
 				if (!isTerminalMode) {
-					const matchingCustomCommand = customAICommands.find((cmd) => cmd.command === commandText);
+					// Parse command and arguments: "/speckit.plan Blah blah" -> baseCommand="/speckit.plan", args="Blah blah"
+					const firstSpaceIndex = commandText.indexOf(' ');
+					const baseCommand =
+						firstSpaceIndex === -1 ? commandText : commandText.substring(0, firstSpaceIndex);
+					const commandArgs =
+						firstSpaceIndex === -1 ? '' : commandText.substring(firstSpaceIndex + 1).trim();
+
+					const matchingCustomCommand = customAICommands.find((cmd) => cmd.command === baseCommand);
 					if (matchingCustomCommand) {
 						// Execute the custom AI command by sending its prompt
 						setInputValue('');
@@ -223,6 +253,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 								tabId: activeTab?.id || activeSession.activeTabId,
 								type: 'command',
 								command: matchingCustomCommand.command,
+								commandArgs, // Arguments passed after the command (for $ARGUMENTS substitution)
 								commandDescription: matchingCustomCommand.description,
 								tabName:
 									activeTab?.name ||
@@ -666,14 +697,14 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					? `${activeSession.id}-ai-${activeTabForSpawn?.id || 'default'}`
 					: `${activeSession.id}-terminal`;
 
-			// Check if this is an AI agent in batch mode (e.g., Claude Code, OpenCode, Codex)
+			// Check if this is an AI agent in batch mode (e.g., Claude Code, OpenCode, Codex, Factory Droid)
 			// Batch mode agents spawn a new process per message rather than writing to stdin
 			const isBatchModeAgent =
 				currentMode === 'ai' &&
-				(activeSession.toolType === 'claude' ||
-					activeSession.toolType === 'claude-code' ||
+				(activeSession.toolType === 'claude-code' ||
 					activeSession.toolType === 'opencode' ||
-					activeSession.toolType === 'codex');
+					activeSession.toolType === 'codex' ||
+					activeSession.toolType === 'factory-droid');
 
 			if (isBatchModeAgent) {
 				// Batch mode: Spawn new agent process with prompt

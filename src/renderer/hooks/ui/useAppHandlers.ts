@@ -2,22 +2,21 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import type { Session, FocusArea } from '../../types';
 import { shouldOpenExternally, getAllFolderPaths } from '../../utils/fileExplorer';
 
-/**
- * File preview information for file explorer navigation.
- */
-export interface FilePreview {
-	name: string;
-	content: string;
-	path: string;
-}
-
-/**
- * Dependencies for the useAppHandlers hook.
- */
 /** Loading state for file preview (shown while fetching remote files) */
 export interface FilePreviewLoading {
 	name: string;
 	path: string;
+}
+
+/**
+ * File info for opening in a file preview tab.
+ */
+export interface FileTabInfo {
+	path: string;
+	name: string;
+	content: string;
+	sshRemoteId?: string;
+	lastModified?: number;
 }
 
 export interface UseAppHandlersDeps {
@@ -29,24 +28,19 @@ export interface UseAppHandlersDeps {
 	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	/** Focus area setter */
 	setActiveFocus: React.Dispatch<React.SetStateAction<FocusArea>>;
-	/** File preview setter */
-	setPreviewFile: (file: FilePreview | null) => void;
 	/** File preview loading state setter (for remote file loading indicator) */
 	setFilePreviewLoading?: (loading: FilePreviewLoading | null) => void;
-	/** File preview history */
-	filePreviewHistory: FilePreview[];
-	/** File preview history setter */
-	setFilePreviewHistory: (history: FilePreview[]) => void;
-	/** Current index in file preview history */
-	filePreviewHistoryIndex: number;
-	/** File preview history index setter */
-	setFilePreviewHistoryIndex: (index: number) => void;
 	/** Confirmation modal message setter */
 	setConfirmModalMessage: (message: string) => void;
 	/** Confirmation modal callback setter */
 	setConfirmModalOnConfirm: (callback: () => () => void) => void;
 	/** Confirmation modal open setter */
 	setConfirmModalOpen: (open: boolean) => void;
+	/**
+	 * Callback to open a file in a tab (new tab-based file preview).
+	 * When provided, file clicks will open tabs instead of the overlay.
+	 */
+	onOpenFileTab?: (file: FileTabInfo) => void;
 }
 
 /**
@@ -111,15 +105,11 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 		activeSessionId,
 		setSessions,
 		setActiveFocus,
-		setPreviewFile,
 		setFilePreviewLoading,
-		filePreviewHistory,
-		setFilePreviewHistory,
-		filePreviewHistoryIndex,
-		setFilePreviewHistoryIndex,
 		setConfirmModalMessage,
 		setConfirmModalOnConfirm,
 		setConfirmModalOpen,
+		onOpenFileTab,
 	} = deps;
 
 	// --- DRAG STATE ---
@@ -154,21 +144,37 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 		e.stopPropagation();
 	}, []);
 
-	// Reset drag state when drag ends (e.g., user cancels by pressing Escape or dragging outside window)
+	// Prevent default drag-and-drop behavior at the document level.
+	// This is critical in Electron/Chromium: without preventing default on both
+	// dragover and drop at the document level, the browser can fall into a state
+	// where subsequent drag-and-drop operations are rejected after the first drop.
+	// Both events must have preventDefault() called to maintain a valid drop zone.
 	useEffect(() => {
 		const handleDragEnd = () => {
 			dragCounterRef.current = 0;
 			setIsDraggingImage(false);
 		};
 
+		const handleDocumentDragOver = (e: DragEvent) => {
+			e.preventDefault();
+		};
+
+		const handleDocumentDrop = (e: DragEvent) => {
+			e.preventDefault();
+			handleDragEnd();
+		};
+
 		// dragend fires when the drag operation ends (drop or cancel)
 		document.addEventListener('dragend', handleDragEnd);
-		// Also listen for drop anywhere in case it's not on our drop zone
-		document.addEventListener('drop', handleDragEnd);
+		// Use capture phase for dragover/drop so they fire BEFORE React handlers that call stopPropagation().
+		// This ensures preventDefault() is called at document level even when element handlers stop bubbling.
+		document.addEventListener('dragover', handleDocumentDragOver, { capture: true });
+		document.addEventListener('drop', handleDocumentDrop, { capture: true });
 
 		return () => {
 			document.removeEventListener('dragend', handleDragEnd);
-			document.removeEventListener('drop', handleDragEnd);
+			document.removeEventListener('dragover', handleDocumentDragOver, { capture: true });
+			document.removeEventListener('drop', handleDocumentDrop, { capture: true });
 		};
 	}, []);
 
@@ -207,24 +213,21 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 
 				try {
 					// Pass SSH remote ID for remote sessions
-					const content = await window.maestro.fs.readFile(fullPath, sshRemoteId);
-					const newFile = {
-						name: node.name,
-						content: content,
+					// Fetch both content and stat for lastModified timestamp
+					const [content, stat] = await Promise.all([
+						window.maestro.fs.readFile(fullPath, sshRemoteId),
+						window.maestro.fs.stat(fullPath, sshRemoteId),
+					]);
+					const lastModified = stat?.modifiedAt ? new Date(stat.modifiedAt).getTime() : Date.now();
+
+					// Open file in tab-based file preview
+					onOpenFileTab?.({
 						path: fullPath,
-					};
-
-					// Only add to history if it's a different file than the current one
-					const currentFile = filePreviewHistory[filePreviewHistoryIndex];
-					if (!currentFile || currentFile.path !== fullPath) {
-						// Add to navigation history (truncate forward history if we're not at the end)
-						const newHistory = filePreviewHistory.slice(0, filePreviewHistoryIndex + 1);
-						newHistory.push(newFile);
-						setFilePreviewHistory(newHistory);
-						setFilePreviewHistoryIndex(newHistory.length - 1);
-					}
-
-					setPreviewFile(newFile);
+						name: node.name,
+						content,
+						sshRemoteId,
+						lastModified,
+					});
 					setActiveFocus('main');
 				} catch (error) {
 					console.error('Failed to read file:', error);
@@ -238,16 +241,12 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 		},
 		[
 			activeSession,
-			filePreviewHistory,
-			filePreviewHistoryIndex,
 			setConfirmModalMessage,
 			setConfirmModalOnConfirm,
 			setConfirmModalOpen,
-			setFilePreviewHistory,
-			setFilePreviewHistoryIndex,
-			setPreviewFile,
 			setActiveFocus,
 			setFilePreviewLoading,
+			onOpenFileTab,
 		]
 	);
 

@@ -56,6 +56,25 @@ describe('SSH Remote Preload API', () => {
 
 			expect(mockInvoke).toHaveBeenCalledWith('ssh-remote:saveConfig', config);
 		});
+
+		it('should pass useSshConfig and sshConfigHost fields', async () => {
+			mockInvoke.mockResolvedValue({ id: 'config-123' });
+			const config = {
+				name: 'SSH Config Server',
+				host: 'my-server',
+				port: 22,
+				username: '', // Optional when using SSH config
+				privateKeyPath: '', // Optional when using SSH config
+				enabled: true,
+				useSshConfig: true,
+				sshConfigHost: 'my-server',
+			};
+
+			const result = await api.saveConfig(config);
+
+			expect(mockInvoke).toHaveBeenCalledWith('ssh-remote:saveConfig', config);
+			expect(result).toEqual({ id: 'config-123' });
+		});
 	});
 
 	describe('deleteConfig', () => {

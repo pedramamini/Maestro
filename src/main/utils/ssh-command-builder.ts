@@ -8,7 +8,7 @@
  */
 
 import { SshRemoteConfig } from '../../shared/types';
-import { shellEscape, buildShellCommand, shellEscapeForDoubleQuotes } from './shell-escape';
+import { shellEscape, buildShellCommand } from './shell-escape';
 import { expandTilde } from '../../shared/pathUtils';
 import { logger } from './logger';
 import { resolveSshPath } from './cliDetection';
@@ -36,6 +36,8 @@ export interface RemoteCommandOptions {
 	cwd?: string;
 	/** Environment variables to set on the remote (optional) */
 	env?: Record<string, string>;
+	/** Indicates the caller will send input via stdin to the remote command (optional) */
+	useStdin?: boolean;
 }
 
 /**
@@ -47,7 +49,7 @@ const DEFAULT_SSH_OPTIONS: Record<string, string> = {
 	StrictHostKeyChecking: 'accept-new', // Auto-accept new host keys
 	ConnectTimeout: '10', // Connection timeout in seconds
 	ClearAllForwardings: 'yes', // Disable port forwarding from SSH config (avoids "Address already in use" errors)
-	RequestTTY: 'force', // Force TTY allocation - required for Claude Code's --print mode to produce output
+	RequestTTY: 'no', // Default: do NOT request a TTY. We only force a TTY for specific remote modes (e.g., --print)
 	LogLevel: 'ERROR', // Suppress SSH warnings like "Pseudo-terminal will not be allocated..."
 };
 
@@ -99,13 +101,29 @@ export function buildRemoteCommand(options: RemoteCommandOptions): string {
 	// Build the command with arguments
 	const commandWithArgs = buildShellCommand(command, args);
 
+	// Handle stdin input modes
+	let finalCommandWithArgs: string;
+	if (options.useStdin) {
+		const hasStreamJsonInput =
+			Array.isArray(args) && args.includes('--input-format') && args.includes('stream-json');
+		if (hasStreamJsonInput) {
+			// Stream-JSON mode: use exec to avoid shell control sequences
+			finalCommandWithArgs = `exec ${commandWithArgs}`;
+		} else {
+			// Raw prompt mode: pipe stdin directly to the command
+			finalCommandWithArgs = commandWithArgs;
+		}
+	} else {
+		finalCommandWithArgs = commandWithArgs;
+	}
+
 	// Combine env exports with command
 	let fullCommand: string;
 	if (envExports.length > 0) {
 		// Prepend env vars inline: VAR1='val1' VAR2='val2' command args
-		fullCommand = `${envExports.join(' ')} ${commandWithArgs}`;
+		fullCommand = `${envExports.join(' ')} ${finalCommandWithArgs}`;
 	} else {
-		fullCommand = commandWithArgs;
+		fullCommand = finalCommandWithArgs;
 	}
 
 	parts.push(fullCommand);
@@ -175,26 +193,48 @@ export async function buildSshCommand(
 	// Resolve the SSH binary path (handles packaged Electron apps where PATH is limited)
 	const sshPath = await resolveSshPath();
 
-	// Force TTY allocation - required for Claude Code's --print mode to produce output
-	// Without a TTY, Claude Code with --print hangs indefinitely
-	args.push('-tt');
+	// Decide whether we need to force a TTY for the remote command.
+	// Historically we forced a TTY for Claude Code when running with `--print`.
+	// However, for stream-json input (sending JSON via stdin) a TTY injects terminal
+	// control sequences that corrupt the stream. Only enable forced TTY for cases
+	// that explicitly require it (e.g., `--print` without `--input-format stream-json`).
+	const remoteArgs = remoteOptions.args || [];
+	const hasPrintFlag = remoteArgs.includes('--print');
+	const hasStreamJsonInput = remoteOptions.useStdin
+		? true
+		: remoteArgs.includes('--input-format') && remoteArgs.includes('stream-json');
+	const forceTty = Boolean(hasPrintFlag && !hasStreamJsonInput);
 
-	// When using SSH config, we let SSH handle authentication settings
-	// Only add explicit overrides if provided
-	if (config.useSshConfig) {
-		// Only specify identity file if explicitly provided (override SSH config)
-		if (config.privateKeyPath && config.privateKeyPath.trim()) {
-			args.push('-i', expandTilde(config.privateKeyPath));
-		}
-	} else {
-		// Direct connection: require private key
+	// Log the decision so callers can debug why a TTY was or was not forced
+	logger.debug('SSH TTY decision', '[ssh-command-builder]', {
+		host: config.host,
+		useStdinFlag: !!remoteOptions.useStdin,
+		hasPrintFlag,
+		hasStreamJsonInput,
+		forceTty,
+	});
+
+	if (forceTty) {
+		// -tt must come first for reliable forced allocation in some SSH implementations
+		args.push('-tt');
+	}
+
+	// Private key - only add if explicitly provided
+	// SSH will use ~/.ssh/config or ssh-agent if no key is specified
+	if (config.privateKeyPath && config.privateKeyPath.trim()) {
 		args.push('-i', expandTilde(config.privateKeyPath));
 	}
 
 	// Default SSH options for non-interactive operation
-	// These are always needed to ensure BatchMode behavior
+	// These are always needed to ensure BatchMode behavior. If `forceTty` is true,
+	// override RequestTTY to `force` so SSH will allocate a TTY even in non-interactive contexts.
 	for (const [key, value] of Object.entries(DEFAULT_SSH_OPTIONS)) {
-		args.push('-o', `${key}=${value}`);
+		// If we will force a TTY for this command, override the RequestTTY option
+		if (key === 'RequestTTY' && forceTty) {
+			args.push('-o', `${key}=force`);
+		} else {
+			args.push('-o', `${key}=${value}`);
+		}
 	}
 
 	// Port specification - only add if not default and not using SSH config
@@ -203,19 +243,12 @@ export async function buildSshCommand(
 		args.push('-p', config.port.toString());
 	}
 
-	// Build the destination (user@host or just host for SSH config)
-	if (config.useSshConfig) {
-		// When using SSH config, just pass the Host pattern
-		// SSH will look up User, HostName, Port, IdentityFile from config
-		// But if username is explicitly provided, use it as override
-		if (config.username && config.username.trim()) {
-			args.push(`${config.username}@${config.host}`);
-		} else {
-			args.push(config.host);
-		}
-	} else {
-		// Direct connection: always include username
+	// Build destination - use user@host if username provided, otherwise just host
+	// SSH will use current user or ~/.ssh/config User directive if no username specified
+	if (config.username && config.username.trim()) {
 		args.push(`${config.username}@${config.host}`);
+	} else {
+		args.push(config.host);
 	}
 
 	// Merge remote config's environment with the command-specific environment
@@ -237,44 +270,48 @@ export async function buildSshCommand(
 		env: Object.keys(mergedEnv).length > 0 ? mergedEnv : undefined,
 	});
 
-	// Wrap the command to execute via the user's login shell.
-	// $SHELL -ilc ensures the user's full PATH (including homebrew, nvm, etc.) is available.
-	// -i forces interactive mode (critical for .bashrc to not bail out)
-	// -l loads login profile for PATH
-	// -c executes the command
-	// Using $SHELL respects the user's configured shell (bash, zsh, etc.)
+	// Wrap the command with explicit PATH setup instead of sourcing profile files.
+	// Profile files often chain to zsh or contain syntax incompatible with -c embedding.
 	//
-	// WHY -i IS CRITICAL:
-	// On Ubuntu (and many Linux distros), .bashrc has a guard at the top:
-	//   case $- in *i*) ;; *) return;; esac
-	// This checks if the shell is interactive before running. Without -i,
-	// .bashrc exits early and user PATH additions (like ~/.local/bin) never load.
-	// The -i flag sets 'i' in $-, allowing .bashrc to run fully.
+	// CRITICAL: Use /bin/bash (full path) instead of just 'bash' because:
+	// SSH passes the command to the remote's login shell (often zsh) which parses it.
+	// If we use 'bash', zsh still sources its profile files while resolving the command.
+	// Using /bin/bash directly bypasses this - zsh just executes the path without sourcing.
 	//
-	// CRITICAL: When Node.js spawn() passes this to SSH without shell:true, SSH runs
-	// the command through the remote's default shell. The key is escaping:
-	// 1. Double quotes around the command are NOT escaped - they delimit the -c argument
-	// 2. $ signs inside the command MUST be escaped as \$ so they defer to the login shell
-	//    (shellEscapeForDoubleQuotes handles this)
-	// 3. Single quotes inside the command pass through unchanged
+	// We prepend common binary locations to PATH:
+	// - ~/.local/bin: Claude Code, pip --user installs
+	// - ~/bin: User scripts
+	// - /usr/local/bin: Homebrew on Intel Mac, manual installs
+	// - /opt/homebrew/bin: Homebrew on Apple Silicon
+	// - ~/.cargo/bin: Rust tools
 	//
-	// Example transformation for spawn():
-	//   Input:  cd '/path' && MYVAR='value' claude --print
-	//   After escaping: cd '/path' && MYVAR='value' claude --print (no $ to escape here)
-	//   Wrapped: $SHELL -ilc "cd '/path' && MYVAR='value' claude --print"
-	//   SSH receives this as one argument, passes to remote shell
-	//   Remote shell expands $SHELL, executes: /bin/zsh -ilc "cd '/path' ..."
-	//   The login shell runs with full PATH from ~/.zprofile AND ~/.bashrc
-	const escapedCommand = shellEscapeForDoubleQuotes(remoteCommand);
-	const wrappedCommand = `$SHELL -ilc "${escapedCommand}"`;
+	// This approach avoids all profile sourcing issues while ensuring agent binaries are found.
+	//
+	// CRITICAL: Use single quotes for the -c argument to prevent the remote shell (often zsh)
+	// from parsing the command content. SSH passes the command to the remote's login shell,
+	// which parses it before executing. Double quotes allow zsh to interpret $, `, \, etc.
+	// Single quotes are parsed literally by zsh - it just passes the content to bash as-is.
+	//
+	// The inner command uses shellEscape() which handles embedded single quotes via '\'' pattern.
+	const pathSetup =
+		'export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"';
+	const fullBashCommand = `${pathSetup} && ${remoteCommand}`;
+	const wrappedCommand = `/bin/bash --norc --noprofile -c ${shellEscape(fullBashCommand)}`;
 	args.push(wrappedCommand);
 
-	// Debug logging to trace the exact command being built
-	logger.info('Built SSH command', '[ssh-command-builder]', {
+	// Log the exact command being built - use info level so it appears in system logs
+	logger.info('SSH command built for remote execution', '[ssh-command-builder]', {
+		host: config.host,
+		username: config.username || '(using SSH config/system default)',
+		port: config.port,
+		useSshConfig: config.useSshConfig,
+		privateKeyPath: config.privateKeyPath ? '***configured***' : '(using SSH config/agent)',
 		remoteCommand,
 		wrappedCommand,
 		sshPath,
-		fullCommand: `${sshPath} ${args.join(' ')}`,
+		sshArgsCount: args.length,
+		// Full command for debugging - escape quotes for readability
+		fullCommand: `${sshPath} ${args.map((a) => (a.includes(' ') ? `"${a}"` : a)).join(' ')}`,
 	});
 
 	return {

@@ -73,6 +73,12 @@ export interface ModeratorConfig {
 	customArgs?: string;
 	/** Custom environment variables */
 	customEnvVars?: Record<string, string>;
+	/** SSH remote config for remote execution */
+	sshRemoteConfig?: {
+		enabled: boolean;
+		remoteId: string | null;
+		workingDirOverride?: string;
+	};
 }
 
 /**

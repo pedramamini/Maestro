@@ -14,6 +14,8 @@ import {
 } from 'lucide-react';
 import type { Theme, BatchDocumentEntry } from '../types';
 import { generateId } from '../utils/ids';
+import { useLayerStack } from '../contexts/LayerStackContext';
+import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 
 // Platform detection helper (userAgentData is newer but not in all TS types yet)
 const isMacPlatform = (): boolean => {
@@ -71,6 +73,27 @@ function DocumentSelectorModal({
 	onAdd,
 	onRefresh,
 }: DocumentSelectorModalProps) {
+	// Layer stack for escape handling
+	const { registerLayer, unregisterLayer } = useLayerStack();
+	const onCloseRef = useRef(onClose);
+	onCloseRef.current = onClose;
+
+	// Register with layer stack for escape handling
+	useEffect(() => {
+		const id = registerLayer({
+			type: 'modal',
+			priority: MODAL_PRIORITIES.DOCUMENT_SELECTOR,
+			blocksLowerLayers: true,
+			capturesFocus: true,
+			focusTrap: 'strict',
+			ariaLabel: 'Select Documents',
+			onEscape: () => {
+				onCloseRef.current();
+			},
+		});
+		return () => unregisterLayer(id);
+	}, [registerLayer, unregisterLayer]);
+
 	// Pre-select currently added documents
 	const [selectedDocs, setSelectedDocs] = useState<Set<string>>(() => {
 		return new Set(documents.map((d) => d.filename));
@@ -956,14 +979,17 @@ export function DocumentsPanel({
 												}}
 											/>
 
-											{/* Document Name */}
+											{/* Document Name - truncates from left to show filename */}
 											<span
-												className={`flex-1 text-sm font-medium truncate ${doc.isMissing ? 'line-through' : ''}`}
+												className={`flex-1 text-sm font-medium overflow-hidden text-ellipsis whitespace-nowrap ${doc.isMissing ? 'line-through' : ''}`}
 												style={{
 													color: doc.isMissing ? theme.colors.error : theme.colors.textMain,
+													direction: 'rtl',
+													textAlign: 'left',
 												}}
+												title={`${doc.filename}.md`}
 											>
-												{doc.filename}.md
+												<bdi>{doc.filename}.md</bdi>
 											</span>
 
 											{/* Missing Indicator */}

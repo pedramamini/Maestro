@@ -12,12 +12,13 @@ Settings are organized into tabs:
 
 | Tab | Contents |
 |-----|----------|
-| **General** | Theme, input behavior, toggles defaults, context warnings, log level, storage location, power management |
+| **General** | Shell configuration, input send behavior, default toggles (history, thinking), automatic tab naming, power management, updates, privacy, usage stats, storage location |
+| **Display** | Font family and size, terminal width, log level and buffer, max output lines per response, document graph settings, context window warnings |
 | **Shortcuts** | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts)) |
-| **Appearance** | Font size, UI density |
-| **Notifications** | Sound alerts, text-to-speech settings |
+| **Themes** | Dark, light, and vibe mode themes, custom theme builder with import/export |
+| **Notifications** | OS notifications, custom command notifications, toast notification duration |
 | **AI Commands** | View and edit slash commands, [Spec-Kit](./speckit-commands), and [OpenSpec](./openspec-commands) prompts |
-| **SSH Remotes** | Configure remote hosts for [SSH agent execution](./ssh-remote-execution) |
+| **SSH Hosts** | Configure remote hosts for [SSH agent execution](./ssh-remote-execution) |
 
 ## Checking for Updates
 
@@ -76,20 +77,25 @@ Enable desktop notifications to be alerted when:
 1. Toggle **Enable OS Notifications** on
 2. Click **Test Notification** to verify it works
 
-### Audio Feedback (Text-to-Speech)
+### Custom Notification
 
-Maestro can speak a brief summary when AI tasks complete using your system's text-to-speech.
+Execute a custom command when AI tasks complete. Use any notification method that fits your workflow.
 
 **To configure:**
-1. Toggle **Enable Audio Feedback** on
-2. Set the **TTS Command** — the command that accepts text via stdin:
-   - **macOS:** `say` (built-in)
-   - **Linux:** `espeak` or `festival --tts`
-   - **Windows:** Use a PowerShell script or third-party TTS tool
-3. Click **Test** to hear a sample message
+1. Toggle **Enable Custom Notification** on
+2. Set the **Command Chain** — the command(s) that accept text via stdin:
+   - **macOS:** `say` (text-to-speech), `afplay /path/to/sound.wav` (audio file)
+   - **Linux:** `notify-send "Maestro"`, `espeak`, `paplay /path/to/sound.wav`
+   - **Windows:** PowerShell scripts or third-party tools
+   - **Custom:** Any command or script that accepts stdin
+3. Click **Test** to verify your command works
 4. Click **Stop** to interrupt a running test
 
-**Piped commands:** You can pipe through multiple commands, e.g., `cmd1 | cmd2`.
+**Command chaining:** Chain multiple commands together using pipes to mix and match tools. Examples:
+- `say` — speak aloud using macOS text-to-speech
+- `tee ~/log.txt | say` — log to a file AND speak aloud
+- `notify-send "Maestro" && espeak` — show desktop notification and speak (Linux)
+- `afplay ~/sounds/done.wav` — play a sound file (macOS)
 
 ### Toast Notifications
 
@@ -104,9 +110,9 @@ In-app toast notifications appear in the corner when events occur. Configure how
 ### When Notifications Trigger
 
 Notifications are sent when:
-- An AI task completes (OS notification + optional TTS)
+- An AI task completes (OS notification + optional custom notification)
 - A long-running command finishes (OS notification)
-- The LLM analysis generates a feedback synopsis (TTS only, if configured)
+- The LLM analysis generates a feedback synopsis (custom notification only, if configured)
 
 ## Sleep Prevention
 
@@ -121,7 +127,7 @@ Maestro can prevent your computer from sleeping while AI agents are actively wor
 
 Sleep prevention automatically activates when:
 - Any session is **busy** (agent processing a request)
-- **Auto Run** is active (batch processing tasks)
+- **Auto Run** is active (processing tasks)
 - **Group Chat** is in progress (moderator or agents responding)
 
 When all activity stops, sleep prevention deactivates automatically.

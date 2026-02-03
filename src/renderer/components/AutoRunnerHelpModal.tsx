@@ -55,7 +55,8 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 						Auto Run is a file-system-based document runner that automates AI-driven task execution.
 						Create markdown documents with checkbox tasks, and let AI agents work through them one
 						by one, each with a fresh context window. Run single documents or chain multiple
-						documents together for complex workflows.
+						documents together for complex workflows—a collection of Auto Run documents is called a{' '}
+						<strong style={{ color: theme.colors.textMain }}>Playbook</strong>.
 					</p>
 				</section>
 
@@ -343,9 +344,9 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 					</div>
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
-							Save your batch run configurations as{' '}
-							<strong style={{ color: theme.colors.textMain }}>Playbooks</strong> for quick reuse. A
-							playbook stores:
+							A <strong style={{ color: theme.colors.textMain }}>Playbook</strong> is a collection of
+							Auto Run documents configured to run together. Save your batch run configurations for
+							quick reuse. A playbook stores:
 						</p>
 						<ul className="list-disc ml-4 space-y-1">
 							<li>Document selection and order</li>
@@ -356,6 +357,13 @@ export function AutoRunnerHelpModal({ theme, onClose }: AutoRunnerHelpModalProps
 						<p>
 							Load a saved playbook with one click and modify it as needed—changes can be saved back
 							or discarded.
+						</p>
+						<p>
+							<strong style={{ color: theme.colors.textMain }}>Sharing Playbooks:</strong> Export
+							playbooks as ZIP files to share with others, or import playbooks you've received.
+							Browse the{' '}
+							<strong style={{ color: theme.colors.textMain }}>Playbook Exchange</strong> to discover
+							and download community-contributed playbooks for common workflows.
 						</p>
 					</div>
 				</section>

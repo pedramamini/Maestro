@@ -68,6 +68,7 @@ Each task should be:
 - **Actionable**: Clear what needs to be done
 - **Verifiable**: You can tell when it's complete
 - **Autonomous**: Can be done without asking the user questions
+- **Reuse-aware**: Search for existing utilities, patterns, or services in the codebase before creating new implementations to avoid duplication
 
 Preserve any markers from the original tasks.md:
 - `[P]` = Parallelizable (can run with other `[P]` tasks)

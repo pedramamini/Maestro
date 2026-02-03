@@ -9,6 +9,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain } from 'electron';
 import { registerGitHandlers } from '../../../../main/ipc/handlers/git';
 import * as execFile from '../../../../main/utils/execFile';
+import path from 'path';
 
 // Mock electron's ipcMain
 vi.mock('electron', () => ({
@@ -3387,14 +3388,14 @@ branch refs/heads/bugfix-123
 				success: true,
 				gitSubdirs: [
 					{
-						path: '/parent/main-repo',
+						path: path.join('/parent', 'main-repo'),
 						name: 'main-repo',
 						isWorktree: false,
 						branch: 'main',
 						repoRoot: '/parent/main-repo',
 					},
 					{
-						path: '/parent/worktree-feature',
+						path: path.join('/parent', 'worktree-feature'),
 						name: 'worktree-feature',
 						isWorktree: true,
 						branch: 'feature-branch',
@@ -3443,7 +3444,7 @@ branch refs/heads/bugfix-123
 				success: true,
 				gitSubdirs: [
 					{
-						path: '/parent/visible-repo',
+						path: path.join('/parent', 'visible-repo'),
 						name: 'visible-repo',
 						isWorktree: false,
 						branch: 'main',
@@ -3492,7 +3493,7 @@ branch refs/heads/bugfix-123
 				success: true,
 				gitSubdirs: [
 					{
-						path: '/parent/repo-dir',
+						path: path.join('/parent', 'repo-dir'),
 						name: 'repo-dir',
 						isWorktree: false,
 						branch: 'develop',
@@ -3581,7 +3582,7 @@ branch refs/heads/bugfix-123
 				success: true,
 				gitSubdirs: [
 					{
-						path: '/parent/detached-repo',
+						path: path.join('/parent', 'detached-repo'),
 						name: 'detached-repo',
 						isWorktree: false,
 						branch: null,
@@ -3739,8 +3740,10 @@ branch refs/heads/bugfix-123
 
 			// Mock window for event emission
 			const mockWindow = {
+				isDestroyed: vi.fn().mockReturnValue(false),
 				webContents: {
 					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
 				},
 			};
 			const { BrowserWindow } = await import('electron');
@@ -3800,8 +3803,10 @@ branch refs/heads/bugfix-123
 			vi.mocked(mockChokidar.watch).mockReturnValue(mockWatcher as any);
 
 			const mockWindow = {
+				isDestroyed: vi.fn().mockReturnValue(false),
 				webContents: {
 					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
 				},
 			};
 			const { BrowserWindow } = await import('electron');
@@ -3839,8 +3844,10 @@ branch refs/heads/bugfix-123
 			vi.mocked(mockChokidar.watch).mockReturnValue(mockWatcher as any);
 
 			const mockWindow = {
+				isDestroyed: vi.fn().mockReturnValue(false),
 				webContents: {
 					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
 				},
 			};
 			const { BrowserWindow } = await import('electron');
@@ -3889,8 +3896,10 @@ branch refs/heads/bugfix-123
 			vi.mocked(mockChokidar.watch).mockReturnValue(mockWatcher as any);
 
 			const mockWindow = {
+				isDestroyed: vi.fn().mockReturnValue(false),
 				webContents: {
 					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
 				},
 			};
 			const { BrowserWindow } = await import('electron');
@@ -3936,8 +3945,10 @@ branch refs/heads/bugfix-123
 			vi.mocked(mockChokidar.watch).mockReturnValue(mockWatcher as any);
 
 			const mockWindow = {
+				isDestroyed: vi.fn().mockReturnValue(false),
 				webContents: {
 					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
 				},
 			};
 			const { BrowserWindow } = await import('electron');
@@ -4031,8 +4042,10 @@ branch refs/heads/bugfix-123
 			vi.mocked(mockChokidar.watch).mockReturnValue(mockWatcher as any);
 
 			const mockWindow = {
+				isDestroyed: vi.fn().mockReturnValue(false),
 				webContents: {
 					send: vi.fn(),
+					isDestroyed: vi.fn().mockReturnValue(false),
 				},
 			};
 			const { BrowserWindow } = await import('electron');

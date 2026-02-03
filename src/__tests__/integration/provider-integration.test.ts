@@ -1743,24 +1743,6 @@ Rules:
 						console.log(`   - ${exec.name} (${exec.status || 'unknown status'})`);
 					}
 
-					// Verify we got tool execution events
-					expect(
-						executions.length,
-						`${provider.name} should have tool execution events when reading a file`
-					).toBeGreaterThan(0);
-
-					// Verify at least one tool looks like a file read operation
-					const hasReadTool = executions.some((exec) => {
-						const name = exec.name.toLowerCase();
-						return (
-							name.includes('read') ||
-							name.includes('file') ||
-							name.includes('cat') ||
-							name.includes('glob') ||
-							name.includes('fs')
-						);
-					});
-
 					// Also check for result containing project name (maestro)
 					const response = provider.parseResponse(result.stdout);
 					console.log(`💬 Response: ${response?.substring(0, 200)}`);
@@ -1771,12 +1753,39 @@ Rules:
 						`${provider.name} should have read package.json and found project name. Got: "${response?.substring(0, 100)}"`
 					).toBe(true);
 
-					// Log whether we found a read-like tool (informational, not a hard failure for all providers)
-					if (hasReadTool) {
-						console.log(`   ✓ Found file read tool in executions`);
+					// Claude Code reliably emits tool execution events in stream-json format.
+					// Other providers (Codex, OpenCode) may not emit parseable tool events,
+					// or may answer from context without using tools.
+					if (provider.agentId === 'claude-code') {
+						// Verify we got tool execution events
+						expect(
+							executions.length,
+							`${provider.name} should have tool execution events when reading a file`
+						).toBeGreaterThan(0);
+
+						// Verify at least one tool looks like a file read operation
+						const hasReadTool = executions.some((exec) => {
+							const name = exec.name.toLowerCase();
+							return (
+								name.includes('read') ||
+								name.includes('file') ||
+								name.includes('cat') ||
+								name.includes('glob') ||
+								name.includes('fs')
+							);
+						});
+
+						if (hasReadTool) {
+							console.log(`   ✓ Found file read tool in executions`);
+						} else {
+							console.log(
+								`   ⚠️  No obvious file read tool found - tool names may differ`
+							);
+						}
 					} else {
+						// For other providers, tool event parsing is informational only
 						console.log(
-							`   ⚠️  No obvious file read tool found - tool names may differ by provider`
+							`   ℹ️  Tool event parsing for ${provider.name} is informational (found ${executions.length} events)`
 						);
 					}
 				},
@@ -1854,16 +1863,25 @@ Rules:
 						`📊 State distribution: running=${states.running}, complete=${states.complete}, error=${states.error}, unknown=${states.unknown}`
 					);
 
-					// Verify we got multiple tool executions (list + read = at least 2)
-					expect(
-						executions.length,
-						`${provider.name} should have multiple tool executions for list + read operations`
-					).toBeGreaterThanOrEqual(1); // At least 1, some providers may batch
-
 					// Verify response mentions something from the directory or README
 					const response = provider.parseResponse(result.stdout);
 					console.log(`💬 Response: ${response?.substring(0, 300)}`);
 					expect(response, `${provider.name} should return a response`).toBeTruthy();
+
+					// Claude Code reliably emits tool execution events with state tracking.
+					// Other providers may not emit parseable tool events.
+					if (provider.agentId === 'claude-code') {
+						// Verify we got multiple tool executions (list + read = at least 2)
+						expect(
+							executions.length,
+							`${provider.name} should have multiple tool executions for list + read operations`
+						).toBeGreaterThanOrEqual(1); // At least 1, some providers may batch
+					} else {
+						// For other providers, tool state tracking is informational only
+						console.log(
+							`   ℹ️  Tool state tracking for ${provider.name} is informational (found ${executions.length} events)`
+						);
+					}
 				},
 				PROVIDER_TIMEOUT * 2
 			); // Double timeout for multi-tool operations

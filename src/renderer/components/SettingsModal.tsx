@@ -30,6 +30,7 @@ import {
 	Battery,
 	Monitor,
 	PartyPopper,
+	Tag,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -53,6 +54,7 @@ import { SettingCheckbox } from './SettingCheckbox';
 import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
+import { SshRemoteIgnoreSection } from './Settings/SshRemoteIgnoreSection';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -252,8 +254,8 @@ interface SettingsModalProps {
 	setEnterToSendTerminal: (value: boolean) => void;
 	defaultSaveToHistory: boolean;
 	setDefaultSaveToHistory: (value: boolean) => void;
-	defaultShowThinking: boolean;
-	setDefaultShowThinking: (value: boolean) => void;
+	defaultShowThinking: 'off' | 'on' | 'sticky';
+	setDefaultShowThinking: (value: 'off' | 'on' | 'sticky') => void;
 	osNotificationsEnabled: boolean;
 	setOsNotificationsEnabled: (value: boolean) => void;
 	audioFeedbackEnabled: boolean;
@@ -270,7 +272,7 @@ interface SettingsModalProps {
 	setCrashReportingEnabled: (value: boolean) => void;
 	customAICommands: CustomAICommand[];
 	setCustomAICommands: (commands: CustomAICommand[]) => void;
-	initialTab?: 'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh';
+	initialTab?: 'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh';
 	hasNoAgents?: boolean;
 	onThemeImportError?: (message: string) => void;
 	onThemeImportSuccess?: (message: string) => void;
@@ -301,10 +303,18 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setDisableGpuAcceleration,
 		disableConfetti,
 		setDisableConfetti,
+		// SSH Remote file indexing settings
+		sshRemoteIgnorePatterns,
+		setSshRemoteIgnorePatterns,
+		sshRemoteHonorGitignore,
+		setSshRemoteHonorGitignore,
+		// Automatic tab naming settings
+		automaticTabNamingEnabled,
+		setAutomaticTabNamingEnabled,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
-		'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+		'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
 	>('general');
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -333,6 +343,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 	// Stats data management state
 	const [statsDbSize, setStatsDbSize] = useState<number | null>(null);
+	const [statsEarliestDate, setStatsEarliestDate] = useState<string | null>(null);
 	const [statsClearing, setStatsClearing] = useState(false);
 	const [statsClearResult, setStatsClearResult] = useState<{
 		success: boolean;
@@ -373,7 +384,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					setSyncError('Failed to load storage settings');
 				});
 
-			// Load stats database size
+			// Load stats database size and earliest timestamp
 			window.maestro.stats
 				.getDatabaseSize()
 				.then((size) => {
@@ -381,6 +392,21 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				})
 				.catch((err) => {
 					console.error('Failed to load stats database size:', err);
+				});
+
+			window.maestro.stats
+				.getEarliestTimestamp()
+				.then((timestamp) => {
+					if (timestamp) {
+						const date = new Date(timestamp);
+						const formatted = date.toISOString().split('T')[0]; // YYYY-MM-DD
+						setStatsEarliestDate(formatted);
+					} else {
+						setStatsEarliestDate(null);
+					}
+				})
+				.catch((err) => {
+					console.error('Failed to load earliest stats timestamp:', err);
 				});
 
 			// Reset stats clear state
@@ -442,10 +468,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 		const handleTabNavigation = (e: KeyboardEvent) => {
 			const tabs: Array<
-				'general' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+				'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
 			> = FEATURE_FLAGS.LLM_SETTINGS
-				? ['general', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
-				: ['general', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
+				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
+				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
 			const currentIndex = tabs.indexOf(activeTab);
 
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {
@@ -851,6 +877,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<Settings className="w-4 h-4" />
 						{activeTab === 'general' && <span>General</span>}
 					</button>
+					<button
+						onClick={() => setActiveTab('display')}
+						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						tabIndex={-1}
+						title="Display"
+					>
+						<Monitor className="w-4 h-4" />
+						{activeTab === 'display' && <span>Display</span>}
+					</button>
 					{FEATURE_FLAGS.LLM_SETTINGS && (
 						<button
 							onClick={() => setActiveTab('llm')}
@@ -916,112 +951,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				<div className="flex-1 p-6 overflow-y-auto scrollbar-thin">
 					{activeTab === 'general' && (
 						<div className="space-y-5">
-							{/* Font Family */}
-							<FontConfigurationPanel
-								fontFamily={props.fontFamily}
-								setFontFamily={props.setFontFamily}
-								systemFonts={systemFonts}
-								fontsLoaded={fontsLoaded}
-								fontLoading={fontLoading}
-								customFonts={customFonts}
-								onAddCustomFont={addCustomFont}
-								onRemoveCustomFont={removeCustomFont}
-								onFontInteraction={handleFontInteraction}
-								theme={theme}
-							/>
-
-							{/* Font Size */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Font Size
-								</label>
-								<ToggleButtonGroup
-									options={[
-										{ value: 12, label: 'Small' },
-										{ value: 14, label: 'Medium' },
-										{ value: 16, label: 'Large' },
-										{ value: 18, label: 'X-Large' },
-									]}
-									value={props.fontSize}
-									onChange={props.setFontSize}
-									theme={theme}
-								/>
-							</div>
-
-							{/* Terminal Width */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Terminal Width (Columns)
-								</label>
-								<ToggleButtonGroup
-									options={[80, 100, 120, 160]}
-									value={props.terminalWidth}
-									onChange={props.setTerminalWidth}
-									theme={theme}
-								/>
-							</div>
-
-							{/* Log Level */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									System Log Level
-								</label>
-								<ToggleButtonGroup
-									options={[
-										{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
-										{ value: 'info', label: 'Info', activeColor: '#3b82f6' },
-										{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
-										{ value: 'error', label: 'Error', activeColor: '#ef4444' },
-									]}
-									value={props.logLevel}
-									onChange={props.setLogLevel}
-									theme={theme}
-								/>
-								<p className="text-xs opacity-50 mt-2">
-									Higher levels show fewer logs. Debug shows all logs, Error shows only errors.
-								</p>
-							</div>
-
-							{/* Max Log Buffer */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Maximum Log Buffer
-								</label>
-								<ToggleButtonGroup
-									options={[1000, 5000, 10000, 25000]}
-									value={props.maxLogBuffer}
-									onChange={props.setMaxLogBuffer}
-									theme={theme}
-								/>
-								<p className="text-xs opacity-50 mt-2">
-									Maximum number of log messages to keep in memory. Older logs are automatically
-									removed.
-								</p>
-							</div>
-
-							{/* Max Output Lines */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Max Output Lines per Response
-								</label>
-								<ToggleButtonGroup
-									options={[
-										{ value: 15 },
-										{ value: 25 },
-										{ value: 50 },
-										{ value: 100 },
-										{ value: Infinity, label: 'All' },
-									]}
-									value={props.maxOutputLines}
-									onChange={props.setMaxOutputLines}
-									theme={theme}
-								/>
-								<p className="text-xs opacity-50 mt-2">
-									Long outputs will be collapsed into a scrollable window. Set to "All" to always
-									show full output.
-								</p>
-							</div>
-
 							{/* Default Shell */}
 							<div>
 								<label className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
@@ -1257,6 +1186,27 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								)}
 							</div>
 
+							{/* System Log Level */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									System Log Level
+								</label>
+								<ToggleButtonGroup
+									options={[
+										{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
+										{ value: 'info', label: 'Info', activeColor: '#3b82f6' },
+										{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
+										{ value: 'error', label: 'Error', activeColor: '#ef4444' },
+									]}
+									value={props.logLevel}
+									onChange={props.setLogLevel}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Higher levels show fewer logs. Debug shows all logs, Error shows only errors.
+								</p>
+							</div>
+
 							{/* GitHub CLI Path */}
 							<div>
 								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
@@ -1382,16 +1332,47 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								theme={theme}
 							/>
 
-							{/* Default Thinking Toggle */}
+							{/* Automatic Tab Naming */}
 							<SettingCheckbox
-								icon={Brain}
-								sectionLabel="Default Thinking Toggle"
-								title='Enable "Thinking" by default for new tabs'
-								description="When enabled, new AI tabs will show streaming thinking/reasoning content as the AI works, instead of waiting for the final result"
-								checked={props.defaultShowThinking}
-								onChange={props.setDefaultShowThinking}
+								icon={Tag}
+								sectionLabel="Automatic Tab Naming"
+								title="Automatically name tabs based on first message"
+								description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
+								checked={automaticTabNamingEnabled}
+								onChange={setAutomaticTabNamingEnabled}
 								theme={theme}
 							/>
+
+							{/* Default Thinking Toggle - Three states: Off, On, Sticky */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+									<Brain className="w-3 h-3" />
+									Default Thinking Mode
+								</label>
+								<div
+									className="p-3 rounded border"
+									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+								>
+									<div className="font-medium mb-1" style={{ color: theme.colors.textMain }}>
+										Show AI thinking/reasoning content for new tabs
+									</div>
+									<div className="text-sm opacity-60 mb-3" style={{ color: theme.colors.textDim }}>
+										{props.defaultShowThinking === 'off' && 'Thinking hidden, only final responses shown'}
+										{props.defaultShowThinking === 'on' && 'Thinking streams live, clears on completion'}
+										{props.defaultShowThinking === 'sticky' && 'Thinking streams live and stays visible'}
+									</div>
+									<ToggleButtonGroup
+										options={[
+											{ value: 'off' as const, label: 'Off' },
+											{ value: 'on' as const, label: 'On' },
+											{ value: 'sticky' as const, label: 'Sticky' },
+										]}
+										value={props.defaultShowThinking}
+										onChange={props.setDefaultShowThinking}
+										theme={theme}
+									/>
+								</div>
+							</div>
 
 							{/* Sleep Prevention */}
 							<div>
@@ -1605,181 +1586,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								theme={theme}
 							/>
 
-							{/* Context Window Warnings */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
-									<AlertTriangle className="w-3 h-3" />
-									Context Window Warnings
-								</label>
-								<div
-									className="p-3 rounded border space-y-3"
-									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
-								>
-									{/* Enable/Disable Toggle */}
-									<div
-										className="flex items-center justify-between cursor-pointer"
-										onClick={() =>
-											updateContextManagementSettings({
-												contextWarningsEnabled: !contextManagementSettings.contextWarningsEnabled,
-											})
-										}
-										role="button"
-										tabIndex={0}
-										onKeyDown={(e) => {
-											if (e.key === 'Enter' || e.key === ' ') {
-												e.preventDefault();
-												updateContextManagementSettings({
-													contextWarningsEnabled: !contextManagementSettings.contextWarningsEnabled,
-												});
-											}
-										}}
-									>
-										<div className="flex-1 pr-3">
-											<div className="font-medium" style={{ color: theme.colors.textMain }}>
-												Show context consumption warnings
-											</div>
-											<div
-												className="text-xs opacity-50 mt-0.5"
-												style={{ color: theme.colors.textDim }}
-											>
-												Display warning banners when context window usage reaches configurable
-												thresholds
-											</div>
-										</div>
-										<button
-											onClick={(e) => {
-												e.stopPropagation();
-												updateContextManagementSettings({
-													contextWarningsEnabled: !contextManagementSettings.contextWarningsEnabled,
-												});
-											}}
-											className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
-											style={{
-												backgroundColor: contextManagementSettings.contextWarningsEnabled
-													? theme.colors.accent
-													: theme.colors.bgActivity,
-											}}
-											role="switch"
-											aria-checked={contextManagementSettings.contextWarningsEnabled}
-										>
-											<span
-												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-													contextManagementSettings.contextWarningsEnabled
-														? 'translate-x-5'
-														: 'translate-x-0.5'
-												}`}
-											/>
-										</button>
-									</div>
-
-									{/* Threshold Sliders (ghosted when disabled) */}
-									<div
-										className="space-y-4 pt-3 border-t"
-										style={{
-											borderColor: theme.colors.border,
-											opacity: contextManagementSettings.contextWarningsEnabled ? 1 : 0.4,
-											pointerEvents: contextManagementSettings.contextWarningsEnabled
-												? 'auto'
-												: 'none',
-										}}
-									>
-										{/* Yellow Warning Threshold */}
-										<div>
-											<div className="flex items-center justify-between mb-2">
-												<label
-													className="text-xs font-medium flex items-center gap-2"
-													style={{ color: theme.colors.textMain }}
-												>
-													<div
-														className="w-2.5 h-2.5 rounded-full"
-														style={{ backgroundColor: '#eab308' }}
-													/>
-													Yellow warning threshold
-												</label>
-												<span
-													className="text-xs font-mono px-2 py-0.5 rounded"
-													style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#fde047' }}
-												>
-													{contextManagementSettings.contextWarningYellowThreshold}%
-												</span>
-											</div>
-											<input
-												type="range"
-												min={30}
-												max={90}
-												step={5}
-												value={contextManagementSettings.contextWarningYellowThreshold}
-												onChange={(e) => {
-													const newYellow = Number(e.target.value);
-													// Validation: ensure yellow < red by at least 10%
-													if (newYellow >= contextManagementSettings.contextWarningRedThreshold) {
-														// Bump red threshold up
-														updateContextManagementSettings({
-															contextWarningYellowThreshold: newYellow,
-															contextWarningRedThreshold: Math.min(95, newYellow + 10),
-														});
-													} else {
-														updateContextManagementSettings({
-															contextWarningYellowThreshold: newYellow,
-														});
-													}
-												}}
-												className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-												style={{
-													background: `linear-gradient(to right, #eab308 0%, #eab308 ${((contextManagementSettings.contextWarningYellowThreshold - 30) / 60) * 100}%, ${theme.colors.bgActivity} ${((contextManagementSettings.contextWarningYellowThreshold - 30) / 60) * 100}%, ${theme.colors.bgActivity} 100%)`,
-												}}
-											/>
-										</div>
-
-										{/* Red Warning Threshold */}
-										<div>
-											<div className="flex items-center justify-between mb-2">
-												<label
-													className="text-xs font-medium flex items-center gap-2"
-													style={{ color: theme.colors.textMain }}
-												>
-													<div
-														className="w-2.5 h-2.5 rounded-full"
-														style={{ backgroundColor: '#ef4444' }}
-													/>
-													Red warning threshold
-												</label>
-												<span
-													className="text-xs font-mono px-2 py-0.5 rounded"
-													style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}
-												>
-													{contextManagementSettings.contextWarningRedThreshold}%
-												</span>
-											</div>
-											<input
-												type="range"
-												min={50}
-												max={95}
-												step={5}
-												value={contextManagementSettings.contextWarningRedThreshold}
-												onChange={(e) => {
-													const newRed = Number(e.target.value);
-													// Validation: ensure red > yellow by at least 10%
-													if (newRed <= contextManagementSettings.contextWarningYellowThreshold) {
-														// Bump yellow threshold down
-														updateContextManagementSettings({
-															contextWarningRedThreshold: newRed,
-															contextWarningYellowThreshold: Math.max(30, newRed - 10),
-														});
-													} else {
-														updateContextManagementSettings({ contextWarningRedThreshold: newRed });
-													}
-												}}
-												className="w-full h-2 rounded-lg appearance-none cursor-pointer"
-												style={{
-													background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${((contextManagementSettings.contextWarningRedThreshold - 50) / 45) * 100}%, ${theme.colors.bgActivity} ${((contextManagementSettings.contextWarningRedThreshold - 50) / 45) * 100}%, ${theme.colors.bgActivity} 100%)`,
-												}}
-											/>
-										</div>
-									</div>
-								</div>
-							</div>
-
 							{/* Stats Data Management */}
 							<div>
 								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
@@ -1868,6 +1674,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											{statsDbSize !== null
 												? (statsDbSize / 1024 / 1024).toFixed(2) + ' MB'
 												: 'Loading...'}
+											{statsEarliestDate && (
+												<span style={{ color: theme.colors.textDim }}> (since {statsEarliestDate})</span>
+											)}
 										</span>
 									</div>
 
@@ -1974,89 +1783,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											)}
 										</div>
 									)}
-								</div>
-							</div>
-
-							{/* Document Graph Settings */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
-									<Sparkles className="w-3 h-3" />
-									Document Graph
-									<span
-										className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
-										style={{
-											backgroundColor: theme.colors.warning + '30',
-											color: theme.colors.warning,
-										}}
-									>
-										Beta
-									</span>
-								</label>
-								<div
-									className="p-3 rounded border space-y-3"
-									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
-								>
-									{/* Show External Links */}
-									<div className="flex items-center justify-between">
-										<div>
-											<p className="text-sm" style={{ color: theme.colors.textMain }}>
-												Show external links by default
-											</p>
-											<p className="text-xs opacity-50 mt-0.5">
-												Display external website links as nodes. Can be toggled in the graph view.
-											</p>
-										</div>
-										<button
-											onClick={() =>
-												setDocumentGraphShowExternalLinks(!documentGraphShowExternalLinks)
-											}
-											className="relative w-10 h-5 rounded-full transition-colors"
-											style={{
-												backgroundColor: documentGraphShowExternalLinks
-													? theme.colors.accent
-													: theme.colors.bgActivity,
-											}}
-											role="switch"
-											aria-checked={documentGraphShowExternalLinks}
-										>
-											<span
-												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
-													documentGraphShowExternalLinks ? 'translate-x-5' : 'translate-x-0.5'
-												}`}
-											/>
-										</button>
-									</div>
-
-									{/* Max Nodes */}
-									<div>
-										<label className="block text-xs opacity-60 mb-2">
-											Maximum nodes to display
-										</label>
-										<div className="flex items-center gap-3">
-											<input
-												type="range"
-												min={50}
-												max={1000}
-												step={50}
-												value={documentGraphMaxNodes}
-												onChange={(e) => setDocumentGraphMaxNodes(Number(e.target.value))}
-												className="flex-1 h-2 rounded-lg appearance-none cursor-pointer"
-												style={{
-													background: `linear-gradient(to right, ${theme.colors.accent} 0%, ${theme.colors.accent} ${((documentGraphMaxNodes - 50) / 950) * 100}%, ${theme.colors.bgActivity} ${((documentGraphMaxNodes - 50) / 950) * 100}%, ${theme.colors.bgActivity} 100%)`,
-												}}
-											/>
-											<span
-												className="text-sm font-mono w-12 text-right"
-												style={{ color: theme.colors.textMain }}
-											>
-												{documentGraphMaxNodes}
-											</span>
-										</div>
-										<p className="text-xs opacity-50 mt-1">
-											Limits initial graph size for performance. Use &quot;Load more&quot; to show
-											additional nodes.
-										</p>
-									</div>
 								</div>
 							</div>
 
@@ -2249,6 +1975,353 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											Restart Maestro for changes to take effect
 										</div>
 									)}
+								</div>
+							</div>
+						</div>
+					)}
+
+					{activeTab === 'display' && (
+						<div className="space-y-5">
+							{/* Font Family */}
+							<FontConfigurationPanel
+								fontFamily={props.fontFamily}
+								setFontFamily={props.setFontFamily}
+								systemFonts={systemFonts}
+								fontsLoaded={fontsLoaded}
+								fontLoading={fontLoading}
+								customFonts={customFonts}
+								onAddCustomFont={addCustomFont}
+								onRemoveCustomFont={removeCustomFont}
+								onFontInteraction={handleFontInteraction}
+								theme={theme}
+							/>
+
+							{/* Font Size */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									Font Size
+								</label>
+								<ToggleButtonGroup
+									options={[
+										{ value: 12, label: 'Small' },
+										{ value: 14, label: 'Medium' },
+										{ value: 16, label: 'Large' },
+										{ value: 18, label: 'X-Large' },
+									]}
+									value={props.fontSize}
+									onChange={props.setFontSize}
+									theme={theme}
+								/>
+							</div>
+
+							{/* Terminal Width */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									Terminal Width (Columns)
+								</label>
+								<ToggleButtonGroup
+									options={[80, 100, 120, 160]}
+									value={props.terminalWidth}
+									onChange={props.setTerminalWidth}
+									theme={theme}
+								/>
+							</div>
+
+							{/* Max Log Buffer */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									Maximum Log Buffer
+								</label>
+								<ToggleButtonGroup
+									options={[1000, 5000, 10000, 25000]}
+									value={props.maxLogBuffer}
+									onChange={props.setMaxLogBuffer}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Maximum number of log messages to keep in memory. Older logs are automatically
+									removed.
+								</p>
+							</div>
+
+							{/* Max Output Lines */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									Max Output Lines per Response
+								</label>
+								<ToggleButtonGroup
+									options={[
+										{ value: 15 },
+										{ value: 25 },
+										{ value: 50 },
+										{ value: 100 },
+										{ value: Infinity, label: 'All' },
+									]}
+									value={props.maxOutputLines}
+									onChange={props.setMaxOutputLines}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Long outputs will be collapsed into a scrollable window. Set to "All" to always
+									show full output.
+								</p>
+							</div>
+
+							{/* Document Graph Settings */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+									<Sparkles className="w-3 h-3" />
+									Document Graph
+									<span
+										className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+										style={{
+											backgroundColor: theme.colors.warning + '30',
+											color: theme.colors.warning,
+										}}
+									>
+										Beta
+									</span>
+								</label>
+								<div
+									className="p-3 rounded border space-y-3"
+									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+								>
+									{/* Show External Links */}
+									<div className="flex items-center justify-between">
+										<div>
+											<p className="text-sm" style={{ color: theme.colors.textMain }}>
+												Show external links by default
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Display external website links as nodes. Can be toggled in the graph view.
+											</p>
+										</div>
+										<button
+											onClick={() =>
+												setDocumentGraphShowExternalLinks(!documentGraphShowExternalLinks)
+											}
+											className="relative w-10 h-5 rounded-full transition-colors"
+											style={{
+												backgroundColor: documentGraphShowExternalLinks
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={documentGraphShowExternalLinks}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													documentGraphShowExternalLinks ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+
+									{/* Max Nodes */}
+									<div>
+										<label className="block text-xs opacity-60 mb-2">
+											Maximum nodes to display
+										</label>
+										<div className="flex items-center gap-3">
+											<input
+												type="range"
+												min={50}
+												max={1000}
+												step={50}
+												value={documentGraphMaxNodes}
+												onChange={(e) => setDocumentGraphMaxNodes(Number(e.target.value))}
+												className="flex-1 h-2 rounded-lg appearance-none cursor-pointer"
+												style={{
+													background: `linear-gradient(to right, ${theme.colors.accent} 0%, ${theme.colors.accent} ${((documentGraphMaxNodes - 50) / 950) * 100}%, ${theme.colors.bgActivity} ${((documentGraphMaxNodes - 50) / 950) * 100}%, ${theme.colors.bgActivity} 100%)`,
+												}}
+											/>
+											<span
+												className="text-sm font-mono w-12 text-right"
+												style={{ color: theme.colors.textMain }}
+											>
+												{documentGraphMaxNodes}
+											</span>
+										</div>
+										<p className="text-xs opacity-50 mt-1">
+											Limits initial graph size for performance. Use &quot;Load more&quot; to show
+											additional nodes.
+										</p>
+									</div>
+								</div>
+							</div>
+
+							{/* Context Window Warnings */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+									<AlertTriangle className="w-3 h-3" />
+									Context Window Warnings
+								</label>
+								<div
+									className="p-3 rounded border space-y-3"
+									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+								>
+									{/* Enable/Disable Toggle */}
+									<div
+										className="flex items-center justify-between cursor-pointer"
+										onClick={() =>
+											updateContextManagementSettings({
+												contextWarningsEnabled: !contextManagementSettings.contextWarningsEnabled,
+											})
+										}
+										role="button"
+										tabIndex={0}
+										onKeyDown={(e) => {
+											if (e.key === 'Enter' || e.key === ' ') {
+												e.preventDefault();
+												updateContextManagementSettings({
+													contextWarningsEnabled: !contextManagementSettings.contextWarningsEnabled,
+												});
+											}
+										}}
+									>
+										<div className="flex-1 pr-3">
+											<div className="font-medium" style={{ color: theme.colors.textMain }}>
+												Show context consumption warnings
+											</div>
+											<div
+												className="text-xs opacity-50 mt-0.5"
+												style={{ color: theme.colors.textDim }}
+											>
+												Display warning banners when context window usage reaches configurable
+												thresholds
+											</div>
+										</div>
+										<button
+											onClick={(e) => {
+												e.stopPropagation();
+												updateContextManagementSettings({
+													contextWarningsEnabled: !contextManagementSettings.contextWarningsEnabled,
+												});
+											}}
+											className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+											style={{
+												backgroundColor: contextManagementSettings.contextWarningsEnabled
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={contextManagementSettings.contextWarningsEnabled}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													contextManagementSettings.contextWarningsEnabled
+														? 'translate-x-5'
+														: 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+
+									{/* Threshold Sliders (ghosted when disabled) */}
+									<div
+										className="space-y-4 pt-3 border-t"
+										style={{
+											borderColor: theme.colors.border,
+											opacity: contextManagementSettings.contextWarningsEnabled ? 1 : 0.4,
+											pointerEvents: contextManagementSettings.contextWarningsEnabled
+												? 'auto'
+												: 'none',
+										}}
+									>
+										{/* Yellow Warning Threshold */}
+										<div>
+											<div className="flex items-center justify-between mb-2">
+												<label
+													className="text-xs font-medium flex items-center gap-2"
+													style={{ color: theme.colors.textMain }}
+												>
+													<div
+														className="w-2.5 h-2.5 rounded-full"
+														style={{ backgroundColor: '#eab308' }}
+													/>
+													Yellow warning threshold
+												</label>
+												<span
+													className="text-xs font-mono px-2 py-0.5 rounded"
+													style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#fde047' }}
+												>
+													{contextManagementSettings.contextWarningYellowThreshold}%
+												</span>
+											</div>
+											<input
+												type="range"
+												min={30}
+												max={90}
+												step={5}
+												value={contextManagementSettings.contextWarningYellowThreshold}
+												onChange={(e) => {
+													const newYellow = Number(e.target.value);
+													// Validation: ensure yellow < red by at least 10%
+													if (newYellow >= contextManagementSettings.contextWarningRedThreshold) {
+														// Bump red threshold up
+														updateContextManagementSettings({
+															contextWarningYellowThreshold: newYellow,
+															contextWarningRedThreshold: Math.min(95, newYellow + 10),
+														});
+													} else {
+														updateContextManagementSettings({
+															contextWarningYellowThreshold: newYellow,
+														});
+													}
+												}}
+												className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+												style={{
+													background: `linear-gradient(to right, #eab308 0%, #eab308 ${((contextManagementSettings.contextWarningYellowThreshold - 30) / 60) * 100}%, ${theme.colors.bgActivity} ${((contextManagementSettings.contextWarningYellowThreshold - 30) / 60) * 100}%, ${theme.colors.bgActivity} 100%)`,
+												}}
+											/>
+										</div>
+
+										{/* Red Warning Threshold */}
+										<div>
+											<div className="flex items-center justify-between mb-2">
+												<label
+													className="text-xs font-medium flex items-center gap-2"
+													style={{ color: theme.colors.textMain }}
+												>
+													<div
+														className="w-2.5 h-2.5 rounded-full"
+														style={{ backgroundColor: '#ef4444' }}
+													/>
+													Red warning threshold
+												</label>
+												<span
+													className="text-xs font-mono px-2 py-0.5 rounded"
+													style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}
+												>
+													{contextManagementSettings.contextWarningRedThreshold}%
+												</span>
+											</div>
+											<input
+												type="range"
+												min={50}
+												max={95}
+												step={5}
+												value={contextManagementSettings.contextWarningRedThreshold}
+												onChange={(e) => {
+													const newRed = Number(e.target.value);
+													// Validation: ensure red > yellow by at least 10%
+													if (newRed <= contextManagementSettings.contextWarningYellowThreshold) {
+														// Bump yellow threshold down
+														updateContextManagementSettings({
+															contextWarningRedThreshold: newRed,
+															contextWarningYellowThreshold: Math.max(30, newRed - 10),
+														});
+													} else {
+														updateContextManagementSettings({ contextWarningRedThreshold: newRed });
+													}
+												}}
+												className="w-full h-2 rounded-lg appearance-none cursor-pointer"
+												style={{
+													background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${((contextManagementSettings.contextWarningRedThreshold - 50) / 45) * 100}%, ${theme.colors.bgActivity} ${((contextManagementSettings.contextWarningRedThreshold - 50) / 45) * 100}%, ${theme.colors.bgActivity} 100%)`,
+												}}
+											/>
+										</div>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -2523,6 +2596,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					{activeTab === 'ssh' && (
 						<div className="space-y-5">
 							<SshRemotesSection theme={theme} />
+							<SshRemoteIgnoreSection
+								theme={theme}
+								ignorePatterns={sshRemoteIgnorePatterns}
+								onIgnorePatternsChange={setSshRemoteIgnorePatterns}
+								honorGitignore={sshRemoteHonorGitignore}
+								onHonorGitignoreChange={setSshRemoteHonorGitignore}
+							/>
 						</div>
 					)}
 				</div>

@@ -1,8 +1,9 @@
 import React, { useState, useRef, useEffect } from 'react';
-import { Wand2, Bot, Menu, Settings, HelpCircle, Info, RefreshCw, Compass } from 'lucide-react';
+import { Wand2, Bot, Menu, Settings, HelpCircle, Info, RefreshCw, Compass, Globe, BookOpen, ExternalLink } from 'lucide-react';
 import type { Theme, Shortcut } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { useClickOutside } from '../hooks';
+import { WelcomeContent } from './WelcomeContent';
 
 interface EmptyStateViewProps {
 	theme: Theme;
@@ -198,7 +199,48 @@ export function EmptyStateView({
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
 											Check for Updates
 										</div>
+										<div className="text-xs" style={{ color: theme.colors.textDim }}>
+											Get the latest version
+										</div>
 									</div>
+								</button>
+
+								<button
+									onClick={() => {
+										window.maestro.shell.openExternal('https://runmaestro.ai');
+										setMenuOpen(false);
+									}}
+									className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 transition-colors text-left"
+								>
+									<Globe className="w-5 h-5" style={{ color: theme.colors.textDim }} />
+									<div className="flex-1">
+										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+											Maestro Website
+										</div>
+										<div className="text-xs" style={{ color: theme.colors.textDim }}>
+											Visit runmaestro.ai
+										</div>
+									</div>
+									<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+								</button>
+
+								<button
+									onClick={() => {
+										window.maestro.shell.openExternal('https://docs.runmaestro.ai');
+										setMenuOpen(false);
+									}}
+									className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 transition-colors text-left"
+								>
+									<BookOpen className="w-5 h-5" style={{ color: theme.colors.textDim }} />
+									<div className="flex-1">
+										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+											Documentation
+										</div>
+										<div className="text-xs" style={{ color: theme.colors.textDim }}>
+											See usage docs on docs.runmaestro.ai
+										</div>
+									</div>
+									<ExternalLink className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 								</button>
 
 								<button
@@ -213,6 +255,9 @@ export function EmptyStateView({
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
 											About Maestro
 										</div>
+										<div className="text-xs" style={{ color: theme.colors.textDim }}>
+											Version, Credits, Stats
+										</div>
 									</div>
 								</button>
 							</div>
@@ -222,16 +267,11 @@ export function EmptyStateView({
 			</div>
 
 			{/* Main Content: Centered Empty State */}
-			<div className="flex-1 flex flex-col items-center justify-center">
-				<div className="flex flex-col items-center opacity-75 mb-8">
-					<Wand2 className="w-16 h-16 mb-4" style={{ color: theme.colors.textDim }} />
-					<p className="text-sm text-center max-w-md" style={{ color: theme.colors.textDim }}>
-						To get started, create your first agent manually or with the help of the AI wizard.
-					</p>
-				</div>
+			<div className="flex-1 flex flex-col items-center justify-center px-4">
+				<WelcomeContent theme={theme} showGetStarted />
 
 				{/* Action Buttons */}
-				<div className="flex items-center gap-4">
+				<div className="flex items-center gap-4 mt-8">
 					<button
 						onClick={onNewAgent}
 						className="flex items-center justify-center gap-3 px-8 py-4 rounded-lg text-base font-bold transition-colors hover:opacity-90 min-w-[180px]"

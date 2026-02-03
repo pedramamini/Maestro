@@ -75,8 +75,12 @@ vi.mock('../../../../main/utils/ssh-command-builder', () => ({
 			args.push('-p', config.port.toString());
 		}
 
-		// Build destination
-		args.push(`${config.username}@${config.host}`);
+		// Build destination - use user@host if username provided, otherwise just host
+		if (config.username && config.username.trim()) {
+			args.push(`${config.username}@${config.host}`);
+		} else {
+			args.push(config.host);
+		}
 
 		// Build the remote command parts
 		const commandParts: string[] = [];
@@ -187,6 +191,7 @@ describe('process IPC handlers', () => {
 			isDestroyed: vi.fn().mockReturnValue(false),
 			webContents: {
 				send: vi.fn(),
+				isDestroyed: vi.fn().mockReturnValue(false),
 			},
 		};
 
@@ -239,6 +244,9 @@ describe('process IPC handlers', () => {
 				name: 'Claude Code',
 				requiresPty: true,
 				path: '/usr/local/bin/claude',
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
 			};
 
 			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
@@ -865,6 +873,9 @@ describe('process IPC handlers', () => {
 			const mockAgent = {
 				id: 'claude-code',
 				requiresPty: true, // Note: should be disabled when using SSH
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
 			};
 
 			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
@@ -945,6 +956,9 @@ describe('process IPC handlers', () => {
 			const mockAgent = {
 				id: 'claude-code',
 				requiresPty: false,
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
 			};
 
 			// Mock applyAgentConfigOverrides to return custom env vars
@@ -1072,6 +1086,9 @@ describe('process IPC handlers', () => {
 			const mockAgent = {
 				id: 'claude-code',
 				requiresPty: false,
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
 			};
 
 			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
@@ -1119,6 +1136,9 @@ describe('process IPC handlers', () => {
 				binaryName: 'codex', // Just the binary name, without path
 				path: '/opt/homebrew/bin/codex', // Local macOS path
 				requiresPty: false,
+				capabilities: {
+					supportsStreamJsonInput: false,
+				},
 			};
 
 			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
@@ -1160,6 +1180,9 @@ describe('process IPC handlers', () => {
 				binaryName: 'codex',
 				path: '/opt/homebrew/bin/codex', // Local path
 				requiresPty: false,
+				capabilities: {
+					supportsStreamJsonInput: false,
+				},
 			};
 
 			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);

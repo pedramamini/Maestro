@@ -193,7 +193,7 @@ describe('HistoryPanel', () => {
 
 	afterEach(() => {
 		vi.useRealTimers();
-		vi.clearAllMocks();
+		vi.restoreAllMocks();
 		consoleErrorSpy.mockRestore();
 	});
 
@@ -1629,3 +1629,4 @@ describe('HistoryPanel', () => {
 		});
 	});
 });
+// Restore original Intl.DateTimeFormat after all tests

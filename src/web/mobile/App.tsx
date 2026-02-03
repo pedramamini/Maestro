@@ -21,6 +21,9 @@ import { useMobileSessionManagement } from '../hooks/useMobileSessionManagement'
 import { useOfflineStatus, useMaestroMode, useDesktopTheme } from '../main';
 import { buildApiUrl } from '../utils/config';
 import { formatCost } from '../../shared/formatters';
+// SYNC: Uses estimateContextUsage() from shared/contextUsage.ts
+// See that file for the canonical formula and all locations that must stay in sync.
+import { estimateContextUsage } from '../../renderer/utils/contextUsage';
 import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { webLogger } from '../utils/logger';
 import { SessionPillBar } from './SessionPillBar';
@@ -41,45 +44,6 @@ import type { Session, LastResponsePreview } from '../hooks/useSessions';
 import { useMobileKeyboardHandler } from '../hooks/useMobileKeyboardHandler';
 import { useMobileViewState } from '../hooks/useMobileViewState';
 import { useMobileAutoReconnect } from '../hooks/useMobileAutoReconnect';
-
-/**
- * Agents that use combined input+output context windows.
- * OpenAI models (Codex, o3, o4-mini) have a single context window that includes
- * both input and output tokens, unlike Claude which has separate limits.
- */
-const COMBINED_CONTEXT_AGENTS = new Set(['codex']);
-
-/**
- * Calculate context usage percentage from usage stats
- * Uses agent-specific calculation:
- * - Claude models: input + cacheCreation + cacheRead (output excluded)
- * - OpenAI models (Codex): input + output + cacheRead (combined limit)
- */
-function calculateContextUsage(
-	usageStats?: Session['usageStats'] | null,
-	toolType?: string
-): number | null {
-	if (!usageStats) return null;
-	const {
-		inputTokens,
-		outputTokens,
-		cacheReadInputTokens,
-		cacheCreationInputTokens,
-		contextWindow,
-	} = usageStats;
-	if (inputTokens == null || contextWindow == null || contextWindow === 0) {
-		return null;
-	}
-	// Base tokens: input + cache creation + cache read
-	let totalTokens = inputTokens + (cacheCreationInputTokens || 0) + (cacheReadInputTokens || 0);
-
-	// OpenAI models have combined input+output context limits
-	if (toolType && COMBINED_CONTEXT_AGENTS.has(toolType)) {
-		totalTokens += outputTokens || 0;
-	}
-
-	return Math.min(Math.round((totalTokens / contextWindow) * 100), 100);
-}
 
 /**
  * Get the active tab from a session
@@ -110,8 +74,8 @@ function MobileHeader({ activeSession }: MobileHeaderProps) {
 	// Use tab's usageStats if available, otherwise fall back to session-level (deprecated)
 	const tabUsageStats = activeTab?.usageStats;
 	const cost = tabUsageStats?.totalCostUsd ?? activeSession?.usageStats?.totalCostUsd;
-	const contextUsage = calculateContextUsage(
-		tabUsageStats ?? activeSession?.usageStats,
+	const contextUsage = estimateContextUsage(
+		tabUsageStats ?? activeSession?.usageStats ?? {},
 		activeSession?.toolType
 	);
 

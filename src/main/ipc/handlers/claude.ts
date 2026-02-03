@@ -21,6 +21,7 @@ import fs from 'fs/promises';
 import Store from 'electron-store';
 import { logger } from '../../utils/logger';
 import { withIpcErrorLogging } from '../../utils/ipcHandler';
+import { isWebContentsAvailable } from '../../utils/safe-send';
 import { CLAUDE_SESSION_PARSE_LIMITS } from '../../constants';
 import { calculateClaudeCost } from '../../utils/pricing';
 import {
@@ -572,7 +573,7 @@ export function registerClaudeHandlers(deps: ClaudeHandlerDependencies): void {
 				processedCount?: number;
 				isComplete: boolean;
 			}) => {
-				if (mainWindow && !mainWindow.isDestroyed()) {
+				if (isWebContentsAvailable(mainWindow)) {
 					mainWindow.webContents.send('claude:projectStatsUpdate', { projectPath, ...stats });
 				}
 			};
@@ -699,15 +700,41 @@ export function registerClaudeHandlers(deps: ClaudeHandlerDependencies): void {
 				lastUpdated: Date.now(),
 			};
 
-			// Copy still-valid cached sessions
+			// ============================================================================
+			// Archive Preservation Pattern
+			// ============================================================================
+			// IMPORTANT: When JSONL files are deleted, we MUST preserve session stats by
+			// marking them as archived (not by dropping them). This ensures lifetime stats
+			// (costs, messages, tokens, oldest timestamp) survive file cleanup.
+			//
+			// This pattern MUST match the global stats cache behavior in agentSessions.ts.
+			// If you modify this logic, update both files and the corresponding tests.
+			// ============================================================================
+
 			if (cache) {
 				for (const [sessionId, sessionStats] of Object.entries(cache.sessions)) {
-					if (
-						currentSessionIds.has(sessionId) &&
-						!sessionsToProcess.some((s) => s.filename.replace('.jsonl', '') === sessionId)
-					) {
-						newCache.sessions[sessionId] = sessionStats;
+					const existsOnDisk = currentSessionIds.has(sessionId);
+					const needsReparse = sessionsToProcess.some(
+						(s) => s.filename.replace('.jsonl', '') === sessionId
+					);
+
+					if (existsOnDisk && !needsReparse) {
+						// Session file still exists and hasn't changed - keep cached stats
+						// Clear archived flag if it was previously set (file reappeared)
+						newCache.sessions[sessionId] = {
+							...sessionStats,
+							archived: false,
+						};
+					} else if (!existsOnDisk) {
+						// Session file was DELETED - preserve stats with archived flag
+						// This is critical: we must NOT drop deleted sessions!
+						// Archived sessions still count toward lifetime totals.
+						newCache.sessions[sessionId] = {
+							...sessionStats,
+							archived: true,
+						};
 					}
+					// If existsOnDisk && needsReparse: skip here, will be added below after parsing
 				}
 			}
 
@@ -729,6 +756,7 @@ export function registerClaudeHandlers(deps: ClaudeHandlerDependencies): void {
 					newCache.sessions[sessionId] = {
 						fileMtimeMs: mtimeMs,
 						...stats,
+						archived: false, // Explicitly mark as active (file exists)
 					};
 
 					processedCount++;
@@ -833,7 +861,7 @@ export function registerClaudeHandlers(deps: ClaudeHandlerDependencies): void {
 				totalSizeBytes: number;
 				isComplete: boolean;
 			}) => {
-				if (mainWindow && !mainWindow.isDestroyed()) {
+				if (isWebContentsAvailable(mainWindow)) {
 					mainWindow.webContents.send('claude:globalStatsUpdate', stats);
 				}
 			};
@@ -1556,6 +1584,120 @@ export function registerClaudeHandlers(deps: ClaudeHandlerDependencies): void {
 		)
 	);
 
+	// ============ Get Skills ============
+
+	const SKILLS_LOG_CONTEXT = '[ClaudeSkills]';
+
+	ipcMain.handle(
+		'claude:getSkills',
+		withIpcErrorLogging(
+			handlerOpts('getSkills', SKILLS_LOG_CONTEXT),
+			async (projectPath: string) => {
+				const homeDir = os.homedir();
+				const skills: Array<{
+					name: string;
+					description: string;
+					tokenCount: number;
+					source: 'project' | 'user';
+				}> = [];
+
+				/**
+				 * Parses a skill.md file to extract name, description, and token count.
+				 * Skills use YAML frontmatter with 'name' and 'description' fields.
+				 */
+				const parseSkillFile = async (
+					filePath: string,
+					skillDirName: string,
+					source: 'project' | 'user'
+				): Promise<{
+					name: string;
+					description: string;
+					tokenCount: number;
+					source: 'project' | 'user';
+				} | null> => {
+					try {
+						const content = await fs.readFile(filePath, 'utf-8');
+						const lines = content.split('\n');
+
+						let name = skillDirName; // Default to directory name
+						let description = 'No description';
+						let inFrontmatter = false;
+						let frontmatterContent = '';
+
+						// Parse YAML frontmatter
+						for (const line of lines) {
+							const trimmed = line.trim();
+							if (trimmed === '---') {
+								if (!inFrontmatter) {
+									inFrontmatter = true;
+									continue;
+								} else {
+									// End of frontmatter
+									break;
+								}
+							}
+							if (inFrontmatter) {
+								frontmatterContent += line + '\n';
+							}
+						}
+
+						// Extract name and description from frontmatter (simple YAML parsing)
+						const nameMatch = frontmatterContent.match(/^name:\s*(.+)$/m);
+						const descMatch = frontmatterContent.match(/^description:\s*(.+)$/m);
+
+						if (nameMatch) {
+							name = nameMatch[1].trim().replace(/^["']|["']$/g, '');
+						}
+						if (descMatch) {
+							description = descMatch[1].trim().replace(/^["']|["']$/g, '');
+						}
+
+						// Approximate token count: ~4 characters per token
+						const tokenCount = Math.round(content.length / 4);
+
+						return { name, description, tokenCount, source };
+					} catch {
+						return null;
+					}
+				};
+
+				/**
+				 * Scans a skills directory for skill.md files
+				 */
+				const scanSkillsDir = async (dir: string, source: 'project' | 'user') => {
+					try {
+						const entries = await fs.readdir(dir, { withFileTypes: true });
+						for (const entry of entries) {
+							if (entry.isDirectory()) {
+								const skillPath = path.join(dir, entry.name, 'skill.md');
+								const skill = await parseSkillFile(skillPath, entry.name, source);
+								if (skill) {
+									skills.push(skill);
+								}
+							}
+						}
+					} catch {
+						// Directory doesn't exist or isn't readable
+					}
+				};
+
+				// 1. Project-level skills
+				const projectSkillsDir = path.join(projectPath, '.claude', 'skills');
+				await scanSkillsDir(projectSkillsDir, 'project');
+
+				// 2. User-level skills (if Claude supports this location)
+				const userSkillsDir = path.join(homeDir, '.claude', 'skills');
+				await scanSkillsDir(userSkillsDir, 'user');
+
+				logger.info(
+					`Found ${skills.length} Claude skills for project: ${projectPath}`,
+					SKILLS_LOG_CONTEXT
+				);
+				return skills;
+			}
+		)
+	);
+
 	// ============ Session Origins ============
 
 	ipcMain.handle(
@@ -1724,7 +1866,13 @@ export function registerClaudeHandlers(deps: ClaudeHandlerDependencies): void {
 }
 
 /**
- * Helper to calculate totals from session stats cache
+ * Helper to calculate totals from session stats cache.
+ *
+ * IMPORTANT: This function intentionally includes ALL sessions (both active and archived)
+ * in the totals. Archived sessions (where JSONL files have been deleted) MUST still count
+ * toward lifetime statistics. This preserves historical cost tracking and session counts.
+ *
+ * Do NOT add filtering for `archived` flag here - that would break lifetime stats.
  */
 function calculateTotals(cache: SessionStatsCache) {
 	let totalSessions = 0;
@@ -1734,6 +1882,7 @@ function calculateTotals(cache: SessionStatsCache) {
 	let totalTokens = 0;
 	let oldestTimestamp: string | null = null;
 
+	// Include ALL sessions (active + archived) for lifetime totals
 	for (const stats of Object.values(cache.sessions)) {
 		totalSessions++;
 		totalMessages += stats.messages;

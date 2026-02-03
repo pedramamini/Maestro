@@ -288,6 +288,19 @@ describe('DocumentNode', () => {
 			const truncatedText = description.slice(0, 100).trim() + '...';
 			expect(screen.getByText(truncatedText)).toBeInTheDocument();
 		});
+
+		it('applies line clamping styles to description for overflow handling', () => {
+			const props = createNodeProps({ description: 'Some description text' });
+
+			renderWithProvider(<DocumentNode {...props} />);
+
+			const descriptionElement = screen.getByText('Some description text');
+			// Should have line clamping and word break styles
+			expect(descriptionElement).toHaveStyle({
+				overflow: 'hidden',
+				wordBreak: 'break-all',
+			});
+		});
 	});
 
 	describe('Selection State', () => {
@@ -367,6 +380,21 @@ describe('DocumentNode', () => {
 			expect(container.querySelector('[title="50 lines"]')).toBeInTheDocument();
 			expect(container.querySelector('[title="200 words"]')).toBeInTheDocument();
 			expect(container.querySelector('[title="512 B"]')).toBeInTheDocument();
+		});
+	});
+
+	describe('Container Dimensions', () => {
+		it('has fixed width to prevent overflow from long content', () => {
+			const props = createNodeProps();
+
+			const { container } = renderWithProvider(<DocumentNode {...props} />);
+
+			const nodeElement = container.querySelector('.document-node');
+			expect(nodeElement).toHaveStyle({
+				width: '280px',
+				maxWidth: '280px',
+				overflow: 'hidden',
+			});
 		});
 	});
 

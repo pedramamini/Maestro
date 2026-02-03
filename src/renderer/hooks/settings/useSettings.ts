@@ -12,6 +12,7 @@ import type {
 	LeaderboardRegistration,
 	ContextManagementSettings,
 	KeyboardMasteryStats,
+	ThinkingMode,
 } from '../../types';
 import { DEFAULT_CUSTOM_THEME_COLORS } from '../../constants/themes';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS, FIXED_SHORTCUTS } from '../../constants/shortcuts';
@@ -167,15 +168,17 @@ export interface UseSettingsReturn {
 	defaultSaveToHistory: boolean;
 	setDefaultSaveToHistory: (value: boolean) => void;
 
-	// Default thinking toggle
-	defaultShowThinking: boolean;
-	setDefaultShowThinking: (value: boolean) => void;
+	// Default thinking toggle (three states: 'off' | 'on' | 'sticky')
+	defaultShowThinking: ThinkingMode;
+	setDefaultShowThinking: (value: ThinkingMode) => void;
 	leftSidebarWidth: number;
 	rightPanelWidth: number;
-	markdownEditMode: boolean;
+	markdownEditMode: boolean; // FilePreview: whether editing file content (vs viewing rendered)
+	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses (vs rendered markdown)
 	setLeftSidebarWidth: (value: number) => void;
 	setRightPanelWidth: (value: number) => void;
 	setMarkdownEditMode: (value: boolean) => void;
+	setChatRawTextMode: (value: boolean) => void;
 	showHiddenFiles: boolean;
 	setShowHiddenFiles: (value: boolean) => void;
 
@@ -333,6 +336,20 @@ export interface UseSettingsReturn {
 	setDisableGpuAcceleration: (value: boolean) => void;
 	disableConfetti: boolean;
 	setDisableConfetti: (value: boolean) => void;
+
+	// SSH Remote file indexing settings
+	sshRemoteIgnorePatterns: string[];
+	setSshRemoteIgnorePatterns: (value: string[]) => void;
+	sshRemoteHonorGitignore: boolean;
+	setSshRemoteHonorGitignore: (value: boolean) => void;
+
+	// Automatic tab naming settings
+	automaticTabNamingEnabled: boolean;
+	setAutomaticTabNamingEnabled: (value: boolean) => void;
+
+	// File tab auto-refresh settings
+	fileTabAutoRefreshEnabled: boolean;
+	setFileTabAutoRefreshEnabled: (value: boolean) => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -366,10 +383,11 @@ export function useSettings(): UseSettingsReturn {
 	const [enterToSendAI, setEnterToSendAIState] = useState(false); // AI mode defaults to Command+Enter
 	const [enterToSendTerminal, setEnterToSendTerminalState] = useState(true); // Terminal defaults to Enter
 	const [defaultSaveToHistory, setDefaultSaveToHistoryState] = useState(true); // History toggle defaults to on
-	const [defaultShowThinking, setDefaultShowThinkingState] = useState(false); // Thinking toggle defaults to off
+	const [defaultShowThinking, setDefaultShowThinkingState] = useState<ThinkingMode>('off'); // Thinking toggle defaults to off
 	const [leftSidebarWidth, setLeftSidebarWidthState] = useState(256);
 	const [rightPanelWidth, setRightPanelWidthState] = useState(384);
-	const [markdownEditMode, setMarkdownEditModeState] = useState(false);
+	const [markdownEditMode, setMarkdownEditModeState] = useState(false); // FilePreview: edit file content
+	const [chatRawTextMode, setChatRawTextModeState] = useState(false); // TerminalOutput: show raw text in AI responses
 	const [showHiddenFiles, setShowHiddenFilesState] = useState(true); // Default: show hidden files
 
 	// Terminal Config
@@ -476,6 +494,20 @@ export function useSettings(): UseSettingsReturn {
 	const [disableGpuAcceleration, setDisableGpuAccelerationState] = useState(false); // Default: disabled (GPU enabled)
 	const [disableConfetti, setDisableConfettiState] = useState(false); // Default: disabled (confetti enabled)
 
+	// SSH Remote file indexing settings
+	// Default patterns: .git directories and any *cache* directories
+	const [sshRemoteIgnorePatterns, setSshRemoteIgnorePatternsState] = useState<string[]>([
+		'.git',
+		'*cache*',
+	]);
+	const [sshRemoteHonorGitignore, setSshRemoteHonorGitignoreState] = useState(true); // Default: honor .gitignore
+
+	// Automatic tab naming settings
+	const [automaticTabNamingEnabled, setAutomaticTabNamingEnabledState] = useState(true); // Default: enabled
+
+	// File tab auto-refresh settings
+	const [fileTabAutoRefreshEnabled, setFileTabAutoRefreshEnabledState] = useState(false); // Default: disabled
+
 	// Wrapper functions that persist to electron-store
 	// PERF: All wrapped in useCallback to prevent re-renders
 	const setLlmProvider = useCallback((value: LLMProvider) => {
@@ -558,7 +590,7 @@ export function useSettings(): UseSettingsReturn {
 		window.maestro.settings.set('defaultSaveToHistory', value);
 	}, []);
 
-	const setDefaultShowThinking = useCallback((value: boolean) => {
+	const setDefaultShowThinking = useCallback((value: ThinkingMode) => {
 		setDefaultShowThinkingState(value);
 		window.maestro.settings.set('defaultShowThinking', value);
 	}, []);
@@ -577,6 +609,11 @@ export function useSettings(): UseSettingsReturn {
 	const setMarkdownEditMode = useCallback((value: boolean) => {
 		setMarkdownEditModeState(value);
 		window.maestro.settings.set('markdownEditMode', value);
+	}, []);
+
+	const setChatRawTextMode = useCallback((value: boolean) => {
+		setChatRawTextModeState(value);
+		window.maestro.settings.set('chatRawTextMode', value);
 	}, []);
 
 	const setShowHiddenFiles = useCallback((value: boolean) => {
@@ -1262,10 +1299,33 @@ export function useSettings(): UseSettingsReturn {
 		window.maestro.settings.set('disableConfetti', value);
 	}, []);
 
-	// Load settings from electron-store on mount
+	// SSH Remote file indexing settings
+	const setSshRemoteIgnorePatterns = useCallback((value: string[]) => {
+		setSshRemoteIgnorePatternsState(value);
+		window.maestro.settings.set('sshRemoteIgnorePatterns', value);
+	}, []);
+
+	const setSshRemoteHonorGitignore = useCallback((value: boolean) => {
+		setSshRemoteHonorGitignoreState(value);
+		window.maestro.settings.set('sshRemoteHonorGitignore', value);
+	}, []);
+
+	// Automatic tab naming toggle
+	const setAutomaticTabNamingEnabled = useCallback((value: boolean) => {
+		setAutomaticTabNamingEnabledState(value);
+		window.maestro.settings.set('automaticTabNamingEnabled', value);
+	}, []);
+
+	// File tab auto-refresh toggle
+	const setFileTabAutoRefreshEnabled = useCallback((value: boolean) => {
+		setFileTabAutoRefreshEnabledState(value);
+		window.maestro.settings.set('fileTabAutoRefreshEnabled', value);
+	}, []);
+
+	// Load settings from electron-store
+	// This function is called on mount and on system resume (after sleep/suspend)
 	// PERF: Use batch loading to reduce IPC calls from ~60 to 3
-	useEffect(() => {
-		const loadSettings = async () => {
+	const loadSettings = useCallback(async () => {
 			try {
 				// Batch load all settings in a single IPC call
 				const allSettings = (await window.maestro.settings.getAll()) as Record<string, unknown>;
@@ -1332,14 +1392,26 @@ export function useSettings(): UseSettingsReturn {
 				const savedPreventSleepEnabled = allSettings['preventSleepEnabled'];
 				const savedDisableGpuAcceleration = allSettings['disableGpuAcceleration'];
 				const savedDisableConfetti = allSettings['disableConfetti'];
+				const savedSshRemoteIgnorePatterns = allSettings['sshRemoteIgnorePatterns'];
+				const savedSshRemoteHonorGitignore = allSettings['sshRemoteHonorGitignore'];
+				const savedAutomaticTabNamingEnabled = allSettings['automaticTabNamingEnabled'];
+				const savedFileTabAutoRefreshEnabled = allSettings['fileTabAutoRefreshEnabled'];
 
 				if (savedEnterToSendAI !== undefined) setEnterToSendAIState(savedEnterToSendAI as boolean);
 				if (savedEnterToSendTerminal !== undefined)
 					setEnterToSendTerminalState(savedEnterToSendTerminal as boolean);
 				if (savedDefaultSaveToHistory !== undefined)
 					setDefaultSaveToHistoryState(savedDefaultSaveToHistory as boolean);
-				if (savedDefaultShowThinking !== undefined)
-					setDefaultShowThinkingState(savedDefaultShowThinking as boolean);
+				if (savedDefaultShowThinking !== undefined) {
+					// Support legacy boolean values: true -> 'on', false -> 'off'
+					const thinkingMode =
+						typeof savedDefaultShowThinking === 'boolean'
+							? savedDefaultShowThinking
+								? 'on'
+								: 'off'
+							: (savedDefaultShowThinking as ThinkingMode);
+					setDefaultShowThinkingState(thinkingMode);
+				}
 
 				if (savedLlmProvider !== undefined) setLlmProviderState(savedLlmProvider as LLMProvider);
 				if (savedModelSlug !== undefined) setModelSlugState(savedModelSlug as string);
@@ -1359,6 +1431,9 @@ export function useSettings(): UseSettingsReturn {
 					setRightPanelWidthState(savedRightPanelWidth as number);
 				if (savedMarkdownEditMode !== undefined)
 					setMarkdownEditModeState(savedMarkdownEditMode as boolean);
+				const savedChatRawTextMode = allSettings['chatRawTextMode'];
+				if (savedChatRawTextMode !== undefined)
+					setChatRawTextModeState(savedChatRawTextMode as boolean);
 				if (savedShowHiddenFiles !== undefined)
 					setShowHiddenFilesState(savedShowHiddenFiles as boolean);
 				if (savedActiveThemeId !== undefined) setActiveThemeIdState(savedActiveThemeId as ThemeId);
@@ -1369,8 +1444,11 @@ export function useSettings(): UseSettingsReturn {
 				if (savedTerminalWidth !== undefined) setTerminalWidthState(savedTerminalWidth as number);
 				if (savedLogLevel !== undefined) setLogLevelState(savedLogLevel);
 				if (savedMaxLogBuffer !== undefined) setMaxLogBufferState(savedMaxLogBuffer);
-				if (savedMaxOutputLines !== undefined)
-					setMaxOutputLinesState(savedMaxOutputLines as number);
+				// Handle maxOutputLines specially: Infinity is serialized as null in JSON
+				// So we treat null as Infinity, undefined keeps the default (25)
+				if (savedMaxOutputLines !== undefined) {
+					setMaxOutputLinesState(savedMaxOutputLines === null ? Infinity : (savedMaxOutputLines as number));
+				}
 				if (savedOsNotificationsEnabled !== undefined)
 					setOsNotificationsEnabledState(savedOsNotificationsEnabled as boolean);
 				if (savedAudioFeedbackEnabled !== undefined)
@@ -1664,15 +1742,46 @@ export function useSettings(): UseSettingsReturn {
 				if (savedDisableConfetti !== undefined) {
 					setDisableConfettiState(savedDisableConfetti as boolean);
 				}
+
+				// SSH Remote file indexing settings
+				if (savedSshRemoteIgnorePatterns !== undefined && Array.isArray(savedSshRemoteIgnorePatterns)) {
+					setSshRemoteIgnorePatternsState(savedSshRemoteIgnorePatterns as string[]);
+				}
+				if (savedSshRemoteHonorGitignore !== undefined) {
+					setSshRemoteHonorGitignoreState(savedSshRemoteHonorGitignore as boolean);
+				}
+
+				// Automatic tab naming settings
+				if (savedAutomaticTabNamingEnabled !== undefined) {
+					setAutomaticTabNamingEnabledState(savedAutomaticTabNamingEnabled as boolean);
+				}
+
+				// File tab auto-refresh settings
+				if (savedFileTabAutoRefreshEnabled !== undefined) {
+					setFileTabAutoRefreshEnabledState(savedFileTabAutoRefreshEnabled as boolean);
+				}
 			} catch (error) {
 				console.error('[Settings] Failed to load settings:', error);
 			} finally {
 				// Mark settings as loaded even if there was an error (use defaults)
 				setSettingsLoaded(true);
 			}
-		};
+		}, []);
+
+	// Load settings on mount
+	useEffect(() => {
 		loadSettings();
-	}, []);
+	}, [loadSettings]);
+
+	// Reload settings when system resumes from sleep/suspend
+	// This ensures settings like maxOutputLines aren't reset to defaults
+	useEffect(() => {
+		const cleanup = window.maestro.app.onSystemResume(() => {
+			console.log('[Settings] System resumed from sleep, reloading settings');
+			loadSettings();
+		});
+		return cleanup;
+	}, [loadSettings]);
 
 	// Apply font size to HTML root element so rem-based Tailwind classes scale
 	// Only apply after settings are loaded to prevent layout shift from default->saved font size
@@ -1723,9 +1832,11 @@ export function useSettings(): UseSettingsReturn {
 			leftSidebarWidth,
 			rightPanelWidth,
 			markdownEditMode,
+			chatRawTextMode,
 			setLeftSidebarWidth,
 			setRightPanelWidth,
 			setMarkdownEditMode,
+			setChatRawTextMode,
 			showHiddenFiles,
 			setShowHiddenFiles,
 			terminalWidth,
@@ -1819,6 +1930,14 @@ export function useSettings(): UseSettingsReturn {
 			setDisableGpuAcceleration,
 			disableConfetti,
 			setDisableConfetti,
+			sshRemoteIgnorePatterns,
+			setSshRemoteIgnorePatterns,
+			sshRemoteHonorGitignore,
+			setSshRemoteHonorGitignore,
+			automaticTabNamingEnabled,
+			setAutomaticTabNamingEnabled,
+			fileTabAutoRefreshEnabled,
+			setFileTabAutoRefreshEnabled,
 		}),
 		[
 			// State values
@@ -1843,6 +1962,7 @@ export function useSettings(): UseSettingsReturn {
 			leftSidebarWidth,
 			rightPanelWidth,
 			markdownEditMode,
+			chatRawTextMode,
 			showHiddenFiles,
 			terminalWidth,
 			logLevel,
@@ -1955,6 +2075,14 @@ export function useSettings(): UseSettingsReturn {
 			setDisableGpuAcceleration,
 			disableConfetti,
 			setDisableConfetti,
+			sshRemoteIgnorePatterns,
+			setSshRemoteIgnorePatterns,
+			sshRemoteHonorGitignore,
+			setSshRemoteHonorGitignore,
+			automaticTabNamingEnabled,
+			setAutomaticTabNamingEnabled,
+			fileTabAutoRefreshEnabled,
+			setFileTabAutoRefreshEnabled,
 		]
 	);
 }

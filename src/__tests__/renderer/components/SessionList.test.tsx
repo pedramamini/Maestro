@@ -58,6 +58,8 @@ vi.mock('lucide-react', () => ({
 	Globe: () => <span data-testid="icon-globe" />,
 	BookOpen: () => <span data-testid="icon-book-open" />,
 	BarChart3: () => <span data-testid="icon-bar-chart" />,
+	Server: () => <span data-testid="icon-server" />,
+	Music: () => <span data-testid="icon-music" />,
 }));
 
 // Mock gitService
@@ -194,6 +196,7 @@ const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]
 	setLogViewerOpen: vi.fn(),
 	setProcessMonitorOpen: vi.fn(),
 	setUsageDashboardOpen: vi.fn(),
+	setSymphonyModalOpen: vi.fn(),
 	toggleGroup: vi.fn(),
 	handleDragStart: vi.fn(),
 	handleDragOver: vi.fn(),
@@ -725,13 +728,11 @@ describe('SessionList', () => {
 
 		it('creates new group when button clicked', () => {
 			const createNewGroup = vi.fn();
-			// Note: "New Group" button is inside the Ungrouped section, which only shows when groups exist
-			const emptyGroup = createMockGroup({ id: 'g-empty', name: 'Other Group' });
-			const sessions = [createMockSession({ id: 's1', name: 'Ungrouped' })];
+			const sessions = [createMockSession({ id: 's1', name: 'Test Session' })];
 			const props = createDefaultProps({
 				sessions,
 				sortedSessions: sessions,
-				groups: [emptyGroup],
+				groups: [],
 				leftSidebarOpen: true,
 				createNewGroup,
 			});
@@ -739,6 +740,71 @@ describe('SessionList', () => {
 
 			fireEvent.click(screen.getByText('New Group'));
 			expect(createNewGroup).toHaveBeenCalled();
+		});
+
+		it('shows New Group button when no groups exist (flat list mode)', () => {
+			const createNewGroup = vi.fn();
+			const sessions = [createMockSession({ id: 's1', name: 'Test Session' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				groups: [], // No groups
+				leftSidebarOpen: true,
+				createNewGroup,
+			});
+			render(<SessionList {...props} />);
+
+			// New Group button should be visible even with no groups
+			expect(screen.getByText('New Group')).toBeInTheDocument();
+		});
+
+		it('shows New Group button inline with Ungrouped Agents header when ungrouped sessions exist', () => {
+			const createNewGroup = vi.fn();
+			const group = createMockGroup({ id: 'g1', name: 'My Group' });
+			const sessions = [createMockSession({ id: 's1', name: 'Ungrouped Session' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				groups: [group],
+				leftSidebarOpen: true,
+				createNewGroup,
+			});
+			render(<SessionList {...props} />);
+
+			// Both Ungrouped Agents header and New Group button should be visible
+			expect(screen.getByText('Ungrouped Agents')).toBeInTheDocument();
+			expect(screen.getByText('New Group')).toBeInTheDocument();
+
+			// The button should be inline - verify they share the same parent row
+			const ungroupedHeader = screen.getByText('Ungrouped Agents');
+			const newGroupButton = screen.getByText('New Group');
+			// Both should be within the same clickable header row (grandparent for text, parent for button)
+			const headerRow = ungroupedHeader.closest('.flex.items-center.justify-between');
+			expect(headerRow).not.toBeNull();
+			expect(headerRow?.contains(newGroupButton)).toBe(true);
+		});
+
+		it('shows standalone New Group button when groups exist with no ungrouped sessions', () => {
+			const createNewGroup = vi.fn();
+			const group = createMockGroup({ id: 'g1', name: 'My Group', sessionIds: ['s1'] });
+			const sessions = [createMockSession({ id: 's1', name: 'Grouped Session', groupId: 'g1' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				groups: [group],
+				leftSidebarOpen: true,
+				createNewGroup,
+			});
+			render(<SessionList {...props} />);
+
+			// New Group button should be visible
+			expect(screen.getByText('New Group')).toBeInTheDocument();
+			// Ungrouped Agents header should NOT be visible (no ungrouped sessions)
+			expect(screen.queryByText('Ungrouped Agents')).not.toBeInTheDocument();
+
+			// Button should be standalone (full-width style)
+			const newGroupButton = screen.getByText('New Group').closest('button');
+			expect(newGroupButton).toHaveClass('w-full');
 		});
 	});
 
@@ -775,6 +841,23 @@ describe('SessionList', () => {
 
 			expect(screen.getByText('Ungrouped Agents')).toBeInTheDocument();
 			expect(screen.getByText('Ungrouped Session')).toBeInTheDocument();
+		});
+
+		it('hides Ungrouped Agents folder when all sessions are in groups', () => {
+			const group = createMockGroup({ id: 'g1', name: 'My Group', sessionIds: ['s1'] });
+			const sessions = [createMockSession({ id: 's1', name: 'Grouped Session', groupId: 'g1' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				groups: [group],
+				leftSidebarOpen: true,
+			});
+			render(<SessionList {...props} />);
+
+			// The session should be visible in the group
+			expect(screen.getByText('Grouped Session')).toBeInTheDocument();
+			// But the Ungrouped Agents folder should NOT be visible
+			expect(screen.queryByText('Ungrouped Agents')).not.toBeInTheDocument();
 		});
 
 		it('selects session when clicked', () => {
@@ -1000,6 +1083,21 @@ describe('SessionList', () => {
 
 			expect(screen.queryByText('Keyboard Shortcuts')).not.toBeInTheDocument();
 		});
+
+		it('has scrollable menu container for limited viewport height', () => {
+			const props = createDefaultProps({ leftSidebarOpen: true });
+			render(<SessionList {...props} />);
+
+			fireEvent.click(screen.getByTitle('Menu'));
+
+			// Find the menu container by its data-tour attribute
+			const menuContainer = document.querySelector('[data-tour="hamburger-menu-contents"]');
+			expect(menuContainer).toBeInTheDocument();
+			expect(menuContainer).toHaveClass('overflow-y-auto');
+			expect(menuContainer).toHaveClass('scrollbar-thin');
+			// Verify max-height is set (the actual calc value depends on Tailwind)
+			expect(menuContainer?.className).toMatch(/max-h-\[calc\(100vh-120px\)\]/);
+		});
 	});
 
 	// ============================================================================
@@ -1111,6 +1209,45 @@ describe('SessionList', () => {
 			fireEvent.drop(groupHeader);
 
 			expect(handleDropOnGroup).toHaveBeenCalledWith('g1');
+		});
+
+		it('shows drop zone for ungrouping when dragging and all sessions are grouped', () => {
+			const handleDropOnUngrouped = vi.fn();
+			const group = createMockGroup({ id: 'g1', name: 'My Group', sessionIds: ['s1'] });
+			const sessions = [createMockSession({ id: 's1', name: 'Grouped Session', groupId: 'g1' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				groups: [group],
+				leftSidebarOpen: true,
+				draggingSessionId: 's1', // Simulating active drag
+				handleDropOnUngrouped,
+			});
+			render(<SessionList {...props} />);
+
+			// Drop zone should be visible when dragging
+			expect(screen.getByText('Drop here to ungroup')).toBeInTheDocument();
+		});
+
+		it('calls handleDropOnUngrouped when dropping on ungroup zone', () => {
+			const handleDropOnUngrouped = vi.fn();
+			const group = createMockGroup({ id: 'g1', name: 'My Group', sessionIds: ['s1'] });
+			const sessions = [createMockSession({ id: 's1', name: 'Grouped Session', groupId: 'g1' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				groups: [group],
+				leftSidebarOpen: true,
+				draggingSessionId: 's1',
+				handleDropOnUngrouped,
+			});
+			render(<SessionList {...props} />);
+
+			// Find the drop zone and drop on it
+			const dropZone = screen.getByText('Drop here to ungroup');
+			fireEvent.drop(dropZone);
+
+			expect(handleDropOnUngrouped).toHaveBeenCalled();
 		});
 	});
 
@@ -2094,7 +2231,7 @@ describe('SessionList', () => {
 				createMockSession({
 					id: 's1',
 					name: 'Claude Session',
-					toolType: 'claude',
+					toolType: 'claude-code',
 					agentSessionId: undefined,
 				}),
 			];
@@ -2115,7 +2252,7 @@ describe('SessionList', () => {
 				createMockSession({
 					id: 's1',
 					name: 'Claude Session',
-					toolType: 'claude',
+					toolType: 'claude-code',
 					agentSessionId: 'session-123',
 				}),
 			];
@@ -2136,7 +2273,7 @@ describe('SessionList', () => {
 				createMockSession({
 					id: 's1',
 					name: 'Claude Session',
-					toolType: 'claude',
+					toolType: 'claude-code',
 					agentSessionId: undefined,
 				}),
 			];

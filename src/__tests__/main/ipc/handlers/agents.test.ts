@@ -23,6 +23,11 @@ vi.mock('electron', () => ({
 // Mock agents module (capabilities exports)
 vi.mock('../../../../main/agents', () => ({
 	getAgentCapabilities: vi.fn(),
+	AGENT_DEFINITIONS: [
+		{ id: 'claude-code', name: 'Claude Code', binaryName: 'claude', configOptions: [] },
+		{ id: 'codex', name: 'Codex', binaryName: 'codex', configOptions: [] },
+		{ id: 'terminal', name: 'Terminal', binaryName: 'bash', configOptions: [] },
+	],
 	DEFAULT_CAPABILITIES: {
 		supportsResume: false,
 		supportsReadOnlyMode: false,
@@ -58,7 +63,13 @@ vi.mock('../../../../main/utils/execFile', () => ({
 	execFileNoThrow: vi.fn(),
 }));
 
+// Mock fs
+vi.mock('fs', () => ({
+	existsSync: vi.fn(),
+}));
+
 import { execFileNoThrow } from '../../../../main/utils/execFile';
+import * as fs from 'fs';
 
 describe('agents IPC handlers', () => {
 	let handlers: Map<string, Function>;
@@ -670,7 +681,7 @@ describe('agents IPC handlers', () => {
 			mockAgentConfigsStore.get.mockReturnValue({
 				'claude-code': { customPath: '/custom/claude' },
 				opencode: { customPath: '/custom/opencode' },
-				aider: { model: 'gpt-4' }, // No customPath
+				codex: { model: 'gpt-4' }, // No customPath
 			});
 
 			const handler = handlers.get('agents:getAllCustomPaths');
@@ -757,7 +768,7 @@ describe('agents IPC handlers', () => {
 			mockAgentConfigsStore.get.mockReturnValue({
 				'claude-code': { customArgs: '--verbose' },
 				opencode: { customArgs: '--debug' },
-				aider: { model: 'gpt-4' }, // No customArgs
+				codex: { model: 'gpt-4' }, // No customArgs
 			});
 
 			const handler = handlers.get('agents:getAllCustomArgs');
@@ -846,7 +857,7 @@ describe('agents IPC handlers', () => {
 			mockAgentConfigsStore.get.mockReturnValue({
 				'claude-code': { customEnvVars: { KEY1: 'val1' } },
 				opencode: { customEnvVars: { KEY2: 'val2' } },
-				aider: { model: 'gpt-4' }, // No customEnvVars
+				codex: { model: 'gpt-4' }, // No customEnvVars
 			});
 
 			const handler = handlers.get('agents:getAllCustomEnvVars');
@@ -917,6 +928,7 @@ describe('agents IPC handlers', () => {
 				slash_commands: ['/help', '/compact', '/clear'],
 			});
 
+			vi.mocked(fs.existsSync).mockReturnValue(true);
 			vi.mocked(execFileNoThrow).mockResolvedValue({
 				stdout: initMessage + '\n',
 				stderr: '',
@@ -959,6 +971,7 @@ describe('agents IPC handlers', () => {
 				slash_commands: ['/help'],
 			});
 
+			vi.mocked(fs.existsSync).mockReturnValue(true);
 			vi.mocked(execFileNoThrow).mockResolvedValue({
 				stdout: initMessage + '\n',
 				stderr: '',

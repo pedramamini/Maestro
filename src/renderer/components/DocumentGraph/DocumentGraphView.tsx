@@ -13,7 +13,7 @@
  * - Theme-aware styling throughout
  */
 
-import React, { useCallback, useEffect, useRef, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
 	X,
 	Network,
@@ -29,6 +29,8 @@ import {
 	Calendar,
 	CheckSquare,
 	Type,
+	ChevronLeft,
+	ChevronRight,
 } from 'lucide-react';
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
@@ -53,9 +55,60 @@ import {
 } from './MindMap';
 import { NodeContextMenu } from './NodeContextMenu';
 import { GraphLegend } from './GraphLegend';
+import { MarkdownRenderer } from '../MarkdownRenderer';
+import { generateProseStyles } from '../../utils/markdownConfig';
+import type { FileNode } from '../../types/fileTree';
 
 /** Debounce delay for graph rebuilds when settings change (ms) */
 const GRAPH_REBUILD_DEBOUNCE_DELAY = 300;
+
+/**
+ * Build a file tree structure from graph node file paths.
+ * This enables wiki-link resolution in the preview panel.
+ */
+function buildFileTreeFromPaths(filePaths: string[]): FileNode[] {
+	const root: FileNode[] = [];
+	const folderMap = new Map<string, FileNode>();
+
+	for (const filePath of filePaths) {
+		if (!filePath) continue;
+
+		const parts = filePath.split('/');
+		let currentLevel = root;
+		let currentPath = '';
+
+		for (let i = 0; i < parts.length; i++) {
+			const part = parts[i];
+			const isLastPart = i === parts.length - 1;
+			currentPath = currentPath ? `${currentPath}/${part}` : part;
+
+			if (isLastPart) {
+				// It's a file
+				currentLevel.push({
+					name: part,
+					type: 'file',
+					fullPath: filePath,
+				});
+			} else {
+				// It's a folder - check if it already exists
+				let folder = folderMap.get(currentPath);
+				if (!folder) {
+					folder = {
+						name: part,
+						type: 'folder',
+						isFolder: true,
+						children: [],
+					};
+					folderMap.set(currentPath, folder);
+					currentLevel.push(folder);
+				}
+				currentLevel = folder.children!;
+			}
+		}
+	}
+
+	return root;
+}
 /** Default maximum number of nodes to load initially */
 const DEFAULT_MAX_NODES = 200;
 /** Number of additional nodes to load when clicking "Load more" */
@@ -163,6 +216,31 @@ export function DocumentGraphView({
 	const [selectedNode, setSelectedNode] = useState<MindMapNode | null>(null);
 	const [searchQuery, setSearchQuery] = useState('');
 
+	// Preview panel state
+	const [previewFile, setPreviewFile] = useState<{
+		path: string;
+		relativePath: string;
+		name: string;
+		content: string;
+	} | null>(null);
+	const [previewError, setPreviewError] = useState<string | null>(null);
+	const [previewLoading, setPreviewLoading] = useState(false);
+
+	// Preview navigation history (for back/forward through wiki link clicks)
+	const [previewHistory, setPreviewHistory] = useState<
+		Array<{ path: string; relativePath: string; name: string; content: string }>
+	>([]);
+	const [previewHistoryIndex, setPreviewHistoryIndex] = useState(-1);
+
+	// All markdown files discovered during scanning (for wiki-link resolution)
+	const [allMarkdownFiles, setAllMarkdownFiles] = useState<string[]>([]);
+
+	// Build file tree from ALL markdown files for wiki-link resolution in preview
+	// This enables linking to files that aren't currently loaded in the graph view
+	const previewFileTree = useMemo(() => {
+		return buildFileTreeFromPaths(allMarkdownFiles);
+	}, [allMarkdownFiles]);
+
 	// Pagination state
 	const [totalDocuments, setTotalDocuments] = useState(0);
 	const [loadedDocuments, setLoadedDocuments] = useState(0);
@@ -196,6 +274,7 @@ export function DocumentGraphView({
 	const graphContainerRef = useRef<HTMLDivElement>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 	const mindMapContainerRef = useRef<HTMLDivElement>(null);
+	const previewContentRef = useRef<HTMLDivElement>(null);
 	const [graphDimensions, setGraphDimensions] = useState({ width: 800, height: 600 });
 
 	// Layer stack for escape handling
@@ -452,6 +531,9 @@ export function DocumentGraphView({
 				setTotalDocuments(graphData.totalDocuments);
 				setLoadedDocuments(graphData.loadedDocuments);
 				setHasMore(graphData.hasMore);
+
+				// Store all markdown files for wiki-link resolution in preview panel
+				setAllMarkdownFiles(graphData.allMarkdownFiles);
 
 				// Cache external data and link counts for instant toggling
 				setCachedExternalData(graphData.cachedExternalData);
@@ -904,6 +986,156 @@ export function DocumentGraphView({
 		},
 		[onDocumentOpen]
 	);
+
+	/**
+	 * Open a markdown preview panel inside the graph view.
+	 * Pushes to navigation history for back/forward support.
+	 */
+	const handlePreviewFile = useCallback(
+		async (filePath: string) => {
+			const isAbsolutePath = filePath.startsWith('/') || /^[A-Za-z]:[\\/]/.test(filePath);
+			const fullPath = isAbsolutePath ? filePath : `${rootPath}/${filePath}`;
+			const relativePath =
+				rootPath && fullPath.startsWith(`${rootPath}/`)
+					? fullPath.slice(rootPath.length + 1)
+					: filePath;
+
+			setPreviewLoading(true);
+			setPreviewError(null);
+
+			try {
+				const content = await window.maestro.fs.readFile(fullPath, sshRemoteId);
+
+				if (content === null) {
+					throw new Error('Unable to read file contents.');
+				}
+
+				const newEntry = {
+					path: fullPath,
+					relativePath,
+					name: relativePath.split('/').pop() || relativePath,
+					content,
+				};
+
+				setPreviewFile(newEntry);
+
+				// Push to history, truncating any forward history
+				setPreviewHistory((prev) => {
+					const newHistory = prev.slice(0, previewHistoryIndex + 1);
+					newHistory.push(newEntry);
+					return newHistory;
+				});
+				setPreviewHistoryIndex((prev) => prev + 1);
+			} catch (err) {
+				setPreviewFile(null);
+				setPreviewError(err instanceof Error ? err.message : 'Failed to load preview.');
+			} finally {
+				setPreviewLoading(false);
+			}
+		},
+		[rootPath, sshRemoteId, previewHistoryIndex]
+	);
+
+	/**
+	 * Close the preview panel and clear navigation history
+	 */
+	const handlePreviewClose = useCallback(() => {
+		setPreviewFile(null);
+		setPreviewLoading(false);
+		setPreviewError(null);
+		setPreviewHistory([]);
+		setPreviewHistoryIndex(-1);
+	}, []);
+
+	/**
+	 * Navigate back in preview history
+	 */
+	const handlePreviewBack = useCallback(() => {
+		if (previewHistoryIndex > 0) {
+			const newIndex = previewHistoryIndex - 1;
+			setPreviewHistoryIndex(newIndex);
+			setPreviewFile(previewHistory[newIndex]);
+			// Focus the content area for keyboard scrolling
+			requestAnimationFrame(() => {
+				previewContentRef.current?.focus();
+			});
+		}
+	}, [previewHistoryIndex, previewHistory]);
+
+	/**
+	 * Navigate forward in preview history
+	 */
+	const handlePreviewForward = useCallback(() => {
+		if (previewHistoryIndex < previewHistory.length - 1) {
+			const newIndex = previewHistoryIndex + 1;
+			setPreviewHistoryIndex(newIndex);
+			setPreviewFile(previewHistory[newIndex]);
+			// Focus the content area for keyboard scrolling
+			requestAnimationFrame(() => {
+				previewContentRef.current?.focus();
+			});
+		}
+	}, [previewHistoryIndex, previewHistory]);
+
+	// Can navigate back/forward?
+	const canGoBack = previewHistoryIndex > 0;
+	const canGoForward = previewHistoryIndex < previewHistory.length - 1;
+
+	/**
+	 * Handle keyboard navigation in preview panel (left/right arrow keys)
+	 */
+	const handlePreviewKeyDown = useCallback(
+		(e: React.KeyboardEvent) => {
+			// Only handle arrow keys without modifiers
+			if (e.metaKey || e.ctrlKey || e.altKey || e.shiftKey) return;
+
+			if (e.key === 'ArrowLeft' && canGoBack) {
+				e.preventDefault();
+				handlePreviewBack();
+			} else if (e.key === 'ArrowRight' && canGoForward) {
+				e.preventDefault();
+				handlePreviewForward();
+			}
+		},
+		[canGoBack, canGoForward, handlePreviewBack, handlePreviewForward]
+	);
+
+	/**
+	 * Register preview panel with layer stack when open.
+	 * Escape closes the preview and returns focus to the graph.
+	 */
+	useEffect(() => {
+		if (previewFile || previewLoading || previewError) {
+			const id = registerLayer({
+				type: 'overlay',
+				priority: MODAL_PRIORITIES.DOCUMENT_GRAPH + 1,
+				blocksLowerLayers: false,
+				capturesFocus: true,
+				focusTrap: 'lenient',
+				allowClickOutside: true,
+				onEscape: () => {
+					handlePreviewClose();
+					// Return focus to the mind map container
+					requestAnimationFrame(() => {
+						mindMapContainerRef.current?.focus();
+					});
+				},
+			});
+			return () => unregisterLayer(id);
+		}
+	}, [previewFile, previewLoading, previewError, registerLayer, unregisterLayer, handlePreviewClose]);
+
+	/**
+	 * Focus the preview content area when preview file loads.
+	 * This enables immediate keyboard scrolling.
+	 */
+	useEffect(() => {
+		if (previewFile && !previewLoading && !previewError) {
+			requestAnimationFrame(() => {
+				previewContentRef.current?.focus();
+			});
+		}
+	}, [previewFile, previewLoading, previewError]);
 
 	/**
 	 * Handle search input escape key
@@ -1422,6 +1654,11 @@ export function DocumentGraphView({
 							selectedNodeId={selectedNodeId}
 							onNodeSelect={handleNodeSelect}
 							onNodeDoubleClick={handleNodeDoubleClick}
+							onNodePreview={(node) => {
+								if (node.nodeType === 'document' && node.filePath) {
+									handlePreviewFile(node.filePath);
+								}
+							}}
 							onNodeContextMenu={handleNodeContextMenu}
 							onOpenFile={handleOpenFile}
 							searchQuery={searchQuery}
@@ -1463,6 +1700,133 @@ export function DocumentGraphView({
 							onFocus={handleContextMenuFocus}
 							onDismiss={() => setContextMenu(null)}
 						/>
+					)}
+
+					{/* Markdown Preview Panel */}
+					{(previewFile || previewLoading || previewError) && (
+						<div
+							className="absolute top-4 right-4 bottom-4 rounded-lg shadow-2xl border flex flex-col z-50 outline-none"
+							style={{
+								backgroundColor: theme.colors.bgActivity,
+								borderColor: theme.colors.border,
+								width: 'min(560px, 42vw)',
+								maxWidth: '90%',
+							}}
+							onKeyDown={handlePreviewKeyDown}
+						>
+							<style>{generateProseStyles({ theme, scopeSelector: '.graph-preview' })}</style>
+							<div
+								className="px-4 py-3 border-b flex items-center justify-between gap-3"
+								style={{ borderColor: theme.colors.border }}
+							>
+								<div className="flex items-center gap-2 min-w-0">
+									{/* Back/Forward navigation buttons */}
+									<div className="flex items-center gap-0.5">
+										<button
+											onClick={handlePreviewBack}
+											disabled={!canGoBack}
+											className="p-1 rounded transition-colors"
+											style={{
+												color: canGoBack ? theme.colors.textMain : theme.colors.textDim,
+												opacity: canGoBack ? 1 : 0.4,
+												cursor: canGoBack ? 'pointer' : 'default',
+											}}
+											onMouseEnter={(e) =>
+												canGoBack && (e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+											}
+											onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+											title={canGoBack ? 'Go back (←)' : 'No previous document'}
+											aria-label="Go back"
+										>
+											<ChevronLeft className="w-4 h-4" />
+										</button>
+										<button
+											onClick={handlePreviewForward}
+											disabled={!canGoForward}
+											className="p-1 rounded transition-colors"
+											style={{
+												color: canGoForward ? theme.colors.textMain : theme.colors.textDim,
+												opacity: canGoForward ? 1 : 0.4,
+												cursor: canGoForward ? 'pointer' : 'default',
+											}}
+											onMouseEnter={(e) =>
+												canGoForward && (e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)
+											}
+											onMouseLeave={(e) => (e.currentTarget.style.backgroundColor = 'transparent')}
+											title={canGoForward ? 'Go forward (→)' : 'No next document'}
+											aria-label="Go forward"
+										>
+											<ChevronRight className="w-4 h-4" />
+										</button>
+									</div>
+									{/* Document title and path */}
+									<div className="min-w-0">
+										<p className="text-sm font-semibold truncate" style={{ color: theme.colors.textMain }}>
+											{previewFile?.name || 'Loading preview...'}
+										</p>
+										<p className="text-xs truncate" style={{ color: theme.colors.textDim }}>
+											{previewFile?.relativePath || ''}
+										</p>
+									</div>
+								</div>
+								<div className="flex items-center gap-2">
+									{previewFile && onDocumentOpen && (
+										<button
+											onClick={() => onDocumentOpen(previewFile.relativePath)}
+											className="px-2 py-1 rounded text-xs transition-colors"
+											style={{
+												backgroundColor: `${theme.colors.accent}20`,
+												color: theme.colors.accent,
+											}}
+											title="Open in file preview"
+										>
+											Open
+										</button>
+									)}
+									<button
+										onClick={handlePreviewClose}
+										className="p-1 rounded transition-colors"
+										style={{ color: theme.colors.textDim }}
+										title="Close preview (Esc)"
+									>
+										<X className="w-4 h-4" />
+									</button>
+								</div>
+							</div>
+							<div
+								ref={previewContentRef}
+								tabIndex={0}
+								className="flex-1 overflow-auto px-4 py-3 graph-preview outline-none"
+							>
+								{previewLoading ? (
+									<div className="flex items-center gap-2 text-xs" style={{ color: theme.colors.textDim }}>
+										<Loader2 className="w-4 h-4 animate-spin" />
+										Loading preview...
+									</div>
+								) : previewError ? (
+									<p className="text-xs" style={{ color: theme.colors.textDim }}>
+										{previewError}
+									</p>
+								) : previewFile ? (
+									<MarkdownRenderer
+										content={previewFile.content}
+										theme={theme}
+										onCopy={async (text: string) => {
+											try {
+												await navigator.clipboard.writeText(text);
+											} catch (err) {
+												console.error('Failed to copy to clipboard:', err);
+											}
+										}}
+										fileTree={previewFileTree}
+										projectRoot={rootPath}
+										cwd={previewFile.relativePath.split('/').slice(0, -1).join('/')}
+										onFileClick={handlePreviewFile}
+										sshRemoteId={sshRemoteId}
+									/>
+								) : null}
+							</div>
+						</div>
 					)}
 				</div>
 

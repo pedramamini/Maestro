@@ -32,14 +32,9 @@ export class SshCommandRunner {
 		// Force disable TTY allocation
 		sshArgs.push('-T');
 
-		// Add identity file
-		if (sshConfig.useSshConfig) {
-			// Only specify identity file if explicitly provided (override SSH config)
-			if (sshConfig.privateKeyPath && sshConfig.privateKeyPath.trim()) {
-				sshArgs.push('-i', expandTilde(sshConfig.privateKeyPath));
-			}
-		} else {
-			// Direct connection: require private key
+		// Private key - only add if explicitly provided
+		// SSH will use ~/.ssh/config or ssh-agent if no key is specified
+		if (sshConfig.privateKeyPath && sshConfig.privateKeyPath.trim()) {
 			sshArgs.push('-i', expandTilde(sshConfig.privateKeyPath));
 		}
 
@@ -60,15 +55,12 @@ export class SshCommandRunner {
 			sshArgs.push('-p', sshConfig.port.toString());
 		}
 
-		// Build destination (user@host or just host for SSH config)
-		if (sshConfig.useSshConfig) {
-			if (sshConfig.username && sshConfig.username.trim()) {
-				sshArgs.push(`${sshConfig.username}@${sshConfig.host}`);
-			} else {
-				sshArgs.push(sshConfig.host);
-			}
-		} else {
+		// Build destination - use user@host if username provided, otherwise just host
+		// SSH will use current user or ~/.ssh/config User directive if no username specified
+		if (sshConfig.username && sshConfig.username.trim()) {
 			sshArgs.push(`${sshConfig.username}@${sshConfig.host}`);
+		} else {
+			sshArgs.push(sshConfig.host);
 		}
 
 		// Determine the working directory on the remote

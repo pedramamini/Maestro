@@ -17,6 +17,7 @@ let windowCloseHandler: (() => void) | null = null;
 const mockWebContents = {
 	send: vi.fn(),
 	openDevTools: vi.fn(),
+	on: vi.fn(),
 };
 
 const mockWindowInstance = {

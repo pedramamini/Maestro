@@ -361,6 +361,85 @@ describe('ToastContext', () => {
 			expect(window.maestro.notification.speak).not.toHaveBeenCalled();
 		});
 
+		it('does not trigger custom notification when skipCustomNotification is true', async () => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
+			let contextValue: ReturnType<typeof useToast> | null = null;
+
+			renderWithProvider(
+				<ToastConsumer
+					onMount={(ctx) => {
+						contextValue = ctx;
+					}}
+				/>
+			);
+
+			// Enable audio feedback
+			await act(async () => {
+				contextValue!.setAudioFeedback(true, 'say -v Alex');
+			});
+
+			vi.clearAllMocks();
+
+			// Add toast with skipCustomNotification - should NOT trigger speak
+			await act(async () => {
+				contextValue!.addToast({
+					type: 'info',
+					title: 'Synopsis',
+					message: 'Synopsis message that should not be spoken',
+					skipCustomNotification: true,
+				});
+			});
+
+			expect(window.maestro.notification.speak).not.toHaveBeenCalled();
+			// But OS notification should still work
+			expect(window.maestro.notification.show).toHaveBeenCalled();
+		});
+
+		it('triggers custom notification for regular toasts but not synopsis', async () => {
+			vi.useFakeTimers({ shouldAdvanceTime: true });
+			let contextValue: ReturnType<typeof useToast> | null = null;
+
+			renderWithProvider(
+				<ToastConsumer
+					onMount={(ctx) => {
+						contextValue = ctx;
+					}}
+				/>
+			);
+
+			// Enable audio feedback
+			await act(async () => {
+				contextValue!.setAudioFeedback(true, 'say');
+			});
+
+			vi.clearAllMocks();
+
+			// Add regular task completion toast - SHOULD trigger speak
+			await act(async () => {
+				contextValue!.addToast({
+					type: 'success',
+					title: 'Task Complete',
+					message: 'Regular task completed',
+				});
+			});
+
+			expect(window.maestro.notification.speak).toHaveBeenCalledWith('Regular task completed', 'say');
+
+			vi.clearAllMocks();
+
+			// Add synopsis toast - should NOT trigger speak
+			await act(async () => {
+				contextValue!.addToast({
+					type: 'info',
+					title: 'Synopsis',
+					message: 'Synopsis message',
+					skipCustomNotification: true,
+				});
+			});
+
+			expect(window.maestro.notification.speak).not.toHaveBeenCalled();
+		});
+
 		it('shows OS notification when enabled', async () => {
 			vi.useFakeTimers({ shouldAdvanceTime: true });
 			let contextValue: ReturnType<typeof useToast> | null = null;

@@ -333,7 +333,10 @@ describe('SessionStatusBanner', () => {
 			expect(screen.getByText('33%')).toBeInTheDocument();
 		});
 
-		it('caps percentage at 100%', () => {
+		it('does not render bar when accumulated tokens exceed context window', () => {
+			// When total context tokens (input + cacheRead + cacheCreation) exceed the context window,
+			// this indicates accumulated values from multi-tool turns.
+			// estimateContextUsage returns null, so the ContextUsageBar doesn't render.
 			const usageStats = createUsageStats({
 				inputTokens: 150000,
 				outputTokens: 100000,
@@ -344,11 +347,14 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			// (150000 + 100000) / 200000 = 125% capped to 100%
-			expect(screen.getByText('100%')).toBeInTheDocument();
+			// (150000 + 100000) / 200000 = 125% > 100%, estimateContextUsage returns null
+			// So the progress bar should not be rendered
+			expect(screen.queryByRole('progressbar')).toBeNull();
 		});
 
-		it('does not render when contextWindow is 0', () => {
+		it('uses default context window when contextWindow is 0', () => {
+			// When contextWindow is 0, estimateContextUsage falls back to
+			// agent-specific default context window (200000 for claude-code)
 			const usageStats = createUsageStats({
 				inputTokens: 1000,
 				outputTokens: 500,
@@ -358,10 +364,15 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.queryByRole('progressbar')).toBeNull();
+			// Should render with fallback context window
+			// 1000 / 200000 * 100 = 0.5% rounds to 1%
+			expect(screen.getByRole('progressbar')).toBeInTheDocument();
+			expect(screen.getByText('1%')).toBeInTheDocument();
 		});
 
-		it('does not render when contextWindow is undefined', () => {
+		it('uses default context window when contextWindow is undefined', () => {
+			// When contextWindow is undefined, estimateContextUsage falls back to
+			// agent-specific default context window (200000 for claude-code)
 			const usageStats = createUsageStats({
 				inputTokens: 1000,
 				outputTokens: 500,
@@ -371,10 +382,15 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.queryByRole('progressbar')).toBeNull();
+			// Should render with fallback context window
+			// 1000 / 200000 * 100 = 0.5% rounds to 1%
+			expect(screen.getByRole('progressbar')).toBeInTheDocument();
+			expect(screen.getByText('1%')).toBeInTheDocument();
 		});
 
-		it('does not render when inputTokens is undefined', () => {
+		it('renders with 0% when inputTokens is undefined', () => {
+			// When inputTokens is undefined, it defaults to 0
+			// 0 / 200000 * 100 = 0%
 			const usageStats = createUsageStats({
 				inputTokens: undefined,
 				outputTokens: 500,
@@ -384,7 +400,9 @@ describe('SessionStatusBanner', () => {
 
 			render(<SessionStatusBanner session={session} />);
 
-			expect(screen.queryByRole('progressbar')).toBeNull();
+			// Should render with 0% usage
+			expect(screen.getByRole('progressbar')).toBeInTheDocument();
+			expect(screen.getByText('0%')).toBeInTheDocument();
 		});
 
 		it('does not render when usageStats is null', () => {

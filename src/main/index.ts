@@ -1,5 +1,6 @@
-import { app, BrowserWindow } from 'electron';
+import { app, BrowserWindow, powerMonitor } from 'electron';
 import path from 'path';
+import os from 'os';
 import crypto from 'crypto';
 // Sentry is imported dynamically below to avoid module-load-time access to electron.app
 // which causes "Cannot read properties of undefined (reading 'getAppPath')" errors
@@ -47,6 +48,7 @@ import {
 	registerWebHandlers,
 	registerLeaderboardHandlers,
 	registerNotificationsHandlers,
+	registerSymphonyHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -59,11 +61,13 @@ import {
 	setGetSessionsCallback,
 	setGetCustomEnvVarsCallback,
 	setGetAgentConfigCallback,
+	setSshStore,
 	markParticipantResponded,
 	spawnModeratorSynthesis,
 	getGroupChatReadOnlyState,
 	respawnParticipantWithRecovery,
 } from './group-chat/group-chat-router';
+import { createSshRemoteStoreAdapter } from './utils/ssh-remote-resolver';
 import { updateParticipant, loadGroupChat, updateGroupChat } from './group-chat/group-chat-storage';
 import { needsSessionRecovery, initiateSessionRecovery } from './group-chat/session-recovery';
 import { initializeSessionStorages } from './storage';
@@ -91,7 +95,7 @@ import {
 	clearGroupChatBuffer,
 } from './group-chat/output-buffer';
 // Phase 2 refactoring - dependency injection
-import { createSafeSend } from './utils/safe-send';
+import { createSafeSend, isWebContentsAvailable } from './utils/safe-send';
 import { createWebServerFactory } from './web-server/web-server-factory';
 // Phase 4 refactoring - app lifecycle
 import {
@@ -140,11 +144,12 @@ const { syncPath, bootstrapStore } = initializeStores({ productionDataPath });
 // Get early settings before Sentry init (for crash reporting and GPU acceleration)
 const { crashReportingEnabled, disableGpuAcceleration } = getEarlySettings(syncPath);
 
-// Disable GPU hardware acceleration if user has opted out
+// Disable GPU hardware acceleration if user has opted out or in WSL environment
 // Must be called before app.ready event
+// In WSL, GPU acceleration is auto-disabled due to EGL/GPU process crash issues
 if (disableGpuAcceleration) {
 	app.disableHardwareAcceleration();
-	console.log('[STARTUP] GPU hardware acceleration disabled by user preference');
+	console.log('[STARTUP] GPU hardware acceleration disabled');
 }
 
 // Generate installation ID on first run (one-time generation)
@@ -304,7 +309,7 @@ app.whenReady().then(async () => {
 				`History file changed for session ${sessionId}, notifying renderer`,
 				'HistoryWatcher'
 			);
-			if (mainWindow && !mainWindow.isDestroyed()) {
+			if (isWebContentsAvailable(mainWindow)) {
 				mainWindow.webContents.send('history:externalChange', sessionId);
 			}
 		});
@@ -351,6 +356,15 @@ app.whenReady().then(async () => {
 	app.on('activate', () => {
 		if (BrowserWindow.getAllWindows().length === 0) {
 			createWindow();
+		}
+	});
+
+	// Listen for system resume (after sleep/suspend) and notify renderer
+	// This allows the renderer to refresh settings that may have been reset
+	powerMonitor.on('resume', () => {
+		logger.info('System resumed from sleep/suspend', 'PowerMonitor');
+		if (isWebContentsAvailable(mainWindow)) {
+			mainWindow.webContents.send('app:systemResume');
 		}
 	});
 });
@@ -427,6 +441,7 @@ function setupIpcHandlers() {
 		agentConfigsStore,
 		settingsStore: store,
 		getMainWindow: () => mainWindow,
+		sessionsStore,
 	});
 
 	// Persistence operations - extracted to src/main/ipc/handlers/persistence.ts
@@ -545,11 +560,13 @@ function setupIpcHandlers() {
 				id: s.id,
 				name: s.name,
 				toolType: s.toolType,
-				cwd: s.cwd || s.fullPath || process.env.HOME || '/tmp',
+				cwd: s.cwd || s.fullPath || os.homedir(),
 				customArgs: s.customArgs,
 				customEnvVars: s.customEnvVars,
 				customModel: s.customModel,
 				sshRemoteName,
+				// Pass full SSH config for remote execution support
+				sshRemoteConfig: s.sessionSshRemoteConfig,
 			};
 		});
 	});
@@ -557,6 +574,9 @@ function setupIpcHandlers() {
 	// Set up callback for group chat router to lookup custom env vars for agents
 	setGetCustomEnvVarsCallback(getCustomEnvVarsForAgent);
 	setGetAgentConfigCallback(getAgentConfigForAgent);
+
+	// Set up SSH store for group chat SSH remote execution support
+	setSshStore(createSshRemoteStoreAdapter(store));
 
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(() => mainWindow);
@@ -581,6 +601,12 @@ function setupIpcHandlers() {
 	registerLeaderboardHandlers({
 		app,
 		settingsStore: store,
+	});
+
+	// Register Symphony handlers for token donation / open source contributions
+	registerSymphonyHandlers({
+		app,
+		getMainWindow: () => mainWindow,
 	});
 }
 

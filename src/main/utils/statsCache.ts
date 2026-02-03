@@ -18,23 +18,50 @@ import { logger } from './logger';
 // ============================================================================
 
 /**
+ * Per-session stats stored in the per-project cache.
+ *
+ * IMPORTANT: Archive Preservation Pattern
+ * ----------------------------------------
+ * When a JSONL session file is deleted from disk (e.g., by Claude Code cleanup),
+ * the session is marked as `archived: true` rather than being removed from cache.
+ * This ensures lifetime statistics (costs, messages, tokens, oldest timestamp)
+ * survive file cleanup.
+ *
+ * This pattern mirrors the global stats cache behavior in agentSessions.ts.
+ * Both caches MUST use the same archive-preservation approach to maintain
+ * consistency between the Sessions Browser and About modal statistics.
+ *
+ * If you modify this behavior, you MUST also update:
+ * - agentSessions.ts: getGlobalStats handler (global cache archive logic)
+ * - claude.ts: getProjectStats handler (per-project cache archive logic)
+ * - statsCache.test.ts: Archive preservation test cases
+ */
+export interface PerProjectSessionStats {
+	messages: number;
+	costUsd: number;
+	sizeBytes: number;
+	tokens: number;
+	oldestTimestamp: string | null;
+	/** File modification time to detect external changes */
+	fileMtimeMs: number;
+	/**
+	 * Whether the source JSONL file has been deleted.
+	 * Archived sessions are preserved in cache so lifetime stats survive file cleanup.
+	 * If the file reappears, this flag is set back to false and the session is re-parsed.
+	 */
+	archived?: boolean;
+}
+
+/**
  * Per-project session statistics cache structure.
  * Stores stats for all Claude Code sessions within a specific project directory.
+ *
+ * IMPORTANT: This cache preserves session metadata even after JSONL files are deleted.
+ * See PerProjectSessionStats for the archive preservation pattern documentation.
  */
 export interface SessionStatsCache {
 	/** Per-session stats keyed by session ID */
-	sessions: Record<
-		string,
-		{
-			messages: number;
-			costUsd: number;
-			sizeBytes: number;
-			tokens: number;
-			oldestTimestamp: string | null;
-			/** File modification time to detect external changes */
-			fileMtimeMs: number;
-		}
-	>;
+	sessions: Record<string, PerProjectSessionStats>;
 	/** Aggregate totals computed from all sessions */
 	totals: {
 		totalSessions: number;
@@ -50,8 +77,14 @@ export interface SessionStatsCache {
 	version: number;
 }
 
-/** Current per-project stats cache version. Bump to force cache invalidation. */
-export const STATS_CACHE_VERSION = 1;
+/**
+ * Current per-project stats cache version. Bump to force cache invalidation.
+ *
+ * Version history:
+ * - v1: Initial version (sessions dropped when JSONL files deleted - BUG)
+ * - v2: Added archived flag to preserve session stats when JSONL files are deleted
+ */
+export const STATS_CACHE_VERSION = 2;
 
 /**
  * Encode a project path the same way Claude Code does.

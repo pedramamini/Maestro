@@ -172,8 +172,10 @@ describe('MessageHistory', () => {
 			const { container } = render(<MessageHistory logs={logs} inputMode="ai" />);
 			const messageCard = container.querySelector('[style*="padding: 10px 12px"]');
 			// Should contain both date (month/day) and time
-			// Format is like "Jan 15 14:30" - check for month abbreviation pattern
-			expect(messageCard?.textContent).toMatch(/[A-Z][a-z]{2}\s+\d{1,2}\s+\d{1,2}:\d{2}/);
+			// Format varies by locale: "Jan 15 14:30" (en) or "30. Jan. 13:03" (de)
+			expect(messageCard?.textContent).toMatch(
+				/(\d{1,2}\.\s+[A-Z][a-z]{2,3}\.|\w{3}\s+\d{1,2})\s+\d{1,2}:\d{2}/
+			);
 		});
 	});
 

@@ -80,6 +80,7 @@ interface AgentConfig {
 	binaryName?: string;
 	available: boolean;
 	path?: string;
+  	customPath?: string;
 	command: string;
 	args?: string[];
 	hidden?: boolean;
@@ -160,7 +161,23 @@ interface MaestroAPI {
 			sessionId: string
 		) => Promise<SessionMessagesResult | null>;
 		// NEW: Single-call grooming (recommended) - spawns batch process and returns response
-		groomContext: (projectRoot: string, agentType: string, prompt: string) => Promise<string>;
+		groomContext: (
+			projectRoot: string,
+			agentType: string,
+			prompt: string,
+			options?: {
+				// SSH remote config for running grooming on a remote host
+				sshRemoteConfig?: {
+					enabled: boolean;
+					remoteId: string | null;
+					workingDirOverride?: string;
+				};
+				// Custom agent configuration
+				customPath?: string;
+				customArgs?: string;
+				customEnvVars?: Record<string, string>;
+			}
+		) => Promise<string>;
 		// Cancel all active grooming sessions
 		cancelGrooming: () => Promise<void>;
 		// DEPRECATED: Use groomContext instead
@@ -522,7 +539,7 @@ interface MaestroAPI {
 		homeDir: () => Promise<string>;
 		readDir: (dirPath: string, sshRemoteId?: string) => Promise<DirectoryEntry[]>;
 		readFile: (filePath: string, sshRemoteId?: string) => Promise<string>;
-		writeFile: (filePath: string, content: string) => Promise<{ success: boolean }>;
+		writeFile: (filePath: string, content: string, sshRemoteId?: string) => Promise<{ success: boolean }>;
 		stat: (
 			filePath: string,
 			sshRemoteId?: string
@@ -828,6 +845,7 @@ interface MaestroAPI {
 	shell: {
 		openExternal: (url: string) => Promise<void>;
 		trashItem: (itemPath: string) => Promise<void>;
+		showItemInFolder: (itemPath: string) => Promise<void>;
 	};
 	tunnel: {
 		isCloudflaredInstalled: () => Promise<boolean>;
@@ -937,6 +955,7 @@ interface MaestroAPI {
 		onQuitConfirmationRequest: (callback: () => void) => () => void;
 		confirmQuit: () => void;
 		cancelQuit: () => void;
+		onSystemResume: (callback: () => void) => () => void;
 	};
 	logger: {
 		log: (
@@ -1068,6 +1087,14 @@ interface MaestroAPI {
 			Array<{
 				command: string;
 				description: string;
+			}>
+		>;
+		getSkills: (projectPath: string) => Promise<
+			Array<{
+				name: string;
+				description: string;
+				tokenCount: number;
+				source: 'project' | 'user';
 			}>
 		>;
 		registerSessionOrigin: (
@@ -1212,9 +1239,11 @@ interface MaestroAPI {
 		speak: (
 			text: string,
 			command?: string
-		) => Promise<{ success: boolean; ttsId?: number; error?: string }>;
-		stopSpeak: (ttsId: number) => Promise<{ success: boolean; error?: string }>;
-		onTtsCompleted: (handler: (ttsId: number) => void) => () => void;
+		) => Promise<{ success: boolean; notificationId?: number; error?: string }>;
+		stopSpeak: (notificationId: number) => Promise<{ success: boolean; error?: string }>;
+		onCommandCompleted: (handler: (notificationId: number) => void) => () => void;
+		/** @deprecated Use onCommandCompleted instead */
+		onTtsCompleted: (handler: (notificationId: number) => void) => () => void;
 	};
 	attachments: {
 		save: (
@@ -1257,15 +1286,18 @@ interface MaestroAPI {
 			folderPath: string,
 			docName: string,
 			base64Data: string,
-			extension: string
+			extension: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; relativePath?: string; error?: string }>;
 		deleteImage: (
 			folderPath: string,
-			relativePath: string
+			relativePath: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; error?: string }>;
 		listImages: (
 			folderPath: string,
-			docName: string
+			docName: string,
+			sshRemoteId?: string
 		) => Promise<{
 			success: boolean;
 			images?: Array<{ filename: string; relativePath: string }>;
@@ -1285,21 +1317,25 @@ interface MaestroAPI {
 		// Backup operations for reset-on-completion documents (legacy)
 		createBackup: (
 			folderPath: string,
-			filename: string
+			filename: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; backupFilename?: string; error?: string }>;
 		restoreBackup: (
 			folderPath: string,
-			filename: string
+			filename: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; error?: string }>;
 		deleteBackups: (
-			folderPath: string
+			folderPath: string,
+			sshRemoteId?: string
 		) => Promise<{ success: boolean; deletedCount?: number; error?: string }>;
 		// Working copy operations for reset-on-completion documents (preferred)
 		// Creates a copy in /Runs/ subdirectory: {name}-{timestamp}-loop-{N}.md
 		createWorkingCopy: (
 			folderPath: string,
 			filename: string,
-			loopNumber: number
+			loopNumber: number,
+			sshRemoteId?: string
 		) => Promise<{ workingCopyPath: string; originalPath: string }>;
 	};
 	// Playbooks API (saved batch run configurations)
@@ -2100,7 +2136,7 @@ interface MaestroAPI {
 		}) => Promise<string>;
 		// Get query events with time range and optional filters
 		getStats: (
-			range: 'day' | 'week' | 'month' | 'year' | 'all',
+			range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all',
 			filters?: {
 				agentType?: string;
 				source?: 'user' | 'auto';
@@ -2120,7 +2156,7 @@ interface MaestroAPI {
 			}>
 		>;
 		// Get Auto Run sessions within a time range
-		getAutoRunSessions: (range: 'day' | 'week' | 'month' | 'year' | 'all') => Promise<
+		getAutoRunSessions: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => Promise<
 			Array<{
 				id: string;
 				sessionId: string;
@@ -2148,7 +2184,7 @@ interface MaestroAPI {
 			}>
 		>;
 		// Get aggregated stats for dashboard display
-		getAggregation: (range: 'day' | 'week' | 'month' | 'year' | 'all') => Promise<{
+		getAggregation: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => Promise<{
 			totalQueries: number;
 			totalDuration: number;
 			avgDuration: number;
@@ -2165,7 +2201,7 @@ interface MaestroAPI {
 			bySessionByDay: Record<string, Array<{ date: string; count: number; duration: number }>>;
 		}>;
 		// Export query events to CSV
-		exportCsv: (range: 'day' | 'week' | 'month' | 'year' | 'all') => Promise<string>;
+		exportCsv: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => Promise<string>;
 		// Subscribe to stats updates (for real-time dashboard refresh)
 		onStatsUpdate: (callback: () => void) => () => void;
 		// Clear old stats data (older than specified number of days)
@@ -2179,6 +2215,8 @@ interface MaestroAPI {
 		}>;
 		// Get database size in bytes
 		getDatabaseSize: () => Promise<number>;
+		// Get earliest stat timestamp (null if no entries exist)
+		getEarliestTimestamp: () => Promise<number | null>;
 		// Record session creation (launched)
 		recordSessionCreated: (event: {
 			sessionId: string;
@@ -2190,7 +2228,7 @@ interface MaestroAPI {
 		// Record session closure
 		recordSessionClosed: (sessionId: string, closedAt: number) => Promise<boolean>;
 		// Get session lifecycle events within a time range
-		getSessionLifecycle: (range: 'day' | 'week' | 'month' | 'year' | 'all') => Promise<
+		getSessionLifecycle: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all') => Promise<
 			Array<{
 				id: string;
 				sessionId: string;
@@ -2202,6 +2240,16 @@ interface MaestroAPI {
 				isRemote?: boolean;
 			}>
 		>;
+		// Get initialization result (for showing database reset notification)
+		getInitializationResult: () => Promise<{
+			success: boolean;
+			wasReset: boolean;
+			backupPath?: string;
+			error?: string;
+			userMessage?: string;
+		} | null>;
+		// Clear initialization result (after user has acknowledged the notification)
+		clearInitializationResult: () => Promise<boolean>;
 	};
 	// Document Graph API (file watching for graph visualization)
 	documentGraph: {
@@ -2216,6 +2264,344 @@ interface MaestroAPI {
 				}>;
 			}) => void
 		) => () => void;
+	};
+	// Symphony API (token donations / open source contributions)
+	symphony: {
+		// Registry operations
+		getRegistry: (forceRefresh?: boolean) => Promise<{
+			success: boolean;
+			registry?: {
+				schemaVersion: '1.0';
+				lastUpdated: string;
+				repositories: Array<{
+					slug: string;
+					name: string;
+					description: string;
+					url: string;
+					category: string;
+					tags?: string[];
+					maintainer: { name: string; url?: string };
+					isActive: boolean;
+					featured?: boolean;
+					addedAt: string;
+				}>;
+			};
+			fromCache?: boolean;
+			cacheAge?: number;
+			error?: string;
+		}>;
+		getIssues: (
+			repoSlug: string,
+			forceRefresh?: boolean
+		) => Promise<{
+			success: boolean;
+			issues?: Array<{
+				number: number;
+				title: string;
+				body: string;
+				url: string;
+				htmlUrl: string;
+				author: string;
+				createdAt: string;
+				updatedAt: string;
+				documentPaths: Array<{
+					name: string;
+					path: string;
+					isExternal: boolean;
+				}>;
+				status: 'available' | 'in_progress' | 'completed';
+				claimedByPr?: {
+					number: number;
+					url: string;
+					author: string;
+					isDraft: boolean;
+				};
+			}>;
+			fromCache?: boolean;
+			cacheAge?: number;
+			error?: string;
+		}>;
+		// State operations
+		getState: () => Promise<{
+			success: boolean;
+			state?: {
+				active: Array<{
+					id: string;
+					repoSlug: string;
+					repoName: string;
+					issueNumber: number;
+					issueTitle: string;
+					localPath: string;
+					branchName: string;
+					draftPrNumber?: number;
+					draftPrUrl?: string;
+					startedAt: string;
+					status: string;
+					progress: {
+						totalDocuments: number;
+						completedDocuments: number;
+						currentDocument?: string;
+						totalTasks: number;
+						completedTasks: number;
+					};
+					tokenUsage: {
+						inputTokens: number;
+						outputTokens: number;
+						estimatedCost: number;
+					};
+					timeSpent: number;
+					sessionId: string;
+					agentType: string;
+					error?: string;
+				}>;
+				history: Array<{
+					id: string;
+					repoSlug: string;
+					repoName: string;
+					issueNumber: number;
+					issueTitle: string;
+					startedAt: string;
+					completedAt: string;
+					prUrl: string;
+					prNumber: number;
+					tokenUsage: {
+						inputTokens: number;
+						outputTokens: number;
+						totalCost: number;
+					};
+					timeSpent: number;
+					documentsProcessed: number;
+					tasksCompleted: number;
+					outcome?: 'merged' | 'closed' | 'open' | 'unknown';
+				}>;
+				stats: {
+					totalContributions: number;
+					totalDocumentsProcessed: number;
+					totalTasksCompleted: number;
+					totalTokensUsed: number;
+					totalTimeSpent: number;
+					estimatedCostDonated: number;
+					repositoriesContributed: string[];
+					firstContributionAt?: string;
+					lastContributionAt?: string;
+					currentStreak: number;
+					longestStreak: number;
+					lastContributionDate?: string;
+				};
+			};
+			error?: string;
+		}>;
+		getActive: () => Promise<{
+			success: boolean;
+			contributions?: Array<{
+				id: string;
+				repoSlug: string;
+				repoName: string;
+				issueNumber: number;
+				issueTitle: string;
+				localPath: string;
+				branchName: string;
+				draftPrNumber?: number;
+				draftPrUrl?: string;
+				startedAt: string;
+				status: string;
+				progress: {
+					totalDocuments: number;
+					completedDocuments: number;
+					currentDocument?: string;
+					totalTasks: number;
+					completedTasks: number;
+				};
+				tokenUsage: {
+					inputTokens: number;
+					outputTokens: number;
+					estimatedCost: number;
+				};
+				timeSpent: number;
+				sessionId: string;
+				agentType: string;
+				error?: string;
+			}>;
+			error?: string;
+		}>;
+		getCompleted: (limit?: number) => Promise<{
+			success: boolean;
+			contributions?: Array<{
+				id: string;
+				repoSlug: string;
+				repoName: string;
+				issueNumber: number;
+				issueTitle: string;
+				startedAt: string;
+				completedAt: string;
+				prUrl: string;
+				prNumber: number;
+				tokenUsage: {
+					inputTokens: number;
+					outputTokens: number;
+					totalCost: number;
+				};
+				timeSpent: number;
+				documentsProcessed: number;
+				tasksCompleted: number;
+				outcome?: 'merged' | 'closed' | 'open' | 'unknown';
+			}>;
+			error?: string;
+		}>;
+		getStats: () => Promise<{
+			success: boolean;
+			stats?: {
+				totalContributions: number;
+				totalDocumentsProcessed: number;
+				totalTasksCompleted: number;
+				totalTokensUsed: number;
+				totalTimeSpent: number;
+				estimatedCostDonated: number;
+				repositoriesContributed: string[];
+				firstContributionAt?: string;
+				lastContributionAt?: string;
+				currentStreak: number;
+				longestStreak: number;
+				lastContributionDate?: string;
+			};
+			error?: string;
+		}>;
+		// Contribution lifecycle
+		start: (params: {
+			repoSlug: string;
+			repoUrl: string;
+			repoName: string;
+			issueNumber: number;
+			issueTitle: string;
+			documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+			agentType: string;
+			sessionId: string;
+			baseBranch?: string;
+			autoRunFolderPath?: string;
+		}) => Promise<{
+			success: boolean;
+			contributionId?: string;
+			localPath?: string;
+			branchName?: string;
+			error?: string;
+		}>;
+		registerActive: (params: {
+			contributionId: string;
+			repoSlug: string;
+			repoName: string;
+			issueNumber: number;
+			issueTitle: string;
+			localPath: string;
+			branchName: string;
+			sessionId: string;
+			agentType: string;
+			totalDocuments: number;
+		}) => Promise<{ success: boolean; error?: string }>;
+		updateStatus: (params: {
+			contributionId: string;
+			status?: string;
+			progress?: {
+				totalDocuments?: number;
+				completedDocuments?: number;
+				currentDocument?: string;
+				totalTasks?: number;
+				completedTasks?: number;
+			};
+			tokenUsage?: {
+				inputTokens?: number;
+				outputTokens?: number;
+				estimatedCost?: number;
+			};
+			timeSpent?: number;
+			error?: string;
+			draftPrNumber?: number;
+			draftPrUrl?: string;
+		}) => Promise<{ success: boolean; updated?: boolean; error?: string }>;
+		complete: (params: { contributionId: string; prBody?: string }) => Promise<{
+			success: boolean;
+			prUrl?: string;
+			prNumber?: number;
+			error?: string;
+		}>;
+		cancel: (
+			contributionId: string,
+			cleanup?: boolean
+		) => Promise<{ success: boolean; cancelled?: boolean; error?: string }>;
+		checkPRStatuses: () => Promise<{
+			success: boolean;
+			checked?: number;
+			merged?: number;
+			closed?: number;
+			errors?: string[];
+			error?: string;
+		}>;
+		syncContribution: (contributionId: string) => Promise<{
+			success: boolean;
+			message?: string;
+			prCreated?: boolean;
+			prMerged?: boolean;
+			prClosed?: boolean;
+			error?: string;
+		}>;
+		// Cache operations
+		clearCache: () => Promise<{ success: boolean; cleared?: boolean; error?: string }>;
+		// Clone and contribution start helpers
+		cloneRepo: (params: {
+			repoUrl: string;
+			localPath: string;
+		}) => Promise<{ success: boolean; error?: string }>;
+		startContribution: (params: {
+			contributionId: string;
+			sessionId: string;
+			repoSlug: string;
+			issueNumber: number;
+			issueTitle: string;
+			localPath: string;
+			documentPaths: Array<{ name: string; path: string; isExternal: boolean }>;
+		}) => Promise<{
+			success: boolean;
+			branchName?: string;
+			draftPrNumber?: number;
+			draftPrUrl?: string;
+			autoRunPath?: string;
+			error?: string;
+		}>;
+		createDraftPR: (params: { contributionId: string; title: string; body: string }) => Promise<{
+			success: boolean;
+			prUrl?: string;
+			prNumber?: number;
+			error?: string;
+		}>;
+		fetchDocumentContent: (
+			url: string
+		) => Promise<{ success: boolean; content?: string; error?: string }>;
+		// Real-time updates
+		onUpdated: (callback: () => void) => () => void;
+		onContributionStarted: (
+			callback: (data: {
+				contributionId: string;
+				sessionId: string;
+				localPath: string;
+				branchName: string;
+			}) => void
+		) => () => void;
+		onPRCreated: (
+			callback: (data: { contributionId: string; prNumber: number; prUrl: string }) => void
+		) => () => void;
+	};
+
+	// Tab Naming API (automatic tab name generation)
+	tabNaming: {
+		generateTabName: (config: {
+			userMessage: string;
+			agentType: string;
+			cwd: string;
+			sessionSshRemoteConfig?: {
+				enabled: boolean;
+				remoteId: string | null;
+				workingDirOverride?: string;
+			};
+		}) => Promise<string | null>;
 	};
 }
 

@@ -46,6 +46,8 @@ import { createProcessApi } from './process';
 import { createGitApi } from './git';
 import { createFsApi } from './fs';
 import { createAgentsApi } from './agents';
+import { createSymphonyApi } from './symphony';
+import { createTabNamingApi } from './tabNaming';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -172,6 +174,12 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// Leaderboard API
 	leaderboard: createLeaderboardApi(),
+
+	// Symphony API (token donations / open source contributions)
+	symphony: createSymphonyApi(),
+
+	// Tab Naming API (automatic tab name generation)
+	tabNaming: createTabNamingApi(),
 });
 
 // Re-export factory functions for external consumers (e.g., tests)
@@ -237,6 +245,10 @@ export {
 	createFsApi,
 	// Agents
 	createAgentsApi,
+	// Symphony
+	createSymphonyApi,
+	// Tab Naming
+	createTabNamingApi,
 };
 
 // Re-export types for TypeScript consumers
@@ -346,7 +358,7 @@ export type {
 	// From notifications
 	NotificationApi,
 	NotificationShowResponse,
-	TtsResponse,
+	NotificationCommandResponse,
 } from './notifications';
 export type {
 	// From leaderboard
@@ -405,3 +417,30 @@ export type {
 	AgentConfig,
 	AgentRefreshResult,
 } from './agents';
+export type {
+	// From symphony
+	SymphonyApi,
+	SymphonyRegistry,
+	SymphonyRepository,
+	SymphonyIssue,
+	DocumentReference,
+	ClaimedByPR,
+	ActiveContribution,
+	CompletedContribution,
+	ContributorStats,
+	ContributionProgress,
+	ContributionTokenUsage,
+	SymphonyState,
+	GetRegistryResponse,
+	GetIssuesResponse,
+	GetStateResponse,
+	StartContributionParams,
+	StartContributionResponse,
+	CreateDraftPRResponse,
+	CompleteContributionResponse,
+} from './symphony';
+export type {
+	// From tabNaming
+	TabNamingApi,
+	TabNamingConfig,
+} from './tabNaming';

@@ -67,13 +67,13 @@ Separate from Conductor ranks, Maestro tracks your **keyboard mastery** based on
 
 | Level | Title | Shortcuts Used |
 |:-----:|-------|----------------|
-| 0 | Novice | 0-19% |
-| 1 | Apprentice | 20-39% |
-| 2 | Journeyman | 40-59% |
-| 3 | Expert | 60-79% |
-| 4 | Master | 80-100% |
+| 0 | Beginner | 0-24% |
+| 1 | Student | 25-49% |
+| 2 | Performer | 50-74% |
+| 3 | Virtuoso | 75-99% |
+| 4 | Keyboard Maestro | 100% |
 
-Your current keyboard mastery level is shown in the status bar. Hover over the keyboard icon to see which shortcuts you've used and which remain to be discovered. See [Keyboard Shortcuts](./keyboard-shortcuts) for the full shortcut reference.
+Your current keyboard mastery level and progress are shown in the **Keyboard Shortcuts panel** (press `?` or `Cmd/Ctrl+/` to open). The panel displays which shortcuts you've used (marked with a checkmark) and which remain to be discovered. See [Keyboard Shortcuts](./keyboard-shortcuts) for the full shortcut reference.
 
 ## Leaderboard
 

@@ -114,6 +114,8 @@ function formatXAxisDate(dateStr: string, timeRange: StatsTimeRange): string {
 			return format(date, 'EEE');
 		case 'month':
 			return format(date, 'MMM d');
+		case 'quarter':
+			return format(date, 'MMM d'); // Show month and day for quarter
 		case 'year':
 			return format(date, 'MMM');
 		case 'all':

@@ -171,7 +171,7 @@ This enables rapid iteration during playbook development.
 
 Local playbooks are visually distinguished in the Playbook Exchange with a blue "Local" badge:
 
-![Playbook Exchange with Local Badge](screenshots/playbook-exchange-list-with-local.png)
+![Playbook Exchange with Local Badge](./screenshots/playbook-exchange-list-with-local.png)
 
 - **Badge:** Blue "Local" badge next to category
 - **Tooltip:** "Custom local playbook" on hover

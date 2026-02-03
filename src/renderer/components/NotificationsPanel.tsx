@@ -1,5 +1,5 @@
-import React, { useState } from 'react';
-import { Bell, Volume2, Clock, Square } from 'lucide-react';
+import React, { useState, useEffect } from 'react';
+import { Bell, Volume2, Clock, Square, Check, AlertCircle, Loader2 } from 'lucide-react';
 import type { Theme } from '../types';
 import { SettingCheckbox } from './SettingCheckbox';
 import { ToggleButtonGroup } from './ToggleButtonGroup';
@@ -16,6 +16,8 @@ interface NotificationsPanelProps {
 	theme: Theme;
 }
 
+type TestStatus = 'idle' | 'running' | 'success' | 'error';
+
 export function NotificationsPanel({
 	osNotificationsEnabled,
 	setOsNotificationsEnabled,
@@ -27,8 +29,36 @@ export function NotificationsPanel({
 	setToastDuration,
 	theme,
 }: NotificationsPanelProps) {
-	// TTS test state
-	const [testTtsId, setTestTtsId] = useState<number | null>(null);
+	// Notification command test state
+	const [testNotificationId, setTestNotificationId] = useState<number | null>(null);
+	const [testStatus, setTestStatus] = useState<TestStatus>('idle');
+	const [testError, setTestError] = useState<string | null>(null);
+
+	// Clear success/error status after a delay
+	useEffect(() => {
+		if (testStatus === 'success' || testStatus === 'error') {
+			const timer = setTimeout(() => {
+				setTestStatus('idle');
+				setTestError(null);
+			}, 3000);
+			return () => clearTimeout(timer);
+		}
+	}, [testStatus]);
+
+	// Listen for notification command completion to reset the Stop button
+	useEffect(() => {
+		if (testNotificationId === null) return;
+
+		const cleanup = window.maestro.notification.onCommandCompleted((completedId) => {
+			if (completedId === testNotificationId) {
+				console.log('[Notification] Command completed, id:', completedId);
+				setTestNotificationId(null);
+				setTestStatus('success');
+			}
+		});
+
+		return cleanup;
+	}, [testNotificationId]);
 
 	return (
 		<div className="space-y-6">
@@ -61,21 +91,21 @@ export function NotificationsPanel({
 				</button>
 			</div>
 
-			{/* Audio Feedback */}
+			{/* Custom Notification */}
 			<div>
 				<SettingCheckbox
 					icon={Volume2}
-					sectionLabel="Audio Feedback"
-					title="Enable Audio Feedback"
-					description="Speak the one-sentence feedback synopsis from LLM analysis using text-to-speech"
+					sectionLabel="Custom Notification"
+					title="Enable Custom Notification"
+					description="Execute a custom command when AI tasks complete, such as text-to-speech feedback"
 					checked={audioFeedbackEnabled}
 					onChange={setAudioFeedbackEnabled}
 					theme={theme}
 				/>
 
-				{/* Audio Command Configuration */}
+				{/* Command Chain Configuration */}
 				<div className="mt-3">
-					<label className="block text-xs font-medium opacity-70 mb-1">TTS Command</label>
+					<label className="block text-xs font-medium opacity-70 mb-1">Command Chain</label>
 					<div className="flex gap-2">
 						<input
 							type="text"
@@ -85,16 +115,20 @@ export function NotificationsPanel({
 							className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 						/>
-						{testTtsId !== null ? (
+						{testNotificationId !== null ? (
 							<button
 								onClick={async () => {
-									console.log('[TTS] Stop test button clicked, ttsId:', testTtsId);
+									console.log(
+										'[Notification] Stop test button clicked, id:',
+										testNotificationId
+									);
 									try {
-										await window.maestro.notification.stopSpeak(testTtsId);
+										await window.maestro.notification.stopSpeak(testNotificationId);
 									} catch (err) {
-										console.error('[TTS] Stop error:', err);
+										console.error('[Notification] Stop error:', err);
 									}
-									setTestTtsId(null);
+									setTestNotificationId(null);
+									setTestStatus('idle');
 								}}
 								className="px-3 py-2 rounded text-xs font-medium transition-all flex items-center gap-1"
 								style={{
@@ -109,42 +143,98 @@ export function NotificationsPanel({
 						) : (
 							<button
 								onClick={async () => {
-									console.log('[TTS] Test button clicked, command:', audioFeedbackCommand);
+									console.log('[Notification] Test button clicked, command:', audioFeedbackCommand);
+									setTestStatus('running');
+									setTestError(null);
 									try {
 										const result = await window.maestro.notification.speak(
 											"Howdy, I'm Maestro, here to conduct your agentic tools into a well-tuned symphony.",
 											audioFeedbackCommand
 										);
-										console.log('[TTS] Speak result:', result);
-										if (result.success && result.ttsId) {
-											setTestTtsId(result.ttsId);
-											// Auto-clear after the message should be done (about 5 seconds for this phrase)
-											setTimeout(() => setTestTtsId(null), 8000);
+										console.log('[Notification] Speak result:', result);
+										if (result.success && result.notificationId) {
+											setTestNotificationId(result.notificationId);
+											// Don't change status to 'success' yet - stay in 'running'
+											// and show Stop button while process is active.
+											// The onCommandCompleted listener will clear testNotificationId
+											// when the process exits, which hides the Stop button.
+										} else {
+											setTestStatus('error');
+											setTestError(result.error || 'Command failed');
 										}
 									} catch (err) {
-										console.error('[TTS] Speak error:', err);
+										console.error('[Notification] Speak error:', err);
+										setTestStatus('error');
+										setTestError(String(err));
 									}
 								}}
-								className="px-3 py-2 rounded text-xs font-medium transition-all"
+								disabled={testStatus === 'running'}
+								className="px-3 py-2 rounded text-xs font-medium transition-all flex items-center gap-1.5 min-w-[70px] justify-center"
 								style={{
-									backgroundColor: theme.colors.bgActivity,
-									color: theme.colors.textMain,
-									border: `1px solid ${theme.colors.border}`,
+									backgroundColor:
+										testStatus === 'success'
+											? theme.colors.success + '20'
+											: testStatus === 'error'
+												? theme.colors.error + '20'
+												: theme.colors.bgActivity,
+									color:
+										testStatus === 'success'
+											? theme.colors.success
+											: testStatus === 'error'
+												? theme.colors.error
+												: theme.colors.textMain,
+									border: `1px solid ${
+										testStatus === 'success'
+											? theme.colors.success
+											: testStatus === 'error'
+												? theme.colors.error
+												: theme.colors.border
+									}`,
+									opacity: testStatus === 'running' ? 0.7 : 1,
 								}}
 							>
-								Test
+								{testStatus === 'running' ? (
+									<>
+										<Loader2 className="w-3 h-3 animate-spin" />
+										Running
+									</>
+								) : testStatus === 'success' ? (
+									<>
+										<Check className="w-3 h-3" />
+										Success
+									</>
+								) : testStatus === 'error' ? (
+									<>
+										<AlertCircle className="w-3 h-3" />
+										Failed
+									</>
+								) : (
+									'Test'
+								)}
 							</button>
 						)}
 					</div>
+					{/* Error message display */}
+					{testError && (
+						<p
+							className="text-xs mt-2 px-2 py-1 rounded"
+							style={{
+								color: theme.colors.error,
+								backgroundColor: theme.colors.error + '10',
+							}}
+						>
+							{testError}
+						</p>
+					)}
 					<p className="text-xs opacity-50 mt-2" style={{ color: theme.colors.textDim }}>
-						Command that accepts text via stdin. Pipes are supported (e.g.,{' '}
+						Command that accepts text via stdin. Chain multiple commands using pipes (e.g.,{' '}
 						<code
 							className="px-1 py-0.5 rounded"
 							style={{ backgroundColor: theme.colors.bgActivity }}
 						>
 							cmd1 | cmd2
 						</code>
-						). Examples:{' '}
+						) to mix and match tools. Default TTS examples:{' '}
 						<code
 							className="px-1 py-0.5 rounded"
 							style={{ backgroundColor: theme.colors.bgActivity }}
@@ -165,6 +255,14 @@ export function NotificationsPanel({
 						>
 							festival --tts
 						</code>
+						. You can also use non-TTS commands or combine them, e.g.,{' '}
+						<code
+							className="px-1 py-0.5 rounded"
+							style={{ backgroundColor: theme.colors.bgActivity }}
+						>
+							tee ~/log.txt | say
+						</code>{' '}
+						to log and speak simultaneously.
 					</p>
 				</div>
 			</div>
@@ -208,8 +306,19 @@ export function NotificationsPanel({
 				<ul className="text-xs opacity-70 space-y-1" style={{ color: theme.colors.textDim }}>
 					<li>• When an AI task completes</li>
 					<li>• When a long-running command finishes</li>
-					<li>• When the LLM analysis generates a feedback synopsis (audio only, if configured)</li>
+					<li>
+						• When the LLM analysis generates a feedback synopsis (custom notification only, if
+						configured)
+					</li>
 				</ul>
+				<div
+					className="text-xs opacity-60 mt-3 pt-3"
+					style={{ color: theme.colors.textDim, borderTop: `1px solid ${theme.colors.border}` }}
+				>
+					<strong>Tip:</strong> The default Command Chain uses TTS (text-to-speech), but you can
+					leverage any notification stack you prefer. Chain commands together with pipes to mix and
+					match—for example, log to a file while also speaking aloud.
+				</div>
 			</div>
 		</div>
 	);

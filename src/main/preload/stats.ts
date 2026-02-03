@@ -178,6 +178,10 @@ export function createStatsApi() {
 		// Get database size in bytes
 		getDatabaseSize: (): Promise<number> => ipcRenderer.invoke('stats:get-database-size'),
 
+		// Get earliest stat timestamp (null if no entries)
+		getEarliestTimestamp: (): Promise<number | null> =>
+			ipcRenderer.invoke('stats:get-earliest-timestamp'),
+
 		// Record session creation (for lifecycle tracking)
 		recordSessionCreated: (event: SessionCreatedEvent): Promise<string | null> =>
 			ipcRenderer.invoke('stats:record-session-created', event),
@@ -201,6 +205,20 @@ export function createStatsApi() {
 				isRemote?: boolean;
 			}>
 		> => ipcRenderer.invoke('stats:get-session-lifecycle', range),
+
+		// Get initialization result (for showing database reset notification)
+		// Returns info about whether the database was reset due to corruption
+		getInitializationResult: (): Promise<{
+			success: boolean;
+			wasReset: boolean;
+			backupPath?: string;
+			error?: string;
+			userMessage?: string;
+		} | null> => ipcRenderer.invoke('stats:get-initialization-result'),
+
+		// Clear initialization result (after user has acknowledged the notification)
+		clearInitializationResult: (): Promise<boolean> =>
+			ipcRenderer.invoke('stats:clear-initialization-result'),
 	};
 }
 

@@ -31,6 +31,9 @@ import {
 	truncatePath,
 } from '../../shared/formatters';
 import { stripAnsiCodes } from '../../shared/stringUtils';
+// SYNC: Uses estimateContextUsage() from shared/contextUsage.ts
+// See that file for the canonical formula and all locations that must stay in sync.
+import { estimateContextUsage } from '../../renderer/utils/contextUsage';
 
 /**
  * Props for SessionStatusBanner component
@@ -85,56 +88,6 @@ function CostTracker({ usageStats }: { usageStats?: UsageStats | null }) {
 }
 
 /**
- * Agents that use combined input+output context windows.
- * OpenAI models (Codex, o3, o4-mini) have a single context window that includes
- * both input and output tokens, unlike Claude which has separate limits.
- */
-const COMBINED_CONTEXT_AGENTS = new Set(['codex']);
-
-/**
- * Calculate context usage percentage from usage stats
- * Returns the percentage of context window used (0-100)
- *
- * Uses agent-specific calculation:
- * - Claude models: input + cacheCreation + cacheRead (output excluded)
- * - OpenAI models (Codex): input + output + cacheRead (combined limit)
- */
-function calculateContextUsage(usageStats?: UsageStats | null, toolType?: string): number | null {
-	if (!usageStats) return null;
-
-	const {
-		inputTokens,
-		outputTokens,
-		cacheReadInputTokens,
-		cacheCreationInputTokens,
-		contextWindow,
-	} = usageStats;
-
-	// Need input and context window to calculate percentage
-	if (
-		inputTokens === undefined ||
-		inputTokens === null ||
-		contextWindow === undefined ||
-		contextWindow === null ||
-		contextWindow === 0
-	) {
-		return null;
-	}
-
-	// Base tokens: input + cache creation + cache read
-	let contextTokens = inputTokens + (cacheCreationInputTokens || 0) + (cacheReadInputTokens || 0);
-
-	// OpenAI models have combined input+output context limits
-	if (toolType && COMBINED_CONTEXT_AGENTS.has(toolType)) {
-		contextTokens += outputTokens || 0;
-	}
-
-	const percentage = Math.min(Math.round((contextTokens / contextWindow) * 100), 100);
-
-	return percentage;
-}
-
-/**
  * Get color for context usage bar based on percentage
  * Green for low usage, yellow for medium, red for high
  */
@@ -157,7 +110,7 @@ function ContextUsageBar({
 }) {
 	const colors = useThemeColors();
 
-	const percentage = calculateContextUsage(usageStats, toolType);
+	const percentage = usageStats ? estimateContextUsage(usageStats, toolType) : null;
 
 	// Don't render if we can't calculate percentage
 	if (percentage === null) {
@@ -361,8 +314,8 @@ function TokenCount({ usageStats }: { usageStats?: UsageStats | null }) {
 				lineHeight: 1,
 				flexShrink: 0,
 			}}
-			title={`Input: ${inputTokens.toLocaleString()} | Output: ${outputTokens.toLocaleString()} | Total: ${totalTokens.toLocaleString()} tokens`}
-			aria-label={`${totalTokens.toLocaleString()} tokens used`}
+			title={`Input: ${inputTokens.toLocaleString('en-US')} | Output: ${outputTokens.toLocaleString('en-US')} | Total: ${totalTokens.toLocaleString('en-US')} tokens`}
+			aria-label={`${totalTokens.toLocaleString('en-US')} tokens used`}
 		>
 			<span style={{ fontSize: '10px' }}>📊</span>
 			<span>{formatTokens(totalTokens)}</span>

@@ -278,7 +278,6 @@ describe('FileExplorerPanel', () => {
 			setSelectedFileIndex: vi.fn(),
 			activeFocus: 'main',
 			activeRightTab: 'files',
-			previewFile: null,
 			setActiveFocus: vi.fn(),
 			fileTreeContainerRef: React.createRef<HTMLDivElement>(),
 			fileTreeFilterInputRef: React.createRef<HTMLInputElement>(),
@@ -889,14 +888,31 @@ describe('FileExplorerPanel', () => {
 	});
 
 	describe('Selected and Keyboard Selected States', () => {
-		it('applies selected style when file is selected in preview', () => {
+		it('applies selected style when file tab is active', () => {
+			// File selection highlighting now uses active file tab (session.activeFileTabId)
+			// Create a session with an active file tab that matches the file path
+			const sessionWithFileTab = createMockSession({
+				activeFileTabId: 'file-tab-1',
+				filePreviewTabs: [
+					{
+						id: 'file-tab-1',
+						path: '/Users/test/project/package.json',
+						name: 'package',
+						extension: '.json',
+						content: '{}',
+						scrollTop: 0,
+						searchQuery: '',
+						editMode: false,
+						editContent: undefined,
+						isLoading: false,
+						lastModified: Date.now(),
+						sshRemoteId: undefined,
+					},
+				],
+			});
 			const props = {
 				...defaultProps,
-				previewFile: {
-					name: 'package.json',
-					content: '{}',
-					path: '/Users/test/project/package.json',
-				},
+				activeSession: sessionWithFileTab,
 			};
 			const { container } = render(<FileExplorerPanel {...props} />);
 			const selectedItem = container.querySelector('[class*="bg-white/10"]');
@@ -1290,8 +1306,9 @@ describe('FileExplorerPanel', () => {
 			expect(screen.getByText('No files found')).toBeInTheDocument();
 		});
 
-		it('handles null previewFile', () => {
-			render(<FileExplorerPanel {...defaultProps} previewFile={null} />);
+		it('handles no active file tab', () => {
+			// When no file tab is active (session.activeFileTabId is null), files should still render
+			render(<FileExplorerPanel {...defaultProps} />);
 			expect(screen.getByText('src')).toBeInTheDocument();
 		});
 

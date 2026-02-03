@@ -1757,7 +1757,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: true,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -1783,7 +1783,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: true,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -1940,7 +1940,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -1965,7 +1965,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -1990,7 +1990,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -2031,7 +2031,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -2058,7 +2058,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: true,
 							saveToHistory: true,
-							showThinking: true,
+							showThinking: 'on',
 						},
 					},
 				}),
@@ -2083,7 +2083,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -2116,7 +2116,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -2144,7 +2144,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),
@@ -2171,7 +2171,7 @@ describe('InputArea', () => {
 						previousUIState: {
 							readOnlyMode: false,
 							saveToHistory: false,
-							showThinking: false,
+							showThinking: 'off',
 						},
 					},
 				}),

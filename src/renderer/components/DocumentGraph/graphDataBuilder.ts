@@ -244,6 +244,12 @@ export interface GraphData {
 	/** Whether backlinks are still being loaded in the background */
 	backlinksLoading?: boolean;
 	/**
+	 * All markdown file paths discovered during scanning (relative to rootPath).
+	 * Used for wiki-link resolution in the preview panel - enables linking to
+	 * files that aren't currently loaded in the graph view.
+	 */
+	allMarkdownFiles: string[];
+	/**
 	 * Start lazy loading of backlinks in the background.
 	 * Call this after the initial graph is displayed.
 	 * @param onUpdate - Callback fired when new backlinks are discovered, with updated graph data
@@ -609,6 +615,11 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
 		sshRemoteId: !!sshRemoteId,
 	});
 
+	// Step 0: Scan all markdown files upfront (fast - just directory traversal, no content parsing)
+	// This enables wiki-link resolution in the preview panel for files not yet loaded in the graph
+	const allMarkdownFiles = await scanMarkdownFiles(rootPath, onProgress, sshRemoteId);
+	console.log(`[DocumentGraph] Found ${allMarkdownFiles.length} markdown files in ${rootPath}`);
+
 	// Track parsed files by path for deduplication
 	const parsedFileMap = new Map<string, ParsedFile>();
 	// BFS queue: [relativePath, depth]
@@ -633,6 +644,7 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
 				totalLinkCount: 0,
 			},
 			internalLinkCount: 0,
+			allMarkdownFiles,
 		};
 	}
 
@@ -989,6 +1001,7 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
 		cachedExternalData,
 		internalLinkCount,
 		backlinksLoading: true,
+		allMarkdownFiles,
 		startBacklinkScan,
 	};
 }

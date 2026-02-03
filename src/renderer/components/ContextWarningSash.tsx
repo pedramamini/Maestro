@@ -96,7 +96,7 @@ export function ContextWarningSash({
 			role="alert"
 			aria-live="polite"
 			aria-label={`Context window at ${contextUsage}% capacity`}
-			className="context-warning-sash flex items-center justify-between px-2 py-1 text-xs rounded-lg"
+			className="context-warning-sash w-full flex items-center justify-between px-2 py-1 text-xs rounded-lg"
 			style={{
 				backgroundColor,
 				border: `1px solid ${borderColor}`,

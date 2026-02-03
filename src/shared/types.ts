@@ -1,7 +1,15 @@
 // Shared type definitions for Maestro CLI and Electron app
 // These types are used by both the CLI tool and the renderer process
 
-export type ToolType = 'claude' | 'claude-code' | 'aider' | 'opencode' | 'codex' | 'terminal';
+export type ToolType = 'claude-code' | 'opencode' | 'codex' | 'terminal' | 'factory-droid';
+
+/**
+ * ThinkingMode controls how AI reasoning/thinking content is displayed.
+ * - 'off': Thinking is suppressed (not shown)
+ * - 'on': Thinking is shown while streaming, cleared when final response arrives
+ * - 'sticky': Thinking is shown and remains visible after the final response
+ */
+export type ThinkingMode = 'off' | 'on' | 'sticky';
 
 // Session group
 export interface Group {

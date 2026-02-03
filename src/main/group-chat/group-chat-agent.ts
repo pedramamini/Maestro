@@ -8,6 +8,7 @@
  * - Participants can collaborate by referencing the shared chat log
  */
 
+import * as os from 'os';
 import { v4 as uuidv4 } from 'uuid';
 import {
 	GroupChatParticipant,
@@ -25,6 +26,8 @@ import {
 	getContextWindowValue,
 } from '../utils/agent-args';
 import { groupChatParticipantPrompt } from '../../prompts';
+import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
+import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 
 /**
  * In-memory store for active participant sessions.
@@ -63,6 +66,12 @@ export interface SessionOverrides {
 	customEnvVars?: Record<string, string>;
 	/** SSH remote name for display in participant card */
 	sshRemoteName?: string;
+	/** Full SSH remote config for remote execution */
+	sshRemoteConfig?: {
+		enabled: boolean;
+		remoteId: string | null;
+		workingDirOverride?: string;
+	};
 }
 
 /**
@@ -76,7 +85,8 @@ export interface SessionOverrides {
  * @param agentDetector - Optional agent detector for resolving agent paths
  * @param agentConfigValues - Optional agent config values (from config store)
  * @param customEnvVars - Optional custom environment variables for the agent (deprecated, use sessionOverrides)
- * @param sessionOverrides - Optional session-specific overrides (customModel, customArgs, customEnvVars)
+ * @param sessionOverrides - Optional session-specific overrides (customModel, customArgs, customEnvVars, sshRemoteConfig)
+ * @param sshStore - Optional SSH settings store for remote execution support
  * @returns The created participant
  */
 export async function addParticipant(
@@ -84,11 +94,12 @@ export async function addParticipant(
 	name: string,
 	agentId: string,
 	processManager: IProcessManager,
-	cwd: string = process.env.HOME || '/tmp',
+	cwd: string = os.homedir(),
 	agentDetector?: AgentDetector,
 	agentConfigValues?: Record<string, any>,
 	customEnvVars?: Record<string, string>,
-	sessionOverrides?: SessionOverrides
+	sessionOverrides?: SessionOverrides,
+	sshStore?: SshRemoteSettingsStore
 ): Promise<GroupChatParticipant> {
 	console.log(`[GroupChat:Debug] ========== ADD PARTICIPANT ==========`);
 	console.log(`[GroupChat:Debug] Group Chat ID: ${groupChatId}`);
@@ -163,18 +174,52 @@ export async function addParticipant(
 	const sessionId = `group-chat-${groupChatId}-participant-${name}-${uuidv4()}`;
 	console.log(`[GroupChat:Debug] Generated session ID: ${sessionId}`);
 
+	// Wrap spawn config with SSH if configured
+	let spawnCommand = command;
+	let spawnArgs = configResolution.args;
+	let spawnCwd = cwd;
+	let spawnPrompt: string | undefined = prompt;
+	let spawnEnvVars = configResolution.effectiveCustomEnvVars ?? effectiveEnvVars;
+
+	// Apply SSH wrapping if SSH is configured and store is available
+	if (sshStore && sessionOverrides?.sshRemoteConfig) {
+		console.log(`[GroupChat:Debug] Applying SSH wrapping for participant...`);
+		const sshWrapped = await wrapSpawnWithSsh(
+			{
+				command,
+				args: configResolution.args,
+				cwd,
+				prompt,
+				customEnvVars: configResolution.effectiveCustomEnvVars ?? effectiveEnvVars,
+				promptArgs: agentConfig?.promptArgs,
+				noPromptSeparator: agentConfig?.noPromptSeparator,
+				agentBinaryName: agentConfig?.binaryName,
+			},
+			sessionOverrides.sshRemoteConfig,
+			sshStore
+		);
+		spawnCommand = sshWrapped.command;
+		spawnArgs = sshWrapped.args;
+		spawnCwd = sshWrapped.cwd;
+		spawnPrompt = sshWrapped.prompt;
+		spawnEnvVars = sshWrapped.customEnvVars;
+		if (sshWrapped.sshRemoteUsed) {
+			console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
+		}
+	}
+
 	// Spawn the participant agent
 	console.log(`[GroupChat:Debug] Spawning participant agent...`);
 	const result = processManager.spawn({
 		sessionId,
 		toolType: agentId,
-		cwd,
-		command,
-		args: configResolution.args,
+		cwd: spawnCwd,
+		command: spawnCommand,
+		args: spawnArgs,
 		readOnlyMode: false, // Participants can make changes
-		prompt,
+		prompt: spawnPrompt,
 		contextWindow: getContextWindowValue(agentConfig, agentConfigValues || {}),
-		customEnvVars: configResolution.effectiveCustomEnvVars ?? effectiveEnvVars,
+		customEnvVars: spawnEnvVars,
 		promptArgs: agentConfig?.promptArgs,
 		noPromptSeparator: agentConfig?.noPromptSeparator,
 	});

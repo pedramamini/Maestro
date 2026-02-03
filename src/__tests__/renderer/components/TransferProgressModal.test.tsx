@@ -37,7 +37,7 @@ vi.mock('../../../renderer/services/contextGroomer', () => ({
 			'claude-code': 'Claude Code',
 			opencode: 'OpenCode',
 			codex: 'OpenAI Codex',
-			aider: 'Aider',
+			'factory-droid': 'Factory Droid',
 			terminal: 'Terminal',
 		};
 		return names[toolType] || toolType;

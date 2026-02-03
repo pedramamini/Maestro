@@ -44,13 +44,15 @@ interface TourStepProps {
  */
 function calculateTooltipPosition(
 	spotlight: SpotlightInfo | null,
-	preferredPosition: TourStepConfig['position']
+	preferredPosition: TourStepConfig['position'],
+	hasExtraContent?: boolean
 ): {
 	position: 'top' | 'bottom' | 'left' | 'right' | 'center' | 'center-overlay';
 	style: React.CSSProperties;
 } {
-	const tooltipWidth = 360;
-	const tooltipHeight = 240; // Estimated max height
+	// Wider tooltip when there's extra JSX content
+	const tooltipWidth = hasExtraContent ? 480 : 360;
+	const tooltipHeight = hasExtraContent ? 320 : 240; // Estimated max height
 	const margin = 16;
 
 	// If no spotlight, center the tooltip on screen
@@ -253,12 +255,20 @@ export function TourStep({
 	fromWizard = false,
 	shortcuts,
 }: TourStepProps): JSX.Element {
-	const { position, style } = calculateTooltipPosition(spotlight, step.position);
-
 	// Use wizard-specific description if fromWizard, otherwise use generic (or fall back to description)
 	const rawDescription = fromWizard
 		? step.description
 		: step.descriptionGeneric || step.description;
+
+	// Get optional JSX content based on context
+	const descriptionContent = fromWizard
+		? step.descriptionContent
+		: step.descriptionContentGeneric || step.descriptionContent;
+
+	// Determine if we have extra content (for wider tooltip)
+	const hasExtraContent = !!descriptionContent;
+
+	const { position, style } = calculateTooltipPosition(spotlight, step.position, hasExtraContent);
 
 	// Replace shortcut placeholders with formatted shortcuts
 	const description = shortcuts
@@ -328,10 +338,19 @@ export function TourStep({
 					{step.title}
 				</h3>
 
-				{/* Description */}
-				<p className="text-sm leading-relaxed mb-5" style={{ color: theme.colors.textDim }}>
-					{description}
-				</p>
+				{/* Description - render newlines as line breaks */}
+				<div className="text-sm leading-relaxed mb-5" style={{ color: theme.colors.textDim }}>
+					<p>
+						{description.split('\n').map((line, i, arr) => (
+							<span key={i}>
+								{line}
+								{i < arr.length - 1 && <br />}
+							</span>
+						))}
+					</p>
+					{/* Optional JSX content (e.g., inline icons) */}
+					{descriptionContent && <div className="mt-3">{descriptionContent}</div>}
+				</div>
 
 				{/* Navigation buttons */}
 				<div className="flex items-center justify-between">

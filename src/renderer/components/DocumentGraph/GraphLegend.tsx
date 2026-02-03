@@ -6,7 +6,7 @@
  * - External link nodes: Smaller pill-shaped nodes with domain
  * - Internal edges: Solid lines connecting markdown documents
  * - External edges: Dashed lines connecting to external domains
- * - Keyboard shortcuts: Arrow keys to navigate, Enter to recenter, O to open
+ * - Keyboard shortcuts: Arrow keys to navigate, Enter to preview, O to open
  *
  * The legend is theme-aware and uses the same colors as the actual mind map elements.
  */
@@ -85,20 +85,24 @@ const KEYBOARD_SHORTCUTS: KeyboardShortcutItem[] = [
 		description: 'Navigate between nodes',
 	},
 	{
+		keys: 'Space',
+		description: 'Focus node in graph',
+	},
+	{
 		keys: 'Enter',
-		description: 'Recenter on focused node',
+		description: 'Preview document in-graph',
 	},
 	{
 		keys: 'O',
-		description: 'Open file in preview',
+		description: 'Open in main preview',
+	},
+	{
+		keys: 'Esc',
+		description: 'Close preview / modal',
 	},
 	{
 		keys: '⌘F',
 		description: 'Focus search',
-	},
-	{
-		keys: 'Esc',
-		description: 'Close panel / modal',
 	},
 ];
 

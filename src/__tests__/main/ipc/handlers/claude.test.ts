@@ -156,12 +156,13 @@ describe('Claude IPC handlers', () => {
 			// Line 1025: ipcMain.handle('claude:deleteMessagePair', ...)   - Delete a message pair from session
 			// Line 1192: ipcMain.handle('claude:searchSessions', ...)      - Search sessions by query
 			// Line 1337: ipcMain.handle('claude:getCommands', ...)         - Get available slash commands
-			// Line 1422: ipcMain.handle('claude:registerSessionOrigin', ...)  - Register session origin (user/auto)
-			// Line 1438: ipcMain.handle('claude:updateSessionName', ...)   - Update session name
-			// Line 1459: ipcMain.handle('claude:updateSessionStarred', ...)  - Update session starred status
-			// Line 1461: ipcMain.handle('claude:updateSessionContextUsage', ...)  - Update context usage percentage
-			// Line 1482: ipcMain.handle('claude:getSessionOrigins', ...)   - Get session origins for a project
-			// Line 1490: ipcMain.handle('claude:getAllNamedSessions', ...)  - Get all sessions with names
+			// Line 1463: ipcMain.handle('claude:getSkills', ...)           - Get available Claude skills
+			// Line 1575: ipcMain.handle('claude:registerSessionOrigin', ...)  - Register session origin (user/auto)
+			// Line 1601: ipcMain.handle('claude:updateSessionName', ...)   - Update session name
+			// Line 1629: ipcMain.handle('claude:updateSessionStarred', ...)  - Update session starred status
+			// Line 1657: ipcMain.handle('claude:updateSessionContextUsage', ...)  - Update context usage percentage
+			// Line 1681: ipcMain.handle('claude:getSessionOrigins', ...)   - Get session origins for a project
+			// Line 1691: ipcMain.handle('claude:getAllNamedSessions', ...)  - Get all sessions with names
 			const expectedChannels = [
 				'claude:listSessions',
 				'claude:listSessionsPaginated',
@@ -172,6 +173,7 @@ describe('Claude IPC handlers', () => {
 				'claude:deleteMessagePair',
 				'claude:searchSessions',
 				'claude:getCommands',
+				'claude:getSkills',
 				'claude:registerSessionOrigin',
 				'claude:updateSessionName',
 				'claude:updateSessionStarred',

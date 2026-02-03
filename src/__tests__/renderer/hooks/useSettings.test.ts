@@ -138,6 +138,13 @@ describe('useSettings', () => {
 			expect(result.current.disableConfetti).toBe(false);
 		});
 
+		it('should have correct default values for tab naming settings', async () => {
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			expect(result.current.automaticTabNamingEnabled).toBe(true);
+		});
+
 		it('should have default shortcuts', async () => {
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
@@ -392,6 +399,17 @@ describe('useSettings', () => {
 			expect(result.current.disableGpuAcceleration).toBe(true);
 			expect(result.current.disableConfetti).toBe(true);
 		});
+
+		it('should load tab naming settings from saved values', async () => {
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				automaticTabNamingEnabled: false,
+			});
+
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			expect(result.current.automaticTabNamingEnabled).toBe(false);
+		});
 	});
 
 	describe('setter functions - LLM settings', () => {
@@ -622,6 +640,28 @@ describe('useSettings', () => {
 			expect(result.current.maxOutputLines).toBe(50);
 			expect(window.maestro.settings.set).toHaveBeenCalledWith('maxOutputLines', 50);
 		});
+
+		it('should treat null maxOutputLines as Infinity (JSON serialization of Infinity)', async () => {
+			// When user selects "All" (Infinity) in the UI, it gets serialized as null in JSON
+			// because JSON.stringify(Infinity) produces null. On reload, we should restore Infinity.
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				maxOutputLines: null,
+			});
+
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			expect(result.current.maxOutputLines).toBe(Infinity);
+		});
+
+		it('should keep default (25) when maxOutputLines is undefined', async () => {
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({});
+
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			expect(result.current.maxOutputLines).toBe(25);
+		});
 	});
 
 	describe('setter functions - notification settings', () => {
@@ -750,6 +790,40 @@ describe('useSettings', () => {
 
 			expect(result.current.disableConfetti).toBe(true);
 			expect(window.maestro.settings.set).toHaveBeenCalledWith('disableConfetti', true);
+		});
+	});
+
+	describe('setter functions - tab naming settings', () => {
+		it('should update automaticTabNamingEnabled and persist to settings', async () => {
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			// Default is true, so toggle to false
+			act(() => {
+				result.current.setAutomaticTabNamingEnabled(false);
+			});
+
+			expect(result.current.automaticTabNamingEnabled).toBe(false);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('automaticTabNamingEnabled', false);
+		});
+
+		it('should toggle automaticTabNamingEnabled back to true', async () => {
+			// Start with false
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				automaticTabNamingEnabled: false,
+			});
+
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			expect(result.current.automaticTabNamingEnabled).toBe(false);
+
+			act(() => {
+				result.current.setAutomaticTabNamingEnabled(true);
+			});
+
+			expect(result.current.automaticTabNamingEnabled).toBe(true);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('automaticTabNamingEnabled', true);
 		});
 	});
 
@@ -1292,6 +1366,61 @@ describe('useSettings', () => {
 			await waitForSettingsLoaded(result);
 
 			expect(document.documentElement.style.fontSize).toBe('20px');
+		});
+	});
+
+	describe('system resume behavior', () => {
+		it('should register onSystemResume listener on mount', async () => {
+			renderHook(() => useSettings());
+
+			expect(window.maestro.app.onSystemResume).toHaveBeenCalled();
+		});
+
+		it('should reload settings when system resumes from sleep', async () => {
+			// Capture the callback passed to onSystemResume
+			let resumeCallback: (() => void) | undefined;
+			vi.mocked(window.maestro.app.onSystemResume).mockImplementation((cb) => {
+				resumeCallback = cb;
+				return () => {};
+			});
+
+			// Initial load with default settings
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				maxOutputLines: 25,
+			});
+
+			const { result } = renderHook(() => useSettings());
+			await waitForSettingsLoaded(result);
+
+			expect(result.current.maxOutputLines).toBe(25);
+
+			// Simulate settings change while asleep (user may have changed via another method)
+			// In the real bug, the setting was being reset, so simulate that by changing
+			// the mock to return a different value on next load
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				maxOutputLines: 0, // 0 means "ALL" in the UI
+			});
+
+			// Trigger system resume
+			await act(async () => {
+				resumeCallback?.();
+				// Allow async operations to complete
+				await new Promise((resolve) => setTimeout(resolve, 0));
+			});
+
+			// Settings should be reloaded with the new value
+			expect(result.current.maxOutputLines).toBe(0);
+		});
+
+		it('should cleanup onSystemResume listener on unmount', async () => {
+			const cleanupFn = vi.fn();
+			vi.mocked(window.maestro.app.onSystemResume).mockReturnValue(cleanupFn);
+
+			const { unmount } = renderHook(() => useSettings());
+
+			unmount();
+
+			expect(cleanupFn).toHaveBeenCalled();
 		});
 	});
 

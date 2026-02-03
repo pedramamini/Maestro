@@ -132,7 +132,21 @@ export function registerContextHandlers(deps: ContextHandlerDependencies): void 
 		'context:groomContext',
 		withIpcErrorLogging(
 			handlerOpts('groomContext'),
-			async (projectRoot: string, agentType: string, prompt: string): Promise<string> => {
+			async (
+				projectRoot: string,
+				agentType: string,
+				prompt: string,
+				options?: {
+					sshRemoteConfig?: {
+						enabled: boolean;
+						remoteId: string | null;
+						workingDirOverride?: string;
+					};
+					customPath?: string;
+					customArgs?: string;
+					customEnvVars?: Record<string, string>;
+				}
+			): Promise<string> => {
 				const processManager = requireDependency(getProcessManager, 'Process manager');
 				const agentDetector = requireDependency(getAgentDetector, 'Agent detector');
 
@@ -142,6 +156,11 @@ export function registerContextHandlers(deps: ContextHandlerDependencies): void 
 						projectRoot,
 						agentType,
 						prompt,
+						// Pass SSH and custom config for remote execution support
+						sessionSshRemoteConfig: options?.sshRemoteConfig,
+						sessionCustomPath: options?.customPath,
+						sessionCustomArgs: options?.customArgs,
+						sessionCustomEnvVars: options?.customEnvVars,
 					},
 					processManager,
 					agentDetector

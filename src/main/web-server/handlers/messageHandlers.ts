@@ -352,12 +352,14 @@ export class WebSocketMessageHandler {
 		this.callbacks
 			.selectSession(sessionId, tabId)
 			.then((success) => {
-				this.send(client, { type: 'select_session_result', success, sessionId });
 				if (success) {
-					logger.debug(`Session ${sessionId} selected in desktop`, LOG_CONTEXT);
+					// Subscribe client to this session's output so they receive session_output messages
+					client.subscribedSessionId = sessionId;
+					logger.debug(`Session ${sessionId} selected in desktop, client subscribed`, LOG_CONTEXT);
 				} else {
 					logger.warn(`Failed to select session ${sessionId} in desktop`, LOG_CONTEXT);
 				}
+				this.send(client, { type: 'select_session_result', success, sessionId });
 			})
 			.catch((error) => {
 				this.sendError(client, `Failed to select session: ${error.message}`);

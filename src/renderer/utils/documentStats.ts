@@ -209,7 +209,7 @@ const MAX_CONTENT_PREVIEW_LENGTH = 600;
 
 /**
  * Strip markdown syntax from content and return plaintext.
- * Removes: headings, bold/italic, links, images, code blocks, blockquotes, lists, etc.
+ * Removes: headings, bold/italic, links, images, code blocks, blockquotes, lists, tables, etc.
  *
  * @param content - Markdown content
  * @returns Plaintext version of the content
@@ -225,6 +225,13 @@ function stripMarkdownSyntax(content: string): string {
 
 	// Remove inline code (`code`)
 	text = text.replace(/`[^`]+`/g, '');
+
+	// Remove markdown tables entirely (header row, separator row, and data rows)
+	// Match lines that start with optional whitespace and a pipe character
+	// Tables typically have: | col1 | col2 | followed by |---|---| separator
+	text = text.replace(/^\s*\|.+\|\s*$/gm, '');
+	// Also remove table separator lines like |---|---|
+	text = text.replace(/^\s*\|[-:\s|]+\|\s*$/gm, '');
 
 	// Remove images ![alt](url)
 	text = text.replace(/!\[[^\]]*\]\([^)]+\)/g, '');

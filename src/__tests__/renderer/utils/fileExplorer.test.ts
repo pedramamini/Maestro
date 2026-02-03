@@ -5,6 +5,8 @@ import {
 	getAllFolderPaths,
 	flattenTree,
 	compareFileTrees,
+	matchGlobPattern,
+	shouldIgnore,
 	FileTreeNode,
 } from '../../../renderer/utils/fileExplorer';
 
@@ -909,6 +911,158 @@ describe('fileExplorer utils', () => {
 			expect(result.newFolders).toBe(2); // b and c
 			expect(result.newFiles).toBe(1); // deep.txt
 			expect(result.totalChanges).toBe(3);
+		});
+	});
+
+	// ============================================================================
+	// matchGlobPattern
+	// ============================================================================
+	describe('matchGlobPattern', () => {
+		describe('exact matches', () => {
+			it('matches exact string', () => {
+				expect(matchGlobPattern('.git', '.git')).toBe(true);
+				expect(matchGlobPattern('node_modules', 'node_modules')).toBe(true);
+			});
+
+			it('does not match different strings', () => {
+				expect(matchGlobPattern('.git', '.gitignore')).toBe(false);
+				expect(matchGlobPattern('node_modules', 'node')).toBe(false);
+			});
+		});
+
+		describe('wildcard (*) patterns', () => {
+			it('matches prefix wildcard', () => {
+				expect(matchGlobPattern('*.log', 'error.log')).toBe(true);
+				expect(matchGlobPattern('*.log', 'access.log')).toBe(true);
+				expect(matchGlobPattern('*.log', 'debug.log')).toBe(true);
+			});
+
+			it('does not match wrong extension with prefix wildcard', () => {
+				expect(matchGlobPattern('*.log', 'file.txt')).toBe(false);
+				expect(matchGlobPattern('*.log', 'log.txt')).toBe(false);
+			});
+
+			it('matches suffix wildcard', () => {
+				expect(matchGlobPattern('test_*', 'test_file')).toBe(true);
+				expect(matchGlobPattern('test_*', 'test_data.txt')).toBe(true);
+			});
+
+			it('does not match wrong prefix with suffix wildcard', () => {
+				expect(matchGlobPattern('test_*', 'my_test_file')).toBe(false);
+				expect(matchGlobPattern('test_*', 'file_test')).toBe(false);
+			});
+
+			it('matches infix wildcard (contains pattern)', () => {
+				expect(matchGlobPattern('*cache*', 'cache')).toBe(true);
+				expect(matchGlobPattern('*cache*', '.cache')).toBe(true);
+				expect(matchGlobPattern('*cache*', '__pycache__')).toBe(true);
+				expect(matchGlobPattern('*cache*', 'node_cache_dir')).toBe(true);
+			});
+
+			it('does not match non-containing strings for infix wildcard', () => {
+				expect(matchGlobPattern('*cache*', 'temporary')).toBe(false);
+				expect(matchGlobPattern('*cache*', 'cach')).toBe(false);
+			});
+
+			it('matches multiple wildcards', () => {
+				expect(matchGlobPattern('*test*.log', 'unit_test_results.log')).toBe(true);
+				expect(matchGlobPattern('*test*.log', 'test.log')).toBe(true);
+			});
+		});
+
+		describe('question mark (?) patterns', () => {
+			it('matches single character', () => {
+				expect(matchGlobPattern('file?.txt', 'file1.txt')).toBe(true);
+				expect(matchGlobPattern('file?.txt', 'fileA.txt')).toBe(true);
+			});
+
+			it('does not match wrong number of characters', () => {
+				expect(matchGlobPattern('file?.txt', 'file.txt')).toBe(false);
+				expect(matchGlobPattern('file?.txt', 'file12.txt')).toBe(false);
+			});
+
+			it('matches multiple question marks', () => {
+				expect(matchGlobPattern('???.txt', 'abc.txt')).toBe(true);
+				expect(matchGlobPattern('???.txt', '123.txt')).toBe(true);
+			});
+
+			it('does not match with wrong character count', () => {
+				expect(matchGlobPattern('???.txt', 'ab.txt')).toBe(false);
+				expect(matchGlobPattern('???.txt', 'abcd.txt')).toBe(false);
+			});
+		});
+
+		describe('combined patterns', () => {
+			it('handles * and ? together', () => {
+				expect(matchGlobPattern('*.?s', 'file.ts')).toBe(true);
+				expect(matchGlobPattern('*.?s', 'app.js')).toBe(true);
+				expect(matchGlobPattern('*.?s', 'main.cs')).toBe(true);
+			});
+
+			it('handles special regex characters in pattern', () => {
+				expect(matchGlobPattern('.git', '.git')).toBe(true);
+				expect(matchGlobPattern('file[1].txt', 'file[1].txt')).toBe(true);
+				expect(matchGlobPattern('a+b.txt', 'a+b.txt')).toBe(true);
+			});
+		});
+
+		describe('case sensitivity', () => {
+			it('is case insensitive for user-friendliness', () => {
+				expect(matchGlobPattern('*.LOG', 'file.log')).toBe(true);
+				expect(matchGlobPattern('*.log', 'file.LOG')).toBe(true);
+				expect(matchGlobPattern('.Git', '.git')).toBe(true);
+				expect(matchGlobPattern('NODE_MODULES', 'node_modules')).toBe(true);
+			});
+		});
+	});
+
+	// ============================================================================
+	// shouldIgnore
+	// ============================================================================
+	describe('shouldIgnore', () => {
+		it('returns false for empty patterns array', () => {
+			expect(shouldIgnore('anyfile', [])).toBe(false);
+			expect(shouldIgnore('.git', [])).toBe(false);
+		});
+
+		it('returns true when name matches any pattern', () => {
+			const patterns = ['.git', '*cache*', 'node_modules'];
+			expect(shouldIgnore('.git', patterns)).toBe(true);
+			expect(shouldIgnore('__pycache__', patterns)).toBe(true);
+			expect(shouldIgnore('node_modules', patterns)).toBe(true);
+		});
+
+		it('returns false when name matches no patterns', () => {
+			const patterns = ['.git', '*cache*', 'node_modules'];
+			expect(shouldIgnore('src', patterns)).toBe(false);
+			expect(shouldIgnore('README.md', patterns)).toBe(false);
+			expect(shouldIgnore('package.json', patterns)).toBe(false);
+		});
+
+		it('handles default SSH ignore patterns', () => {
+			const defaultPatterns = ['.git', '.*cache*'];
+			expect(shouldIgnore('.git', defaultPatterns)).toBe(true);
+			expect(shouldIgnore('.cache', defaultPatterns)).toBe(true);
+			expect(shouldIgnore('.__pycache__', defaultPatterns)).toBe(true);
+			expect(shouldIgnore('.pytest_cache', defaultPatterns)).toBe(true);
+			expect(shouldIgnore('src', defaultPatterns)).toBe(false);
+			// Does not match cache dirs without leading dot
+			expect(shouldIgnore('__pycache__', defaultPatterns)).toBe(false);
+		});
+
+		it('handles multiple specific patterns', () => {
+			const patterns = ['*.log', '*.tmp', 'temp_*'];
+			expect(shouldIgnore('error.log', patterns)).toBe(true);
+			expect(shouldIgnore('backup.tmp', patterns)).toBe(true);
+			expect(shouldIgnore('temp_file', patterns)).toBe(true);
+			expect(shouldIgnore('main.ts', patterns)).toBe(false);
+		});
+
+		it('returns true on first matching pattern', () => {
+			const patterns = ['first', 'second', 'third'];
+			expect(shouldIgnore('first', patterns)).toBe(true);
+			expect(shouldIgnore('second', patterns)).toBe(true);
+			expect(shouldIgnore('third', patterns)).toBe(true);
 		});
 	});
 });

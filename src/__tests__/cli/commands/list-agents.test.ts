@@ -78,7 +78,7 @@ describe('list-agents command', () => {
 		it('should display agents in human-readable format', () => {
 			const mockSessions: SessionInfo[] = [
 				mockSession({ id: 'a1', name: 'Agent One', toolType: 'claude-code' }),
-				mockSession({ id: 'a2', name: 'Agent Two', toolType: 'aider' }),
+				mockSession({ id: 'a2', name: 'Agent Two', toolType: 'factory-droid' }),
 			];
 			vi.mocked(readSessions).mockReturnValue(mockSessions);
 
@@ -423,7 +423,7 @@ describe('list-agents command', () => {
 		});
 
 		it('should handle all tool types', () => {
-			const toolTypes = ['claude-code', 'aider', 'terminal', 'gemini-cli', 'qwen3-coder'];
+			const toolTypes = ['claude-code', 'factory-droid', 'terminal', 'gemini-cli', 'qwen3-coder'];
 			const mockSessions: SessionInfo[] = toolTypes.map((toolType, i) =>
 				mockSession({ id: `agent-${i}`, name: `Agent ${i}`, toolType: toolType as any })
 			);

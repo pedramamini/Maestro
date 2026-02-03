@@ -235,7 +235,42 @@ Continue with implementation.`);
 			expect(mockGroomContext).toHaveBeenCalledWith(
 				'/test/project',
 				'claude-code',
-				expect.stringContaining('How do I implement X?')
+				expect.stringContaining('How do I implement X?'),
+				// 4th param is options object (SSH/custom config)
+				expect.any(Object)
+			);
+		});
+
+		it('should pass SSH and custom config options to groomContext', async () => {
+			const requestWithSshConfig = {
+				...baseRequest,
+				sshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+					workingDirOverride: '/remote/path',
+				},
+				customPath: '/custom/agent',
+				customArgs: '--flag',
+				customEnvVars: { MY_VAR: 'value' },
+			};
+
+			const logs = [createMockLog({ text: 'Test content' })];
+			await service.summarizeContext(requestWithSshConfig, logs, () => {});
+
+			expect(mockGroomContext).toHaveBeenCalledWith(
+				'/test/project',
+				'claude-code',
+				expect.any(String),
+				{
+					sshRemoteConfig: {
+						enabled: true,
+						remoteId: 'remote-1',
+						workingDirOverride: '/remote/path',
+					},
+					customPath: '/custom/agent',
+					customArgs: '--flag',
+					customEnvVars: { MY_VAR: 'value' },
+				}
 			);
 		});
 

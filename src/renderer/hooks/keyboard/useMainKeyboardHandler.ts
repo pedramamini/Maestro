@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import type { Session, AITab } from '../../types';
+import type { Session, AITab, ThinkingMode } from '../../types';
 import { getInitialRenameValue } from '../../utils/tabHelpers';
 
 /**
@@ -99,6 +99,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					(keyLower === 'f' || keyLower === 'h' || keyLower === 's');
 				// Allow jumpToBottom (Cmd+Shift+J) from anywhere - always scroll main panel to bottom
 				const isJumpToBottomShortcut = (e.metaKey || e.ctrlKey) && e.shiftKey && keyLower === 'j';
+				// Allow markdown toggle (Cmd+E) for chat history, even when overlays are open
+				// (e.g., when output search is open, user should still be able to toggle markdown mode)
+				const isMarkdownToggleShortcut =
+					(e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && keyLower === 'e';
 				// Allow system utility shortcuts (Alt+Cmd+L for logs, Alt+Cmd+P for processes) even when modals are open
 				// NOTE: Must use e.code for Alt key combos on macOS because e.key produces special characters (e.g., Alt+P = π)
 				const codeKeyLower = e.code?.replace('Key', '').toLowerCase() || '';
@@ -110,6 +114,20 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				// NOTE: Must use e.code for Alt key combos on macOS because e.key produces special characters
 				const isSessionJumpShortcut =
 					e.altKey && (e.metaKey || e.ctrlKey) && /^Digit[0-9]$/.test(e.code || '');
+				// Allow tab management shortcuts even when file preview overlay is open:
+				// - Cmd+T: new tab
+				// - Cmd+W: close tab
+				// - Cmd+Shift+T: reopen closed tab
+				const isTabManagementShortcut =
+					(e.metaKey || e.ctrlKey) &&
+					!e.altKey &&
+					((keyLower === 't' && !e.shiftKey) || // Cmd+T
+						keyLower === 'w' || // Cmd+W (with or without shift)
+						(keyLower === 't' && e.shiftKey)); // Cmd+Shift+T
+				// Allow tab switcher shortcut (Alt+Cmd+T) even when file preview is open
+				// NOTE: Must use e.code for Alt key combos on macOS because e.key produces special characters
+				const isTabSwitcherShortcut =
+					e.altKey && (e.metaKey || e.ctrlKey) && !e.shiftKey && codeKeyLower === 't';
 
 				if (ctx.hasOpenModal()) {
 					// TRUE MODAL is open - block most shortcuts from App.tsx
@@ -125,17 +143,21 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					}
 					// Fall through to handle layout/system utility/session jump/jumpToBottom shortcuts below
 				} else {
-					// Only OVERLAYS are open (FilePreview, LogViewer, etc.)
+					// Only OVERLAYS are open (file tabs, LogViewer, etc.)
 					// Allow Cmd+Shift+[] to fall through to App.tsx handler
-					// (which will cycle right panel tabs when previewFile is set)
+					// (which will cycle right panel tabs when file tab is active)
 					// Also allow right panel tab shortcuts to switch tabs while overlay is open
+					// Also allow tab management shortcuts (Cmd+T/W, Alt+Cmd+T tab switcher) from file preview
 					if (
 						!isCycleShortcut &&
 						!isLayoutShortcut &&
 						!isRightPanelShortcut &&
 						!isSystemUtilShortcut &&
 						!isSessionJumpShortcut &&
-						!isJumpToBottomShortcut
+						!isJumpToBottomShortcut &&
+						!isMarkdownToggleShortcut &&
+						!isTabManagementShortcut &&
+						!isTabSwitcherShortcut
 					) {
 						return;
 					}
@@ -373,6 +395,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setUsageDashboardOpen(true);
 				trackShortcut('usageDashboard');
+			} else if (ctx.isShortcut(e, 'openSymphony')) {
+				e.preventDefault();
+				ctx.setSymphonyModalOpen(true);
+				trackShortcut('openSymphony');
 			} else if (ctx.isShortcut(e, 'jumpToBottom')) {
 				e.preventDefault();
 				// Jump to the bottom of the current main panel output (AI logs or terminal output)
@@ -381,7 +407,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			} else if (ctx.isShortcut(e, 'toggleMarkdownMode')) {
 				// Toggle markdown raw mode for AI message history
 				// Skip when in AutoRun panel (it has its own Cmd+E handler for edit/preview toggle)
-				// Skip when FilePreview is open (it handles its own Cmd+E)
+				// Skip when file tab is active (it handles its own Cmd+E)
 				// Skip when Auto Run is running (editing is locked)
 				// Check both state-based detection AND DOM-based detection for robustness
 				const isInAutoRunPanel = ctx.activeFocus === 'right' && ctx.activeRightTab === 'autorun';
@@ -391,9 +417,12 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				// Check if Auto Run is running and editing is locked (running without worktree)
 				const isAutoRunLocked =
 					ctx.activeBatchRunState?.isRunning && !ctx.activeBatchRunState?.worktreeActive;
-				if (!isInAutoRunPanel && !isInAutoRunDOM && !ctx.previewFile && !isAutoRunLocked) {
+				// Check if a file tab is active (new tab-based file preview)
+				const hasActiveFileTab = !!ctx.activeSession?.activeFileTabId;
+				if (!isInAutoRunPanel && !isInAutoRunDOM && !hasActiveFileTab && !isAutoRunLocked) {
 					e.preventDefault();
-					ctx.setMarkdownEditMode(!ctx.markdownEditMode);
+					// Toggle chat raw text mode (not file preview edit mode)
+					ctx.setChatRawTextMode(!ctx.chatRawTextMode);
 					trackShortcut('toggleMarkdownMode');
 				}
 			} else if (ctx.isShortcut(e, 'toggleAutoRunExpanded')) {
@@ -452,36 +481,41 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				}
 				if (ctx.isTabShortcut(e, 'closeTab')) {
 					e.preventDefault();
-					const activeTab = ctx.activeSession.aiTabs.find(
-						(t: AITab) => t.id === ctx.activeSession.activeTabId
-					);
+					// Use handleCloseCurrentTab to close the active tab (file or AI)
+					// This handles both file preview tabs and AI tabs with unified tab system
+					const closeResult = ctx.handleCloseCurrentTab();
 
-					// Check if this is a wizard tab - show confirmation before closing
-					if (activeTab && ctx.hasActiveWizard && ctx.hasActiveWizard(activeTab)) {
-						ctx.setConfirmModalMessage(
-							'Close this wizard? Your progress will be lost and cannot be restored.'
-						);
-						ctx.setConfirmModalOnConfirm(() => () => {
-							ctx.performTabClose(ctx.activeSession.activeTabId);
-							trackShortcut('closeTab');
-						});
-						ctx.setConfirmModalOpen(true);
-					} else {
-						// Regular tab - use closeTab directly with skipHistory for wizard tabs
-						const isWizardTab = activeTab && ctx.hasActiveWizard && ctx.hasActiveWizard(activeTab);
-						const result = ctx.closeTab(
-							ctx.activeSession,
-							ctx.activeSession.activeTabId,
-							ctx.showUnreadOnly,
-							{ skipHistory: isWizardTab }
-						);
-						if (result) {
-							ctx.setSessions((prev: Session[]) =>
-								prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
+					if (closeResult.type === 'file') {
+						// File tab was already closed by handleCloseCurrentTab
+						trackShortcut('closeTab');
+					} else if (closeResult.type === 'ai' && closeResult.tabId) {
+						// AI tab - need to handle wizard confirmation
+						if (closeResult.isWizardTab) {
+							ctx.setConfirmModalMessage(
+								'Close this wizard? Your progress will be lost and cannot be restored.'
 							);
-							trackShortcut('closeTab');
+							ctx.setConfirmModalOnConfirm(() => () => {
+								ctx.performTabClose(closeResult.tabId);
+								trackShortcut('closeTab');
+							});
+							ctx.setConfirmModalOpen(true);
+						} else {
+							// Regular AI tab - close it
+							const result = ctx.closeTab(
+								ctx.activeSession,
+								closeResult.tabId,
+								ctx.showUnreadOnly,
+								{ skipHistory: false }
+							);
+							if (result) {
+								ctx.setSessions((prev: Session[]) =>
+									prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
+								);
+								trackShortcut('closeTab');
+							}
 						}
 					}
+					// 'prevented' or 'none' - do nothing (can't close last AI tab)
 				}
 				if (ctx.isTabShortcut(e, 'closeAllTabs')) {
 					e.preventDefault();
@@ -520,8 +554,8 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				}
 				if (ctx.isTabShortcut(e, 'reopenClosedTab')) {
 					e.preventDefault();
-					// Reopen the most recently closed tab, or switch to existing if duplicate
-					const result = ctx.reopenClosedTab(ctx.activeSession);
+					// Reopen the most recently closed tab (AI or file), or switch to existing if duplicate
+					const result = ctx.reopenUnifiedClosedTab(ctx.activeSession);
 					if (result) {
 						ctx.setSessions((prev: Session[]) =>
 							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
@@ -572,6 +606,12 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				}
 				if (ctx.isTabShortcut(e, 'toggleShowThinking')) {
 					e.preventDefault();
+					// Helper to cycle through thinking modes: off -> on -> sticky -> off
+					const cycleThinkingMode = (current: ThinkingMode | undefined): ThinkingMode => {
+						if (!current || current === 'off') return 'on';
+						if (current === 'on') return 'sticky';
+						return 'off'; // sticky -> off
+					};
 					ctx.setSessions((prev: Session[]) =>
 						prev.map((s: Session) => {
 							if (s.id !== ctx.activeSession!.id) return s;
@@ -593,16 +633,17 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 											},
 										};
 									}
-									// Regular tab: toggle showThinking
+									// Regular tab: cycle showThinking through three states
+									const newMode = cycleThinkingMode(tab.showThinking);
 									// When turning OFF, also clear any existing thinking/tool logs
-									if (tab.showThinking) {
+									if (newMode === 'off') {
 										return {
 											...tab,
-											showThinking: false,
+											showThinking: 'off',
 											logs: tab.logs.filter((l) => l.source !== 'thinking' && l.source !== 'tool'),
 										};
 									}
-									return { ...tab, showThinking: true };
+									return { ...tab, showThinking: newMode };
 								}),
 							};
 						})
@@ -619,9 +660,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					ctx.toggleTabUnread();
 					trackShortcut('toggleTabUnread');
 				}
+				// Cmd+Shift+] - Navigate to next tab in unified tab order
+				// Cycles through both AI tabs and file preview tabs
 				if (ctx.isTabShortcut(e, 'nextTab')) {
 					e.preventDefault();
-					const result = ctx.navigateToNextTab(ctx.activeSession, ctx.showUnreadOnly);
+					const result = ctx.navigateToNextUnifiedTab(ctx.activeSession, ctx.showUnreadOnly);
 					if (result) {
 						ctx.setSessions((prev: Session[]) =>
 							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
@@ -629,9 +672,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						trackShortcut('nextTab');
 					}
 				}
+				// Cmd+Shift+[ - Navigate to previous tab in unified tab order
+				// Cycles through both AI tabs and file preview tabs
 				if (ctx.isTabShortcut(e, 'prevTab')) {
 					e.preventDefault();
-					const result = ctx.navigateToPrevTab(ctx.activeSession, ctx.showUnreadOnly);
+					const result = ctx.navigateToPrevUnifiedTab(ctx.activeSession, ctx.showUnreadOnly);
 					if (result) {
 						ctx.setSessions((prev: Session[]) =>
 							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
@@ -639,12 +684,14 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						trackShortcut('prevTab');
 					}
 				}
-				// Cmd+1 through Cmd+9: Jump to specific tab by index (disabled in unread-only mode)
+				// Cmd+1 through Cmd+9: Jump to specific tab by index in unified tab order
+				// Works with both AI tabs and file preview tabs
+				// Disabled in unread-only mode (unread filter only applies to AI tabs)
 				if (!ctx.showUnreadOnly) {
 					for (let i = 1; i <= 9; i++) {
 						if (ctx.isTabShortcut(e, `goToTab${i}`)) {
 							e.preventDefault();
-							const result = ctx.navigateToTabByIndex(ctx.activeSession, i - 1);
+							const result = ctx.navigateToUnifiedTabByIndex(ctx.activeSession, i - 1);
 							if (result) {
 								ctx.setSessions((prev: Session[]) =>
 									prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
@@ -654,10 +701,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 							break;
 						}
 					}
-					// Cmd+0: Jump to last tab
+					// Cmd+0: Jump to last tab in unified tab order
 					if (ctx.isTabShortcut(e, 'goToLastTab')) {
 						e.preventDefault();
-						const result = ctx.navigateToLastTab(ctx.activeSession);
+						const result = ctx.navigateToLastUnifiedTab(ctx.activeSession);
 						if (result) {
 							ctx.setSessions((prev: Session[]) =>
 								prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))

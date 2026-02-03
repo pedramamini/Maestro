@@ -5,6 +5,7 @@
  */
 
 import { describe, it, expect, beforeEach } from 'vitest';
+import * as path from 'path';
 import {
 	parseSshConfig,
 	parseConfigContent,
@@ -245,7 +246,7 @@ Host server1 server2 server3
 
 			expect(result.success).toBe(true);
 			expect(result.hosts).toHaveLength(0);
-			expect(result.configPath).toBe('/home/user/.ssh/config');
+			expect(result.configPath).toBe(path.join('/home/user', '.ssh', 'config'));
 		});
 
 		it('should parse config file when it exists', () => {

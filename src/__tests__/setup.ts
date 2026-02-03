@@ -82,19 +82,22 @@ vi.mock('lucide-react', () => {
 });
 
 // Mock window.matchMedia for components that use media queries
-Object.defineProperty(window, 'matchMedia', {
-	writable: true,
-	value: vi.fn().mockImplementation((query: string) => ({
-		matches: false,
-		media: query,
-		onchange: null,
-		addListener: vi.fn(),
-		removeListener: vi.fn(),
-		addEventListener: vi.fn(),
-		removeEventListener: vi.fn(),
-		dispatchEvent: vi.fn(),
-	})),
-});
+// Only mock if window exists (jsdom environment)
+if (typeof window !== 'undefined') {
+	Object.defineProperty(window, 'matchMedia', {
+		writable: true,
+		value: vi.fn().mockImplementation((query: string) => ({
+			matches: false,
+			media: query,
+			onchange: null,
+			addListener: vi.fn(),
+			removeListener: vi.fn(),
+			addEventListener: vi.fn(),
+			removeEventListener: vi.fn(),
+			dispatchEvent: vi.fn(),
+		})),
+	});
+}
 
 // Mock ResizeObserver using a proper class-like constructor
 // Simulates a 1000px width by default which ensures all responsive UI elements are visible
@@ -129,29 +132,32 @@ class MockResizeObserver {
 	unobserve = vi.fn();
 	disconnect = vi.fn();
 }
-global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
+// Only set browser globals if window exists (jsdom environment)
+if (typeof window !== 'undefined') {
+	global.ResizeObserver = MockResizeObserver as unknown as typeof ResizeObserver;
 
-// Mock offsetWidth to return reasonable values for responsive breakpoint tests
-// This ensures components that check element dimensions work correctly in jsdom
-Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
-	configurable: true,
-	get() {
-		return 1000; // Default to wide enough for all responsive features to show
-	},
-});
+	// Mock offsetWidth to return reasonable values for responsive breakpoint tests
+	// This ensures components that check element dimensions work correctly in jsdom
+	Object.defineProperty(HTMLElement.prototype, 'offsetWidth', {
+		configurable: true,
+		get() {
+			return 1000; // Default to wide enough for all responsive features to show
+		},
+	});
 
-// Mock IntersectionObserver
-global.IntersectionObserver = vi.fn().mockImplementation(() => ({
-	observe: vi.fn(),
-	unobserve: vi.fn(),
-	disconnect: vi.fn(),
-}));
+	// Mock IntersectionObserver
+	global.IntersectionObserver = vi.fn().mockImplementation(() => ({
+		observe: vi.fn(),
+		unobserve: vi.fn(),
+		disconnect: vi.fn(),
+	}));
 
-// Mock Element.prototype.scrollTo - needed for components that use scrollTo
-Element.prototype.scrollTo = vi.fn();
+	// Mock Element.prototype.scrollTo - needed for components that use scrollTo
+	Element.prototype.scrollTo = vi.fn();
 
-// Mock Element.prototype.scrollIntoView - needed for components that scroll elements into view
-Element.prototype.scrollIntoView = vi.fn();
+	// Mock Element.prototype.scrollIntoView - needed for components that scroll elements into view
+	Element.prototype.scrollIntoView = vi.fn();
+}
 
 // Mock window.maestro API (Electron IPC bridge)
 const mockMaestro = {
@@ -372,9 +378,10 @@ const mockMaestro = {
 		setMaxLogBuffer: vi.fn().mockResolvedValue(undefined),
 	},
 	notification: {
-		speak: vi.fn().mockResolvedValue({ success: true, ttsId: 1 }),
+		speak: vi.fn().mockResolvedValue({ success: true, notificationId: 1 }),
 		stopSpeak: vi.fn().mockResolvedValue({ success: true }),
-		onTtsCompleted: vi.fn().mockReturnValue(() => {}),
+		onCommandCompleted: vi.fn().mockReturnValue(() => {}),
+		onTtsCompleted: vi.fn().mockReturnValue(() => {}), // Legacy alias
 		show: vi.fn().mockResolvedValue(undefined),
 	},
 	dialog: {
@@ -386,6 +393,8 @@ const mockMaestro = {
 	},
 	shell: {
 		openExternal: vi.fn().mockResolvedValue(undefined),
+		trashItem: vi.fn().mockResolvedValue(undefined),
+		showItemInFolder: vi.fn().mockResolvedValue(undefined),
 	},
 	sync: {
 		getDefaultPath: vi.fn().mockResolvedValue('/default/path'),
@@ -394,6 +403,7 @@ const mockMaestro = {
 		setCustomPath: vi.fn().mockResolvedValue(undefined),
 		migrateStorage: vi.fn().mockResolvedValue({ success: true, migratedCount: 0 }),
 		resetToDefault: vi.fn().mockResolvedValue({ success: true }),
+		selectSyncFolder: vi.fn().mockResolvedValue(null),
 	},
 	stats: {
 		recordQuery: vi.fn().mockResolvedValue({ success: true }),
@@ -414,6 +424,7 @@ const mockMaestro = {
 		exportCsv: vi.fn().mockResolvedValue(''),
 		onStatsUpdate: vi.fn().mockReturnValue(() => {}),
 		getDatabaseSize: vi.fn().mockResolvedValue(1024 * 1024), // 1MB mock
+		getEarliestTimestamp: vi.fn().mockResolvedValue(null),
 		clearOldData: vi.fn().mockResolvedValue({
 			success: true,
 			deletedQueryEvents: 0,
@@ -444,9 +455,46 @@ const mockMaestro = {
 		sync: vi.fn().mockResolvedValue({ success: true }),
 		getInstallationId: vi.fn().mockResolvedValue('test-installation-id'),
 	},
+	symphony: {
+		getRegistry: vi.fn().mockResolvedValue({
+			success: true,
+			registry: { schemaVersion: '1.0', lastUpdated: '2025-01-01T00:00:00Z', repositories: [] },
+			fromCache: false,
+		}),
+		getIssues: vi.fn().mockResolvedValue({ success: true, issues: [], fromCache: false }),
+		getState: vi.fn().mockResolvedValue({
+			success: true,
+			state: { active: [], history: [], stats: {} },
+		}),
+		getActive: vi.fn().mockResolvedValue({ success: true, contributions: [] }),
+		getCompleted: vi.fn().mockResolvedValue({ success: true, contributions: [] }),
+		getStats: vi.fn().mockResolvedValue({ success: true, stats: {} }),
+		start: vi.fn().mockResolvedValue({ success: true, contributionId: 'test-id' }),
+		registerActive: vi.fn().mockResolvedValue({ success: true }),
+		updateStatus: vi.fn().mockResolvedValue({ success: true, updated: true }),
+		complete: vi.fn().mockResolvedValue({ success: true }),
+		cancel: vi.fn().mockResolvedValue({ success: true, cancelled: true }),
+		checkPRStatuses: vi.fn().mockResolvedValue({ success: true, checked: 0, merged: 0, closed: 0 }),
+		clearCache: vi.fn().mockResolvedValue({ success: true, cleared: true }),
+		cloneRepo: vi.fn().mockResolvedValue({ success: true }),
+		startContribution: vi.fn().mockResolvedValue({ success: true, branchName: 'test-branch' }),
+		createDraftPR: vi.fn().mockResolvedValue({ success: true }),
+		fetchDocumentContent: vi.fn().mockResolvedValue({ success: true, content: '# Test' }),
+		onUpdated: vi.fn().mockReturnValue(() => {}),
+		onContributionStarted: vi.fn().mockReturnValue(() => {}),
+	},
+	app: {
+		onQuitConfirmationRequest: vi.fn().mockReturnValue(() => {}),
+		confirmQuit: vi.fn(),
+		cancelQuit: vi.fn(),
+		onSystemResume: vi.fn().mockReturnValue(() => {}),
+	},
 };
 
-Object.defineProperty(window, 'maestro', {
-	writable: true,
-	value: mockMaestro,
-});
+// Only mock window.maestro if window exists (jsdom environment)
+if (typeof window !== 'undefined') {
+	Object.defineProperty(window, 'maestro', {
+		writable: true,
+		value: mockMaestro,
+	});
+}

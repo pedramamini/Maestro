@@ -9,9 +9,8 @@ Agent support documentation for the Maestro codebase. For the main guide, see [[
 | `claude-code` | Claude Code | **Active** | Primary agent, `--print --verbose --output-format stream-json` |
 | `codex` | OpenAI Codex | **Active** | Full support, `--json`, YOLO mode default |
 | `opencode` | OpenCode | **Active** | Multi-provider support (75+ LLMs), stub session storage |
+| `factory-droid` | Factory Droid | **Active** | Factory's AI coding assistant, `-o stream-json` |
 | `terminal` | Terminal | Internal | Hidden from UI, used for shell sessions |
-
-Additional `ToolType` values (`aider`, `claude`) are defined in types but not yet implemented in `agent-detector.ts`.
 
 ## Agent Capabilities
 

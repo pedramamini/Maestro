@@ -55,14 +55,27 @@ export function createAutorunApi() {
 		writeDoc: (folderPath: string, filename: string, content: string, sshRemoteId?: string) =>
 			ipcRenderer.invoke('autorun:writeDoc', folderPath, filename, content, sshRemoteId),
 
-		saveImage: (folderPath: string, docName: string, base64Data: string, extension: string) =>
-			ipcRenderer.invoke('autorun:saveImage', folderPath, docName, base64Data, extension),
+		saveImage: (
+			folderPath: string,
+			docName: string,
+			base64Data: string,
+			extension: string,
+			sshRemoteId?: string
+		) =>
+			ipcRenderer.invoke(
+				'autorun:saveImage',
+				folderPath,
+				docName,
+				base64Data,
+				extension,
+				sshRemoteId
+			),
 
-		deleteImage: (folderPath: string, relativePath: string) =>
-			ipcRenderer.invoke('autorun:deleteImage', folderPath, relativePath),
+		deleteImage: (folderPath: string, relativePath: string, sshRemoteId?: string) =>
+			ipcRenderer.invoke('autorun:deleteImage', folderPath, relativePath, sshRemoteId),
 
-		listImages: (folderPath: string, docName: string) =>
-			ipcRenderer.invoke('autorun:listImages', folderPath, docName),
+		listImages: (folderPath: string, docName: string, sshRemoteId?: string) =>
+			ipcRenderer.invoke('autorun:listImages', folderPath, docName, sshRemoteId),
 
 		deleteFolder: (projectPath: string) => ipcRenderer.invoke('autorun:deleteFolder', projectPath),
 
@@ -85,20 +98,28 @@ export function createAutorunApi() {
 			return () => ipcRenderer.removeListener('autorun:fileChanged', wrappedHandler);
 		},
 
-		createBackup: (folderPath: string, filename: string) =>
-			ipcRenderer.invoke('autorun:createBackup', folderPath, filename),
+		createBackup: (folderPath: string, filename: string, sshRemoteId?: string) =>
+			ipcRenderer.invoke('autorun:createBackup', folderPath, filename, sshRemoteId),
 
-		restoreBackup: (folderPath: string, filename: string) =>
-			ipcRenderer.invoke('autorun:restoreBackup', folderPath, filename),
+		restoreBackup: (folderPath: string, filename: string, sshRemoteId?: string) =>
+			ipcRenderer.invoke('autorun:restoreBackup', folderPath, filename, sshRemoteId),
 
-		deleteBackups: (folderPath: string) => ipcRenderer.invoke('autorun:deleteBackups', folderPath),
+		deleteBackups: (folderPath: string, sshRemoteId?: string) =>
+			ipcRenderer.invoke('autorun:deleteBackups', folderPath, sshRemoteId),
 
 		createWorkingCopy: (
 			folderPath: string,
 			filename: string,
-			loopNumber: number
+			loopNumber: number,
+			sshRemoteId?: string
 		): Promise<{ workingCopyPath: string; originalPath: string }> =>
-			ipcRenderer.invoke('autorun:createWorkingCopy', folderPath, filename, loopNumber),
+			ipcRenderer.invoke(
+				'autorun:createWorkingCopy',
+				folderPath,
+				filename,
+				loopNumber,
+				sshRemoteId
+			),
 	};
 }
 

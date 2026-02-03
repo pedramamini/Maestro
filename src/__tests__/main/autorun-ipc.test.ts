@@ -387,7 +387,9 @@ describe('Auto Run IPC Handlers', () => {
 				const filename = 'Phase1/Task1';
 				const filePath = path.join(folderPath, `${filename}.md`);
 
-				expect(filePath).toBe('/test/autorun/Phase1/Task1.md');
+				// Normalize expected path to use platform separators
+				const expectedPath = path.join('/test/autorun', 'Phase1/Task1.md');
+				expect(filePath).toBe(expectedPath);
 
 				await mockAccess(filePath);
 				const result = await mockReadFile(filePath, 'utf-8');
@@ -444,12 +446,13 @@ describe('Auto Run IPC Handlers', () => {
 			it('should handle symlink traversal via path resolution', () => {
 				const folderPath = '/test/autorun';
 
-				// Simulated resolved paths
-				const validResolved = '/test/autorun/doc.md';
-				const traversalResolved = '/etc/passwd';
+				// Simulated resolved paths - normalize to use platform separators
+				const validResolved = path.resolve('/test/autorun/doc.md');
+				const traversalResolved = path.resolve('/etc/passwd');
 
 				const isValidPath = (resolved: string, folder: string): boolean => {
-					return resolved.startsWith(folder + path.sep);
+					const normalizedFolder = path.resolve(folder);
+					return resolved.startsWith(normalizedFolder + path.sep) || resolved === normalizedFolder;
 				};
 
 				expect(isValidPath(validResolved, folderPath)).toBe(true);
@@ -869,7 +872,7 @@ describe('Auto Run IPC Handlers', () => {
 
 			it('should only delete files in images/ directory', () => {
 				const isValidImagePath = (relativePath: string): boolean => {
-					const normalized = path.normalize(relativePath);
+					const normalized = path.normalize(relativePath).replace(/\\/g, '/');
 					return normalized.startsWith('images/') && !normalized.includes('..');
 				};
 
@@ -914,7 +917,7 @@ describe('Auto Run IPC Handlers', () => {
 				const folderPath = '/test/autorun';
 
 				const isValidPath = (relativePath: string): boolean => {
-					const normalized = path.normalize(relativePath);
+					const normalized = path.normalize(relativePath).replace(/\\/g, '/');
 					if (
 						normalized.includes('..') ||
 						path.isAbsolute(normalized) ||
@@ -925,7 +928,9 @@ describe('Auto Run IPC Handlers', () => {
 					const filePath = path.join(folderPath, normalized);
 					const resolvedPath = path.resolve(filePath);
 					const resolvedFolder = path.resolve(folderPath);
-					return resolvedPath.startsWith(resolvedFolder);
+					return (
+						resolvedPath.startsWith(resolvedFolder + path.sep) || resolvedPath === resolvedFolder
+					);
 				};
 
 				expect(isValidPath('images/photo.png')).toBe(true);
@@ -1213,10 +1218,10 @@ describe('Auto Run IPC Handlers', () => {
 
 				await mockCopyFile(sourcePath, backupPath);
 
-				expect(mockCopyFile).toHaveBeenCalledWith(
-					'/test/autorun/Phase1/Task1.md',
-					'/test/autorun/Phase1/Task1.backup.md'
-				);
+				// Normalize expected paths to use platform separators
+				const expectedSource = path.join('/test/autorun', 'Phase1/Task1.md');
+				const expectedBackup = path.join('/test/autorun', 'Phase1/Task1.backup.md');
+				expect(mockCopyFile).toHaveBeenCalledWith(expectedSource, expectedBackup);
 			});
 		});
 
@@ -1286,7 +1291,9 @@ describe('Auto Run IPC Handlers', () => {
 				await mockCopyFile(backupPath, path.join(folderPath, `${filename}.md`));
 				await mockUnlink(backupPath);
 
-				expect(mockUnlink).toHaveBeenCalledWith('/test/autorun/Phase1/Task1.backup.md');
+				// Normalize expected path to use platform separators
+				const expectedBackupPath = path.join('/test/autorun', 'Phase1/Task1.backup.md');
+				expect(mockUnlink).toHaveBeenCalledWith(expectedBackupPath);
 			});
 		});
 

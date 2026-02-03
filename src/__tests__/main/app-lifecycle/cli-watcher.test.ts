@@ -70,7 +70,7 @@ vi.mock('../../../main/utils/logger', () => ({
 describe('app-lifecycle/cli-watcher', () => {
 	let mockMainWindow: {
 		isDestroyed: ReturnType<typeof vi.fn>;
-		webContents: { send: ReturnType<typeof vi.fn> };
+		webContents: { send: ReturnType<typeof vi.fn>; isDestroyed: ReturnType<typeof vi.fn> };
 	};
 	let getMainWindow: ReturnType<typeof vi.fn>;
 	let getUserDataPath: ReturnType<typeof vi.fn>;
@@ -82,7 +82,7 @@ describe('app-lifecycle/cli-watcher', () => {
 
 		mockMainWindow = {
 			isDestroyed: vi.fn().mockReturnValue(false),
-			webContents: { send: vi.fn() },
+			webContents: { send: vi.fn(), isDestroyed: vi.fn().mockReturnValue(false) },
 		};
 		getMainWindow = vi.fn().mockReturnValue(mockMainWindow);
 		getUserDataPath = vi.fn().mockReturnValue('/test/user/data');

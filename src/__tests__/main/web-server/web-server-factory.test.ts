@@ -134,9 +134,11 @@ describe('web-server/web-server-factory', () => {
 
 		mockWebContents = {
 			send: vi.fn(),
+			isDestroyed: vi.fn().mockReturnValue(false),
 		};
 
 		mockMainWindow = {
+			isDestroyed: vi.fn().mockReturnValue(false),
 			webContents: mockWebContents as WebContents,
 		};
 

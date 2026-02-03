@@ -18,7 +18,17 @@
  */
 
 import React, { useMemo } from 'react';
-import { MessageSquare, Clock, Timer, Bot, Users, Layers } from 'lucide-react';
+import {
+	MessageSquare,
+	Clock,
+	Timer,
+	Bot,
+	Users,
+	Layers,
+	Sunrise,
+	Globe,
+	Zap,
+} from 'lucide-react';
 import type { Theme } from '../../types';
 import type { StatsAggregation } from '../../hooks/useStats';
 
@@ -114,23 +124,58 @@ function MetricCard({ icon, label, value, theme, animationIndex = 0 }: MetricCar
 	);
 }
 
+/**
+ * Format hour number (0-23) to human-readable time
+ * Examples: 0 → "12 AM", 13 → "1 PM", 9 → "9 AM"
+ */
+function formatHour(hour: number): string {
+	const suffix = hour >= 12 ? 'PM' : 'AM';
+	const displayHour = hour % 12 || 12;
+	return `${displayHour} ${suffix}`;
+}
+
 export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
 	// Calculate derived metrics
-	const { mostActiveAgent, interactiveRatio } = useMemo(() => {
-		// Find most active agent by query count
-		const agents = Object.entries(data.byAgent);
-		const topAgent = agents.length > 0 ? agents.sort((a, b) => b[1].count - a[1].count)[0] : null;
+	const { mostActiveAgent, interactiveRatio, peakHour, localVsRemote, queriesPerSession } =
+		useMemo(() => {
+			// Find most active agent by query count
+			const agents = Object.entries(data.byAgent);
+			const topAgent =
+				agents.length > 0 ? agents.sort((a, b) => b[1].count - a[1].count)[0] : null;
 
-		// Calculate interactive percentage
-		const totalBySource = data.bySource.user + data.bySource.auto;
-		const ratio =
-			totalBySource > 0 ? `${Math.round((data.bySource.user / totalBySource) * 100)}%` : 'N/A';
+			// Calculate interactive percentage
+			const totalBySource = data.bySource.user + data.bySource.auto;
+			const ratio =
+				totalBySource > 0 ? `${Math.round((data.bySource.user / totalBySource) * 100)}%` : 'N/A';
 
-		return {
-			mostActiveAgent: topAgent ? topAgent[0] : 'N/A',
-			interactiveRatio: ratio,
-		};
-	}, [data.byAgent, data.bySource]);
+			// Find peak usage hour (hour with most queries)
+			const hourWithMostQueries = data.byHour.reduce(
+				(max, curr) => (curr.count > max.count ? curr : max),
+				{ hour: 0, count: 0, duration: 0 }
+			);
+			const peak = hourWithMostQueries.count > 0 ? formatHour(hourWithMostQueries.hour) : 'N/A';
+
+			// Calculate local vs remote percentage
+			const totalByLocation = data.byLocation.local + data.byLocation.remote;
+			const localPercent =
+				totalByLocation > 0
+					? `${Math.round((data.byLocation.local / totalByLocation) * 100)}%`
+					: 'N/A';
+
+			// Calculate queries per session
+			const qps =
+				data.totalSessions > 0
+					? (data.totalQueries / data.totalSessions).toFixed(1)
+					: 'N/A';
+
+			return {
+				mostActiveAgent: topAgent ? topAgent[0] : 'N/A',
+				interactiveRatio: ratio,
+				peakHour: peak,
+				localVsRemote: localPercent,
+				queriesPerSession: qps,
+			};
+		}, [data.byAgent, data.bySource, data.byHour, data.byLocation, data.totalSessions, data.totalQueries]);
 
 	const metrics = [
 		{
@@ -144,6 +189,11 @@ export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
 			value: formatNumber(data.totalQueries),
 		},
 		{
+			icon: <Zap className="w-4 h-4" />,
+			label: 'Queries/Session',
+			value: queriesPerSession,
+		},
+		{
 			icon: <Clock className="w-4 h-4" />,
 			label: 'Total Time',
 			value: formatDuration(data.totalDuration),
@@ -154,6 +204,11 @@ export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
 			value: formatDuration(data.avgDuration),
 		},
 		{
+			icon: <Sunrise className="w-4 h-4" />,
+			label: 'Peak Hour',
+			value: peakHour,
+		},
+		{
 			icon: <Bot className="w-4 h-4" />,
 			label: 'Top Agent',
 			value: mostActiveAgent,
@@ -162,6 +217,11 @@ export function SummaryCards({ data, theme, columns = 3 }: SummaryCardsProps) {
 			icon: <Users className="w-4 h-4" />,
 			label: 'Interactive %',
 			value: interactiveRatio,
+		},
+		{
+			icon: <Globe className="w-4 h-4" />,
+			label: 'Local %',
+			value: localVsRemote,
 		},
 	];
 

@@ -15,7 +15,6 @@ import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import {
 	FileCode,
-	X,
 	Eye,
 	ChevronUp,
 	ChevronDown,
@@ -31,10 +30,12 @@ import {
 	AlertTriangle,
 	Share2,
 	GitGraph,
+	List,
 } from 'lucide-react';
 import { visit } from 'unist-util-visit';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { useClickOutside } from '../hooks/ui/useClickOutside';
 import { Modal, ModalFooter } from './ui/Modal';
 import { MermaidRenderer } from './MermaidRenderer';
 import { getEncoder, formatTokenCount } from '../utils/tokenCounter';
@@ -44,6 +45,26 @@ import remarkFrontmatter from 'remark-frontmatter';
 import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import type { FileNode } from '../types/fileTree';
 import { isImageFile } from '../../shared/gitUtils';
+
+// Global cache for loaded images to prevent re-fetching and flickering
+// Maps resolved path -> { dataUrl, dimensions }
+const imageCache = new Map<
+	string,
+	{ dataUrl: string; width?: number; height?: number; loadedAt: number }
+>();
+
+// Cache cleanup interval (clear entries older than 10 minutes)
+const IMAGE_CACHE_TTL = 10 * 60 * 1000;
+
+// Clean up old cache entries periodically
+setInterval(() => {
+	const now = Date.now();
+	for (const [key, value] of imageCache.entries()) {
+		if (now - value.loadedAt > IMAGE_CACHE_TTL) {
+			imageCache.delete(key);
+		}
+	}
+}, IMAGE_CACHE_TTL);
 
 interface FileStats {
 	size: number;
@@ -63,8 +84,12 @@ interface FilePreviewProps {
 	fileTree?: FileNode[];
 	/** Current working directory for proximity-based matching */
 	cwd?: string;
-	/** Callback when a file link is clicked */
-	onFileClick?: (path: string) => void;
+	/** Callback when a file link is clicked
+	 * @param path - The file path to open
+	 * @param options - Options for how to open the file
+	 * @param options.openInNewTab - If true, open in a new tab adjacent to current; if false, replace current tab content
+	 */
+	onFileClick?: (path: string, options?: { openInNewTab?: boolean }) => void;
 	/** Whether back navigation is available */
 	canGoBack?: boolean;
 	/** Whether forward navigation is available */
@@ -74,9 +99,9 @@ interface FilePreviewProps {
 	/** Navigate forward in history */
 	onNavigateForward?: () => void;
 	/** Navigation history for back breadcrumbs (items before current) */
-	backHistory?: { name: string; content: string; path: string }[];
+	backHistory?: { name: string; path: string; scrollTop?: number }[];
 	/** Navigation history for forward breadcrumbs (items after current) */
-	forwardHistory?: { name: string; content: string; path: string }[];
+	forwardHistory?: { name: string; path: string; scrollTop?: number }[];
 	/** Navigate to a specific index in history */
 	onNavigateToIndex?: (index: number) => void;
 	/** Current index in history */
@@ -95,6 +120,20 @@ interface FilePreviewProps {
 	onOpenInGraph?: () => void;
 	/** SSH remote ID for remote file operations */
 	sshRemoteId?: string;
+	/** Current edit content (used for file tab persistence) - if provided, overrides internal state */
+	externalEditContent?: string;
+	/** Callback when edit content changes (used for file tab persistence) */
+	onEditContentChange?: (content: string) => void;
+	/** Initial scroll position to restore (used for file tab persistence) */
+	initialScrollTop?: number;
+	/** Callback when scroll position changes (used for file tab persistence) */
+	onScrollPositionChange?: (scrollTop: number) => void;
+	/** Initial search query to restore (used for file tab persistence) */
+	initialSearchQuery?: string;
+	/** Callback when search query changes (used for file tab persistence) */
+	onSearchQueryChange?: (query: string) => void;
+	/** When true, disables click-outside-to-close and layer registration (for tab-based rendering) */
+	isTabMode?: boolean;
 }
 
 export interface FilePreviewHandle {
@@ -247,6 +286,49 @@ const countMarkdownTasks = (content: string): { open: number; closed: number } =
 	};
 };
 
+// Interface for table of contents entries
+interface TocEntry {
+	level: number; // 1-6 for h1-h6
+	text: string;
+	slug: string;
+}
+
+// Extract headings from markdown content for table of contents
+const extractHeadings = (content: string): TocEntry[] => {
+	const headings: TocEntry[] = [];
+	const lines = content.split('\n');
+	let inCodeFence = false;
+
+	for (const line of lines) {
+		// Track code fence boundaries (``` or ~~~, optionally with language specifier)
+		if (/^(`{3,}|~{3,})/.test(line)) {
+			inCodeFence = !inCodeFence;
+			continue;
+		}
+
+		// Skip headings inside code fences
+		if (inCodeFence) {
+			continue;
+		}
+
+		// Match ATX-style headings (# H1, ## H2, etc.)
+		const match = line.match(/^(#{1,6})\s+(.+)$/);
+		if (match) {
+			const level = match[1].length;
+			const text = match[2].trim();
+			// Generate slug same way rehype-slug does (lowercase, replace spaces with hyphens, remove special chars)
+			const slug = text
+				.toLowerCase()
+				.replace(/[^\w\s-]/g, '')
+				.replace(/\s+/g, '-')
+				.replace(/^-+|-+$/g, '');
+			headings.push({ level, text, slug });
+		}
+	}
+
+	return headings;
+};
+
 // Helper to resolve image path relative to markdown file directory
 const resolveImagePath = (src: string, markdownFilePath: string): string => {
 	// If it's already a data URL or http(s) URL, return as-is
@@ -274,6 +356,7 @@ const resolveImagePath = (src: string, markdownFilePath: string): string => {
 };
 
 // Custom image component for markdown that loads images from file paths
+// Uses a global cache to prevent re-fetching and flickering on re-renders
 function MarkdownImage({
 	src,
 	alt,
@@ -294,33 +377,63 @@ function MarkdownImage({
 	sshRemoteId?: string; // SSH remote ID for remote file operations
 }) {
 	const [dataUrl, setDataUrl] = useState<string | null>(null);
+	const [dimensions, setDimensions] = useState<{ width?: number; height?: number }>({});
 	const [error, setError] = useState<string | null>(null);
 	const [loading, setLoading] = useState(true);
 	const isRemoteUrl = src?.startsWith('http://') || src?.startsWith('https://');
 
+	// Compute the cache key based on resolved path
+	const cacheKey = useMemo(() => {
+		if (!src) return null;
+		if (src.startsWith('data:')) return src; // Use data URL itself as key
+		if (isRemoteUrl) return src; // Use URL as key for remote images
+
+		let decodedSrc = src;
+		try {
+			decodedSrc = decodeURIComponent(src);
+		} catch {
+			// Use original if decode fails
+		}
+
+		if (isFromFileTree && projectRoot) {
+			return `${projectRoot}/${decodedSrc}`;
+		}
+		return resolveImagePath(decodedSrc, markdownFilePath);
+	}, [src, markdownFilePath, isFromFileTree, projectRoot, isRemoteUrl]);
+
 	useEffect(() => {
-		// Reset state when src or showRemoteImages changes
 		setError(null);
 
-		if (!src) {
+		if (!src || !cacheKey) {
 			setDataUrl(null);
 			setLoading(false);
 			return;
 		}
 
-		// If it's already a data URL, use it directly
-		if (src.startsWith('data:')) {
-			setDataUrl(src);
+		// Check cache first
+		const cached = imageCache.get(cacheKey);
+		if (cached) {
+			setDataUrl(cached.dataUrl);
+			setDimensions({ width: cached.width, height: cached.height });
 			setLoading(false);
 			return;
 		}
 
+		// If it's already a data URL, use it directly and cache
+		if (src.startsWith('data:')) {
+			setDataUrl(src);
+			setLoading(false);
+			// Cache with current time (dimensions will be set on load)
+			imageCache.set(cacheKey, { dataUrl: src, loadedAt: Date.now() });
+			return;
+		}
+
 		// If it's an HTTP(S) URL, handle based on showRemoteImages setting
-		if (src.startsWith('http://') || src.startsWith('https://')) {
+		if (isRemoteUrl) {
 			if (showRemoteImages) {
 				setDataUrl(src);
+				imageCache.set(cacheKey, { dataUrl: src, loadedAt: Date.now() });
 			} else {
-				// Explicitly clear the dataUrl when hiding remote images
 				setDataUrl(null);
 			}
 			setLoading(false);
@@ -330,36 +443,16 @@ function MarkdownImage({
 		// For local files, we need to load them
 		setLoading(true);
 
-		// Decode URL-encoded characters (e.g., %20 -> space) since file:// URLs encode spaces
-		// but the filesystem needs actual spaces
-		let decodedSrc = src;
-		try {
-			decodedSrc = decodeURIComponent(src);
-		} catch {
-			// If decoding fails, use original src
-		}
-
-		// Resolve the path:
-		// - If isFromFileTree is true, the src is already a path relative to projectRoot (complete path from file tree)
-		// - Otherwise, resolve relative to the markdown file location
-		let resolvedPath: string;
-		if (isFromFileTree && projectRoot) {
-			// Path was found in file tree - combine with projectRoot directly
-			resolvedPath = `${projectRoot}/${decodedSrc}`;
-		} else {
-			// Path is relative to markdown file - use normal resolution
-			resolvedPath = resolveImagePath(decodedSrc, markdownFilePath);
-		}
-
 		// Load the image via IPC (supports SSH remote)
 		window.maestro.fs
-			.readFile(resolvedPath, sshRemoteId)
+			.readFile(cacheKey, sshRemoteId)
 			.then((result) => {
 				// readFile returns a data URL for images
 				if (result.startsWith('data:')) {
 					setDataUrl(result);
+					// Cache the result
+					imageCache.set(cacheKey, { dataUrl: result, loadedAt: Date.now() });
 				} else {
-					// If it's not a data URL, something went wrong
 					setError('Invalid image data');
 				}
 				setLoading(false);
@@ -368,13 +461,37 @@ function MarkdownImage({
 				setError(`Failed to load image: ${err.message || 'Unknown error'}`);
 				setLoading(false);
 			});
-	}, [src, markdownFilePath, showRemoteImages, isFromFileTree, projectRoot, sshRemoteId]);
+	}, [src, cacheKey, showRemoteImages, isRemoteUrl, sshRemoteId]);
+
+	// Handle image load to get dimensions and update cache
+	const handleImageLoad = useCallback(
+		(e: React.SyntheticEvent<HTMLImageElement>) => {
+			const img = e.currentTarget;
+			const width = img.naturalWidth;
+			const height = img.naturalHeight;
+			setDimensions({ width, height });
+
+			// Update cache with dimensions
+			if (cacheKey && dataUrl) {
+				const cached = imageCache.get(cacheKey);
+				if (cached) {
+					imageCache.set(cacheKey, { ...cached, width, height });
+				}
+			}
+		},
+		[cacheKey, dataUrl]
+	);
 
 	if (loading) {
 		return (
 			<span
-				className="inline-flex items-center gap-2 px-3 py-2 rounded"
-				style={{ backgroundColor: theme.colors.bgActivity }}
+				className="inline-flex items-center gap-2 px-3 py-2 rounded my-2"
+				style={{
+					backgroundColor: theme.colors.bgActivity,
+					// Reserve some space to reduce layout shift
+					minHeight: '100px',
+					minWidth: '200px',
+				}}
 			>
 				<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.textDim }} />
 				<span className="text-xs" style={{ color: theme.colors.textDim }}>
@@ -387,7 +504,7 @@ function MarkdownImage({
 	if (error) {
 		return (
 			<span
-				className="inline-flex items-center gap-2 px-3 py-2 rounded"
+				className="inline-flex items-center gap-2 px-3 py-2 rounded my-2"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					border: `1px solid ${theme.colors.error}`,
@@ -405,7 +522,7 @@ function MarkdownImage({
 	if (!dataUrl && isRemoteUrl && !showRemoteImages) {
 		return (
 			<span
-				className="inline-flex items-center gap-2 px-3 py-2 rounded"
+				className="inline-flex items-center gap-2 px-3 py-2 rounded my-2"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					border: `1px dashed ${theme.colors.border}`,
@@ -428,7 +545,14 @@ function MarkdownImage({
 			src={dataUrl}
 			alt={alt || ''}
 			className="max-w-full rounded my-2 block"
-			style={{ border: `1px solid ${theme.colors.border}` }}
+			style={{
+				border: `1px solid ${theme.colors.border}`,
+				// Use cached dimensions if available to prevent layout shift
+				...(dimensions.width && dimensions.height
+					? { aspectRatio: `${dimensions.width} / ${dimensions.height}` }
+					: {}),
+			}}
+			onLoad={handleImageLoad}
 		/>
 	);
 }
@@ -510,14 +634,31 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 		hasGist,
 		onOpenInGraph,
 		sshRemoteId,
+		externalEditContent,
+		onEditContentChange,
+		initialScrollTop,
+		onScrollPositionChange,
+		initialSearchQuery,
+		onSearchQueryChange,
+		isTabMode,
 	},
 	ref
 ) {
-	const [searchQuery, setSearchQuery] = useState('');
-	const [searchOpen, setSearchOpen] = useState(false);
+	// Search state - use initialSearchQuery if provided, and notify parent of changes
+	const [internalSearchQuery, setInternalSearchQuery] = useState(initialSearchQuery ?? '');
+	// Wrapper to update state and notify parent
+	const setSearchQuery = useCallback((query: string) => {
+		setInternalSearchQuery(query);
+		onSearchQueryChange?.(query);
+	}, [onSearchQueryChange]);
+	// Expose the current search query value
+	const searchQuery = internalSearchQuery;
+	// If initialSearchQuery is provided and non-empty, auto-open search
+	const [searchOpen, setSearchOpen] = useState(Boolean(initialSearchQuery));
 	const [showCopyNotification, setShowCopyNotification] = useState(false);
 	const [showBackPopup, setShowBackPopup] = useState(false);
 	const [showForwardPopup, setShowForwardPopup] = useState(false);
+	const [showTocOverlay, setShowTocOverlay] = useState(false);
 	const backPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const forwardPopupTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const [currentMatchIndex, setCurrentMatchIndex] = useState(0);
@@ -526,8 +667,15 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 	const [showStatsBar, setShowStatsBar] = useState(true);
 	const [tokenCount, setTokenCount] = useState<number | null>(null);
 	const [showRemoteImages, setShowRemoteImages] = useState(false);
-	// Edit mode state
-	const [editContent, setEditContent] = useState('');
+	// Edit mode state - use external content when provided (for file tab persistence)
+	const [internalEditContent, setInternalEditContent] = useState('');
+	// Computed edit content - prefer external if provided
+	const editContent = externalEditContent ?? internalEditContent;
+	// Wrapper to update both internal state and notify parent
+	const setEditContent = useCallback((content: string) => {
+		setInternalEditContent(content);
+		onEditContentChange?.(content);
+	}, [onEditContentChange]);
 	const [isSaving, setIsSaving] = useState(false);
 	const [showUnsavedChangesModal, setShowUnsavedChangesModal] = useState(false);
 	const [copyNotificationMessage, setCopyNotificationMessage] = useState('');
@@ -540,6 +688,9 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 	const layerIdRef = useRef<string>();
 	const matchElementsRef = useRef<HTMLElement[]>([]);
 	const cancelButtonRef = useRef<HTMLButtonElement>(null);
+	const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const tocButtonRef = useRef<HTMLButtonElement>(null);
+	const tocOverlayRef = useRef<HTMLDivElement>(null);
 
 	// Expose focus method to parent via ref
 	useImperativeHandle(
@@ -601,6 +752,23 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 		return counts;
 	}, [isMarkdown, file?.content]);
 
+	// Extract table of contents entries for markdown files
+	const tocEntries = useMemo(() => {
+		if (!isMarkdown || !file?.content) return [];
+		return extractHeadings(file.content);
+	}, [isMarkdown, file?.content]);
+
+	const scrollMarkdownToBoundary = useCallback(
+		(direction: 'top' | 'bottom') => {
+			// Use contentRef which is the actual scrollable container
+			const container = contentRef.current;
+			if (!container) return;
+			const top = direction === 'top' ? 0 : container.scrollHeight;
+			container.scrollTo({ top, behavior: 'smooth' });
+		},
+		[]
+	);
+
 	// Memoize file tree indices to avoid O(n) traversal on every render
 	const fileTreeIndices = useMemo(() => {
 		if (fileTree && fileTree.length > 0) {
@@ -652,7 +820,9 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 						onClick={(e) => {
 							e.preventDefault();
 							if (isMaestroFile && filePath && onFileClick) {
-								onFileClick(filePath);
+								// Cmd/Ctrl+Click opens in new tab, regular click replaces current tab
+								const openInNewTab = e.metaKey || e.ctrlKey;
+								onFileClick(filePath, { openInNewTab });
 							} else if (isAnchorLink && anchorId) {
 								// Handle anchor links - scroll to the target element
 								const targetElement = markdownContainerRef.current
@@ -784,12 +954,13 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 			});
 	}, [file?.content, isImage, isBinary, isLargeFile]);
 
-	// Sync edit content when file changes or when entering edit mode
+	// Sync internal edit content when file changes (only when NOT using external content)
+	// When externalEditContent is provided (file tab mode), the parent manages the state
 	useEffect(() => {
-		if (file?.content) {
-			setEditContent(file.content);
+		if (file?.content && externalEditContent === undefined) {
+			setInternalEditContent(file.content);
 		}
-	}, [file?.content, file?.path]);
+	}, [file?.content, file?.path, externalEditContent]);
 
 	// Focus appropriate element and sync scroll position when mode changes
 	const prevMarkdownEditModeRef = useRef(markdownEditMode);
@@ -858,7 +1029,7 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 		}
 	}, [file, onSave, hasChanges, isSaving, editContent]);
 
-	// Track scroll position to show/hide stats bar
+	// Track scroll position to show/hide stats bar and report changes
 	useEffect(() => {
 		const contentEl = contentRef.current;
 		if (!contentEl) return;
@@ -866,37 +1037,98 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 		const handleScroll = () => {
 			// Show stats bar when scrolled to top (within 10px), hide otherwise
 			setShowStatsBar(contentEl.scrollTop <= 10);
+
+			// Throttled scroll position save (200ms) - same timing as TerminalOutput
+			if (onScrollPositionChange) {
+				if (scrollSaveTimerRef.current) {
+					clearTimeout(scrollSaveTimerRef.current);
+				}
+				scrollSaveTimerRef.current = setTimeout(() => {
+					onScrollPositionChange(contentEl.scrollTop);
+					scrollSaveTimerRef.current = null;
+				}, 200);
+			}
 		};
 
 		contentEl.addEventListener('scroll', handleScroll, { passive: true });
-		return () => contentEl.removeEventListener('scroll', handleScroll);
-	}, []);
+		return () => {
+			contentEl.removeEventListener('scroll', handleScroll);
+			// Clear any pending scroll save timer
+			if (scrollSaveTimerRef.current) {
+				clearTimeout(scrollSaveTimerRef.current);
+				scrollSaveTimerRef.current = null;
+			}
+		};
+	}, [onScrollPositionChange]);
+
+	// Restore scroll position when initialScrollTop is provided (file tab switching)
+	// Use a ref to track if we've already restored for this file to avoid re-scrolling on re-renders
+	const hasRestoredScrollRef = useRef<string | null>(null);
+	useEffect(() => {
+		const contentEl = contentRef.current;
+		if (!contentEl || !file?.path) return;
+
+		// Only restore if this is a new file and we have a scroll position to restore
+		if (
+			initialScrollTop !== undefined &&
+			initialScrollTop > 0 &&
+			hasRestoredScrollRef.current !== file.path
+		) {
+			// Use requestAnimationFrame to ensure DOM is ready
+			requestAnimationFrame(() => {
+				contentEl.scrollTop = initialScrollTop;
+			});
+			hasRestoredScrollRef.current = file.path;
+		} else if (hasRestoredScrollRef.current !== file.path) {
+			// New file without saved scroll position - reset to top
+			hasRestoredScrollRef.current = file.path;
+		}
+	}, [file?.path, initialScrollTop]);
 
 	// Auto-focus on mount and when file changes so keyboard shortcuts work immediately
 	useEffect(() => {
 		containerRef.current?.focus();
+		// Close TOC overlay when file changes
+		setShowTocOverlay(false);
 	}, [file?.path]); // Run on mount and when navigating to a different file
 
 	// Helper to handle escape key - shows confirmation modal if there are unsaved changes
+	// In tab mode: Escape only closes internal UI (search, TOC), not the tab itself
+	// Tabs close via Cmd+W or clicking the close button, not Escape
 	const handleEscapeRequest = useCallback(() => {
-		if (searchOpen) {
+		if (showTocOverlay) {
+			setShowTocOverlay(false);
+			containerRef.current?.focus();
+		} else if (searchOpen) {
 			setSearchOpen(false);
 			setSearchQuery('');
 			// Refocus container so keyboard navigation (arrow keys) still works
 			containerRef.current?.focus();
-		} else if (hasChanges) {
-			// Show confirmation modal if there are unsaved changes
-			setShowUnsavedChangesModal(true);
-		} else {
-			onClose();
+		} else if (!isTabMode) {
+			// Only close the preview if NOT in tab mode (overlay behavior)
+			// Tabs should not close on Escape - use Cmd+W or close button
+			if (hasChanges) {
+				// Show confirmation modal if there are unsaved changes
+				setShowUnsavedChangesModal(true);
+			} else {
+				onClose();
+			}
 		}
-	}, [searchOpen, hasChanges, onClose]);
+		// In tab mode with no internal UI open, Escape does nothing
+	}, [showTocOverlay, searchOpen, hasChanges, onClose, isTabMode]);
 
-	// Register layer on mount - only register once, use updateLayerHandler for handler changes
+	// Register layer on mount - only for overlay mode (not tab mode)
+	// Tab mode: File preview is part of the main panel content, not an overlay
+	// It doesn't need layer registration since it doesn't block keyboard shortcuts or need focus trapping
 	// Note: handleEscapeRequest is intentionally NOT in the dependency array to prevent
 	// infinite re-registration loops when its dependencies (hasChanges, searchOpen) change.
 	// The subsequent useEffect with updateLayerHandler handles keeping the handler current.
 	useEffect(() => {
+		// Skip layer registration entirely in tab mode - tabs are main content, not overlays
+		if (isTabMode) {
+			return;
+		}
+
 		layerIdRef.current = registerLayer({
 			type: 'overlay',
 			priority: MODAL_PRIORITIES.FILE_PREVIEW,
@@ -913,15 +1145,25 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 				unregisterLayer(layerIdRef.current);
 			}
 		};
-		 
-	}, [registerLayer, unregisterLayer]);
 
-	// Update handler when dependencies change
+	}, [registerLayer, unregisterLayer, isTabMode]);
+
+	// Update handler when dependencies change (only for overlay mode)
 	useEffect(() => {
-		if (layerIdRef.current) {
+		if (layerIdRef.current && !isTabMode) {
 			updateLayerHandler(layerIdRef.current, handleEscapeRequest);
 		}
-	}, [handleEscapeRequest, updateLayerHandler]);
+	}, [handleEscapeRequest, updateLayerHandler, isTabMode]);
+
+	// Click outside to dismiss (same behavior as Escape)
+	// Use delay to prevent the click that opened the preview from immediately closing it
+	// Disable click-outside in tab mode - tabs should only close via explicit user action
+	useClickOutside(containerRef, handleEscapeRequest, !!file && !isTabMode, { delay: true });
+
+	// Click outside ToC overlay to dismiss (exclude both overlay and the toggle button)
+	// Use delay to prevent the click that opened it from immediately closing it
+	const closeTocOverlay = useCallback(() => setShowTocOverlay(false), []);
+	useClickOutside<HTMLElement>([tocOverlayRef, tocButtonRef], closeTocOverlay, showTocOverlay, { delay: true });
 
 	// Keep search input focused when search is open
 	useEffect(() => {
@@ -1549,13 +1791,6 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 						>
 							<FolderOpen className="w-4 h-4" />
 						</button>
-						<button
-							onClick={onClose}
-							className="p-2 rounded hover:bg-white/10 transition-colors"
-							style={{ color: theme.colors.textDim }}
-						>
-							<X className="w-5 h-5" />
-						</button>
 					</div>
 				</div>
 				{/* File Stats subbar - hidden on scroll */}
@@ -1728,8 +1963,12 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 				) : null}
 			</div>
 
-			{/* Content */}
-			<div ref={contentRef} className="flex-1 overflow-y-auto px-6 pt-3 pb-6 scrollbar-thin">
+			{/* Content - isolated scroll to prevent scroll chaining */}
+			<div
+				ref={contentRef}
+				className="flex-1 overflow-y-auto px-6 pt-3 pb-6 scrollbar-thin"
+				style={{ overscrollBehavior: 'contain' }}
+			>
 				{/* Floating Search */}
 				{searchOpen && (
 					<div className="sticky top-0 z-10 pb-4">
@@ -1992,6 +2231,143 @@ export const FilePreview = forwardRef<FilePreviewHandle, FilePreviewProps>(funct
 							{displayContent}
 						</SyntaxHighlighter>
 					</div>
+				)}
+
+				{/* Table of Contents Floating Button and Overlay - Only for markdown in preview mode */}
+				{isMarkdown && !markdownEditMode && tocEntries.length > 0 && (
+					<>
+						{/* Floating TOC Button */}
+						<button
+							ref={tocButtonRef}
+							onClick={() => setShowTocOverlay(!showTocOverlay)}
+							className="absolute bottom-4 right-4 p-2.5 rounded-full shadow-lg transition-all duration-200 hover:scale-105 z-10"
+							style={{
+								backgroundColor: showTocOverlay ? theme.colors.accent : theme.colors.bgSidebar,
+								color: showTocOverlay ? theme.colors.accentForeground : theme.colors.textMain,
+								border: `1px solid ${theme.colors.border}`,
+							}}
+							title="Table of Contents"
+						>
+							<List className="w-5 h-5" />
+						</button>
+
+						{/* TOC Overlay - click outside handled by useClickOutside hook */}
+						{showTocOverlay && (
+							<div
+								ref={tocOverlayRef}
+								className="absolute bottom-16 right-4 rounded-lg shadow-xl overflow-hidden z-20 animate-in fade-in slide-in-from-bottom-2 duration-200 flex flex-col"
+								style={{
+									backgroundColor: theme.colors.bgSidebar,
+									border: `1px solid ${theme.colors.border}`,
+										maxHeight: 'calc(70vh - 80px)',
+										minWidth: '200px',
+										maxWidth: '350px',
+									}}
+									onWheel={(e) => e.stopPropagation()}
+								>
+								{/* TOC Header */}
+								<div
+									className="px-3 py-2 border-b flex items-center justify-between flex-shrink-0"
+									style={{ borderColor: theme.colors.border }}
+								>
+									<span
+										className="text-xs font-medium uppercase tracking-wide"
+										style={{ color: theme.colors.textDim }}
+									>
+										Contents
+									</span>
+									<span
+										className="text-[10px]"
+										style={{ color: theme.colors.textDim }}
+									>
+										{tocEntries.length} headings
+									</span>
+								</div>
+								{/* Top Navigation Sash */}
+								<button
+									data-testid="toc-top-button"
+									onClick={() => {
+										scrollMarkdownToBoundary('top');
+									}}
+									className="w-full px-3 py-2 text-left text-xs border-b transition-colors flex items-center gap-2 hover:brightness-110 flex-shrink-0"
+									style={{
+										backgroundColor: `${theme.colors.accent}15`,
+										borderColor: theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+									title="Jump to top"
+								>
+									<ChevronUp className="w-3 h-3" style={{ color: theme.colors.accent }} />
+									<span>Top</span>
+								</button>
+
+								{/* TOC Entries - scrollable middle section */}
+								<div
+									className="overflow-y-auto px-1 py-1 flex-1 min-h-0"
+									style={{ overscrollBehavior: 'contain' }}
+									onWheel={(e) => e.stopPropagation()}
+								>
+									{tocEntries.map((entry, index) => {
+										// Get color based on heading level (match the prose styles)
+										const levelColors: Record<number, string> = {
+											1: theme.colors.accent,
+											2: theme.colors.success,
+											3: theme.colors.warning,
+											4: theme.colors.textMain,
+											5: theme.colors.textMain,
+											6: theme.colors.textDim,
+										};
+										const headingColor = levelColors[entry.level] || theme.colors.textMain;
+
+										return (
+											<button
+												key={`${entry.slug}-${index}`}
+												onClick={() => {
+													// Find and scroll to the heading
+													const targetElement = markdownContainerRef.current?.querySelector(
+														`#${CSS.escape(entry.slug)}`
+													);
+													if (targetElement) {
+														targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
+													}
+													// ToC stays open so user can click multiple items
+													// Dismiss with click outside or Escape key
+												}}
+												className="w-full px-2 py-1.5 text-left text-sm rounded hover:bg-white/10 transition-colors truncate flex items-center gap-1"
+												style={{
+													color: headingColor,
+													paddingLeft: `${(entry.level - 1) * 12 + 8}px`,
+													opacity: entry.level > 3 ? 0.85 : 1,
+													fontSize: entry.level === 1 ? '0.875rem' : entry.level === 2 ? '0.8125rem' : '0.75rem',
+												}}
+												title={entry.text}
+											>
+												<span className="truncate">{entry.text}</span>
+											</button>
+										);
+									})}
+								</div>
+
+								{/* Bottom Navigation Sash */}
+								<button
+									data-testid="toc-bottom-button"
+									onClick={() => {
+										scrollMarkdownToBoundary('bottom');
+									}}
+									className="w-full px-3 py-2 text-left text-xs border-t transition-colors flex items-center gap-2 hover:brightness-110 flex-shrink-0"
+									style={{
+										backgroundColor: `${theme.colors.accent}15`,
+										borderColor: theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+									title="Jump to bottom"
+								>
+									<ChevronDown className="w-3 h-3" style={{ color: theme.colors.accent }} />
+									<span>Bottom</span>
+								</button>
+							</div>
+						)}
+					</>
 				)}
 			</div>
 

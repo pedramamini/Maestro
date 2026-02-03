@@ -25,7 +25,7 @@ The exchange displays playbooks in a searchable grid organized by category:
 Use `Cmd+Shift+[` / `Cmd+Shift+]` (`Ctrl+Shift+[/]` on Windows/Linux) to quickly switch between category tabs.
 
 <Frame>
-  <img src="/screenshots/playbook-exchange-list.png" alt="Playbook Exchange browsing view" />
+  <img src="./screenshots/playbook-exchange-list.png" alt="Playbook Exchange browsing view" />
 </Frame>
 
 ## Playbook Details
@@ -46,7 +46,7 @@ Clicking a playbook tile (or pressing `Enter`) opens the detail view where you c
 - **`Esc`** — Return to the playbook grid
 
 <Frame>
-  <img src="/screenshots/playbook-exchange-details.png" alt="Playbook Exchange detail view" />
+  <img src="./screenshots/playbook-exchange-details.png" alt="Playbook Exchange detail view" />
 </Frame>
 
 ## Importing a Playbook

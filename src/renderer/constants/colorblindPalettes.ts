@@ -114,3 +114,120 @@ export function getColorBlindPattern(index: number): ColorBlindPattern {
 	];
 	return patterns[index % patterns.length];
 }
+
+/**
+ * Colorblind-safe palette for file extension badges.
+ * Uses Wong's palette with appropriate contrast for badge backgrounds and text.
+ * Each extension category is mapped to a distinct, colorblind-safe color.
+ *
+ * Colors are chosen to be distinguishable in:
+ * - Protanopia (red-green, red-weak)
+ * - Deuteranopia (red-green, green-weak)
+ * - Tritanopia (blue-yellow)
+ *
+ * Each color has a light mode and dark mode variant for proper contrast.
+ */
+export const COLORBLIND_EXTENSION_PALETTE = {
+	// TypeScript/JavaScript - Strong Blue (#0077BB)
+	typescript: {
+		light: { bg: 'rgba(0, 119, 187, 0.18)', text: 'rgba(0, 90, 150, 0.95)' },
+		dark: { bg: 'rgba(0, 119, 187, 0.35)', text: 'rgba(102, 178, 230, 0.95)' },
+	},
+	// Markdown/Docs - Teal (#009988)
+	markdown: {
+		light: { bg: 'rgba(0, 153, 136, 0.18)', text: 'rgba(0, 115, 100, 0.95)' },
+		dark: { bg: 'rgba(0, 153, 136, 0.35)', text: 'rgba(77, 204, 189, 0.95)' },
+	},
+	// JSON/Config - Orange (#EE7733)
+	config: {
+		light: { bg: 'rgba(238, 119, 51, 0.18)', text: 'rgba(180, 85, 30, 0.95)' },
+		dark: { bg: 'rgba(238, 119, 51, 0.35)', text: 'rgba(255, 170, 120, 0.95)' },
+	},
+	// CSS/Styles - Purple (#AA4499)
+	styles: {
+		light: { bg: 'rgba(170, 68, 153, 0.18)', text: 'rgba(130, 50, 115, 0.95)' },
+		dark: { bg: 'rgba(170, 68, 153, 0.35)', text: 'rgba(210, 140, 195, 0.95)' },
+	},
+	// HTML/Templates - Vermillion (#CC3311)
+	html: {
+		light: { bg: 'rgba(204, 51, 17, 0.18)', text: 'rgba(160, 40, 15, 0.95)' },
+		dark: { bg: 'rgba(204, 51, 17, 0.35)', text: 'rgba(255, 130, 100, 0.95)' },
+	},
+	// Python - Cyan (#33BBEE)
+	python: {
+		light: { bg: 'rgba(51, 187, 238, 0.18)', text: 'rgba(30, 130, 175, 0.95)' },
+		dark: { bg: 'rgba(51, 187, 238, 0.35)', text: 'rgba(130, 210, 245, 0.95)' },
+	},
+	// Rust - Magenta (#EE3377)
+	rust: {
+		light: { bg: 'rgba(238, 51, 119, 0.18)', text: 'rgba(180, 35, 85, 0.95)' },
+		dark: { bg: 'rgba(238, 51, 119, 0.35)', text: 'rgba(255, 140, 175, 0.95)' },
+	},
+	// Go - Blue-Green (#44AA99)
+	go: {
+		light: { bg: 'rgba(68, 170, 153, 0.18)', text: 'rgba(45, 130, 115, 0.95)' },
+		dark: { bg: 'rgba(68, 170, 153, 0.35)', text: 'rgba(130, 210, 195, 0.95)' },
+	},
+	// Shell - Gray (#BBBBBB)
+	shell: {
+		light: { bg: 'rgba(120, 120, 120, 0.18)', text: 'rgba(80, 80, 80, 0.95)' },
+		dark: { bg: 'rgba(150, 150, 150, 0.35)', text: 'rgba(200, 200, 200, 0.95)' },
+	},
+	// Default/Unknown - uses theme colors (handled in getExtensionColor)
+};
+
+/**
+ * Get colorblind-safe color for file extension badges.
+ * Maps file extensions to colorblind-friendly colors from Wong's palette.
+ *
+ * @param extension - File extension including dot (e.g., '.ts', '.md')
+ * @param isLightTheme - Whether the current theme is light mode
+ * @returns Object with bg (background) and text color in rgba format
+ */
+export function getColorBlindExtensionColor(
+	extension: string,
+	isLightTheme: boolean
+): { bg: string; text: string } | null {
+	const ext = extension.toLowerCase();
+	const mode = isLightTheme ? 'light' : 'dark';
+
+	// TypeScript/JavaScript
+	if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.typescript[mode];
+	}
+	// Markdown/Docs
+	if (['.md', '.mdx', '.txt', '.rst'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.markdown[mode];
+	}
+	// JSON/Config
+	if (['.json', '.yaml', '.yml', '.toml', '.ini', '.env'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.config[mode];
+	}
+	// CSS/Styles
+	if (['.css', '.scss', '.sass', '.less', '.styl'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.styles[mode];
+	}
+	// HTML/Templates
+	if (['.html', '.htm', '.xml', '.svg'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.html[mode];
+	}
+	// Python
+	if (['.py', '.pyw', '.pyi'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.python[mode];
+	}
+	// Rust
+	if (['.rs'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.rust[mode];
+	}
+	// Go
+	if (['.go'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.go[mode];
+	}
+	// Shell scripts
+	if (['.sh', '.bash', '.zsh', '.fish'].includes(ext)) {
+		return COLORBLIND_EXTENSION_PALETTE.shell[mode];
+	}
+
+	// Return null for unknown extensions (caller should use theme defaults)
+	return null;
+}

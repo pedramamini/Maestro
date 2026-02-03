@@ -295,4 +295,91 @@ describe('useFileTreeManagement', () => {
 			remoteCwd: '/remote/project',
 		});
 	});
+
+	it('fetches stats for sessions with file tree but no stats (migration)', async () => {
+		// Mock directorySize for the migration
+		const mockDirectorySize = vi.fn().mockResolvedValue({
+			fileCount: 100,
+			folderCount: 20,
+			totalSize: 5000000,
+		});
+
+		const originalFs = window.maestro?.fs;
+		window.maestro = {
+			...window.maestro,
+			fs: {
+				...originalFs,
+				directorySize: mockDirectorySize,
+			},
+		};
+
+		// Create session with file tree but no stats (simulating pre-Dec 2025 session)
+		const sessionWithTreeNoStats = createMockSession({
+			fileTree: [{ name: 'existing.txt', type: 'file' }],
+			fileTreeStats: undefined,
+			fileTreeError: undefined,
+			fileTreeLoading: false,
+		});
+		const state = createSessionsState([sessionWithTreeNoStats]);
+		const deps = createDeps(state);
+
+		renderHook(() => useFileTreeManagement(deps));
+
+		// Wait for the migration effect to run
+		await waitFor(() => {
+			expect(mockDirectorySize).toHaveBeenCalledWith('/test/project', undefined);
+		});
+
+		// Verify stats were populated
+		await waitFor(() => {
+			const updated = state.getSessions()[0];
+			expect(updated.fileTreeStats).toEqual({
+				fileCount: 100,
+				folderCount: 20,
+				totalSize: 5000000,
+			});
+		});
+
+		// Restore original
+		if (originalFs) {
+			window.maestro.fs = originalFs;
+		}
+	});
+
+	it('does not fetch stats when session already has stats', async () => {
+		const mockDirectorySize = vi.fn();
+
+		const originalFs = window.maestro?.fs;
+		window.maestro = {
+			...window.maestro,
+			fs: {
+				...originalFs,
+				directorySize: mockDirectorySize,
+			},
+		};
+
+		// Create session with both file tree and stats (no migration needed)
+		const sessionWithStats = createMockSession({
+			fileTree: [{ name: 'existing.txt', type: 'file' }],
+			fileTreeStats: {
+				fileCount: 50,
+				folderCount: 10,
+				totalSize: 1000000,
+			},
+		});
+		const state = createSessionsState([sessionWithStats]);
+		const deps = createDeps(state);
+
+		renderHook(() => useFileTreeManagement(deps));
+
+		// Migration should NOT run since stats exist
+		// Give it a moment to not be called
+		await new Promise((resolve) => setTimeout(resolve, 50));
+		expect(mockDirectorySize).not.toHaveBeenCalled();
+
+		// Restore original
+		if (originalFs) {
+			window.maestro.fs = originalFs;
+		}
+	});
 });

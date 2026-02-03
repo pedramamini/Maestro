@@ -59,28 +59,6 @@ export const AGENT_ARTIFACTS: Record<ToolType, string[]> = {
 		'Claude Code',
 		'CLAUDE.md',
 	],
-	aider: [
-		// Slash commands
-		'/add',
-		'/drop',
-		'/commit',
-		'/diff',
-		'/undo',
-		'/clear',
-		'/run',
-		'/voice',
-		'/help',
-		'/quit',
-		'/ls',
-		'/map',
-		// Brand references
-		'Aider',
-		'aider',
-		// Model references
-		'gpt-4',
-		'gpt-3.5',
-		'GPT',
-	],
 	opencode: [
 		// Slash commands
 		'/help',
@@ -110,13 +88,17 @@ export const AGENT_ARTIFACTS: Record<ToolType, string[]> = {
 		'openai codex',
 		'OpenAI Codex',
 	],
-	claude: [
-		// This is the base Claude (not Claude Code)
+	'factory-droid': [
+		// Brand references
+		'Factory',
+		'Droid',
+		'Factory Droid',
+		// Model references (can use multiple providers)
 		'Claude',
-		'Anthropic',
-		'sonnet',
-		'opus',
-		'haiku',
+		'GPT',
+		'Gemini',
+		'Opus',
+		'Sonnet',
 	],
 	terminal: [
 		// Terminal has no agent-specific artifacts
@@ -134,12 +116,6 @@ export const AGENT_TARGET_NOTES: Record<ToolType, string> = {
     It uses slash commands like /compact, /clear, /cost for session management.
     It can handle large codebases and multi-file changes.
   `,
-	aider: `
-    Aider is an AI pair programming tool.
-    It works with git repositories and can make commits.
-    It uses /add to include files in context and /drop to remove them.
-    It focuses on code changes and git workflow.
-  `,
 	opencode: `
     OpenCode is a multi-model AI coding assistant.
     It supports multiple AI providers and models.
@@ -151,10 +127,11 @@ export const AGENT_TARGET_NOTES: Record<ToolType, string> = {
     It can read files, edit code, and run terminal commands.
     It excels at complex reasoning and problem-solving.
   `,
-	claude: `
-    Claude is a general-purpose AI assistant by Anthropic.
-    It does not have direct file system or terminal access.
-    Code examples should be presented as text for the user to apply.
+	'factory-droid': `
+    Factory Droid is an enterprise AI coding assistant by Factory.
+    It supports multiple model providers (Claude, GPT, Gemini).
+    It can read and edit files, run commands, search code, and interact with git.
+    It has tiered autonomy levels for controlling operation permissions.
   `,
 	terminal: `
     Terminal is a raw shell interface.
@@ -168,10 +145,9 @@ export const AGENT_TARGET_NOTES: Record<ToolType, string> = {
 export function getAgentDisplayName(agentType: ToolType): string {
 	const names: Record<ToolType, string> = {
 		'claude-code': 'Claude Code',
-		aider: 'Aider',
 		opencode: 'OpenCode',
 		codex: 'OpenAI Codex',
-		claude: 'Claude',
+		'factory-droid': 'Factory Droid',
 		terminal: 'Terminal',
 	};
 	return names[agentType] || agentType;
@@ -319,7 +295,7 @@ export class ContextGroomingService {
 			// Use the new single-call groomContext API (spawns batch process with prompt)
 			const groomedText = await window.maestro.context.groomContext(
 				targetProjectRoot,
-				this.config.defaultAgentType,
+				request.targetAgent,
 				prompt
 			);
 

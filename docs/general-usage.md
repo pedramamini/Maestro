@@ -22,7 +22,7 @@ Maestro features a three-panel layout:
 Each agent shows a color-coded status indicator:
 
 - 🟢 **Green** - Ready and waiting
-- 🟡 **Yellow** - Agent is thinking
+- 🟡 **Yellow** - Agent is thinking or waiting for user input
 - 🔴 **Red** - No connection with agent
 - 🟠 **Pulsing Orange** - Attempting to establish connection
 - 🔴 **Red Badge** - Unread messages (small red dot overlapping top-right of status indicator, iPhone-style)
@@ -46,7 +46,7 @@ When you open a file, a **breadcrumb trail** appears showing your navigation his
 
 ### File Editing
 
-Files can be edited directly in the preview. Changes are saved automatically when you navigate away or close the preview.
+Files can be edited directly in the preview. Press `Cmd+S` / `Ctrl+S` to save changes. If you navigate away or close the preview with unsaved changes, a confirmation dialog will ask whether to discard them.
 
 ### Publish as GitHub Gist
 
@@ -89,6 +89,7 @@ Reference files in your AI prompts using `@` mentions:
 For complex prompts that need more editing space, use the **Prompt Composer** — a fullscreen editing modal.
 
 **To open the Prompt Composer:**
+- Press `Cmd+Shift+P` / `Ctrl+Shift+P`, or
 - Click the **pencil icon** (✏️) in the bottom-left corner of the AI input box
 
 ![Prompt Composer Button](./screenshots/prompt-composer-button.png)
@@ -318,10 +319,48 @@ Drag the right edge of the sidebar to resize it. The width is persisted across s
 
 ### Collapsed Mode
 
-Click the sidebar toggle (`Cmd+B` / `Ctrl+B`) to collapse the sidebar to icon-only mode. In collapsed mode:
+Click the sidebar toggle (`Opt+Cmd+Left` / `Alt+Ctrl+Left`) to collapse the sidebar to icon-only mode. In collapsed mode:
 - Agents show as icons with status indicators
 - Hover for agent name tooltip
 - Click to select an agent
+
+## Tab Management
+
+Each agent session can have multiple tabs, allowing you to work on different tasks within the same project workspace.
+
+### Automatic Tab Naming
+
+When you send your first message to a new tab, Maestro automatically generates a descriptive name based on your request. This helps you identify tabs at a glance without manual renaming.
+
+**How it works:**
+1. When you start a new conversation in a tab, your first message is analyzed
+2. An AI generates a concise, relevant name (2-5 words)
+3. The tab name updates automatically once the name is generated
+4. If you've already renamed the tab, automatic naming is skipped
+
+**Examples of generated tab names:**
+| Your message | Generated name |
+|--------------|----------------|
+| "Help me implement user authentication with JWT" | JWT Auth Implementation |
+| "Fix the bug in the checkout flow" | Checkout Bug Fix |
+| "Add dark mode support to the app" | Dark Mode Support |
+| "Refactor the database queries" | Database Query Refactor |
+
+**Configuring automatic tab naming:**
+- Go to **Settings** (`Cmd+,` / `Ctrl+,`) → **General**
+- Toggle **Automatic Tab Naming** on or off
+- Default: Enabled
+
+<Note>
+Automatic tab naming uses the same AI agent as your session, including SSH remote configurations. The naming request runs in parallel with your main prompt, so there's no delay to your workflow.
+</Note>
+
+### Manual Tab Renaming
+
+You can always rename tabs manually:
+- Right-click a tab → **Rename Tab**
+- Or double-click the tab name to edit it directly
+- Manual names take precedence over automatic naming
 
 ## Session Management
 

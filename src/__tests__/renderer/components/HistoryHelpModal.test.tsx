@@ -1,6 +1,6 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, cleanup, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, cleanup } from '@testing-library/react';
 import { HistoryHelpModal } from '../../../renderer/components/HistoryHelpModal';
 import type { Theme } from '../../../renderer/types';
 
@@ -18,21 +18,6 @@ vi.mock('../../../renderer/contexts/LayerStackContext', () => ({
 	}),
 }));
 
-// Mock window.maestro APIs
-const mockGetCurrentStoragePath = vi.fn();
-const mockHomeDir = vi.fn();
-
-Object.defineProperty(window, 'maestro', {
-	value: {
-		sync: {
-			getCurrentStoragePath: mockGetCurrentStoragePath,
-		},
-		fs: {
-			homeDir: mockHomeDir,
-		},
-	},
-	writable: true,
-});
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -102,11 +87,6 @@ describe('HistoryHelpModal', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		mockRegisterLayer.mockReturnValue('test-layer-id');
-		// Default mock values for storage path APIs
-		mockGetCurrentStoragePath.mockResolvedValue(
-			'/Users/testuser/Library/Application Support/maestro'
-		);
-		mockHomeDir.mockResolvedValue('/Users/testuser');
 	});
 
 	afterEach(() => {
@@ -865,81 +845,6 @@ describe('HistoryHelpModal', () => {
 			// Modal component uses p-6 for content area padding
 			const contentArea = container.querySelector('.p-6');
 			expect(contentArea).toBeInTheDocument();
-		});
-	});
-
-	describe('Dynamic History Path', () => {
-		it('displays default storage path with home directory shortened', async () => {
-			mockGetCurrentStoragePath.mockResolvedValue(
-				'/Users/testuser/Library/Application Support/maestro'
-			);
-			mockHomeDir.mockResolvedValue('/Users/testuser');
-
-			render(<HistoryHelpModal {...defaultProps} />);
-
-			await waitFor(() => {
-				expect(
-					screen.getByText('~/Library/Application Support/maestro/history/<sessionId>.json')
-				).toBeInTheDocument();
-			});
-		});
-
-		it('displays custom storage path when user has configured one', async () => {
-			mockGetCurrentStoragePath.mockResolvedValue('/Users/testuser/Dropbox/MaestroSync');
-			mockHomeDir.mockResolvedValue('/Users/testuser');
-
-			render(<HistoryHelpModal {...defaultProps} />);
-
-			await waitFor(() => {
-				expect(
-					screen.getByText('~/Dropbox/MaestroSync/history/<sessionId>.json')
-				).toBeInTheDocument();
-			});
-		});
-
-		it('displays full path when not under home directory', async () => {
-			mockGetCurrentStoragePath.mockResolvedValue('/opt/maestro/data');
-			mockHomeDir.mockResolvedValue('/Users/testuser');
-
-			render(<HistoryHelpModal {...defaultProps} />);
-
-			await waitFor(() => {
-				expect(screen.getByText('/opt/maestro/data/history/<sessionId>.json')).toBeInTheDocument();
-			});
-		});
-
-		it('displays Windows path with backslashes when detected', async () => {
-			mockGetCurrentStoragePath.mockResolvedValue('C:\\Users\\testuser\\AppData\\Roaming\\maestro');
-			mockHomeDir.mockResolvedValue('C:\\Users\\testuser');
-
-			render(<HistoryHelpModal {...defaultProps} />);
-
-			await waitFor(() => {
-				expect(
-					screen.getByText('~\\AppData\\Roaming\\maestro\\history\\<sessionId>.json')
-				).toBeInTheDocument();
-			});
-		});
-
-		it('shows fallback path when API fails', async () => {
-			mockGetCurrentStoragePath.mockRejectedValue(new Error('API unavailable'));
-			mockHomeDir.mockRejectedValue(new Error('API unavailable'));
-
-			render(<HistoryHelpModal {...defaultProps} />);
-
-			await waitFor(() => {
-				expect(screen.getByText('<storage-folder>/history/<sessionId>.json')).toBeInTheDocument();
-			});
-		});
-
-		it('shows Loading... initially before path is fetched', () => {
-			// Use a promise that never resolves to test loading state
-			mockGetCurrentStoragePath.mockReturnValue(new Promise(() => {}));
-			mockHomeDir.mockReturnValue(new Promise(() => {}));
-
-			render(<HistoryHelpModal {...defaultProps} />);
-
-			expect(screen.getByText('Loading...')).toBeInTheDocument();
 		});
 	});
 });

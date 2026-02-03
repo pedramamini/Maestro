@@ -341,4 +341,82 @@ describe('useAgentExecution', () => {
 		expect(setFlashNotification).toHaveBeenCalledWith(null);
 		expect(setSuccessFlashNotification).toHaveBeenCalledWith(null);
 	});
+
+	it('cancels pending synopsis sessions when cancelPendingSynopsis is called', async () => {
+		const mockKill = vi.fn().mockResolvedValue(true);
+		window.maestro.process.kill = mockKill;
+
+		const session = createMockSession();
+		const sessionsRef = { current: [session] };
+		const setSessions = vi.fn();
+
+		const { result } = renderHook(() =>
+			useAgentExecution({
+				activeSession: session,
+				sessionsRef,
+				setSessions,
+				processQueuedItemRef: { current: null },
+				setFlashNotification: vi.fn(),
+				setSuccessFlashNotification: vi.fn(),
+			})
+		);
+
+		// Spawn a synopsis session (don't wait for it to complete)
+		const spawnPromise = result.current.spawnBackgroundSynopsis(
+			session.id,
+			session.cwd,
+			'resume-123',
+			'Summarize session',
+			'claude-code'
+		);
+
+		await waitFor(() => {
+			expect(mockProcess.spawn).toHaveBeenCalledTimes(1);
+		});
+
+		// Cancel the pending synopsis
+		await act(async () => {
+			await result.current.cancelPendingSynopsis(session.id);
+		});
+
+		// Should have called kill on the synopsis session
+		expect(mockKill).toHaveBeenCalledTimes(1);
+		expect(mockKill.mock.calls[0][0]).toMatch(new RegExp(`^${session.id}-synopsis-\\d+$`));
+
+		// Clean up: trigger exit so the promise resolves
+		const spawnConfig = mockProcess.spawn.mock.calls[0][0];
+		const targetSessionId = spawnConfig.sessionId as string;
+		act(() => {
+			onExitHandler?.(targetSessionId);
+		});
+
+		await spawnPromise;
+	});
+
+	it('does nothing when cancelPendingSynopsis is called with no pending synopses', async () => {
+		const mockKill = vi.fn().mockResolvedValue(true);
+		window.maestro.process.kill = mockKill;
+
+		const session = createMockSession();
+		const sessionsRef = { current: [session] };
+
+		const { result } = renderHook(() =>
+			useAgentExecution({
+				activeSession: session,
+				sessionsRef,
+				setSessions: vi.fn(),
+				processQueuedItemRef: { current: null },
+				setFlashNotification: vi.fn(),
+				setSuccessFlashNotification: vi.fn(),
+			})
+		);
+
+		// Cancel with no pending synopses
+		await act(async () => {
+			await result.current.cancelPendingSynopsis(session.id);
+		});
+
+		// Should not have called kill
+		expect(mockKill).not.toHaveBeenCalled();
+	});
 });

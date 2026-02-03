@@ -91,7 +91,7 @@ const createMockSession = (overrides?: Partial<Session>): Session =>
 			previousUIState: {
 				readOnlyMode: false,
 				saveToHistory: true,
-				showThinking: false,
+				showThinking: 'off',
 			},
 		},
 		...overrides,

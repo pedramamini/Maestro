@@ -825,8 +825,8 @@ describe('error-patterns', () => {
 				],
 			};
 
-			registerErrorPatterns('aider', customPatterns);
-			const patterns = getErrorPatterns('aider');
+			registerErrorPatterns('factory-droid', customPatterns);
+			const patterns = getErrorPatterns('factory-droid');
 			expect(patterns).toBe(customPatterns);
 		});
 

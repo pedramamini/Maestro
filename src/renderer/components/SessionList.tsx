@@ -34,6 +34,7 @@ import {
 	BookOpen,
 	BarChart3,
 	Server,
+	Music,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type {
@@ -436,6 +437,7 @@ interface HamburgerMenuContentProps {
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
+	setSymphonyModalOpen: (open: boolean) => void;
 	setUpdateCheckModalOpen: (open: boolean) => void;
 	setAboutModalOpen: (open: boolean) => void;
 	setMenuOpen: (open: boolean) => void;
@@ -452,6 +454,7 @@ function HamburgerMenuContent({
 	setLogViewerOpen,
 	setProcessMonitorOpen,
 	setUsageDashboardOpen,
+	setSymphonyModalOpen,
 	setUpdateCheckModalOpen,
 	setAboutModalOpen,
 	setMenuOpen,
@@ -617,6 +620,29 @@ function HamburgerMenuContent({
 					style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
 				>
 					{formatShortcutKeys(shortcuts.usageDashboard.keys)}
+				</span>
+			</button>
+			<button
+				onClick={() => {
+					setSymphonyModalOpen(true);
+					setMenuOpen(false);
+				}}
+				className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 transition-colors text-left"
+			>
+				<Music className="w-5 h-5" style={{ color: theme.colors.accent }} />
+				<div className="flex-1">
+					<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+						Maestro Symphony
+					</div>
+					<div className="text-xs" style={{ color: theme.colors.textDim }}>
+						Contribute to open source
+					</div>
+				</div>
+				<span
+					className="text-xs font-mono px-1.5 py-0.5 rounded"
+					style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+				>
+					{shortcuts.openSymphony ? formatShortcutKeys(shortcuts.openSymphony.keys) : '⇧⌘Y'}
 				</span>
 			</button>
 			<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
@@ -961,6 +987,7 @@ interface SessionListProps {
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
+	setSymphonyModalOpen: (open: boolean) => void;
 	toggleGroup: (groupId: string) => void;
 	handleDragStart: (sessionId: string) => void;
 	handleDragOver: (e: React.DragEvent) => void;
@@ -1078,6 +1105,7 @@ function SessionListInner(props: SessionListProps) {
 		setLogViewerOpen,
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
+		setSymphonyModalOpen,
 		toggleGroup,
 		handleDragStart,
 		handleDragOver,
@@ -1348,7 +1376,7 @@ function SessionListInner(props: SessionListProps) {
 							key={`${keyPrefix}-part-${s.id}`}
 							className={`group/segment relative flex-1 h-full ${isInBatch ? 'animate-pulse' : ''}`}
 							style={{
-								...(s.toolType === 'claude' && !s.agentSessionId && !isInBatch
+								...(s.toolType === 'claude-code' && !s.agentSessionId && !isInBatch
 									? { border: `1px solid ${theme.colors.textDim}`, backgroundColor: 'transparent' }
 									: {
 											backgroundColor: isInBatch
@@ -1685,15 +1713,15 @@ function SessionListInner(props: SessionListProps) {
 	}, [sessionFilter, sessions, worktreeChildrenByParentId]);
 
 	// Destructure for backwards compatibility with existing code
-	const filteredSessions = sessionCategories.filtered;
+	const _filteredSessions = sessionCategories.filtered;
 	const bookmarkedSessions = sessionCategories.bookmarked;
-	const bookmarkedParentSessions = sessionCategories.sortedBookmarkedParent;
+	const _bookmarkedParentSessions = sessionCategories.sortedBookmarkedParent;
 	const sortedBookmarkedSessions = sessionCategories.sortedBookmarked;
 	const sortedBookmarkedParentSessions = sessionCategories.sortedBookmarkedParent;
-	const groupedSessionsById = sessionCategories.groupedMap;
+	const _groupedSessionsById = sessionCategories.groupedMap;
 	const sortedGroupSessionsById = sessionCategories.sortedGrouped;
 	const ungroupedSessions = sessionCategories.ungrouped;
-	const ungroupedParentSessions = sessionCategories.sortedUngroupedParent;
+	const _ungroupedParentSessions = sessionCategories.sortedUngroupedParent;
 	const sortedUngroupedSessions = sessionCategories.sortedUngrouped;
 	const sortedUngroupedParentSessions = sessionCategories.sortedUngroupedParent;
 	const sortedFilteredSessions = sessionCategories.sortedFiltered;
@@ -2363,7 +2391,7 @@ function SessionListInner(props: SessionListProps) {
 							{/* Menu Overlay */}
 							{menuOpen && (
 								<div
-									className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-hidden"
+									className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin max-h-[calc(100vh-120px)]"
 									data-tour="hamburger-menu-contents"
 									style={{
 										backgroundColor: theme.colors.bgSidebar,
@@ -2381,6 +2409,7 @@ function SessionListInner(props: SessionListProps) {
 										setLogViewerOpen={setLogViewerOpen}
 										setProcessMonitorOpen={setProcessMonitorOpen}
 										setUsageDashboardOpen={setUsageDashboardOpen}
+										setSymphonyModalOpen={setSymphonyModalOpen}
 										setUpdateCheckModalOpen={setUpdateCheckModalOpen}
 										setAboutModalOpen={setAboutModalOpen}
 										setMenuOpen={setMenuOpen}
@@ -2401,7 +2430,7 @@ function SessionListInner(props: SessionListProps) {
 						{/* Menu Overlay for Collapsed Sidebar */}
 						{menuOpen && (
 							<div
-								className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-hidden"
+								className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin max-h-[calc(100vh-120px)]"
 								style={{
 									backgroundColor: theme.colors.bgSidebar,
 									border: `1px solid ${theme.colors.border}`,
@@ -2418,6 +2447,7 @@ function SessionListInner(props: SessionListProps) {
 									setLogViewerOpen={setLogViewerOpen}
 									setProcessMonitorOpen={setProcessMonitorOpen}
 									setUsageDashboardOpen={setUsageDashboardOpen}
+									setSymphonyModalOpen={setSymphonyModalOpen}
 									setUpdateCheckModalOpen={setUpdateCheckModalOpen}
 									setAboutModalOpen={setAboutModalOpen}
 									setMenuOpen={setMenuOpen}
@@ -2610,77 +2640,126 @@ function SessionListInner(props: SessionListProps) {
 
 					{/* SESSIONS - Flat list when no groups exist, otherwise show Ungrouped folder */}
 					{sessions.length > 0 && groups.length === 0 ? (
-						/* FLAT LIST - No groups exist yet, show sessions directly */
-						<div className="flex flex-col">
-							{sortedFilteredSessions.map((session) =>
-								renderSessionWithWorktrees(session, 'flat', { keyPrefix: 'flat' })
-							)}
-						</div>
-					) : (
-						groups.length > 0 && (
-							/* UNGROUPED FOLDER - Groups exist, show as collapsible folder */
-							<div className="mb-1 mt-4">
-								<div
-									className="px-3 py-1.5 flex items-center justify-between cursor-pointer hover:bg-opacity-50 group"
-									onClick={() => setUngroupedCollapsed(!ungroupedCollapsed)}
-									onDragOver={handleDragOver}
-									onDrop={handleDropOnUngrouped}
-								>
-									<div
-										className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider flex-1"
-										style={{ color: theme.colors.textDim }}
-									>
-										{ungroupedCollapsed ? (
-											<ChevronRight className="w-3 h-3" />
-										) : (
-											<ChevronDown className="w-3 h-3" />
-										)}
-										<Folder className="w-3.5 h-3.5" />
-										<span>Ungrouped Agents</span>
-									</div>
-									<button
-										onClick={(e) => {
-											e.stopPropagation();
-											createNewGroup();
-										}}
-										className="px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
-										style={{
-											backgroundColor: theme.colors.accent + '20',
-											color: theme.colors.accent,
-											border: `1px solid ${theme.colors.accent}40`,
-										}}
-										title="Create new group"
-									>
-										<Plus className="w-3 h-3" />
-										<span>New Group</span>
-									</button>
-								</div>
-
-								{!ungroupedCollapsed ? (
-									<div
-										className="flex flex-col border-l ml-4"
-										style={{ borderColor: theme.colors.border }}
-									>
-										{sortedUngroupedSessions.map((session) =>
-											renderSessionWithWorktrees(session, 'ungrouped', { keyPrefix: 'ungrouped' })
-										)}
-									</div>
-								) : (
-									/* Collapsed Ungrouped Palette - uses subdivided pills for worktrees */
-									<div
-										className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
-										onClick={() => setUngroupedCollapsed(false)}
-									>
-										{sortedUngroupedParentSessions.map((s) =>
-											renderCollapsedPill(s, 'ungrouped-collapsed', () =>
-												setUngroupedCollapsed(false)
-											)
-										)}
-									</div>
+						/* FLAT LIST - No groups exist yet, show sessions directly with New Group button */
+						<>
+							<div className="flex flex-col">
+								{sortedFilteredSessions.map((session) =>
+									renderSessionWithWorktrees(session, 'flat', { keyPrefix: 'flat' })
 								)}
 							</div>
-						)
-					)}
+							<div className="mt-4 px-3">
+								<button
+									onClick={createNewGroup}
+									className="w-full px-2 py-1.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center justify-center gap-1"
+									style={{
+										backgroundColor: theme.colors.accent + '20',
+										color: theme.colors.accent,
+										border: `1px solid ${theme.colors.accent}40`,
+									}}
+									title="Create new group"
+								>
+									<Plus className="w-3 h-3" />
+									<span>New Group</span>
+								</button>
+							</div>
+						</>
+					) : groups.length > 0 && ungroupedSessions.length > 0 ? (
+						/* UNGROUPED FOLDER - Groups exist and there are ungrouped agents */
+						<div className="mb-1 mt-4">
+							<div
+								className="px-3 py-1.5 flex items-center justify-between cursor-pointer hover:bg-opacity-50 group"
+								onClick={() => setUngroupedCollapsed(!ungroupedCollapsed)}
+								onDragOver={handleDragOver}
+								onDrop={handleDropOnUngrouped}
+							>
+								<div
+									className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider flex-1"
+									style={{ color: theme.colors.textDim }}
+								>
+									{ungroupedCollapsed ? (
+										<ChevronRight className="w-3 h-3" />
+									) : (
+										<ChevronDown className="w-3 h-3" />
+									)}
+									<Folder className="w-3.5 h-3.5" />
+									<span>Ungrouped Agents</span>
+								</div>
+								<button
+									onClick={(e) => {
+										e.stopPropagation();
+										createNewGroup();
+									}}
+									className="px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
+									style={{
+										backgroundColor: theme.colors.accent + '20',
+										color: theme.colors.accent,
+										border: `1px solid ${theme.colors.accent}40`,
+									}}
+									title="Create new group"
+								>
+									<Plus className="w-3 h-3" />
+									<span>New Group</span>
+								</button>
+							</div>
+
+							{!ungroupedCollapsed ? (
+								<div
+									className="flex flex-col border-l ml-4"
+									style={{ borderColor: theme.colors.border }}
+								>
+									{sortedUngroupedSessions.map((session) =>
+										renderSessionWithWorktrees(session, 'ungrouped', { keyPrefix: 'ungrouped' })
+									)}
+								</div>
+							) : (
+								/* Collapsed Ungrouped Palette - uses subdivided pills for worktrees */
+								<div
+									className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
+									onClick={() => setUngroupedCollapsed(false)}
+								>
+									{sortedUngroupedParentSessions.map((s) =>
+										renderCollapsedPill(s, 'ungrouped-collapsed', () =>
+											setUngroupedCollapsed(false)
+										)
+									)}
+								</div>
+							)}
+						</div>
+					) : groups.length > 0 ? (
+						/* NO UNGROUPED AGENTS - Show drop zone for ungrouping + New Group button */
+						<div
+							className="mt-4 px-3"
+							onDragOver={handleDragOver}
+							onDrop={handleDropOnUngrouped}
+						>
+							{/* Drop zone indicator when dragging */}
+							{draggingSessionId && (
+								<div
+									className="mb-2 px-3 py-2 rounded border-2 border-dashed text-center text-xs"
+									style={{
+										borderColor: theme.colors.accent,
+										color: theme.colors.textDim,
+										backgroundColor: theme.colors.accent + '10',
+									}}
+								>
+									Drop here to ungroup
+								</div>
+							)}
+							<button
+								onClick={createNewGroup}
+								className="w-full px-2 py-1.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center justify-center gap-1"
+								style={{
+									backgroundColor: theme.colors.accent + '20',
+									color: theme.colors.accent,
+									border: `1px solid ${theme.colors.accent}40`,
+								}}
+								title="Create new group"
+							>
+								<Plus className="w-3 h-3" />
+								<span>New Group</span>
+							</button>
+						</div>
+					) : null}
 
 					{/* Flexible spacer to push group chats to bottom */}
 					<div className="flex-grow min-h-4" />
@@ -2719,7 +2798,7 @@ function SessionListInner(props: SessionListProps) {
 						// Sessions in Auto Run mode should show yellow/warning color
 						const effectiveStatusColor = isInBatch
 							? theme.colors.warning
-							: session.toolType === 'claude' && !session.agentSessionId
+							: session.toolType === 'claude-code' && !session.agentSessionId
 								? undefined // Will use border style instead
 								: getStatusColor(session.state, theme);
 						const shouldPulse = session.state === 'busy' || isInBatch;
@@ -2736,7 +2815,7 @@ function SessionListInner(props: SessionListProps) {
 									<div
 										className={`w-3 h-3 rounded-full ${shouldPulse ? 'animate-pulse' : ''}`}
 										style={
-											session.toolType === 'claude' && !session.agentSessionId && !isInBatch
+											session.toolType === 'claude-code' && !session.agentSessionId && !isInBatch
 												? {
 														border: `1.5px solid ${theme.colors.textDim}`,
 														backgroundColor: 'transparent',
@@ -2744,7 +2823,7 @@ function SessionListInner(props: SessionListProps) {
 												: { backgroundColor: effectiveStatusColor }
 										}
 										title={
-											session.toolType === 'claude' && !session.agentSessionId
+											session.toolType === 'claude-code' && !session.agentSessionId
 												? 'No active Claude session'
 												: undefined
 										}

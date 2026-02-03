@@ -23,6 +23,8 @@ vi.mock('electron', () => ({
 // Mock the stats-db module
 vi.mock('../../../../main/stats', () => ({
 	getStatsDB: vi.fn(),
+	getInitializationResult: vi.fn(),
+	clearInitializationResult: vi.fn(),
 }));
 
 // Mock the logger
@@ -39,7 +41,7 @@ describe('stats IPC handlers', () => {
 	let handlers: Map<string, Function>;
 	let mockStatsDB: Partial<StatsDB>;
 	let mockMainWindow: {
-		webContents: { send: ReturnType<typeof vi.fn> };
+		webContents: { send: ReturnType<typeof vi.fn>; isDestroyed: ReturnType<typeof vi.fn> };
 		isDestroyed: ReturnType<typeof vi.fn>;
 	};
 	let getMainWindow: () => typeof mockMainWindow | null;
@@ -87,6 +89,7 @@ describe('stats IPC handlers', () => {
 		mockMainWindow = {
 			webContents: {
 				send: vi.fn(),
+				isDestroyed: vi.fn().mockReturnValue(false),
 			},
 			isDestroyed: vi.fn().mockReturnValue(false),
 		};
@@ -503,4 +506,5 @@ describe('stats IPC handlers', () => {
 			});
 		});
 	});
+
 });

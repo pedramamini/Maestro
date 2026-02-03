@@ -1,7 +1,12 @@
 /**
  * Tests for notification IPC handlers
  *
- * Note: TTS-related tests are simplified due to the complexity of mocking
+ * IMPORTANT: Custom notification commands have NO WHITELIST and NO VALIDATION.
+ * Users have full control to specify ANY command, ANY path, ANY arguments.
+ * This is by design - the feature supports arbitrary shell pipelines for
+ * maximum flexibility (e.g., fabric | 11s, tee ~/log.txt | say, etc.)
+ *
+ * Note: Notification command tests are simplified due to the complexity of mocking
  * child_process spawn with all the event listeners and stdin handling.
  */
 
@@ -83,13 +88,12 @@ vi.mock('child_process', async (importOriginal) => {
 
 import {
 	registerNotificationsHandlers,
-	resetTtsState,
-	getTtsQueueLength,
-	getActiveTtsCount,
-	clearTtsQueue,
-	getTtsMaxQueueSize,
-	getAllowedTtsCommands,
-	validateTtsCommand,
+	resetNotificationState,
+	getNotificationQueueLength,
+	getActiveNotificationCount,
+	clearNotificationQueue,
+	getNotificationMaxQueueSize,
+	parseNotificationCommand,
 } from '../../../../main/ipc/handlers/notifications';
 
 describe('Notification IPC Handlers', () => {
@@ -97,7 +101,7 @@ describe('Notification IPC Handlers', () => {
 
 	beforeEach(() => {
 		vi.clearAllMocks();
-		resetTtsState();
+		resetNotificationState();
 		handlers = new Map();
 
 		// Reset mocks
@@ -114,7 +118,7 @@ describe('Notification IPC Handlers', () => {
 
 	afterEach(() => {
 		vi.clearAllMocks();
-		resetTtsState();
+		resetNotificationState();
 	});
 
 	describe('handler registration', () => {
@@ -183,200 +187,157 @@ describe('Notification IPC Handlers', () => {
 	});
 
 	describe('notification:stopSpeak', () => {
-		it('should return error when no active TTS process', async () => {
+		it('should return error when no active notification process', async () => {
 			const handler = handlers.get('notification:stopSpeak')!;
 			const result = await handler({}, 999);
 
 			expect(result.success).toBe(false);
-			expect(result.error).toBe('No active TTS process with that ID');
+			expect(result.error).toBe('No active notification process with that ID');
 		});
 	});
 
-	describe('TTS state utilities', () => {
-		it('should track TTS queue length', () => {
-			expect(getTtsQueueLength()).toBe(0);
+	describe('notification state utilities', () => {
+		it('should track notification queue length', () => {
+			expect(getNotificationQueueLength()).toBe(0);
 		});
 
-		it('should track active TTS count', () => {
-			expect(getActiveTtsCount()).toBe(0);
+		it('should track active notification count', () => {
+			expect(getActiveNotificationCount()).toBe(0);
 		});
 
-		it('should clear TTS queue', () => {
-			clearTtsQueue();
-			expect(getTtsQueueLength()).toBe(0);
+		it('should clear notification queue', () => {
+			clearNotificationQueue();
+			expect(getNotificationQueueLength()).toBe(0);
 		});
 
-		it('should reset TTS state', () => {
-			resetTtsState();
-			expect(getTtsQueueLength()).toBe(0);
-			expect(getActiveTtsCount()).toBe(0);
+		it('should reset notification state', () => {
+			resetNotificationState();
+			expect(getNotificationQueueLength()).toBe(0);
+			expect(getActiveNotificationCount()).toBe(0);
 		});
 
 		it('should return max queue size', () => {
-			expect(getTtsMaxQueueSize()).toBe(10);
-		});
-
-		it('should return allowed TTS commands', () => {
-			const commands = getAllowedTtsCommands();
-			expect(commands).toContain('say');
-			expect(commands).toContain('espeak');
-			expect(commands).toContain('espeak-ng');
-			expect(commands).toContain('spd-say');
-			expect(commands).toContain('festival');
-			expect(commands).toContain('flite');
+			expect(getNotificationMaxQueueSize()).toBe(10);
 		});
 	});
 
-	describe('TTS command validation (security)', () => {
-		it('should accept default command when none provided', () => {
-			const result = validateTtsCommand();
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('say');
+	/**
+	 * Custom notification command parsing tests
+	 *
+	 * CRITICAL: These tests verify that there is NO WHITELIST and NO VALIDATION
+	 * on custom notification commands. Users have FULL CONTROL to specify:
+	 * - ANY executable path (absolute or relative)
+	 * - ANY binary name
+	 * - ANY arguments and flags
+	 * - ANY shell pipeline (pipes, redirects, etc.)
+	 *
+	 * This design allows maximum flexibility for users to integrate with
+	 * any tooling they prefer (TTS engines, AI summarizers, logging, etc.)
+	 */
+	describe('custom notification command parsing - NO WHITELIST, ANY COMMAND ALLOWED', () => {
+		it('should return default command (say) when none provided', () => {
+			const result = parseNotificationCommand();
+			expect(result).toBe('say');
 		});
 
-		it('should accept empty string and use default', () => {
-			const result = validateTtsCommand('');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('say');
+		it('should return default command for empty string', () => {
+			const result = parseNotificationCommand('');
+			expect(result).toBe('say');
 		});
 
-		it('should accept whitespace-only string and use default', () => {
-			const result = validateTtsCommand('   ');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('say');
+		it('should return default command for whitespace-only string', () => {
+			const result = parseNotificationCommand('   ');
+			expect(result).toBe('say');
 		});
 
-		it('should accept whitelisted command: say', () => {
-			const result = validateTtsCommand('say');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('say');
+		// Explicit NO WHITELIST tests - any command should be passed through unchanged
+		it('should NOT validate or whitelist commands - any binary name is allowed', () => {
+			// These would have been blocked by a whitelist - verify they pass through
+			expect(parseNotificationCommand('my-custom-binary')).toBe('my-custom-binary');
+			expect(parseNotificationCommand('totally-unknown-command')).toBe('totally-unknown-command');
+			expect(parseNotificationCommand('arbitrary_executable')).toBe('arbitrary_executable');
 		});
 
-		it('should accept whitelisted command: espeak', () => {
-			const result = validateTtsCommand('espeak');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('espeak');
+		it('should NOT validate or whitelist paths - any absolute path is allowed', () => {
+			expect(parseNotificationCommand('/usr/local/bin/my-custom-tool')).toBe(
+				'/usr/local/bin/my-custom-tool'
+			);
+			expect(parseNotificationCommand('/Users/pedram/go/bin/fabric')).toBe(
+				'/Users/pedram/go/bin/fabric'
+			);
+			expect(parseNotificationCommand('/opt/homebrew/bin/anything')).toBe(
+				'/opt/homebrew/bin/anything'
+			);
+			expect(parseNotificationCommand('/some/deeply/nested/path/to/binary')).toBe(
+				'/some/deeply/nested/path/to/binary'
+			);
 		});
 
-		it('should accept whitelisted command: espeak-ng', () => {
-			const result = validateTtsCommand('espeak-ng');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('espeak-ng');
+		it('should NOT validate or whitelist arguments - any arguments are allowed', () => {
+			expect(parseNotificationCommand('say -v Alex')).toBe('say -v Alex');
+			expect(parseNotificationCommand('cmd --flag1 --flag2=value -x -y -z')).toBe(
+				'cmd --flag1 --flag2=value -x -y -z'
+			);
+			expect(parseNotificationCommand('binary arg1 arg2 arg3 "quoted arg"')).toBe(
+				'binary arg1 arg2 arg3 "quoted arg"'
+			);
 		});
 
-		it('should accept whitelisted command: spd-say', () => {
-			const result = validateTtsCommand('spd-say');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('spd-say');
+		it('should allow shell pipelines with any commands', () => {
+			expect(parseNotificationCommand('tee ~/log.txt | say')).toBe('tee ~/log.txt | say');
+			expect(parseNotificationCommand('cmd1 | cmd2 | cmd3')).toBe('cmd1 | cmd2 | cmd3');
 		});
 
-		it('should accept whitelisted command: festival', () => {
-			const result = validateTtsCommand('festival');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('festival');
+		it('should allow complex command chains with redirects and pipes', () => {
+			const complexCommand =
+				'/Users/pedram/go/bin/fabric --pattern ped_summarize_conversational --model gpt-5-mini --raw 2>/dev/null | /Users/pedram/.local/bin/11s --voice NFQv27BRKPFgprCm0xgr';
+			expect(parseNotificationCommand(complexCommand)).toBe(complexCommand);
 		});
 
-		it('should accept whitelisted command: flite', () => {
-			const result = validateTtsCommand('flite');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('flite');
+		it('should trim leading and trailing whitespace only', () => {
+			expect(parseNotificationCommand('  say  ')).toBe('say');
+			expect(parseNotificationCommand('\t/path/to/cmd\n')).toBe('/path/to/cmd');
 		});
 
-		it('should reject non-whitelisted command', () => {
-			const result = validateTtsCommand('rm');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('Invalid TTS command');
-			expect(result.error).toContain('rm');
+		// Common TTS commands work, but are NOT special-cased or whitelisted
+		it('should accept common TTS commands (not because whitelisted, but because any command works)', () => {
+			expect(parseNotificationCommand('say')).toBe('say');
+			expect(parseNotificationCommand('espeak')).toBe('espeak');
+			expect(parseNotificationCommand('espeak-ng')).toBe('espeak-ng');
+			expect(parseNotificationCommand('festival --tts')).toBe('festival --tts');
+			expect(parseNotificationCommand('flite')).toBe('flite');
+			expect(parseNotificationCommand('spd-say')).toBe('spd-say');
 		});
 
-		it('should reject command injection attempt with &&', () => {
-			const result = validateTtsCommand('say && rm -rf /');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('arguments are not allowed');
-		});
-
-		it('should reject command injection attempt with ;', () => {
-			const result = validateTtsCommand('say; rm -rf /');
-			expect(result.valid).toBe(false);
-			// The semicolon makes 'say;' the base command, which is not whitelisted
-			expect(result.error).toContain('Invalid TTS command');
-		});
-
-		it('should reject command injection attempt with |', () => {
-			const result = validateTtsCommand('say | cat /etc/passwd');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('arguments are not allowed');
-		});
-
-		it('should reject command with arguments (security)', () => {
-			const result = validateTtsCommand('say -v Alex');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('arguments are not allowed');
-		});
-
-		it('should reject command with subshell attempt', () => {
-			const result = validateTtsCommand('$(whoami)');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('Invalid TTS command');
-		});
-
-		it('should reject command with backtick attempt', () => {
-			const result = validateTtsCommand('`whoami`');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('Invalid TTS command');
-		});
-
-		it('should reject arbitrary shell command', () => {
-			const result = validateTtsCommand('/bin/bash -c "echo hacked"');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('Invalid TTS command');
-		});
-
-		it('should reject curl command', () => {
-			const result = validateTtsCommand('curl http://evil.com');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('Invalid TTS command');
-		});
-
-		it('should reject wget command', () => {
-			const result = validateTtsCommand('wget http://evil.com');
-			expect(result.valid).toBe(false);
-			expect(result.error).toContain('Invalid TTS command');
-		});
-
-		it('should handle command with leading whitespace', () => {
-			const result = validateTtsCommand('  say');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('say');
-		});
-
-		it('should handle command with trailing whitespace', () => {
-			// Trailing whitespace is trimmed, so 'say  ' becomes 'say' which is valid
-			const result = validateTtsCommand('say  ');
-			expect(result.valid).toBe(true);
-			expect(result.command).toBe('say');
+		// Non-TTS commands are equally valid
+		it('should accept non-TTS commands for logging, processing, or other purposes', () => {
+			expect(parseNotificationCommand('tee ~/notifications.log')).toBe('tee ~/notifications.log');
+			expect(parseNotificationCommand('cat >> ~/log.txt')).toBe('cat >> ~/log.txt');
+			expect(parseNotificationCommand('curl -X POST https://webhook.example.com')).toBe(
+				'curl -X POST https://webhook.example.com'
+			);
 		});
 	});
 
-	describe('TTS queue size limit', () => {
+	describe('notification queue size limit', () => {
 		it('should reject requests when queue is full', async () => {
 			const handler = handlers.get('notification:speak')!;
-			const maxSize = getTtsMaxQueueSize();
+			const maxSize = getNotificationMaxQueueSize();
 
 			// The flow is:
-			// 1. First call: item added to queue, processNextTts() shifts it out to process
-			// 2. executeTts() creates a spawn that never completes, so isTtsProcessing stays true
-			// 3. Subsequent calls: items are added to queue but not processed (isTtsProcessing is true)
+			// 1. First call: item added to queue, processNextNotification() shifts it out to process
+			// 2. executeNotificationCommand() creates a spawn that never completes, so isNotificationProcessing stays true
+			// 3. Subsequent calls: items are added to queue but not processed (isNotificationProcessing is true)
 			// 4. Queue accumulates items 2 through maxSize (first one was shifted out)
 			// 5. We need maxSize + 1 calls total to fill the queue to maxSize items
 
 			// First call - this item gets shifted out of queue immediately for processing
 			handler({}, 'Message 0');
 
-			// Allow the async processNextTts to start (shifts item from queue)
+			// Allow the async processNextNotification to start (shifts item from queue)
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
-			// Now isTtsProcessing is true, so subsequent items stay in queue
+			// Now isNotificationProcessing is true, so subsequent items stay in queue
 			// Add maxSize more items - this should fill the queue to maxSize
 			for (let i = 1; i <= maxSize; i++) {
 				handler({}, `Message ${i}`);
@@ -386,7 +347,7 @@ describe('Notification IPC Handlers', () => {
 			await new Promise((resolve) => setTimeout(resolve, 10));
 
 			// Verify queue is at capacity
-			expect(getTtsQueueLength()).toBe(maxSize);
+			expect(getNotificationQueueLength()).toBe(maxSize);
 
 			// Now try to add one more - should be rejected immediately
 			// This will resolve immediately with error because queue >= maxSize check triggers
@@ -396,8 +357,8 @@ describe('Notification IPC Handlers', () => {
 			expect(result.error).toContain('queue is full');
 			expect(result.error).toContain(`max ${maxSize}`);
 
-			// Clean up - reset all TTS state including clearing the queue
-			resetTtsState();
+			// Clean up - reset all notification state including clearing the queue
+			resetNotificationState();
 		});
 	});
 });

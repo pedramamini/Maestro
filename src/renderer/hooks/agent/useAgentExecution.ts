@@ -103,6 +103,8 @@ export interface UseAgentExecutionReturn {
 	showFlashNotification: (message: string) => void;
 	/** Show success flash notification (center screen, auto-dismisses after 2 seconds) */
 	showSuccessFlash: (message: string) => void;
+	/** Cancel all pending synopsis processes for a given maestro session ID */
+	cancelPendingSynopsis: (maestroSessionId: string) => Promise<void>;
 }
 
 /**
@@ -134,6 +136,10 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 	const spawnAgentWithPromptRef = useRef<((prompt: string) => Promise<AgentSpawnResult>) | null>(
 		null
 	);
+
+	// Track active synopsis session IDs for cancellation
+	// Map: maestroSessionId -> Set of active synopsis process session IDs
+	const activeSynopsisSessionsRef = useRef<Map<string, Set<string>>>(new Map());
 	const accumulateUsageStats = useCallback(
 		(current: UsageStats | undefined, usageStats: UsageStats): UsageStats => ({
 			...usageStats,
@@ -477,6 +483,12 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 				// Use a unique target ID for background synopsis
 				const targetSessionId = `${sessionId}-synopsis-${Date.now()}`;
 
+				// Track this synopsis session for potential cancellation
+				if (!activeSynopsisSessionsRef.current.has(sessionId)) {
+					activeSynopsisSessionsRef.current.set(sessionId, new Set());
+				}
+				activeSynopsisSessionsRef.current.get(sessionId)!.add(targetSessionId);
+
 				return new Promise((resolve) => {
 					let agentSessionId: string | undefined;
 					let responseText = '';
@@ -487,6 +499,8 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 
 					const cleanup = () => {
 						cleanupFns.forEach((fn) => fn());
+						// Remove from tracking
+						activeSynopsisSessionsRef.current.get(sessionId)?.delete(targetSessionId);
 					};
 
 					cleanupFns.push(
@@ -530,6 +544,15 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 					);
 
 					// Spawn with session resume - the IPC handler will use the agent's resumeArgs builder
+					// If no sessionConfig or no sessionSshRemoteConfig, try to get it from the main session (by sessionId)
+					let effectiveSessionSshRemoteConfig = sessionConfig?.sessionSshRemoteConfig;
+					if (!effectiveSessionSshRemoteConfig) {
+						// Try to find the main session and use its SSH config
+						const mainSession = sessionsRef.current.find((s) => s.id === sessionId);
+						if (mainSession && mainSession.sessionSshRemoteConfig) {
+							effectiveSessionSshRemoteConfig = mainSession.sessionSshRemoteConfig;
+						}
+					}
 					const commandToUse = sessionConfig?.customPath || agent.path || agent.command;
 					window.maestro.process
 						.spawn({
@@ -546,8 +569,8 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 							sessionCustomEnvVars: sessionConfig?.customEnvVars,
 							sessionCustomModel: sessionConfig?.customModel,
 							sessionCustomContextWindow: sessionConfig?.customContextWindow,
-							// Per-session SSH remote config (takes precedence over agent-level SSH config)
-							sessionSshRemoteConfig: sessionConfig?.sessionSshRemoteConfig,
+							// Always use effective SSH remote config if available
+							sessionSshRemoteConfig: effectiveSessionSshRemoteConfig,
 						})
 						.catch(() => {
 							cleanup();
@@ -559,8 +582,40 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 				return { success: false };
 			}
 		},
-		[accumulateUsageStats]
+		[accumulateUsageStats, sessionsRef]
 	);
+
+	/**
+	 * Cancel all pending synopsis processes for a given maestro session ID.
+	 * Called when user clicks Stop to prevent synopsis from running after interruption.
+	 */
+	const cancelPendingSynopsis = useCallback(async (maestroSessionId: string): Promise<void> => {
+		const synopsisSessions = activeSynopsisSessionsRef.current.get(maestroSessionId);
+		if (!synopsisSessions || synopsisSessions.size === 0) {
+			return;
+		}
+
+		console.log('[cancelPendingSynopsis] Cancelling synopsis sessions for', maestroSessionId, {
+			count: synopsisSessions.size,
+			sessionIds: Array.from(synopsisSessions),
+		});
+
+		// Kill all active synopsis processes for this session
+		const killPromises = Array.from(synopsisSessions).map(async (synopsisSessionId) => {
+			try {
+				await window.maestro.process.kill(synopsisSessionId);
+				console.log('[cancelPendingSynopsis] Killed synopsis session:', synopsisSessionId);
+			} catch (error) {
+				// Process may have already exited
+				console.warn('[cancelPendingSynopsis] Failed to kill synopsis session:', synopsisSessionId, error);
+			}
+		});
+
+		await Promise.all(killPromises);
+
+		// Clear the tracking set
+		activeSynopsisSessionsRef.current.delete(maestroSessionId);
+	}, []);
 
 	/**
 	 * Show flash notification (bottom-right, auto-dismisses after 2 seconds).
@@ -596,5 +651,6 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 		spawnAgentWithPromptRef,
 		showFlashNotification,
 		showSuccessFlash,
+		cancelPendingSynopsis,
 	};
 }

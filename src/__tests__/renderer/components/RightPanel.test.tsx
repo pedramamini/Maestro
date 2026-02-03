@@ -109,7 +109,6 @@ describe('RightPanel', () => {
 		filteredFileTree: [],
 		selectedFileIndex: 0,
 		setSelectedFileIndex: vi.fn(),
-		previewFile: null,
 		fileTreeContainerRef: { current: null } as React.RefObject<HTMLDivElement>,
 		fileTreeFilterInputRef: { current: null } as React.RefObject<HTMLInputElement>,
 		toggleFolder: vi.fn(),

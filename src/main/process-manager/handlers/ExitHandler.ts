@@ -95,6 +95,17 @@ export class ExitHandler {
 			this.handleBatchModeExit(sessionId, managedProcess);
 		}
 
+		// Handle stream-json mode: emit accumulated streamed text if no result was emitted
+		// Some agents (like Factory Droid) don't send explicit "done" events, they just exit
+		if (isStreamJsonMode && !managedProcess.resultEmitted && managedProcess.streamedText) {
+			managedProcess.resultEmitted = true;
+			logger.debug('[ProcessManager] Emitting streamed text at exit (no result event)', 'ProcessManager', {
+				sessionId,
+				streamedTextLength: managedProcess.streamedText.length,
+			});
+			this.bufferManager.emitDataBuffered(sessionId, managedProcess.streamedText);
+		}
+
 		// Check for errors using the parser (if not already emitted)
 		if (outputParser && !managedProcess.errorEmitted) {
 			const agentError = outputParser.detectErrorFromExit(
@@ -121,8 +132,23 @@ export class ExitHandler {
 			managedProcess.sshRemoteId &&
 			(code !== 0 || managedProcess.stderrBuffer)
 		) {
+			// SSH errors can appear in stdout OR stderr, so check both
 			const stderrToCheck = managedProcess.stderrBuffer || '';
-			const sshError = matchSshErrorPattern(stderrToCheck);
+			const stdoutToCheck = managedProcess.stdoutBuffer || managedProcess.streamedText || '';
+			const combinedOutput = `${stdoutToCheck}\n${stderrToCheck}`;
+
+			// Log detailed info before SSH error check to help debug shell parse errors
+			logger.info('[ProcessManager] Checking for SSH errors at exit', 'ProcessManager', {
+				sessionId,
+				exitCode: code,
+				sshRemoteId: managedProcess.sshRemoteId,
+				stderrLength: stderrToCheck.length,
+				stderrPreview: stderrToCheck.substring(0, 300),
+				stdoutLength: stdoutToCheck.length,
+				combinedLength: combinedOutput.length,
+			});
+
+			const sshError = matchSshErrorPattern(combinedOutput);
 			if (sshError) {
 				managedProcess.errorEmitted = true;
 				const agentError: AgentError = {
@@ -135,15 +161,28 @@ export class ExitHandler {
 					raw: {
 						exitCode: code,
 						stderr: stderrToCheck,
+						stdout: stdoutToCheck.substring(0, 1000), // Truncate for log size
 					},
 				};
-				logger.debug('[ProcessManager] SSH error detected at exit', 'ProcessManager', {
+				// Log at INFO level so it's visible in system logs
+				logger.info('[ProcessManager] SSH error detected at exit', 'ProcessManager', {
 					sessionId,
 					exitCode: code,
 					errorType: sshError.type,
 					errorMessage: sshError.message,
+					stdoutPreview: stdoutToCheck.substring(0, 500),
+					stderrPreview: stderrToCheck.substring(0, 500),
 				});
 				this.emitter.emit('agent-error', sessionId, agentError);
+			} else if (code !== 0) {
+				// Log SSH failures even if no pattern matched, to help debug
+				logger.warn('[ProcessManager] SSH command failed without matching error pattern', 'ProcessManager', {
+					sessionId,
+					exitCode: code,
+					sshRemoteId: managedProcess.sshRemoteId,
+					stdoutPreview: stdoutToCheck.substring(0, 500),
+					stderrPreview: stderrToCheck.substring(0, 500),
+				});
 			}
 		}
 

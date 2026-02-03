@@ -255,8 +255,8 @@ export function AgentPromptComposerModal({
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgSidebar }}
 				>
 					<div className="text-xs flex items-center gap-3" style={{ color: theme.colors.textDim }}>
-						<span>{value.length.toLocaleString()} characters</span>
-						<span>~{tokenCount.toLocaleString()} tokens</span>
+						<span>{value.length.toLocaleString('en-US')} characters</span>
+						<span>~{tokenCount.toLocaleString('en-US')} tokens</span>
 					</div>
 					<button
 						onClick={handleDone}

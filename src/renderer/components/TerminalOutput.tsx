@@ -4,14 +4,13 @@ import {
 	ChevronUp,
 	Trash2,
 	Copy,
-	Volume2,
-	Square,
 	Check,
 	ArrowDown,
 	Eye,
 	FileText,
 	RotateCcw,
 	AlertCircle,
+	Save,
 } from 'lucide-react';
 import type { Session, Theme, LogEntry, FocusArea } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -30,6 +29,7 @@ import {
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { QueuedItemsList } from './QueuedItemsList';
 import { LogFilterControls } from './LogFilterControls';
+import { SaveMarkdownModal } from './SaveMarkdownModal';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
 
 // ============================================================================
@@ -75,10 +75,6 @@ interface LogItemProps {
 		source?: 'staged' | 'history'
 	) => void;
 	copyToClipboard: (text: string) => void;
-	speakText?: (text: string, logId: string) => void;
-	stopSpeaking?: () => void;
-	speakingLogId: string | null;
-	audioFeedbackCommand?: string;
 	// ANSI converter
 	ansiConverter: Convert;
 	// Markdown rendering mode for AI responses (when true, shows raw text)
@@ -93,6 +89,8 @@ interface LogItemProps {
 	onFileClick?: (path: string) => void;
 	// Error details callback
 	onShowErrorDetails?: () => void;
+	// Save to file callback (AI mode only, non-user messages)
+	onSaveToFile?: (text: string) => void;
 }
 
 const LogItemComponent = memo(
@@ -121,10 +119,6 @@ const LogItemComponent = memo(
 		scrollContainerRef,
 		setLightboxImage,
 		copyToClipboard,
-		speakText,
-		stopSpeaking,
-		speakingLogId,
-		audioFeedbackCommand,
 		ansiConverter,
 		markdownEditMode,
 		onToggleMarkdownEditMode,
@@ -134,6 +128,7 @@ const LogItemComponent = memo(
 		projectRoot,
 		onFileClick,
 		onShowErrorDetails,
+		onSaveToFile,
 	}: LogItemProps) => {
 		// Ref for the log item container - used for scroll-into-view on expand
 		const logItemRef = useRef<HTMLDivElement>(null);
@@ -498,6 +493,9 @@ const LogItemComponent = memo(
 									safeStr(toolInput.pattern) ||
 									safeStr(toolInput.file_path) ||
 									safeStr(toolInput.query) ||
+									safeStr(toolInput.description) || // Task tool
+									safeStr(toolInput.prompt) || // Task tool fallback
+									safeStr(toolInput.task_id) || // TaskOutput tool
 									null
 								: null;
 
@@ -534,7 +532,7 @@ const LogItemComponent = memo(
 										)}
 										{toolDetail && (
 											<span
-												className="opacity-70 break-all whitespace-pre-wrap"
+												className="opacity-70 break-words whitespace-pre-wrap"
 												style={{ color: theme.colors.textMain }}
 											>
 												{toolDetail}
@@ -557,13 +555,13 @@ const LogItemComponent = memo(
 						) : shouldCollapse && !isExpanded ? (
 							<div>
 								<div
-									className={`${isTerminal && log.source !== 'user' ? 'whitespace-pre text-sm' : 'whitespace-pre-wrap text-sm break-all'}`}
+									className={`${isTerminal && log.source !== 'user' ? 'whitespace-pre text-sm' : 'whitespace-pre-wrap text-sm break-words'}`}
 									style={{
 										maxHeight: `${maxOutputLines * 1.5}em`,
 										overflow: isTerminal && log.source !== 'user' ? 'hidden' : 'hidden',
 										color: theme.colors.textMain,
 										fontFamily,
-										wordBreak: isTerminal && log.source !== 'user' ? undefined : 'break-all',
+										overflowWrap: isTerminal && log.source !== 'user' ? undefined : 'break-word',
 									}}
 								>
 									{isTerminal && log.source !== 'user' ? (
@@ -604,14 +602,14 @@ const LogItemComponent = memo(
 						) : shouldCollapse && isExpanded ? (
 							<div>
 								<div
-									className={`${isTerminal && log.source !== 'user' ? 'whitespace-pre text-sm scrollbar-thin' : 'whitespace-pre-wrap text-sm break-all'}`}
+									className={`${isTerminal && log.source !== 'user' ? 'whitespace-pre text-sm scrollbar-thin' : 'whitespace-pre-wrap text-sm break-words'}`}
 									style={{
 										maxHeight: '600px',
 										overflow: 'auto',
 										overscrollBehavior: 'contain',
 										color: theme.colors.textMain,
 										fontFamily,
-										wordBreak: isTerminal && log.source !== 'user' ? undefined : 'break-all',
+										overflowWrap: isTerminal && log.source !== 'user' ? undefined : 'break-word',
 									}}
 									onWheel={(e) => {
 										// Prevent scroll from propagating to parent when this container can scroll
@@ -699,7 +697,7 @@ const LogItemComponent = memo(
 									/>
 								) : log.source === 'user' && isTerminal ? (
 									<div
-										className="whitespace-pre-wrap text-sm break-all"
+										className="whitespace-pre-wrap text-sm break-words"
 										style={{ color: theme.colors.textMain, fontFamily }}
 									>
 										<span style={{ color: theme.colors.accent }}>$ </span>
@@ -725,7 +723,7 @@ const LogItemComponent = memo(
 											</span>
 										</div>
 										<div
-											className="whitespace-pre-wrap text-sm break-all"
+											className="whitespace-pre-wrap text-sm break-words"
 											style={{ color: theme.colors.textMain }}
 										>
 											{highlightMatches(filteredText, outputSearchQuery)}
@@ -745,7 +743,7 @@ const LogItemComponent = memo(
 								) : (
 									// Plain text mode (strip markdown formatting for readability)
 									<div
-										className="whitespace-pre-wrap text-sm break-all"
+										className="whitespace-pre-wrap text-sm break-words"
 										style={{ color: theme.colors.textMain }}
 									>
 										{highlightMatches(
@@ -772,28 +770,6 @@ const LogItemComponent = memo(
 								{markdownEditMode ? <Eye className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
 							</button>
 						)}
-						{/* Speak/Stop Button - only show for non-user messages when TTS is configured */}
-						{audioFeedbackCommand &&
-							log.source !== 'user' &&
-							(speakingLogId === log.id ? (
-								<button
-									onClick={stopSpeaking}
-									className="p-1.5 rounded opacity-100"
-									style={{ color: theme.colors.error }}
-									title="Stop speaking"
-								>
-									<Square className="w-3.5 h-3.5" fill="currentColor" />
-								</button>
-							) : (
-								<button
-									onClick={() => speakText?.(log.text, log.id)}
-									className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
-									style={{ color: theme.colors.textDim }}
-									title="Speak text"
-								>
-									<Volume2 className="w-3.5 h-3.5" />
-								</button>
-							))}
 						{/* Replay button for user messages in AI mode */}
 						{isUserMessage && isAIMode && onReplayMessage && (
 							<button
@@ -814,6 +790,17 @@ const LogItemComponent = memo(
 						>
 							<Copy className="w-3.5 h-3.5" />
 						</button>
+						{/* Save to File Button - only for AI responses */}
+						{log.source !== 'user' && isAIMode && onSaveToFile && (
+							<button
+								onClick={() => onSaveToFile(log.text)}
+								className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
+								style={{ color: theme.colors.textDim }}
+								title="Save to file"
+							>
+								<Save className="w-3.5 h-3.5" />
+							</button>
+						)}
 						{/* Delete button for user messages (both AI and terminal modes) */}
 						{log.source === 'user' &&
 							onDeleteLog &&
@@ -894,7 +881,6 @@ const LogItemComponent = memo(
 			prevProps.filterMode.regex === nextProps.filterMode.regex &&
 			prevProps.activeLocalFilter === nextProps.activeLocalFilter &&
 			prevProps.deleteConfirmLogId === nextProps.deleteConfirmLogId &&
-			prevProps.speakingLogId === nextProps.speakingLogId &&
 			prevProps.outputSearchQuery === nextProps.outputSearchQuery &&
 			prevProps.theme === nextProps.theme &&
 			prevProps.maxOutputLines === nextProps.maxOutputLines &&
@@ -967,7 +953,6 @@ interface TerminalOutputProps {
 	onDeleteLog?: (logId: string) => number | null; // Returns the index to scroll to after deletion
 	onRemoveQueuedItem?: (itemId: string) => void; // Callback to remove a queued item from execution queue
 	onInterrupt?: () => void; // Callback to interrupt the current process
-	audioFeedbackCommand?: string; // TTS command for speech synthesis
 	onScrollPositionChange?: (scrollTop: number) => void; // Callback to save scroll position
 	onAtBottomChange?: (isAtBottom: boolean) => void; // Callback when user scrolls to/away from bottom
 	initialScrollTop?: number; // Initial scroll position to restore
@@ -1003,7 +988,6 @@ export const TerminalOutput = memo(
 			onDeleteLog,
 			onRemoveQueuedItem,
 			onInterrupt: _onInterrupt,
-			audioFeedbackCommand,
 			onScrollPositionChange,
 			onAtBottomChange,
 			initialScrollTop,
@@ -1060,9 +1044,8 @@ export const TerminalOutput = memo(
 		// Copy to clipboard notification state
 		const [showCopiedNotification, setShowCopiedNotification] = useState(false);
 
-		// TTS state - track which log is currently speaking and its TTS ID
-		const [speakingLogId, setSpeakingLogId] = useState<string | null>(null);
-		const [activeTtsId, setActiveTtsId] = useState<number | null>(null);
+		// Save markdown modal state
+		const [saveModalContent, setSaveModalContent] = useState<string | null>(null);
 
 		// New message indicator state
 		const [isAtBottom, setIsAtBottom] = useState(true);
@@ -1094,71 +1077,10 @@ export const TerminalOutput = memo(
 			}
 		}, []);
 
-		// Speak text using TTS command
-		const speakText = useCallback(
-			async (text: string, logId: string) => {
-				console.log(
-					'[TTS] speakText called, text length:',
-					text.length,
-					'command:',
-					audioFeedbackCommand,
-					'logId:',
-					logId
-				);
-				if (!audioFeedbackCommand) {
-					console.log('[TTS] No audioFeedbackCommand configured, skipping');
-					return;
-				}
-				try {
-					// Set the speaking state before starting
-					setSpeakingLogId(logId);
-					const result = await window.maestro.notification.speak(text, audioFeedbackCommand);
-					console.log('[TTS] Speak result:', result);
-					if (result.success && result.ttsId) {
-						setActiveTtsId(result.ttsId);
-					} else {
-						// If speak failed, clear the speaking state
-						setSpeakingLogId(null);
-					}
-				} catch (err) {
-					console.error('[TTS] Failed to speak text:', err);
-					setSpeakingLogId(null);
-				}
-			},
-			[audioFeedbackCommand]
-		);
-
-		// Stop the currently speaking TTS
-		const stopSpeaking = useCallback(async () => {
-			console.log('[TTS] stopSpeaking called, activeTtsId:', activeTtsId);
-			if (activeTtsId === null) {
-				console.log('[TTS] No active TTS to stop');
-				setSpeakingLogId(null);
-				return;
-			}
-			try {
-				const result = await window.maestro.notification.stopSpeak(activeTtsId);
-				console.log('[TTS] Stop result:', result);
-			} catch (err) {
-				console.error('[TTS] Failed to stop speaking:', err);
-			}
-			// Always clear state after stopping
-			setSpeakingLogId(null);
-			setActiveTtsId(null);
-		}, [activeTtsId]);
-
-		// Listen for TTS completion events from main process
-		useEffect(() => {
-			const cleanup = window.maestro.notification.onTtsCompleted((completedTtsId: number) => {
-				console.log('[TTS] TTS completed event received for ID:', completedTtsId);
-				// Only clear if this is the currently active TTS
-				if (completedTtsId === activeTtsId) {
-					setSpeakingLogId(null);
-					setActiveTtsId(null);
-				}
-			});
-			return cleanup;
-		}, [activeTtsId]);
+		// Open save modal for markdown content
+		const handleSaveToFile = useCallback((text: string) => {
+			setSaveModalContent(text);
+		}, []);
 
 		// Layer stack integration for search overlay
 		const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -1683,10 +1605,6 @@ export const TerminalOutput = memo(
 							scrollContainerRef={scrollContainerRef}
 							setLightboxImage={setLightboxImage}
 							copyToClipboard={copyToClipboard}
-							speakText={speakText}
-							stopSpeaking={stopSpeaking}
-							speakingLogId={speakingLogId}
-							audioFeedbackCommand={audioFeedbackCommand}
 							ansiConverter={ansiConverter}
 							markdownEditMode={markdownEditMode}
 							onToggleMarkdownEditMode={toggleMarkdownEditMode}
@@ -1696,6 +1614,7 @@ export const TerminalOutput = memo(
 							projectRoot={projectRoot}
 							onFileClick={onFileClick}
 							onShowErrorDetails={onShowErrorDetails}
+							onSaveToFile={handleSaveToFile}
 						/>
 					))}
 
@@ -1777,6 +1696,25 @@ export const TerminalOutput = memo(
 					>
 						Copied to Clipboard
 					</div>
+				)}
+
+				{/* Save Markdown Modal */}
+				{saveModalContent !== null && (
+					<SaveMarkdownModal
+						theme={theme}
+						content={saveModalContent}
+						onClose={() => setSaveModalContent(null)}
+						defaultFolder={cwd || session.cwd || ''}
+						isRemoteSession={
+							session.sessionSshRemoteConfig?.enabled &&
+							!!session.sessionSshRemoteConfig?.remoteId
+						}
+						sshRemoteId={
+							session.sessionSshRemoteConfig?.enabled
+								? session.sessionSshRemoteConfig?.remoteId ?? undefined
+								: undefined
+						}
+					/>
 				)}
 			</div>
 		);

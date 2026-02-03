@@ -280,6 +280,16 @@ export function remoteUrlToBrowserUrl(remoteUrl: string): string | null {
 		return url;
 	}
 
+	// Handle malformed HTTPS+SSH hybrid: https://git@github.com:user/repo
+	// This can happen with misconfigured remotes
+	if (url.match(/^https?:\/\/git@/)) {
+		url = url
+			.replace(/^https?:\/\/git@/, 'https://')
+			.replace(/:([^/])/, '/$1') // Replace SSH-style : with /
+			.replace(/\.git$/, '');
+		return url;
+	}
+
 	// Handle HTTPS format: https://github.com/user/repo.git
 	if (url.startsWith('https://') || url.startsWith('http://')) {
 		url = url.replace(/\.git$/, '');

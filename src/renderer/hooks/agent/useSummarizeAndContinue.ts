@@ -213,6 +213,12 @@ export function useSummarizeAndContinue(session: Session | null): UseSummarizeAn
 						sourceTabId,
 						projectRoot: session.projectRoot,
 						agentType: session.toolType,
+						// Pass SSH remote config if the session uses remote execution
+						sshRemoteConfig: session.sessionSshRemoteConfig,
+						// Pass custom agent configuration for proper remote execution
+						customPath: session.customPath,
+						customArgs: session.customArgs,
+						customEnvVars: session.customEnvVars,
 					},
 					sourceTab.logs,
 					(p) => {

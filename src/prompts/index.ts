@@ -42,4 +42,7 @@ export {
 	contextGroomingPrompt,
 	contextTransferPrompt,
 	contextSummarizePrompt,
+
+	// Tab naming
+	tabNamingPrompt,
 } from '../generated/prompts';

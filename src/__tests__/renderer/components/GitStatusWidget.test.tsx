@@ -115,12 +115,14 @@ const mockTheme: Theme = {
 
 describe('GitStatusWidget', () => {
 	const mockOnViewDiff = vi.fn();
+	const mockOnViewLog = vi.fn();
 
 	const defaultProps = {
 		sessionId: 'test-session-id',
 		isGitRepo: true,
 		theme: mockTheme,
 		onViewDiff: mockOnViewDiff,
+		onViewLog: mockOnViewLog,
 	};
 
 	beforeEach(() => {
@@ -306,6 +308,29 @@ describe('GitStatusWidget', () => {
 			const viewDiffButton = screen.getByText('View Full Diff');
 			fireEvent.click(viewDiffButton);
 			expect(mockOnViewDiff).toHaveBeenCalled();
+		});
+
+		it('should call onViewLog when "View Git Log" link is clicked in tooltip', () => {
+			mockGetStatus.mockReturnValue(createGitStatusData());
+			render(<GitStatusWidget {...defaultProps} />);
+
+			const container = screen.getByRole('button').parentElement!;
+			fireEvent.mouseEnter(container);
+
+			const viewLogButton = screen.getByText('View Git Log');
+			fireEvent.click(viewLogButton);
+			expect(mockOnViewLog).toHaveBeenCalled();
+		});
+
+		it('should not render "View Git Log" button when onViewLog is not provided', () => {
+			mockGetStatus.mockReturnValue(createGitStatusData());
+			const { onViewLog: _, ...propsWithoutLog } = defaultProps;
+			render(<GitStatusWidget {...propsWithoutLog} />);
+
+			const container = screen.getByRole('button').parentElement!;
+			fireEvent.mouseEnter(container);
+
+			expect(screen.queryByText('View Git Log')).not.toBeInTheDocument();
 		});
 	});
 

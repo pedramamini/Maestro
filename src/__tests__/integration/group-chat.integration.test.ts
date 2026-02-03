@@ -13,6 +13,20 @@
  */
 
 import { describe, it, expect, beforeAll, afterEach, vi } from 'vitest';
+import os from 'os';
+import path from 'path';
+
+// Mock Electron app module before importing modules that use it
+vi.mock('electron', () => ({
+	app: {
+		getPath: (name: string) => {
+			if (name === 'userData') {
+				return path.join(os.tmpdir(), 'maestro-test-group-chat');
+			}
+			return os.tmpdir();
+		},
+	},
+}));
 import { createGroupChat, loadGroupChat } from '../../main/group-chat/group-chat-storage';
 import { readLog } from '../../main/group-chat/group-chat-log';
 import {

@@ -63,6 +63,8 @@ export const SETTINGS_DEFAULTS: MaestroSettings = {
 	webInterfaceCustomPort: 8080,
 	sshRemotes: [],
 	defaultSshRemoteId: null,
+	sshRemoteIgnorePatterns: ['.git', '.*cache*'],
+	sshRemoteHonorGitignore: false,
 	installationId: null,
 };
 

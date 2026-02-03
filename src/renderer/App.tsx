@@ -1,4 +1,13 @@
-import React, { useState, useEffect, useRef, useMemo, useCallback, useDeferredValue } from 'react';
+import React, {
+	useState,
+	useEffect,
+	useRef,
+	useMemo,
+	useCallback,
+	useDeferredValue,
+	lazy,
+	Suspense,
+} from 'react';
 import { SettingsModal } from './components/SettingsModal';
 import { SessionList } from './components/SessionList';
 import { RightPanel, RightPanelHandle } from './components/RightPanel';
@@ -13,7 +22,6 @@ import {
 import { DEFAULT_BATCH_PROMPT } from './components/BatchRunnerModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainPanel, type MainPanelHandle } from './components/MainPanel';
-import { LogViewer } from './components/LogViewer';
 import { AppOverlays } from './components/AppOverlays';
 import { PlaygroundPanel } from './components/PlaygroundPanel';
 import { DebugWizardModal } from './components/DebugWizardModal';
@@ -28,9 +36,27 @@ import {
 import { TourOverlay } from './components/Wizard/tour';
 import { CONDUCTOR_BADGES, getBadgeForTime } from './constants/conductorBadges';
 import { EmptyStateView } from './components/EmptyStateView';
-import { MarketplaceModal } from './components/MarketplaceModal';
-import { DocumentGraphView } from './components/DocumentGraph/DocumentGraphView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
+
+// Lazy-loaded components for performance (rarely-used heavy modals)
+// These are loaded on-demand when the user first opens them
+const LogViewer = lazy(() =>
+	import('./components/LogViewer').then((m) => ({ default: m.LogViewer }))
+);
+const MarketplaceModal = lazy(() =>
+	import('./components/MarketplaceModal').then((m) => ({ default: m.MarketplaceModal }))
+);
+const SymphonyModal = lazy(() =>
+	import('./components/SymphonyModal').then((m) => ({ default: m.SymphonyModal }))
+);
+const DocumentGraphView = lazy(() =>
+	import('./components/DocumentGraph/DocumentGraphView').then((m) => ({
+		default: m.DocumentGraphView,
+	}))
+);
+
+// Re-import the type for SymphonyContributionData (types don't need lazy loading)
+import type { SymphonyContributionData } from './components/SymphonyModal';
 
 // Group Chat Components
 import { GroupChatPanel } from './components/GroupChatPanel';
@@ -115,10 +141,11 @@ import type {
 	ToolType,
 	SessionState,
 	RightPanelTab,
-	FocusArea,
 	LogEntry,
 	Session,
 	AITab,
+	FilePreviewTab,
+	UnifiedTabRef,
 	UsageStats,
 	QueuedItem,
 	BatchRunConfig,
@@ -129,6 +156,7 @@ import type {
 	OpenSpecCommand,
 	LeaderboardRegistration,
 	CustomAICommand,
+	ThinkingMode,
 } from './types';
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
@@ -137,22 +165,34 @@ import {
 	setActiveTab,
 	createTab,
 	closeTab,
-	reopenClosedTab,
+	reopenUnifiedClosedTab,
+	closeFileTab as closeFileTabHelper,
+	addAiTabToUnifiedHistory,
 	getActiveTab,
 	getWriteModeTab,
 	navigateToNextTab,
 	navigateToPrevTab,
 	navigateToTabByIndex,
 	navigateToLastTab,
+	navigateToUnifiedTabByIndex,
+	navigateToLastUnifiedTab,
+	navigateToNextUnifiedTab,
+	navigateToPrevUnifiedTab,
 	getInitialRenameValue,
 	hasActiveWizard,
 } from './utils/tabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
-import { validateNewSession } from './utils/sessionValidation';
+import { validateNewSession, getProviderDisplayName } from './utils/sessionValidation';
 import { estimateContextUsage } from './utils/contextUsage';
 import { formatLogsForClipboard } from './utils/contextExtractor';
+import {
+	parseSessionId,
+	parseGroupChatSessionId,
+	isSynopsisSession,
+	isBatchSession,
+} from './utils/sessionIdParser';
 import { isLikelyConcatenatedToolNames, getSlashCommandDescription } from './constants/app';
 import { useUILayout } from './contexts/UILayoutContext';
 
@@ -375,6 +415,9 @@ function MaestroConsoleInner() {
 		setTourOpen,
 		tourFromWizard,
 		setTourFromWizard,
+		// Symphony Modal
+		symphonyModalOpen,
+		setSymphonyModalOpen,
 	} = useModalContext();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -439,6 +482,8 @@ function MaestroConsoleInner() {
 		setRightPanelWidth,
 		markdownEditMode,
 		setMarkdownEditMode,
+		chatRawTextMode,
+		setChatRawTextMode,
 		showHiddenFiles,
 		setShowHiddenFiles,
 		terminalWidth,
@@ -513,6 +558,12 @@ function MaestroConsoleInner() {
 
 		// Rendering settings
 		disableConfetti,
+
+		// Tab naming settings
+		automaticTabNamingEnabled,
+
+		// File tab refresh settings
+		fileTabAutoRefreshEnabled,
 	} = settings;
 
 	// --- KEYBOARD SHORTCUT HELPERS ---
@@ -610,6 +661,25 @@ function MaestroConsoleInner() {
 			.catch(console.error);
 	}, []);
 
+	// Check for stats database initialization issues (corruption, reset, etc.) on mount
+	useEffect(() => {
+		window.maestro?.stats
+			?.getInitializationResult()
+			.then((result) => {
+				if (result?.userMessage) {
+					addToast({
+						type: 'warning',
+						title: 'Statistics Database',
+						message: result.userMessage,
+						duration: 10000, // Show for 10 seconds since this is important info
+					});
+					// Clear the result so we don't show it again
+					window.maestro?.stats?.clearInitializationResult();
+				}
+			})
+			.catch(console.error);
+	}, [addToast]);
+
 	// Compute map of session names to SSH remote names (for group chat participant cards)
 	const sessionSshRemoteNames = useMemo(() => {
 		const map = new Map<string, string>();
@@ -689,7 +759,6 @@ function MaestroConsoleInner() {
 	const { preFilterActiveTabIdRef } = useUILayout();
 
 	// File Explorer State
-	const { previewFile, setPreviewFile } = useUILayout();
 	const [filePreviewLoading, setFilePreviewLoading] = useState<{
 		name: string;
 		path: string;
@@ -948,14 +1017,6 @@ function MaestroConsoleInner() {
 		};
 	}, []);
 
-	// Close file preview when switching sessions (history is now per-session)
-	// previewFile intentionally omitted: we only want to clear preview on session change, not when preview itself changes
-	useEffect(() => {
-		if (previewFile !== null) {
-			setPreviewFile(null);
-		}
-	}, [activeSessionId]);
-
 	// Restore a persisted session by respawning its process
 	/**
 	 * Fetch git info (isRepo, branches, tags) for a session in the background.
@@ -1052,6 +1113,10 @@ function MaestroConsoleInner() {
 						},
 					],
 					activeTabId: defaultTabId,
+					filePreviewTabs: [],
+					activeFileTabId: null,
+					unifiedTabOrder: [{ type: 'ai' as const, id: defaultTabId }],
+					unifiedClosedTabHistory: [],
 				};
 			}
 
@@ -1176,6 +1241,12 @@ function MaestroConsoleInner() {
 					agentError: undefined,
 					agentErrorPaused: false,
 					closedTabHistory: [], // Runtime-only, reset on load
+					// File preview tabs - initialize from persisted data or empty
+					filePreviewTabs: correctedSession.filePreviewTabs || [],
+					activeFileTabId: correctedSession.activeFileTabId ?? null,
+					unifiedTabOrder:
+						correctedSession.unifiedTabOrder ||
+						resetAiTabs.map((tab) => ({ type: 'ai' as const, id: tab.id })),
 				};
 			} else {
 				// Process spawn failed
@@ -1593,6 +1664,10 @@ function MaestroConsoleInner() {
 							aiTabs: [initialTab],
 							activeTabId: initialTabId,
 							closedTabHistory: [],
+							filePreviewTabs: [],
+							activeFileTabId: null,
+							unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+							unifiedClosedTabHistory: [],
 							customPath: parentSession.customPath,
 							customArgs: parentSession.customArgs,
 							customEnvVars: parentSession.customEnvVars,
@@ -1937,6 +2012,7 @@ function MaestroConsoleInner() {
 					tabName?: string;
 					tabId?: string;
 					lastSynopsisTime?: number;
+					taskDuration?: number; // Duration of the task that just completed (from thinkingStartTime)
 					toolType?: ToolType;
 					sessionConfig?: {
 						customPath?: string;
@@ -2080,6 +2156,7 @@ function MaestroConsoleInner() {
 								tabName,
 								tabId: completedTab?.id,
 								lastSynopsisTime: completedTab?.lastSynopsisTime, // Track when last synopsis was generated
+								taskDuration: duration, // Duration of the task that just completed
 								toolType: currentSession.toolType, // Pass tool type for multi-provider support
 								sessionConfig: {
 									customPath: currentSession.customPath,
@@ -2427,10 +2504,9 @@ function MaestroConsoleInner() {
 					let SYNOPSIS_PROMPT: string;
 					if (synopsisData.lastSynopsisTime) {
 						const timeAgo = formatRelativeTime(synopsisData.lastSynopsisTime);
-						SYNOPSIS_PROMPT = `Synopsize ONLY the work done since the last synopsis (${timeAgo}). Do not repeat previous work. 2-3 sentences max.`;
+						SYNOPSIS_PROMPT = `${autorunSynopsisPrompt}\n\nIMPORTANT: Only synopsize work done since the last synopsis (${timeAgo}). Do not repeat previous work.`;
 					} else {
-						SYNOPSIS_PROMPT =
-							'Synopsize our recent work in 2-3 sentences max since the last time we did a synopsis.';
+						SYNOPSIS_PROMPT = autorunSynopsisPrompt;
 					}
 					const startTime = Date.now();
 					const synopsisTime = Date.now(); // Capture time for updating lastSynopsisTime
@@ -2447,16 +2523,34 @@ function MaestroConsoleInner() {
 						.then((result) => {
 							const duration = Date.now() - startTime;
 							if (result.success && result.response && addHistoryEntryRef.current) {
+								// Parse the synopsis response to check for NOTHING_TO_REPORT
+								const parsed = parseSynopsis(result.response);
+
+								// Skip history entry and toast if nothing meaningful to report
+								if (parsed.nothingToReport) {
+									console.log(
+										'[onProcessExit] Synopsis returned NOTHING_TO_REPORT - skipping history entry',
+										{
+											sessionId: synopsisData!.sessionId,
+											agentSessionId: synopsisData!.agentSessionId,
+										}
+									);
+									return;
+								}
+
 								// IMPORTANT: Pass explicit sessionId and projectPath to prevent cross-agent bleed
 								// when user switches agents while synopsis is running in background
 								addHistoryEntryRef.current({
 									type: 'USER',
-									summary: result.response,
+									summary: parsed.shortSummary,
+									fullResponse: parsed.fullSynopsis,
 									agentSessionId: synopsisData!.agentSessionId,
 									usageStats: result.usageStats,
 									sessionId: synopsisData!.sessionId,
 									projectPath: synopsisData!.cwd,
 									sessionName: synopsisData!.tabName,
+									// Use actual task duration (from thinkingStartTime to completion)
+									elapsedTimeMs: synopsisData!.taskDuration,
 								});
 
 								// Update lastSynopsisTime on the tab so future synopses know the time window
@@ -2474,16 +2568,18 @@ function MaestroConsoleInner() {
 								);
 
 								// Show toast for synopsis completion
+								// Skip custom notification - synopsis is not part of regular AI conversation flow
 								addToastRef.current({
 									type: 'info',
 									title: 'Synopsis',
-									message: result.response,
+									message: parsed.shortSummary,
 									group: synopsisData!.groupName,
 									project: synopsisData!.projectName,
 									taskDuration: duration,
 									sessionId: synopsisData!.sessionId,
 									tabId: synopsisData!.tabId,
 									tabName: synopsisData!.tabName,
+									skipCustomNotification: true,
 								});
 
 								// Refresh history panel if available
@@ -2513,21 +2609,68 @@ function MaestroConsoleInner() {
 			async (sessionId: string, agentSessionId: string) => {
 				// Ignore batch sessions - they have their own isolated session IDs that should NOT
 				// contaminate the interactive session's agentSessionId
-				if (sessionId.includes('-batch-')) {
+				if (isBatchSession(sessionId)) {
 					return;
 				}
 
 				// Parse sessionId to get actual session ID and tab ID
-				// Format: ${sessionId}-ai-${tabId}
-				let actualSessionId: string;
-				let tabId: string | undefined;
+				// Uses pre-compiled regex patterns from sessionIdParser
+				const parsed = parseSessionId(sessionId);
+				const actualSessionId = parsed.actualSessionId;
+				const tabId = parsed.tabId ?? undefined;
 
-				const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-				if (aiTabMatch) {
-					actualSessionId = aiTabMatch[1];
-					tabId = aiTabMatch[2];
-				} else {
-					actualSessionId = sessionId;
+				// First, check if we need to trigger automatic tab naming BEFORE updating state
+				// We need the current session state to determine this
+				const currentSessions = sessionsRef.current;
+				const currentSession = currentSessions.find((s) => s.id === actualSessionId);
+
+				// Capture info for tab naming (must be done before state update modifies awaitingSessionId)
+				interface TabNamingInfo {
+					tabId: string;
+					userMessage: string;
+					agentType: string;
+					cwd: string;
+					sessionSshRemoteConfig?: {
+						enabled: boolean;
+						remoteId: string | null;
+						workingDirOverride?: string;
+					};
+				}
+				let tabNamingInfo: TabNamingInfo | null = null;
+
+				if (currentSession) {
+					// Find the target tab (same logic as in setSessions below)
+					let targetTab = tabId
+						? currentSession.aiTabs?.find((tab) => tab.id === tabId)
+						: undefined;
+
+					if (!targetTab) {
+						const awaitingTab = currentSession.aiTabs?.find(
+							(tab) => tab.awaitingSessionId && !tab.agentSessionId
+						);
+						targetTab = awaitingTab || getActiveTab(currentSession);
+					}
+
+					// Check if we should trigger automatic tab naming:
+					// 1. Tab was awaiting session ID (this is a new session, not a resume)
+					// 2. Tab doesn't already have a custom name
+					// 3. Tab has at least one user message in logs
+					if (targetTab?.awaitingSessionId && !targetTab.name) {
+						const userMessages = targetTab.logs.filter((log) => log.source === 'user');
+						if (userMessages.length > 0) {
+							const firstUserMessage = userMessages[0];
+							// Only use text messages for naming (skip image-only messages)
+							if (firstUserMessage.text?.trim()) {
+								tabNamingInfo = {
+									tabId: targetTab.id,
+									userMessage: firstUserMessage.text,
+									agentType: currentSession.toolType,
+									cwd: currentSession.cwd,
+									sessionSshRemoteConfig: currentSession.sessionSshRemoteConfig,
+								};
+							}
+						}
+					}
 				}
 
 				// Store Claude session ID in session state
@@ -2593,6 +2736,99 @@ function MaestroConsoleInner() {
 						return { ...s, aiTabs: updatedAiTabs, agentSessionId }; // Also keep session-level for backwards compatibility
 					});
 				});
+
+				// Trigger automatic tab naming if conditions are met
+				// This runs after the state update so it happens in parallel with the main AI processing
+				// Use ref to access the latest setting value (useEffect has [] deps so we'd get stale value otherwise)
+				if (tabNamingInfo && automaticTabNamingEnabledRef.current) {
+					console.log('[onSessionId] Triggering automatic tab naming', {
+						tabId: tabNamingInfo.tabId,
+						messageLength: tabNamingInfo.userMessage.length,
+						agentType: tabNamingInfo.agentType,
+					});
+
+					// Set isGeneratingName to show spinner in tab
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== actualSessionId) return s;
+							return {
+								...s,
+								aiTabs: s.aiTabs.map((t) =>
+									t.id === tabNamingInfo!.tabId ? { ...t, isGeneratingName: true } : t
+								),
+							};
+						})
+					);
+
+					// Call the tab naming API (async, don't await)
+					window.maestro.tabNaming
+						.generateTabName({
+							userMessage: tabNamingInfo.userMessage,
+							agentType: tabNamingInfo.agentType,
+							cwd: tabNamingInfo.cwd,
+							sessionSshRemoteConfig: tabNamingInfo.sessionSshRemoteConfig,
+						})
+						.then((generatedName) => {
+							// Clear the generating indicator
+							setSessions((prev) =>
+								prev.map((s) => {
+									if (s.id !== actualSessionId) return s;
+									return {
+										...s,
+										aiTabs: s.aiTabs.map((t) =>
+											t.id === tabNamingInfo!.tabId ? { ...t, isGeneratingName: false } : t
+										),
+									};
+								})
+							);
+
+							if (!generatedName) {
+								console.log('[onSessionId] Tab naming returned null (timeout or error)');
+								return;
+							}
+
+							console.log('[onSessionId] Tab naming generated:', generatedName);
+
+							// Update the tab name only if it's still null (user hasn't renamed it)
+							setSessions((prev) =>
+								prev.map((s) => {
+									if (s.id !== actualSessionId) return s;
+
+									const tab = s.aiTabs.find((t) => t.id === tabNamingInfo!.tabId);
+									// Only update if tab exists and name is still null (UUID display)
+									if (!tab || tab.name !== null) {
+										console.log('[onSessionId] Skipping tab name update (already named)', {
+											tabExists: !!tab,
+											currentName: tab?.name,
+										});
+										return s;
+									}
+
+									return {
+										...s,
+										aiTabs: s.aiTabs.map((t) =>
+											t.id === tabNamingInfo!.tabId ? { ...t, name: generatedName } : t
+										),
+									};
+								})
+							);
+						})
+						.catch((error) => {
+							console.error('[onSessionId] Tab naming failed:', error);
+							// Clear the generating indicator on error
+							setSessions((prev) =>
+								prev.map((s) => {
+									if (s.id !== actualSessionId) return s;
+									return {
+										...s,
+										aiTabs: s.aiTabs.map((t) =>
+											t.id === tabNamingInfo!.tabId ? { ...t, isGeneratingName: false } : t
+										),
+									};
+								})
+							);
+						});
+				}
 			}
 		);
 
@@ -2601,8 +2837,7 @@ function MaestroConsoleInner() {
 		const unsubscribeSlashCommands = window.maestro.process.onSlashCommands(
 			(sessionId: string, slashCommands: string[]) => {
 				// Parse sessionId to get actual session ID (ignore tab ID suffix)
-				const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-				const actualSessionId = aiTabMatch ? aiTabMatch[1] : sessionId;
+				const actualSessionId = parseSessionId(sessionId).baseSessionId;
 
 				// Convert string array to command objects with descriptions
 				// Claude Code returns just command names, we'll need to derive descriptions
@@ -2701,31 +2936,18 @@ function MaestroConsoleInner() {
 
 		// Handle usage statistics from AI responses (BATCHED for performance)
 		const unsubscribeUsage = window.maestro.process.onUsage((sessionId: string, usageStats) => {
-			// Parse sessionId to get actual session ID and tab ID (handles -ai-tabId and legacy -ai suffix)
-			let actualSessionId: string;
-			let tabId: string | null = null;
-			const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-			if (aiTabMatch) {
-				actualSessionId = aiTabMatch[1];
-				tabId = aiTabMatch[2];
-			} else if (sessionId.endsWith('-ai')) {
-				actualSessionId = sessionId.slice(0, -3);
-			} else {
-				actualSessionId = sessionId;
-			}
+			// Parse sessionId using centralized parser (pre-compiled regex patterns)
+			// Handles: -ai-tabId, legacy -ai suffix, -synopsis-timestamp, -batch-timestamp
+			const parsed = parseSessionId(sessionId);
+			const { actualSessionId, tabId, baseSessionId } = parsed;
 
-			// Calculate context window usage percentage.
-			// For Claude: context = inputTokens + cacheReadInputTokens + cacheCreationInputTokens
-			//   (these three fields partition the total input into uncached, cache-hit, newly-cached)
-			// For Codex: context = inputTokens + outputTokens (combined limit)
-			//
-			// When Claude Code performs complex multi-tool turns, the reported values are
-			// accumulated across internal API calls and can exceed the context window.
-			// estimateContextUsage returns null in that case - we skip the update and
-			// keep the last valid measurement. This means the gauge may stay static
+			// Estimate context usage percentage using agent-specific calculation.
+			// estimateContextUsage returns null when values are accumulated across multiple
+			// internal API calls within a complex turn. In that case, the UI may update less
 			// during tool-heavy turns, but it's always accurate when it does update,
 			// keeping the compact warning reliable.
-			const sessionForUsage = sessionsRef.current.find((s) => s.id === actualSessionId);
+			// Use baseSessionId for lookup to handle synopsis/batch sessions that inherit parent's agent type
+			const sessionForUsage = sessionsRef.current.find((s) => s.id === baseSessionId);
 			const agentToolType = sessionForUsage?.toolType;
 			const contextPercentage = estimateContextUsage(usageStats, agentToolType);
 
@@ -2733,11 +2955,10 @@ function MaestroConsoleInner() {
 			// The batched updater handles the accumulation logic internally
 			batchedUpdater.updateUsage(actualSessionId, tabId, usageStats);
 			batchedUpdater.updateUsage(actualSessionId, null, usageStats); // Session-level accumulation
+			// Only update context percentage if we got a valid value (not accumulated)
 			if (contextPercentage !== null) {
-				// Valid measurement from a non-accumulated turn - use it directly
 				batchedUpdater.updateContextUsage(actualSessionId, contextPercentage);
 			}
-			// When null (accumulated values), keep the last valid percentage unchanged
 			batchedUpdater.updateCycleTokens(actualSessionId, usageStats.outputTokens);
 
 			// Update persistent global stats (not batched - this is a separate concern)
@@ -2766,19 +2987,12 @@ function MaestroConsoleInner() {
 				};
 
 				// Check if this is a group chat error (moderator or participant)
-				// Pattern: group-chat-{UUID}-moderator-{timestamp} or group-chat-{UUID}-{participantName}-{timestamp}
-				// UUIDs look like: 533fad24-3915-4fc6-9edb-ba2292a5b903
-				const groupChatModeratorMatch = sessionId.match(
-					/^group-chat-([0-9a-f-]{36})-moderator-(\d+)$/
-				);
-				const groupChatParticipantMatch = sessionId.match(
-					/^group-chat-([0-9a-f-]{36})-(.+?)-(\d+)$/
-				);
-				const groupChatMatch = groupChatModeratorMatch || groupChatParticipantMatch;
-				if (groupChatMatch) {
-					const groupChatId = groupChatMatch[1];
-					const isModeratorError = groupChatModeratorMatch !== null;
-					const participantOrModerator = isModeratorError ? 'moderator' : groupChatMatch[2];
+				// Uses pre-compiled regex patterns from sessionIdParser
+				const groupChatParsed = parseGroupChatSessionId(sessionId);
+				if (groupChatParsed.isGroupChat) {
+					const groupChatId = groupChatParsed.groupChatId!;
+					const isModeratorError = groupChatParsed.isModerator ?? false;
+					const participantOrModerator = isModeratorError ? 'moderator' : groupChatParsed.participantName!;
 
 					console.log('[onAgentError] Group chat error received:', {
 						rawSessionId: sessionId,
@@ -2818,7 +3032,7 @@ function MaestroConsoleInner() {
 
 				// Synopsis processes run in the background - don't show their errors in the main session UI
 				// They have their own error handling in the promise rejection
-				if (sessionId.match(/-synopsis-\d+$/)) {
+				if (isSynopsisSession(sessionId)) {
 					console.log('[onAgentError] Ignoring synopsis process error:', {
 						rawSessionId: sessionId,
 						errorType: error.type,
@@ -2828,18 +3042,10 @@ function MaestroConsoleInner() {
 				}
 
 				// Parse sessionId to get actual session ID (strip suffixes)
-				let actualSessionId: string;
-				let tabIdFromSession: string | undefined;
-				const aiTabMatch = sessionId.match(/^(.+)-ai(?:-(.+))?$/);
-				if (aiTabMatch) {
-					actualSessionId = aiTabMatch[1];
-					tabIdFromSession = aiTabMatch[2];
-				} else if (sessionId.match(/-batch-\d+$/)) {
-					// Batch process errors - strip -batch-{timestamp} suffix
-					actualSessionId = sessionId.replace(/-batch-\d+$/, '');
-				} else {
-					actualSessionId = sessionId;
-				}
+				// Uses pre-compiled regex patterns from sessionIdParser
+				const parsed = parseSessionId(sessionId);
+				const actualSessionId = parsed.baseSessionId;
+				const tabIdFromSession = parsed.tabId ?? undefined;
 
 				console.log('[onAgentError] Agent error received:', {
 					rawSessionId: sessionId,
@@ -3030,8 +3236,8 @@ function MaestroConsoleInner() {
 									const targetTab = updatedTabs.find((t) => t.id === chunkTabId);
 									if (!targetTab) continue;
 
-									// Only append if thinking is enabled for this tab
-									if (!targetTab.showThinking) continue;
+									// Only append if thinking is enabled for this tab (on or sticky)
+									if (!targetTab.showThinking || targetTab.showThinking === 'off') continue;
 
 									// Skip malformed content that looks like concatenated tool names
 									// This can happen if the stream parser receives malformed output
@@ -3190,7 +3396,8 @@ function MaestroConsoleInner() {
 						if (s.id !== actualSessionId) return s;
 
 						const targetTab = s.aiTabs.find((t) => t.id === tabId);
-						if (!targetTab?.showThinking) return s; // Only show if thinking enabled
+						// Only show if thinking enabled (on or sticky)
+						if (!targetTab?.showThinking || targetTab.showThinking === 'off') return s;
 
 						const toolLog: LogEntry = {
 							id: `tool-${Date.now()}-${toolEvent.toolName}`,
@@ -3266,17 +3473,7 @@ function MaestroConsoleInner() {
 
 		const unsubModeratorUsage = window.maestro.groupChat.onModeratorUsage?.((id, usage) => {
 			if (id === activeGroupChatId) {
-				// When contextUsage is -1, values are accumulated from multi-tool turns.
-				// Preserve previous context/token values, only update cost.
-				if (usage.contextUsage === -1) {
-					setModeratorUsage((prev) =>
-						prev
-							? { ...prev, totalCost: usage.totalCost }
-							: { contextUsage: 0, totalCost: usage.totalCost, tokenCount: 0 }
-					);
-				} else {
-					setModeratorUsage(usage);
-				}
+				setModeratorUsage(usage);
 			}
 		});
 
@@ -3385,11 +3582,15 @@ function MaestroConsoleInner() {
 	const customAICommandsRef = useRef(customAICommands);
 	const speckitCommandsRef = useRef(speckitCommands);
 	const openspecCommandsRef = useRef(openspecCommands);
+	const automaticTabNamingEnabledRef = useRef(automaticTabNamingEnabled);
+	const fileTabAutoRefreshEnabledRef = useRef(fileTabAutoRefreshEnabled);
 	addToastRef.current = addToast;
 	updateGlobalStatsRef.current = updateGlobalStats;
 	customAICommandsRef.current = customAICommands;
 	speckitCommandsRef.current = speckitCommands;
 	openspecCommandsRef.current = openspecCommands;
+	automaticTabNamingEnabledRef.current = automaticTabNamingEnabled;
+	fileTabAutoRefreshEnabledRef.current = fileTabAutoRefreshEnabled;
 
 	// Note: spawnBackgroundSynopsisRef and spawnAgentWithPromptRef are now provided by useAgentExecution hook
 	// Note: addHistoryEntryRef is now provided by useAgentSessionManagement hook
@@ -3563,45 +3764,219 @@ function MaestroConsoleInner() {
 		activeSession?.projectRoot,
 	]);
 
-	// File preview navigation history - derived from active session (per-agent history)
-	const filePreviewHistory = useMemo(
-		() => activeSession?.filePreviewHistory ?? [],
-		[activeSession?.filePreviewHistory]
+	// Per-tab navigation history for the active file tab
+	const activeFileTabHistory = useMemo(() => {
+		if (!activeSession?.activeFileTabId) return [];
+		const tab = activeSession.filePreviewTabs.find((t) => t.id === activeSession.activeFileTabId);
+		return tab?.navigationHistory ?? [];
+	}, [activeSession?.activeFileTabId, activeSession?.filePreviewTabs]);
+
+	const activeFileTabNavIndex = useMemo(() => {
+		if (!activeSession?.activeFileTabId) return -1;
+		const tab = activeSession.filePreviewTabs.find((t) => t.id === activeSession.activeFileTabId);
+		return tab?.navigationIndex ?? (tab?.navigationHistory?.length ?? 0) - 1;
+	}, [activeSession?.activeFileTabId, activeSession?.filePreviewTabs]);
+
+	// Per-tab back/forward history arrays
+	const fileTabBackHistory = useMemo(
+		() => activeFileTabHistory.slice(0, activeFileTabNavIndex),
+		[activeFileTabHistory, activeFileTabNavIndex]
 	);
-	const filePreviewHistoryIndex = useMemo(
-		() => activeSession?.filePreviewHistoryIndex ?? -1,
-		[activeSession?.filePreviewHistoryIndex]
+	const fileTabForwardHistory = useMemo(
+		() => activeFileTabHistory.slice(activeFileTabNavIndex + 1),
+		[activeFileTabHistory, activeFileTabNavIndex]
 	);
 
-	// PERF: Memoize sliced history arrays to prevent new array creation on every render
-	const backHistory = useMemo(
-		() => filePreviewHistory.slice(0, filePreviewHistoryIndex),
-		[filePreviewHistory, filePreviewHistoryIndex]
-	);
-	const forwardHistory = useMemo(
-		() => filePreviewHistory.slice(filePreviewHistoryIndex + 1),
-		[filePreviewHistory, filePreviewHistoryIndex]
-	);
+	// Can navigate back/forward in the current file tab
+	const fileTabCanGoBack = activeFileTabNavIndex > 0;
+	const fileTabCanGoForward = activeFileTabNavIndex < activeFileTabHistory.length - 1;
 
-	// Helper to update file preview history for the active session
-	const setFilePreviewHistory = useCallback(
-		(history: { name: string; content: string; path: string }[]) => {
-			if (!activeSessionId) return;
+	/**
+	 * Open a file preview tab. If a tab with the same path already exists, select it.
+	 * Otherwise, create a new FilePreviewTab, add it to filePreviewTabs and unifiedTabOrder,
+	 * and set it as the active file tab (deselecting any active AI tab).
+	 *
+	 * For SSH remote files, pass sshRemoteId so content can be re-fetched if needed.
+	 */
+	const handleOpenFileTab = useCallback(
+		(
+			file: { path: string; name: string; content: string; sshRemoteId?: string; lastModified?: number },
+			options?: {
+				/** If true, create new tab adjacent to current file tab. If false, replace current file tab content. Default: true (create new tab) */
+				openInNewTab?: boolean;
+			}
+		) => {
+			const openInNewTab = options?.openInNewTab ?? true; // Default to opening in new tab for backward compatibility
+
 			setSessions((prev) =>
-				prev.map((s) => (s.id === activeSessionId ? { ...s, filePreviewHistory: history } : s))
+				prev.map((s) => {
+					if (s.id !== activeSessionIdRef.current) return s;
+
+					// Check if a tab with this path already exists
+					const existingTab = s.filePreviewTabs.find((tab) => tab.path === file.path);
+					if (existingTab) {
+						// Tab exists - update content and lastModified if provided (e.g., after re-fetch) and select it
+						const updatedTabs = s.filePreviewTabs.map((tab) =>
+							tab.id === existingTab.id
+								? {
+										...tab,
+										content: file.content,
+										lastModified: file.lastModified ?? tab.lastModified,
+										isLoading: false,
+									}
+								: tab
+						);
+						return {
+							...s,
+							filePreviewTabs: updatedTabs,
+							activeFileTabId: existingTab.id,
+							activeTabId: s.activeTabId, // Keep AI tab reference but it's not visually active
+						};
+					}
+
+					// If not opening in new tab and there's an active file tab, replace its content
+					if (!openInNewTab && s.activeFileTabId) {
+						const currentTabId = s.activeFileTabId;
+						const currentTab = s.filePreviewTabs.find((tab) => tab.id === currentTabId);
+						const extension = file.name.includes('.')
+							? '.' + file.name.split('.').pop()
+							: '';
+						const nameWithoutExtension = extension
+							? file.name.slice(0, -extension.length)
+							: file.name;
+
+						// Replace current tab's content with new file and update navigation history
+						const updatedTabs = s.filePreviewTabs.map((tab) => {
+							if (tab.id !== currentTabId) return tab;
+
+							// Build updated navigation history
+							const currentHistory = tab.navigationHistory ?? [];
+							const currentIndex = tab.navigationIndex ?? currentHistory.length - 1;
+
+							// Save current file to history before replacing (if we have content)
+							// Truncate forward history if we're not at the end
+							const truncatedHistory =
+								currentIndex >= 0 && currentIndex < currentHistory.length - 1
+									? currentHistory.slice(0, currentIndex + 1)
+									: currentHistory;
+
+							// Add current file to history if it exists and isn't already the last entry
+							let newHistory = truncatedHistory;
+							if (
+								currentTab &&
+								currentTab.path &&
+								(truncatedHistory.length === 0 ||
+									truncatedHistory[truncatedHistory.length - 1].path !== currentTab.path)
+							) {
+								newHistory = [
+									...truncatedHistory,
+									{
+										path: currentTab.path,
+										name: currentTab.name,
+										scrollTop: currentTab.scrollTop,
+									},
+								];
+							}
+
+							// Add the new file to history
+							const finalHistory = [
+								...newHistory,
+								{
+									path: file.path,
+									name: nameWithoutExtension,
+									scrollTop: 0,
+								},
+							];
+
+							return {
+								...tab,
+								path: file.path,
+								name: nameWithoutExtension,
+								extension,
+								content: file.content,
+								scrollTop: 0, // Reset scroll for new file
+								searchQuery: '', // Clear search
+								editMode: false,
+								editContent: undefined,
+								lastModified: file.lastModified ?? Date.now(),
+								sshRemoteId: file.sshRemoteId,
+								isLoading: false,
+								navigationHistory: finalHistory,
+								navigationIndex: finalHistory.length - 1, // Point to current (new) file
+							};
+						});
+						return {
+							...s,
+							filePreviewTabs: updatedTabs,
+							// activeFileTabId stays the same since we're replacing in-place
+						};
+					}
+
+					// Create a new file preview tab
+					const newTabId = generateId();
+					const extension = file.name.includes('.')
+						? '.' + file.name.split('.').pop()
+						: '';
+					const nameWithoutExtension = extension
+						? file.name.slice(0, -extension.length)
+						: file.name;
+
+					const newFileTab: FilePreviewTab = {
+						id: newTabId,
+						path: file.path,
+						name: nameWithoutExtension,
+						extension,
+						content: file.content,
+						scrollTop: 0,
+						searchQuery: '',
+						editMode: false,
+						editContent: undefined,
+						createdAt: Date.now(),
+						lastModified: file.lastModified ?? Date.now(), // Use file mtime or current time as fallback
+						sshRemoteId: file.sshRemoteId,
+						isLoading: false, // Content is already loaded when this is called
+						// Initialize navigation history with the first file
+						navigationHistory: [{ path: file.path, name: nameWithoutExtension, scrollTop: 0 }],
+						navigationIndex: 0,
+					};
+
+					// Create the unified tab reference
+					const newTabRef: UnifiedTabRef = { type: 'file', id: newTabId };
+
+					// If opening in new tab and there's an active file tab, insert adjacent to it
+					let updatedUnifiedTabOrder: UnifiedTabRef[];
+					if (openInNewTab && s.activeFileTabId) {
+						const currentIndex = s.unifiedTabOrder.findIndex(
+							(ref) => ref.type === 'file' && ref.id === s.activeFileTabId
+						);
+						if (currentIndex !== -1) {
+							// Insert right after the current file tab
+							updatedUnifiedTabOrder = [
+								...s.unifiedTabOrder.slice(0, currentIndex + 1),
+								newTabRef,
+								...s.unifiedTabOrder.slice(currentIndex + 1),
+							];
+						} else {
+							// Fallback: append at end
+							updatedUnifiedTabOrder = [...s.unifiedTabOrder, newTabRef];
+						}
+					} else {
+						// No active file tab or not specified - append at end
+						updatedUnifiedTabOrder = [...s.unifiedTabOrder, newTabRef];
+					}
+
+					return {
+						...s,
+						filePreviewTabs: [...s.filePreviewTabs, newFileTab],
+						unifiedTabOrder: updatedUnifiedTabOrder,
+						activeFileTabId: newTabId,
+						// Deselect AI tab when file tab becomes active
+						// Note: activeTabId stays as is - it tracks the last active AI tab for when user switches back
+					};
+				})
 			);
 		},
-		[activeSessionId]
-	);
-
-	const setFilePreviewHistoryIndex = useCallback(
-		(index: number) => {
-			if (!activeSessionId) return;
-			setSessions((prev) =>
-				prev.map((s) => (s.id === activeSessionId ? { ...s, filePreviewHistoryIndex: index } : s))
-			);
-		},
-		[activeSessionId]
+		[]
 	);
 
 	// --- APP HANDLERS (drag, file, folder operations) ---
@@ -3622,15 +3997,11 @@ function MaestroConsoleInner() {
 		activeSessionId,
 		setSessions,
 		setActiveFocus,
-		setPreviewFile,
 		setFilePreviewLoading,
-		filePreviewHistory,
-		setFilePreviewHistory,
-		filePreviewHistoryIndex,
-		setFilePreviewHistoryIndex,
 		setConfirmModalMessage,
 		setConfirmModalOnConfirm,
 		setConfirmModalOpen,
+		onOpenFileTab: handleOpenFileTab,
 	});
 
 	// Use custom colors when custom theme is selected, otherwise use the standard theme
@@ -4457,8 +4828,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 					aiOnly: true, // Agent commands are only available in AI mode
 				}))
 			: [];
+		// Filter built-in slash commands by agent type (if specified)
+		const currentAgentType = activeSession?.toolType;
+		const filteredSlashCommands = slashCommands.filter(
+			(cmd) => !cmd.agentTypes || (currentAgentType && cmd.agentTypes.includes(currentAgentType))
+		);
 		return [
-			...slashCommands,
+			...filteredSlashCommands,
 			...customCommandsAsSlash,
 			...speckitCommandsAsSlash,
 			...openspecCommandsAsSlash,
@@ -4469,6 +4845,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		speckitCommands,
 		openspecCommands,
 		activeSession?.agentCommands,
+		activeSession?.toolType,
 		hasActiveSessionCapability,
 	]);
 
@@ -4482,6 +4859,48 @@ You are taking over this conversation. Based on the context above, provide a bri
 		() => (activeSession ? getActiveTab(activeSession) : undefined),
 		[activeSession?.aiTabs, activeSession?.activeTabId]
 	);
+
+	// UNIFIED TAB SYSTEM: Combine aiTabs and filePreviewTabs according to unifiedTabOrder
+	// This produces a single list for rendering tabs in the correct order (AI and file tabs interspersed)
+	// The type discriminator allows components to render the appropriate content for each tab type
+	type UnifiedTab =
+		| { type: 'ai'; id: string; data: AITab }
+		| { type: 'file'; id: string; data: FilePreviewTab };
+
+	const unifiedTabs = useMemo((): UnifiedTab[] => {
+		if (!activeSession) return [];
+
+		const { aiTabs, filePreviewTabs, unifiedTabOrder } = activeSession;
+		const aiTabMap = new Map(aiTabs.map((tab) => [tab.id, tab]));
+		const fileTabMap = new Map(filePreviewTabs.map((tab) => [tab.id, tab]));
+
+		return unifiedTabOrder
+			.map((ref): UnifiedTab | null => {
+				if (ref.type === 'ai') {
+					const tab = aiTabMap.get(ref.id);
+					return tab ? { type: 'ai', id: ref.id, data: tab } : null;
+				} else {
+					const tab = fileTabMap.get(ref.id);
+					return tab ? { type: 'file', id: ref.id, data: tab } : null;
+				}
+			})
+			.filter((tab): tab is UnifiedTab => tab !== null);
+	}, [
+		activeSession?.aiTabs,
+		activeSession?.filePreviewTabs,
+		activeSession?.unifiedTabOrder,
+	]);
+
+	// Get the active file preview tab (if a file tab is active)
+	const activeFileTab = useMemo((): FilePreviewTab | null => {
+		if (!activeSession?.activeFileTabId) return null;
+		return (
+			activeSession.filePreviewTabs.find(
+				(tab) => tab.id === activeSession.activeFileTabId
+			) ?? null
+		);
+	}, [activeSession?.activeFileTabId, activeSession?.filePreviewTabs]);
+
 	const isResumingSession = !!activeTab?.agentSessionId;
 	const canAttachImages = useMemo(() => {
 		if (!activeSession || activeSession.inputMode !== 'ai') return false;
@@ -4786,6 +5205,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		spawnAgentWithPromptRef: _spawnAgentWithPromptRef,
 		showFlashNotification: _showFlashNotification,
 		showSuccessFlash,
+		cancelPendingSynopsis,
 	} = useAgentExecution({
 		activeSession,
 		sessionsRef,
@@ -4842,6 +5262,243 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, []);
 
 	/**
+	 * Force close a file preview tab without confirmation.
+	 * Removes it from filePreviewTabs and unifiedTabOrder.
+	 * If this was the active file tab, selects the next tab in unifiedTabOrder (could be AI or file).
+	 * Updates activeTabId or activeFileTabId accordingly.
+	 */
+	const forceCloseFileTab = useCallback((tabId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== activeSessionIdRef.current) return s;
+
+				// Use helper function to close file tab and add to unified history
+				const result = closeFileTabHelper(s, tabId);
+				if (!result) return s;
+
+				return result.session;
+			})
+		);
+	}, []);
+
+	/**
+	 * Close a file preview tab with unsaved changes check.
+	 * If the tab has unsaved changes (editContent !== undefined), show a confirmation modal.
+	 * Otherwise, close the tab immediately.
+	 */
+	const handleCloseFileTab = useCallback(
+		(tabId: string) => {
+			// Find the tab to check for unsaved changes
+			const activeSession = sessions.find((s) => s.id === activeSessionIdRef.current);
+			if (!activeSession) {
+				forceCloseFileTab(tabId);
+				return;
+			}
+
+			const tabToClose = activeSession.filePreviewTabs.find((tab) => tab.id === tabId);
+			if (!tabToClose) {
+				forceCloseFileTab(tabId);
+				return;
+			}
+
+			// Check if tab has unsaved changes (editContent is set when different from saved content)
+			if (tabToClose.editContent !== undefined) {
+				// Show confirmation modal
+				setConfirmModalMessage(
+					`"${tabToClose.name}${tabToClose.extension}" has unsaved changes. Are you sure you want to close it?`
+				);
+				setConfirmModalOnConfirm(() => () => {
+					forceCloseFileTab(tabId);
+				});
+				setConfirmModalOpen(true);
+			} else {
+				// No unsaved changes, close immediately
+				forceCloseFileTab(tabId);
+			}
+		},
+		[sessions, forceCloseFileTab, setConfirmModalMessage, setConfirmModalOnConfirm, setConfirmModalOpen]
+	);
+
+	/**
+	 * Update a file tab's editMode state.
+	 * Called when user toggles between edit and preview mode in FilePreview.
+	 */
+	const handleFileTabEditModeChange = useCallback((tabId: string, editMode: boolean) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== activeSessionIdRef.current) return s;
+
+				const updatedFileTabs = s.filePreviewTabs.map((tab) => {
+					if (tab.id !== tabId) return tab;
+					return { ...tab, editMode };
+				});
+
+				return { ...s, filePreviewTabs: updatedFileTabs };
+			})
+		);
+	}, []);
+
+	/**
+	 * Update a file tab's editContent state.
+	 * Called when user edits content in FilePreview.
+	 * Pass undefined to indicate no pending changes (content matches saved file).
+	 * Optionally pass savedContent to update the tab's base content after a save.
+	 */
+	const handleFileTabEditContentChange = useCallback(
+		(tabId: string, editContent: string | undefined, savedContent?: string) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== activeSessionIdRef.current) return s;
+
+					const updatedFileTabs = s.filePreviewTabs.map((tab) => {
+						if (tab.id !== tabId) return tab;
+						// If savedContent is provided, update the base content as well
+						if (savedContent !== undefined) {
+							return { ...tab, editContent, content: savedContent };
+						}
+						return { ...tab, editContent };
+					});
+
+					return { ...s, filePreviewTabs: updatedFileTabs };
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a file tab's scroll position.
+	 * Called when user scrolls within FilePreview (throttled at 200ms).
+	 */
+	const handleFileTabScrollPositionChange = useCallback((tabId: string, scrollTop: number) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== activeSessionIdRef.current) return s;
+
+				const updatedFileTabs = s.filePreviewTabs.map((tab) => {
+					if (tab.id !== tabId) return tab;
+					return { ...tab, scrollTop };
+				});
+
+				return { ...s, filePreviewTabs: updatedFileTabs };
+			})
+		);
+	}, []);
+
+	/**
+	 * Update a file tab's search query state.
+	 * Called when user types in the search box within FilePreview.
+	 */
+	const handleFileTabSearchQueryChange = useCallback((tabId: string, searchQuery: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== activeSessionIdRef.current) return s;
+
+				const updatedFileTabs = s.filePreviewTabs.map((tab) => {
+					if (tab.id !== tabId) return tab;
+					return { ...tab, searchQuery };
+				});
+
+				return { ...s, filePreviewTabs: updatedFileTabs };
+			})
+		);
+	}, []);
+
+	/**
+	 * Select a file preview tab. This sets the file tab as active.
+	 * activeTabId is preserved to track the last active AI tab for when the user switches back.
+	 * If fileTabAutoRefreshEnabled setting is true, checks if file has changed on disk and refreshes content.
+	 */
+	const handleSelectFileTab = useCallback(async (tabId: string) => {
+		const currentSession = sessionsRef.current.find(
+			(s) => s.id === activeSessionIdRef.current
+		);
+		if (!currentSession) return;
+
+		// Verify the file tab exists
+		const fileTab = currentSession.filePreviewTabs.find((tab) => tab.id === tabId);
+		if (!fileTab) return;
+
+		// Set the tab as active immediately
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== activeSessionIdRef.current) return s;
+				return {
+					...s,
+					activeFileTabId: tabId,
+					// activeTabId stays as is - it tracks the last active AI tab for when user switches back
+				};
+			})
+		);
+
+		// If auto-refresh is enabled and tab has pending edits, skip refresh to avoid losing changes
+		if (fileTabAutoRefreshEnabledRef.current && !fileTab.editContent) {
+			try {
+				// Get the current file stat to check if it has changed
+				const stat = await window.maestro.fs.stat(fileTab.path, fileTab.sshRemoteId);
+				if (!stat || !stat.modifiedAt) return;
+
+				const currentMtime = new Date(stat.modifiedAt).getTime();
+
+				// If file has been modified since we last loaded it, refresh content
+				if (currentMtime > fileTab.lastModified) {
+					const content = await window.maestro.fs.readFile(fileTab.path, fileTab.sshRemoteId);
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionIdRef.current) return s;
+							return {
+								...s,
+								filePreviewTabs: s.filePreviewTabs.map((tab) =>
+									tab.id === tabId
+										? { ...tab, content, lastModified: currentMtime }
+										: tab
+								),
+							};
+						})
+					);
+				}
+			} catch (error) {
+				// Silently ignore refresh errors - the tab still shows previous content
+				console.debug('[handleSelectFileTab] Auto-refresh failed:', error);
+			}
+		}
+	}, []);
+
+	/**
+	 * Reorder tabs in the unified tab order. This allows moving both AI and file tabs
+	 * relative to each other. The fromIndex and toIndex refer to positions in unifiedTabOrder.
+	 * This replaces/supplements handleTabReorder for the unified tab system.
+	 */
+	const handleUnifiedTabReorder = useCallback(
+		(fromIndex: number, toIndex: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== activeSessionIdRef.current) return s;
+
+					// Validate indices
+					if (
+						fromIndex < 0 ||
+						fromIndex >= s.unifiedTabOrder.length ||
+						toIndex < 0 ||
+						toIndex >= s.unifiedTabOrder.length ||
+						fromIndex === toIndex
+					) {
+						return s;
+					}
+
+					// Reorder the unifiedTabOrder array
+					const newOrder = [...s.unifiedTabOrder];
+					const [movedRef] = newOrder.splice(fromIndex, 1);
+					newOrder.splice(toIndex, 0, movedRef);
+
+					return { ...s, unifiedTabOrder: newOrder };
+				})
+			);
+		},
+		[]
+	);
+
+	/**
 	 * Internal tab close handler that performs the actual close.
 	 * Wizard tabs are closed without being added to history (they can't be restored).
 	 */
@@ -4852,9 +5509,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Check if this is a wizard tab - wizard tabs should not be added to close history
 				const tab = s.aiTabs.find((t) => t.id === tabId);
 				const isWizardTab = tab && hasActiveWizard(tab);
+				// Find the unified index before closing
+				const unifiedIndex = s.unifiedTabOrder.findIndex(
+					(ref) => ref.type === 'ai' && ref.id === tabId
+				);
 				// Note: showUnreadOnly is accessed via ref pattern if needed, or we accept this dep
 				const result = closeTab(s, tabId, false, { skipHistory: isWizardTab }); // Don't filter for unread during close
-				return result ? result.session : s;
+				if (!result) return s;
+				// Also add to unified closed history (unless wizard tab) so it can be reopened with Cmd+Shift+T
+				if (!isWizardTab && tab) {
+					return addAiTabToUnifiedHistory(result.session, tab, unifiedIndex);
+				}
+				return result.session;
 			})
 		);
 	}, []);
@@ -4924,73 +5590,217 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, []);
 
 	/**
-	 * Close all tabs except the active tab.
+	 * Close all tabs except the active tab (works with unified tabs).
+	 * Supports both AI tabs and file preview tabs based on unifiedTabOrder.
 	 */
 	const handleCloseOtherTabs = useCallback(() => {
 		setSessions((prev) =>
 			prev.map((s) => {
 				if (s.id !== activeSessionIdRef.current) return s;
+
+				// Determine the currently active tab in unified order
+				const activeUnifiedId = s.activeFileTabId ?? s.activeTabId;
+				const activeUnifiedType = s.activeFileTabId ? 'file' : 'ai';
+
+				// Find tabs to close (all except the active one)
+				const tabsToClose = s.unifiedTabOrder.filter(
+					(ref) => !(ref.type === activeUnifiedType && ref.id === activeUnifiedId)
+				);
+
 				let updatedSession = s;
-				const tabsToClose = s.aiTabs.filter((t) => t.id !== s.activeTabId);
-				for (const tab of tabsToClose) {
-					const result = closeTab(updatedSession, tab.id, false, {
-						skipHistory: hasActiveWizard(tab),
-					});
-					if (result) {
-						updatedSession = result.session;
+
+				for (const tabRef of tabsToClose) {
+					if (tabRef.type === 'ai') {
+						// Close AI tab using closeTab helper
+						const tab = updatedSession.aiTabs.find((t) => t.id === tabRef.id);
+						if (tab) {
+							const result = closeTab(updatedSession, tab.id, false, {
+								skipHistory: hasActiveWizard(tab),
+							});
+							if (result) {
+								updatedSession = result.session;
+							}
+						}
+					} else {
+						// Close file tab by removing from arrays
+						updatedSession = {
+							...updatedSession,
+							filePreviewTabs: updatedSession.filePreviewTabs.filter(
+								(t) => t.id !== tabRef.id
+							),
+							unifiedTabOrder: updatedSession.unifiedTabOrder.filter(
+								(ref) => !(ref.type === 'file' && ref.id === tabRef.id)
+							),
+						};
 					}
 				}
+
 				return updatedSession;
 			})
 		);
 	}, []);
 
 	/**
-	 * Close all tabs to the left of the active tab.
+	 * Close all tabs to the left of the active tab (works with unified tabs).
+	 * Supports both AI tabs and file preview tabs based on unifiedTabOrder.
 	 */
 	const handleCloseTabsLeft = useCallback(() => {
 		setSessions((prev) =>
 			prev.map((s) => {
 				if (s.id !== activeSessionIdRef.current) return s;
-				const activeIndex = s.aiTabs.findIndex((t) => t.id === s.activeTabId);
+
+				// Determine the currently active tab in unified order
+				const activeUnifiedId = s.activeFileTabId ?? s.activeTabId;
+				const activeUnifiedType = s.activeFileTabId ? 'file' : 'ai';
+
+				// Find the active tab's position in unifiedTabOrder
+				const activeIndex = s.unifiedTabOrder.findIndex(
+					(ref) => ref.type === activeUnifiedType && ref.id === activeUnifiedId
+				);
 				if (activeIndex <= 0) return s; // Nothing to close
+
+				// Get all tabs to the left of the active tab
+				const tabsToClose = s.unifiedTabOrder.slice(0, activeIndex);
+
 				let updatedSession = s;
-				const tabsToClose = s.aiTabs.slice(0, activeIndex);
-				for (const tab of tabsToClose) {
-					const result = closeTab(updatedSession, tab.id, false, {
-						skipHistory: hasActiveWizard(tab),
-					});
-					if (result) {
-						updatedSession = result.session;
+
+				for (const tabRef of tabsToClose) {
+					if (tabRef.type === 'ai') {
+						// Close AI tab using closeTab helper
+						const tab = updatedSession.aiTabs.find((t) => t.id === tabRef.id);
+						if (tab) {
+							const result = closeTab(updatedSession, tab.id, false, {
+								skipHistory: hasActiveWizard(tab),
+							});
+							if (result) {
+								updatedSession = result.session;
+							}
+						}
+					} else {
+						// Close file tab by removing from arrays
+						updatedSession = {
+							...updatedSession,
+							filePreviewTabs: updatedSession.filePreviewTabs.filter(
+								(t) => t.id !== tabRef.id
+							),
+							unifiedTabOrder: updatedSession.unifiedTabOrder.filter(
+								(ref) => !(ref.type === 'file' && ref.id === tabRef.id)
+							),
+						};
 					}
 				}
+
 				return updatedSession;
 			})
 		);
 	}, []);
 
 	/**
-	 * Close all tabs to the right of the active tab.
+	 * Close all tabs to the right of the active tab (works with unified tabs).
+	 * Supports both AI tabs and file preview tabs based on unifiedTabOrder.
 	 */
 	const handleCloseTabsRight = useCallback(() => {
 		setSessions((prev) =>
 			prev.map((s) => {
 				if (s.id !== activeSessionIdRef.current) return s;
-				const activeIndex = s.aiTabs.findIndex((t) => t.id === s.activeTabId);
-				if (activeIndex < 0 || activeIndex >= s.aiTabs.length - 1) return s; // Nothing to close
+
+				// Determine the currently active tab in unified order
+				const activeUnifiedId = s.activeFileTabId ?? s.activeTabId;
+				const activeUnifiedType = s.activeFileTabId ? 'file' : 'ai';
+
+				// Find the active tab's position in unifiedTabOrder
+				const activeIndex = s.unifiedTabOrder.findIndex(
+					(ref) => ref.type === activeUnifiedType && ref.id === activeUnifiedId
+				);
+				if (activeIndex < 0 || activeIndex >= s.unifiedTabOrder.length - 1) return s; // Nothing to close
+
+				// Get all tabs to the right of the active tab
+				const tabsToClose = s.unifiedTabOrder.slice(activeIndex + 1);
+
 				let updatedSession = s;
-				const tabsToClose = s.aiTabs.slice(activeIndex + 1);
-				for (const tab of tabsToClose) {
-					const result = closeTab(updatedSession, tab.id, false, {
-						skipHistory: hasActiveWizard(tab),
-					});
-					if (result) {
-						updatedSession = result.session;
+
+				for (const tabRef of tabsToClose) {
+					if (tabRef.type === 'ai') {
+						// Close AI tab using closeTab helper
+						const tab = updatedSession.aiTabs.find((t) => t.id === tabRef.id);
+						if (tab) {
+							const result = closeTab(updatedSession, tab.id, false, {
+								skipHistory: hasActiveWizard(tab),
+							});
+							if (result) {
+								updatedSession = result.session;
+							}
+						}
+					} else {
+						// Close file tab by removing from arrays
+						updatedSession = {
+							...updatedSession,
+							filePreviewTabs: updatedSession.filePreviewTabs.filter(
+								(t) => t.id !== tabRef.id
+							),
+							unifiedTabOrder: updatedSession.unifiedTabOrder.filter(
+								(ref) => !(ref.type === 'file' && ref.id === tabRef.id)
+							),
+						};
 					}
 				}
+
 				return updatedSession;
 			})
 		);
+	}, []);
+
+	/**
+	 * Close the currently active tab (for Cmd+W).
+	 * Determines which tab is active (checking activeFileTabId first, then activeTabId),
+	 * and calls the appropriate close handler.
+	 *
+	 * For file tabs: closes immediately.
+	 * For AI tabs: prevents closing if it's the last AI tab (keeps at least one AI tab).
+	 *
+	 * Returns an object indicating what action was taken, for the keyboard handler
+	 * to potentially show confirmation modals for wizard tabs.
+	 */
+	const handleCloseCurrentTab = useCallback((): {
+		type: 'file' | 'ai' | 'prevented' | 'none';
+		tabId?: string;
+		isWizardTab?: boolean;
+	} => {
+		const session = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
+		if (!session) return { type: 'none' };
+
+		// Check if a file tab is active first
+		if (session.activeFileTabId) {
+			const tabId = session.activeFileTabId;
+			// File tabs can always be closed (no wizard confirmation needed)
+			// Use the closeFileTabHelper to properly add to unifiedClosedTabHistory for Cmd+Shift+T
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== activeSessionIdRef.current) return s;
+					const result = closeFileTabHelper(s, tabId);
+					if (!result) return s;
+					return result.session;
+				})
+			);
+			return { type: 'file', tabId };
+		}
+
+		// AI tab is active
+		if (session.activeTabId) {
+			// Prevent closing if it's the last AI tab
+			if (session.aiTabs.length <= 1) {
+				return { type: 'prevented' };
+			}
+
+			const tabId = session.activeTabId;
+			const tab = session.aiTabs.find((t) => t.id === tabId);
+			const isWizardTab = tab ? hasActiveWizard(tab) : false;
+
+			// Return info for the keyboard handler to show confirmation modal if needed
+			return { type: 'ai', tabId, isWizardTab };
+		}
+
+		return { type: 'none' };
 	}, []);
 
 	const handleRemoveQueuedItem = useCallback((itemId: string) => {
@@ -5267,6 +6077,12 @@ You are taking over this conversation. Based on the context above, provide a bri
 		if (!session) return;
 		const activeTab = getActiveTab(session);
 		if (!activeTab) return;
+		// Cycle through: off -> on -> sticky -> off
+		const cycleThinkingMode = (current: ThinkingMode | undefined): ThinkingMode => {
+			if (!current || current === 'off') return 'on';
+			if (current === 'on') return 'sticky';
+			return 'off'; // sticky -> off
+		};
 		setSessions((prev) =>
 			prev.map((s) => {
 				if (s.id !== activeSessionIdRef.current) return s;
@@ -5274,14 +6090,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 					...s,
 					aiTabs: s.aiTabs.map((tab) => {
 						if (tab.id !== activeTab.id) return tab;
-						if (tab.showThinking) {
+						const newMode = cycleThinkingMode(tab.showThinking);
+						// When turning OFF, also clear any existing thinking/tool logs
+						if (newMode === 'off') {
 							return {
 								...tab,
-								showThinking: false,
+								showThinking: 'off',
 								logs: tab.logs.filter((l) => l.source !== 'thinking' && l.source !== 'tool'),
 							};
 						}
-						return { ...tab, showThinking: true };
+						return { ...tab, showThinking: newMode };
 					}),
 				};
 			})
@@ -5459,94 +6277,218 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 	// PERF: Memoized callbacks for MainPanel file preview navigation
 	// These were inline arrow functions causing MainPanel re-renders on every keystroke
-	const handleMainPanelFileClick = useCallback(async (relativePath: string) => {
-		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const filename = relativePath.split('/').pop() || relativePath;
+	// Updated to use file tabs (handleOpenFileTab) instead of legacy preview overlay
+	const handleMainPanelFileClick = useCallback(
+		async (relativePath: string, options?: { openInNewTab?: boolean }) => {
+			const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
+			if (!currentSession) return;
+			const filename = relativePath.split('/').pop() || relativePath;
 
-		// Get SSH remote ID
-		const sshRemoteId =
-			currentSession.sshRemoteId || currentSession.sessionSshRemoteConfig?.remoteId || undefined;
+			// Get SSH remote ID
+			const sshRemoteId =
+				currentSession.sshRemoteId || currentSession.sessionSshRemoteConfig?.remoteId || undefined;
 
-		// Check if file should be opened externally (PDF, etc.)
-		if (!sshRemoteId && shouldOpenExternally(filename)) {
-			const fullPath = `${currentSession.fullPath}/${relativePath}`;
-			window.maestro.shell.openExternal(`file://${fullPath}`);
-			return;
-		}
-
-		try {
-			const fullPath = `${currentSession.fullPath}/${relativePath}`;
-			const content = await window.maestro.fs.readFile(fullPath, sshRemoteId);
-			const newFile = { name: filename, content, path: fullPath };
-
-			const history = currentSession.filePreviewHistory ?? [];
-			const historyIndex = currentSession.filePreviewHistoryIndex ?? -1;
-			const currentFile = history[historyIndex];
-
-			if (!currentFile || currentFile.path !== fullPath) {
-				const newHistory = history.slice(0, historyIndex + 1);
-				newHistory.push(newFile);
-				setSessions((prev) =>
-					prev.map((s) =>
-						s.id === currentSession.id
-							? {
-									...s,
-									filePreviewHistory: newHistory,
-									filePreviewHistoryIndex: newHistory.length - 1,
-								}
-							: s
-					)
-				);
+			// Check if file should be opened externally (PDF, etc.)
+			if (!sshRemoteId && shouldOpenExternally(filename)) {
+				const fullPath = `${currentSession.fullPath}/${relativePath}`;
+				window.maestro.shell.openExternal(`file://${fullPath}`);
+				return;
 			}
-			setPreviewFile(newFile);
-			setActiveFocus('main');
-		} catch (error) {
-			console.error('[onFileClick] Failed to read file:', error);
+
+			try {
+				const fullPath = `${currentSession.fullPath}/${relativePath}`;
+				// Fetch content and stat in parallel for efficiency
+				const [content, stat] = await Promise.all([
+					window.maestro.fs.readFile(fullPath, sshRemoteId),
+					window.maestro.fs.stat(fullPath, sshRemoteId).catch(() => null), // stat is optional, don't fail if unavailable
+				]);
+				const lastModified = stat?.modifiedAt ? new Date(stat.modifiedAt).getTime() : undefined;
+				// Open file in a tab:
+				// - openInNewTab=true (Cmd/Ctrl+Click): create new tab adjacent to current
+				// - openInNewTab=false (regular click): replace current tab content
+				handleOpenFileTab(
+					{
+						path: fullPath,
+						name: filename,
+						content,
+						sshRemoteId,
+						lastModified,
+					},
+					{ openInNewTab: options?.openInNewTab ?? false } // Default to replacing current tab for in-content links
+				);
+				setActiveFocus('main');
+			} catch (error) {
+				console.error('[onFileClick] Failed to read file:', error);
+			}
+		},
+		[handleOpenFileTab]
+	);
+
+	const handleClearFilePreviewHistory = useCallback(() => {
+		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
+		if (!currentSession) return;
+		setSessions((prev) =>
+			prev.map((s) =>
+				s.id === currentSession.id
+					? { ...s, filePreviewHistory: [], filePreviewHistoryIndex: -1 }
+					: s
+			)
+		);
+	}, []);
+
+	/**
+	 * Navigate back in the current file tab's navigation history.
+	 * Loads the previous file and updates the navigation index.
+	 */
+	const handleFileTabNavigateBack = useCallback(async () => {
+		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
+		if (!currentSession?.activeFileTabId) return;
+
+		const currentTab = currentSession.filePreviewTabs.find(
+			(tab) => tab.id === currentSession.activeFileTabId
+		);
+		if (!currentTab) return;
+
+		const history = currentTab.navigationHistory ?? [];
+		const currentIndex = currentTab.navigationIndex ?? history.length - 1;
+
+		if (currentIndex > 0) {
+			const newIndex = currentIndex - 1;
+			const historyEntry = history[newIndex];
+
+			// Fetch the file content (use SSH remote ID from the current tab if available)
+			try {
+				const sshRemoteId = currentTab.sshRemoteId;
+				const content = await window.maestro.fs.readFile(historyEntry.path, sshRemoteId);
+				if (!content) return;
+
+				// Update the tab with new content and navigation index
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== currentSession.id) return s;
+						return {
+							...s,
+							filePreviewTabs: s.filePreviewTabs.map((tab) =>
+								tab.id === currentTab.id
+									? {
+											...tab,
+											path: historyEntry.path,
+											name: historyEntry.name,
+											content,
+											scrollTop: historyEntry.scrollTop ?? 0,
+											navigationIndex: newIndex,
+										}
+									: tab
+							),
+						};
+					})
+				);
+			} catch (error) {
+				console.error('Failed to navigate back:', error);
+			}
 		}
 	}, []);
 
-	const handleNavigateBack = useCallback(() => {
+	/**
+	 * Navigate forward in the current file tab's navigation history.
+	 * Loads the next file and updates the navigation index.
+	 */
+	const handleFileTabNavigateForward = useCallback(async () => {
 		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const historyIndex = currentSession.filePreviewHistoryIndex ?? -1;
-		const history = currentSession.filePreviewHistory ?? [];
-		if (historyIndex > 0) {
-			const newIndex = historyIndex - 1;
-			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === currentSession.id ? { ...s, filePreviewHistoryIndex: newIndex } : s
-				)
-			);
-			setPreviewFile(history[newIndex]);
+		if (!currentSession?.activeFileTabId) return;
+
+		const currentTab = currentSession.filePreviewTabs.find(
+			(tab) => tab.id === currentSession.activeFileTabId
+		);
+		if (!currentTab) return;
+
+		const history = currentTab.navigationHistory ?? [];
+		const currentIndex = currentTab.navigationIndex ?? history.length - 1;
+
+		if (currentIndex < history.length - 1) {
+			const newIndex = currentIndex + 1;
+			const historyEntry = history[newIndex];
+
+			// Fetch the file content (use SSH remote ID from the current tab if available)
+			try {
+				const sshRemoteId = currentTab.sshRemoteId;
+				const content = await window.maestro.fs.readFile(historyEntry.path, sshRemoteId);
+				if (!content) return;
+
+				// Update the tab with new content and navigation index
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== currentSession.id) return s;
+						return {
+							...s,
+							filePreviewTabs: s.filePreviewTabs.map((tab) =>
+								tab.id === currentTab.id
+									? {
+											...tab,
+											path: historyEntry.path,
+											name: historyEntry.name,
+											content,
+											scrollTop: historyEntry.scrollTop ?? 0,
+											navigationIndex: newIndex,
+										}
+									: tab
+							),
+						};
+					})
+				);
+			} catch (error) {
+				console.error('Failed to navigate forward:', error);
+			}
 		}
 	}, []);
 
-	const handleNavigateForward = useCallback(() => {
+	/**
+	 * Navigate to a specific index in the current file tab's navigation history.
+	 */
+	const handleFileTabNavigateToIndex = useCallback(async (index: number) => {
 		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const historyIndex = currentSession.filePreviewHistoryIndex ?? -1;
-		const history = currentSession.filePreviewHistory ?? [];
-		if (historyIndex < history.length - 1) {
-			const newIndex = historyIndex + 1;
-			setSessions((prev) =>
-				prev.map((s) =>
-					s.id === currentSession.id ? { ...s, filePreviewHistoryIndex: newIndex } : s
-				)
-			);
-			setPreviewFile(history[newIndex]);
-		}
-	}, []);
+		if (!currentSession?.activeFileTabId) return;
 
-	const handleNavigateToIndex = useCallback((index: number) => {
-		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const history = currentSession.filePreviewHistory ?? [];
+		const currentTab = currentSession.filePreviewTabs.find(
+			(tab) => tab.id === currentSession.activeFileTabId
+		);
+		if (!currentTab) return;
+
+		const history = currentTab.navigationHistory ?? [];
+
 		if (index >= 0 && index < history.length) {
-			setSessions((prev) =>
-				prev.map((s) => (s.id === currentSession.id ? { ...s, filePreviewHistoryIndex: index } : s))
-			);
-			setPreviewFile(history[index]);
+			const historyEntry = history[index];
+
+			// Fetch the file content (use SSH remote ID from the current tab if available)
+			try {
+				const sshRemoteId = currentTab.sshRemoteId;
+				const content = await window.maestro.fs.readFile(historyEntry.path, sshRemoteId);
+				if (!content) return;
+
+				// Update the tab with new content and navigation index
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== currentSession.id) return s;
+						return {
+							...s,
+							filePreviewTabs: s.filePreviewTabs.map((tab) =>
+								tab.id === currentTab.id
+									? {
+											...tab,
+											path: historyEntry.path,
+											name: historyEntry.name,
+											content,
+											scrollTop: historyEntry.scrollTop ?? 0,
+											navigationIndex: index,
+										}
+									: tab
+							),
+						};
+					})
+				);
+			} catch (error) {
+				console.error('Failed to navigate to index:', error);
+			}
 		}
 	}, []);
 
@@ -6016,23 +6958,23 @@ You are taking over this conversation. Based on the context above, provide a bri
 		sendMessage: sendInlineWizardMessage,
 		// State for syncing to session.wizardState
 		isWizardActive: inlineWizardActive,
-		isWaiting: inlineWizardIsWaiting,
-		wizardMode: inlineWizardMode,
-		wizardGoal: inlineWizardGoal,
-		confidence: inlineWizardConfidence,
-		ready: inlineWizardReady,
-		conversationHistory: inlineWizardConversationHistory,
-		error: inlineWizardError,
-		isGeneratingDocs: inlineWizardIsGeneratingDocs,
-		generatedDocuments: inlineWizardGeneratedDocuments,
-		streamingContent: inlineWizardStreamingContent,
-		generationProgress: inlineWizardGenerationProgress,
-		state: inlineWizardState,
+		isWaiting: _inlineWizardIsWaiting,
+		wizardMode: _inlineWizardMode,
+		wizardGoal: _inlineWizardGoal,
+		confidence: _inlineWizardConfidence,
+		ready: _inlineWizardReady,
+		conversationHistory: _inlineWizardConversationHistory,
+		error: _inlineWizardError,
+		isGeneratingDocs: _inlineWizardIsGeneratingDocs,
+		generatedDocuments: _inlineWizardGeneratedDocuments,
+		streamingContent: _inlineWizardStreamingContent,
+		generationProgress: _inlineWizardGenerationProgress,
+		state: _inlineWizardState,
 		wizardTabId: inlineWizardTabId,
-		agentSessionId: inlineWizardAgentSessionId,
+		agentSessionId: _inlineWizardAgentSessionId,
 		// Per-tab wizard state accessors
 		getStateForTab: getInlineWizardStateForTab,
-		isWizardActiveForTab: isInlineWizardActiveForTab,
+		isWizardActiveForTab: _isInlineWizardActiveForTab,
 	} = useInlineWizardContext();
 
 	// Wrapper for sendInlineWizardMessage that adds thinking content callback
@@ -6229,7 +7171,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					previousUIState: tabWizardState.previousUIState ?? {
 						readOnlyMode: false,
 						saveToHistory: true,
-						showThinking: false,
+						showThinking: 'off',
 					},
 					error: tabWizardState.error,
 					isGeneratingDocs: tabWizardState.isGeneratingDocs,
@@ -6330,6 +7272,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					customEnvVars: activeSession.customEnvVars,
 					customModel: activeSession.customModel,
 					customContextWindow: activeSession.customContextWindow,
+					sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
 				}
 			);
 
@@ -6369,6 +7312,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 				const group = groups.find((g) => g.id === activeSession.groupId);
 				const groupName = group?.name || 'Ungrouped';
 
+				// Calculate elapsed time since last synopsis (or tab creation if no previous synopsis)
+				const elapsedTimeMs = activeTab.lastSynopsisTime
+					? synopsisTime - activeTab.lastSynopsisTime
+					: synopsisTime - activeTab.createdAt;
+
 				// Add to history
 				addHistoryEntry({
 					type: 'AUTO',
@@ -6379,6 +7327,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					projectPath: activeSession.cwd,
 					sessionName: activeTab.name || undefined,
 					usageStats: result.usageStats,
+					elapsedTimeMs,
 				});
 
 				// Update the pending log with success AND set lastSynopsisTime
@@ -6478,6 +7427,113 @@ You are taking over this conversation. Based on the context above, provide a bri
 		addToast,
 	]);
 
+	// Handler for the built-in /skills command (Claude Code only)
+	// Lists available skills from .claude/skills/ directories
+	const handleSkillsCommand = useCallback(async () => {
+		if (!activeSession) {
+			console.warn('[handleSkillsCommand] No active session');
+			return;
+		}
+
+		if (activeSession.toolType !== 'claude-code') {
+			console.warn('[handleSkillsCommand] Skills command only available for Claude Code');
+			return;
+		}
+
+		const activeTab = getActiveTab(activeSession);
+		if (!activeTab) {
+			console.warn('[handleSkillsCommand] No active tab');
+			return;
+		}
+
+		try {
+			// Add user log entry showing the /skills command was requested
+			const userLog: LogEntry = {
+				id: generateId(),
+				timestamp: Date.now(),
+				source: 'user',
+				text: '/skills',
+			};
+			addLogToActiveTab(activeSession.id, userLog);
+
+			// Fetch skills from the IPC handler
+			const skills = await window.maestro.claude.getSkills(activeSession.projectRoot);
+
+			// Format skills as a markdown table
+			let skillsMessage: string;
+			if (skills.length === 0) {
+				skillsMessage =
+					'## Skills\n\nNo Claude Code skills were found in this project.\n\nTo add skills, create `.claude/skills/<skill-name>/skill.md` files in your project.';
+			} else {
+				const formatTokenCount = (tokens: number): string => {
+					if (tokens >= 1000) {
+						return `~${(tokens / 1000).toFixed(1)}k`;
+					}
+					return `~${tokens}`;
+				};
+
+				const projectSkills = skills.filter((s) => s.source === 'project');
+				const userSkills = skills.filter((s) => s.source === 'user');
+
+				const lines: string[] = [
+					`## Skills`,
+					'',
+					`${skills.length} skill${skills.length !== 1 ? 's' : ''} available`,
+					'',
+				];
+
+				if (projectSkills.length > 0) {
+					lines.push('### Project Skills');
+					lines.push('');
+					lines.push('| Skill | Tokens | Description |');
+					lines.push('|-------|--------|-------------|');
+					for (const skill of projectSkills) {
+						const desc =
+							skill.description && skill.description !== 'No description'
+								? skill.description
+								: '—';
+						lines.push(`| **${skill.name}** | ${formatTokenCount(skill.tokenCount)} | ${desc} |`);
+					}
+					lines.push('');
+				}
+
+				if (userSkills.length > 0) {
+					lines.push('### User Skills');
+					lines.push('');
+					lines.push('| Skill | Tokens | Description |');
+					lines.push('|-------|--------|-------------|');
+					for (const skill of userSkills) {
+						const desc =
+							skill.description && skill.description !== 'No description'
+								? skill.description
+								: '—';
+						lines.push(`| **${skill.name}** | ${formatTokenCount(skill.tokenCount)} | ${desc} |`);
+					}
+				}
+
+				skillsMessage = lines.join('\n');
+			}
+
+			// Add the skills listing as a system log entry
+			const skillsLog: LogEntry = {
+				id: generateId(),
+				timestamp: Date.now(),
+				source: 'system',
+				text: skillsMessage,
+			};
+			addLogToActiveTab(activeSession.id, skillsLog);
+		} catch (error) {
+			console.error('[handleSkillsCommand] Error:', error);
+			const errorLog: LogEntry = {
+				id: generateId(),
+				timestamp: Date.now(),
+				source: 'system',
+				text: `Error listing skills: ${(error as Error).message}`,
+			};
+			addLogToActiveTab(activeSession.id, errorLog);
+		}
+	}, [activeSession, addLogToActiveTab]);
+
 	// Handler for the built-in /wizard command
 	// Starts the inline wizard for creating/iterating on Auto Run documents
 	const handleWizardCommand = useCallback(
@@ -6497,7 +7553,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const currentUIState: PreviousUIState = {
 				readOnlyMode: activeTab.readOnlyMode ?? false,
 				saveToHistory: activeTab.saveToHistory ?? true,
-				showThinking: activeTab.showThinking ?? false,
+				showThinking: activeTab.showThinking ?? 'off',
 			};
 
 			// Start the inline wizard with the argument text (natural language input)
@@ -6510,7 +7566,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				activeSession.name, // Session/project name
 				activeTab.id, // Tab ID for per-tab isolation
 				activeSession.id, // Session ID for playbook creation
-				activeSession.autoRunFolderPath // User-configured Auto Run folder path (if set)
+				activeSession.autoRunFolderPath, // User-configured Auto Run folder path (if set)
+				activeSession.sessionSshRemoteConfig // SSH remote config for remote execution
 			);
 
 			// Rename the tab to "Wizard" immediately when wizard starts
@@ -6592,7 +7649,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				activeSession.name,
 				newTab.id,
 				activeSession.id,
-				activeSession.autoRunFolderPath // User-configured Auto Run folder path (if set)
+				activeSession.autoRunFolderPath, // User-configured Auto Run folder path (if set)
+				activeSession.sessionSshRemoteConfig // SSH remote config for remote execution
 			);
 
 			// Show a system log entry
@@ -6621,7 +7679,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, [activeSession, activeSession?.activeTabId, inlineWizardActive, inlineWizardTabId]);
 
 	// Input processing hook - handles sending messages and commands
-	const { processInput, processInputRef: hookProcessInputRef } = useInputProcessing({
+	const { processInput, processInputRef: _hookProcessInputRef } = useInputProcessing({
 		activeSession,
 		activeSessionId,
 		setSessions,
@@ -6644,6 +7702,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		onWizardCommand: handleWizardCommand,
 		onWizardSendMessage: sendWizardMessageWithThinking,
 		isWizardActive: isWizardActiveForCurrentTab,
+		onSkillsCommand: handleSkillsCommand,
 	});
 
 	// Auto-send context when a tab with autoSendOnActivate becomes active
@@ -6894,6 +7953,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				aiTabs: [initialTab],
 				activeTabId: initialTabId,
 				closedTabHistory: [],
+				filePreviewTabs: [],
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+				unifiedClosedTabHistory: [],
 				customPath: parentSession.customPath,
 				customArgs: parentSession.customArgs,
 				customEnvVars: parentSession.customEnvVars,
@@ -7075,6 +8138,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 								aiTabs: [initialTab],
 								activeTabId: initialTabId,
 								closedTabHistory: [],
+								filePreviewTabs: [],
+								activeFileTabId: null,
+								unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+								unifiedClosedTabHistory: [],
 								customPath: session.customPath,
 								customArgs: session.customArgs,
 								customEnvVars: session.customEnvVars,
@@ -7897,13 +8964,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 		loadTaskCounts,
 	]);
 
-	// Auto-scroll logs
-	// PERF: Use memoized activeTab instead of calling getActiveTab() again
-	const activeTabLogs = activeTab?.logs;
-	useEffect(() => {
-		logsEndRef.current?.scrollIntoView({ behavior: 'instant' });
-	}, [activeTabLogs, activeSession?.shellLogs, activeSession?.inputMode]);
-
 	// --- ACTIONS ---
 	const cycleSession = (dir: 'next' | 'prev') => {
 		// Build the visual order of items as they appear in the sidebar.
@@ -8370,6 +9430,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 				aiTabs: [initialTab],
 				activeTabId: initialTabId,
 				closedTabHistory: [],
+				// File preview tabs - start empty, unified tab order starts with initial AI tab
+				filePreviewTabs: [],
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+				unifiedClosedTabHistory: [],
 				// Nudge message - appended to every interactive user message
 				nudgeMessage,
 				// Per-agent config (path, args, env vars, model)
@@ -8536,6 +9601,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				aiTabs: [initialTab],
 				activeTabId: initialTabId,
 				closedTabHistory: [],
+				filePreviewTabs: [],
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+				unifiedClosedTabHistory: [],
 				// Auto Run configuration from wizard
 				autoRunFolderPath,
 				autoRunSelectedFile,
@@ -9019,7 +10088,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			}
 
 			// Handle AI mode for batch-mode agents (Claude Code, Codex, OpenCode)
-			const supportedBatchAgents: ToolType[] = ['claude', 'claude-code', 'codex', 'opencode'];
+			const supportedBatchAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
 			if (!supportedBatchAgents.includes(session.toolType)) {
 				console.log('[Remote] Not a batch-mode agent, skipping');
 				return;
@@ -9438,7 +10507,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 							// Ignore git errors
 						}
 					}
-					const substitutedPrompt = substituteTemplateVariables(matchingCommand.prompt, {
+
+					// First substitute $ARGUMENTS with the command arguments (spec-kit/openspec style)
+					// This handles prompts like "/speckit.plan Blah blah" where "Blah blah" replaces $ARGUMENTS
+					let promptWithArgs = matchingCommand.prompt;
+					if (item.commandArgs) {
+						promptWithArgs = promptWithArgs.replace(/\$ARGUMENTS/g, item.commandArgs);
+					} else {
+						// If no arguments provided, replace $ARGUMENTS with empty string
+						promptWithArgs = promptWithArgs.replace(/\$ARGUMENTS/g, '');
+					}
+
+					// Then substitute {{TEMPLATE_VARIABLES}}
+					const substitutedPrompt = substituteTemplateVariables(promptWithArgs, {
 						session,
 						gitBranch,
 					});
@@ -9668,6 +10749,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				: `${activeSession.id}-terminal`;
 
 		try {
+			// Cancel any pending synopsis processes for this session
+			// This prevents synopsis from running after the user clicks Stop
+			await cancelPendingSynopsis(activeSession.id);
+
 			// Send interrupt signal (Ctrl+C)
 			await window.maestro.process.interrupt(targetSessionId);
 
@@ -10242,11 +11327,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 	// Image Handlers
 	const showImageAttachBlockedNotice = useCallback(() => {
-		const message =
-			'Images are only available in the initial message to Claude. Please start a new session if you want to include an image.';
+		const agentName = activeSession?.toolType
+			? getProviderDisplayName(activeSession.toolType)
+			: 'the agent';
+		const message = `Images are only available in the initial message to ${agentName}. Please start a new session if you want to include an image.`;
 		setSuccessFlashNotification(message);
 		setTimeout(() => setSuccessFlashNotification(null), 4000);
-	}, [setSuccessFlashNotification]);
+	}, [setSuccessFlashNotification, activeSession?.toolType]);
 
 	const handlePaste = (e: React.ClipboardEvent) => {
 		// Allow image pasting in group chat or direct AI mode
@@ -10361,6 +11448,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 		activeSession,
 		fileTreeFilter,
 		rightPanelRef,
+		sshRemoteIgnorePatterns: settings.sshRemoteIgnorePatterns,
+		sshRemoteHonorGitignore: settings.sshRemoteHonorGitignore,
 	});
 
 	// --- GROUP MANAGEMENT ---
@@ -10552,6 +11641,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 							aiTabs: [initialTab],
 							activeTabId: initialTabId,
 							closedTabHistory: [],
+							filePreviewTabs: [],
+							activeFileTabId: null,
+							unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+							unifiedClosedTabHistory: [],
 							customPath: activeSession.customPath,
 							customArgs: activeSession.customArgs,
 							customEnvVars: activeSession.customEnvVars,
@@ -10727,6 +11820,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 					aiTabs: [initialTab],
 					activeTabId: initialTabId,
 					closedTabHistory: [],
+					filePreviewTabs: [],
+					activeFileTabId: null,
+					unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+					unifiedClosedTabHistory: [],
 					customPath: activeSession.customPath,
 					customArgs: activeSession.customArgs,
 					customEnvVars: activeSession.customEnvVars,
@@ -10876,6 +11973,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				aiTabs: [initialTab],
 				activeTabId: initialTabId,
 				closedTabHistory: [],
+				filePreviewTabs: [],
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+				unifiedClosedTabHistory: [],
 				customPath: createWorktreeSession.customPath,
 				customArgs: createWorktreeSession.customArgs,
 				customEnvVars: createWorktreeSession.customEnvVars,
@@ -10994,8 +12095,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 			} else {
 				setStagedImages((prev) => prev.filter((i) => i !== img));
 			}
+			// Also update lightboxImages so the lightbox navigation stays in sync
+			// (lightboxImages is a snapshot taken when the lightbox opened, so it gets stale on deletion)
+			setLightboxImages(lightboxImages.filter((i) => i !== img));
 		},
-		[setStagedImages]
+		[setStagedImages, setLightboxImages, lightboxImages]
 	);
 	const handleCloseAutoRunSetup = useCallback(() => setAutoRunSetupModalOpen(false), []);
 	const handleCloseBatchRunner = useCallback(() => setBatchRunnerModalOpen(false), []);
@@ -11021,8 +12125,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 	const handleUtilityTabSelect = useCallback(
 		(tabId: string) => {
 			if (!activeSession) return;
+			// Clear activeFileTabId when selecting an AI tab
 			setSessions((prev) =>
-				prev.map((s) => (s.id === activeSession.id ? { ...s, activeTabId: tabId } : s))
+				prev.map((s) =>
+					s.id === activeSession.id ? { ...s, activeTabId: tabId, activeFileTabId: null } : s
+				)
+			);
+		},
+		[activeSession]
+	);
+	const handleUtilityFileTabSelect = useCallback(
+		(tabId: string) => {
+			if (!activeSession) return;
+			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs)
+			setSessions((prev) =>
+				prev.map((s) => (s.id === activeSession.id ? { ...s, activeFileTabId: tabId } : s))
 			);
 		},
 		[activeSession]
@@ -11133,6 +12250,12 @@ You are taking over this conversation. Based on the context above, provide a bri
 		if (!activeSession) return;
 		const activeTab = getActiveTab(activeSession);
 		if (!activeTab) return;
+		// Cycle through: off -> on -> sticky -> off
+		const cycleThinkingMode = (current: ThinkingMode | undefined): ThinkingMode => {
+			if (!current || current === 'off') return 'on';
+			if (current === 'on') return 'sticky';
+			return 'off';
+		};
 		setSessions((prev) =>
 			prev.map((s) => {
 				if (s.id !== activeSession.id) return s;
@@ -11140,15 +12263,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 					...s,
 					aiTabs: s.aiTabs.map((tab) => {
 						if (tab.id !== activeTab.id) return tab;
-						if (tab.showThinking) {
-							// Turn off - clear thinking logs
+						const newMode = cycleThinkingMode(tab.showThinking);
+						// When turning OFF, clear thinking logs
+						if (newMode === 'off') {
 							return {
 								...tab,
-								showThinking: false,
+								showThinking: 'off',
 								logs: tab.logs.filter((log) => log.source !== 'thinking'),
 							};
 						}
-						return { ...tab, showThinking: true };
+						return { ...tab, showThinking: newMode };
 					}),
 				};
 			})
@@ -11188,6 +12312,12 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, [activeSession]);
 	const handleQuickActionsToggleTabShowThinking = useCallback(() => {
 		if (activeSession?.inputMode === 'ai' && activeSession.activeTabId) {
+			// Cycle through: off -> on -> sticky -> off
+			const cycleThinkingMode = (current: ThinkingMode | undefined): ThinkingMode => {
+				if (!current || current === 'off') return 'on';
+				if (current === 'on') return 'sticky';
+				return 'off';
+			};
 			setSessions((prev) =>
 				prev.map((s) => {
 					if (s.id !== activeSession.id) return s;
@@ -11195,15 +12325,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 						...s,
 						aiTabs: s.aiTabs.map((tab) => {
 							if (tab.id !== s.activeTabId) return tab;
+							const newMode = cycleThinkingMode(tab.showThinking);
 							// When turning OFF, clear any thinking/tool logs
-							if (tab.showThinking) {
+							if (newMode === 'off') {
 								return {
 									...tab,
-									showThinking: false,
+									showThinking: 'off',
 									logs: tab.logs.filter((l) => l.source !== 'thinking' && l.source !== 'tool'),
 								};
 							}
-							return { ...tab, showThinking: true };
+							return { ...tab, showThinking: newMode };
 						}),
 					};
 				})
@@ -11238,10 +12369,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 		// Process the item
 		processQueuedItem(activeSessionId, nextItem);
 	}, [activeSession, activeSessionId, processQueuedItem]);
-	const handleQuickActionsToggleMarkdownEditMode = useCallback(
-		() => setMarkdownEditMode(!markdownEditMode),
-		[markdownEditMode]
-	);
+	const handleQuickActionsToggleMarkdownEditMode = useCallback(() => {
+		// Toggle the appropriate mode based on context:
+		// - If file tab is active: toggle file edit mode (markdownEditMode)
+		// - If no file tab: toggle chat raw text mode (chatRawTextMode)
+		if (activeSession?.activeFileTabId) {
+			setMarkdownEditMode(!markdownEditMode);
+		} else {
+			setChatRawTextMode(!chatRawTextMode);
+		}
+	}, [activeSession?.activeFileTabId, markdownEditMode, chatRawTextMode, setMarkdownEditMode, setChatRawTextMode]);
 	const handleQuickActionsStartTour = useCallback(() => {
 		setTourFromWizard(false);
 		setTourOpen(true);
@@ -11334,7 +12471,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 		renameInstanceModalOpen,
 		renameGroupModalOpen,
 		activeSession,
-		previewFile,
 		fileTreeFilter,
 		fileTreeFilterOpen,
 		gitDiffPreview,
@@ -11350,6 +12486,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		editingSessionId,
 		editingGroupId,
 		markdownEditMode,
+		chatRawTextMode,
 		defaultSaveToHistory,
 		defaultShowThinking,
 		setLeftSidebarOpen,
@@ -11384,7 +12521,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setSessions,
 		createTab,
 		closeTab,
-		reopenClosedTab,
+		reopenUnifiedClosedTab,
 		getActiveTab,
 		setRenameTabId,
 		setRenameTabInitialName,
@@ -11399,6 +12536,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 		navigateToPrevTab,
 		navigateToTabByIndex,
 		navigateToLastTab,
+		navigateToUnifiedTabByIndex,
+		navigateToLastUnifiedTab,
+		navigateToNextUnifiedTab,
+		navigateToPrevUnifiedTab,
 		setFileTreeFilterOpen,
 		isShortcut,
 		isTabShortcut,
@@ -11410,6 +12551,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		stagedImages,
 		handleSetLightboxImage,
 		setMarkdownEditMode,
+		setChatRawTextMode,
 		toggleTabStar,
 		toggleTabUnread,
 		setPromptComposerOpen,
@@ -11417,6 +12559,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		rightPanelRef,
 		setFuzzyFileSearchOpen,
 		setMarketplaceModalOpen,
+		setSymphonyModalOpen,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
 		// Group chat context
@@ -11459,6 +12602,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleCloseOtherTabs,
 		handleCloseTabsLeft,
 		handleCloseTabsRight,
+
+		// Close current tab (Cmd+W) - works with both file and AI tabs
+		handleCloseCurrentTab,
 
 		// Session bookmark toggle
 		toggleBookmark,
@@ -11799,9 +12945,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 		slashCommandOpen,
 		slashCommands: allSlashCommands,
 		selectedSlashCommandIndex,
-		previewFile,
 		filePreviewLoading,
 		markdownEditMode,
+		chatRawTextMode,
 		shortcuts,
 		rightPanelOpen,
 		maxOutputLines,
@@ -11830,12 +12976,12 @@ You are taking over this conversation. Based on the context above, provide a bri
 		// File tree
 		fileTree: activeSession?.fileTree || [],
 
-		// File preview navigation
-		canGoBack: filePreviewHistoryIndex > 0,
-		canGoForward: filePreviewHistoryIndex < filePreviewHistory.length - 1,
-		backHistory,
-		forwardHistory,
-		filePreviewHistoryIndex,
+		// File preview navigation (per-tab)
+		canGoBack: fileTabCanGoBack,
+		canGoForward: fileTabCanGoForward,
+		backHistory: fileTabBackHistory,
+		forwardHistory: fileTabForwardHistory,
+		filePreviewHistoryIndex: activeFileTabNavIndex,
 
 		// Active tab for error handling
 		activeTab,
@@ -11863,13 +13009,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Gist publishing
 		ghCliAvailable,
-		hasGist: previewFile ? !!fileGistUrls[previewFile.path] : false,
+		hasGist: activeFileTab ? !!fileGistUrls[activeFileTab.path] : false,
 
 		// Unread filter
 		showUnreadOnly,
 
-		// Audio feedback
-		audioFeedbackCommand,
+		// Accessibility
+		colorBlindMode,
 
 		// Setters
 		setLogViewerSelectedLevels,
@@ -11896,8 +13042,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setAtMentionFilter,
 		setAtMentionStartIndex,
 		setSelectedAtMentionIndex,
-		setPreviewFile,
 		setMarkdownEditMode,
+		setChatRawTextMode,
 		setAboutModalOpen,
 		setRightPanelOpen,
 		setGitLogOpen,
@@ -11932,6 +13078,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleNewTab,
 		handleRequestTabRename,
 		handleTabReorder,
+		handleUnifiedTabReorder,
 		handleUpdateTabByClaudeSessionId,
 		handleTabStar,
 		handleTabMarkUnread,
@@ -11944,15 +13091,28 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleCloseOtherTabs,
 		handleCloseTabsLeft,
 		handleCloseTabsRight,
+
+		// Unified tab system (Phase 4)
+		unifiedTabs,
+		activeFileTabId: activeSession?.activeFileTabId ?? null,
+		activeFileTab,
+		handleFileTabSelect: handleSelectFileTab,
+		handleFileTabClose: handleCloseFileTab,
+		handleFileTabEditModeChange,
+		handleFileTabEditContentChange,
+		handleFileTabScrollPositionChange,
+		handleFileTabSearchQueryChange,
+
 		handleScrollPositionChange,
 		handleAtBottomChange,
 		handleMainPanelInputBlur,
 		handleOpenPromptComposer,
 		handleReplayMessage,
 		handleMainPanelFileClick,
-		handleNavigateBack,
-		handleNavigateForward,
-		handleNavigateToIndex,
+		handleNavigateBack: handleFileTabNavigateBack,
+		handleNavigateForward: handleFileTabNavigateForward,
+		handleNavigateToIndex: handleFileTabNavigateToIndex,
+		handleClearFilePreviewHistory,
 		handleClearAgentErrorForMainPanel,
 		handleShowAgentErrorModal,
 		showSuccessFlash,
@@ -12061,6 +13221,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setLogViewerOpen,
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
+		setSymphonyModalOpen,
 		setGroups,
 		setSessions,
 		setRenameInstanceModalOpen,
@@ -12128,7 +13289,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 		fileTreeFilterOpen,
 		filteredFileTree,
 		selectedFileIndex,
-		previewFile,
 		showHiddenFiles,
 
 		// Auto Run state
@@ -12441,7 +13601,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					setPlaygroundOpen={setPlaygroundOpen}
 					onQuickActionsRefreshGitFileState={handleQuickActionsRefreshGitFileState}
 					onQuickActionsDebugReleaseQueuedItem={handleQuickActionsDebugReleaseQueuedItem}
-					markdownEditMode={markdownEditMode}
+					markdownEditMode={activeSession?.activeFileTabId ? markdownEditMode : chatRawTextMode}
 					onQuickActionsToggleMarkdownEditMode={handleQuickActionsToggleMarkdownEditMode}
 					setUpdateCheckModalOpenForQuickActions={setUpdateCheckModalOpen}
 					openWizard={openWizardModal}
@@ -12473,7 +13633,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					autoRunSelectedDocument={activeSession?.autoRunSelectedFile ?? null}
 					autoRunCompletedTaskCount={rightPanelRef.current?.getAutoRunCompletedTaskCount() ?? 0}
 					onAutoRunResetTasks={handleQuickActionsAutoRunResetTasks}
-					isFilePreviewOpen={previewFile !== null}
+					isFilePreviewOpen={!!activeSession?.activeFileTabId}
 					ghCliAvailable={ghCliAvailable}
 					onPublishGist={() => setGistPublishModalOpen(true)}
 					lastGraphFocusFile={lastGraphFocusFilePath}
@@ -12509,9 +13669,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 					getDocumentTaskCount={getDocumentTaskCount}
 					onAutoRunRefresh={handleAutoRunRefresh}
 					onOpenMarketplace={handleOpenMarketplace}
+					onOpenSymphony={() => setSymphonyModalOpen(true)}
 					tabSwitcherOpen={tabSwitcherOpen}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
+					onFileTabSelect={handleUtilityFileTabSelect}
 					onNamedSessionSelect={handleNamedSessionSelect}
 					fuzzyFileSearchOpen={fuzzyFileSearchOpen}
 					filteredFileTree={filteredFileTree}
@@ -12553,7 +13715,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						activeGroupChatId ? groupChatReadOnlyMode : (activeTab?.readOnlyMode ?? false)
 					}
 					onPromptToggleTabReadOnlyMode={handlePromptToggleTabReadOnlyMode}
-					promptTabShowThinking={activeGroupChatId ? false : (activeTab?.showThinking ?? false)}
+					promptTabShowThinking={activeGroupChatId ? 'off' : (activeTab?.showThinking ?? 'off')}
 					onPromptToggleTabShowThinking={
 						activeGroupChatId ? undefined : handlePromptToggleTabShowThinking
 					}
@@ -12650,38 +13812,218 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onClose={() => setDebugWizardModalOpen(false)}
 				/>
 
-				{/* --- MARKETPLACE MODAL --- */}
-				{activeSession && activeSession.autoRunFolderPath && (
-					<MarketplaceModal
-						theme={theme}
-						isOpen={marketplaceModalOpen}
-						onClose={() => setMarketplaceModalOpen(false)}
-						autoRunFolderPath={activeSession.autoRunFolderPath}
-						sessionId={activeSession.id}
-						sshRemoteId={
-							activeSession.sshRemoteId ||
-							activeSession.sessionSshRemoteConfig?.remoteId ||
-							undefined
+				{/* --- MARKETPLACE MODAL (lazy-loaded) --- */}
+				{activeSession && activeSession.autoRunFolderPath && marketplaceModalOpen && (
+					<Suspense fallback={null}>
+						<MarketplaceModal
+							theme={theme}
+							isOpen={marketplaceModalOpen}
+							onClose={() => setMarketplaceModalOpen(false)}
+							autoRunFolderPath={activeSession.autoRunFolderPath}
+							sessionId={activeSession.id}
+							sshRemoteId={
+								activeSession.sshRemoteId ||
+								activeSession.sessionSshRemoteConfig?.remoteId ||
+								undefined
+							}
+							onImportComplete={handleMarketplaceImportComplete}
+						/>
+					</Suspense>
+				)}
+
+				{/* --- SYMPHONY MODAL (lazy-loaded) --- */}
+				{symphonyModalOpen && (
+					<Suspense fallback={null}>
+						<SymphonyModal
+							theme={theme}
+							isOpen={symphonyModalOpen}
+							onClose={() => setSymphonyModalOpen(false)}
+					onStartContribution={async (data: SymphonyContributionData) => {
+						console.log('[Symphony] Creating session for contribution:', data);
+
+						// Get agent definition
+						const agent = await window.maestro.agents.get(data.agentType);
+						if (!agent) {
+							console.error(`Agent not found: ${data.agentType}`);
+							addToast({
+								type: 'error',
+								title: 'Symphony Error',
+								message: `Agent not found: ${data.agentType}`,
+							});
+							return;
 						}
-						onImportComplete={handleMarketplaceImportComplete}
-					/>
+
+						// Validate uniqueness
+						const validation = validateNewSession(
+							data.sessionName,
+							data.localPath,
+							data.agentType as ToolType,
+							sessions
+						);
+						if (!validation.valid) {
+							console.error(`Session validation failed: ${validation.error}`);
+							addToast({
+								type: 'error',
+								title: 'Session Creation Failed',
+								message: validation.error || 'Cannot create duplicate session',
+							});
+							return;
+						}
+
+						const newId = generateId();
+						const initialTabId = generateId();
+
+						// Check git repo status
+						const isGitRepo = await gitService.isRepo(data.localPath);
+						let gitBranches: string[] | undefined;
+						let gitTags: string[] | undefined;
+						let gitRefsCacheTime: number | undefined;
+
+						if (isGitRepo) {
+							[gitBranches, gitTags] = await Promise.all([
+								gitService.getBranches(data.localPath),
+								gitService.getTags(data.localPath),
+							]);
+							gitRefsCacheTime = Date.now();
+						}
+
+						// Create initial tab
+						const initialTab: AITab = {
+							id: initialTabId,
+							agentSessionId: null,
+							name: null,
+							starred: false,
+							logs: [],
+							inputValue: '',
+							stagedImages: [],
+							createdAt: Date.now(),
+							state: 'idle',
+							saveToHistory: defaultSaveToHistory,
+						};
+
+						// Create session with Symphony metadata
+						const newSession: Session = {
+							id: newId,
+							name: data.sessionName,
+							toolType: data.agentType as ToolType,
+							state: 'idle',
+							cwd: data.localPath,
+							fullPath: data.localPath,
+							projectRoot: data.localPath,
+							isGitRepo,
+							gitBranches,
+							gitTags,
+							gitRefsCacheTime,
+							aiLogs: [],
+							shellLogs: [
+								{
+									id: generateId(),
+									timestamp: Date.now(),
+									source: 'system',
+									text: 'Shell Session Ready.',
+								},
+							],
+							workLog: [],
+							contextUsage: 0,
+							inputMode: 'ai',
+							aiPid: 0,
+							terminalPid: 0,
+							port: 3000 + Math.floor(Math.random() * 100),
+							isLive: false,
+							changedFiles: [],
+							fileTree: [],
+							fileExplorerExpanded: [],
+							fileExplorerScrollPos: 0,
+							fileTreeAutoRefreshInterval: 180,
+							shellCwd: data.localPath,
+							aiCommandHistory: [],
+							shellCommandHistory: [],
+							executionQueue: [],
+							activeTimeMs: 0,
+							aiTabs: [initialTab],
+							activeTabId: initialTabId,
+							closedTabHistory: [],
+							filePreviewTabs: [],
+							activeFileTabId: null,
+							unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
+							unifiedClosedTabHistory: [],
+							// Custom agent config
+							customPath: data.customPath,
+							customArgs: data.customArgs,
+							customEnvVars: data.customEnvVars,
+							// Auto Run setup - use autoRunPath from contribution
+							autoRunFolderPath: data.autoRunPath,
+							// Symphony metadata for tracking
+							symphonyMetadata: {
+								isSymphonySession: true,
+								contributionId: data.contributionId,
+								repoSlug: data.repo.slug,
+								issueNumber: data.issue.number,
+								issueTitle: data.issue.title,
+								documentPaths: data.issue.documentPaths.map((d) => d.path),
+								status: 'running',
+							},
+						};
+
+						setSessions((prev) => [...prev, newSession]);
+						setActiveSessionId(newId);
+						setSymphonyModalOpen(false);
+
+						// Register active contribution in Symphony persistent state
+						// This makes it show up in the Active tab of the Symphony modal
+						window.maestro.symphony
+							.registerActive({
+								contributionId: data.contributionId,
+								sessionId: newId,
+								repoSlug: data.repo.slug,
+								repoName: data.repo.name,
+								issueNumber: data.issue.number,
+								issueTitle: data.issue.title,
+								localPath: data.localPath,
+								branchName: data.branchName || '',
+								totalDocuments: data.issue.documentPaths.length,
+								agentType: data.agentType,
+							})
+							.catch((err: unknown) => {
+								console.error('[Symphony] Failed to register active contribution:', err);
+							});
+
+						// Track stats
+						updateGlobalStats({ totalSessions: 1 });
+						window.maestro.stats.recordSessionCreated({
+							sessionId: newId,
+							agentType: data.agentType,
+							projectPath: data.localPath,
+							createdAt: Date.now(),
+							isRemote: false,
+						});
+
+						// Focus input
+						setActiveFocus('main');
+						setTimeout(() => inputRef.current?.focus(), 50);
+
+						// Switch to Auto Run tab so user sees the documents
+						setActiveRightTab('autorun');
+					}}
+				/>
+					</Suspense>
 				)}
 
 				{/* --- GIST PUBLISH MODAL --- */}
-				{/* Supports both file preview and tab context gist publishing */}
-				{gistPublishModalOpen && (previewFile || tabGistContent) && (
+				{/* Supports both file preview tabs and tab context gist publishing */}
+				{gistPublishModalOpen && (activeFileTab || tabGistContent) && (
 					<GistPublishModal
 						theme={theme}
-						filename={tabGistContent?.filename ?? previewFile?.name ?? 'conversation.md'}
-						content={tabGistContent?.content ?? previewFile?.content ?? ''}
+						filename={tabGistContent?.filename ?? (activeFileTab ? activeFileTab.name + activeFileTab.extension : 'conversation.md')}
+						content={tabGistContent?.content ?? activeFileTab?.content ?? ''}
 						onClose={() => {
 							setGistPublishModalOpen(false);
 							setTabGistContent(null);
 						}}
 						onSuccess={(gistUrl, isPublic) => {
-							// Save gist URL for the file if it's from file preview (not tab context)
-							if (previewFile && !tabGistContent) {
-								saveFileGistUrl(previewFile.path, {
+							// Save gist URL for the file if it's from file preview tab (not tab context)
+							if (activeFileTab && !tabGistContent) {
+								saveFileGistUrl(activeFileTab.path, {
 									gistUrl,
 									isPublic,
 									publishedAt: Date.now(),
@@ -12702,15 +14044,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 							setTabGistContent(null);
 						}}
 						existingGist={
-							previewFile && !tabGistContent ? fileGistUrls[previewFile.path] : undefined
+							activeFileTab && !tabGistContent ? fileGistUrls[activeFileTab.path] : undefined
 						}
 					/>
 				)}
 
-				{/* --- DOCUMENT GRAPH VIEW (Mind Map) --- */}
+				{/* --- DOCUMENT GRAPH VIEW (Mind Map, lazy-loaded) --- */}
 				{/* Only render when a focus file is provided - mind map requires a center document */}
 				{graphFocusFilePath && (
-					<DocumentGraphView
+					<Suspense fallback={null}>
+						<DocumentGraphView
 						isOpen={isGraphViewOpen}
 						onClose={() => {
 							setIsGraphViewOpen(false);
@@ -12722,25 +14065,36 @@ You are taking over this conversation. Based on the context above, provide a bri
 						}}
 						theme={theme}
 						rootPath={activeSession?.projectRoot || activeSession?.cwd || ''}
-						onDocumentOpen={(filePath) => {
-							// Open the document in file preview
+						onDocumentOpen={async (filePath) => {
+							// Open the document in a file tab (migrated from legacy setPreviewFile overlay)
 							const treeRoot = activeSession?.projectRoot || activeSession?.cwd || '';
 							const fullPath = `${treeRoot}/${filePath}`;
+							const filename = filePath.split('/').pop() || filePath;
 							// Note: sshRemoteId is only set after AI agent spawns. For terminal-only SSH sessions,
 							// use sessionSshRemoteConfig.remoteId as fallback (see CLAUDE.md SSH Remote Sessions)
-							const sshId =
+							const sshRemoteId =
 								activeSession?.sshRemoteId ||
 								activeSession?.sessionSshRemoteConfig?.remoteId ||
 								undefined;
-							window.maestro.fs.readFile(fullPath, sshId).then((content) => {
+							try {
+								// Fetch content and stat in parallel for efficiency
+								const [content, stat] = await Promise.all([
+									window.maestro.fs.readFile(fullPath, sshRemoteId),
+									window.maestro.fs.stat(fullPath, sshRemoteId).catch(() => null), // stat is optional
+								]);
 								if (content !== null) {
-									setPreviewFile({
-										name: filePath.split('/').pop() || filePath,
-										content,
+									const lastModified = stat?.modifiedAt ? new Date(stat.modifiedAt).getTime() : undefined;
+									handleOpenFileTab({
 										path: fullPath,
+										name: filename,
+										content,
+										sshRemoteId,
+										lastModified,
 									});
 								}
-							});
+							} catch (error) {
+								console.error('[DocumentGraph] Failed to open file:', error);
+							}
 							setIsGraphViewOpen(false);
 						}}
 						onExternalLinkOpen={(url) => {
@@ -12761,6 +14115,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 							undefined
 						}
 					/>
+					</Suspense>
 				)}
 
 				{/* NOTE: All modals are now rendered via the unified <AppModals /> component above */}
@@ -12802,20 +14157,22 @@ You are taking over this conversation. Based on the context above, provide a bri
 					</ErrorBoundary>
 				)}
 
-				{/* --- SYSTEM LOG VIEWER (replaces center content when open) --- */}
+				{/* --- SYSTEM LOG VIEWER (replaces center content when open, lazy-loaded) --- */}
 				{logViewerOpen && (
 					<div
 						className="flex-1 flex flex-col min-w-0"
 						style={{ backgroundColor: theme.colors.bgMain }}
 					>
-						<LogViewer
-							theme={theme}
-							onClose={handleCloseLogViewer}
-							logLevel={logLevel}
-							savedSelectedLevels={logViewerSelectedLevels}
-							onSelectedLevelsChange={setLogViewerSelectedLevels}
-							onShortcutUsed={handleLogViewerShortcutUsed}
-						/>
+						<Suspense fallback={null}>
+							<LogViewer
+								theme={theme}
+								onClose={handleCloseLogViewer}
+								logLevel={logLevel}
+								savedSelectedLevels={logViewerSelectedLevels}
+								onSelectedLevelsChange={setLogViewerSelectedLevels}
+								onShortcutUsed={handleLogViewerShortcutUsed}
+							/>
+						</Suspense>
 					</div>
 				)}
 

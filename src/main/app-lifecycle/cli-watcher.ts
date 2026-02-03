@@ -7,6 +7,7 @@ import fsSync from 'fs';
 import path from 'path';
 import type { BrowserWindow } from 'electron';
 import { logger } from '../utils/logger';
+import { isWebContentsAvailable } from '../utils/safe-send';
 
 /** Dependencies for CLI activity watcher */
 export interface CliWatcherDependencies {
@@ -54,7 +55,7 @@ export function createCliWatcher(deps: CliWatcherDependencies): CliWatcher {
 					if (filename === 'cli-activity.json') {
 						logger.debug('CLI activity file changed, notifying renderer', 'CliActivityWatcher');
 						const mainWindow = getMainWindow();
-						if (mainWindow && !mainWindow.isDestroyed()) {
+						if (isWebContentsAvailable(mainWindow)) {
 							mainWindow.webContents.send('cli:activityChange');
 						}
 					}

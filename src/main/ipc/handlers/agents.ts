@@ -1,5 +1,6 @@
 import { ipcMain } from 'electron';
 import Store from 'electron-store';
+import * as fs from 'fs';
 import { AgentDetector, AGENT_DEFINITIONS, getAgentCapabilities } from '../../agents';
 import { execFileNoThrow } from '../../utils/execFile';
 import { logger } from '../../utils/logger';
@@ -304,13 +305,136 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 		})
 	);
 
-	// Get a specific agent by ID
+	// Get a specific agent by ID (supports SSH remote detection via optional sshRemoteId)
 	ipcMain.handle(
 		'agents:get',
-		withIpcErrorLogging(handlerOpts('get'), async (agentId: string) => {
+		withIpcErrorLogging(handlerOpts('get'), async (agentId: string, sshRemoteId?: string) => {
+			logger.debug(`Getting agent: ${agentId}`, LOG_CONTEXT, { sshRemoteId });
+
+			// If SSH remote ID provided, detect agent on remote host
+			if (sshRemoteId) {
+				const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
+				if (!sshConfig) {
+					logger.warn(`SSH remote not found or disabled: ${sshRemoteId}`, LOG_CONTEXT);
+					// Return the agent definition with unavailable status
+					const agentDef = AGENT_DEFINITIONS.find((a) => a.id === agentId);
+					if (!agentDef) {
+						throw new Error(`Unknown agent: ${agentId}`);
+					}
+					return stripAgentFunctions({
+						...agentDef,
+						available: false,
+						path: undefined,
+						capabilities: getAgentCapabilities(agentDef.id),
+						error: `SSH remote configuration not found: ${sshRemoteId}`,
+					});
+				}
+
+				logger.info(`Getting agent ${agentId} on remote host: ${sshConfig.host}`, LOG_CONTEXT);
+
+				// Find the agent definition
+				const agentDef = AGENT_DEFINITIONS.find((a) => a.id === agentId);
+				if (!agentDef) {
+					throw new Error(`Unknown agent: ${agentId}`);
+				}
+
+				// Build SSH command to check for the binary using 'which'
+				const remoteOptions: RemoteCommandOptions = {
+					command: 'which',
+					args: [agentDef.binaryName],
+				};
+
+				try {
+					const sshCommand = await buildSshCommand(sshConfig, remoteOptions);
+					logger.info(`Executing SSH detection command for '${agentDef.binaryName}'`, LOG_CONTEXT, {
+						command: sshCommand.command,
+						args: sshCommand.args,
+					});
+
+					// Execute with timeout
+					const SSH_TIMEOUT_MS = 10000;
+					const resultPromise = execFileNoThrow(sshCommand.command, sshCommand.args);
+					const timeoutPromise = new Promise<{ exitCode: number; stdout: string; stderr: string }>(
+						(_, reject) => {
+							setTimeout(
+								() => reject(new Error(`SSH connection timed out after ${SSH_TIMEOUT_MS / 1000}s`)),
+								SSH_TIMEOUT_MS
+							);
+						}
+					);
+
+					const result = await Promise.race([resultPromise, timeoutPromise]);
+
+					logger.info(`SSH command result for '${agentDef.binaryName}'`, LOG_CONTEXT, {
+						exitCode: result.exitCode,
+						stdout: result.stdout,
+						stderr: result.stderr,
+					});
+
+					// Check for SSH connection errors
+					let connectionError: string | undefined;
+					if (
+						result.stderr &&
+						(result.stderr.includes('Connection refused') ||
+							result.stderr.includes('Connection timed out') ||
+							result.stderr.includes('No route to host') ||
+							result.stderr.includes('Could not resolve hostname') ||
+							result.stderr.includes('Permission denied'))
+					) {
+						connectionError = result.stderr.trim().split('\n')[0];
+						logger.warn(
+							`SSH connection error for ${sshConfig.host}: ${connectionError}`,
+							LOG_CONTEXT
+						);
+					}
+
+					// Strip ANSI/OSC escape sequences from output
+					const cleanedOutput = stripAnsi(result.stdout);
+					const available = result.exitCode === 0 && cleanedOutput.trim().length > 0;
+					const path = available ? cleanedOutput.trim().split('\n')[0] : undefined;
+
+					if (available) {
+						logger.info(`Agent "${agentDef.name}" found on remote at: ${path}`, LOG_CONTEXT);
+					} else {
+						logger.debug(`Agent "${agentDef.name}" not found on remote`, LOG_CONTEXT);
+					}
+
+					return stripAgentFunctions({
+						...agentDef,
+						available,
+						path,
+						capabilities: getAgentCapabilities(agentDef.id),
+						error: connectionError,
+					});
+				} catch (error) {
+					const errorMessage = error instanceof Error ? error.message : String(error);
+					logger.warn(
+						`Failed to check agent "${agentDef.name}" on remote: ${errorMessage}`,
+						LOG_CONTEXT
+					);
+					return stripAgentFunctions({
+						...agentDef,
+						available: false,
+						capabilities: getAgentCapabilities(agentDef.id),
+						error: `Failed to connect: ${errorMessage}`,
+					});
+				}
+			}
+
+			// Local detection
 			const agentDetector = requireDependency(getAgentDetector, 'Agent detector');
-			logger.debug(`Getting agent: ${agentId}`, LOG_CONTEXT);
 			const agent = await agentDetector.getAgent(agentId);
+
+			// Debug logging for agent availability
+			logger.debug(`Agent retrieved: ${agentId}`, LOG_CONTEXT, {
+				available: agent?.available,
+				hasPath: !!agent?.path,
+				path: agent?.path,
+				command: agent?.command,
+				hasCustomPath: !!agent?.customPath,
+				customPath: agent?.customPath,
+			});
+
 			// Strip argBuilder functions before sending over IPC
 			return stripAgentFunctions(agent);
 		})
@@ -326,11 +450,26 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 	);
 
 	// Get all configuration for an agent
+	// Merges stored config with defaults from agent's configOptions
 	ipcMain.handle(
 		'agents:getConfig',
 		withIpcErrorLogging(handlerOpts('getConfig', CONFIG_LOG_CONTEXT), async (agentId: string) => {
 			const allConfigs = agentConfigsStore.get('configs', {});
-			return allConfigs[agentId] || {};
+			const storedConfig = allConfigs[agentId] || {};
+
+			// Get defaults from agent definition's configOptions
+			const agentDef = AGENT_DEFINITIONS.find((a) => a.id === agentId);
+			const defaults: Record<string, unknown> = {};
+			if (agentDef?.configOptions) {
+				for (const option of agentDef.configOptions) {
+					if (option.default !== undefined) {
+						defaults[option.key] = option.default;
+					}
+				}
+			}
+
+			// Merge: stored config takes precedence over defaults
+			return { ...defaults, ...storedConfig };
 		})
 	);
 
@@ -350,6 +489,7 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 	);
 
 	// Get a specific configuration value for an agent
+	// Falls back to default from agent's configOptions if not stored
 	ipcMain.handle(
 		'agents:getConfigValue',
 		withIpcErrorLogging(
@@ -357,7 +497,16 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 			async (agentId: string, key: string) => {
 				const allConfigs = agentConfigsStore.get('configs', {});
 				const agentConfig = allConfigs[agentId] || {};
-				return agentConfig[key];
+
+				// Return stored value if present
+				if (agentConfig[key] !== undefined) {
+					return agentConfig[key];
+				}
+
+				// Fall back to default from agent definition
+				const agentDef = AGENT_DEFINITIONS.find((a) => a.id === agentId);
+				const option = agentDef?.configOptions?.find((o) => o.key === key);
+				return option?.default;
 			}
 		)
 	);
@@ -594,6 +743,15 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 				try {
 					// Use custom path if provided, otherwise use detected path
 					const commandPath = customPath || agent.path || agent.command;
+
+					// Check if the command path exists before attempting to spawn
+					if (!fs.existsSync(commandPath)) {
+						logger.warn(
+							`Command path does not exist for slash command discovery: ${commandPath}`,
+							LOG_CONTEXT
+						);
+						return null;
+					}
 
 					// Spawn Claude with /help which immediately exits and costs no tokens
 					// The init message contains all available slash commands

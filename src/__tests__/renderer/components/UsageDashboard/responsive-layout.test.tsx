@@ -7,7 +7,7 @@
  * - Medium screens (600-900px): 2-column charts, 3-column summary cards grid
  * - Wide screens (>900px): 2-column charts, 5-column summary cards grid
  *
- * Note: SummaryCards always renders 6 metric cards regardless of grid column count.
+ * Note: SummaryCards always renders 9 metric cards regardless of grid column count.
  *
  * The responsive system uses ResizeObserver to track container width and
  * dynamically adjusts grid column counts via CSS grid.
@@ -48,6 +48,9 @@ vi.mock('lucide-react', () => {
 		AlertTriangle: createIcon('alert-triangle', '⚠️'),
 		ChevronDown: createIcon('chevron-down', '▼'),
 		ChevronUp: createIcon('chevron-up', '▲'),
+		Sunrise: createIcon('sunrise', '🌅'),
+		Globe: createIcon('globe', '🌐'),
+		Zap: createIcon('zap', '⚡'),
 	};
 });
 
@@ -383,16 +386,16 @@ describe('UsageDashboard Responsive Layout', () => {
 			});
 		});
 
-		it('renders all 6 metric cards regardless of column count', async () => {
+		it('renders all 9 metric cards regardless of column count', async () => {
 			render(<UsageDashboardModal isOpen={true} onClose={onClose} theme={theme} />);
 
 			await waitFor(() => {
 				expect(screen.getByTestId('usage-dashboard-content')).toBeInTheDocument();
 			});
 
-			// Should always have 6 metric cards
+			// Should always have 9 metric cards
 			const metricCards = screen.getAllByTestId('metric-card');
-			expect(metricCards).toHaveLength(6);
+			expect(metricCards).toHaveLength(9);
 		});
 	});
 

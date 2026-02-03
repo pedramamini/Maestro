@@ -333,7 +333,7 @@ describe('storage service', () => {
 			const configs = {
 				configs: {
 					'claude-code': { customPath: '/custom/path' },
-					aider: { setting: 'value' },
+					'factory-droid': { setting: 'value' },
 				},
 			};
 			vi.mocked(fs.readFileSync).mockReturnValue(JSON.stringify(configs));
@@ -341,7 +341,7 @@ describe('storage service', () => {
 			const result = readAgentConfigs();
 
 			expect(result['claude-code']).toEqual({ customPath: '/custom/path' });
-			expect(result['aider']).toEqual({ setting: 'value' });
+			expect(result['factory-droid']).toEqual({ setting: 'value' });
 		});
 
 		it('should return empty object when file does not exist', () => {
@@ -389,7 +389,7 @@ describe('storage service', () => {
 				})
 			);
 
-			const result = getAgentCustomPath('aider');
+			const result = getAgentCustomPath('factory-droid');
 
 			expect(result).toBeUndefined();
 		});

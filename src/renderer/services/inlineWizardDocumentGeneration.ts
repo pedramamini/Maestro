@@ -128,6 +128,12 @@ export interface DocumentGenerationConfig {
 	autoRunFolderPath: string;
 	/** Session ID for playbook creation */
 	sessionId?: string;
+	/** SSH remote configuration (for remote execution) */
+	sessionSshRemoteConfig?: {
+		enabled: boolean;
+		remoteId: string | null;
+		workingDirOverride?: string;
+	};
 	/** Optional callbacks */
 	callbacks?: DocumentGenerationCallbacks;
 }
@@ -575,9 +581,50 @@ function buildArgsForAgent(agent: { id: string; args?: string[] }): string[] {
 			return args;
 		}
 
-		case 'codex':
+		case 'codex': {
+			// Codex requires exec batch mode with JSON output for document generation
+			// Must include these explicitly since wizard pre-builds args before IPC handler
+			const args = [];
+
+			// Add batch mode prefix: 'exec'
+			if ((agent as any).batchModePrefix) {
+				args.push(...(agent as any).batchModePrefix);
+			}
+
+			// Add base args (if any)
+			args.push(...(agent.args || []));
+
+			// Add batch mode args: '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'
+			if ((agent as any).batchModeArgs) {
+				args.push(...(agent as any).batchModeArgs);
+			}
+
+			// Add JSON output: '--json'
+			if ((agent as any).jsonOutputArgs) {
+				args.push(...(agent as any).jsonOutputArgs);
+			}
+
+			return args;
+		}
+
 		case 'opencode': {
-			return [...(agent.args || [])];
+			// OpenCode requires 'run' batch mode with JSON output for document generation
+			const args = [];
+
+			// Add batch mode prefix: 'run'
+			if ((agent as any).batchModePrefix) {
+				args.push(...(agent as any).batchModePrefix);
+			}
+
+			// Add base args (if any)
+			args.push(...(agent.args || []));
+
+			// Add JSON output: '--format json'
+			if ((agent as any).jsonOutputArgs) {
+				args.push(...(agent as any).jsonOutputArgs);
+			}
+
+			return args;
 		}
 
 		default: {
@@ -670,9 +717,25 @@ export async function generateInlineDocuments(
 	try {
 		// Get the agent configuration
 		const agent = await window.maestro.agents.get(agentType);
-		if (!agent || !agent.available) {
+		// For SSH remote sessions, skip local availability checks since agent may be remote
+		const isRemoteSession = config.sessionSshRemoteConfig?.enabled;
+		if (!agent && !isRemoteSession) {
 			throw new Error(`Agent ${agentType} is not available`);
 		}
+		if (agent && !agent.available && !isRemoteSession) {
+			throw new Error(`Agent ${agentType} is not available`);
+		}
+
+		logger.info(
+			`Generating documents for remote execution: ${isRemoteSession}`,
+			'[InlineWizardDocGen]',
+			{
+				subfolderName,
+				agentType,
+				isRemote: isRemoteSession,
+				agentAvailable: agent?.available ?? false,
+			}
+		);
 
 		// Generate the prompt (include subfolder so agent writes to correct location)
 		const prompt = generateDocumentPrompt(config, subfolderName);
@@ -681,7 +744,7 @@ export async function generateInlineDocuments(
 
 		// Spawn agent and collect output
 		const sessionId = `inline-wizard-gen-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
-		const argsForSpawn = buildArgsForAgent(agent);
+		const argsForSpawn = agent ? buildArgsForAgent(agent) : [];
 
 		// Track documents created via file watcher (for real-time streaming)
 		const documentsFromWatcher: InlineGeneratedDocument[] = [];
@@ -692,14 +755,15 @@ export async function generateInlineDocuments(
 				let dataListenerCleanup: (() => void) | undefined;
 				let exitListenerCleanup: (() => void) | undefined;
 				let fileWatcherCleanup: (() => void) | undefined;
-				let lastActivityTime = Date.now();
+				// Track last activity for potential future timeout logic
+				let _lastActivityTime = Date.now();
 
 				/**
 				 * Reset the inactivity timeout - called on any activity
 				 */
 				const resetTimeout = () => {
 					clearTimeout(timeoutId);
-					lastActivityTime = Date.now();
+					_lastActivityTime = Date.now();
 
 					timeoutId = setTimeout(() => {
 						console.error('[InlineWizardDocGen] TIMEOUT fired! Session:', sessionId);
@@ -876,16 +940,24 @@ export async function generateInlineDocuments(
 					sessionId,
 					agentType,
 					cwd: directoryPath,
+					hasAgent: !!agent,
+					isRemote: isRemoteSession,
 				});
+
+				// Use the agent's resolved path if available, falling back to agent type name
+				// For remote sessions, we use the agent type name since the agent is installed on the remote host
+				const commandToUse = agent?.path || agent?.command || agentType;
 
 				window.maestro.process
 					.spawn({
 						sessionId,
 						toolType: agentType,
 						cwd: directoryPath,
-						command: agent.command,
+						command: commandToUse,
 						args: argsForSpawn,
 						prompt,
+						// Pass SSH config for remote execution
+						sessionSshRemoteConfig: config.sessionSshRemoteConfig,
 					})
 					.then(() => {
 						logger.debug('Document generation agent spawned successfully', '[InlineWizardDocGen]', {

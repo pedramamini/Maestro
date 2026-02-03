@@ -103,6 +103,8 @@ function getDaysForRange(timeRange: StatsTimeRange): number {
 			return 7;
 		case 'month':
 			return 30;
+		case 'quarter':
+			return 90;
 		case 'year':
 			return 365;
 		case 'all':
@@ -122,10 +124,10 @@ function shouldUseSingleDayMode(timeRange: StatsTimeRange): boolean {
 
 /**
  * Check if we should use 4-hour block mode (6 blocks per day)
- * Used for month view to show time-of-day patterns
+ * Used for month and quarter views to show time-of-day patterns with more granularity
  */
 function shouldUse4HourBlockMode(timeRange: StatsTimeRange): boolean {
-	return timeRange === 'month';
+	return timeRange === 'month' || timeRange === 'quarter';
 }
 
 // Time block labels for 4-hour chunks
@@ -636,18 +638,18 @@ export function ActivityHeatmap({
 				</div>
 			</div>
 
-			{/* GitHub-style heatmap for month/year/all views */}
+			{/* GitHub-style heatmap for year/all views */}
 			{useGitHubLayout && gitHubGrid && (
 				<div className="flex gap-2">
 					{/* Day of week labels (Y-axis) */}
-					<div className="flex flex-col flex-shrink-0" style={{ width: 32, paddingTop: 20 }}>
+					<div className="flex flex-col flex-shrink-0" style={{ width: 36, paddingTop: 22 }}>
 						{dayOfWeekLabels.map((label, idx) => (
 							<div
 								key={idx}
 								className="text-xs text-right flex items-center justify-end pr-1"
 								style={{
 									color: theme.colors.textDim,
-									height: 13,
+									height: 15,
 								}}
 							>
 								{/* Only show Mon, Wed, Fri for cleaner look */}
@@ -659,14 +661,14 @@ export function ActivityHeatmap({
 					{/* Grid container */}
 					<div className="flex-1 overflow-x-auto">
 						{/* Month labels row */}
-						<div className="flex" style={{ marginBottom: 4, height: 16 }}>
+						<div className="flex" style={{ marginBottom: 6, height: 18 }}>
 							{gitHubGrid.monthLabels.map((monthLabel, idx) => (
 								<div
 									key={`${monthLabel.month}-${idx}`}
 									className="text-xs"
 									style={{
 										color: theme.colors.textDim,
-										width: monthLabel.colSpan * 13, // 11px cell + 2px gap
+										width: monthLabel.colSpan * 15, // 13px cell + 2px gap
 										paddingLeft: 2,
 										flexShrink: 0,
 									}}
@@ -682,15 +684,15 @@ export function ActivityHeatmap({
 								<div
 									key={weekIdx}
 									className="flex flex-col gap-[2px]"
-									style={{ width: 11, flexShrink: 0 }}
+									style={{ width: 13, flexShrink: 0 }}
 								>
 									{week.days.map((day) => (
 										<div
 											key={day.dateString}
 											className="rounded-sm cursor-default"
 											style={{
-												width: 11,
-												height: 11,
+												width: 13,
+												height: 13,
 												backgroundColor: day.isPlaceholder
 													? 'transparent'
 													: getIntensityColor(day.intensity, theme, colorBlindMode),
@@ -722,18 +724,18 @@ export function ActivityHeatmap({
 				</div>
 			)}
 
-			{/* 4-hour block heatmap for month view */}
+			{/* 4-hour block heatmap for month/quarter views */}
 			{use4HourBlockLayout && blockGrid && (
 				<div className="flex gap-2">
 					{/* Time block labels (Y-axis) */}
-					<div className="flex flex-col flex-shrink-0" style={{ width: 48, paddingTop: 18 }}>
+					<div className="flex flex-col flex-shrink-0" style={{ width: 52, paddingTop: 22 }}>
 						{TIME_BLOCK_LABELS.map((label, idx) => (
 							<div
 								key={idx}
-								className="text-xs text-right flex items-center justify-end pr-1"
+								className="text-xs text-right flex items-center justify-end pr-2"
 								style={{
 									color: theme.colors.textDim,
-									height: 18,
+									height: 20,
 								}}
 							>
 								{label}
@@ -743,50 +745,63 @@ export function ActivityHeatmap({
 
 					{/* Grid of cells with scrolling */}
 					<div className="flex-1 overflow-x-auto">
-						<div className="flex gap-[2px]" style={{ minWidth: blockGrid.dayColumns.length * 15 }}>
-							{blockGrid.dayColumns.map((col) => (
-								<div
-									key={col.dateString}
-									className="flex flex-col gap-[2px]"
-									style={{ width: 13, flexShrink: 0 }}
-								>
-									{/* Day label */}
+						<div className="flex gap-[3px]" style={{ minWidth: blockGrid.dayColumns.length * 17 }}>
+							{blockGrid.dayColumns.map((col, colIdx) => {
+								// Show day number for all days, but only show month on 1st of month
+								const isFirstOfMonth = col.date.getDate() === 1;
+								const showMonthLabel = isFirstOfMonth || colIdx === 0;
+								return (
 									<div
-										className="text-xs text-center truncate h-[16px] flex items-center justify-center"
-										style={{ color: theme.colors.textDim, fontSize: 10 }}
-										title={format(col.date, 'EEEE, MMM d')}
+										key={col.dateString}
+										className="flex flex-col gap-[3px]"
+										style={{ width: 14, flexShrink: 0 }}
 									>
-										{col.dayLabel}
-									</div>
-									{/* Time block cells */}
-									{col.blocks.map((block) => (
+										{/* Day label with month indicator */}
 										<div
-											key={`${col.dateString}-${block.blockIndex}`}
-											className="rounded-sm cursor-default"
+											className="text-xs text-center truncate h-[18px] flex items-center justify-center"
 											style={{
-												height: 16,
-												backgroundColor: block.isPlaceholder
-													? 'transparent'
-													: getIntensityColor(block.intensity, theme, colorBlindMode),
-												outline:
-													hoveredCell &&
-													'blockIndex' in hoveredCell &&
-													hoveredCell.dateString === block.dateString &&
-													hoveredCell.blockIndex === block.blockIndex
-														? `2px solid ${theme.colors.accent}`
-														: 'none',
-												outlineOffset: -1,
-												transition: 'background-color 0.3s ease, outline 0.15s ease',
+												color: isFirstOfMonth
+													? theme.colors.accent
+													: theme.colors.textDim,
+												fontSize: 10,
+												fontWeight: isFirstOfMonth ? 600 : 400,
 											}}
-											onMouseEnter={(e) => handleMouseEnterBlock(block, e)}
-											onMouseLeave={handleMouseLeave}
-											role="gridcell"
-											aria-label={`${format(block.date, 'MMM d')} ${block.blockLabel}: ${block.count} ${block.count === 1 ? 'query' : 'queries'}${block.duration > 0 ? `, ${formatDuration(block.duration)}` : ''}`}
-											tabIndex={0}
-										/>
-									))}
-								</div>
-							))}
+											title={format(col.date, 'EEEE, MMM d')}
+										>
+											{showMonthLabel && isFirstOfMonth
+												? format(col.date, 'MMM')
+												: col.dayLabel}
+										</div>
+										{/* Time block cells */}
+										{col.blocks.map((block) => (
+											<div
+												key={`${col.dateString}-${block.blockIndex}`}
+												className="rounded-sm cursor-default"
+												style={{
+													height: 17,
+													backgroundColor: block.isPlaceholder
+														? 'transparent'
+														: getIntensityColor(block.intensity, theme, colorBlindMode),
+													outline:
+														hoveredCell &&
+														'blockIndex' in hoveredCell &&
+														hoveredCell.dateString === block.dateString &&
+														hoveredCell.blockIndex === block.blockIndex
+															? `2px solid ${theme.colors.accent}`
+															: 'none',
+													outlineOffset: -1,
+													transition: 'background-color 0.3s ease, outline 0.15s ease',
+												}}
+												onMouseEnter={(e) => handleMouseEnterBlock(block, e)}
+												onMouseLeave={handleMouseLeave}
+												role="gridcell"
+												aria-label={`${format(block.date, 'MMM d')} ${block.blockLabel}: ${block.count} ${block.count === 1 ? 'query' : 'queries'}${block.duration > 0 ? `, ${formatDuration(block.duration)}` : ''}`}
+												tabIndex={0}
+											/>
+										))}
+									</div>
+								);
+							})}
 						</div>
 					</div>
 				</div>

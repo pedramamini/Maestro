@@ -2,7 +2,7 @@
  * Tests for SummaryCards component
  *
  * Verifies:
- * - Renders all six metric cards correctly
+ * - Renders all nine metric cards correctly
  * - Displays formatted values (numbers, durations)
  * - Shows correct icons for each metric
  * - Applies theme colors properly
@@ -27,7 +27,7 @@ const mockData: StatsAggregation = {
 	avgDuration: 48000, // 48 seconds in ms
 	byAgent: {
 		'claude-code': { count: 100, duration: 5000000 },
-		aider: { count: 50, duration: 2200000 },
+		codex: { count: 50, duration: 2200000 },
 	},
 	bySource: { user: 120, auto: 30 },
 	byLocation: { local: 120, remote: 30 },
@@ -37,7 +37,7 @@ const mockData: StatsAggregation = {
 	],
 	byHour: [],
 	totalSessions: 25,
-	sessionsByAgent: { 'claude-code': 15, aider: 10 },
+	sessionsByAgent: { 'claude-code': 15, codex: 10 },
 	sessionsByDay: [],
 	avgSessionDuration: 288000,
 	byAgentByDay: {},
@@ -131,11 +131,11 @@ describe('SummaryCards', () => {
 			expect(screen.getByTestId('summary-cards')).toBeInTheDocument();
 		});
 
-		it('renders all six metric cards', () => {
+		it('renders all nine metric cards', () => {
 			render(<SummaryCards data={mockData} theme={theme} />);
 
 			const cards = screen.getAllByTestId('metric-card');
-			expect(cards).toHaveLength(6);
+			expect(cards).toHaveLength(9);
 		});
 
 		it('renders Total Queries metric', () => {
@@ -170,7 +170,10 @@ describe('SummaryCards', () => {
 			render(<SummaryCards data={mockData} theme={theme} />);
 
 			expect(screen.getByText('Interactive %')).toBeInTheDocument();
-			expect(screen.getByText('80%')).toBeInTheDocument();
+			// Interactive % card shows 80% (120 user / 150 total)
+			// Use aria-label to find the specific card since Local % may also show 80%
+			const interactiveCard = screen.getByRole('group', { name: /Interactive %: 80%/i });
+			expect(interactiveCard).toBeInTheDocument();
 		});
 	});
 
@@ -240,7 +243,7 @@ describe('SummaryCards', () => {
 		it('identifies the most active agent by count', () => {
 			render(<SummaryCards data={mockData} theme={theme} />);
 
-			// claude-code has 100 queries, aider has 50
+			// claude-code has 100 queries, codex has 50
 			expect(screen.getByText('claude-code')).toBeInTheDocument();
 		});
 
@@ -266,20 +269,26 @@ describe('SummaryCards', () => {
 		it('calculates correct percentage', () => {
 			render(<SummaryCards data={mockData} theme={theme} />);
 
-			// 120 user / (120 + 30) = 80%
-			expect(screen.getByText('80%')).toBeInTheDocument();
+			// 120 user / (120 + 30) = 80% for Interactive %
+			// Find the Interactive % card specifically by its aria-label
+			const interactiveCard = screen.getByRole('group', { name: /Interactive %: 80%/i });
+			expect(interactiveCard).toBeInTheDocument();
 		});
 
 		it('shows 100% for user-only queries', () => {
 			render(<SummaryCards data={singleAgentData} theme={theme} />);
 
-			expect(screen.getByText('100%')).toBeInTheDocument();
+			// For singleAgentData: bySource = { user: 50, auto: 0 } = 100% interactive
+			const interactiveCard = screen.getByRole('group', { name: /Interactive %: 100%/i });
+			expect(interactiveCard).toBeInTheDocument();
 		});
 
 		it('shows 0% for auto-only queries', () => {
 			render(<SummaryCards data={onlyAutoData} theme={theme} />);
 
-			expect(screen.getByText('0%')).toBeInTheDocument();
+			// For onlyAutoData: bySource = { user: 0, auto: 100 } = 0% interactive
+			const interactiveCard = screen.getByRole('group', { name: /Interactive %: 0%/i });
+			expect(interactiveCard).toBeInTheDocument();
 		});
 
 		it('shows N/A when no source data exists', () => {
@@ -329,9 +338,9 @@ describe('SummaryCards', () => {
 		it('renders SVG icons for each metric', () => {
 			const { container } = render(<SummaryCards data={mockData} theme={theme} />);
 
-			// Each card should have an SVG icon
+			// Each card should have an SVG icon (9 cards = 9 icons)
 			const svgElements = container.querySelectorAll('svg');
-			expect(svgElements.length).toBe(6);
+			expect(svgElements.length).toBe(9);
 		});
 	});
 

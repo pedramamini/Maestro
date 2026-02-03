@@ -1,6 +1,6 @@
 import React, { useEffect, useRef, useState } from 'react';
-import { X, PenLine, Send, ImageIcon, History, Eye, Keyboard, Brain } from 'lucide-react';
-import type { Theme } from '../types';
+import { X, PenLine, Send, ImageIcon, History, Eye, Keyboard, Brain, Pin } from 'lucide-react';
+import type { Theme, ThinkingMode } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { estimateTokenCount } from '../../shared/formatters';
@@ -23,7 +23,7 @@ interface PromptComposerModalProps {
 	onToggleTabSaveToHistory?: () => void;
 	tabReadOnlyMode?: boolean;
 	onToggleTabReadOnlyMode?: () => void;
-	tabShowThinking?: boolean;
+	tabShowThinking?: ThinkingMode;
 	onToggleTabShowThinking?: () => void;
 	supportsThinking?: boolean;
 	enterToSend?: boolean;
@@ -46,7 +46,7 @@ export function PromptComposerModal({
 	onToggleTabSaveToHistory,
 	tabReadOnlyMode = false,
 	onToggleTabReadOnlyMode,
-	tabShowThinking = false,
+	tabShowThinking = 'off',
 	onToggleTabShowThinking,
 	supportsThinking = false,
 	enterToSend = false,
@@ -332,7 +332,7 @@ export function PromptComposerModal({
 							style={{ color: theme.colors.textDim }}
 						>
 							<span>{value.length} characters</span>
-							<span>~{tokenCount.toLocaleString()} tokens</span>
+							<span>~{tokenCount.toLocaleString('en-US')} tokens</span>
 						</div>
 					</div>
 
@@ -380,24 +380,44 @@ export function PromptComposerModal({
 							</button>
 						)}
 
-						{/* Show Thinking toggle - for agents that support it */}
+						{/* Show Thinking toggle - three states: 'off' | 'on' | 'sticky' */}
 						{supportsThinking && onToggleTabShowThinking && (
 							<button
 								onClick={onToggleTabShowThinking}
 								className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full cursor-pointer transition-all ${
-									tabShowThinking ? '' : 'opacity-40 hover:opacity-70'
+									tabShowThinking !== 'off' ? '' : 'opacity-40 hover:opacity-70'
 								}`}
 								style={{
-									backgroundColor: tabShowThinking ? `${theme.colors.accentText}25` : 'transparent',
-									color: tabShowThinking ? theme.colors.accentText : theme.colors.textDim,
-									border: tabShowThinking
-										? `1px solid ${theme.colors.accentText}50`
-										: '1px solid transparent',
+									backgroundColor:
+										tabShowThinking === 'sticky'
+											? `${theme.colors.warning}30`
+											: tabShowThinking === 'on'
+												? `${theme.colors.accentText}25`
+												: 'transparent',
+									color:
+										tabShowThinking === 'sticky'
+											? theme.colors.warning
+											: tabShowThinking === 'on'
+												? theme.colors.accentText
+												: theme.colors.textDim,
+									border:
+										tabShowThinking === 'sticky'
+											? `1px solid ${theme.colors.warning}50`
+											: tabShowThinking === 'on'
+												? `1px solid ${theme.colors.accentText}50`
+												: '1px solid transparent',
 								}}
-								title="Show Thinking - Stream AI reasoning in real-time"
+								title={
+									tabShowThinking === 'off'
+										? 'Show Thinking - Click to stream AI reasoning'
+										: tabShowThinking === 'on'
+											? 'Thinking (temporary) - Click for sticky mode'
+											: 'Thinking (sticky) - Click to turn off'
+								}
 							>
 								<Brain className="w-3 h-3" />
 								<span>Thinking</span>
+								{tabShowThinking === 'sticky' && <Pin className="w-2.5 h-2.5" />}
 							</button>
 						)}
 

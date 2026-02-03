@@ -44,27 +44,37 @@ Worktree sub-agents appear nested under their parent agent in the Left Bar:
 
 ![Worktree list](./screenshots/git-worktree-list.png)
 
-- **Nested Display** — Worktree sub-agents appear indented under their parent agent
-- **Branch Icon** — A green checkmark indicates the active worktree
-- **Collapse/Expand** — Click the chevron on a parent agent to show/hide its worktree children
+- **Nested Display** — Worktree sub-agents appear in a drawer below their parent agent, styled with a subtle accent background
+- **Branch Icon** — Worktree children show a `GitBranch` icon next to their name
+- **Collapse/Expand** — Click the worktree count band below the parent session to show/hide worktree children (e.g., "2 worktrees ▾")
 - **Independent Operation** — Each worktree agent has its own working directory, conversation history, and state
 
 ### Creating a Worktree Sub-Agent
 
-1. In the agent list (Left Bar), hover over an agent in a git repository
-2. Click the **git branch indicator** (shows current branch name)
-3. In the overlay menu, click **"Create Worktree Sub-Agent"**
-4. Configure the worktree:
+There are two ways to access worktree configuration:
+
+**From the Header (Main Panel):**
+1. Select an agent that's in a git repository
+2. Hover over the **branch pill** in the header (shows the current branch name, e.g., "main")
+3. In the hover overlay, click **"Configure Worktrees"**
+
+**From the Context Menu (Left Bar):**
+1. Right-click an agent in the session list
+2. Select **"Configure Worktrees"** (only shown for git repositories)
+
+In the configuration modal:
 
 ![Worktree configuration](./screenshots/git-worktree-configuration.png)
 
 | Option | Description |
 |--------|-------------|
-| **Worktree Directory** | Base folder where worktrees are created (should be outside the main repo) |
-| **Watch for Changes** | Monitor the worktree for file system changes |
-| **Create New Worktree** | Branch name for the new worktree (becomes the subdirectory name) |
+| **Worktree Directory** | Base folder where worktrees are created (should be outside the main repo). You can browse to select it (local sessions) or type the path directly. |
+| **Watch for new worktrees** | Auto-detect worktrees created outside Maestro (e.g., via command line) |
+| **Create New Worktree** | Enter a branch name and click **Create** to instantly create a new worktree sub-agent |
 
 **Tip:** Configure the worktree directory to be outside your main repository (e.g., `~/Projects/Maestro-WorkTrees/`). This keeps worktrees organized and prevents them from appearing in your main repo's file tree.
+
+**Note:** Once configured, you can quickly create additional worktrees by right-clicking the parent session and selecting **"Create Worktree"** (bypasses the full configuration modal).
 
 ### Worktree Actions
 
@@ -76,6 +86,7 @@ Right-click any worktree sub-agent to access management options:
 |--------|-------------|
 | **Rename** | Change the display name of the worktree agent |
 | **Edit Agent...** | Modify agent configuration |
+| **Duplicate...** | Create a new agent with the same configuration |
 | **Create Pull Request** | Open a PR from this worktree's branch |
 | **Remove Worktree** | Delete the worktree agent (see below) |
 

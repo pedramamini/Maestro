@@ -72,8 +72,8 @@ export function createFsApi() {
 		/**
 		 * Write file contents
 		 */
-		writeFile: (filePath: string, content: string): Promise<{ success: boolean }> =>
-			ipcRenderer.invoke('fs:writeFile', filePath, content),
+		writeFile: (filePath: string, content: string, sshRemoteId?: string): Promise<{ success: boolean }> =>
+			ipcRenderer.invoke('fs:writeFile', filePath, content, sshRemoteId),
 
 		/**
 		 * Get file/directory stats

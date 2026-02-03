@@ -57,7 +57,7 @@ function generateLargeDataset(numDays: number): StatsAggregation {
 				count: Math.floor(totalQueries * 0.6),
 				duration: Math.floor(totalDuration * 0.6),
 			},
-			aider: { count: Math.floor(totalQueries * 0.3), duration: Math.floor(totalDuration * 0.3) },
+			codex: { count: Math.floor(totalQueries * 0.3), duration: Math.floor(totalDuration * 0.3) },
 			opencode: {
 				count: Math.floor(totalQueries * 0.1),
 				duration: Math.floor(totalDuration * 0.1),
@@ -76,7 +76,7 @@ function generateManyAgentsData(numAgents: number): StatsAggregation {
 	const byAgent: Record<string, { count: number; duration: number }> = {};
 	const agentNames = [
 		'claude-code',
-		'aider',
+		'factory-droid',
 		'opencode',
 		'gpt-engineer',
 		'cursor',

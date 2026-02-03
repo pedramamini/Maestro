@@ -117,6 +117,9 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 		return [];
 	});
 
+	// Track initial document state for dirty checking
+	const initialDocumentsRef = useRef<string[]>([currentDocument].filter(Boolean));
+
 	// Task counts per document (keyed by filename)
 	const [taskCounts, setTaskCounts] = useState<Record<string, number>>({});
 	const [loadingTaskCounts, setLoadingTaskCounts] = useState(true);
@@ -125,12 +128,53 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	const [loopEnabled, setLoopEnabled] = useState(false);
 	const [maxLoops, setMaxLoops] = useState<number | null>(null); // null = infinite
 
+	// Track initial loop settings for dirty checking
+	const initialLoopEnabledRef = useRef(false);
+	const initialMaxLoopsRef = useRef<number | null>(null);
+
 	// Prompt state
 	const [prompt, setPrompt] = useState(initialPrompt || DEFAULT_BATCH_PROMPT);
 	const [variablesExpanded, setVariablesExpanded] = useState(false);
 	const [savedPrompt, setSavedPrompt] = useState(initialPrompt || '');
 	const [promptComposerOpen, setPromptComposerOpen] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
+
+	// Track initial prompt for dirty checking
+	const initialPromptRef = useRef(initialPrompt || DEFAULT_BATCH_PROMPT);
+
+	// Compute if there are unsaved configuration changes
+	// This checks if documents, loop settings, or prompt have changed from initial values
+	const hasUnsavedConfigChanges = useCallback(() => {
+		// Check if documents have changed (compare filenames)
+		const currentDocFilenames = documents.map((d) => d.filename).sort();
+		const initialDocFilenames = [...initialDocumentsRef.current].sort();
+		const documentsChanged =
+			currentDocFilenames.length !== initialDocFilenames.length ||
+			currentDocFilenames.some((f, i) => f !== initialDocFilenames[i]);
+
+		// Check if loop settings have changed
+		const loopChanged =
+			loopEnabled !== initialLoopEnabledRef.current || maxLoops !== initialMaxLoopsRef.current;
+
+		// Check if prompt has changed
+		const promptChanged = prompt !== initialPromptRef.current;
+
+		return documentsChanged || loopChanged || promptChanged;
+	}, [documents, loopEnabled, maxLoops, prompt]);
+
+	// Handler for closing with unsaved changes check
+	const handleCloseWithConfirmation = useCallback(() => {
+		if (hasUnsavedConfigChanges()) {
+			showConfirmation(
+				'You have unsaved changes to your Auto Run configuration. Close without saving?',
+				() => {
+					onClose();
+				}
+			);
+		} else {
+			onClose();
+		}
+	}, [hasUnsavedConfigChanges, showConfirmation, onClose]);
 
 	// Playbook management callback to apply loaded playbook configuration
 	const handleApplyPlaybook = useCallback(
@@ -238,7 +282,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 				} else if (showSavePlaybookModal) {
 					setShowSavePlaybookModal(false);
 				} else {
-					onClose();
+					handleCloseWithConfirmation();
 				}
 			},
 		});
@@ -255,6 +299,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 		showSavePlaybookModal,
 		showDeleteConfirmModal,
 		handleCancelDeletePlaybook,
+		handleCloseWithConfirmation,
 	]);
 
 	// Update handler when dependencies change
@@ -266,12 +311,12 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 				} else if (showSavePlaybookModal) {
 					setShowSavePlaybookModal(false);
 				} else {
-					onClose();
+					handleCloseWithConfirmation();
 				}
 			});
 		}
 	}, [
-		onClose,
+		handleCloseWithConfirmation,
 		updateLayerHandler,
 		showSavePlaybookModal,
 		showDeleteConfirmModal,
@@ -365,7 +410,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 								{totalTaskCount === 1 ? 'task' : 'tasks'}
 							</span>
 						</div>
-						<button onClick={onClose} style={{ color: theme.colors.textDim }}>
+						<button onClick={handleCloseWithConfirmation} style={{ color: theme.colors.textDim }}>
 							<X className="w-4 h-4" />
 						</button>
 					</div>
@@ -710,7 +755,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 					{/* Right side: Buttons */}
 					<div className="flex items-center gap-2">
 						<button
-							onClick={onClose}
+							onClick={handleCloseWithConfirmation}
 							className="px-4 py-2 rounded border hover:bg-white/5 transition-colors"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 						>

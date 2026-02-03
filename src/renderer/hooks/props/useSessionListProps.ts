@@ -90,6 +90,7 @@ export interface UseSessionListPropsDeps {
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
+	setSymphonyModalOpen: (open: boolean) => void;
 	setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
 	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	setRenameInstanceModalOpen: (open: boolean) => void;
@@ -191,6 +192,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			setLogViewerOpen: deps.setLogViewerOpen,
 			setProcessMonitorOpen: deps.setProcessMonitorOpen,
 			setUsageDashboardOpen: deps.setUsageDashboardOpen,
+			setSymphonyModalOpen: deps.setSymphonyModalOpen,
 
 			// Handlers
 			toggleGroup: deps.toggleGroup,
@@ -313,6 +315,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.setLogViewerOpen,
 			deps.setProcessMonitorOpen,
 			deps.setUsageDashboardOpen,
+			deps.setSymphonyModalOpen,
 			deps.setGroups,
 			deps.setSessions,
 			deps.setRenameInstanceModalOpen,

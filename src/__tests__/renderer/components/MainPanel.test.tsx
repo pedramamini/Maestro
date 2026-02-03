@@ -317,9 +317,9 @@ describe('MainPanel', () => {
 		// State
 		logViewerOpen: false,
 		agentSessionsOpen: false,
-		activeClaudeSessionId: null,
+		activeAgentSessionId: null,
 		activeSession: createSession(),
-		sessions: [createSession()],
+		thinkingSessions: [] as Session[],
 		theme,
 		fontFamily: 'monospace',
 		isMobileLandscape: false,
@@ -336,8 +336,11 @@ describe('MainPanel', () => {
 		slashCommandOpen: false,
 		slashCommands: [],
 		selectedSlashCommandIndex: 0,
-		previewFile: null,
+		// File tab system (replaced previewFile)
+		activeFileTabId: null as string | null,
+		activeFileTab: null as import('../../../renderer/types').FilePreviewTab | null,
 		markdownEditMode: false,
+		chatRawTextMode: false,
 		shortcuts: defaultShortcuts,
 		rightPanelOpen: true,
 		maxOutputLines: 1000,
@@ -366,8 +369,16 @@ describe('MainPanel', () => {
 		setCommandHistorySelectedIndex: vi.fn(),
 		setSlashCommandOpen: vi.fn(),
 		setSelectedSlashCommandIndex: vi.fn(),
-		setPreviewFile: vi.fn(),
+		// File tab handlers (replaced setPreviewFile)
+		onFileTabClose: vi.fn(),
+		onFileTabSelect: vi.fn(),
+		onOpenFileTab: vi.fn(),
+		onFileTabEditModeChange: vi.fn(),
+		onFileTabEditContentChange: vi.fn(),
+		onFileTabScrollPositionChange: vi.fn(),
+		onFileTabSearchQueryChange: vi.fn(),
 		setMarkdownEditMode: vi.fn(),
+		setChatRawTextMode: vi.fn(),
 		setAboutModalOpen: vi.fn(),
 		setRightPanelOpen: vi.fn(),
 		setGitLogOpen: vi.fn(),
@@ -635,98 +646,67 @@ describe('MainPanel', () => {
 		});
 	});
 
-	describe('File Preview mode', () => {
-		it('should render FilePreview when previewFile is set', () => {
-			const previewFile = { name: 'test.ts', content: 'test content', path: '/test/test.ts' };
-			render(<MainPanel {...defaultProps} previewFile={previewFile} />);
+	describe('File Preview mode (file tabs)', () => {
+		// Helper to create a FilePreviewTab for testing
+		const createFileTab = (overrides = {}) => ({
+			id: 'file-tab-1',
+			path: '/test/test.ts',
+			name: 'test',
+			extension: '.ts',
+			content: 'test content',
+			scrollTop: 0,
+			searchQuery: '',
+			editMode: false,
+			editContent: undefined,
+			createdAt: Date.now(),
+			lastModified: Date.now(),
+			...overrides,
+		});
+
+		it('should render FilePreview when activeFileTab is set', () => {
+			const activeFileTab = createFileTab();
+			render(
+				<MainPanel
+					{...defaultProps}
+					activeFileTabId="file-tab-1"
+					activeFileTab={activeFileTab}
+				/>
+			);
 
 			expect(screen.getByTestId('file-preview')).toBeInTheDocument();
 			expect(screen.getByText('File Preview: test.ts')).toBeInTheDocument();
 		});
 
-		it('should hide TabBar when file preview is open', () => {
-			const previewFile = { name: 'test.ts', content: 'test content', path: '/test/test.ts' };
-			render(<MainPanel {...defaultProps} previewFile={previewFile} />);
+		it('should show TabBar when file preview tab is active (tabs remain visible)', () => {
+			const activeFileTab = createFileTab();
+			render(
+				<MainPanel
+					{...defaultProps}
+					activeFileTabId="file-tab-1"
+					activeFileTab={activeFileTab}
+				/>
+			);
 
-			expect(screen.queryByTestId('tab-bar')).not.toBeInTheDocument();
+			// In the new tab system, TabBar remains visible when file tab is active
+			expect(screen.getByTestId('tab-bar')).toBeInTheDocument();
 		});
 
-		it('should call setPreviewFile(null) and setActiveFocus when closing preview', () => {
-			const setPreviewFile = vi.fn();
-			const setActiveFocus = vi.fn();
-			const previewFile = { name: 'test.ts', content: 'test content', path: '/test/test.ts' };
+		it('should call onFileTabClose when closing preview', () => {
+			const onFileTabClose = vi.fn();
+			const activeFileTab = createFileTab();
 
 			render(
 				<MainPanel
 					{...defaultProps}
-					previewFile={previewFile}
-					setPreviewFile={setPreviewFile}
-					setActiveFocus={setActiveFocus}
+					activeFileTabId="file-tab-1"
+					activeFileTab={activeFileTab}
+					onFileTabClose={onFileTabClose}
 				/>
 			);
 
 			fireEvent.click(screen.getByTestId('file-preview-close'));
 
-			expect(setPreviewFile).toHaveBeenCalledWith(null);
-			expect(setActiveFocus).toHaveBeenCalledWith('right');
-		});
-
-		it('should focus file tree container when closing preview (setTimeout callback)', async () => {
-			vi.useFakeTimers();
-			const setPreviewFile = vi.fn();
-			const setActiveFocus = vi.fn();
-			const previewFile = { name: 'test.ts', content: 'test content', path: '/test/test.ts' };
-			const fileTreeContainerRef = { current: { focus: vi.fn() } };
-
-			render(
-				<MainPanel
-					{...defaultProps}
-					previewFile={previewFile}
-					setPreviewFile={setPreviewFile}
-					setActiveFocus={setActiveFocus}
-					fileTreeContainerRef={fileTreeContainerRef as any}
-					fileTreeFilterOpen={false}
-				/>
-			);
-
-			fireEvent.click(screen.getByTestId('file-preview-close'));
-
-			// Run the setTimeout callback
-			await act(async () => {
-				vi.advanceTimersByTime(1);
-			});
-
-			expect(fileTreeContainerRef.current.focus).toHaveBeenCalled();
-			vi.useRealTimers();
-		});
-
-		it('should focus file tree filter input when closing preview with filter open', async () => {
-			vi.useFakeTimers();
-			const setPreviewFile = vi.fn();
-			const setActiveFocus = vi.fn();
-			const previewFile = { name: 'test.ts', content: 'test content', path: '/test/test.ts' };
-			const fileTreeFilterInputRef = { current: { focus: vi.fn() } };
-
-			render(
-				<MainPanel
-					{...defaultProps}
-					previewFile={previewFile}
-					setPreviewFile={setPreviewFile}
-					setActiveFocus={setActiveFocus}
-					fileTreeFilterInputRef={fileTreeFilterInputRef as any}
-					fileTreeFilterOpen={true}
-				/>
-			);
-
-			fireEvent.click(screen.getByTestId('file-preview-close'));
-
-			// Run the setTimeout callback
-			await act(async () => {
-				vi.advanceTimersByTime(1);
-			});
-
-			expect(fileTreeFilterInputRef.current.focus).toHaveBeenCalled();
-			vi.useRealTimers();
+			expect(onFileTabClose).toHaveBeenCalledWith('file-tab-1');
 		});
 	});
 
@@ -2990,10 +2970,22 @@ describe('MainPanel', () => {
 			expect(screen.getByText(longMessage)).toBeInTheDocument();
 		});
 
-		it('should still display error banner when previewFile is open', () => {
+		it('should still display error banner when file tab is active', () => {
 			// The error banner appears above file preview in the layout hierarchy
 			// This ensures users see critical errors even while previewing files
-			const previewFile = { name: 'test.ts', content: 'test content', path: '/test/test.ts' };
+			const activeFileTab = {
+				id: 'file-tab-1',
+				path: '/test/test.ts',
+				name: 'test',
+				extension: '.ts',
+				content: 'test content',
+				scrollTop: 0,
+				searchQuery: '',
+				editMode: false,
+				editContent: undefined,
+				createdAt: Date.now(),
+				lastModified: Date.now(),
+			};
 			const session = createSession({
 				inputMode: 'ai',
 				aiTabs: [
@@ -3008,7 +3000,14 @@ describe('MainPanel', () => {
 				activeTabId: 'tab-1',
 			});
 
-			render(<MainPanel {...defaultProps} activeSession={session} previewFile={previewFile} />);
+			render(
+				<MainPanel
+					{...defaultProps}
+					activeSession={session}
+					activeFileTabId="file-tab-1"
+					activeFileTab={activeFileTab}
+				/>
+			);
 
 			// Both error banner and file preview should be visible
 			expect(

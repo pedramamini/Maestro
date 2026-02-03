@@ -549,6 +549,29 @@ describe('wizardPrompts', () => {
 			expect(prompt).toContain('/specific/path');
 		});
 
+		it('should use default Auto Run folder path when not provided', () => {
+			const config: SystemPromptConfig = {
+				agentName: 'Test',
+				agentPath: '/Users/test/project',
+			};
+			const prompt = generateSystemPrompt(config);
+
+			// Should contain default Auto Run folder path: agentPath/Auto Run Docs
+			expect(prompt).toContain('/Users/test/project/Auto Run Docs');
+		});
+
+		it('should use custom Auto Run folder path when provided', () => {
+			const config: SystemPromptConfig = {
+				agentName: 'Test',
+				agentPath: '/Users/test/project',
+				autoRunFolderPath: '/Users/test/shared-autorun',
+			};
+			const prompt = generateSystemPrompt(config);
+
+			// Should contain the custom path, not the default
+			expect(prompt).toContain('/Users/test/shared-autorun');
+		});
+
 		it('should include example responses', () => {
 			const config: SystemPromptConfig = {
 				agentName: 'Test',

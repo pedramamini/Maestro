@@ -171,7 +171,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					undefined,
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -194,7 +194,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					undefined, // No input
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -220,7 +220,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					'add user authentication',
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -233,7 +233,7 @@ describe('Inline Wizard Integration Flow', () => {
 
 		it('stores previous UI state for later restoration', async () => {
 			const { result } = renderHook(() => useInlineWizard());
-			const previousUIState = { readOnlyMode: true, saveToHistory: false, showThinking: true };
+			const previousUIState = { readOnlyMode: true, saveToHistory: false, showThinking: 'on' };
 
 			await act(async () => {
 				await result.current.startWizard(
@@ -298,7 +298,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					undefined,
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -557,7 +557,7 @@ describe('Inline Wizard Integration Flow', () => {
 	describe('UI State Restoration', () => {
 		it('returns previous UI state when wizard ends', async () => {
 			const { result } = renderHook(() => useInlineWizard());
-			const previousUIState = { readOnlyMode: true, saveToHistory: false, showThinking: true };
+			const previousUIState = { readOnlyMode: true, saveToHistory: false, showThinking: 'on' };
 
 			// Mock no docs
 			mockMaestro.autorun.listDocs.mockResolvedValue({ success: true, files: [] });
@@ -595,7 +595,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					undefined,
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -635,7 +635,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					undefined,
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -794,7 +794,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					undefined,
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -856,7 +856,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					'add authentication',
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'
@@ -895,7 +895,7 @@ describe('Inline Wizard Integration Flow', () => {
 			mockMaestro.autorun.listDocs.mockResolvedValue({ success: true, files: [] });
 
 			const { result } = renderHook(() => useInlineWizard());
-			const previousUIState = { readOnlyMode: true, saveToHistory: false, showThinking: true };
+			const previousUIState = { readOnlyMode: true, saveToHistory: false, showThinking: 'on' };
 
 			// Step 1: Start wizard
 			await act(async () => {
@@ -960,7 +960,7 @@ describe('Inline Wizard Integration Flow', () => {
 			await act(async () => {
 				await result.current.startWizard(
 					'add user authentication and API endpoints',
-					{ readOnlyMode: false, saveToHistory: true, showThinking: true },
+					{ readOnlyMode: false, saveToHistory: true, showThinking: 'on' },
 					'/test/project',
 					'claude-code',
 					'TestProject'

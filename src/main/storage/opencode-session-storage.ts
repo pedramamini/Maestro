@@ -23,6 +23,7 @@ import os from 'os';
 import fs from 'fs/promises';
 import { createHash } from 'crypto';
 import { logger } from '../utils/logger';
+import { readFileRemote, readDirRemote, statRemote } from '../utils/remote-fs';
 import type {
 	AgentSessionStorage,
 	AgentSessionInfo,
@@ -34,7 +35,7 @@ import type {
 	SessionReadOptions,
 	SessionMessage,
 } from '../agents';
-import type { ToolType } from '../../shared/types';
+import type { ToolType, SshRemoteConfig } from '../../shared/types';
 
 const LOG_CONTEXT = '[OpenCodeSessionStorage]';
 
@@ -166,6 +167,44 @@ async function listJsonFiles(dirPath: string): Promise<string[]> {
 }
 
 /**
+ * Read a JSON file from a remote host via SSH
+ */
+async function readJsonFileRemote<T>(
+	filePath: string,
+	sshConfig: SshRemoteConfig
+): Promise<T | null> {
+	try {
+		const result = await readFileRemote(filePath, sshConfig);
+		if (!result.success || !result.data) {
+			return null;
+		}
+		return JSON.parse(result.data) as T;
+	} catch {
+		return null;
+	}
+}
+
+/**
+ * List all JSON files in a remote directory via SSH
+ */
+async function listJsonFilesRemote(
+	dirPath: string,
+	sshConfig: SshRemoteConfig
+): Promise<string[]> {
+	try {
+		const result = await readDirRemote(dirPath, sshConfig);
+		if (!result.success || !result.data) {
+			return [];
+		}
+		return result.data
+			.filter((entry) => !entry.isDirectory && entry.name.endsWith('.json'))
+			.map((entry) => entry.name);
+	} catch {
+		return [];
+	}
+}
+
+/**
  * OpenCode Session Storage Implementation
  *
  * Provides access to OpenCode's local session storage at ~/.local/share/opencode/storage/
@@ -174,24 +213,53 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 	readonly agentId: ToolType = 'opencode';
 
 	/**
-	 * Get the session directory for a project
+	 * Get the session directory for a project (local)
 	 */
 	private getSessionDir(projectId: string): string {
 		return path.join(OPENCODE_STORAGE_DIR, 'session', projectId);
 	}
 
 	/**
-	 * Get the message directory for a session
+	 * Get the message directory for a session (local)
 	 */
 	private getMessageDir(sessionId: string): string {
 		return path.join(OPENCODE_STORAGE_DIR, 'message', sessionId);
 	}
 
 	/**
-	 * Get the part directory for a message
+	 * Get the part directory for a message (local)
 	 */
 	private getPartDir(messageId: string): string {
 		return path.join(OPENCODE_STORAGE_DIR, 'part', messageId);
+	}
+
+	/**
+	 * Get the OpenCode storage base directory (remote)
+	 * On remote Linux hosts, ~ expands to the user's home directory
+	 */
+	private getRemoteStorageDir(): string {
+		return '~/.local/share/opencode/storage';
+	}
+
+	/**
+	 * Get the session directory for a project (remote)
+	 */
+	private getRemoteSessionDir(projectId: string): string {
+		return `${this.getRemoteStorageDir()}/session/${projectId}`;
+	}
+
+	/**
+	 * Get the message directory for a session (remote)
+	 */
+	private getRemoteMessageDir(sessionId: string): string {
+		return `${this.getRemoteStorageDir()}/message/${sessionId}`;
+	}
+
+	/**
+	 * Get the part directory for a message (remote)
+	 */
+	private getRemotePartDir(messageId: string): string {
+		return `${this.getRemoteStorageDir()}/part/${messageId}`;
 	}
 
 	/**
@@ -266,6 +334,81 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 	}
 
 	/**
+	 * Find the project ID for a given path by checking existing projects (remote via SSH)
+	 */
+	private async findProjectIdRemote(
+		projectPath: string,
+		sshConfig: SshRemoteConfig
+	): Promise<string | null> {
+		const projectDir = `${this.getRemoteStorageDir()}/project`;
+
+		const projectFiles = await listJsonFilesRemote(projectDir, sshConfig);
+		if (projectFiles.length === 0) {
+			logger.info(`OpenCode project directory not found on remote: ${projectDir}`, LOG_CONTEXT);
+			return null;
+		}
+
+		// Normalize project path for comparison (remove trailing slashes)
+		// Note: On remote, we don't resolve paths since the remote may have different filesystem
+		const normalizedPath = projectPath.replace(/\/+$/, '');
+		logger.info(
+			`Looking for OpenCode project for path on remote: ${normalizedPath}`,
+			LOG_CONTEXT
+		);
+
+		for (const file of projectFiles) {
+			// Skip global.json - we'll use it as fallback
+			if (file === 'global.json') continue;
+
+			const projectData = await readJsonFileRemote<OpenCodeProject>(
+				`${projectDir}/${file}`,
+				sshConfig
+			);
+			if (!projectData?.worktree) continue;
+
+			// Normalize stored path (remove trailing slashes)
+			const storedPath = projectData.worktree.replace(/\/+$/, '');
+
+			// Exact match
+			if (storedPath === normalizedPath) {
+				logger.info(
+					`Found OpenCode project on remote: ${projectData.id} for path: ${normalizedPath}`,
+					LOG_CONTEXT
+				);
+				return projectData.id;
+			}
+
+			// Check if one is a subdirectory of the other (handles worktree subdirs)
+			if (
+				normalizedPath.startsWith(storedPath + '/') ||
+				storedPath.startsWith(normalizedPath + '/')
+			) {
+				logger.info(
+					`Found OpenCode project (subdirectory match) on remote: ${projectData.id} for path: ${normalizedPath}`,
+					LOG_CONTEXT
+				);
+				return projectData.id;
+			}
+		}
+
+		// Also check using hash-based ID (OpenCode may use SHA1 of path)
+		const hashedId = hashProjectPath(projectPath);
+		const hashedFile = `${projectDir}/${hashedId}.json`;
+		const hashedResult = await statRemote(hashedFile, sshConfig);
+		if (hashedResult.success) {
+			logger.info(`Found OpenCode project by hash on remote: ${hashedId}`, LOG_CONTEXT);
+			return hashedId;
+		}
+
+		// Fall back to 'global' project
+		logger.info(
+			`No dedicated OpenCode project found for path on remote: ${normalizedPath}, will check global project`,
+			LOG_CONTEXT
+		);
+		return 'global';
+	}
+
+	/**
 	 * Check if a session's directory matches the requested project path
 	 * Used for filtering global project sessions by their working directory
 	 */
@@ -274,6 +417,29 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 
 		const normalizedSessionDir = path.resolve(sessionDirectory).replace(/\/+$/, '');
 		const normalizedProjectPath = path.resolve(projectPath).replace(/\/+$/, '');
+
+		// Exact match
+		if (normalizedSessionDir === normalizedProjectPath) return true;
+
+		// Session is in a subdirectory of the project
+		if (normalizedSessionDir.startsWith(normalizedProjectPath + '/')) return true;
+
+		return false;
+	}
+
+	/**
+	 * Check if a session's directory matches the requested project path (remote version)
+	 * Used for filtering global project sessions by their working directory
+	 * Note: On remote, we don't use path.resolve since we're operating on remote paths
+	 */
+	private sessionMatchesPathRemote(
+		sessionDirectory: string | undefined,
+		projectPath: string
+	): boolean {
+		if (!sessionDirectory) return false;
+
+		const normalizedSessionDir = sessionDirectory.replace(/\/+$/, '');
+		const normalizedProjectPath = projectPath.replace(/\/+$/, '');
 
 		// Exact match
 		if (normalizedSessionDir === normalizedProjectPath) return true;
@@ -362,6 +528,92 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 	}
 
 	/**
+	 * Load all messages for a session (remote via SSH)
+	 */
+	private async loadSessionMessagesRemote(
+		sessionId: string,
+		sshConfig: SshRemoteConfig
+	): Promise<{
+		messages: OpenCodeMessage[];
+		parts: Map<string, OpenCodePart[]>;
+		totalInputTokens: number;
+		totalOutputTokens: number;
+		totalCacheReadTokens: number;
+		totalCacheWriteTokens: number;
+		totalCost: number;
+	}> {
+		const messageDir = this.getRemoteMessageDir(sessionId);
+		const messages: OpenCodeMessage[] = [];
+		const parts = new Map<string, OpenCodePart[]>();
+		let totalInputTokens = 0;
+		let totalOutputTokens = 0;
+		let totalCacheReadTokens = 0;
+		let totalCacheWriteTokens = 0;
+		let totalCost = 0;
+
+		try {
+			const messageFiles = await listJsonFilesRemote(messageDir, sshConfig);
+
+			for (const file of messageFiles) {
+				const msg = await readJsonFileRemote<OpenCodeMessage>(
+					`${messageDir}/${file}`,
+					sshConfig
+				);
+				if (msg) {
+					messages.push(msg);
+
+					// Aggregate token stats
+					if (msg.tokens) {
+						totalInputTokens += msg.tokens.input || 0;
+						totalOutputTokens += msg.tokens.output || 0;
+						totalCacheReadTokens += msg.tokens.cache?.read || 0;
+						totalCacheWriteTokens += msg.tokens.cache?.write || 0;
+					}
+					if (msg.cost) {
+						totalCost += msg.cost;
+					}
+
+					// Load parts for this message
+					const partDir = this.getRemotePartDir(msg.id);
+					const partFiles = await listJsonFilesRemote(partDir, sshConfig);
+					const messageParts: OpenCodePart[] = [];
+
+					for (const partFile of partFiles) {
+						const part = await readJsonFileRemote<OpenCodePart>(
+							`${partDir}/${partFile}`,
+							sshConfig
+						);
+						if (part) {
+							messageParts.push(part);
+						}
+					}
+
+					parts.set(msg.id, messageParts);
+				}
+			}
+		} catch {
+			// Directory may not exist
+		}
+
+		// Sort messages by creation time (OpenCode uses time.created as Unix timestamp in ms)
+		messages.sort((a, b) => {
+			const aTime = a.time?.created || 0;
+			const bTime = b.time?.created || 0;
+			return aTime - bTime;
+		});
+
+		return {
+			messages,
+			parts,
+			totalInputTokens,
+			totalOutputTokens,
+			totalCacheReadTokens,
+			totalCacheWriteTokens,
+			totalCost,
+		};
+	}
+
+	/**
 	 * Extract text content from message parts
 	 */
 	private extractTextFromParts(parts: OpenCodePart[]): string {
@@ -369,7 +621,15 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 		return textParts.join(' ').trim();
 	}
 
-	async listSessions(projectPath: string): Promise<AgentSessionInfo[]> {
+	async listSessions(
+		projectPath: string,
+		sshConfig?: SshRemoteConfig
+	): Promise<AgentSessionInfo[]> {
+		// Use SSH remote access if config provided
+		if (sshConfig) {
+			return this.listSessionsRemote(projectPath, sshConfig);
+		}
+
 		const projectId = await this.findProjectId(projectPath);
 
 		if (!projectId) {
@@ -489,11 +749,143 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 		return sessions;
 	}
 
+	/**
+	 * List sessions from remote host via SSH
+	 */
+	private async listSessionsRemote(
+		projectPath: string,
+		sshConfig: SshRemoteConfig
+	): Promise<AgentSessionInfo[]> {
+		const projectId = await this.findProjectIdRemote(projectPath, sshConfig);
+
+		if (!projectId) {
+			logger.info(`No OpenCode project found for path on remote: ${projectPath}`, LOG_CONTEXT);
+			return [];
+		}
+
+		// When using the 'global' project, we need to filter sessions by their directory field
+		const isGlobalProject = projectId === 'global';
+
+		const sessionDir = this.getRemoteSessionDir(projectId);
+
+		const sessionFiles = await listJsonFilesRemote(sessionDir, sshConfig);
+		if (sessionFiles.length === 0) {
+			logger.info(
+				`No OpenCode sessions directory for project on remote: ${projectPath}`,
+				LOG_CONTEXT
+			);
+			return [];
+		}
+
+		const sessions: AgentSessionInfo[] = [];
+
+		for (const file of sessionFiles) {
+			const sessionData = await readJsonFileRemote<OpenCodeSession>(
+				`${sessionDir}/${file}`,
+				sshConfig
+			);
+
+			if (!sessionData) continue;
+
+			// For global project, filter by the session's directory field
+			if (
+				isGlobalProject &&
+				!this.sessionMatchesPathRemote(sessionData.directory, projectPath)
+			) {
+				continue;
+			}
+
+			// Load messages to get first message and stats
+			const {
+				messages,
+				parts,
+				totalInputTokens,
+				totalOutputTokens,
+				totalCacheReadTokens,
+				totalCacheWriteTokens,
+				totalCost,
+			} = await this.loadSessionMessagesRemote(sessionData.id, sshConfig);
+
+			// Get preview message - prefer first assistant response, fall back to user message or title
+			let firstAssistantMessage = '';
+			let firstUserMessage = '';
+
+			for (const msg of messages) {
+				const msgParts = parts.get(msg.id) || [];
+				const textContent = this.extractTextFromParts(msgParts);
+
+				if (!firstUserMessage && msg.role === 'user' && textContent.trim()) {
+					firstUserMessage = textContent;
+				}
+				if (!firstAssistantMessage && msg.role === 'assistant' && textContent.trim()) {
+					firstAssistantMessage = textContent;
+					break; // Found first assistant response, stop scanning
+				}
+			}
+
+			// Priority: assistant response > user message > title
+			const previewMessage = firstAssistantMessage || firstUserMessage || sessionData.title || '';
+
+			// Calculate duration using time.created (Unix timestamp in ms)
+			let durationSeconds = 0;
+			if (messages.length >= 2) {
+				const firstMsg = messages[0];
+				const lastMsg = messages[messages.length - 1];
+				const startTime = firstMsg.time?.created || 0;
+				const endTime = lastMsg.time?.created || 0;
+				if (startTime && endTime) {
+					durationSeconds = Math.max(0, Math.floor((endTime - startTime) / 1000));
+				}
+			}
+
+			// Get file stats for size via SSH
+			let sizeBytes = 0;
+			const statResult = await statRemote(`${sessionDir}/${file}`, sshConfig);
+			if (statResult.success && statResult.data) {
+				sizeBytes = statResult.data.size;
+			}
+
+			// Convert OpenCode timestamps (Unix ms) to ISO strings
+			const createdAt = sessionData.time?.created
+				? new Date(sessionData.time.created).toISOString()
+				: new Date().toISOString();
+			const updatedAt = sessionData.time?.updated
+				? new Date(sessionData.time.updated).toISOString()
+				: createdAt;
+
+			sessions.push({
+				sessionId: sessionData.id,
+				projectPath,
+				timestamp: createdAt,
+				modifiedAt: updatedAt,
+				firstMessage: previewMessage.slice(0, 200),
+				messageCount: messages.filter((m) => m.role === 'user' || m.role === 'assistant').length,
+				sizeBytes,
+				costUsd: totalCost,
+				inputTokens: totalInputTokens,
+				outputTokens: totalOutputTokens,
+				cacheReadTokens: totalCacheReadTokens,
+				cacheCreationTokens: totalCacheWriteTokens,
+				durationSeconds,
+			});
+		}
+
+		// Sort by modified date (newest first)
+		sessions.sort((a, b) => new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime());
+
+		logger.info(
+			`Found ${sessions.length} OpenCode sessions for project: ${projectPath} (remote via SSH)`,
+			LOG_CONTEXT
+		);
+		return sessions;
+	}
+
 	async listSessionsPaginated(
 		projectPath: string,
-		options?: SessionListOptions
+		options?: SessionListOptions,
+		sshConfig?: SshRemoteConfig
 	): Promise<PaginatedSessionsResult> {
-		const allSessions = await this.listSessions(projectPath);
+		const allSessions = await this.listSessions(projectPath, sshConfig);
 		const { cursor, limit = 100 } = options || {};
 
 		let startIndex = 0;
@@ -517,9 +909,12 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 	async readSessionMessages(
 		_projectPath: string,
 		sessionId: string,
-		options?: SessionReadOptions
+		options?: SessionReadOptions,
+		sshConfig?: SshRemoteConfig
 	): Promise<SessionMessagesResult> {
-		const { messages, parts } = await this.loadSessionMessages(sessionId);
+		const { messages, parts } = sshConfig
+			? await this.loadSessionMessagesRemote(sessionId, sshConfig)
+			: await this.loadSessionMessages(sessionId);
 
 		const sessionMessages: SessionMessage[] = [];
 
@@ -566,18 +961,21 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 	async searchSessions(
 		projectPath: string,
 		query: string,
-		searchMode: SessionSearchMode
+		searchMode: SessionSearchMode,
+		sshConfig?: SshRemoteConfig
 	): Promise<SessionSearchResult[]> {
 		if (!query.trim()) {
 			return [];
 		}
 
-		const sessions = await this.listSessions(projectPath);
+		const sessions = await this.listSessions(projectPath, sshConfig);
 		const searchLower = query.toLowerCase();
 		const results: SessionSearchResult[] = [];
 
 		for (const session of sessions) {
-			const { messages, parts } = await this.loadSessionMessages(session.sessionId);
+			const { messages, parts } = sshConfig
+				? await this.loadSessionMessagesRemote(session.sessionId, sshConfig)
+				: await this.loadSessionMessages(session.sessionId);
 
 			let titleMatch = false;
 			let userMatches = 0;
@@ -659,9 +1057,16 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 		return results;
 	}
 
-	getSessionPath(_projectPath: string, sessionId: string): string | null {
+	getSessionPath(
+		_projectPath: string,
+		sessionId: string,
+		sshConfig?: SshRemoteConfig
+	): string | null {
 		// OpenCode uses a more complex structure with multiple directories
 		// Return the message directory as the "session path"
+		if (sshConfig) {
+			return this.getRemoteMessageDir(sessionId);
+		}
 		return this.getMessageDir(sessionId);
 	}
 
@@ -669,8 +1074,15 @@ export class OpenCodeSessionStorage implements AgentSessionStorage {
 		_projectPath: string,
 		sessionId: string,
 		userMessageUuid: string,
-		fallbackContent?: string
+		fallbackContent?: string,
+		sshConfig?: SshRemoteConfig
 	): Promise<{ success: boolean; error?: string; linesRemoved?: number }> {
+		// Delete operations on remote sessions are not supported
+		if (sshConfig) {
+			logger.warn('Delete message pair not supported for SSH remote sessions', LOG_CONTEXT);
+			return { success: false, error: 'Delete not supported for remote sessions' };
+		}
+
 		try {
 			// Load all messages for the session
 			const { messages, parts } = await this.loadSessionMessages(sessionId);

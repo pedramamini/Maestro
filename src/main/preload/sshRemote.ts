@@ -21,6 +21,10 @@ export interface SshRemoteConfig {
 	privateKeyPath: string;
 	remoteEnv?: Record<string, string>;
 	enabled: boolean;
+	/** Whether to use settings from ~/.ssh/config for this host */
+	useSshConfig?: boolean;
+	/** Original SSH config Host pattern if imported from ~/.ssh/config */
+	sshConfigHost?: string;
 }
 
 /**
@@ -49,6 +53,8 @@ export function createSshRemoteApi() {
 			privateKeyPath?: string;
 			remoteEnv?: Record<string, string>;
 			enabled?: boolean;
+			useSshConfig?: boolean;
+			sshConfigHost?: string;
 		}) => ipcRenderer.invoke('ssh-remote:saveConfig', config),
 
 		deleteConfig: (id: string) => ipcRenderer.invoke('ssh-remote:deleteConfig', id),

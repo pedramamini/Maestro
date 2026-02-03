@@ -10,6 +10,7 @@
 import type { UpdateInfo, ProgressInfo, AppUpdater } from 'electron-updater';
 import { BrowserWindow, ipcMain } from 'electron';
 import { logger } from './utils/logger';
+import { isWebContentsAvailable } from './utils/safe-send';
 
 export interface UpdateStatus {
 	status:
@@ -99,7 +100,7 @@ export function initAutoUpdater(window: BrowserWindow): void {
  * Send current status to renderer
  */
 function sendStatusToRenderer(): void {
-	if (mainWindow && !mainWindow.isDestroyed()) {
+	if (isWebContentsAvailable(mainWindow)) {
 		mainWindow.webContents.send('updates:status', currentStatus);
 	}
 }

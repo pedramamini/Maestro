@@ -24,10 +24,16 @@ function getConfigDir(): string {
 	if (platform === 'darwin') {
 		return path.join(home, 'Library', 'Application Support', 'Maestro');
 	} else if (platform === 'win32') {
-		return path.join(process.env.APPDATA || path.join(home, 'AppData', 'Roaming'), 'Maestro');
+		return path.join(
+			process.env.APPDATA || path.join(home, 'AppData', 'Roaming'),
+			'Maestro'
+		);
 	} else {
 		// Linux and others
-		return path.join(process.env.XDG_CONFIG_HOME || path.join(home, '.config'), 'Maestro');
+		return path.join(
+			process.env.XDG_CONFIG_HOME || path.join(home, '.config'),
+			'Maestro'
+		);
 	}
 }
 
@@ -431,7 +437,7 @@ export function addHistoryEntry(entry: HistoryEntry): void {
 			fs.writeFileSync(filePath, JSON.stringify(data, null, 2), 'utf-8');
 		} else {
 			// Use legacy format
-			const filePath = path.join(getConfigDir(), 'maestro-history.json');
+			const filePath = path.posix.join(getConfigDir(), 'maestro-history.json');
 			const data = readStoreFile<HistoryStore>('maestro-history.json') || { entries: [] };
 
 			data.entries.unshift(entry); // Add to beginning (most recent first)

@@ -12,6 +12,19 @@
  *
  * This service abstracts the complexity of managing temporary sessions
  * and provides progress callbacks for UI updates during the operation.
+ *
+ * ╔══════════════════════════════════════════════════════════════════════════════╗
+ * ║ CONTEXT CALCULATION SYNC                                                      ║
+ * ╠══════════════════════════════════════════════════════════════════════════════╣
+ * ║ The canSummarize() method uses session.contextUsage which is calculated in   ║
+ * ║ App.tsx using calculateContextTokens() from shared/contextUsage.ts.          ║
+ * ║                                                                               ║
+ * ║ IMPORTANT: If the context % shown in UI doesn't match what canSummarize()    ║
+ * ║ sees, users will see "Cannot compact" errors despite high UI usage.          ║
+ * ║                                                                               ║
+ * ║ The fallback checks (MIN_TOKENS_FOR_SUMMARIZATION, MIN_LOG_ENTRIES) help     ║
+ * ║ handle cases where the context gauge is inaccurate.                          ║
+ * ╚══════════════════════════════════════════════════════════════════════════════╝
  */
 
 import type { ToolType } from '../../shared/types';
@@ -162,8 +175,15 @@ export class ContextSummarizationService {
 
 			const summarizedText = await window.maestro.context.groomContext(
 				request.projectRoot,
-				this.config.defaultAgentType,
-				prompt
+				request.agentType,
+				prompt,
+				// Pass SSH and custom config for remote execution support
+				{
+					sshRemoteConfig: request.sshRemoteConfig,
+					customPath: request.customPath,
+					customArgs: request.customArgs,
+					customEnvVars: request.customEnvVars,
+				}
 			);
 			console.log('[ContextSummarizer] Received response, length:', summarizedText?.length || 0);
 
@@ -225,8 +245,15 @@ export class ContextSummarizationService {
 			// Use the new single-call groomContext API (spawns batch process with prompt)
 			const summary = await window.maestro.context.groomContext(
 				request.projectRoot,
-				this.config.defaultAgentType,
-				prompt
+				request.agentType,
+				prompt,
+				// Pass SSH and custom config for remote execution support
+				{
+					sshRemoteConfig: request.sshRemoteConfig,
+					customPath: request.customPath,
+					customArgs: request.customArgs,
+					customEnvVars: request.customEnvVars,
+				}
 			);
 			chunkSummaries.push(summary);
 		}
@@ -258,8 +285,15 @@ export class ContextSummarizationService {
 
 			const consolidated = await window.maestro.context.groomContext(
 				request.projectRoot,
-				this.config.defaultAgentType,
-				consolidationPrompt
+				request.agentType,
+				consolidationPrompt,
+				// Pass SSH and custom config for remote execution support
+				{
+					sshRemoteConfig: request.sshRemoteConfig,
+					customPath: request.customPath,
+					customArgs: request.customArgs,
+					customEnvVars: request.customEnvVars,
+				}
 			);
 
 			const newTokens = estimateTextTokenCount(consolidated);
@@ -378,6 +412,13 @@ Please provide a comprehensive but compacted summary of the above conversation, 
 	 * - The agent doesn't report context usage percentage
 	 * - The context gauge resets to 0 when the context fills
 	 * - The conversation has many short messages
+	 *
+	 * SYNC: The contextUsage parameter comes from session.contextUsage which is
+	 * calculated in App.tsx using calculateContextTokens() from shared/contextUsage.ts.
+	 * If the UI shows different values than what's stored, this check may fail
+	 * unexpectedly. The fallback checks help mitigate this.
+	 *
+	 * @see src/shared/contextUsage.ts for the canonical context calculation
 	 *
 	 * @param contextUsage - The current context usage percentage (0-100)
 	 * @param logs - Optional array of log entries to estimate tokens from

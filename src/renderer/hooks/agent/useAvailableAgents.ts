@@ -64,7 +64,6 @@ export interface UseAvailableAgentsReturn {
 function getAgentIcon(agentId: string): string {
 	switch (agentId) {
 		case 'claude-code':
-		case 'claude':
 			return '🤖';
 		case 'codex':
 			return '◇';
@@ -74,8 +73,8 @@ function getAgentIcon(agentId: string): string {
 			return '⬡';
 		case 'opencode':
 			return '📟';
-		case 'aider':
-			return '🛠️';
+		case 'factory-droid':
+			return '🏭';
 		default:
 			return '🔧';
 	}

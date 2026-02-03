@@ -18,13 +18,21 @@ export type {
 	BatchDocumentEntry,
 	PlaybookDocumentEntry,
 	Playbook,
+	ThinkingMode,
 } from '../../shared/types';
+
+// Re-export Symphony types for session metadata
+export type { SymphonySessionMetadata } from '../../shared/symphony-types';
+// Import Symphony types for use in this file
+import type { SymphonySessionMetadata } from '../../shared/symphony-types';
+
 // Import for extension in this file
 import type {
 	WorktreeConfig as BaseWorktreeConfig,
 	BatchDocumentEntry,
 	UsageStats,
 	ToolType,
+	ThinkingMode,
 } from '../../shared/types';
 
 // Re-export group chat types from shared location
@@ -73,7 +81,7 @@ export interface WizardMessage {
 export interface WizardPreviousUIState {
 	readOnlyMode: boolean;
 	saveToHistory: boolean;
-	showThinking: boolean;
+	showThinking: ThinkingMode;
 }
 
 /**
@@ -206,6 +214,7 @@ export interface QueuedItem {
 	images?: string[]; // Attached images (base64)
 	// For commands
 	command?: string; // Slash command (e.g., '/commit')
+	commandArgs?: string; // Arguments passed after the command (e.g., 'Blah blah' from '/speckit.plan Blah blah')
 	commandDescription?: string; // Command description for display
 	// Display metadata
 	tabName?: string; // Tab name at time of queuing (for display)
@@ -413,7 +422,7 @@ export interface AITab {
 	readOnlyMode?: boolean; // When true, agent operates in plan/read-only mode
 	saveToHistory?: boolean; // When true, synopsis is requested after each completion and saved to History
 	lastSynopsisTime?: number; // Timestamp of last synopsis generation (for time-window context in prompts)
-	showThinking?: boolean; // When true, show streaming thinking/reasoning content in real-time
+	showThinking?: ThinkingMode; // Controls thinking display: 'off' | 'on' (temporary) | 'sticky' (persistent)
 	awaitingSessionId?: boolean; // True when this tab sent a message and is awaiting its session ID
 	thinkingStartTime?: number; // Timestamp when tab started thinking (for elapsed time display)
 	scrollTop?: number; // Saved scroll position for this tab's output view
@@ -422,15 +431,76 @@ export interface AITab {
 	pendingMergedContext?: string; // Context from merge that needs to be sent with next message
 	autoSendOnActivate?: boolean; // When true, automatically send inputValue when tab becomes active
 	wizardState?: SessionWizardState; // Per-tab inline wizard state for /wizard command
+	isGeneratingName?: boolean; // True while automatic tab naming is in progress
 }
 
 // Closed tab entry for undo functionality (Cmd+Shift+T)
 // Stores tab data with original position for restoration
+// This is the legacy interface for AI tabs only - kept for backwards compatibility
 export interface ClosedTab {
 	tab: AITab; // The closed tab data
 	index: number; // Original position in the tab array
 	closedAt: number; // Timestamp when closed
 }
+
+/**
+ * File Preview Tab for in-tab file viewing.
+ * Designed to coexist with AITab and future terminal tabs in the unified tab system.
+ * File tabs persist across session switches and app restarts.
+ */
+/**
+ * Navigation history entry for file preview breadcrumb navigation.
+ * Tracks the files visited within a single file preview tab.
+ */
+export interface FilePreviewHistoryEntry {
+	path: string; // Full file path
+	name: string; // Filename for display
+	scrollTop?: number; // Optional scroll position to restore
+}
+
+export interface FilePreviewTab {
+	id: string; // Unique tab ID (UUID)
+	path: string; // Full file path
+	name: string; // Filename without extension (displayed as tab name)
+	extension: string; // File extension with dot (e.g., '.md', '.ts') - shown as badge
+	content: string; // File content (stored directly for simplicity - file previews are typically small)
+	scrollTop: number; // Saved scroll position
+	searchQuery: string; // Preserved search query
+	editMode: boolean; // Whether tab was in edit mode
+	editContent: string | undefined; // Unsaved edit content (undefined if no pending changes)
+	createdAt: number; // Timestamp for ordering
+	lastModified: number; // Timestamp (ms) when file was last modified on disk (for refresh detection)
+	// SSH remote support
+	sshRemoteId?: string; // SSH remote ID for re-fetching content if needed
+	isLoading?: boolean; // True while content is being loaded (for SSH remote files)
+	// Navigation history for breadcrumb navigation (per-tab)
+	navigationHistory?: FilePreviewHistoryEntry[]; // Stack of visited files
+	navigationIndex?: number; // Current position in history (-1 or undefined = at end)
+}
+
+/**
+ * Reference to any tab in the unified tab system.
+ * Used for unified tab ordering across different tab types.
+ */
+export type UnifiedTabRef = { type: 'ai' | 'file'; id: string };
+
+/**
+ * Unified tab entry for rendering in TabBar.
+ * Discriminated union that includes the full tab data for each type.
+ * Used by TabBar to render both AI and file tabs in a single list.
+ */
+export type UnifiedTab =
+	| { type: 'ai'; id: string; data: AITab }
+	| { type: 'file'; id: string; data: FilePreviewTab };
+
+/**
+ * Unified closed tab entry for undo functionality (Cmd+Shift+T).
+ * Can hold either an AITab or FilePreviewTab with type discrimination.
+ * Uses unifiedIndex for restoring position in the unified tab order.
+ */
+export type ClosedTabEntry =
+	| { type: 'ai'; tab: AITab; unifiedIndex: number; closedAt: number }
+	| { type: 'file'; tab: FilePreviewTab; unifiedIndex: number; closedAt: number };
 
 export interface Session {
 	id: string;
@@ -448,8 +518,8 @@ export interface Session {
 	// Usage statistics from AI responses
 	usageStats?: UsageStats;
 	inputMode: 'terminal' | 'ai';
-	// AI process PID (for non-batch agents like Aider)
-	// For Claude batch mode, this is 0 since processes spawn per-message
+	// AI process PID (for agents with persistent processes)
+	// For batch mode agents, this is 0 since processes spawn per-message
 	aiPid: number;
 	// Terminal uses runCommand() which spawns fresh shells per command
 	// This field is kept for backwards compatibility but is always 0
@@ -549,6 +619,18 @@ export interface Session {
 	activeTabId: string;
 	// Stack of recently closed tabs for undo (max 25, runtime-only, not persisted)
 	closedTabHistory: ClosedTab[];
+
+	// File Preview Tabs - in-tab file viewing (coexists with AI tabs and future terminal tabs)
+	// Tabs are interspersed visually but stored separately for type safety
+	filePreviewTabs: FilePreviewTab[];
+	// Currently active file tab ID (null if an AI tab is active)
+	activeFileTabId: string | null;
+	// Unified tab ordering - determines visual order of all tabs (AI and file)
+	unifiedTabOrder: UnifiedTabRef[];
+	// Stack of recently closed tabs (both AI and file) for undo (max 25, runtime-only, not persisted)
+	// Used by Cmd+Shift+T to restore any recently closed tab
+	unifiedClosedTabHistory: ClosedTabEntry[];
+
 	// Saved scroll position for terminal/shell output view
 	terminalScrollTop?: number;
 	// Draft input for terminal mode (persisted across session switches)
@@ -620,6 +702,9 @@ export interface Session {
 	// SSH connection status - runtime only, not persisted
 	// Set when background SSH operations fail (e.g., git info fetch on startup)
 	sshConnectionFailed?: boolean;
+
+	// Symphony contribution metadata (only set for Symphony sessions)
+	symphonyMetadata?: SymphonySessionMetadata;
 }
 
 export interface AgentConfigOption {
@@ -696,6 +781,9 @@ export interface ProcessConfig {
 		remoteId: string | null;
 		workingDirOverride?: string;
 	};
+	// Windows command line length workaround
+	sendPromptViaStdin?: boolean; // If true, send the prompt via stdin as JSON instead of command line
+	sendPromptViaStdinRaw?: boolean; // If true, send the prompt via stdin as raw text instead of command line
 }
 
 // Directory entry from fs:readDir

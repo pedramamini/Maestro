@@ -15,6 +15,28 @@ import { ProcessManager } from '../process-manager';
 import { logger } from './logger';
 
 /**
+ * Serialize an error object for logging.
+ * Error objects don't serialize well with JSON.stringify (they produce {}).
+ * This function extracts the useful properties for logging.
+ */
+function serializeError(error: unknown): Record<string, unknown> {
+	if (error instanceof Error) {
+		return {
+			name: error.name,
+			message: error.message,
+			stack: error.stack,
+			// Include any additional properties that might be on the error
+			...(error as unknown as Record<string, unknown>),
+		};
+	}
+	// For non-Error objects, return as-is if it's an object, otherwise wrap it
+	if (typeof error === 'object' && error !== null) {
+		return error as Record<string, unknown>;
+	}
+	return { value: String(error) };
+}
+
+/**
  * Standard IPC response format for operations that return data
  */
 export interface IpcSuccessResponse<T = unknown> {
@@ -87,7 +109,7 @@ export function createHandler<TArgs extends unknown[], TResult extends Record<st
 
 			return { success: true, ...result };
 		} catch (error) {
-			logger.error(`${operation} error`, context, error);
+			logger.error(`${operation} error`, context, serializeError(error));
 			return { success: false, error: String(error) };
 		}
 	};
@@ -127,7 +149,7 @@ export function createDataHandler<TArgs extends unknown[], TData>(
 
 			return { success: true, data };
 		} catch (error) {
-			logger.error(`${operation} error`, context, error);
+			logger.error(`${operation} error`, context, serializeError(error));
 			return { success: false, error: String(error) };
 		}
 	};
@@ -161,7 +183,7 @@ export function withErrorLogging<TArgs extends unknown[], TResult>(
 		try {
 			return await handler(...args);
 		} catch (error) {
-			logger.error(`${operation} error`, context, error);
+			logger.error(`${operation} error`, context, serializeError(error));
 			throw error;
 		}
 	};
@@ -198,7 +220,7 @@ export function withIpcErrorLogging<TArgs extends unknown[], TResult>(
 		try {
 			return await handler(...args);
 		} catch (error) {
-			logger.error(`${operation} error`, context, error);
+			logger.error(`${operation} error`, context, serializeError(error));
 			throw error;
 		}
 	};
@@ -242,7 +264,7 @@ export function createIpcHandler<TArgs extends unknown[], TResult extends Record
 
 			return { success: true, ...result };
 		} catch (error) {
-			logger.error(`${operation} error`, context, error);
+			logger.error(`${operation} error`, context, serializeError(error));
 			return { success: false, error: String(error) };
 		}
 	};
@@ -272,7 +294,7 @@ export function createIpcDataHandler<TArgs extends unknown[], TData>(
 
 			return { success: true, data };
 		} catch (error) {
-			logger.error(`${operation} error`, context, error);
+			logger.error(`${operation} error`, context, serializeError(error));
 			return { success: false, error: String(error) };
 		}
 	};

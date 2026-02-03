@@ -233,6 +233,10 @@ useEffect(() => {
 
 ## Performance Profiling
 
+For React DevTools profiling workflow, see [[CONTRIBUTING.md#profiling]].
+
+### Chrome DevTools Performance Traces
+
 **Exporting DevTools Performance traces:**
 
 The Chrome DevTools Performance panel's "Save profile" button fails in Electron with:

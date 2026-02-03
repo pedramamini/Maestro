@@ -15,8 +15,9 @@ import {
 	PenLine,
 	Brain,
 	Wand2,
+	Pin,
 } from 'lucide-react';
-import type { Session, Theme, BatchRunState, Shortcut } from '../types';
+import type { Session, Theme, BatchRunState, Shortcut, ThinkingMode } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks';
 import type {
@@ -122,8 +123,8 @@ interface InputAreaProps {
 	shortcuts?: Record<string, Shortcut>;
 	// Flash notification callback
 	showFlashNotification?: (message: string) => void;
-	// Show Thinking toggle (per-tab)
-	tabShowThinking?: boolean;
+	// Show Thinking toggle (per-tab) - three states: 'off' | 'on' | 'sticky'
+	tabShowThinking?: ThinkingMode;
 	onToggleTabShowThinking?: () => void;
 	supportsThinking?: boolean; // From agent capabilities
 	// Context warning sash props (Phase 6)
@@ -214,7 +215,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		onOpenPromptComposer,
 		shortcuts,
 		showFlashNotification,
-		tabShowThinking = false,
+		tabShowThinking = 'off',
 		onToggleTabShowThinking,
 		supportsThinking = false,
 		// Context warning sash props (Phase 6)
@@ -1042,26 +1043,45 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 											<span>Read-only</span>
 										</button>
 									)}
-								{/* Show Thinking toggle - AI mode only, for agents that support it */}
+								{/* Show Thinking toggle - AI mode only, for agents that support it
+								    Three states: 'off' (hidden), 'on' (temporary), 'sticky' (persistent) */}
 								{session.inputMode === 'ai' && supportsThinking && onToggleTabShowThinking && (
 									<button
 										onClick={onToggleTabShowThinking}
 										className={`flex items-center gap-1.5 text-[10px] px-2 py-1 rounded-full cursor-pointer transition-all ${
-											tabShowThinking ? '' : 'opacity-40 hover:opacity-70'
+											tabShowThinking !== 'off' ? '' : 'opacity-40 hover:opacity-70'
 										}`}
 										style={{
-											backgroundColor: tabShowThinking
-												? `${theme.colors.accentText}25`
-												: 'transparent',
-											color: tabShowThinking ? theme.colors.accentText : theme.colors.textDim,
-											border: tabShowThinking
-												? `1px solid ${theme.colors.accentText}50`
-												: '1px solid transparent',
+											backgroundColor:
+												tabShowThinking === 'sticky'
+													? `${theme.colors.warning}30`
+													: tabShowThinking === 'on'
+														? `${theme.colors.accentText}25`
+														: 'transparent',
+											color:
+												tabShowThinking === 'sticky'
+													? theme.colors.warning
+													: tabShowThinking === 'on'
+														? theme.colors.accentText
+														: theme.colors.textDim,
+											border:
+												tabShowThinking === 'sticky'
+													? `1px solid ${theme.colors.warning}50`
+													: tabShowThinking === 'on'
+														? `1px solid ${theme.colors.accentText}50`
+														: '1px solid transparent',
 										}}
-										title="Show Thinking - Stream AI reasoning in real-time"
+										title={
+											tabShowThinking === 'off'
+												? 'Show Thinking - Click to stream AI reasoning'
+												: tabShowThinking === 'on'
+													? 'Thinking (temporary) - Click for sticky mode'
+													: 'Thinking (sticky) - Click to turn off'
+										}
 									>
 										<Brain className="w-3 h-3" />
 										<span>Thinking</span>
+										{tabShowThinking === 'sticky' && <Pin className="w-2.5 h-2.5" />}
 									</button>
 								)}
 								<button

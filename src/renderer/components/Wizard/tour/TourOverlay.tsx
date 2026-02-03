@@ -9,11 +9,12 @@
  * Uses CSS clip-path to create the spotlight cutout effect.
  */
 
-import { useEffect, useCallback, useRef } from 'react';
+import { useEffect, useCallback, useRef, useState } from 'react';
 import type { Theme, Shortcut } from '../../../types';
 import { useLayerStack } from '../../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../../constants/modalPriorities';
 import { TourStep } from './TourStep';
+import { TourWelcome } from './TourWelcome';
 import { useTour, type TourStepConfig } from './useTour';
 
 interface TourOverlayProps {
@@ -97,6 +98,9 @@ export function TourOverlay({
 }: TourOverlayProps): JSX.Element | null {
 	const { registerLayer, unregisterLayer } = useLayerStack();
 
+	// Track whether we're showing the welcome screen (before tour steps)
+	const [showWelcome, setShowWelcome] = useState(true);
+
 	// Track if tour start has been recorded for this open session
 	const tourStartedRef = useRef(false);
 	// Track maximum step viewed (1-indexed for reporting)
@@ -156,6 +160,7 @@ export function TourOverlay({
 		if (isOpen && !tourStartedRef.current) {
 			tourStartedRef.current = true;
 			maxStepViewedRef.current = 1; // Reset to 1 (first step)
+			setShowWelcome(true); // Reset to welcome screen when tour opens
 			if (onTourStartRef.current) {
 				onTourStartRef.current();
 			}
@@ -176,6 +181,11 @@ export function TourOverlay({
 		}
 	}, [isOpen, currentStepIndex]);
 
+	// Handle starting tour from welcome screen
+	const handleStartTour = useCallback(() => {
+		setShowWelcome(false);
+	}, []);
+
 	// Handle keyboard navigation
 	const handleKeyDown = useCallback(
 		(e: KeyboardEvent) => {
@@ -185,7 +195,9 @@ export function TourOverlay({
 				case 'Enter':
 				case ' ':
 					e.preventDefault();
-					if (isLastStep) {
+					if (showWelcome) {
+						handleStartTour();
+					} else if (isLastStep) {
 						skipTour(); // Finish tour
 					} else {
 						nextStep();
@@ -198,18 +210,22 @@ export function TourOverlay({
 				case 'ArrowRight':
 				case 'ArrowDown':
 					e.preventDefault();
-					nextStep();
+					if (!showWelcome) {
+						nextStep();
+					}
 					break;
 				case 'ArrowLeft':
 				case 'ArrowUp':
 					e.preventDefault();
-					previousStep();
+					if (!showWelcome) {
+						previousStep();
+					}
 					break;
 				default:
 					break;
 			}
 		},
-		[isOpen, isLastStep, nextStep, previousStep, skipTour]
+		[isOpen, showWelcome, isLastStep, nextStep, previousStep, skipTour, handleStartTour]
 	);
 
 	// Register keyboard handler
@@ -236,11 +252,16 @@ export function TourOverlay({
 	}, [isOpen, registerLayer, unregisterLayer, skipTour]);
 
 	// Don't render if not open
-	if (!isOpen || !currentStep) {
+	if (!isOpen) {
 		return null;
 	}
 
-	const clipPath = getSpotlightClipPath(spotlight);
+	// Don't render tour steps if currentStep is null (but welcome can still show)
+	if (!showWelcome && !currentStep) {
+		return null;
+	}
+
+	const clipPath = showWelcome ? 'none' : getSpotlightClipPath(spotlight);
 
 	return (
 		<div
@@ -255,45 +276,58 @@ export function TourOverlay({
 				style={{
 					backgroundColor: 'rgba(0, 0, 0, 0.75)',
 					clipPath: clipPath,
-					// If no spotlight, ensure full coverage
+					// If no spotlight or welcome screen, ensure full coverage
 					...(clipPath === 'none' && { backgroundColor: 'rgba(0, 0, 0, 0.85)' }),
 				}}
 			/>
 
-			{/* Spotlight border ring (visible highlight around the cutout area) */}
-			{spotlight?.rect && (
-				<div
-					className="absolute pointer-events-none transition-all duration-300 ease-out"
-					style={{
-						left: spotlight.rect.x - (spotlight.padding || 8) - 2,
-						top: spotlight.rect.y - (spotlight.padding || 8) - 2,
-						width: spotlight.rect.width + (spotlight.padding || 8) * 2 + 4,
-						height: spotlight.rect.height + (spotlight.padding || 8) * 2 + 4,
-						borderRadius: (spotlight.borderRadius || 8) + 2,
-						border: `2px solid ${theme.colors.accent}`,
-						boxShadow: `0 0 20px ${theme.colors.accent}40, inset 0 0 20px ${theme.colors.accent}20`,
-						// Only show when position is ready and not transitioning
-						opacity: isPositionReady && !isTransitioning ? 1 : 0,
-					}}
+			{/* Welcome screen or tour steps */}
+			{showWelcome ? (
+				<TourWelcome
+					theme={theme}
+					onStartTour={handleStartTour}
+					onSkip={skipTour}
 				/>
-			)}
+			) : (
+				<>
+					{/* Spotlight border ring (visible highlight around the cutout area) */}
+					{spotlight?.rect && (
+						<div
+							className="absolute pointer-events-none transition-all duration-300 ease-out"
+							style={{
+								left: spotlight.rect.x - (spotlight.padding || 8) - 2,
+								top: spotlight.rect.y - (spotlight.padding || 8) - 2,
+								width: spotlight.rect.width + (spotlight.padding || 8) * 2 + 4,
+								height: spotlight.rect.height + (spotlight.padding || 8) * 2 + 4,
+								borderRadius: (spotlight.borderRadius || 8) + 2,
+								border: `2px solid ${theme.colors.accent}`,
+								boxShadow: `0 0 20px ${theme.colors.accent}40, inset 0 0 20px ${theme.colors.accent}20`,
+								// Only show when position is ready and not transitioning
+								opacity: isPositionReady && !isTransitioning ? 1 : 0,
+							}}
+						/>
+					)}
 
-			{/* Tour step tooltip */}
-			<TourStep
-				theme={theme}
-				step={currentStep}
-				stepNumber={currentStepIndex + 1}
-				totalSteps={totalSteps}
-				spotlight={spotlight}
-				onNext={nextStep}
-				onGoToStep={goToStep}
-				onSkip={skipTour}
-				isLastStep={isLastStep}
-				isTransitioning={isTransitioning}
-				isPositionReady={isPositionReady}
-				fromWizard={fromWizard}
-				shortcuts={shortcuts}
-			/>
+					{/* Tour step tooltip */}
+					{currentStep && (
+						<TourStep
+							theme={theme}
+							step={currentStep}
+							stepNumber={currentStepIndex + 1}
+							totalSteps={totalSteps}
+							spotlight={spotlight}
+							onNext={nextStep}
+							onGoToStep={goToStep}
+							onSkip={skipTour}
+							isLastStep={isLastStep}
+							isTransitioning={isTransitioning}
+							isPositionReady={isPositionReady}
+							fromWizard={fromWizard}
+							shortcuts={shortcuts}
+						/>
+					)}
+				</>
+			)}
 
 			{/* Animation styles */}
 			<style>{`
@@ -322,6 +356,21 @@ export function TourOverlay({
           to {
             opacity: 1;
             transform: translateY(0);
+          }
+        }
+
+        .tour-welcome-enter {
+          animation: tour-welcome-enter 0.3s ease-out;
+        }
+
+        @keyframes tour-welcome-enter {
+          from {
+            opacity: 0;
+            transform: translate(-50%, -50%) scale(0.95);
+          }
+          to {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
           }
         }
       `}</style>

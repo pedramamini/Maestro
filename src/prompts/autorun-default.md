@@ -76,6 +76,7 @@ docs/
     - There will be future runs to take care of other checkbox items.
 
 4. Task Implementation
+    - **Before creating new code**, search for existing implementations, utilities, helpers, or patterns in the codebase that can be reused or extended. Avoid duplicating functionality that already exists.
     - Implement the task according to the project's established style, architecture, and coding norms.
     - Ensure that test cases are created, and that they pass.
     - Ensure you haven't broken any existing test cases.

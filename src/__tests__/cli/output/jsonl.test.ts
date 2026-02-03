@@ -526,7 +526,7 @@ describe('jsonl output', () => {
 			const agent = {
 				id: 'agent-456',
 				name: 'Grouped Agent',
-				toolType: 'aider',
+				toolType: 'factory-droid',
 				cwd: '/path',
 				groupId: 'group-123',
 			};
@@ -576,7 +576,7 @@ describe('jsonl output', () => {
 		});
 
 		it('should handle different tool types', () => {
-			const toolTypes = ['claude-code', 'aider', 'terminal', 'gemini-cli', 'qwen3-coder'];
+			const toolTypes = ['claude-code', 'factory-droid', 'terminal', 'gemini-cli', 'qwen3-coder'];
 
 			toolTypes.forEach((toolType, index) => {
 				consoleSpy.mockClear();

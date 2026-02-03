@@ -141,6 +141,10 @@ export function createClaudeApi() {
 			logDeprecationWarning('getCommands');
 			return ipcRenderer.invoke('claude:getCommands', projectPath);
 		},
+		getSkills: (projectPath: string) => {
+			logDeprecationWarning('getSkills');
+			return ipcRenderer.invoke('claude:getSkills', projectPath);
+		},
 		registerSessionOrigin: (
 			projectPath: string,
 			agentSessionId: string,

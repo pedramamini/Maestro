@@ -72,6 +72,7 @@ Each task should be:
 - **Actionable**: Clear what needs to be done
 - **Verifiable**: You can tell when it's complete
 - **Autonomous**: Can be done without asking the user questions
+- **Reuse-aware**: Include hints to search for and reuse existing code patterns before creating new implementations
 
 ### Grouping Rules
 
@@ -174,6 +175,7 @@ If one item in a group is significantly more complex, give it its own task:
 - Keep phases focused (5-15 tasks typically)
 - Avoid tasks that require user decisions mid-execution
 - No documentation-only tasks (docs can be part of implementation tasks)
+- Include explicit guidance to search for existing code patterns before creating new implementations (reduces duplication)
 
 ## Structured Output Artifacts
 
@@ -261,6 +263,9 @@ File naming convention:
 - `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Phase-01-[Description].md`
 - `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Phase-02-[Description].md`
 - Continue the pattern for additional phases...
+- **Always use two-digit phase numbers** (01, 02, etc.) to ensure correct lexicographic sorting
+
+**Multi-phase efforts:** When creating 3 or more phase documents for a single effort, place them in a dedicated subdirectory prefixed with today's date (e.g., `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/YYYY-MM-DD-Feature-Name/FEATURE-NAME-01.md`). This allows users to add the entire folder at once and keeps related documents organized with a clear creation date.
 
 **Working Folder**: If any phase needs to create temporary files, scratch work, or intermediate outputs, use:
 `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Working/`
@@ -276,3 +281,14 @@ File naming convention:
 ## Now Generate the Documents
 
 Based on the conversation above, create the Auto Run documents. Start with Phase 1 (the working prototype), then create additional phases as needed. Remember: Phase 1 must be completely autonomous and deliver something that works!
+
+## After Document Generation
+
+Once all phase documents are written, output a brief message to the user that includes:
+
+1. A summary of what was created (number of phases, brief description of each)
+2. **This important note about execution:**
+
+> **Getting Started:** Phase 01 will launch automatically to get you started. Once it completes, review the results. If everything looks good, open the **Auto Run** panel in the Right Bar and add the remaining phase documents in order (Phase 02, Phase 03, etc.) to continue execution.
+
+This ensures the user understands they're seeing just the first phase execute and knows how to continue with the rest of the Playbook.

@@ -1,5 +1,5 @@
 import { useState, useRef, useEffect, memo } from 'react';
-import { GitBranch, Plus, Minus, FileEdit, FileDiff } from 'lucide-react';
+import { GitBranch, Plus, Minus, FileEdit, FileDiff, History } from 'lucide-react';
 import type { Theme } from '../types';
 import { useGitFileStatus, useGitDetail, type GitFileChange } from '../contexts/GitStatusContext';
 
@@ -10,6 +10,7 @@ interface GitStatusWidgetProps {
 	isGitRepo: boolean;
 	theme: Theme;
 	onViewDiff: () => void;
+	onViewLog?: () => void;
 	/** Use compact mode - just show file count without breakdown */
 	compact?: boolean;
 }
@@ -31,6 +32,7 @@ export const GitStatusWidget = memo(function GitStatusWidget({
 	isGitRepo,
 	theme,
 	onViewDiff,
+	onViewLog,
 	compact = false,
 }: GitStatusWidgetProps) {
 	// Tooltip hover state with timeout for smooth UX
@@ -228,6 +230,19 @@ export const GitStatusWidget = memo(function GitStatusWidget({
 							<FileDiff className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
 							View Full Diff
 						</button>
+						{onViewLog && (
+							<button
+								onClick={onViewLog}
+								className="flex items-center justify-center gap-2 text-xs p-2 border-t w-full hover:bg-white/10 transition-colors cursor-pointer"
+								style={{
+									color: theme.colors.textDim,
+									borderColor: theme.colors.border,
+								}}
+							>
+								<History className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
+								View Git Log
+							</button>
+						)}
 					</div>
 				</>
 			)}

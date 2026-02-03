@@ -14,10 +14,29 @@ Maestro provides built-in slash commands that are handled internally (not sent t
 |---------|-------------|
 | `/history` | Generate a synopsis of recent work and add to the History panel |
 | `/wizard` | Start the planning wizard for Auto Run documents |
+| `/skills` | List available Claude Code skills for this project *(Claude Code only)* |
 
 <Tip>
 The `/wizard` command can take optional natural language input: `/wizard add user authentication feature` to provide initial context.
 </Tip>
+
+### Skills Enumeration
+
+The `/skills` command displays all Claude Code skills available in your project. Skills are extensions that provide domain-specific knowledge and capabilities to Claude Code.
+
+<Frame>
+  <img src="./screenshots/skills-enumeration.png" alt="Skills enumeration showing project skills with name, token count, and description" />
+</Frame>
+
+Skills are loaded from:
+- **Project skills**: `.claude/skills/<skill-name>/skill.md` in your project directory
+- **User skills**: `~/.claude/skills/<skill-name>/skill.md` for personal skills
+
+Each skill is displayed with its name, approximate token count, and description. This command is only available when using Claude Code as your AI provider.
+
+<Note>
+The `/skills` command is a Maestro feature that reads skill files directly—it doesn't invoke Claude Code's native `/skills` command (which requires an interactive terminal).
+</Note>
 
 ## Custom AI Commands
 
@@ -34,7 +53,7 @@ Commands support **template variables** that are automatically substituted at ru
 | `{{AGENT_GROUP}}` | Agent's group name (if grouped) |
 | `{{AGENT_SESSION_ID}}` | Agent session ID (for conversation continuity) |
 | `{{TAB_NAME}}` | Custom tab name (alias: `SESSION_NAME`) |
-| `{{TOOL_TYPE}}` | Agent type (claude-code, codex, opencode, aider) |
+| `{{TOOL_TYPE}}` | Agent type (claude-code, codex, opencode, factory-droid) |
 
 ### Path Variables
 

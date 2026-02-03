@@ -63,14 +63,14 @@ export const AGENT_TILES: AgentTile[] = [
 		description: 'Open-source AI coding assistant',
 		brandColor: '#F97316', // Orange
 	},
-	// Coming soon agents at the bottom
 	{
-		id: 'aider',
-		name: 'Aider',
-		supported: false,
-		description: 'Coming soon',
-		brandColor: '#14B8A6', // Teal
+		id: 'factory-droid',
+		name: 'Factory Droid',
+		supported: true,
+		description: "Factory's AI coding assistant",
+		brandColor: '#3B82F6', // Factory blue
 	},
+	// Coming soon agents at the bottom
 	{
 		id: 'gemini-cli',
 		name: 'Gemini CLI',
@@ -87,7 +87,7 @@ export const AGENT_TILES: AgentTile[] = [
 	},
 ];
 
-// Grid dimensions for keyboard navigation (3 cols for 5 items)
+// Grid dimensions for keyboard navigation (3 cols for 6 items)
 const GRID_COLS = 3;
 const GRID_ROWS = 2;
 
@@ -145,33 +145,6 @@ export function AgentLogo({
 					{/* OpenAI hexagon-inspired logo */}
 					<path d="M24 6L40 15v18l-16 9-16-9V15l16-9z" stroke={color} strokeWidth="2" fill="none" />
 					<path d="M24 6v36M40 15L8 33M8 15l32 18" stroke={color} strokeWidth="2" />
-				</svg>
-			);
-
-		case 'aider':
-			// Aider - chat bubble with code brackets
-			return (
-				<svg
-					className="w-12 h-12"
-					viewBox="0 0 48 48"
-					fill="none"
-					xmlns="http://www.w3.org/2000/svg"
-					style={{ opacity }}
-				>
-					{/* Chat bubble with code brackets */}
-					<path
-						d="M8 12C8 9.79 9.79 8 12 8H36C38.21 8 40 9.79 40 12V28C40 30.21 38.21 32 36 32H20L12 40V32H12C9.79 32 8 30.21 8 28V12Z"
-						stroke={color}
-						strokeWidth="2"
-						fill="none"
-					/>
-					<path
-						d="M18 16L14 20L18 24M30 16L34 20L30 24"
-						stroke={color}
-						strokeWidth="2"
-						strokeLinecap="round"
-						strokeLinejoin="round"
-					/>
 				</svg>
 			);
 
@@ -243,6 +216,60 @@ export function AgentLogo({
 						strokeWidth="2"
 						strokeLinecap="round"
 						strokeLinejoin="round"
+					/>
+				</svg>
+			);
+
+		case 'factory-droid':
+			// Factory Droid - pinwheel/flower logo
+			return (
+				<svg
+					className="w-12 h-12"
+					viewBox="0 0 48 48"
+					fill="none"
+					xmlns="http://www.w3.org/2000/svg"
+					style={{ opacity }}
+				>
+					{/* Factory Droid pinwheel logo - 6 petals radiating from center */}
+					<circle cx="24" cy="24" r="3" fill={color} />
+					{/* Petals - elliptical shapes radiating outward */}
+					<ellipse cx="24" cy="12" rx="4" ry="8" fill={color} fillOpacity="0.9" />
+					<ellipse
+						cx="34.4"
+						cy="18"
+						rx="4"
+						ry="8"
+						fill={color}
+						fillOpacity="0.9"
+						transform="rotate(60 34.4 18)"
+					/>
+					<ellipse
+						cx="34.4"
+						cy="30"
+						rx="4"
+						ry="8"
+						fill={color}
+						fillOpacity="0.9"
+						transform="rotate(120 34.4 30)"
+					/>
+					<ellipse cx="24" cy="36" rx="4" ry="8" fill={color} fillOpacity="0.9" />
+					<ellipse
+						cx="13.6"
+						cy="30"
+						rx="4"
+						ry="8"
+						fill={color}
+						fillOpacity="0.9"
+						transform="rotate(60 13.6 30)"
+					/>
+					<ellipse
+						cx="13.6"
+						cy="18"
+						rx="4"
+						ry="8"
+						fill={color}
+						fillOpacity="0.9"
+						transform="rotate(120 13.6 18)"
 					/>
 				</svg>
 			);
@@ -361,7 +388,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 					const visibleAgents = agents.filter((a: AgentConfig) => !a.hidden);
 
 					// Check if all agents have connection errors (indicates SSH connection failure)
-					 
+
 					const connectionErrors = visibleAgents
 						.filter((a: any) => a.error)
 						.map((a: any) => a.error);
@@ -442,7 +469,6 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 		// Using JSON.stringify with 'null' fallback to ensure the effect runs when switching
 		// between remote and local (JSON.stringify(undefined) returns undefined, not 'null',
 		// so we need the fallback to ensure React sees it as a real string change)
-		 
 	}, [setAvailableAgents, setSelectedAgent, JSON.stringify(sshRemoteConfig) ?? 'null']);
 
 	// Load SSH remote configurations on mount
@@ -831,9 +857,54 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						<ArrowLeft className="w-4 h-4" />
 						Back
 					</button>
-					<h3 className="text-xl font-semibold" style={{ color: theme.colors.textMain }}>
-						Configure {configuringTile.name}
-					</h3>
+					<div className="flex flex-col items-center gap-2">
+						<h3 className="text-xl font-semibold" style={{ color: theme.colors.textMain }}>
+							Configure {configuringTile.name}
+						</h3>
+						{/* SSH Remote Location Dropdown - only shown if remotes are configured */}
+						{sshRemotes.length > 0 && (
+							<div className="flex items-center gap-2 text-sm">
+								<span style={{ color: theme.colors.textDim }}>on</span>
+								<select
+									value={sshRemoteConfig?.enabled ? sshRemoteConfig.remoteId || '' : ''}
+									onChange={(e) => {
+										const remoteId = e.target.value;
+										if (remoteId === '') {
+											// Local machine selected
+											setSshRemoteConfig(undefined);
+											// Also update wizard context immediately
+											setWizardSessionSshRemoteConfig({ enabled: false, remoteId: null });
+										} else {
+											// Remote selected
+											setSshRemoteConfig({
+												enabled: true,
+												remoteId,
+											});
+											// Also update wizard context immediately
+											setWizardSessionSshRemoteConfig({
+												enabled: true,
+												remoteId,
+											});
+										}
+									}}
+									className="px-3 py-1 rounded border outline-none transition-all cursor-pointer text-xs"
+									style={{
+										backgroundColor: theme.colors.bgMain,
+										borderColor: theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+									aria-label="Agent location"
+								>
+									<option value="">Local Machine</option>
+									{sshRemotes.map((remote) => (
+										<option key={remote.id} value={remote.id}>
+											{remote.name || remote.host}
+										</option>
+									))}
+								</select>
+							</div>
+						)}
+					</div>
 					<div className="w-20" /> {/* Spacer for centering */}
 				</div>
 

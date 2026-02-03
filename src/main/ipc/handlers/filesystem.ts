@@ -7,7 +7,7 @@
  * - readFile: Read file contents with image base64 encoding (local & SSH remote)
  * - stat: Get file/directory statistics (local & SSH remote)
  * - directorySize: Calculate directory size recursively (local & SSH remote)
- * - writeFile: Write content to file (local only)
+ * - writeFile: Write content to file (local & SSH remote)
  * - rename: Rename file/directory (local & SSH remote)
  * - delete: Delete file/directory (local & SSH remote)
  * - countItems: Count files and folders recursively (local & SSH remote)
@@ -25,6 +25,7 @@ import { logger } from '../../utils/logger';
 import {
 	readDirRemote,
 	readFileRemote,
+	writeFileRemote,
 	statRemote,
 	directorySizeRemote,
 	renameRemote,
@@ -239,9 +240,23 @@ export function registerFilesystemHandlers(): void {
 		};
 	});
 
-	// Write content to file (local only)
-	ipcMain.handle('fs:writeFile', async (_, filePath: string, content: string) => {
+	// Write content to file (supports SSH remote)
+	ipcMain.handle('fs:writeFile', async (_, filePath: string, content: string, sshRemoteId?: string) => {
 		try {
+			// SSH remote: dispatch to remote fs operations
+			if (sshRemoteId) {
+				const sshConfig = getSshRemoteById(sshRemoteId);
+				if (!sshConfig) {
+					throw new Error(`SSH remote not found: ${sshRemoteId}`);
+				}
+				const result = await writeFileRemote(filePath, content, sshConfig);
+				if (!result.success) {
+					throw new Error(result.error || 'Failed to write remote file');
+				}
+				return { success: true };
+			}
+
+			// Local: use standard fs operations
 			await fs.writeFile(filePath, content, 'utf-8');
 			return { success: true };
 		} catch (error) {

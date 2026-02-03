@@ -72,6 +72,7 @@ export function createShellApi() {
 	return {
 		openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
 		trashItem: (itemPath: string) => ipcRenderer.invoke('shell:trashItem', itemPath),
+		showItemInFolder: (itemPath: string) => ipcRenderer.invoke('shell:showItemInFolder', itemPath),
 	};
 }
 
@@ -190,6 +191,15 @@ export function createAppApi() {
 		},
 		cancelQuit: () => {
 			ipcRenderer.send('app:quitCancelled');
+		},
+		/**
+		 * Listen for system resume event (after sleep/suspend)
+		 * Used to refresh settings that may have been reset during sleep
+		 */
+		onSystemResume: (callback: () => void) => {
+			const handler = () => callback();
+			ipcRenderer.on('app:systemResume', handler);
+			return () => ipcRenderer.removeListener('app:systemResume', handler);
 		},
 	};
 }

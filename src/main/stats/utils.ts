@@ -48,6 +48,9 @@ export function getTimeRangeStart(range: StatsTimeRange): number {
 			return now - 365 * day;
 		case 'all':
 			return 0;
+		default:
+			// Exhaustive check - should never reach here
+			return 0;
 	}
 }
 

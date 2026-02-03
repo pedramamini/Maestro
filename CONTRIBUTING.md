@@ -565,9 +565,10 @@ Based on capabilities, these UI features are automatically enabled/disabled:
 | Agent | Resume | Read-Only | JSON | Images | Sessions | Cost | Status |
 |-------|--------|-----------|------|--------|----------|------|--------|
 | Claude Code | ✅ `--resume` | ✅ `--permission-mode plan` | ✅ | ✅ | ✅ `~/.claude/` | ✅ | ✅ Complete |
-| OpenCode | ✅ `--session` | ✅ `--agent plan` | ✅ | ✅ | Stub | ❌ (local) | 🔄 Stub Ready |
+| Codex | ✅ `exec resume` | ✅ `--sandbox read-only` | ✅ | ✅ | ✅ `~/.codex/` | ❌ (tokens only) | ✅ Complete |
+| OpenCode | ✅ `--session` | ✅ `--agent plan` | ✅ | ✅ | ✅ `~/.local/share/opencode/` | ✅ | ✅ Complete |
+| Factory Droid | ✅ `-s, --session-id` | ✅ (default mode) | ✅ | ✅ | ✅ `~/.factory/` | ❌ (tokens only) | ✅ Complete |
 | Gemini CLI | TBD | TBD | TBD | TBD | TBD | ✅ | 📋 Planned |
-| Codex | TBD | TBD | TBD | TBD | TBD | ✅ | 📋 Planned |
 
 For detailed implementation guide, see [AGENT_SUPPORT.md](AGENT_SUPPORT.md).
 
@@ -648,12 +649,35 @@ intervalRef.current = setInterval(updateElapsed, 3000); // Not 1000ms
 
 ### Profiling
 
-When investigating performance issues:
+**React DevTools (Standalone):** For profiling React renders and inspecting component trees:
 
-1. Use Chrome DevTools Performance tab (Cmd+Option+I → Performance)
-2. Record during the slow operation
-3. Look for long tasks (>50ms) blocking the main thread
-4. Check for excessive re-renders in React DevTools Profiler
+```bash
+# Install globally (once)
+npm install -g react-devtools
+
+# Launch the standalone app
+npx react-devtools
+```
+
+Then run `npm run dev` — the app auto-connects (connection script in `src/renderer/index.html`).
+
+**Tabs:**
+- **Components** — Inspect React component tree, props, state, hooks
+- **Profiler** — Record and analyze render performance, identify unnecessary re-renders
+
+**Profiler workflow:**
+1. Click the record button (blue circle)
+2. Interact with the app (navigate, type, scroll)
+3. Stop recording
+4. Analyze the flame graph for:
+   - Components that render too often
+   - Render times per component
+   - Why a component rendered (props/state/hooks changed)
+
+**Chrome DevTools Performance tab** (`Cmd+Option+I` → Performance):
+1. Record during the slow operation
+2. Look for long tasks (>50ms) blocking the main thread
+3. Identify expensive JavaScript execution or layout thrashing
 
 ## Debugging Guide
 
@@ -695,7 +719,7 @@ When investigating performance issues:
 
 ### DevTools
 
-Open via Quick Actions (`Cmd+K` → "Toggle DevTools") or set `DEBUG=true` env var.
+**Electron DevTools:** Open via Quick Actions (`Cmd+K` → "Toggle DevTools") or set `DEBUG=true` env var.
 
 ## Commit Messages
 

@@ -8,6 +8,7 @@
  * - Aggregates responses and maintains conversation flow
  */
 
+import * as os from 'os';
 import { GroupChat, loadGroupChat, updateGroupChat } from './group-chat-storage';
 import { appendToLog, readLog } from './group-chat-log';
 import { groupChatModeratorSystemPrompt, groupChatModeratorSynthesisPrompt } from '../../prompts';
@@ -143,7 +144,7 @@ export function getModeratorSynthesisPrompt(): string {
 export async function spawnModerator(
 	chat: GroupChat,
 	_processManager: IProcessManager,
-	_cwd: string = process.env.HOME || '/tmp'
+	_cwd: string = os.homedir()
 ): Promise<string> {
 	console.log(`[GroupChat:Debug] ========== SPAWNING MODERATOR ==========`);
 	console.log(`[GroupChat:Debug] Chat ID: ${chat.id}`);

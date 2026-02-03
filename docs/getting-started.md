@@ -12,7 +12,7 @@ Follow the [Installation](./installation) instructions for your platform, then l
 
 ## 2. Create an agent (or use the Wizard)
 
-Maestro supports **Claude Code**, **OpenAI Codex**, and **OpenCode** as providers. Make sure at least one is installed and authenticated.
+Maestro supports **Claude Code**, **Codex** (OpenAI), and **OpenCode** as providers. Make sure at least one is installed and authenticated.
 
 **Option A: Quick Setup**
 Create your first agent manually using the **+** button in the sidebar.
@@ -32,7 +32,7 @@ The Wizard creates a fully configured agent with an Auto Run document folder rea
 
 After completing the Wizard, you'll be offered an **Introductory Tour** that highlights key UI elements:
 - The AI Terminal and how to interact with it
-- The Auto Run panel and how batch processing works
+- The Auto Run panel and how document processing works
 - File Explorer and preview features
 - Keyboard shortcuts for power users
 

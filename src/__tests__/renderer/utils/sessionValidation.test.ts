@@ -169,11 +169,11 @@ describe('sessionValidation', () => {
 						toolType: 'claude-code',
 					}),
 				];
-				// Different provider (aider) also gets a warning now
+				// Different provider (factory-droid) also gets a warning now
 				const result = validateNewSession(
-					'Aider Agent',
+					'Factory Droid Agent',
 					'/Users/test/project',
-					'aider',
+					'factory-droid',
 					existingSessions
 				);
 				expect(result.valid).toBe(true);
@@ -269,7 +269,7 @@ describe('sessionValidation', () => {
 					createMockSession({
 						name: 'Agent 2',
 						projectRoot: '/Users/test/project',
-						toolType: 'aider',
+						toolType: 'factory-droid',
 					}),
 				];
 				const result = validateNewSession(
@@ -299,7 +299,7 @@ describe('sessionValidation', () => {
 						projectRoot: '/path/two',
 						toolType: 'claude-code',
 					}),
-					createMockSession({ name: 'Session 3', projectRoot: '/path/three', toolType: 'aider' }),
+					createMockSession({ name: 'Session 3', projectRoot: '/path/three', toolType: 'factory-droid' }),
 				];
 
 				// Unique name and directory - no warning
@@ -331,7 +331,7 @@ describe('sessionValidation', () => {
 				const diffProviderResult = validateNewSession(
 					'Session 4',
 					'/path/two',
-					'aider',
+					'factory-droid',
 					existingSessions
 				);
 				expect(diffProviderResult.valid).toBe(true);
@@ -372,10 +372,10 @@ describe('sessionValidation', () => {
 					createMockSession({
 						name: 'Existing',
 						projectRoot: '/path',
-						toolType: 'aider',
+						toolType: 'factory-droid',
 					}),
 				];
-				const result = validateNewSession('New', '/path', 'aider', existingSessions);
+				const result = validateNewSession('New', '/path', 'factory-droid', existingSessions);
 				expect(result.valid).toBe(true);
 				expect(result.warning).toBeDefined();
 				expect(result.warning).toContain('Existing');

@@ -10,7 +10,7 @@
  *   {{AGENT_SESSION_ID}}  - Agent session ID (for conversation continuity)
  *   {{AGENT_HISTORY_PATH}} - Path to agent's history JSON file (for task recall)
  *   {{TAB_NAME}}          - Custom tab name (alias: SESSION_NAME)
- *   {{TOOL_TYPE}}         - Agent type (claude-code, aider, etc.)
+ *   {{TOOL_TYPE}}         - Agent type (claude-code, codex, opencode, factory-droid)
  *
  * Path Variables:
  *   {{CWD}}               - Current working directory

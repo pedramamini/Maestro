@@ -26,10 +26,16 @@ interface Session {
   aiPid: number;                // AI process ID
   port: number;                 // Web server communication port
 
-  // Multi-Tab Support
+  // Multi-Tab Support (AI Tabs)
   aiTabs: AITab[];              // Multiple conversation tabs
-  activeTabId: string;          // Currently active tab
-  closedTabHistory: ClosedTab[]; // Undo stack for closed tabs
+  activeTabId: string;          // Currently active AI tab
+  closedTabHistory: ClosedTab[]; // Undo stack for closed AI tabs
+
+  // File Preview Tabs
+  filePreviewTabs: FilePreviewTab[]; // Open file preview tabs
+  activeFileTabId: string | null;    // Active file tab (null if AI tab active)
+  unifiedTabOrder: UnifiedTabRef[];  // Visual order of all tabs (AI + file)
+  closedUnifiedTabHistory: ClosedUnifiedTab[]; // Unified undo stack for Cmd+Shift+T
 
   // Logs (per-tab)
   shellLogs: LogEntry[];        // Terminal output history
@@ -79,6 +85,25 @@ interface AITab {
   scrollTop?: number;
   draftInput?: string;
 }
+
+interface FilePreviewTab {
+  id: string;                   // Unique tab ID (UUID)
+  path: string;                 // Full file path
+  name: string;                 // Filename without extension
+  extension: string;            // File extension with dot (e.g., '.md')
+  content: string;              // File content
+  scrollTop: number;            // Preserved scroll position
+  searchQuery: string;          // Preserved search query
+  editMode: boolean;            // Whether tab was in edit mode
+  editContent?: string;         // Unsaved edit content
+  createdAt: number;            // Timestamp for ordering
+  lastModified: number;         // File modification time
+  sshRemoteId?: string;         // SSH remote ID for remote files
+  isLoading?: boolean;          // True while loading remote content
+}
+
+// Unified tab references for ordering
+type UnifiedTabRef = { type: 'ai' | 'file'; id: string };
 ```
 
 ---

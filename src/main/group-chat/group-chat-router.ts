@@ -8,6 +8,7 @@
  * - Participants -> Moderator
  */
 
+import * as os from 'os';
 import {
 	GroupChatParticipant,
 	loadGroupChat,
@@ -17,7 +18,11 @@ import {
 	getGroupChatDir,
 } from './group-chat-storage';
 import { appendToLog, readLog } from './group-chat-log';
-import { type GroupChatMessage, mentionMatches } from '../../shared/group-chat-types';
+import {
+	type GroupChatMessage,
+	mentionMatches,
+	normalizeMentionName,
+} from '../../shared/group-chat-types';
 import {
 	IProcessManager,
 	getModeratorSessionId,
@@ -34,6 +39,8 @@ import {
 	getContextWindowValue,
 } from '../utils/agent-args';
 import { groupChatParticipantRequestPrompt } from '../../prompts';
+import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
+import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 
 // Import emitters from IPC handlers (will be populated after handlers are registered)
 import { groupChatEmitters } from '../ipc/handlers/groupChat';
@@ -51,6 +58,12 @@ export interface SessionInfo {
 	customModel?: string;
 	/** SSH remote name for display in participant card */
 	sshRemoteName?: string;
+	/** Full SSH remote config for remote execution */
+	sshRemoteConfig?: {
+		enabled: boolean;
+		remoteId: string | null;
+		workingDirOverride?: string;
+	};
 }
 
 /**
@@ -70,6 +83,9 @@ let getSessionsCallback: GetSessionsCallback | null = null;
 // Module-level callback for custom env vars lookup
 let getCustomEnvVarsCallback: GetCustomEnvVarsCallback | null = null;
 let getAgentConfigCallback: GetAgentConfigCallback | null = null;
+
+// Module-level SSH store for remote execution support
+let sshStore: SshRemoteSettingsStore | null = null;
 
 /**
  * Tracks pending participant responses for each group chat.
@@ -148,6 +164,14 @@ export function setGetCustomEnvVarsCallback(callback: GetCustomEnvVarsCallback):
 
 export function setGetAgentConfigCallback(callback: GetAgentConfigCallback): void {
 	getAgentConfigCallback = callback;
+}
+
+/**
+ * Sets the SSH store for remote execution support.
+ * Called from index.ts during initialization.
+ */
+export function setSshStore(store: SshRemoteSettingsStore): void {
+	sshStore = store;
 }
 
 /**
@@ -369,9 +393,12 @@ export async function routeUserMessage(
 			console.log(`[GroupChat:Debug] Command to execute: ${command}`);
 
 			// Build participant context
+			// Use normalized names (spaces → hyphens) so moderator can @mention them properly
 			const participantContext =
 				chat.participants.length > 0
-					? chat.participants.map((p) => `- @${p.name} (${p.agentId} session)`).join('\n')
+					? chat.participants
+							.map((p) => `- @${normalizeMentionName(p.name)} (${p.agentId} session)`)
+							.join('\n')
 					: '(No agents currently in this group chat)';
 
 			// Build available sessions context (sessions that could be added)
@@ -386,7 +413,8 @@ export async function routeUserMessage(
 					(s) => s.toolType !== 'terminal' && !participantNames.has(s.name)
 				);
 				if (availableSessions.length > 0) {
-					availableSessionsContext = `\n\n## Available Maestro Sessions (can be added via @mention):\n${availableSessions.map((s) => `- @${s.name} (${s.toolType})`).join('\n')}`;
+					// Use normalized names (spaces → hyphens) so moderator can @mention them properly
+					availableSessionsContext = `\n\n## Available Maestro Sessions (can be added via @mention):\n${availableSessions.map((s) => `- @${normalizeMentionName(s.name)} (${s.toolType})`).join('\n')}`;
 				}
 			}
 
@@ -419,7 +447,7 @@ ${message}`;
 			const baseArgs = buildAgentArgs(agent, {
 				baseArgs: args,
 				prompt: fullPrompt,
-				cwd: process.env.HOME || '/tmp',
+				cwd: os.homedir(),
 				readOnlyMode: true,
 			});
 			const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -434,7 +462,7 @@ ${message}`;
 			console.log(`[GroupChat:Debug] ========== SPAWNING MODERATOR PROCESS ==========`);
 			console.log(`[GroupChat:Debug] Session ID: ${sessionId}`);
 			console.log(`[GroupChat:Debug] Tool Type: ${chat.moderatorAgentId}`);
-			console.log(`[GroupChat:Debug] CWD: ${process.env.HOME || '/tmp'}`);
+			console.log(`[GroupChat:Debug] CWD: ${os.homedir()}`);
 			console.log(`[GroupChat:Debug] Command: ${command}`);
 			console.log(`[GroupChat:Debug] ReadOnly: true`);
 
@@ -447,18 +475,54 @@ ${message}`;
 				// Add power block reason to prevent sleep during group chat activity
 				powerManager.addBlockReason(`groupchat:${groupChatId}`);
 
+				// Prepare spawn config with potential SSH wrapping
+				let spawnCommand = command;
+				let spawnArgs = finalArgs;
+				let spawnCwd = os.homedir();
+				let spawnPrompt: string | undefined = fullPrompt;
+				let spawnEnvVars =
+					configResolution.effectiveCustomEnvVars ??
+					getCustomEnvVarsCallback?.(chat.moderatorAgentId);
+
+				// Apply SSH wrapping if configured
+				if (sshStore && chat.moderatorConfig?.sshRemoteConfig) {
+					console.log(`[GroupChat:Debug] Applying SSH wrapping for moderator...`);
+					const sshWrapped = await wrapSpawnWithSsh(
+						{
+							command,
+							args: finalArgs,
+							cwd: os.homedir(),
+							prompt: fullPrompt,
+							customEnvVars:
+								configResolution.effectiveCustomEnvVars ??
+								getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+							promptArgs: agent.promptArgs,
+							noPromptSeparator: agent.noPromptSeparator,
+							agentBinaryName: agent.binaryName,
+						},
+						chat.moderatorConfig.sshRemoteConfig,
+						sshStore
+					);
+					spawnCommand = sshWrapped.command;
+					spawnArgs = sshWrapped.args;
+					spawnCwd = sshWrapped.cwd;
+					spawnPrompt = sshWrapped.prompt;
+					spawnEnvVars = sshWrapped.customEnvVars;
+					if (sshWrapped.sshRemoteUsed) {
+						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
+					}
+				}
+
 				const spawnResult = processManager.spawn({
 					sessionId,
 					toolType: chat.moderatorAgentId,
-					cwd: process.env.HOME || '/tmp',
-					command,
-					args: finalArgs,
+					cwd: spawnCwd,
+					command: spawnCommand,
+					args: spawnArgs,
 					readOnlyMode: true,
-					prompt: fullPrompt,
+					prompt: spawnPrompt,
 					contextWindow: getContextWindowValue(agent, agentConfigValues),
-					customEnvVars:
-						configResolution.effectiveCustomEnvVars ??
-						getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+					customEnvVars: spawnEnvVars,
 					promptArgs: agent.promptArgs,
 					noPromptSeparator: agent.noPromptSeparator,
 				});
@@ -610,13 +674,16 @@ export async function routeModeratorResponse(
 						agentDetector,
 						agentConfigValues,
 						customEnvVars,
-						// Pass session-specific overrides (customModel, customArgs, customEnvVars, sshRemoteName from session)
+						// Pass session-specific overrides (customModel, customArgs, customEnvVars, sshRemoteConfig from session)
 						{
 							customModel: matchingSession.customModel,
 							customArgs: matchingSession.customArgs,
 							customEnvVars: matchingSession.customEnvVars,
 							sshRemoteName: matchingSession.sshRemoteName,
-						}
+							sshRemoteConfig: matchingSession.sshRemoteConfig,
+						},
+						// Pass SSH store for remote execution support
+						sshStore ?? undefined
 					);
 					existingParticipantNames.add(participantName);
 
@@ -690,7 +757,7 @@ export async function routeModeratorResponse(
 			const matchingSession = sessions.find(
 				(s) => mentionMatches(s.name, participantName) || s.name === participantName
 			);
-			const cwd = matchingSession?.cwd || process.env.HOME || '/tmp';
+			const cwd = matchingSession?.cwd || os.homedir();
 			console.log(`[GroupChat:Debug] CWD for participant: ${cwd}`);
 
 			// Resolve agent configuration
@@ -771,18 +838,54 @@ export async function routeModeratorResponse(
 					`[GroupChat:Debug] CustomEnvVars: ${JSON.stringify(configResolution.effectiveCustomEnvVars || {})}`
 				);
 
+				// Prepare spawn config with potential SSH wrapping
+				let finalSpawnCommand = spawnCommand;
+				let finalSpawnArgs = spawnArgs;
+				let finalSpawnCwd = cwd;
+				let finalSpawnPrompt: string | undefined = participantPrompt;
+				let finalSpawnEnvVars =
+					configResolution.effectiveCustomEnvVars ??
+					getCustomEnvVarsCallback?.(participant.agentId);
+
+				// Apply SSH wrapping if configured for this session
+				if (sshStore && matchingSession?.sshRemoteConfig) {
+					console.log(`[GroupChat:Debug] Applying SSH wrapping for participant ${participantName}...`);
+					const sshWrapped = await wrapSpawnWithSsh(
+						{
+							command: spawnCommand,
+							args: spawnArgs,
+							cwd,
+							prompt: participantPrompt,
+							customEnvVars:
+								configResolution.effectiveCustomEnvVars ??
+								getCustomEnvVarsCallback?.(participant.agentId),
+							promptArgs: agent.promptArgs,
+							noPromptSeparator: agent.noPromptSeparator,
+							agentBinaryName: agent.binaryName,
+						},
+						matchingSession.sshRemoteConfig,
+						sshStore
+					);
+					finalSpawnCommand = sshWrapped.command;
+					finalSpawnArgs = sshWrapped.args;
+					finalSpawnCwd = sshWrapped.cwd;
+					finalSpawnPrompt = sshWrapped.prompt;
+					finalSpawnEnvVars = sshWrapped.customEnvVars;
+					if (sshWrapped.sshRemoteUsed) {
+						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
+					}
+				}
+
 				const spawnResult = processManager.spawn({
 					sessionId,
 					toolType: participant.agentId,
-					cwd,
-					command: spawnCommand,
-					args: spawnArgs,
+					cwd: finalSpawnCwd,
+					command: finalSpawnCommand,
+					args: finalSpawnArgs,
 					readOnlyMode: readOnly ?? false, // Propagate read-only mode from caller
-					prompt: participantPrompt,
+					prompt: finalSpawnPrompt,
 					contextWindow: getContextWindowValue(agent, agentConfigValues),
-					customEnvVars:
-						configResolution.effectiveCustomEnvVars ??
-						getCustomEnvVarsCallback?.(participant.agentId),
+					customEnvVars: finalSpawnEnvVars,
 					promptArgs: agent.promptArgs,
 					noPromptSeparator: agent.noPromptSeparator,
 				});
@@ -1014,9 +1117,12 @@ export async function spawnModeratorSynthesis(
 		.join('\n');
 
 	// Build participant context for potential follow-up @mentions
+	// Use normalized names (spaces → hyphens) so moderator can @mention them properly
 	const participantContext =
 		chat.participants.length > 0
-			? chat.participants.map((p) => `- @${p.name} (${p.agentId} session)`).join('\n')
+			? chat.participants
+					.map((p) => `- @${normalizeMentionName(p.name)} (${p.agentId} session)`)
+					.join('\n')
 			: '(No agents currently in this group chat)';
 
 	const synthesisPrompt = `${getModeratorSystemPrompt()}
@@ -1038,7 +1144,7 @@ Review the agent responses above. Either:
 	const baseArgs = buildAgentArgs(agent, {
 		baseArgs: args,
 		prompt: synthesisPrompt,
-		cwd: process.env.HOME || '/tmp',
+		cwd: os.homedir(),
 		readOnlyMode: true,
 	});
 	const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -1061,7 +1167,7 @@ Review the agent responses above. Either:
 		const spawnResult = processManager.spawn({
 			sessionId,
 			toolType: chat.moderatorAgentId,
-			cwd: process.env.HOME || '/tmp',
+			cwd: os.homedir(),
 			command,
 			args: finalArgs,
 			readOnlyMode: true,
@@ -1152,7 +1258,7 @@ export async function respawnParticipantWithRecovery(
 	const matchingSession = sessions.find(
 		(s) => mentionMatches(s.name, participantName) || s.name === participantName
 	);
-	const cwd = matchingSession?.cwd || process.env.HOME || '/tmp';
+	const cwd = matchingSession?.cwd || os.homedir();
 
 	// Build the prompt with recovery context
 	const readOnlyNote = readOnly

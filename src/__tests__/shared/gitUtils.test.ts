@@ -279,6 +279,19 @@ describe('gitUtils', () => {
 			expect(remoteUrlToBrowserUrl('unknown://something')).toBeNull();
 			expect(remoteUrlToBrowserUrl('just-a-string')).toBeNull();
 		});
+
+		it('handles malformed HTTPS+SSH hybrid URLs (MAESTRO-43)', () => {
+			// Some git clients may produce malformed URLs that mix HTTPS and SSH formats
+			expect(remoteUrlToBrowserUrl('https://git@github.com:chancegraff/project-aig')).toBe(
+				'https://github.com/chancegraff/project-aig'
+			);
+			expect(remoteUrlToBrowserUrl('http://git@github.com:user/repo.git')).toBe(
+				'https://github.com/user/repo'
+			);
+			expect(remoteUrlToBrowserUrl('https://git@gitlab.com:org/project.git')).toBe(
+				'https://gitlab.com/org/project'
+			);
+		});
 	});
 
 	describe('isImageFile', () => {

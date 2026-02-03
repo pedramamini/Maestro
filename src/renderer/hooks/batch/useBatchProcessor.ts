@@ -254,6 +254,13 @@ export function useBatchProcessor({
 	const sessionsRef = useRef(sessions);
 	sessionsRef.current = sessions;
 
+	// Refs to always have access to latest audio feedback settings (fixes stale closure during batch run)
+	// Without refs, toggling settings off during a batch run won't take effect until the next run
+	const audioFeedbackEnabledRef = useRef(audioFeedbackEnabled);
+	audioFeedbackEnabledRef.current = audioFeedbackEnabled;
+	const audioFeedbackCommandRef = useRef(audioFeedbackCommand);
+	audioFeedbackCommandRef.current = audioFeedbackCommand;
+
 	// Ref to track latest batchRunStates for time tracking callback
 	// NOTE: Do NOT auto-sync with batchRunStates on every render!
 	// The dispatch wrapper updates this ref synchronously after each action.
@@ -321,7 +328,7 @@ export function useBatchProcessor({
 	}, []);
 
 	// Use extracted debounce hook for batch state updates (replaces manual debounce logic)
-	const { scheduleUpdate: scheduleDebouncedUpdate, flushUpdate: flushDebouncedUpdate } =
+	const { scheduleUpdate: _scheduleDebouncedUpdate, flushUpdate: flushDebouncedUpdate } =
 		useSessionDebounce<Record<string, BatchRunState>>({
 			delayMs: BATCH_STATE_DEBOUNCE_MS,
 			onUpdate: useCallback(
@@ -507,7 +514,7 @@ export function useBatchProcessor({
 		(
 			sessionId: string,
 			updater: (prev: Record<string, BatchRunState>) => Record<string, BatchRunState>,
-			immediate: boolean = false
+			_immediate: boolean = false
 		) => {
 			// DEBUG: Bypass debouncing entirely to test if that's the issue
 			// Apply update directly without debouncing
@@ -931,7 +938,8 @@ export function useBatchProcessor({
 							const { workingCopyPath } = await window.maestro.autorun.createWorkingCopy(
 								folderPath,
 								docEntry.filename,
-								loopIteration + 1 // 1-indexed loop number
+								loopIteration + 1, // 1-indexed loop number
+								sshRemoteId
 							);
 							workingCopies.set(docEntry.filename, workingCopyPath);
 							effectiveFilename = workingCopyPath;
@@ -1144,9 +1152,10 @@ export function useBatchProcessor({
 							});
 
 							// Speak the synopsis via TTS if audio feedback is enabled
-							if (audioFeedbackEnabled && audioFeedbackCommand && shortSummary) {
+							// Use refs to get latest setting values (user may toggle mid-run)
+							if (audioFeedbackEnabledRef.current && audioFeedbackCommandRef.current && shortSummary) {
 								window.maestro.notification
-									.speak(shortSummary, audioFeedbackCommand)
+									.speak(shortSummary, audioFeedbackCommandRef.current)
 									.catch((err) => {
 										console.error('[BatchProcessor] Failed to speak synopsis:', err);
 									});
@@ -1633,14 +1642,14 @@ export function useBatchProcessor({
 			// Note: updateBatchStateAndBroadcast is accessed via ref to avoid stale closure in long-running async
 			// flushDebouncedUpdate is stable (empty deps in useSessionDebounce) so adding it doesn't cause re-renders
 		},
+		// Note: audioFeedbackEnabled/audioFeedbackCommand removed from deps - we use refs
+		// to allow mid-run setting changes to take effect immediately
 		[
 			onUpdateSession,
 			onSpawnAgent,
 			onAddHistoryEntry,
 			onComplete,
 			onPRResult,
-			audioFeedbackEnabled,
-			audioFeedbackCommand,
 			timeTracking,
 			onProcessQueueAfterCompletion,
 			flushDebouncedUpdate,

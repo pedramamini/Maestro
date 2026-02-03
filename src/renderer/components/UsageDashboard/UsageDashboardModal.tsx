@@ -25,6 +25,9 @@ import { DurationTrendsChart } from './DurationTrendsChart';
 import { AgentUsageChart } from './AgentUsageChart';
 import { AutoRunStats } from './AutoRunStats';
 import { SessionStats } from './SessionStats';
+import { AgentEfficiencyChart } from './AgentEfficiencyChart';
+import { WeekdayComparisonChart } from './WeekdayComparisonChart';
+import { TasksByHourChart } from './TasksByHourChart';
 import { EmptyState } from './EmptyState';
 import { DashboardSkeleton } from './ChartSkeletons';
 import { ChartErrorBoundary } from './ChartErrorBoundary';
@@ -44,9 +47,9 @@ const OVERVIEW_SECTIONS = [
 	'activity-heatmap',
 	'duration-trends',
 ] as const;
-const AGENTS_SECTIONS = ['session-stats', 'agent-comparison', 'agent-usage'] as const;
-const ACTIVITY_SECTIONS = ['activity-heatmap', 'duration-trends'] as const;
-const AUTORUN_SECTIONS = ['autorun-stats'] as const;
+const AGENTS_SECTIONS = ['session-stats', 'agent-efficiency', 'agent-comparison', 'agent-usage'] as const;
+const ACTIVITY_SECTIONS = ['activity-heatmap', 'weekday-comparison', 'duration-trends'] as const;
+const AUTORUN_SECTIONS = ['autorun-stats', 'tasks-by-hour'] as const;
 
 type SectionId =
 	| (typeof OVERVIEW_SECTIONS)[number]
@@ -58,7 +61,7 @@ type SectionId =
 const perfMetrics = getRendererPerfMetrics('UsageDashboard');
 
 // Stats time range type matching the backend API
-type StatsTimeRange = 'day' | 'week' | 'month' | 'year' | 'all';
+type StatsTimeRange = 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all';
 
 // Aggregation data shape from the stats API
 interface StatsAggregation {
@@ -118,6 +121,7 @@ const TIME_RANGE_OPTIONS: { value: StatsTimeRange; label: string }[] = [
 	{ value: 'day', label: 'Today' },
 	{ value: 'week', label: 'This Week' },
 	{ value: 'month', label: 'This Month' },
+	{ value: 'quarter', label: 'This Quarter' },
 	{ value: 'year', label: 'This Year' },
 	{ value: 'all', label: 'All Time' },
 ];
@@ -347,14 +351,17 @@ export function UsageDashboardModal({
 		const labels: Record<SectionId, string> = {
 			'summary-cards': 'Summary Cards',
 			'session-stats': 'Agent Statistics',
+			'agent-efficiency': 'Agent Efficiency Chart',
 			'agent-comparison': 'Provider Comparison Chart',
 			'agent-usage': 'Agent Usage Chart',
 			'source-distribution': 'Session Type Chart',
 			'location-distribution': 'Location Distribution Chart',
 			'peak-hours': 'Peak Hours Chart',
 			'activity-heatmap': 'Activity Heatmap',
+			'weekday-comparison': 'Weekday vs Weekend Chart',
 			'duration-trends': 'Duration Trends Chart',
 			'autorun-stats': 'Auto Run Statistics',
+			'tasks-by-hour': 'Tasks by Time of Day Chart',
 		};
 		return labels[sectionId] || sectionId;
 	}, []);
@@ -922,6 +929,33 @@ export function UsageDashboardModal({
 										</ChartErrorBoundary>
 									</div>
 
+									{/* Agent Efficiency */}
+									<div
+										ref={setSectionRef('agent-efficiency')}
+										tabIndex={0}
+										role="region"
+										aria-label={getSectionLabel('agent-efficiency')}
+										onKeyDown={(e) => handleSectionKeyDown(e, 'agent-efficiency')}
+										className="outline-none rounded-lg transition-shadow dashboard-section-enter"
+										style={{
+											minHeight: '180px',
+											boxShadow:
+												focusedSection === 'agent-efficiency'
+													? `0 0 0 2px ${theme.colors.accent}`
+													: 'none',
+											animationDelay: '50ms',
+										}}
+										data-testid="section-agent-efficiency"
+									>
+										<ChartErrorBoundary theme={theme} chartName="Agent Efficiency">
+											<AgentEfficiencyChart
+												data={data}
+												theme={theme}
+												colorBlindMode={colorBlindMode}
+											/>
+										</ChartErrorBoundary>
+									</div>
+
 									{/* Provider Comparison */}
 									<div
 										ref={setSectionRef('agent-comparison')}
@@ -1009,6 +1043,33 @@ export function UsageDashboardModal({
 											/>
 										</ChartErrorBoundary>
 									</div>
+
+									{/* Weekday vs Weekend Comparison */}
+									<div
+										ref={setSectionRef('weekday-comparison')}
+										tabIndex={0}
+										role="region"
+										aria-label={getSectionLabel('weekday-comparison')}
+										onKeyDown={(e) => handleSectionKeyDown(e, 'weekday-comparison')}
+										className="outline-none rounded-lg transition-shadow dashboard-section-enter"
+										style={{
+											boxShadow:
+												focusedSection === 'weekday-comparison'
+													? `0 0 0 2px ${theme.colors.accent}`
+													: 'none',
+											animationDelay: '50ms',
+										}}
+										data-testid="section-weekday-comparison"
+									>
+										<ChartErrorBoundary theme={theme} chartName="Weekday Comparison">
+											<WeekdayComparisonChart
+												data={data}
+												theme={theme}
+												colorBlindMode={colorBlindMode}
+											/>
+										</ChartErrorBoundary>
+									</div>
+
 									<div
 										ref={setSectionRef('duration-trends')}
 										tabIndex={0}
@@ -1062,6 +1123,31 @@ export function UsageDashboardModal({
 												timeRange={timeRange}
 												theme={theme}
 												columns={layout.autoRunStatsCols}
+											/>
+										</ChartErrorBoundary>
+									</div>
+
+									{/* Tasks by Time of Day */}
+									<div
+										ref={setSectionRef('tasks-by-hour')}
+										tabIndex={0}
+										role="region"
+										aria-label={getSectionLabel('tasks-by-hour')}
+										onKeyDown={(e) => handleSectionKeyDown(e, 'tasks-by-hour')}
+										className="outline-none rounded-lg transition-shadow dashboard-section-enter"
+										style={{
+											boxShadow:
+												focusedSection === 'tasks-by-hour'
+													? `0 0 0 2px ${theme.colors.accent}`
+													: 'none',
+											animationDelay: '100ms',
+										}}
+										data-testid="section-tasks-by-hour"
+									>
+										<ChartErrorBoundary theme={theme} chartName="Tasks by Hour">
+											<TasksByHourChart
+												timeRange={timeRange}
+												theme={theme}
 											/>
 										</ChartErrorBoundary>
 									</div>

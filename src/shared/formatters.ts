@@ -102,7 +102,7 @@ export function formatRelativeTime(dateOrTimestamp: Date | number | string): str
 	if (diffHours < 24) return `${diffHours}h ago`;
 	if (diffDays < 7) return `${diffDays}d ago`;
 	// Show compact date format (e.g., "Dec 3") for older dates
-	return new Date(timestamp).toLocaleDateString(undefined, { month: 'short', day: 'numeric' });
+	return new Date(timestamp).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 /**

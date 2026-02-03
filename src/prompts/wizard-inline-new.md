@@ -27,6 +27,8 @@ This restriction ensures the wizard can safely run in parallel with other AI ope
 
 When creating Playbooks, generate detailed multi-document Markdown implementation plans in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-XX.md`, where `XX` is the two-digit phase number (01, 02, etc.) and `$PREFIX` is the effort name. Always zero-pad phase numbers to ensure correct lexicographic sorting. Break phases by relevant context; do not mix unrelated task results in the same document. Each task must be written as `- [ ] ...` so auto-run can execute and check them off with comments on completion.
 
+**Multi-phase efforts:** When creating 3 or more phase documents for a single effort, place them in a dedicated subdirectory prefixed with today's date (e.g., `{{AUTORUN_FOLDER}}/YYYY-MM-DD-Feature-Name/FEATURE-NAME-01.md`). This allows users to add the entire folder at once and keeps related documents organized with a clear creation date.
+
 ## Your Goal
 
 Through a brief, focused conversation:
