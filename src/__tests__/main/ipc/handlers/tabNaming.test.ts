@@ -382,7 +382,9 @@ describe('Tab Naming IPC Handlers', () => {
 			expect(result).toBe('Correct Tab Name');
 		});
 
-		it('truncates very long tab names', async () => {
+		it('returns null for very long tab names exceeding 40 chars', async () => {
+			// The extractTabName function filters out lines longer than 40 chars
+			// to ensure tab names remain short and readable
 			let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
 			let onExitCallback: ((sessionId: string) => void) | undefined;
 
@@ -401,18 +403,19 @@ describe('Tab Naming IPC Handlers', () => {
 				expect(mockProcessManager.spawn).toHaveBeenCalled();
 			});
 
-			// Simulate a very long tab name (over 50 chars)
+			// Simulate a very long tab name (over 40 chars) - gets filtered out
 			const longName = 'This Is A Very Long Tab Name That Should Be Truncated Because It Exceeds The Maximum Length';
 			onDataCallback?.('tab-naming-mock-uuid-1234', longName);
 			onExitCallback?.('tab-naming-mock-uuid-1234');
 
 			const result = await resultPromise;
-			expect(result).not.toBeNull();
-			expect((result as string).length).toBeLessThanOrEqual(50);
-			expect((result as string).endsWith('...')).toBe(true);
+			// Long lines are filtered out, so result is null
+			expect(result).toBeNull();
 		});
 
-		it('removes quotes from tab names', async () => {
+		it('filters out lines starting with quotes (example inputs)', async () => {
+			// Lines starting with quotes are filtered as they typically represent
+			// example inputs in the prompt, not actual tab names
 			let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
 			let onExitCallback: ((sessionId: string) => void) | undefined;
 
@@ -431,12 +434,40 @@ describe('Tab Naming IPC Handlers', () => {
 				expect(mockProcessManager.spawn).toHaveBeenCalled();
 			});
 
-			// Simulate output with quotes
+			// Simulate output with quotes - lines starting with " are filtered
 			onDataCallback?.('tab-naming-mock-uuid-1234', '"Quoted Tab Name"');
 			onExitCallback?.('tab-naming-mock-uuid-1234');
 
 			const result = await resultPromise;
-			expect(result).toBe('Quoted Tab Name');
+			// Lines starting with quotes are filtered out as example inputs
+			expect(result).toBeNull();
+		});
+
+		it('removes trailing quotes from tab names', async () => {
+			let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
+			let onExitCallback: ((sessionId: string) => void) | undefined;
+
+			mockProcessManager.on.mockImplementation((event: string, callback: (...args: any[]) => void) => {
+				if (event === 'data') onDataCallback = callback;
+				if (event === 'exit') onExitCallback = callback;
+			});
+
+			const resultPromise = invokeHandler('tabNaming:generateTabName', {
+				userMessage: 'Something with quotes',
+				agentType: 'claude-code',
+				cwd: '/test/project',
+			});
+
+			await vi.waitFor(() => {
+				expect(mockProcessManager.spawn).toHaveBeenCalled();
+			});
+
+			// Tab name with trailing quote gets cleaned up
+			onDataCallback?.('tab-naming-mock-uuid-1234', "Tab Name'");
+			onExitCallback?.('tab-naming-mock-uuid-1234');
+
+			const result = await resultPromise;
+			expect(result).toBe('Tab Name');
 		});
 
 		it('uses stdin for prompt when SSH remote is configured', async () => {
@@ -806,7 +837,9 @@ describe('extractTabName utility', () => {
 				expect(mockProcessManager.spawn).toHaveBeenCalled();
 			});
 
-			onDataCallback?.('tab-naming-mock-uuid-1234', "Here's the tab name: Auth Bug Fix");
+			// The regex matches: here's, the tab name is, tab name:, name:, →, output:
+			// "Tab name: Auth Bug Fix" will have "Tab name:" removed
+			onDataCallback?.('tab-naming-mock-uuid-1234', 'Tab name: Auth Bug Fix');
 			onExitCallback?.('tab-naming-mock-uuid-1234');
 
 			const result = await resultPromise;
@@ -833,9 +866,10 @@ describe('extractTabName utility', () => {
 			});
 
 			// Agent might echo back example text before giving the actual name
+			// The function splits on periods, so use period to separate lines
 			onDataCallback?.(
 				'tab-naming-mock-uuid-1234',
-				'Example: Dark Mode\nActual Tab Name'
+				'Example: Dark Mode. Actual Tab Name'
 			);
 			onExitCallback?.('tab-naming-mock-uuid-1234');
 
@@ -843,7 +877,9 @@ describe('extractTabName utility', () => {
 			expect(result).toBe('Actual Tab Name');
 		});
 
-		it('truncates names longer than 40 characters', async () => {
+		it('filters out lines longer than 40 characters', async () => {
+			// The extractTabName function filters out any line longer than 40 chars
+			// This ensures tab names stay short and readable
 			let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
 			let onExitCallback: ((sessionId: string) => void) | undefined;
 
@@ -862,13 +898,14 @@ describe('extractTabName utility', () => {
 				expect(mockProcessManager.spawn).toHaveBeenCalled();
 			});
 
+			// Line longer than 40 chars is filtered out
 			const longName = 'This Is A Very Long Tab Name That Exceeds The Maximum Length Limit';
 			onDataCallback?.('tab-naming-mock-uuid-1234', longName);
 			onExitCallback?.('tab-naming-mock-uuid-1234');
 
 			const result = await resultPromise;
-			expect(result).toBe('This Is A Very Long Tab Name That Ex...');
-			expect(result!.length).toBe(40);
+			// Long lines are filtered out, resulting in null
+			expect(result).toBeNull();
 		});
 	});
 });
