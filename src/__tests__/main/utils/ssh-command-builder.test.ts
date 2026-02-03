@@ -723,40 +723,71 @@ describe('ssh-command-builder', () => {
 			expect(result.stdinScript).toContain('question');
 		});
 
-		it('includes prompt as final argument in stdin script', async () => {
+		it('includes prompt via stdin heredoc when stdinInput provided', async () => {
 			const result = await buildSshCommandWithStdin(baseConfig, {
 				command: 'opencode',
 				args: ['run', '--format', 'json'],
-				prompt: 'Write hello world to a file',
+				stdinInput: 'Write hello world to a file',
 			});
 
-			expect(result.stdinScript).toContain('opencode');
+			const execLine = result.stdinScript
+				?.split('\n')
+				.find((line) => line.startsWith('exec '));
+			expect(execLine).toBe("exec opencode 'run' '--format' 'json' <<'MAESTRO_PROMPT_EOF'");
 			expect(result.stdinScript).toContain('Write hello world to a file');
+			expect(result.stdinScript).toContain('MAESTRO_PROMPT_EOF');
 		});
 
-		it('handles prompts with special characters without escaping issues', async () => {
+		it('handles stdin prompts with special characters without escaping issues', async () => {
 			const result = await buildSshCommandWithStdin(baseConfig, {
 				command: 'opencode',
 				args: ['run'],
-				prompt: "What's the $PATH? Use `echo` and \"quotes\"",
+				stdinInput: "What's the $PATH? Use `echo` and \"quotes\"",
 			});
 
-			// The script should contain the prompt (escaped for bash)
+			// The script should contain the prompt verbatim (no shell interpolation in heredoc)
 			expect(result.stdinScript).toBeDefined();
-			// Single quotes in the prompt should be escaped
-			expect(result.stdinScript).toContain("'\\''");
+			expect(result.stdinScript).toContain("What's the $PATH? Use `echo` and \"quotes\"");
 		});
 
-		it('handles multi-line prompts', async () => {
+		it('handles multi-line stdin prompts', async () => {
 			const result = await buildSshCommandWithStdin(baseConfig, {
 				command: 'opencode',
 				args: ['run'],
-				prompt: 'Line 1\nLine 2\nLine 3',
+				stdinInput: 'Line 1\nLine 2\nLine 3',
 			});
 
 			expect(result.stdinScript).toContain('Line 1');
 			expect(result.stdinScript).toContain('Line 2');
 			expect(result.stdinScript).toContain('Line 3');
+		});
+
+		it('uses a unique heredoc delimiter when prompt contains the default token', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+				stdinInput: 'Line with MAESTRO_PROMPT_EOF inside',
+			});
+
+			const execLine = result.stdinScript
+				?.split('\n')
+				.find((line) => line.startsWith('exec '));
+			expect(execLine).toContain("<<'MAESTRO_PROMPT_EOF_0'");
+			expect(result.stdinScript).toContain('Line with MAESTRO_PROMPT_EOF inside');
+		});
+
+		it('includes prompt as final argument when stdinInput is not provided', async () => {
+			const result = await buildSshCommandWithStdin(baseConfig, {
+				command: 'opencode',
+				args: ['run'],
+				prompt: "Say 'hello'",
+			});
+
+			const execLine = result.stdinScript
+				?.split('\n')
+				.find((line) => line.startsWith('exec '));
+			// The prompt is escaped with single quotes - "Say 'hello'" becomes "'Say '\\''hello'\\''"
+			expect(execLine).toContain("opencode 'run' 'Say '\\''hello'\\'''");
 		});
 
 		it('uses exec to replace shell with command', async () => {

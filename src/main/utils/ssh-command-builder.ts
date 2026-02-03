@@ -158,15 +158,15 @@ export function buildRemoteCommand(options: RemoteCommandOptions): string {
  *   args: ['run', '--format', 'json'],
  *   cwd: '/home/user/project',
  *   env: { OPENCODE_CONFIG_CONTENT: '{"permission":{"*":"allow"}}' },
- *   prompt: 'Write hello world to a file'
+ *   stdinInput: 'Write hello world to a file'
  * });
  * // result.command = 'ssh'
  * // result.args = ['-o', 'BatchMode=yes', ..., 'user@host', '/bin/bash']
- * // result.stdinScript = '#!/bin/bash\nexport PATH=...\ncd /home/user/project\nOPENCODE_CONFIG_CONTENT=... opencode run --format json "Write hello world to a file"\n'
+ * // result.stdinScript = '#!/bin/bash\nexport PATH=...\ncd /home/user/project\nOPENCODE_CONFIG_CONTENT=...\nexec opencode run --format json <<'MAESTRO_PROMPT_EOF'\nWrite hello world to a file\nMAESTRO_PROMPT_EOF\n'
  */
 export async function buildSshCommandWithStdin(
 	config: SshRemoteConfig,
-	remoteOptions: RemoteCommandOptions & { prompt?: string }
+	remoteOptions: RemoteCommandOptions & { prompt?: string; stdinInput?: string }
 ): Promise<SshCommandResult> {
 	const args: string[] = [];
 
@@ -232,13 +232,28 @@ export async function buildSshCommandWithStdin(
 	// For the script, we use simple quoting since we're not going through shell parsing layers
 	const cmdParts = [remoteOptions.command, ...remoteOptions.args.map((arg) => shellEscape(arg))];
 
-	// Add prompt as final argument if provided
-	if (remoteOptions.prompt) {
+	// Add prompt as final argument if provided and not sending via stdin
+	const hasStdinInput = remoteOptions.stdinInput !== undefined;
+	if (remoteOptions.prompt && !hasStdinInput) {
 		cmdParts.push(shellEscape(remoteOptions.prompt));
 	}
 
 	// Use exec to replace the shell with the command (cleaner process tree)
-	scriptLines.push(`exec ${cmdParts.join(' ')}`);
+	if (hasStdinInput) {
+		// IMPORTANT: Prompts must be passed via stdin to avoid CLI length limits.
+		// Build a safe heredoc delimiter that won't collide with the prompt content.
+		const delimiterBase = 'MAESTRO_PROMPT_EOF';
+		let delimiter = delimiterBase;
+		let counter = 0;
+		while (remoteOptions.stdinInput?.includes(delimiter)) {
+			delimiter = `${delimiterBase}_${counter++}`;
+		}
+		scriptLines.push(`exec ${cmdParts.join(' ')} <<'${delimiter}'`);
+		scriptLines.push(remoteOptions.stdinInput ?? '');
+		scriptLines.push(delimiter);
+	} else {
+		scriptLines.push(`exec ${cmdParts.join(' ')}`);
+	}
 
 	const stdinScript = scriptLines.join('\n') + '\n';
 

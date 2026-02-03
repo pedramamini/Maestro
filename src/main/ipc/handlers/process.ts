@@ -344,12 +344,19 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						// Build the SSH command with stdin script
 						// The script contains PATH setup, cd, env vars, and the actual command
 						// This eliminates all shell escaping issues
+						//
+						// IMPORTANT: OpenCode prompts must be passed via stdin to avoid CLI length limits.
+						// Prompts can be huge and contain arbitrary characters; do NOT pass them as argv.
+						const shouldSendPromptViaStdin = config.toolType === 'opencode' && !!config.prompt;
+						const promptForArgs = shouldSendPromptViaStdin ? undefined : config.prompt;
+						const stdinInput = shouldSendPromptViaStdin ? config.prompt : undefined;
 						const sshCommand = await buildSshCommandWithStdin(sshResult.config, {
 							command: remoteCommand,
 							args: finalArgs,
 							cwd: config.cwd,
 							env: effectiveCustomEnvVars,
-							prompt: config.prompt, // Prompt is included in the stdin script
+							prompt: promptForArgs,
+							stdinInput,
 						});
 
 						commandToSpawn = sshCommand.command;
