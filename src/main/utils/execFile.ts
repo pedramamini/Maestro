@@ -25,7 +25,9 @@ export interface ExecResult {
 /**
  * Determine if a command needs shell execution on Windows
  * - Batch files (.cmd, .bat) always need shell
- * - Commands without extensions need PATHEXT resolution via shell
+ * - Commands without extensions normally need PATHEXT resolution via shell,
+ *   BUT we avoid shell for known commands that have .exe variants (git, node, etc.)
+ *   to prevent percent-sign escaping issues in arguments
  * - Executables (.exe, .com) can run directly
  */
 function needsWindowsShell(command: string): boolean {
@@ -41,7 +43,14 @@ function needsWindowsShell(command: string): boolean {
 		return false;
 	}
 
-	// Commands without extension need shell for PATHEXT resolution
+	// Commands without extension: skip shell for known commands that have .exe variants
+	// This prevents issues like % being interpreted as environment variables on Windows
+	const knownExeCommands = ['git', 'node', 'npm', 'yarn', 'python', 'python3'];
+	if (knownExeCommands.includes(lowerCommand)) {
+		return false;
+	}
+
+	// Other commands without extension still need shell for PATHEXT resolution
 	const hasExtension = path.extname(command).length > 0;
 	return !hasExtension;
 }
