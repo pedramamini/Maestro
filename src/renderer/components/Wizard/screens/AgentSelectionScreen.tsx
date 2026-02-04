@@ -1124,8 +1124,8 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 				>
 					<Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: theme.colors.accent }} />
 					<span style={{ color: theme.colors.textDim }}>
-						<strong style={{ color: theme.colors.textMain }}>Note:</strong> This wizard captures
-						application inputs until complete. For a lighter touch, skip this and use{' '}
+						<strong style={{ color: theme.colors.textMain }}>Note:</strong> The new agent wizard captures
+						application inputs until complete. For a lighter touch, create a new agent then run{' '}
 						<code
 							className="px-1 py-0.5 rounded text-[11px]"
 							style={{ backgroundColor: theme.colors.border }}
@@ -1137,7 +1137,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 							className="inline w-3.5 h-3.5 align-text-bottom"
 							style={{ color: theme.colors.accent }}
 						/>
-						{' '}button in the Auto Run panel after creating an agent.
+						{' '}button in the Auto Run panel. The in-tab wizard runs alongside your other work.
 					</span>
 				</div>
 			</div>

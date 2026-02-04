@@ -1613,9 +1613,24 @@ function TabBarInner({
 					`[data-tab-id="${targetTabId}"]`
 				) as HTMLElement | null;
 				if (container && tabElement) {
-					// Use scrollIntoView with 'nearest' to ensure the full tab is visible
-					// This scrolls minimally - only if the tab is partially or fully out of view
-					tabElement.scrollIntoView({ inline: 'nearest', behavior: 'smooth', block: 'nearest' });
+					// Calculate scroll position manually to ensure FULL tab is visible
+					// scrollIntoView with 'nearest' doesn't always work when tab expands on activation
+					const containerRect = container.getBoundingClientRect();
+					const tabRect = tabElement.getBoundingClientRect();
+
+					// Check if right edge is clipped (most common issue with close button)
+					const rightOverflow = tabRect.right - containerRect.right;
+					if (rightOverflow > 0) {
+						// Scroll right to reveal the full tab including close button
+						container.scrollLeft += rightOverflow + 8; // +8px padding for breathing room
+					}
+
+					// Check if left edge is clipped
+					const leftOverflow = containerRect.left - tabRect.left;
+					if (leftOverflow > 0) {
+						// Scroll left to reveal the tab
+						container.scrollLeft -= leftOverflow + 8;
+					}
 				}
 			});
 		});
