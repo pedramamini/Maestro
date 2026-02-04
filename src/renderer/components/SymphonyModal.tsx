@@ -38,8 +38,9 @@ import {
 	ChevronDown,
 	HelpCircle,
 	Github,
+	Terminal,
 } from 'lucide-react';
-import type { Theme } from '../types';
+import type { Theme, Session } from '../types';
 import type {
 	RegisteredRepository,
 	SymphonyIssue,
@@ -79,6 +80,8 @@ export interface SymphonyModalProps {
 	isOpen: boolean;
 	onClose: () => void;
 	onStartContribution: (data: SymphonyContributionData) => void;
+	sessions: Session[];
+	onSelectSession: (sessionId: string) => void;
 }
 
 type ModalTab = 'projects' | 'active' | 'history' | 'stats';
@@ -862,12 +865,16 @@ function ActiveContributionCard({
 	onFinalize,
 	onSync,
 	isSyncing,
+	sessionName,
+	onNavigateToSession,
 }: {
 	contribution: ActiveContribution;
 	theme: Theme;
 	onFinalize: () => void;
 	onSync: () => void;
 	isSyncing: boolean;
+	sessionName: string | null;
+	onNavigateToSession: () => void;
 }) {
 	const statusInfo = getStatusInfo(contribution.status);
 	const docProgress =
@@ -902,6 +909,17 @@ function ActiveContributionCard({
 					<p className="text-xs truncate" style={{ color: theme.colors.textDim }}>
 						{contribution.repoSlug}
 					</p>
+					{sessionName && (
+						<button
+							onClick={onNavigateToSession}
+							className="flex items-center gap-1 text-xs mt-0.5 hover:underline cursor-pointer"
+							style={{ color: theme.colors.accent }}
+							title={`Go to session: ${sessionName}`}
+						>
+							<Terminal className="w-3 h-3" />
+							<span className="truncate">{sessionName}</span>
+						</button>
+					)}
 				</div>
 				<div className="flex items-center gap-2 shrink-0">
 					<button
@@ -1178,7 +1196,14 @@ function AchievementCard({ achievement, theme }: { achievement: Achievement; the
 // Main SymphonyModal
 // ============================================================================
 
-export function SymphonyModal({ theme, isOpen, onClose, onStartContribution }: SymphonyModalProps) {
+export function SymphonyModal({
+	theme,
+	isOpen,
+	onClose,
+	onStartContribution,
+	sessions,
+	onSelectSession,
+}: SymphonyModalProps) {
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
@@ -1949,16 +1974,32 @@ export function SymphonyModal({ theme, isOpen, onClose, onStartContribution }: S
 											</div>
 										) : (
 											<div className="grid grid-cols-2 gap-4">
-												{activeContributions.map((contribution) => (
-													<ActiveContributionCard
-														key={contribution.id}
-														contribution={contribution}
-														theme={theme}
-														onFinalize={() => handleFinalize(contribution.id)}
-														onSync={() => handleSyncContribution(contribution.id)}
-														isSyncing={syncingContributionId === contribution.id}
-													/>
-												))}
+												{activeContributions.map((contribution) => {
+													const session = sessions.find(
+														(s) => s.id === contribution.sessionId
+													);
+													return (
+														<ActiveContributionCard
+															key={contribution.id}
+															contribution={contribution}
+															theme={theme}
+															onFinalize={() => handleFinalize(contribution.id)}
+															onSync={() =>
+																handleSyncContribution(contribution.id)
+															}
+															isSyncing={
+																syncingContributionId === contribution.id
+															}
+															sessionName={session?.name ?? null}
+															onNavigateToSession={() => {
+																if (session) {
+																	onSelectSession(session.id);
+																	onClose();
+																}
+															}}
+														/>
+													);
+												})}
 											</div>
 										)}
 									</div>

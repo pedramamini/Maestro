@@ -13780,6 +13780,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 							theme={theme}
 							isOpen={symphonyModalOpen}
 							onClose={() => setSymphonyModalOpen(false)}
+							sessions={sessions}
+							onSelectSession={(sessionId) => {
+								setActiveSessionId(sessionId);
+								setSymphonyModalOpen(false);
+							}}
 							onStartContribution={async (data: SymphonyContributionData) => {
 								console.log('[Symphony] Creating session for contribution:', data);
 
