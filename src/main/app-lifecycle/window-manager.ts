@@ -86,6 +86,7 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 				minWidth: 1000,
 				minHeight: 600,
 				backgroundColor: '#0b0b0d',
+				autoHideMenuBar: true,
 				titleBarStyle: 'hiddenInset',
 				webPreferences: {
 					preload: preloadPath,
@@ -208,21 +209,24 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 			});
 
 			// Handle page load failures (network issues, invalid URLs, etc.)
-			mainWindow.webContents.on('did-fail-load', (_event, errorCode, errorDescription, validatedURL) => {
-				// Ignore aborted loads (user navigated away)
-				if (errorCode === -3) return;
+			mainWindow.webContents.on(
+				'did-fail-load',
+				(_event, errorCode, errorDescription, validatedURL) => {
+					// Ignore aborted loads (user navigated away)
+					if (errorCode === -3) return;
 
-				logger.error('Page failed to load', 'Window', {
-					errorCode,
-					errorDescription,
-					url: validatedURL,
-				});
-				reportCrashToSentry(`Page failed to load: ${errorDescription}`, 'error', {
-					errorCode,
-					errorDescription,
-					url: validatedURL,
-				});
-			});
+					logger.error('Page failed to load', 'Window', {
+						errorCode,
+						errorDescription,
+						url: validatedURL,
+					});
+					reportCrashToSentry(`Page failed to load: ${errorDescription}`, 'error', {
+						errorCode,
+						errorDescription,
+						url: validatedURL,
+					});
+				}
+			);
 
 			// Handle preload script errors
 			mainWindow.webContents.on('preload-error', (_event, preloadPath, error) => {
