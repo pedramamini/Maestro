@@ -89,7 +89,7 @@ export function WelcomeContent({ theme, showGetStarted = false }: WelcomeContent
 
 			{/* How it works section */}
 			<div
-				className="text-sm leading-relaxed p-4 rounded-lg text-left"
+				className="text-sm leading-relaxed p-4 rounded-lg text-left space-y-2"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					color: theme.colors.textDim,
@@ -97,6 +97,10 @@ export function WelcomeContent({ theme, showGetStarted = false }: WelcomeContent
 			>
 				<p>
 					<strong style={{ color: theme.colors.textMain }}>How it works:</strong>{' '}
+					Maestro is a pass-through to your AI provider. Your MCP tools, skills,
+					and permissions work exactly as they do when running the provider directly.
+				</p>
+				<p>
 					Agents run in auto-approve mode with tool calls accepted automatically.
 					Toggle Read-Only mode for guardrails.
 				</p>

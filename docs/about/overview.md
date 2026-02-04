@@ -49,3 +49,4 @@ This approach mirrors methodologies like [Spec-Kit](https://github.com/github/sp
 | **History** | Timestamped log of all actions (user commands, AI responses, Auto Run completions) with session links. |
 | **Remote Control** | Web interface for mobile access. Local network or remote via Cloudflare tunnel. |
 | **CLI** | Headless command-line tool for scripting, automation, and CI/CD integration. |
+| **Provider Pass-Through** | Maestro delegates all AI work to your installed provider (Claude Code, Codex, OpenCode). Your MCP tools, custom skills, permissions, and authentication all carry over—Maestro runs them in batch mode (prompt in, response out) rather than interactive mode. |

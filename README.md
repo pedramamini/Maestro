@@ -12,6 +12,8 @@ Collaborate with AI to create detailed specification documents, then let Auto Ru
 
 Run multiple agents in parallel with a Linear/Superhuman-level responsive interface. Currently supporting **Claude Code**, **OpenAI Codex**, **OpenCode**, and **Factory Droid** with plans for additional agentic coding tools (Gemini CLI, Qwen3 Coder) based on user demand.
 
+> **How It Works:** Maestro is a pass-through to your AI provider. Whatever MCP tools, skills, permissions, or authentication you have configured in Claude Code, Codex, or OpenCode works identically in Maestro. The only difference is we're not running interactively—each task gets a prompt and returns a response, whether it's a new session or resuming a prior one.
+
 <div align="center">
   <a href="https://youtu.be/fmwwTOg7cyA?si=dJ89K54tGflKa5G4">
     <img src="https://github.com/user-attachments/assets/deaf601d-1898-4ede-bf5a-42e46874ebb3"
