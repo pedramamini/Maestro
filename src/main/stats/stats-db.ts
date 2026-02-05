@@ -540,4 +540,47 @@ export class StatsDB {
 	exportToCsv(range: StatsTimeRange): string {
 		return exportToCsv(this.database, range);
 	}
+
+	// ============================================================================
+	// Timestamps
+	// ============================================================================
+
+	/**
+	 * Get the earliest timestamp across all stats tables.
+	 * Returns null if no stats data exists.
+	 */
+	getEarliestTimestamp(): number | null {
+		try {
+			// Query the minimum startTime from query_events table
+			const queryResult = this.database
+				.prepare('SELECT MIN(startTime) as earliest FROM query_events')
+				.get() as { earliest: number | null } | undefined;
+
+			// Query the minimum startTime from auto_run_sessions table
+			const autoRunResult = this.database
+				.prepare('SELECT MIN(startTime) as earliest FROM auto_run_sessions')
+				.get() as { earliest: number | null } | undefined;
+
+			// Query the minimum createdAt from session_lifecycle table
+			const lifecycleResult = this.database
+				.prepare('SELECT MIN(createdAt) as earliest FROM session_lifecycle')
+				.get() as { earliest: number | null } | undefined;
+
+			// Find the minimum across all tables
+			const timestamps = [
+				queryResult?.earliest,
+				autoRunResult?.earliest,
+				lifecycleResult?.earliest,
+			].filter((t): t is number => t !== null && t !== undefined);
+
+			if (timestamps.length === 0) {
+				return null;
+			}
+
+			return Math.min(...timestamps);
+		} catch (error) {
+			logger.error(`Failed to get earliest timestamp: ${error}`, LOG_CONTEXT);
+			return null;
+		}
+	}
 }
