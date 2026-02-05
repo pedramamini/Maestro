@@ -265,6 +265,10 @@ export interface ModalContextValue {
 	symphonyModalOpen: boolean;
 	setSymphonyModalOpen: (open: boolean) => void;
 
+	// Director's Notes Modal
+	directorNotesOpen: boolean;
+	setDirectorNotesOpen: (open: boolean) => void;
+
 	// Windows Warning Modal
 	windowsWarningModalOpen: boolean;
 	setWindowsWarningModalOpen: (open: boolean) => void;
@@ -449,6 +453,9 @@ export function ModalProvider({ children }: ModalProviderProps) {
 
 	// Symphony Modal
 	const [symphonyModalOpen, setSymphonyModalOpen] = useState(false);
+
+	// Director's Notes Modal
+	const [directorNotesOpen, setDirectorNotesOpen] = useState(false);
 
 	// Windows Warning Modal
 	const [windowsWarningModalOpen, setWindowsWarningModalOpen] = useState(false);
@@ -704,6 +711,10 @@ export function ModalProvider({ children }: ModalProviderProps) {
 			symphonyModalOpen,
 			setSymphonyModalOpen,
 
+			// Director's Notes Modal
+			directorNotesOpen,
+			setDirectorNotesOpen,
+
 			// Windows Warning Modal
 			windowsWarningModalOpen,
 			setWindowsWarningModalOpen,
@@ -822,6 +833,8 @@ export function ModalProvider({ children }: ModalProviderProps) {
 			tourFromWizard,
 			// Symphony Modal
 			symphonyModalOpen,
+			// Director's Notes Modal
+			directorNotesOpen,
 			// Windows Warning Modal
 			windowsWarningModalOpen,
 		]
