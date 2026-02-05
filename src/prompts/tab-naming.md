@@ -4,6 +4,7 @@ Rules:
 - 2-4 words max, shorter is better
 - Title Case, no punctuation
 - Be specific (mention tech/file names if relevant)
+- Include ID numbers (PR #, issue #, ticket ID) when mentioned
 - Use hyphens for compound concepts
 - If too vague, use format: YYYY-MM-DD Topic
 
@@ -13,4 +14,7 @@ Examples:
 "refactor DB queries for pooling" = DB Connection Pooling
 "write tests for checkout" = Checkout Tests
 "fix TS errors in parser.ts" = Parser TS Errors
+"review PR #256" = PR 256 Review
+"fix issue #42 memory leak" = Issue 42 Memory Leak
+"implement JIRA-1234 feature" = JIRA-1234 Feature
 "help with my code" = 2024-01-15 Code Help
