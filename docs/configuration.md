@@ -112,7 +112,6 @@ In-app toast notifications appear in the corner when events occur. Configure how
 Notifications are sent when:
 - An AI task completes (OS notification + optional custom notification)
 - A long-running command finishes (OS notification)
-- The LLM analysis generates a feedback synopsis (custom notification only, if configured)
 
 ## Sleep Prevention
 

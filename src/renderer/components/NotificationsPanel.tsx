@@ -306,10 +306,6 @@ export function NotificationsPanel({
 				<ul className="text-xs opacity-70 space-y-1" style={{ color: theme.colors.textDim }}>
 					<li>• When an AI task completes</li>
 					<li>• When a long-running command finishes</li>
-					<li>
-						• When the LLM analysis generates a feedback synopsis (custom notification only, if
-						configured)
-					</li>
 				</ul>
 				<div
 					className="text-xs opacity-60 mt-3 pt-3"
