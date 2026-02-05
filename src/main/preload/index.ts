@@ -48,6 +48,7 @@ import { createFsApi } from './fs';
 import { createAgentsApi } from './agents';
 import { createSymphonyApi } from './symphony';
 import { createTabNamingApi } from './tabNaming';
+import { createDirectorNotesApi } from './directorNotes';
 
 // Expose protected methods that allow the renderer process to use
 // the ipcRenderer without exposing the entire object
@@ -180,6 +181,9 @@ contextBridge.exposeInMainWorld('maestro', {
 
 	// Tab Naming API (automatic tab name generation)
 	tabNaming: createTabNamingApi(),
+
+	// Director's Notes API (unified history + synopsis)
+	directorNotes: createDirectorNotesApi(),
 });
 
 // Re-export factory functions for external consumers (e.g., tests)
@@ -249,6 +253,8 @@ export {
 	createSymphonyApi,
 	// Tab Naming
 	createTabNamingApi,
+	// Director's Notes
+	createDirectorNotesApi,
 };
 
 // Re-export types for TypeScript consumers
@@ -444,3 +450,11 @@ export type {
 	TabNamingApi,
 	TabNamingConfig,
 } from './tabNaming';
+export type {
+	// From directorNotes
+	DirectorNotesApi,
+	UnifiedHistoryOptions,
+	UnifiedHistoryEntry,
+	SynopsisOptions,
+	SynopsisResult,
+} from './directorNotes';

@@ -476,10 +476,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 		const handleTabNavigation = (e: KeyboardEvent) => {
 			const tabs: Array<
-				'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+				'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh' | 'director-notes'
 			> = FEATURE_FLAGS.LLM_SETTINGS
-				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
-				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
+				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh', 'director-notes']
+				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh', 'director-notes'];
 			const currentIndex = tabs.indexOf(activeTab);
 
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {

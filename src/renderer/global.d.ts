@@ -2603,6 +2603,45 @@ interface MaestroAPI {
 			};
 		}) => Promise<string | null>;
 	};
+
+	// Director's Notes API (unified history + synopsis generation)
+	directorNotes: {
+		getUnifiedHistory: (options: {
+			lookbackDays: number;
+			filter?: 'AUTO' | 'USER' | null;
+		}) => Promise<
+			Array<{
+				id: string;
+				type: HistoryEntryType;
+				timestamp: number;
+				summary: string;
+				fullResponse?: string;
+				agentSessionId?: string;
+				sessionName?: string;
+				projectPath: string;
+				sessionId?: string;
+				contextUsage?: number;
+				success?: boolean;
+				elapsedTimeMs?: number;
+				validated?: boolean;
+				agentName?: string;
+				sourceSessionId: string;
+			}>
+		>;
+		estimateTokens: (
+			entries: Array<{
+				summary: string;
+				fullResponse?: string;
+			}>
+		) => Promise<number>;
+		generateSynopsis: (options: {
+			lookbackDays: number;
+			provider: 'claude-code' | 'codex' | 'opencode';
+		}) => Promise<{
+			success: boolean;
+			synopsis: string;
+		}>;
+	};
 }
 
 declare global {
