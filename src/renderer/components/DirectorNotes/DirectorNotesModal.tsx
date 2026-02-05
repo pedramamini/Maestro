@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, lazy, Suspense } from 'react';
+import React, { useState, useEffect, useRef, useCallback, lazy, Suspense } from 'react';
 import { createPortal } from 'react-dom';
 import { X, History, Sparkles, Loader2 } from 'lucide-react';
 import type { Theme } from '../../types';
@@ -48,16 +48,15 @@ export function DirectorNotesModal({
 		};
 	}, [registerLayer, unregisterLayer, onClose]);
 
-	// Start generating overview when modal opens
+	// Handle synopsis ready callback from AIOverviewTab
+	const handleSynopsisReady = useCallback(() => {
+		setOverviewGenerating(false);
+		setOverviewReady(true);
+	}, []);
+
+	// Start generating indicator when modal opens
 	useEffect(() => {
 		setOverviewGenerating(true);
-		// Phase 07 will implement actual generation
-		// For now, simulate completion after a delay
-		const timer = setTimeout(() => {
-			setOverviewGenerating(false);
-			setOverviewReady(true);
-		}, 2000);
-		return () => clearTimeout(timer);
 	}, []);
 
 	return createPortal(
@@ -129,19 +128,19 @@ export function DirectorNotesModal({
 							<Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.colors.textDim }} />
 						</div>
 					}>
-						{activeTab === 'history' && (
+						<div className={`h-full ${activeTab === 'history' ? '' : 'hidden'}`}>
 							<UnifiedHistoryTab
 								theme={theme}
 								fileTree={fileTree}
 								onFileClick={onFileClick}
 							/>
-						)}
-						{activeTab === 'overview' && overviewReady && (
+						</div>
+						<div className={`h-full ${activeTab === 'overview' ? '' : 'hidden'}`}>
 							<AIOverviewTab
 								theme={theme}
-								onSynopsisReady={() => setOverviewReady(true)}
+								onSynopsisReady={handleSynopsisReady}
 							/>
-						)}
+						</div>
 					</Suspense>
 				</div>
 			</div>

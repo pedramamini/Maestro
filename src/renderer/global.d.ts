@@ -2640,6 +2640,7 @@ interface MaestroAPI {
 		}) => Promise<{
 			success: boolean;
 			synopsis: string;
+			error?: string;
 		}>;
 	};
 }

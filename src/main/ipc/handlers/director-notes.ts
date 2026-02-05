@@ -39,6 +39,7 @@ export interface SynopsisOptions {
 export interface SynopsisResult {
 	success: boolean;
 	synopsis: string;
+	error?: string;
 }
 
 /**
