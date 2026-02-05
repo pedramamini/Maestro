@@ -66,6 +66,8 @@ export interface HistoryEntryItemProps {
 	onOpenDetailModal: (entry: HistoryEntry, index: number) => void;
 	onOpenSessionAsTab?: (agentSessionId: string) => void;
 	onOpenAboutModal?: () => void;
+	/** When true, displays the agentName field prominently in the entry header (used in unified history view) */
+	showAgentName?: boolean;
 }
 
 export const HistoryEntryItem = memo(function HistoryEntryItem({
@@ -76,6 +78,7 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 	onOpenDetailModal,
 	onOpenSessionAsTab,
 	onOpenAboutModal,
+	showAgentName,
 }: HistoryEntryItemProps) {
 	const colors = getPillColor(entry.type, theme);
 	const Icon = getEntryIcon(entry.type);
@@ -144,6 +147,21 @@ export const HistoryEntryItem = memo(function HistoryEntryItem({
 						<Icon className="w-2.5 h-2.5" />
 						{entry.type}
 					</span>
+
+					{/* Agent Name - shown in unified history view */}
+					{showAgentName && (entry as HistoryEntry & { agentName?: string }).agentName && (
+						<span
+							className="px-2 py-0.5 rounded-full text-[10px] font-bold truncate max-w-[120px]"
+							style={{
+								backgroundColor: theme.colors.bgActivity,
+								color: theme.colors.textMain,
+								border: `1px solid ${theme.colors.border}`,
+							}}
+							title={(entry as HistoryEntry & { agentName?: string }).agentName}
+						>
+							{(entry as HistoryEntry & { agentName?: string }).agentName}
+						</span>
+					)}
 
 					{/* Session Name or ID Octet (clickable) - opens session as new tab */}
 					{entry.agentSessionId && (
