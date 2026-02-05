@@ -7,7 +7,7 @@ import React, {
 	forwardRef,
 	useMemo,
 } from 'react';
-import { Bot, User, HelpCircle } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Session, Theme, HistoryEntry, HistoryEntryType } from '../types';
 import { HistoryDetailModal } from './HistoryDetailModal';
@@ -16,6 +16,7 @@ import { useThrottledCallback, useListNavigation } from '../hooks';
 import {
 	ActivityGraph,
 	HistoryEntryItem,
+	HistoryFilterToggle,
 	MAX_HISTORY_IN_MEMORY,
 	ESTIMATED_ROW_HEIGHT,
 	ESTIMATED_ROW_HEIGHT_SIMPLE,
@@ -428,72 +429,16 @@ export const HistoryPanel = React.memo(
 			[session.id, setSelectedIndex]
 		);
 
-		// Get pill color based on type (used by filter buttons in header)
-		const getPillColor = (type: HistoryEntryType) => {
-			switch (type) {
-				case 'AUTO':
-					return {
-						bg: theme.colors.warning + '20',
-						text: theme.colors.warning,
-						border: theme.colors.warning + '40',
-					};
-				case 'USER':
-					return {
-						bg: theme.colors.accent + '20',
-						text: theme.colors.accent,
-						border: theme.colors.accent + '40',
-					};
-				default:
-					return {
-						bg: theme.colors.bgActivity,
-						text: theme.colors.textDim,
-						border: theme.colors.border,
-					};
-			}
-		};
-
-		// Get icon for entry type (used by filter buttons in header)
-		const getEntryIcon = (type: HistoryEntryType) => {
-			switch (type) {
-				case 'AUTO':
-					return Bot;
-				case 'USER':
-					return User;
-				default:
-					return Bot;
-			}
-		};
-
 		return (
 			<div className="flex flex-col h-full">
 				{/* Filter Pills + Activity Graph + Help Button */}
 				<div className="flex items-start gap-3 mb-4 pt-2">
 					{/* Left-justified filter pills */}
-					<div className="flex gap-2 flex-shrink-0">
-						{(['AUTO', 'USER'] as HistoryEntryType[]).map((type) => {
-							const isActive = activeFilters.has(type);
-							const colors = getPillColor(type);
-							const Icon = getEntryIcon(type);
-
-							return (
-								<button
-									key={type}
-									onClick={() => toggleFilter(type)}
-									className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase transition-all ${
-										isActive ? 'opacity-100' : 'opacity-40'
-									}`}
-									style={{
-										backgroundColor: isActive ? colors.bg : 'transparent',
-										color: isActive ? colors.text : theme.colors.textDim,
-										border: `1px solid ${isActive ? colors.border : theme.colors.border}`,
-									}}
-								>
-									<Icon className="w-3 h-3" />
-									{type}
-								</button>
-							);
-						})}
-					</div>
+					<HistoryFilterToggle
+						activeFilters={activeFilters}
+						onToggleFilter={toggleFilter}
+						theme={theme}
+					/>
 
 					{/* 24-hour activity bar graph */}
 					<ActivityGraph
