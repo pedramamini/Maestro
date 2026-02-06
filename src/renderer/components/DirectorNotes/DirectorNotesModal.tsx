@@ -32,6 +32,11 @@ export function DirectorNotesModal({
 	// Layer stack registration for Escape handling
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const layerIdRef = useRef<string>();
+	const modalRef = useRef<HTMLDivElement>(null);
+
+	// Store onClose in a ref to avoid re-registering layer when onClose changes
+	const onCloseRef = useRef(onClose);
+	onCloseRef.current = onClose;
 
 	// Register modal layer
 	useEffect(() => {
@@ -41,12 +46,17 @@ export function DirectorNotesModal({
 			blocksLowerLayers: true,
 			capturesFocus: true,
 			focusTrap: 'lenient',
-			onEscape: onClose,
+			onEscape: () => onCloseRef.current(),
 		});
 		return () => {
 			if (layerIdRef.current) unregisterLayer(layerIdRef.current);
 		};
-	}, [registerLayer, unregisterLayer, onClose]);
+	}, [registerLayer, unregisterLayer]);
+
+	// Auto-focus the modal container on mount for keyboard navigation
+	useEffect(() => {
+		modalRef.current?.focus();
+	}, []);
 
 	// Handle synopsis ready callback from AIOverviewTab
 	const handleSynopsisReady = useCallback(() => {
@@ -66,7 +76,9 @@ export function DirectorNotesModal({
 
 			{/* Modal */}
 			<div
-				className="relative w-full max-w-5xl h-[85vh] overflow-hidden rounded-lg border shadow-2xl flex flex-col"
+				ref={modalRef}
+				tabIndex={-1}
+				className="relative w-full max-w-5xl h-[85vh] overflow-hidden rounded-lg border shadow-2xl flex flex-col outline-none"
 				style={{
 					backgroundColor: theme.colors.bgSidebar,
 					borderColor: theme.colors.border,
