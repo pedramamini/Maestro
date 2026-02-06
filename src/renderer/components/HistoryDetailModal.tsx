@@ -25,23 +25,7 @@ import { stripAnsiCodes } from '../../shared/stringUtils';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
 import { calculateContextTokens } from '../utils/contextUsage';
-
-// Double checkmark SVG component for validated entries
-const DoubleCheck = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-	<svg
-		className={className}
-		style={style}
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2.5"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<polyline points="15 6 6 17 1 12" />
-		<polyline points="23 6 14 17 11 14" />
-	</svg>
-);
+import { DoubleCheck } from './History';
 
 interface HistoryDetailModalProps {
 	theme: Theme;
@@ -525,20 +509,24 @@ export function HistoryDetailModal({
 					className="flex items-center justify-between px-6 py-4 border-t shrink-0"
 					style={{ borderColor: theme.colors.border }}
 				>
-					{/* Delete button */}
-					<button
-						onClick={() => setShowDeleteConfirm(true)}
-						className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors hover:opacity-90"
-						style={{
-							backgroundColor: theme.colors.error + '20',
-							color: theme.colors.error,
-							border: `1px solid ${theme.colors.error}40`,
-						}}
-						title="Delete this history entry"
-					>
-						<Trash2 className="w-4 h-4" />
-						Delete
-					</button>
+					{/* Delete button - only shown when onDelete handler is provided */}
+					{onDelete ? (
+						<button
+							onClick={() => setShowDeleteConfirm(true)}
+							className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors hover:opacity-90"
+							style={{
+								backgroundColor: theme.colors.error + '20',
+								color: theme.colors.error,
+								border: `1px solid ${theme.colors.error}40`,
+							}}
+							title="Delete this history entry"
+						>
+							<Trash2 className="w-4 h-4" />
+							Delete
+						</button>
+					) : (
+						<div />
+					)}
 
 					{/* Prev/Next navigation buttons - centered */}
 					{canNavigate && (
