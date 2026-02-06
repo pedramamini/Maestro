@@ -683,8 +683,6 @@ describe('Database file creation on first launch', () => {
  * Daily backup system tests
  */
 describe('Daily backup system', () => {
-	const mockFsReaddirSync = vi.fn();
-
 	beforeEach(() => {
 		vi.clearAllMocks();
 		lastDbPath = null;
@@ -695,19 +693,6 @@ describe('Daily backup system', () => {
 		mockStatement.all.mockReturnValue([]);
 		mockFsExistsSync.mockReturnValue(true);
 		mockFsReaddirSync.mockReturnValue([]);
-
-		// Mock readdirSync in the fs mock
-		vi.doMock('fs', () => ({
-			existsSync: (...args: unknown[]) => mockFsExistsSync(...args),
-			mkdirSync: (...args: unknown[]) => mockFsMkdirSync(...args),
-			copyFileSync: (...args: unknown[]) => mockFsCopyFileSync(...args),
-			unlinkSync: (...args: unknown[]) => mockFsUnlinkSync(...args),
-			renameSync: (...args: unknown[]) => mockFsRenameSync(...args),
-			statSync: (...args: unknown[]) => mockFsStatSync(...args),
-			readFileSync: (...args: unknown[]) => mockFsReadFileSync(...args),
-			writeFileSync: (...args: unknown[]) => mockFsWriteFileSync(...args),
-			readdirSync: (...args: unknown[]) => mockFsReaddirSync(...args),
-		}));
 	});
 
 	afterEach(() => {
@@ -828,6 +813,13 @@ describe('Daily backup system', () => {
 
 	describe('daily backup creation on initialize', () => {
 		it('should attempt to create daily backup on initialization', async () => {
+			// existsSync must return false for the daily backup path so the backup is created
+			const today = new Date().toISOString().split('T')[0];
+			mockFsExistsSync.mockImplementation((p: unknown) => {
+				if (typeof p === 'string' && p.includes(`daily.${today}`)) return false;
+				return true;
+			});
+
 			const { StatsDB } = await import('../../../main/stats');
 			const db = new StatsDB();
 			db.initialize();
