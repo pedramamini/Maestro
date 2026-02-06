@@ -393,6 +393,12 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						// For SSH, env vars are passed in the stdin script, not locally
 						customEnvVarsToPass = undefined;
 
+						// CRITICAL: When using SSH, do NOT use shell execution
+						// SSH needs direct stdin/stdout/stderr access for the script passthrough to work
+						// Running SSH through a shell breaks stdin passthrough and the agent never gets the script
+						useShell = false;
+						shellToUse = undefined;
+
 						logger.info(`SSH command built with stdin passthrough`, LOG_CONTEXT, {
 							sessionId: config.sessionId,
 							toolType: config.toolType,
