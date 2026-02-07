@@ -5358,6 +5358,20 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, []);
 
 	/**
+	 * Save a terminal tab rename and close the rename modal.
+	 */
+	const handleTerminalTabRenameSave = useCallback(
+		(name: string) => {
+			if (activeSession && terminalRenameTabId) {
+				handleTerminalTabRename(activeSession.id, terminalRenameTabId, name);
+			}
+			setTerminalRenameModalOpen(false);
+			setTerminalRenameTabId(null);
+		},
+		[activeSession, terminalRenameTabId, handleTerminalTabRename]
+	);
+
+	/**
 	 * Reorder terminal tabs.
 	 */
 	const handleTerminalTabReorder = useCallback(
