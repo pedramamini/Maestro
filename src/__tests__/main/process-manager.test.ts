@@ -516,6 +516,57 @@ describe('process-manager.ts', () => {
 			});
 		});
 
+		describe('interrupt', () => {
+			it('sends Ctrl+C to a terminal-tab PTY using the full terminal session id', () => {
+				const terminalSessionId = 'abc123-terminal-def456';
+				const ptyWrite = vi.fn();
+
+				(
+					processManager as unknown as {
+						processes: Map<string, Record<string, unknown>>;
+					}
+				).processes.set(terminalSessionId, {
+					sessionId: terminalSessionId,
+					toolType: 'terminal',
+					cwd: '/tmp',
+					pid: 24,
+					isTerminal: true,
+					startTime: Date.now(),
+					ptyProcess: {
+						write: ptyWrite,
+					},
+				});
+
+				expect(processManager.interrupt(terminalSessionId)).toBe(true);
+				expect(ptyWrite).toHaveBeenCalledWith('\x03');
+			});
+
+			it('does not interrupt a terminal-tab PTY when only the base session id is provided', () => {
+				const terminalSessionId = 'abc123-terminal-def456';
+				const ptyWrite = vi.fn();
+
+				(
+					processManager as unknown as {
+						processes: Map<string, Record<string, unknown>>;
+					}
+				).processes.set(terminalSessionId, {
+					sessionId: terminalSessionId,
+					toolType: 'terminal',
+					cwd: '/tmp',
+					pid: 88,
+					isTerminal: true,
+					startTime: Date.now(),
+					ptyProcess: {
+						write: ptyWrite,
+					},
+				});
+
+				expect(processManager.interrupt('abc123')).toBe(false);
+				expect(ptyWrite).not.toHaveBeenCalled();
+				expect(processManager.get(terminalSessionId)).toBeDefined();
+			});
+		});
+
 		describe('kill', () => {
 			it('kills a terminal-tab PTY using the full terminal session id', () => {
 				const terminalSessionId = 'abc123-terminal-def456';
