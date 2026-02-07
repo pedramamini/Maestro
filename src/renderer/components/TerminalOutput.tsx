@@ -737,7 +737,6 @@ export const TerminalOutput = memo(
 			session,
 			theme,
 			fontFamily,
-			activeFocus: _activeFocus,
 			outputSearchOpen,
 			outputSearchQuery,
 			setOutputSearchOpen,
@@ -749,7 +748,6 @@ export const TerminalOutput = memo(
 			maxOutputLines,
 			onDeleteLog,
 			onRemoveQueuedItem,
-			onInterrupt: _onInterrupt,
 			onScrollPositionChange,
 			onAtBottomChange,
 			initialScrollTop,
@@ -773,18 +771,9 @@ export const TerminalOutput = memo(
 
 		// Track which log entries are expanded (by log ID)
 		const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
-		// Use a ref to access current value without recreating LogItem callback
-		const expandedLogsRef = useRef(expandedLogs);
-		expandedLogsRef.current = expandedLogs;
-		// Counter to force re-render of LogItem when expanded state changes
-		const [_expandedTrigger, setExpandedTrigger] = useState(0);
 
 		// Delete confirmation state
 		const [deleteConfirmLogId, setDeleteConfirmLogId] = useState<string | null>(null);
-		const deleteConfirmLogIdRef = useRef(deleteConfirmLogId);
-		deleteConfirmLogIdRef.current = deleteConfirmLogId;
-		// Counter to force re-render when delete confirmation changes
-		const [_deleteConfirmTrigger, _setDeleteConfirmTrigger] = useState(0);
 
 		// Copy to clipboard notification state
 		const [showCopiedNotification, setShowCopiedNotification] = useState(false);
@@ -878,8 +867,6 @@ export const TerminalOutput = memo(
 				}
 				return newSet;
 			});
-			// Trigger re-render after state update
-			setExpandedTrigger((t) => t + 1);
 		}, []);
 
 		// Callback to toggle markdown mode
