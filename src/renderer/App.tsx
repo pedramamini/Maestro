@@ -190,6 +190,7 @@ import {
 } from './utils/tabHelpers';
 import {
 	createTerminalTab,
+	ensureTerminalTabStructure,
 	getActiveTerminalTab,
 	getTerminalSessionId,
 	parseTerminalSessionId,
@@ -1125,21 +1126,10 @@ function MaestroConsoleInner() {
 				session = { ...session, projectRoot: session.cwd };
 			}
 
-			// Migrate sessions without terminal tabs (backwards compatibility)
-			if (!session.terminalTabs || session.terminalTabs.length === 0) {
-				const defaultTerminalTab = createTerminalTab(defaultShell || 'zsh', session.cwd, null);
-				session = {
-					...session,
-					terminalTabs: [defaultTerminalTab],
-					activeTerminalTabId: defaultTerminalTab.id,
-					closedTerminalTabHistory: [],
-				};
+			const terminalTabMigration = ensureTerminalTabStructure(session, defaultShell || 'zsh');
+			session = terminalTabMigration.session;
+			if (terminalTabMigration.didMigrateTerminalTabs) {
 				console.log(`[restoreSession] Migrated session ${session.id} to terminal tabs`);
-			}
-
-			// Ensure closedTerminalTabHistory exists (runtime-only, not persisted)
-			if (!session.closedTerminalTabHistory) {
-				session = { ...session, closedTerminalTabHistory: [] };
 			}
 
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
@@ -1362,7 +1352,12 @@ function MaestroConsoleInner() {
 
 				// Handle sessions
 				if (savedSessions && savedSessions.length > 0) {
-					const restoredSessions = await Promise.all(savedSessions.map((s) => restoreSession(s)));
+					const migratedSessions = savedSessions.map(
+						(session) => ensureTerminalTabStructure(session, defaultShell || 'zsh').session
+					);
+					const restoredSessions = await Promise.all(
+						migratedSessions.map((s) => restoreSession(s))
+					);
 					setSessions(restoredSessions);
 					_hasSessionsLoaded = true;
 					// Set active session to first session if current activeSessionId is invalid

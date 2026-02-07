@@ -3,6 +3,7 @@ import {
 	MAX_CLOSED_TERMINAL_TABS,
 	createClosedTerminalTab,
 	createTerminalTab,
+	ensureTerminalTabStructure,
 	getActiveTerminalTab,
 	getActiveTerminalTabCount,
 	getTerminalSessionId,
@@ -103,6 +104,65 @@ describe('terminalTabHelpers', () => {
 				createdAt: 98765,
 				state: 'idle',
 			});
+		});
+	});
+
+	describe('ensureTerminalTabStructure', () => {
+		it('migrates sessions that are missing terminal tabs', () => {
+			vi.spyOn(Date, 'now').mockReturnValue(43210);
+			const legacySession = createMockSession({
+				id: 'session-legacy',
+				cwd: '/legacy/project',
+				terminalTabs: undefined as unknown as TerminalTab[],
+				activeTerminalTabId: '',
+				closedTerminalTabHistory: undefined as unknown as Session['closedTerminalTabHistory'],
+			});
+
+			const result = ensureTerminalTabStructure(legacySession, 'bash');
+
+			expect(result.didMigrateTerminalTabs).toBe(true);
+			expect(result.session.terminalTabs).toEqual([
+				{
+					id: 'mock-terminal-tab-id',
+					name: null,
+					shellType: 'bash',
+					pid: 0,
+					cwd: '/legacy/project',
+					createdAt: 43210,
+					state: 'idle',
+				},
+			]);
+			expect(result.session.activeTerminalTabId).toBe('mock-terminal-tab-id');
+			expect(result.session.closedTerminalTabHistory).toEqual([]);
+		});
+
+		it('initializes closed terminal tab history when missing', () => {
+			const tab = createMockTerminalTab({ id: 'tab-1' });
+			const session = createMockSession({
+				terminalTabs: [tab],
+				activeTerminalTabId: tab.id,
+				closedTerminalTabHistory: undefined as unknown as Session['closedTerminalTabHistory'],
+			});
+
+			const result = ensureTerminalTabStructure(session, 'zsh');
+
+			expect(result.didMigrateTerminalTabs).toBe(false);
+			expect(result.session.terminalTabs).toBe(session.terminalTabs);
+			expect(result.session.closedTerminalTabHistory).toEqual([]);
+		});
+
+		it('returns unchanged session when terminal tab structure is already valid', () => {
+			const tab = createMockTerminalTab({ id: 'tab-stable' });
+			const session = createMockSession({
+				terminalTabs: [tab],
+				activeTerminalTabId: tab.id,
+				closedTerminalTabHistory: [],
+			});
+
+			const result = ensureTerminalTabStructure(session, 'zsh');
+
+			expect(result.didMigrateTerminalTabs).toBe(false);
+			expect(result.session).toBe(session);
 		});
 	});
 
