@@ -430,6 +430,58 @@ describe('process-manager.ts', () => {
 			});
 		});
 
+		describe('spawnTerminalTab', () => {
+			it('spawns terminal tabs using terminal toolType defaults', () => {
+				const spawnSpy = vi.spyOn(processManager, 'spawn').mockReturnValue({
+					pid: 777,
+					success: true,
+				});
+
+				const result = processManager.spawnTerminalTab({
+					sessionId: 'abc123-terminal-def456',
+					cwd: '/tmp',
+					shellArgs: '--noprofile',
+					shellEnvVars: { TEST_ENV: '1' },
+				});
+
+				expect(result).toEqual({ pid: 777, success: true });
+				expect(spawnSpy).toHaveBeenCalledWith({
+					sessionId: 'abc123-terminal-def456',
+					toolType: 'terminal',
+					cwd: '/tmp',
+					command: process.platform === 'win32' ? 'powershell.exe' : 'zsh',
+					args: [],
+					shell: process.platform === 'win32' ? 'powershell.exe' : 'zsh',
+					shellArgs: '--noprofile',
+					shellEnvVars: { TEST_ENV: '1' },
+				});
+			});
+
+			it('uses a custom shell when provided', () => {
+				const spawnSpy = vi.spyOn(processManager, 'spawn').mockReturnValue({
+					pid: 888,
+					success: true,
+				});
+
+				processManager.spawnTerminalTab({
+					sessionId: 'session-terminal-tab',
+					cwd: '/tmp',
+					shell: '/bin/bash',
+				});
+
+				expect(spawnSpy).toHaveBeenCalledWith({
+					sessionId: 'session-terminal-tab',
+					toolType: 'terminal',
+					cwd: '/tmp',
+					command: '/bin/bash',
+					args: [],
+					shell: '/bin/bash',
+					shellArgs: undefined,
+					shellEnvVars: undefined,
+				});
+			});
+		});
+
 		describe('spawn routing', () => {
 			it('routes terminal-tab session IDs to the PTY spawner when toolType is terminal', () => {
 				const ptySpawn = vi.fn().mockReturnValue({ pid: 321, success: true });

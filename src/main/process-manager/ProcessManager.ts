@@ -56,6 +56,33 @@ export class ProcessManager extends EventEmitter {
 		}
 	}
 
+	/**
+	 * Spawn a terminal PTY for a specific terminal tab
+	 */
+	spawnTerminalTab(config: {
+		sessionId: string;
+		cwd: string;
+		shell?: string;
+		shellArgs?: string;
+		shellEnvVars?: Record<string, string>;
+		cols?: number;
+		rows?: number;
+	}): SpawnResult {
+		const { sessionId, cwd, shell, shellArgs, shellEnvVars } = config;
+		const terminalShell = shell || (process.platform === 'win32' ? 'powershell.exe' : 'zsh');
+
+		return this.spawn({
+			sessionId,
+			toolType: 'terminal',
+			cwd,
+			command: terminalShell,
+			args: [],
+			shell: terminalShell,
+			shellArgs,
+			shellEnvVars,
+		});
+	}
+
 	private shouldUsePty(config: ProcessConfig): boolean {
 		const { toolType, requiresPty, prompt } = config;
 		return (toolType === 'terminal' || requiresPty === true) && !prompt;
