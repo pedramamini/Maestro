@@ -474,9 +474,7 @@ const LogItemComponent = memo(
 									thinking
 								</span>
 							</div>
-							<div className="whitespace-pre-wrap">
-								{log.text}
-							</div>
+							<div className="whitespace-pre-wrap">{log.text}</div>
 						</div>
 					)}
 					{/* Special rendering for tool execution events (shown alongside thinking) */}
@@ -967,6 +965,17 @@ interface TerminalOutputProps {
 	onFileSaved?: () => void; // Callback when markdown content is saved to file (e.g., to refresh file list)
 }
 
+/**
+ * TerminalOutput - Log-based output display for AI mode
+ *
+ * This component renders conversation history as styled log entries.
+ * Used for AI agent output (Claude Code, Codex, etc.), NOT for terminal mode.
+ *
+ * Terminal mode uses XTerminal component for full terminal emulation.
+ *
+ * @see XTerminal.tsx for terminal mode rendering
+ * @see TerminalView.tsx for terminal tab management
+ */
 // PERFORMANCE: Wrap in React.memo to prevent re-renders when parent re-renders
 // but TerminalOutput's props haven't changed. This is critical because TerminalOutput
 // can render many log entries and is expensive to re-render.
@@ -1708,12 +1717,11 @@ export const TerminalOutput = memo(
 						onClose={() => setSaveModalContent(null)}
 						defaultFolder={cwd || session.cwd || ''}
 						isRemoteSession={
-							session.sessionSshRemoteConfig?.enabled &&
-							!!session.sessionSshRemoteConfig?.remoteId
+							session.sessionSshRemoteConfig?.enabled && !!session.sessionSshRemoteConfig?.remoteId
 						}
 						sshRemoteId={
 							session.sessionSshRemoteConfig?.enabled
-								? session.sessionSshRemoteConfig?.remoteId ?? undefined
+								? (session.sessionSshRemoteConfig?.remoteId ?? undefined)
 								: undefined
 						}
 						onFileSaved={onFileSaved}
