@@ -45,6 +45,7 @@ import { TourOverlay } from './components/Wizard/tour';
 import { CONDUCTOR_BADGES, getBadgeForTime } from './constants/conductorBadges';
 import { EmptyStateView } from './components/EmptyStateView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
+import { TerminalTabRenameModal } from './components/TerminalTabRenameModal';
 
 // Lazy-loaded components for performance (rarely-used heavy modals)
 // These are loaded on-demand when the user first opens them
@@ -197,6 +198,7 @@ import {
 	ensureTerminalTabStructure,
 	getActiveTerminalTab,
 	getTerminalSessionId,
+	getTerminalTabDisplayName,
 	parseTerminalSessionId,
 	reopenTerminalTab,
 	reorderTerminalTabs,
@@ -14110,6 +14112,25 @@ You are taking over this conversation. Based on the context above, provide a bri
 					sendToAgentModalOpen={sendToAgentModalOpen}
 					onCloseSendToAgent={handleCloseSendToAgent}
 					onSendToAgent={handleSendToAgent}
+				/>
+
+				<TerminalTabRenameModal
+					theme={theme}
+					isOpen={terminalRenameModalOpen}
+					currentName={terminalTabBeingRenamed?.name ?? null}
+					defaultName={
+						terminalTabBeingRenamed && activeSession
+							? getTerminalTabDisplayName(
+									terminalTabBeingRenamed,
+									Math.max(
+										activeSession.terminalTabs.findIndex((tab) => tab.id === terminalRenameTabId),
+										0
+									)
+								)
+							: 'Terminal 1'
+					}
+					onSave={handleTerminalTabRenameSave}
+					onClose={handleTerminalRenameModalClose}
 				/>
 
 				{/* --- DEBUG PACKAGE MODAL --- */}
