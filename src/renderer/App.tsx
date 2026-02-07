@@ -197,6 +197,7 @@ import {
 	getActiveTerminalTab,
 	getTerminalSessionId,
 	parseTerminalSessionId,
+	reorderTerminalTabs,
 	renameTerminalTab,
 	setActiveTerminalTab,
 } from './utils/terminalTabHelpers';
@@ -5285,6 +5286,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 			})
 		);
 	}, []);
+
+	/**
+	 * Reorder terminal tabs.
+	 */
+	const handleTerminalTabReorder = useCallback(
+		(sessionId: string, fromIndex: number, toIndex: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return reorderTerminalTabs(s, fromIndex, toIndex);
+				})
+			);
+		},
+		[]
+	);
 
 	/**
 	 * Force close a file preview tab without confirmation.
@@ -14490,6 +14506,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						onTerminalTabClose={handleTerminalTabClose}
 						onTerminalNewTab={handleTerminalNewTab}
 						onTerminalTabRename={handleTerminalTabRename}
+						onTerminalTabReorder={handleTerminalTabReorder}
 					/>
 				)}
 

@@ -62,6 +62,34 @@ export function renameTerminalTab(session: Session, tabId: string, name: string)
 }
 
 /**
+ * Reorder terminal tabs in a session.
+ */
+export function reorderTerminalTabs(session: Session, fromIndex: number, toIndex: number): Session {
+	if (
+		fromIndex === toIndex ||
+		fromIndex < 0 ||
+		toIndex < 0 ||
+		fromIndex >= session.terminalTabs.length ||
+		toIndex >= session.terminalTabs.length
+	) {
+		return session;
+	}
+
+	const reorderedTabs = [...session.terminalTabs];
+	const [movedTab] = reorderedTabs.splice(fromIndex, 1);
+	if (!movedTab) {
+		return session;
+	}
+
+	reorderedTabs.splice(toIndex, 0, movedTab);
+
+	return {
+		...session,
+		terminalTabs: reorderedTabs,
+	};
+}
+
+/**
  * Create a new terminal tab with default values
  */
 export function createTerminalTab(
