@@ -5358,6 +5358,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, []);
 
 	/**
+	 * Close the terminal tab rename modal and clear tab selection.
+	 */
+	const handleTerminalRenameModalClose = useCallback(() => {
+		setTerminalRenameModalOpen(false);
+		setTerminalRenameTabId(null);
+	}, []);
+
+	/**
 	 * Save a terminal tab rename and close the rename modal.
 	 */
 	const handleTerminalTabRenameSave = useCallback(
@@ -5365,10 +5373,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 			if (activeSession && terminalRenameTabId) {
 				handleTerminalTabRename(activeSession.id, terminalRenameTabId, name);
 			}
-			setTerminalRenameModalOpen(false);
-			setTerminalRenameTabId(null);
+			handleTerminalRenameModalClose();
 		},
-		[activeSession, terminalRenameTabId, handleTerminalTabRename]
+		[activeSession, terminalRenameTabId, handleTerminalTabRename, handleTerminalRenameModalClose]
 	);
 
 	/**
