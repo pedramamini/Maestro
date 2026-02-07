@@ -33,6 +33,38 @@ export function createTerminalTab(
 }
 
 /**
+ * Ensure a session has terminal tab structure required at runtime.
+ * Returns the updated session and whether terminal tabs were migrated.
+ */
+export function ensureTerminalTabStructure(
+	session: Session,
+	defaultShell: string = 'zsh'
+): { session: Session; didMigrateTerminalTabs: boolean } {
+	let nextSession = session;
+	let didMigrateTerminalTabs = false;
+
+	if (!nextSession.terminalTabs || nextSession.terminalTabs.length === 0) {
+		const defaultTerminalTab = createTerminalTab(defaultShell, nextSession.cwd, null);
+		nextSession = {
+			...nextSession,
+			terminalTabs: [defaultTerminalTab],
+			activeTerminalTabId: defaultTerminalTab.id,
+			closedTerminalTabHistory: [],
+		};
+		didMigrateTerminalTabs = true;
+	}
+
+	if (!nextSession.closedTerminalTabHistory) {
+		nextSession = {
+			...nextSession,
+			closedTerminalTabHistory: [],
+		};
+	}
+
+	return { session: nextSession, didMigrateTerminalTabs };
+}
+
+/**
  * Get display name for a terminal tab
  * Priority: name > "Terminal N" (by index)
  */
