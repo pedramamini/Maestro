@@ -414,11 +414,12 @@ export function setupExitListener(
 		// Broadcast exit to web clients
 		const webServer = getWebServer();
 		if (webServer) {
-			// Extract base session ID from formats: {id}-ai-{tabId}, {id}-terminal, {id}-batch-{timestamp}, {id}-synopsis-{timestamp}
-			const baseSessionId = sessionId.replace(
-				/-ai-[^-]+$|-terminal$|-batch-\d+$|-synopsis-\d+$/,
-				''
-			);
+			// Preserve terminal tab session IDs ({id}-terminal-{tabId}) for per-tab exit routing.
+			// Strip legacy suffixes for other session types when broadcasting to web clients.
+			const isTerminalTabSession = sessionId.includes('-terminal-');
+			const baseSessionId = isTerminalTabSession
+				? sessionId
+				: sessionId.replace(/-ai-[^-]+$|-terminal$|-batch-\d+$|-synopsis-\d+$/, '');
 			webServer.broadcastToSessionClients(baseSessionId, {
 				type: 'session_exit',
 				sessionId: baseSessionId,
