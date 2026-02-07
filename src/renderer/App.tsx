@@ -1125,6 +1125,23 @@ function MaestroConsoleInner() {
 				session = { ...session, projectRoot: session.cwd };
 			}
 
+			// Migrate sessions without terminal tabs (backwards compatibility)
+			if (!session.terminalTabs || session.terminalTabs.length === 0) {
+				const defaultTerminalTab = createTerminalTab(defaultShell || 'zsh', session.cwd, null);
+				session = {
+					...session,
+					terminalTabs: [defaultTerminalTab],
+					activeTerminalTabId: defaultTerminalTab.id,
+					closedTerminalTabHistory: [],
+				};
+				console.log(`[restoreSession] Migrated session ${session.id} to terminal tabs`);
+			}
+
+			// Ensure closedTerminalTabHistory exists (runtime-only, not persisted)
+			if (!session.closedTerminalTabHistory) {
+				session = { ...session, closedTerminalTabHistory: [] };
+			}
+
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
 			// Create a default tab to prevent crashes when code calls .find() on aiTabs
 			if (!session.aiTabs || session.aiTabs.length === 0) {
