@@ -791,6 +791,12 @@ function MaestroConsoleInner() {
 	const [aiInputValueLocal, setAiInputValueLocal] = useState('');
 	const [terminalSearchOpen, setTerminalSearchOpen] = useState(false);
 	const [terminalSearchQuery, setTerminalSearchQuery] = useState('');
+	const [terminalRenameModalOpen, setTerminalRenameModalOpen] = useState(false);
+	const [terminalRenameTabId, setTerminalRenameTabId] = useState<string | null>(null);
+	const terminalTabBeingRenamed = useMemo(() => {
+		if (!terminalRenameTabId || !activeSession) return null;
+		return activeSession.terminalTabs.find((tab) => tab.id === terminalRenameTabId) ?? null;
+	}, [terminalRenameTabId, activeSession]);
 	const handleCloseTerminalSearch = useCallback(() => {
 		setTerminalSearchOpen(false);
 	}, []);
