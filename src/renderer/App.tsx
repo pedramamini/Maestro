@@ -191,12 +191,7 @@ import {
 	navigateToPrevUnifiedTab,
 	hasActiveWizard,
 } from './utils/tabHelpers';
-import {
-	createTerminalTab,
-	getActiveTerminalTab,
-	getTerminalSessionId,
-	parseTerminalSessionId,
-} from './utils/terminalTabHelpers';
+import { createTerminalTab } from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
@@ -4808,6 +4803,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const autoRunFolderPath = `${directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
 			const firstDoc = generatedDocuments[0];
 			const autoRunSelectedFile = firstDoc ? firstDoc.filename.replace(/\.md$/, '') : undefined;
+			const defaultTerminalTab = createTerminalTab(defaultShell || 'zsh', directoryPath, null);
 
 			// Create the session with Auto Run configured
 			const newSession: Session = {
@@ -4855,6 +4851,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				activeFileTabId: null,
 				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
 				unifiedClosedTabHistory: [],
+				terminalTabs: [defaultTerminalTab],
+				activeTerminalTabId: defaultTerminalTab.id,
+				closedTerminalTabHistory: [],
 				// Auto Run configuration from wizard
 				autoRunFolderPath,
 				autoRunSelectedFile,
@@ -8112,6 +8111,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 								};
 
 								// Create session with Symphony metadata
+								const defaultTerminalTab = createTerminalTab(
+									defaultShell || 'zsh',
+									data.localPath,
+									null
+								);
 								const newSession: Session = {
 									id: newId,
 									name: data.sessionName,
@@ -8157,6 +8161,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 									activeFileTabId: null,
 									unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
 									unifiedClosedTabHistory: [],
+									terminalTabs: [defaultTerminalTab],
+									activeTerminalTabId: defaultTerminalTab.id,
+									closedTerminalTabHistory: [],
 									// Custom agent config
 									customPath: data.customPath,
 									customArgs: data.customArgs,

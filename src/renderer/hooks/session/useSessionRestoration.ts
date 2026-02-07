@@ -19,6 +19,7 @@ import { useSessionStore } from '../../stores/sessionStore';
 import { useGroupChatStore } from '../../stores/groupChatStore';
 import { gitService } from '../../services/git';
 import { generateId } from '../../utils/ids';
+import { createTerminalTab } from '../../utils/terminalTabHelpers';
 import { AUTO_RUN_FOLDER_NAME } from '../../components/Wizard';
 
 // ============================================================================
@@ -143,6 +144,23 @@ export function useSessionRestoration(): SessionRestorationReturn {
 					`[restoreSession] Session missing fileTreeAutoRefreshInterval, defaulting to 180s`
 				);
 				session = { ...session, fileTreeAutoRefreshInterval: 180 };
+			}
+
+			// Migrate sessions without terminal tabs (backwards compatibility)
+			if (!session.terminalTabs || session.terminalTabs.length === 0) {
+				const defaultTerminalTab = createTerminalTab('zsh', session.cwd, null);
+				session = {
+					...session,
+					terminalTabs: [defaultTerminalTab],
+					activeTerminalTabId: defaultTerminalTab.id,
+					closedTerminalTabHistory: [],
+				};
+				console.log(`[restoreSession] Migrated session ${session.id} to terminal tabs`);
+			}
+
+			// Ensure closedTerminalTabHistory exists (runtime-only, not persisted)
+			if (!session.closedTerminalTabHistory) {
+				session = { ...session, closedTerminalTabHistory: [] };
 			}
 
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
