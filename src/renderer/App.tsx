@@ -4558,7 +4558,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 			enabled: boolean;
 			remoteId: string | null;
 			workingDirOverride?: string;
-		}
+		},
+		initialTerminalShellType?: string
 	) => {
 		// Get agent definition to get correct command
 		const agent = await window.maestro.agents.get(agentId);
@@ -4624,7 +4625,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 			};
 
 			// Initialize with a single terminal tab
-			const defaultTerminalTab = createTerminalTab(defaultShell || 'zsh', workingDir, null);
+			const defaultTerminalTab = createTerminalTab(
+				initialTerminalShellType || defaultShell || 'zsh',
+				workingDir,
+				null
+			);
 
 			const newSession: Session = {
 				id: newId,
