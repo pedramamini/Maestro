@@ -205,6 +205,20 @@ describe('XTerminal', () => {
 		const fitAddon = mocks.fitAddonInstances[0];
 		const webglAddon = mocks.webglAddonInstances[0];
 		const searchAddon = mocks.searchAddonInstances[0];
+		const expectedSearchOptions = {
+			caseSensitive: false,
+			wholeWord: false,
+			regex: false,
+			incremental: true,
+			decorations: {
+				matchBackground: '#e0af68',
+				matchBorder: '#e0af68',
+				matchOverviewRuler: '#e0af68',
+				activeMatchBackground: '#7aa2f7',
+				activeMatchBorder: '#7dcfff',
+				activeMatchColorOverviewRuler: '#7aa2f7',
+			},
+		};
 
 		expect(terminal.options).toMatchObject({
 			cursorBlink: true,
@@ -255,10 +269,18 @@ describe('XTerminal', () => {
 			wholeWord: false,
 			regex: false,
 			incremental: true,
+			decorations: {
+				matchBackground: '#e0af68',
+				matchBorder: '#e0af68',
+				matchOverviewRuler: '#e0af68',
+				activeMatchBackground: '#7aa2f7',
+				activeMatchBorder: '#7dcfff',
+				activeMatchColorOverviewRuler: '#7aa2f7',
+			},
 		});
-		expect(searchAddon.findNext).toHaveBeenNthCalledWith(2, 'needle');
+		expect(searchAddon.findNext).toHaveBeenNthCalledWith(2, 'needle', expectedSearchOptions);
 		expect(searchAddon.findNext).toHaveBeenCalledTimes(2);
-		expect(searchAddon.findPrevious).toHaveBeenCalledWith('needle');
+		expect(searchAddon.findPrevious).toHaveBeenCalledWith('needle', expectedSearchOptions);
 		expect(searchAddon.findPrevious).toHaveBeenCalledTimes(1);
 		expect(ref.current?.getSelection()).toBe('selected-text');
 		expect(() => {

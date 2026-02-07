@@ -1,9 +1,9 @@
-import { forwardRef, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useCallback, useEffect, useImperativeHandle, useMemo, useRef } from 'react';
 import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
-import { SearchAddon } from '@xterm/addon-search';
+import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
 import '@xterm/xterm/css/xterm.css';
 import type { Theme } from '../types';
@@ -56,6 +56,53 @@ type XtermAnsiOverrides = Partial<{
 	ansiBrightWhite: string;
 }>;
 
+const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
+const SHORT_HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{3}$/;
+const HEX_WITH_ALPHA_PATTERN = /^#[0-9a-fA-F]{8}$/;
+
+function normalizeSearchDecorationColor(color: string | undefined, fallback: string): string {
+	if (!color) {
+		return fallback;
+	}
+
+	const trimmedColor = color.trim();
+
+	if (HEX_COLOR_PATTERN.test(trimmedColor)) {
+		return trimmedColor;
+	}
+
+	if (SHORT_HEX_COLOR_PATTERN.test(trimmedColor)) {
+		return `#${trimmedColor[1]}${trimmedColor[1]}${trimmedColor[2]}${trimmedColor[2]}${trimmedColor[3]}${trimmedColor[3]}`;
+	}
+
+	if (HEX_WITH_ALPHA_PATTERN.test(trimmedColor)) {
+		return trimmedColor.slice(0, 7);
+	}
+
+	return fallback;
+}
+
+function createSearchOptions(theme: Theme): ISearchOptions {
+	const matchColor = normalizeSearchDecorationColor(theme.colors.warning, '#e0af68');
+	const activeMatchColor = normalizeSearchDecorationColor(theme.colors.accent, '#7aa2f7');
+	const activeMatchBorderColor = normalizeSearchDecorationColor(theme.colors.accentText, '#7dcfff');
+
+	return {
+		caseSensitive: false,
+		wholeWord: false,
+		regex: false,
+		incremental: true,
+		decorations: {
+			matchBackground: matchColor,
+			matchBorder: matchColor,
+			matchOverviewRuler: matchColor,
+			activeMatchBackground: activeMatchColor,
+			activeMatchBorder: activeMatchBorderColor,
+			activeMatchColorOverviewRuler: activeMatchColor,
+		},
+	};
+}
+
 function mapMaestroThemeToXterm(theme: Theme): ITheme {
 	const colors = theme.colors as Theme['colors'] & XtermAnsiOverrides;
 
@@ -101,6 +148,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 	const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const searchAddonRef = useRef<SearchAddon | null>(null);
 	const searchQueryRef = useRef('');
+	const searchOptions = useMemo(() => createSearchOptions(theme), [theme]);
 
 	const handleResize = useCallback(() => {
 		if (resizeTimeoutRef.current) {
@@ -251,33 +299,26 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 
 				searchQueryRef.current = query;
 
-				return (
-					searchAddonRef.current.findNext(query, {
-						caseSensitive: false,
-						wholeWord: false,
-						regex: false,
-						incremental: true,
-					}) ?? false
-				);
+				return searchAddonRef.current.findNext(query, searchOptions) ?? false;
 			},
 			searchNext: () => {
 				if (!searchAddonRef.current || !searchQueryRef.current) {
 					return false;
 				}
 
-				return searchAddonRef.current.findNext(searchQueryRef.current) ?? false;
+				return searchAddonRef.current.findNext(searchQueryRef.current, searchOptions) ?? false;
 			},
 			searchPrevious: () => {
 				if (!searchAddonRef.current || !searchQueryRef.current) {
 					return false;
 				}
 
-				return searchAddonRef.current.findPrevious(searchQueryRef.current) ?? false;
+				return searchAddonRef.current.findPrevious(searchQueryRef.current, searchOptions) ?? false;
 			},
 			getSelection: () => terminalRef.current?.getSelection() ?? '',
 			resize: () => addonsRef.current.fit?.fit(),
 		}),
-		[]
+		[searchOptions]
 	);
 
 	return (
