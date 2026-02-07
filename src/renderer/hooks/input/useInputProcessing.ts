@@ -833,9 +833,9 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 			// Reset height
 			if (inputRef.current) inputRef.current.style.height = 'auto';
 
-			// Write to the appropriate process based on inputMode
-			// Each session has TWO processes: AI agent and terminal
-			const targetPid = currentMode === 'ai' ? activeSession.aiPid : activeSession.terminalPid;
+			// DEPRECATED: terminalPid is legacy-only and always 0.
+			// Terminal input is handled via runCommand/terminal tabs, not session.terminalPid.
+			const aiTargetPid = activeSession.aiPid;
 			// For batch mode (Claude), include tab ID in session ID to prevent process collision
 			// This ensures each tab's process has a unique identifier
 			const activeTabForSpawn = getActiveTab(activeSession);
@@ -1110,7 +1110,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							})
 						);
 					});
-			} else if (targetPid > 0) {
+			} else if (aiTargetPid > 0) {
 				// AI mode: Write to stdin
 				window.maestro.process.write(targetSessionId, capturedInputValue).catch((error) => {
 					console.error('Failed to write to process:', error);
