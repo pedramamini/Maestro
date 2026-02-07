@@ -8,6 +8,7 @@ import {
 	ensureTerminalTabStructure,
 	getActiveTerminalTab,
 	getActiveTerminalTabCount,
+	reorderTerminalTabs,
 	setActiveTerminalTab,
 	renameTerminalTab,
 	getTerminalSessionId,
@@ -121,6 +122,47 @@ describe('terminalTabHelpers', () => {
 			const session = createMockSession({ terminalTabs: [tab], activeTerminalTabId: tab.id });
 
 			expect(renameTerminalTab(session, 'tab-1', 'Build')).toBe(session);
+		});
+	});
+
+	describe('reorderTerminalTabs', () => {
+		it('reorders terminal tabs when both indices are valid', () => {
+			const tab1 = createMockTerminalTab({ id: 'tab-1' });
+			const tab2 = createMockTerminalTab({ id: 'tab-2' });
+			const tab3 = createMockTerminalTab({ id: 'tab-3' });
+			const session = createMockSession({
+				terminalTabs: [tab1, tab2, tab3],
+				activeTerminalTabId: 'tab-1',
+			});
+
+			const reordered = reorderTerminalTabs(session, 0, 2);
+
+			expect(reordered).not.toBe(session);
+			expect(reordered.terminalTabs.map((tab) => tab.id)).toEqual(['tab-2', 'tab-3', 'tab-1']);
+			expect(reordered.activeTerminalTabId).toBe('tab-1');
+		});
+
+		it('returns original session when indices are unchanged', () => {
+			const tab1 = createMockTerminalTab({ id: 'tab-1' });
+			const tab2 = createMockTerminalTab({ id: 'tab-2' });
+			const session = createMockSession({
+				terminalTabs: [tab1, tab2],
+				activeTerminalTabId: 'tab-1',
+			});
+
+			expect(reorderTerminalTabs(session, 1, 1)).toBe(session);
+		});
+
+		it('returns original session when indices are out of bounds', () => {
+			const tab1 = createMockTerminalTab({ id: 'tab-1' });
+			const tab2 = createMockTerminalTab({ id: 'tab-2' });
+			const session = createMockSession({
+				terminalTabs: [tab1, tab2],
+				activeTerminalTabId: 'tab-1',
+			});
+
+			expect(reorderTerminalTabs(session, -1, 1)).toBe(session);
+			expect(reorderTerminalTabs(session, 0, 4)).toBe(session);
 		});
 	});
 
