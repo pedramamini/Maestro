@@ -80,7 +80,7 @@ const prepareSessionForPersistence = (session: Session): Session => {
 	}));
 
 	// Reset terminal tab runtime state - PTY processes don't survive app restart
-	const terminalTabsForPersistence = session.terminalTabs.map((tab) => ({
+	const terminalTabsForPersistence = (session.terminalTabs || []).map((tab) => ({
 		...tab,
 		pid: 0,
 		state: 'idle' as const,

@@ -481,6 +481,23 @@ describe('useDebouncedPersistence', () => {
 				expect(persisted[0].terminalTabs[0].state).toBe('idle');
 				expect(persisted[0].terminalTabs[0].exitCode).toBeUndefined();
 			});
+
+			it('should handle sessions with undefined terminalTabs', () => {
+				const session = {
+					...makeSession(),
+					terminalTabs: undefined,
+				} as unknown as Session;
+
+				const initialLoadRef = makeInitialLoadRef(true);
+				const { result } = renderHook(() => useDebouncedPersistence([session], initialLoadRef));
+
+				act(() => {
+					result.current.flushNow();
+				});
+
+				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
+				expect(persisted[0].terminalTabs).toEqual([]);
+			});
 		});
 
 		describe('session runtime fields removal', () => {
