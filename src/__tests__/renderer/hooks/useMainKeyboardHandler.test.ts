@@ -1350,6 +1350,67 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockHandleOpenTerminalSearch).toHaveBeenCalledWith('session-1');
 		});
 
+		it('should navigate to next terminal search result with Cmd+G in terminal mode', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockSearchNext = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }],
+					activeTerminalTabId: 'term-1',
+				},
+				terminalViewRef: { current: { searchNext: mockSearchNext, searchPrevious: vi.fn() } },
+			});
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'g',
+				metaKey: true,
+				bubbles: true,
+			});
+			const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+			act(() => {
+				window.dispatchEvent(event);
+			});
+
+			expect(preventDefaultSpy).toHaveBeenCalled();
+			expect(mockSearchNext).toHaveBeenCalledTimes(1);
+		});
+
+		it('should navigate to previous terminal search result with Cmd+Shift+G in terminal mode', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockSearchPrevious = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }],
+					activeTerminalTabId: 'term-1',
+				},
+				terminalViewRef: { current: { searchNext: vi.fn(), searchPrevious: mockSearchPrevious } },
+			});
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'g',
+				metaKey: true,
+				shiftKey: true,
+				bubbles: true,
+			});
+			const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+			act(() => {
+				window.dispatchEvent(event);
+			});
+
+			expect(preventDefaultSpy).toHaveBeenCalled();
+			expect(mockSearchPrevious).toHaveBeenCalledTimes(1);
+		});
+
 		it('should not intercept Ctrl+C in terminal mode', () => {
 			const { result } = renderHook(() => useMainKeyboardHandler());
 

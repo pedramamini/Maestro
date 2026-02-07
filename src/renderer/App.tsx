@@ -11357,10 +11357,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 	};
 
 	const handleInputKeyDown = (e: React.KeyboardEvent) => {
-		// Cmd+F opens output search from input field - handle first, before any modal logic
+		// Cmd+F opens contextual search from input field - handle first, before any modal logic
 		if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
-			setOutputSearchOpen(true);
+			if (activeSession?.inputMode === 'terminal') {
+				setTerminalSearchOpen(true);
+			} else {
+				setOutputSearchOpen(true);
+			}
 			return;
 		}
 
@@ -12800,6 +12804,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		logsEndRef,
 		inputRef,
 		terminalOutputRef,
+		terminalViewRef,
 		sidebarContainerRef,
 		setSessions,
 		createTab,
