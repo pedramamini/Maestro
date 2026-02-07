@@ -515,6 +515,58 @@ describe('process-manager.ts', () => {
 				expect(childSpawn).not.toHaveBeenCalled();
 			});
 		});
+
+		describe('kill', () => {
+			it('kills a terminal-tab PTY using the full terminal session id', () => {
+				const terminalSessionId = 'abc123-terminal-def456';
+				const ptyKill = vi.fn();
+
+				(
+					processManager as unknown as {
+						processes: Map<string, Record<string, unknown>>;
+					}
+				).processes.set(terminalSessionId, {
+					sessionId: terminalSessionId,
+					toolType: 'terminal',
+					cwd: '/tmp',
+					pid: 42,
+					isTerminal: true,
+					startTime: Date.now(),
+					ptyProcess: {
+						kill: ptyKill,
+					},
+				});
+
+				expect(processManager.kill(terminalSessionId)).toBe(true);
+				expect(ptyKill).toHaveBeenCalledOnce();
+				expect(processManager.get(terminalSessionId)).toBeUndefined();
+			});
+
+			it('does not kill a terminal-tab PTY when only the base session id is provided', () => {
+				const terminalSessionId = 'abc123-terminal-def456';
+				const ptyKill = vi.fn();
+
+				(
+					processManager as unknown as {
+						processes: Map<string, Record<string, unknown>>;
+					}
+				).processes.set(terminalSessionId, {
+					sessionId: terminalSessionId,
+					toolType: 'terminal',
+					cwd: '/tmp',
+					pid: 99,
+					isTerminal: true,
+					startTime: Date.now(),
+					ptyProcess: {
+						kill: ptyKill,
+					},
+				});
+
+				expect(processManager.kill('abc123')).toBe(false);
+				expect(ptyKill).not.toHaveBeenCalled();
+				expect(processManager.get(terminalSessionId)).toBeDefined();
+			});
+		});
 	});
 
 	describe('data buffering', () => {
