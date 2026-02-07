@@ -19,7 +19,11 @@ vi.mock('electron', () => ({
 	},
 }));
 
-import { createProcessApi, type ProcessConfig } from '../../../main/preload/process';
+import {
+	createProcessApi,
+	type ProcessConfig,
+	type SpawnTerminalTabConfig,
+} from '../../../main/preload/process';
 
 describe('Process Preload API', () => {
 	let api: ReturnType<typeof createProcessApi>;
@@ -64,6 +68,26 @@ describe('Process Preload API', () => {
 			const result = await api.spawn(config);
 
 			expect(result.sshRemote).toEqual({ id: 'remote-1', name: 'My Server', host: 'example.com' });
+		});
+	});
+
+	describe('spawnTerminalTab', () => {
+		it('should invoke process:spawnTerminalTab with config', async () => {
+			const config: SpawnTerminalTabConfig = {
+				sessionId: 'session-123-terminal-tab-456',
+				cwd: '/home/user/project',
+				shell: '/bin/zsh',
+				shellArgs: '--login',
+				shellEnvVars: { TERM: 'xterm-256color' },
+				cols: 120,
+				rows: 40,
+			};
+			mockInvoke.mockResolvedValue({ pid: 4567, success: true });
+
+			const result = await api.spawnTerminalTab(config);
+
+			expect(mockInvoke).toHaveBeenCalledWith('process:spawnTerminalTab', config);
+			expect(result).toEqual({ pid: 4567, success: true });
 		});
 	});
 
