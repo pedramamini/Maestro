@@ -132,6 +132,27 @@ const theme: Theme = {
 	},
 };
 
+const lightTheme: Theme = {
+	id: 'github-light',
+	name: 'GitHub',
+	mode: 'light',
+	colors: {
+		bgMain: '#ffffff',
+		bgSidebar: '#f6f8fa',
+		bgActivity: '#eff2f5',
+		border: '#d0d7de',
+		textMain: '#24292f',
+		textDim: '#57606a',
+		accent: '#0969da',
+		accentDim: 'rgba(9, 105, 218, 0.1)',
+		accentText: '#0969da',
+		accentForeground: '#ffffff',
+		success: '#1a7f37',
+		warning: '#9a6700',
+		error: '#cf222e',
+	},
+};
+
 describe('XTerminal', () => {
 	let container: HTMLDivElement;
 	let root: Root;
@@ -228,26 +249,26 @@ describe('XTerminal', () => {
 			theme: {
 				background: '#1a1b26',
 				foreground: '#c0caf5',
-				cursor: '#c0caf5',
+				cursor: '#7aa2f7',
 				cursorAccent: '#1a1b26',
-				selectionBackground: '#3b4261',
-				selectionInactiveBackground: '#3b4261',
-				selectionForeground: '#c0caf5',
-				black: '#000000',
-				red: '#f7768e',
-				green: '#9ece6a',
-				yellow: '#e0af68',
-				blue: '#7aa2f7',
+				selectionBackground: 'rgba(255, 255, 255, 0.2)',
+				selectionInactiveBackground: 'rgba(255, 255, 255, 0.2)',
+				selectionForeground: undefined,
+				black: '#282c34',
+				red: '#e06c75',
+				green: '#98c379',
+				yellow: '#e5c07b',
+				blue: '#61afef',
 				magenta: '#c678dd',
-				cyan: '#7dcfff',
-				white: '#c0caf5',
-				brightBlack: '#9aa5ce',
-				brightRed: '#f7768e',
-				brightGreen: '#9ece6a',
-				brightYellow: '#e0af68',
-				brightBlue: '#7aa2f7',
+				cyan: '#56b6c2',
+				white: '#abb2bf',
+				brightBlack: '#5c6370',
+				brightRed: '#e06c75',
+				brightGreen: '#98c379',
+				brightYellow: '#e5c07b',
+				brightBlue: '#61afef',
 				brightMagenta: '#c678dd',
-				brightCyan: '#7dcfff',
+				brightCyan: '#56b6c2',
 				brightWhite: '#ffffff',
 			},
 			scrollback: 10000,
@@ -374,6 +395,33 @@ describe('XTerminal', () => {
 		});
 
 		expect(processResize).not.toHaveBeenCalled();
+	});
+
+	it('uses light defaults and honors ANSI overrides when present', () => {
+		const themeWithOverrides: Theme = {
+			...lightTheme,
+			colors: {
+				...lightTheme.colors,
+				selection: 'rgba(20, 40, 60, 0.4)',
+				ansiRed: '#aa0011',
+				ansiBrightWhite: '#fafafa',
+			},
+		};
+
+		act(() => {
+			root.render(
+				<XTerminal sessionId="session-light" theme={themeWithOverrides} fontFamily="Monaco" />
+			);
+		});
+
+		const terminal = mocks.terminalInstances[0];
+		const xtermTheme = terminal.options.theme as Record<string, string | undefined>;
+
+		expect(xtermTheme.black).toBe('#073642');
+		expect(xtermTheme.red).toBe('#aa0011');
+		expect(xtermTheme.brightWhite).toBe('#fafafa');
+		expect(xtermTheme.selectionBackground).toBe('rgba(20, 40, 60, 0.4)');
+		expect(xtermTheme.selectionInactiveBackground).toBe('rgba(20, 40, 60, 0.4)');
 	});
 
 	it('bridges PTY data to terminal and terminal input back to PTY', () => {
