@@ -169,6 +169,7 @@ const LogItemComponent = memo(
 			return parts.length > 0 ? parts : text;
 		};
 
+		// TerminalOutput is AI-only; keep terminal-specific filtering disabled.
 		const processedText = processLogTextHelper(log.text, false);
 
 		// Skip rendering stderr entries that have no actual content
