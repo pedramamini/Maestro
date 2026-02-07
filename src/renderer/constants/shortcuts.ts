@@ -106,7 +106,7 @@ export const FIXED_SHORTCUTS: Record<string, Shortcut> = {
 	},
 };
 
-// Tab navigation shortcuts (AI mode only)
+// Tab navigation shortcuts (shared by AI mode and terminal mode where applicable)
 export const TAB_SHORTCUTS: Record<string, Shortcut> = {
 	tabSwitcher: { id: 'tabSwitcher', label: 'Tab Switcher', keys: ['Alt', 'Meta', 't'] },
 	newTab: { id: 'newTab', label: 'New Tab', keys: ['Meta', 't'] },
@@ -170,4 +170,19 @@ export const TERMINAL_TAB_SHORTCUTS: Record<string, Shortcut> = {
 		keys: ['Control', 'Shift', '`'],
 	},
 	clearTerminal: { id: 'clearTerminal', label: 'Clear Terminal', keys: ['Meta', 'k'] },
+	openTerminalSearch: {
+		id: 'openTerminalSearch',
+		label: 'Open Terminal Search',
+		keys: ['Meta', 'f'],
+	},
+	nextTerminalSearchResult: {
+		id: 'nextTerminalSearchResult',
+		label: 'Next Terminal Search Result',
+		keys: ['Meta', 'g'],
+	},
+	previousTerminalSearchResult: {
+		id: 'previousTerminalSearchResult',
+		label: 'Previous Terminal Search Result',
+		keys: ['Meta', 'Shift', 'g'],
+	},
 };

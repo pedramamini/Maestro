@@ -229,6 +229,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				) {
 					e.preventDefault();
 					ctx.handleTerminalNewTab?.(ctx.activeSession.id);
+					trackShortcut('newTerminalTab');
 					return;
 				}
 
@@ -236,6 +237,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				if ((e.metaKey || e.ctrlKey) && !e.shiftKey && !e.altKey && e.key.toLowerCase() === 'k') {
 					e.preventDefault();
 					ctx.handleClearActiveTerminal?.(ctx.activeSession.id);
+					trackShortcut('clearTerminal');
 					return;
 				}
 
@@ -244,6 +246,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					if (ctx.handleOpenTerminalSearch) {
 						e.preventDefault();
 						ctx.handleOpenTerminalSearch(ctx.activeSession.id);
+						trackShortcut('openTerminalSearch');
 						return;
 					}
 				}
@@ -254,8 +257,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						e.preventDefault();
 						if (e.shiftKey) {
 							ctx.terminalViewRef.current.searchPrevious();
+							trackShortcut('previousTerminalSearchResult');
 						} else {
 							ctx.terminalViewRef.current.searchNext();
+							trackShortcut('nextTerminalSearchResult');
 						}
 						return;
 					}
