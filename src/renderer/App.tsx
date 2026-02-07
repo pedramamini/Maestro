@@ -5338,6 +5338,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, []);
 
 	/**
+	 * Open the terminal tab rename modal for a specific tab.
+	 */
+	const handleTerminalTabRenameRequest = useCallback((tabId: string) => {
+		setTerminalRenameTabId(tabId);
+		setTerminalRenameModalOpen(true);
+	}, []);
+
+	/**
 	 * Rename a terminal tab.
 	 */
 	const handleTerminalTabRename = useCallback((sessionId: string, tabId: string, name: string) => {
