@@ -51,6 +51,7 @@ import {
 	registerSymphonyHandlers,
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
+	registerWakatimeHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -169,6 +170,18 @@ if (!installationId) {
 
 // Initialize WakaTime heartbeat manager
 const wakatimeManager = new WakaTimeManager(store);
+
+// Auto-install WakaTime CLI on startup if enabled
+if (store.get('wakatimeEnabled', false)) {
+	wakatimeManager.ensureCliInstalled();
+}
+
+// Auto-install WakaTime CLI when user enables the feature
+store.onDidChange('wakatimeEnabled', (newValue) => {
+	if (newValue === true) {
+		wakatimeManager.ensureCliInstalled();
+	}
+});
 
 // Initialize Sentry for crash reporting (dynamic import to avoid module-load-time errors)
 // Only enable in production - skip during development to avoid noise from hot-reload artifacts
@@ -637,6 +650,9 @@ function setupIpcHandlers() {
 		agentConfigsStore,
 		settingsStore: store,
 	});
+
+	// Register WakaTime handlers (CLI check, API key validation)
+	registerWakatimeHandlers();
 }
 
 // Handle process output streaming (set up after initialization)
