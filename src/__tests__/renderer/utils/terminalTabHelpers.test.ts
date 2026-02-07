@@ -7,6 +7,7 @@ import {
 	ensureTerminalTabStructure,
 	getActiveTerminalTab,
 	getActiveTerminalTabCount,
+	setActiveTerminalTab,
 	getTerminalSessionId,
 	getTerminalTabDisplayName,
 	hasRunningTerminalProcess,
@@ -61,6 +62,23 @@ describe('terminalTabHelpers', () => {
 			const session = createMockSession({ terminalTabs: [tab1], activeTerminalTabId: 'missing' });
 
 			expect(getActiveTerminalTab(session)).toBeUndefined();
+		});
+	});
+
+	describe('setActiveTerminalTab', () => {
+		it('updates activeTerminalTabId when selecting a different tab', () => {
+			const session = createMockSession({ activeTerminalTabId: 'tab-1' });
+
+			expect(setActiveTerminalTab(session, 'tab-2')).toEqual({
+				...session,
+				activeTerminalTabId: 'tab-2',
+			});
+		});
+
+		it('returns the original session when selecting the already active tab', () => {
+			const session = createMockSession({ activeTerminalTabId: 'tab-1' });
+
+			expect(setActiveTerminalTab(session, 'tab-1')).toBe(session);
 		});
 	});
 

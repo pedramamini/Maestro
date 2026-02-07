@@ -195,6 +195,7 @@ import {
 	getActiveTerminalTab,
 	getTerminalSessionId,
 	parseTerminalSessionId,
+	setActiveTerminalTab,
 } from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
@@ -5226,6 +5227,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 				if (s.id !== activeSessionIdRef.current) return s;
 				const result = setActiveTab(s, tabId);
 				return result ? result.session : s;
+			})
+		);
+	}, []);
+
+	/**
+	 * Select a terminal tab within a session.
+	 */
+	const handleTerminalTabSelect = useCallback((sessionId: string, tabId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return setActiveTerminalTab(s, tabId);
 			})
 		);
 	}, []);
@@ -14427,7 +14440,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 				{/* --- CENTER WORKSPACE (hidden when no sessions, group chat is active, or log viewer is open) --- */}
 				{sessions.length > 0 && !activeGroupChatId && !logViewerOpen && (
-					<MainPanel ref={mainPanelRef} {...mainPanelProps} />
+					<MainPanel
+						ref={mainPanelRef}
+						{...mainPanelProps}
+						onTerminalTabSelect={handleTerminalTabSelect}
+					/>
 				)}
 
 				{/* --- RIGHT PANEL (hidden in mobile landscape, when no sessions, group chat is active, or log viewer is open) --- */}
