@@ -110,6 +110,8 @@ import {
 } from './app-lifecycle';
 // Phase 3 refactoring - process listeners
 import { setupProcessListeners as setupProcessListenersModule } from './process-listeners';
+import { setupWakaTimeListener } from './process-listeners/wakatime-listener';
+import { WakaTimeManager } from './wakatime-manager';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -165,6 +167,9 @@ if (!installationId) {
 	store.set('installationId', installationId);
 	logger.info('Generated new installation ID', 'Startup', { installationId });
 }
+
+// Initialize WakaTime heartbeat manager
+const wakatimeManager = new WakaTimeManager(store);
 
 // Initialize Sentry for crash reporting (dynamic import to avoid module-load-time errors)
 // Only enable in production - skip during development to avoid noise from hot-reload artifacts
@@ -693,5 +698,8 @@ function setupProcessListeners() {
 			},
 			logger,
 		});
+
+		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
+		setupWakaTimeListener(processManager, wakatimeManager);
 	}
 }
