@@ -189,6 +189,7 @@ import {
 	hasActiveWizard,
 } from './utils/tabHelpers';
 import {
+	closeTerminalTab,
 	createInitialTerminalTabState,
 	createTerminalTab,
 	ensureTerminalTabStructure,
@@ -5239,6 +5240,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 			prev.map((s) => {
 				if (s.id !== sessionId) return s;
 				return setActiveTerminalTab(s, tabId);
+			})
+		);
+	}, []);
+
+	/**
+	 * Close a terminal tab, preserving close history for reopen.
+	 */
+	const handleTerminalTabClose = useCallback((sessionId: string, tabId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				const result = closeTerminalTab(s, tabId);
+				return result ? result.session : s;
 			})
 		);
 	}, []);
@@ -14444,6 +14458,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						ref={mainPanelRef}
 						{...mainPanelProps}
 						onTerminalTabSelect={handleTerminalTabSelect}
+						onTerminalTabClose={handleTerminalTabClose}
 					/>
 				)}
 
