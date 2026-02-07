@@ -22,6 +22,7 @@ import type { MaestroSettings } from './stores/types';
 
 const LOG_CONTEXT = '[WakaTime]';
 const HEARTBEAT_DEBOUNCE_MS = 120_000; // 2 minutes - WakaTime deduplicates within this window
+const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // Check for CLI updates once per day
 
 /** Map Node.js platform to WakaTime release naming */
 function getWakaTimePlatform(): string | null {
@@ -78,12 +79,47 @@ function downloadFile(url: string, destPath: string, maxRedirects = 5): Promise<
 	});
 }
 
+/** Fetch JSON from a URL, following redirects */
+function fetchJson(url: string, maxRedirects = 5): Promise<unknown> {
+	return new Promise((resolve, reject) => {
+		if (maxRedirects <= 0) {
+			reject(new Error('Too many redirects'));
+			return;
+		}
+		const parsedUrl = new URL(url);
+		const options = {
+			hostname: parsedUrl.hostname,
+			path: parsedUrl.pathname + parsedUrl.search,
+			headers: { 'User-Agent': 'maestro-wakatime' },
+		};
+		https.get(options, (response) => {
+			if (response.statusCode && response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+				response.resume();
+				fetchJson(response.headers.location, maxRedirects - 1).then(resolve, reject);
+				return;
+			}
+			if (response.statusCode !== 200) {
+				response.resume();
+				reject(new Error(`HTTP ${response.statusCode}`));
+				return;
+			}
+			let data = '';
+			response.on('data', (chunk: Buffer) => { data += chunk.toString(); });
+			response.on('end', () => {
+				try { resolve(JSON.parse(data)); }
+				catch (err) { reject(err); }
+			});
+		}).on('error', reject);
+	});
+}
+
 export class WakaTimeManager {
 	private settingsStore: Store<MaestroSettings>;
 	private lastHeartbeatPerSession: Map<string, number> = new Map();
 	private cliPath: string | null = null;
 	private cliDetected = false;
 	private installing: Promise<boolean> | null = null;
+	private lastUpdateCheck = 0;
 
 	constructor(settingsStore: Store<MaestroSettings>) {
 		this.settingsStore = settingsStore;
@@ -136,7 +172,15 @@ export class WakaTimeManager {
 	 */
 	async ensureCliInstalled(): Promise<boolean> {
 		// If already detected, return early
-		if (await this.detectCli()) return true;
+		if (await this.detectCli()) {
+			// Fire-and-forget background update check (at most once per day)
+			const now = Date.now();
+			if (now - this.lastUpdateCheck >= UPDATE_CHECK_INTERVAL_MS) {
+				this.lastUpdateCheck = now;
+				this.checkForUpdate().catch(() => {});
+			}
+			return true;
+		}
 
 		// Guard against concurrent installs
 		if (this.installing) return this.installing;
@@ -211,6 +255,49 @@ export class WakaTimeManager {
 		} finally {
 			// Clean up zip file
 			try { fs.unlinkSync(zipPath); } catch { /* ignore */ }
+		}
+	}
+
+	/**
+	 * Check if the installed CLI is outdated and update if needed.
+	 * Fetches the latest release tag from GitHub and compares it to the
+	 * currently installed version. If they differ, re-downloads the CLI.
+	 */
+	private async checkForUpdate(): Promise<void> {
+		try {
+			// Get the latest release tag from GitHub
+			const release = await fetchJson('https://api.github.com/repos/wakatime/wakatime-cli/releases/latest') as { tag_name?: string };
+			const latestTag = release?.tag_name;
+			if (!latestTag) {
+				logger.debug('Could not determine latest WakaTime CLI version from GitHub', LOG_CONTEXT);
+				return;
+			}
+
+			// Get the currently installed version
+			if (!this.cliPath) return;
+			const result = await execFileNoThrow(this.cliPath, ['--version']);
+			if (result.exitCode !== 0) return;
+			const currentVersion = result.stdout.trim();
+
+			// Compare — latestTag is like "v1.73.1", currentVersion is like "wakatime-cli 1.73.1" or "v1.73.1"
+			// Normalize both to just the numeric version
+			const normalize = (v: string) => v.replace(/^(wakatime-cli\s+|v)/i, '').trim();
+			const latest = normalize(latestTag);
+			const current = normalize(currentVersion);
+
+			if (latest === current) {
+				logger.debug(`WakaTime CLI is up to date (${current})`, LOG_CONTEXT);
+				return;
+			}
+
+			logger.info(`WakaTime CLI update available: ${current} → ${latest}`, LOG_CONTEXT);
+
+			// Reset detection state and re-install
+			this.cliDetected = false;
+			this.cliPath = null;
+			await this.doInstall();
+		} catch (err) {
+			logger.debug(`WakaTime CLI update check failed: ${err instanceof Error ? err.message : String(err)}`, LOG_CONTEXT);
 		}
 	}
 
