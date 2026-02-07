@@ -345,7 +345,7 @@ describe('WakaTimeManager', () => {
 				'--entity-type', 'app',
 				'--project', 'My Project',
 				'--plugin', 'maestro/1.0.0 maestro-wakatime/1.0.0',
-				'--category', 'coding',
+				'--category', 'ai coding',
 			]);
 			expect(logger.debug).toHaveBeenCalledWith(
 				expect.stringContaining('Heartbeat sent for session session-1'),
