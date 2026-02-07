@@ -18,6 +18,15 @@ const mockTerminalTabBarProps = vi.hoisted(() => ({
 		onTabClose: (tabId: string) => void;
 	} | null,
 }));
+const mockTerminalSearchBarProps = vi.hoisted(() => ({
+	current: null as {
+		isOpen: boolean;
+		onClose: () => void;
+		onSearch: (query: string) => boolean;
+		onSearchNext: () => boolean;
+		onSearchPrevious: () => boolean;
+	} | null,
+}));
 
 vi.mock('../../../renderer/components/XTerminal', async () => {
 	const ReactModule = await import('react');
@@ -87,6 +96,19 @@ vi.mock('../../../renderer/components/TerminalTabBar', () => ({
 				'Close first tab'
 			)
 		);
+	},
+}));
+
+vi.mock('../../../renderer/components/TerminalSearchBar', () => ({
+	TerminalSearchBar: (props: {
+		isOpen: boolean;
+		onClose: () => void;
+		onSearch: (query: string) => boolean;
+		onSearchNext: () => boolean;
+		onSearchPrevious: () => boolean;
+	}) => {
+		mockTerminalSearchBarProps.current = props;
+		return React.createElement('div', { 'data-testid': 'terminal-search-bar' });
 	},
 }));
 
@@ -170,6 +192,7 @@ describe('TerminalView', () => {
 		(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 		mockXTerminalHandlesBySessionId.clear();
 		mockTerminalTabBarProps.current = null;
+		mockTerminalSearchBarProps.current = null;
 		vi.clearAllMocks();
 		exitHandler = null;
 
@@ -274,6 +297,49 @@ describe('TerminalView', () => {
 			terminalViewRef.current?.focusActiveTerminal();
 		});
 		expect(terminalHandle?.focus.mock.calls.length ?? 0).toBe(initialFocusCalls + 1);
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('passes search UI callbacks to the search bar for the active terminal', () => {
+		const callbacks = createCallbacks();
+		const onSearchClose = vi.fn();
+		const session = createSession();
+
+		const { root } = mount(
+			<TerminalView
+				session={session}
+				theme={theme}
+				fontFamily="Monaco"
+				defaultShell="zsh"
+				searchOpen={true}
+				onSearchClose={onSearchClose}
+				{...callbacks}
+			/>
+		);
+
+		const terminalHandle = mockXTerminalHandlesBySessionId.get('session-1-terminal-tab-1');
+		expect(terminalHandle).toBeTruthy();
+		expect(mockTerminalSearchBarProps.current?.isOpen).toBe(true);
+
+		const searchResult = mockTerminalSearchBarProps.current?.onSearch('needle') ?? false;
+		expect(searchResult).toBe(true);
+		expect(terminalHandle?.search).toHaveBeenCalledWith('needle');
+
+		const searchNextResult = mockTerminalSearchBarProps.current?.onSearchNext() ?? false;
+		expect(searchNextResult).toBe(true);
+		expect(terminalHandle?.searchNext).toHaveBeenCalledTimes(1);
+
+		const searchPreviousResult = mockTerminalSearchBarProps.current?.onSearchPrevious() ?? true;
+		expect(searchPreviousResult).toBe(false);
+		expect(terminalHandle?.searchPrevious).toHaveBeenCalledTimes(1);
+
+		act(() => {
+			mockTerminalSearchBarProps.current?.onClose();
+		});
+		expect(onSearchClose).toHaveBeenCalledTimes(1);
 
 		act(() => {
 			root.unmount();
