@@ -14,6 +14,20 @@ export function getActiveTerminalTab(session: Session): TerminalTab | undefined 
 }
 
 /**
+ * Set the active terminal tab for a session
+ */
+export function setActiveTerminalTab(session: Session, tabId: string): Session {
+	if (session.activeTerminalTabId === tabId) {
+		return session;
+	}
+
+	return {
+		...session,
+		activeTerminalTabId: tabId,
+	};
+}
+
+/**
  * Create a new terminal tab with default values
  */
 export function createTerminalTab(
