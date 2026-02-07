@@ -1887,6 +1887,7 @@ function TabBarInner({
 		<div
 			ref={tabBarRef}
 			className="flex items-end gap-0.5 pt-2 border-b overflow-x-auto overflow-y-hidden no-scrollbar"
+			data-tour="tab-bar"
 			style={{
 				backgroundColor: theme.colors.bgSidebar,
 				borderColor: theme.colors.border,

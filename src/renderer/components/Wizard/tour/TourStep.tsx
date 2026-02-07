@@ -6,9 +6,65 @@
  * navigation buttons, and step indicator.
  */
 
+import React from 'react';
 import type { Theme, Shortcut } from '../../../types';
 import type { TourStepConfig, SpotlightInfo } from './useTour';
-import { replaceShortcutPlaceholders } from './tourSteps';
+import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
+
+/**
+ * Render description text with shortcut placeholders replaced by styled kbd badges.
+ * Splits on {{shortcutId}} patterns and returns React nodes.
+ */
+function renderDescriptionWithBadges(
+	text: string,
+	shortcuts: Record<string, Shortcut> | undefined,
+	theme: Theme
+): React.ReactNode[] {
+	if (!shortcuts) return [text];
+
+	const parts: React.ReactNode[] = [];
+	const pattern = /\{\{(\w+)\}\}/g;
+	let lastIndex = 0;
+	let match: RegExpExecArray | null;
+
+	while ((match = pattern.exec(text)) !== null) {
+		// Add text before the match
+		if (match.index > lastIndex) {
+			parts.push(text.slice(lastIndex, match.index));
+		}
+
+		const shortcutId = match[1];
+		const shortcut = shortcuts[shortcutId];
+		if (shortcut?.keys) {
+			const formatted = formatShortcutKeys(shortcut.keys);
+			parts.push(
+				<kbd
+					key={`kbd-${match.index}`}
+					className="inline-block px-1.5 py-0.5 mx-0.5 rounded text-xs font-mono font-semibold"
+					style={{
+						backgroundColor: theme.colors.accent + '25',
+						color: theme.colors.accent,
+						border: `1px solid ${theme.colors.accent}40`,
+					}}
+				>
+					{formatted}
+				</kbd>
+			);
+		} else {
+			// Shortcut not found, keep placeholder as-is
+			parts.push(match[0]);
+		}
+
+		lastIndex = match.index + match[0].length;
+	}
+
+	// Add remaining text after last match
+	if (lastIndex < text.length) {
+		parts.push(text.slice(lastIndex));
+	}
+
+	return parts;
+}
 
 interface TourStepProps {
 	theme: Theme;
@@ -50,9 +106,9 @@ function calculateTooltipPosition(
 	position: 'top' | 'bottom' | 'left' | 'right' | 'center' | 'center-overlay';
 	style: React.CSSProperties;
 } {
-	// Wider tooltip when there's extra JSX content
-	const tooltipWidth = hasExtraContent ? 480 : 360;
-	const tooltipHeight = hasExtraContent ? 320 : 240; // Estimated max height
+	// Wider tooltip when step has extra content or is flagged as wide
+	const tooltipWidth = hasExtraContent ? 520 : 360;
+	const tooltipHeight = hasExtraContent ? 360 : 240; // Estimated max height
 	const margin = 16;
 
 	// If no spotlight, center the tooltip on screen
@@ -265,15 +321,12 @@ export function TourStep({
 		? step.descriptionContent
 		: step.descriptionContentGeneric || step.descriptionContent;
 
-	// Determine if we have extra content (for wider tooltip)
-	const hasExtraContent = !!descriptionContent;
+	// Determine if we have extra content or explicit wide flag (for wider tooltip)
+	const hasExtraContent = !!descriptionContent || !!step.wide;
 
 	const { position, style } = calculateTooltipPosition(spotlight, step.position, hasExtraContent);
 
-	// Replace shortcut placeholders with formatted shortcuts
-	const description = shortcuts
-		? replaceShortcutPlaceholders(rawDescription, shortcuts)
-		: rawDescription;
+	// Description stays as raw text; shortcut badges are rendered inline as JSX
 
 	// Only show tooltip when position is ready and not transitioning
 	// This prevents flickering by ensuring position is calculated before becoming visible
@@ -338,16 +391,18 @@ export function TourStep({
 					{step.title}
 				</h3>
 
-				{/* Description - render newlines as line breaks */}
+				{/* Description - render double newlines as paragraphs, single newlines as line breaks, shortcuts as kbd badges */}
 				<div className="text-sm leading-relaxed mb-5" style={{ color: theme.colors.textDim }}>
-					<p>
-						{description.split('\n').map((line, i, arr) => (
-							<span key={i}>
-								{line}
-								{i < arr.length - 1 && <br />}
-							</span>
-						))}
-					</p>
+					{rawDescription.split('\n\n').map((paragraph, pi) => (
+						<p key={pi} className={pi > 0 ? 'mt-3' : ''}>
+							{paragraph.split('\n').map((line, i, arr) => (
+								<span key={i}>
+									{renderDescriptionWithBadges(line, shortcuts, theme)}
+									{i < arr.length - 1 && <br />}
+								</span>
+							))}
+						</p>
+					))}
 					{/* Optional JSX content (e.g., inline icons) */}
 					{descriptionContent && <div className="mt-3">{descriptionContent}</div>}
 				</div>

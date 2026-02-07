@@ -17,7 +17,7 @@
  */
 
 import React from 'react';
-import { PenLine, ImageIcon, History, Eye, Brain, Keyboard } from 'lucide-react';
+import { PenLine, ImageIcon, History, Eye, Brain, Keyboard, Search } from 'lucide-react';
 import type { TourStepConfig } from './useTour';
 import type { Shortcut } from '../../../types';
 import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
@@ -58,6 +58,15 @@ const inputAreaIconsContent = (
 );
 
 /**
+ * JSX content for the AI Terminal & Tabs tour step showing magnifier icon
+ */
+const tabSearchIconContent = (
+	<div className="text-xs leading-relaxed">
+		The <TourIcon icon={Search} /> icon on the left of the tab bar opens a searchable tab overview.
+	</div>
+);
+
+/**
  * All tour steps in order
  *
  * Tour sequence:
@@ -66,12 +75,13 @@ const inputAreaIconsContent = (
  * 3) Files tab - show file explorer
  * 4) History tab - explain auto vs manual entries
  * 5) Left panel hamburger menu - show menu options
- * 6) Left panel session list - explain sessions and groups
- * 7) Main terminal area - explain AI Terminal
- * 8) Agent Sessions button - browse previous conversations
- * 9) Input area - explain messaging the AI
- * 10) Terminal mode - teach Cmd+J shortcut
- * 11) Keyboard shortcuts - mention Cmd+/ for all shortcuts, end tour
+ * 6) Remote control - LIVE/OFFLINE toggle, QR code, Cloudflare tunnel
+ * 7) Left panel agent list - explain agents and groups
+ * 8) Main terminal area + tabs - explain AI Terminal and tab usage
+ * 9) Agent Sessions button - browse previous conversations
+ * 10) Input area - explain messaging the AI
+ * 11) Terminal mode - teach Cmd+J shortcut
+ * 12) Keyboard shortcuts - mention Cmd+/ for all shortcuts, end tour
  */
 export const tourSteps: TourStepConfig[] = [
 	{
@@ -100,9 +110,10 @@ export const tourSteps: TourStepConfig[] = [
 		id: 'files-tab',
 		title: 'File Explorer',
 		description:
-			"The Files tab shows your project's file structure. As the AI creates and modifies files, you'll see them appear here in real-time. Click any file to preview its contents. Press {{goToFiles}} to jump here.",
+			"The Files tab shows your project's file structure. As the AI creates and modifies files, you'll see them appear here. The file tree can be searched. Double click a file to open it in a tab for preview and edit. Right click a file for other options such as opening Markdown documents in a graph view. Press {{goToFiles}} to jump to the file panel from anywhere.",
 		descriptionGeneric:
-			"The Files tab shows your project's file structure. As the AI creates and modifies files, you'll see them appear here in real-time. Click any file to preview its contents. Press {{goToFiles}} to jump here.",
+			"The Files tab shows your project's file structure. As the AI creates and modifies files, you'll see them appear here. The file tree can be searched. Double click a file to open it in a tab for preview and edit. Right click a file for other options such as opening Markdown documents in a graph view. Press {{goToFiles}} to jump to the file panel from anywhere.",
+		wide: true,
 		selector: '[data-tour="files-tab"]',
 		position: 'left',
 		uiActions: [{ type: 'setRightTab', value: 'files' }, { type: 'openRightPanel' }],
@@ -111,9 +122,10 @@ export const tourSteps: TourStepConfig[] = [
 		id: 'history-tab',
 		title: 'History & Tracking',
 		description:
-			'The History tab tracks all changes made during your session. Auto Run entries are marked automatically, while manual changes you make are tracked separately. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default behavior in Settings → General. Press {{goToHistory}} to jump here.',
+			'The History tab tracks all AI interactions in your session. Auto Run entries are tracked automatically, and separate from manual interactions. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default value under Settings → General.\n\nSwitch between the list view and the details view to drill into any entry. From the details view you can also resume the session where that entry took place.\n\nHistory also serves as memory for all Maestro agents—they know how to locate and parse the history file, giving them context about prior work. Press {{goToHistory}} to jump here.',
 		descriptionGeneric:
-			'The History tab tracks all AI interactions in your session. Auto Run entries are marked automatically, while manual changes are tracked separately. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default behavior in Settings → General. Press {{goToHistory}} to jump here.',
+			'The History tab tracks all AI interactions in your session. Auto Run entries are tracked automatically, and separate from manual interactions. You can toggle history per-message using the "History" bubble (with the clock icon) in the input area. Configure the default value under Settings → General.\n\nSwitch between the list view and the details view to drill into any entry. From the details view you can also resume the session where that entry took place.\n\nHistory also serves as memory for all Maestro agents—they know how to locate and parse the history file, giving them context about prior work. Press {{goToHistory}} to jump here.',
+		wide: true,
 		selector: '[data-tour="history-tab"]',
 		position: 'left',
 		uiActions: [{ type: 'setRightTab', value: 'history' }, { type: 'openRightPanel' }],
@@ -131,24 +143,40 @@ export const tourSteps: TourStepConfig[] = [
 		uiActions: [{ type: 'openHamburgerMenu' }],
 	},
 	{
-		id: 'session-list',
-		title: 'Sessions & Groups',
+		id: 'remote-control',
+		title: 'Remote Control',
 		description:
-			'The session list shows all your AI assistant sessions. You can have multiple projects running simultaneously, organize them into groups, and quickly switch between them. Watch for the pulsing green dot—it indicates unread messages from an agent. Press {{focusSidebar}} to focus the session list.',
+			'The LIVE/OFFLINE indicator controls a built-in web interface for remote access. Toggle it on to generate a local URL and QR code—scan it with your phone to control Maestro from the couch, the kitchen, or anywhere on your network.\n\nIf you have Cloudflare Tunnel (cloudflared) installed, one click opens a secure tunnel—no API keys, no login, no configuration. Access Maestro from anywhere, even outside your home network.',
 		descriptionGeneric:
-			'The session list shows all your AI assistant sessions. You can have multiple projects running simultaneously, organize them into groups, and quickly switch between them. A pulsing green dot indicates unread messages. Press {{focusSidebar}} to focus the session list.',
+			'The LIVE/OFFLINE indicator controls a built-in web interface for remote access. Toggle it on to generate a local URL and QR code—scan it with your phone to control Maestro from anywhere on your network.\n\nIf you have Cloudflare Tunnel (cloudflared) installed, one click opens a secure tunnel—no API keys, no login, no configuration. Access Maestro from anywhere, even outside your home network.',
+		wide: true,
+		selector: '[data-tour="remote-control"]',
+		position: 'right',
+		uiActions: [{ type: 'closeHamburgerMenu' }],
+	},
+	{
+		id: 'session-list',
+		title: 'Agents & Groups',
+		description:
+			'The agent list shows all your AI coding agents. Each agent is backed by a provider like Claude Code, Codex, or OpenCode. You can run multiple agents simultaneously on different projects and quickly switch between them. A red indicator dot marks unread messages.\n\nOrganize agents into groups, and with two or more agents you can start a group chat—even across different providers. Press {{focusSidebar}} to focus the agent list.',
+		descriptionGeneric:
+			'The agent list shows all your AI coding agents. Each agent is backed by a provider like Claude Code, Codex, or OpenCode. You can run multiple agents simultaneously on different projects and quickly switch between them. A red indicator dot marks unread messages.\n\nOrganize agents into groups, and with two or more agents you can start a group chat—even across different providers. Press {{focusSidebar}} to focus the agent list.',
+		wide: true,
 		selector: '[data-tour="session-list"]',
 		position: 'right',
 		uiActions: [{ type: 'closeHamburgerMenu' }],
 	},
 	{
 		id: 'main-terminal',
-		title: 'AI Terminal',
+		title: 'AI Terminal & Tabs',
 		description:
-			'This is the AI Terminal where you communicate with your AI assistant. In "AI" mode (shown now), messages go to the AI. You can also switch to "Terminal" mode for direct shell commands.',
+			'This is the AI Terminal where you communicate with your AI assistant. In "AI" mode (shown now), messages go to the AI. You can also switch to "Terminal" mode for direct shell commands.\n\nUse tabs liberally. Create one for every task, bug, question, or whatever. Each tab is a fresh context. Tabs can be closed and later recalled. There\'s tooling available on tabs too, such as export, send to another agent, and publish as Gist.\n\nYour favorite browser shortcuts work here: {{newTab}} for new, {{closeTab}} to close, {{reopenClosedTab}} to reopen the last closed tab.\n\nAny prior session you\'ve had with your provider can be recalled as a tab, even if that session occurred with the provider directly.',
 		descriptionGeneric:
-			'This is the AI Terminal where you communicate with your AI assistant. In "AI" mode, messages go to the AI. Switch to "Terminal" mode for direct shell commands.',
-		selector: '[data-tour="main-terminal"]',
+			'This is the AI Terminal where you communicate with your AI assistant. In "AI" mode, messages go to the AI. Switch to "Terminal" mode for direct shell commands.\n\nUse tabs liberally. Create one for every task, bug, question, or whatever. Each tab is a fresh context. Tabs can be closed and later recalled. There\'s tooling available on tabs too, such as export, send to another agent, and publish as Gist.\n\nYour favorite browser shortcuts work here: {{newTab}} for new, {{closeTab}} to close, {{reopenClosedTab}} to reopen the last closed tab.\n\nAny prior session you\'ve had with your provider can be recalled as a tab, even if that session occurred with the provider directly.',
+		descriptionContent: tabSearchIconContent,
+		descriptionContentGeneric: tabSearchIconContent,
+		wide: true,
+		selector: '[data-tour="tab-bar"], [data-tour="main-terminal"]',
 		position: 'center-overlay',
 		uiActions: [],
 	},

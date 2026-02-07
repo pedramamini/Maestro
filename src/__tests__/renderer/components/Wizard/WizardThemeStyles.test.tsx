@@ -100,6 +100,9 @@ vi.mock('lucide-react', () => ({
 	Keyboard: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<svg data-testid="keyboard-icon" className={className} style={style} />
 	),
+	Search: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<svg data-testid="search-icon" className={className} style={style} />
+	),
 	Info: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
 		<svg data-testid="info-icon" className={className} style={style} />
 	),

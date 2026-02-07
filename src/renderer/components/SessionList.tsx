@@ -1982,7 +1982,7 @@ function SessionListInner(props: SessionListProps) {
 								</button>
 							)}
 							{/* Global LIVE Toggle */}
-							<div className="ml-2 relative" ref={liveOverlayRef}>
+							<div className="ml-2 relative" ref={liveOverlayRef} data-tour="remote-control">
 								<button
 									onClick={() => {
 										if (!isLiveMode) {
