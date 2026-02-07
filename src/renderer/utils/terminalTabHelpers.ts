@@ -33,6 +33,22 @@ export function createTerminalTab(
 }
 
 /**
+ * Create default terminal tab state for a session.
+ */
+export function createInitialTerminalTabState(
+	shellType: string = 'zsh',
+	cwd: string = ''
+): Pick<Session, 'terminalTabs' | 'activeTerminalTabId' | 'closedTerminalTabHistory'> {
+	const defaultTerminalTab = createTerminalTab(shellType, cwd, null);
+
+	return {
+		terminalTabs: [defaultTerminalTab],
+		activeTerminalTabId: defaultTerminalTab.id,
+		closedTerminalTabHistory: [],
+	};
+}
+
+/**
  * Ensure a session has terminal tab structure required at runtime.
  * Returns the updated session and whether terminal tabs were migrated.
  */

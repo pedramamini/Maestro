@@ -189,6 +189,7 @@ import {
 	hasActiveWizard,
 } from './utils/tabHelpers';
 import {
+	createInitialTerminalTabState,
 	createTerminalTab,
 	ensureTerminalTabStructure,
 	getActiveTerminalTab,
@@ -1705,6 +1706,11 @@ function MaestroConsoleInner() {
 							// Ignore errors
 						}
 
+						const initialTerminalTabState = createInitialTerminalTabState(
+							defaultShell || 'zsh',
+							subdir.path
+						);
+
 						const worktreeSession: Session = {
 							id: newId,
 							name: subdir.branch || subdir.name,
@@ -1733,6 +1739,7 @@ function MaestroConsoleInner() {
 							contextUsage: 0,
 							inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
 							aiPid: 0,
+							...initialTerminalTabState,
 							terminalPid: 0,
 							port: 3000 + Math.floor(Math.random() * 100),
 							isLive: false,
@@ -7888,6 +7895,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Ignore errors
 			}
 
+			const initialTerminalTabState = createInitialTerminalTabState(
+				defaultShell || 'zsh',
+				worktree.path
+			);
+
 			const worktreeSession: Session = {
 				id: newId,
 				name: worktree.branch || worktree.name,
@@ -7916,6 +7928,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				contextUsage: 0,
 				inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
 				aiPid: 0,
+				...initialTerminalTabState,
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -8072,6 +8085,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 								// Ignore errors
 							}
 
+							const initialTerminalTabState = createInitialTerminalTabState(
+								defaultShell || 'zsh',
+								subdir.path
+							);
+
 							const newSession: Session = {
 								id: newId,
 								name: sessionName,
@@ -8101,6 +8119,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 								contextUsage: 0,
 								inputMode: session.inputMode,
 								aiPid: 0,
+								...initialTerminalTabState,
 								terminalPid: 0,
 								port: 3000 + Math.floor(Math.random() * 100),
 								isLive: false,
@@ -11647,6 +11666,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 							// Ignore errors fetching git info
 						}
 
+						const initialTerminalTabState = createInitialTerminalTabState(
+							defaultShell || 'zsh',
+							subdir.path
+						);
+
 						const worktreeSession: Session = {
 							id: newId,
 							name: subdir.branch || subdir.name,
@@ -11677,6 +11701,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 							contextUsage: 0,
 							inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 							aiPid: 0,
+							...initialTerminalTabState,
 							terminalPid: 0,
 							port: 3000 + Math.floor(Math.random() * 100),
 							isLive: false,
@@ -11828,6 +11853,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 					// Ignore errors
 				}
 
+				const initialTerminalTabState = createInitialTerminalTabState(
+					defaultShell || 'zsh',
+					worktreePath
+				);
+
 				const worktreeSession: Session = {
 					id: newId,
 					name: branchName,
@@ -11856,6 +11886,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					contextUsage: 0,
 					inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 					aiPid: 0,
+					...initialTerminalTabState,
 					terminalPid: 0,
 					port: 3000 + Math.floor(Math.random() * 100),
 					isLive: false,
@@ -11981,6 +12012,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Ignore errors
 			}
 
+			const initialTerminalTabState = createInitialTerminalTabState(
+				defaultShell || 'zsh',
+				worktreePath
+			);
+
 			const worktreeSession: Session = {
 				id: newId,
 				name: branchName,
@@ -12009,6 +12045,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				contextUsage: 0,
 				inputMode: createWorktreeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 				aiPid: 0,
+				...initialTerminalTabState,
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,

@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import {
 	MAX_CLOSED_TERMINAL_TABS,
 	createClosedTerminalTab,
+	createInitialTerminalTabState,
 	createTerminalTab,
 	ensureTerminalTabStructure,
 	getActiveTerminalTab,
@@ -103,6 +104,28 @@ describe('terminalTabHelpers', () => {
 				cwd: '/workspace',
 				createdAt: 98765,
 				state: 'idle',
+			});
+		});
+	});
+
+	describe('createInitialTerminalTabState', () => {
+		it('builds terminal tab session state from shell and cwd', () => {
+			vi.spyOn(Date, 'now').mockReturnValue(24680);
+
+			expect(createInitialTerminalTabState('bash', '/worktrees/feature-a')).toEqual({
+				terminalTabs: [
+					{
+						id: 'mock-terminal-tab-id',
+						name: null,
+						shellType: 'bash',
+						pid: 0,
+						cwd: '/worktrees/feature-a',
+						createdAt: 24680,
+						state: 'idle',
+					},
+				],
+				activeTerminalTabId: 'mock-terminal-tab-id',
+				closedTerminalTabHistory: [],
 			});
 		});
 	});
