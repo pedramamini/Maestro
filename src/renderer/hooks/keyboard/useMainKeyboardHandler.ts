@@ -251,6 +251,19 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					}
 				}
 
+				// Cmd/Ctrl+G - Navigate terminal search results
+				if ((e.metaKey || e.ctrlKey) && !e.altKey && e.key.toLowerCase() === 'g') {
+					if (ctx.terminalViewRef?.current) {
+						e.preventDefault();
+						if (e.shiftKey) {
+							ctx.terminalViewRef.current.searchPrevious();
+						} else {
+							ctx.terminalViewRef.current.searchNext();
+						}
+						return;
+					}
+				}
+
 				if (ctx.isTabShortcut(e, 'prevTab')) {
 					e.preventDefault();
 					const currentIndex = terminalTabs.findIndex(
