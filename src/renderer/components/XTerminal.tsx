@@ -37,28 +37,47 @@ interface XTerminalAddons {
 	unicode11: Unicode11Addon | null;
 }
 
-type XtermAnsiOverrides = Partial<{
-	ansiBlack: string;
-	ansiRed: string;
-	ansiGreen: string;
-	ansiYellow: string;
-	ansiBlue: string;
-	ansiMagenta: string;
-	ansiCyan: string;
-	ansiWhite: string;
-	ansiBrightBlack: string;
-	ansiBrightRed: string;
-	ansiBrightGreen: string;
-	ansiBrightYellow: string;
-	ansiBrightBlue: string;
-	ansiBrightMagenta: string;
-	ansiBrightCyan: string;
-	ansiBrightWhite: string;
-}>;
-
 const HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{6}$/;
 const SHORT_HEX_COLOR_PATTERN = /^#[0-9a-fA-F]{3}$/;
 const HEX_WITH_ALPHA_PATTERN = /^#[0-9a-fA-F]{8}$/;
+
+const DARK_DEFAULT_ANSI = {
+	black: '#282c34',
+	red: '#e06c75',
+	green: '#98c379',
+	yellow: '#e5c07b',
+	blue: '#61afef',
+	magenta: '#c678dd',
+	cyan: '#56b6c2',
+	white: '#abb2bf',
+	brightBlack: '#5c6370',
+	brightRed: '#e06c75',
+	brightGreen: '#98c379',
+	brightYellow: '#e5c07b',
+	brightBlue: '#61afef',
+	brightMagenta: '#c678dd',
+	brightCyan: '#56b6c2',
+	brightWhite: '#ffffff',
+};
+
+const LIGHT_DEFAULT_ANSI = {
+	black: '#073642',
+	red: '#dc322f',
+	green: '#859900',
+	yellow: '#b58900',
+	blue: '#268bd2',
+	magenta: '#d33682',
+	cyan: '#2aa198',
+	white: '#eee8d5',
+	brightBlack: '#586e75',
+	brightRed: '#cb4b16',
+	brightGreen: '#859900',
+	brightYellow: '#b58900',
+	brightBlue: '#268bd2',
+	brightMagenta: '#6c71c4',
+	brightCyan: '#2aa198',
+	brightWhite: '#fdf6e3',
+};
 
 function normalizeSearchDecorationColor(color: string | undefined, fallback: string): string {
 	if (!color) {
@@ -104,32 +123,35 @@ function createSearchOptions(theme: Theme): ISearchOptions {
 }
 
 function mapMaestroThemeToXterm(theme: Theme): ITheme {
-	const colors = theme.colors as Theme['colors'] & XtermAnsiOverrides;
+	const isDarkTheme = theme.mode !== 'light';
+	const defaultAnsi = isDarkTheme ? DARK_DEFAULT_ANSI : LIGHT_DEFAULT_ANSI;
+	const selectionBackground =
+		theme.colors.selection ?? (isDarkTheme ? 'rgba(255, 255, 255, 0.2)' : 'rgba(0, 0, 0, 0.2)');
 
 	return {
 		background: theme.colors.bgMain,
 		foreground: theme.colors.textMain,
-		cursor: theme.colors.textMain,
+		cursor: theme.colors.accent,
 		cursorAccent: theme.colors.bgMain,
-		selectionBackground: theme.colors.accentDim || 'rgba(255, 255, 255, 0.3)',
-		selectionInactiveBackground: theme.colors.accentDim || 'rgba(255, 255, 255, 0.2)',
-		selectionForeground: theme.colors.textMain,
-		black: colors.ansiBlack || '#000000',
-		red: colors.ansiRed || theme.colors.error || '#e06c75',
-		green: colors.ansiGreen || theme.colors.success || '#98c379',
-		yellow: colors.ansiYellow || theme.colors.warning || '#e5c07b',
-		blue: colors.ansiBlue || theme.colors.accent || '#61afef',
-		magenta: colors.ansiMagenta || '#c678dd',
-		cyan: colors.ansiCyan || theme.colors.accentText || '#56b6c2',
-		white: colors.ansiWhite || theme.colors.textMain || '#abb2bf',
-		brightBlack: colors.ansiBrightBlack || theme.colors.textDim || '#5c6370',
-		brightRed: colors.ansiBrightRed || theme.colors.error || '#e06c75',
-		brightGreen: colors.ansiBrightGreen || theme.colors.success || '#98c379',
-		brightYellow: colors.ansiBrightYellow || theme.colors.warning || '#e5c07b',
-		brightBlue: colors.ansiBrightBlue || theme.colors.accent || '#61afef',
-		brightMagenta: colors.ansiBrightMagenta || '#c678dd',
-		brightCyan: colors.ansiBrightCyan || theme.colors.accentText || '#56b6c2',
-		brightWhite: colors.ansiBrightWhite || '#ffffff',
+		selectionBackground,
+		selectionInactiveBackground: selectionBackground,
+		selectionForeground: undefined,
+		black: theme.colors.ansiBlack ?? defaultAnsi.black,
+		red: theme.colors.ansiRed ?? defaultAnsi.red,
+		green: theme.colors.ansiGreen ?? defaultAnsi.green,
+		yellow: theme.colors.ansiYellow ?? defaultAnsi.yellow,
+		blue: theme.colors.ansiBlue ?? defaultAnsi.blue,
+		magenta: theme.colors.ansiMagenta ?? defaultAnsi.magenta,
+		cyan: theme.colors.ansiCyan ?? defaultAnsi.cyan,
+		white: theme.colors.ansiWhite ?? defaultAnsi.white,
+		brightBlack: theme.colors.ansiBrightBlack ?? defaultAnsi.brightBlack,
+		brightRed: theme.colors.ansiBrightRed ?? defaultAnsi.brightRed,
+		brightGreen: theme.colors.ansiBrightGreen ?? defaultAnsi.brightGreen,
+		brightYellow: theme.colors.ansiBrightYellow ?? defaultAnsi.brightYellow,
+		brightBlue: theme.colors.ansiBrightBlue ?? defaultAnsi.brightBlue,
+		brightMagenta: theme.colors.ansiBrightMagenta ?? defaultAnsi.brightMagenta,
+		brightCyan: theme.colors.ansiBrightCyan ?? defaultAnsi.brightCyan,
+		brightWhite: theme.colors.ansiBrightWhite ?? defaultAnsi.brightWhite,
 	};
 }
 
