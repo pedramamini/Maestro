@@ -15,6 +15,7 @@ import {
 	getTerminalTabDisplayName,
 	hasRunningTerminalProcess,
 	parseTerminalSessionId,
+	updateTerminalTabState,
 } from '../../../renderer/utils/terminalTabHelpers';
 import type { Session, TerminalTab } from '../../../renderer/types';
 
@@ -321,6 +322,51 @@ describe('terminalTabHelpers', () => {
 	});
 
 	describe('terminal tab state helpers', () => {
+		describe('updateTerminalTabState', () => {
+			it('updates tab state and preserves exit code for exited tabs', () => {
+				const tab1 = createMockTerminalTab({ id: 'tab-1', state: 'busy' });
+				const tab2 = createMockTerminalTab({ id: 'tab-2', state: 'idle' });
+				const session = createMockSession({
+					terminalTabs: [tab1, tab2],
+					activeTerminalTabId: 'tab-1',
+				});
+
+				const updated = updateTerminalTabState(session, 'tab-2', 'exited', 130);
+
+				expect(updated).not.toBe(session);
+				expect(updated.terminalTabs[0]).toBe(tab1);
+				expect(updated.terminalTabs[1]).toMatchObject({
+					id: 'tab-2',
+					state: 'exited',
+					exitCode: 130,
+				});
+			});
+
+			it('clears exitCode when transitioning out of exited state', () => {
+				const tab = createMockTerminalTab({ id: 'tab-1', state: 'exited', exitCode: 1 });
+				const session = createMockSession({
+					terminalTabs: [tab],
+					activeTerminalTabId: 'tab-1',
+				});
+
+				const updated = updateTerminalTabState(session, 'tab-1', 'idle');
+
+				expect(updated.terminalTabs[0]).toMatchObject({ id: 'tab-1', state: 'idle' });
+				expect(updated.terminalTabs[0].exitCode).toBeUndefined();
+			});
+
+			it('returns original session when no tab changes', () => {
+				const tab = createMockTerminalTab({ id: 'tab-1', state: 'idle' });
+				const session = createMockSession({
+					terminalTabs: [tab],
+					activeTerminalTabId: 'tab-1',
+				});
+
+				expect(updateTerminalTabState(session, 'tab-1', 'idle')).toBe(session);
+				expect(updateTerminalTabState(session, 'missing-tab', 'busy')).toBe(session);
+			});
+		});
+
 		it('detects when any terminal tab is busy', () => {
 			const session = createMockSession({
 				terminalTabs: [

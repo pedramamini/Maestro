@@ -200,6 +200,7 @@ import {
 	reorderTerminalTabs,
 	renameTerminalTab,
 	setActiveTerminalTab,
+	updateTerminalTabState,
 } from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
@@ -5296,6 +5297,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 				prev.map((s) => {
 					if (s.id !== sessionId) return s;
 					return reorderTerminalTabs(s, fromIndex, toIndex);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a terminal tab's runtime state.
+	 */
+	const handleTerminalTabStateChange = useCallback(
+		(sessionId: string, tabId: string, state: 'idle' | 'busy' | 'exited', exitCode?: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return updateTerminalTabState(s, tabId, state, exitCode);
 				})
 			);
 		},
@@ -14507,6 +14523,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						onTerminalNewTab={handleTerminalNewTab}
 						onTerminalTabRename={handleTerminalTabRename}
 						onTerminalTabReorder={handleTerminalTabReorder}
+						onTerminalTabStateChange={handleTerminalTabStateChange}
 					/>
 				)}
 
