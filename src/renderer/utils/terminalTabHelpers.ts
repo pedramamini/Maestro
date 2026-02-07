@@ -28,6 +28,40 @@ export function setActiveTerminalTab(session: Session, tabId: string): Session {
 }
 
 /**
+ * Rename a terminal tab.
+ * Empty names are normalized to null.
+ */
+export function renameTerminalTab(session: Session, tabId: string, name: string): Session {
+	const normalizedName = name.trim() || null;
+	let didUpdate = false;
+
+	const updatedTabs = session.terminalTabs.map((tab) => {
+		if (tab.id !== tabId) {
+			return tab;
+		}
+
+		if (tab.name === normalizedName) {
+			return tab;
+		}
+
+		didUpdate = true;
+		return {
+			...tab,
+			name: normalizedName,
+		};
+	});
+
+	if (!didUpdate) {
+		return session;
+	}
+
+	return {
+		...session,
+		terminalTabs: updatedTabs,
+	};
+}
+
+/**
  * Create a new terminal tab with default values
  */
 export function createTerminalTab(

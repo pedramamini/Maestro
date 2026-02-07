@@ -9,6 +9,7 @@ import {
 	getActiveTerminalTab,
 	getActiveTerminalTabCount,
 	setActiveTerminalTab,
+	renameTerminalTab,
 	getTerminalSessionId,
 	getTerminalTabDisplayName,
 	hasRunningTerminalProcess,
@@ -80,6 +81,46 @@ describe('terminalTabHelpers', () => {
 			const session = createMockSession({ activeTerminalTabId: 'tab-1' });
 
 			expect(setActiveTerminalTab(session, 'tab-1')).toBe(session);
+		});
+	});
+
+	describe('renameTerminalTab', () => {
+		it('updates the matching tab name when renamed', () => {
+			const tab1 = createMockTerminalTab({ id: 'tab-1', name: null });
+			const tab2 = createMockTerminalTab({ id: 'tab-2', name: 'Build' });
+			const session = createMockSession({
+				terminalTabs: [tab1, tab2],
+				activeTerminalTabId: 'tab-1',
+			});
+
+			const renamed = renameTerminalTab(session, 'tab-1', 'Deploy');
+
+			expect(renamed).not.toBe(session);
+			expect(renamed.terminalTabs[0].name).toBe('Deploy');
+			expect(renamed.terminalTabs[1]).toBe(tab2);
+		});
+
+		it('normalizes blank names to null', () => {
+			const tab = createMockTerminalTab({ id: 'tab-1', name: 'Named Tab' });
+			const session = createMockSession({ terminalTabs: [tab], activeTerminalTabId: tab.id });
+
+			const renamed = renameTerminalTab(session, tab.id, '   ');
+
+			expect(renamed.terminalTabs[0].name).toBeNull();
+		});
+
+		it('returns the original session when tab is missing', () => {
+			const tab = createMockTerminalTab({ id: 'tab-1', name: null });
+			const session = createMockSession({ terminalTabs: [tab], activeTerminalTabId: tab.id });
+
+			expect(renameTerminalTab(session, 'tab-999', 'Anything')).toBe(session);
+		});
+
+		it('returns the original session when name does not change', () => {
+			const tab = createMockTerminalTab({ id: 'tab-1', name: 'Build' });
+			const session = createMockSession({ terminalTabs: [tab], activeTerminalTabId: tab.id });
+
+			expect(renameTerminalTab(session, 'tab-1', 'Build')).toBe(session);
 		});
 	});
 
