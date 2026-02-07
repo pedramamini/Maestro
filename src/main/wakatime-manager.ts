@@ -117,6 +117,7 @@ export class WakaTimeManager {
 	private settingsStore: Store<MaestroSettings>;
 	private lastHeartbeatPerSession: Map<string, number> = new Map();
 	private branchCache: Map<string, string> = new Map();
+	private languageCache: Map<string, string> = new Map();
 	private cliPath: string | null = null;
 	private cliDetected = false;
 	private installing: Promise<boolean> | null = null;
@@ -319,6 +320,60 @@ export class WakaTimeManager {
 	}
 
 	/**
+	 * Detect the primary programming language for a project directory by checking
+	 * for well-known config/manifest files. Result is cached per session.
+	 */
+	private detectLanguage(sessionId: string, cwd: string): string | null {
+		const cached = this.languageCache.get(sessionId);
+		if (cached !== undefined) return cached || null;
+
+		// Ordered by specificity — first match wins
+		const markers: [string, string][] = [
+			['tsconfig.json', 'TypeScript'],
+			['package.json', 'JavaScript'],
+			['Cargo.toml', 'Rust'],
+			['go.mod', 'Go'],
+			['pyproject.toml', 'Python'],
+			['setup.py', 'Python'],
+			['requirements.txt', 'Python'],
+			['Gemfile', 'Ruby'],
+			['pom.xml', 'Java'],
+			['build.gradle', 'Java'],
+			['build.gradle.kts', 'Kotlin'],
+			['*.csproj', 'C#'],
+			['Package.swift', 'Swift'],
+			['CMakeLists.txt', 'C++'],
+			['Makefile', 'C'],
+			['composer.json', 'PHP'],
+			['mix.exs', 'Elixir'],
+			['pubspec.yaml', 'Dart'],
+			['deno.json', 'TypeScript'],
+		];
+
+		for (const [file, language] of markers) {
+			if (file.startsWith('*')) {
+				// Glob-style: check if any file matches the extension
+				try {
+					const ext = file.slice(1); // e.g., '.csproj'
+					const entries = fs.readdirSync(cwd);
+					if (entries.some(e => e.endsWith(ext))) {
+						this.languageCache.set(sessionId, language);
+						return language;
+					}
+				} catch { /* ignore */ }
+			} else {
+				if (fs.existsSync(path.join(cwd, file))) {
+					this.languageCache.set(sessionId, language);
+					return language;
+				}
+			}
+		}
+
+		this.languageCache.set(sessionId, '');
+		return null;
+	}
+
+	/**
 	 * Detect the current git branch for a project directory.
 	 * Result is cached per session to avoid running git on every heartbeat.
 	 */
@@ -333,7 +388,7 @@ export class WakaTimeManager {
 	}
 
 	/** Send a heartbeat for a session's activity */
-	async sendHeartbeat(sessionId: string, projectName: string, projectCwd?: string, agentType?: string): Promise<void> {
+	async sendHeartbeat(sessionId: string, projectName: string, projectCwd?: string): Promise<void> {
 		// Check if enabled
 		const enabled = this.settingsStore.get('wakatimeEnabled', false);
 		if (!enabled) return;
@@ -366,16 +421,12 @@ export class WakaTimeManager {
 			'--category', 'ai coding',
 		];
 
-		// Add agent type as language so WakaTime shows it instead of "Other"
-		if (agentType) {
-			const agentDisplayNames: Record<string, string> = {
-				'claude-code': 'Claude Code',
-				'codex': 'Codex',
-				'opencode': 'OpenCode',
-				'factory-droid': 'Factory Droid',
-			};
-			const language = agentDisplayNames[agentType] || agentType;
-			args.push('--language', language);
+		// Detect project language from manifest files in cwd
+		if (projectCwd) {
+			const language = this.detectLanguage(sessionId, projectCwd);
+			if (language) {
+				args.push('--language', language);
+			}
 		}
 
 		// Add branch info if we can detect it from the project directory
@@ -403,5 +454,6 @@ export class WakaTimeManager {
 	removeSession(sessionId: string): void {
 		this.lastHeartbeatPerSession.delete(sessionId);
 		this.branchCache.delete(sessionId);
+		this.languageCache.delete(sessionId);
 	}
 }

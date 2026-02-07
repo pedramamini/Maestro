@@ -44,7 +44,7 @@ describe('WakaTime Listener', () => {
 		expect(mockProcessManager.on).toHaveBeenCalledWith('exit', expect.any(Function));
 	});
 
-	it('should send heartbeat on data event for AI sessions with agent type', () => {
+	it('should send heartbeat on data event for AI sessions', () => {
 		vi.mocked(mockProcessManager.get).mockReturnValue({
 			sessionId: 'session-abc',
 			toolType: 'claude-code',
@@ -64,7 +64,6 @@ describe('WakaTime Listener', () => {
 			'session-abc',
 			'/home/user/project',
 			'/home/user/project',
-			'claude-code'
 		);
 	});
 
@@ -88,7 +87,6 @@ describe('WakaTime Listener', () => {
 			'session-thinking',
 			'/home/user/project',
 			'/home/user/project',
-			'claude-code'
 		);
 	});
 
@@ -140,11 +138,10 @@ describe('WakaTime Listener', () => {
 			'session-no-path',
 			'/home/user/fallback',
 			'/home/user/fallback',
-			'codex'
 		);
 	});
 
-	it('should send heartbeat on query-complete with projectPath and agentType', () => {
+	it('should send heartbeat on query-complete with projectPath', () => {
 		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
 
 		const handler = eventHandlers.get('query-complete');
@@ -164,7 +161,6 @@ describe('WakaTime Listener', () => {
 			'session-abc',
 			'/home/user/project',
 			'/home/user/project',
-			'claude-code'
 		);
 	});
 
@@ -186,7 +182,6 @@ describe('WakaTime Listener', () => {
 			'session-fallback',
 			'session-fallback',
 			undefined,
-			'claude-code'
 		);
 	});
 

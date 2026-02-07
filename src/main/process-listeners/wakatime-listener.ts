@@ -22,9 +22,7 @@ function heartbeatForSession(
 	const managedProcess = processManager.get(sessionId);
 	if (!managedProcess || managedProcess.isTerminal) return;
 	const projectName = managedProcess.projectPath || managedProcess.cwd || sessionId;
-	void wakaTimeManager.sendHeartbeat(
-		sessionId, projectName, managedProcess.cwd, managedProcess.toolType
-	);
+	void wakaTimeManager.sendHeartbeat(sessionId, projectName, managedProcess.cwd);
 }
 
 /**
@@ -51,9 +49,7 @@ export function setupWakaTimeListener(
 	// Also send heartbeat on query-complete for batch/auto-run processes
 	processManager.on('query-complete', (_sessionId: string, queryData: QueryCompleteData) => {
 		const projectName = queryData.projectPath || queryData.sessionId;
-		void wakaTimeManager.sendHeartbeat(
-			queryData.sessionId, projectName, queryData.projectPath, queryData.agentType
-		);
+		void wakaTimeManager.sendHeartbeat(queryData.sessionId, projectName, queryData.projectPath);
 	});
 
 	// Clean up debounce tracking when a process exits
