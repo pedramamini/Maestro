@@ -32,7 +32,6 @@ export interface XTerminalHandle {
 
 interface XTerminalAddons {
 	fit: FitAddon | null;
-	search: SearchAddon | null;
 	webgl: WebglAddon | null;
 	webLinks: WebLinksAddon | null;
 	unicode11: Unicode11Addon | null;
@@ -95,12 +94,12 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 	const terminalRef = useRef<Terminal | null>(null);
 	const addonsRef = useRef<XTerminalAddons>({
 		fit: null,
-		search: null,
 		webgl: null,
 		webLinks: null,
 		unicode11: null,
 	});
 	const resizeTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+	const searchAddonRef = useRef<SearchAddon | null>(null);
 	const searchQueryRef = useRef('');
 
 	const handleResize = useCallback(() => {
@@ -143,6 +142,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 
 		const searchAddon = new SearchAddon();
 		terminal.loadAddon(searchAddon);
+		searchAddonRef.current = searchAddon;
 
 		const unicode11Addon = new Unicode11Addon();
 		terminal.loadAddon(unicode11Addon);
@@ -166,7 +166,6 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		terminalRef.current = terminal;
 		addonsRef.current = {
 			fit: fitAddon,
-			search: searchAddon,
 			webgl: webglAddon,
 			webLinks: webLinksAddon,
 			unicode11: unicode11Addon,
@@ -182,9 +181,9 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			terminal.dispose();
 
 			terminalRef.current = null;
+			searchAddonRef.current = null;
 			addonsRef.current = {
 				fit: null,
-				search: null,
 				webgl: null,
 				webLinks: null,
 				unicode11: null,
@@ -245,11 +244,36 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			clear: () => terminalRef.current?.clear(),
 			scrollToBottom: () => terminalRef.current?.scrollToBottom(),
 			search: (query: string) => {
+				if (!searchAddonRef.current || !query) {
+					searchQueryRef.current = '';
+					return false;
+				}
+
 				searchQueryRef.current = query;
-				return addonsRef.current.search?.findNext(query) ?? false;
+
+				return (
+					searchAddonRef.current.findNext(query, {
+						caseSensitive: false,
+						wholeWord: false,
+						regex: false,
+						incremental: true,
+					}) ?? false
+				);
 			},
-			searchNext: () => addonsRef.current.search?.findNext(searchQueryRef.current) ?? false,
-			searchPrevious: () => addonsRef.current.search?.findPrevious(searchQueryRef.current) ?? false,
+			searchNext: () => {
+				if (!searchAddonRef.current || !searchQueryRef.current) {
+					return false;
+				}
+
+				return searchAddonRef.current.findNext(searchQueryRef.current) ?? false;
+			},
+			searchPrevious: () => {
+				if (!searchAddonRef.current || !searchQueryRef.current) {
+					return false;
+				}
+
+				return searchAddonRef.current.findPrevious(searchQueryRef.current) ?? false;
+			},
 			getSelection: () => terminalRef.current?.getSelection() ?? '',
 			resize: () => addonsRef.current.fit?.fit(),
 		}),
