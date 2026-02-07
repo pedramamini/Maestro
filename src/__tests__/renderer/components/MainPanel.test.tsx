@@ -539,6 +539,7 @@ describe('MainPanel', () => {
 
 			expect(screen.getByTestId('terminal-view')).toBeInTheDocument();
 			expect(screen.queryByTestId('terminal-output')).not.toBeInTheDocument();
+			expect(screen.queryByTestId('input-area')).not.toBeInTheDocument();
 		});
 
 		it('should pass terminal tab callbacks and shell settings to TerminalView', () => {
