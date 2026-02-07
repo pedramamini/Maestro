@@ -191,7 +191,12 @@ import {
 	navigateToPrevUnifiedTab,
 	hasActiveWizard,
 } from './utils/tabHelpers';
-import { createTerminalTab } from './utils/terminalTabHelpers';
+import {
+	createTerminalTab,
+	getActiveTerminalTab,
+	getTerminalSessionId,
+	parseTerminalSessionId,
+} from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
