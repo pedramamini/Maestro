@@ -247,9 +247,19 @@ describe('XTerminal', () => {
 		expect(ref.current?.search('needle')).toBe(false);
 		expect(ref.current?.searchNext()).toBe(false);
 		expect(ref.current?.searchPrevious()).toBe(false);
-		expect(searchAddon.findNext).toHaveBeenNthCalledWith(1, 'needle');
+		expect(ref.current?.search('')).toBe(false);
+		expect(ref.current?.searchNext()).toBe(false);
+		expect(ref.current?.searchPrevious()).toBe(false);
+		expect(searchAddon.findNext).toHaveBeenNthCalledWith(1, 'needle', {
+			caseSensitive: false,
+			wholeWord: false,
+			regex: false,
+			incremental: true,
+		});
 		expect(searchAddon.findNext).toHaveBeenNthCalledWith(2, 'needle');
+		expect(searchAddon.findNext).toHaveBeenCalledTimes(2);
 		expect(searchAddon.findPrevious).toHaveBeenCalledWith('needle');
+		expect(searchAddon.findPrevious).toHaveBeenCalledTimes(1);
 		expect(ref.current?.getSelection()).toBe('selected-text');
 		expect(() => {
 			ref.current?.write('echo test');
