@@ -752,8 +752,18 @@ describe('useMainKeyboardHandler', () => {
 		function createUnifiedTabContext(overrides: Record<string, unknown> = {}) {
 			const aiTab1 = { id: 'ai-tab-1', name: 'AI Tab 1', logs: [] };
 			const aiTab2 = { id: 'ai-tab-2', name: 'AI Tab 2', logs: [] };
-			const fileTab1 = { id: 'file-tab-1', path: '/test/file1.ts', name: 'file1', extension: '.ts' };
-			const fileTab2 = { id: 'file-tab-2', path: '/test/file2.ts', name: 'file2', extension: '.ts' };
+			const fileTab1 = {
+				id: 'file-tab-1',
+				path: '/test/file1.ts',
+				name: 'file1',
+				extension: '.ts',
+			};
+			const fileTab2 = {
+				id: 'file-tab-2',
+				path: '/test/file2.ts',
+				name: 'file2',
+				extension: '.ts',
+			};
 
 			return createMockContext({
 				activeSession: {
@@ -787,7 +797,9 @@ describe('useMainKeyboardHandler', () => {
 						id: 'session-1',
 						aiTabs: [{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] }],
 						activeTabId: 'ai-tab-1',
-						filePreviewTabs: [{ id: 'file-tab-1', path: '/test/file.ts', name: 'file', extension: '.ts' }],
+						filePreviewTabs: [
+							{ id: 'file-tab-1', path: '/test/file.ts', name: 'file', extension: '.ts' },
+						],
 						activeFileTabId: 'file-tab-1', // File tab is active
 						unifiedTabOrder: ['ai-tab-1', 'file-tab-1'],
 						inputMode: 'ai',
@@ -1246,6 +1258,174 @@ describe('useMainKeyboardHandler', () => {
 				// Tab shortcuts should be disabled in terminal mode
 				expect(mockCreateTab).not.toHaveBeenCalled();
 			});
+		});
+	});
+
+	describe('terminal tab shortcuts', () => {
+		it('should create a terminal tab with Ctrl+Shift+` in terminal mode', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleTerminalNewTab = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }],
+					activeTerminalTabId: 'term-1',
+				},
+				handleTerminalNewTab: mockHandleTerminalNewTab,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: '`',
+						code: 'Backquote',
+						ctrlKey: true,
+						shiftKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleTerminalNewTab).toHaveBeenCalledWith('session-1');
+		});
+
+		it('should clear the active terminal with Cmd+K in terminal mode', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleClearActiveTerminal = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }],
+					activeTerminalTabId: 'term-1',
+				},
+				handleClearActiveTerminal: mockHandleClearActiveTerminal,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'k',
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleClearActiveTerminal).toHaveBeenCalledWith('session-1');
+		});
+
+		it('should prioritize terminal tab navigation over session cycling', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleTerminalTabSelect = vi.fn();
+			const mockCycleSession = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }, { id: 'term-2' }],
+					activeTerminalTabId: 'term-1',
+				},
+				isShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'cycleNext',
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'nextTab',
+				handleTerminalTabSelect: mockHandleTerminalTabSelect,
+				cycleSession: mockCycleSession,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: ']',
+						metaKey: true,
+						shiftKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleTerminalTabSelect).toHaveBeenCalledWith('session-1', 'term-2');
+			expect(mockCycleSession).not.toHaveBeenCalled();
+		});
+
+		it('should close and reopen terminal tabs with mirrored tab shortcuts', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleTerminalTabClose = vi.fn();
+			const mockHandleReopenTerminalTab = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }, { id: 'term-2' }],
+					activeTerminalTabId: 'term-2',
+				},
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) =>
+					actionId === 'closeTab' || actionId === 'reopenClosedTab',
+				handleTerminalTabClose: mockHandleTerminalTabClose,
+				handleReopenTerminalTab: mockHandleReopenTerminalTab,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'w',
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleTerminalTabClose).toHaveBeenCalledWith('session-1', 'term-2');
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 't',
+						metaKey: true,
+						shiftKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleReopenTerminalTab).toHaveBeenCalledWith('session-1');
+		});
+
+		it('should jump to numbered terminal tabs with Cmd+1-9', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleTerminalTabSelect = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }, { id: 'term-2' }, { id: 'term-3' }],
+					activeTerminalTabId: 'term-1',
+				},
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'goToTab2',
+				handleTerminalTabSelect: mockHandleTerminalTabSelect,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: '2',
+						metaKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleTerminalTabSelect).toHaveBeenCalledWith('session-1', 'term-2');
 		});
 	});
 });

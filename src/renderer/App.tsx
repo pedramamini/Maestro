@@ -5293,6 +5293,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 	);
 
 	/**
+	 * Clear the active terminal by sending a clear command to the active PTY tab.
+	 */
+	const handleClearActiveTerminal = useCallback((sessionId: string) => {
+		const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
+		if (!session) return;
+
+		const activeTab = getActiveTerminalTab(session);
+		if (!activeTab) return;
+
+		void window.maestro.process.write(getTerminalSessionId(session.id, activeTab.id), 'clear\r');
+	}, []);
+
+	/**
 	 * Rename a terminal tab.
 	 */
 	const handleTerminalTabRename = useCallback((sessionId: string, tabId: string, name: string) => {
@@ -12847,6 +12860,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Close current tab (Cmd+W) - works with both file and AI tabs
 		handleCloseCurrentTab,
+		handleTerminalNewTab,
+		handleTerminalTabSelect,
+		handleTerminalTabClose,
+		handleClearActiveTerminal,
 		handleReopenTerminalTab,
 
 		// Session bookmark toggle
