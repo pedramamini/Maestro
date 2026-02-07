@@ -242,7 +242,7 @@ export class WakaTimeManager {
 			'--entity-type', 'app',
 			'--project', projectName,
 			'--plugin', `maestro/${app.getVersion()} maestro-wakatime/${app.getVersion()}`,
-			'--category', 'coding',
+			'--category', 'ai coding',
 		];
 
 		const result = await execFileNoThrow(this.cliPath!, args);
