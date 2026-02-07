@@ -189,6 +189,7 @@ import {
 	hasActiveWizard,
 } from './utils/tabHelpers';
 import {
+	addTerminalTab,
 	closeTerminalTab,
 	createInitialTerminalTabState,
 	createTerminalTab,
@@ -5256,6 +5257,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 			})
 		);
 	}, []);
+
+	/**
+	 * Create a new terminal tab and switch focus to it.
+	 */
+	const handleTerminalNewTab = useCallback(
+		(sessionId: string) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return addTerminalTab(s, defaultShell || 'zsh').session;
+				})
+			);
+		},
+		[defaultShell]
+	);
 
 	/**
 	 * Force close a file preview tab without confirmation.
@@ -14459,6 +14475,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						{...mainPanelProps}
 						onTerminalTabSelect={handleTerminalTabSelect}
 						onTerminalTabClose={handleTerminalTabClose}
+						onTerminalNewTab={handleTerminalNewTab}
 					/>
 				)}
 
