@@ -1,5 +1,5 @@
 import { forwardRef, useEffect, useImperativeHandle, useRef } from 'react';
-import { Terminal } from '@xterm/xterm';
+import { Terminal, type ITheme } from '@xterm/xterm';
 import { FitAddon } from '@xterm/addon-fit';
 import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
@@ -38,6 +38,55 @@ interface XTerminalAddons {
 	unicode11: Unicode11Addon | null;
 }
 
+type XtermAnsiOverrides = Partial<{
+	ansiBlack: string;
+	ansiRed: string;
+	ansiGreen: string;
+	ansiYellow: string;
+	ansiBlue: string;
+	ansiMagenta: string;
+	ansiCyan: string;
+	ansiWhite: string;
+	ansiBrightBlack: string;
+	ansiBrightRed: string;
+	ansiBrightGreen: string;
+	ansiBrightYellow: string;
+	ansiBrightBlue: string;
+	ansiBrightMagenta: string;
+	ansiBrightCyan: string;
+	ansiBrightWhite: string;
+}>;
+
+function mapMaestroThemeToXterm(theme: Theme): ITheme {
+	const colors = theme.colors as Theme['colors'] & XtermAnsiOverrides;
+
+	return {
+		background: theme.colors.bgMain,
+		foreground: theme.colors.textMain,
+		cursor: theme.colors.textMain,
+		cursorAccent: theme.colors.bgMain,
+		selectionBackground: theme.colors.accentDim || 'rgba(255, 255, 255, 0.3)',
+		selectionInactiveBackground: theme.colors.accentDim || 'rgba(255, 255, 255, 0.2)',
+		selectionForeground: theme.colors.textMain,
+		black: colors.ansiBlack || '#000000',
+		red: colors.ansiRed || theme.colors.error || '#e06c75',
+		green: colors.ansiGreen || theme.colors.success || '#98c379',
+		yellow: colors.ansiYellow || theme.colors.warning || '#e5c07b',
+		blue: colors.ansiBlue || theme.colors.accent || '#61afef',
+		magenta: colors.ansiMagenta || '#c678dd',
+		cyan: colors.ansiCyan || theme.colors.accentText || '#56b6c2',
+		white: colors.ansiWhite || theme.colors.textMain || '#abb2bf',
+		brightBlack: colors.ansiBrightBlack || theme.colors.textDim || '#5c6370',
+		brightRed: colors.ansiBrightRed || theme.colors.error || '#e06c75',
+		brightGreen: colors.ansiBrightGreen || theme.colors.success || '#98c379',
+		brightYellow: colors.ansiBrightYellow || theme.colors.warning || '#e5c07b',
+		brightBlue: colors.ansiBrightBlue || theme.colors.accent || '#61afef',
+		brightMagenta: colors.ansiBrightMagenta || '#c678dd',
+		brightCyan: colors.ansiBrightCyan || theme.colors.accentText || '#56b6c2',
+		brightWhite: colors.ansiBrightWhite || '#ffffff',
+	};
+}
+
 export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XTerminal(
 	{ sessionId, theme, fontFamily, fontSize },
 	ref
@@ -63,14 +112,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			cursorStyle: 'block',
 			fontFamily: fontFamily || 'Menlo, Monaco, "Courier New", monospace',
 			fontSize: fontSize ?? 14,
-			theme: {
-				background: theme.colors.bgMain,
-				foreground: theme.colors.textMain,
-				cursor: theme.colors.textMain,
-				cursorAccent: theme.colors.bgMain,
-				selectionBackground: theme.colors.accentDim,
-				selectionInactiveBackground: theme.colors.accentDim,
-			},
+			theme: mapMaestroThemeToXterm(theme),
 			allowProposedApi: true,
 			scrollback: 10000,
 		});
