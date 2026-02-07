@@ -788,6 +788,8 @@ function MaestroConsoleInner() {
 	// to avoid context re-renders on every keystroke. Only completion states are in context.
 	const [terminalInputValue, setTerminalInputValue] = useState('');
 	const [aiInputValueLocal, setAiInputValueLocal] = useState('');
+	const [terminalSearchOpen, setTerminalSearchOpen] = useState(false);
+	const [terminalSearchQuery, setTerminalSearchQuery] = useState('');
 
 	// PERF: Refs to access current input values without triggering re-renders in memoized callbacks
 	const terminalInputValueRef = useRef(terminalInputValue);
@@ -5303,6 +5305,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 		if (!activeTab) return;
 
 		void window.maestro.process.write(getTerminalSessionId(session.id, activeTab.id), 'clear\r');
+	}, []);
+
+	/**
+	 * Open terminal search UI state for the active terminal session.
+	 */
+	const handleOpenTerminalSearch = useCallback((sessionId: string) => {
+		if (activeSessionIdRef.current !== sessionId) return;
+		setTerminalSearchOpen(true);
 	}, []);
 
 	/**
@@ -12731,6 +12741,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 		gitDiffPreview,
 		gitLogOpen,
 		lightboxImage,
+		terminalSearchOpen,
+		terminalSearchQuery,
 		hasOpenLayers,
 		hasOpenModal,
 		visibleSessions,
@@ -12864,7 +12876,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleTerminalTabSelect,
 		handleTerminalTabClose,
 		handleClearActiveTerminal,
+		handleOpenTerminalSearch,
 		handleReopenTerminalTab,
+		setTerminalSearchOpen,
+		setTerminalSearchQuery,
 
 		// Session bookmark toggle
 		toggleBookmark,
