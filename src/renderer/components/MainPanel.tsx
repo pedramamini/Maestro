@@ -1736,7 +1736,10 @@ export const MainPanel = React.memo(
 								{/* Logs Area - Show DocumentGenerationView while generating OR when docs exist (waiting for user to click Exit Wizard), WizardConversationView when wizard is active, otherwise show TerminalOutput */}
 								{/* Note: wizardState is per-tab (stored on activeTab), not per-session */}
 								{/* User clicks "Exit Wizard" button in DocumentGenerationView which calls onWizardComplete to convert tab to normal session */}
-								<div className="flex-1 overflow-hidden flex flex-col" data-tour="main-terminal">
+								<div
+									className="flex-1 flex min-h-0 flex-col overflow-hidden"
+									data-tour="main-terminal"
+								>
 									{activeSession.inputMode === 'terminal' ? (
 										<TerminalView
 											session={activeSession}

@@ -552,6 +552,22 @@ describe('MainPanel', () => {
 			expect(screen.queryByTestId('input-area')).not.toBeInTheDocument();
 		});
 
+		it('should keep the terminal container in full-height flex layout', () => {
+			const session = createSession({ inputMode: 'terminal' });
+			render(<MainPanel {...defaultProps} activeSession={session} />);
+
+			const terminalContainer = screen
+				.getByTestId('terminal-view')
+				.closest('[data-tour="main-terminal"]');
+
+			expect(terminalContainer).toBeInTheDocument();
+			expect(terminalContainer).toHaveClass('flex-1');
+			expect(terminalContainer).toHaveClass('flex');
+			expect(terminalContainer).toHaveClass('min-h-0');
+			expect(terminalContainer).toHaveClass('flex-col');
+			expect(terminalContainer).toHaveClass('overflow-hidden');
+		});
+
 		it('should pass terminal tab callbacks and shell settings to TerminalView', () => {
 			const onTerminalTabSelect = vi.fn();
 			const onTerminalNewTab = vi.fn();
