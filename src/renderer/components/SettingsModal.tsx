@@ -31,6 +31,7 @@ import {
 	Monitor,
 	PartyPopper,
 	Tag,
+	Timer,
 	User,
 	Clapperboard,
 } from 'lucide-react';
@@ -331,6 +332,11 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		// Director's Notes settings
 		directorNotesSettings,
 		setDirectorNotesSettings,
+		// WakaTime integration settings
+		wakatimeApiKey,
+		setWakatimeApiKey,
+		wakatimeEnabled,
+		setWakatimeEnabled,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
@@ -2115,6 +2121,93 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									)}
 								</div>
 							</div>
+
+							{/* WakaTime Integration */}
+							<div>
+								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+									<Timer className="w-3 h-3" />
+									WakaTime
+									<span
+										className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+										style={{
+											backgroundColor: theme.colors.warning + '30',
+											color: theme.colors.warning,
+										}}
+									>
+										Beta
+									</span>
+								</label>
+								<div
+									className="p-3 rounded border space-y-3"
+									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+								>
+									{/* Enable/Disable Toggle */}
+									<div className="flex items-center justify-between">
+										<div>
+											<p className="text-sm" style={{ color: theme.colors.textMain }}>
+												Enable WakaTime tracking
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Track coding activity in Maestro sessions via WakaTime.
+											</p>
+										</div>
+										<button
+											onClick={() => setWakatimeEnabled(!wakatimeEnabled)}
+											className="relative w-10 h-5 rounded-full transition-colors"
+											style={{
+												backgroundColor: wakatimeEnabled
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={wakatimeEnabled}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													wakatimeEnabled ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+
+									{/* API Key Input (only shown when enabled) */}
+									{wakatimeEnabled && (
+										<div>
+											<label className="block text-xs opacity-60 mb-1">API Key</label>
+											<div
+												className="flex items-center border rounded px-3 py-2"
+												style={{
+													backgroundColor: theme.colors.bgMain,
+													borderColor: theme.colors.border,
+												}}
+											>
+												<Key className="w-4 h-4 mr-2 opacity-50" />
+												<input
+													type="password"
+													value={wakatimeApiKey}
+													onChange={(e) => setWakatimeApiKey(e.target.value)}
+													className="bg-transparent flex-1 text-sm outline-none"
+													style={{ color: theme.colors.textMain }}
+													placeholder="waka_..."
+												/>
+												{wakatimeApiKey && (
+													<button
+														onClick={() => setWakatimeApiKey('')}
+														className="ml-2 opacity-50 hover:opacity-100"
+														title="Clear API key"
+													>
+														<X className="w-3 h-3" />
+													</button>
+												)}
+											</div>
+											<p className="text-[10px] mt-1.5 opacity-50">
+												Get your API key from wakatime.com/settings/api-key. Keys are stored locally in ~/.maestro/settings.json.
+											</p>
+										</div>
+									)}
+								</div>
+							</div>
+
 						</div>
 					)}
 
