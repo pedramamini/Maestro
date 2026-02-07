@@ -455,13 +455,19 @@ describe('useDebouncedPersistence', () => {
 			});
 		});
 
-		describe('terminal tab runtime state reset', () => {
-			it('should reset terminal tab pid, state, and exitCode', () => {
+		describe('terminal tab persistence', () => {
+			it('should persist terminal tab metadata without runtime PTY state', () => {
 				const terminalTab = makeTerminalTab({
 					id: 'terminal-1',
+					name: 'Build Shell',
+					shellType: 'bash',
+					cwd: '/workspace/app',
+					createdAt: 1700000000000,
 					pid: 4321,
 					state: 'exited',
 					exitCode: 1,
+					scrollTop: 900,
+					searchQuery: 'npm test',
 				});
 				const session = makeSession({
 					terminalTabs: [terminalTab],
@@ -477,9 +483,16 @@ describe('useDebouncedPersistence', () => {
 
 				const persisted = vi.mocked(window.maestro.sessions.setAll).mock.calls[0][0] as Session[];
 				expect(persisted[0].terminalTabs).toHaveLength(1);
-				expect(persisted[0].terminalTabs[0].pid).toBe(0);
-				expect(persisted[0].terminalTabs[0].state).toBe('idle');
+				expect(persisted[0].terminalTabs[0].id).toBe('terminal-1');
+				expect(persisted[0].terminalTabs[0].name).toBe('Build Shell');
+				expect(persisted[0].terminalTabs[0].shellType).toBe('bash');
+				expect(persisted[0].terminalTabs[0].cwd).toBe('/workspace/app');
+				expect(persisted[0].terminalTabs[0].createdAt).toBe(1700000000000);
+				expect(persisted[0].terminalTabs[0].pid).toBeUndefined();
+				expect(persisted[0].terminalTabs[0].state).toBeUndefined();
 				expect(persisted[0].terminalTabs[0].exitCode).toBeUndefined();
+				expect(persisted[0].terminalTabs[0].scrollTop).toBeUndefined();
+				expect(persisted[0].terminalTabs[0].searchQuery).toBeUndefined();
 			});
 
 			it('should handle sessions with undefined terminalTabs', () => {
