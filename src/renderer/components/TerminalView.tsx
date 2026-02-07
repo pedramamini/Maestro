@@ -1,6 +1,7 @@
 import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
 import { XTerminal, type XTerminalHandle } from './XTerminal';
 import { TerminalTabBar } from './TerminalTabBar';
+import { TerminalSearchBar } from './TerminalSearchBar';
 import type { Session, TerminalTab, Theme } from '../types';
 import { getActiveTerminalTab, getTerminalSessionId } from '../utils/terminalTabHelpers';
 
@@ -21,6 +22,8 @@ interface TerminalViewProps {
 	onTabCwdChange: (tabId: string, cwd: string) => void;
 	onTabPidChange: (tabId: string, pid: number) => void;
 	onRequestRename?: (tabId: string) => void;
+	searchOpen?: boolean;
+	onSearchClose?: () => void;
 }
 
 export interface TerminalViewHandle {
@@ -48,6 +51,8 @@ export const TerminalView = memo(
 			onTabStateChange,
 			onTabPidChange,
 			onRequestRename,
+			searchOpen,
+			onSearchClose,
 		} = props;
 
 		const terminalRefs = useRef<Map<string, XTerminalHandle>>(new Map());
@@ -169,6 +174,25 @@ export const TerminalView = memo(
 			terminalRefs.current.delete(tabId);
 		}, []);
 
+		const handleSearch = useCallback(
+			(query: string) => getActiveTerminalHandle()?.search(query) ?? false,
+			[getActiveTerminalHandle]
+		);
+
+		const handleSearchNext = useCallback(
+			() => getActiveTerminalHandle()?.searchNext() ?? false,
+			[getActiveTerminalHandle]
+		);
+
+		const handleSearchPrevious = useCallback(
+			() => getActiveTerminalHandle()?.searchPrevious() ?? false,
+			[getActiveTerminalHandle]
+		);
+
+		const handleSearchClose = useCallback(() => {
+			onSearchClose?.();
+		}, [onSearchClose]);
+
 		return (
 			<div className="flex h-full flex-col">
 				<TerminalTabBar
@@ -183,6 +207,15 @@ export const TerminalView = memo(
 				/>
 
 				<div className="relative flex-1 overflow-hidden">
+					<TerminalSearchBar
+						theme={theme}
+						isOpen={searchOpen ?? false}
+						onClose={handleSearchClose}
+						onSearch={handleSearch}
+						onSearchNext={handleSearchNext}
+						onSearchPrevious={handleSearchPrevious}
+					/>
+
 					{session.terminalTabs.map((tab) => {
 						const isActive = tab.id === session.activeTerminalTabId;
 						return (
