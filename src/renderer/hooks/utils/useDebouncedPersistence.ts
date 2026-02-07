@@ -79,12 +79,14 @@ const prepareSessionForPersistence = (session: Session): Session => {
 		wizardState: undefined,
 	}));
 
-	// Reset terminal tab runtime state - PTY processes don't survive app restart
+	// Persist terminal tab metadata only.
+	// Runtime PTY/xterm state is recreated on restore and should not be written to disk.
 	const terminalTabsForPersistence = (session.terminalTabs || []).map((tab) => ({
-		...tab,
-		pid: 0,
-		state: 'idle' as const,
-		exitCode: undefined,
+		id: tab.id,
+		name: tab.name,
+		shellType: tab.shellType,
+		cwd: tab.cwd,
+		createdAt: tab.createdAt,
 	}));
 
 	// Return session without runtime-only fields
