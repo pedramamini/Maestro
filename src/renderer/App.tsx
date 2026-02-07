@@ -201,6 +201,7 @@ import {
 	renameTerminalTab,
 	setActiveTerminalTab,
 	updateTerminalTabCwd,
+	updateTerminalTabPid,
 	updateTerminalTabState,
 } from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
@@ -5328,6 +5329,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 				prev.map((s) => {
 					if (s.id !== sessionId) return s;
 					return updateTerminalTabCwd(s, tabId, cwd);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a terminal tab's process ID.
+	 */
+	const handleTerminalTabPidChange = useCallback(
+		(sessionId: string, tabId: string, pid: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return updateTerminalTabPid(s, tabId, pid);
 				})
 			);
 		},
@@ -14541,6 +14557,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						onTerminalTabReorder={handleTerminalTabReorder}
 						onTerminalTabStateChange={handleTerminalTabStateChange}
 						onTerminalTabCwdChange={handleTerminalTabCwdChange}
+						onTerminalTabPidChange={handleTerminalTabPidChange}
 					/>
 				)}
 
