@@ -183,6 +183,7 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 	);
 
 	const canClose = tabs.length > 1;
+	const newTabTitle = `New terminal (${process.platform === 'darwin' ? 'Ctrl+Shift+`' : 'Ctrl+Shift+`'})`;
 
 	return (
 		<div
@@ -218,7 +219,7 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 				onClick={onNewTab}
 				className="flex items-center justify-center w-8 h-8 opacity-60 hover:opacity-100 transition-opacity shrink-0"
 				style={{ color: theme.colors.textDim }}
-				title="New terminal"
+				title={newTabTitle}
 			>
 				<Plus className="w-4 h-4" />
 			</button>

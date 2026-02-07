@@ -181,6 +181,8 @@ describe('TerminalTabBar', () => {
 	});
 
 	it('calls onNewTab from new terminal button', () => {
+		const expectedTitle = `New terminal (${process.platform === 'darwin' ? 'Ctrl+Shift+`' : 'Ctrl+Shift+`'})`;
+
 		const { container, root } = mount(
 			<TerminalTabBar
 				tabs={[createTerminalTab({ id: 'terminal-1', name: 'Solo' })]}
@@ -192,8 +194,9 @@ describe('TerminalTabBar', () => {
 			/>
 		);
 
-		const newTabButton = container.querySelector('button[title="New terminal"]');
+		const newTabButton = container.querySelector(`button[title="${expectedTitle}"]`);
 		expect(newTabButton).toBeTruthy();
+		expect(newTabButton?.getAttribute('title')).toBe(expectedTitle);
 
 		act(() => {
 			newTabButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
