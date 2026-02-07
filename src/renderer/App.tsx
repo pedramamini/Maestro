@@ -25,6 +25,7 @@ import {
 import { DEFAULT_BATCH_PROMPT } from './components/BatchRunnerModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainPanel, type MainPanelHandle } from './components/MainPanel';
+import type { TerminalViewHandle } from './components/TerminalView';
 import { AppOverlays } from './components/AppOverlays';
 import { PlaygroundPanel } from './components/PlaygroundPanel';
 import { DebugWizardModal } from './components/DebugWizardModal';
@@ -3549,6 +3550,7 @@ function MaestroConsoleInner() {
 	const logsEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const terminalOutputRef = useRef<HTMLDivElement>(null);
+	const terminalViewRef = useRef<TerminalViewHandle>(null);
 	const sidebarContainerRef = useRef<HTMLDivElement>(null);
 	const fileTreeContainerRef = useRef<HTMLDivElement>(null);
 	const fileTreeFilterInputRef = useRef<HTMLInputElement>(null);
@@ -5295,9 +5297,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 	);
 
 	/**
-	 * Clear the active terminal by sending a clear command to the active PTY tab.
+	 * Clear the active terminal view, falling back to PTY command clearing.
 	 */
 	const handleClearActiveTerminal = useCallback((sessionId: string) => {
+		if (activeSessionIdRef.current === sessionId && terminalViewRef.current) {
+			terminalViewRef.current.clearActiveTerminal();
+			return;
+		}
+
 		const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
 		if (!session) return;
 
@@ -14597,6 +14604,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					<MainPanel
 						ref={mainPanelRef}
 						{...mainPanelProps}
+						terminalViewRef={terminalViewRef}
 						onTerminalTabSelect={handleTerminalTabSelect}
 						onTerminalTabClose={handleTerminalTabClose}
 						onTerminalNewTab={handleTerminalNewTab}
