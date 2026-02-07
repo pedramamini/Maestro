@@ -41,6 +41,8 @@ export interface TourStepConfig {
 	descriptionContentGeneric?: React.ReactNode;
 	/** CSS selector for the element to spotlight, or null for no spotlight */
 	selector: string | null;
+	/** Use wider tooltip (480px instead of 360px) for longer content */
+	wide?: boolean;
 	/** Preferred tooltip position relative to spotlight
 	 * - 'center-overlay': Centers tooltip over the spotlight element itself
 	 * - 'center': Centers tooltip on screen (no spotlight)

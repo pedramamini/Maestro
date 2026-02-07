@@ -2315,8 +2315,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</div>
 											<input
 												type="range"
-												min={30}
-												max={90}
+												min={0}
+												max={100}
 												step={5}
 												value={contextManagementSettings.contextWarningYellowThreshold}
 												onChange={(e) => {
@@ -2326,7 +2326,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 														// Bump red threshold up
 														updateContextManagementSettings({
 															contextWarningYellowThreshold: newYellow,
-															contextWarningRedThreshold: Math.min(95, newYellow + 10),
+															contextWarningRedThreshold: Math.min(100, newYellow + 10),
 														});
 													} else {
 														updateContextManagementSettings({
@@ -2336,7 +2336,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												}}
 												className="w-full h-2 rounded-lg appearance-none cursor-pointer"
 												style={{
-													background: `linear-gradient(to right, #eab308 0%, #eab308 ${((contextManagementSettings.contextWarningYellowThreshold - 30) / 60) * 100}%, ${theme.colors.bgActivity} ${((contextManagementSettings.contextWarningYellowThreshold - 30) / 60) * 100}%, ${theme.colors.bgActivity} 100%)`,
+													background: `linear-gradient(to right, #eab308 0%, #eab308 ${contextManagementSettings.contextWarningYellowThreshold}%, ${theme.colors.bgActivity} ${contextManagementSettings.contextWarningYellowThreshold}%, ${theme.colors.bgActivity} 100%)`,
 												}}
 											/>
 										</div>
@@ -2363,8 +2363,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</div>
 											<input
 												type="range"
-												min={50}
-												max={95}
+												min={0}
+												max={100}
 												step={5}
 												value={contextManagementSettings.contextWarningRedThreshold}
 												onChange={(e) => {
@@ -2374,7 +2374,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 														// Bump yellow threshold down
 														updateContextManagementSettings({
 															contextWarningRedThreshold: newRed,
-															contextWarningYellowThreshold: Math.max(30, newRed - 10),
+															contextWarningYellowThreshold: Math.max(0, newRed - 10),
 														});
 													} else {
 														updateContextManagementSettings({ contextWarningRedThreshold: newRed });
@@ -2382,7 +2382,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												}}
 												className="w-full h-2 rounded-lg appearance-none cursor-pointer"
 												style={{
-													background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${((contextManagementSettings.contextWarningRedThreshold - 50) / 45) * 100}%, ${theme.colors.bgActivity} ${((contextManagementSettings.contextWarningRedThreshold - 50) / 45) * 100}%, ${theme.colors.bgActivity} 100%)`,
+													background: `linear-gradient(to right, #ef4444 0%, #ef4444 ${contextManagementSettings.contextWarningRedThreshold}%, ${theme.colors.bgActivity} ${contextManagementSettings.contextWarningRedThreshold}%, ${theme.colors.bgActivity} 100%)`,
 												}}
 											/>
 										</div>

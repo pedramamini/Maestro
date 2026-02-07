@@ -459,7 +459,7 @@ const LogItemComponent = memo(
 						<div
 							className="px-4 py-2 text-sm font-mono border-l-2"
 							style={{
-								color: theme.colors.textDim,
+								color: theme.colors.textMain,
 								borderColor: theme.colors.accent,
 							}}
 						>
@@ -474,7 +474,7 @@ const LogItemComponent = memo(
 									thinking
 								</span>
 							</div>
-							<div className="whitespace-pre-wrap" style={{ opacity: 0.7 }}>
+							<div className="whitespace-pre-wrap">
 								{log.text}
 							</div>
 						</div>
@@ -503,7 +503,7 @@ const LogItemComponent = memo(
 								<div
 									className="px-4 py-1.5 text-xs font-mono border-l-2"
 									style={{
-										color: theme.colors.textDim,
+										color: theme.colors.textMain,
 										borderColor: theme.colors.accent,
 									}}
 								>
