@@ -441,6 +441,23 @@ export interface ThinkingItem {
 	tab: AITab | null; // null for legacy sessions without tab-level tracking
 }
 
+/**
+ * Terminal Tab for multi-tab terminal support within a Maestro session
+ * Each tab represents a separate PTY shell session with full terminal emulation
+ */
+export interface TerminalTab {
+	id: string; // Unique tab ID (generated UUID)
+	name: string | null; // User-defined name (null = show shell name or "Terminal N")
+	shellType: string; // Shell being used (e.g., 'zsh', 'bash', 'powershell')
+	pid: number; // PTY process ID (0 if not spawned yet)
+	cwd: string; // Current working directory (tracked from shell)
+	createdAt: number; // Timestamp for ordering
+	state: 'idle' | 'busy' | 'exited'; // Tab state (busy = command running)
+	exitCode?: number; // Exit code if shell exited
+	scrollTop?: number; // Saved scroll position
+	searchQuery?: string; // Active search query (for Cmd+F persistence)
+}
+
 // Closed tab entry for undo functionality (Cmd+Shift+T)
 // Stores tab data with original position for restoration
 // This is the legacy interface for AI tabs only - kept for backwards compatibility
