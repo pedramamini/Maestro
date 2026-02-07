@@ -392,6 +392,151 @@ describe('WakaTimeManager', () => {
 		});
 	});
 
+	describe('checkForUpdate (via ensureCliInstalled)', () => {
+		/** Helper: mock https.get to return a JSON response for fetchJson */
+		function mockGithubApiResponse(body: object) {
+			vi.mocked(https.get).mockImplementation((_opts: any, cb: any) => {
+				const json = JSON.stringify(body);
+				const response = {
+					statusCode: 200,
+					headers: {},
+					on: vi.fn((event: string, handler: (...args: unknown[]) => void) => {
+						if (event === 'data') handler(Buffer.from(json));
+						if (event === 'end') handler();
+						return response;
+					}),
+					resume: vi.fn(),
+				};
+				cb(response);
+				const req = { on: vi.fn().mockReturnThis() };
+				return req as any;
+			});
+		}
+
+		/** Helper: mock https.get to simulate a network error */
+		function mockGithubApiError() {
+			vi.mocked(https.get).mockImplementation((_opts: any, _cb: any) => {
+				const req = {
+					on: vi.fn((_event: string, cb: (err: Error) => void) => {
+						setTimeout(() => cb(new Error('Network error')), 0);
+						return req;
+					}),
+				};
+				return req as any;
+			});
+		}
+
+		it('should trigger update check on first ensureCliInstalled when CLI is detected', async () => {
+			// CLI detected on PATH
+			vi.mocked(execFileNoThrow)
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.73.1\n', stderr: '' }) // detectCli
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.73.1\n', stderr: '' }); // --version in checkForUpdate
+
+			// GitHub returns the same version
+			mockGithubApiResponse({ tag_name: 'v1.73.1' });
+
+			const result = await manager.ensureCliInstalled();
+
+			expect(result).toBe(true);
+
+			// Wait for the fire-and-forget checkForUpdate to complete
+			await vi.waitFor(() => {
+				expect(logger.debug).toHaveBeenCalledWith(
+					expect.stringContaining('WakaTime CLI is up to date'),
+					'[WakaTime]'
+				);
+			});
+		});
+
+		it('should not trigger update check again within 24 hours', async () => {
+			// CLI detected on PATH
+			vi.mocked(execFileNoThrow)
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.73.1\n', stderr: '' }) // detectCli
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.73.1\n', stderr: '' }); // --version in checkForUpdate
+
+			mockGithubApiResponse({ tag_name: 'v1.73.1' });
+
+			// First call: triggers update check
+			await manager.ensureCliInstalled();
+
+			// Wait for fire-and-forget to complete
+			await vi.waitFor(() => {
+				expect(https.get).toHaveBeenCalledTimes(1);
+			});
+
+			vi.mocked(https.get).mockClear();
+
+			// Second call: should NOT trigger another update check (within 24h interval)
+			await manager.ensureCliInstalled();
+
+			// Allow any pending microtasks
+			await new Promise(resolve => setTimeout(resolve, 10));
+
+			expect(https.get).not.toHaveBeenCalled();
+		});
+
+		it('should re-install CLI when version differs from latest', async () => {
+			// CLI detected on PATH
+			vi.mocked(execFileNoThrow)
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.72.0\n', stderr: '' }) // detectCli
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.72.0\n', stderr: '' }); // --version in checkForUpdate
+
+			// GitHub returns a newer version
+			mockGithubApiResponse({ tag_name: 'v1.73.1' });
+
+			// Mock the download that doInstall will trigger (network error is fine, we just check it tries)
+			// https.get is already mocked for the API call — doInstall calls downloadFile which also uses https.get
+			// Since the mock returns JSON for all calls, the download will fail, which is expected
+
+			await manager.ensureCliInstalled();
+
+			// Wait for the fire-and-forget checkForUpdate to trigger re-install
+			await vi.waitFor(() => {
+				expect(logger.info).toHaveBeenCalledWith(
+					expect.stringContaining('WakaTime CLI update available: 1.72.0'),
+					'[WakaTime]'
+				);
+			});
+		});
+
+		it('should handle GitHub API failure gracefully', async () => {
+			// CLI detected on PATH
+			vi.mocked(execFileNoThrow)
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.73.1\n', stderr: '' });
+
+			mockGithubApiError();
+
+			const result = await manager.ensureCliInstalled();
+			expect(result).toBe(true);
+
+			// Wait for the fire-and-forget checkForUpdate to complete with error
+			await vi.waitFor(() => {
+				expect(logger.debug).toHaveBeenCalledWith(
+					expect.stringContaining('WakaTime CLI update check failed'),
+					'[WakaTime]'
+				);
+			});
+		});
+
+		it('should handle missing tag_name in GitHub response gracefully', async () => {
+			// CLI detected on PATH
+			vi.mocked(execFileNoThrow)
+				.mockResolvedValueOnce({ exitCode: 0, stdout: 'wakatime-cli 1.73.1\n', stderr: '' });
+
+			// GitHub returns an unexpected format (no tag_name)
+			mockGithubApiResponse({ name: 'Latest Release' });
+
+			await manager.ensureCliInstalled();
+
+			await vi.waitFor(() => {
+				expect(logger.debug).toHaveBeenCalledWith(
+					expect.stringContaining('Could not determine latest WakaTime CLI version'),
+					'[WakaTime]'
+				);
+			});
+		});
+	});
+
 	describe('removeSession', () => {
 		it('should remove session from debounce tracking', async () => {
 			mockStore.get.mockImplementation((key: string, defaultVal: unknown) => {
