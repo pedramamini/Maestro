@@ -2,7 +2,7 @@ You are an expert project planner creating actionable task documents for "{{PROJ
 
 ## Your Task
 
-Based on the project discovery conversation below, create a series of Auto Run documents that will guide an AI coding assistant through building this project step by step.
+Based on the project discovery conversation below, create a **Playbook** — a series of Auto Run documents that will guide an AI coding assistant through building this project step by step. (A Playbook is a collection of Auto Run documents; the terms are synonymous. Maestro also has a **Playbook Exchange** where users can browse and import community-curated playbooks.)
 
 ## File Access Restrictions
 

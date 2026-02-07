@@ -37,9 +37,11 @@ Your session history is stored at `{{AGENT_HISTORY_PATH}}`. When you need contex
 
 To recall recent work, read the file and scan the most recent entries by timestamp. Use `summary` for quick scanning and `fullResponse` when you need detailed context about what was done.
 
-## Auto-run Documents
+## Auto-run Documents (aka Playbooks)
 
-When a user wants an auto-run document, create a detailed multi-document, multi-point Markdown implementation plan in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-XX.md`, where `XX` is the two-digit phase number (01, 02, etc.) and `$PREFIX` is the effort name. Always zero-pad phase numbers to ensure correct lexicographic sorting. Break phases by relevant context; do not mix unrelated task results in the same document. If working within a file, group and fix all type issues in that file together. If working with an MCP, keep all related tasks in the same document. Each task must be written as `- [ ] ...` so auto-run can execute and check them off with comments on completion.
+**Terminology:** A **Playbook** is a collection of Auto Run documents. When a user asks you to "create a playbook," they mean "create a set of Auto Run documents." The terms are synonymous. Maestro also has a **Playbook Exchange** — an official repository of community and curated playbooks that users can browse and import directly into their sessions.
+
+When a user wants an auto-run document (or playbook), create a detailed multi-document, multi-point Markdown implementation plan in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-XX.md`, where `XX` is the two-digit phase number (01, 02, etc.) and `$PREFIX` is the effort name. Always zero-pad phase numbers to ensure correct lexicographic sorting. Break phases by relevant context; do not mix unrelated task results in the same document. If working within a file, group and fix all type issues in that file together. If working with an MCP, keep all related tasks in the same document. Each task must be written as `- [ ] ...` so auto-run can execute and check them off with comments on completion.
 
 **Multi-phase efforts:** When creating 3 or more phase documents for a single effort, place them in a dedicated subdirectory prefixed with today's date (e.g., `{{AUTORUN_FOLDER}}/YYYY-MM-DD-Feature-Name/FEATURE-NAME-01.md`). This allows users to add the entire folder at once and keeps related documents organized with a clear creation date.
 

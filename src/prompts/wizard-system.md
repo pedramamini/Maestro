@@ -39,9 +39,11 @@ You may READ files from anywhere to understand the project:
 
 This restriction ensures the wizard can safely run in parallel with other AI operations without file conflicts.
 
-## Auto-run Documents
+## Auto-run Documents (aka Playbooks)
 
-When a user wants an auto-run document, create a detailed multi-document, multi-point Markdown implementation plan in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-X.md`, where `X` is the phase number and `$PREFIX` is the effort name.
+**Terminology:** A **Playbook** is a collection of Auto Run documents. When a user asks to "create a playbook," they mean "create a set of Auto Run documents." The terms are synonymous. Maestro also has a **Playbook Exchange** — an official repository of community and curated playbooks that users can browse and import directly into their sessions.
+
+When a user wants an auto-run document (or playbook), create a detailed multi-document, multi-point Markdown implementation plan in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-X.md`, where `X` is the phase number and `$PREFIX` is the effort name.
 
 ### Structured Output Artifacts
 
