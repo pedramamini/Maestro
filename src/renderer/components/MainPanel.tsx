@@ -80,6 +80,7 @@ interface MainPanelProps {
 	activeFocus: FocusArea;
 	outputSearchOpen: boolean;
 	outputSearchQuery: string;
+	terminalSearchOpen?: boolean;
 	inputValue: string;
 	enterToSendAI: boolean;
 	enterToSendTerminal: boolean;
@@ -134,6 +135,7 @@ interface MainPanelProps {
 	setActiveFocus: (focus: FocusArea) => void;
 	setOutputSearchOpen: (open: boolean) => void;
 	setOutputSearchQuery: (query: string) => void;
+	onTerminalSearchClose?: () => void;
 	setInputValue: (value: string) => void;
 	setEnterToSendAI: (value: boolean) => void;
 	setEnterToSendTerminal: (value: boolean) => void;
@@ -375,6 +377,7 @@ export const MainPanel = React.memo(
 			activeFocus,
 			outputSearchOpen,
 			outputSearchQuery,
+			terminalSearchOpen = false,
 			inputValue,
 			enterToSendAI,
 			stagedImages,
@@ -418,6 +421,7 @@ export const MainPanel = React.memo(
 			setActiveFocus,
 			setOutputSearchOpen,
 			setOutputSearchQuery,
+			onTerminalSearchClose,
 			setInputValue,
 			setEnterToSendAI,
 			setStagedImages,
@@ -1750,6 +1754,8 @@ export const MainPanel = React.memo(
 											onTabPidChange={(tabId, pid) =>
 												props.onTerminalTabPidChange?.(activeSession.id, tabId, pid)
 											}
+											searchOpen={terminalSearchOpen}
+											onSearchClose={onTerminalSearchClose}
 										/>
 									) : activeSession.inputMode === 'ai' &&
 									  (activeTab?.wizardState?.isGeneratingDocs ||

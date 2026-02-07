@@ -791,6 +791,15 @@ function MaestroConsoleInner() {
 	const [aiInputValueLocal, setAiInputValueLocal] = useState('');
 	const [terminalSearchOpen, setTerminalSearchOpen] = useState(false);
 	const [terminalSearchQuery, setTerminalSearchQuery] = useState('');
+	const handleCloseTerminalSearch = useCallback(() => {
+		setTerminalSearchOpen(false);
+	}, []);
+
+	useEffect(() => {
+		if (activeSession?.inputMode !== 'terminal') {
+			setTerminalSearchOpen(false);
+		}
+	}, [activeSession?.inputMode]);
 
 	// PERF: Refs to access current input values without triggering re-renders in memoized callbacks
 	const terminalInputValueRef = useRef(terminalInputValue);
@@ -14604,6 +14613,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 					<MainPanel
 						ref={mainPanelRef}
 						{...mainPanelProps}
+						terminalSearchOpen={terminalSearchOpen}
+						onTerminalSearchClose={handleCloseTerminalSearch}
 						terminalViewRef={terminalViewRef}
 						onTerminalTabSelect={handleTerminalTabSelect}
 						onTerminalTabClose={handleTerminalTabClose}
