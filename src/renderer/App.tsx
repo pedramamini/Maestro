@@ -200,6 +200,7 @@ import {
 	reorderTerminalTabs,
 	renameTerminalTab,
 	setActiveTerminalTab,
+	updateTerminalTabCwd,
 	updateTerminalTabState,
 } from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
@@ -5312,6 +5313,21 @@ You are taking over this conversation. Based on the context above, provide a bri
 				prev.map((s) => {
 					if (s.id !== sessionId) return s;
 					return updateTerminalTabState(s, tabId, state, exitCode);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a terminal tab's current working directory.
+	 */
+	const handleTerminalTabCwdChange = useCallback(
+		(sessionId: string, tabId: string, cwd: string) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return updateTerminalTabCwd(s, tabId, cwd);
 				})
 			);
 		},
@@ -14524,6 +14540,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						onTerminalTabRename={handleTerminalTabRename}
 						onTerminalTabReorder={handleTerminalTabReorder}
 						onTerminalTabStateChange={handleTerminalTabStateChange}
+						onTerminalTabCwdChange={handleTerminalTabCwdChange}
 					/>
 				)}
 
