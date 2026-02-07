@@ -6,8 +6,8 @@
  * - Usernames in paths are replaced with ~
  */
 
-import os from 'os';
 import Store from 'electron-store';
+import { sanitizePath } from './sanitize';
 
 // Keys that contain sensitive data (case-insensitive matching)
 const SENSITIVE_KEYS = [
@@ -44,18 +44,6 @@ const PATH_KEYS = [
 export interface SanitizedSettings {
 	raw: Record<string, unknown>; // Sanitized settings object
 	sanitizedFields: string[]; // List of fields that were sanitized
-}
-
-/**
- * Sanitize a file path by replacing the home directory with ~
- */
-export function sanitizePath(pathStr: string): string {
-	if (typeof pathStr !== 'string') return pathStr;
-	const homeDir = os.homedir();
-	// Handle both forward and backward slashes
-	const normalizedPath = pathStr.replace(/\\/g, '/');
-	const normalizedHome = homeDir.replace(/\\/g, '/');
-	return normalizedPath.replace(normalizedHome, '~');
 }
 
 /**

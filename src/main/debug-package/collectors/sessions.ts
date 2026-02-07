@@ -8,11 +8,10 @@
  */
 
 import Store from 'electron-store';
-import { sanitizePath } from './settings';
+import { sanitizePath } from './sanitize';
 
 export interface SessionInfo {
 	id: string;
-	name: string;
 	groupId?: string;
 	toolType: string;
 	state: string;
@@ -49,7 +48,6 @@ export async function collectSessions(sessionsStore: Store<any>): Promise<Sessio
 	for (const session of storedSessions) {
 		const sessionInfo: SessionInfo = {
 			id: session.id || 'unknown',
-			name: session.name || 'Unnamed',
 			groupId: session.groupId,
 			toolType: session.toolType || 'unknown',
 			state: session.state || 'unknown',

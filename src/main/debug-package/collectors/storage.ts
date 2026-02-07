@@ -9,7 +9,7 @@ import { app } from 'electron';
 import * as fs from 'fs';
 import * as path from 'path';
 import Store from 'electron-store';
-import { sanitizePath } from './settings';
+import { sanitizePath } from './sanitize';
 
 export interface StorageInfo {
 	paths: {

@@ -64,8 +64,12 @@ This package does NOT contain:
 - API keys or tokens
 - File contents from your projects
 - Passwords or secrets
+- Agent binary paths or installation locations
+- Session or group chat names
+- Directory file listings
 
-All file paths have been sanitized to remove your username.
+Log messages are truncated and sanitized to remove embedded paths.
+All remaining file paths have been sanitized to remove your username.
 `;
 }
 

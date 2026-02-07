@@ -7,7 +7,7 @@
  */
 
 import { ProcessManager } from '../../process-manager';
-import { sanitizePath } from './settings';
+import { sanitizePath } from './sanitize';
 
 export interface ProcessInfo {
 	sessionId: string;
