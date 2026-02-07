@@ -197,6 +197,7 @@ import {
 	getActiveTerminalTab,
 	getTerminalSessionId,
 	parseTerminalSessionId,
+	renameTerminalTab,
 	setActiveTerminalTab,
 } from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
@@ -5272,6 +5273,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 		},
 		[defaultShell]
 	);
+
+	/**
+	 * Rename a terminal tab.
+	 */
+	const handleTerminalTabRename = useCallback((sessionId: string, tabId: string, name: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return renameTerminalTab(s, tabId, name);
+			})
+		);
+	}, []);
 
 	/**
 	 * Force close a file preview tab without confirmation.
@@ -14476,6 +14489,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						onTerminalTabSelect={handleTerminalTabSelect}
 						onTerminalTabClose={handleTerminalTabClose}
 						onTerminalNewTab={handleTerminalNewTab}
+						onTerminalTabRename={handleTerminalTabRename}
 					/>
 				)}
 
