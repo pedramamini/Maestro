@@ -3,7 +3,15 @@ import { createRoot, type Root } from 'react-dom/client';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import type { Session, TerminalTab, Theme } from '../../../renderer/types';
 
-const mockXTerminalFocusBySessionId = vi.hoisted(() => new Map<string, ReturnType<typeof vi.fn>>());
+type MockXTerminalHandle = {
+	focus: ReturnType<typeof vi.fn>;
+	clear: ReturnType<typeof vi.fn>;
+	search: ReturnType<typeof vi.fn>;
+	searchNext: ReturnType<typeof vi.fn>;
+	searchPrevious: ReturnType<typeof vi.fn>;
+};
+
+const mockXTerminalHandlesBySessionId = vi.hoisted(() => new Map<string, MockXTerminalHandle>());
 const mockTerminalTabBarProps = vi.hoisted(() => ({
 	current: null as {
 		tabs: TerminalTab[];
@@ -17,17 +25,38 @@ vi.mock('../../../renderer/components/XTerminal', async () => {
 	return {
 		XTerminal: ReactModule.forwardRef(function MockXTerminal(
 			props: { sessionId: string },
-			ref: React.ForwardedRef<{ focus: () => void }>
+			ref: React.ForwardedRef<{
+				focus: () => void;
+				clear: () => void;
+				search: (query: string) => boolean;
+				searchNext: () => boolean;
+				searchPrevious: () => boolean;
+			}>
 		) {
 			const focus = vi.fn();
-			mockXTerminalFocusBySessionId.set(props.sessionId, focus);
+			const clear = vi.fn();
+			const search = vi.fn(() => true);
+			const searchNext = vi.fn(() => true);
+			const searchPrevious = vi.fn(() => false);
+
+			mockXTerminalHandlesBySessionId.set(props.sessionId, {
+				focus,
+				clear,
+				search,
+				searchNext,
+				searchPrevious,
+			});
 
 			ReactModule.useImperativeHandle(
 				ref,
 				() => ({
 					focus,
+					clear,
+					search,
+					searchNext,
+					searchPrevious,
 				}),
-				[focus]
+				[focus, clear, search, searchNext, searchPrevious]
 			);
 
 			return ReactModule.createElement('div', {
@@ -61,7 +90,7 @@ vi.mock('../../../renderer/components/TerminalTabBar', () => ({
 	},
 }));
 
-import { TerminalView } from '../../../renderer/components/TerminalView';
+import { TerminalView, type TerminalViewHandle } from '../../../renderer/components/TerminalView';
 
 const theme: Theme = {
 	id: 'nord',
@@ -139,7 +168,7 @@ describe('TerminalView', () => {
 
 	beforeEach(() => {
 		(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
-		mockXTerminalFocusBySessionId.clear();
+		mockXTerminalHandlesBySessionId.clear();
 		mockTerminalTabBarProps.current = null;
 		vi.clearAllMocks();
 		exitHandler = null;
@@ -195,9 +224,56 @@ describe('TerminalView', () => {
 		expect(callbacks.onTabPidChange).toHaveBeenCalledWith('tab-1', 4242);
 		expect(callbacks.onTabStateChange).toHaveBeenCalledWith('tab-1', 'idle');
 
-		const focus = mockXTerminalFocusBySessionId.get('session-1-terminal-tab-1');
-		expect(focus).toBeTruthy();
-		expect(focus).toHaveBeenCalled();
+		const terminalHandle = mockXTerminalHandlesBySessionId.get('session-1-terminal-tab-1');
+		expect(terminalHandle).toBeTruthy();
+		expect(terminalHandle?.focus).toHaveBeenCalled();
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('exposes clear and search methods for the active terminal tab via ref', () => {
+		const callbacks = createCallbacks();
+		const session = createSession();
+		const terminalViewRef = React.createRef<TerminalViewHandle>();
+
+		const { root } = mount(
+			<TerminalView
+				ref={terminalViewRef}
+				session={session}
+				theme={theme}
+				fontFamily="Monaco"
+				defaultShell="zsh"
+				{...callbacks}
+			/>
+		);
+
+		const terminalHandle = mockXTerminalHandlesBySessionId.get('session-1-terminal-tab-1');
+		expect(terminalHandle).toBeTruthy();
+
+		act(() => {
+			terminalViewRef.current?.clearActiveTerminal();
+		});
+		expect(terminalHandle?.clear).toHaveBeenCalledTimes(1);
+
+		const searchResult = terminalViewRef.current?.searchActiveTerminal('needle') ?? false;
+		expect(searchResult).toBe(true);
+		expect(terminalHandle?.search).toHaveBeenCalledWith('needle');
+
+		const searchNextResult = terminalViewRef.current?.searchNext() ?? false;
+		expect(searchNextResult).toBe(true);
+		expect(terminalHandle?.searchNext).toHaveBeenCalledTimes(1);
+
+		const searchPreviousResult = terminalViewRef.current?.searchPrevious() ?? true;
+		expect(searchPreviousResult).toBe(false);
+		expect(terminalHandle?.searchPrevious).toHaveBeenCalledTimes(1);
+
+		const initialFocusCalls = terminalHandle?.focus.mock.calls.length ?? 0;
+		act(() => {
+			terminalViewRef.current?.focusActiveTerminal();
+		});
+		expect(terminalHandle?.focus.mock.calls.length ?? 0).toBe(initialFocusCalls + 1);
 
 		act(() => {
 			root.unmount();
