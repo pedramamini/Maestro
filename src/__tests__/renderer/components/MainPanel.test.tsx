@@ -29,8 +29,11 @@ vi.mock('../../../renderer/components/TerminalOutput', () => ({
 	}),
 }));
 
+let lastTerminalViewProps: Record<string, unknown> | null = null;
+
 vi.mock('../../../renderer/components/TerminalView', () => ({
-	TerminalView: (props: { session: { name: string } }) => {
+	TerminalView: (props: { session: { name: string } } & Record<string, unknown>) => {
+		lastTerminalViewProps = props;
 		return React.createElement(
 			'div',
 			{ 'data-testid': 'terminal-view' },
@@ -433,6 +436,7 @@ describe('MainPanel', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
+		lastTerminalViewProps = null;
 
 		// Clear capabilities cache and pre-populate with Claude Code capabilities (default test agent)
 		clearCapabilitiesCache();
@@ -535,6 +539,33 @@ describe('MainPanel', () => {
 
 			expect(screen.getByTestId('terminal-view')).toBeInTheDocument();
 			expect(screen.queryByTestId('terminal-output')).not.toBeInTheDocument();
+		});
+
+		it('should pass terminal tab callbacks and shell settings to TerminalView', () => {
+			const onTerminalTabSelect = vi.fn();
+			const onTerminalNewTab = vi.fn();
+			const session = createSession({ inputMode: 'terminal' });
+
+			render(
+				<MainPanel
+					{...defaultProps}
+					activeSession={session}
+					defaultShell="bash"
+					onTerminalTabSelect={onTerminalTabSelect}
+					onTerminalNewTab={onTerminalNewTab}
+				/>
+			);
+
+			expect(lastTerminalViewProps).not.toBeNull();
+			expect(lastTerminalViewProps?.defaultShell).toBe('bash');
+
+			(lastTerminalViewProps?.onTabSelect as ((tabId: string) => void) | undefined)?.(
+				'terminal-tab-1'
+			);
+			(lastTerminalViewProps?.onNewTab as (() => void) | undefined)?.();
+
+			expect(onTerminalTabSelect).toHaveBeenCalledWith(session.id, 'terminal-tab-1');
+			expect(onTerminalNewTab).toHaveBeenCalledWith(session.id);
 		});
 	});
 
