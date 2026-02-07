@@ -1320,6 +1320,36 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockHandleClearActiveTerminal).toHaveBeenCalledWith('session-1');
 		});
 
+		it('should open terminal search with Cmd+F in terminal mode', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleOpenTerminalSearch = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }],
+					activeTerminalTabId: 'term-1',
+				},
+				handleOpenTerminalSearch: mockHandleOpenTerminalSearch,
+			});
+
+			const event = new KeyboardEvent('keydown', {
+				key: 'f',
+				metaKey: true,
+				bubbles: true,
+			});
+			const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+
+			act(() => {
+				window.dispatchEvent(event);
+			});
+
+			expect(preventDefaultSpy).toHaveBeenCalled();
+			expect(mockHandleOpenTerminalSearch).toHaveBeenCalledWith('session-1');
+		});
+
 		it('should not intercept Ctrl+C in terminal mode', () => {
 			const { result } = renderHook(() => useMainKeyboardHandler());
 
