@@ -468,6 +468,17 @@ export interface ClosedTab {
 }
 
 /**
+ * Closed terminal tab entry for undo functionality (Cmd+Shift+T)
+ * Note: Terminal tabs cannot be fully restored since the PTY session is gone,
+ * but we can recreate a new terminal in the same position with same settings
+ */
+export interface ClosedTerminalTab {
+	tab: TerminalTab; // The closed tab data (sans PTY state)
+	index: number; // Original position in the tab array
+	closedAt: number; // Timestamp when closed
+}
+
+/**
  * File Preview Tab for in-tab file viewing.
  * Designed to coexist with AITab and future terminal tabs in the unified tab system.
  * File tabs persist across session switches and app restarts.
