@@ -106,6 +106,14 @@ describe('THEMES constant', () => {
 			}
 		});
 
+		it('should include ANSI color overrides for every theme', () => {
+			for (const theme of themes) {
+				for (const colorKey of REQUIRED_ANSI_COLORS) {
+					expect(theme.colors[colorKey], `${theme.id}.${colorKey} should be defined`).toBeDefined();
+				}
+			}
+		});
+
 		it('should have valid CSS color values', () => {
 			for (const theme of themes) {
 				for (const [colorName, colorValue] of Object.entries(theme.colors)) {

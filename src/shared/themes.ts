@@ -93,6 +93,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#50fa7b',
 			warning: '#ffb86c',
 			error: '#ff5555',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	monokai: {
@@ -113,6 +114,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#a6e22e',
 			warning: '#e6db74',
 			error: '#f92672',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	nord: {
@@ -133,6 +135,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#a3be8c',
 			warning: '#ebcb8b',
 			error: '#bf616a',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	'tokyo-night': {
@@ -153,6 +156,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#9ece6a',
 			warning: '#e0af68',
 			error: '#f7768e',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	'catppuccin-mocha': {
@@ -173,6 +177,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#a6e3a1',
 			warning: '#fab387',
 			error: '#f38ba8',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	'gruvbox-dark': {
@@ -193,6 +198,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#b8bb26',
 			warning: '#fabd2f',
 			error: '#fb4934',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	// Light themes
@@ -214,6 +220,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#1a7f37',
 			warning: '#9a6700',
 			error: '#cf222e',
+			...LIGHT_ANSI_COLORS,
 		},
 	},
 	'solarized-light': {
@@ -234,6 +241,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#859900',
 			warning: '#b58900',
 			error: '#dc322f',
+			...LIGHT_ANSI_COLORS,
 		},
 	},
 	'one-light': {
@@ -254,6 +262,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#50a14f',
 			warning: '#c18401',
 			error: '#e45649',
+			...LIGHT_ANSI_COLORS,
 		},
 	},
 	'gruvbox-light': {
@@ -274,6 +283,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#98971a',
 			warning: '#d79921',
 			error: '#cc241d',
+			...LIGHT_ANSI_COLORS,
 		},
 	},
 	'catppuccin-latte': {
@@ -294,6 +304,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#40a02b',
 			warning: '#fe640b',
 			error: '#d20f39',
+			...LIGHT_ANSI_COLORS,
 		},
 	},
 	'ayu-light': {
@@ -314,6 +325,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#86b300',
 			warning: '#f2ae49',
 			error: '#f07171',
+			...LIGHT_ANSI_COLORS,
 		},
 	},
 	// Vibe themes
@@ -335,6 +347,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#7cb342',
 			warning: '#d4af37',
 			error: '#da70d6',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	'maestros-choice': {
@@ -355,6 +368,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#66d9a0',
 			warning: '#f4c430',
 			error: '#e05070',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	'dre-synth': {
@@ -375,6 +389,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#00ffcc',
 			warning: '#ff2a6d',
 			error: '#ff2a6d',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	inquest: {
@@ -395,6 +410,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#f5f5f5',
 			warning: '#cc0033',
 			error: '#cc0033',
+			...DARK_ANSI_COLORS,
 		},
 	},
 	// Custom theme - user-configurable, defaults to Dracula
@@ -416,6 +432,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			success: '#50fa7b',
 			warning: '#ffb86c',
 			error: '#ff5555',
+			...DARK_ANSI_COLORS,
 		},
 	},
 };
