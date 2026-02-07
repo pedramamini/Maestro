@@ -197,6 +197,7 @@ import {
 	getActiveTerminalTab,
 	getTerminalSessionId,
 	parseTerminalSessionId,
+	reopenTerminalTab,
 	reorderTerminalTabs,
 	renameTerminalTab,
 	setActiveTerminalTab,
@@ -5258,6 +5259,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 			prev.map((s) => {
 				if (s.id !== sessionId) return s;
 				const result = closeTerminalTab(s, tabId);
+				return result ? result.session : s;
+			})
+		);
+	}, []);
+
+	/**
+	 * Reopen the most recently closed terminal tab for a session.
+	 */
+	const handleReopenTerminalTab = useCallback((sessionId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				const result = reopenTerminalTab(s);
 				return result ? result.session : s;
 			})
 		);
@@ -12833,6 +12847,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Close current tab (Cmd+W) - works with both file and AI tabs
 		handleCloseCurrentTab,
+		handleReopenTerminalTab,
 
 		// Session bookmark toggle
 		toggleBookmark,
