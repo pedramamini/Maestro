@@ -64,6 +64,7 @@ describe('TerminalTabBar', () => {
 	const onTabSelect = vi.fn();
 	const onTabClose = vi.fn();
 	const onNewTab = vi.fn();
+	const onRequestRename = vi.fn();
 	const onTabReorder = vi.fn();
 
 	beforeEach(() => {
@@ -132,6 +133,40 @@ describe('TerminalTabBar', () => {
 		});
 
 		expect(onTabSelect).toHaveBeenCalledWith('terminal-2');
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('calls onRequestRename when double-clicking a tab', () => {
+		const tabs = [
+			createTerminalTab({ id: 'terminal-1', name: 'One' }),
+			createTerminalTab({ id: 'terminal-2', name: 'Two' }),
+		];
+
+		const { container, root } = mount(
+			<TerminalTabBar
+				tabs={tabs}
+				activeTabId="terminal-1"
+				theme={mockTheme}
+				onTabSelect={onTabSelect}
+				onTabClose={onTabClose}
+				onNewTab={onNewTab}
+				onRequestRename={onRequestRename}
+			/>
+		);
+
+		const tabLabel = Array.from(container.querySelectorAll('span')).find(
+			(el) => el.textContent === 'Two'
+		);
+		expect(tabLabel?.parentElement).toBeTruthy();
+
+		act(() => {
+			tabLabel?.parentElement?.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+		});
+
+		expect(onRequestRename).toHaveBeenCalledWith('terminal-2');
 
 		act(() => {
 			root.unmount();
