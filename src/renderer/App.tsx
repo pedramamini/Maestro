@@ -1174,6 +1174,8 @@ function MaestroConsoleInner() {
 				return {
 					...session,
 					aiPid: -1,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					state: 'error' as SessionState,
 					isLive: false,
@@ -1245,6 +1247,8 @@ function MaestroConsoleInner() {
 				return {
 					...correctedSession,
 					aiPid: -1,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					state: 'error' as SessionState,
 					isLive: false,
@@ -1304,7 +1308,9 @@ function MaestroConsoleInner() {
 				return {
 					...correctedSession,
 					aiPid: aiSpawnResult.pid,
-					terminalPid: 0, // Terminal uses runCommand (fresh shells per command)
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
+					terminalPid: 0,
 					state: 'idle' as SessionState,
 					// Reset runtime-only busy state - processes don't survive app restart
 					busySource: undefined,
@@ -1342,6 +1348,8 @@ function MaestroConsoleInner() {
 				return {
 					...session,
 					aiPid: -1,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					state: 'error' as SessionState,
 					isLive: false,
@@ -1353,6 +1361,8 @@ function MaestroConsoleInner() {
 			return {
 				...session,
 				aiPid: -1,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				state: 'error' as SessionState,
 				isLive: false,
@@ -1767,6 +1777,8 @@ function MaestroConsoleInner() {
 							inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
 							aiPid: 0,
 							...initialTerminalTabState,
+							// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+							// Terminal runtime state now lives in terminalTabs[].pid.
 							terminalPid: 0,
 							port: 3000 + Math.floor(Math.random() * 100),
 							isLive: false,
@@ -8077,6 +8089,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
 				aiPid: 0,
 				...initialTerminalTabState,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -8263,6 +8277,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 								inputMode: session.inputMode,
 								aiPid: 0,
 								...initialTerminalTabState,
+								// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+								// Terminal runtime state now lives in terminalTabs[].pid.
 								terminalPid: 0,
 								port: 3000 + Math.floor(Math.random() * 100),
 								isLive: false,
@@ -9574,6 +9590,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				terminalTabs: [defaultTerminalTab],
 				activeTerminalTabId: defaultTerminalTab.id,
 				closedTerminalTabHistory: [],
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -9741,6 +9759,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				contextUsage: 0,
 				inputMode: 'ai',
 				aiPid,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -11821,6 +11841,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 							inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 							aiPid: 0,
 							...initialTerminalTabState,
+							// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+							// Terminal runtime state now lives in terminalTabs[].pid.
 							terminalPid: 0,
 							port: 3000 + Math.floor(Math.random() * 100),
 							isLive: false,
@@ -12001,6 +12023,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 					inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 					aiPid: 0,
 					...initialTerminalTabState,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					port: 3000 + Math.floor(Math.random() * 100),
 					isLive: false,
@@ -12155,6 +12179,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				inputMode: createWorktreeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 				aiPid: 0,
 				...initialTerminalTabState,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -14193,6 +14219,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 									contextUsage: 0,
 									inputMode: 'ai',
 									aiPid: 0,
+									// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+									// Terminal runtime state now lives in terminalTabs[].pid.
 									terminalPid: 0,
 									port: 3000 + Math.floor(Math.random() * 100),
 									isLive: false,
