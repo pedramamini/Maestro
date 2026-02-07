@@ -148,8 +148,30 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 							}
 						: null,
 				});
+				// Detect interactive AI mode: Claude Code without a prompt runs as interactive PTY
+				const isInteractiveAI =
+					config.toolType === 'claude-code' && !config.prompt && !config.sessionSshRemoteConfig?.enabled;
+
+				// For interactive mode, strip batch-mode-only args (--print, --output-format stream-json)
+				// Keep --verbose and --dangerously-skip-permissions
+				let baseArgs = config.args;
+				if (isInteractiveAI) {
+					baseArgs = baseArgs.filter((arg, i, arr) => {
+						if (arg === '--print') return false;
+						if (arg === '--output-format') return false;
+						// Also remove the value following --output-format (e.g., 'stream-json')
+						if (i > 0 && arr[i - 1] === '--output-format') return false;
+						return true;
+					});
+					logger.info('Interactive AI mode: stripped batch-mode args', LOG_CONTEXT, {
+						sessionId: config.sessionId,
+						originalArgs: config.args,
+						strippedArgs: baseArgs,
+					});
+				}
+
 				let finalArgs = buildAgentArgs(agent, {
-					baseArgs: config.args,
+					baseArgs,
 					prompt: config.prompt,
 					cwd: config.cwd,
 					readOnlyMode: config.readOnlyMode,
@@ -446,6 +468,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					noPromptSeparator: agent?.noPromptSeparator, // Some agents don't support '--' before prompt
 					// Stats tracking: use cwd as projectPath if not explicitly provided
 					projectPath: config.cwd,
+					// Interactive AI mode: spawn as interactive PTY (full TUI, no --print)
+					isInteractiveAI,
 					// SSH remote context (for SSH-specific error messages)
 					sshRemoteId: sshRemoteUsed?.id,
 					sshRemoteHost: sshRemoteUsed?.host,

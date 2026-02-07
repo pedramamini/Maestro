@@ -57,7 +57,8 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	private shouldUsePty(config: ProcessConfig): boolean {
-		const { toolType, requiresPty, prompt } = config;
+		const { toolType, requiresPty, prompt, isInteractiveAI } = config;
+		if (isInteractiveAI) return true;
 		return (toolType === 'terminal' || requiresPty === true) && !prompt;
 	}
 
@@ -74,7 +75,7 @@ export class ProcessManager extends EventEmitter {
 		}
 
 		try {
-			if (process.isTerminal && process.ptyProcess) {
+			if (process.ptyProcess && (process.isTerminal || process.isInteractiveAI)) {
 				const command = data.replace(/\r?\n$/, '');
 				if (command.trim()) {
 					process.lastCommand = command.trim();
@@ -100,7 +101,8 @@ export class ProcessManager extends EventEmitter {
 	 */
 	resize(sessionId: string, cols: number, rows: number): boolean {
 		const process = this.processes.get(sessionId);
-		if (!process || !process.isTerminal || !process.ptyProcess) return false;
+		if (!process || !process.ptyProcess || !(process.isTerminal || process.isInteractiveAI))
+			return false;
 
 		try {
 			process.ptyProcess.resize(cols, rows);
@@ -122,7 +124,7 @@ export class ProcessManager extends EventEmitter {
 		if (!process) return false;
 
 		try {
-			if (process.isTerminal && process.ptyProcess) {
+			if (process.ptyProcess && (process.isTerminal || process.isInteractiveAI)) {
 				process.ptyProcess.write('\x03');
 				return true;
 			} else if (process.childProcess) {
@@ -152,7 +154,7 @@ export class ProcessManager extends EventEmitter {
 			}
 			this.bufferManager.flushDataBuffer(sessionId);
 
-			if (process.isTerminal && process.ptyProcess) {
+			if (process.ptyProcess && (process.isTerminal || process.isInteractiveAI)) {
 				process.ptyProcess.kill();
 			} else if (process.childProcess) {
 				process.childProcess.kill('SIGTERM');

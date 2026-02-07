@@ -784,8 +784,10 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
 			// Check if this is an AI agent in batch mode (e.g., Claude Code, OpenCode, Codex, Factory Droid)
 			// Batch mode agents spawn a new process per message rather than writing to stdin
+			// Interactive AI sessions (isInteractiveAI) write to the existing PTY instead
 			const isBatchModeAgent =
 				currentMode === 'ai' &&
+				!activeSession.isInteractiveAI &&
 				(activeSession.toolType === 'claude-code' ||
 					activeSession.toolType === 'opencode' ||
 					activeSession.toolType === 'codex' ||
@@ -972,6 +974,11 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						);
 					}
 				})();
+			} else if (currentMode === 'ai' && activeSession.isInteractiveAI) {
+				// Interactive AI mode: write to the existing PTY using bracketed paste mode
+				// Bracketed paste prevents multi-line prompts from being submitted prematurely at newlines
+				const wrapped = `\x1b[200~${capturedInputValue}\x1b[201~\n`;
+				window.maestro.process.write(targetSessionId, wrapped);
 			} else if (currentMode === 'terminal') {
 				// Intercept "clear" command to clear shell logs instead of sending to shell
 				const trimmedCommand = capturedInputValue.trim();

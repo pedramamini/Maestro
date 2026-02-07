@@ -705,6 +705,10 @@ export interface Session {
 
 	// Symphony contribution metadata (only set for Symphony sessions)
 	symphonyMetadata?: SymphonySessionMetadata;
+
+	// Interactive AI mode - when true, session runs a fully interactive PTY (e.g., Claude Code TUI)
+	// Output is raw ANSI rendered as terminal, not parsed markdown
+	isInteractiveAI?: boolean;
 }
 
 export interface AgentConfigOption {

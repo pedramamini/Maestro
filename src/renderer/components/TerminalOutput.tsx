@@ -1470,8 +1470,9 @@ export const TerminalOutput = memo(
 		);
 
 		// Computed values for rendering
-		const isTerminal = session.inputMode === 'terminal';
-		const isAIMode = session.inputMode === 'ai';
+		// Interactive AI sessions render output as raw ANSI (like terminal mode)
+		const isTerminal = session.inputMode === 'terminal' || session.isInteractiveAI === true;
+		const isAIMode = session.inputMode === 'ai' && !session.isInteractiveAI;
 
 		// Memoized prose styles - applied once at container level instead of per-log-item
 		// IMPORTANT: Scoped to .terminal-output to avoid CSS conflicts with other prose containers (e.g., AutoRun panel)
@@ -1486,8 +1487,7 @@ export const TerminalOutput = memo(
 				tabIndex={0}
 				className="terminal-output flex-1 flex flex-col overflow-hidden transition-colors outline-none relative"
 				style={{
-					backgroundColor:
-						session.inputMode === 'ai' ? theme.colors.bgMain : theme.colors.bgActivity,
+					backgroundColor: isAIMode ? theme.colors.bgMain : theme.colors.bgActivity,
 				}}
 				onKeyDown={(e) => {
 					// Cmd+F to open search

@@ -24,6 +24,7 @@ export class PtySpawner {
 		const { sessionId, toolType, cwd, command, args, shell, shellArgs, shellEnvVars } = config;
 
 		const isTerminal = toolType === 'terminal';
+		const isInteractive = config.isInteractiveAI === true;
 		const isWindows = process.platform === 'win32';
 
 		try {
@@ -70,6 +71,9 @@ export class PtySpawner {
 			let ptyEnv: NodeJS.ProcessEnv;
 			if (isTerminal) {
 				ptyEnv = buildPtyTerminalEnv(shellEnvVars);
+			} else if (isInteractive && config.customEnvVars) {
+				// For interactive AI sessions: merge custom env vars into process env
+				ptyEnv = { ...process.env, ...config.customEnvVars };
 			} else {
 				// For AI agents in PTY mode: pass full env (they need NODE_PATH, etc.)
 				ptyEnv = process.env;
@@ -89,26 +93,32 @@ export class PtySpawner {
 				ptyProcess,
 				cwd,
 				pid: ptyProcess.pid,
-				isTerminal: true,
+				isTerminal: isTerminal || isInteractive,
 				startTime: Date.now(),
 				command: ptyCommand,
 				args: ptyArgs,
+				isInteractiveAI: isInteractive,
 			};
 
 			this.processes.set(sessionId, managedProcess);
 
 			// Handle output
 			ptyProcess.onData((data) => {
-				const managedProc = this.processes.get(sessionId);
-				const cleanedData = stripControlSequences(data, managedProc?.lastCommand, isTerminal);
-				logger.debug('[ProcessManager] PTY onData', 'ProcessManager', {
-					sessionId,
-					pid: ptyProcess.pid,
-					dataPreview: cleanedData.substring(0, 100),
-				});
-				// Only emit if there's actual content after filtering
-				if (cleanedData.trim()) {
-					this.bufferManager.emitDataBuffered(sessionId, cleanedData);
+				if (isInteractive) {
+					// Interactive AI: pass raw ANSI output through for TUI rendering
+					this.bufferManager.emitDataBuffered(sessionId, data);
+				} else {
+					const managedProc = this.processes.get(sessionId);
+					const cleanedData = stripControlSequences(data, managedProc?.lastCommand, isTerminal);
+					logger.debug('[ProcessManager] PTY onData', 'ProcessManager', {
+						sessionId,
+						pid: ptyProcess.pid,
+						dataPreview: cleanedData.substring(0, 100),
+					});
+					// Only emit if there's actual content after filtering
+					if (cleanedData.trim()) {
+						this.bufferManager.emitDataBuffered(sessionId, cleanedData);
+					}
 				}
 			});
 

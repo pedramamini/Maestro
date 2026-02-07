@@ -9421,6 +9421,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				customProviderPath,
 				// Per-session SSH remote config (takes precedence over agent-level SSH config)
 				sessionSshRemoteConfig,
+				// Interactive AI mode: Claude Code runs as interactive PTY (full TUI)
+				// Only for local sessions (SSH deferred to future work)
+				isInteractiveAI: agentId === 'claude-code' && !isRemoteSession,
 			};
 			setSessions((prev) => [...prev, newSession]);
 			setActiveSessionId(newId);
@@ -9434,6 +9437,38 @@ You are taking over this conversation. Based on the context above, provide a bri
 				createdAt: Date.now(),
 				isRemote: !!isRemoteSession,
 			});
+			// For interactive AI sessions, spawn the PTY immediately (no prompt needed)
+			// The user will type into the running Claude Code TUI
+			if (agentId === 'claude-code' && !isRemoteSession) {
+				const agent = await window.maestro.agents.get(agentId);
+				if (agent) {
+					const commandToUse = agent.path || agent.command;
+					const targetSessionId = `${newId}-ai-${initialTabId}`;
+					window.maestro.process
+						.spawn({
+							sessionId: targetSessionId,
+							toolType: agentId,
+							cwd: workingDir,
+							command: commandToUse,
+							args: agent.args ?? [],
+							// No prompt - interactive mode
+							sessionCustomPath: customPath,
+							sessionCustomArgs: customArgs,
+							sessionCustomEnvVars: customEnvVars,
+							sessionCustomModel: customModel,
+							sessionCustomContextWindow: customContextWindow,
+						})
+						.then((result) => {
+							if (result.success) {
+								setSessions((prev) =>
+									prev.map((s) => (s.id === newId ? { ...s, aiPid: result.pid } : s))
+								);
+							}
+						})
+						.catch((err) => console.error('Failed to spawn interactive AI:', err));
+				}
+			}
+
 			// Auto-focus the input so user can start typing immediately
 			// Use a small delay to ensure the modal has closed and the UI has updated
 			setActiveFocus('main');
