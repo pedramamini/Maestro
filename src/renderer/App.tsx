@@ -1319,7 +1319,9 @@ function MaestroConsoleInner() {
 					liveUrl: undefined, // Clear any stale URL
 					aiLogs: [], // Deprecated - logs are now in aiTabs
 					aiTabs: resetAiTabs, // Reset tab states
-					shellLogs: correctedSession.shellLogs, // Preserve existing Command Terminal logs
+					// DEPRECATED: shellLogs is no longer used for terminal rendering.
+					// Keep persisted values for backwards compatibility with older sessions.
+					shellLogs: correctedSession.shellLogs || [],
 					executionQueue: correctedSession.executionQueue || [], // Ensure backwards compatibility
 					activeTimeMs: correctedSession.activeTimeMs || 0, // Ensure backwards compatibility
 					// Clear runtime-only error state - no agent is running yet so there can't be an error
@@ -1756,14 +1758,9 @@ function MaestroConsoleInner() {
 							parentSessionId: parentSession.id,
 							worktreeBranch: subdir.branch || undefined,
 							aiLogs: [],
-							shellLogs: [
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'system',
-									text: 'Worktree Session Ready.',
-								},
-							],
+							// DEPRECATED: shellLogs is no longer used for terminal output.
+							// Keep field for backwards compatibility with persisted sessions.
+							shellLogs: [],
 							workLog: [],
 							contextUsage: 0,
 							inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
@@ -1966,9 +1963,8 @@ function MaestroConsoleInner() {
 			// Filter out empty stdout for terminal commands (AI output should pass through)
 			if (!isFromAi && !data.trim()) return;
 
-			// For terminal output, use batched append to shell logs
+			// DEPRECATED: terminal output is rendered directly by xterm.js buffers.
 			if (!isFromAi) {
-				batchedUpdater.appendLog(actualSessionId, null, false, data);
 				return;
 			}
 
@@ -2469,14 +2465,6 @@ function MaestroConsoleInner() {
 							};
 						}
 
-						// Terminal exit - show exit code
-						const exitLog: LogEntry = {
-							id: generateId(),
-							timestamp: Date.now(),
-							source: 'system',
-							text: `Terminal process exited with code ${code}`,
-						};
-
 						// Check if any AI tabs are still busy - don't clear session state if so
 						const anyAiTabBusy = s.aiTabs?.some((tab) => tab.state === 'busy') || false;
 
@@ -2485,7 +2473,6 @@ function MaestroConsoleInner() {
 							// Only clear session state if no AI tabs are busy
 							state: anyAiTabBusy ? s.state : ('idle' as SessionState),
 							busySource: anyAiTabBusy ? s.busySource : undefined,
-							shellLogs: [...s.shellLogs, exitLog],
 						};
 					})
 				);
@@ -2495,9 +2482,10 @@ function MaestroConsoleInner() {
 				if (!isFromAi) {
 					const currentSession = sessionsRef.current.find((s) => s.id === actualSessionId);
 					if (currentSession?.isGitRepo) {
-						// Get the last user command from shell logs
-						const userLogs = currentSession.shellLogs.filter((log) => log.source === 'user');
-						const lastCommand = userLogs[userLogs.length - 1]?.text?.trim().toLowerCase() || '';
+						const lastCommand =
+							currentSession.shellCommandHistory?.[currentSession.shellCommandHistory.length - 1]
+								?.trim()
+								.toLowerCase() || '';
 
 						// Refresh refs if command might have modified them
 						const gitRefCommands = [
@@ -2858,14 +2846,14 @@ function MaestroConsoleInner() {
 				// AI process stderr - route to the correct tab with stderr flag for red box styling
 				batchedUpdater.appendLog(actualSessionId, tabIdFromSession, true, data, true);
 			} else {
-				// Terminal command stderr - route to shell logs
-				batchedUpdater.appendLog(actualSessionId, null, false, data, true);
+				// DEPRECATED: terminal stderr is rendered directly by xterm.js buffers.
+				return;
 			}
 		});
 
 		// Handle command exit from runCommand
 		const unsubscribeCommandExit = window.maestro.process.onCommandExit(
-			(sessionId: string, code: number) => {
+			(sessionId: string, _code: number) => {
 				// runCommand uses plain session ID (no suffix)
 				const actualSessionId = sessionId;
 
@@ -2881,22 +2869,6 @@ function MaestroConsoleInner() {
 						// - Otherwise, session becomes idle
 						const newState = anyAiTabBusy ? ('busy' as SessionState) : ('idle' as SessionState);
 						const newBusySource = anyAiTabBusy ? ('ai' as const) : undefined;
-
-						// Only show exit code if non-zero (error)
-						if (code !== 0) {
-							const exitLog: LogEntry = {
-								id: generateId(),
-								timestamp: Date.now(),
-								source: 'system',
-								text: `Command exited with code ${code}`,
-							};
-							return {
-								...s,
-								state: newState,
-								busySource: newBusySource,
-								shellLogs: [...s.shellLogs, exitLog],
-							};
-						}
 
 						return {
 							...s,
@@ -6025,7 +5997,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		const isAIMode = currentSession.inputMode === 'ai';
 
-		// For AI mode, use the active tab's logs; for terminal mode, use shellLogs
+		// For AI mode, use the active tab's logs.
+		// DEPRECATED: shellLogs is retained only for legacy session compatibility.
 		const currentActiveTab = isAIMode ? getActiveTab(currentSession) : null;
 		const logs = isAIMode ? currentActiveTab?.logs || [] : currentSession.shellLogs;
 
@@ -6110,7 +6083,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				})
 			);
 		} else {
-			// Terminal mode - update shellLogs and shellCommandHistory
+			// DEPRECATED: terminal mode only updates legacy shellLogs when deleting old entries.
 			const commandText = log.text.trim();
 
 			setSessions((prev) =>
@@ -8126,14 +8099,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				parentSessionId: sessionId,
 				worktreeBranch: worktree.branch || undefined,
 				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Worktree Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
@@ -8317,14 +8285,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 								// Inherit SSH configuration from parent session
 								sessionSshRemoteConfig: session.sessionSshRemoteConfig,
 								aiLogs: [],
-								shellLogs: [
-									{
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'system',
-										text: 'Shell Session Ready.',
-									},
-								],
+								// DEPRECATED: shellLogs is no longer used for terminal output.
+								// Keep field for backwards compatibility with persisted sessions.
+								shellLogs: [],
 								workLog: [],
 								contextUsage: 0,
 								inputMode: session.inputMode,
@@ -9629,14 +9592,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				gitTags,
 				gitRefsCacheTime,
 				aiLogs: [], // Deprecated - logs are now in aiTabs
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Shell Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: agentId === 'terminal' ? 'terminal' : 'ai',
@@ -9806,14 +9764,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				gitTags,
 				gitRefsCacheTime,
 				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Shell Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: 'ai',
@@ -10275,23 +10228,23 @@ You are taking over this conversation. Based on the context above, provide a bri
 			if (effectiveInputMode === 'terminal') {
 				console.log('[Remote] Terminal mode - using runCommand for clean output');
 
-				// Add user message to shell logs and set state to busy
+				// Set terminal session busy and record command in shell history.
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== sessionId) return s;
+						const history = [...(s.shellCommandHistory || [])];
+						const trimmedCommand = command.trim();
+						if (
+							trimmedCommand &&
+							(history.length === 0 || history[history.length - 1] !== trimmedCommand)
+						) {
+							history.push(trimmedCommand);
+						}
 						return {
 							...s,
 							state: 'busy' as SessionState,
 							busySource: 'terminal',
-							shellLogs: [
-								...s.shellLogs,
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'user',
-									text: command,
-								},
-							],
+							shellCommandHistory: history,
 						};
 					})
 				);
@@ -10315,7 +10268,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 					console.log('[Remote] Terminal command completed successfully');
 				} catch (error: unknown) {
 					console.error('[Remote] Terminal command failed:', error);
-					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					setSessions((prev) =>
 						prev.map((s) => {
 							if (s.id !== sessionId) return s;
@@ -10324,15 +10276,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 								state: 'idle' as SessionState,
 								busySource: undefined,
 								thinkingStartTime: undefined,
-								shellLogs: [
-									...s.shellLogs,
-									{
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'system',
-										text: `Error: Failed to run command - ${errorMessage}`,
-									},
-								],
 							};
 						})
 					);
@@ -11218,8 +11161,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 										return t;
 									});
 								}
-							} else {
-								updatedSession.shellLogs = [...s.shellLogs, killLog];
 							}
 
 							// If there are queued items, start processing the next one
@@ -11381,7 +11322,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 							}
 							return {
 								...s,
-								shellLogs: [...s.shellLogs, errorLog],
 								state: 'idle',
 								busySource: undefined,
 								thinkingStartTime: undefined,
@@ -11903,14 +11843,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 							// Inherit SSH configuration from parent session
 							sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
 							aiLogs: [],
-							shellLogs: [
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'system',
-									text: 'Worktree Session Ready.',
-								},
-							],
+							// DEPRECATED: shellLogs is no longer used for terminal output.
+							// Keep field for backwards compatibility with persisted sessions.
+							shellLogs: [],
 							workLog: [],
 							contextUsage: 0,
 							inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
@@ -12088,14 +12023,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 					parentSessionId: activeSession.id,
 					worktreeBranch: branchName,
 					aiLogs: [],
-					shellLogs: [
-						{
-							id: generateId(),
-							timestamp: Date.now(),
-							source: 'system',
-							text: 'Worktree Session Ready.',
-						},
-					],
+					// DEPRECATED: shellLogs is no longer used for terminal output.
+					// Keep field for backwards compatibility with persisted sessions.
+					shellLogs: [],
 					workLog: [],
 					contextUsage: 0,
 					inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
@@ -12247,14 +12177,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				parentSessionId: createWorktreeSession.id,
 				worktreeBranch: branchName,
 				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Worktree Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: createWorktreeSession.toolType === 'terminal' ? 'terminal' : 'ai',
@@ -14291,14 +14216,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 									gitTags,
 									gitRefsCacheTime,
 									aiLogs: [],
-									shellLogs: [
-										{
-											id: generateId(),
-											timestamp: Date.now(),
-											source: 'system',
-											text: 'Shell Session Ready.',
-										},
-									],
+									// DEPRECATED: shellLogs is no longer used for terminal output.
+									// Keep field for backwards compatibility with persisted sessions.
+									shellLogs: [],
 									workLog: [],
 									contextUsage: 0,
 									inputMode: 'ai',
