@@ -80,7 +80,7 @@ interface AgentConfig {
 	binaryName?: string;
 	available: boolean;
 	path?: string;
-  	customPath?: string;
+	customPath?: string;
 	command: string;
 	args?: string[];
 	hidden?: boolean;
@@ -200,6 +200,15 @@ interface MaestroAPI {
 	};
 	process: {
 		spawn: (config: ProcessConfig) => Promise<{ pid: number; success: boolean }>;
+		spawnTerminalTab: (config: {
+			sessionId: string;
+			cwd: string;
+			shell?: string;
+			shellArgs?: string;
+			shellEnvVars?: Record<string, string>;
+			cols?: number;
+			rows?: number;
+		}) => Promise<{ pid: number; success: boolean }>;
 		write: (sessionId: string, data: string) => Promise<boolean>;
 		interrupt: (sessionId: string) => Promise<boolean>;
 		kill: (sessionId: string) => Promise<boolean>;
@@ -539,7 +548,11 @@ interface MaestroAPI {
 		homeDir: () => Promise<string>;
 		readDir: (dirPath: string, sshRemoteId?: string) => Promise<DirectoryEntry[]>;
 		readFile: (filePath: string, sshRemoteId?: string) => Promise<string>;
-		writeFile: (filePath: string, content: string, sshRemoteId?: string) => Promise<{ success: boolean }>;
+		writeFile: (
+			filePath: string,
+			content: string,
+			sshRemoteId?: string
+		) => Promise<{ success: boolean }>;
 		stat: (
 			filePath: string,
 			sshRemoteId?: string
