@@ -1985,15 +1985,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											<p className="text-sm flex items-center gap-2" style={{ color: theme.colors.textMain }}>
 												<Timer className="w-3.5 h-3.5 opacity-60" />
 												Enable WakaTime tracking
-												<span
-													className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
-													style={{
-														backgroundColor: theme.colors.warning + '30',
-														color: theme.colors.warning,
-													}}
-												>
-													Beta
-												</span>
 											</p>
 											<p className="text-xs opacity-50 mt-0.5">
 												Track coding activity in Maestro sessions via WakaTime.
