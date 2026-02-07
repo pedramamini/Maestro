@@ -224,6 +224,7 @@ import {
 	isSynopsisSession,
 	isBatchSession,
 } from './utils/sessionIdParser';
+import { getAiProcessContext } from './utils/processEventRouting';
 import { isLikelyConcatenatedToolNames, getSlashCommandDescription } from './constants/app';
 import { useUIStore } from './stores/uiStore';
 
@@ -1933,40 +1934,15 @@ function MaestroConsoleInner() {
 		const thinkingChunkBuffer = thinkingChunkBufferRef.current;
 
 		// Handle process output data (BATCHED for performance)
-		// sessionId will be in format: "{id}-ai-{tabId}", "{id}-terminal", "{id}-batch-{timestamp}", etc.
+		// Terminal output is handled by XTerminal subscriptions, not App-level AI log routing.
 		const unsubscribeData = window.maestro.process.onData((sessionId: string, data: string) => {
-			// Parse sessionId to determine which process this is from
-			let actualSessionId: string;
-			let isFromAi: boolean;
-			let tabIdFromSession: string | undefined;
-
-			// Format: sessionId-ai-tabId
-			const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-			if (aiTabMatch) {
-				actualSessionId = aiTabMatch[1];
-				tabIdFromSession = aiTabMatch[2];
-				isFromAi = true;
-			} else if (sessionId.endsWith('-terminal')) {
-				// Ignore PTY terminal output - we use runCommand for terminal commands,
-				// which emits data with plain session ID (not -terminal suffix)
-				return;
-			} else if (sessionId.includes('-batch-')) {
-				// Ignore batch task output - these are handled separately by spawnAgentForSession
-				// and their output goes to history entries, not to the AI terminal
-				return;
-			} else {
-				// Plain session ID = output from runCommand (terminal commands)
-				actualSessionId = sessionId;
-				isFromAi = false;
-			}
-
-			// Filter out empty stdout for terminal commands (AI output should pass through)
-			if (!isFromAi && !data.trim()) return;
-
-			// DEPRECATED: terminal output is rendered directly by xterm.js buffers.
-			if (!isFromAi) {
+			const aiContext = getAiProcessContext(sessionId);
+			if (!aiContext) {
 				return;
 			}
+
+			const actualSessionId = aiContext.actualSessionId;
+			const tabIdFromSession = aiContext.tabId;
 
 			// For AI output, determine target tab ID
 			// Priority: 1) tab ID from session ID (most reliable), 2) busy tab, 3) active tab
@@ -2817,38 +2793,32 @@ function MaestroConsoleInner() {
 			}
 		);
 
-		// Handle stderr from processes (BATCHED - separate from stdout)
-		// Supports both AI processes (sessionId format: {id}-ai-{tabId}) and terminal commands (plain sessionId)
+		// Handle stderr from AI processes (BATCHED - separate from stdout)
 		const unsubscribeStderr = window.maestro.process.onStderr((sessionId: string, data: string) => {
 			// Filter out empty stderr (only whitespace)
 			if (!data.trim()) return;
 
-			// Parse sessionId to determine which process this is from
-			// Same logic as onData handler
-			let actualSessionId: string;
-			let tabIdFromSession: string | undefined;
-			let isFromAi = false;
-
-			const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-			if (aiTabMatch) {
-				actualSessionId = aiTabMatch[1];
-				tabIdFromSession = aiTabMatch[2];
-				isFromAi = true;
-			} else if (sessionId.includes('-batch-')) {
-				// Ignore batch task stderr
-				return;
-			} else {
-				// Plain session ID = runCommand (terminal commands)
-				actualSessionId = sessionId;
-			}
-
-			if (isFromAi && tabIdFromSession) {
-				// AI process stderr - route to the correct tab with stderr flag for red box styling
-				batchedUpdater.appendLog(actualSessionId, tabIdFromSession, true, data, true);
-			} else {
-				// DEPRECATED: terminal stderr is rendered directly by xterm.js buffers.
+			const aiContext = getAiProcessContext(sessionId);
+			if (!aiContext) {
 				return;
 			}
+
+			const actualSessionId = aiContext.actualSessionId;
+			let targetTabId = aiContext.tabId;
+			if (!targetTabId) {
+				const session = sessionsRef.current.find((s) => s.id === actualSessionId);
+				if (session) {
+					const targetTab = getWriteModeTab(session) || getActiveTab(session);
+					targetTabId = targetTab?.id;
+				}
+			}
+
+			if (!targetTabId) {
+				return;
+			}
+
+			// AI process stderr - route to the correct tab with stderr flag for red box styling
+			batchedUpdater.appendLog(actualSessionId, targetTabId, true, data, true);
 		});
 
 		// Handle command exit from runCommand
