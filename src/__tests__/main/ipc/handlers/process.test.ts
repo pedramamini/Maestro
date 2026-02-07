@@ -655,6 +655,17 @@ describe('process IPC handlers', () => {
 			expect(result).toBe(true);
 		});
 
+		it('should forward full terminal-tab session ids unchanged', async () => {
+			mockProcessManager.interrupt.mockReturnValue(true);
+			const terminalSessionId = 'abc123-terminal-def456';
+
+			const handler = handlers.get('process:interrupt');
+			const result = await handler!({} as any, terminalSessionId);
+
+			expect(mockProcessManager.interrupt).toHaveBeenCalledWith(terminalSessionId);
+			expect(result).toBe(true);
+		});
+
 		it('should return false for non-existent process', async () => {
 			mockProcessManager.interrupt.mockReturnValue(false);
 

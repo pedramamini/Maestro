@@ -105,10 +105,11 @@ describe('Process Preload API', () => {
 	describe('interrupt', () => {
 		it('should invoke process:interrupt with sessionId', async () => {
 			mockInvoke.mockResolvedValue(true);
+			const terminalSessionId = 'abc123-terminal-def456';
 
-			const result = await api.interrupt('session-123');
+			const result = await api.interrupt(terminalSessionId);
 
-			expect(mockInvoke).toHaveBeenCalledWith('process:interrupt', 'session-123');
+			expect(mockInvoke).toHaveBeenCalledWith('process:interrupt', terminalSessionId);
 			expect(result).toBe(true);
 		});
 	});
