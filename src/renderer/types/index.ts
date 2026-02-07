@@ -668,6 +668,13 @@ export interface Session {
 
 	// Saved scroll position for terminal/shell output view
 	terminalScrollTop?: number;
+	// Terminal tab management (multi-tab terminal support with full PTY emulation)
+	// Each terminal tab represents a separate shell session with xterm.js rendering
+	terminalTabs: TerminalTab[];
+	// Currently active terminal tab ID
+	activeTerminalTabId: string;
+	// Stack of recently closed terminal tabs for undo (max 10, runtime-only)
+	closedTerminalTabHistory: ClosedTerminalTab[];
 	// Draft input for terminal mode (persisted across session switches)
 	terminalDraftInput?: string;
 
