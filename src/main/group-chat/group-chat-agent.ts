@@ -19,7 +19,7 @@ import {
 } from './group-chat-storage';
 import { appendToLog } from './group-chat-log';
 import { IProcessManager, isModeratorActive } from './group-chat-moderator';
-import { type AgentDetector, getAgentCapabilities } from '../agents';
+import type { AgentDetector } from '../agents';
 import {
 	buildAgentArgs,
 	applyAgentConfigOverrides,
@@ -28,8 +28,7 @@ import {
 import { groupChatParticipantPrompt } from '../../prompts';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
-import { getWindowsShellForAgentExecution } from '../process-manager/utils/shellEscape';
-import { getCustomShellPath } from './group-chat-config';
+import { getWindowsSpawnConfig } from './group-chat-config';
 
 /**
  * In-memory store for active participant sessions.
@@ -210,23 +209,15 @@ export async function addParticipant(
 		if (sshWrapped.sshRemoteUsed) {
 			console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
 		}
-	} else if (process.platform === 'win32') {
-		// On Windows (when not using SSH), use shell execution with PowerShell
-		// to avoid cmd.exe command line length limits (~8191 characters)
-		const shellConfig = getWindowsShellForAgentExecution({
-			customShellPath: getCustomShellPath(),
-		});
-		spawnShell = shellConfig.shell;
-		spawnRunInShell = shellConfig.useShell;
-		console.log(`[GroupChat:Debug] Windows shell config for participant: ${shellConfig.shell} (source: ${shellConfig.source})`);
 	}
 
-	// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-	// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
-	const isWindowsAddParticipant = process.platform === 'win32' && !sessionOverrides?.sshRemoteConfig;
-	const addParticipantCapabilities = getAgentCapabilities(agentId);
-	const sendPromptViaStdin = isWindowsAddParticipant && addParticipantCapabilities.supportsStreamJsonInput;
-	const sendPromptViaStdinRaw = isWindowsAddParticipant && !addParticipantCapabilities.supportsStreamJsonInput;
+	// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
+	const winConfig = getWindowsSpawnConfig(agentId, sessionOverrides?.sshRemoteConfig);
+	if (winConfig.shell) {
+		spawnShell = winConfig.shell;
+		spawnRunInShell = winConfig.runInShell;
+		console.log(`[GroupChat:Debug] Windows shell config for participant: ${winConfig.shell}`);
+	}
 
 	// Spawn the participant agent
 	console.log(`[GroupChat:Debug] Spawning participant agent...`);
@@ -244,8 +235,8 @@ export async function addParticipant(
 		noPromptSeparator: agentConfig?.noPromptSeparator,
 		shell: spawnShell,
 		runInShell: spawnRunInShell,
-		sendPromptViaStdin,
-		sendPromptViaStdinRaw,
+		sendPromptViaStdin: winConfig.sendPromptViaStdin,
+		sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 	});
 
 	console.log(`[GroupChat:Debug] Spawn result: ${JSON.stringify(result)}`);

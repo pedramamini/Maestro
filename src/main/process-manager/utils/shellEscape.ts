@@ -204,14 +204,64 @@ export function getWindowsShellForAgentExecution(
 	}
 
 	// 3. Default to PowerShell to avoid cmd.exe limits
-	// Use PSHOME environment variable if available for a more reliable path
-	const powerShellPath = process.env.PSHOME
-		? `${process.env.PSHOME}\\powershell.exe`
-		: 'powershell.exe';
+	// Try multiple PowerShell paths in order of preference:
+	// - PSHOME environment variable (most reliable)
+	// - PowerShell Core (pwsh.exe) if installed
+	// - Windows PowerShell (powershell.exe)
+	// - Fall back to ComSpec (cmd.exe) as last resort with warning
+	const fs = require('fs');
+	const possiblePaths: string[] = [];
+
+	// Add PSHOME path if environment variable is set
+	if (process.env.PSHOME) {
+		possiblePaths.push(`${process.env.PSHOME}\\powershell.exe`);
+	}
+
+	// Add common PowerShell locations
+	possiblePaths.push(
+		// Windows PowerShell (built into Windows)
+		`${process.env.SystemRoot || 'C:\\Windows'}\\System32\\WindowsPowerShell\\v1.0\\powershell.exe`,
+		// PowerShell Core (if installed)
+		`${process.env.ProgramFiles || 'C:\\Program Files'}\\PowerShell\\7\\pwsh.exe`,
+		// Fallback to bare name (relies on PATH)
+		'powershell.exe'
+	);
+
+	// Try each path and use the first that exists
+	for (const shellPath of possiblePaths) {
+		// For bare names like 'powershell.exe', assume it's in PATH
+		if (!shellPath.includes('\\') && !shellPath.includes('/')) {
+			return {
+				shell: shellPath,
+				useShell: true,
+				source: 'powershell-default',
+			};
+		}
+		// For full paths, check if file exists
+		try {
+			if (fs.existsSync(shellPath)) {
+				return {
+					shell: shellPath,
+					useShell: true,
+					source: 'powershell-default',
+				};
+			}
+		} catch {
+			// Ignore filesystem errors, continue to next path
+		}
+	}
+
+	// Last resort: fall back to ComSpec (cmd.exe)
+	// This may cause command line length issues, but at least it will work
+	const comSpec = process.env.ComSpec || 'cmd.exe';
+	console.warn(
+		`[shellEscape] PowerShell not found, falling back to ${comSpec}. ` +
+		`Long commands may fail due to cmd.exe's ~8191 character limit.`
+	);
 
 	return {
-		shell: powerShellPath,
+		shell: comSpec,
 		useShell: true,
-		source: 'powershell-default',
+		source: 'powershell-default', // Keep source consistent for logging
 	};
 }

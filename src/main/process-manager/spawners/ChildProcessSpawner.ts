@@ -438,7 +438,7 @@ export class ChildProcessSpawner {
 				this.exitHandler.handleError(sessionId, error);
 			});
 
-			// Handle stdin for SSH script, stream-json, or batch mode
+			// Handle stdin for SSH script, raw stdin, stream-json, or batch mode
 			if (config.sshStdinScript) {
 				// SSH stdin script mode: send the entire script to /bin/bash on remote
 				// This bypasses all shell escaping issues by piping the script via stdin
@@ -448,29 +448,27 @@ export class ChildProcessSpawner {
 				});
 				childProcess.stdin?.write(config.sshStdinScript);
 				childProcess.stdin?.end();
+			} else if (config.sendPromptViaStdinRaw && prompt) {
+				// Raw stdin mode: send prompt as literal text (non-stream-json agents on Windows)
+				// Note: When sending via stdin, PowerShell treats the input as literal text,
+				// NOT as code to parse. No escaping is needed for special characters.
+				logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {
+					sessionId,
+					promptLength: prompt.length,
+				});
+				childProcess.stdin?.write(prompt);
+				childProcess.stdin?.end();
 			} else if (isStreamJsonMode && prompt) {
-				if (config.sendPromptViaStdinRaw) {
-					// Send raw prompt via stdin
-					// Note: When sending via stdin, PowerShell treats the input as literal text,
-					// NOT as code to parse. No escaping is needed for special characters.
-					logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {
-						sessionId,
-						promptLength: prompt.length,
-					});
-					childProcess.stdin?.write(prompt);
-					childProcess.stdin?.end();
-				} else {
-					// Stream-json mode: send the message via stdin
-					const streamJsonMessage = buildStreamJsonMessage(prompt, images || []);
-					logger.debug('[ProcessManager] Sending stream-json message via stdin', 'ProcessManager', {
-						sessionId,
-						messageLength: streamJsonMessage.length,
-						imageCount: (images || []).length,
-						hasImages: !!(images && images.length > 0),
-					});
-					childProcess.stdin?.write(streamJsonMessage + '\n');
-					childProcess.stdin?.end();
-				}
+				// Stream-json mode: send the message via stdin as JSON
+				const streamJsonMessage = buildStreamJsonMessage(prompt, images || []);
+				logger.debug('[ProcessManager] Sending stream-json message via stdin', 'ProcessManager', {
+					sessionId,
+					messageLength: streamJsonMessage.length,
+					imageCount: (images || []).length,
+					hasImages: !!(images && images.length > 0),
+				});
+				childProcess.stdin?.write(streamJsonMessage + '\n');
+				childProcess.stdin?.end();
 			} else if (isBatchMode) {
 				// Regular batch mode: close stdin immediately
 				logger.debug('[ProcessManager] Closing stdin for batch mode', 'ProcessManager', {

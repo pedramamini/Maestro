@@ -31,7 +31,7 @@ import {
 	getModeratorSynthesisPrompt,
 } from './group-chat-moderator';
 import { addParticipant } from './group-chat-agent';
-import { AgentDetector, getAgentCapabilities } from '../agents';
+import { AgentDetector } from '../agents';
 import { powerManager } from '../power-manager';
 import {
 	buildAgentArgs,
@@ -41,10 +41,9 @@ import {
 import { groupChatParticipantRequestPrompt } from '../../prompts';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
-import { getWindowsShellForAgentExecution } from '../process-manager/utils/shellEscape';
 import {
 	setGetCustomShellPathCallback,
-	getCustomShellPath,
+	getWindowsSpawnConfig,
 } from './group-chat-config';
 
 // Import emitters from IPC handlers (will be populated after handlers are registered)
@@ -522,27 +521,15 @@ ${message}`;
 					if (sshWrapped.sshRemoteUsed) {
 						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
 					}
-				} else if (process.platform === 'win32') {
-					// On Windows (when not using SSH), use shell execution with PowerShell
-					// to avoid cmd.exe command line length limits (~8191 characters).
-					// Long prompts with system instructions can easily exceed this limit,
-					// causing: "Die Befehlszeile ist zu lang" (command line too long) errors.
-					// ALSO: Send prompt via stdin to avoid PowerShell parsing issues with
-					// markdown content (e.g., bullet points like "- If you..." get parsed as operators).
-					const shellConfig = getWindowsShellForAgentExecution({
-						customShellPath: getCustomShellPath(),
-					});
-					spawnShell = shellConfig.shell;
-					spawnRunInShell = shellConfig.useShell;
-					console.log(`[GroupChat:Debug] Windows shell config: ${shellConfig.shell} (source: ${shellConfig.source})`);
 				}
 
-				// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-				// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
-				const isWindows = process.platform === 'win32' && !chat.moderatorConfig?.sshRemoteConfig;
-				const moderatorCapabilities = getAgentCapabilities(chat.moderatorAgentId);
-				const sendPromptViaStdin = isWindows && moderatorCapabilities.supportsStreamJsonInput;
-				const sendPromptViaStdinRaw = isWindows && !moderatorCapabilities.supportsStreamJsonInput;
+				// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
+				const winConfig = getWindowsSpawnConfig(chat.moderatorAgentId, chat.moderatorConfig?.sshRemoteConfig);
+				if (winConfig.shell) {
+					spawnShell = winConfig.shell;
+					spawnRunInShell = winConfig.runInShell;
+					console.log(`[GroupChat:Debug] Windows shell config: ${winConfig.shell}`);
+				}
 
 				const spawnResult = processManager.spawn({
 					sessionId,
@@ -558,8 +545,8 @@ ${message}`;
 					noPromptSeparator: agent.noPromptSeparator,
 					shell: spawnShell,
 					runInShell: spawnRunInShell,
-					sendPromptViaStdin,
-					sendPromptViaStdinRaw,
+					sendPromptViaStdin: winConfig.sendPromptViaStdin,
+					sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 				});
 
 				console.log(`[GroupChat:Debug] Spawn result: ${JSON.stringify(spawnResult)}`);
@@ -913,23 +900,15 @@ export async function routeModeratorResponse(
 					if (sshWrapped.sshRemoteUsed) {
 						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
 					}
-				} else if (process.platform === 'win32') {
-					// On Windows (when not using SSH), use shell execution with PowerShell
-					// to avoid cmd.exe command line length limits
-					const shellConfig = getWindowsShellForAgentExecution({
-						customShellPath: getCustomShellPath(),
-					});
-					finalSpawnShell = shellConfig.shell;
-					finalSpawnRunInShell = shellConfig.useShell;
-					console.log(`[GroupChat:Debug] Windows shell config for ${participantName}: ${shellConfig.shell} (source: ${shellConfig.source})`);
 				}
 
-				// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-				// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
-				const isWindowsParticipant = process.platform === 'win32' && !matchingSession?.sshRemoteConfig;
-				const participantCapabilities = getAgentCapabilities(participant.agentId);
-				const sendPromptViaStdin = isWindowsParticipant && participantCapabilities.supportsStreamJsonInput;
-				const sendPromptViaStdinRaw = isWindowsParticipant && !participantCapabilities.supportsStreamJsonInput;
+				// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
+				const winConfig = getWindowsSpawnConfig(participant.agentId, matchingSession?.sshRemoteConfig);
+				if (winConfig.shell) {
+					finalSpawnShell = winConfig.shell;
+					finalSpawnRunInShell = winConfig.runInShell;
+					console.log(`[GroupChat:Debug] Windows shell config for ${participantName}: ${winConfig.shell}`);
+				}
 
 				const spawnResult = processManager.spawn({
 					sessionId,
@@ -945,8 +924,8 @@ export async function routeModeratorResponse(
 					noPromptSeparator: agent.noPromptSeparator,
 					shell: finalSpawnShell,
 					runInShell: finalSpawnRunInShell,
-					sendPromptViaStdin,
-					sendPromptViaStdinRaw,
+					sendPromptViaStdin: winConfig.sendPromptViaStdin,
+					sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 				});
 
 				console.log(
@@ -1116,6 +1095,9 @@ export async function spawnModeratorSynthesis(
 	if (!chat) {
 		console.error(`[GroupChat:Debug] ERROR: Chat not found for synthesis!`);
 		console.error(`[GroupChatRouter] Cannot spawn synthesis - chat not found: ${groupChatId}`);
+		// Reset UI state and remove power block on early return
+		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
+		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 		return;
 	}
 
@@ -1126,6 +1108,9 @@ export async function spawnModeratorSynthesis(
 		console.error(
 			`[GroupChatRouter] Cannot spawn synthesis - moderator not active for: ${groupChatId}`
 		);
+		// Reset UI state and remove power block on early return
+		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
+		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 		return;
 	}
 
@@ -1137,6 +1122,9 @@ export async function spawnModeratorSynthesis(
 		console.error(
 			`[GroupChatRouter] Cannot spawn synthesis - no moderator session ID for: ${groupChatId}`
 		);
+		// Reset UI state and remove power block on early return
+		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
+		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 		return;
 	}
 
@@ -1158,6 +1146,9 @@ export async function spawnModeratorSynthesis(
 		console.error(
 			`[GroupChatRouter] Agent '${chat.moderatorAgentId}' is not available for synthesis`
 		);
+		// Reset UI state and remove power block on early return
+		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
+		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 		return;
 	}
 
@@ -1224,24 +1215,11 @@ Review the agent responses above. Either:
 		groupChatEmitters.emitStateChange?.(groupChatId, 'moderator-thinking');
 		console.log(`[GroupChat:Debug] Emitted state change: moderator-thinking`);
 
-		// On Windows, use shell execution with PowerShell to avoid cmd.exe command line length limits
-		let spawnShell: string | undefined;
-		let spawnRunInShell = false;
-		if (process.platform === 'win32') {
-			const shellConfig = getWindowsShellForAgentExecution({
-				customShellPath: getCustomShellPath(),
-			});
-			spawnShell = shellConfig.shell;
-			spawnRunInShell = shellConfig.useShell;
-			console.log(`[GroupChat:Debug] Windows shell config for synthesis: ${shellConfig.shell} (source: ${shellConfig.source})`);
+		// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
+		const winConfig = getWindowsSpawnConfig(chat.moderatorAgentId, chat.moderatorConfig?.sshRemoteConfig);
+		if (winConfig.shell) {
+			console.log(`[GroupChat:Debug] Windows shell config for synthesis: ${winConfig.shell}`);
 		}
-
-		// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-		// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
-		const isWindowsSynthesis = process.platform === 'win32';
-		const synthesisCapabilities = getAgentCapabilities(chat.moderatorAgentId);
-		const sendPromptViaStdin = isWindowsSynthesis && synthesisCapabilities.supportsStreamJsonInput;
-		const sendPromptViaStdinRaw = isWindowsSynthesis && !synthesisCapabilities.supportsStreamJsonInput;
 
 		const spawnResult = processManager.spawn({
 			sessionId,
@@ -1257,10 +1235,10 @@ Review the agent responses above. Either:
 				getCustomEnvVarsCallback?.(chat.moderatorAgentId),
 			promptArgs: agent.promptArgs,
 			noPromptSeparator: agent.noPromptSeparator,
-			shell: spawnShell,
-			runInShell: spawnRunInShell,
-			sendPromptViaStdin,
-			sendPromptViaStdinRaw,
+			shell: winConfig.shell,
+			runInShell: winConfig.runInShell,
+			sendPromptViaStdin: winConfig.sendPromptViaStdin,
+			sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 		});
 
 		console.log(`[GroupChat:Debug] Synthesis spawn result: ${JSON.stringify(spawnResult)}`);
@@ -1401,24 +1379,12 @@ export async function respawnParticipantWithRecovery(
 	console.log(`[GroupChat:Debug] Recovery spawn command: ${spawnCommand}`);
 	console.log(`[GroupChat:Debug] Recovery spawn args count: ${configResolution.args.length}`);
 
-	// On Windows, use shell execution with PowerShell to avoid cmd.exe command line length limits
-	let spawnShell: string | undefined;
-	let spawnRunInShell = false;
-	if (process.platform === 'win32') {
-		const shellConfig = getWindowsShellForAgentExecution({
-			customShellPath: getCustomShellPath(),
-		});
-		spawnShell = shellConfig.shell;
-		spawnRunInShell = shellConfig.useShell;
-		console.log(`[GroupChat:Debug] Windows shell config for recovery: ${shellConfig.shell} (source: ${shellConfig.source})`);
+	// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
+	// Note: Recovery uses matchingSession's SSH config if available
+	const winConfig = getWindowsSpawnConfig(participant.agentId, matchingSession?.sshRemoteConfig);
+	if (winConfig.shell) {
+		console.log(`[GroupChat:Debug] Windows shell config for recovery: ${winConfig.shell}`);
 	}
-
-	// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-	// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
-	const isWindowsRecovery = process.platform === 'win32';
-	const recoveryCapabilities = getAgentCapabilities(participant.agentId);
-	const sendPromptViaStdin = isWindowsRecovery && recoveryCapabilities.supportsStreamJsonInput;
-	const sendPromptViaStdinRaw = isWindowsRecovery && !recoveryCapabilities.supportsStreamJsonInput;
 
 	const spawnResult = processManager.spawn({
 		sessionId,
@@ -1433,10 +1399,10 @@ export async function respawnParticipantWithRecovery(
 			configResolution.effectiveCustomEnvVars ?? getCustomEnvVarsCallback?.(participant.agentId),
 		promptArgs: agent.promptArgs,
 		noPromptSeparator: agent.noPromptSeparator,
-		shell: spawnShell,
-		runInShell: spawnRunInShell,
-		sendPromptViaStdin,
-		sendPromptViaStdinRaw,
+		shell: winConfig.shell,
+		runInShell: winConfig.runInShell,
+		sendPromptViaStdin: winConfig.sendPromptViaStdin,
+		sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 	});
 
 	console.log(`[GroupChat:Debug] Recovery spawn result: ${JSON.stringify(spawnResult)}`);
