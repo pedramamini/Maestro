@@ -35,7 +35,9 @@ export interface IProcessManager {
 		shell?: string;
 		/** Whether to run the command in a shell */
 		runInShell?: boolean;
-		/** Send prompt via stdin as raw text (avoids shell escaping issues on Windows) */
+		/** Send prompt via stdin in JSON format (for stream-json agents on Windows) */
+		sendPromptViaStdin?: boolean;
+		/** Send prompt via stdin as raw text (for non-stream-json agents on Windows) */
 		sendPromptViaStdinRaw?: boolean;
 	}): { pid: number; success: boolean };
 

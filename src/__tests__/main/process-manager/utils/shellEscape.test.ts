@@ -7,7 +7,6 @@ import {
 	isPowerShellShell,
 	escapeArgsForShell,
 	getWindowsShellForAgentExecution,
-	escapePowerShellPromptContent,
 } from '../../../../main/process-manager/utils/shellEscape';
 
 describe('shellEscape', () => {
@@ -184,6 +183,24 @@ describe('shellEscape', () => {
 			expect(result.source).toBe('powershell-default');
 		});
 
+		it('should NOT skip shells with "cmd" in the path but not the basename', () => {
+			// This tests the fix for overly broad .includes('cmd') check
+			// e.g., C:\Users\commander\bash.exe should not be skipped
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'C:\\Users\\commander\\bash.exe',
+			});
+			expect(result.shell).toBe('C:\\Users\\commander\\bash.exe');
+			expect(result.source).toBe('current');
+		});
+
+		it('should skip bare "cmd" as current shell', () => {
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'cmd',
+			});
+			expect(result.shell).toContain('powershell');
+			expect(result.source).toBe('powershell-default');
+		});
+
 		it('should default to PowerShell when no options provided', () => {
 			const result = getWindowsShellForAgentExecution();
 			expect(result.shell).toContain('powershell');
@@ -244,150 +261,4 @@ describe('shellEscape', () => {
 		});
 	});
 
-	describe('escapePowerShellPromptContent', () => {
-		it('should not escape normal text', () => {
-			expect(escapePowerShellPromptContent('Hello world')).toBe('Hello world');
-			expect(escapePowerShellPromptContent('This is a regular sentence.')).toBe(
-				'This is a regular sentence.'
-			);
-		});
-
-		it('should not escape lines starting with hyphen (dash)', () => {
-			const input = 'Please do:\n- Run tests\n- Check logs';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with @ (array/splatting)', () => {
-			const input = 'Array:\n@items\n@(1,2,3)';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with $ (variable)', () => {
-			const input = 'Variable:\n$var = "value"\n$x = 5';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with + (plus operator)', () => {
-			const input = 'Calculation:\n+ 2 + 2';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with & (call operator)', () => {
-			const input = 'Commands:\n& command.exe';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with | (pipe)', () => {
-			const input = 'Pipeline:\n| Where-Object';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with < > (redirection)', () => {
-			const input = 'Redirect:\n< input.txt\n> output.txt';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with brackets', () => {
-			const input = 'Arrays:\n(1, 2, 3)\n[array]';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should handle leading whitespace before operator', () => {
-			const input = 'Items:\n  - First item\n\t- Second item';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape markdown-style bullet lists', () => {
-			const input = `Please follow these steps:
-- Clone the repository
-- Install dependencies
-- Run the tests
-
-Do not:
-- Delete files
-- Change config`;
-			// When sent via stdin, PowerShell treats this as literal text, preserving markdown
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should handle mixed content with operators and normal text', () => {
-			const input = 'Normal text\n- List item\nMore normal text\n$variable\nEnd';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with ! (history expansion)', () => {
-			const input = 'History:\n! command';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with % (modulo/percent)', () => {
-			const input = 'Percent:\n% 50';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with ^ (caret)', () => {
-			const input = 'Caret:\n^ symbol';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with backtick', () => {
-			const input = 'Backtick:\n` escaping';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with ; (statement separator)', () => {
-			const input = 'Statements:\n; statement';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should not escape lines starting with space followed by operator', () => {
-			const input = 'Items:\n - Item one';
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should preserve empty lines', () => {
-			const input = 'Line one\n\nLine two';
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-
-		it('should handle single-line input with special character', () => {
-			// When sent via stdin, PowerShell treats this as literal text, not code
-			expect(escapePowerShellPromptContent('- Single dash line')).toBe('- Single dash line');
-		});
-
-		it('should handle complex group chat moderator response', () => {
-			const input = `Here's what I need from you:
-- Run the test suite
-- Check the logs
-- Report any errors
-
-Please prioritize:
-1. First, run tests
-2. Then check logs
-3. Finally report
-
-Use these options:
-- --verbose
-- --debug
-- --force`;
-			// When sent via stdin, PowerShell treats this as literal text, preserving markdown
-			expect(escapePowerShellPromptContent(input)).toBe(input);
-		});
-	});
 });

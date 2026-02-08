@@ -921,10 +921,10 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						// On Windows, use stdin to bypass cmd.exe ~8KB command line length limit
 						// and avoid shell escaping issues with special characters like "-"
 						const isWindows = navigator.platform.toLowerCase().includes('win');
+						// Use agent capabilities to determine stdin mode
 						// Agents that support --input-format stream-json use sendPromptViaStdin (JSON format)
 						// Agents that don't support stream-json use sendPromptViaStdinRaw (raw text)
-						const supportsStreamJson =
-							freshSession.toolType === 'claude-code' || freshSession.toolType === 'codex';
+						const supportsStreamJson = agent.capabilities?.supportsStreamJsonInput ?? false;
 						const sendPromptViaStdin = isWindows && supportsStreamJson;
 						const sendPromptViaStdinRaw = isWindows && !supportsStreamJson;
 

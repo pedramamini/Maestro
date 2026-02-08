@@ -70,7 +70,6 @@ import {
 	getGroupChatReadOnlyState,
 	respawnParticipantWithRecovery,
 } from './group-chat/group-chat-router';
-import { setGetCustomShellPathCallback as setAgentCustomShellPathCallback } from './group-chat/group-chat-agent';
 import { createSshRemoteStoreAdapter } from './utils/ssh-remote-resolver';
 import { updateParticipant, loadGroupChat, updateGroupChat } from './group-chat/group-chat-storage';
 import { needsSessionRecovery, initiateSessionRecovery } from './group-chat/session-recovery';
@@ -589,9 +588,9 @@ function setupIpcHandlers() {
 	setSshStore(createSshRemoteStoreAdapter(store));
 
 	// Set up callback for group chat to get custom shell path (for Windows PowerShell preference)
-	const getCustomShellPath = () => store.get('customShellPath', '') as string | undefined;
-	setGetCustomShellPathCallback(getCustomShellPath);
-	setAgentCustomShellPathCallback(getCustomShellPath);
+	// This is used by both group-chat-router.ts and group-chat-agent.ts via the shared config module
+	const getCustomShellPathFn = () => store.get('customShellPath', '') as string | undefined;
+	setGetCustomShellPathCallback(getCustomShellPathFn);
 
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(() => mainWindow);

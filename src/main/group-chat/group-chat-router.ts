@@ -31,7 +31,7 @@ import {
 	getModeratorSynthesisPrompt,
 } from './group-chat-moderator';
 import { addParticipant } from './group-chat-agent';
-import { AgentDetector } from '../agents';
+import { AgentDetector, getAgentCapabilities } from '../agents';
 import { powerManager } from '../power-manager';
 import {
 	buildAgentArgs,
@@ -42,9 +42,16 @@ import { groupChatParticipantRequestPrompt } from '../../prompts';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 import { getWindowsShellForAgentExecution } from '../process-manager/utils/shellEscape';
+import {
+	setGetCustomShellPathCallback,
+	getCustomShellPath,
+} from './group-chat-config';
 
 // Import emitters from IPC handlers (will be populated after handlers are registered)
 import { groupChatEmitters } from '../ipc/handlers/groupChat';
+
+// Re-export setGetCustomShellPathCallback for index.ts to use
+export { setGetCustomShellPathCallback };
 
 /**
  * Session info for matching @mentions to available Maestro sessions.
@@ -87,9 +94,6 @@ let getAgentConfigCallback: GetAgentConfigCallback | null = null;
 
 // Module-level SSH store for remote execution support
 let sshStore: SshRemoteSettingsStore | null = null;
-
-// Module-level callback for getting custom shell path from settings
-let getCustomShellPathCallback: (() => string | undefined) | null = null;
 
 /**
  * Tracks pending participant responses for each group chat.
@@ -176,15 +180,6 @@ export function setGetAgentConfigCallback(callback: GetAgentConfigCallback): voi
  */
 export function setSshStore(store: SshRemoteSettingsStore): void {
 	sshStore = store;
-}
-
-/**
- * Sets the callback for getting the custom shell path from settings.
- * This is used on Windows to prefer PowerShell over cmd.exe to avoid command line length limits.
- * Called from index.ts during initialization.
- */
-export function setGetCustomShellPathCallback(callback: () => string | undefined): void {
-	getCustomShellPathCallback = callback;
 }
 
 /**
@@ -535,7 +530,7 @@ ${message}`;
 					// ALSO: Send prompt via stdin to avoid PowerShell parsing issues with
 					// markdown content (e.g., bullet points like "- If you..." get parsed as operators).
 					const shellConfig = getWindowsShellForAgentExecution({
-						customShellPath: getCustomShellPathCallback?.(),
+						customShellPath: getCustomShellPath(),
 					});
 					spawnShell = shellConfig.shell;
 					spawnRunInShell = shellConfig.useShell;
@@ -543,7 +538,11 @@ ${message}`;
 				}
 
 				// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-				const sendPromptViaStdinRaw = process.platform === 'win32' && !chat.moderatorConfig?.sshRemoteConfig;
+				// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
+				const isWindows = process.platform === 'win32' && !chat.moderatorConfig?.sshRemoteConfig;
+				const moderatorCapabilities = getAgentCapabilities(chat.moderatorAgentId);
+				const sendPromptViaStdin = isWindows && moderatorCapabilities.supportsStreamJsonInput;
+				const sendPromptViaStdinRaw = isWindows && !moderatorCapabilities.supportsStreamJsonInput;
 
 				const spawnResult = processManager.spawn({
 					sessionId,
@@ -559,6 +558,7 @@ ${message}`;
 					noPromptSeparator: agent.noPromptSeparator,
 					shell: spawnShell,
 					runInShell: spawnRunInShell,
+					sendPromptViaStdin,
 					sendPromptViaStdinRaw,
 				});
 
@@ -917,7 +917,7 @@ export async function routeModeratorResponse(
 					// On Windows (when not using SSH), use shell execution with PowerShell
 					// to avoid cmd.exe command line length limits
 					const shellConfig = getWindowsShellForAgentExecution({
-						customShellPath: getCustomShellPathCallback?.(),
+						customShellPath: getCustomShellPath(),
 					});
 					finalSpawnShell = shellConfig.shell;
 					finalSpawnRunInShell = shellConfig.useShell;
@@ -925,7 +925,11 @@ export async function routeModeratorResponse(
 				}
 
 				// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-				const sendPromptViaStdinRaw = process.platform === 'win32' && !matchingSession?.sshRemoteConfig;
+				// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
+				const isWindowsParticipant = process.platform === 'win32' && !matchingSession?.sshRemoteConfig;
+				const participantCapabilities = getAgentCapabilities(participant.agentId);
+				const sendPromptViaStdin = isWindowsParticipant && participantCapabilities.supportsStreamJsonInput;
+				const sendPromptViaStdinRaw = isWindowsParticipant && !participantCapabilities.supportsStreamJsonInput;
 
 				const spawnResult = processManager.spawn({
 					sessionId,
@@ -941,6 +945,7 @@ export async function routeModeratorResponse(
 					noPromptSeparator: agent.noPromptSeparator,
 					shell: finalSpawnShell,
 					runInShell: finalSpawnRunInShell,
+					sendPromptViaStdin,
 					sendPromptViaStdinRaw,
 				});
 
@@ -1224,7 +1229,7 @@ Review the agent responses above. Either:
 		let spawnRunInShell = false;
 		if (process.platform === 'win32') {
 			const shellConfig = getWindowsShellForAgentExecution({
-				customShellPath: getCustomShellPathCallback?.(),
+				customShellPath: getCustomShellPath(),
 			});
 			spawnShell = shellConfig.shell;
 			spawnRunInShell = shellConfig.useShell;
@@ -1232,7 +1237,11 @@ Review the agent responses above. Either:
 		}
 
 		// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-		const sendPromptViaStdinRaw = process.platform === 'win32';
+		// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
+		const isWindowsSynthesis = process.platform === 'win32';
+		const synthesisCapabilities = getAgentCapabilities(chat.moderatorAgentId);
+		const sendPromptViaStdin = isWindowsSynthesis && synthesisCapabilities.supportsStreamJsonInput;
+		const sendPromptViaStdinRaw = isWindowsSynthesis && !synthesisCapabilities.supportsStreamJsonInput;
 
 		const spawnResult = processManager.spawn({
 			sessionId,
@@ -1250,6 +1259,7 @@ Review the agent responses above. Either:
 			noPromptSeparator: agent.noPromptSeparator,
 			shell: spawnShell,
 			runInShell: spawnRunInShell,
+			sendPromptViaStdin,
 			sendPromptViaStdinRaw,
 		});
 
@@ -1396,7 +1406,7 @@ export async function respawnParticipantWithRecovery(
 	let spawnRunInShell = false;
 	if (process.platform === 'win32') {
 		const shellConfig = getWindowsShellForAgentExecution({
-			customShellPath: getCustomShellPathCallback?.(),
+			customShellPath: getCustomShellPath(),
 		});
 		spawnShell = shellConfig.shell;
 		spawnRunInShell = shellConfig.useShell;
@@ -1404,7 +1414,11 @@ export async function respawnParticipantWithRecovery(
 	}
 
 	// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-	const sendPromptViaStdinRaw = process.platform === 'win32';
+	// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
+	const isWindowsRecovery = process.platform === 'win32';
+	const recoveryCapabilities = getAgentCapabilities(participant.agentId);
+	const sendPromptViaStdin = isWindowsRecovery && recoveryCapabilities.supportsStreamJsonInput;
+	const sendPromptViaStdinRaw = isWindowsRecovery && !recoveryCapabilities.supportsStreamJsonInput;
 
 	const spawnResult = processManager.spawn({
 		sessionId,
@@ -1421,6 +1435,7 @@ export async function respawnParticipantWithRecovery(
 		noPromptSeparator: agent.noPromptSeparator,
 		shell: spawnShell,
 		runInShell: spawnRunInShell,
+		sendPromptViaStdin,
 		sendPromptViaStdinRaw,
 	});
 

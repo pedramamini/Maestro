@@ -15,11 +15,7 @@ import { ExitHandler } from '../handlers/ExitHandler';
 import { buildChildProcessEnv } from '../utils/envBuilder';
 import { saveImageToTempFile } from '../utils/imageUtils';
 import { buildStreamJsonMessage } from '../utils/streamJsonBuilder';
-import {
-	escapeArgsForShell,
-	isPowerShellShell,
-	escapePowerShellPromptContent,
-} from '../utils/shellEscape';
+import { escapeArgsForShell, isPowerShellShell } from '../utils/shellEscape';
 
 /**
  * Handles spawning of child processes (non-PTY).
@@ -455,30 +451,13 @@ export class ChildProcessSpawner {
 			} else if (isStreamJsonMode && prompt) {
 				if (config.sendPromptViaStdinRaw) {
 					// Send raw prompt via stdin
-					// On Windows with PowerShell, escape prompt content to prevent PowerShell from
-					// interpreting lines starting with operators (-, @, $, etc.) as code
-					let promptToWrite = prompt;
-					const shellPath = typeof config.shell === 'string' ? config.shell : undefined;
-
-					if (isWindows && isPowerShellShell(shellPath)) {
-						promptToWrite = escapePowerShellPromptContent(prompt);
-						logger.debug(
-							'[ProcessManager] Applied PowerShell prompt escaping for Windows',
-							'ProcessManager',
-							{
-								sessionId,
-								originalLength: prompt.length,
-								escapedLength: promptToWrite.length,
-								contentModified: prompt !== promptToWrite,
-							}
-						);
-					}
-
+					// Note: When sending via stdin, PowerShell treats the input as literal text,
+					// NOT as code to parse. No escaping is needed for special characters.
 					logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {
 						sessionId,
-						promptLength: promptToWrite.length,
+						promptLength: prompt.length,
 					});
-					childProcess.stdin?.write(promptToWrite);
+					childProcess.stdin?.write(prompt);
 					childProcess.stdin?.end();
 				} else {
 					// Stream-json mode: send the message via stdin

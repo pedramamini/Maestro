@@ -93,8 +93,25 @@ export function setupExitListener(
 					{ groupChatId }
 				);
 				void (async () => {
+					// Helper to load chat with retry for transient failures
+					const loadChatWithRetry = async () => {
+						try {
+							return await groupChatStorage.loadGroupChat(groupChatId);
+						} catch (firstErr) {
+							debugLog('GroupChat:Debug', ` First chat load failed, retrying after 100ms...`);
+							logger.warn(
+								'[GroupChat] Chat load failed, retrying once',
+								'ProcessListener',
+								{ error: String(firstErr), groupChatId }
+							);
+							// Wait 100ms and retry once for transient I/O issues
+							await new Promise((resolve) => setTimeout(resolve, 100));
+							return await groupChatStorage.loadGroupChat(groupChatId);
+						}
+					};
+
 					try {
-						const chat = await groupChatStorage.loadGroupChat(groupChatId);
+						const chat = await loadChatWithRetry();
 						debugLog('GroupChat:Debug', ` Chat loaded for parsing: ${chat?.name || 'null'}`);
 						const agentType = chat?.moderatorAgentId;
 						debugLog('GroupChat:Debug', ` Agent type for parsing: ${agentType}`);
@@ -140,16 +157,22 @@ export function setupExitListener(
 							);
 						}
 					} catch (err) {
-						debugLog('GroupChat:Debug', ` ERROR loading chat:`, err);
+						debugLog('GroupChat:Debug', ` ERROR loading chat after retry:`, err);
+						// Log what we would have tried to route for debugging
+						const parsedTextForLog = outputParser.extractTextFromStreamJson(bufferedOutput);
 						logger.error(
-							'[GroupChat] Failed to load chat for moderator output parsing',
+							'[GroupChat] Failed to load chat for moderator output parsing after retry',
 							'ProcessListener',
-							{ error: String(err), groupChatId }
+							{
+								error: String(err),
+								groupChatId,
+								bufferedLength: bufferedOutput.length,
+								parsedTextPreview: parsedTextForLog.substring(0, 500),
+								parsedTextLength: parsedTextForLog.length,
+							}
 						);
-						// Do NOT attempt to route the response if chat load fails
-						// The chat load failure likely indicates a serious issue that should be
-						// resolved before attempting to route the moderator's response.
-						// Attempting to route anyway could cause duplicate responses or incorrect routing.
+						// Do NOT attempt to route the response if chat load still fails after retry
+						// The failure indicates a persistent issue that should be investigated.
 					}
 				})().finally(() => {
 					outputBuffer.clearGroupChatBuffer(sessionId);

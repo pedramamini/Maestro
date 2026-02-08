@@ -155,30 +155,6 @@ export interface WindowsShellResult {
 }
 
 /**
- * Escape prompt content for PowerShell stdin delivery.
- *
- * NOTE: When sending prompt content via stdin in raw mode to a PowerShell process,
- * PowerShell treats the input as literal text, NOT as code to parse. Therefore,
- * no escaping is needed. Special characters like `-`, `$`, etc. in plain text
- * content are not interpreted as operators.
- *
- * The original implementation incorrectly converted lines starting with `-` to comments,
- * which corrupted markdown list formatting and other content.
- *
- * PowerShell only interprets special characters as operators when they appear in
- * actual command code being executed, not in text data being read from stdin.
- *
- * @param content - The prompt content to escape
- * @returns The content unchanged (no escaping needed for stdin)
- */
-export function escapePowerShellPromptContent(content: string): string {
-	// PowerShell stdin treats input as literal text, so no escaping is needed.
-	// Returning the content as-is ensures markdown formatting and other content
-	// is preserved exactly as intended.
-	return content;
-}
-
-/**
  * Get the preferred shell for Windows agent execution.
  *
  * This function implements the shell selection priority for Windows to avoid
@@ -214,8 +190,11 @@ export function getWindowsShellForAgentExecution(
 	// 2. Use current shell if provided (and not cmd.exe, which has limits)
 	if (currentShell && currentShell.trim()) {
 		const shellLower = currentShell.toLowerCase();
+		// Check basename to avoid false positives (e.g., C:\Users\commander\bash.exe)
+		const basename = shellLower.split(/[\\/]/).pop() || '';
+		const isCmdExe = basename === 'cmd' || basename === 'cmd.exe';
 		// Skip cmd.exe to avoid command line length limits
-		if (!shellLower.includes('cmd')) {
+		if (!isCmdExe) {
 			return {
 				shell: currentShell.trim(),
 				useShell: true,

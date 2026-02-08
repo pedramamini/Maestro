@@ -305,6 +305,9 @@ describe('inlineWizardConversation', () => {
 				available: true,
 				command: 'claude',
 				args: [],
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
 			};
 			mockMaestro.agents.get.mockResolvedValue(mockAgent);
 			mockMaestro.process.spawn.mockResolvedValue(undefined);
@@ -343,6 +346,9 @@ describe('inlineWizardConversation', () => {
 				available: true,
 				command: 'opencode',
 				args: [],
+				capabilities: {
+					supportsStreamJsonInput: false,
+				},
 			};
 			mockMaestro.agents.get.mockResolvedValue(mockAgent);
 			mockMaestro.process.spawn.mockResolvedValue(undefined);
@@ -381,6 +387,9 @@ describe('inlineWizardConversation', () => {
 				available: true,
 				command: 'opencode',
 				args: [],
+				capabilities: {
+					supportsStreamJsonInput: false,
+				},
 			};
 			mockMaestro.agents.get.mockResolvedValue(mockAgent);
 			mockMaestro.process.spawn.mockResolvedValue(undefined);
@@ -419,6 +428,9 @@ describe('inlineWizardConversation', () => {
 				available: true,
 				command: 'claude',
 				args: ['--print'],
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
 			};
 			mockMaestro.agents.get.mockResolvedValue(mockAgent);
 			mockMaestro.process.spawn.mockResolvedValue(undefined);
@@ -458,6 +470,9 @@ describe('inlineWizardConversation', () => {
 				available: true,
 				command: 'opencode',
 				args: ['run'],
+				capabilities: {
+					supportsStreamJsonInput: false,
+				},
 			};
 			mockMaestro.agents.get.mockResolvedValue(mockAgent);
 			mockMaestro.process.spawn.mockResolvedValue(undefined);

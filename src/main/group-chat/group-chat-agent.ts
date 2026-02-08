@@ -19,7 +19,7 @@ import {
 } from './group-chat-storage';
 import { appendToLog } from './group-chat-log';
 import { IProcessManager, isModeratorActive } from './group-chat-moderator';
-import type { AgentDetector } from '../agents';
+import { type AgentDetector, getAgentCapabilities } from '../agents';
 import {
 	buildAgentArgs,
 	applyAgentConfigOverrides,
@@ -29,24 +29,13 @@ import { groupChatParticipantPrompt } from '../../prompts';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 import { getWindowsShellForAgentExecution } from '../process-manager/utils/shellEscape';
+import { getCustomShellPath } from './group-chat-config';
 
 /**
  * In-memory store for active participant sessions.
  * Maps `${groupChatId}:${participantName}` -> sessionId
  */
 const activeParticipantSessions = new Map<string, string>();
-
-// Module-level callback for getting custom shell path from settings
-let getCustomShellPathCallback: (() => string | undefined) | null = null;
-
-/**
- * Sets the callback for getting the custom shell path from settings.
- * This is used on Windows to prefer PowerShell over cmd.exe to avoid command line length limits.
- * Called from index.ts during initialization.
- */
-export function setGetCustomShellPathCallback(callback: () => string | undefined): void {
-	getCustomShellPathCallback = callback;
-}
 
 /**
  * Generate a key for the participant sessions map.
@@ -225,7 +214,7 @@ export async function addParticipant(
 		// On Windows (when not using SSH), use shell execution with PowerShell
 		// to avoid cmd.exe command line length limits (~8191 characters)
 		const shellConfig = getWindowsShellForAgentExecution({
-			customShellPath: getCustomShellPathCallback?.(),
+			customShellPath: getCustomShellPath(),
 		});
 		spawnShell = shellConfig.shell;
 		spawnRunInShell = shellConfig.useShell;
@@ -233,7 +222,11 @@ export async function addParticipant(
 	}
 
 	// On Windows, send prompt via stdin to avoid PowerShell parsing issues
-	const sendPromptViaStdinRaw = process.platform === 'win32' && !sessionOverrides?.sshRemoteConfig;
+	// Use JSON mode (sendPromptViaStdin) for stream-json agents, raw mode for others
+	const isWindowsAddParticipant = process.platform === 'win32' && !sessionOverrides?.sshRemoteConfig;
+	const addParticipantCapabilities = getAgentCapabilities(agentId);
+	const sendPromptViaStdin = isWindowsAddParticipant && addParticipantCapabilities.supportsStreamJsonInput;
+	const sendPromptViaStdinRaw = isWindowsAddParticipant && !addParticipantCapabilities.supportsStreamJsonInput;
 
 	// Spawn the participant agent
 	console.log(`[GroupChat:Debug] Spawning participant agent...`);
@@ -251,6 +244,7 @@ export async function addParticipant(
 		noPromptSeparator: agentConfig?.noPromptSeparator,
 		shell: spawnShell,
 		runInShell: spawnRunInShell,
+		sendPromptViaStdin,
 		sendPromptViaStdinRaw,
 	});
 

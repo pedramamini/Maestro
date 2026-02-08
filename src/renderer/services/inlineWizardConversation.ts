@@ -591,9 +591,10 @@ export async function sendWizardMessage(
 		// On Windows, use stdin to bypass cmd.exe ~8KB command line length limit
 		// Note: Use navigator.platform in renderer (process.platform is not available in browser context)
 		const isWindows = navigator.platform.toLowerCase().includes('win');
+		// Use agent capabilities to determine stdin mode
 		// Agents that support --input-format stream-json use sendPromptViaStdin (JSON format)
 		// Agents that don't support stream-json use sendPromptViaStdinRaw (raw text)
-		const supportsStreamJson = session.agentType === 'claude-code' || session.agentType === 'codex';
+		const supportsStreamJson = agent?.capabilities?.supportsStreamJsonInput ?? false;
 		const sendViaStdin = isWindows && supportsStreamJson;
 		const sendViaStdinRaw = isWindows && !supportsStreamJson;
 		if (sendViaStdin && !argsForSpawn.includes('--input-format')) {
