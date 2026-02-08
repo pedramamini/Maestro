@@ -653,6 +653,35 @@ describe('XTerminal', () => {
 		expect(terminal.options.cursorBlink).toBe(false);
 	});
 
+	it('calls focus callbacks when terminal DOM focus changes', () => {
+		const onFocus = vi.fn();
+		const onBlur = vi.fn();
+
+		act(() => {
+			root.render(
+				<XTerminal
+					sessionId="session-focus-callbacks"
+					theme={theme}
+					fontFamily="Monaco"
+					onFocus={onFocus}
+					onBlur={onBlur}
+				/>
+			);
+		});
+
+		const terminalContainer = container.firstElementChild as HTMLElement;
+
+		act(() => {
+			terminalContainer.dispatchEvent(new Event('focusin', { bubbles: true }));
+		});
+		expect(onFocus).toHaveBeenCalledTimes(1);
+
+		act(() => {
+			terminalContainer.dispatchEvent(new Event('focusout', { bubbles: true }));
+		});
+		expect(onBlur).toHaveBeenCalledTimes(1);
+	});
+
 	it('bridges PTY data to terminal and terminal input back to PTY', () => {
 		const onInputData = vi.fn();
 		const processWrite = (globalThis as any).window.maestro.process.write as ReturnType<

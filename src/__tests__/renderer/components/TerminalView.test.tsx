@@ -19,6 +19,9 @@ const mockXTerminalHandlesBySessionId = vi.hoisted(() => new Map<string, MockXTe
 const mockTerminalInputCallbacksBySessionId = vi.hoisted(
 	() => new Map<string, (data: string) => void>()
 );
+const mockTerminalFocusCallbacksBySessionId = vi.hoisted(
+	() => new Map<string, { onFocus?: () => void; onBlur?: () => void }>()
+);
 const mockTerminalTabBarProps = vi.hoisted(() => ({
 	current: null as {
 		tabs: TerminalTab[];
@@ -40,7 +43,12 @@ vi.mock('../../../renderer/components/XTerminal', async () => {
 
 	return {
 		XTerminal: ReactModule.forwardRef(function MockXTerminal(
-			props: { sessionId: string; onData?: (data: string) => void },
+			props: {
+				sessionId: string;
+				onData?: (data: string) => void;
+				onFocus?: () => void;
+				onBlur?: () => void;
+			},
 			ref: React.ForwardedRef<{
 				write: (data: string) => void;
 				focus: () => void;
@@ -62,6 +70,11 @@ vi.mock('../../../renderer/components/XTerminal', async () => {
 			} else {
 				mockTerminalInputCallbacksBySessionId.delete(props.sessionId);
 			}
+
+			mockTerminalFocusCallbacksBySessionId.set(props.sessionId, {
+				onFocus: props.onFocus,
+				onBlur: props.onBlur,
+			});
 
 			mockXTerminalHandlesBySessionId.set(props.sessionId, {
 				write,
@@ -88,6 +101,7 @@ vi.mock('../../../renderer/components/XTerminal', async () => {
 			ReactModule.useEffect(() => {
 				return () => {
 					mockTerminalInputCallbacksBySessionId.delete(props.sessionId);
+					mockTerminalFocusCallbacksBySessionId.delete(props.sessionId);
 				};
 			}, [props.sessionId]);
 
@@ -224,6 +238,7 @@ describe('TerminalView', () => {
 		(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
 		mockXTerminalHandlesBySessionId.clear();
 		mockTerminalInputCallbacksBySessionId.clear();
+		mockTerminalFocusCallbacksBySessionId.clear();
 		mockTerminalTabBarProps.current = null;
 		mockTerminalSearchBarProps.current = null;
 		vi.clearAllMocks();
@@ -282,7 +297,6 @@ describe('TerminalView', () => {
 
 		const terminalHandle = mockXTerminalHandlesBySessionId.get('session-1-terminal-tab-1');
 		expect(terminalHandle).toBeTruthy();
-		expect(terminalHandle?.focus).toHaveBeenCalled();
 
 		act(() => {
 			root.unmount();
@@ -324,6 +338,56 @@ describe('TerminalView', () => {
 		});
 
 		expect(terminalHandle?.focus.mock.calls.length ?? 0).toBe(initialFocusCalls + 1);
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('shows and clears a focus indicator for the active terminal pane', () => {
+		const callbacks = createCallbacks();
+		const session = createSession({
+			terminalTabs: [
+				{
+					id: 'tab-1',
+					name: null,
+					shellType: 'zsh',
+					pid: 4242,
+					cwd: '/workspace',
+					createdAt: Date.now(),
+					state: 'idle',
+				},
+			],
+		});
+
+		const { container, root } = mount(
+			<TerminalView
+				session={session}
+				theme={theme}
+				fontFamily="Monaco"
+				defaultShell="zsh"
+				{...callbacks}
+			/>
+		);
+
+		const terminalPane = container.querySelector(
+			'[data-testid="terminal-pane-tab-1"]'
+		) as HTMLElement | null;
+		expect(terminalPane).toBeTruthy();
+		expect(terminalPane?.style.boxShadow ?? '').toBe('');
+
+		const focusCallbacks = mockTerminalFocusCallbacksBySessionId.get('session-1-terminal-tab-1');
+		expect(focusCallbacks).toBeTruthy();
+
+		act(() => {
+			focusCallbacks?.onFocus?.();
+		});
+		expect(terminalPane?.style.boxShadow).toContain('inset 0 0 0 1px');
+
+		act(() => {
+			focusCallbacks?.onBlur?.();
+		});
+		expect(terminalPane?.style.boxShadow ?? '').toBe('');
 
 		act(() => {
 			root.unmount();

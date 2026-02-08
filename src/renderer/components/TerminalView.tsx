@@ -1,4 +1,13 @@
-import { forwardRef, memo, useCallback, useEffect, useImperativeHandle, useRef } from 'react';
+import {
+	forwardRef,
+	memo,
+	useCallback,
+	useEffect,
+	useImperativeHandle,
+	useLayoutEffect,
+	useRef,
+	useState,
+} from 'react';
 import { AlertCircle } from 'lucide-react';
 import { XTerminal, type XTerminalHandle } from './XTerminal';
 import { TerminalTabBar } from './TerminalTabBar';
@@ -62,6 +71,7 @@ export const TerminalView = memo(
 		const terminalRefs = useRef<Map<string, XTerminalHandle>>(new Map());
 		const latestTabsRef = useRef<TerminalTab[]>(session.terminalTabs);
 		const shellExitedTabsRef = useRef<Set<string>>(new Set());
+		const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
 		const activeTab = getActiveTerminalTab(session);
 
 		useEffect(() => {
@@ -77,6 +87,17 @@ export const TerminalView = memo(
 				}
 			}
 		}, [session.terminalTabs]);
+
+		useEffect(() => {
+			if (!focusedTabId) {
+				return;
+			}
+
+			const isFocusedTabStillOpen = session.terminalTabs.some((tab) => tab.id === focusedTabId);
+			if (!isFocusedTabStillOpen) {
+				setFocusedTabId(null);
+			}
+		}, [session.terminalTabs, focusedTabId]);
 
 		const getLatestTab = useCallback((tabId: string) => {
 			return latestTabsRef.current.find((tab) => tab.id === tabId);
@@ -167,8 +188,9 @@ export const TerminalView = memo(
 			}
 		}, [activeTab, spawnPtyForTab]);
 
-		useEffect(() => {
+		useLayoutEffect(() => {
 			if (!activeTab) {
+				setFocusedTabId(null);
 				return;
 			}
 
@@ -212,6 +234,9 @@ export const TerminalView = memo(
 		const handleTabClose = useCallback(
 			async (tabId: string) => {
 				const tab = session.terminalTabs.find((candidate) => candidate.id === tabId);
+				if (focusedTabId === tabId) {
+					setFocusedTabId(null);
+				}
 				shellExitedTabsRef.current.delete(tabId);
 				try {
 					if (tab && tab.pid > 0) {
@@ -221,7 +246,7 @@ export const TerminalView = memo(
 					onTabClose(tabId);
 				}
 			},
-			[session.id, session.terminalTabs, onTabClose]
+			[session.id, session.terminalTabs, onTabClose, focusedTabId]
 		);
 
 		const handleTerminalInput = useCallback(
@@ -299,11 +324,20 @@ export const TerminalView = memo(
 
 					{session.terminalTabs.map((tab) => {
 						const isActive = tab.id === session.activeTerminalTabId;
+						const isFocused = isActive && focusedTabId === tab.id;
 						const showSpawnFailure = isSpawnFailureTab(tab);
 						return (
 							<div
 								key={tab.id}
-								className={`absolute inset-0 ${isActive ? '' : 'invisible pointer-events-none'}`}
+								data-testid={`terminal-pane-${tab.id}`}
+								className={`absolute inset-0 border border-transparent transition-shadow ${isActive ? '' : 'invisible pointer-events-none'}`}
+								style={
+									isFocused
+										? {
+												boxShadow: `inset 0 0 0 1px ${theme.colors.accent}`,
+											}
+										: undefined
+								}
 							>
 								{showSpawnFailure ? (
 									<div className="flex h-full items-center justify-center">
@@ -336,6 +370,14 @@ export const TerminalView = memo(
 										fontFamily={fontFamily}
 										fontSize={fontSize}
 										processInputEnabled={tab.pid > 0}
+										onFocus={() => {
+											setFocusedTabId(tab.id);
+										}}
+										onBlur={() => {
+											setFocusedTabId((currentTabId) =>
+												currentTabId === tab.id ? null : currentTabId
+											);
+										}}
 										onData={(data) => {
 											handleTerminalInput(tab.id, data);
 										}}
