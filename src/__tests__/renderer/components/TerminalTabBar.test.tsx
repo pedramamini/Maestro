@@ -69,6 +69,8 @@ describe('TerminalTabBar', () => {
 	const onNewTab = vi.fn();
 	const onRequestRename = vi.fn();
 	const onTabReorder = vi.fn();
+	const onCloseOtherTabs = vi.fn();
+	const onCloseTabsRight = vi.fn();
 
 	beforeEach(() => {
 		(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true;
@@ -274,6 +276,119 @@ describe('TerminalTabBar', () => {
 		});
 
 		expect(onNewTab).toHaveBeenCalledTimes(1);
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('opens context menu and triggers rename action', () => {
+		const tabs = [
+			createTerminalTab({ id: 'terminal-1', name: 'One' }),
+			createTerminalTab({ id: 'terminal-2', name: 'Two' }),
+		];
+
+		const { container, root } = mount(
+			<TerminalTabBar
+				tabs={tabs}
+				activeTabId="terminal-1"
+				theme={mockTheme}
+				onTabSelect={onTabSelect}
+				onTabClose={onTabClose}
+				onNewTab={onNewTab}
+				onRequestRename={onRequestRename}
+			/>
+		);
+
+		const tabLabel = Array.from(container.querySelectorAll('span')).find(
+			(el) => el.textContent === 'Two'
+		);
+		expect(tabLabel?.parentElement).toBeTruthy();
+
+		act(() => {
+			tabLabel?.parentElement?.dispatchEvent(
+				new MouseEvent('contextmenu', { bubbles: true, clientX: 60, clientY: 40 })
+			);
+		});
+
+		const renameButton = Array.from(document.querySelectorAll('button')).find(
+			(button) => button.textContent === 'Rename'
+		);
+		expect(renameButton).toBeTruthy();
+
+		act(() => {
+			renameButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		});
+
+		expect(onTabSelect).toHaveBeenCalledWith('terminal-2');
+		expect(onRequestRename).toHaveBeenCalledWith('terminal-2');
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('triggers close others and close to the right from context menu', () => {
+		const tabs = [
+			createTerminalTab({ id: 'terminal-1', name: 'One' }),
+			createTerminalTab({ id: 'terminal-2', name: 'Two' }),
+			createTerminalTab({ id: 'terminal-3', name: 'Three' }),
+		];
+
+		const { container, root } = mount(
+			<TerminalTabBar
+				tabs={tabs}
+				activeTabId="terminal-1"
+				theme={mockTheme}
+				onTabSelect={onTabSelect}
+				onTabClose={onTabClose}
+				onNewTab={onNewTab}
+				onCloseOtherTabs={onCloseOtherTabs}
+				onCloseTabsRight={onCloseTabsRight}
+			/>
+		);
+
+		const secondTabLabel = Array.from(container.querySelectorAll('span')).find(
+			(el) => el.textContent === 'Two'
+		);
+		expect(secondTabLabel?.parentElement).toBeTruthy();
+
+		act(() => {
+			secondTabLabel?.parentElement?.dispatchEvent(
+				new MouseEvent('contextmenu', { bubbles: true, clientX: 80, clientY: 44 })
+			);
+		});
+
+		const closeOthersButton = Array.from(document.querySelectorAll('button')).find(
+			(button) => button.textContent === 'Close Others'
+		);
+		expect(closeOthersButton).toBeTruthy();
+
+		act(() => {
+			closeOthersButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		});
+		expect(onCloseOtherTabs).toHaveBeenCalledWith('terminal-2');
+
+		const firstTabLabel = Array.from(container.querySelectorAll('span')).find(
+			(el) => el.textContent === 'One'
+		);
+		expect(firstTabLabel?.parentElement).toBeTruthy();
+
+		act(() => {
+			firstTabLabel?.parentElement?.dispatchEvent(
+				new MouseEvent('contextmenu', { bubbles: true, clientX: 90, clientY: 46 })
+			);
+		});
+
+		const closeRightButton = Array.from(document.querySelectorAll('button')).find(
+			(button) => button.textContent === 'Close to the Right'
+		);
+		expect(closeRightButton).toBeTruthy();
+
+		act(() => {
+			closeRightButton?.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+		});
+		expect(onCloseTabsRight).toHaveBeenCalledWith('terminal-1');
 
 		act(() => {
 			root.unmount();
