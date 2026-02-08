@@ -588,22 +588,26 @@ export async function sendWizardMessage(
 		// Build args for the agent
 		const argsForSpawn = agent ? buildArgsForAgent(agent) : [];
 
-		// On Windows, use sendPromptViaStdin to bypass cmd.exe ~8KB command line length limit
+		// On Windows, use stdin to bypass cmd.exe ~8KB command line length limit
 		// Note: Use navigator.platform in renderer (process.platform is not available in browser context)
 		const isWindows = navigator.platform.toLowerCase().includes('win');
-		const sendViaStdin = isWindows;
+		// Agents that support --input-format stream-json use sendPromptViaStdin (JSON format)
+		// Agents that don't support stream-json use sendPromptViaStdinRaw (raw text)
+		const supportsStreamJson = session.agentType === 'claude-code' || session.agentType === 'codex';
+		const sendViaStdin = isWindows && supportsStreamJson;
+		const sendViaStdinRaw = isWindows && !supportsStreamJson;
 		if (sendViaStdin && !argsForSpawn.includes('--input-format')) {
 			// Add --input-format stream-json when using stdin with stream-json compatible agents
-			if (session.agentType === 'claude-code' || session.agentType === 'codex') {
-				argsForSpawn.push('--input-format', 'stream-json');
-			}
+			argsForSpawn.push('--input-format', 'stream-json');
 		}
 
-		logger.info(`Using stdin for Windows: ${sendViaStdin}`, '[InlineWizardConversation]', {
+		logger.info(`Using stdin for Windows`, '[InlineWizardConversation]', {
 			sessionId: session.sessionId,
 			platform: navigator.platform,
 			promptLength: fullPrompt.length,
 			sendViaStdin,
+			sendViaStdinRaw,
+			supportsStreamJson,
 		});
 
 		// Spawn agent and collect output
@@ -784,7 +788,10 @@ export async function sendWizardMessage(
 					command: commandToUse,
 					args: argsForSpawn,
 					prompt: fullPrompt,
+					// For stream-json agents (Claude Code, Codex): use JSON format via stdin
+					// For other agents (OpenCode, etc.): use raw text via stdin
 					sendPromptViaStdin: sendViaStdin,
+					sendPromptViaStdinRaw: sendViaStdinRaw,
 					// Pass SSH config for remote execution
 					sessionSshRemoteConfig: session.sessionSshRemoteConfig,
 				} as ProcessConfig)
