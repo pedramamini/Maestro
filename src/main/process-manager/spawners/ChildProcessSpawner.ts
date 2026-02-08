@@ -288,6 +288,7 @@ export class ChildProcessSpawner {
 			// IMPORTANT: SSH stdin script mode (sshStdinScript) MUST enable stream-json parsing
 			// because the SSH command wraps the actual agent command. Without this, the output
 			// parser won't process JSON output from remote agents, causing raw JSON to display.
+			// NOTE: sendPromptViaStdinRaw sends RAW text (not JSON), so it should NOT set isStreamJsonMode
 			const argsContain = (pattern: string) => finalArgs.some((arg) => arg.includes(pattern));
 			const isStreamJsonMode =
 				argsContain('stream-json') ||
@@ -295,7 +296,6 @@ export class ChildProcessSpawner {
 				(argsContain('--format') && argsContain('json')) ||
 				(hasImages && !!prompt) ||
 				!!config.sendPromptViaStdin ||
-				!!config.sendPromptViaStdinRaw ||
 				!!config.sshStdinScript;
 
 			// Get the output parser for this agent type

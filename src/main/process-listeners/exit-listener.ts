@@ -144,34 +144,12 @@ export function setupExitListener(
 						logger.error(
 							'[GroupChat] Failed to load chat for moderator output parsing',
 							'ProcessListener',
-							{ error: String(err) }
+							{ error: String(err), groupChatId }
 						);
-						const parsedText = outputParser.extractTextFromStreamJson(bufferedOutput);
-						if (parsedText.trim()) {
-							const readOnly = groupChatRouter.getGroupChatReadOnlyState(groupChatId);
-							const pm = getProcessManager();
-							const ad = getAgentDetector();
-							groupChatRouter
-								.routeModeratorResponse(
-									groupChatId,
-									parsedText,
-									pm ?? undefined,
-									ad ?? undefined,
-									readOnly
-								)
-								.catch((routeErr) => {
-									debugLog(
-										'GroupChat:Debug',
-										` ERROR routing moderator response (fallback):`,
-										routeErr
-									);
-									logger.error(
-										'[GroupChat] Failed to route moderator response',
-										'ProcessListener',
-										{ error: String(routeErr) }
-									);
-								});
-						}
+						// Do NOT attempt to route the response if chat load fails
+						// The chat load failure likely indicates a serious issue that should be
+						// resolved before attempting to route the moderator's response.
+						// Attempting to route anyway could cause duplicate responses or incorrect routing.
 					}
 				})().finally(() => {
 					outputBuffer.clearGroupChatBuffer(sessionId);
@@ -264,7 +242,10 @@ export function setupExitListener(
 					const chat = await groupChatStorage.loadGroupChat(groupChatId);
 					const agentType = chat?.participants.find((p) => p.name === participantName)?.agentId;
 
-					if (!isRecoverySession && sessionRecovery.needsSessionRecovery(bufferedOutput, agentType)) {
+					if (
+						!isRecoverySession &&
+						sessionRecovery.needsSessionRecovery(bufferedOutput, agentType)
+					) {
 						debugLog(
 							'GroupChat:Debug',
 							` Session not found error detected for ${participantName} - initiating recovery`

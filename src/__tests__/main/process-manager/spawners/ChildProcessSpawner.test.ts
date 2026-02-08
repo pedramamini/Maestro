@@ -186,9 +186,11 @@ describe('ChildProcessSpawner', () => {
 			expect(proc?.isStreamJsonMode).toBe(true);
 		});
 
-		it('should enable stream-json mode when sendPromptViaStdinRaw is true', () => {
+		it('should NOT enable stream-json mode when sendPromptViaStdinRaw is true', () => {
 			const { processes, spawner } = createTestContext();
 
+			// sendPromptViaStdinRaw sends RAW text via stdin, not JSON
+			// So it should NOT set isStreamJsonMode (which is for JSON streaming)
 			spawner.spawn(
 				createBaseConfig({
 					args: ['--print'],
@@ -198,7 +200,7 @@ describe('ChildProcessSpawner', () => {
 			);
 
 			const proc = processes.get('test-session');
-			expect(proc?.isStreamJsonMode).toBe(true);
+			expect(proc?.isStreamJsonMode).toBe(false);
 		});
 
 		it('should enable stream-json mode when sshStdinScript is provided', () => {
