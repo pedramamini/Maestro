@@ -234,11 +234,15 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		let webglAddon: WebglAddon | null = null;
 		try {
 			webglAddon = new WebglAddon();
-			webglAddon.onContextLoss(() => {
-				webglAddon?.dispose();
-				webglAddon = null;
+			const webglInstance = webglAddon;
+			webglInstance.onContextLoss(() => {
+				console.warn('WebGL context lost, falling back to canvas renderer');
+				webglInstance.dispose();
+				if (addonsRef.current.webgl === webglInstance) {
+					addonsRef.current.webgl = null;
+				}
 			});
-			terminal.loadAddon(webglAddon);
+			terminal.loadAddon(webglInstance);
 		} catch (error) {
 			console.warn('WebGL addon failed to load, using canvas renderer', error);
 		}
