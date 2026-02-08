@@ -68,9 +68,11 @@ const TerminalTabComponent = memo(function TerminalTabComponent({
 	const isExited = tab.state === 'exited';
 	const isBusy = tab.state === 'busy';
 	const isSpawning = tab.pid === 0 && tab.state === 'idle';
+	const tabHoverTitle = `${tab.shellType} - ${tab.cwd}`;
 
 	return (
 		<div
+			title={tabHoverTitle}
 			draggable
 			onDragStart={onDragStart}
 			onDragOver={onDragOver}

@@ -253,6 +253,39 @@ describe('TerminalTabBar', () => {
 		});
 	});
 
+	it('shows shell and cwd in tab hover tooltip', () => {
+		const tabs = [
+			createTerminalTab({
+				id: 'terminal-1',
+				name: 'Workspace Shell',
+				shellType: 'zsh',
+				cwd: '/Users/caleb/Maestro-Symphony/pedramamini-Maestro',
+			}),
+		];
+
+		const { container, root } = mount(
+			<TerminalTabBar
+				tabs={tabs}
+				activeTabId="terminal-1"
+				theme={mockTheme}
+				onTabSelect={onTabSelect}
+				onTabClose={onTabClose}
+				onNewTab={onNewTab}
+			/>
+		);
+
+		const tabLabel = Array.from(container.querySelectorAll('span')).find(
+			(el) => el.textContent === 'Workspace Shell'
+		);
+		expect(tabLabel?.parentElement?.getAttribute('title')).toBe(
+			'zsh - /Users/caleb/Maestro-Symphony/pedramamini-Maestro'
+		);
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
 	it('calls onNewTab from new terminal button', () => {
 		const expectedTitle = `New terminal (${process.platform === 'darwin' ? 'Ctrl+Shift+`' : 'Ctrl+Shift+`'})`;
 
