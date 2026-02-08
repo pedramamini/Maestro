@@ -157,55 +157,25 @@ export interface WindowsShellResult {
 /**
  * Escape prompt content for PowerShell stdin delivery.
  *
- * When sending prompt content via stdin in raw mode to a PowerShell process,
- * PowerShell may attempt to parse certain lines as PowerShell code rather than
- * plain text. This function escapes content that would be misinterpreted.
+ * NOTE: When sending prompt content via stdin in raw mode to a PowerShell process,
+ * PowerShell treats the input as literal text, NOT as code to parse. Therefore,
+ * no escaping is needed. Special characters like `-`, `$`, etc. in plain text
+ * content are not interpreted as operators.
  *
- * Specifically, lines that contain (possibly after whitespace) PowerShell operators
- * (-, @, $, etc.) are wrapped in a comment to prevent interpretation as code.
+ * The original implementation incorrectly converted lines starting with `-` to comments,
+ * which corrupted markdown list formatting and other content.
  *
- * Example:
- *   Input:  "Please do:\n- Run tests\n- Check logs"
- *   Output: "Please do:\n# - Run tests\n# - Check logs"
- *
- * This prevents errors like:
- *   "Ausdruck fehlt nach dem unären Operator '-'"
- *   (Expression missing after unary operator '-')
+ * PowerShell only interprets special characters as operators when they appear in
+ * actual command code being executed, not in text data being read from stdin.
  *
  * @param content - The prompt content to escape
- * @returns The escaped content safe for PowerShell stdin
+ * @returns The content unchanged (no escaping needed for stdin)
  */
 export function escapePowerShellPromptContent(content: string): string {
-	// Lines that need escaping: those with PowerShell special characters after optional whitespace
-	// - : operator/parameter
-	// @ : array/splatting
-	// $ : variable
-	// + : plus operator
-	// & : ampersand (call operator)
-	// | : pipe
-	// < > : redirection
-	// ( ) [ ] { } : grouping/subexpression
-	// ! : history expansion
-	// % : percentage
-	// ^ : caret (escape char in cmd.exe)
-	// ` : backtick (escape in PowerShell)
-	// ; : statement separator
-	const powerShellSpecialStartChars = /^(\s*)[-@$+&|<>()[\]{}!%^`; ]/;
-
-	return content
-		.split('\n')
-		.map((line) => {
-			// If line contains a PowerShell special character after optional whitespace,
-			// insert '#' after the whitespace to make it a comment
-			const match = powerShellSpecialStartChars.exec(line);
-			if (match) {
-				const leadingWhitespace = match[1];
-				const restOfLine = line.slice(leadingWhitespace.length);
-				return leadingWhitespace + '# ' + restOfLine;
-			}
-			return line;
-		})
-		.join('\n');
+	// PowerShell stdin treats input as literal text, so no escaping is needed.
+	// Returning the content as-is ensures markdown formatting and other content
+	// is preserved exactly as intended.
+	return content;
 }
 
 /**
