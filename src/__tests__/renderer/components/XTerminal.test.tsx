@@ -62,8 +62,14 @@ vi.mock('@xterm/addon-fit', () => {
 
 vi.mock('@xterm/addon-webgl', () => {
 	class MockWebglAddon {
-		onContextLoss = vi.fn();
+		contextLossHandler: (() => void) | null = null;
+		onContextLoss = vi.fn((handler: () => void) => {
+			this.contextLossHandler = handler;
+		});
 		dispose = vi.fn();
+		triggerContextLoss = () => {
+			this.contextLossHandler?.();
+		};
 
 		constructor() {
 			mocks.webglAddonInstances.push(this);
@@ -344,6 +350,39 @@ describe('XTerminal', () => {
 
 		expect(webglAddon.dispose).toHaveBeenCalledTimes(1);
 		expect(terminal.dispose).toHaveBeenCalledTimes(1);
+	});
+
+	it('falls back to canvas renderer when WebGL context is lost', () => {
+		const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+
+		try {
+			act(() => {
+				root.render(<XTerminal sessionId="session-webgl-loss" theme={theme} fontFamily="Monaco" />);
+			});
+
+			const webglAddon = mocks.webglAddonInstances[0] as {
+				onContextLoss: ReturnType<typeof vi.fn>;
+				dispose: ReturnType<typeof vi.fn>;
+				triggerContextLoss: () => void;
+			};
+
+			expect(webglAddon.onContextLoss).toHaveBeenCalledTimes(1);
+
+			act(() => {
+				webglAddon.triggerContextLoss();
+			});
+
+			expect(webglAddon.dispose).toHaveBeenCalledTimes(1);
+			expect(warnSpy).toHaveBeenCalledWith('WebGL context lost, falling back to canvas renderer');
+
+			act(() => {
+				root.unmount();
+			});
+
+			expect(webglAddon.dispose).toHaveBeenCalledTimes(1);
+		} finally {
+			warnSpy.mockRestore();
+		}
 	});
 
 	it('applies default font size when omitted', () => {
