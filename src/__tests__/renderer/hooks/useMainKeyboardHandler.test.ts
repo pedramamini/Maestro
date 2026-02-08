@@ -1491,8 +1491,17 @@ describe('useMainKeyboardHandler', () => {
 					terminalTabs: [{ id: 'term-1' }, { id: 'term-2' }],
 					activeTerminalTabId: 'term-2',
 				},
-				isTabShortcut: (_e: KeyboardEvent, actionId: string) =>
-					actionId === 'closeTab' || actionId === 'reopenClosedTab',
+				isTabShortcut: (e: KeyboardEvent, actionId: string) => {
+					if (actionId === 'closeTab') {
+						return e.metaKey && !e.shiftKey && e.key.toLowerCase() === 'w';
+					}
+
+					if (actionId === 'reopenClosedTab') {
+						return e.metaKey && e.shiftKey && e.key.toLowerCase() === 't';
+					}
+
+					return false;
+				},
 				handleTerminalTabClose: mockHandleTerminalTabClose,
 				handleReopenTerminalTab: mockHandleReopenTerminalTab,
 			});
