@@ -94,7 +94,7 @@ vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 		setSshRemoteHonorGitignore: vi.fn(),
 		// Director's Notes settings
 		directorNotesSettings: {
-			provider: 'claude-code' as const,
+			provider: 'claude-code',
 			defaultLookbackDays: 7,
 		},
 		setDirectorNotesSettings: mockSetDirectorNotesSettings,
@@ -258,6 +258,13 @@ describe('SettingsModal', () => {
 				name: 'Claude Code',
 				available: true,
 				path: '/usr/local/bin/claude',
+				hidden: false,
+			},
+			{
+				id: 'codex',
+				name: 'Codex',
+				available: true,
+				path: '/usr/local/bin/codex',
 				hidden: false,
 			},
 			{ id: 'openai-codex', name: 'OpenAI Codex', available: false, hidden: false },
@@ -2019,7 +2026,7 @@ describe('SettingsModal', () => {
 			expect(screen.getByText("Director's Notes", { selector: 'h3' })).toBeInTheDocument();
 		});
 
-		it('should render provider dropdown with claude-code, codex, opencode options', async () => {
+		it('should render provider dropdown with detected available agents', async () => {
 			render(<SettingsModal {...createDefaultProps()} />);
 
 			await act(async () => {
@@ -2030,23 +2037,38 @@ describe('SettingsModal', () => {
 			fireEvent.click(screen.getByTitle("Director's Notes"));
 
 			await act(async () => {
-				await vi.advanceTimersByTimeAsync(50);
+				await vi.advanceTimersByTimeAsync(100);
 			});
 
 			expect(screen.getByText('Synopsis Provider')).toBeInTheDocument();
 
-			const select = screen.getByDisplayValue('Claude Code');
+			// With the default mock, only claude-code is available and supported
+			const select = screen.getByLabelText('Select synopsis provider agent');
 			expect(select).toBeInTheDocument();
 
-			// Verify all options exist
 			const options = select.querySelectorAll('option');
-			expect(options).toHaveLength(3);
+			expect(options.length).toBeGreaterThanOrEqual(1);
 			expect(options[0]).toHaveValue('claude-code');
 			expect(options[0]).toHaveTextContent('Claude Code');
-			expect(options[1]).toHaveValue('codex');
-			expect(options[1]).toHaveTextContent('Codex');
-			expect(options[2]).toHaveValue('opencode');
-			expect(options[2]).toHaveTextContent('OpenCode');
+		});
+
+		it('should render Customize button for provider configuration', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Navigate to Director's Notes tab
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			const customizeButton = screen.getByTitle('Customize provider settings');
+			expect(customizeButton).toBeInTheDocument();
+			expect(customizeButton).toHaveTextContent('Customize');
 		});
 
 		it('should render default lookback period slider with range 1-90', async () => {

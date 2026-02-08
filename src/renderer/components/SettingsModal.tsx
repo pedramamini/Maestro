@@ -43,6 +43,7 @@ import type {
 	ShellInfo,
 	CustomAICommand,
 	LLMProvider,
+	AgentConfig,
 } from '../types';
 import { CustomThemeBuilder } from './CustomThemeBuilder';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -57,6 +58,8 @@ import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
 import { SshRemoteIgnoreSection } from './Settings/SshRemoteIgnoreSection';
+import { AgentConfigPanel } from './shared/AgentConfigPanel';
+import { AGENT_TILES } from './Wizard/screens/AgentSelectionScreen';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -369,6 +372,19 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		error?: string;
 	} | null>(null);
 
+	// Director's Notes agent configuration state
+	const [dnDetectedAgents, setDnDetectedAgents] = useState<AgentConfig[]>([]);
+	const [dnIsDetecting, setDnIsDetecting] = useState(false);
+	const [dnIsConfigExpanded, setDnIsConfigExpanded] = useState(false);
+	const [dnCustomPath, setDnCustomPath] = useState(directorNotesSettings.customPath || '');
+	const [dnCustomArgs, setDnCustomArgs] = useState(directorNotesSettings.customArgs || '');
+	const [dnCustomEnvVars, setDnCustomEnvVars] = useState<Record<string, string>>(directorNotesSettings.customEnvVars || {});
+	const [dnAgentConfig, setDnAgentConfig] = useState<Record<string, any>>({});
+	const [dnAvailableModels, setDnAvailableModels] = useState<string[]>([]);
+	const [dnLoadingModels, setDnLoadingModels] = useState(false);
+	const [dnRefreshingAgent, setDnRefreshingAgent] = useState(false);
+	const dnAgentConfigRef = useRef<Record<string, any>>({});
+
 	// Layer stack integration
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 	const layerIdRef = useRef<string>();
@@ -429,6 +445,51 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			setStatsClearResult(null);
 		}
 	}, [isOpen, initialTab]);
+
+	// Detect agents when Director's Notes tab is active
+	useEffect(() => {
+		if (!isOpen || activeTab !== 'director-notes') return;
+		let cancelled = false;
+		setDnIsDetecting(true);
+		window.maestro.agents.detect().then((agents) => {
+			if (cancelled) return;
+			const available = agents.filter((a: AgentConfig) => a.available && !a.hidden);
+			setDnDetectedAgents(available);
+			setDnIsDetecting(false);
+		}).catch(() => {
+			if (!cancelled) setDnIsDetecting(false);
+		});
+		return () => { cancelled = true; };
+	}, [isOpen, activeTab]);
+
+	// Sync local Director's Notes custom config state from settings when tab opens
+	useEffect(() => {
+		if (activeTab === 'director-notes') {
+			setDnCustomPath(directorNotesSettings.customPath || '');
+			setDnCustomArgs(directorNotesSettings.customArgs || '');
+			setDnCustomEnvVars(directorNotesSettings.customEnvVars || {});
+			setDnIsConfigExpanded(false);
+		}
+	}, [activeTab]);
+
+	// Load agent config when expanding Director's Notes configuration panel
+	useEffect(() => {
+		if (dnIsConfigExpanded && directorNotesSettings.provider) {
+			const agentId = directorNotesSettings.provider;
+			window.maestro.agents.getConfig(agentId).then((config) => {
+				setDnAgentConfig(config || {});
+				dnAgentConfigRef.current = config || {};
+			});
+			// Load models if agent supports it
+			const agent = dnDetectedAgents.find((a) => a.id === agentId);
+			if (agent?.capabilities?.supportsModelSelection) {
+				setDnLoadingModels(true);
+				window.maestro.agents.getModels(agentId).then((models) => {
+					setDnAvailableModels(models);
+				}).catch(() => {}).finally(() => setDnLoadingModels(false));
+			}
+		}
+	}, [dnIsConfigExpanded, directorNotesSettings.provider, dnDetectedAgents]);
 
 	// Store onClose in a ref to avoid re-registering layer when onClose changes
 	const onCloseRef = useRef(onClose);
@@ -2686,7 +2747,79 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						</div>
 					)}
 
-					{activeTab === 'director-notes' && (
+					{activeTab === 'director-notes' && (() => {
+						// Compute derived values for director-notes tab
+						const dnAvailableTiles = AGENT_TILES.filter((tile) => {
+							if (!tile.supported) return false;
+							return dnDetectedAgents.some((a: AgentConfig) => a.id === tile.id);
+						});
+						const dnSelectedAgentConfig = dnDetectedAgents.find((a) => a.id === directorNotesSettings.provider);
+						const dnSelectedTile = AGENT_TILES.find((t) => t.id === directorNotesSettings.provider);
+						const dnHasCustomization = dnCustomPath || dnCustomArgs || Object.keys(dnCustomEnvVars).length > 0;
+
+						const handleDnAgentChange = (agentId: string) => {
+							setDirectorNotesSettings({
+								...directorNotesSettings,
+								provider: agentId,
+								customPath: undefined,
+								customArgs: undefined,
+								customEnvVars: undefined,
+							});
+							setDnCustomPath('');
+							setDnCustomArgs('');
+							setDnCustomEnvVars({});
+							setDnAgentConfig({});
+							dnAgentConfigRef.current = {};
+							if (dnIsConfigExpanded) {
+								window.maestro.agents.getConfig(agentId).then((config) => {
+									setDnAgentConfig(config || {});
+									dnAgentConfigRef.current = config || {};
+								});
+								const agent = dnDetectedAgents.find((a) => a.id === agentId);
+								if (agent?.capabilities?.supportsModelSelection) {
+									setDnLoadingModels(true);
+									window.maestro.agents.getModels(agentId).then((models) => {
+										setDnAvailableModels(models);
+									}).catch(() => {}).finally(() => setDnLoadingModels(false));
+								}
+							}
+						};
+
+						const handleDnRefreshAgent = async () => {
+							setDnRefreshingAgent(true);
+							try {
+								const agents = await window.maestro.agents.detect();
+								const available = agents.filter((a: AgentConfig) => a.available && !a.hidden);
+								setDnDetectedAgents(available);
+							} finally {
+								setDnRefreshingAgent(false);
+							}
+						};
+
+						const handleDnRefreshModels = async () => {
+							if (!directorNotesSettings.provider) return;
+							setDnLoadingModels(true);
+							try {
+								const models = await window.maestro.agents.getModels(directorNotesSettings.provider, true);
+								setDnAvailableModels(models);
+							} catch (err) {
+								console.error('Failed to refresh models:', err);
+							} finally {
+								setDnLoadingModels(false);
+							}
+						};
+
+						// Persist custom config to settings on blur
+						const persistDnCustomConfig = () => {
+							setDirectorNotesSettings({
+								...directorNotesSettings,
+								customPath: dnCustomPath || undefined,
+								customArgs: dnCustomArgs || undefined,
+								customEnvVars: Object.keys(dnCustomEnvVars).length > 0 ? dnCustomEnvVars : undefined,
+							});
+						};
+
+						return (
 						<div className="p-6 space-y-8">
 							<div>
 								<h3 className="text-sm font-bold mb-4" style={{ color: theme.colors.textMain }}>
@@ -2698,27 +2831,169 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								</p>
 							</div>
 
-							{/* Provider Selection */}
+							{/* Provider Selection - Agent dropdown with Customize button */}
 							<div>
-								<label className="block text-xs font-bold mb-2" style={{ color: theme.colors.textMain }}>
+								<label
+									className="block text-xs font-bold opacity-70 uppercase mb-2"
+									style={{ color: theme.colors.textMain }}
+								>
 									Synopsis Provider
 								</label>
-								<select
-									value={directorNotesSettings.provider}
-									onChange={(e) =>
-										setDirectorNotesSettings({
-											...directorNotesSettings,
-											provider: e.target.value as 'claude-code' | 'codex' | 'opencode',
-										})
-									}
-									className="w-full p-2 rounded border bg-transparent outline-none text-sm"
-									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-								>
-									<option value="claude-code">Claude Code</option>
-									<option value="codex">Codex</option>
-									<option value="opencode">OpenCode</option>
-								</select>
-								<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+
+								{dnIsDetecting ? (
+									<div className="flex items-center gap-2 py-2">
+										<div
+											className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+											style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
+										/>
+										<span className="text-sm" style={{ color: theme.colors.textDim }}>
+											Detecting agents...
+										</span>
+									</div>
+								) : dnAvailableTiles.length === 0 ? (
+									<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+										No agents available. Please install Claude Code, OpenCode, Codex, or Factory Droid.
+									</div>
+								) : (
+									<div className="flex items-center gap-2">
+										{/* Dropdown */}
+										<div className="relative flex-1">
+											<select
+												value={directorNotesSettings.provider}
+												onChange={(e) => handleDnAgentChange(e.target.value)}
+												className="w-full px-3 py-2 pr-10 rounded-lg border outline-none appearance-none cursor-pointer text-sm"
+												style={{
+													backgroundColor: theme.colors.bgMain,
+													borderColor: theme.colors.border,
+													color: theme.colors.textMain,
+												}}
+												aria-label="Select synopsis provider agent"
+											>
+												{dnAvailableTiles.map((tile) => {
+													const isBeta = tile.id === 'codex' || tile.id === 'opencode' || tile.id === 'factory-droid';
+													return (
+														<option key={tile.id} value={tile.id}>
+															{tile.name}{isBeta ? ' (Beta)' : ''}
+														</option>
+													);
+												})}
+											</select>
+											<ChevronDown
+												className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+												style={{ color: theme.colors.textDim }}
+											/>
+										</div>
+
+										{/* Customize button */}
+										<button
+											onClick={() => setDnIsConfigExpanded((prev) => !prev)}
+											className="flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors hover:bg-white/5"
+											style={{
+												borderColor: dnIsConfigExpanded ? theme.colors.accent : theme.colors.border,
+												color: dnIsConfigExpanded ? theme.colors.accent : theme.colors.textDim,
+												backgroundColor: dnIsConfigExpanded ? `${theme.colors.accent}10` : 'transparent',
+											}}
+											title="Customize provider settings"
+										>
+											<Settings className="w-4 h-4" />
+											<span className="text-sm">Customize</span>
+											{dnHasCustomization && (
+												<span
+													className="w-2 h-2 rounded-full"
+													style={{ backgroundColor: theme.colors.accent }}
+												/>
+											)}
+										</button>
+									</div>
+								)}
+
+								{/* Expandable Configuration Panel */}
+								{dnIsConfigExpanded && dnSelectedAgentConfig && dnSelectedTile && (
+									<div
+										className="mt-3 p-4 rounded-lg border"
+										style={{
+											backgroundColor: theme.colors.bgActivity,
+											borderColor: theme.colors.border,
+										}}
+									>
+										<div className="flex items-center justify-between mb-3">
+											<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
+												{dnSelectedTile.name} Configuration
+											</span>
+											{dnHasCustomization && (
+												<div className="flex items-center gap-1">
+													<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
+													<span className="text-xs" style={{ color: theme.colors.success }}>
+														Customized
+													</span>
+												</div>
+											)}
+										</div>
+										<AgentConfigPanel
+											theme={theme}
+											agent={dnSelectedAgentConfig}
+											customPath={dnCustomPath}
+											onCustomPathChange={setDnCustomPath}
+											onCustomPathBlur={persistDnCustomConfig}
+											onCustomPathClear={() => {
+												setDnCustomPath('');
+												setDirectorNotesSettings({ ...directorNotesSettings, customPath: undefined });
+											}}
+											customArgs={dnCustomArgs}
+											onCustomArgsChange={setDnCustomArgs}
+											onCustomArgsBlur={persistDnCustomConfig}
+											onCustomArgsClear={() => {
+												setDnCustomArgs('');
+												setDirectorNotesSettings({ ...directorNotesSettings, customArgs: undefined });
+											}}
+											customEnvVars={dnCustomEnvVars}
+											onEnvVarKeyChange={(oldKey, newKey, value) => {
+												const newVars = { ...dnCustomEnvVars };
+												delete newVars[oldKey];
+												newVars[newKey] = value;
+												setDnCustomEnvVars(newVars);
+											}}
+											onEnvVarValueChange={(key, value) => {
+												setDnCustomEnvVars({ ...dnCustomEnvVars, [key]: value });
+											}}
+											onEnvVarRemove={(key) => {
+												const newVars = { ...dnCustomEnvVars };
+												delete newVars[key];
+												setDnCustomEnvVars(newVars);
+											}}
+											onEnvVarAdd={() => {
+												let newKey = 'NEW_VAR';
+												let counter = 1;
+												while (dnCustomEnvVars[newKey]) {
+													newKey = `NEW_VAR_${counter}`;
+													counter++;
+												}
+												setDnCustomEnvVars({ ...dnCustomEnvVars, [newKey]: '' });
+											}}
+											onEnvVarsBlur={persistDnCustomConfig}
+											agentConfig={dnAgentConfig}
+											onConfigChange={(key, value) => {
+												const newConfig = { ...dnAgentConfig, [key]: value };
+												setDnAgentConfig(newConfig);
+												dnAgentConfigRef.current = newConfig;
+											}}
+											onConfigBlur={async () => {
+												if (directorNotesSettings.provider) {
+													await window.maestro.agents.setConfig(directorNotesSettings.provider, dnAgentConfigRef.current);
+												}
+											}}
+											availableModels={dnAvailableModels}
+											loadingModels={dnLoadingModels}
+											onRefreshModels={handleDnRefreshModels}
+											onRefreshAgent={handleDnRefreshAgent}
+											refreshingAgent={dnRefreshingAgent}
+											compact
+											showBuiltInEnvVars
+										/>
+									</div>
+								)}
+
+								<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
 									The AI agent used to generate synopsis summaries
 								</p>
 							</div>
@@ -2754,7 +3029,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								</p>
 							</div>
 						</div>
-					)}
+						);
+					})()}
 				</div>
 			</div>
 		</div>
