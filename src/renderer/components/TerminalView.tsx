@@ -261,6 +261,35 @@ export const TerminalView = memo(
 			[handleTabClose]
 		);
 
+		const handleCloseOtherTabs = useCallback(
+			(tabId: string) => {
+				onTabSelect(tabId);
+				const tabIdsToClose = session.terminalTabs
+					.filter((tab) => tab.id !== tabId)
+					.map((tab) => tab.id);
+
+				for (const tabIdToClose of tabIdsToClose) {
+					void handleTabClose(tabIdToClose);
+				}
+			},
+			[session.terminalTabs, onTabSelect, handleTabClose]
+		);
+
+		const handleCloseTabsRight = useCallback(
+			(tabId: string) => {
+				const tabIndex = session.terminalTabs.findIndex((tab) => tab.id === tabId);
+				if (tabIndex === -1) {
+					return;
+				}
+
+				const tabIdsToClose = session.terminalTabs.slice(tabIndex + 1).map((tab) => tab.id);
+				for (const tabIdToClose of tabIdsToClose) {
+					void handleTabClose(tabIdToClose);
+				}
+			},
+			[session.terminalTabs, handleTabClose]
+		);
+
 		const setTerminalRef = useCallback((tabId: string, handle: XTerminalHandle | null) => {
 			if (handle) {
 				terminalRefs.current.set(tabId, handle);
@@ -310,6 +339,8 @@ export const TerminalView = memo(
 					onNewTab={onNewTab}
 					onRequestRename={onRequestRename}
 					onTabReorder={onTabReorder}
+					onCloseOtherTabs={handleCloseOtherTabs}
+					onCloseTabsRight={handleCloseTabsRight}
 				/>
 
 				<div className="relative flex-1 overflow-hidden">

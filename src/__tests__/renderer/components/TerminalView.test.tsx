@@ -26,6 +26,8 @@ const mockTerminalTabBarProps = vi.hoisted(() => ({
 	current: null as {
 		tabs: TerminalTab[];
 		onTabClose: (tabId: string) => void;
+		onCloseOtherTabs?: (tabId: string) => void;
+		onCloseTabsRight?: (tabId: string) => void;
 	} | null,
 }));
 const mockTerminalSearchBarProps = vi.hoisted(() => ({
@@ -113,7 +115,12 @@ vi.mock('../../../renderer/components/XTerminal', async () => {
 });
 
 vi.mock('../../../renderer/components/TerminalTabBar', () => ({
-	TerminalTabBar: (props: { tabs: TerminalTab[]; onTabClose: (tabId: string) => void }) => {
+	TerminalTabBar: (props: {
+		tabs: TerminalTab[];
+		onTabClose: (tabId: string) => void;
+		onCloseOtherTabs?: (tabId: string) => void;
+		onCloseTabsRight?: (tabId: string) => void;
+	}) => {
 		mockTerminalTabBarProps.current = props;
 
 		return React.createElement(
@@ -131,6 +138,32 @@ vi.mock('../../../renderer/components/TerminalTabBar', () => ({
 					},
 				},
 				'Close first tab'
+			),
+			React.createElement(
+				'button',
+				{
+					type: 'button',
+					'data-testid': 'close-others-from-second-tab',
+					onClick: () => {
+						if (props.tabs[1] && props.onCloseOtherTabs) {
+							props.onCloseOtherTabs(props.tabs[1].id);
+						}
+					},
+				},
+				'Close others from second tab'
+			),
+			React.createElement(
+				'button',
+				{
+					type: 'button',
+					'data-testid': 'close-right-from-first-tab',
+					onClick: () => {
+						if (props.tabs[0] && props.onCloseTabsRight) {
+							props.onCloseTabsRight(props.tabs[0].id);
+						}
+					},
+				},
+				'Close right from first tab'
 			)
 		);
 	},
@@ -846,6 +879,148 @@ describe('TerminalView', () => {
 		});
 
 		expect(callbacks.onTabClose).toHaveBeenCalledWith('tab-1');
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('closes other terminal tabs from context menu action', async () => {
+		const callbacks = createCallbacks();
+		const session = createSession({
+			activeTerminalTabId: 'tab-1',
+			terminalTabs: [
+				{
+					id: 'tab-1',
+					name: 'One',
+					shellType: 'zsh',
+					pid: 101,
+					cwd: '/workspace',
+					createdAt: Date.now(),
+					state: 'busy',
+				},
+				{
+					id: 'tab-2',
+					name: 'Two',
+					shellType: 'zsh',
+					pid: 0,
+					cwd: '/workspace/two',
+					createdAt: Date.now(),
+					state: 'idle',
+				},
+				{
+					id: 'tab-3',
+					name: 'Three',
+					shellType: 'zsh',
+					pid: 303,
+					cwd: '/workspace/three',
+					createdAt: Date.now(),
+					state: 'busy',
+				},
+			],
+		});
+
+		const { container, root } = mount(
+			<TerminalView
+				session={session}
+				theme={theme}
+				fontFamily="Monaco"
+				defaultShell="zsh"
+				{...callbacks}
+			/>
+		);
+
+		const closeOthersButton = container.querySelector(
+			'[data-testid="close-others-from-second-tab"]'
+		) as HTMLButtonElement | null;
+		expect(closeOthersButton).toBeTruthy();
+
+		act(() => {
+			closeOthersButton?.click();
+		});
+
+		expect(callbacks.onTabSelect).toHaveBeenCalledWith('tab-2');
+
+		await vi.waitFor(() => {
+			expect(callbacks.onTabClose).toHaveBeenCalledTimes(2);
+		});
+
+		const closedTabIds = callbacks.onTabClose.mock.calls.map((call) => call[0]);
+		expect(closedTabIds).toEqual(expect.arrayContaining(['tab-1', 'tab-3']));
+		expect(closedTabIds).not.toContain('tab-2');
+
+		expect(killProcess).toHaveBeenCalledWith('session-1-terminal-tab-1');
+		expect(killProcess).toHaveBeenCalledWith('session-1-terminal-tab-3');
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
+	it('closes tabs to the right from context menu action', async () => {
+		const callbacks = createCallbacks();
+		const session = createSession({
+			activeTerminalTabId: 'tab-1',
+			terminalTabs: [
+				{
+					id: 'tab-1',
+					name: 'One',
+					shellType: 'zsh',
+					pid: 404,
+					cwd: '/workspace',
+					createdAt: Date.now(),
+					state: 'busy',
+				},
+				{
+					id: 'tab-2',
+					name: 'Two',
+					shellType: 'zsh',
+					pid: 0,
+					cwd: '/workspace/two',
+					createdAt: Date.now(),
+					state: 'idle',
+				},
+				{
+					id: 'tab-3',
+					name: 'Three',
+					shellType: 'zsh',
+					pid: 505,
+					cwd: '/workspace/three',
+					createdAt: Date.now(),
+					state: 'busy',
+				},
+			],
+		});
+
+		const { container, root } = mount(
+			<TerminalView
+				session={session}
+				theme={theme}
+				fontFamily="Monaco"
+				defaultShell="zsh"
+				{...callbacks}
+			/>
+		);
+
+		const closeRightButton = container.querySelector(
+			'[data-testid="close-right-from-first-tab"]'
+		) as HTMLButtonElement | null;
+		expect(closeRightButton).toBeTruthy();
+
+		act(() => {
+			closeRightButton?.click();
+		});
+
+		await vi.waitFor(() => {
+			expect(callbacks.onTabClose).toHaveBeenCalledTimes(2);
+		});
+
+		const closedTabIds = callbacks.onTabClose.mock.calls.map((call) => call[0]);
+		expect(closedTabIds).toEqual(expect.arrayContaining(['tab-2', 'tab-3']));
+		expect(closedTabIds).not.toContain('tab-1');
+
+		expect(killProcess).toHaveBeenCalledWith('session-1-terminal-tab-3');
+		expect(killProcess).not.toHaveBeenCalledWith('session-1-terminal-tab-2');
 
 		act(() => {
 			root.unmount();
