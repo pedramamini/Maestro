@@ -1411,7 +1411,7 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockSearchPrevious).toHaveBeenCalledTimes(1);
 		});
 
-		it('should not intercept Ctrl+C in terminal mode', () => {
+		it('should not intercept Ctrl+C/Ctrl+D in terminal mode', () => {
 			const { result } = renderHook(() => useMainKeyboardHandler());
 
 			const mockHandleSidebarNavigation = vi.fn().mockReturnValue(false);
@@ -1428,20 +1428,57 @@ describe('useMainKeyboardHandler', () => {
 				handleTerminalNewTab: mockHandleTerminalNewTab,
 			});
 
-			const event = new KeyboardEvent('keydown', {
-				key: 'c',
-				ctrlKey: true,
-				bubbles: true,
-			});
-			const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
+			for (const key of ['c', 'd']) {
+				const event = new KeyboardEvent('keydown', {
+					key,
+					ctrlKey: true,
+					bubbles: true,
+				});
+				const preventDefaultSpy = vi.spyOn(event, 'preventDefault');
 
-			act(() => {
-				window.dispatchEvent(event);
-			});
+				act(() => {
+					window.dispatchEvent(event);
+				});
 
-			expect(preventDefaultSpy).not.toHaveBeenCalled();
+				expect(preventDefaultSpy).not.toHaveBeenCalled();
+			}
+
 			expect(mockHandleSidebarNavigation).not.toHaveBeenCalled();
 			expect(mockHandleTerminalNewTab).not.toHaveBeenCalled();
+		});
+
+		it('should prioritize previous terminal tab navigation over session cycling', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+
+			const mockHandleTerminalTabSelect = vi.fn();
+			const mockCycleSession = vi.fn();
+			result.current.keyboardHandlerRef.current = createMockContext({
+				activeSessionId: 'session-1',
+				activeSession: {
+					id: 'session-1',
+					inputMode: 'terminal',
+					terminalTabs: [{ id: 'term-1' }, { id: 'term-2' }],
+					activeTerminalTabId: 'term-2',
+				},
+				isShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'cyclePrev',
+				isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'prevTab',
+				handleTerminalTabSelect: mockHandleTerminalTabSelect,
+				cycleSession: mockCycleSession,
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: '[',
+						metaKey: true,
+						shiftKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockHandleTerminalTabSelect).toHaveBeenCalledWith('session-1', 'term-1');
+			expect(mockCycleSession).not.toHaveBeenCalled();
 		});
 
 		it('should prioritize terminal tab navigation over session cycling', () => {
