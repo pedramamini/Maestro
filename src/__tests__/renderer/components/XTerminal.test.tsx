@@ -153,6 +153,26 @@ const lightTheme: Theme = {
 	},
 };
 
+function createResizeObserverEntry(target: Element): ResizeObserverEntry {
+	return {
+		target,
+		contentRect: {
+			width: 1000,
+			height: 500,
+			top: 0,
+			left: 0,
+			bottom: 500,
+			right: 1000,
+			x: 0,
+			y: 0,
+			toJSON: () => ({}),
+		},
+		borderBoxSize: [{ blockSize: 500, inlineSize: 1000 }],
+		contentBoxSize: [{ blockSize: 500, inlineSize: 1000 }],
+		devicePixelContentBoxSize: [{ blockSize: 500, inlineSize: 1000 }],
+	} as unknown as ResizeObserverEntry;
+}
+
 describe('XTerminal', () => {
 	let container: HTMLDivElement;
 	let root: Root;
@@ -370,6 +390,78 @@ describe('XTerminal', () => {
 		expect(fitAddon.fit).toHaveBeenCalledTimes(2);
 		expect(onResize).toHaveBeenCalledWith(80, 24);
 		expect(processResize).toHaveBeenCalledWith('session-resize', 80, 24);
+	});
+
+	it('coalesces rapid resize events and sends only the latest geometry', () => {
+		vi.useFakeTimers();
+		const onResize = vi.fn();
+		const processResize = (globalThis as any).window.maestro.process.resize as ReturnType<
+			typeof vi.fn
+		>;
+		const originalResizeObserver = globalThis.ResizeObserver;
+		let resizeCallback: ResizeObserverCallback | null = null;
+
+		class ManualResizeObserver {
+			constructor(callback: ResizeObserverCallback) {
+				resizeCallback = callback;
+			}
+
+			observe = vi.fn();
+			unobserve = vi.fn();
+			disconnect = vi.fn();
+		}
+
+		globalThis.ResizeObserver = ManualResizeObserver as unknown as typeof ResizeObserver;
+
+		try {
+			act(() => {
+				root.render(
+					<XTerminal
+						sessionId="session-rapid-resize"
+						theme={theme}
+						fontFamily="Monaco"
+						onResize={onResize}
+					/>
+				);
+			});
+
+			expect(resizeCallback).toBeTypeOf('function');
+
+			const terminal = mocks.terminalInstances[0];
+			const fitAddon = mocks.fitAddonInstances[0];
+			const target = container.firstElementChild as Element;
+
+			act(() => {
+				terminal.cols = 100;
+				terminal.rows = 30;
+				resizeCallback?.([createResizeObserverEntry(target)], {} as ResizeObserver);
+
+				terminal.cols = 120;
+				terminal.rows = 40;
+				resizeCallback?.([createResizeObserverEntry(target)], {} as ResizeObserver);
+
+				terminal.cols = 132;
+				terminal.rows = 48;
+				resizeCallback?.([createResizeObserverEntry(target)], {} as ResizeObserver);
+
+				vi.advanceTimersByTime(99);
+			});
+
+			expect(onResize).not.toHaveBeenCalled();
+			expect(processResize).not.toHaveBeenCalled();
+
+			act(() => {
+				vi.advanceTimersByTime(1);
+			});
+
+			expect(fitAddon.fit).toHaveBeenCalledTimes(2);
+			expect(onResize).toHaveBeenCalledTimes(1);
+			expect(onResize).toHaveBeenCalledWith(132, 48);
+			expect(processResize).toHaveBeenCalledTimes(1);
+			expect(processResize).toHaveBeenCalledWith('session-rapid-resize', 132, 48);
+		} finally {
+			globalThis.ResizeObserver = originalResizeObserver;
+		}
 	});
 
 	it('clears pending resize debounce on unmount', () => {

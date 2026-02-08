@@ -567,6 +567,57 @@ describe('process-manager.ts', () => {
 			});
 		});
 
+		describe('resize', () => {
+			it('resizes a terminal-tab PTY using the full terminal session id', () => {
+				const terminalSessionId = 'abc123-terminal-def456';
+				const ptyResize = vi.fn();
+
+				(
+					processManager as unknown as {
+						processes: Map<string, Record<string, unknown>>;
+					}
+				).processes.set(terminalSessionId, {
+					sessionId: terminalSessionId,
+					toolType: 'terminal',
+					cwd: '/tmp',
+					pid: 313,
+					isTerminal: true,
+					startTime: Date.now(),
+					ptyProcess: {
+						resize: ptyResize,
+					},
+				});
+
+				expect(processManager.resize(terminalSessionId, 132, 48)).toBe(true);
+				expect(ptyResize).toHaveBeenCalledWith(132, 48);
+			});
+
+			it('does not resize a terminal-tab PTY when only the base session id is provided', () => {
+				const terminalSessionId = 'abc123-terminal-def456';
+				const ptyResize = vi.fn();
+
+				(
+					processManager as unknown as {
+						processes: Map<string, Record<string, unknown>>;
+					}
+				).processes.set(terminalSessionId, {
+					sessionId: terminalSessionId,
+					toolType: 'terminal',
+					cwd: '/tmp',
+					pid: 271,
+					isTerminal: true,
+					startTime: Date.now(),
+					ptyProcess: {
+						resize: ptyResize,
+					},
+				});
+
+				expect(processManager.resize('abc123', 120, 40)).toBe(false);
+				expect(ptyResize).not.toHaveBeenCalled();
+				expect(processManager.get(terminalSessionId)).toBeDefined();
+			});
+		});
+
 		describe('kill', () => {
 			it('kills a terminal-tab PTY using the full terminal session id', () => {
 				const terminalSessionId = 'abc123-terminal-def456';
