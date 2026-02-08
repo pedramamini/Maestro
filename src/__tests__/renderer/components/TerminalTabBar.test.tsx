@@ -526,4 +526,53 @@ describe('TerminalTabBar', () => {
 			root.unmount();
 		});
 	});
+
+	it('fades out closed tabs before removing them from the tab bar', () => {
+		vi.useFakeTimers();
+
+		const initialTabs = [
+			createTerminalTab({ id: 'terminal-1', name: 'One' }),
+			createTerminalTab({ id: 'terminal-2', name: 'Two' }),
+		];
+
+		const { container, root } = mount(
+			<TerminalTabBar
+				tabs={initialTabs}
+				activeTabId="terminal-1"
+				theme={mockTheme}
+				onTabSelect={onTabSelect}
+				onTabClose={onTabClose}
+				onNewTab={onNewTab}
+			/>
+		);
+
+		act(() => {
+			root.render(
+				<TerminalTabBar
+					tabs={[createTerminalTab({ id: 'terminal-1', name: 'One' })]}
+					activeTabId="terminal-1"
+					theme={mockTheme}
+					onTabSelect={onTabSelect}
+					onTabClose={onTabClose}
+					onNewTab={onNewTab}
+				/>
+			);
+		});
+
+		const exitingTab = container.querySelector('[data-testid="terminal-tab-terminal-2"]');
+		expect(exitingTab).toBeTruthy();
+		expect(exitingTab?.getAttribute('data-transition-state')).toBe('exiting');
+
+		act(() => {
+			vi.advanceTimersByTime(200);
+		});
+
+		expect(container.querySelector('[data-testid="terminal-tab-terminal-2"]')).toBeNull();
+
+		act(() => {
+			root.unmount();
+		});
+
+		vi.useRealTimers();
+	});
 });
