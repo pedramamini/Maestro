@@ -47,6 +47,9 @@ export interface TerminalViewHandle {
 	searchPrevious: () => boolean;
 }
 
+/**
+ * Renders the terminal tab workspace and owns PTY lifecycle for each tab.
+ */
 export const TerminalView = memo(
 	forwardRef<TerminalViewHandle, TerminalViewProps>(function TerminalView(props, ref) {
 		const {
@@ -145,6 +148,8 @@ export const TerminalView = memo(
 
 					if (result.success && result.pid > 0) {
 						const latestTab = getLatestTab(tab.id);
+						// Spawn resolves asynchronously, so ignore late success for tabs that were
+						// closed (or already marked exited) while the process request was in flight.
 						if (!latestTab || (!allowExited && latestTab.state === 'exited')) {
 							return;
 						}
@@ -255,6 +260,8 @@ export const TerminalView = memo(
 					return;
 				}
 
+				// Exited tabs close on first keypress so users can dismiss the tab quickly
+				// without sending bytes to a dead PTY.
 				shellExitedTabsRef.current.delete(tabId);
 				void handleTabClose(tabId);
 			},
@@ -320,6 +327,7 @@ export const TerminalView = memo(
 
 		const isSpawnFailureTab = useCallback((tab: TerminalTab) => {
 			if (shellExitedTabsRef.current.has(tab.id)) {
+				// Shell exits reuse the in-terminal yellow notice instead of the failure pane.
 				return false;
 			}
 
