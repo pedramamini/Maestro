@@ -14,6 +14,8 @@ import { X, Plus, Loader2, Terminal as TerminalIcon } from 'lucide-react';
 import type { TerminalTab, Theme } from '../types';
 import { getTerminalTabDisplayName } from '../utils/terminalTabHelpers';
 
+const TAB_TRANSITION_DURATION_MS = 150;
+
 interface TerminalTabBarProps {
 	tabs: TerminalTab[];
 	activeTabId: string;
@@ -31,6 +33,7 @@ interface TerminalTabProps {
 	tab: TerminalTab;
 	index: number;
 	isActive: boolean;
+	transitionState: 'entering' | 'entered' | 'exiting';
 	theme: Theme;
 	canClose: boolean;
 	onSelect: () => void;
@@ -50,6 +53,7 @@ const TerminalTabComponent = memo(function TerminalTabComponent({
 	tab,
 	index,
 	isActive,
+	transitionState,
 	theme,
 	canClose,
 	onSelect,
@@ -72,8 +76,10 @@ const TerminalTabComponent = memo(function TerminalTabComponent({
 
 	return (
 		<div
+			data-testid={`terminal-tab-${tab.id}`}
+			data-transition-state={transitionState}
 			title={tabHoverTitle}
-			draggable
+			draggable={transitionState !== 'exiting'}
 			onDragStart={onDragStart}
 			onDragOver={onDragOver}
 			onDragEnd={onDragEnd}
@@ -89,7 +95,8 @@ const TerminalTabComponent = memo(function TerminalTabComponent({
 			onDoubleClick={onRename}
 			className={`
 				flex items-center gap-1.5 px-3 py-1.5 text-sm cursor-pointer
-				border-r transition-colors select-none shrink-0
+				border-r transition-all duration-150 ease-out select-none shrink-0
+				${transitionState === 'entering' || transitionState === 'exiting' ? 'opacity-0 -translate-y-1 scale-95 pointer-events-none' : 'opacity-100 translate-y-0 scale-100'}
 				${isDragging ? 'opacity-50' : ''}
 				${isDragOver ? 'ring-1 ring-inset' : ''}
 			`}
@@ -161,6 +168,9 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 	onCloseOtherTabs,
 	onCloseTabsRight,
 }: TerminalTabBarProps) {
+	const [renderTabs, setRenderTabs] = useState<
+		Array<{ tab: TerminalTab; transitionState: 'entering' | 'entered' | 'exiting' }>
+	>(() => tabs.map((tab) => ({ tab, transitionState: 'entered' })));
 	const [draggingIndex, setDraggingIndex] = useState<number | null>(null);
 	const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
 	const [contextMenu, setContextMenu] = useState<{ x: number; y: number; tabId: string } | null>(
@@ -168,6 +178,78 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 	);
 	const containerRef = useRef<HTMLDivElement>(null);
 	const contextMenuRef = useRef<HTMLDivElement>(null);
+
+	useEffect(() => {
+		setRenderTabs((currentRenderTabs) => {
+			const currentById = new Map(currentRenderTabs.map((entry) => [entry.tab.id, entry]));
+			const nextTabIds = new Set(tabs.map((tab) => tab.id));
+
+			const nextRenderTabs: Array<{
+				tab: TerminalTab;
+				transitionState: 'entering' | 'entered' | 'exiting';
+			}> = tabs.map((tab) => {
+				const currentEntry = currentById.get(tab.id);
+				if (!currentEntry) {
+					return { tab, transitionState: 'entering' as const };
+				}
+
+				return {
+					tab,
+					transitionState:
+						currentEntry.transitionState === 'exiting'
+							? ('entered' as const)
+							: currentEntry.transitionState,
+				};
+			});
+
+			for (const currentEntry of currentRenderTabs) {
+				if (nextTabIds.has(currentEntry.tab.id)) {
+					continue;
+				}
+
+				nextRenderTabs.push({
+					tab: currentEntry.tab,
+					transitionState: 'exiting',
+				});
+			}
+
+			return nextRenderTabs;
+		});
+	}, [tabs]);
+
+	useEffect(() => {
+		if (!renderTabs.some((entry) => entry.transitionState === 'entering')) {
+			return;
+		}
+
+		const rafId = window.requestAnimationFrame(() => {
+			setRenderTabs((currentRenderTabs) =>
+				currentRenderTabs.map((entry) =>
+					entry.transitionState === 'entering' ? { ...entry, transitionState: 'entered' } : entry
+				)
+			);
+		});
+
+		return () => {
+			window.cancelAnimationFrame(rafId);
+		};
+	}, [renderTabs]);
+
+	useEffect(() => {
+		if (!renderTabs.some((entry) => entry.transitionState === 'exiting')) {
+			return;
+		}
+
+		const timeoutId = window.setTimeout(() => {
+			setRenderTabs((currentRenderTabs) =>
+				currentRenderTabs.filter((entry) => entry.transitionState !== 'exiting')
+			);
+		}, TAB_TRANSITION_DURATION_MS);
+
+		return () => {
+			window.clearTimeout(timeoutId);
+		};
+	}, [renderTabs]);
 
 	useEffect(() => {
 		if (!contextMenu) {
@@ -285,17 +367,33 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 					scrollbarWidth: 'thin',
 				}}
 			>
-				{tabs.map((tab, index) => (
+				{renderTabs.map(({ tab, transitionState }, index) => (
 					<TerminalTabComponent
 						key={tab.id}
 						tab={tab}
 						index={index}
 						isActive={tab.id === activeTabId}
+						transitionState={transitionState}
 						theme={theme}
 						canClose={canClose}
-						onSelect={() => onTabSelect(tab.id)}
-						onClose={() => onTabClose(tab.id)}
-						onMiddleClick={() => canClose && onTabClose(tab.id)}
+						onSelect={() => {
+							if (transitionState === 'exiting') {
+								return;
+							}
+							onTabSelect(tab.id);
+						}}
+						onClose={() => {
+							if (transitionState === 'exiting') {
+								return;
+							}
+							onTabClose(tab.id);
+						}}
+						onMiddleClick={() => {
+							if (transitionState === 'exiting') {
+								return;
+							}
+							canClose && onTabClose(tab.id);
+						}}
 						onDragStart={handleDragStart(index)}
 						onDragOver={handleDragOver(index)}
 						onDragEnd={handleDragEnd}
