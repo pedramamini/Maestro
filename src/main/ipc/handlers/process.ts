@@ -90,6 +90,9 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				prompt?: string;
 				shell?: string;
 				images?: string[]; // Base64 data URLs for images
+				// Stdin prompt delivery modes
+				sendPromptViaStdin?: boolean; // If true, send prompt via stdin as JSON (for stream-json compatible agents)
+				sendPromptViaStdinRaw?: boolean; // If true, send prompt via stdin as raw text (for OpenCode, Codex, etc.)
 				// Agent-specific spawn options (used to build args via agent config)
 				agentSessionId?: string; // For session resume
 				readOnlyMode?: boolean; // For read-only/plan mode
@@ -396,12 +399,14 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 							// prompt is not passed as CLI arg - it goes via stdinInput
 							stdinInput,
 							// File-based image agents (Codex, OpenCode): pass images for remote temp file creation
-							images: hasImages && agent?.imageArgs && !agent?.capabilities?.supportsStreamJsonInput
-								? config.images
-								: undefined,
-							imageArgs: hasImages && agent?.imageArgs && !agent?.capabilities?.supportsStreamJsonInput
-								? agent.imageArgs
-								: undefined,
+							images:
+								hasImages && agent?.imageArgs && !agent?.capabilities?.supportsStreamJsonInput
+									? config.images
+									: undefined,
+							imageArgs:
+								hasImages && agent?.imageArgs && !agent?.capabilities?.supportsStreamJsonInput
+									? agent.imageArgs
+									: undefined,
 						});
 
 						commandToSpawn = sshCommand.command;
