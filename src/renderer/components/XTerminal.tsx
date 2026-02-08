@@ -17,6 +17,8 @@ interface XTerminalProps {
 	cursorStyle?: 'block' | 'underline' | 'bar';
 	processInputEnabled?: boolean;
 	onData?: (data: string) => void;
+	onFocus?: () => void;
+	onBlur?: () => void;
 	onResize?: (cols: number, rows: number) => void;
 	onTitleChange?: (title: string) => void;
 }
@@ -168,6 +170,8 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		cursorStyle = 'block',
 		processInputEnabled = true,
 		onData,
+		onFocus,
+		onBlur,
 		onResize,
 	},
 	ref
@@ -335,6 +339,28 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			window.removeEventListener('blur', handleWindowBlur);
 		};
 	}, [cursorBlink]);
+
+	useEffect(() => {
+		if (!containerRef.current) {
+			return;
+		}
+
+		const element = containerRef.current;
+		const handleFocusIn = () => {
+			onFocus?.();
+		};
+		const handleFocusOut = () => {
+			onBlur?.();
+		};
+
+		element.addEventListener('focusin', handleFocusIn);
+		element.addEventListener('focusout', handleFocusOut);
+
+		return () => {
+			element.removeEventListener('focusin', handleFocusIn);
+			element.removeEventListener('focusout', handleFocusOut);
+		};
+	}, [onFocus, onBlur]);
 
 	useEffect(() => {
 		if (!terminalRef.current) {
