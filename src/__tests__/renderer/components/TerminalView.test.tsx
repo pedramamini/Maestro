@@ -289,6 +289,47 @@ describe('TerminalView', () => {
 		});
 	});
 
+	it('refocuses the active terminal when the window regains focus', () => {
+		const callbacks = createCallbacks();
+		const session = createSession({
+			terminalTabs: [
+				{
+					id: 'tab-1',
+					name: null,
+					shellType: 'zsh',
+					pid: 4242,
+					cwd: '/workspace',
+					createdAt: Date.now(),
+					state: 'idle',
+				},
+			],
+		});
+
+		const { root } = mount(
+			<TerminalView
+				session={session}
+				theme={theme}
+				fontFamily="Monaco"
+				defaultShell="zsh"
+				{...callbacks}
+			/>
+		);
+
+		const terminalHandle = mockXTerminalHandlesBySessionId.get('session-1-terminal-tab-1');
+		expect(terminalHandle).toBeTruthy();
+		const initialFocusCalls = terminalHandle?.focus.mock.calls.length ?? 0;
+
+		act(() => {
+			window.dispatchEvent(new Event('focus'));
+		});
+
+		expect(terminalHandle?.focus.mock.calls.length ?? 0).toBe(initialFocusCalls + 1);
+
+		act(() => {
+			root.unmount();
+		});
+	});
+
 	it('marks tab exited when PTY spawn fails', async () => {
 		const callbacks = createCallbacks();
 		spawnTerminalTab.mockResolvedValue({ success: false, pid: 0 });

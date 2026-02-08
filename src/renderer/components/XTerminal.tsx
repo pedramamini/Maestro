@@ -310,6 +310,36 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			return;
 		}
 
+		const handleWindowFocus = () => {
+			if (!terminalRef.current) {
+				return;
+			}
+
+			terminalRef.current.options.cursorBlink = cursorBlink;
+		};
+
+		const handleWindowBlur = () => {
+			if (!terminalRef.current) {
+				return;
+			}
+
+			terminalRef.current.options.cursorBlink = false;
+		};
+
+		window.addEventListener('focus', handleWindowFocus);
+		window.addEventListener('blur', handleWindowBlur);
+
+		return () => {
+			window.removeEventListener('focus', handleWindowFocus);
+			window.removeEventListener('blur', handleWindowBlur);
+		};
+	}, [cursorBlink]);
+
+	useEffect(() => {
+		if (!terminalRef.current) {
+			return;
+		}
+
 		const disposable = terminalRef.current.onData((data: string) => {
 			if (processInputEnabled) {
 				void window.maestro.process.write(sessionId, data);
