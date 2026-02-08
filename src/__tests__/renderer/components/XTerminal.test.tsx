@@ -394,6 +394,17 @@ describe('XTerminal', () => {
 		expect(terminalContainer.dataset.fontSize).toBe('14');
 	});
 
+	it('enables smooth scrolling for terminal output navigation', () => {
+		act(() => {
+			root.render(
+				<XTerminal sessionId="session-smooth-scroll" theme={theme} fontFamily="Monaco" />
+			);
+		});
+
+		expect(mocks.terminalInstances).toHaveLength(1);
+		expect(mocks.terminalInstances[0].options.smoothScrollDuration).toBe(125);
+	});
+
 	it('handles debounced resize and notifies PTY + callbacks', () => {
 		vi.useFakeTimers();
 		const onResize = vi.fn();

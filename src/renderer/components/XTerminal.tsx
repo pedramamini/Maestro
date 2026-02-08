@@ -215,6 +215,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			theme: mapMaestroThemeToXterm(theme),
 			allowProposedApi: true,
 			scrollback: 10000,
+			smoothScrollDuration: 125,
 		});
 
 		const fitAddon = new FitAddon();
