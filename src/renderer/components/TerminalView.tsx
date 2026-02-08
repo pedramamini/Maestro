@@ -176,6 +176,18 @@ export const TerminalView = memo(
 		}, [activeTab?.id]);
 
 		useEffect(() => {
+			const handleWindowFocus = () => {
+				getActiveTerminalHandle()?.focus();
+			};
+
+			window.addEventListener('focus', handleWindowFocus);
+
+			return () => {
+				window.removeEventListener('focus', handleWindowFocus);
+			};
+		}, [getActiveTerminalHandle]);
+
+		useEffect(() => {
 			return window.maestro.process.onExit((sessionId, code) => {
 				const matchingTab = session.terminalTabs.find(
 					(tab) => getTerminalSessionId(session.id, tab.id) === sessionId

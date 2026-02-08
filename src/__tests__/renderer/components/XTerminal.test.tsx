@@ -606,6 +606,42 @@ describe('XTerminal', () => {
 		expect(terminal.options.cursorStyle).toBe('underline');
 	});
 
+	it('pauses cursor blink when window blurs and restores it on focus', () => {
+		act(() => {
+			root.render(<XTerminal sessionId="session-window-focus" theme={theme} fontFamily="Monaco" />);
+		});
+
+		expect(mocks.terminalInstances).toHaveLength(1);
+		const terminal = mocks.terminalInstances[0];
+		expect(terminal.options.cursorBlink).toBe(true);
+
+		act(() => {
+			window.dispatchEvent(new Event('blur'));
+		});
+		expect(terminal.options.cursorBlink).toBe(false);
+
+		act(() => {
+			window.dispatchEvent(new Event('focus'));
+		});
+		expect(terminal.options.cursorBlink).toBe(true);
+
+		act(() => {
+			root.render(
+				<XTerminal
+					sessionId="session-window-focus"
+					theme={theme}
+					fontFamily="Monaco"
+					cursorBlink={false}
+				/>
+			);
+		});
+
+		act(() => {
+			window.dispatchEvent(new Event('focus'));
+		});
+		expect(terminal.options.cursorBlink).toBe(false);
+	});
+
 	it('bridges PTY data to terminal and terminal input back to PTY', () => {
 		const onInputData = vi.fn();
 		const processWrite = (globalThis as any).window.maestro.process.write as ReturnType<
