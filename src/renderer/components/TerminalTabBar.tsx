@@ -156,6 +156,9 @@ const TerminalTabComponent = memo(function TerminalTabComponent({
 	);
 });
 
+/**
+ * Renders terminal tabs, tab transitions, and context-menu actions.
+ */
 export const TerminalTabBar = memo(function TerminalTabBar({
 	tabs,
 	activeTabId,
@@ -207,6 +210,7 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 					continue;
 				}
 
+				// Keep removed tabs mounted briefly so CSS exit transitions can play.
 				nextRenderTabs.push({
 					tab: currentEntry.tab,
 					transitionState: 'exiting',
@@ -222,6 +226,8 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 			return;
 		}
 
+		// Promote entering tabs on the next frame so transition classes animate from
+		// the initial hidden state to the settled state.
 		const rafId = window.requestAnimationFrame(() => {
 			setRenderTabs((currentRenderTabs) =>
 				currentRenderTabs.map((entry) =>
@@ -240,6 +246,7 @@ export const TerminalTabBar = memo(function TerminalTabBar({
 			return;
 		}
 
+		// Remove exiting tabs after the transition duration to avoid abrupt unmount.
 		const timeoutId = window.setTimeout(() => {
 			setRenderTabs((currentRenderTabs) =>
 				currentRenderTabs.filter((entry) => entry.transitionState !== 'exiting')

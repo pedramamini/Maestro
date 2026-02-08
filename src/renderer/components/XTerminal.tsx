@@ -160,6 +160,9 @@ function mapMaestroThemeToXterm(theme: Theme): ITheme {
 	};
 }
 
+/**
+ * Thin xterm.js wrapper responsible for rendering, addons, and PTY I/O wiring.
+ */
 export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XTerminal(
 	{
 		sessionId,
@@ -194,6 +197,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			clearTimeout(resizeTimeoutRef.current);
 		}
 
+		// Coalesce rapid container resize events into one fit + PTY resize round trip.
 		resizeTimeoutRef.current = setTimeout(() => {
 			if (!addonsRef.current.fit || !terminalRef.current) {
 				return;
@@ -368,6 +372,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		}
 
 		const disposable = terminalRef.current.onData((data: string) => {
+			// Keep keyboard handlers alive for local shell-exit UX even when PTY input is disabled.
 			if (processInputEnabled) {
 				void window.maestro.process.write(sessionId, data);
 			}
