@@ -242,6 +242,7 @@
     "dompurify": "^3.3.0",
     "electron-store": "^8.1.0",
     "electron-updater": "^6.6.2",
+    "emoji-mart": "^5.6.0",
     "fastify": "^4.25.2",
     "js-tiktoken": "^1.0.21",
     "marked": "^17.0.1",
