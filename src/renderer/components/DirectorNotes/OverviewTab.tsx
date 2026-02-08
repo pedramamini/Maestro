@@ -1,5 +1,5 @@
+import { useRef, useImperativeHandle, forwardRef } from 'react';
 import {
-	BookOpen,
 	History,
 	Sparkles,
 	Search,
@@ -13,34 +13,36 @@ import {
 } from 'lucide-react';
 import type { Theme } from '../../types';
 
+export interface TabFocusHandle {
+	focus: () => void;
+}
+
 interface OverviewTabProps {
 	theme: Theme;
 }
 
-export function OverviewTab({ theme }: OverviewTabProps) {
+export const OverviewTab = forwardRef<TabFocusHandle, OverviewTabProps>(function OverviewTab({ theme }, ref) {
+	const containerRef = useRef<HTMLDivElement>(null);
+
+	useImperativeHandle(ref, () => ({
+		focus: () => containerRef.current?.focus(),
+	}));
 	const sectionHeaderClass = 'flex items-center gap-2 mb-3';
 	const sectionContentClass = 'text-sm space-y-2 pl-7';
 	const codeClass = 'px-1.5 py-0.5 rounded text-[11px] font-mono';
 
 	return (
-		<div className="flex flex-col h-full overflow-y-auto p-6 scrollbar-thin">
+		<div
+			ref={containerRef}
+			tabIndex={0}
+			className="flex flex-col h-full overflow-y-auto p-6 scrollbar-thin outline-none"
+		>
 			<div className="max-w-3xl mx-auto space-y-6" style={{ color: theme.colors.textMain }}>
-				{/* Title */}
-				<div className="flex items-center gap-3 mb-2">
-					<BookOpen className="w-8 h-8" style={{ color: theme.colors.accent }} />
-					<div>
-						<h1 className="text-xl font-bold">Director's Notes</h1>
-						<p className="text-sm" style={{ color: theme.colors.textDim }}>
-							A unified view of everything happening across your Maestro sessions.
-						</p>
-					</div>
-				</div>
-
 				{/* What it is */}
 				<section>
 					<div className={sectionHeaderClass}>
 						<Layers className="w-5 h-5" style={{ color: theme.colors.accent }} />
-						<h3 className="font-bold">What is Director's Notes?</h3>
+						<h3 className="font-bold">What are Director's Notes?</h3>
 					</div>
 					<div className={sectionContentClass} style={{ color: theme.colors.textDim }}>
 						<p>
@@ -195,4 +197,4 @@ export function OverviewTab({ theme }: OverviewTabProps) {
 			</div>
 		</div>
 	);
-}
+});

@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useCallback, useMemo, useRef, forwardRef, useImperativeHandle } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Theme, HistoryEntry, HistoryEntryType } from '../../types';
 import type { FileNode } from '../../types/fileTree';
@@ -11,6 +11,7 @@ import {
 } from '../History';
 import { HistoryDetailModal } from '../HistoryDetailModal';
 import { useSettings, useListNavigation } from '../../hooks';
+import type { TabFocusHandle } from './OverviewTab';
 
 interface UnifiedHistoryEntry extends HistoryEntry {
 	agentName?: string;
@@ -24,12 +25,12 @@ interface UnifiedHistoryTabProps {
 	searchFilter?: string;
 }
 
-export function UnifiedHistoryTab({
+export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabProps>(function UnifiedHistoryTab({
 	theme,
 	fileTree,
 	onFileClick,
 	searchFilter = '',
-}: UnifiedHistoryTabProps) {
+}, ref) {
 	const { directorNotesSettings } = useSettings();
 	const [entries, setEntries] = useState<UnifiedHistoryEntry[]>([]);
 	const [isLoading, setIsLoading] = useState(true);
@@ -38,6 +39,10 @@ export function UnifiedHistoryTab({
 	const [detailModalEntry, setDetailModalEntry] = useState<HistoryEntry | null>(null);
 
 	const listRef = useRef<HTMLDivElement>(null);
+
+	useImperativeHandle(ref, () => ({
+		focus: () => listRef.current?.focus(),
+	}));
 
 	// Load unified history
 	const loadHistory = useCallback(async () => {
@@ -243,4 +248,4 @@ export function UnifiedHistoryTab({
 			)}
 		</div>
 	);
-}
+});

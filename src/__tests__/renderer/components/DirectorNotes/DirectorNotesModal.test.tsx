@@ -22,14 +22,14 @@ vi.mock('../../../../renderer/constants/modalPriorities', () => ({
 	},
 }));
 
-// Mock lazy-loaded child components
+// Mock lazy-loaded child components (use forwardRef to match real components)
 vi.mock('../../../../renderer/components/DirectorNotes/UnifiedHistoryTab', () => ({
-	UnifiedHistoryTab: ({ theme, searchFilter }: { theme: Theme; searchFilter?: string }) => (
-		<div data-testid="unified-history-tab" data-search-filter={searchFilter || ''}>
+	UnifiedHistoryTab: React.forwardRef(({ theme, searchFilter }: { theme: Theme; searchFilter?: string }, _ref: any) => (
+		<div data-testid="unified-history-tab" data-search-filter={searchFilter || ''} tabIndex={0}>
 			Unified History Content
 			{searchFilter && <span data-testid="search-active">Filtering: {searchFilter}</span>}
 		</div>
-	),
+	)),
 }));
 
 vi.mock('../../../../renderer/components/DirectorNotes/AIOverviewTab', () => ({
@@ -44,9 +44,10 @@ vi.mock('../../../../renderer/components/DirectorNotes/AIOverviewTab', () => ({
 }));
 
 vi.mock('../../../../renderer/components/DirectorNotes/OverviewTab', () => ({
-	OverviewTab: ({ theme }: { theme: Theme }) => (
-		<div data-testid="overview-tab">Overview Content</div>
-	),
+	OverviewTab: React.forwardRef(({ theme }: { theme: Theme }, _ref: any) => (
+		<div data-testid="overview-tab" tabIndex={0}>Overview Content</div>
+	)),
+	TabFocusHandle: {},
 }));
 
 // Import after mocks
@@ -178,9 +179,9 @@ describe('DirectorNotesModal', () => {
 			renderModal();
 
 			await waitFor(() => {
-				const modal = document.querySelector('.relative.w-full.max-w-5xl');
+				const modal = document.querySelector('[role="dialog"]');
 				expect(modal).toHaveStyle({
-					backgroundColor: mockTheme.colors.bgSidebar,
+					backgroundColor: mockTheme.colors.bgActivity,
 					borderColor: mockTheme.colors.border,
 				});
 			});
@@ -291,11 +292,11 @@ describe('DirectorNotesModal', () => {
 
 			const historyTabButton = screen.getByText('Unified History').closest('button');
 			expect(historyTabButton).toHaveStyle({
-				borderColor: mockTheme.colors.accent,
-				color: mockTheme.colors.textMain,
+				backgroundColor: mockTheme.colors.accent + '20',
+				color: mockTheme.colors.accent,
 			});
 
-			// Inactive overview tab should have dim text color
+			// Inactive tab should have dim text color
 			const overviewTabButton = screen.getByText('AI Overview').closest('button');
 			expect(overviewTabButton).toHaveStyle({
 				color: mockTheme.colors.textDim,
@@ -316,7 +317,7 @@ describe('DirectorNotesModal', () => {
 				fireEvent.click(screen.getByTestId('trigger-synopsis-ready'));
 			});
 
-			// Starting on history (index 0), Cmd+Shift+] should go to ai-overview (index 1)
+			// Starting on history (index 1), Cmd+Shift+] should go to ai-overview (index 2)
 			await act(async () => {
 				window.dispatchEvent(new KeyboardEvent('keydown', {
 					key: ']',
@@ -337,7 +338,7 @@ describe('DirectorNotesModal', () => {
 				expect(screen.getByTestId('unified-history-tab')).toBeInTheDocument();
 			});
 
-			// Starting on history (index 0), Cmd+Shift+[ should wrap to help (index 2)
+			// Starting on history (index 1), Cmd+Shift+[ should go to help (index 0)
 			await act(async () => {
 				window.dispatchEvent(new KeyboardEvent('keydown', {
 					key: '[',
@@ -358,7 +359,7 @@ describe('DirectorNotesModal', () => {
 				expect(screen.getByTestId('unified-history-tab')).toBeInTheDocument();
 			});
 
-			// AI Overview is disabled (not ready). From history (index 0), Cmd+Shift+] should skip to help (index 2)
+			// AI Overview is disabled (not ready). From history (index 1), Cmd+Shift+] should skip to help (index 0)
 			await act(async () => {
 				window.dispatchEvent(new KeyboardEvent('keydown', {
 					key: ']',
@@ -527,8 +528,8 @@ describe('DirectorNotesModal', () => {
 				expect(screen.getByText('Unified History')).toBeInTheDocument();
 			});
 
-			// Click the backdrop (bg-black/60 overlay)
-			const backdrop = document.querySelector('.absolute.inset-0.bg-black\\/60');
+			// Click the backdrop overlay (the outer fixed container)
+			const backdrop = document.querySelector('.fixed.inset-0.modal-overlay');
 			fireEvent.click(backdrop!);
 
 			expect(onClose).toHaveBeenCalledTimes(1);

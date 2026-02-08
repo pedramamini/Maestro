@@ -4,7 +4,7 @@ import { X, History, Sparkles, Loader2, Clapperboard, HelpCircle, Search } from 
 import type { Theme } from '../../types';
 import { useLayerStack } from '../../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
-import { OverviewTab } from './OverviewTab';
+import { OverviewTab, type TabFocusHandle } from './OverviewTab';
 
 // Lazy load tab components
 const UnifiedHistoryTab = lazy(() => import('./UnifiedHistoryTab').then(m => ({ default: m.UnifiedHistoryTab })));
@@ -21,9 +21,9 @@ interface DirectorNotesModalProps {
 type TabId = 'overview' | 'history' | 'ai-overview';
 
 const TABS: { id: TabId; label: string; icon: React.ElementType; disabledKey?: string }[] = [
+	{ id: 'overview', label: 'Help', icon: HelpCircle },
 	{ id: 'history', label: 'Unified History', icon: History },
 	{ id: 'ai-overview', label: 'AI Overview', icon: Sparkles, disabledKey: 'aiOverview' },
-	{ id: 'overview', label: 'Help', icon: HelpCircle },
 ];
 
 export function DirectorNotesModal({
@@ -44,9 +44,27 @@ export function DirectorNotesModal({
 	const modalRef = useRef<HTMLDivElement>(null);
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
-	// Store onClose in a ref to avoid re-registering layer when onClose changes
+	// Tab content refs for focus management
+	const overviewTabRef = useRef<TabFocusHandle>(null);
+	const historyTabRef = useRef<TabFocusHandle>(null);
+	const aiOverviewContentRef = useRef<HTMLDivElement>(null);
+
+	// Focus the active tab's content area
+	const focusActiveTab = useCallback((tabId?: TabId) => {
+		const target = tabId ?? activeTab;
+		// Delay to allow React to render/show the tab
+		requestAnimationFrame(() => {
+			if (target === 'overview') overviewTabRef.current?.focus();
+			else if (target === 'history') historyTabRef.current?.focus();
+			else if (target === 'ai-overview') aiOverviewContentRef.current?.focus();
+		});
+	}, [activeTab]);
+
+	// Store callbacks in refs to avoid re-registering layer when they change
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+	const focusActiveTabRef = useRef(focusActiveTab);
+	focusActiveTabRef.current = focusActiveTab;
 
 	// Register modal layer
 	useEffect(() => {
@@ -60,7 +78,7 @@ export function DirectorNotesModal({
 				if (searchVisible) {
 					setSearchVisible(false);
 					setSearchQuery('');
-					modalRef.current?.focus();
+					focusActiveTabRef.current();
 				} else {
 					onCloseRef.current();
 				}
@@ -71,10 +89,10 @@ export function DirectorNotesModal({
 		};
 	}, [registerLayer, unregisterLayer, searchVisible]);
 
-	// Auto-focus the modal container on mount for keyboard navigation
+	// Focus the active tab content when tab changes (including initial mount)
 	useEffect(() => {
-		modalRef.current?.focus();
-	}, []);
+		focusActiveTab(activeTab);
+	}, [activeTab, focusActiveTab]);
 
 	// Focus search input when search becomes visible
 	useEffect(() => {
@@ -149,8 +167,8 @@ export function DirectorNotesModal({
 	const closeSearch = useCallback(() => {
 		setSearchVisible(false);
 		setSearchQuery('');
-		modalRef.current?.focus();
-	}, []);
+		focusActiveTab();
+	}, [focusActiveTab]);
 
 	// Handle search input keyboard
 	const handleSearchKeyDown = useCallback((e: React.KeyboardEvent) => {
@@ -162,80 +180,85 @@ export function DirectorNotesModal({
 	}, [closeSearch]);
 
 	return createPortal(
-		<div className="fixed inset-0 flex items-center justify-center z-[9999]">
-			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/60" onClick={onClose} />
-
+		<div
+			className="fixed inset-0 modal-overlay flex items-start justify-center pt-16 z-[9999] animate-in fade-in duration-100"
+			style={{ backgroundColor: 'rgba(0, 0, 0, 0.5)' }}
+			onClick={(e) => { if (e.target === e.currentTarget) onClose(); }}
+		>
 			{/* Modal */}
 			<div
 				ref={modalRef}
+				role="dialog"
+				aria-modal="true"
+				aria-labelledby="director-notes-title"
 				tabIndex={-1}
-				className="relative w-full max-w-5xl h-[85vh] overflow-hidden rounded-lg border shadow-2xl flex flex-col outline-none"
+				className="w-[1200px] max-w-[95vw] h-[85vh] rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
 				style={{
-					backgroundColor: theme.colors.bgSidebar,
+					backgroundColor: theme.colors.bgActivity,
 					borderColor: theme.colors.border,
 				}}
 			>
-				{/* Header: title row + tab bar */}
-				<div className="shrink-0 border-b" style={{ borderColor: theme.colors.border }}>
-					{/* Title row — matches Symphony header pattern */}
-					<div
-						className="flex items-center justify-between px-4 py-3 border-b"
-						style={{ borderColor: theme.colors.border }}
-					>
-						<div className="flex items-center gap-2">
-							<Clapperboard className="w-5 h-5" style={{ color: theme.colors.accent }} />
-							<h2
-								className="text-lg font-semibold"
-								style={{ color: theme.colors.textMain }}
-							>
-								Director's Notes
-							</h2>
-						</div>
-
-						{/* Close button */}
-						<button
-							onClick={onClose}
-							className="p-2 rounded hover:bg-white/10 transition-colors"
+				{/* Header */}
+				<div
+					className="flex items-center justify-between px-4 py-3 border-b"
+					style={{ borderColor: theme.colors.border }}
+				>
+					<div className="flex items-center gap-2">
+						<Clapperboard className="w-5 h-5" style={{ color: theme.colors.accent }} />
+						<h2
+							id="director-notes-title"
+							className="text-lg font-semibold"
+							style={{ color: theme.colors.textMain }}
 						>
-							<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-						</button>
+							Director's Notes
+						</h2>
 					</div>
 
-					{/* Tab buttons */}
-					<div className="flex px-4">
-						{TABS.map((tab) => {
-							const Icon = tab.icon;
-							const isActive = activeTab === tab.id;
-							const isDisabled = !isTabEnabled(tab.id);
-							const showGenerating = tab.id === 'ai-overview' && overviewGenerating;
+					{/* Close button */}
+					<button
+						onClick={onClose}
+						className="p-1 rounded hover:bg-white/10 transition-colors"
+					>
+						<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
+					</button>
+				</div>
 
-							return (
-								<button
-									key={tab.id}
-									onClick={() => !isDisabled && setActiveTab(tab.id)}
-									disabled={isDisabled}
-									className="px-4 py-3 text-sm font-bold border-b-2 flex items-center gap-2 transition-colors"
-									style={{
-										borderColor: isActive ? theme.colors.accent : 'transparent',
-										color: isActive ? theme.colors.textMain : theme.colors.textDim,
-										opacity: isDisabled ? 0.5 : 1,
-										cursor: isDisabled ? 'default' : 'pointer',
-									}}
-								>
-									{showGenerating ? (
-										<Loader2 className="w-4 h-4 animate-spin" />
-									) : (
-										<Icon className="w-4 h-4" />
-									)}
-									{tab.label}
-									{showGenerating && (
-										<span className="text-[10px] font-normal">(generating...)</span>
-									)}
-								</button>
-							);
-						})}
-					</div>
+				{/* Tab navigation */}
+				<div
+					className="flex items-center gap-1 px-4 py-2 border-b"
+					style={{ borderColor: theme.colors.border }}
+				>
+					{TABS.map((tab) => {
+						const Icon = tab.icon;
+						const isActive = activeTab === tab.id;
+						const isDisabled = !isTabEnabled(tab.id);
+						const showGenerating = tab.id === 'ai-overview' && overviewGenerating;
+
+						return (
+							<button
+								key={tab.id}
+								onClick={() => !isDisabled && setActiveTab(tab.id)}
+								disabled={isDisabled}
+								className={`px-3 py-1.5 rounded text-sm flex items-center gap-2 transition-colors ${isActive ? 'font-semibold' : ''}`}
+								style={{
+									backgroundColor: isActive ? theme.colors.accent + '20' : 'transparent',
+									color: isActive ? theme.colors.accent : theme.colors.textDim,
+									opacity: isDisabled ? 0.5 : 1,
+									cursor: isDisabled ? 'default' : 'pointer',
+								}}
+							>
+								{showGenerating ? (
+									<Loader2 className="w-4 h-4 animate-spin" />
+								) : (
+									<Icon className="w-4 h-4" />
+								)}
+								{tab.label}
+								{showGenerating && (
+									<span className="text-[10px] font-normal">(generating...)</span>
+								)}
+							</button>
+						);
+					})}
 				</div>
 
 				{/* Search bar (visible on Cmd+F, applies to history tab) */}
@@ -244,7 +267,7 @@ export function DirectorNotesModal({
 						className="shrink-0 flex items-center gap-2 px-4 py-2 border-b"
 						style={{
 							borderColor: theme.colors.border,
-							backgroundColor: theme.colors.bgActivity,
+							backgroundColor: theme.colors.bgMain,
 						}}
 					>
 						<Search className="w-4 h-4 shrink-0" style={{ color: theme.colors.accent }} />
@@ -276,24 +299,29 @@ export function DirectorNotesModal({
 				)}
 
 				{/* Tab content */}
-				<div className="flex-1 overflow-hidden">
+				<div className="flex-1 overflow-hidden min-h-0 flex flex-col" style={{ backgroundColor: theme.colors.bgMain }}>
 					<Suspense fallback={
 						<div className="flex items-center justify-center h-full">
 							<Loader2 className="w-8 h-8 animate-spin" style={{ color: theme.colors.textDim }} />
 						</div>
 					}>
 						<div className={`h-full ${activeTab === 'overview' ? '' : 'hidden'}`}>
-							<OverviewTab theme={theme} />
+							<OverviewTab ref={overviewTabRef} theme={theme} />
 						</div>
 						<div className={`h-full ${activeTab === 'history' ? '' : 'hidden'}`}>
 							<UnifiedHistoryTab
+								ref={historyTabRef}
 								theme={theme}
 								fileTree={fileTree}
 								onFileClick={onFileClick}
 								searchFilter={searchQuery}
 							/>
 						</div>
-						<div className={`h-full ${activeTab === 'ai-overview' ? '' : 'hidden'}`}>
+						<div
+							ref={aiOverviewContentRef}
+							tabIndex={0}
+							className={`h-full outline-none ${activeTab === 'ai-overview' ? '' : 'hidden'}`}
+						>
 							<AIOverviewTab
 								theme={theme}
 								onSynopsisReady={handleSynopsisReady}

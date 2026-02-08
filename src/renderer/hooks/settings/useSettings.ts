@@ -1567,10 +1567,19 @@ export function useSettings(): UseSettingsReturn {
 					migratedShortcuts[id] = { ...shortcut, keys: migratedKeys };
 				}
 
-				// Migration: directorNotes changed from Alt+Meta+D to Meta+Shift+O
+				// Migration: directorNotes changed to Meta+Shift+O (was Alt+Meta+D, briefly Meta+Shift+D)
 				const directorNotesSaved = migratedShortcuts['directorNotes'];
-				if (directorNotesSaved && JSON.stringify(directorNotesSaved.keys) === JSON.stringify(['Alt', 'Meta', 'd'])) {
-					migratedShortcuts['directorNotes'] = { ...directorNotesSaved, keys: ['Meta', 'Shift', 'o'] };
+				if (directorNotesSaved) {
+					const savedKeysJson = JSON.stringify(directorNotesSaved.keys);
+					if (savedKeysJson === JSON.stringify(['Alt', 'Meta', 'd']) || savedKeysJson === JSON.stringify(['Meta', 'Shift', 'd'])) {
+						migratedShortcuts['directorNotes'] = { ...directorNotesSaved, keys: ['Meta', 'Shift', 'o'] };
+						needsMigration = true;
+					}
+				}
+				// Also restore viewGitDiff if it was swapped to Alt+Meta+D during the brief Shift+D migration
+				const viewGitDiffSaved = migratedShortcuts['viewGitDiff'];
+				if (viewGitDiffSaved && JSON.stringify(viewGitDiffSaved.keys) === JSON.stringify(['Alt', 'Meta', 'd'])) {
+					migratedShortcuts['viewGitDiff'] = { ...viewGitDiffSaved, keys: ['Meta', 'Shift', 'd'] };
 					needsMigration = true;
 				}
 
