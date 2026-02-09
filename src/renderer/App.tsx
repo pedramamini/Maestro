@@ -73,6 +73,7 @@ import { GroupChatRightPanel, type GroupChatRightTab } from './components/GroupC
 import {
 	// Batch processing
 	useBatchProcessor,
+	useBatchedSessionUpdates,
 	type PreviousUIState,
 	// Settings
 	useSettings,
@@ -128,7 +129,8 @@ import { GitStatusProvider } from './contexts/GitStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
 import { GroupChatProvider, useGroupChat } from './contexts/GroupChatContext';
 import { AutoRunProvider, useAutoRun } from './contexts/AutoRunContext';
-import { SessionProvider, useSession } from './contexts/SessionContext';
+// All session state is read directly from useSessionStore in MaestroConsoleInner.
+import { useSessionStore, selectActiveSession } from './stores/sessionStore';
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
 
@@ -206,6 +208,7 @@ import {
 } from './utils/sessionIdParser';
 import { isLikelyConcatenatedToolNames, getSlashCommandDescription } from './constants/app';
 import { useUIStore } from './stores/uiStore';
+import { useTabStore } from './stores/tabStore';
 
 // Note: DEFAULT_IMAGE_ONLY_PROMPT is now imported from useInputProcessing hook
 
@@ -595,29 +598,117 @@ function MaestroConsoleInner() {
 		tabShortcuts,
 	});
 
-	// --- SESSION STATE (Phase 6: extracted to SessionContext) ---
-	// Use SessionContext for all core session states
+	// --- SESSION STATE (migrated from useSession() to direct useSessionStore selectors) ---
+	// Reactive values — each selector triggers re-render only when its specific value changes
+	const sessions = useSessionStore((s) => s.sessions);
+	const groups = useSessionStore((s) => s.groups);
+	const activeSessionId = useSessionStore((s) => s.activeSessionId);
+	const sessionsLoaded = useSessionStore((s) => s.sessionsLoaded);
+	const activeSession = useSessionStore(selectActiveSession);
+
+	// Actions — stable references from store, never trigger re-renders
 	const {
-		sessions,
 		setSessions,
-		groups,
 		setGroups,
-		activeSessionId,
-		setActiveSessionId: setActiveSessionIdFromContext,
+		setActiveSessionId: storeSetActiveSessionId,
 		setActiveSessionIdInternal,
-		sessionsLoaded,
 		setSessionsLoaded,
-		initialLoadComplete,
-		sessionsRef,
-		groupsRef,
-		activeSessionIdRef,
-		batchedUpdater,
-		activeSession,
-		cyclePositionRef,
-		removedWorktreePaths: _removedWorktreePaths,
 		setRemovedWorktreePaths,
-		removedWorktreePathsRef,
-	} = useSession();
+	} = useMemo(() => useSessionStore.getState(), []);
+
+	// batchedUpdater — React hook for timer lifecycle (reads store directly)
+	const batchedUpdater = useBatchedSessionUpdates();
+	const batchedUpdaterRef = useRef(batchedUpdater);
+	batchedUpdaterRef.current = batchedUpdater;
+
+	// setActiveSessionId wrapper — flushes batched updates before switching
+	const setActiveSessionIdFromContext = useCallback(
+		(id: string) => {
+			batchedUpdaterRef.current.flushNow();
+			storeSetActiveSessionId(id);
+		},
+		[storeSetActiveSessionId]
+	);
+
+	// Ref-like getters — read current state from store without stale closures
+	// Used by 106 callback sites that need current state (e.g., sessionsRef.current)
+	const sessionsRef = useMemo(
+		() => ({
+			get current() {
+				return useSessionStore.getState().sessions;
+			},
+		}),
+		[]
+	) as React.MutableRefObject<Session[]>;
+
+	const groupsRef = useMemo(
+		() => ({
+			get current() {
+				return useSessionStore.getState().groups;
+			},
+		}),
+		[]
+	) as React.MutableRefObject<Group[]>;
+
+	const activeSessionIdRef = useMemo(
+		() => ({
+			get current() {
+				return useSessionStore.getState().activeSessionId;
+			},
+		}),
+		[]
+	) as React.MutableRefObject<string>;
+
+	const removedWorktreePathsRef = useMemo(
+		() => ({
+			get current() {
+				return useSessionStore.getState().removedWorktreePaths;
+			},
+		}),
+		[]
+	) as React.MutableRefObject<Set<string>>;
+
+	// initialLoadComplete — Proxy bridges ref API (.current = true) to store boolean
+	const initialLoadComplete = useMemo(() => {
+		const ref = { current: useSessionStore.getState().initialLoadComplete };
+		return new Proxy(ref, {
+			set(_target, prop, value) {
+				if (prop === 'current') {
+					ref.current = value;
+					useSessionStore.getState().setInitialLoadComplete(value);
+					return true;
+				}
+				return false;
+			},
+			get(target, prop) {
+				if (prop === 'current') {
+					return useSessionStore.getState().initialLoadComplete;
+				}
+				return (target as Record<string | symbol, unknown>)[prop];
+			},
+		});
+	}, []) as React.MutableRefObject<boolean>;
+
+	// cyclePositionRef — Proxy bridges ref API to store number
+	const cyclePositionRef = useMemo(() => {
+		const ref = { current: useSessionStore.getState().cyclePosition };
+		return new Proxy(ref, {
+			set(_target, prop, value) {
+				if (prop === 'current') {
+					ref.current = value;
+					useSessionStore.getState().setCyclePosition(value);
+					return true;
+				}
+				return false;
+			},
+			get(target, prop) {
+				if (prop === 'current') {
+					return useSessionStore.getState().cyclePosition;
+				}
+				return (target as Record<string | symbol, unknown>)[prop];
+			},
+		});
+	}, []) as React.MutableRefObject<number>;
 
 	// Spec Kit commands (loaded from bundled prompts)
 	const [speckitCommands, setSpeckitCommands] = useState<SpecKitCommand[]>([]);
@@ -831,13 +922,9 @@ function MaestroConsoleInner() {
 	// GitHub CLI availability (for gist publishing)
 	const [ghCliAvailable, setGhCliAvailable] = useState(false);
 	const [gistPublishModalOpen, setGistPublishModalOpen] = useState(false);
-	// Tab context gist publishing - stores { filename, content } when publishing tab context
-	const [tabGistContent, setTabGistContent] = useState<{
-		filename: string;
-		content: string;
-	} | null>(null);
-	// File gist URL storage - maps file paths to their published gist info
-	const [fileGistUrls, setFileGistUrls] = useState<Record<string, GistInfo>>({});
+	// Tab context gist publishing - now backed by tabStore (Zustand)
+	const tabGistContent = useTabStore((s) => s.tabGistContent);
+	const fileGistUrls = useTabStore((s) => s.fileGistUrls);
 
 	// Delete Agent Modal State
 	const [deleteAgentModalOpen, setDeleteAgentModalOpen] = useState(false);
@@ -1460,7 +1547,7 @@ function MaestroConsoleInner() {
 			.get('fileGistUrls')
 			.then((savedUrls) => {
 				if (savedUrls && typeof savedUrls === 'object') {
-					setFileGistUrls(savedUrls as Record<string, GistInfo>);
+					useTabStore.getState().setFileGistUrls(savedUrls as Record<string, GistInfo>);
 				}
 			})
 			.catch(() => {
@@ -1470,12 +1557,11 @@ function MaestroConsoleInner() {
 
 	// Helper to save a gist URL for a file path
 	const saveFileGistUrl = useCallback((filePath: string, gistInfo: GistInfo) => {
-		setFileGistUrls((prev) => {
-			const updated = { ...prev, [filePath]: gistInfo };
-			// Persist to settings
-			window.maestro.settings.set('fileGistUrls', updated);
-			return updated;
-		});
+		const { fileGistUrls: current } = useTabStore.getState();
+		const updated = { ...current, [filePath]: gistInfo };
+		useTabStore.getState().setFileGistUrls(updated);
+		// Persist to settings
+		window.maestro.settings.set('fileGistUrls', updated);
 	}, []);
 
 	// Expose debug helpers to window for console access
@@ -2956,10 +3042,13 @@ function MaestroConsoleInner() {
 					// by respawning the participant with context. Don't show error or
 					// reset state - let the recovery flow handle it silently.
 					if (agentError.type === 'session_not_found') {
-						console.log('[onAgentError] Suppressing session_not_found for group chat - exit-listener will handle recovery:', {
-							groupChatId,
-							participantName: isModeratorError ? 'Moderator' : participantOrModerator,
-						});
+						console.log(
+							'[onAgentError] Suppressing session_not_found for group chat - exit-listener will handle recovery:',
+							{
+								groupChatId,
+								participantName: isModeratorError ? 'Moderator' : participantOrModerator,
+							}
+						);
 						return;
 					}
 
@@ -3536,7 +3625,6 @@ function MaestroConsoleInner() {
 	const mainPanelRef = useRef<MainPanelHandle>(null);
 
 	// Refs for toast notifications (to access latest values in event handlers)
-	// Note: sessionsRef, groupsRef, activeSessionIdRef are now provided by SessionContext
 	const addToastRef = useRef(addToast);
 	const updateGlobalStatsRef = useRef(updateGlobalStats);
 	const customAICommandsRef = useRef(customAICommands);
@@ -3609,7 +3697,6 @@ function MaestroConsoleInner() {
 
 	// Keyboard navigation state
 	// Note: selectedSidebarIndex/setSelectedSidebarIndex are destructured from useUIStore() above
-	// Note: activeSession is now provided by SessionContext
 	// Note: activeTab is memoized later at line ~3795 - use that for all tab operations
 
 	// Discover slash commands when a session becomes active and doesn't have them yet
@@ -5265,7 +5352,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Show confirmation modal (use openModal with data atomically to avoid race condition)
 				useModalStore.getState().openModal('confirm', {
 					message: `"${tabToClose.name}${tabToClose.extension}" has unsaved changes. Are you sure you want to close it?`,
-					onConfirm: () => { forceCloseFileTab(tabId); },
+					onConfirm: () => {
+						forceCloseFileTab(tabId);
+					},
 				});
 			} else {
 				// No unsaved changes, close immediately
@@ -6556,7 +6645,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		const filename = `${tabName.replace(/[^a-zA-Z0-9-_]/g, '_')}_context.md`;
 
 		// Set content and open the modal
-		setTabGistContent({ filename, content });
+		useTabStore.getState().setTabGistContent({ filename, content });
 		setGistPublishModalOpen(true);
 	}, []);
 
@@ -14120,7 +14209,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						content={tabGistContent?.content ?? activeFileTab?.content ?? ''}
 						onClose={() => {
 							setGistPublishModalOpen(false);
-							setTabGistContent(null);
+							useTabStore.getState().setTabGistContent(null);
 						}}
 						onSuccess={(gistUrl, isPublic) => {
 							// Save gist URL for the file if it's from file preview tab (not tab context)
@@ -14143,7 +14232,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 								actionLabel: 'Open Gist',
 							});
 							// Clear tab gist content after success
-							setTabGistContent(null);
+							useTabStore.getState().setTabGistContent(null);
 						}}
 						existingGist={
 							activeFileTab && !tabGistContent ? fileGistUrls[activeFileTab.path] : undefined
@@ -14621,22 +14710,20 @@ You are taking over this conversation. Based on the context above, provide a bri
  * Phase 3: InputProvider - centralized input state management
  * Phase 4: GroupChatProvider - centralized group chat state management
  * Phase 5: AutoRunProvider - centralized Auto Run and batch processing state management
- * Phase 6: SessionProvider - centralized session and group state management
+ * Phase 6: Session state now lives in sessionStore (Zustand) — no context wrapper needed
  * Phase 7: InlineWizardProvider - inline /wizard command state management
  * See refactor-details-2.md for full plan.
  */
 export default function MaestroConsole() {
 	return (
-		<SessionProvider>
-			<AutoRunProvider>
-				<GroupChatProvider>
-					<InlineWizardProvider>
-						<InputProvider>
-							<MaestroConsoleInner />
-						</InputProvider>
-					</InlineWizardProvider>
-				</GroupChatProvider>
-			</AutoRunProvider>
-		</SessionProvider>
+		<AutoRunProvider>
+			<GroupChatProvider>
+				<InlineWizardProvider>
+					<InputProvider>
+						<MaestroConsoleInner />
+					</InputProvider>
+				</InlineWizardProvider>
+			</GroupChatProvider>
+		</AutoRunProvider>
 	);
 }

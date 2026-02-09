@@ -15,6 +15,7 @@
 
 import { useRef, useCallback, useEffect, useMemo } from 'react';
 import type { Session, SessionState, UsageStats, LogEntry } from '../../types';
+import { useSessionStore } from '../../stores/sessionStore';
 
 // Default flush interval in milliseconds (imperceptible to users)
 export const DEFAULT_BATCH_FLUSH_INTERVAL = 150;
@@ -121,12 +122,14 @@ const generateId = (): string => `${Date.now()}-${Math.random().toString(36).sub
 /**
  * Hook that batches session updates to reduce React re-renders.
  *
- * @param setSessions - The React setState function for sessions
+ * Uses sessionStore.setSessions() directly instead of requiring a React setState
+ * function as a parameter. This decouples the batcher from the React component tree,
+ * so it no longer needs to be instantiated inside a specific provider.
+ *
  * @param flushInterval - How often to flush accumulated updates (default 150ms)
  * @returns BatchedUpdater with methods to queue updates and flush them
  */
 export function useBatchedSessionUpdates(
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>,
 	flushInterval: number = DEFAULT_BATCH_FLUSH_INTERVAL
 ): UseBatchedSessionUpdatesReturn {
 	// Accumulated updates per session
@@ -162,7 +165,7 @@ export function useBatchedSessionUpdates(
 		accumulatorRef.current = new Map();
 		hasPendingRef.current = false;
 
-		setSessions((prev) => {
+		useSessionStore.getState().setSessions((prev: Session[]) => {
 			// PERF: Track whether any session was actually modified.
 			// If no session in prev matched an accumulator entry, return prev
 			// unchanged to preserve referential identity and skip a React re-render.
@@ -449,7 +452,7 @@ export function useBatchedSessionUpdates(
 
 			return anyChanged ? next : prev;
 		});
-	}, [setSessions]);
+	}, []);
 
 	/**
 	 * Start the flush interval timer
