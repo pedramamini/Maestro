@@ -134,6 +134,10 @@ export interface UseSessionListPropsDeps {
 	handleOpenRenameGroupChatModal: (id: string) => void;
 	handleOpenDeleteGroupChatModal: (id: string) => void;
 
+	// Context warning thresholds
+	contextWarningYellowThreshold: number;
+	contextWarningRedThreshold: number;
+
 	// Ref
 	sidebarContainerRef: React.RefObject<HTMLDivElement>;
 }
@@ -265,6 +269,10 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			groupChatStates: deps.groupChatStates,
 			allGroupChatParticipantStates: deps.allGroupChatParticipantStates,
 
+			// Context warning thresholds
+			contextWarningYellowThreshold: deps.contextWarningYellowThreshold,
+			contextWarningRedThreshold: deps.contextWarningRedThreshold,
+
 			// Ref
 			sidebarContainerRef: deps.sidebarContainerRef,
 		}),
@@ -356,6 +364,8 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.handleEditGroupChat,
 			deps.handleOpenRenameGroupChatModal,
 			deps.handleOpenDeleteGroupChatModal,
+			deps.contextWarningYellowThreshold,
+			deps.contextWarningRedThreshold,
 			// Refs (stable, but included for completeness)
 			deps.sidebarContainerRef,
 		]

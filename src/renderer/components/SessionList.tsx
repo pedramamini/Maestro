@@ -784,6 +784,8 @@ interface SessionTooltipContentProps {
 	gitFileCount?: number;
 	groupName?: string; // Optional group name (for skinny mode)
 	isInBatch?: boolean; // Whether session is running in auto mode
+	contextWarningYellowThreshold?: number;
+	contextWarningRedThreshold?: number;
 }
 
 const SessionTooltipContent = memo(function SessionTooltipContent({
@@ -792,6 +794,8 @@ const SessionTooltipContent = memo(function SessionTooltipContent({
 	gitFileCount,
 	groupName,
 	isInBatch = false,
+	contextWarningYellowThreshold = 60,
+	contextWarningRedThreshold = 80,
 }: SessionTooltipContentProps) {
 	return (
 		<>
@@ -919,7 +923,7 @@ const SessionTooltipContent = memo(function SessionTooltipContent({
 						className="h-full transition-all"
 						style={{
 							width: `${session.contextUsage}%`,
-							backgroundColor: getContextColor(session.contextUsage, theme),
+							backgroundColor: getContextColor(session.contextUsage, theme, contextWarningYellowThreshold, contextWarningRedThreshold),
 						}}
 					/>
 				</div>
@@ -1118,6 +1122,10 @@ interface SessionListProps {
 	groupChatStates?: Map<string, GroupChatState>;
 	/** Participant states for ALL group chats (groupChatId -> Map<participantName, state>) */
 	allGroupChatParticipantStates?: Map<string, Map<string, 'idle' | 'working'>>;
+
+	// Context warning thresholds (to match header bar colors with warning sash)
+	contextWarningYellowThreshold?: number;
+	contextWarningRedThreshold?: number;
 }
 
 function SessionListInner(props: SessionListProps) {
@@ -1210,6 +1218,8 @@ function SessionListInner(props: SessionListProps) {
 		participantStates,
 		groupChatStates,
 		allGroupChatParticipantStates,
+		contextWarningYellowThreshold = 60,
+		contextWarningRedThreshold = 80,
 	} = props;
 
 	const [sessionFilter, setSessionFilter] = useState('');
@@ -1473,6 +1483,8 @@ function SessionListInner(props: SessionListProps) {
 									theme={theme}
 									gitFileCount={getFileCount(s.id)}
 									isInBatch={isInBatch}
+									contextWarningYellowThreshold={contextWarningYellowThreshold}
+									contextWarningRedThreshold={contextWarningRedThreshold}
 								/>
 							</div>
 						</div>
@@ -2911,6 +2923,8 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(session.id)}
 										groupName={groups.find((g) => g.id === session.groupId)?.name}
 										isInBatch={isInBatch}
+										contextWarningYellowThreshold={contextWarningYellowThreshold}
+										contextWarningRedThreshold={contextWarningRedThreshold}
 									/>
 								</div>
 							</div>

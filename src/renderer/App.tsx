@@ -12973,6 +12973,22 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// when fileTree is undefined, and a new reference whenever activeSession updates.
 	const stableFileTree = useMemo(() => activeSession?.fileTree || [], [activeSession?.fileTree]);
 
+	// Bind user's context warning thresholds to getContextColor so the header bar
+	// colors match the bottom warning sash thresholds from settings.
+	const boundGetContextColor: typeof getContextColor = useCallback(
+		(usage, th) =>
+			getContextColor(
+				usage,
+				th,
+				contextManagementSettings.contextWarningYellowThreshold,
+				contextManagementSettings.contextWarningRedThreshold
+			),
+		[
+			contextManagementSettings.contextWarningYellowThreshold,
+			contextManagementSettings.contextWarningRedThreshold,
+		]
+	);
+
 	const mainPanelProps = useMainPanelProps({
 		// Core state
 		logViewerOpen,
@@ -13115,7 +13131,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleInputKeyDown,
 		handlePaste,
 		handleDrop,
-		getContextColor,
+		getContextColor: boundGetContextColor,
 		setActiveSessionId,
 		handleStopBatchRun,
 		showConfirmation,
@@ -13318,6 +13334,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 		handleEditGroupChat,
 		handleOpenRenameGroupChatModal,
 		handleOpenDeleteGroupChatModal,
+
+		// Context warning thresholds
+		contextWarningYellowThreshold: contextManagementSettings.contextWarningYellowThreshold,
+		contextWarningRedThreshold: contextManagementSettings.contextWarningRedThreshold,
 
 		// Ref
 		sidebarContainerRef,

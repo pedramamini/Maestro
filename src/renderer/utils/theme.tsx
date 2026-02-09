@@ -5,10 +5,16 @@ import type { Theme, SessionState, FileChangeType } from '../types';
 // Re-export formatActiveTime from formatters for backwards compatibility
 export { formatActiveTime } from './formatters';
 
-// Get color based on context usage percentage
-export const getContextColor = (usage: number, theme: Theme): string => {
-	if (usage >= 80) return theme.colors.error;
-	if (usage >= 60) return theme.colors.warning;
+// Get color based on context usage percentage.
+// Thresholds default to 60/80 but can be overridden to match user's context warning settings.
+export const getContextColor = (
+	usage: number,
+	theme: Theme,
+	yellowThreshold = 60,
+	redThreshold = 80
+): string => {
+	if (usage >= redThreshold) return theme.colors.error;
+	if (usage >= yellowThreshold) return theme.colors.warning;
 	return theme.colors.success;
 };
 

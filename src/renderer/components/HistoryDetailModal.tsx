@@ -25,6 +25,7 @@ import { stripAnsiCodes } from '../../shared/stringUtils';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
 import { calculateContextTokens } from '../utils/contextUsage';
+import { getContextColor } from '../utils/theme';
 
 // Double checkmark SVG component for validated entries
 const DoubleCheck = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
@@ -62,12 +63,6 @@ interface HistoryDetailModalProps {
 	onFileClick?: (path: string) => void;
 }
 
-// Get context bar color based on usage percentage
-const getContextColor = (usage: number, theme: Theme) => {
-	if (usage >= 90) return theme.colors.error;
-	if (usage >= 70) return theme.colors.warning;
-	return theme.colors.success;
-};
 
 export function HistoryDetailModal({
 	theme,
