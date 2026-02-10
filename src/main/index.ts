@@ -274,7 +274,7 @@ function createWindow() {
 setupGlobalErrorHandlers();
 
 app.whenReady().then(async () => {
-	windowRegistry = new WindowRegistry();
+	windowRegistry = new WindowRegistry({ windowStateStore });
 	windowManager = createWindowManager({
 		windowStateStore,
 		isDevelopment,
@@ -409,6 +409,8 @@ const quitHandler = createQuitHandler({
 	getActiveGroomingSessionCount,
 	cleanupAllGroomingSessions,
 	closeStatsDB,
+	getWindowRegistry: () => windowRegistry,
+	windowStateStore,
 	stopCliWatcher: () => cliWatcher.stop(),
 });
 quitHandler.setup();
