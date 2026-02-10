@@ -222,8 +222,13 @@ const mockMaestro = {
 		getForSession: vi.fn().mockResolvedValue(null),
 		moveSession: vi.fn().mockResolvedValue(true),
 		focusWindow: vi.fn().mockResolvedValue(true),
+		getWindowBounds: vi.fn().mockResolvedValue({ x: 0, y: 0, width: 1200, height: 800 }),
+		findWindowAtPoint: vi.fn().mockResolvedValue(null),
+		highlightDropZone: vi.fn().mockResolvedValue(true),
 		getState: vi.fn().mockResolvedValue(null),
 		onSessionMoved: vi.fn().mockReturnValue(() => {}),
+		onDropZoneHighlight: vi.fn().mockReturnValue(() => {}),
+		updateState: vi.fn().mockResolvedValue(true),
 	},
 	git: {
 		status: vi.fn().mockResolvedValue({ files: [], branch: 'main', stdout: '' }),

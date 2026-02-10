@@ -92,6 +92,11 @@ interface MaestroWindowSessionMovedEvent {
 	toWindowId: string;
 }
 
+interface MaestroWindowDropZoneHighlightEvent {
+	highlight: boolean;
+	sourceWindowId: string | null;
+}
+
 interface AgentConfigOption {
 	key: string;
 	type: 'checkbox' | 'text' | 'number' | 'select';
@@ -2753,8 +2758,12 @@ interface MaestroAPI {
 		focusWindow: (windowId: string) => Promise<boolean>;
 		getWindowBounds: () => Promise<MaestroWindowBounds>;
 		findWindowAtPoint: (screenX: number, screenY: number) => Promise<string | null>;
+		highlightDropZone: (windowId: string, highlight: boolean) => Promise<boolean>;
 		getState: () => Promise<MaestroWindowState | null>;
 		onSessionMoved: (callback: (event: MaestroWindowSessionMovedEvent) => void) => () => void;
+		onDropZoneHighlight: (
+			callback: (event: MaestroWindowDropZoneHighlightEvent) => void
+		) => () => void;
 		updateState: (
 			updates: Partial<Pick<MaestroWindowState, 'leftPanelCollapsed' | 'rightPanelCollapsed'>>
 		) => Promise<boolean>;

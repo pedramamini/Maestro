@@ -954,6 +954,175 @@ describe('TabBar', () => {
 			// Tab should no longer have opacity-50 class (dragging state)
 			expect(tab).not.toHaveClass('opacity-50');
 		});
+
+		it('creates a drag preview image when dragging starts', () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					onTabReorder={mockOnTabReorder}
+				/>
+			);
+
+			const tab = screen.getByText('Tab 1').closest('[data-tab-id]') as HTMLElement;
+			tab.getBoundingClientRect = () => ({
+				left: 0,
+				top: 0,
+				right: 120,
+				bottom: 32,
+				width: 120,
+				height: 32,
+				x: 0,
+				y: 0,
+				toJSON: () => ({}),
+			});
+
+			const dataTransfer = {
+				effectAllowed: '',
+				setData: vi.fn(),
+				getData: vi.fn().mockReturnValue('tab-1'),
+				setDragImage: vi.fn(),
+			};
+
+			fireEvent.dragStart(tab, {
+				dataTransfer,
+				clientX: 10,
+				clientY: 10,
+				screenX: 10,
+				screenY: 10,
+			});
+
+			expect(dataTransfer.setDragImage).toHaveBeenCalledTimes(1);
+
+			fireEvent.dragEnd(tab, { dataTransfer });
+		});
+
+		it('notifies other windows about drop targets when dragging outside bounds', async () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+			const getWindowBoundsMock = vi.mocked(window.maestro.windows.getWindowBounds);
+			const findWindowAtPointMock = vi.mocked(window.maestro.windows.findWindowAtPoint);
+			getWindowBoundsMock.mockResolvedValue({
+				x: 0,
+				y: 0,
+				width: 50,
+				height: 50,
+			});
+			findWindowAtPointMock.mockResolvedValue('secondary-window');
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					onTabReorder={mockOnTabReorder}
+				/>
+			);
+
+			const tab = screen.getByText('Tab 1').closest('[data-tab-id]') as HTMLElement;
+			tab.getBoundingClientRect = () => ({
+				left: 0,
+				top: 0,
+				right: 120,
+				bottom: 32,
+				width: 120,
+				height: 32,
+				x: 0,
+				y: 0,
+				toJSON: () => ({}),
+			});
+
+			const dataTransfer = {
+				effectAllowed: '',
+				setData: vi.fn(),
+				getData: vi.fn().mockReturnValue('tab-1'),
+				setDragImage: vi.fn(),
+			};
+
+			fireEvent.dragStart(tab, {
+				dataTransfer,
+				clientX: 10,
+				clientY: 10,
+				screenX: 10,
+				screenY: 10,
+			});
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			fireEvent.drag(tab, {
+				dataTransfer,
+				clientX: 20,
+				clientY: 20,
+				screenX: 200,
+				screenY: 200,
+			});
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(window.maestro.windows.highlightDropZone).toHaveBeenCalledWith(
+				'secondary-window',
+				true
+			);
+
+			fireEvent.dragEnd(tab, { dataTransfer });
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(window.maestro.windows.highlightDropZone).toHaveBeenCalledWith(
+				'secondary-window',
+				false
+			);
+		});
+	});
+
+	describe('drop zone highlight IPC', () => {
+		it('toggles highlight state when IPC event fires', () => {
+			const tabs = [createTab({ id: 'tab-1', name: 'Tab 1' })];
+			const listeners: Array<(event: { highlight: boolean }) => void> = [];
+			const dropZoneListenerMock = vi.mocked(window.maestro.windows.onDropZoneHighlight);
+			dropZoneListenerMock.mockImplementation((callback) => {
+				listeners.push(callback);
+				return () => {};
+			});
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+				/>
+			);
+
+			const tabBar = document.querySelector('[data-tour="tab-bar"]') as HTMLElement;
+			expect(tabBar).toHaveAttribute('data-drop-target-highlight', 'false');
+
+			act(() => {
+				listeners[0]?.({ highlight: true });
+			});
+			expect(tabBar).toHaveAttribute('data-drop-target-highlight', 'true');
+
+			act(() => {
+				listeners[0]?.({ highlight: false });
+			});
+			expect(tabBar).toHaveAttribute('data-drop-target-highlight', 'false');
+		});
 	});
 
 	describe('moveSessionToWindowHelper', () => {

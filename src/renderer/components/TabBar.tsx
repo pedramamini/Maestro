@@ -1689,6 +1689,7 @@ function TabBarInner({
 	const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
 	const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
 	const [isDraggingOutsideWindow, setIsDraggingOutsideWindow] = useState(false);
+	const [isDropZoneHighlightActive, setIsDropZoneHighlightActive] = useState(false);
 	// Use prop if provided (controlled), otherwise use local state (uncontrolled)
 	const [showUnreadOnlyLocal, setShowUnreadOnlyLocal] = useState(false);
 	const showUnreadOnly = showUnreadOnlyProp ?? showUnreadOnlyLocal;
@@ -1702,6 +1703,8 @@ function TabBarInner({
 	const dragHoveredWindowIdRef = useRef<string | null>(null);
 	const dragWindowLookupTicketRef = useRef(0);
 	const wasDraggingOutsideWindowRef = useRef(false);
+	const dragPreviewElementRef = useRef<HTMLElement | null>(null);
+	const highlightedWindowIdRef = useRef<string | null>(null);
 	const [isOverflowing, setIsOverflowing] = useState(false);
 
 	// Get active tab's name to trigger scroll when it changes (e.g., after auto-generated name)
@@ -1773,14 +1776,92 @@ function TabBarInner({
 		});
 	}, [unifiedTabs, showUnreadOnly, activeTabId, activeFileTabId]);
 
+	const cleanupDragPreview = useCallback(() => {
+		const preview = dragPreviewElementRef.current;
+		if (preview?.parentNode) {
+			preview.parentNode.removeChild(preview);
+		}
+		dragPreviewElementRef.current = null;
+	}, []);
+
+	const sendDropZoneHighlight = useCallback(async (windowId: string, highlight: boolean) => {
+		if (!window.maestro?.windows?.highlightDropZone) {
+			return;
+		}
+
+		try {
+			await window.maestro.windows.highlightDropZone(windowId, highlight);
+		} catch (error) {
+			console.error('Failed to update drop zone highlight state', error);
+		}
+	}, []);
+
+	const syncDropZoneHighlight = useCallback(
+		(nextWindowId: string | null) => {
+			const previousWindowId = highlightedWindowIdRef.current;
+			if (previousWindowId && previousWindowId !== nextWindowId) {
+				highlightedWindowIdRef.current = null;
+				void sendDropZoneHighlight(previousWindowId, false);
+			}
+
+			if (nextWindowId && nextWindowId !== previousWindowId) {
+				highlightedWindowIdRef.current = nextWindowId;
+				void sendDropZoneHighlight(nextWindowId, true);
+			} else if (!nextWindowId) {
+				highlightedWindowIdRef.current = null;
+			}
+		},
+		[sendDropZoneHighlight]
+	);
+
+	const setHoveredWindow = useCallback(
+		(windowId: string | null) => {
+			if (dragHoveredWindowIdRef.current === windowId) {
+				return;
+			}
+			dragHoveredWindowIdRef.current = windowId;
+			syncDropZoneHighlight(windowId);
+		},
+		[syncDropZoneHighlight]
+	);
+
 	const resetDragWindowTracking = useCallback(() => {
 		windowBoundsRef.current = null;
 		dragCursorPositionRef.current = null;
-		dragHoveredWindowIdRef.current = null;
+		setHoveredWindow(null);
 		dragWindowLookupTicketRef.current += 1;
 		wasDraggingOutsideWindowRef.current = false;
 		setIsDraggingOutsideWindow(false);
-	}, []);
+		cleanupDragPreview();
+	}, [cleanupDragPreview, setHoveredWindow]);
+
+	const attachDragPreviewImage = useCallback(
+		(tabId: string, event: React.DragEvent) => {
+			const tabElement = tabRefs.current.get(tabId);
+			const dataTransfer = event.dataTransfer;
+			if (!tabElement || !dataTransfer || typeof dataTransfer.setDragImage !== 'function') {
+				return;
+			}
+
+			const clone = tabElement.cloneNode(true) as HTMLElement;
+			clone.style.position = 'absolute';
+			clone.style.top = '-10000px';
+			clone.style.left = '-10000px';
+			clone.style.pointerEvents = 'none';
+			clone.style.opacity = '1';
+			clone.style.filter = 'drop-shadow(0 8px 20px rgba(0, 0, 0, 0.35))';
+			clone.style.width = `${tabElement.offsetWidth}px`;
+			clone.style.height = `${tabElement.offsetHeight}px`;
+			document.body.appendChild(clone);
+			dragPreviewElementRef.current = clone;
+
+			const rect = tabElement.getBoundingClientRect();
+			const offsetX = Math.max(0, Math.min(event.clientX - rect.left, rect.width));
+			const offsetY = Math.max(0, Math.min(event.clientY - rect.top, rect.height));
+			dataTransfer.setDragImage(clone, offsetX, offsetY);
+		},
+		[]
+	);
 
 	const moveSessionToWindow = useCallback(
 		(tabId: string, targetWindowId: string) => {
@@ -1838,26 +1919,29 @@ function TabBarInner({
 		[windowId, tabs]
 	);
 
-	const resolveWindowAtDragPoint = useCallback(async (screenX: number, screenY: number) => {
-		if (!window.maestro?.windows?.findWindowAtPoint) {
-			dragHoveredWindowIdRef.current = null;
-			return;
-		}
-
-		const lookupTicket = ++dragWindowLookupTicketRef.current;
-
-		try {
-			const windowId = await window.maestro.windows.findWindowAtPoint(screenX, screenY);
-			if (dragWindowLookupTicketRef.current === lookupTicket) {
-				dragHoveredWindowIdRef.current = windowId ?? null;
+	const resolveWindowAtDragPoint = useCallback(
+		async (screenX: number, screenY: number) => {
+			if (!window.maestro?.windows?.findWindowAtPoint) {
+				setHoveredWindow(null);
+				return;
 			}
-		} catch (error) {
-			if (dragWindowLookupTicketRef.current === lookupTicket) {
-				dragHoveredWindowIdRef.current = null;
+
+			const lookupTicket = ++dragWindowLookupTicketRef.current;
+
+			try {
+				const windowId = await window.maestro.windows.findWindowAtPoint(screenX, screenY);
+				if (dragWindowLookupTicketRef.current === lookupTicket) {
+					setHoveredWindow(windowId ?? null);
+				}
+			} catch (error) {
+				if (dragWindowLookupTicketRef.current === lookupTicket) {
+					setHoveredWindow(null);
+				}
+				console.error('Failed to resolve window at drag point', error);
 			}
-			console.error('Failed to resolve window at drag point', error);
-		}
-	}, []);
+		},
+		[setHoveredWindow]
+	);
 
 	const applyDragPosition = useCallback(
 		(screenX: number, screenY: number) => {
@@ -1885,9 +1969,9 @@ function TabBarInner({
 			if (wasOutside) {
 				dragWindowLookupTicketRef.current += 1;
 			}
-			dragHoveredWindowIdRef.current = null;
+			setHoveredWindow(null);
 		}
-	}, [resolveWindowAtDragPoint]);
+	}, [resolveWindowAtDragPoint, setHoveredWindow]);
 
 	const captureWindowBounds = useCallback(async () => {
 		if (!window.maestro?.windows?.getWindowBounds) {
@@ -1912,10 +1996,11 @@ function TabBarInner({
 			e.dataTransfer.setData('text/plain', tabId);
 			setDraggingTabId(tabId);
 			resetDragWindowTracking();
+			attachDragPreviewImage(tabId, e);
 			applyDragPosition(e.screenX, e.screenY);
 			void captureWindowBounds();
 		},
-		[applyDragPosition, captureWindowBounds, resetDragWindowTracking]
+		[attachDragPreviewImage, applyDragPosition, captureWindowBounds, resetDragWindowTracking]
 	);
 
 	const handleDrag = useCallback(
@@ -2149,15 +2234,43 @@ function TabBarInner({
 		}
 	}, []);
 
+	useEffect(() => {
+		if (!window.maestro?.windows?.onDropZoneHighlight) {
+			return undefined;
+		}
+
+		const unsubscribe = window.maestro.windows.onDropZoneHighlight((event) => {
+			setIsDropZoneHighlightActive(Boolean(event?.highlight));
+		});
+		return () => {
+			unsubscribe?.();
+		};
+	}, []);
+
+	useEffect(() => {
+		return () => {
+			const highlightedId = highlightedWindowIdRef.current;
+			if (highlightedId && window.maestro?.windows?.highlightDropZone) {
+				void window.maestro.windows.highlightDropZone(highlightedId, false);
+			}
+			cleanupDragPreview();
+		};
+	}, [cleanupDragPreview]);
+
 	return (
 		<div
 			ref={tabBarRef}
 			className="flex items-end gap-0.5 pt-2 border-b overflow-x-auto overflow-y-hidden no-scrollbar"
 			data-tour="tab-bar"
 			data-dragging-outside={isDraggingOutsideWindow ? 'true' : 'false'}
+			data-drop-target-highlight={isDropZoneHighlightActive ? 'true' : 'false'}
 			style={{
 				backgroundColor: theme.colors.bgSidebar,
-				borderColor: theme.colors.border,
+				borderColor: isDropZoneHighlightActive ? theme.colors.accent : theme.colors.border,
+				boxShadow: isDropZoneHighlightActive
+					? `inset 0 -2px 0 ${theme.colors.accent}, 0 8px 24px ${theme.colors.accent}33`
+					: 'none',
+				transition: 'box-shadow 120ms ease, border-color 120ms ease',
 			}}
 		>
 			{/* Tab search and unread filter - sticky at the beginning with full-height opaque background */}
