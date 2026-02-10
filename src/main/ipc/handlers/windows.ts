@@ -6,6 +6,7 @@ import type { WindowManager } from '../../app-lifecycle/window-manager';
 import type { WindowState as WindowStateStoreShape } from '../../stores/types';
 import type {
 	MultiWindowState,
+	WindowDropZoneHighlightEvent,
 	WindowInfo,
 	WindowState as PersistedWindowState,
 	WindowSessionMovedEvent,
@@ -54,6 +55,11 @@ interface FindWindowAtPointArgs {
 interface UpdateWindowStateArgs {
 	leftPanelCollapsed?: boolean;
 	rightPanelCollapsed?: boolean;
+}
+
+interface HighlightDropZoneArgs {
+	windowId: string;
+	highlight?: boolean;
 }
 
 export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void {
@@ -227,6 +233,46 @@ export function registerWindowsHandlers(deps: WindowsHandlerDependencies): void 
 				}
 
 				return null;
+			}
+		)
+	);
+
+	ipcMain.handle(
+		'windows:highlightDropZone',
+		withIpcErrorLogging(
+			handlerOpts('highlightDropZone'),
+			async (event, args?: HighlightDropZoneArgs) => {
+				const { windowId, highlight = true } = args ?? {};
+
+				if (!windowId) {
+					throw new Error('windowId is required');
+				}
+
+				const windowRegistry = getWindowRegistry();
+				const entry = windowRegistry.get(windowId);
+
+				if (!entry) {
+					throw new Error(`Window ${windowId} not found`);
+				}
+
+				if (!isWebContentsAvailable(entry.browserWindow)) {
+					return false;
+				}
+
+				const sourceBrowserWindow = BrowserWindow.fromWebContents(event.sender);
+				let sourceWindowId: string | null = null;
+				if (sourceBrowserWindow) {
+					sourceWindowId =
+						findWindowIdByBrowserWindow(windowRegistry, sourceBrowserWindow) ?? null;
+				}
+
+				const payload: WindowDropZoneHighlightEvent = {
+					highlight: Boolean(highlight),
+					sourceWindowId,
+				};
+
+				entry.browserWindow.webContents.send('windows:dropZoneHighlight', payload);
+				return true;
 			}
 		)
 	);

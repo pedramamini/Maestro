@@ -34,3 +34,8 @@ export interface WindowSessionMovedEvent {
 	fromWindowId: string;
 	toWindowId: string;
 }
+
+export interface WindowDropZoneHighlightEvent {
+	highlight: boolean;
+	sourceWindowId: string | null;
+}
