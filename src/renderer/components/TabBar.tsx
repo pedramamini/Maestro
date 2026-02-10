@@ -25,6 +25,7 @@ import type { AITab, Theme, FilePreviewTab, UnifiedTab } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
 import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
 import { useWindowContext } from '../contexts/WindowContext';
+import { useToast } from '../contexts/ToastContext';
 
 // Offset newly spawned windows so the cursor isn't pinned to the top-left corner
 const DRAG_WINDOW_OFFSET_X = 100;
@@ -1702,7 +1703,13 @@ function TabBarInner({
 	colorBlindMode,
 	sessionId,
 }: TabBarProps) {
-	const { sessionIds: windowSessionIds, windowId, moveSessionToNewWindow } = useWindowContext();
+	const {
+		sessionIds: windowSessionIds,
+		windowId,
+		moveSessionToNewWindow,
+		isMainWindow,
+	} = useWindowContext();
+	const { addToast } = useToast();
 	const sessionAllowed =
 		!sessionId || windowSessionIds.length === 0 || windowSessionIds.includes(sessionId);
 
@@ -1718,6 +1725,34 @@ function TabBarInner({
 	const showUnreadOnly = showUnreadOnlyProp ?? showUnreadOnlyLocal;
 	const toggleUnreadFilter =
 		onToggleUnreadFilter ?? (() => setShowUnreadOnlyLocal((prev) => !prev));
+
+	const showPrimaryWindowGuardToast = useCallback(() => {
+		addToast({
+			type: 'warning',
+			title: 'Keep a tab in the primary window',
+			message:
+				'The main Maestro window must keep at least one session open. Move another tab first or create a new window before removing this one.',
+		});
+	}, [addToast]);
+
+	const shouldPreventPrimaryTabMove = useCallback(
+		(tabId: string) =>
+			isMainWindow &&
+			windowSessionIds.length <= 1 &&
+			windowSessionIds.includes(tabId),
+		[isMainWindow, windowSessionIds]
+	);
+
+	const guardPrimaryWindowTabMove = useCallback(
+		(tabId: string) => {
+			if (!shouldPreventPrimaryTabMove(tabId)) {
+				return false;
+			}
+			showPrimaryWindowGuardToast();
+			return true;
+		},
+		[shouldPreventPrimaryTabMove, showPrimaryWindowGuardToast]
+	);
 
 	const tabBarRef = useRef<HTMLDivElement>(null);
 	const tabRefs = useRef<Map<string, HTMLDivElement>>(new Map());
@@ -2018,6 +2053,11 @@ function TabBarInner({
 
 	const handleDragStart = useCallback(
 		(tabId: string, e: React.DragEvent) => {
+			if (guardPrimaryWindowTabMove(tabId)) {
+				e.preventDefault();
+				e.stopPropagation();
+				return;
+			}
 			e.dataTransfer.effectAllowed = 'move';
 			e.dataTransfer.setData('text/plain', tabId);
 			setDraggingTabId(tabId);
@@ -2026,7 +2066,13 @@ function TabBarInner({
 			applyDragPosition(e.screenX, e.screenY);
 			void captureWindowBounds();
 		},
-		[attachDragPreviewImage, applyDragPosition, captureWindowBounds, resetDragWindowTracking]
+		[
+			attachDragPreviewImage,
+			applyDragPosition,
+			captureWindowBounds,
+			guardPrimaryWindowTabMove,
+			resetDragWindowTracking,
+		]
 	);
 
 	const handleDrag = useCallback(
@@ -2171,9 +2217,12 @@ function TabBarInner({
 
 	const handleTabMoveToNewWindow = useCallback(
 		(tabId: string) => {
+			if (guardPrimaryWindowTabMove(tabId)) {
+				return;
+			}
 			void moveSessionToNewWindow(tabId);
 		},
-		[moveSessionToNewWindow]
+		[guardPrimaryWindowTabMove, moveSessionToNewWindow]
 	);
 
 	// Stable callback wrappers that receive tabId from the Tab component
