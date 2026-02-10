@@ -52,6 +52,7 @@ import {
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
+	registerWindowsHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -107,9 +108,11 @@ import {
 	createCliWatcher,
 	createWindowManager,
 	createQuitHandler,
+	type WindowManager,
 } from './app-lifecycle';
 // Phase 3 refactoring - process listeners
 import { setupProcessListeners as setupProcessListenersModule } from './process-listeners';
+import { WindowRegistry } from './window-registry';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -223,6 +226,8 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let windowManager: WindowManager | null = null;
+let windowRegistry: WindowRegistry | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -235,15 +240,6 @@ const cliWatcher = createCliWatcher({
 
 const devServerPort = process.env.VITE_PORT ? parseInt(process.env.VITE_PORT, 10) : 5173;
 const devServerUrl = `http://localhost:${devServerPort}`;
-
-// Create window manager with dependency injection (Phase 4 refactoring)
-const windowManager = createWindowManager({
-	windowStateStore,
-	isDevelopment,
-	preloadPath: path.join(__dirname, 'preload.js'),
-	rendererPath: path.join(__dirname, '../renderer/index.html'),
-	devServerUrl: devServerUrl,
-});
 
 // Create web server factory with dependency injection (Phase 2 refactoring)
 const createWebServer = createWebServerFactory({
@@ -260,10 +256,17 @@ const createWebServer = createWebServerFactory({
 // - DevTools installation in development
 // - Auto-updater initialization in production
 function createWindow() {
-	mainWindow = windowManager.createWindow();
+	if (!windowManager) {
+		throw new Error('Window manager is not initialized');
+	}
+
+	const browserWindow = windowManager.createWindow();
+	mainWindow = browserWindow;
 	// Handle closed event to clear the reference
-	mainWindow.on('closed', () => {
-		mainWindow = null;
+	browserWindow.on('closed', () => {
+		if (mainWindow === browserWindow) {
+			mainWindow = null;
+		}
 	});
 }
 
@@ -271,6 +274,16 @@ function createWindow() {
 setupGlobalErrorHandlers();
 
 app.whenReady().then(async () => {
+	windowRegistry = new WindowRegistry();
+	windowManager = createWindowManager({
+		windowStateStore,
+		isDevelopment,
+		preloadPath: path.join(__dirname, 'preload.js'),
+		rendererPath: path.join(__dirname, '../renderer/index.html'),
+		devServerUrl: devServerUrl,
+		windowRegistry,
+	});
+
 	// Load logger settings first
 	const logLevel = store.get('logLevel', 'info');
 	logger.setLogLevel(logLevel);
@@ -380,7 +393,8 @@ app.whenReady().then(async () => {
 });
 
 app.on('window-all-closed', () => {
-	if (process.platform !== 'darwin') {
+	const primaryWindow = windowRegistry?.getPrimary();
+	if (process.platform !== 'darwin' || !primaryWindow) {
 		app.quit();
 	}
 });
@@ -638,6 +652,16 @@ function setupIpcHandlers() {
 		getAgentDetector: () => agentDetector,
 		agentConfigsStore,
 		settingsStore: store,
+	});
+
+	if (!windowManager || !windowRegistry) {
+		throw new Error('Window system has not been initialized');
+	}
+
+	registerWindowsHandlers({
+		windowStateStore,
+		getWindowManager: () => windowManager,
+		getWindowRegistry: () => windowRegistry,
 	});
 }
 
