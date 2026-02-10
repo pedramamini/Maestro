@@ -185,6 +185,16 @@ const mockMaestro = {
 		onOutput: vi.fn().mockReturnValue(() => {}),
 		onExit: vi.fn().mockReturnValue(() => {}),
 	},
+	windows: {
+		create: vi.fn().mockResolvedValue({ windowId: 'test-window' }),
+		close: vi.fn().mockResolvedValue(true),
+		list: vi.fn().mockResolvedValue([]),
+		getForSession: vi.fn().mockResolvedValue(null),
+		moveSession: vi.fn().mockResolvedValue(true),
+		focusWindow: vi.fn().mockResolvedValue(true),
+		getState: vi.fn().mockResolvedValue(null),
+		onSessionMoved: vi.fn().mockReturnValue(() => {}),
+	},
 	git: {
 		status: vi.fn().mockResolvedValue({ files: [], branch: 'main', stdout: '' }),
 		diff: vi.fn().mockResolvedValue(''),

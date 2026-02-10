@@ -10,7 +10,7 @@
 import { ipcRenderer } from 'electron';
 import type { Rectangle } from 'electron';
 
-import type { WindowInfo, WindowState } from '../../shared/types/window';
+import type { WindowInfo, WindowSessionMovedEvent, WindowState } from '../../shared/types/window';
 
 type WindowBounds = Partial<Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>>;
 
@@ -75,6 +75,16 @@ export function createWindowsApi() {
 		 * Get persisted state for the current BrowserWindow
 		 */
 		getState: (): Promise<WindowState | null> => ipcRenderer.invoke('windows:getState'),
+
+		/**
+		 * Listen for session move events across windows
+		 */
+		onSessionMoved: (callback: (event: WindowSessionMovedEvent) => void) => {
+			const handler = (_event: Electron.IpcRendererEvent, event: WindowSessionMovedEvent) =>
+				callback(event);
+			ipcRenderer.on('windows:sessionMoved', handler);
+			return () => ipcRenderer.removeListener('windows:sessionMoved', handler);
+		},
 	};
 }
 
