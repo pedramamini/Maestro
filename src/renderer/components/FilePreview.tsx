@@ -2142,19 +2142,33 @@ export const FilePreview = React.memo(
 									e.stopPropagation();
 									setMarkdownEditMode(false);
 								}
-								// Handle Cmd+Up: Move cursor to beginning of document
+								// Handle Cmd+Up: Move cursor to beginning (Shift: select to beginning)
 								else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
 									e.preventDefault();
 									const textarea = e.currentTarget;
-									textarea.setSelectionRange(0, 0);
+									if (e.shiftKey) {
+										const anchor = textarea.selectionDirection === 'backward'
+											? textarea.selectionEnd
+											: textarea.selectionStart;
+										textarea.setSelectionRange(0, anchor, 'backward');
+									} else {
+										textarea.setSelectionRange(0, 0);
+									}
 									textarea.scrollTop = 0;
 								}
-								// Handle Cmd+Down: Move cursor to end of document
+								// Handle Cmd+Down: Move cursor to end (Shift: select to end)
 								else if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) {
 									e.preventDefault();
 									const textarea = e.currentTarget;
 									const len = textarea.value.length;
-									textarea.setSelectionRange(len, len);
+									if (e.shiftKey) {
+										const anchor = textarea.selectionDirection === 'forward'
+											? textarea.selectionStart
+											: textarea.selectionEnd;
+										textarea.setSelectionRange(anchor, len, 'forward');
+									} else {
+										textarea.setSelectionRange(len, len);
+									}
 									textarea.scrollTop = textarea.scrollHeight;
 								}
 								// Handle Opt+Up: Page up (move cursor up by roughly a page)
