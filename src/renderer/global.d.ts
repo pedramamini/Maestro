@@ -86,6 +86,12 @@ interface MaestroMoveSessionOptions {
 	fromWindowId?: string;
 }
 
+interface MaestroWindowSessionMovedEvent {
+	sessionId: string;
+	fromWindowId: string;
+	toWindowId: string;
+}
+
 interface AgentConfigOption {
 	key: string;
 	type: 'checkbox' | 'text' | 'number' | 'select';
@@ -2746,6 +2752,7 @@ interface MaestroAPI {
 		moveSession: (options: MaestroMoveSessionOptions) => Promise<boolean>;
 		focusWindow: (windowId: string) => Promise<boolean>;
 		getState: () => Promise<MaestroWindowState | null>;
+		onSessionMoved: (callback: (event: MaestroWindowSessionMovedEvent) => void) => () => void;
 	};
 }
 

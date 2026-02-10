@@ -33,6 +33,7 @@ export function WindowProvider({ children, initialWindowId }: WindowProviderProp
 	const [windowId, setWindowId] = useState<string | null>(initialWindowId ?? null);
 	const [isMainWindow, setIsMainWindow] = useState(false);
 	const mountedRef = useRef(true);
+	const windowIdRef = useRef<string | null>(initialWindowId ?? null);
 
 	const refreshIsMainWindow = useCallback(async (id: string) => {
 		try {
@@ -73,6 +74,29 @@ export function WindowProvider({ children, initialWindowId }: WindowProviderProp
 		hydrateState();
 		return () => {
 			mountedRef.current = false;
+		};
+	}, [hydrateState]);
+
+	useEffect(() => {
+		windowIdRef.current = windowId;
+	}, [windowId]);
+
+	useEffect(() => {
+		const unsubscribe = window.maestro.windows.onSessionMoved((event) => {
+			const currentWindowId = windowIdRef.current;
+			if (!currentWindowId) {
+				return;
+			}
+			if (
+				event.fromWindowId !== currentWindowId &&
+				event.toWindowId !== currentWindowId
+			) {
+				return;
+			}
+			hydrateState();
+		});
+		return () => {
+			unsubscribe();
 		};
 	}, [hydrateState]);
 
