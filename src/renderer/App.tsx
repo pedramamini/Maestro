@@ -138,6 +138,7 @@ import { useSessionStore, selectActiveSession } from './stores/sessionStore';
 import { useAgentStore } from './stores/agentStore';
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
+import { WindowProvider, useWindowContext } from './contexts/WindowContext';
 
 // Import services
 import { gitService } from './services/git';
@@ -570,9 +571,45 @@ function MaestroConsoleInner() {
 	// Reactive values — each selector triggers re-render only when its specific value changes
 	const sessions = useSessionStore((s) => s.sessions);
 	const groups = useSessionStore((s) => s.groups);
-	const activeSessionId = useSessionStore((s) => s.activeSessionId);
+	let activeSessionId = useSessionStore((s) => s.activeSessionId);
 	const sessionsLoaded = useSessionStore((s) => s.sessionsLoaded);
-	const activeSession = useSessionStore(selectActiveSession);
+
+	const { sessionIds: windowSessionIds, activeSessionId: windowActiveSessionId } = useWindowContext();
+
+	const activeSession = useMemo(() => {
+		if (!sessions.length) {
+			return null;
+		}
+
+		const restrictedSessionIds = windowSessionIds.length ? new Set(windowSessionIds) : null;
+
+		const resolveSession = (sessionId?: string | null) => {
+			if (!sessionId) {
+				return null;
+			}
+			const match = sessions.find((session) => session.id === sessionId);
+			if (!match) {
+				return null;
+			}
+			if (restrictedSessionIds && !restrictedSessionIds.has(match.id)) {
+				return null;
+			}
+			return match;
+		};
+
+		if (restrictedSessionIds) {
+			return (
+				resolveSession(windowActiveSessionId) ??
+				resolveSession(activeSessionId) ??
+				sessions.find((session) => restrictedSessionIds.has(session.id)) ??
+				null
+			);
+		}
+
+		return resolveSession(windowActiveSessionId) ?? resolveSession(activeSessionId) ?? sessions[0] ?? null;
+	}, [sessions, windowSessionIds, windowActiveSessionId, activeSessionId]);
+
+	activeSessionId = activeSession?.id ?? activeSessionId;
 
 	// Actions — stable references from store, never trigger re-renders
 	const {
@@ -12861,11 +12898,25 @@ You are taking over this conversation. Based on the context above, provide a bri
  * See refactor-details-2.md for full plan.
  */
 export default function MaestroConsole() {
+	const initialWindowId = useMemo(() => {
+		if (typeof window === 'undefined') {
+			return undefined;
+		}
+		try {
+			const params = new URLSearchParams(window.location.search);
+			return params.get('windowId') ?? undefined;
+		} catch {
+			return undefined;
+		}
+	}, []);
+
 	return (
-		<InlineWizardProvider>
-			<InputProvider>
-				<MaestroConsoleInner />
-			</InputProvider>
-		</InlineWizardProvider>
+		<WindowProvider initialWindowId={initialWindowId}>
+			<InlineWizardProvider>
+				<InputProvider>
+					<MaestroConsoleInner />
+				</InputProvider>
+			</InlineWizardProvider>
+		</WindowProvider>
 	);
 }
