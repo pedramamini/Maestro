@@ -25,6 +25,7 @@ import type { AITab, Theme, FilePreviewTab, UnifiedTab } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
+import { useWindowContext } from '../contexts/WindowContext';
 
 interface TabBarProps {
 	tabs: AITab[];
@@ -78,6 +79,9 @@ interface TabBarProps {
 	// === Accessibility ===
 	/** Whether colorblind-friendly colors should be used for extension badges */
 	colorBlindMode?: boolean;
+
+	/** Parent session ID for window scoping */
+	sessionId?: string | null;
 }
 
 interface TabProps {
@@ -1603,7 +1607,15 @@ function TabBarInner({
 	onUnifiedTabReorder,
 	// Accessibility
 	colorBlindMode,
+	sessionId,
 }: TabBarProps) {
+	const { sessionIds: windowSessionIds } = useWindowContext();
+	const sessionAllowed =
+		!sessionId || windowSessionIds.length === 0 || windowSessionIds.includes(sessionId);
+
+	if (!sessionAllowed) {
+		return null;
+	}
 	const [draggingTabId, setDraggingTabId] = useState<string | null>(null);
 	const [dragOverTabId, setDragOverTabId] = useState<string | null>(null);
 	// Use prop if provided (controlled), otherwise use local state (uncontrolled)
