@@ -107,6 +107,18 @@ const DEFAULT_WINDOW_TEMPLATE: PersistedWindowState = {
 		WINDOW_STATE_DEFAULTS.multiWindowState?.windows?.[0]?.rightPanelCollapsed ?? false,
 };
 
+function appendWindowIdToUrl(baseUrl: string, windowId: string): string {
+	try {
+		const url = new URL(baseUrl);
+		url.searchParams.set('windowId', windowId);
+		return url.toString();
+	} catch {
+		// Base URL might be a file path or missing protocol in development.
+		const separator = baseUrl.includes('?') ? '&' : '?';
+		return `${baseUrl}${separator}windowId=${encodeURIComponent(windowId)}`;
+	}
+}
+
 /**
  * Creates a window manager for handling BrowserWindows.
  *
@@ -213,11 +225,14 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 					logger.warn(`Failed to load electron-devtools-installer: ${err.message}`, 'Window')
 				);
 
-			browserWindow.loadURL(devServerUrl);
+			const devServerWithWindowId = appendWindowIdToUrl(devServerUrl, resolvedWindowId);
+			browserWindow.loadURL(devServerWithWindowId);
 			// DevTools can be opened via Command-K menu instead of automatically on startup
 			logger.info('Loading development server', 'Window');
 		} else {
-			browserWindow.loadFile(rendererPath);
+			browserWindow.loadFile(rendererPath, {
+				query: { windowId: resolvedWindowId },
+			});
 			logger.info('Loading production build', 'Window');
 			// Open DevTools in production if DEBUG env var is set
 			if (process.env.DEBUG === 'true') {
