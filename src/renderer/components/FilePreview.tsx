@@ -846,32 +846,48 @@ export const FilePreview = React.memo(
 						</a>
 					);
 				},
-				code: ({ node: _node, inline, className, children, ...props }: any) => {
-					const match = (className || '').match(/language-(\w+)/);
-					const lang = match ? match[1] : 'text';
-					const codeContent = String(children).replace(/\n$/, '');
+				pre: ({ children }: any) => {
+					// In react-markdown v10, block code is <pre><code>...</code></pre>
+					// Extract the code element and render with SyntaxHighlighter
+					const codeElement = React.Children.toArray(children).find(
+						(child: any) => child?.type === 'code' || child?.props?.node?.tagName === 'code'
+					) as React.ReactElement<any> | undefined;
 
-					// Handle mermaid code blocks
-					if (!inline && lang === 'mermaid') {
-						return <MermaidRenderer chart={codeContent} theme={theme} />;
+					if (codeElement?.props) {
+						const { className, children: codeChildren } = codeElement.props;
+						const match = (className || '').match(/language-(\w+)/);
+						const lang = match ? match[1] : 'text';
+						const codeContent = String(codeChildren).replace(/\n$/, '');
+
+						// Handle mermaid code blocks
+						if (lang === 'mermaid') {
+							return <MermaidRenderer chart={codeContent} theme={theme} />;
+						}
+
+						return (
+							<SyntaxHighlighter
+								language={lang}
+								style={vscDarkPlus}
+								customStyle={{
+									margin: '0.5em 0',
+									padding: '1em',
+									background: theme.colors.bgActivity,
+									fontSize: '0.9em',
+									borderRadius: '6px',
+								}}
+								PreTag="div"
+							>
+								{codeContent}
+							</SyntaxHighlighter>
+						);
 					}
 
-					return !inline && match ? (
-						<SyntaxHighlighter
-							language={lang}
-							style={vscDarkPlus}
-							customStyle={{
-								margin: '0.5em 0',
-								padding: '1em',
-								background: theme.colors.bgActivity,
-								fontSize: '0.9em',
-								borderRadius: '6px',
-							}}
-							PreTag="div"
-						>
-							{codeContent}
-						</SyntaxHighlighter>
-					) : (
+					// Fallback: render as-is
+					return <pre>{children}</pre>;
+				},
+				code: ({ node: _node, className, children, ...props }: any) => {
+					// Inline code only — block code is handled by the pre component above
+					return (
 						<code className={className} {...props}>
 							{children}
 						</code>
@@ -2126,19 +2142,33 @@ export const FilePreview = React.memo(
 									e.stopPropagation();
 									setMarkdownEditMode(false);
 								}
-								// Handle Cmd+Up: Move cursor to beginning of document
+								// Handle Cmd+Up: Move cursor to beginning (Shift: select to beginning)
 								else if (e.key === 'ArrowUp' && (e.metaKey || e.ctrlKey)) {
 									e.preventDefault();
 									const textarea = e.currentTarget;
-									textarea.setSelectionRange(0, 0);
+									if (e.shiftKey) {
+										const anchor = textarea.selectionDirection === 'backward'
+											? textarea.selectionEnd
+											: textarea.selectionStart;
+										textarea.setSelectionRange(0, anchor, 'backward');
+									} else {
+										textarea.setSelectionRange(0, 0);
+									}
 									textarea.scrollTop = 0;
 								}
-								// Handle Cmd+Down: Move cursor to end of document
+								// Handle Cmd+Down: Move cursor to end (Shift: select to end)
 								else if (e.key === 'ArrowDown' && (e.metaKey || e.ctrlKey)) {
 									e.preventDefault();
 									const textarea = e.currentTarget;
 									const len = textarea.value.length;
-									textarea.setSelectionRange(len, len);
+									if (e.shiftKey) {
+										const anchor = textarea.selectionDirection === 'forward'
+											? textarea.selectionStart
+											: textarea.selectionEnd;
+										textarea.setSelectionRange(anchor, len, 'forward');
+									} else {
+										textarea.setSelectionRange(len, len);
+									}
 									textarea.scrollTop = textarea.scrollHeight;
 								}
 								// Handle Opt+Up: Page up (move cursor up by roughly a page)

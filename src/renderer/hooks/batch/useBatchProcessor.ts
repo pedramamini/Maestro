@@ -1043,7 +1043,6 @@ export function useBatchProcessor({
 							const {
 								tasksCompletedThisRun,
 								addedUncheckedTasks,
-								totalTasksChange,
 								newRemainingTasks,
 								documentChanged,
 								newCheckedCount,
@@ -1107,15 +1106,23 @@ export function useBatchProcessor({
 								docTasksTotal += addedUncheckedTasks;
 							}
 
+							// Recount all documents to get accurate total
+							// Tasks in one document can create tasks in other documents,
+							// so delta-based tracking on just the current doc is insufficient
+							let recountedTotal = 0;
+							for (const doc of documents) {
+								const { taskCount, checkedCount } = await readDocAndCountTasks(
+									folderPath,
+									doc.filename,
+									sshRemoteId
+								);
+								recountedTotal += taskCount + checkedCount;
+							}
+
 							updateBatchStateAndBroadcastRef.current!(sessionId, (prev) => {
 								const prevState = prev[sessionId] || DEFAULT_BATCH_STATE;
-								// Use totalTasksChange for accurate overall tracking
-								// This correctly accounts for both completed tasks and newly added tasks
-								const nextTotalAcrossAllDocs = Math.max(
-									0,
-									prevState.totalTasksAcrossAllDocs + totalTasksChange
-								);
-								const nextTotalTasks = Math.max(0, prevState.totalTasks + totalTasksChange);
+								const nextTotalAcrossAllDocs = Math.max(0, recountedTotal);
+								const nextTotalTasks = Math.max(0, recountedTotal);
 
 								return {
 									...prev,
