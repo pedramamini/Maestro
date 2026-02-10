@@ -576,13 +576,16 @@ function MaestroConsoleInner() {
 	const sessionsLoaded = useSessionStore((s) => s.sessionsLoaded);
 
 	const { sessionIds: windowSessionIds, activeSessionId: windowActiveSessionId } = useWindowContext();
+	const windowSessionIdSet = useMemo(() => {
+		return windowSessionIds.length ? new Set(windowSessionIds) : null;
+	}, [windowSessionIds]);
 
 	const activeSession = useMemo(() => {
 		if (!sessions.length) {
 			return null;
 		}
 
-		const restrictedSessionIds = windowSessionIds.length ? new Set(windowSessionIds) : null;
+		const restrictedSessionIds = windowSessionIdSet;
 
 		const resolveSession = (sessionId?: string | null) => {
 			if (!sessionId) {
@@ -608,7 +611,7 @@ function MaestroConsoleInner() {
 		}
 
 		return resolveSession(windowActiveSessionId) ?? resolveSession(activeSessionId) ?? sessions[0] ?? null;
-	}, [sessions, windowSessionIds, windowActiveSessionId, activeSessionId]);
+	}, [sessions, windowSessionIdSet, windowActiveSessionId, activeSessionId]);
 
 	activeSessionId = activeSession?.id ?? activeSessionId;
 
@@ -3504,10 +3507,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// PERF: Memoize thinkingSessions at App level to avoid passing full sessions array to children.
 	// This prevents InputArea from re-rendering on unrelated session updates (e.g., terminal output).
 	// The computation is O(n) but only runs when sessions array changes, not on every keystroke.
-	const thinkingSessions = useMemo(
-		() => sessions.filter((s) => s.state === 'busy' && s.busySource === 'ai'),
-		[sessions]
-	);
+	const thinkingSessions = useMemo(() => {
+		const busySessions = sessions.filter((s) => s.state === 'busy' && s.busySource === 'ai');
+		if (!windowSessionIdSet) {
+			return busySessions;
+		}
+		return busySessions.filter((session) => windowSessionIdSet.has(session.id));
+	}, [sessions, windowSessionIdSet]);
 
 	// Images are stored per-tab and only used in AI mode
 	// Get staged images from the active tab
@@ -5439,11 +5445,31 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// displayed correctly regardless of which tab/session the user is viewing.
 	// Quick Win 4: Memoized to prevent unnecessary re-calculations
 	const activeBatchRunState = useMemo(() => {
-		if (activeBatchSessionIds.length > 0) {
-			return getBatchState(activeBatchSessionIds[0]);
+		const resolveTargetSessionId = () => {
+			if (windowSessionIdSet) {
+				const matchingBatch = activeBatchSessionIds.find((id) => windowSessionIdSet.has(id));
+				if (matchingBatch) {
+					return matchingBatch;
+				}
+				if (activeSession && windowSessionIdSet.has(activeSession.id)) {
+					return activeSession.id;
+				}
+				return null;
+			}
+
+			if (activeBatchSessionIds.length > 0) {
+				return activeBatchSessionIds[0];
+			}
+
+			return activeSession?.id ?? null;
+		};
+
+		const targetSessionId = resolveTargetSessionId();
+		if (targetSessionId) {
+			return getBatchState(targetSessionId);
 		}
-		return activeSession ? getBatchState(activeSession.id) : getBatchState('');
-	}, [activeBatchSessionIds, activeSession, getBatchState]);
+		return getBatchState('');
+	}, [activeBatchSessionIds, activeSession, windowSessionIdSet, getBatchState]);
 
 	// Inline wizard context for /wizard command
 	// This manages the state for the inline wizard that creates/iterates on Auto Run documents
