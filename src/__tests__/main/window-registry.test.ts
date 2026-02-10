@@ -2,6 +2,7 @@ import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import type { BrowserWindow } from 'electron';
 
 import { WindowRegistry } from '../../main/window-registry';
+import type { WindowState as PersistedWindowState } from '../../shared/types/window';
 
 interface MockStore {
 	store: Record<string, any> & {
@@ -57,7 +58,11 @@ function createMockStore(): MockStore {
 	return store;
 }
 
-function createPersistedWindowState(id: string, sessionIds: string[] = []) {
+function createPersistedWindowState(
+	id: string,
+	sessionIds: string[] = [],
+	overrides: Partial<PersistedWindowState> = {}
+): PersistedWindowState {
 	return {
 		id,
 		x: 0,
@@ -70,6 +75,7 @@ function createPersistedWindowState(id: string, sessionIds: string[] = []) {
 		activeSessionId: sessionIds[0] ?? null,
 		leftPanelCollapsed: false,
 		rightPanelCollapsed: false,
+		...overrides,
 	};
 }
 
@@ -118,6 +124,27 @@ describe('WindowRegistry.saveWindowState', () => {
 			isFullScreen: false,
 			activeSessionId: 'session-1',
 		});
+	});
+
+	it('retains persisted panel collapse state for each window', () => {
+		mockStore.store.multiWindowState = {
+			primaryWindowId: 'primary',
+			windows: [
+				createPersistedWindowState('primary', ['session-1'], {
+					leftPanelCollapsed: true,
+					rightPanelCollapsed: false,
+				}),
+			],
+		};
+		const registry = createRegistry();
+		registerWindow(registry, 'primary');
+
+		registry.saveWindowState('primary', { immediate: true });
+
+		const savedStateCall = mockStore.set.mock.calls.find(([key]) => key === 'multiWindowState');
+		const savedWindow = savedStateCall?.[1].windows[0];
+		expect(savedWindow.leftPanelCollapsed).toBe(true);
+		expect(savedWindow.rightPanelCollapsed).toBe(false);
 	});
 
 	it('debounces repeated save requests', () => {
