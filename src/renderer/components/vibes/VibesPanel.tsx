@@ -5,17 +5,23 @@ import { useSettings, useVibesData } from '../../hooks';
 import { VibesDashboard } from './VibesDashboard';
 import { VibesAnnotationLog } from './VibesAnnotationLog';
 import { VibesModelAttribution } from './VibesModelAttribution';
+import { VibesBlameView } from './VibesBlameView';
+import { VibeCoverageView } from './VibeCoverageView';
+import { VibesReportView } from './VibesReportView';
 
 // ============================================================================
 // Sub-tab type
 // ============================================================================
 
-type VibesSubTab = 'overview' | 'log' | 'models';
+type VibesSubTab = 'overview' | 'log' | 'models' | 'blame' | 'coverage' | 'reports';
 
 const SUB_TABS: { key: VibesSubTab; label: string }[] = [
 	{ key: 'overview', label: 'Overview' },
 	{ key: 'log', label: 'Log' },
 	{ key: 'models', label: 'Models' },
+	{ key: 'blame', label: 'Blame' },
+	{ key: 'coverage', label: 'Coverage' },
+	{ key: 'reports', label: 'Reports' },
 ];
 
 // ============================================================================
@@ -36,7 +42,8 @@ interface VibesPanelProps {
  * Rendered in the Right Panel when the VIBES tab is active.
  *
  * Features:
- * - Sub-navigation bar with Overview / Log / Models tabs
+ * - Sub-navigation bar with Overview / Log / Models / Blame / Coverage / Reports tabs
+ * - Scrollable tab bar to accommodate 6 sub-tabs
  * - Disabled state message when VIBES is off, with button to open Settings
  * - Passes projectPath and vibesData to child components
  */
@@ -95,16 +102,16 @@ export const VibesPanel: React.FC<VibesPanelProps> = ({ theme, projectPath }) =>
 
 	return (
 		<div className="h-full flex flex-col">
-			{/* Sub-tab navigation bar */}
+			{/* Sub-tab navigation bar — scrollable for 6 tabs */}
 			<div
-				className="flex border-b shrink-0"
+				className="flex overflow-x-auto border-b shrink-0 scrollbar-thin"
 				style={{ borderColor: theme.colors.border }}
 			>
 				{SUB_TABS.map((tab) => (
 					<button
 						key={tab.key}
 						onClick={() => setActiveSubTab(tab.key)}
-						className="flex-1 py-2 text-[11px] font-semibold border-b-2 transition-colors"
+						className="shrink-0 px-3 py-2 text-[11px] font-semibold border-b-2 transition-colors whitespace-nowrap"
 						style={{
 							borderColor: activeSubTab === tab.key ? theme.colors.accent : 'transparent',
 							color: activeSubTab === tab.key ? theme.colors.textMain : theme.colors.textDim,
@@ -140,6 +147,27 @@ export const VibesPanel: React.FC<VibesPanelProps> = ({ theme, projectPath }) =>
 						theme={theme}
 						models={vibesData.models}
 						isLoading={vibesData.isLoading}
+					/>
+				)}
+
+				{activeSubTab === 'blame' && (
+					<VibesBlameView
+						theme={theme}
+						projectPath={projectPath}
+					/>
+				)}
+
+				{activeSubTab === 'coverage' && (
+					<VibeCoverageView
+						theme={theme}
+						projectPath={projectPath}
+					/>
+				)}
+
+				{activeSubTab === 'reports' && (
+					<VibesReportView
+						theme={theme}
+						projectPath={projectPath}
 					/>
 				)}
 			</div>

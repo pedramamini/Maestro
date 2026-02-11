@@ -50,6 +50,24 @@ vi.mock('../../../../renderer/components/vibes/VibesModelAttribution', () => ({
 	),
 }));
 
+vi.mock('../../../../renderer/components/vibes/VibesBlameView', () => ({
+	VibesBlameView: () => (
+		<div data-testid="vibes-blame-view">BlameView</div>
+	),
+}));
+
+vi.mock('../../../../renderer/components/vibes/VibeCoverageView', () => ({
+	VibeCoverageView: () => (
+		<div data-testid="vibes-coverage-view">CoverageView</div>
+	),
+}));
+
+vi.mock('../../../../renderer/components/vibes/VibesReportView', () => ({
+	VibesReportView: () => (
+		<div data-testid="vibes-report-view">ReportView</div>
+	),
+}));
+
 vi.mock('lucide-react', () => ({
 	Shield: () => <span data-testid="icon-shield">Shield</span>,
 	Settings: () => <span data-testid="icon-settings">Settings</span>,
@@ -119,12 +137,15 @@ describe('VibesPanel', () => {
 	// Sub-tab navigation
 	// ========================================================================
 
-	it('renders sub-tab navigation with Overview, Log, Models', () => {
+	it('renders sub-tab navigation with all 6 tabs', () => {
 		render(<VibesPanel theme={mockTheme} projectPath="/project" />);
 
 		expect(screen.getByText('Overview')).toBeTruthy();
 		expect(screen.getByText('Log')).toBeTruthy();
 		expect(screen.getByText('Models')).toBeTruthy();
+		expect(screen.getByText('Blame')).toBeTruthy();
+		expect(screen.getByText('Coverage')).toBeTruthy();
+		expect(screen.getByText('Reports')).toBeTruthy();
 	});
 
 	it('defaults to Overview sub-tab', () => {
@@ -155,6 +176,33 @@ describe('VibesPanel', () => {
 		expect(screen.getByTestId('vibes-model-attribution')).toBeTruthy();
 	});
 
+	it('switches to Blame sub-tab when clicked', () => {
+		render(<VibesPanel theme={mockTheme} projectPath="/project" />);
+
+		fireEvent.click(screen.getByText('Blame'));
+
+		expect(screen.queryByTestId('vibes-dashboard')).toBeNull();
+		expect(screen.getByTestId('vibes-blame-view')).toBeTruthy();
+	});
+
+	it('switches to Coverage sub-tab when clicked', () => {
+		render(<VibesPanel theme={mockTheme} projectPath="/project" />);
+
+		fireEvent.click(screen.getByText('Coverage'));
+
+		expect(screen.queryByTestId('vibes-dashboard')).toBeNull();
+		expect(screen.getByTestId('vibes-coverage-view')).toBeTruthy();
+	});
+
+	it('switches to Reports sub-tab when clicked', () => {
+		render(<VibesPanel theme={mockTheme} projectPath="/project" />);
+
+		fireEvent.click(screen.getByText('Reports'));
+
+		expect(screen.queryByTestId('vibes-dashboard')).toBeNull();
+		expect(screen.getByTestId('vibes-report-view')).toBeTruthy();
+	});
+
 	it('switches back to Overview from another tab', () => {
 		render(<VibesPanel theme={mockTheme} projectPath="/project" />);
 
@@ -166,6 +214,34 @@ describe('VibesPanel', () => {
 		fireEvent.click(screen.getByText('Overview'));
 		expect(screen.getByTestId('vibes-dashboard')).toBeTruthy();
 		expect(screen.queryByTestId('vibes-annotation-log')).toBeNull();
+	});
+
+	it('only renders one sub-tab content at a time when switching between all tabs', () => {
+		render(<VibesPanel theme={mockTheme} projectPath="/project" />);
+
+		// Overview is default
+		expect(screen.getByTestId('vibes-dashboard')).toBeTruthy();
+		expect(screen.queryByTestId('vibes-blame-view')).toBeNull();
+		expect(screen.queryByTestId('vibes-coverage-view')).toBeNull();
+		expect(screen.queryByTestId('vibes-report-view')).toBeNull();
+
+		// Switch to Blame
+		fireEvent.click(screen.getByText('Blame'));
+		expect(screen.queryByTestId('vibes-dashboard')).toBeNull();
+		expect(screen.getByTestId('vibes-blame-view')).toBeTruthy();
+		expect(screen.queryByTestId('vibes-coverage-view')).toBeNull();
+		expect(screen.queryByTestId('vibes-report-view')).toBeNull();
+
+		// Switch to Coverage
+		fireEvent.click(screen.getByText('Coverage'));
+		expect(screen.queryByTestId('vibes-blame-view')).toBeNull();
+		expect(screen.getByTestId('vibes-coverage-view')).toBeTruthy();
+		expect(screen.queryByTestId('vibes-report-view')).toBeNull();
+
+		// Switch to Reports
+		fireEvent.click(screen.getByText('Reports'));
+		expect(screen.queryByTestId('vibes-coverage-view')).toBeNull();
+		expect(screen.getByTestId('vibes-report-view')).toBeTruthy();
 	});
 
 	// ========================================================================
