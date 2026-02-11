@@ -280,6 +280,66 @@ describe('vibes-io', () => {
 	});
 
 	// ========================================================================
+	// Atomic Writes (DIVERGENCE 1 fix)
+	// ========================================================================
+	describe('atomic writes', () => {
+		it('writes manifest atomically via temp file + rename', async () => {
+			// Pre-create a stale .tmp file to prove the atomic write cycle runs
+			await ensureAuditDir(tmpDir);
+			const manifestTmpPath = path.join(tmpDir, '.ai-audit', 'manifest.json.tmp');
+			await fsWriteFile(manifestTmpPath, 'stale-data', 'utf8');
+
+			const manifest: VibesManifest = {
+				standard: 'VIBES',
+				version: '1.0',
+				entries: {},
+			};
+			await writeVibesManifest(tmpDir, manifest);
+
+			// Final file has correct content
+			const manifestPath = path.join(tmpDir, '.ai-audit', 'manifest.json');
+			const raw = await readFile(manifestPath, 'utf8');
+			expect(JSON.parse(raw)).toEqual(manifest);
+
+			// Temp file was consumed by rename (no longer exists)
+			await expect(access(manifestTmpPath, constants.F_OK)).rejects.toThrow();
+		});
+
+		it('writes config atomically via temp file + rename', async () => {
+			// Pre-create a stale .tmp file to prove the atomic write cycle runs
+			await ensureAuditDir(tmpDir);
+			const configTmpPath = path.join(tmpDir, '.ai-audit', 'config.json.tmp');
+			await fsWriteFile(configTmpPath, 'stale-data', 'utf8');
+
+			await writeVibesConfig(tmpDir, SAMPLE_CONFIG);
+
+			// Final file has correct content
+			const configPath = path.join(tmpDir, '.ai-audit', 'config.json');
+			const raw = await readFile(configPath, 'utf8');
+			expect(JSON.parse(raw)).toEqual(SAMPLE_CONFIG);
+
+			// Temp file was consumed by rename (no longer exists)
+			await expect(access(configTmpPath, constants.F_OK)).rejects.toThrow();
+		});
+
+		it('no temp file remains after successful write', async () => {
+			const manifest: VibesManifest = {
+				standard: 'VIBES',
+				version: '1.0',
+				entries: {},
+			};
+			await writeVibesManifest(tmpDir, manifest);
+			await writeVibesConfig(tmpDir, SAMPLE_CONFIG);
+
+			// Neither .tmp file should exist
+			const manifestTmpPath = path.join(tmpDir, '.ai-audit', 'manifest.json.tmp');
+			const configTmpPath = path.join(tmpDir, '.ai-audit', 'config.json.tmp');
+			await expect(access(manifestTmpPath, constants.F_OK)).rejects.toThrow();
+			await expect(access(configTmpPath, constants.F_OK)).rejects.toThrow();
+		});
+	});
+
+	// ========================================================================
 	// appendAnnotation / readAnnotations (buffered)
 	// ========================================================================
 	describe('appendAnnotation', () => {

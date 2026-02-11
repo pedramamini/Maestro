@@ -9,7 +9,7 @@
 // - Per-project file locking to prevent concurrent write corruption
 // - Graceful error handling (log + never crash the agent session)
 
-import { mkdir, readFile, writeFile, appendFile, access, constants } from 'fs/promises';
+import { mkdir, readFile, writeFile, appendFile, access, constants, open, rename } from 'fs/promises';
 import * as path from 'path';
 
 import type {
@@ -56,6 +56,27 @@ const MANIFEST_DEBOUNCE_MS = 500;
 function logWarn(message: string, error?: unknown): void {
 	const errMsg = error instanceof Error ? error.message : String(error ?? '');
 	console.warn(`[vibes-io] ${message}${errMsg ? `: ${errMsg}` : ''}`);
+}
+
+// ============================================================================
+// Atomic File Writes
+// ============================================================================
+
+/**
+ * Write a file atomically: write to a temp file, fsync, then rename.
+ * On POSIX systems, rename() is atomic, so readers will either see the
+ * old content or the new content — never a partial write.
+ */
+async function atomicWriteFile(filePath: string, data: string): Promise<void> {
+	const tmpPath = `${filePath}.tmp`;
+	const fh = await open(tmpPath, 'w');
+	try {
+		await fh.writeFile(data, 'utf8');
+		await fh.sync();
+	} finally {
+		await fh.close();
+	}
+	await rename(tmpPath, filePath);
 }
 
 // ============================================================================
@@ -282,7 +303,7 @@ export async function readVibesConfig(projectPath: string): Promise<VibesConfig 
 export async function writeVibesConfig(projectPath: string, config: VibesConfig): Promise<void> {
 	await ensureAuditDir(projectPath);
 	const configPath = path.join(projectPath, AUDIT_DIR, CONFIG_FILE);
-	await writeFile(configPath, JSON.stringify(config, null, '\t') + '\n', 'utf8');
+	await atomicWriteFile(configPath, JSON.stringify(config, null, '\t') + '\n');
 }
 
 // ============================================================================
@@ -314,7 +335,7 @@ export async function writeVibesManifest(
 ): Promise<void> {
 	await ensureAuditDir(projectPath);
 	const manifestPath = path.join(projectPath, AUDIT_DIR, MANIFEST_FILE);
-	await writeFile(manifestPath, JSON.stringify(manifest, null, '\t') + '\n', 'utf8');
+	await atomicWriteFile(manifestPath, JSON.stringify(manifest, null, '\t') + '\n');
 }
 
 // ============================================================================
