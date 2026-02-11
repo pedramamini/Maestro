@@ -1,6 +1,7 @@
 import React, { memo } from 'react';
-import { Activity, GitBranch, Bot, Bookmark, AlertCircle, Server } from 'lucide-react';
+import { Activity, GitBranch, Bot, Bookmark, AlertCircle, Server, Shield } from 'lucide-react';
 import type { Session, Group, Theme } from '../types';
+import type { VibesAssuranceLevel } from '../../shared/vibes-types';
 import { getStatusColor } from '../utils/theme';
 
 // ============================================================================
@@ -35,6 +36,12 @@ export interface SessionItemProps {
 	gitFileCount?: number;
 	isInBatch?: boolean;
 	jumpNumber?: string | null; // Session jump shortcut number (1-9, 0)
+
+	// VIBES indicators (optional — only shown when vibesEnabled is true)
+	vibesEnabled?: boolean;
+	vibesAssuranceLevel?: VibesAssuranceLevel;
+	vibesAnnotationCount?: number; // Live annotation count for this session's project
+	vibesActive?: boolean; // Whether VIBES is initialized for this session's project
 
 	// Handlers
 	onSelect: () => void;
@@ -75,6 +82,10 @@ export const SessionItem = memo(function SessionItem({
 	gitFileCount,
 	isInBatch = false,
 	jumpNumber,
+	vibesEnabled = false,
+	vibesAssuranceLevel,
+	vibesAnnotationCount,
+	vibesActive = false,
 	onSelect,
 	onDragStart,
 	onDragOver,
@@ -251,6 +262,36 @@ export const SessionItem = memo(function SessionItem({
 							{session.sessionSshRemoteConfig?.enabled ? 'REMOTE' : 'LOCAL'}
 						</div>
 					))}
+
+				{/* VIBES Indicator — shows assurance level dot + annotation count */}
+				{vibesEnabled && vibesActive && (
+					<div
+						className="flex items-center gap-1 px-1.5 py-0.5 rounded text-[9px] font-bold"
+						style={{
+							backgroundColor:
+								(vibesAssuranceLevel === 'high'
+									? theme.colors.success
+									: vibesAssuranceLevel === 'low'
+										? theme.colors.warning
+										: theme.colors.accent) + '25',
+							color:
+								vibesAssuranceLevel === 'high'
+									? theme.colors.success
+									: vibesAssuranceLevel === 'low'
+										? theme.colors.warning
+										: theme.colors.accent,
+						}}
+						title={`VIBES: ${vibesAssuranceLevel?.toUpperCase() ?? 'MEDIUM'} assurance — ${vibesAnnotationCount ?? 0} annotations`}
+					>
+						<Shield className="w-2.5 h-2.5" />
+						<span>
+							{vibesAssuranceLevel === 'high' ? 'H' : vibesAssuranceLevel === 'low' ? 'L' : 'M'}
+						</span>
+						{(vibesAnnotationCount ?? 0) > 0 && (
+							<span className="opacity-80">{vibesAnnotationCount}</span>
+						)}
+					</div>
+				)}
 
 				{/* AUTO Mode Indicator */}
 				{isInBatch && (

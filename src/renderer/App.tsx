@@ -13439,6 +13439,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 		contextWarningYellowThreshold: contextManagementSettings.contextWarningYellowThreshold,
 		contextWarningRedThreshold: contextManagementSettings.contextWarningRedThreshold,
 
+		// VIBES session indicators
+		vibesEnabled: settings.vibesEnabled,
+		vibesAssuranceLevel: settings.vibesAssuranceLevel,
+
 		// Ref
 		sidebarContainerRef,
 	});

@@ -89,6 +89,12 @@ export type {
 	UseVibesDataReturn,
 } from './useVibesData';
 
+export { useVibesSessionIndicators } from './useVibesSessionIndicators';
+export type {
+	VibesIndicatorData,
+	UseVibesSessionIndicatorsReturn,
+} from './useVibesSessionIndicators';
+
 // ============================================================================
 // Re-export TransferError types from component for convenience
 // ============================================================================
