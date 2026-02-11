@@ -15,6 +15,7 @@ import { HistoryPanel, HistoryPanelHandle } from './HistoryPanel';
 import { AutoRun, AutoRunHandle } from './AutoRun';
 import type { DocumentTaskCount } from './AutoRunDocumentSelector';
 import { AutoRunExpandedModal } from './AutoRunExpandedModal';
+import { VibesPanel } from './vibes/VibesPanel';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 export interface RightPanelHandle {
@@ -428,7 +429,7 @@ export const RightPanel = memo(
 
 				{/* Tab Header */}
 				<div className="flex border-b h-16" style={{ borderColor: theme.colors.border }}>
-					{['files', 'history', 'autorun'].map((tab) => (
+					{['files', 'history', 'autorun', 'vibes'].map((tab) => (
 						<button
 							key={tab}
 							onClick={() => setActiveRightTab(tab as RightPanelTab)}
@@ -439,7 +440,7 @@ export const RightPanel = memo(
 							}}
 							data-tour={`${tab}-tab`}
 						>
-							{tab === 'autorun' ? 'Auto Run' : tab.charAt(0).toUpperCase() + tab.slice(1)}
+							{tab === 'autorun' ? 'Auto Run' : tab === 'vibes' ? 'VIBES' : tab.charAt(0).toUpperCase() + tab.slice(1)}
 						</button>
 					))}
 
@@ -533,6 +534,15 @@ export const RightPanel = memo(
 					{activeRightTab === 'autorun' && (
 						<div data-tour="autorun-panel" className="h-full">
 							<AutoRun ref={autoRunRef} {...autoRunSharedProps} onExpand={handleExpandAutoRun} />
+						</div>
+					)}
+
+					{activeRightTab === 'vibes' && (
+						<div data-tour="vibes-panel" className="h-full">
+							<VibesPanel
+								theme={theme}
+								projectPath={session.projectRoot || session.cwd}
+							/>
 						</div>
 					)}
 				</div>

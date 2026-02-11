@@ -10456,7 +10456,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 			switch (type) {
 				case 'setRightTab':
-					if (value === 'files' || value === 'history' || value === 'autorun') {
+					if (value === 'files' || value === 'history' || value === 'autorun' || value === 'vibes') {
 						setActiveRightTab(value as RightPanelTab);
 					}
 					break;
