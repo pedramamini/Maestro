@@ -4,6 +4,7 @@
  * prompt, reasoning entries, line annotations, and session records.
  */
 
+import { gunzipSync } from 'zlib';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import {
 	createEnvironmentEntry,
@@ -299,6 +300,73 @@ describe('vibes-annotations', () => {
 			const { hash: hash2 } = createReasoningEntry({ reasoningText: 'Approach B' });
 
 			expect(hash1).not.toBe(hash2);
+		});
+
+		it('stores raw reasoning_text when below compress threshold', () => {
+			const shortText = 'Short reasoning text under threshold';
+			const { entry } = createReasoningEntry({ reasoningText: shortText });
+
+			expect(entry.reasoning_text).toBe(shortText);
+			expect(entry.reasoning_text_compressed).toBeUndefined();
+			expect(entry.compressed).toBeUndefined();
+		});
+
+		it('compresses reasoning_text when above compress threshold', () => {
+			// Create text exceeding the default 10 KB threshold
+			const largeText = 'A'.repeat(11000);
+			const { entry } = createReasoningEntry({ reasoningText: largeText });
+
+			expect(entry.reasoning_text_compressed).toBeDefined();
+			expect(typeof entry.reasoning_text_compressed).toBe('string');
+			// Compressed base64 should be shorter than the raw text
+			expect(entry.reasoning_text_compressed!.length).toBeLessThan(largeText.length);
+		});
+
+		it('sets compressed flag to true when compressed', () => {
+			const largeText = 'B'.repeat(11000);
+			const { entry } = createReasoningEntry({ reasoningText: largeText });
+
+			expect(entry.compressed).toBe(true);
+		});
+
+		it('omits raw reasoning_text when compressed', () => {
+			const largeText = 'C'.repeat(11000);
+			const { entry } = createReasoningEntry({ reasoningText: largeText });
+
+			expect(entry.reasoning_text).toBeUndefined();
+		});
+
+		it('compressed text can be decompressed back to original via gunzipSync + base64 decode', () => {
+			const originalText = 'D'.repeat(11000);
+			const { entry } = createReasoningEntry({ reasoningText: originalText });
+
+			expect(entry.reasoning_text_compressed).toBeDefined();
+
+			// Decode base64 → gunzip → UTF-8 string
+			const compressedBuf = Buffer.from(entry.reasoning_text_compressed!, 'base64');
+			const decompressed = gunzipSync(compressedBuf).toString('utf8');
+
+			expect(decompressed).toBe(originalText);
+		});
+
+		it('respects custom compressThresholdBytes parameter', () => {
+			const text = 'E'.repeat(500); // 500 bytes
+
+			// Below custom threshold of 1000 — should not compress
+			const { entry: belowEntry } = createReasoningEntry({
+				reasoningText: text,
+				compressThresholdBytes: 1000,
+			});
+			expect(belowEntry.reasoning_text).toBe(text);
+			expect(belowEntry.compressed).toBeUndefined();
+
+			// Above custom threshold of 100 — should compress
+			const { entry: aboveEntry } = createReasoningEntry({
+				reasoningText: text,
+				compressThresholdBytes: 100,
+			});
+			expect(aboveEntry.compressed).toBe(true);
+			expect(aboveEntry.reasoning_text).toBeUndefined();
 		});
 	});
 

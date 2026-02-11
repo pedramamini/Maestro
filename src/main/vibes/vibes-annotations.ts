@@ -2,6 +2,7 @@
 // from Maestro's internal event data. Each builder function returns a typed entry
 // along with its content-addressed hash for manifest storage.
 
+import { gzipSync } from 'zlib';
 import { computeVibesHash } from './vibes-hash';
 import type {
 	VibesAssuranceLevel,
@@ -126,18 +127,34 @@ export function createPromptEntry(params: {
 /**
  * Create a reasoning manifest entry recording chain-of-thought output from the model.
  * Only captured at High assurance level.
+ *
+ * When reasoning text exceeds `compressThresholdBytes` (default 10 KB), the text
+ * is gzip-compressed and base64-encoded into `reasoning_text_compressed`, with
+ * `compressed` set to true and raw `reasoning_text` omitted to save space.
+ *
  * Returns the entry and its content-addressed hash.
  */
 export function createReasoningEntry(params: {
 	reasoningText: string;
 	tokenCount?: number;
 	model?: string;
+	compressThresholdBytes?: number;
 }): { entry: VibesReasoningEntry; hash: string } {
+	const compressThreshold = params.compressThresholdBytes ?? 10240;
+	const textBytes = Buffer.byteLength(params.reasoningText, 'utf8');
+
 	const entry: VibesReasoningEntry = {
 		type: 'reasoning',
-		reasoning_text: params.reasoningText,
 		created_at: new Date().toISOString(),
 	};
+
+	if (textBytes > compressThreshold) {
+		const compressed = gzipSync(Buffer.from(params.reasoningText, 'utf8'));
+		entry.reasoning_text_compressed = compressed.toString('base64');
+		entry.compressed = true;
+	} else {
+		entry.reasoning_text = params.reasoningText;
+	}
 
 	if (params.tokenCount !== undefined) {
 		entry.reasoning_token_count = params.tokenCount;
