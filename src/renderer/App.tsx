@@ -200,6 +200,12 @@ import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
 import { validateNewSession, getProviderDisplayName } from './utils/sessionValidation';
+import { getNextWindowSessionCycle } from './utils/windowSessionOrdering';
+import {
+	estimateContextUsage,
+	estimateAccumulatedGrowth,
+	DEFAULT_CONTEXT_WINDOWS,
+} from './utils/contextUsage';
 import { formatLogsForClipboard } from './utils/contextExtractor';
 import { getSlashCommandDescription } from './constants/app';
 import { useUIStore } from './stores/uiStore';
@@ -2801,7 +2807,11 @@ function MaestroConsoleInner() {
 			// Show desktop notification for visibility when app is not focused
 			window.maestro.notification.show(
 				'Session Merged',
-				`Created "${info.sessionName}" with merged context`
+				`Created "${info.sessionName}" with merged context`,
+				{
+					sessionId: info.sessionId,
+					windowId: currentWindowId ?? undefined,
+				}
 			);
 
 			// Clear the merge state for the source tab after a short delay
@@ -2880,7 +2890,11 @@ function MaestroConsoleInner() {
 			// Show desktop notification for visibility when app is not focused
 			window.maestro.notification.show(
 				'Context Transferred',
-				`Created "${sessionName}" with transferred context`
+				`Created "${sessionName}" with transferred context`,
+				{
+					sessionId,
+					windowId: currentWindowId ?? undefined,
+				}
 			);
 
 			// Reset the transfer state after a short delay to allow progress modal to show "Complete"
@@ -5473,7 +5487,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// falling back to the active session's state. This ensures AutoRun progress is
 	// displayed correctly regardless of which tab/session the user is viewing.
 	// Quick Win 4: Memoized to prevent unnecessary re-calculations
-	const activeBatchRunState = useMemo(() => {
+	const { activeBatchRunState, activeBatchRunSessionId } = useMemo(() => {
 		const resolveTargetSessionId = () => {
 			if (windowSessionIdSet) {
 				const matchingBatch = activeBatchSessionIds.find((id) => windowSessionIdSet.has(id));
@@ -5495,9 +5509,15 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		const targetSessionId = resolveTargetSessionId();
 		if (targetSessionId) {
-			return getBatchState(targetSessionId);
+			return {
+				activeBatchRunState: getBatchState(targetSessionId),
+				activeBatchRunSessionId: targetSessionId,
+			};
 		}
-		return getBatchState('');
+		return {
+			activeBatchRunState: getBatchState(''),
+			activeBatchRunSessionId: null,
+		};
 	}, [activeBatchSessionIds, activeSession, windowSessionIdSet, getBatchState]);
 
 	// Inline wizard context for /wizard command
@@ -7651,6 +7671,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 	// --- ACTIONS ---
 	const cycleSession = (dir: 'next' | 'prev') => {
+		const windowCycleResult = getNextWindowSessionCycle(
+			sessions,
+			windowSessionIds,
+			activeSessionId || null,
+			dir
+		);
+		if (windowCycleResult) {
+			cyclePositionRef.current = windowCycleResult.index;
+			setActiveGroupChatId(null);
+			setActiveSessionIdInternal(windowCycleResult.sessionId);
+			return;
+		}
+
 		// Build the visual order of items as they appear in the sidebar.
 		// This matches the actual rendering order in SessionList.tsx:
 		// 1. Bookmarks section (if open) - sorted alphabetically
@@ -11381,6 +11414,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Batch run state (convert null to undefined for component props)
 		activeBatchRunState: activeBatchRunState ?? undefined,
+		activeBatchRunSessionId,
 		currentSessionBatchState: currentSessionBatchState ?? undefined,
 
 		// File tree
