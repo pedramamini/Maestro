@@ -25,6 +25,7 @@ import {
 import { DEFAULT_BATCH_PROMPT } from './components/BatchRunnerModal';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainPanel, type MainPanelHandle } from './components/MainPanel';
+import type { TerminalViewHandle } from './components/TerminalView';
 import { AppOverlays } from './components/AppOverlays';
 import { PlaygroundPanel } from './components/PlaygroundPanel';
 import { DebugWizardModal } from './components/DebugWizardModal';
@@ -44,6 +45,7 @@ import { TourOverlay } from './components/Wizard/tour';
 import { CONDUCTOR_BADGES, getBadgeForTime } from './constants/conductorBadges';
 import { EmptyStateView } from './components/EmptyStateView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
+import { TerminalTabRenameModal } from './components/TerminalTabRenameModal';
 
 // Lazy-loaded components for performance (rarely-used heavy modals)
 // These are loaded on-demand when the user first opens them
@@ -190,6 +192,24 @@ import {
 	getInitialRenameValue,
 	hasActiveWizard,
 } from './utils/tabHelpers';
+import {
+	addTerminalTab,
+	closeTerminalTab,
+	createInitialTerminalTabState,
+	createTerminalTab,
+	ensureTerminalTabStructure,
+	getActiveTerminalTab,
+	getTerminalSessionId,
+	getTerminalTabDisplayName,
+	parseTerminalSessionId,
+	reopenTerminalTab,
+	reorderTerminalTabs,
+	renameTerminalTab,
+	setActiveTerminalTab,
+	updateTerminalTabCwd,
+	updateTerminalTabPid,
+	updateTerminalTabState,
+} from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
@@ -206,6 +226,7 @@ import {
 	isSynopsisSession,
 	isBatchSession,
 } from './utils/sessionIdParser';
+import { getAiProcessContext } from './utils/processEventRouting';
 import { isLikelyConcatenatedToolNames, getSlashCommandDescription } from './constants/app';
 import { useUIStore } from './stores/uiStore';
 import { useTabStore } from './stores/tabStore';
@@ -864,6 +885,23 @@ function MaestroConsoleInner() {
 	// to avoid context re-renders on every keystroke. Only completion states are in context.
 	const [terminalInputValue, setTerminalInputValue] = useState('');
 	const [aiInputValueLocal, setAiInputValueLocal] = useState('');
+	const [terminalSearchOpen, setTerminalSearchOpen] = useState(false);
+	const [terminalSearchQuery, setTerminalSearchQuery] = useState('');
+	const [terminalRenameModalOpen, setTerminalRenameModalOpen] = useState(false);
+	const [terminalRenameTabId, setTerminalRenameTabId] = useState<string | null>(null);
+	const terminalTabBeingRenamed = useMemo(() => {
+		if (!terminalRenameTabId || !activeSession) return null;
+		return activeSession.terminalTabs.find((tab) => tab.id === terminalRenameTabId) ?? null;
+	}, [terminalRenameTabId, activeSession]);
+	const handleCloseTerminalSearch = useCallback(() => {
+		setTerminalSearchOpen(false);
+	}, []);
+
+	useEffect(() => {
+		if (activeSession?.inputMode !== 'terminal') {
+			setTerminalSearchOpen(false);
+		}
+	}, [activeSession?.inputMode]);
 
 	// PERF: Refs to access current input values without triggering re-renders in memoized callbacks
 	const terminalInputValueRef = useRef(terminalInputValue);
@@ -1202,6 +1240,12 @@ function MaestroConsoleInner() {
 				session = { ...session, projectRoot: session.cwd };
 			}
 
+			const terminalTabMigration = ensureTerminalTabStructure(session, defaultShell || 'zsh');
+			session = terminalTabMigration.session;
+			if (terminalTabMigration.didMigrateTerminalTabs) {
+				console.log(`[restoreSession] Migrated session ${session.id} to terminal tabs`);
+			}
+
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
 			// Create a default tab to prevent crashes when code calls .find() on aiTabs
 			if (!session.aiTabs || session.aiTabs.length === 0) {
@@ -1213,6 +1257,8 @@ function MaestroConsoleInner() {
 				return {
 					...session,
 					aiPid: -1,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					state: 'error' as SessionState,
 					isLive: false,
@@ -1284,6 +1330,8 @@ function MaestroConsoleInner() {
 				return {
 					...correctedSession,
 					aiPid: -1,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					state: 'error' as SessionState,
 					isLive: false,
@@ -1343,7 +1391,9 @@ function MaestroConsoleInner() {
 				return {
 					...correctedSession,
 					aiPid: aiSpawnResult.pid,
-					terminalPid: 0, // Terminal uses runCommand (fresh shells per command)
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
+					terminalPid: 0,
 					state: 'idle' as SessionState,
 					// Reset runtime-only busy state - processes don't survive app restart
 					busySource: undefined,
@@ -1359,7 +1409,9 @@ function MaestroConsoleInner() {
 					liveUrl: undefined, // Clear any stale URL
 					aiLogs: [], // Deprecated - logs are now in aiTabs
 					aiTabs: resetAiTabs, // Reset tab states
-					shellLogs: correctedSession.shellLogs, // Preserve existing Command Terminal logs
+					// DEPRECATED: shellLogs is no longer used for terminal rendering.
+					// Keep persisted values for backwards compatibility with older sessions.
+					shellLogs: correctedSession.shellLogs || [],
 					executionQueue: correctedSession.executionQueue || [], // Ensure backwards compatibility
 					activeTimeMs: correctedSession.activeTimeMs || 0, // Ensure backwards compatibility
 					// Clear runtime-only error state - no agent is running yet so there can't be an error
@@ -1379,6 +1431,8 @@ function MaestroConsoleInner() {
 				return {
 					...session,
 					aiPid: -1,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					state: 'error' as SessionState,
 					isLive: false,
@@ -1390,6 +1444,8 @@ function MaestroConsoleInner() {
 			return {
 				...session,
 				aiPid: -1,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				state: 'error' as SessionState,
 				isLive: false,
@@ -1422,7 +1478,12 @@ function MaestroConsoleInner() {
 
 				// Handle sessions
 				if (savedSessions && savedSessions.length > 0) {
-					const restoredSessions = await Promise.all(savedSessions.map((s) => restoreSession(s)));
+					const migratedSessions = savedSessions.map(
+						(session) => ensureTerminalTabStructure(session, defaultShell || 'zsh').session
+					);
+					const restoredSessions = await Promise.all(
+						migratedSessions.map((s) => restoreSession(s))
+					);
 					setSessions(restoredSessions);
 					_hasSessionsLoaded = true;
 					// Set active session to first session if current activeSessionId is invalid
@@ -1777,6 +1838,11 @@ function MaestroConsoleInner() {
 							// Ignore errors
 						}
 
+						const initialTerminalTabState = createInitialTerminalTabState(
+							defaultShell || 'zsh',
+							subdir.path
+						);
+
 						const worktreeSession: Session = {
 							id: newId,
 							name: subdir.branch || subdir.name,
@@ -1793,18 +1859,16 @@ function MaestroConsoleInner() {
 							parentSessionId: parentSession.id,
 							worktreeBranch: subdir.branch || undefined,
 							aiLogs: [],
-							shellLogs: [
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'system',
-									text: 'Worktree Session Ready.',
-								},
-							],
+							// DEPRECATED: shellLogs is no longer used for terminal output.
+							// Keep field for backwards compatibility with persisted sessions.
+							shellLogs: [],
 							workLog: [],
 							contextUsage: 0,
 							inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
 							aiPid: 0,
+							...initialTerminalTabState,
+							// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+							// Terminal runtime state now lives in terminalTabs[].pid.
 							terminalPid: 0,
 							port: 3000 + Math.floor(Math.random() * 100),
 							isLive: false,
@@ -1972,41 +2036,15 @@ function MaestroConsoleInner() {
 		const thinkingChunkBuffer = thinkingChunkBufferRef.current;
 
 		// Handle process output data (BATCHED for performance)
-		// sessionId will be in format: "{id}-ai-{tabId}", "{id}-terminal", "{id}-batch-{timestamp}", etc.
+		// Terminal output is handled by XTerminal subscriptions, not App-level AI log routing.
 		const unsubscribeData = window.maestro.process.onData((sessionId: string, data: string) => {
-			// Parse sessionId to determine which process this is from
-			let actualSessionId: string;
-			let isFromAi: boolean;
-			let tabIdFromSession: string | undefined;
-
-			// Format: sessionId-ai-tabId
-			const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-			if (aiTabMatch) {
-				actualSessionId = aiTabMatch[1];
-				tabIdFromSession = aiTabMatch[2];
-				isFromAi = true;
-			} else if (sessionId.endsWith('-terminal')) {
-				// Ignore PTY terminal output - we use runCommand for terminal commands,
-				// which emits data with plain session ID (not -terminal suffix)
-				return;
-			} else if (sessionId.includes('-batch-')) {
-				// Ignore batch task output - these are handled separately by spawnAgentForSession
-				// and their output goes to history entries, not to the AI terminal
-				return;
-			} else {
-				// Plain session ID = output from runCommand (terminal commands)
-				actualSessionId = sessionId;
-				isFromAi = false;
-			}
-
-			// Filter out empty stdout for terminal commands (AI output should pass through)
-			if (!isFromAi && !data.trim()) return;
-
-			// For terminal output, use batched append to shell logs
-			if (!isFromAi) {
-				batchedUpdater.appendLog(actualSessionId, null, false, data);
+			const aiContext = getAiProcessContext(sessionId);
+			if (!aiContext) {
 				return;
 			}
+
+			const actualSessionId = aiContext.actualSessionId;
+			const tabIdFromSession = aiContext.tabId;
 
 			// For AI output, determine target tab ID
 			// Priority: 1) tab ID from session ID (most reliable), 2) busy tab, 3) active tab
@@ -2505,14 +2543,6 @@ function MaestroConsoleInner() {
 							};
 						}
 
-						// Terminal exit - show exit code
-						const exitLog: LogEntry = {
-							id: generateId(),
-							timestamp: Date.now(),
-							source: 'system',
-							text: `Terminal process exited with code ${code}`,
-						};
-
 						// Check if any AI tabs are still busy - don't clear session state if so
 						const anyAiTabBusy = s.aiTabs?.some((tab) => tab.state === 'busy') || false;
 
@@ -2521,7 +2551,6 @@ function MaestroConsoleInner() {
 							// Only clear session state if no AI tabs are busy
 							state: anyAiTabBusy ? s.state : ('idle' as SessionState),
 							busySource: anyAiTabBusy ? s.busySource : undefined,
-							shellLogs: [...s.shellLogs, exitLog],
 						};
 					})
 				);
@@ -2531,9 +2560,10 @@ function MaestroConsoleInner() {
 				if (!isFromAi) {
 					const currentSession = sessionsRef.current.find((s) => s.id === actualSessionId);
 					if (currentSession?.isGitRepo) {
-						// Get the last user command from shell logs
-						const userLogs = currentSession.shellLogs.filter((log) => log.source === 'user');
-						const lastCommand = userLogs[userLogs.length - 1]?.text?.trim().toLowerCase() || '';
+						const lastCommand =
+							currentSession.shellCommandHistory?.[currentSession.shellCommandHistory.length - 1]
+								?.trim()
+								.toLowerCase() || '';
 
 						// Refresh refs if command might have modified them
 						const gitRefCommands = [
@@ -2865,43 +2895,37 @@ function MaestroConsoleInner() {
 			}
 		);
 
-		// Handle stderr from processes (BATCHED - separate from stdout)
-		// Supports both AI processes (sessionId format: {id}-ai-{tabId}) and terminal commands (plain sessionId)
+		// Handle stderr from AI processes (BATCHED - separate from stdout)
 		const unsubscribeStderr = window.maestro.process.onStderr((sessionId: string, data: string) => {
 			// Filter out empty stderr (only whitespace)
 			if (!data.trim()) return;
 
-			// Parse sessionId to determine which process this is from
-			// Same logic as onData handler
-			let actualSessionId: string;
-			let tabIdFromSession: string | undefined;
-			let isFromAi = false;
-
-			const aiTabMatch = sessionId.match(/^(.+)-ai-(.+)$/);
-			if (aiTabMatch) {
-				actualSessionId = aiTabMatch[1];
-				tabIdFromSession = aiTabMatch[2];
-				isFromAi = true;
-			} else if (sessionId.includes('-batch-')) {
-				// Ignore batch task stderr
+			const aiContext = getAiProcessContext(sessionId);
+			if (!aiContext) {
 				return;
-			} else {
-				// Plain session ID = runCommand (terminal commands)
-				actualSessionId = sessionId;
 			}
 
-			if (isFromAi && tabIdFromSession) {
-				// AI process stderr - route to the correct tab with stderr flag for red box styling
-				batchedUpdater.appendLog(actualSessionId, tabIdFromSession, true, data, true);
-			} else {
-				// Terminal command stderr - route to shell logs
-				batchedUpdater.appendLog(actualSessionId, null, false, data, true);
+			const actualSessionId = aiContext.actualSessionId;
+			let targetTabId = aiContext.tabId;
+			if (!targetTabId) {
+				const session = sessionsRef.current.find((s) => s.id === actualSessionId);
+				if (session) {
+					const targetTab = getWriteModeTab(session) || getActiveTab(session);
+					targetTabId = targetTab?.id;
+				}
 			}
+
+			if (!targetTabId) {
+				return;
+			}
+
+			// AI process stderr - route to the correct tab with stderr flag for red box styling
+			batchedUpdater.appendLog(actualSessionId, targetTabId, true, data, true);
 		});
 
 		// Handle command exit from runCommand
 		const unsubscribeCommandExit = window.maestro.process.onCommandExit(
-			(sessionId: string, code: number) => {
+			(sessionId: string, _code: number) => {
 				// runCommand uses plain session ID (no suffix)
 				const actualSessionId = sessionId;
 
@@ -2917,22 +2941,6 @@ function MaestroConsoleInner() {
 						// - Otherwise, session becomes idle
 						const newState = anyAiTabBusy ? ('busy' as SessionState) : ('idle' as SessionState);
 						const newBusySource = anyAiTabBusy ? ('ai' as const) : undefined;
-
-						// Only show exit code if non-zero (error)
-						if (code !== 0) {
-							const exitLog: LogEntry = {
-								id: generateId(),
-								timestamp: Date.now(),
-								source: 'system',
-								text: `Command exited with code ${code}`,
-							};
-							return {
-								...s,
-								state: newState,
-								busySource: newBusySource,
-								shellLogs: [...s.shellLogs, exitLog],
-							};
-						}
 
 						return {
 							...s,
@@ -3617,6 +3625,7 @@ function MaestroConsoleInner() {
 	const logsEndRef = useRef<HTMLDivElement>(null);
 	const inputRef = useRef<HTMLTextAreaElement>(null);
 	const terminalOutputRef = useRef<HTMLDivElement>(null);
+	const terminalViewRef = useRef<TerminalViewHandle>(null);
 	const sidebarContainerRef = useRef<HTMLDivElement>(null);
 	const fileTreeContainerRef = useRef<HTMLDivElement>(null);
 	const fileTreeFilterInputRef = useRef<HTMLInputElement>(null);
@@ -5308,6 +5317,186 @@ You are taking over this conversation. Based on the context above, provide a bri
 	}, []);
 
 	/**
+	 * Select a terminal tab within a session.
+	 */
+	const handleTerminalTabSelect = useCallback((sessionId: string, tabId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return setActiveTerminalTab(s, tabId);
+			})
+		);
+	}, []);
+
+	/**
+	 * Close a terminal tab, preserving close history for reopen.
+	 */
+	const handleTerminalTabClose = useCallback((sessionId: string, tabId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				const result = closeTerminalTab(s, tabId);
+				return result ? result.session : s;
+			})
+		);
+	}, []);
+
+	/**
+	 * Reopen the most recently closed terminal tab for a session.
+	 */
+	const handleReopenTerminalTab = useCallback((sessionId: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				const result = reopenTerminalTab(s);
+				return result ? result.session : s;
+			})
+		);
+	}, []);
+
+	/**
+	 * Create a new terminal tab and switch focus to it.
+	 */
+	const handleTerminalNewTab = useCallback(
+		(sessionId: string) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return addTerminalTab(s, defaultShell || 'zsh').session;
+				})
+			);
+		},
+		[defaultShell]
+	);
+
+	/**
+	 * Clear the active terminal view, falling back to PTY command clearing.
+	 */
+	const handleClearActiveTerminal = useCallback((sessionId: string) => {
+		if (activeSessionIdRef.current === sessionId && terminalViewRef.current) {
+			terminalViewRef.current.clearActiveTerminal();
+			return;
+		}
+
+		const session = sessionsRef.current.find((candidate) => candidate.id === sessionId);
+		if (!session) return;
+
+		const activeTab = getActiveTerminalTab(session);
+		if (!activeTab) return;
+
+		void window.maestro.process.write(getTerminalSessionId(session.id, activeTab.id), 'clear\r');
+	}, []);
+
+	/**
+	 * Open terminal search UI state for the active terminal session.
+	 */
+	const handleOpenTerminalSearch = useCallback((sessionId: string) => {
+		if (activeSessionIdRef.current !== sessionId) return;
+		setTerminalSearchOpen(true);
+	}, []);
+
+	/**
+	 * Open the terminal tab rename modal for a specific tab.
+	 */
+	const handleTerminalTabRenameRequest = useCallback((tabId: string) => {
+		setTerminalRenameTabId(tabId);
+		setTerminalRenameModalOpen(true);
+	}, []);
+
+	/**
+	 * Rename a terminal tab.
+	 */
+	const handleTerminalTabRename = useCallback((sessionId: string, tabId: string, name: string) => {
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id !== sessionId) return s;
+				return renameTerminalTab(s, tabId, name);
+			})
+		);
+	}, []);
+
+	/**
+	 * Close the terminal tab rename modal and clear tab selection.
+	 */
+	const handleTerminalRenameModalClose = useCallback(() => {
+		setTerminalRenameModalOpen(false);
+		setTerminalRenameTabId(null);
+	}, []);
+
+	/**
+	 * Save a terminal tab rename and close the rename modal.
+	 */
+	const handleTerminalTabRenameSave = useCallback(
+		(name: string) => {
+			if (activeSession && terminalRenameTabId) {
+				handleTerminalTabRename(activeSession.id, terminalRenameTabId, name);
+			}
+			handleTerminalRenameModalClose();
+		},
+		[activeSession, terminalRenameTabId, handleTerminalTabRename, handleTerminalRenameModalClose]
+	);
+
+	/**
+	 * Reorder terminal tabs.
+	 */
+	const handleTerminalTabReorder = useCallback(
+		(sessionId: string, fromIndex: number, toIndex: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return reorderTerminalTabs(s, fromIndex, toIndex);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a terminal tab's runtime state.
+	 */
+	const handleTerminalTabStateChange = useCallback(
+		(sessionId: string, tabId: string, state: 'idle' | 'busy' | 'exited', exitCode?: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return updateTerminalTabState(s, tabId, state, exitCode);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a terminal tab's current working directory.
+	 */
+	const handleTerminalTabCwdChange = useCallback(
+		(sessionId: string, tabId: string, cwd: string) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return updateTerminalTabCwd(s, tabId, cwd);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
+	 * Update a terminal tab's process ID.
+	 */
+	const handleTerminalTabPidChange = useCallback(
+		(sessionId: string, tabId: string, pid: number) => {
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== sessionId) return s;
+					return updateTerminalTabPid(s, tabId, pid);
+				})
+			);
+		},
+		[]
+	);
+
+	/**
 	 * Force close a file preview tab without confirmation.
 	 * Removes it from filePreviewTabs and unifiedTabOrder.
 	 * If this was the active file tab, selects the next tab in unifiedTabOrder (could be AI or file).
@@ -5890,7 +6079,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		const isAIMode = currentSession.inputMode === 'ai';
 
-		// For AI mode, use the active tab's logs; for terminal mode, use shellLogs
+		// For AI mode, use the active tab's logs.
+		// DEPRECATED: shellLogs is retained only for legacy session compatibility.
 		const currentActiveTab = isAIMode ? getActiveTab(currentSession) : null;
 		const logs = isAIMode ? currentActiveTab?.logs || [] : currentSession.shellLogs;
 
@@ -5975,7 +6165,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				})
 			);
 		} else {
-			// Terminal mode - update shellLogs and shellCommandHistory
+			// DEPRECATED: terminal mode only updates legacy shellLogs when deleting old entries.
 			const commandText = log.text.trim();
 
 			setSessions((prev) =>
@@ -7970,6 +8160,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Ignore errors
 			}
 
+			const initialTerminalTabState = createInitialTerminalTabState(
+				defaultShell || 'zsh',
+				worktree.path
+			);
+
 			const worktreeSession: Session = {
 				id: newId,
 				name: worktree.branch || worktree.name,
@@ -7986,18 +8181,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 				parentSessionId: sessionId,
 				worktreeBranch: worktree.branch || undefined,
 				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Worktree Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: parentSession.toolType === 'terminal' ? 'terminal' : 'ai',
 				aiPid: 0,
+				...initialTerminalTabState,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -8154,6 +8347,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 								// Ignore errors
 							}
 
+							const initialTerminalTabState = createInitialTerminalTabState(
+								defaultShell || 'zsh',
+								subdir.path
+							);
+
 							const newSession: Session = {
 								id: newId,
 								name: sessionName,
@@ -8171,18 +8369,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 								// Inherit SSH configuration from parent session
 								sessionSshRemoteConfig: session.sessionSshRemoteConfig,
 								aiLogs: [],
-								shellLogs: [
-									{
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'system',
-										text: 'Shell Session Ready.',
-									},
-								],
+								// DEPRECATED: shellLogs is no longer used for terminal output.
+								// Keep field for backwards compatibility with persisted sessions.
+								shellLogs: [],
 								workLog: [],
 								contextUsage: 0,
 								inputMode: session.inputMode,
 								aiPid: 0,
+								...initialTerminalTabState,
+								// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+								// Terminal runtime state now lives in terminalTabs[].pid.
 								terminalPid: 0,
 								port: 3000 + Math.floor(Math.random() * 100),
 								isLive: false,
@@ -9397,7 +9593,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 			enabled: boolean;
 			remoteId: string | null;
 			workingDirOverride?: string;
-		}
+		},
+		initialTerminalShellType?: string
 	) => {
 		// Get agent definition to get correct command
 		const agent = await window.maestro.agents.get(agentId);
@@ -9462,6 +9659,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 				showThinking: defaultShowThinking,
 			};
 
+			// Initialize with a single terminal tab
+			const defaultTerminalTab = createTerminalTab(
+				initialTerminalShellType || defaultShell || 'zsh',
+				workingDir,
+				null
+			);
+
 			const newSession: Session = {
 				id: newId,
 				name,
@@ -9475,20 +9679,20 @@ You are taking over this conversation. Based on the context above, provide a bri
 				gitTags,
 				gitRefsCacheTime,
 				aiLogs: [], // Deprecated - logs are now in aiTabs
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Shell Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: agentId === 'terminal' ? 'terminal' : 'ai',
 				// AI process PID (terminal uses runCommand which spawns fresh shells)
 				// For agents that requiresPromptToStart, this starts as 0 and gets set on first message
 				aiPid,
+				terminalTabs: [defaultTerminalTab],
+				activeTerminalTabId: defaultTerminalTab.id,
+				closedTerminalTabHistory: [],
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -9649,18 +9853,15 @@ You are taking over this conversation. Based on the context above, provide a bri
 				gitTags,
 				gitRefsCacheTime,
 				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Shell Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: 'ai',
 				aiPid,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -10118,23 +10319,23 @@ You are taking over this conversation. Based on the context above, provide a bri
 			if (effectiveInputMode === 'terminal') {
 				console.log('[Remote] Terminal mode - using runCommand for clean output');
 
-				// Add user message to shell logs and set state to busy
+				// Set terminal session busy and record command in shell history.
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== sessionId) return s;
+						const history = [...(s.shellCommandHistory || [])];
+						const trimmedCommand = command.trim();
+						if (
+							trimmedCommand &&
+							(history.length === 0 || history[history.length - 1] !== trimmedCommand)
+						) {
+							history.push(trimmedCommand);
+						}
 						return {
 							...s,
 							state: 'busy' as SessionState,
 							busySource: 'terminal',
-							shellLogs: [
-								...s.shellLogs,
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'user',
-									text: command,
-								},
-							],
+							shellCommandHistory: history,
 						};
 					})
 				);
@@ -10158,7 +10359,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 					console.log('[Remote] Terminal command completed successfully');
 				} catch (error: unknown) {
 					console.error('[Remote] Terminal command failed:', error);
-					const errorMessage = error instanceof Error ? error.message : 'Unknown error';
 					setSessions((prev) =>
 						prev.map((s) => {
 							if (s.id !== sessionId) return s;
@@ -10167,15 +10367,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 								state: 'idle' as SessionState,
 								busySource: undefined,
 								thinkingStartTime: undefined,
-								shellLogs: [
-									...s.shellLogs,
-									{
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'system',
-										text: `Error: Failed to run command - ${errorMessage}`,
-									},
-								],
 							};
 						})
 					);
@@ -11061,8 +11252,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 										return t;
 									});
 								}
-							} else {
-								updatedSession.shellLogs = [...s.shellLogs, killLog];
 							}
 
 							// If there are queued items, start processing the next one
@@ -11224,7 +11413,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 							}
 							return {
 								...s,
-								shellLogs: [...s.shellLogs, errorLog],
 								state: 'idle',
 								busySource: undefined,
 								thinkingStartTime: undefined,
@@ -11237,10 +11425,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 	};
 
 	const handleInputKeyDown = (e: React.KeyboardEvent) => {
-		// Cmd+F opens output search from input field - handle first, before any modal logic
+		// Cmd+F opens contextual search from input field - handle first, before any modal logic
 		if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
 			e.preventDefault();
-			setOutputSearchOpen(true);
+			if (activeSession?.inputMode === 'terminal') {
+				setTerminalSearchOpen(true);
+			} else {
+				setOutputSearchOpen(true);
+			}
 			return;
 		}
 
@@ -11719,6 +11911,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 							// Ignore errors fetching git info
 						}
 
+						const initialTerminalTabState = createInitialTerminalTabState(
+							defaultShell || 'zsh',
+							subdir.path
+						);
+
 						const worktreeSession: Session = {
 							id: newId,
 							name: subdir.branch || subdir.name,
@@ -11737,18 +11934,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 							// Inherit SSH configuration from parent session
 							sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
 							aiLogs: [],
-							shellLogs: [
-								{
-									id: generateId(),
-									timestamp: Date.now(),
-									source: 'system',
-									text: 'Worktree Session Ready.',
-								},
-							],
+							// DEPRECATED: shellLogs is no longer used for terminal output.
+							// Keep field for backwards compatibility with persisted sessions.
+							shellLogs: [],
 							workLog: [],
 							contextUsage: 0,
 							inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 							aiPid: 0,
+							...initialTerminalTabState,
+							// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+							// Terminal runtime state now lives in terminalTabs[].pid.
 							terminalPid: 0,
 							port: 3000 + Math.floor(Math.random() * 100),
 							isLive: false,
@@ -11900,6 +12095,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 					// Ignore errors
 				}
 
+				const initialTerminalTabState = createInitialTerminalTabState(
+					defaultShell || 'zsh',
+					worktreePath
+				);
+
 				const worktreeSession: Session = {
 					id: newId,
 					name: branchName,
@@ -11916,18 +12116,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 					parentSessionId: activeSession.id,
 					worktreeBranch: branchName,
 					aiLogs: [],
-					shellLogs: [
-						{
-							id: generateId(),
-							timestamp: Date.now(),
-							source: 'system',
-							text: 'Worktree Session Ready.',
-						},
-					],
+					// DEPRECATED: shellLogs is no longer used for terminal output.
+					// Keep field for backwards compatibility with persisted sessions.
+					shellLogs: [],
 					workLog: [],
 					contextUsage: 0,
 					inputMode: activeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 					aiPid: 0,
+					...initialTerminalTabState,
+					// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+					// Terminal runtime state now lives in terminalTabs[].pid.
 					terminalPid: 0,
 					port: 3000 + Math.floor(Math.random() * 100),
 					isLive: false,
@@ -12053,6 +12251,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Ignore errors
 			}
 
+			const initialTerminalTabState = createInitialTerminalTabState(
+				defaultShell || 'zsh',
+				worktreePath
+			);
+
 			const worktreeSession: Session = {
 				id: newId,
 				name: branchName,
@@ -12069,18 +12272,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 				parentSessionId: createWorktreeSession.id,
 				worktreeBranch: branchName,
 				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Worktree Session Ready.',
-					},
-				],
+				// DEPRECATED: shellLogs is no longer used for terminal output.
+				// Keep field for backwards compatibility with persisted sessions.
+				shellLogs: [],
 				workLog: [],
 				contextUsage: 0,
 				inputMode: createWorktreeSession.toolType === 'terminal' ? 'terminal' : 'ai',
 				aiPid: 0,
+				...initialTerminalTabState,
+				// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+				// Terminal runtime state now lives in terminalTabs[].pid.
 				terminalPid: 0,
 				port: 3000 + Math.floor(Math.random() * 100),
 				isLive: false,
@@ -12619,6 +12820,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 		gitDiffPreview,
 		gitLogOpen,
 		lightboxImage,
+		terminalSearchOpen,
+		terminalSearchQuery,
 		hasOpenLayers,
 		hasOpenModal,
 		visibleSessions,
@@ -12660,6 +12863,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		logsEndRef,
 		inputRef,
 		terminalOutputRef,
+		terminalViewRef,
 		sidebarContainerRef,
 		setSessions,
 		createTab,
@@ -12748,6 +12952,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Close current tab (Cmd+W) - works with both file and AI tabs
 		handleCloseCurrentTab,
+		handleTerminalNewTab,
+		handleTerminalTabSelect,
+		handleTerminalTabClose,
+		handleClearActiveTerminal,
+		handleOpenTerminalSearch,
+		handleReopenTerminalTab,
+		setTerminalSearchOpen,
+		setTerminalSearchQuery,
 
 		// Session bookmark toggle
 		toggleBookmark,
@@ -13945,6 +14157,25 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onSendToAgent={handleSendToAgent}
 				/>
 
+				<TerminalTabRenameModal
+					theme={theme}
+					isOpen={terminalRenameModalOpen}
+					currentName={terminalTabBeingRenamed?.name ?? null}
+					defaultName={
+						terminalTabBeingRenamed && activeSession
+							? getTerminalTabDisplayName(
+									terminalTabBeingRenamed,
+									Math.max(
+										activeSession.terminalTabs.findIndex((tab) => tab.id === terminalRenameTabId),
+										0
+									)
+								)
+							: 'Terminal 1'
+					}
+					onSave={handleTerminalTabRenameSave}
+					onClose={handleTerminalRenameModalClose}
+				/>
+
 				{/* --- DEBUG PACKAGE MODAL --- */}
 				<DebugPackageModal
 					theme={theme}
@@ -14103,18 +14334,15 @@ You are taking over this conversation. Based on the context above, provide a bri
 									gitTags,
 									gitRefsCacheTime,
 									aiLogs: [],
-									shellLogs: [
-										{
-											id: generateId(),
-											timestamp: Date.now(),
-											source: 'system',
-											text: 'Shell Session Ready.',
-										},
-									],
+									// DEPRECATED: shellLogs is no longer used for terminal output.
+									// Keep field for backwards compatibility with persisted sessions.
+									shellLogs: [],
 									workLog: [],
 									contextUsage: 0,
 									inputMode: 'ai',
 									aiPid: 0,
+									// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+									// Terminal runtime state now lives in terminalTabs[].pid.
 									terminalPid: 0,
 									port: 3000 + Math.floor(Math.random() * 100),
 									isLive: false,
@@ -14483,7 +14711,22 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 				{/* --- CENTER WORKSPACE (hidden when no sessions, group chat is active, or log viewer is open) --- */}
 				{sessions.length > 0 && !activeGroupChatId && !logViewerOpen && (
-					<MainPanel ref={mainPanelRef} {...mainPanelProps} />
+					<MainPanel
+						ref={mainPanelRef}
+						{...mainPanelProps}
+						terminalSearchOpen={terminalSearchOpen}
+						onTerminalSearchClose={handleCloseTerminalSearch}
+						terminalViewRef={terminalViewRef}
+						onTerminalTabSelect={handleTerminalTabSelect}
+						onTerminalTabClose={handleTerminalTabClose}
+						onTerminalNewTab={handleTerminalNewTab}
+						onRequestTerminalTabRename={handleTerminalTabRenameRequest}
+						onTerminalTabRename={handleTerminalTabRename}
+						onTerminalTabReorder={handleTerminalTabReorder}
+						onTerminalTabStateChange={handleTerminalTabStateChange}
+						onTerminalTabCwdChange={handleTerminalTabCwdChange}
+						onTerminalTabPidChange={handleTerminalTabPidChange}
+					/>
 				)}
 
 				{/* --- RIGHT PANEL (hidden in mobile landscape, when no sessions, group chat is active, or log viewer is open) --- */}

@@ -87,6 +87,28 @@ describe('Data Listener', () => {
 			);
 		});
 
+		it('should preserve full terminal tab session IDs when forwarding and broadcasting', () => {
+			setupListener();
+			const handler = eventHandlers.get('data');
+
+			handler?.('abc123-terminal-def456', 'terminal tab output');
+
+			expect(mockSafeSend).toHaveBeenCalledWith(
+				'process:data',
+				'abc123-terminal-def456',
+				'terminal tab output'
+			);
+			expect(mockWebServer.broadcastToSessionClients).toHaveBeenCalledWith(
+				'abc123-terminal-def456',
+				expect.objectContaining({
+					type: 'session_output',
+					sessionId: 'abc123-terminal-def456',
+					data: 'terminal tab output',
+					source: 'terminal',
+				})
+			);
+		});
+
 		it('should broadcast to web clients for AI sessions', () => {
 			setupListener();
 			const handler = eventHandlers.get('data');

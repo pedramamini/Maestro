@@ -17,6 +17,7 @@ import {
 	registerProcessHandlers,
 	ProcessHandlerDependencies,
 } from '../../../../main/ipc/handlers/process';
+import { logger } from '../../../../main/utils/logger';
 
 // Mock electron's ipcMain
 vi.mock('electron', () => ({
@@ -102,7 +103,9 @@ vi.mock('../../../../main/utils/ssh-command-builder', () => ({
 
 		// Build the stdin script that would be sent to bash
 		const scriptLines: string[] = [];
-		scriptLines.push('export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"');
+		scriptLines.push(
+			'export PATH="$HOME/.local/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"'
+		);
 
 		if (remoteOptions.cwd) {
 			scriptLines.push(`cd '${remoteOptions.cwd}' || exit 1`);
@@ -115,7 +118,8 @@ vi.mock('../../../../main/utils/ssh-command-builder', () => ({
 		}
 
 		// Build command with args
-		const cmdWithArgs = `${remoteOptions.command} ${remoteOptions.args.map((a: string) => `'${a}'`).join(' ')}`.trim();
+		const cmdWithArgs =
+			`${remoteOptions.command} ${remoteOptions.args.map((a: string) => `'${a}'`).join(' ')}`.trim();
 		scriptLines.push(`exec ${cmdWithArgs}`);
 
 		let stdinScript = scriptLines.join('\n') + '\n';
@@ -191,6 +195,7 @@ describe('process IPC handlers', () => {
 	let handlers: Map<string, Function>;
 	let mockProcessManager: {
 		spawn: ReturnType<typeof vi.fn>;
+		spawnTerminalTab: ReturnType<typeof vi.fn>;
 		write: ReturnType<typeof vi.fn>;
 		interrupt: ReturnType<typeof vi.fn>;
 		kill: ReturnType<typeof vi.fn>;
@@ -209,6 +214,10 @@ describe('process IPC handlers', () => {
 		get: ReturnType<typeof vi.fn>;
 		set: ReturnType<typeof vi.fn>;
 	};
+	let mockSessionsStore: {
+		get: ReturnType<typeof vi.fn>;
+		set: ReturnType<typeof vi.fn>;
+	};
 	let deps: ProcessHandlerDependencies;
 
 	beforeEach(() => {
@@ -218,6 +227,7 @@ describe('process IPC handlers', () => {
 		// Create mock process manager
 		mockProcessManager = {
 			spawn: vi.fn(),
+			spawnTerminalTab: vi.fn(),
 			write: vi.fn(),
 			interrupt: vi.fn(),
 			kill: vi.fn(),
@@ -243,6 +253,11 @@ describe('process IPC handlers', () => {
 			set: vi.fn(),
 		};
 
+		mockSessionsStore = {
+			get: vi.fn().mockReturnValue([]),
+			set: vi.fn(),
+		};
+
 		// Create mock main window for SSH remote event emission
 		const mockMainWindow = {
 			isDestroyed: vi.fn().mockReturnValue(false),
@@ -259,6 +274,7 @@ describe('process IPC handlers', () => {
 			agentConfigsStore: mockAgentConfigsStore as any,
 			settingsStore: mockSettingsStore as any,
 			getMainWindow: () => mockMainWindow as any,
+			sessionsStore: mockSessionsStore as any,
 		};
 
 		// Capture all registered handlers
@@ -279,6 +295,7 @@ describe('process IPC handlers', () => {
 		it('should register all process handlers', () => {
 			const expectedChannels = [
 				'process:spawn',
+				'process:spawnTerminalTab',
 				'process:write',
 				'process:interrupt',
 				'process:kill',
@@ -291,6 +308,28 @@ describe('process IPC handlers', () => {
 				expect(handlers.has(channel)).toBe(true);
 			}
 			expect(handlers.size).toBe(expectedChannels.length);
+		});
+	});
+
+	describe('process:spawnTerminalTab', () => {
+		it('should spawn terminal tab PTY using full terminal session id', async () => {
+			mockProcessManager.spawnTerminalTab.mockReturnValue({ pid: 4567, success: true });
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			const config = {
+				sessionId: 'abc123-terminal-def456',
+				cwd: '/test/project',
+				shell: '/bin/zsh',
+				shellArgs: '--login',
+				shellEnvVars: { TERM: 'xterm-256color' },
+				cols: 120,
+				rows: 40,
+			};
+
+			const result = await handler!({} as any, config);
+
+			expect(mockProcessManager.spawnTerminalTab).toHaveBeenCalledWith(config);
+			expect(result).toEqual({ pid: 4567, success: true });
 		});
 	});
 
@@ -617,6 +656,17 @@ describe('process IPC handlers', () => {
 			expect(result).toBe(true);
 		});
 
+		it('should forward full terminal-tab session ids unchanged', async () => {
+			mockProcessManager.interrupt.mockReturnValue(true);
+			const terminalSessionId = 'abc123-terminal-def456';
+
+			const handler = handlers.get('process:interrupt');
+			const result = await handler!({} as any, terminalSessionId);
+
+			expect(mockProcessManager.interrupt).toHaveBeenCalledWith(terminalSessionId);
+			expect(result).toBe(true);
+		});
+
 		it('should return false for non-existent process', async () => {
 			mockProcessManager.interrupt.mockReturnValue(false);
 
@@ -765,6 +815,11 @@ describe('process IPC handlers', () => {
 				{}, // shell env vars
 				null // sshRemoteConfig (not set in this test)
 			);
+			expect(logger.warn).toHaveBeenCalledWith(
+				'process:runCommand is deprecated, use process:spawnTerminalTab for terminal workflows',
+				'[ProcessManager]',
+				{ sessionId: 'session-1' }
+			);
 			expect(result).toEqual({ exitCode: 0 });
 		});
 
@@ -820,6 +875,51 @@ describe('process IPC handlers', () => {
 			);
 		});
 
+		it('should resolve session SSH remote config for terminal runCommand execution', async () => {
+			const sshRemote = {
+				id: 'remote-1',
+				name: 'Dev Server',
+				host: 'dev.example.com',
+				port: 22,
+				username: 'devuser',
+				privateKeyPath: '~/.ssh/id_ed25519',
+				enabled: true,
+			};
+
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'defaultShell') return 'zsh';
+				if (key === 'customShellPath') return '';
+				if (key === 'shellEnvVars') return { TERM_PROGRAM: 'maestro' };
+				if (key === 'sshRemotes') return [sshRemote];
+				return defaultValue;
+			});
+			mockProcessManager.runCommand.mockResolvedValue({ exitCode: 0 });
+
+			const handler = handlers.get('process:runCommand');
+			await handler!({} as any, {
+				sessionId: 'session-ssh-terminal',
+				command: 'pwd',
+				cwd: '/home/devuser/project',
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			expect(mockProcessManager.runCommand).toHaveBeenCalledWith(
+				'session-ssh-terminal',
+				'pwd',
+				'/home/devuser/project',
+				'zsh',
+				{ TERM_PROGRAM: 'maestro' },
+				expect.objectContaining({
+					id: 'remote-1',
+					name: 'Dev Server',
+					host: 'dev.example.com',
+				})
+			);
+		});
+
 		it('should return non-zero exit code on command failure', async () => {
 			mockProcessManager.runCommand.mockResolvedValue({ exitCode: 1 });
 
@@ -842,6 +942,8 @@ describe('process IPC handlers', () => {
 				getAgentDetector: () => mockAgentDetector as any,
 				agentConfigsStore: mockAgentConfigsStore as any,
 				settingsStore: mockSettingsStore as any,
+				getMainWindow: () => null,
+				sessionsStore: mockSessionsStore as any,
 			};
 
 			// Re-register handlers with null process manager
@@ -860,6 +962,8 @@ describe('process IPC handlers', () => {
 				getAgentDetector: () => null,
 				agentConfigsStore: mockAgentConfigsStore as any,
 				settingsStore: mockSettingsStore as any,
+				getMainWindow: () => null,
+				sessionsStore: mockSessionsStore as any,
 			};
 
 			// Re-register handlers with null agent detector
@@ -1026,7 +1130,7 @@ describe('process IPC handlers', () => {
 			const { applyAgentConfigOverrides } = await import('../../../../main/utils/agent-args');
 			vi.mocked(applyAgentConfigOverrides).mockReturnValue({
 				args: ['--print'],
-				modelSource: 'none',
+				modelSource: 'default',
 				customArgsSource: 'none',
 				customEnvSource: 'session',
 				effectiveCustomEnvVars: { CUSTOM_API_KEY: 'secret123' },

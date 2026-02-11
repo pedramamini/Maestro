@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { THEMES } from '../../../renderer/constants/themes';
+import { DARK_ANSI_COLORS, LIGHT_ANSI_COLORS, THEMES } from '../../../renderer/constants/themes';
 import type { ThemeColors } from '../../../shared/theme-types';
 import { isValidThemeId } from '../../../shared/theme-types';
 
@@ -25,6 +25,26 @@ const REQUIRED_COLORS: (keyof ThemeColors)[] = [
 	'success',
 	'warning',
 	'error',
+];
+
+const REQUIRED_ANSI_COLORS: (keyof ThemeColors)[] = [
+	'ansiBlack',
+	'ansiRed',
+	'ansiGreen',
+	'ansiYellow',
+	'ansiBlue',
+	'ansiMagenta',
+	'ansiCyan',
+	'ansiWhite',
+	'ansiBrightBlack',
+	'ansiBrightRed',
+	'ansiBrightGreen',
+	'ansiBrightYellow',
+	'ansiBrightBlue',
+	'ansiBrightMagenta',
+	'ansiBrightCyan',
+	'ansiBrightWhite',
+	'selection',
 ];
 
 // Hex color regex
@@ -86,6 +106,14 @@ describe('THEMES constant', () => {
 			}
 		});
 
+		it('should include ANSI color overrides for every theme', () => {
+			for (const theme of themes) {
+				for (const colorKey of REQUIRED_ANSI_COLORS) {
+					expect(theme.colors[colorKey], `${theme.id}.${colorKey} should be defined`).toBeDefined();
+				}
+			}
+		});
+
 		it('should have valid CSS color values', () => {
 			for (const theme of themes) {
 				for (const [colorName, colorValue] of Object.entries(theme.colors)) {
@@ -111,6 +139,42 @@ describe('THEMES constant', () => {
 
 		it('should have at least one light theme', () => {
 			expect(themes.some((t) => t.mode === 'light')).toBe(true);
+		});
+	});
+
+	describe('ANSI palette defaults', () => {
+		it('should define all required dark ANSI colors', () => {
+			for (const colorKey of REQUIRED_ANSI_COLORS) {
+				expect(DARK_ANSI_COLORS[colorKey]).toBeDefined();
+				expect(isValidCssColor(DARK_ANSI_COLORS[colorKey] as string)).toBe(true);
+			}
+		});
+
+		it('should define all required light ANSI colors', () => {
+			for (const colorKey of REQUIRED_ANSI_COLORS) {
+				expect(LIGHT_ANSI_COLORS[colorKey]).toBeDefined();
+				expect(isValidCssColor(LIGHT_ANSI_COLORS[colorKey] as string)).toBe(true);
+			}
+		});
+
+		it('should use distinctive ANSI palettes for selected dark themes', () => {
+			expect(THEMES.dracula.colors.ansiBlue).toBe('#bd93f9');
+			expect(THEMES.dracula.colors.ansiMagenta).toBe('#ff79c6');
+			expect(THEMES.dracula.colors.selection).toBe('rgba(189, 147, 249, 0.3)');
+
+			expect(THEMES.nord.colors.ansiBlue).toBe('#81a1c1');
+			expect(THEMES.nord.colors.ansiBrightCyan).toBe('#8fbcbb');
+			expect(THEMES.nord.colors.selection).toBe('rgba(136, 192, 208, 0.3)');
+
+			expect(THEMES['gruvbox-dark'].colors.ansiBlue).toBe('#458588');
+			expect(THEMES['gruvbox-dark'].colors.ansiBrightGreen).toBe('#b8bb26');
+			expect(THEMES['gruvbox-dark'].colors.selection).toBe('rgba(69, 133, 136, 0.3)');
+		});
+
+		it('should keep distinctive ANSI palettes separate from generic dark defaults', () => {
+			expect(THEMES.dracula.colors.ansiBlue).not.toBe(DARK_ANSI_COLORS.ansiBlue);
+			expect(THEMES.nord.colors.ansiBlue).not.toBe(DARK_ANSI_COLORS.ansiBlue);
+			expect(THEMES['gruvbox-dark'].colors.ansiBlue).not.toBe(DARK_ANSI_COLORS.ansiBlue);
 		});
 	});
 });

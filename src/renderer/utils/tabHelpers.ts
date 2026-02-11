@@ -14,6 +14,7 @@ import {
 	ThinkingMode,
 } from '../types';
 import { generateId } from './ids';
+import { createInitialTerminalTabState } from './terminalTabHelpers';
 
 /**
  * Get the initial name to show in the rename modal.
@@ -530,10 +531,10 @@ export function closeFileTab(session: Session, tabId: string): CloseFileTabResul
 	}
 
 	// Add to unified closed tab history
-	const updatedUnifiedHistory = [
-		closedTabEntry,
-		...(session.unifiedClosedTabHistory || []),
-	].slice(0, MAX_CLOSED_TAB_HISTORY);
+	const updatedUnifiedHistory = [closedTabEntry, ...(session.unifiedClosedTabHistory || [])].slice(
+		0,
+		MAX_CLOSED_TAB_HISTORY
+	);
 
 	return {
 		closedTabEntry,
@@ -571,10 +572,10 @@ export function addAiTabToUnifiedHistory(
 		closedAt: Date.now(),
 	};
 
-	const updatedUnifiedHistory = [
-		closedTabEntry,
-		...(session.unifiedClosedTabHistory || []),
-	].slice(0, MAX_CLOSED_TAB_HISTORY);
+	const updatedUnifiedHistory = [closedTabEntry, ...(session.unifiedClosedTabHistory || [])].slice(
+		0,
+		MAX_CLOSED_TAB_HISTORY
+	);
 
 	return {
 		...session,
@@ -1477,6 +1478,8 @@ export function createMergedSession(
 
 	// Create the merged session with standard structure
 	// Matches the pattern from App.tsx createNewSession
+	const initialTerminalTabState = createInitialTerminalTabState('zsh', projectRoot);
+
 	const session: Session = {
 		id: sessionId,
 		name,
@@ -1500,6 +1503,9 @@ export function createMergedSession(
 		contextUsage: 0,
 		inputMode: toolType === 'terminal' ? 'terminal' : 'ai',
 		aiPid: 0,
+		...initialTerminalTabState,
+		// DEPRECATED: terminalPid was always 0 in legacy terminal mode.
+		// Terminal runtime state now lives in terminalTabs[].pid.
 		terminalPid: 0,
 		port: 3000 + Math.floor(Math.random() * 100),
 		isLive: false,
