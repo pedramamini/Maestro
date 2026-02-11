@@ -1,4 +1,5 @@
-import { BrowserWindow, BrowserWindowConstructorOptions } from 'electron';
+import { BrowserWindow, BrowserWindowConstructorOptions, screen } from 'electron';
+import type { Rectangle } from 'electron';
 import type Store from 'electron-store';
 
 import { WINDOW_STATE_DEFAULTS } from './stores/defaults';
@@ -369,8 +370,11 @@ export class WindowRegistry {
 				nextState.isMaximized = isMaximized;
 				nextState.isFullScreen = isFullScreen;
 
+				const bounds = entry.browserWindow.getBounds();
+				const resolvedDisplayId = resolveDisplayIdFromBounds(bounds);
+				nextState.displayId = resolvedDisplayId ?? nextState.displayId ?? null;
+
 				if (!isMaximized && !isFullScreen) {
-					const bounds = entry.browserWindow.getBounds();
 					nextState.x = bounds.x;
 					nextState.y = bounds.y;
 					nextState.width = bounds.width;
@@ -447,6 +451,7 @@ function createDefaultWindowStateSnapshot(windowId: string): PersistedWindowStat
 		activeSessionId: null,
 		leftPanelCollapsed: template?.leftPanelCollapsed ?? false,
 		rightPanelCollapsed: template?.rightPanelCollapsed ?? false,
+		displayId: template?.displayId ?? undefined,
 	};
 }
 
@@ -474,4 +479,14 @@ function syncLegacyWindowStateSnapshot(
 	windowStateStore.set('height', windowState.height);
 	windowStateStore.set('isMaximized', windowState.isMaximized);
 	windowStateStore.set('isFullScreen', windowState.isFullScreen);
+	windowStateStore.set('displayId', windowState.displayId ?? null);
+}
+
+function resolveDisplayIdFromBounds(bounds: Rectangle): number | null {
+	try {
+		const display = screen.getDisplayMatching(bounds);
+		return typeof display?.id === 'number' ? display.id : null;
+	} catch {
+		return null;
+	}
 }

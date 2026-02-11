@@ -15,6 +15,7 @@ export interface WindowState {
 	activeSessionId: string | null;
 	leftPanelCollapsed: boolean;
 	rightPanelCollapsed: boolean;
+	displayId?: number | null;
 }
 
 export interface MultiWindowState {

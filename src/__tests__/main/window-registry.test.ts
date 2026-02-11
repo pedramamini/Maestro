@@ -4,6 +4,21 @@ import type { BrowserWindow } from 'electron';
 import { WindowRegistry } from '../../main/window-registry';
 import type { WindowState as PersistedWindowState } from '../../shared/types/window';
 
+const defaultDisplay = {
+	id: 1,
+	bounds: { x: 0, y: 0, width: 1920, height: 1080 },
+	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+};
+
+const mockGetDisplayMatching = vi.fn().mockReturnValue(defaultDisplay);
+
+vi.mock('electron', () => ({
+	BrowserWindow: class MockBrowserWindow {},
+	screen: {
+		getDisplayMatching: (...args: unknown[]) => mockGetDisplayMatching(...args),
+	},
+}));
+
 interface MockStore {
 	store: Record<string, any> & {
 		multiWindowState: {
@@ -85,6 +100,8 @@ describe('WindowRegistry.saveWindowState', () => {
 	beforeEach(() => {
 		mockStore = createMockStore();
 		vi.useFakeTimers();
+		mockGetDisplayMatching.mockReset();
+		mockGetDisplayMatching.mockReturnValue(defaultDisplay);
 	});
 
 	afterEach(() => {
@@ -123,6 +140,7 @@ describe('WindowRegistry.saveWindowState', () => {
 			isMaximized: false,
 			isFullScreen: false,
 			activeSessionId: 'session-1',
+			displayId: defaultDisplay.id,
 		});
 	});
 
@@ -170,6 +188,8 @@ describe('WindowRegistry session reassignment', () => {
 	beforeEach(() => {
 		mockStore = createMockStore();
 		registry = new WindowRegistry({ windowStateStore: mockStore as any, saveDebounceMs: 25 });
+		mockGetDisplayMatching.mockReset();
+		mockGetDisplayMatching.mockReturnValue(defaultDisplay);
 	});
 
 	function seedWindows(options: {

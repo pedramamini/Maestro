@@ -20,7 +20,9 @@ import { initAutoUpdater } from '../auto-updater';
 import { WINDOW_STATE_DEFAULTS } from '../stores/defaults';
 
 /** Window bounds override shape */
-type WindowBounds = Partial<Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>>;
+type WindowBounds = Partial<Pick<Rectangle, 'x' | 'y' | 'width' | 'height'>> & {
+	displayId?: number | null;
+};
 
 /** Sentry severity levels */
 type SentrySeverityLevel = 'fatal' | 'error' | 'warning' | 'log' | 'info' | 'debug';
@@ -107,6 +109,7 @@ const DEFAULT_WINDOW_TEMPLATE: PersistedWindowState = {
 		WINDOW_STATE_DEFAULTS.multiWindowState?.windows?.[0]?.leftPanelCollapsed ?? false,
 	rightPanelCollapsed:
 		WINDOW_STATE_DEFAULTS.multiWindowState?.windows?.[0]?.rightPanelCollapsed ?? false,
+	displayId: WINDOW_STATE_DEFAULTS.multiWindowState?.windows?.[0]?.displayId ?? undefined,
 };
 
 function appendWindowIdToUrl(baseUrl: string, windowId: string): string {
@@ -403,6 +406,7 @@ function createDefaultWindowState(windowId: string): PersistedWindowState {
 		// Ensure session metadata is reset per window
 		sessionIds: [],
 		activeSessionId: null,
+		displayId: undefined,
 	};
 }
 
@@ -430,13 +434,19 @@ function buildBrowserWindowOptions(
 		height: bounds?.height ?? savedWindowState.height,
 	};
 
-	const { bounds: adjustedBounds, wasAdjusted } = ensureWindowVisibleBounds(resolvedBounds);
+	const preferredDisplayId =
+		bounds?.displayId ?? savedWindowState.displayId ?? null;
+	const { bounds: adjustedBounds, wasAdjusted } = ensureWindowVisibleBounds(
+		resolvedBounds,
+		preferredDisplayId
+	);
 
 	if (wasAdjusted) {
-		logger.info('Saved window bounds were off-screen, repositioning to primary display', 'Window', {
+		logger.info('Saved window bounds were off-screen, repositioning to visible display', 'Window', {
 			windowId: savedWindowState.id,
 			originalBounds: resolvedBounds,
 			adjustedBounds,
+			preferredDisplayId,
 		});
 	}
 
@@ -480,37 +490,33 @@ function buildBoundsUpdates(bounds?: WindowBounds): Partial<PersistedWindowState
 		updates.height = bounds.height;
 	}
 
+	if (typeof bounds.displayId === 'number' || bounds.displayId === null) {
+		updates.displayId = bounds.displayId;
+	}
+
 	return updates;
 }
 
 function ensureWindowVisibleBounds(
-	bounds: WindowBounds
+	bounds: WindowBounds,
+	preferredDisplayId?: number | null
 ): { bounds: WindowBounds; wasAdjusted: boolean } {
-	if (!hasCompleteBounds(bounds)) {
-		return { bounds, wasAdjusted: false };
+	if (hasCompleteBounds(bounds)) {
+		const candidateRect: Rectangle = {
+			x: bounds.x,
+			y: bounds.y,
+			width: bounds.width,
+			height: bounds.height,
+		};
+		const matchingDisplay = screen.getDisplayMatching(candidateRect);
+		const displayBounds = matchingDisplay?.workArea ?? matchingDisplay?.bounds;
+		if (displayBounds && rectanglesOverlap(candidateRect, displayBounds)) {
+			return { bounds: candidateRect, wasAdjusted: false };
+		}
 	}
 
-	const candidateRect: Rectangle = {
-		x: bounds.x,
-		y: bounds.y,
-		width: bounds.width,
-		height: bounds.height,
-	};
-
-	const matchingDisplay = screen.getDisplayMatching(candidateRect);
-	const matchingBounds = matchingDisplay?.bounds;
-	if (matchingBounds && rectanglesOverlap(candidateRect, matchingBounds)) {
-		return { bounds: candidateRect, wasAdjusted: false };
-	}
-
-	const primaryDisplay = screen.getPrimaryDisplay();
-	const primaryBounds = primaryDisplay?.workArea ?? primaryDisplay?.bounds;
-	if (!primaryBounds) {
-		return { bounds: candidateRect, wasAdjusted: false };
-	}
-
-	const centeredBounds = centerRectWithinBounds(candidateRect, primaryBounds);
-	return { bounds: centeredBounds, wasAdjusted: true };
+	const fallbackBounds = resolveBoundsForPreferredDisplay(bounds, preferredDisplayId);
+	return { bounds: fallbackBounds, wasAdjusted: true };
 }
 
 function hasCompleteBounds(bounds: WindowBounds): bounds is Rectangle {
@@ -543,6 +549,39 @@ function centerRectWithinBounds(rect: Rectangle, container: Rectangle): Rectangl
 		width,
 		height,
 	};
+}
+
+function resolveBoundsForPreferredDisplay(
+	bounds: WindowBounds,
+	preferredDisplayId?: number | null
+): WindowBounds {
+	const displays = typeof screen.getAllDisplays === 'function' ? screen.getAllDisplays() : [];
+	let targetDisplay =
+		typeof preferredDisplayId === 'number'
+			? displays.find((display) => display.id === preferredDisplayId)
+			: undefined;
+
+	if (!targetDisplay) {
+		targetDisplay = screen.getPrimaryDisplay();
+	}
+
+	if (!targetDisplay) {
+		return bounds;
+	}
+
+	const workArea = targetDisplay.workArea ?? targetDisplay.bounds;
+	const resolvedWidth = Math.min(bounds.width ?? DEFAULT_WINDOW_TEMPLATE.width, workArea.width);
+	const resolvedHeight = Math.min(bounds.height ?? DEFAULT_WINDOW_TEMPLATE.height, workArea.height);
+
+	return centerRectWithinBounds(
+		{
+			x: typeof bounds.x === 'number' ? bounds.x : workArea.x,
+			y: typeof bounds.y === 'number' ? bounds.y : workArea.y,
+			width: resolvedWidth,
+			height: resolvedHeight,
+		},
+		workArea
+	);
 }
 
 
@@ -597,6 +636,9 @@ function syncLegacyWindowState(
 	}
 	if ('isFullScreen' in updates) {
 		windowStateStore.set('isFullScreen', windowState.isFullScreen);
+	}
+	if ('displayId' in updates) {
+		windowStateStore.set('displayId', windowState.displayId ?? null);
 	}
 }
 
