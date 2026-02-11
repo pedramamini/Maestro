@@ -409,11 +409,19 @@ describe('FilePreview', () => {
 				/>
 			);
 
+			// Allow the initial file stats fetch to complete
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			const callsAfterMount = mockStat.mock.calls.length;
+
+			// Advance timers past multiple poll intervals — no additional calls should happen
 			await act(async () => {
 				vi.advanceTimersByTime(6000);
 			});
 
-			expect(mockStat).not.toHaveBeenCalled();
+			expect(mockStat).toHaveBeenCalledTimes(callsAfterMount);
 
 			vi.useRealTimers();
 		});
