@@ -240,7 +240,16 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 		// The item carries its intended tabId from when it was queued
 		const tabByItemId = session.aiTabs.find((tab) => tab.id === item.tabId);
 		const targetTab = tabByItemId || getActiveTab(session);
-		const targetSessionId = `${sessionId}-ai-${targetTab?.id || 'default'}`;
+
+		if (!targetTab) {
+			console.error(
+				'[processQueuedItem] No target tab found — session has no aiTabs. Aborting spawn.',
+				{ sessionId, itemTabId: item.tabId }
+			);
+			return;
+		}
+
+		const targetSessionId = `${sessionId}-ai-${targetTab.id}`;
 
 		try {
 			// Get agent configuration for this session's tool type
@@ -248,8 +257,8 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 			if (!agent) throw new Error(`Agent not found for toolType: ${session.toolType}`);
 
 			// Get the TARGET TAB's agentSessionId for session continuity
-			const tabAgentSessionId = targetTab?.agentSessionId;
-			const isReadOnly = item.readOnlyMode || targetTab?.readOnlyMode;
+			const tabAgentSessionId = targetTab.agentSessionId;
+			const isReadOnly = item.readOnlyMode || targetTab.readOnlyMode;
 
 			// Filter out YOLO/skip-permissions flags when read-only mode is active
 			const spawnArgs = isReadOnly

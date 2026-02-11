@@ -1658,6 +1658,28 @@ describe('agentStore', () => {
 			expect(updated.pendingAICommandForSynopsis).toBe('/review');
 		});
 
+		it('aborts without spawning when session has no aiTabs (no target tab)', async () => {
+			const session = createMockSession({
+				id: 'session-1',
+				aiTabs: [],
+				activeTabId: '',
+			});
+			useSessionStore.getState().setSessions([session]);
+
+			const item = createQueuedItem({ tabId: 'nonexistent-tab', text: 'Hello' });
+			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+			await useAgentStore.getState().processQueuedItem('session-1', item, defaultDeps);
+
+			expect(mockSpawn).not.toHaveBeenCalled();
+			expect(consoleSpy).toHaveBeenCalledWith(
+				expect.stringContaining('No target tab found'),
+				expect.objectContaining({ sessionId: 'session-1', itemTabId: 'nonexistent-tab' })
+			);
+
+			consoleSpy.mockRestore();
+		});
+
 		it('passes images to spawn for message with images', async () => {
 			const session = createMockSession({
 				id: 'session-1',
