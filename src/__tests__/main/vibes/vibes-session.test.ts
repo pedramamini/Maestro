@@ -11,7 +11,8 @@ import * as os from 'os';
 
 import { VibesSessionManager } from '../../../main/vibes/vibes-session';
 import type { VibesSessionState } from '../../../main/vibes/vibes-session';
-import { readAnnotations, readVibesManifest, ensureAuditDir, flushAll, resetAllBuffers } from '../../../main/vibes/vibes-io';
+import { readAnnotations, readVibesManifest, ensureAuditDir, flushAll, resetAllBuffers, getBufferedAnnotationCount } from '../../../main/vibes/vibes-io';
+import * as vibesIo from '../../../main/vibes/vibes-io';
 import type {
 	VibesLineAnnotation,
 	VibesSessionRecord,
@@ -618,6 +619,82 @@ describe('vibes-session', () => {
 			const state = mgr.getSession('sess-1');
 			expect(state).not.toBeNull();
 			expect(state!.annotationCount).toBe(1);
+		});
+	});
+
+	// ========================================================================
+	// Immediate writes for session lifecycle (DIVERGENCE 4 fix)
+	// ========================================================================
+	describe('immediate writes for session lifecycle', () => {
+		it('should use appendAnnotationImmediate for session start', async () => {
+			const spy = vi.spyOn(vibesIo, 'appendAnnotationImmediate');
+
+			await manager.startSession('sess-imm-1', tmpDir, 'claude-code', 'medium');
+
+			expect(spy).toHaveBeenCalledTimes(1);
+			expect(spy).toHaveBeenCalledWith(
+				tmpDir,
+				expect.objectContaining({
+					type: 'session',
+					event: 'start',
+				}),
+			);
+
+			spy.mockRestore();
+		});
+
+		it('should use appendAnnotationImmediate for session end', async () => {
+			await manager.startSession('sess-imm-2', tmpDir, 'claude-code', 'medium');
+
+			const spy = vi.spyOn(vibesIo, 'appendAnnotationImmediate');
+
+			await manager.endSession('sess-imm-2');
+
+			expect(spy).toHaveBeenCalledTimes(1);
+			expect(spy).toHaveBeenCalledWith(
+				tmpDir,
+				expect.objectContaining({
+					type: 'session',
+					event: 'end',
+				}),
+			);
+
+			spy.mockRestore();
+		});
+
+		it('should NOT use appendAnnotationImmediate for regular annotations', async () => {
+			await manager.startSession('sess-imm-3', tmpDir, 'claude-code', 'medium');
+
+			const spy = vi.spyOn(vibesIo, 'appendAnnotationImmediate');
+
+			const lineAnnotation: VibesLineAnnotation = {
+				type: 'line',
+				file_path: 'src/index.ts',
+				line_start: 1,
+				line_end: 10,
+				environment_hash: 'e'.repeat(64),
+				action: 'create',
+				timestamp: FIXED_ISO,
+				assurance_level: 'medium',
+			};
+
+			await manager.recordAnnotation('sess-imm-3', lineAnnotation);
+
+			expect(spy).not.toHaveBeenCalled();
+
+			spy.mockRestore();
+		});
+
+		it('should not buffer session start/end annotations', async () => {
+			await manager.startSession('sess-imm-4', tmpDir, 'claude-code', 'medium');
+
+			// Session start should not have gone through the buffer
+			expect(getBufferedAnnotationCount(tmpDir)).toBe(0);
+
+			// But the annotation should be on disk
+			const annotations = await readAnnotations(tmpDir);
+			expect(annotations).toHaveLength(1);
+			expect((annotations[0] as VibesSessionRecord).event).toBe('start');
 		});
 	});
 

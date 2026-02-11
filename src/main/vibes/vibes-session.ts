@@ -4,7 +4,7 @@
 
 import { generateUUID } from '../../shared/uuid';
 import { createSessionRecord } from './vibes-annotations';
-import { appendAnnotation, addManifestEntry } from './vibes-io';
+import { appendAnnotation, appendAnnotationImmediate, addManifestEntry, flushAll } from './vibes-io';
 import type {
 	VibesAssuranceLevel,
 	VibesAnnotation,
@@ -90,7 +90,8 @@ export class VibesSessionManager {
 
 		this.sessions.set(sessionId, state);
 
-		// Write session start annotation (includes environment_hash if available)
+		// Write session start annotation immediately (critical audit record —
+		// bypasses the write buffer so it survives hard crashes).
 		const startRecord = createSessionRecord({
 			event: 'start',
 			sessionId: vibesSessionId,
@@ -98,7 +99,7 @@ export class VibesSessionManager {
 			assuranceLevel,
 			description: `${agentType} agent session`,
 		});
-		await appendAnnotation(projectPath, startRecord);
+		await appendAnnotationImmediate(projectPath, startRecord);
 		state.annotationCount++;
 		this.onAnnotationRecorded?.(sessionId, {
 			annotationCount: state.annotationCount,
@@ -118,6 +119,13 @@ export class VibesSessionManager {
 			return;
 		}
 
+		// Flush any buffered annotations first to preserve chronological order
+		// on disk (buffered line annotations written during the session should
+		// appear before the session end record).
+		await flushAll();
+
+		// Write session end annotation immediately (critical audit record —
+		// bypasses the write buffer so it survives hard crashes).
 		const endRecord = createSessionRecord({
 			event: 'end',
 			sessionId: state.vibesSessionId,
@@ -125,7 +133,7 @@ export class VibesSessionManager {
 			assuranceLevel: state.assuranceLevel,
 			description: `${state.agentType} agent session ended`,
 		});
-		await appendAnnotation(state.projectPath, endRecord);
+		await appendAnnotationImmediate(state.projectPath, endRecord);
 		state.annotationCount++;
 		this.onAnnotationRecorded?.(sessionId, {
 			annotationCount: state.annotationCount,

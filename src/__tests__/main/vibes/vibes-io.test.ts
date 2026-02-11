@@ -18,6 +18,7 @@ import {
 	readVibesManifest,
 	writeVibesManifest,
 	appendAnnotation,
+	appendAnnotationImmediate,
 	appendAnnotations,
 	readAnnotations,
 	addManifestEntry,
@@ -885,6 +886,67 @@ describe('vibes-io', () => {
 
 			expect(result.success).toBe(false);
 			expect(result.error).toBeDefined();
+		});
+	});
+
+	// ========================================================================
+	// appendAnnotationImmediate (DIVERGENCE 4 fix)
+	// ========================================================================
+	describe('appendAnnotationImmediate', () => {
+		it('should write annotation to disk immediately without buffering', async () => {
+			await appendAnnotationImmediate(tmpDir, SAMPLE_SESSION_RECORD);
+
+			// The annotation should be on disk already — no flushAll needed
+			const annotationsPath = path.join(tmpDir, '.ai-audit', 'annotations.jsonl');
+			const raw = await readFile(annotationsPath, 'utf8');
+			const lines = raw.trim().split('\n');
+			expect(lines).toHaveLength(1);
+			expect(JSON.parse(lines[0])).toEqual(SAMPLE_SESSION_RECORD);
+
+			// The write buffer should still be empty (was not used)
+			expect(getBufferedAnnotationCount(tmpDir)).toBe(0);
+		});
+
+		it('should serialize with project lock', async () => {
+			// Fire multiple immediate writes concurrently — they should all succeed
+			// without corrupting the file
+			const records: VibesSessionRecord[] = [];
+			for (let i = 0; i < 5; i++) {
+				records.push({
+					...SAMPLE_SESSION_RECORD,
+					session_id: `session-${i}`,
+					timestamp: `2026-02-10T12:0${i}:00Z`,
+				});
+			}
+
+			await Promise.all(
+				records.map((r) => appendAnnotationImmediate(tmpDir, r)),
+			);
+
+			const annotationsPath = path.join(tmpDir, '.ai-audit', 'annotations.jsonl');
+			const raw = await readFile(annotationsPath, 'utf8');
+			const lines = raw.trim().split('\n');
+			expect(lines).toHaveLength(5);
+			// Each line should be valid JSON
+			for (const line of lines) {
+				expect(() => JSON.parse(line)).not.toThrow();
+			}
+		});
+
+		it('should append to existing annotations file', async () => {
+			// Write a buffered annotation first
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			await flushAll();
+
+			// Now write an immediate annotation
+			await appendAnnotationImmediate(tmpDir, SAMPLE_SESSION_RECORD);
+
+			const annotationsPath = path.join(tmpDir, '.ai-audit', 'annotations.jsonl');
+			const raw = await readFile(annotationsPath, 'utf8');
+			const lines = raw.trim().split('\n');
+			expect(lines).toHaveLength(2);
+			expect(JSON.parse(lines[0])).toEqual(SAMPLE_LINE_ANNOTATION);
+			expect(JSON.parse(lines[1])).toEqual(SAMPLE_SESSION_RECORD);
 		});
 	});
 

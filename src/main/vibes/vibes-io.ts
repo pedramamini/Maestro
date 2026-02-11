@@ -339,6 +339,35 @@ export async function writeVibesManifest(
 }
 
 // ============================================================================
+// Annotations (Immediate — for critical records)
+// ============================================================================
+
+/**
+ * Append a single annotation directly to disk, bypassing the write buffer.
+ * Uses the per-project lock for serialization but does NOT buffer — the
+ * annotation is guaranteed on disk when the returned promise resolves.
+ *
+ * Use this for critical audit records (session start/end) where data loss
+ * on hard crash is unacceptable. For high-frequency annotations where
+ * occasional loss is tolerable, use {@link appendAnnotation} instead.
+ */
+export async function appendAnnotationImmediate(
+	projectPath: string,
+	annotation: VibesAnnotation,
+): Promise<void> {
+	return withProjectLock(projectPath, async () => {
+		try {
+			await ensureAuditDir(projectPath);
+			const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
+			const line = JSON.stringify(annotation) + '\n';
+			await appendFile(annotationsPath, line, 'utf8');
+		} catch (err) {
+			logWarn('Failed to write annotation immediately', err);
+		}
+	});
+}
+
+// ============================================================================
 // Annotations (Buffered)
 // ============================================================================
 
