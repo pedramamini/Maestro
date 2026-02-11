@@ -11,6 +11,7 @@ import {
 	createCommandEntry,
 	createPromptEntry,
 	createReasoningEntry,
+	createExternalReasoningEntry,
 	createLineAnnotation,
 	createSessionRecord,
 } from '../../../main/vibes/vibes-annotations';
@@ -367,6 +368,66 @@ describe('vibes-annotations', () => {
 			});
 			expect(aboveEntry.compressed).toBe(true);
 			expect(aboveEntry.reasoning_text).toBeUndefined();
+		});
+	});
+
+	// ========================================================================
+	// createExternalReasoningEntry
+	// ========================================================================
+	describe('createExternalReasoningEntry', () => {
+		it('should create external reasoning entry with blob_path', () => {
+			const { entry, hash } = createExternalReasoningEntry({
+				blobPath: 'blobs/abc123.blob',
+			});
+
+			expect(entry.type).toBe('reasoning');
+			expect(entry.blob_path).toBe('blobs/abc123.blob');
+			expect(entry.external).toBe(true);
+			expect(entry.created_at).toBe(FIXED_ISO);
+			expect(hash).toMatch(/^[0-9a-f]{64}$/);
+		});
+
+		it('should set external flag to true for external entries', () => {
+			const { entry } = createExternalReasoningEntry({
+				blobPath: 'blobs/def456.blob',
+			});
+
+			expect(entry.external).toBe(true);
+		});
+
+		it('should omit reasoning_text for external entries', () => {
+			const { entry } = createExternalReasoningEntry({
+				blobPath: 'blobs/ghi789.blob',
+			});
+
+			expect(entry.reasoning_text).toBeUndefined();
+			expect(entry.reasoning_text_compressed).toBeUndefined();
+			expect(entry.compressed).toBeUndefined();
+		});
+
+		it('should include optional tokenCount', () => {
+			const { entry } = createExternalReasoningEntry({
+				blobPath: 'blobs/test.blob',
+				tokenCount: 5000,
+			});
+
+			expect(entry.reasoning_token_count).toBe(5000);
+		});
+
+		it('should include optional model', () => {
+			const { entry } = createExternalReasoningEntry({
+				blobPath: 'blobs/test.blob',
+				model: 'claude-4-opus',
+			});
+
+			expect(entry.reasoning_model).toBe('claude-4-opus');
+		});
+
+		it('should produce different hashes for different blob paths', () => {
+			const { hash: hash1 } = createExternalReasoningEntry({ blobPath: 'blobs/a.blob' });
+			const { hash: hash2 } = createExternalReasoningEntry({ blobPath: 'blobs/b.blob' });
+
+			expect(hash1).not.toBe(hash2);
 		});
 	});
 

@@ -167,6 +167,37 @@ export function createReasoningEntry(params: {
 	return { entry, hash };
 }
 
+/**
+ * Create a reasoning manifest entry pre-configured for external blob storage.
+ * Used when reasoning text exceeds the external blob threshold (default 100 KB).
+ * The entry has `external: true` and `blob_path` set; raw text and compressed text
+ * are omitted. The caller is responsible for writing the blob data via `writeReasoningBlob()`.
+ *
+ * Returns the entry and its content-addressed hash.
+ */
+export function createExternalReasoningEntry(params: {
+	blobPath: string;
+	tokenCount?: number;
+	model?: string;
+}): { entry: VibesReasoningEntry; hash: string } {
+	const entry: VibesReasoningEntry = {
+		type: 'reasoning',
+		external: true,
+		blob_path: params.blobPath,
+		created_at: new Date().toISOString(),
+	};
+
+	if (params.tokenCount !== undefined) {
+		entry.reasoning_token_count = params.tokenCount;
+	}
+	if (params.model !== undefined) {
+		entry.reasoning_model = params.model;
+	}
+
+	const hash = computeVibesHash(entry as unknown as Record<string, unknown>);
+	return { entry, hash };
+}
+
 // ============================================================================
 // Line Annotation
 // ============================================================================

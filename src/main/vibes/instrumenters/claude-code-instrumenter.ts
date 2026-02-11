@@ -5,14 +5,17 @@
 // Error handling: All public methods catch and log errors at 'warn' level
 // to ensure instrumentation failures never crash the agent session.
 
+import * as crypto from 'crypto';
 import * as path from 'path';
 import type { VibesSessionManager } from '../vibes-session';
 import {
 	createCommandEntry,
 	createLineAnnotation,
 	createReasoningEntry,
+	createExternalReasoningEntry,
 	createPromptEntry,
 } from '../vibes-annotations';
+import { writeReasoningBlob } from '../vibes-io';
 import type { ParsedEvent } from '../../parsers/agent-output-parser';
 import type {
 	VibesAssuranceLevel,
@@ -215,14 +218,24 @@ export class ClaudeCodeInstrumenter {
 	/** Most recent reasoning hash per session, for linking to line annotations. */
 	private lastReasoningHashes: Map<string, string> = new Map();
 
+	/** Byte threshold above which reasoning text is compressed (default 10 KB). */
+	private compressThresholdBytes: number;
+
+	/** Byte threshold above which reasoning is stored as an external blob (default 100 KB). */
+	private externalBlobThresholdBytes: number;
+
 	constructor(params: {
 		sessionManager: VibesSessionManager;
 		assuranceLevel: VibesAssuranceLevel;
 		excludePatterns?: string[];
+		compressThresholdBytes?: number;
+		externalBlobThresholdBytes?: number;
 	}) {
 		this.sessionManager = params.sessionManager;
 		this.assuranceLevel = params.assuranceLevel;
 		this.excludePatterns = params.excludePatterns ?? [];
+		this.compressThresholdBytes = params.compressThresholdBytes ?? 10240;
+		this.externalBlobThresholdBytes = params.externalBlobThresholdBytes ?? 102400;
 	}
 
 	/**
@@ -441,6 +454,10 @@ export class ClaudeCodeInstrumenter {
 	/**
 	 * Flush buffered reasoning text to a reasoning manifest entry.
 	 * Only operates at High assurance level.
+	 *
+	 * If the text exceeds the external blob threshold, writes to an external
+	 * blob file and creates an external reasoning entry. If it exceeds only
+	 * the compress threshold, compression is handled by createReasoningEntry.
 	 */
 	private async flushReasoning(sessionId: string): Promise<void> {
 		if (this.assuranceLevel !== 'high') {
@@ -459,12 +476,30 @@ export class ClaudeCodeInstrumenter {
 
 		const tokenCount = this.reasoningTokenCounts.get(sessionId);
 		const model = this.modelNames.get(sessionId);
+		const textBytes = Buffer.byteLength(text, 'utf8');
 
-		const { entry, hash } = createReasoningEntry({
-			reasoningText: text,
-			tokenCount,
-			model,
-		});
+		let entry;
+		let hash;
+
+		if (textBytes > this.externalBlobThresholdBytes) {
+			// External blob storage: write to .ai-audit/blobs/ and reference by path
+			const tempHash = crypto.createHash('sha256').update(text).digest('hex');
+			const blobPath = await writeReasoningBlob(session.projectPath, tempHash, text);
+			({ entry, hash } = createExternalReasoningEntry({
+				blobPath,
+				tokenCount,
+				model,
+			}));
+		} else {
+			// Normal or compressed entry (compression handled internally by createReasoningEntry)
+			({ entry, hash } = createReasoningEntry({
+				reasoningText: text,
+				tokenCount,
+				model,
+				compressThresholdBytes: this.compressThresholdBytes,
+			}));
+		}
+
 		await this.sessionManager.recordManifestEntry(sessionId, hash, entry);
 		this.lastReasoningHashes.set(sessionId, hash);
 

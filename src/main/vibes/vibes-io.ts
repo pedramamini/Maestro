@@ -230,6 +230,33 @@ export async function ensureAuditDir(projectPath: string): Promise<void> {
 }
 
 // ============================================================================
+// External Blob Storage
+// ============================================================================
+
+/**
+ * Write reasoning data to an external blob file at `.ai-audit/blobs/{hash}.blob`.
+ * Used for very large reasoning traces that exceed the external blob threshold.
+ * Ensures the blobs directory exists before writing.
+ *
+ * Returns the relative blob path (e.g. `blobs/{hash}.blob`).
+ */
+export async function writeReasoningBlob(
+	projectPath: string,
+	hash: string,
+	data: Buffer | string,
+): Promise<string> {
+	await ensureAuditDir(projectPath);
+	const blobFileName = `${hash}.blob`;
+	const blobPath = path.join(projectPath, AUDIT_DIR, BLOBS_DIR, blobFileName);
+	if (typeof data === 'string') {
+		await writeFile(blobPath, data, 'utf8');
+	} else {
+		await writeFile(blobPath, data);
+	}
+	return `${BLOBS_DIR}/${blobFileName}`;
+}
+
+// ============================================================================
 // Config
 // ============================================================================
 

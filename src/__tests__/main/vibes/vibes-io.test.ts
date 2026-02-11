@@ -26,6 +26,7 @@ import {
 	getPendingManifestEntryCount,
 	resetAllBuffers,
 	initVibesDirectly,
+	writeReasoningBlob,
 } from '../../../main/vibes/vibes-io';
 
 import type {
@@ -824,6 +825,49 @@ describe('vibes-io', () => {
 
 			expect(result.success).toBe(false);
 			expect(result.error).toBeDefined();
+		});
+	});
+
+	// ========================================================================
+	// writeReasoningBlob
+	// ========================================================================
+	describe('writeReasoningBlob', () => {
+		it('should write blob file to .ai-audit/blobs/{hash}.blob', async () => {
+			const hash = 'abc123def456';
+			const data = 'This is reasoning blob data';
+			await writeReasoningBlob(tmpDir, hash, data);
+
+			const blobPath = path.join(tmpDir, '.ai-audit', 'blobs', `${hash}.blob`);
+			await expect(access(blobPath, constants.F_OK)).resolves.toBeUndefined();
+			const content = await readFile(blobPath, 'utf8');
+			expect(content).toBe(data);
+		});
+
+		it('should create blobs directory if needed', async () => {
+			// tmpDir has no .ai-audit/ yet
+			const hash = 'newblobhash';
+			await writeReasoningBlob(tmpDir, hash, 'data');
+
+			await expect(
+				access(path.join(tmpDir, '.ai-audit', 'blobs'), constants.F_OK),
+			).resolves.toBeUndefined();
+		});
+
+		it('should return relative blob path', async () => {
+			const hash = 'myhash123';
+			const result = await writeReasoningBlob(tmpDir, hash, 'test data');
+
+			expect(result).toBe(`blobs/${hash}.blob`);
+		});
+
+		it('should write Buffer data correctly', async () => {
+			const hash = 'bufferhash';
+			const data = Buffer.from('binary blob content', 'utf8');
+			await writeReasoningBlob(tmpDir, hash, data);
+
+			const blobPath = path.join(tmpDir, '.ai-audit', 'blobs', `${hash}.blob`);
+			const content = await readFile(blobPath, 'utf8');
+			expect(content).toBe('binary blob content');
 		});
 	});
 });
