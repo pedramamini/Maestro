@@ -1202,6 +1202,11 @@ function MaestroConsoleInner() {
 				session = { ...session, projectRoot: session.cwd };
 			}
 
+			// Migration: ensure fileTreeAutoRefreshInterval is set (default 180s for legacy sessions)
+			if (session.fileTreeAutoRefreshInterval == null) {
+				session = { ...session, fileTreeAutoRefreshInterval: 180 };
+			}
+
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
 			// Create a default tab to prevent crashes when code calls .find() on aiTabs
 			if (!session.aiTabs || session.aiTabs.length === 0) {

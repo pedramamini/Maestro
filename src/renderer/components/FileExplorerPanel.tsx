@@ -490,9 +490,14 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 
 		// Start new timer if interval is set
 		if (autoRefreshInterval > 0) {
-			autoRefreshTimerRef.current = setInterval(() => {
-				// Use refs to get latest values without causing effect re-runs
-				refreshFileTreeRef.current(sessionIdRef.current);
+			autoRefreshTimerRef.current = setInterval(async () => {
+				// Brief spin animation so user can see auto-refresh is active
+				setIsRefreshing(true);
+				try {
+					await refreshFileTreeRef.current(sessionIdRef.current);
+				} finally {
+					setTimeout(() => setIsRefreshing(false), 500);
+				}
 			}, autoRefreshInterval * 1000);
 		}
 

@@ -712,60 +712,79 @@ describe('FileExplorerPanel', () => {
 	});
 
 	describe('Auto-refresh Timer', () => {
-		it('starts timer when interval is set', () => {
+		it('starts timer when interval is set', async () => {
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 5 });
 			render(<FileExplorerPanel {...defaultProps} session={session} />);
 
 			expect(defaultProps.refreshFileTree).not.toHaveBeenCalled();
 
-			act(() => {
-				vi.advanceTimersByTime(5000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5000);
 			});
 
 			expect(defaultProps.refreshFileTree).toHaveBeenCalledWith('session-1');
 		});
 
-		it('calls refresh at interval repeatedly', () => {
+		it('shows brief spin animation during auto-refresh', async () => {
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 5 });
 			render(<FileExplorerPanel {...defaultProps} session={session} />);
 
-			act(() => {
-				vi.advanceTimersByTime(15000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5000);
+			});
+
+			// Icon should be spinning after auto-refresh fires
+			const refreshIcon = screen.getByTestId('refresh-icon');
+			expect(refreshIcon.className).toContain('animate-spin');
+
+			// After 500ms the spin stops
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(500);
+			});
+			expect(refreshIcon.className).not.toContain('animate-spin');
+		});
+
+		it('calls refresh at interval repeatedly', async () => {
+			const session = createMockSession({ fileTreeAutoRefreshInterval: 5 });
+			render(<FileExplorerPanel {...defaultProps} session={session} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(15000);
 			});
 
 			expect(defaultProps.refreshFileTree).toHaveBeenCalledTimes(3);
 		});
 
-		it('does not start timer when interval is 0', () => {
+		it('does not start timer when interval is 0', async () => {
 			render(<FileExplorerPanel {...defaultProps} />);
 
-			act(() => {
-				vi.advanceTimersByTime(60000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(60000);
 			});
 
 			expect(defaultProps.refreshFileTree).not.toHaveBeenCalled();
 		});
 
-		it('clears timer on unmount', () => {
+		it('clears timer on unmount', async () => {
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 5 });
 			const { unmount } = render(<FileExplorerPanel {...defaultProps} session={session} />);
 
 			unmount();
 
-			act(() => {
-				vi.advanceTimersByTime(10000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(10000);
 			});
 
 			// No calls after unmount
 			expect(defaultProps.refreshFileTree).not.toHaveBeenCalled();
 		});
 
-		it('restarts timer when interval changes', () => {
+		it('restarts timer when interval changes', async () => {
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 60 });
 			const { rerender } = render(<FileExplorerPanel {...defaultProps} session={session} />);
 
-			act(() => {
-				vi.advanceTimersByTime(30000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(30000);
 			});
 
 			expect(defaultProps.refreshFileTree).not.toHaveBeenCalled();
@@ -774,8 +793,8 @@ describe('FileExplorerPanel', () => {
 			const newSession = createMockSession({ fileTreeAutoRefreshInterval: 5 });
 			rerender(<FileExplorerPanel {...defaultProps} session={newSession} />);
 
-			act(() => {
-				vi.advanceTimersByTime(5000);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(5000);
 			});
 
 			expect(defaultProps.refreshFileTree).toHaveBeenCalledTimes(1);
