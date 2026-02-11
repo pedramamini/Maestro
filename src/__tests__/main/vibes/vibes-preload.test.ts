@@ -41,10 +41,11 @@ describe('vibes preload API', () => {
 			expect(api).toHaveProperty('getModels');
 			expect(api).toHaveProperty('build');
 			expect(api).toHaveProperty('findBinary');
+			expect(api).toHaveProperty('clearBinaryCache');
 		});
 
-		it('should have exactly 11 methods', () => {
-			expect(Object.keys(api)).toHaveLength(11);
+		it('should have exactly 12 methods', () => {
+			expect(Object.keys(api)).toHaveLength(12);
 		});
 	});
 
@@ -190,29 +191,39 @@ describe('vibes preload API', () => {
 
 	describe('findBinary', () => {
 		it('should invoke vibes:findBinary with custom path', async () => {
-			mockInvoke.mockResolvedValue('/usr/local/bin/vibescheck');
+			mockInvoke.mockResolvedValue({ path: '/usr/local/bin/vibescheck', version: 'vibescheck 0.3.2' });
 
 			const result = await api.findBinary('/custom/vibescheck');
 
 			expect(mockInvoke).toHaveBeenCalledWith('vibes:findBinary', '/custom/vibescheck');
-			expect(result).toBe('/usr/local/bin/vibescheck');
+			expect(result).toEqual({ path: '/usr/local/bin/vibescheck', version: 'vibescheck 0.3.2' });
 		});
 
 		it('should work without custom path', async () => {
-			mockInvoke.mockResolvedValue('/usr/bin/vibescheck');
+			mockInvoke.mockResolvedValue({ path: '/usr/bin/vibescheck', version: null });
 
 			const result = await api.findBinary();
 
 			expect(mockInvoke).toHaveBeenCalledWith('vibes:findBinary', undefined);
-			expect(result).toBe('/usr/bin/vibescheck');
+			expect(result).toEqual({ path: '/usr/bin/vibescheck', version: null });
 		});
 
-		it('should return null when not found', async () => {
-			mockInvoke.mockResolvedValue(null);
+		it('should return null path and version when not found', async () => {
+			mockInvoke.mockResolvedValue({ path: null, version: null });
 
 			const result = await api.findBinary();
 
-			expect(result).toBeNull();
+			expect(result).toEqual({ path: null, version: null });
+		});
+	});
+
+	describe('clearBinaryCache', () => {
+		it('should invoke vibes:clearBinaryCache', async () => {
+			mockInvoke.mockResolvedValue(undefined);
+
+			await api.clearBinaryCache();
+
+			expect(mockInvoke).toHaveBeenCalledWith('vibes:clearBinaryCache');
 		});
 	});
 });

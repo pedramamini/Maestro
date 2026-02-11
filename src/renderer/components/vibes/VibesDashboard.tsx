@@ -57,9 +57,9 @@ export const VibesDashboard: React.FC<VibesDashboardProps> = ({
 		let cancelled = false;
 		(async () => {
 			try {
-				const path = await window.maestro.vibes.findBinary();
+				const result = await window.maestro.vibes.findBinary();
 				if (!cancelled) {
-					setBinaryStatus(path ? 'found' : 'not-found');
+					setBinaryStatus(result.path ? 'found' : 'not-found');
 				}
 			} catch {
 				if (!cancelled) {

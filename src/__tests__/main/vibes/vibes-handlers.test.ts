@@ -8,6 +8,8 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 // Hoist mocks for vibes-bridge functions and electron
 const {
 	mockFindBinary,
+	mockGetVersion,
+	mockClearCache,
 	mockIsInitialized,
 	mockVibesInit,
 	mockVibesBuild,
@@ -21,6 +23,8 @@ const {
 	mockIpcMainHandle,
 } = vi.hoisted(() => ({
 	mockFindBinary: vi.fn(),
+	mockGetVersion: vi.fn(),
+	mockClearCache: vi.fn(),
 	mockIsInitialized: vi.fn(),
 	mockVibesInit: vi.fn(),
 	mockVibesBuild: vi.fn(),
@@ -44,6 +48,8 @@ vi.mock('electron', () => ({
 // Mock vibes-bridge
 vi.mock('../../../main/vibes/vibes-bridge', () => ({
 	findVibesCheckBinary: mockFindBinary,
+	getVibesCheckVersion: mockGetVersion,
+	clearBinaryPathCache: mockClearCache,
 	isVibesInitialized: mockIsInitialized,
 	vibesInit: mockVibesInit,
 	vibesBuild: mockVibesBuild,
@@ -93,8 +99,8 @@ describe('vibes-handlers', () => {
 	});
 
 	describe('handler registration', () => {
-		it('should register all 11 VIBES IPC handlers', () => {
-			expect(mockIpcMainHandle).toHaveBeenCalledTimes(11);
+		it('should register all 12 VIBES IPC handlers', () => {
+			expect(mockIpcMainHandle).toHaveBeenCalledTimes(12);
 		});
 
 		it('should register handlers with correct channel names', () => {
@@ -110,6 +116,7 @@ describe('vibes-handlers', () => {
 				'vibes:getModels',
 				'vibes:build',
 				'vibes:findBinary',
+				'vibes:clearBinaryCache',
 			];
 			for (const channel of expectedChannels) {
 				expect(handlers[channel]).toBeDefined();
@@ -311,38 +318,48 @@ describe('vibes-handlers', () => {
 	});
 
 	describe('vibes:findBinary', () => {
-		it('should call findVibesCheckBinary with custom path', async () => {
+		it('should return path and version when binary is found', async () => {
 			mockFindBinary.mockResolvedValue('/usr/local/bin/vibescheck');
+			mockGetVersion.mockResolvedValue('vibescheck 0.3.2');
 
 			const result = await handlers['vibes:findBinary']({}, '/custom/vibescheck');
 
 			expect(mockFindBinary).toHaveBeenCalledWith('/custom/vibescheck');
-			expect(result).toBe('/usr/local/bin/vibescheck');
+			expect(mockGetVersion).toHaveBeenCalledWith('/usr/local/bin/vibescheck');
+			expect(result).toEqual({ path: '/usr/local/bin/vibescheck', version: 'vibescheck 0.3.2' });
 		});
 
-		it('should call findVibesCheckBinary without custom path', async () => {
-			mockFindBinary.mockResolvedValue('/usr/bin/vibescheck');
+		it('should return path with null version when --version fails', async () => {
+			mockFindBinary.mockResolvedValue('/usr/local/bin/vibescheck');
+			mockGetVersion.mockResolvedValue(null);
 
 			const result = await handlers['vibes:findBinary']({});
 
-			expect(mockFindBinary).toHaveBeenCalledWith(undefined);
-			expect(result).toBe('/usr/bin/vibescheck');
+			expect(result).toEqual({ path: '/usr/local/bin/vibescheck', version: null });
 		});
 
-		it('should return null when binary not found', async () => {
+		it('should return null path and version when binary not found', async () => {
 			mockFindBinary.mockResolvedValue(null);
 
 			const result = await handlers['vibes:findBinary']({});
 
-			expect(result).toBeNull();
+			expect(result).toEqual({ path: null, version: null });
+			expect(mockGetVersion).not.toHaveBeenCalled();
 		});
 
-		it('should return null on error', async () => {
+		it('should return null path and version on error', async () => {
 			mockFindBinary.mockRejectedValue(new Error('search failed'));
 
 			const result = await handlers['vibes:findBinary']({});
 
-			expect(result).toBeNull();
+			expect(result).toEqual({ path: null, version: null });
+		});
+	});
+
+	describe('vibes:clearBinaryCache', () => {
+		it('should call clearBinaryPathCache', async () => {
+			await handlers['vibes:clearBinaryCache']({});
+			expect(mockClearCache).toHaveBeenCalled();
 		});
 	});
 

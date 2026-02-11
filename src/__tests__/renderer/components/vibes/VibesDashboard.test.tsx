@@ -100,7 +100,7 @@ const mockGetReport = vi.fn();
 
 beforeEach(() => {
 	vi.clearAllMocks();
-	mockFindBinary.mockResolvedValue('/usr/local/bin/vibescheck');
+	mockFindBinary.mockResolvedValue({ path: '/usr/local/bin/vibescheck', version: 'vibescheck 0.3.2' });
 
 	(window as any).maestro = {
 		vibes: {
@@ -175,7 +175,7 @@ describe('VibesDashboard', () => {
 	});
 
 	it('shows vibescheck binary not found warning when binary is missing', async () => {
-		mockFindBinary.mockResolvedValue(null);
+		mockFindBinary.mockResolvedValue({ path: null, version: null });
 
 		render(
 			<VibesDashboard
@@ -195,7 +195,7 @@ describe('VibesDashboard', () => {
 	});
 
 	it('does not show binary warning when binary is found', async () => {
-		mockFindBinary.mockResolvedValue('/usr/local/bin/vibescheck');
+		mockFindBinary.mockResolvedValue({ path: '/usr/local/bin/vibescheck', version: 'vibescheck 0.3.2' });
 
 		render(
 			<VibesDashboard

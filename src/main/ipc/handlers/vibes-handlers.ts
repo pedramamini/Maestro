@@ -12,7 +12,8 @@
  * - getReport: Generate a VIBES report
  * - getSessions: List all sessions
  * - getModels: List all models used
- * - findBinary: Find the vibescheck binary
+ * - findBinary: Find the vibescheck binary and return path + version
+ * - clearBinaryCache: Clear cached binary path (on settings change)
  */
 
 import { ipcMain } from 'electron';
@@ -20,6 +21,8 @@ import type Store from 'electron-store';
 import { logger } from '../../utils/logger';
 import {
 	findVibesCheckBinary,
+	getVibesCheckVersion,
+	clearBinaryPathCache,
 	isVibesInitialized,
 	vibesInit,
 	vibesBuild,
@@ -192,13 +195,23 @@ export function registerVibesHandlers(deps: VibesHandlerDependencies): void {
 		}
 	});
 
-	// Find the vibescheck binary
+	// Find the vibescheck binary — returns { path, version } or { path: null, version: null }
 	ipcMain.handle('vibes:findBinary', async (_event, customPath?: string) => {
 		try {
-			return await findVibesCheckBinary(customPath);
+			const binaryPath = await findVibesCheckBinary(customPath);
+			if (!binaryPath) {
+				return { path: null, version: null };
+			}
+			const version = await getVibesCheckVersion(binaryPath);
+			return { path: binaryPath, version };
 		} catch (error) {
 			logger.error('findBinary error', LOG_CONTEXT, { error: String(error) });
-			return null;
+			return { path: null, version: null };
 		}
+	});
+
+	// Clear the binary path cache (called when settings change)
+	ipcMain.handle('vibes:clearBinaryCache', async () => {
+		clearBinaryPathCache();
 	});
 }

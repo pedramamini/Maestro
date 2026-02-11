@@ -2669,7 +2669,8 @@ interface MaestroAPI {
 			success: boolean;
 			error?: string;
 		}>;
-		findBinary: (customPath?: string) => Promise<string | null>;
+		findBinary: (customPath?: string) => Promise<{ path: string | null; version: string | null }>;
+		clearBinaryCache: () => Promise<void>;
 	};
 }
 

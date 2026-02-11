@@ -57,8 +57,11 @@ vi.mock('fs/promises', async () => {
 });
 
 describe('vibes-bridge', () => {
-	beforeEach(() => {
+	beforeEach(async () => {
 		vi.clearAllMocks();
+		// Clear cached binary path between tests
+		const mod = await import('../../../main/vibes/vibes-bridge');
+		mod.clearBinaryPathCache();
 	});
 
 	afterEach(() => {
@@ -112,22 +115,55 @@ describe('vibes-bridge', () => {
 			expect(result).toBeNull();
 		});
 
-		it('should search $PATH when no custom path provided', async () => {
+		it('should search common paths then $PATH when no custom path provided', async () => {
 			const originalPath = process.env.PATH;
-			process.env.PATH = '/usr/bin:/usr/local/bin';
+			process.env.PATH = '/usr/bin:/opt/bin';
 
-			// First dir fails, second dir succeeds
-			mockAccess.mockRejectedValueOnce(new Error('ENOENT'));
-			mockAccess.mockResolvedValueOnce(undefined);
+			// Reject all common paths (~/.cargo/bin, /usr/local/bin), then $PATH first dir,
+			// then succeed on $PATH second dir
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // ~/.cargo/bin/vibescheck
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // /usr/local/bin/vibescheck
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // /usr/bin/vibescheck
+			mockAccess.mockResolvedValueOnce(undefined);           // /opt/bin/vibescheck
 
 			const { findVibesCheckBinary } = await import('../../../main/vibes/vibes-bridge');
 			const result = await findVibesCheckBinary();
-			expect(result).toBe('/usr/local/bin/vibescheck');
+			expect(result).toBe('/opt/bin/vibescheck');
 
 			process.env.PATH = originalPath;
 		});
 
-		it('should return null when binary not found in $PATH', async () => {
+		it('should find binary at common path ~/.cargo/bin before $PATH', async () => {
+			const originalPath = process.env.PATH;
+			process.env.PATH = '/usr/bin';
+
+			// First common path succeeds
+			mockAccess.mockResolvedValueOnce(undefined); // ~/.cargo/bin/vibescheck
+
+			const { findVibesCheckBinary } = await import('../../../main/vibes/vibes-bridge');
+			const result = await findVibesCheckBinary();
+			expect(result).toMatch(/\.cargo\/bin\/vibescheck$/);
+
+			process.env.PATH = originalPath;
+		});
+
+		it('should check project node_modules/.bin/ when projectPath is provided', async () => {
+			const originalPath = process.env.PATH;
+			process.env.PATH = '';
+
+			// Reject common paths, succeed on node_modules
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // ~/.cargo/bin
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // /usr/local/bin
+			mockAccess.mockResolvedValueOnce(undefined);            // node_modules/.bin
+
+			const { findVibesCheckBinary } = await import('../../../main/vibes/vibes-bridge');
+			const result = await findVibesCheckBinary(undefined, '/my/project');
+			expect(result).toBe('/my/project/node_modules/.bin/vibescheck');
+
+			process.env.PATH = originalPath;
+		});
+
+		it('should return null when binary not found in any path', async () => {
 			const originalPath = process.env.PATH;
 			process.env.PATH = '/usr/bin:/usr/local/bin';
 
@@ -140,15 +176,97 @@ describe('vibes-bridge', () => {
 			process.env.PATH = originalPath;
 		});
 
-		it('should return null when $PATH is empty', async () => {
+		it('should return null when $PATH is empty and no common paths match', async () => {
 			const originalPath = process.env.PATH;
 			process.env.PATH = '';
+
+			mockAccess.mockRejectedValue(new Error('ENOENT'));
 
 			const { findVibesCheckBinary } = await import('../../../main/vibes/vibes-bridge');
 			const result = await findVibesCheckBinary();
 			expect(result).toBeNull();
 
 			process.env.PATH = originalPath;
+		});
+
+		it('should cache the binary path after first successful detection', async () => {
+			const originalPath = process.env.PATH;
+			process.env.PATH = '/usr/bin';
+
+			// Reject common paths, succeed on $PATH
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // ~/.cargo/bin
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // /usr/local/bin
+			mockAccess.mockResolvedValueOnce(undefined);            // /usr/bin
+
+			const mod = await import('../../../main/vibes/vibes-bridge');
+			const result1 = await mod.findVibesCheckBinary();
+			expect(result1).toBe('/usr/bin/vibescheck');
+
+			// Clear all mocks — second call should still return cached value
+			mockAccess.mockClear();
+			const result2 = await mod.findVibesCheckBinary();
+			expect(result2).toBe('/usr/bin/vibescheck');
+			// access should NOT have been called again
+			expect(mockAccess).not.toHaveBeenCalled();
+
+			process.env.PATH = originalPath;
+		});
+
+		it('should clear cache when clearBinaryPathCache is called', async () => {
+			const originalPath = process.env.PATH;
+			process.env.PATH = '/usr/bin';
+
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // ~/.cargo/bin
+			mockAccess.mockRejectedValueOnce(new Error('ENOENT')); // /usr/local/bin
+			mockAccess.mockResolvedValueOnce(undefined);            // /usr/bin
+
+			const mod = await import('../../../main/vibes/vibes-bridge');
+			await mod.findVibesCheckBinary();
+
+			// Clear cache and reject everything — should return null
+			mod.clearBinaryPathCache();
+			mockAccess.mockRejectedValue(new Error('ENOENT'));
+			const result = await mod.findVibesCheckBinary();
+			expect(result).toBeNull();
+
+			process.env.PATH = originalPath;
+		});
+	});
+
+	// ========================================================================
+	// getVibesCheckVersion
+	// ========================================================================
+	describe('getVibesCheckVersion', () => {
+		it('should return version string on success', async () => {
+			mockExecSuccess('vibescheck 0.3.2');
+
+			const { getVibesCheckVersion } = await import('../../../main/vibes/vibes-bridge');
+			const result = await getVibesCheckVersion('/usr/local/bin/vibescheck');
+			expect(result).toBe('vibescheck 0.3.2');
+		});
+
+		it('should return null when command fails', async () => {
+			mockExecFailure('not recognized', 1);
+
+			const { getVibesCheckVersion } = await import('../../../main/vibes/vibes-bridge');
+			const result = await getVibesCheckVersion('/usr/local/bin/vibescheck');
+			expect(result).toBeNull();
+		});
+
+		it('should return null when stdout is empty', async () => {
+			mockExecSuccess('');
+
+			const { getVibesCheckVersion } = await import('../../../main/vibes/vibes-bridge');
+			const result = await getVibesCheckVersion('/usr/local/bin/vibescheck');
+			expect(result).toBeNull();
+		});
+
+		it('should trim whitespace from version output', async () => {
+			mockExecSuccess('  vibescheck 0.3.2  \n');
+
+			const { getVibesCheckVersion } = await import('../../../main/vibes/vibes-bridge');
+			const result = await getVibesCheckVersion('/usr/local/bin/vibescheck');
+			expect(result).toBe('vibescheck 0.3.2');
 		});
 	});
 

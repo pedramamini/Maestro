@@ -5,6 +5,7 @@ import { execFile } from 'child_process';
 import { promisify } from 'util';
 import { access, constants } from 'fs/promises';
 import * as path from 'path';
+import * as os from 'os';
 
 import type { VibesAssuranceLevel } from '../../shared/vibes-types';
 
@@ -22,6 +23,27 @@ const VIBES_MAX_BUFFER = 5 * 1024 * 1024;
 
 /** Name of the vibescheck binary. */
 const VIBES_BINARY_NAME = 'vibescheck';
+
+/** Common installation paths to search for the vibescheck binary. */
+const COMMON_BINARY_PATHS = [
+	path.join(os.homedir(), '.cargo', 'bin', VIBES_BINARY_NAME),
+	path.join('/usr', 'local', 'bin', VIBES_BINARY_NAME),
+];
+
+// ============================================================================
+// Binary Path Cache
+// ============================================================================
+
+/** Cached binary path result (null means "searched but not found"). */
+let cachedBinaryPath: string | null | undefined;
+
+/**
+ * Clear the cached binary path. Should be called when settings change
+ * (e.g. custom binary path updated).
+ */
+export function clearBinaryPathCache(): void {
+	cachedBinaryPath = undefined;
+}
 
 // ============================================================================
 // Internal Helper
@@ -65,11 +87,19 @@ async function execVibesCheck(
 // ============================================================================
 
 /**
- * Find the vibescheck binary. Checks custom path first, then searches $PATH.
- * Returns the absolute path to the binary, or null if not found.
+ * Find the vibescheck binary. Checks custom path first, then common
+ * installation paths (~/.cargo/bin, /usr/local/bin), the project's
+ * node_modules/.bin/, and $PATH. Caches the result after first
+ * successful detection; call `clearBinaryPathCache()` on settings change.
+ *
+ * @param customPath  User-configured custom binary path (overrides auto-detect)
+ * @param projectPath Optional project directory to check node_modules/.bin/
  */
-export async function findVibesCheckBinary(customPath?: string): Promise<string | null> {
-	// Check custom path first
+export async function findVibesCheckBinary(
+	customPath?: string,
+	projectPath?: string,
+): Promise<string | null> {
+	// Check custom path first — always check, skip cache
 	if (customPath) {
 		try {
 			await access(customPath, constants.X_OK);
@@ -79,19 +109,70 @@ export async function findVibesCheckBinary(customPath?: string): Promise<string 
 		}
 	}
 
+	// Return cached result if available
+	if (cachedBinaryPath !== undefined) {
+		return cachedBinaryPath;
+	}
+
+	// Build the list of candidate paths to search
+	const candidates: string[] = [
+		...COMMON_BINARY_PATHS,
+	];
+
+	// Add project-local node_modules/.bin/ if a project path is provided
+	if (projectPath) {
+		candidates.push(
+			path.join(projectPath, 'node_modules', '.bin', VIBES_BINARY_NAME),
+		);
+	}
+
+	// Check common installation paths first
+	for (const candidate of candidates) {
+		try {
+			await access(candidate, constants.X_OK);
+			cachedBinaryPath = candidate;
+			return candidate;
+		} catch {
+			// Not found at this path, continue
+		}
+	}
+
 	// Search $PATH
 	const pathDirs = (process.env.PATH || '').split(path.delimiter);
 	for (const dir of pathDirs) {
 		const candidate = path.join(dir, VIBES_BINARY_NAME);
 		try {
 			await access(candidate, constants.X_OK);
+			cachedBinaryPath = candidate;
 			return candidate;
 		} catch {
 			// Not found in this directory, continue
 		}
 	}
 
+	// Cache the negative result so we don't keep searching
+	cachedBinaryPath = null;
 	return null;
+}
+
+// ============================================================================
+// Binary Version Detection
+// ============================================================================
+
+/**
+ * Get the version string of the vibescheck binary.
+ * Runs `vibescheck --version` and returns the trimmed stdout, or null on failure.
+ */
+export async function getVibesCheckVersion(binaryPath: string): Promise<string | null> {
+	try {
+		const result = await execVibesCheck(binaryPath, ['--version'], process.cwd());
+		if (result.exitCode === 0 && result.stdout.trim()) {
+			return result.stdout.trim();
+		}
+		return null;
+	} catch {
+		return null;
+	}
 }
 
 // ============================================================================

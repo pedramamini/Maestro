@@ -14,7 +14,7 @@
  * - Advanced: compression and blob thresholds
  */
 
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect, useRef } from 'react';
 import {
 	Shield,
 	Plus,
@@ -29,6 +29,9 @@ import {
 	Zap,
 	Terminal,
 	Settings2,
+	CheckCircle2,
+	AlertCircle,
+	Loader2,
 } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { VibesAssuranceLevel } from '../../../shared/vibes-types';
@@ -97,6 +100,55 @@ export function VibesSettings({
 	const [newPattern, setNewPattern] = useState('');
 	const [patternError, setPatternError] = useState<string | null>(null);
 	const [advancedOpen, setAdvancedOpen] = useState(false);
+	const [binaryDetectStatus, setBinaryDetectStatus] = useState<'idle' | 'checking' | 'found' | 'not-found'>('idle');
+	const [binaryDetectedPath, setBinaryDetectedPath] = useState<string | null>(null);
+	const [binaryVersion, setBinaryVersion] = useState<string | null>(null);
+	const prevBinaryPath = useRef(vibesCheckBinaryPath);
+
+	// Detect binary when VIBES is enabled or binary path changes
+	useEffect(() => {
+		if (!vibesEnabled) {
+			setBinaryDetectStatus('idle');
+			return;
+		}
+
+		// Clear cache if path changed
+		const pathChanged = prevBinaryPath.current !== vibesCheckBinaryPath;
+		prevBinaryPath.current = vibesCheckBinaryPath;
+
+		let cancelled = false;
+		setBinaryDetectStatus('checking');
+
+		(async () => {
+			try {
+				if (pathChanged && window.maestro?.vibes?.clearBinaryCache) {
+					await window.maestro.vibes.clearBinaryCache();
+				}
+				const result = await window.maestro.vibes.findBinary(
+					vibesCheckBinaryPath || undefined,
+				);
+				if (!cancelled) {
+					if (result.path) {
+						setBinaryDetectStatus('found');
+						setBinaryDetectedPath(result.path);
+						setBinaryVersion(result.version);
+					} else {
+						setBinaryDetectStatus('not-found');
+						setBinaryDetectedPath(null);
+						setBinaryVersion(null);
+					}
+				}
+			} catch {
+				if (!cancelled) {
+					setBinaryDetectStatus('not-found');
+					setBinaryDetectedPath(null);
+					setBinaryVersion(null);
+				}
+			}
+		})();
+
+		return () => { cancelled = true; };
+	}, [vibesEnabled, vibesCheckBinaryPath]);
 
 	// --- Extension handlers ---
 	const handleAddExtension = useCallback(() => {
@@ -765,6 +817,63 @@ export function VibesSettings({
 									>
 										Auto
 									</span>
+								)}
+							</div>
+
+							{/* Binary Detection Status */}
+							<div className="mt-3">
+								{binaryDetectStatus === 'checking' && (
+									<div className="flex items-center gap-2 text-xs" data-testid="binary-status-checking">
+										<Loader2 className="w-3.5 h-3.5 animate-spin" style={{ color: theme.colors.textDim }} />
+										<span style={{ color: theme.colors.textDim }}>Detecting vibescheck binary...</span>
+									</div>
+								)}
+								{binaryDetectStatus === 'found' && (
+									<div className="flex flex-col gap-1" data-testid="binary-status-found">
+										<div className="flex items-center gap-2 text-xs">
+											<CheckCircle2 className="w-3.5 h-3.5" style={{ color: theme.colors.success }} />
+											<span style={{ color: theme.colors.success }}>
+												vibescheck found
+												{binaryVersion && (
+													<span className="font-mono ml-1">({binaryVersion})</span>
+												)}
+											</span>
+										</div>
+										{binaryDetectedPath && (
+											<span
+												className="text-[10px] font-mono ml-5"
+												style={{ color: theme.colors.textDim }}
+											>
+												{binaryDetectedPath}
+											</span>
+										)}
+									</div>
+								)}
+								{binaryDetectStatus === 'not-found' && (
+									<div className="flex flex-col gap-1.5" data-testid="binary-status-not-found">
+										<div className="flex items-center gap-2 text-xs">
+											<AlertCircle className="w-3.5 h-3.5" style={{ color: theme.colors.error }} />
+											<span style={{ color: theme.colors.error }}>vibescheck not found</span>
+										</div>
+										<div
+											className="text-xs ml-5 p-2 rounded"
+											style={{
+												backgroundColor: theme.colors.bgActivity,
+												color: theme.colors.textDim,
+											}}
+										>
+											<p className="mb-1">Install vibescheck using one of these methods:</p>
+											<p className="font-mono text-[11px]" style={{ color: theme.colors.textMain }}>
+												cargo install vibescheck
+											</p>
+											<p
+												className="text-[10px] mt-1"
+												style={{ color: theme.colors.textDim }}
+											>
+												Or set a manual path override above.
+											</p>
+										</div>
+									</div>
 								)}
 							</div>
 						</div>

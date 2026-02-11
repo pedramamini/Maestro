@@ -24,6 +24,14 @@ export interface VibesCommandResult {
 }
 
 /**
+ * Result from the vibes:findBinary IPC call.
+ */
+export interface VibesBinaryInfo {
+	path: string | null;
+	version: string | null;
+}
+
+/**
  * Configuration for vibescheck init.
  */
 export interface VibesInitConfig {
@@ -84,8 +92,11 @@ export function createVibesApi() {
 		build: (projectPath: string): Promise<{ success: boolean; error?: string }> =>
 			ipcRenderer.invoke('vibes:build', projectPath),
 
-		findBinary: (customPath?: string): Promise<string | null> =>
+		findBinary: (customPath?: string): Promise<VibesBinaryInfo> =>
 			ipcRenderer.invoke('vibes:findBinary', customPath),
+
+		clearBinaryCache: (): Promise<void> =>
+			ipcRenderer.invoke('vibes:clearBinaryCache'),
 	};
 }
 
