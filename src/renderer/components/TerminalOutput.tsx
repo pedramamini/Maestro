@@ -475,7 +475,121 @@ const LogItemComponent = memo(
 					{/* Special rendering for tool execution events (shown alongside thinking) */}
 					{log.source === 'tool' &&
 						(() => {
-							// Extract tool input details for display
+							// Special rendering for AskUserQuestion tool
+							if (log.text === 'AskUserQuestion') {
+								const toolInput = log.metadata?.toolState?.input as
+									| { questions?: Array<{
+										question?: string;
+										header?: string;
+										options?: Array<{ label?: string; description?: string }>;
+										multiSelect?: boolean;
+									}> }
+									| undefined;
+								const questions = toolInput?.questions;
+								const isCompleted = log.metadata?.toolState?.status === 'completed';
+
+								if (!questions?.length) {
+									return (
+										<div
+											className="px-2 py-1 text-xs font-mono border-l-2"
+											style={{ color: theme.colors.textMain, borderColor: theme.colors.accent }}
+										>
+											<span
+												className="px-1 py-0.5 rounded"
+												style={{ backgroundColor: `${theme.colors.accent}30`, color: theme.colors.accent }}
+											>
+												AskUserQuestion
+											</span>
+										</div>
+									);
+								}
+
+								return (
+									<div
+										className="px-2 py-2 border-l-2 space-y-3"
+										style={{ borderColor: theme.colors.accent }}
+									>
+										{questions.map((q, qi) => (
+											<div key={qi}>
+												{/* Question header badge */}
+												{q.header && (
+													<span
+														className="text-[10px] px-1 py-0.5 rounded mb-1 inline-block"
+														style={{
+															backgroundColor: `${theme.colors.accent}30`,
+															color: theme.colors.accent,
+														}}
+													>
+														{q.header}
+													</span>
+												)}
+												{/* Question text */}
+												<div
+													className="text-sm mb-2"
+													style={{ color: theme.colors.textMain }}
+												>
+													{q.question}
+												</div>
+												{/* Options as clickable buttons */}
+												<div className="flex flex-wrap gap-2">
+													{q.options?.map((opt, oi) => (
+														<button
+															key={oi}
+															onClick={() => {
+																if (!isCompleted && onReplayMessage) {
+																	onReplayMessage(opt.label || '');
+																}
+															}}
+															disabled={isCompleted}
+															className="text-left px-3 py-1.5 rounded-lg border text-sm transition-all"
+															style={{
+																borderColor: isCompleted
+																	? theme.colors.border
+																	: theme.colors.accent + '50',
+																backgroundColor: isCompleted
+																	? theme.colors.bgActivity
+																	: theme.colors.bgSidebar,
+																color: isCompleted
+																	? theme.colors.textDim
+																	: theme.colors.textMain,
+																cursor: isCompleted ? 'default' : 'pointer',
+																opacity: isCompleted ? 0.6 : 1,
+															}}
+															title={opt.description}
+														>
+															<div className="font-medium">{opt.label}</div>
+															{opt.description && (
+																<div
+																	className="text-xs mt-0.5"
+																	style={{ color: theme.colors.textDim }}
+																>
+																	{opt.description}
+																</div>
+															)}
+														</button>
+													))}
+												</div>
+												{q.multiSelect && !isCompleted && (
+													<div
+														className="text-[10px] mt-1"
+														style={{ color: theme.colors.textDim }}
+													>
+														Multiple selections allowed - type your choices in the input below
+													</div>
+												)}
+											</div>
+										))}
+										{isCompleted && (
+											<div className="flex items-center gap-1 text-xs" style={{ color: theme.colors.success }}>
+												<span>✓</span>
+												<span>Answered</span>
+											</div>
+										)}
+									</div>
+								);
+							}
+
+							// Generic tool rendering for all other tools
 							// Use type checks to ensure we only render strings (prevents React error #31)
 							const toolInput = log.metadata?.toolState?.input as
 								| Record<string, unknown>
