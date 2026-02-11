@@ -62,12 +62,14 @@ class MockBrowserWindow {
 const mockHandle = vi.fn();
 
 const defaultDisplay = {
+	id: 1,
 	bounds: { x: 0, y: 0, width: 1920, height: 1080 },
 	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
 };
 
 const mockGetDisplayMatching = vi.fn().mockReturnValue(defaultDisplay);
 const mockGetPrimaryDisplay = vi.fn().mockReturnValue(defaultDisplay);
+const mockGetAllDisplays = vi.fn().mockReturnValue([defaultDisplay]);
 
 vi.mock('electron', () => ({
 	BrowserWindow: MockBrowserWindow,
@@ -77,6 +79,7 @@ vi.mock('electron', () => ({
 	screen: {
 		getDisplayMatching: (...args: unknown[]) => mockGetDisplayMatching(...args),
 		getPrimaryDisplay: () => mockGetPrimaryDisplay(),
+		getAllDisplays: () => mockGetAllDisplays(),
 	},
 }));
 
@@ -113,6 +116,7 @@ describe('app-lifecycle/window-manager', () => {
 			height: number;
 			isMaximized: boolean;
 			isFullScreen: boolean;
+			displayId?: number | null;
 			multiWindowState: {
 				primaryWindowId: string;
 				windows: Array<{
@@ -141,8 +145,10 @@ describe('app-lifecycle/window-manager', () => {
 		lastBrowserWindowOptions = undefined;
 		mockGetDisplayMatching.mockReset();
 		mockGetPrimaryDisplay.mockReset();
+		mockGetAllDisplays.mockReset();
 		mockGetDisplayMatching.mockReturnValue(defaultDisplay);
 		mockGetPrimaryDisplay.mockReturnValue(defaultDisplay);
+		mockGetAllDisplays.mockReturnValue([defaultDisplay]);
 
 		const defaultWindowState = {
 			id: 'primary',
@@ -156,6 +162,7 @@ describe('app-lifecycle/window-manager', () => {
 			activeSessionId: null,
 			leftPanelCollapsed: false,
 			rightPanelCollapsed: false,
+			displayId: defaultDisplay.id,
 		};
 
 		const initialStoreState = {
@@ -165,6 +172,7 @@ describe('app-lifecycle/window-manager', () => {
 			height: defaultWindowState.height,
 			isMaximized: defaultWindowState.isMaximized,
 			isFullScreen: defaultWindowState.isFullScreen,
+			displayId: defaultWindowState.displayId,
 			multiWindowState: {
 				primaryWindowId: 'primary',
 				windows: [
@@ -410,6 +418,7 @@ describe('app-lifecycle/window-manager', () => {
 			expect(storedWindow.height).toBe(800);
 			expect(storedWindow.isMaximized).toBe(false);
 			expect(storedWindow.isFullScreen).toBe(false);
+			expect(storedWindow.displayId).toBe(defaultDisplay.id);
 
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('x', 100);
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('y', 100);
@@ -417,6 +426,7 @@ describe('app-lifecycle/window-manager', () => {
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('height', 800);
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('isMaximized', false);
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('isFullScreen', false);
+			expect(mockWindowStateStore.set).toHaveBeenCalledWith('displayId', defaultDisplay.id);
 		});
 
 		it('should not save bounds when maximized', async () => {
@@ -445,7 +455,8 @@ describe('app-lifecycle/window-manager', () => {
 			// Should save isMaximized but not bounds
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('isMaximized', true);
 			expect(mockWindowStateStore.set).toHaveBeenCalledWith('isFullScreen', false);
-			expect(mockWindowInstance.getBounds).not.toHaveBeenCalled();
+			expect(mockWindowStateStore.set).toHaveBeenCalledWith('displayId', defaultDisplay.id);
+			expect(mockWindowInstance.getBounds).toHaveBeenCalledTimes(1);
 		});
 
 		it('should log window creation details', async () => {

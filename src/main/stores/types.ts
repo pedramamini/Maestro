@@ -108,6 +108,7 @@ export interface WindowState {
 	isMaximized: boolean;
 	isFullScreen: boolean;
 	multiWindowState?: MultiWindowState;
+	displayId?: number | null;
 }
 
 // ============================================================================

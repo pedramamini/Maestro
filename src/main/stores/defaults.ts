@@ -62,6 +62,7 @@ const MULTI_WINDOW_DEFAULT_STATE: MultiWindowState = {
 			activeSessionId: null,
 			leftPanelCollapsed: false,
 			rightPanelCollapsed: false,
+			displayId: undefined,
 		},
 	],
 };
@@ -106,6 +107,7 @@ export const WINDOW_STATE_DEFAULTS: WindowState = {
 	isMaximized: false,
 	isFullScreen: false,
 	multiWindowState: MULTI_WINDOW_DEFAULT_STATE,
+	displayId: undefined,
 };
 
 export const CLAUDE_SESSION_ORIGINS_DEFAULTS: ClaudeSessionOriginsData = {
