@@ -113,6 +113,8 @@ interface QuickActionsModalProps {
 	onOpenLastDocumentGraph?: () => void;
 	// Symphony
 	onOpenSymphony?: () => void;
+	// Director's Notes
+	onOpenDirectorNotes?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -196,6 +198,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		lastGraphFocusFile,
 		onOpenLastDocumentGraph,
 		onOpenSymphony,
+		onOpenDirectorNotes,
 	} = props;
 
 	const [search, setSearch] = useState('');
@@ -981,6 +984,21 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 						subtext: 'Contribute to open source projects',
 						action: () => {
 							onOpenSymphony();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Director's Notes - unified history and AI synopsis
+		...(onOpenDirectorNotes
+			? [
+					{
+						id: 'directorNotes',
+						label: "Director's Notes",
+						shortcut: shortcuts.directorNotes,
+						subtext: 'View unified history and AI synopsis across all sessions',
+						action: () => {
+							onOpenDirectorNotes();
 							setQuickActionOpen(false);
 						},
 					},

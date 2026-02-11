@@ -435,7 +435,7 @@ describe('HistoryHelpModal', () => {
 			render(<HistoryHelpModal {...defaultProps} />);
 
 			expect(screen.getByText('Click any bar')).toBeInTheDocument();
-			expect(screen.getByText(/to filter the history list/)).toBeInTheDocument();
+			expect(screen.getByText(/to jump to entries within that time bucket/)).toBeInTheDocument();
 		});
 
 		it('describes hover functionality', () => {

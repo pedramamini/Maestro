@@ -16,15 +16,7 @@ import type { Theme, BatchDocumentEntry } from '../types';
 import { generateId } from '../utils/ids';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
-
-// Platform detection helper (userAgentData is newer but not in all TS types yet)
-const isMacPlatform = (): boolean => {
-	const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-	return (
-		nav.userAgentData?.platform?.toLowerCase().includes('mac') ??
-		navigator.platform.toLowerCase().includes('mac')
-	);
-};
+import { formatMetaKey } from '../utils/shortcutFormatter';
 
 // Tree node type for folder structure
 export interface DocTreeNode {
@@ -1033,7 +1025,7 @@ export function DocumentsPanel({
 														documents.filter((d) => d.filename === doc.filename).length > 1;
 													const canDisableReset = !hasDuplicates;
 
-													const modifierKey = isMacPlatform() ? '⌘' : 'Ctrl';
+													const modifierKey = formatMetaKey();
 													let tooltipText: string;
 													if (doc.resetOnCompletion) {
 														if (canDisableReset) {

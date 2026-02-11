@@ -1770,7 +1770,7 @@ export const FilePreview = React.memo(
 										opacity: hasChanges && !isSaving ? 1 : 0.5,
 										cursor: hasChanges && !isSaving ? 'pointer' : 'default',
 									}}
-									title={hasChanges ? 'Save changes (⌘S)' : 'No changes to save'}
+									title={hasChanges ? `Save changes (${formatShortcutKeys(['Meta', 's'])})` : 'No changes to save'}
 								>
 									{isSaving ? (
 										<Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1806,7 +1806,7 @@ export const FilePreview = React.memo(
 								onClick={copyContentToClipboard}
 								className="p-2 rounded hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textDim }}
-								title={isImage ? 'Copy image to clipboard (⌘C)' : 'Copy content to clipboard'}
+								title={isImage ? `Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})` : 'Copy content to clipboard'}
 							>
 								<Clipboard className="w-4 h-4" />
 							</button>
@@ -1827,7 +1827,7 @@ export const FilePreview = React.memo(
 									onClick={onOpenInGraph}
 									className="p-2 rounded hover:bg-white/10 transition-colors"
 									style={{ color: theme.colors.textDim }}
-									title="View in Document Graph (⌘⇧G)"
+									title={`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`}
 								>
 									<GitGraph className="w-4 h-4" />
 								</button>
@@ -1918,7 +1918,7 @@ export const FilePreview = React.memo(
 											disabled={!canGoBack}
 											className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-default"
 											style={{ color: canGoBack ? theme.colors.textMain : theme.colors.textDim }}
-											title="Go back (⌘←)"
+											title={`Go back (${formatShortcutKeys(['Meta', 'ArrowLeft'])})`}
 										>
 											<ChevronLeft className="w-4 h-4" />
 										</button>
@@ -1975,7 +1975,7 @@ export const FilePreview = React.memo(
 											disabled={!canGoForward}
 											className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-default"
 											style={{ color: canGoForward ? theme.colors.textMain : theme.colors.textDim }}
-											title="Go forward (⌘→)"
+											title={`Go forward (${formatShortcutKeys(['Meta', 'ArrowRight'])})`}
 										>
 											<ChevronRight className="w-4 h-4" />
 										</button>

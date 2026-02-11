@@ -30,6 +30,7 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useMarketplace } from '../hooks/batch/useMarketplace';
 import { generateProseStyles, createMarkdownComponents } from '../utils/markdownConfig';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 // ============================================================================
 // Types
@@ -1398,13 +1399,13 @@ export function MarketplaceModal({
 							<span className="flex items-center gap-3">
 								<span>
 									<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">
-										{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+F
+										{formatShortcutKeys(['Meta', 'f'])}
 									</kbd>{' '}
 									search
 								</span>
 								<span>
 									<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">
-										{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Shift+[/]
+										{formatShortcutKeys(['Meta', 'Shift'])}+[/]
 									</kbd>{' '}
 									to switch tabs
 								</span>

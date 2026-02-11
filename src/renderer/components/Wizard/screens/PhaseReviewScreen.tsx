@@ -21,6 +21,7 @@ import { useWizard } from '../WizardContext';
 import { AUTO_RUN_FOLDER_NAME } from '../services/phaseGenerator';
 import { ScreenReaderAnnouncement } from '../ScreenReaderAnnouncement';
 import { DocumentEditor } from '../shared/DocumentEditor';
+import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
 
 // Auto-save debounce delay in milliseconds
 const AUTO_SAVE_DELAY = 2000;
@@ -535,7 +536,7 @@ function DocumentReview({
 							className="px-1.5 py-0.5 rounded text-xs"
 							style={{ backgroundColor: theme.colors.border }}
 						>
-							⌘E
+							{formatShortcutKeys(['Meta', 'e'])}
 						</kbd>
 						Toggle Edit/Preview
 					</span>
@@ -548,7 +549,7 @@ function DocumentReview({
 								className="px-1.5 py-0.5 rounded text-xs"
 								style={{ backgroundColor: theme.colors.border }}
 							>
-								⌘⇧[]
+								{formatShortcutKeys(['Meta', 'Shift'])}[]
 							</kbd>
 							Cycle documents
 						</span>

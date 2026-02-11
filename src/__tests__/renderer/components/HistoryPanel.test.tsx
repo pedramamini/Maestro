@@ -171,7 +171,7 @@ describe('HistoryPanel', () => {
 		mockHistoryDelete = vi.fn().mockResolvedValue(true);
 		mockHistoryUpdate = vi.fn().mockResolvedValue(true);
 
-		// Add history mock to window.maestro
+		// Add history and settings mocks to window.maestro
 		(
 			window as unknown as {
 				maestro: {
@@ -180,12 +180,22 @@ describe('HistoryPanel', () => {
 						delete: typeof mockHistoryDelete;
 						update: typeof mockHistoryUpdate;
 					};
+					settings: {
+						get: ReturnType<typeof vi.fn>;
+						set: ReturnType<typeof vi.fn>;
+					};
 				};
 			}
-		).maestro.history = {
-			getAll: mockHistoryGetAll,
-			delete: mockHistoryDelete,
-			update: mockHistoryUpdate,
+		).maestro = {
+			history: {
+				getAll: mockHistoryGetAll,
+				delete: mockHistoryDelete,
+				update: mockHistoryUpdate,
+			},
+			settings: {
+				get: vi.fn().mockResolvedValue(undefined),
+				set: vi.fn().mockResolvedValue(undefined),
+			},
 		};
 
 		consoleErrorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
@@ -603,6 +613,48 @@ describe('HistoryPanel', () => {
 
 			await waitFor(() => {
 				expect(screen.getByText('UPPERCASE Summary')).toBeInTheDocument();
+			});
+		});
+
+		it('should filter entries by graph lookback period', async () => {
+			const now = Date.now();
+			const recentEntry = createMockEntry({
+				id: 'recent',
+				summary: 'Recent task',
+				timestamp: now - 2 * 60 * 60 * 1000, // 2 hours ago
+			});
+			const oldEntry = createMockEntry({
+				id: 'old',
+				summary: 'Old task',
+				timestamp: now - 48 * 60 * 60 * 1000, // 48 hours ago
+			});
+			mockHistoryGetAll.mockResolvedValue([recentEntry, oldEntry]);
+
+			const { container } = render(<HistoryPanel session={createMockSession()} theme={mockTheme} />);
+
+			// Both entries visible initially (all time)
+			await waitFor(() => {
+				expect(screen.getByText('Recent task')).toBeInTheDocument();
+				expect(screen.getByText('Old task')).toBeInTheDocument();
+			});
+
+			// Right-click the graph to open context menu
+			const graphContainer = container.querySelector('[class*="flex-1"][class*="min-w-0"][class*="flex-col"]');
+			if (graphContainer) {
+				fireEvent.contextMenu(graphContainer);
+			}
+
+			// Select "24 hours" from the context menu
+			await waitFor(() => {
+				const option24h = screen.getByText('24 hours');
+				expect(option24h).toBeInTheDocument();
+				fireEvent.click(option24h);
+			});
+
+			// Old entry (48h ago) should be filtered out
+			await waitFor(() => {
+				expect(screen.getByText('Recent task')).toBeInTheDocument();
+				expect(screen.queryByText('Old task')).not.toBeInTheDocument();
 			});
 		});
 

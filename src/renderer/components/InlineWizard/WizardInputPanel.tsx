@@ -26,7 +26,7 @@ import type { Session, Theme } from '../../types';
 import { WizardPill } from './WizardPill';
 import { WizardConfidenceGauge } from './WizardConfidenceGauge';
 import { WizardExitConfirmDialog } from './WizardExitConfirmDialog';
-import { isMacOS } from '../../utils/shortcutFormatter';
+import { formatShortcutKeys, formatEnterToSend, formatEnterToSendTooltip } from '../../utils/shortcutFormatter';
 
 interface WizardInputPanelProps {
 	/** Current session with wizard state */
@@ -324,13 +324,11 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 									onClick={() => setEnterToSend(!enterToSend)}
 									className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 px-2 py-1 rounded hover:bg-white/5"
 									title={
-										enterToSend
-											? `Switch to ${isMacOS() ? 'Cmd' : 'Ctrl'}+Enter to send`
-											: 'Switch to Enter to send'
+										formatEnterToSendTooltip(enterToSend)
 									}
 								>
 									<Keyboard className="w-3 h-3" />
-									{enterToSend ? 'Enter' : isMacOS() ? '⌘ + Enter' : 'Ctrl + Enter'}
+									{formatEnterToSend(enterToSend)}
 								</button>
 							</div>
 						</div>
@@ -349,7 +347,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 							borderColor: theme.colors.border,
 							color: theme.colors.textDim,
 						}}
-						title={isBusy ? 'Cannot switch mode while wizard is processing' : 'Toggle Mode (Cmd+J)'}
+						title={isBusy ? 'Cannot switch mode while wizard is processing' : `Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`}
 					>
 						{/* Show Wand2 icon in wizard mode instead of Terminal/Cpu */}
 						{isTerminalMode ? (

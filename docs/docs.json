@@ -52,25 +52,32 @@
             ]
           },
           {
-            "group": "Usage",
+            "group": "General Usage",
             "pages": [
               "general-usage",
               "keyboard-shortcuts",
               "slash-commands",
-              "speckit-commands",
-              "openspec-commands",
               "history",
+              "director-notes",
               "context-management",
               "document-graph",
               "usage-dashboard",
-              "autorun-playbooks",
-              "playbook-exchange",
               "symphony",
               "git-worktrees",
               "group-chat",
               "remote-access",
               "ssh-remote-execution",
               "configuration"
+            ]
+          },
+          {
+            "group": "Auto Run",
+            "icon": "play",
+            "pages": [
+              "autorun-playbooks",
+              "playbook-exchange",
+              "speckit-commands",
+              "openspec-commands"
             ]
           },
           {

@@ -61,6 +61,9 @@ const DocumentGraphView = lazy(() =>
 		default: m.DocumentGraphView,
 	}))
 );
+const DirectorNotesModal = lazy(() =>
+	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
+);
 
 // Re-import the type for SymphonyContributionData (types don't need lazy loading)
 import type { SymphonyContributionData } from './components/SymphonyModal';
@@ -160,6 +163,7 @@ import type {
 	BatchRunConfig,
 	AgentError,
 	BatchRunState,
+	Group,
 	GroupChatMessage,
 	SpecKitCommand,
 	OpenSpecCommand,
@@ -439,6 +443,9 @@ function MaestroConsoleInner() {
 		// Symphony Modal
 		symphonyModalOpen,
 		setSymphonyModalOpen,
+		// Director's Notes Modal
+		directorNotesOpen,
+		setDirectorNotesOpen,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -5273,6 +5280,37 @@ You are taking over this conversation. Based on the context above, provide a bri
 			defaultSaveToHistory,
 			defaultShowThinking,
 		});
+
+	// --- DIRECTOR'S NOTES SESSION NAVIGATION ---
+	// Handles cross-agent navigation: close modal → switch agent → resume session
+	const pendingResumeRef = useRef<{ agentSessionId: string; targetSessionId: string } | null>(null);
+
+	const handleDirectorNotesResumeSession = useCallback(
+		(sourceSessionId: string, agentSessionId: string) => {
+			// Close the Director's Notes modal
+			setDirectorNotesOpen(false);
+
+			// If already on the right agent, resume directly
+			if (activeSession?.id === sourceSessionId) {
+				handleResumeSession(agentSessionId);
+				return;
+			}
+
+			// Switch to the target agent and defer resume until activeSession updates
+			pendingResumeRef.current = { agentSessionId, targetSessionId: sourceSessionId };
+			setActiveSessionId(sourceSessionId);
+		},
+		[activeSession?.id, handleResumeSession, setActiveSessionId, setDirectorNotesOpen]
+	);
+
+	// Effect: process pending resume after agent switch completes
+	useEffect(() => {
+		if (pendingResumeRef.current && activeSession?.id === pendingResumeRef.current.targetSessionId) {
+			const { agentSessionId } = pendingResumeRef.current;
+			pendingResumeRef.current = null;
+			handleResumeSession(agentSessionId);
+		}
+	}, [activeSession?.id, handleResumeSession]);
 
 	// PERFORMANCE: Memoized callback for creating new agent sessions
 	// Extracted from inline function to prevent MainPanel re-renders
@@ -12703,6 +12741,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setFuzzyFileSearchOpen,
 		setMarketplaceModalOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
 		// Group chat context
@@ -13389,6 +13428,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setGroups,
 		setSessions,
 		setRenameInstanceModalOpen,
@@ -13842,6 +13882,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onAutoRunRefresh={handleAutoRunRefresh}
 					onOpenMarketplace={handleOpenMarketplace}
 					onOpenSymphony={() => setSymphonyModalOpen(true)}
+					onOpenDirectorNotes={() => setDirectorNotesOpen(true)}
 					tabSwitcherOpen={tabSwitcherOpen}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
@@ -14193,6 +14234,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 								// Switch to Auto Run tab so user sees the documents
 								setActiveRightTab('autorun');
 							}}
+						/>
+					</Suspense>
+				)}
+
+				{/* --- DIRECTOR'S NOTES MODAL (lazy-loaded) --- */}
+				{directorNotesOpen && (
+					<Suspense fallback={null}>
+						<DirectorNotesModal
+							theme={theme}
+							onClose={() => setDirectorNotesOpen(false)}
+							onResumeSession={handleDirectorNotesResumeSession}
+							fileTree={activeSession?.fileTree}
+							onFileClick={(path: string) => handleFileClick({ name: path.split('/').pop() || path, type: 'file' }, path)}
 						/>
 					</Suspense>
 				)}

@@ -23,6 +23,7 @@ import type { GeneratedDocument } from '../Wizard/WizardContext';
 import { MermaidRenderer } from '../MermaidRenderer';
 import { useClickOutside } from '../../hooks';
 import { AustinFactsDisplay } from './AustinFactsDisplay';
+import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 import { formatSize, formatElapsedTime } from '../../../shared/formatters';
 
 // Memoize remarkPlugins array - it never changes
@@ -669,7 +670,7 @@ function DocumentEditor({
 							mode === 'edit' && !isLocked ? theme.colors.accent : theme.colors.border
 						}`,
 					}}
-					title="Edit document (⌘E)"
+					title={`Edit document (${formatShortcutKeys(['Meta', 'e'])})`}
 				>
 					<Edit className="w-3.5 h-3.5" />
 					Edit
@@ -684,7 +685,7 @@ function DocumentEditor({
 						color: mode === 'preview' ? theme.colors.textMain : theme.colors.textDim,
 						border: `1px solid ${mode === 'preview' ? theme.colors.accent : theme.colors.border}`,
 					}}
-					title="Preview document (⌘E)"
+					title={`Preview document (${formatShortcutKeys(['Meta', 'e'])})`}
 				>
 					<Eye className="w-3.5 h-3.5" />
 					Preview

@@ -8,6 +8,7 @@ import { FormInput } from './ui/FormInput';
 import { Modal, ModalFooter } from './ui/Modal';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
 import { SshRemoteSelector } from './shared/SshRemoteSelector';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 // Maximum character length for nudge message
 const NUDGE_MESSAGE_MAX_LENGTH = 1000;
@@ -1051,7 +1052,7 @@ export function NewInstanceModal({
 								title={
 									isSshEnabled
 										? `Folder picker unavailable for SSH remote${sshRemoteHost ? ` (${sshRemoteHost})` : ''}. Enter the remote path manually.`
-										: 'Browse folders (Cmd+O)'
+										: `Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
 								}
 							>
 								<Folder className="w-5 h-5" />

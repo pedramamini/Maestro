@@ -231,6 +231,8 @@ export function HistoryHelpModal({ theme, onClose }: HistoryHelpModalProps) {
 					<div className="text-sm space-y-2 pl-7" style={{ color: theme.colors.textDim }}>
 						<p>
 							The bar graph in the header visualizes your activity over a configurable time period.
+							Changing the lookback period filters both the graph and the entry list below it—only
+							entries within the selected window are shown.
 						</p>
 						<p className="mt-2">
 							<strong style={{ color: theme.colors.textMain }}>Right-click the graph</strong> to
@@ -238,8 +240,8 @@ export function HistoryHelpModal({ theme, onClose }: HistoryHelpModalProps) {
 							months, 1 year, or all time.
 						</p>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Click any bar</strong> to filter the
-							history list to entries within that time bucket.
+							<strong style={{ color: theme.colors.textMain }}>Click any bar</strong> to jump to
+							entries within that time bucket.
 						</p>
 						<p>Hover over any bar to see the exact count and time range.</p>
 					</div>

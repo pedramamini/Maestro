@@ -56,6 +56,7 @@ import { useSymphony } from '../hooks/symphony';
 import { useContributorStats, type Achievement } from '../hooks/symphony/useContributorStats';
 import { AgentCreationDialog, type AgentCreationConfig } from './AgentCreationDialog';
 import { generateProseStyles, createMarkdownComponents } from '../utils/markdownConfig';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 // ============================================================================
 // Types
@@ -1909,7 +1910,7 @@ export function SymphonyModal({
 										<span>
 											{filteredRepositories.length} repositories • Contribute to open source with AI
 										</span>
-										<span>↑↓←→ navigate • Enter select • / search • ⌘⇧[] tabs</span>
+										<span>{`↑↓←→ navigate • Enter select • / search • ${formatShortcutKeys(['Meta', 'Shift'])}[] tabs`}</span>
 									</div>
 								</>
 							)}

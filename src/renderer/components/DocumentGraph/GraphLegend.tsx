@@ -14,6 +14,7 @@
 import React, { memo } from 'react';
 import { X, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { Theme } from '../../types';
+import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 
 /**
  * Props for the GraphLegend component
@@ -101,7 +102,7 @@ const KEYBOARD_SHORTCUTS: KeyboardShortcutItem[] = [
 		description: 'Close preview / modal',
 	},
 	{
-		keys: '⌘F',
+		keys: formatShortcutKeys(['Meta', 'f']),
 		description: 'Focus search',
 	},
 ];

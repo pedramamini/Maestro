@@ -34,7 +34,7 @@ import type { WizardError } from '../services/wizardErrorDetection';
 import { AUTO_RUN_FOLDER_NAME, wizardDebugLogger } from '../services/phaseGenerator';
 import { getNextFillerPhrase } from '../services/fillerPhrases';
 import { ScreenReaderAnnouncement } from '../ScreenReaderAnnouncement';
-import { isMacOS } from '../../../utils/shortcutFormatter';
+import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
 
 interface ConversationScreenProps {
 	theme: Theme;
@@ -1583,7 +1583,7 @@ export function ConversationScreen({
 							className="px-1.5 py-0.5 rounded text-xs"
 							style={{ backgroundColor: theme.colors.border }}
 						>
-							⌘⇧K
+							{formatShortcutKeys(['Meta', 'Shift', 'k'])}
 						</kbd>
 						<button
 							onClick={() => setShowThinking(!showThinking)}
@@ -1614,7 +1614,7 @@ export function ConversationScreen({
 							className="px-1.5 py-0.5 rounded text-xs"
 							style={{ backgroundColor: theme.colors.border }}
 						>
-							{isMacOS() ? '⌘' : 'Ctrl'}+Enter
+							{formatShortcutKeys(['Meta', 'Enter'])}
 						</kbd>
 						Send
 					</span>

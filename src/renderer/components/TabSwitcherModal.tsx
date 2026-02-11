@@ -982,7 +982,7 @@ export function TabSwitcherModal({
 						{filteredItems.length}{' '}
 						{viewMode === 'open' ? 'tabs' : viewMode === 'starred' ? 'starred' : 'sessions'}
 					</span>
-					<span>↑↓ navigate • Enter select • ⌘1-9 quick select</span>
+					<span>{`↑↓ navigate • Enter select • ${formatShortcutKeys(['Meta'])}1-9 quick select`}</span>
 				</div>
 			</div>
 		</div>

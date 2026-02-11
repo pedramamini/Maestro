@@ -18,7 +18,7 @@ import {
 	Pin,
 } from 'lucide-react';
 import type { Session, Theme, BatchRunState, Shortcut, ThinkingMode } from '../types';
-import { formatShortcutKeys, isMacOS } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, formatEnterToSend, formatEnterToSendTooltip } from '../utils/shortcutFormatter';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks';
 import type {
 	SummarizeProgress,
@@ -1013,7 +1013,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 												? `1px solid ${theme.colors.accent}50`
 												: '1px solid transparent',
 										}}
-										title="Save to History (Cmd+S) - Synopsis added after each completion"
+										title={`Save to History (${formatShortcutKeys(['Meta', 's'])}) - Synopsis added after each completion`}
 									>
 										<History className="w-3 h-3" />
 										<span>History</span>
@@ -1089,13 +1089,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									onClick={() => setEnterToSend(!enterToSend)}
 									className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 px-2 py-1 rounded hover:bg-white/5"
 									title={
-										enterToSend
-											? `Switch to ${isMacOS() ? 'Cmd' : 'Ctrl'}+Enter to send`
-											: 'Switch to Enter to send'
+										formatEnterToSendTooltip(enterToSend)
 									}
 								>
 									<Keyboard className="w-3 h-3" />
-									{enterToSend ? 'Enter' : isMacOS() ? '⌘ + Enter' : 'Ctrl + Enter'}
+									{formatEnterToSend(enterToSend)}
 								</button>
 							</div>
 						</div>
@@ -1125,7 +1123,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							borderColor: theme.colors.border,
 							color: theme.colors.textDim,
 						}}
-						title="Toggle Mode (Cmd+J)"
+						title={`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`}
 					>
 						{session.inputMode === 'terminal' ? (
 							<Terminal className="w-4 h-4" />

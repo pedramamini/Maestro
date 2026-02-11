@@ -2606,6 +2606,69 @@ interface MaestroAPI {
 			};
 		}) => Promise<string | null>;
 	};
+
+	// Director's Notes API (unified history + synopsis generation)
+	directorNotes: {
+		getUnifiedHistory: (options: {
+			lookbackDays: number;
+			filter?: 'AUTO' | 'USER' | null;
+			limit?: number;
+			offset?: number;
+		}) => Promise<{
+			entries: Array<{
+				id: string;
+				type: HistoryEntryType;
+				timestamp: number;
+				summary: string;
+				fullResponse?: string;
+				agentSessionId?: string;
+				sessionName?: string;
+				projectPath: string;
+				sessionId?: string;
+				contextUsage?: number;
+				success?: boolean;
+				elapsedTimeMs?: number;
+				validated?: boolean;
+				agentName?: string;
+				sourceSessionId: string;
+				usageStats?: {
+					totalCostUsd: number;
+					inputTokens: number;
+					outputTokens: number;
+					cacheReadTokens: number;
+					cacheWriteTokens: number;
+				};
+			}>;
+			total: number;
+			limit: number;
+			offset: number;
+			hasMore: boolean;
+			stats: {
+				agentCount: number;
+				sessionCount: number;
+				autoCount: number;
+				userCount: number;
+				totalCount: number;
+			};
+		}>;
+		generateSynopsis: (options: {
+			lookbackDays: number;
+			provider: string;
+			customPath?: string;
+			customArgs?: string;
+			customEnvVars?: Record<string, string>;
+		}) => Promise<{
+			success: boolean;
+			synopsis: string;
+			generatedAt?: number;
+			stats?: {
+				agentCount: number;
+				entryCount: number;
+				durationMs: number;
+			};
+			error?: string;
+		}>;
+	};
 }
 
 declare global {

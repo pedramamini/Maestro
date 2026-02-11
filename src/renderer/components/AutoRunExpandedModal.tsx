@@ -353,7 +353,7 @@ export function AutoRunExpandedModal({
 											border: `1px solid ${theme.colors.border}`,
 										}}
 									>
-										⌘S
+										{formatShortcutKeys(['Meta', 's'])}
 									</span>
 								</button>
 							</>

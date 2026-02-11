@@ -1512,7 +1512,7 @@ export const MainPanel = React.memo(
 												setAgentSessionsOpen(true);
 											}}
 											className="p-2 rounded hover:bg-white/5"
-											title={`Agent Sessions (${shortcuts.agentSessions?.keys?.join('+').replace('Meta', 'Cmd').replace('Shift', '⇧') || 'Cmd+⇧+L'})`}
+											title={`Agent Sessions (${shortcuts.agentSessions ? formatShortcutKeys(shortcuts.agentSessions.keys) : formatShortcutKeys(['Meta', 'Shift', 'l'])})`}
 											data-tour="agent-sessions-button"
 										>
 											<List className="w-4 h-4" style={{ color: theme.colors.textDim }} />

@@ -210,7 +210,9 @@ export type ModalId =
 	// Symphony
 	| 'symphony'
 	// Platform Warnings
-	| 'windowsWarning';
+	| 'windowsWarning'
+	// Director's Notes
+	| 'directorNotes';
 
 /**
  * Type mapping from ModalId to its data type.
@@ -725,6 +727,10 @@ export function getModalActions() {
 		setWindowsWarningModalOpen: (open: boolean) =>
 			open ? openModal('windowsWarning') : closeModal('windowsWarning'),
 
+		// Director's Notes Modal
+		setDirectorNotesOpen: (open: boolean) =>
+			open ? openModal('directorNotes') : closeModal('directorNotes'),
+
 		// Lightbox refs replacement - use updateModalData instead
 		setLightboxIsGroupChat: (isGroupChat: boolean) => updateModalData('lightbox', { isGroupChat }),
 		setLightboxAllowDelete: (allowDelete: boolean) => updateModalData('lightbox', { allowDelete }),
@@ -811,6 +817,7 @@ export function useModalActions() {
 	const tourData = useModalStore(selectModalData('tour'));
 	const symphonyModalOpen = useModalStore(selectModalOpen('symphony'));
 	const windowsWarningModalOpen = useModalStore(selectModalOpen('windowsWarning'));
+	const directorNotesOpen = useModalStore(selectModalOpen('directorNotes'));
 
 	// Get stable actions
 	const actions = getModalActions();
@@ -971,6 +978,9 @@ export function useModalActions() {
 
 		// Windows Warning Modal
 		windowsWarningModalOpen,
+
+		// Director's Notes Modal
+		directorNotesOpen,
 
 		// Lightbox ref replacements (now stored as data)
 		lightboxIsGroupChat: lightboxData?.isGroupChat ?? false,

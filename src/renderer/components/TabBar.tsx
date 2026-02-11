@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { AITab, Theme, FilePreviewTab, UnifiedTab } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
 
 interface TabBarProps {
@@ -1920,7 +1921,7 @@ function TabBarInner({
 						onClick={onOpenTabSearch}
 						className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
-						title="Search tabs (Cmd+Shift+O)"
+						title={`Search tabs (${formatShortcutKeys(['Meta', 'Shift', 'o'])})`}
 					>
 						<Search className="w-4 h-4" />
 					</button>
@@ -1933,7 +1934,7 @@ function TabBarInner({
 						color: showUnreadOnly ? theme.colors.accent : theme.colors.textDim,
 						opacity: showUnreadOnly ? 1 : 0.5,
 					}}
-					title={showUnreadOnly ? 'Showing unread only (Cmd+U)' : 'Filter unread tabs (Cmd+U)'}
+					title={showUnreadOnly ? `Showing unread only (${formatShortcutKeys(['Meta', 'u'])})` : `Filter unread tabs (${formatShortcutKeys(['Meta', 'u'])})`}
 				>
 					<Mail className="w-4 h-4" />
 					{/* Notification dot */}
@@ -2176,7 +2177,7 @@ function TabBarInner({
 					onClick={onNewTab}
 					className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
 					style={{ color: theme.colors.textDim }}
-					title="New tab (Cmd+T)"
+					title={`New tab (${formatShortcutKeys(['Meta', 't'])})`}
 				>
 					<Plus className="w-4 h-4" />
 				</button>

@@ -402,6 +402,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setSymphonyModalOpen(true);
 				trackShortcut('openSymphony');
+			} else if (ctx.isShortcut(e, 'directorNotes')) {
+				e.preventDefault();
+				ctx.setDirectorNotesOpen(true);
+				trackShortcut('directorNotes');
 			} else if (ctx.isShortcut(e, 'jumpToBottom')) {
 				e.preventDefault();
 				// Jump to the bottom of the current main panel output (AI logs or terminal output)

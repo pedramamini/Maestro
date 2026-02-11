@@ -2,6 +2,7 @@ import React, { useState, useCallback, memo, useEffect, useRef } from 'react';
 import { createPortal } from 'react-dom';
 import { X, ChevronLeft, ChevronRight, Copy, Check, Trash2, FileText } from 'lucide-react';
 import type { Theme } from '../types';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { ConfirmModal } from './ConfirmModal';
@@ -277,7 +278,7 @@ export const AutoRunLightbox = memo(
 							copyToClipboard();
 						}}
 						className="bg-white/10 hover:bg-white/20 text-white rounded-full p-3 backdrop-blur-sm transition-colors flex items-center gap-2"
-						title="Copy image to clipboard (⌘C)"
+						title={`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`}
 					>
 						{copied ? <Check className="w-5 h-5" /> : <Copy className="w-5 h-5" />}
 						{copied && <span className="text-sm">Copied!</span>}

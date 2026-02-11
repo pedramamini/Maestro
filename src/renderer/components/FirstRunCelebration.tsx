@@ -23,6 +23,7 @@ import confetti from 'canvas-confetti';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 // 15 minutes in milliseconds - threshold for "Standing Ovation" variation
 const STANDING_OVATION_THRESHOLD_MS = 15 * 60 * 1000;
@@ -437,7 +438,7 @@ export function FirstRunCelebration({
 											Or start fresh with new ideas
 										</p>
 										<p className="text-xs" style={{ color: theme.colors.textDim }}>
-											Use Cmd+Shift+N to open the wizard anytime
+											Use {formatShortcutKeys(['Meta', 'Shift', 'n'])} to open the wizard anytime
 										</p>
 									</div>
 								</div>

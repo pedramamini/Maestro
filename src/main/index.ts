@@ -51,6 +51,7 @@ import {
 	registerSymphonyHandlers,
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
+	registerDirectorNotesHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -435,6 +436,12 @@ function setupIpcHandlers() {
 	// History operations - extracted to src/main/ipc/handlers/history.ts
 	// Uses HistoryManager singleton for per-session storage
 	registerHistoryHandlers();
+
+	// Director's Notes - unified history + synopsis generation
+	registerDirectorNotesHandlers({
+		getProcessManager: () => processManager,
+		getAgentDetector: () => agentDetector,
+	});
 
 	// Agent management operations - extracted to src/main/ipc/handlers/agents.ts
 	registerAgentsHandlers({

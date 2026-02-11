@@ -533,7 +533,7 @@ export function FileSearchModal({
 					style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 				>
 					<span>{filteredFiles.length} files</span>
-					<span>↑↓ navigate • Enter select • ⌘1-9 quick select</span>
+					<span>{`↑↓ navigate • Enter select • ${formatShortcutKeys(['Meta'])}1-9 quick select`}</span>
 				</div>
 			</div>
 		</div>
