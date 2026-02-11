@@ -17,6 +17,7 @@ import type { DocumentTaskCount } from './AutoRunDocumentSelector';
 import { AutoRunExpandedModal } from './AutoRunExpandedModal';
 import { VibesPanel } from './vibes/VibesPanel';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { useSettings } from '../hooks';
 
 export interface RightPanelHandle {
 	refreshHistoryPanel: () => void;
@@ -205,6 +206,18 @@ export const RightPanel = memo(
 		const historyPanelRef = useRef<HistoryPanelHandle>(null);
 		const autoRunRef = useRef<AutoRunHandle>(null);
 		const panelRef = useRef<HTMLDivElement>(null);
+
+		// VIBES blame view state — tracks file path to pre-select in blame view
+		const { vibesEnabled } = useSettings();
+		const [blameFilePath, setBlameFilePath] = useState<string | undefined>(undefined);
+
+		const handleViewAIBlame = useCallback(
+			(relativePath: string) => {
+				setBlameFilePath(relativePath);
+				setActiveRightTab('vibes');
+			},
+			[setActiveRightTab],
+		);
 
 		// Elapsed time for Auto Run display - tracks wall clock time from startTime
 		const [elapsedTime, setElapsedTime] = useState<string>('');
@@ -511,6 +524,7 @@ export const RightPanel = memo(
 								onFocusFileInGraph={onFocusFileInGraph}
 								lastGraphFocusFile={lastGraphFocusFile}
 								onOpenLastDocumentGraph={onOpenLastDocumentGraph}
+								onViewAIBlame={vibesEnabled ? handleViewAIBlame : undefined}
 							/>
 						</div>
 					)}
@@ -542,6 +556,8 @@ export const RightPanel = memo(
 							<VibesPanel
 								theme={theme}
 								projectPath={session.projectRoot || session.cwd}
+								initialBlameFilePath={blameFilePath}
+								onBlameFileConsumed={() => setBlameFilePath(undefined)}
 							/>
 						</div>
 					)}

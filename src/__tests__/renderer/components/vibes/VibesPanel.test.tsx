@@ -51,8 +51,10 @@ vi.mock('../../../../renderer/components/vibes/VibesModelAttribution', () => ({
 }));
 
 vi.mock('../../../../renderer/components/vibes/VibesBlameView', () => ({
-	VibesBlameView: () => (
-		<div data-testid="vibes-blame-view">BlameView</div>
+	VibesBlameView: (props: Record<string, unknown>) => (
+		<div data-testid="vibes-blame-view">
+			BlameView{props.initialFilePath ? `: file=${String(props.initialFilePath)}` : ''}
+		</div>
 	),
 }));
 
@@ -282,5 +284,64 @@ describe('VibesPanel', () => {
 		fireEvent.click(logTab);
 		expect(logTab.style.borderColor).not.toBe('transparent');
 		expect(overviewTab.style.borderColor).toBe('transparent');
+	});
+
+	// ========================================================================
+	// initialBlameFilePath — context menu integration
+	// ========================================================================
+
+	it('auto-navigates to blame sub-tab when initialBlameFilePath is provided', () => {
+		render(
+			<VibesPanel
+				theme={mockTheme}
+				projectPath="/project"
+				initialBlameFilePath="src/index.ts"
+			/>,
+		);
+
+		// Should show blame view, not dashboard
+		expect(screen.queryByTestId('vibes-dashboard')).toBeNull();
+		expect(screen.getByTestId('vibes-blame-view')).toBeTruthy();
+	});
+
+	it('passes initialBlameFilePath to VibesBlameView as initialFilePath', () => {
+		render(
+			<VibesPanel
+				theme={mockTheme}
+				projectPath="/project"
+				initialBlameFilePath="src/utils/helpers.ts"
+			/>,
+		);
+
+		const blameView = screen.getByTestId('vibes-blame-view');
+		expect(blameView.textContent).toContain('file=src/utils/helpers.ts');
+	});
+
+	it('calls onBlameFileConsumed after processing initialBlameFilePath', () => {
+		const onBlameFileConsumed = vi.fn();
+		render(
+			<VibesPanel
+				theme={mockTheme}
+				projectPath="/project"
+				initialBlameFilePath="src/index.ts"
+				onBlameFileConsumed={onBlameFileConsumed}
+			/>,
+		);
+
+		expect(onBlameFileConsumed).toHaveBeenCalledTimes(1);
+	});
+
+	it('does not auto-navigate when initialBlameFilePath is undefined', () => {
+		render(
+			<VibesPanel
+				theme={mockTheme}
+				projectPath="/project"
+				initialBlameFilePath={undefined}
+			/>,
+		);
+
+		// Should remain on Overview (default)
+		expect(screen.getByTestId('vibes-dashboard')).toBeTruthy();
+		expect(screen.queryByTestId('vibes-blame-view')).toBeNull();
 	});
 });

@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from 'react';
+import React, { useState, useCallback, useEffect } from 'react';
 import { Shield, Settings } from 'lucide-react';
 import type { Theme } from '../../types';
 import { useSettings, useVibesData } from '../../hooks';
@@ -31,6 +31,10 @@ const SUB_TABS: { key: VibesSubTab; label: string }[] = [
 interface VibesPanelProps {
 	theme: Theme;
 	projectPath: string | undefined;
+	/** Optional file path to pre-select in the blame view (e.g. from file explorer context menu). */
+	initialBlameFilePath?: string;
+	/** Callback to clear the initialBlameFilePath after it has been consumed. */
+	onBlameFileConsumed?: () => void;
 }
 
 // ============================================================================
@@ -46,11 +50,27 @@ interface VibesPanelProps {
  * - Scrollable tab bar to accommodate 6 sub-tabs
  * - Disabled state message when VIBES is off, with button to open Settings
  * - Passes projectPath and vibesData to child components
+ * - Accepts initialBlameFilePath to auto-navigate to blame view with a pre-selected file
  */
-export const VibesPanel: React.FC<VibesPanelProps> = ({ theme, projectPath }) => {
+export const VibesPanel: React.FC<VibesPanelProps> = ({
+	theme,
+	projectPath,
+	initialBlameFilePath,
+	onBlameFileConsumed,
+}) => {
 	const [activeSubTab, setActiveSubTab] = useState<VibesSubTab>('overview');
+	const [blameFilePath, setBlameFilePath] = useState<string | undefined>(undefined);
 	const { vibesEnabled, vibesAssuranceLevel } = useSettings();
 	const vibesData = useVibesData(projectPath, vibesEnabled);
+
+	// When an initialBlameFilePath is provided, switch to blame tab and set the file path
+	useEffect(() => {
+		if (initialBlameFilePath) {
+			setBlameFilePath(initialBlameFilePath);
+			setActiveSubTab('blame');
+			onBlameFileConsumed?.();
+		}
+	}, [initialBlameFilePath, onBlameFileConsumed]);
 
 	const handleOpenSettings = useCallback(() => {
 		// Dispatch tour:action event to open settings (same event bus as other UI actions)
@@ -154,6 +174,7 @@ export const VibesPanel: React.FC<VibesPanelProps> = ({ theme, projectPath }) =>
 					<VibesBlameView
 						theme={theme}
 						projectPath={projectPath}
+						initialFilePath={blameFilePath}
 					/>
 				)}
 

@@ -22,6 +22,7 @@ import {
 	Trash2,
 	AlertTriangle,
 	Loader2,
+	Shield,
 } from 'lucide-react';
 import type { Session, Theme, FocusArea } from '../types';
 import type { FileNode } from '../types/fileTree';
@@ -360,6 +361,8 @@ interface FileExplorerPanelProps {
 	lastGraphFocusFile?: string;
 	/** Callback to open the last document graph */
 	onOpenLastDocumentGraph?: () => void;
+	/** Callback to open VIBES blame view for a specific file (relative path) */
+	onViewAIBlame?: (relativePath: string) => void;
 }
 
 function FileExplorerPanelInner(props: FileExplorerPanelProps) {
@@ -391,6 +394,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		onFocusFileInGraph,
 		lastGraphFocusFile,
 		onOpenLastDocumentGraph,
+		onViewAIBlame,
 	} = props;
 
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -573,6 +577,13 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		}
 		setContextMenu(null);
 	}, [contextMenu, onFocusFileInGraph]);
+
+	const handleViewAIBlame = useCallback(() => {
+		if (contextMenu && onViewAIBlame) {
+			onViewAIBlame(contextMenu.path);
+		}
+		setContextMenu(null);
+	}, [contextMenu, onViewAIBlame]);
 
 	const handlePreviewFile = useCallback(() => {
 		if (contextMenu && contextMenu.node.type === 'file') {
@@ -1395,6 +1406,18 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 										<span>Document Graph</span>
 									</button>
 								)}
+
+							{/* View AI Blame option - for files only, when VIBES is enabled */}
+							{contextMenu.node.type === 'file' && onViewAIBlame && (
+								<button
+									onClick={handleViewAIBlame}
+									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
+									style={{ color: theme.colors.textMain }}
+								>
+									<Shield className="w-3.5 h-3.5" style={{ color: theme.colors.accent }} />
+									<span>View AI Blame</span>
+								</button>
+							)}
 
 							{/* Open in Default App option - for files only, not available over SSH */}
 							{contextMenu.node.type === 'file' && !sshRemoteId && (

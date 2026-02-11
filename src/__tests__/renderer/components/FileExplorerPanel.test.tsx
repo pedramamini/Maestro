@@ -116,6 +116,11 @@ vi.mock('lucide-react', () => ({
 			⏳
 		</span>
 	),
+	Shield: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
+		<span data-testid="shield-icon" className={className} style={style}>
+			🛡️
+		</span>
+	),
 }));
 
 // Mock @tanstack/react-virtual for virtualization
@@ -1772,6 +1777,80 @@ describe('FileExplorerPanel', () => {
 			// Focus behavior with requestAnimationFrame is tested elsewhere
 			const cancelButton = screen.getByText('Cancel');
 			expect(cancelButton).toBeInTheDocument();
+		});
+
+		it('shows View AI Blame option when onViewAIBlame is provided and file is right-clicked', () => {
+			const onViewAIBlame = vi.fn();
+			const { container } = render(
+				<FileExplorerPanel {...defaultProps} onViewAIBlame={onViewAIBlame} />
+			);
+
+			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('package.json')
+			);
+			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+			expect(screen.getByText('View AI Blame')).toBeInTheDocument();
+		});
+
+		it('does not show View AI Blame option when onViewAIBlame is not provided', () => {
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+
+			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('package.json')
+			);
+			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+			expect(screen.queryByText('View AI Blame')).not.toBeInTheDocument();
+		});
+
+		it('does not show View AI Blame option for folders', () => {
+			const onViewAIBlame = vi.fn();
+			const { container } = render(
+				<FileExplorerPanel {...defaultProps} onViewAIBlame={onViewAIBlame} />
+			);
+
+			const folderItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('src')
+			);
+			fireEvent.contextMenu(folderItem!, { clientX: 100, clientY: 200 });
+
+			expect(screen.queryByText('View AI Blame')).not.toBeInTheDocument();
+		});
+
+		it('calls onViewAIBlame with relative path when View AI Blame is clicked', () => {
+			const onViewAIBlame = vi.fn();
+			const { container } = render(
+				<FileExplorerPanel {...defaultProps} onViewAIBlame={onViewAIBlame} />
+			);
+
+			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('package.json')
+			);
+			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+			const blameButton = screen.getByText('View AI Blame');
+			fireEvent.click(blameButton);
+
+			expect(onViewAIBlame).toHaveBeenCalledWith('package.json');
+		});
+
+		it('closes context menu after clicking View AI Blame', () => {
+			const onViewAIBlame = vi.fn();
+			const { container } = render(
+				<FileExplorerPanel {...defaultProps} onViewAIBlame={onViewAIBlame} />
+			);
+
+			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('package.json')
+			);
+			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+			const blameButton = screen.getByText('View AI Blame');
+			fireEvent.click(blameButton);
+
+			// Context menu should be closed
+			expect(screen.queryByText('View AI Blame')).not.toBeInTheDocument();
 		});
 	});
 });
