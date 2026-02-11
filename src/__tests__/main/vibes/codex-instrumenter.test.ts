@@ -1,0 +1,916 @@
+/**
+ * Tests for src/main/vibes/instrumenters/codex-instrumenter.ts
+ * Validates the Codex instrumenter: tool execution handling, thinking
+ * chunk buffering, usage capture, prompt capture, result flushing, and
+ * assurance-level gating.
+ */
+
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
+import { mkdtemp, rm } from 'fs/promises';
+import * as path from 'path';
+import * as os from 'os';
+
+import { CodexInstrumenter } from '../../../main/vibes/instrumenters/codex-instrumenter';
+import { VibesSessionManager } from '../../../main/vibes/vibes-session';
+import { readAnnotations, readVibesManifest, ensureAuditDir } from '../../../main/vibes/vibes-io';
+import type {
+	VibesLineAnnotation,
+	VibesCommandEntry,
+	VibesPromptEntry,
+	VibesReasoningEntry,
+} from '../../../shared/vibes-types';
+
+// ============================================================================
+// Test Suite
+// ============================================================================
+
+describe('codex-instrumenter', () => {
+	const FIXED_ISO = '2026-02-10T12:00:00.000Z';
+	let tmpDir: string;
+	let manager: VibesSessionManager;
+
+	beforeEach(async () => {
+		vi.useFakeTimers();
+		vi.setSystemTime(new Date(FIXED_ISO));
+		tmpDir = await mkdtemp(path.join(os.tmpdir(), 'vibes-codex-instrumenter-test-'));
+		await ensureAuditDir(tmpDir);
+		manager = new VibesSessionManager();
+	});
+
+	afterEach(async () => {
+		vi.useRealTimers();
+		await rm(tmpDir, { recursive: true, force: true });
+	});
+
+	/**
+	 * Helper: start a session and set up the environment hash.
+	 */
+	async function setupSession(
+		sessionId: string,
+		assuranceLevel: 'low' | 'medium' | 'high' = 'medium',
+	) {
+		const state = await manager.startSession(sessionId, tmpDir, 'codex', assuranceLevel);
+		state.environmentHash = 'e'.repeat(64);
+		return state;
+	}
+
+	// ========================================================================
+	// handleToolExecution
+	// ========================================================================
+	describe('handleToolExecution', () => {
+		it('should create a command manifest entry for shell tools', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'shell',
+				state: { status: 'running', input: { command: 'npm test' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('shell');
+			expect(cmdEntries[0].command_text).toBe('npm test');
+		});
+
+		it('should create a command entry for container_shell tools', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'container_shell',
+				state: { status: 'running', input: { command: 'ls -la' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('shell');
+		});
+
+		it('should create a command entry and line annotation for write_file tools', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/index.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('file_write');
+			expect(cmdEntries[0].command_text).toBe('write_file: src/index.ts');
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].file_path).toBe('src/index.ts');
+			expect(lineAnnotations[0].action).toBe('modify');
+			expect(lineAnnotations[0].environment_hash).toBe('e'.repeat(64));
+		});
+
+		it('should create a line annotation with create action for create_file tools', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'create_file',
+				state: { status: 'running', input: { file_path: 'src/new-file.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].file_path).toBe('src/new-file.ts');
+			expect(lineAnnotations[0].action).toBe('create');
+		});
+
+		it('should create a modify annotation for apply_patch tools', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'apply_patch',
+				state: { status: 'running', input: { path: 'src/utils.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].action).toBe('modify');
+		});
+
+		it('should create a command entry for read_file tools with file_read type', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'read_file',
+				state: { status: 'running', input: { file_path: 'package.json' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('file_read');
+			expect(cmdEntries[0].command_text).toBe('read_file: package.json');
+		});
+
+		it('should not create line annotations for shell tools', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'shell',
+				state: { status: 'running', input: { command: 'ls -la' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter((a) => a.type === 'line');
+			expect(lineAnnotations).toHaveLength(0);
+		});
+
+		it('should create command entries for search tools with tool_use type', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'grep_search',
+				state: { status: 'running', input: { path: 'src/' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('tool_use');
+		});
+
+		it('should handle unknown tool names with "other" command type', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'unknown_tool',
+				state: null,
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('other');
+		});
+
+		it('should be a no-op for unknown session IDs', async () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('nonexistent', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'test.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(Object.keys(manifest.entries)).toHaveLength(0);
+		});
+
+		it('should be a no-op for inactive sessions', async () => {
+			await setupSession('sess-1');
+			await manager.endSession('sess-1');
+
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'test.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(Object.keys(manifest.entries)).toHaveLength(0);
+		});
+
+		it('should not create line annotation when environmentHash is null', async () => {
+			const state = await manager.startSession('sess-1', tmpDir, 'codex', 'medium');
+			// Leave environmentHash as null (don't set it)
+			expect(state.environmentHash).toBeNull();
+
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/test.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter((a) => a.type === 'line');
+			expect(lineAnnotations).toHaveLength(0);
+
+			// But command entry should still be created
+			const manifest = await readVibesManifest(tmpDir);
+			const cmdEntries = Object.values(manifest.entries).filter((e) => e.type === 'command');
+			expect(cmdEntries).toHaveLength(1);
+		});
+
+		it('should truncate long shell commands in command text', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			const longCommand = 'echo ' + 'x'.repeat(300);
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'shell',
+				state: { status: 'running', input: { command: longCommand } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries[0].command_text.length).toBeLessThanOrEqual(200);
+			expect(cmdEntries[0].command_text).toContain('...');
+		});
+
+		it('should extract file path from target_file field', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'apply_patch',
+				state: { status: 'running', input: { target_file: 'src/patched.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].file_path).toBe('src/patched.ts');
+		});
+
+		it('should handle list_directory as file_read', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'list_directory',
+				state: { status: 'running', input: { path: 'src/' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_type).toBe('file_read');
+		});
+	});
+
+	// ========================================================================
+	// handleThinkingChunk
+	// ========================================================================
+	describe('handleThinkingChunk', () => {
+		it('should buffer reasoning text at High assurance', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'First thought. ');
+			instrumenter.handleThinkingChunk('sess-1', 'Second thought.');
+
+			// Trigger flush via handleResult
+			await instrumenter.handleResult('sess-1', 'done');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter(
+				(e) => e.type === 'reasoning',
+			) as VibesReasoningEntry[];
+			expect(reasoningEntries).toHaveLength(1);
+			expect(reasoningEntries[0].reasoning_text).toBe('First thought. Second thought.');
+		});
+
+		it('should not buffer reasoning at Medium assurance', async () => {
+			await setupSession('sess-1', 'medium');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'This should be ignored.');
+
+			await instrumenter.handleResult('sess-1', 'done');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries).toHaveLength(0);
+		});
+
+		it('should not buffer reasoning at Low assurance', async () => {
+			await setupSession('sess-1', 'low');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'low',
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'This should be ignored.');
+
+			await instrumenter.handleResult('sess-1', 'done');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries).toHaveLength(0);
+		});
+
+		it('should be a no-op for unknown session IDs', () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			// Should not throw
+			instrumenter.handleThinkingChunk('nonexistent', 'ignored');
+		});
+
+		it('should flush reasoning before each tool execution at High assurance', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'Thinking about the file...');
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'read_file',
+				state: { status: 'running', input: { file_path: 'test.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter(
+				(e) => e.type === 'reasoning',
+			) as VibesReasoningEntry[];
+			expect(reasoningEntries).toHaveLength(1);
+			expect(reasoningEntries[0].reasoning_text).toBe('Thinking about the file...');
+		});
+	});
+
+	// ========================================================================
+	// handleUsage
+	// ========================================================================
+	describe('handleUsage', () => {
+		it('should capture reasoning token count for later inclusion', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter.handleUsage('sess-1', {
+				inputTokens: 100,
+				outputTokens: 50,
+				reasoningTokens: 30,
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'Some reasoning.');
+
+			await instrumenter.handleResult('sess-1', 'done');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter(
+				(e) => e.type === 'reasoning',
+			) as VibesReasoningEntry[];
+			expect(reasoningEntries).toHaveLength(1);
+			expect(reasoningEntries[0].reasoning_token_count).toBe(30);
+		});
+
+		it('should accumulate reasoning token counts across multiple usage events', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter.handleUsage('sess-1', {
+				inputTokens: 100,
+				outputTokens: 50,
+				reasoningTokens: 10,
+			});
+			instrumenter.handleUsage('sess-1', {
+				inputTokens: 200,
+				outputTokens: 100,
+				reasoningTokens: 20,
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'Thoughts.');
+
+			await instrumenter.handleResult('sess-1', 'done');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter(
+				(e) => e.type === 'reasoning',
+			) as VibesReasoningEntry[];
+			expect(reasoningEntries).toHaveLength(1);
+			expect(reasoningEntries[0].reasoning_token_count).toBe(30);
+		});
+
+		it('should be a no-op with null usage', () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			// Should not throw
+			instrumenter.handleUsage('sess-1', undefined);
+		});
+
+		it('should be a no-op for unknown session IDs', () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			instrumenter.handleUsage('nonexistent', {
+				inputTokens: 100,
+				outputTokens: 50,
+			});
+		});
+	});
+
+	// ========================================================================
+	// handleResult
+	// ========================================================================
+	describe('handleResult', () => {
+		it('should flush buffered reasoning on result', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'My reasoning.');
+
+			await instrumenter.handleResult('sess-1', 'The final answer.');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries).toHaveLength(1);
+		});
+
+		it('should be a no-op when no reasoning is buffered', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			await instrumenter.handleResult('sess-1', 'The answer.');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries).toHaveLength(0);
+		});
+
+		it('should be a no-op for unknown session IDs', async () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			// Should not throw
+			await instrumenter.handleResult('nonexistent', 'text');
+		});
+	});
+
+	// ========================================================================
+	// handlePrompt
+	// ========================================================================
+	describe('handlePrompt', () => {
+		it('should create a prompt manifest entry at Medium assurance', async () => {
+			await setupSession('sess-1', 'medium');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handlePrompt('sess-1', 'Fix the bug in login.ts');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const promptEntries = entries.filter(
+				(e) => e.type === 'prompt',
+			) as VibesPromptEntry[];
+			expect(promptEntries).toHaveLength(1);
+			expect(promptEntries[0].prompt_text).toBe('Fix the bug in login.ts');
+			expect(promptEntries[0].prompt_type).toBe('user_instruction');
+		});
+
+		it('should create a prompt manifest entry at High assurance', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			await instrumenter.handlePrompt('sess-1', 'Refactor the auth module');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const promptEntries = entries.filter((e) => e.type === 'prompt');
+			expect(promptEntries).toHaveLength(1);
+		});
+
+		it('should NOT create a prompt manifest entry at Low assurance', async () => {
+			await setupSession('sess-1', 'low');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'low',
+			});
+
+			await instrumenter.handlePrompt('sess-1', 'This should be skipped');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const promptEntries = entries.filter((e) => e.type === 'prompt');
+			expect(promptEntries).toHaveLength(0);
+		});
+
+		it('should include context files when provided', async () => {
+			await setupSession('sess-1', 'medium');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handlePrompt('sess-1', 'Review these files', [
+				'src/auth.ts',
+				'src/login.ts',
+			]);
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const promptEntries = entries.filter(
+				(e) => e.type === 'prompt',
+			) as VibesPromptEntry[];
+			expect(promptEntries[0].prompt_context_files).toEqual([
+				'src/auth.ts',
+				'src/login.ts',
+			]);
+		});
+
+		it('should be a no-op for unknown session IDs', async () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handlePrompt('nonexistent', 'ignored');
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(Object.keys(manifest.entries)).toHaveLength(0);
+		});
+	});
+
+	// ========================================================================
+	// flush
+	// ========================================================================
+	describe('flush', () => {
+		it('should flush buffered reasoning and clean up session state', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter.handleThinkingChunk('sess-1', 'Reasoning to flush.');
+
+			await instrumenter.flush('sess-1');
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries).toHaveLength(1);
+
+			// After flush, no more reasoning should be buffered
+			await instrumenter.handleResult('sess-1', 'done');
+
+			// No additional reasoning entries
+			const manifest2 = await readVibesManifest(tmpDir);
+			const entries2 = Object.values(manifest2.entries);
+			const reasoningEntries2 = entries2.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries2).toHaveLength(1);
+		});
+
+		it('should be safe to call flush on sessions with no buffered data', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			// Should not throw
+			await instrumenter.flush('sess-1');
+		});
+
+		it('should be safe to call flush on unknown sessions', async () => {
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			// Should not throw
+			await instrumenter.flush('nonexistent');
+		});
+	});
+
+	// ========================================================================
+	// Integration: Full Turn Cycle
+	// ========================================================================
+	describe('integration', () => {
+		it('should handle a full Codex turn cycle with reasoning + tool + result at High assurance', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			// 1. Prompt
+			await instrumenter.handlePrompt('sess-1', 'Add a new utility function');
+
+			// 2. Reasoning chunks (from Codex reasoning items)
+			instrumenter.handleThinkingChunk('sess-1', 'I need to create a new file. ');
+			instrumenter.handleThinkingChunk('sess-1', 'Let me write it to src/utils.ts.');
+
+			// 3. Usage info (from turn.completed)
+			instrumenter.handleUsage('sess-1', {
+				inputTokens: 500,
+				outputTokens: 200,
+				reasoningTokens: 50,
+			});
+
+			// 4. Tool execution (flushes reasoning)
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/utils.ts' } },
+				timestamp: Date.now(),
+			});
+
+			// 5. More reasoning
+			instrumenter.handleThinkingChunk('sess-1', 'Now verify it works.');
+
+			// 6. Another tool execution
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'shell',
+				state: { status: 'running', input: { command: 'npm test' } },
+				timestamp: Date.now(),
+			});
+
+			// 7. Result (from agent_message item)
+			await instrumenter.handleResult('sess-1', 'Created utility function successfully.');
+
+			// Verify manifest entries
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+
+			// Should have: 1 prompt + 2 reasoning + 2 command entries
+			const promptEntries = entries.filter((e) => e.type === 'prompt');
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			const commandEntries = entries.filter((e) => e.type === 'command');
+
+			expect(promptEntries).toHaveLength(1);
+			expect(reasoningEntries).toHaveLength(2);
+			expect(commandEntries).toHaveLength(2);
+
+			// Verify annotations
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter((a) => a.type === 'line');
+			// Only write_file creates line annotation, not shell
+			expect(lineAnnotations).toHaveLength(1);
+		});
+
+		it('should handle multiple sessions independently', async () => {
+			await setupSession('sess-1', 'medium');
+			await setupSession('sess-2', 'high');
+
+			const instrumenter1 = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+			const instrumenter2 = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			instrumenter2.handleThinkingChunk('sess-2', 'High assurance thinking.');
+
+			await instrumenter1.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/a.ts' } },
+				timestamp: Date.now(),
+			});
+
+			await instrumenter2.handleToolExecution('sess-2', {
+				toolName: 'apply_patch',
+				state: { status: 'running', input: { path: 'src/b.ts' } },
+				timestamp: Date.now(),
+			});
+
+			// Both sessions share the same tmpDir, so check the manifest has entries from both
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const commandEntries = entries.filter((e) => e.type === 'command');
+			expect(commandEntries.length).toBeGreaterThanOrEqual(2);
+
+			// Session 2 should have reasoning (high assurance)
+			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
+			expect(reasoningEntries).toHaveLength(1);
+		});
+
+		it('should handle file_search and codebase_search as tool_use', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'file_search',
+				state: { status: 'running', input: { path: 'src/' } },
+				timestamp: Date.now(),
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'codebase_search',
+				state: { status: 'running', input: {} },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(2);
+			expect(cmdEntries[0].command_type).toBe('tool_use');
+			expect(cmdEntries[1].command_type).toBe('tool_use');
+		});
+
+		it('should handle Codex cmd field in shell tool input', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'shell',
+				state: { status: 'running', input: { cmd: 'git status' } },
+				timestamp: Date.now(),
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			const entries = Object.values(manifest.entries);
+			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
+			expect(cmdEntries).toHaveLength(1);
+			expect(cmdEntries[0].command_text).toBe('git status');
+		});
+
+		it('should handle filename field for file path extraction', async () => {
+			await setupSession('sess-1');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { filename: 'src/output.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].file_path).toBe('src/output.ts');
+		});
+	});
+});
