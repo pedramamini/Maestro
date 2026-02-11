@@ -11,7 +11,7 @@ import * as os from 'os';
 
 import { VibesSessionManager } from '../../../main/vibes/vibes-session';
 import type { VibesSessionState } from '../../../main/vibes/vibes-session';
-import { readAnnotations, readVibesManifest, ensureAuditDir } from '../../../main/vibes/vibes-io';
+import { readAnnotations, readVibesManifest, ensureAuditDir, flushAll, resetAllBuffers } from '../../../main/vibes/vibes-io';
 import type {
 	VibesLineAnnotation,
 	VibesSessionRecord,
@@ -37,6 +37,7 @@ describe('vibes-session', () => {
 	});
 
 	afterEach(async () => {
+		resetAllBuffers();
 		vi.useRealTimers();
 		await rm(tmpDir, { recursive: true, force: true });
 	});
@@ -306,6 +307,7 @@ describe('vibes-session', () => {
 			const hash = 'e'.repeat(64);
 
 			await manager.recordManifestEntry('sess-1', hash, envEntry);
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(manifest.entries[hash]).toEqual(envEntry);
@@ -323,6 +325,7 @@ describe('vibes-session', () => {
 			};
 
 			await manager.recordManifestEntry('sess-1', 'c'.repeat(64), cmdEntry);
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
@@ -339,6 +342,7 @@ describe('vibes-session', () => {
 			};
 
 			await manager.recordManifestEntry('nonexistent', 'e'.repeat(64), envEntry);
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
@@ -365,6 +369,7 @@ describe('vibes-session', () => {
 
 			await manager.recordManifestEntry('sess-1', 'e'.repeat(64), envEntry);
 			await manager.recordManifestEntry('sess-1', 'c'.repeat(64), cmdEntry);
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(2);
@@ -511,6 +516,7 @@ describe('vibes-session', () => {
 			expect(endRecord.environment_hash).toBe(envHash);
 
 			// 6. Verify manifest
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(manifest.entries[envHash]).toEqual(envEntry);
 

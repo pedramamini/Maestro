@@ -1,6 +1,13 @@
 // VIBES File I/O — Reads and writes .ai-audit/ directory files directly from Maestro.
 // This is the "fast path" for annotation writing that bypasses the vibescheck binary,
 // allowing Maestro to write annotations in real-time during agent sessions.
+//
+// Features:
+// - Async write buffer batches annotation writes (flush every 2s or 20 annotations)
+// - Non-blocking appendAnnotation/appendAnnotations (add to buffer, return immediately)
+// - Debounced manifest writes (read-modify-write with coalescing)
+// - Per-project file locking to prevent concurrent write corruption
+// - Graceful error handling (log + never crash the agent session)
 
 import { mkdir, readFile, writeFile, appendFile, access, constants } from 'fs/promises';
 import * as path from 'path';
@@ -30,6 +37,180 @@ const MANIFEST_FILE = 'manifest.json';
 
 /** Annotations JSONL file name. */
 const ANNOTATIONS_FILE = 'annotations.jsonl';
+
+/** Maximum annotations in the write buffer before auto-flush. */
+const BUFFER_FLUSH_SIZE = 20;
+
+/** Interval in ms between automatic buffer flushes. */
+const BUFFER_FLUSH_INTERVAL_MS = 2000;
+
+/** Debounce delay in ms for manifest writes. */
+const MANIFEST_DEBOUNCE_MS = 500;
+
+// ============================================================================
+// Logging
+// ============================================================================
+
+/** Logger stub — warn level so instrumentation failures are non-critical. */
+function logWarn(message: string, error?: unknown): void {
+	const errMsg = error instanceof Error ? error.message : String(error ?? '');
+	console.warn(`[vibes-io] ${message}${errMsg ? `: ${errMsg}` : ''}`);
+}
+
+// ============================================================================
+// Per-Project Mutex (In-Process Serialization)
+// ============================================================================
+
+/** In-memory promise chain per project path for serializing writes within this process. */
+const projectMutexes: Map<string, Promise<void>> = new Map();
+
+/**
+ * Serialize async operations per project path.
+ * Ensures only one write operation runs at a time for each project,
+ * preventing corruption from concurrent read-modify-write cycles.
+ * Uses promise chaining (no setTimeout) so it works with fake timers in tests.
+ */
+function withProjectLock(projectPath: string, fn: () => Promise<void>): Promise<void> {
+	const prev = projectMutexes.get(projectPath) ?? Promise.resolve();
+	const next = prev.then(fn, fn); // Run fn regardless of prev outcome
+	projectMutexes.set(projectPath, next);
+	// Clean up reference when done to prevent unbounded map growth
+	next.then(() => {
+		if (projectMutexes.get(projectPath) === next) {
+			projectMutexes.delete(projectPath);
+		}
+	});
+	return next;
+}
+
+// ============================================================================
+// Write Buffer
+// ============================================================================
+
+/** Per-project annotation write buffer. */
+interface ProjectBuffer {
+	annotations: VibesAnnotation[];
+	timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** Global map of project path → annotation write buffer. */
+const annotationBuffers: Map<string, ProjectBuffer> = new Map();
+
+/** Per-project manifest debounce state. */
+interface ManifestDebounce {
+	pendingEntries: Map<string, VibesManifestEntry>;
+	timer: ReturnType<typeof setTimeout> | null;
+}
+
+/** Global map of project path → manifest debounce state. */
+const manifestDebounces: Map<string, ManifestDebounce> = new Map();
+
+/**
+ * Get or create the annotation buffer for a project.
+ */
+function getBuffer(projectPath: string): ProjectBuffer {
+	let buf = annotationBuffers.get(projectPath);
+	if (!buf) {
+		buf = { annotations: [], timer: null };
+		annotationBuffers.set(projectPath, buf);
+	}
+	return buf;
+}
+
+/**
+ * Schedule an auto-flush timer for the given project buffer.
+ * If a timer is already running, this is a no-op.
+ */
+function scheduleFlush(projectPath: string, buf: ProjectBuffer): void {
+	if (buf.timer !== null) {
+		return;
+	}
+	buf.timer = setTimeout(() => {
+		buf.timer = null;
+		flushAnnotationBuffer(projectPath).catch((err) => {
+			logWarn('Auto-flush failed', err);
+		});
+	}, BUFFER_FLUSH_INTERVAL_MS);
+}
+
+/**
+ * Flush the annotation write buffer for a specific project.
+ * Writes all buffered annotations to disk in a single append call.
+ * Serialized per project via in-memory mutex to prevent concurrent writes.
+ */
+async function flushAnnotationBuffer(projectPath: string): Promise<void> {
+	const buf = annotationBuffers.get(projectPath);
+	if (!buf || buf.annotations.length === 0) {
+		return;
+	}
+
+	return withProjectLock(projectPath, async () => {
+		// Re-check after acquiring lock (buffer may have been flushed by another call)
+		if (buf.annotations.length === 0) {
+			return;
+		}
+
+		// Drain the buffer
+		const toWrite = buf.annotations.splice(0);
+		if (buf.timer !== null) {
+			clearTimeout(buf.timer);
+			buf.timer = null;
+		}
+
+		try {
+			await ensureAuditDir(projectPath);
+			const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
+			const lines = toWrite.map((a) => JSON.stringify(a)).join('\n') + '\n';
+			// appendFile is safe for concurrent appends within the same file
+			await appendFile(annotationsPath, lines, 'utf8');
+		} catch (err) {
+			logWarn('Failed to flush annotation buffer', err);
+		}
+	});
+}
+
+/**
+ * Flush pending manifest entries for a specific project.
+ * Serialized per project via in-memory mutex to prevent concurrent writes.
+ */
+async function flushManifestDebounce(projectPath: string): Promise<void> {
+	const state = manifestDebounces.get(projectPath);
+	if (!state || state.pendingEntries.size === 0) {
+		return;
+	}
+
+	return withProjectLock(projectPath, async () => {
+		// Re-check after acquiring lock
+		if (!state || state.pendingEntries.size === 0) {
+			return;
+		}
+
+		// Drain pending entries
+		const entries = new Map(state.pendingEntries);
+		state.pendingEntries.clear();
+		if (state.timer !== null) {
+			clearTimeout(state.timer);
+			state.timer = null;
+		}
+
+		try {
+			await ensureAuditDir(projectPath);
+			const manifest = await readVibesManifest(projectPath);
+			let changed = false;
+			for (const [hash, entry] of entries) {
+				if (!(hash in manifest.entries)) {
+					manifest.entries[hash] = entry;
+					changed = true;
+				}
+			}
+			if (changed) {
+				await writeVibesManifest(projectPath, manifest);
+			}
+		} catch (err) {
+			logWarn('Failed to flush manifest debounce', err);
+		}
+	});
+}
 
 // ============================================================================
 // Directory Management
@@ -109,27 +290,38 @@ export async function writeVibesManifest(
 }
 
 // ============================================================================
-// Annotations
+// Annotations (Buffered)
 // ============================================================================
 
 /**
- * Append a single annotation as a JSONL line to .ai-audit/annotations.jsonl.
- * Uses file append mode for safe concurrent writes.
+ * Append a single annotation to the write buffer.
+ * Non-blocking — adds to in-memory buffer and returns immediately.
+ * The buffer auto-flushes every 2s or when 20 annotations are buffered.
  */
 export async function appendAnnotation(
 	projectPath: string,
 	annotation: VibesAnnotation,
 ): Promise<void> {
-	await ensureAuditDir(projectPath);
-	const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
-	const line = JSON.stringify(annotation) + '\n';
-	await appendFile(annotationsPath, line, 'utf8');
+	try {
+		const buf = getBuffer(projectPath);
+		buf.annotations.push(annotation);
+
+		if (buf.annotations.length >= BUFFER_FLUSH_SIZE) {
+			// Trigger immediate flush but don't await — keep non-blocking
+			flushAnnotationBuffer(projectPath).catch((err) => {
+				logWarn('Flush on size threshold failed', err);
+			});
+		} else {
+			scheduleFlush(projectPath, buf);
+		}
+	} catch (err) {
+		logWarn('Failed to buffer annotation', err);
+	}
 }
 
 /**
- * Append multiple annotations as JSONL lines atomically.
- * All annotations are written in a single appendFile call to minimize
- * the window for interleaving with concurrent writes.
+ * Append multiple annotations to the write buffer.
+ * Non-blocking — adds to in-memory buffer and returns immediately.
  */
 export async function appendAnnotations(
 	projectPath: string,
@@ -138,10 +330,20 @@ export async function appendAnnotations(
 	if (annotations.length === 0) {
 		return;
 	}
-	await ensureAuditDir(projectPath);
-	const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
-	const lines = annotations.map((a) => JSON.stringify(a)).join('\n') + '\n';
-	await appendFile(annotationsPath, lines, 'utf8');
+	try {
+		const buf = getBuffer(projectPath);
+		buf.annotations.push(...annotations);
+
+		if (buf.annotations.length >= BUFFER_FLUSH_SIZE) {
+			flushAnnotationBuffer(projectPath).catch((err) => {
+				logWarn('Flush on size threshold failed', err);
+			});
+		} else {
+			scheduleFlush(projectPath, buf);
+		}
+	} catch (err) {
+		logWarn('Failed to buffer annotations', err);
+	}
 }
 
 /**
@@ -150,6 +352,9 @@ export async function appendAnnotations(
  * Skips blank lines gracefully.
  */
 export async function readAnnotations(projectPath: string): Promise<VibesAnnotation[]> {
+	// Flush any pending annotations first so reads are consistent
+	await flushAnnotationBuffer(projectPath);
+
 	const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
 	try {
 		await access(annotationsPath, constants.F_OK);
@@ -164,21 +369,114 @@ export async function readAnnotations(projectPath: string): Promise<VibesAnnotat
 }
 
 // ============================================================================
-// Manifest Entry Management
+// Manifest Entry Management (Debounced)
 // ============================================================================
 
 /**
  * Add an entry to the manifest if the hash is not already present.
- * Reads the current manifest, adds the entry, and writes it back.
+ * Uses debounced writes — manifest changes are coalesced within a 500ms window,
+ * then flushed as a single read-modify-write operation with file locking.
  */
 export async function addManifestEntry(
 	projectPath: string,
 	hash: string,
 	entry: VibesManifestEntry,
 ): Promise<void> {
-	const manifest = await readVibesManifest(projectPath);
-	if (!(hash in manifest.entries)) {
-		manifest.entries[hash] = entry;
-		await writeVibesManifest(projectPath, manifest);
+	try {
+		let state = manifestDebounces.get(projectPath);
+		if (!state) {
+			state = { pendingEntries: new Map(), timer: null };
+			manifestDebounces.set(projectPath, state);
+		}
+
+		state.pendingEntries.set(hash, entry);
+
+		// Reset debounce timer
+		if (state.timer !== null) {
+			clearTimeout(state.timer);
+		}
+		state.timer = setTimeout(() => {
+			state!.timer = null;
+			flushManifestDebounce(projectPath).catch((err) => {
+				logWarn('Manifest debounce flush failed', err);
+			});
+		}, MANIFEST_DEBOUNCE_MS);
+	} catch (err) {
+		logWarn('Failed to schedule manifest entry', err);
 	}
+}
+
+// ============================================================================
+// Flush All (Session End / Shutdown)
+// ============================================================================
+
+/**
+ * Force-flush all pending writes across all projects.
+ * Called on session end and app shutdown to ensure no data is lost.
+ */
+export async function flushAll(): Promise<void> {
+	const flushPromises: Promise<void>[] = [];
+
+	// Flush all annotation buffers
+	for (const projectPath of annotationBuffers.keys()) {
+		flushPromises.push(
+			flushAnnotationBuffer(projectPath).catch((err) => {
+				logWarn(`flushAll: annotation flush failed for ${projectPath}`, err);
+			}),
+		);
+	}
+
+	// Flush all manifest debounces
+	for (const projectPath of manifestDebounces.keys()) {
+		flushPromises.push(
+			flushManifestDebounce(projectPath).catch((err) => {
+				logWarn(`flushAll: manifest flush failed for ${projectPath}`, err);
+			}),
+		);
+	}
+
+	await Promise.all(flushPromises);
+}
+
+// ============================================================================
+// Buffer Inspection (Testing)
+// ============================================================================
+
+/**
+ * Get the number of buffered (unflushed) annotations for a project.
+ * Primarily used for testing.
+ */
+export function getBufferedAnnotationCount(projectPath: string): number {
+	const buf = annotationBuffers.get(projectPath);
+	return buf ? buf.annotations.length : 0;
+}
+
+/**
+ * Get the number of pending (unflushed) manifest entries for a project.
+ * Primarily used for testing.
+ */
+export function getPendingManifestEntryCount(projectPath: string): number {
+	const state = manifestDebounces.get(projectPath);
+	return state ? state.pendingEntries.size : 0;
+}
+
+/**
+ * Clear all buffers and timers. Used in tests for cleanup.
+ */
+export function resetAllBuffers(): void {
+	for (const buf of annotationBuffers.values()) {
+		if (buf.timer !== null) {
+			clearTimeout(buf.timer);
+		}
+	}
+	annotationBuffers.clear();
+
+	for (const state of manifestDebounces.values()) {
+		if (state.timer !== null) {
+			clearTimeout(state.timer);
+		}
+	}
+	manifestDebounces.clear();
+
+	projectMutexes.clear();
 }

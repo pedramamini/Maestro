@@ -12,7 +12,7 @@ import * as os from 'os';
 
 import { VibesCoordinator } from '../../../main/vibes/vibes-coordinator';
 import type { VibesSettingsStore } from '../../../main/vibes/vibes-coordinator';
-import { readAnnotations, readVibesManifest, ensureAuditDir } from '../../../main/vibes/vibes-io';
+import { readAnnotations, readVibesManifest, ensureAuditDir, flushAll, resetAllBuffers } from '../../../main/vibes/vibes-io';
 import { VIBES_SETTINGS_DEFAULTS } from '../../../shared/vibes-settings';
 import type {
 	VibesSessionRecord,
@@ -84,6 +84,7 @@ describe('vibes-coordinator', () => {
 	});
 
 	afterEach(async () => {
+		resetAllBuffers();
 		vi.useRealTimers();
 		await rm(tmpDir, { recursive: true, force: true });
 	});
@@ -210,6 +211,7 @@ describe('vibes-coordinator', () => {
 
 			await coordinator.handleProcessSpawn('sess-1', config);
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const envEntries = entries.filter((e) => e.type === 'environment') as VibesEnvironmentEntry[];
@@ -299,6 +301,7 @@ describe('vibes-coordinator', () => {
 
 			await coordinator.handleProcessSpawn('sess-1', config);
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const envEntries = entries.filter((e) => e.type === 'environment') as VibesEnvironmentEntry[];
@@ -408,6 +411,7 @@ describe('vibes-coordinator', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -431,6 +435,7 @@ describe('vibes-coordinator', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -481,6 +486,7 @@ describe('vibes-coordinator', () => {
 
 			await coordinator.handlePromptSent('sess-1', 'Fix the login bug');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt') as VibesPromptEntry[];
@@ -501,6 +507,7 @@ describe('vibes-coordinator', () => {
 
 			await coordinator.handlePromptSent('sess-1', 'Fix the login bug');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt');
@@ -531,6 +538,7 @@ describe('vibes-coordinator', () => {
 
 			await coordinator.handlePromptSent('sess-1', 'Fix this', ['src/main.ts', 'src/utils.ts']);
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt') as VibesPromptEntry[];
@@ -629,6 +637,7 @@ describe('vibes-coordinator', () => {
 			expect(sessionEnds).toHaveLength(1);
 
 			// 6. Verify manifest has entries
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			expect(entries.length).toBeGreaterThanOrEqual(1);

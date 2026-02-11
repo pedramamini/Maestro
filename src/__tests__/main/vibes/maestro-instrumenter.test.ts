@@ -12,7 +12,7 @@ import * as os from 'os';
 
 import { MaestroInstrumenter } from '../../../main/vibes/instrumenters/maestro-instrumenter';
 import { VibesSessionManager } from '../../../main/vibes/vibes-session';
-import { readVibesManifest, ensureAuditDir } from '../../../main/vibes/vibes-io';
+import { readVibesManifest, ensureAuditDir, flushAll, resetAllBuffers } from '../../../main/vibes/vibes-io';
 import type {
 	VibesCommandEntry,
 	VibesPromptEntry,
@@ -36,6 +36,7 @@ describe('maestro-instrumenter', () => {
 	});
 
 	afterEach(async () => {
+		resetAllBuffers();
 		vi.useRealTimers();
 		await rm(tmpDir, { recursive: true, force: true });
 	});
@@ -70,6 +71,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -95,6 +97,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter(
@@ -120,6 +123,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt');
@@ -141,6 +145,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt');
@@ -164,6 +169,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt');
@@ -183,6 +189,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -203,6 +210,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -227,6 +235,7 @@ describe('maestro-instrumenter', () => {
 				duration: 45000,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -254,6 +263,7 @@ describe('maestro-instrumenter', () => {
 				duration: 12500,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -277,6 +287,7 @@ describe('maestro-instrumenter', () => {
 				duration: 1000,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -298,6 +309,7 @@ describe('maestro-instrumenter', () => {
 				duration: 1000,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -321,6 +333,7 @@ describe('maestro-instrumenter', () => {
 				agentType: 'claude-code',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -349,6 +362,7 @@ describe('maestro-instrumenter', () => {
 				agentType: 'codex',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -370,6 +384,7 @@ describe('maestro-instrumenter', () => {
 				agentType: 'claude-code',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -390,6 +405,7 @@ describe('maestro-instrumenter', () => {
 				agentType: 'claude-code',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -409,6 +425,7 @@ describe('maestro-instrumenter', () => {
 				agentType: 'claude-code',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -436,6 +453,7 @@ describe('maestro-instrumenter', () => {
 				totalTasks: 12,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -461,6 +479,7 @@ describe('maestro-instrumenter', () => {
 				totalTasks: 0,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -480,6 +499,7 @@ describe('maestro-instrumenter', () => {
 				totalTasks: 10,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -499,6 +519,7 @@ describe('maestro-instrumenter', () => {
 				totalTasks: 10,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -568,6 +589,7 @@ describe('maestro-instrumenter', () => {
 
 			// Verify: should have batch start + 2 spawns + 2 completes + batch complete = 6 command entries
 			// Plus 2 prompt entries (Medium assurance, with task descriptions)
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command');
@@ -613,6 +635,7 @@ describe('maestro-instrumenter', () => {
 				totalTasks: 1,
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command');
@@ -647,6 +670,7 @@ describe('maestro-instrumenter', () => {
 				projectPath: '/home/user/project',
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command');

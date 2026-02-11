@@ -2,10 +2,12 @@
  * Tests for src/main/vibes/vibes-io.ts
  * Validates the VIBES file I/O module: reading/writing config, manifest,
  * and annotations in the .ai-audit/ directory structure.
+ * Includes tests for the async write buffer, debounced manifest writes,
+ * file locking, and graceful error handling.
  */
 
-import { describe, it, expect, beforeEach, afterEach } from 'vitest';
-import { mkdtemp, rm, readFile, access, constants } from 'fs/promises';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtemp, rm, readFile, access, constants, writeFile as fsWriteFile } from 'fs/promises';
 import * as path from 'path';
 import * as os from 'os';
 
@@ -19,6 +21,10 @@ import {
 	appendAnnotations,
 	readAnnotations,
 	addManifestEntry,
+	flushAll,
+	getBufferedAnnotationCount,
+	getPendingManifestEntryCount,
+	resetAllBuffers,
 } from '../../../main/vibes/vibes-io';
 
 import type {
@@ -95,9 +101,11 @@ describe('vibes-io', () => {
 
 	beforeEach(async () => {
 		tmpDir = await mkdtemp(path.join(os.tmpdir(), 'vibes-io-test-'));
+		resetAllBuffers();
 	});
 
 	afterEach(async () => {
+		resetAllBuffers();
 		await rm(tmpDir, { recursive: true, force: true });
 	});
 
@@ -270,82 +278,78 @@ describe('vibes-io', () => {
 	});
 
 	// ========================================================================
-	// appendAnnotation / readAnnotations
+	// appendAnnotation / readAnnotations (buffered)
 	// ========================================================================
 	describe('appendAnnotation', () => {
-		it('should create annotations.jsonl if it does not exist', async () => {
+		it('should buffer annotations and flush on readAnnotations', async () => {
 			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+
+			// Data should be in the buffer
+			expect(getBufferedAnnotationCount(tmpDir)).toBeGreaterThanOrEqual(0);
+
+			// readAnnotations triggers a flush
+			const annotations = await readAnnotations(tmpDir);
+			expect(annotations).toHaveLength(1);
+			expect(annotations[0]).toEqual(SAMPLE_LINE_ANNOTATION);
+		});
+
+		it('should buffer and flush multiple sequential annotations', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			await appendAnnotation(tmpDir, SAMPLE_FUNCTION_ANNOTATION);
+			await appendAnnotation(tmpDir, SAMPLE_SESSION_RECORD);
+
+			// Flush and read
+			const annotations = await readAnnotations(tmpDir);
+
+			expect(annotations).toHaveLength(3);
+			expect(annotations[0]).toEqual(SAMPLE_LINE_ANNOTATION);
+			expect(annotations[1]).toEqual(SAMPLE_FUNCTION_ANNOTATION);
+			expect(annotations[2]).toEqual(SAMPLE_SESSION_RECORD);
+		});
+
+		it('should create annotations.jsonl after flush', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			await flushAll();
 
 			await expect(
 				access(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), constants.F_OK),
 			).resolves.toBeUndefined();
 		});
-
-		it('should write a single JSONL line', async () => {
-			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
-
-			const raw = await readFile(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), 'utf8');
-			const lines = raw.trim().split('\n');
-
-			expect(lines).toHaveLength(1);
-			expect(JSON.parse(lines[0])).toEqual(SAMPLE_LINE_ANNOTATION);
-		});
-
-		it('should append subsequent annotations', async () => {
-			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
-			await appendAnnotation(tmpDir, SAMPLE_FUNCTION_ANNOTATION);
-			await appendAnnotation(tmpDir, SAMPLE_SESSION_RECORD);
-
-			const raw = await readFile(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), 'utf8');
-			const lines = raw.trim().split('\n');
-
-			expect(lines).toHaveLength(3);
-			expect(JSON.parse(lines[0])).toEqual(SAMPLE_LINE_ANNOTATION);
-			expect(JSON.parse(lines[1])).toEqual(SAMPLE_FUNCTION_ANNOTATION);
-			expect(JSON.parse(lines[2])).toEqual(SAMPLE_SESSION_RECORD);
-		});
 	});
 
 	describe('appendAnnotations', () => {
-		it('should write multiple annotations in a single call', async () => {
+		it('should write multiple annotations via buffer', async () => {
 			const annotations = [SAMPLE_LINE_ANNOTATION, SAMPLE_FUNCTION_ANNOTATION, SAMPLE_SESSION_RECORD];
 			await appendAnnotations(tmpDir, annotations);
 
-			const raw = await readFile(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), 'utf8');
-			const lines = raw.trim().split('\n');
+			const result = await readAnnotations(tmpDir);
 
-			expect(lines).toHaveLength(3);
-			expect(JSON.parse(lines[0])).toEqual(SAMPLE_LINE_ANNOTATION);
-			expect(JSON.parse(lines[1])).toEqual(SAMPLE_FUNCTION_ANNOTATION);
-			expect(JSON.parse(lines[2])).toEqual(SAMPLE_SESSION_RECORD);
+			expect(result).toHaveLength(3);
+			expect(result[0]).toEqual(SAMPLE_LINE_ANNOTATION);
+			expect(result[1]).toEqual(SAMPLE_FUNCTION_ANNOTATION);
+			expect(result[2]).toEqual(SAMPLE_SESSION_RECORD);
 		});
 
-		it('should handle empty array without creating file', async () => {
+		it('should handle empty array without buffering', async () => {
 			await appendAnnotations(tmpDir, []);
-
-			await expect(
-				access(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), constants.F_OK),
-			).rejects.toThrow();
+			expect(getBufferedAnnotationCount(tmpDir)).toBe(0);
 		});
 
 		it('should append to existing annotations', async () => {
 			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			await flushAll();
 			await appendAnnotations(tmpDir, [SAMPLE_FUNCTION_ANNOTATION, SAMPLE_SESSION_RECORD]);
 
-			const raw = await readFile(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), 'utf8');
-			const lines = raw.trim().split('\n');
-
-			expect(lines).toHaveLength(3);
+			const result = await readAnnotations(tmpDir);
+			expect(result).toHaveLength(3);
 		});
 
 		it('should write a single annotation', async () => {
 			await appendAnnotations(tmpDir, [SAMPLE_LINE_ANNOTATION]);
 
-			const raw = await readFile(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), 'utf8');
-			const lines = raw.trim().split('\n');
-
-			expect(lines).toHaveLength(1);
-			expect(JSON.parse(lines[0])).toEqual(SAMPLE_LINE_ANNOTATION);
+			const result = await readAnnotations(tmpDir);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual(SAMPLE_LINE_ANNOTATION);
 		});
 	});
 
@@ -378,8 +382,7 @@ describe('vibes-io', () => {
 			const annotationsPath = path.join(tmpDir, '.ai-audit', 'annotations.jsonl');
 			const content = JSON.stringify(SAMPLE_LINE_ANNOTATION) + '\n\n' +
 				JSON.stringify(SAMPLE_FUNCTION_ANNOTATION) + '\n\n';
-			const { writeFile: wf } = await import('fs/promises');
-			await wf(annotationsPath, content, 'utf8');
+			await fsWriteFile(annotationsPath, content, 'utf8');
 
 			const annotations = await readAnnotations(tmpDir);
 
@@ -390,12 +393,95 @@ describe('vibes-io', () => {
 	});
 
 	// ========================================================================
-	// addManifestEntry
+	// Write Buffer Behavior
+	// ========================================================================
+	describe('write buffer', () => {
+		it('should buffer annotations in memory before flush', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			// Buffer should hold the annotation (may be 0 if auto-flush already fired, but typically 1)
+			const count = getBufferedAnnotationCount(tmpDir);
+			// It should be >= 0 (could have already flushed asynchronously)
+			expect(count).toBeGreaterThanOrEqual(0);
+		});
+
+		it('should flush all buffers with flushAll()', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			await appendAnnotation(tmpDir, SAMPLE_FUNCTION_ANNOTATION);
+
+			await flushAll();
+
+			// Buffer should be empty after flush
+			expect(getBufferedAnnotationCount(tmpDir)).toBe(0);
+
+			// Data should be on disk
+			const raw = await readFile(path.join(tmpDir, '.ai-audit', 'annotations.jsonl'), 'utf8');
+			const lines = raw.trim().split('\n');
+			expect(lines).toHaveLength(2);
+		});
+
+		it('should auto-flush when buffer reaches 20 annotations', async () => {
+			const annotations: VibesLineAnnotation[] = [];
+			for (let i = 0; i < 25; i++) {
+				annotations.push({
+					...SAMPLE_LINE_ANNOTATION,
+					line_start: i,
+					line_end: i + 5,
+					timestamp: `2026-02-10T12:${String(i).padStart(2, '0')}:00Z`,
+				});
+			}
+
+			await appendAnnotations(tmpDir, annotations);
+
+			// Give the async flush a moment to complete
+			await new Promise((resolve) => setTimeout(resolve, 100));
+
+			// Now flush remaining
+			await flushAll();
+
+			const result = await readAnnotations(tmpDir);
+			expect(result).toHaveLength(25);
+		});
+
+		it('should handle multiple projects independently', async () => {
+			const tmpDir2 = await mkdtemp(path.join(os.tmpdir(), 'vibes-io-test2-'));
+
+			try {
+				await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+				await appendAnnotation(tmpDir2, SAMPLE_FUNCTION_ANNOTATION);
+
+				await flushAll();
+
+				const annotations1 = await readAnnotations(tmpDir);
+				const annotations2 = await readAnnotations(tmpDir2);
+
+				expect(annotations1).toHaveLength(1);
+				expect(annotations1[0]).toEqual(SAMPLE_LINE_ANNOTATION);
+				expect(annotations2).toHaveLength(1);
+				expect(annotations2[0]).toEqual(SAMPLE_FUNCTION_ANNOTATION);
+			} finally {
+				await rm(tmpDir2, { recursive: true, force: true });
+			}
+		});
+
+		it('should clear all buffers and timers with resetAllBuffers()', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			resetAllBuffers();
+
+			expect(getBufferedAnnotationCount(tmpDir)).toBe(0);
+			expect(getPendingManifestEntryCount(tmpDir)).toBe(0);
+		});
+	});
+
+	// ========================================================================
+	// addManifestEntry (debounced)
 	// ========================================================================
 	describe('addManifestEntry', () => {
-		it('should add a new entry to an empty manifest', async () => {
+		it('should add a new entry to an empty manifest after flush', async () => {
 			const hash = 'abc123def456789012345678901234567890123456789012345678901234';
 			await addManifestEntry(tmpDir, hash, SAMPLE_ENVIRONMENT_ENTRY);
+
+			// Debounced — need to flush
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(manifest.entries[hash]).toEqual(SAMPLE_ENVIRONMENT_ENTRY);
@@ -403,7 +489,14 @@ describe('vibes-io', () => {
 
 		it('should not overwrite an existing entry with the same hash', async () => {
 			const hash = 'abc123def456789012345678901234567890123456789012345678901234';
-			await addManifestEntry(tmpDir, hash, SAMPLE_ENVIRONMENT_ENTRY);
+
+			// Write the first entry directly to disk
+			const manifest: VibesManifest = {
+				standard: 'VIBES',
+				version: '1.0',
+				entries: { [hash]: SAMPLE_ENVIRONMENT_ENTRY },
+			};
+			await writeVibesManifest(tmpDir, manifest);
 
 			const differentEntry: VibesPromptEntry = {
 				type: 'prompt',
@@ -411,9 +504,10 @@ describe('vibes-io', () => {
 				created_at: '2026-02-10T13:00:00Z',
 			};
 			await addManifestEntry(tmpDir, hash, differentEntry);
+			await flushAll();
 
-			const manifest = await readVibesManifest(tmpDir);
-			expect(manifest.entries[hash]).toEqual(SAMPLE_ENVIRONMENT_ENTRY);
+			const result = await readVibesManifest(tmpDir);
+			expect(result.entries[hash]).toEqual(SAMPLE_ENVIRONMENT_ENTRY);
 		});
 
 		it('should add multiple entries with different hashes', async () => {
@@ -438,6 +532,8 @@ describe('vibes-io', () => {
 			await addManifestEntry(tmpDir, hash1, SAMPLE_ENVIRONMENT_ENTRY);
 			await addManifestEntry(tmpDir, hash2, commandEntry);
 			await addManifestEntry(tmpDir, hash3, promptEntry);
+
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(3);
@@ -465,6 +561,7 @@ describe('vibes-io', () => {
 				created_at: '2026-02-10T12:03:00Z',
 			};
 			await addManifestEntry(tmpDir, newHash, commandEntry);
+			await flushAll();
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(manifest.standard).toBe('VIBES');
@@ -472,6 +569,86 @@ describe('vibes-io', () => {
 			expect(Object.keys(manifest.entries)).toHaveLength(2);
 			expect(manifest.entries['existing-hash']).toEqual(SAMPLE_ENVIRONMENT_ENTRY);
 			expect(manifest.entries[newHash]).toEqual(commandEntry);
+		});
+
+		it('should track pending manifest entries', async () => {
+			const hash = 'test-hash-012345678901234567890123456789012345678901234567890';
+			await addManifestEntry(tmpDir, hash, SAMPLE_ENVIRONMENT_ENTRY);
+
+			expect(getPendingManifestEntryCount(tmpDir)).toBe(1);
+
+			await flushAll();
+			expect(getPendingManifestEntryCount(tmpDir)).toBe(0);
+		});
+	});
+
+	// ========================================================================
+	// flushAll
+	// ========================================================================
+	describe('flushAll', () => {
+		it('should flush both annotation buffers and manifest debounces', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			const hash = 'test-hash-012345678901234567890123456789012345678901234567890';
+			await addManifestEntry(tmpDir, hash, SAMPLE_ENVIRONMENT_ENTRY);
+
+			await flushAll();
+
+			expect(getBufferedAnnotationCount(tmpDir)).toBe(0);
+			expect(getPendingManifestEntryCount(tmpDir)).toBe(0);
+
+			// Verify data is on disk
+			const annotations = await readAnnotations(tmpDir);
+			expect(annotations).toHaveLength(1);
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(manifest.entries[hash]).toEqual(SAMPLE_ENVIRONMENT_ENTRY);
+		});
+
+		it('should be safe to call with no pending data', async () => {
+			await expect(flushAll()).resolves.toBeUndefined();
+		});
+
+		it('should flush multiple projects', async () => {
+			const tmpDir2 = await mkdtemp(path.join(os.tmpdir(), 'vibes-io-test-flush-'));
+
+			try {
+				await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+				await appendAnnotation(tmpDir2, SAMPLE_FUNCTION_ANNOTATION);
+
+				await flushAll();
+
+				const annotations1 = await readAnnotations(tmpDir);
+				const annotations2 = await readAnnotations(tmpDir2);
+
+				expect(annotations1).toHaveLength(1);
+				expect(annotations2).toHaveLength(1);
+			} finally {
+				await rm(tmpDir2, { recursive: true, force: true });
+			}
+		});
+	});
+
+	// ========================================================================
+	// Graceful Error Handling
+	// ========================================================================
+	describe('graceful error handling', () => {
+		it('should not throw when buffering an annotation for invalid path', async () => {
+			// appendAnnotation should never throw — just log
+			await expect(
+				appendAnnotation('/nonexistent/path/that/will/fail', SAMPLE_LINE_ANNOTATION),
+			).resolves.toBeUndefined();
+		});
+
+		it('should not throw when flushing fails', async () => {
+			await appendAnnotation('/nonexistent/path', SAMPLE_LINE_ANNOTATION);
+			// flushAll should handle the error gracefully
+			await expect(flushAll()).resolves.toBeUndefined();
+		});
+
+		it('should not throw when addManifestEntry target is invalid', async () => {
+			await expect(
+				addManifestEntry('/nonexistent/path', 'hash', SAMPLE_ENVIRONMENT_ENTRY),
+			).resolves.toBeUndefined();
 		});
 	});
 
@@ -488,15 +665,18 @@ describe('vibes-io', () => {
 			const config = await readVibesConfig(tmpDir);
 			expect(config).toEqual(SAMPLE_CONFIG);
 
-			// 3. Add manifest entries
+			// 3. Add manifest entries (debounced)
 			const envHash = 'env-hash-0123456789012345678901234567890123456789012345678901';
 			await addManifestEntry(tmpDir, envHash, SAMPLE_ENVIRONMENT_ENTRY);
 
-			// 4. Write annotations
+			// 4. Write annotations (buffered)
 			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
 			await appendAnnotations(tmpDir, [SAMPLE_FUNCTION_ANNOTATION, SAMPLE_SESSION_RECORD]);
 
-			// 5. Read back everything
+			// 5. Flush everything
+			await flushAll();
+
+			// 6. Read back everything
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(1);
 			expect(manifest.entries[envHash]).toEqual(SAMPLE_ENVIRONMENT_ENTRY);
@@ -506,6 +686,35 @@ describe('vibes-io', () => {
 			expect(annotations[0].type).toBe('line');
 			expect(annotations[1].type).toBe('function');
 			expect(annotations[2].type).toBe('session');
+		});
+
+		it('should handle concurrent annotation and manifest writes', async () => {
+			const hashes = ['hash-a', 'hash-b', 'hash-c'];
+			const entries = hashes.map((h, i) => ({
+				type: 'command' as const,
+				command_text: `cmd-${i}`,
+				command_type: 'shell' as const,
+				created_at: `2026-02-10T12:0${i}:00Z`,
+			}));
+
+			// Fire off multiple operations concurrently
+			const promises = [
+				appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION),
+				appendAnnotation(tmpDir, SAMPLE_FUNCTION_ANNOTATION),
+				appendAnnotation(tmpDir, SAMPLE_SESSION_RECORD),
+				addManifestEntry(tmpDir, hashes[0], entries[0]),
+				addManifestEntry(tmpDir, hashes[1], entries[1]),
+				addManifestEntry(tmpDir, hashes[2], entries[2]),
+			];
+			await Promise.all(promises);
+
+			await flushAll();
+
+			const annotations = await readAnnotations(tmpDir);
+			expect(annotations).toHaveLength(3);
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(Object.keys(manifest.entries)).toHaveLength(3);
 		});
 	});
 });

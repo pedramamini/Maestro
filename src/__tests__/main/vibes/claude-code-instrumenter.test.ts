@@ -12,7 +12,7 @@ import * as os from 'os';
 
 import { ClaudeCodeInstrumenter } from '../../../main/vibes/instrumenters/claude-code-instrumenter';
 import { VibesSessionManager } from '../../../main/vibes/vibes-session';
-import { readAnnotations, readVibesManifest, ensureAuditDir } from '../../../main/vibes/vibes-io';
+import { readAnnotations, readVibesManifest, ensureAuditDir, flushAll, resetAllBuffers } from '../../../main/vibes/vibes-io';
 import type {
 	VibesLineAnnotation,
 	VibesCommandEntry,
@@ -38,6 +38,7 @@ describe('claude-code-instrumenter', () => {
 	});
 
 	afterEach(async () => {
+		resetAllBuffers();
 		vi.useRealTimers();
 		await rm(tmpDir, { recursive: true, force: true });
 	});
@@ -71,6 +72,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -138,6 +140,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -177,6 +180,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -198,6 +202,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -218,6 +223,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -237,6 +243,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -256,6 +263,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -281,6 +289,7 @@ describe('claude-code-instrumenter', () => {
 			expect(lineAnnotations).toHaveLength(0);
 
 			// But command entry should still be created
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const cmdEntries = Object.values(manifest.entries).filter((e) => e.type === 'command');
 			expect(cmdEntries).toHaveLength(1);
@@ -300,6 +309,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -323,6 +333,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -346,6 +357,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
@@ -381,6 +393,7 @@ describe('claude-code-instrumenter', () => {
 			// Trigger flush via handleResult
 			await instrumenter.handleResult('sess-1', 'done');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter(
@@ -401,6 +414,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handleResult('sess-1', 'done');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
@@ -418,6 +432,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handleResult('sess-1', 'done');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
@@ -449,6 +464,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter(
@@ -480,6 +496,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handleResult('sess-1', 'done');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter(
@@ -511,6 +528,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handleResult('sess-1', 'done');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter(
@@ -558,6 +576,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handleResult('sess-1', 'The final answer.');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
@@ -573,6 +592,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handleResult('sess-1', 'The answer.');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
@@ -603,6 +623,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handlePrompt('sess-1', 'Fix the bug in login.ts');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter(
@@ -622,6 +643,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handlePrompt('sess-1', 'Refactor the auth module');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt');
@@ -637,6 +659,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handlePrompt('sess-1', 'This should be skipped');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter((e) => e.type === 'prompt');
@@ -655,6 +678,7 @@ describe('claude-code-instrumenter', () => {
 				'src/login.ts',
 			]);
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const promptEntries = entries.filter(
@@ -674,6 +698,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.handlePrompt('nonexistent', 'ignored');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(0);
 		});
@@ -694,6 +719,7 @@ describe('claude-code-instrumenter', () => {
 
 			await instrumenter.flush('sess-1');
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const reasoningEntries = entries.filter((e) => e.type === 'reasoning');
@@ -703,6 +729,7 @@ describe('claude-code-instrumenter', () => {
 			await instrumenter.handleResult('sess-1', 'done');
 
 			// No additional reasoning entries
+			await flushAll();
 			const manifest2 = await readVibesManifest(tmpDir);
 			const entries2 = Object.values(manifest2.entries);
 			const reasoningEntries2 = entries2.filter((e) => e.type === 'reasoning');
@@ -777,6 +804,7 @@ describe('claude-code-instrumenter', () => {
 			await instrumenter.handleResult('sess-1', 'Created utility function successfully.');
 
 			// Verify manifest entries
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 
@@ -824,6 +852,7 @@ describe('claude-code-instrumenter', () => {
 			});
 
 			// Both sessions share the same tmpDir, so check the manifest has entries from both
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const commandEntries = entries.filter((e) => e.type === 'command');
@@ -847,6 +876,7 @@ describe('claude-code-instrumenter', () => {
 				timestamp: Date.now(),
 			});
 
+			await flushAll();
 			const manifest = await readVibesManifest(tmpDir);
 			const entries = Object.values(manifest.entries);
 			const cmdEntries = entries.filter((e) => e.type === 'command') as VibesCommandEntry[];
