@@ -1,32 +1,148 @@
-import React from 'react';
+import React, { useState, useCallback } from 'react';
+import { Shield, Settings } from 'lucide-react';
 import type { Theme } from '../../types';
+import { useSettings, useVibesData } from '../../hooks';
+import { VibesDashboard } from './VibesDashboard';
+import { VibesAnnotationLog } from './VibesAnnotationLog';
+import { VibesModelAttribution } from './VibesModelAttribution';
+
+// ============================================================================
+// Sub-tab type
+// ============================================================================
+
+type VibesSubTab = 'overview' | 'log' | 'models';
+
+const SUB_TABS: { key: VibesSubTab; label: string }[] = [
+	{ key: 'overview', label: 'Overview' },
+	{ key: 'log', label: 'Log' },
+	{ key: 'models', label: 'Models' },
+];
+
+// ============================================================================
+// Props
+// ============================================================================
 
 interface VibesPanelProps {
 	theme: Theme;
 	projectPath: string | undefined;
 }
 
+// ============================================================================
+// Component
+// ============================================================================
+
 /**
  * Main VIBES panel container component.
  * Rendered in the Right Panel when the VIBES tab is active.
- * Sub-navigation and child components will be added in subsequent phases.
+ *
+ * Features:
+ * - Sub-navigation bar with Overview / Log / Models tabs
+ * - Disabled state message when VIBES is off, with button to open Settings
+ * - Passes projectPath and vibesData to child components
  */
-export const VibesPanel: React.FC<VibesPanelProps> = ({ theme }) => {
+export const VibesPanel: React.FC<VibesPanelProps> = ({ theme, projectPath }) => {
+	const [activeSubTab, setActiveSubTab] = useState<VibesSubTab>('overview');
+	const { vibesEnabled, vibesAssuranceLevel } = useSettings();
+	const vibesData = useVibesData(projectPath, vibesEnabled);
+
+	const handleOpenSettings = useCallback(() => {
+		// Dispatch tour:action event to open settings (same event bus as other UI actions)
+		window.dispatchEvent(
+			new CustomEvent('tour:action', {
+				detail: { type: 'openSettings' },
+			}),
+		);
+	}, []);
+
+	// ========================================================================
+	// Disabled state — VIBES is off in settings
+	// ========================================================================
+
+	if (!vibesEnabled) {
+		return (
+			<div className="h-full flex flex-col items-center justify-center gap-3 text-center px-4">
+				<Shield className="w-8 h-8 opacity-40" style={{ color: theme.colors.textDim }} />
+				<span
+					className="text-sm font-medium"
+					style={{ color: theme.colors.textMain }}
+				>
+					VIBES is disabled
+				</span>
+				<span
+					className="text-xs max-w-xs"
+					style={{ color: theme.colors.textDim }}
+				>
+					Enable VIBES in Settings to start tracking AI attribution metadata for your project.
+				</span>
+				<button
+					onClick={handleOpenSettings}
+					className="flex items-center gap-1.5 px-3 py-1.5 rounded text-xs font-medium transition-opacity hover:opacity-80 mt-1"
+					style={{
+						backgroundColor: theme.colors.accent,
+						color: theme.colors.accentForeground,
+					}}
+				>
+					<Settings className="w-3.5 h-3.5" />
+					Open Settings
+				</button>
+			</div>
+		);
+	}
+
+	// ========================================================================
+	// Active state — sub-tab navigation + content
+	// ========================================================================
+
 	return (
-		<div className="h-full flex flex-col items-center justify-center gap-3 text-center px-4">
-			<span
-				className="text-sm font-medium"
-				style={{ color: theme.colors.textMain }}
+		<div className="h-full flex flex-col">
+			{/* Sub-tab navigation bar */}
+			<div
+				className="flex border-b shrink-0"
+				style={{ borderColor: theme.colors.border }}
 			>
-				VIBES Panel
-			</span>
-			<span
-				className="text-xs"
-				style={{ color: theme.colors.textDim }}
-			>
-				AI attribution and audit metadata for your project.
-				Configure VIBES in Settings to get started.
-			</span>
+				{SUB_TABS.map((tab) => (
+					<button
+						key={tab.key}
+						onClick={() => setActiveSubTab(tab.key)}
+						className="flex-1 py-2 text-[11px] font-semibold border-b-2 transition-colors"
+						style={{
+							borderColor: activeSubTab === tab.key ? theme.colors.accent : 'transparent',
+							color: activeSubTab === tab.key ? theme.colors.textMain : theme.colors.textDim,
+						}}
+					>
+						{tab.label}
+					</button>
+				))}
+			</div>
+
+			{/* Sub-tab content */}
+			<div className="flex-1 overflow-y-auto overflow-x-hidden scrollbar-thin">
+				{activeSubTab === 'overview' && (
+					<VibesDashboard
+						theme={theme}
+						projectPath={projectPath}
+						vibesData={vibesData}
+						vibesEnabled={vibesEnabled}
+						vibesAssuranceLevel={vibesAssuranceLevel}
+					/>
+				)}
+
+				{activeSubTab === 'log' && (
+					<VibesAnnotationLog
+						theme={theme}
+						annotations={vibesData.annotations}
+						isLoading={vibesData.isLoading}
+					/>
+				)}
+
+				{activeSubTab === 'models' && (
+					<VibesModelAttribution
+						theme={theme}
+						models={vibesData.models}
+						isLoading={vibesData.isLoading}
+					/>
+				)}
+			</div>
 		</div>
 	);
 };

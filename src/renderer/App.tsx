@@ -10466,6 +10466,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				case 'closeRightPanel':
 					setRightPanelOpen(false);
 					break;
+				case 'openSettings':
+					setSettingsModalOpen(true);
+					break;
 				// hamburger menu actions are handled by SessionList.tsx
 				default:
 					break;
