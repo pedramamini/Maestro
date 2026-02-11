@@ -331,37 +331,11 @@ const LogItemComponent = memo(
 		return (
 			<div
 				ref={logItemRef}
-				className={`flex gap-4 group ${isUserMessage ? 'flex-row-reverse' : ''} px-6 py-2`}
+				className={`flex group ${isUserMessage ? 'flex-row-reverse' : ''} px-3 py-1`}
 				data-log-index={index}
 			>
 				<div
-					className={`w-20 shrink-0 text-[10px] pt-2 ${isUserMessage ? 'text-right' : 'text-left'}`}
-					style={{ fontFamily, color: theme.colors.textDim, opacity: 0.6 }}
-				>
-					{(() => {
-						const logDate = new Date(log.timestamp);
-						const today = new Date();
-						const isToday = logDate.toDateString() === today.toDateString();
-						const time = logDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-						if (isToday) {
-							return time;
-						}
-						// Format: YYYY-MM-DD on first line, time on second
-						const year = logDate.getFullYear();
-						const month = String(logDate.getMonth() + 1).padStart(2, '0');
-						const day = String(logDate.getDate()).padStart(2, '0');
-						return (
-							<>
-								<div>
-									{year}-{month}-{day}
-								</div>
-								<div>{time}</div>
-							</>
-						);
-					})()}
-				</div>
-				<div
-					className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${isUserMessage ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
+					className={`flex-1 min-w-0 px-3 py-2 pb-6 rounded-lg border ${isUserMessage ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
 					style={{
 						backgroundColor: isUserMessage
 							? isAIMode
@@ -380,6 +354,25 @@ const LogItemComponent = memo(
 									: theme.colors.border,
 					}}
 				>
+					{/* Inline timestamp */}
+					<div
+						className={`text-[10px] mb-1 ${isUserMessage ? 'text-right' : 'text-left'}`}
+						style={{ color: theme.colors.textDim, opacity: 0.5 }}
+					>
+						{(() => {
+							const logDate = new Date(log.timestamp);
+							const today = new Date();
+							const isToday = logDate.toDateString() === today.toDateString();
+							const time = logDate.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+							if (isToday) {
+								return time;
+							}
+							const year = logDate.getFullYear();
+							const month = String(logDate.getMonth() + 1).padStart(2, '0');
+							const day = String(logDate.getDate()).padStart(2, '0');
+							return `${year}-${month}-${day} ${time}`;
+						})()}
+					</div>
 					{/* Local filter icon for system output only */}
 					{log.source !== 'user' && isTerminal && (
 						<div className="absolute top-2 right-2 flex items-center gap-2">
@@ -414,9 +407,9 @@ const LogItemComponent = memo(
 						</div>
 					)}
 					{log.source === 'stderr' && (
-						<div className="mb-2">
+						<div className="mb-1">
 							<span
-								className="px-2 py-1 rounded text-xs font-bold uppercase tracking-wide"
+								className="px-1.5 py-0.5 rounded text-xs font-bold uppercase tracking-wide"
 								style={{
 									backgroundColor: theme.colors.error,
 									color: '#fff',
@@ -428,7 +421,7 @@ const LogItemComponent = memo(
 					)}
 					{/* Special rendering for error log entries */}
 					{log.source === 'error' && (
-						<div className="flex flex-col gap-3">
+						<div className="flex flex-col gap-2">
 							<div className="flex items-center gap-2">
 								<AlertCircle className="w-5 h-5" style={{ color: theme.colors.error }} />
 								<span className="text-sm font-medium" style={{ color: theme.colors.error }}>
@@ -457,15 +450,15 @@ const LogItemComponent = memo(
 					{/* Special rendering for thinking/streaming content (AI reasoning in real-time) */}
 					{log.source === 'thinking' && (
 						<div
-							className="px-4 py-2 text-sm font-mono border-l-2"
+							className="px-2 py-1 text-sm font-mono border-l-2"
 							style={{
 								color: theme.colors.textMain,
 								borderColor: theme.colors.accent,
 							}}
 						>
-							<div className="flex items-center gap-2 mb-1">
+							<div className="flex items-center gap-1.5 mb-0.5">
 								<span
-									className="text-[10px] px-1.5 py-0.5 rounded"
+									className="text-[10px] px-1 py-0.5 rounded"
 									style={{
 										backgroundColor: `${theme.colors.accent}30`,
 										color: theme.colors.accent,
@@ -501,15 +494,15 @@ const LogItemComponent = memo(
 
 							return (
 								<div
-									className="px-4 py-1.5 text-xs font-mono border-l-2"
+									className="px-2 py-1 text-xs font-mono border-l-2"
 									style={{
 										color: theme.colors.textMain,
 										borderColor: theme.colors.accent,
 									}}
 								>
-									<div className="flex items-start gap-2">
+									<div className="flex items-start gap-1.5">
 										<span
-											className="px-1.5 py-0.5 rounded shrink-0"
+											className="px-1 py-0.5 rounded shrink-0"
 											style={{
 												backgroundColor: `${theme.colors.accent}30`,
 												color: theme.colors.accent,
@@ -588,7 +581,7 @@ const LogItemComponent = memo(
 								</div>
 								<button
 									onClick={handleExpandToggle}
-									className="flex items-center gap-2 mt-2 text-xs px-3 py-1.5 rounded border hover:opacity-70 transition-opacity"
+									className="flex items-center gap-1.5 mt-1 text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
 									style={{
 										borderColor: theme.colors.border,
 										backgroundColor: theme.colors.bgActivity,
@@ -671,7 +664,7 @@ const LogItemComponent = memo(
 								</div>
 								<button
 									onClick={handleExpandToggle}
-									className="flex items-center gap-2 mt-2 text-xs px-3 py-1.5 rounded border hover:opacity-70 transition-opacity"
+									className="flex items-center gap-1.5 mt-1 text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
 									style={{
 										borderColor: theme.colors.border,
 										backgroundColor: theme.colors.bgActivity,
@@ -1625,7 +1618,7 @@ export const TerminalOutput = memo(
 						session.inputMode === 'terminal' &&
 						session.busySource === 'terminal' && (
 							<div
-								className="flex flex-col items-center justify-center gap-2 py-6 mx-6 my-4 rounded-xl border"
+								className="flex flex-col items-center justify-center gap-2 py-4 mx-3 my-2 rounded-lg border"
 								style={{
 									backgroundColor: theme.colors.bgActivity,
 									borderColor: theme.colors.border,

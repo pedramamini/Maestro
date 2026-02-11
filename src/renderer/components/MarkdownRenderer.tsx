@@ -281,7 +281,7 @@ export const MarkdownRenderer = memo(
 		return (
 			<div
 				className={`prose prose-sm max-w-none text-sm ${className}`}
-				style={{ color: theme.colors.textMain, lineHeight: 1.4, paddingLeft: '0.5em' }}
+				style={{ color: theme.colors.textMain, lineHeight: 1.4 }}
 			>
 				<ReactMarkdown
 					remarkPlugins={remarkPlugins}

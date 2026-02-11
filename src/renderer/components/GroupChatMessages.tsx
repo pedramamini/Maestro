@@ -241,19 +241,11 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 							<div
 								key={msgKey}
 								data-message-timestamp={msg.timestamp}
-								className={`flex gap-4 group ${isUser ? 'flex-row-reverse' : ''} px-6 py-2`}
+								className={`flex group ${isUser ? 'flex-row-reverse' : ''} px-3 py-1`}
 							>
-								{/* Timestamp - outside bubble, like AI Terminal */}
-								<div
-									className={`w-20 shrink-0 text-[10px] pt-2 ${isUser ? 'text-right' : 'text-left'}`}
-									style={{ color: theme.colors.textDim, opacity: 0.6 }}
-								>
-									{formatTimestamp(msg.timestamp)}
-								</div>
-
 								{/* Message bubble */}
 								<div
-									className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${isUser ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
+									className={`flex-1 min-w-0 px-3 py-2 pb-6 rounded-lg border ${isUser ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
 									style={{
 										backgroundColor: isUser
 											? `color-mix(in srgb, ${theme.colors.accent} 20%, ${theme.colors.bgSidebar})`
@@ -264,9 +256,16 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 										color: theme.colors.textMain,
 									}}
 								>
+									{/* Inline timestamp */}
+									<div
+										className={`text-[10px] mb-1 ${isUser ? 'text-right' : 'text-left'}`}
+										style={{ color: theme.colors.textDim, opacity: 0.5 }}
+									>
+										{formatTimestamp(msg.timestamp)}
+									</div>
 									{/* Sender label for non-user messages */}
 									{!isUser && (
-										<div className="text-xs font-medium mb-2" style={{ color: senderColor }}>
+										<div className="text-xs font-medium mb-1" style={{ color: senderColor }}>
 											{msg.from === 'moderator'
 												? 'Moderator'
 												: msg.from === 'system'
@@ -297,7 +296,7 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 											</div>
 											<button
 												onClick={() => toggleExpanded(msgKey)}
-												className="flex items-center gap-2 mt-2 text-xs px-3 py-1.5 rounded border hover:opacity-70 transition-opacity"
+												className="flex items-center gap-1.5 mt-1 text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
 												style={{
 													borderColor: theme.colors.border,
 													backgroundColor: theme.colors.bgActivity,
@@ -338,7 +337,7 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 											</div>
 											<button
 												onClick={() => toggleExpanded(msgKey)}
-												className="flex items-center gap-2 mt-2 text-xs px-3 py-1.5 rounded border hover:opacity-70 transition-opacity"
+												className="flex items-center gap-1.5 mt-1 text-xs px-2 py-1 rounded border hover:opacity-70 transition-opacity"
 												style={{
 													borderColor: theme.colors.border,
 													backgroundColor: theme.colors.bgActivity,
@@ -407,10 +406,9 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 
 				{/* Typing indicator */}
 				{state !== 'idle' && (
-					<div className="flex gap-4 px-6 py-2">
-						<div className="w-20 shrink-0" />
+					<div className="flex px-3 py-1">
 						<div
-							className="flex-1 min-w-0 p-4 rounded-xl border rounded-tl-none"
+							className="flex-1 min-w-0 px-3 py-2 rounded-lg border rounded-tl-none"
 							style={{ backgroundColor: theme.colors.bgActivity, borderColor: theme.colors.border }}
 						>
 							<div className="flex items-center gap-2">
