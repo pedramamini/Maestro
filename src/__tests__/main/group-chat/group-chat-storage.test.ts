@@ -104,6 +104,7 @@ describe('group-chat-storage', () => {
 			expect(chat.name).toBe('Test Chat');
 			expect(chat.moderatorAgentId).toBe('claude-code');
 			expect(chat.participants).toEqual([]);
+			expect(chat.initiatorWindowId).toBe('primary');
 
 			// Verify directory structure was created
 			const logExists = await fs
@@ -151,6 +152,15 @@ describe('group-chat-storage', () => {
 			expect(chat.moderatorSessionId).toBe('');
 
 			// Clean up
+			await deleteGroupChat(chat.id);
+		});
+
+		it('persists initiator window id when provided', async () => {
+			const chat = await createGroupChat('Window Scoped', 'claude-code', undefined, 'window-42');
+			expect(chat.initiatorWindowId).toBe('window-42');
+			const loaded = await loadGroupChat(chat.id);
+			expect(loaded?.initiatorWindowId).toBe('window-42');
+
 			await deleteGroupChat(chat.id);
 		});
 	});

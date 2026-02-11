@@ -1696,7 +1696,8 @@ interface MaestroAPI {
 				customPath?: string;
 				customArgs?: string;
 				customEnvVars?: Record<string, string>;
-			}
+			},
+			initiatorWindowId?: string | null
 		) => Promise<{
 			id: string;
 			name: string;
@@ -1711,6 +1712,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string | null;
 		}>;
 		list: () => Promise<
 			Array<{
@@ -1727,6 +1729,7 @@ interface MaestroAPI {
 				logPath: string;
 				imagesDir: string;
 				createdAt: number;
+				initiatorWindowId?: string | null;
 			}>
 		>;
 		load: (id: string) => Promise<{
@@ -1743,6 +1746,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string | null;
 		} | null>;
 		delete: (id: string) => Promise<boolean>;
 		rename: (
@@ -1762,6 +1766,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string | null;
 		}>;
 		update: (
 			id: string,
@@ -1788,6 +1793,7 @@ interface MaestroAPI {
 			logPath: string;
 			imagesDir: string;
 			createdAt: number;
+			initiatorWindowId?: string | null;
 		}>;
 		// Chat log
 		appendMessage: (id: string, from: string, content: string) => Promise<void>;
