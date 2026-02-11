@@ -388,6 +388,119 @@ describe('codex-instrumenter', () => {
 	});
 
 	// ========================================================================
+	// Prompt Hash Linking (DIVERGENCE 5)
+	// ========================================================================
+	describe('prompt_hash linking', () => {
+		it('includes prompt_hash in line annotations at medium assurance', async () => {
+			await setupSession('sess-1', 'medium');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			// Send a prompt first
+			await instrumenter.handlePrompt('sess-1', 'Fix the login bug');
+
+			// Then a tool execution that creates a line annotation
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/login.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].prompt_hash).toBeDefined();
+			expect(typeof lineAnnotations[0].prompt_hash).toBe('string');
+			expect(lineAnnotations[0].prompt_hash!.length).toBe(64);
+		});
+
+		it('includes prompt_hash in line annotations at high assurance', async () => {
+			await setupSession('sess-1', 'high');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'high',
+			});
+
+			await instrumenter.handlePrompt('sess-1', 'Add new feature');
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'create_file',
+				state: { status: 'running', input: { file_path: 'src/feature.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].prompt_hash).toBeDefined();
+			expect(typeof lineAnnotations[0].prompt_hash).toBe('string');
+			expect(lineAnnotations[0].prompt_hash!.length).toBe(64);
+		});
+
+		it('does not include prompt_hash in line annotations at low assurance', async () => {
+			await setupSession('sess-1', 'low');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'low',
+			});
+
+			// At low assurance, handlePrompt is a no-op, but even if it weren't,
+			// the annotation should not include prompt_hash
+			await instrumenter.handlePrompt('sess-1', 'Some prompt');
+
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/test.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].prompt_hash).toBeUndefined();
+		});
+
+		it('clears prompt hash on session cleanup', async () => {
+			await setupSession('sess-1', 'medium');
+			const instrumenter = new CodexInstrumenter({
+				sessionManager: manager,
+				assuranceLevel: 'medium',
+			});
+
+			// Send a prompt to store the hash
+			await instrumenter.handlePrompt('sess-1', 'First prompt');
+
+			// Flush to trigger cleanup
+			await instrumenter.flush('sess-1');
+
+			// Start a new session with the same ID
+			await setupSession('sess-1', 'medium');
+
+			// Tool execution after cleanup should not have prompt_hash
+			await instrumenter.handleToolExecution('sess-1', {
+				toolName: 'write_file',
+				state: { status: 'running', input: { file_path: 'src/after-cleanup.ts' } },
+				timestamp: Date.now(),
+			});
+
+			const annotations = await readAnnotations(tmpDir);
+			const lineAnnotations = annotations.filter(
+				(a) => a.type === 'line' && (a as VibesLineAnnotation).file_path === 'src/after-cleanup.ts',
+			) as VibesLineAnnotation[];
+			expect(lineAnnotations).toHaveLength(1);
+			expect(lineAnnotations[0].prompt_hash).toBeUndefined();
+		});
+	});
+
+	// ========================================================================
 	// handleThinkingChunk
 	// ========================================================================
 	describe('handleThinkingChunk', () => {

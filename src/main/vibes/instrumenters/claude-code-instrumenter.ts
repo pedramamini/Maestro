@@ -209,6 +209,9 @@ export class ClaudeCodeInstrumenter {
 	/** Cached model name from usage events per session. */
 	private modelNames: Map<string, string> = new Map();
 
+	/** Most recent prompt hash per session, for linking to line annotations. */
+	private lastPromptHashes: Map<string, string> = new Map();
+
 	constructor(params: {
 		sessionManager: VibesSessionManager;
 		assuranceLevel: VibesAssuranceLevel;
@@ -285,12 +288,14 @@ export class ClaudeCodeInstrumenter {
 					}
 
 					const lineRange = extractLineRange(toolInput);
+					const promptHash = this.assuranceLevel !== 'low' ? this.lastPromptHashes.get(sessionId) : undefined;
 					const annotation = createLineAnnotation({
 						filePath: normalizedPath,
 						lineStart: lineRange?.lineStart ?? 1,
 						lineEnd: lineRange?.lineEnd ?? 1,
 						environmentHash: session.environmentHash,
 						commandHash: cmdHash,
+						promptHash,
 						action,
 						sessionId: session.vibesSessionId,
 						assuranceLevel: session.assuranceLevel,
@@ -405,6 +410,7 @@ export class ClaudeCodeInstrumenter {
 				contextFiles,
 			});
 			await this.sessionManager.recordManifestEntry(sessionId, hash, entry);
+			this.lastPromptHashes.set(sessionId, hash);
 		} catch (err) {
 			logWarn('Error handling prompt', { sessionId, error: String(err) });
 		}
@@ -501,5 +507,6 @@ export class ClaudeCodeInstrumenter {
 		this.reasoningBuffers.delete(sessionId);
 		this.reasoningTokenCounts.delete(sessionId);
 		this.modelNames.delete(sessionId);
+		this.lastPromptHashes.delete(sessionId);
 	}
 }
