@@ -100,7 +100,9 @@ export class VibesCoordinator {
 	 * - `tool-execution` → routes to the appropriate agent instrumenter
 	 * - `thinking-chunk` → routes to the appropriate agent instrumenter
 	 * - `usage` → routes to the appropriate agent instrumenter
-	 * - `session-id` → triggers session start in the session manager
+	 *
+	 * Note: Session lifecycle is handled via `handleProcessSpawn()` / `handleProcessExit()`
+	 * called from the IPC process handlers, not via the `session-id` event.
 	 */
 	attachToProcessManager(processManager: EventEmitter): void {
 		if (!this.isEnabled()) {
