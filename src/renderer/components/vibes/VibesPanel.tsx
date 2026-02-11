@@ -60,7 +60,7 @@ export const VibesPanel: React.FC<VibesPanelProps> = ({
 }) => {
 	const [activeSubTab, setActiveSubTab] = useState<VibesSubTab>('overview');
 	const [blameFilePath, setBlameFilePath] = useState<string | undefined>(undefined);
-	const { vibesEnabled, vibesAssuranceLevel } = useSettings();
+	const { vibesEnabled, vibesAssuranceLevel, vibesAutoInit } = useSettings();
 	const vibesData = useVibesData(projectPath, vibesEnabled);
 
 	// When an initialBlameFilePath is provided, switch to blame tab and set the file path
@@ -151,6 +151,7 @@ export const VibesPanel: React.FC<VibesPanelProps> = ({
 						vibesData={vibesData}
 						vibesEnabled={vibesEnabled}
 						vibesAssuranceLevel={vibesAssuranceLevel}
+						vibesAutoInit={vibesAutoInit}
 					/>
 				)}
 

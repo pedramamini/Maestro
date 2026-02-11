@@ -25,6 +25,7 @@ import {
 	getBufferedAnnotationCount,
 	getPendingManifestEntryCount,
 	resetAllBuffers,
+	initVibesDirectly,
 } from '../../../main/vibes/vibes-io';
 
 import type {
@@ -715,6 +716,114 @@ describe('vibes-io', () => {
 
 			const manifest = await readVibesManifest(tmpDir);
 			expect(Object.keys(manifest.entries)).toHaveLength(3);
+		});
+	});
+
+	// ========================================================================
+	// initVibesDirectly (Fallback initialization)
+	// ========================================================================
+	describe('initVibesDirectly', () => {
+		it('should create .ai-audit/ directory structure', async () => {
+			const result = await initVibesDirectly(tmpDir, {
+				projectName: 'test-project',
+				assuranceLevel: 'medium',
+			});
+
+			expect(result.success).toBe(true);
+			await expect(access(path.join(tmpDir, '.ai-audit'), constants.F_OK)).resolves.toBeUndefined();
+			await expect(access(path.join(tmpDir, '.ai-audit', 'blobs'), constants.F_OK)).resolves.toBeUndefined();
+		});
+
+		it('should create a valid config.json', async () => {
+			await initVibesDirectly(tmpDir, {
+				projectName: 'my-app',
+				assuranceLevel: 'high',
+			});
+
+			const config = await readVibesConfig(tmpDir);
+			expect(config).not.toBeNull();
+			expect(config!.standard).toBe('VIBES');
+			expect(config!.standard_version).toBe('1.0');
+			expect(config!.project_name).toBe('my-app');
+			expect(config!.assurance_level).toBe('high');
+			expect(config!.tracked_extensions).toContain('.ts');
+			expect(config!.exclude_patterns).toContain('**/node_modules/**');
+		});
+
+		it('should create an empty manifest.json', async () => {
+			await initVibesDirectly(tmpDir, {
+				projectName: 'test-project',
+				assuranceLevel: 'medium',
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(manifest.standard).toBe('VIBES');
+			expect(manifest.version).toBe('1.0');
+			expect(Object.keys(manifest.entries)).toHaveLength(0);
+		});
+
+		it('should create an empty annotations.jsonl', async () => {
+			await initVibesDirectly(tmpDir, {
+				projectName: 'test-project',
+				assuranceLevel: 'medium',
+			});
+
+			const annotationsPath = path.join(tmpDir, '.ai-audit', 'annotations.jsonl');
+			await expect(access(annotationsPath, constants.F_OK)).resolves.toBeUndefined();
+			const content = await readFile(annotationsPath, 'utf8');
+			expect(content).toBe('');
+		});
+
+		it('should use custom tracked extensions when provided', async () => {
+			await initVibesDirectly(tmpDir, {
+				projectName: 'test-project',
+				assuranceLevel: 'low',
+				trackedExtensions: ['.rs', '.toml'],
+			});
+
+			const config = await readVibesConfig(tmpDir);
+			expect(config!.tracked_extensions).toEqual(['.rs', '.toml']);
+		});
+
+		it('should use custom exclude patterns when provided', async () => {
+			await initVibesDirectly(tmpDir, {
+				projectName: 'test-project',
+				assuranceLevel: 'medium',
+				excludePatterns: ['**/target/**'],
+			});
+
+			const config = await readVibesConfig(tmpDir);
+			expect(config!.exclude_patterns).toEqual(['**/target/**']);
+		});
+
+		it('should not overwrite existing manifest', async () => {
+			// Pre-create a manifest with entries
+			await ensureAuditDir(tmpDir);
+			const existingManifest = {
+				standard: 'VIBES' as const,
+				version: '1.0' as const,
+				entries: { 'hash123': { type: 'environment' as const, tool_name: 'test', tool_version: '1.0', model_name: 'test', model_version: '1.0', created_at: '2026-02-10T12:00:00Z' } },
+			};
+			await writeVibesManifest(tmpDir, existingManifest);
+
+			await initVibesDirectly(tmpDir, {
+				projectName: 'test-project',
+				assuranceLevel: 'medium',
+			});
+
+			const manifest = await readVibesManifest(tmpDir);
+			expect(Object.keys(manifest.entries)).toHaveLength(1);
+			expect(manifest.entries['hash123']).toBeDefined();
+		});
+
+		it('should return error for invalid paths', async () => {
+			const result = await initVibesDirectly('/dev/null/impossible', {
+				projectName: 'test',
+				assuranceLevel: 'medium',
+			});
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBeDefined();
 		});
 	});
 });

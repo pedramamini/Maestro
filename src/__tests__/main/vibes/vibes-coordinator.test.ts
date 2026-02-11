@@ -848,4 +848,181 @@ describe('vibes-coordinator', () => {
 			// Should not throw
 		});
 	});
+
+	// ========================================================================
+	// Auto-Initialization
+	// ========================================================================
+	describe('auto-initialization', () => {
+		it('should auto-init .ai-audit/ when vibesAutoInit is enabled and project is not initialized', async () => {
+			// Create a fresh tmpDir WITHOUT .ai-audit/ pre-created
+			const freshDir = await mkdtemp(path.join(os.tmpdir(), 'vibes-autoinit-test-'));
+			try {
+				const store = createMockSettingsStore({ vibesAutoInit: true });
+				const coordinator = new VibesCoordinator({ settingsStore: store });
+
+				const config = createProcessConfig({
+					sessionId: 'sess-auto-1',
+					toolType: 'claude-code',
+					projectPath: freshDir,
+				});
+
+				await coordinator.handleProcessSpawn('sess-auto-1', config);
+
+				// .ai-audit/ should now exist with config.json
+				const { readVibesConfig } = await import('../../../main/vibes/vibes-io');
+				const vibesConfig = await readVibesConfig(freshDir);
+				expect(vibesConfig).not.toBeNull();
+				expect(vibesConfig!.project_name).toBe(path.basename(freshDir));
+				expect(vibesConfig!.assurance_level).toBe('medium');
+
+				// Session should also have been started
+				const stats = coordinator.getSessionStats('sess-auto-1');
+				expect(stats).not.toBeNull();
+			} finally {
+				await rm(freshDir, { recursive: true, force: true });
+			}
+		});
+
+		it('should not auto-init when vibesAutoInit is disabled', async () => {
+			const freshDir = await mkdtemp(path.join(os.tmpdir(), 'vibes-autoinit-test-'));
+			try {
+				const store = createMockSettingsStore({ vibesAutoInit: false });
+				const coordinator = new VibesCoordinator({ settingsStore: store });
+
+				const config = createProcessConfig({
+					sessionId: 'sess-noinit-1',
+					toolType: 'claude-code',
+					projectPath: freshDir,
+				});
+
+				await coordinator.handleProcessSpawn('sess-noinit-1', config);
+
+				// .ai-audit/config.json should not exist (only created by session, not full init)
+				const { readVibesConfig } = await import('../../../main/vibes/vibes-io');
+				const vibesConfig = await readVibesConfig(freshDir);
+				// Config should be null because only ensureAuditDir was called, not full init
+				expect(vibesConfig).toBeNull();
+			} finally {
+				await rm(freshDir, { recursive: true, force: true });
+			}
+		});
+
+		it('should skip auto-init if .ai-audit/ is already initialized', async () => {
+			// tmpDir already has .ai-audit/ from beforeEach
+			const { writeVibesConfig } = await import('../../../main/vibes/vibes-io');
+			await writeVibesConfig(tmpDir, {
+				standard: 'VIBES',
+				standard_version: '1.0',
+				assurance_level: 'low',
+				project_name: 'existing-project',
+				tracked_extensions: ['.ts'],
+				exclude_patterns: [],
+				compress_reasoning_threshold_bytes: 10240,
+				external_blob_threshold_bytes: 102400,
+			});
+
+			const store = createMockSettingsStore({ vibesAutoInit: true });
+			const coordinator = new VibesCoordinator({ settingsStore: store });
+
+			const config = createProcessConfig({
+				sessionId: 'sess-skip-1',
+				toolType: 'claude-code',
+				projectPath: tmpDir,
+			});
+
+			await coordinator.handleProcessSpawn('sess-skip-1', config);
+
+			// Config should still have the original project name (not overwritten)
+			const { readVibesConfig } = await import('../../../main/vibes/vibes-io');
+			const vibesConfig = await readVibesConfig(tmpDir);
+			expect(vibesConfig!.project_name).toBe('existing-project');
+		});
+
+		it('should only attempt auto-init once per project path', async () => {
+			const freshDir = await mkdtemp(path.join(os.tmpdir(), 'vibes-autoinit-test-'));
+			try {
+				const store = createMockSettingsStore({ vibesAutoInit: true });
+				const coordinator = new VibesCoordinator({ settingsStore: store });
+
+				// First spawn — should auto-init
+				const config1 = createProcessConfig({
+					sessionId: 'sess-once-1',
+					toolType: 'claude-code',
+					projectPath: freshDir,
+				});
+				await coordinator.handleProcessSpawn('sess-once-1', config1);
+				await coordinator.handleProcessExit('sess-once-1', 0);
+
+				// Delete the config to simulate "un-initialized"
+				const { rm: rmFile } = await import('fs/promises');
+				await rmFile(path.join(freshDir, '.ai-audit', 'config.json'), { force: true });
+
+				// Second spawn — should NOT re-init (already attempted)
+				const config2 = createProcessConfig({
+					sessionId: 'sess-once-2',
+					toolType: 'claude-code',
+					projectPath: freshDir,
+				});
+				await coordinator.handleProcessSpawn('sess-once-2', config2);
+
+				const { readVibesConfig } = await import('../../../main/vibes/vibes-io');
+				const vibesConfig = await readVibesConfig(freshDir);
+				// Config should still be null because auto-init was not re-attempted
+				expect(vibesConfig).toBeNull();
+			} finally {
+				await rm(freshDir, { recursive: true, force: true });
+			}
+		});
+
+		it('should clear auto-init cache', () => {
+			const store = createMockSettingsStore();
+			const coordinator = new VibesCoordinator({ settingsStore: store });
+
+			coordinator.clearAutoInitCache();
+			// Should not throw
+		});
+
+		it('should handle auto-init failure gracefully without blocking session', async () => {
+			const store = createMockSettingsStore({ vibesAutoInit: true });
+			const coordinator = new VibesCoordinator({ settingsStore: store });
+
+			// Use a path where auto-init will fail
+			const config = createProcessConfig({
+				sessionId: 'sess-fail-1',
+				toolType: 'claude-code',
+				projectPath: '/dev/null/impossible-path',
+			});
+
+			// Should not throw even when auto-init fails
+			await expect(
+				coordinator.handleProcessSpawn('sess-fail-1', config),
+			).resolves.not.toThrow();
+		});
+
+		it('should use settings assurance level for auto-init', async () => {
+			const freshDir = await mkdtemp(path.join(os.tmpdir(), 'vibes-autoinit-test-'));
+			try {
+				const store = createMockSettingsStore({
+					vibesAutoInit: true,
+					vibesAssuranceLevel: 'high',
+				});
+				const coordinator = new VibesCoordinator({ settingsStore: store });
+
+				const config = createProcessConfig({
+					sessionId: 'sess-level-1',
+					toolType: 'claude-code',
+					projectPath: freshDir,
+				});
+
+				await coordinator.handleProcessSpawn('sess-level-1', config);
+
+				const { readVibesConfig } = await import('../../../main/vibes/vibes-io');
+				const vibesConfig = await readVibesConfig(freshDir);
+				expect(vibesConfig).not.toBeNull();
+				expect(vibesConfig!.assurance_level).toBe('high');
+			} finally {
+				await rm(freshDir, { recursive: true, force: true });
+			}
+		});
+	});
 });

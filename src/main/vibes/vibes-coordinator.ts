@@ -12,6 +12,8 @@ import { ClaudeCodeInstrumenter } from './instrumenters/claude-code-instrumenter
 import { CodexInstrumenter } from './instrumenters/codex-instrumenter';
 import { MaestroInstrumenter } from './instrumenters/maestro-instrumenter';
 import { createEnvironmentEntry } from './vibes-annotations';
+import { isVibesInitialized, vibesInit, findVibesCheckBinary } from './vibes-bridge';
+import { initVibesDirectly } from './vibes-io';
 import {
 	VIBES_SETTINGS_DEFAULTS,
 	getVibesSettingWithDefault,
@@ -69,6 +71,9 @@ export class VibesCoordinator {
 
 	/** Projects where .ai-audit/ is not writable — instrumentation disabled. */
 	private unwritableProjects: Set<string> = new Set();
+
+	/** Projects where auto-init has already been attempted (avoid repeated attempts). */
+	private autoInitAttempted: Set<string> = new Set();
 
 	/** Whether the vibescheck binary missing warning has been logged this session. */
 	private vibesBinaryMissingLogged = false;
@@ -221,6 +226,23 @@ export class VibesCoordinator {
 				{ sessionId, agentType, projectPath },
 			);
 			return;
+		}
+
+		// Auto-initialize .ai-audit/ if vibesAutoInit is enabled and it doesn't exist
+		if (!this.autoInitAttempted.has(projectPath)) {
+			this.autoInitAttempted.add(projectPath);
+			try {
+				const initialized = await isVibesInitialized(projectPath);
+				if (!initialized && this.isAutoInitEnabled()) {
+					await this.autoInitProject(projectPath);
+				}
+			} catch (err) {
+				logger.warn(
+					'[VibesCoordinator] Auto-init check failed, continuing without initialization',
+					'VibesCoordinator',
+					{ projectPath, error: String(err) },
+				);
+			}
 		}
 
 		// Check that .ai-audit/ directory is writable
@@ -442,6 +464,13 @@ export class VibesCoordinator {
 		this.unwritableProjects.clear();
 	}
 
+	/**
+	 * Clear the auto-init attempted cache (e.g. on settings change).
+	 */
+	clearAutoInitCache(): void {
+		this.autoInitAttempted.clear();
+	}
+
 	// ========================================================================
 	// Event Routing
 	// ========================================================================
@@ -588,5 +617,86 @@ export class VibesCoordinator {
 				VIBES_SETTINGS_DEFAULTS.vibesAssuranceLevel,
 			) as VibesAssuranceLevel | undefined,
 		);
+	}
+
+	/**
+	 * Check whether vibesAutoInit is enabled in settings.
+	 */
+	private isAutoInitEnabled(): boolean {
+		return !!this.settingsStore.get(
+			'vibesAutoInit',
+			VIBES_SETTINGS_DEFAULTS.vibesAutoInit,
+		);
+	}
+
+	/**
+	 * Auto-initialize a project's .ai-audit/ directory.
+	 * Attempts to use the vibescheck binary first; falls back to direct
+	 * directory creation via vibes-io if the binary is not available.
+	 * Uses the project directory name as the project name.
+	 * Never throws — logs warnings on failure.
+	 */
+	private async autoInitProject(projectPath: string): Promise<void> {
+		const projectName = path.basename(projectPath);
+		const assuranceLevel = this.getAssuranceLevel();
+		const customBinaryPath = this.settingsStore.get('vibesCheckBinaryPath', '') as string;
+
+		logger.info(
+			'[VibesCoordinator] Auto-initializing VIBES for project',
+			'VibesCoordinator',
+			{ projectPath, projectName, assuranceLevel },
+		);
+
+		// Try vibescheck binary first
+		const binaryPath = await findVibesCheckBinary(customBinaryPath || undefined, projectPath);
+		if (binaryPath) {
+			try {
+				const result = await vibesInit(projectPath, {
+					projectName,
+					assuranceLevel,
+				}, customBinaryPath || undefined);
+
+				if (result.success) {
+					logger.info(
+						'[VibesCoordinator] Auto-init succeeded via vibescheck binary',
+						'VibesCoordinator',
+						{ projectPath },
+					);
+					return;
+				}
+
+				logger.warn(
+					'[VibesCoordinator] vibescheck init failed, falling back to direct init',
+					'VibesCoordinator',
+					{ projectPath, error: result.error },
+				);
+			} catch (err) {
+				logger.warn(
+					'[VibesCoordinator] vibescheck init threw, falling back to direct init',
+					'VibesCoordinator',
+					{ projectPath, error: String(err) },
+				);
+			}
+		}
+
+		// Fallback: create directory structure directly via vibes-io
+		const directResult = await initVibesDirectly(projectPath, {
+			projectName,
+			assuranceLevel,
+		});
+
+		if (directResult.success) {
+			logger.info(
+				'[VibesCoordinator] Auto-init succeeded via direct directory creation',
+				'VibesCoordinator',
+				{ projectPath },
+			);
+		} else {
+			logger.warn(
+				'[VibesCoordinator] Auto-init failed',
+				'VibesCoordinator',
+				{ projectPath, error: directResult.error },
+			);
+		}
 	}
 }

@@ -12,6 +12,7 @@ import {
 	Shield,
 	Loader2,
 	AlertTriangle,
+	Info,
 } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { UseVibesDataReturn } from '../../hooks';
@@ -24,6 +25,7 @@ interface VibesDashboardProps {
 	vibesData: UseVibesDataReturn;
 	vibesEnabled: boolean;
 	vibesAssuranceLevel: VibesAssuranceLevel;
+	vibesAutoInit?: boolean;
 }
 
 /** Color mapping for assurance level badges. */
@@ -45,6 +47,7 @@ export const VibesDashboard: React.FC<VibesDashboardProps> = ({
 	vibesData,
 	vibesEnabled,
 	vibesAssuranceLevel,
+	vibesAutoInit,
 }) => {
 	const { isInitialized, stats, isLoading, error, refresh, initialize } = vibesData;
 	const [initProjectName, setInitProjectName] = useState('');
@@ -172,6 +175,20 @@ export const VibesDashboard: React.FC<VibesDashboardProps> = ({
 				<span className="text-xs max-w-xs" style={{ color: theme.colors.textDim }}>
 					No <code>.ai-audit/</code> directory found for this project. Initialize VIBES to start recording AI attribution metadata.
 				</span>
+				{vibesAutoInit === false && (
+					<div
+						className="flex items-start gap-2 px-3 py-2.5 rounded text-xs max-w-xs text-left"
+						style={{
+							backgroundColor: 'rgba(59, 130, 246, 0.1)',
+							border: '1px solid rgba(59, 130, 246, 0.3)',
+						}}
+					>
+						<Info className="w-3.5 h-3.5 shrink-0 mt-0.5" style={{ color: '#3b82f6' }} />
+						<span style={{ color: theme.colors.textDim }}>
+							Auto-initialization is disabled. Enable it in Settings to automatically set up VIBES when opening new projects, or initialize manually below.
+						</span>
+					</div>
+				)}
 				<div className="flex items-center gap-2 mt-2">
 					<input
 						type="text"

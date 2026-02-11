@@ -13,6 +13,7 @@ import { mkdir, readFile, writeFile, appendFile, access, constants } from 'fs/pr
 import * as path from 'path';
 
 import type {
+	VibesAssuranceLevel,
 	VibesConfig,
 	VibesManifest,
 	VibesManifestEntry,
@@ -436,6 +437,82 @@ export async function flushAll(): Promise<void> {
 	}
 
 	await Promise.all(flushPromises);
+}
+
+// ============================================================================
+// Direct Initialization (Fallback when vibescheck binary is unavailable)
+// ============================================================================
+
+/**
+ * Initialize the VIBES directory structure directly without the vibescheck binary.
+ * Creates `.ai-audit/`, `.ai-audit/blobs/`, `config.json`, `manifest.json`,
+ * and an empty `annotations.jsonl`. Used as a fallback when the vibescheck
+ * CLI is not installed.
+ *
+ * Returns `{ success: true }` on success, `{ success: false, error }` on failure.
+ */
+export async function initVibesDirectly(
+	projectPath: string,
+	config: {
+		projectName: string;
+		assuranceLevel: VibesAssuranceLevel;
+		trackedExtensions?: string[];
+		excludePatterns?: string[];
+	},
+): Promise<{ success: boolean; error?: string }> {
+	try {
+		await ensureAuditDir(projectPath);
+
+		const vibesConfig: VibesConfig = {
+			standard: 'VIBES',
+			standard_version: '1.0',
+			assurance_level: config.assuranceLevel,
+			project_name: config.projectName,
+			tracked_extensions: config.trackedExtensions ?? [
+				'.ts', '.tsx', '.js', '.jsx', '.py', '.rs',
+				'.go', '.java', '.c', '.cpp', '.rb', '.swift', '.kt',
+			],
+			exclude_patterns: config.excludePatterns ?? [
+				'**/node_modules/**',
+				'**/vendor/**',
+				'**/.venv/**',
+				'**/dist/**',
+				'**/target/**',
+				'**/.git/**',
+				'**/build/**',
+			],
+			compress_reasoning_threshold_bytes: 10240,
+			external_blob_threshold_bytes: 102400,
+		};
+
+		await writeVibesConfig(projectPath, vibesConfig);
+
+		// Create empty manifest if it doesn't exist
+		const manifestPath = path.join(projectPath, AUDIT_DIR, MANIFEST_FILE);
+		try {
+			await access(manifestPath, constants.F_OK);
+		} catch {
+			await writeVibesManifest(projectPath, {
+				standard: 'VIBES',
+				version: '1.0',
+				entries: {},
+			});
+		}
+
+		// Create empty annotations file if it doesn't exist
+		const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
+		try {
+			await access(annotationsPath, constants.F_OK);
+		} catch {
+			await writeFile(annotationsPath, '', 'utf8');
+		}
+
+		return { success: true };
+	} catch (err) {
+		const errMsg = err instanceof Error ? err.message : String(err);
+		logWarn('Direct VIBES initialization failed', err);
+		return { success: false, error: errMsg };
+	}
 }
 
 // ============================================================================
