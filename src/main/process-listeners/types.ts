@@ -6,6 +6,7 @@
 import type { ProcessManager } from '../process-manager';
 import type { WebServer } from '../web-server';
 import type { AgentDetector } from '../agents';
+import type { VibesCoordinator } from '../vibes/vibes-coordinator';
 import type { SafeSendFn } from '../utils/safe-send';
 import type { StatsDB } from '../stats';
 import type { GroupChat, GroupChatParticipant } from '../group-chat/group-chat-storage';
@@ -163,4 +164,6 @@ export interface ProcessListenerDependencies {
 		warn: (message: string, context: string, data?: Record<string, unknown>) => void;
 		debug: (message: string, context: string, data?: Record<string, unknown>) => void;
 	};
+	/** VIBES instrumentation coordinator (null when disabled or unavailable) */
+	getVibesCoordinator?: () => VibesCoordinator | null;
 }

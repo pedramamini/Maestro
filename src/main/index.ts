@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
+import { VibesCoordinator } from './vibes/vibes-coordinator';
 import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { powerManager } from './power-manager';
@@ -222,6 +223,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let vibesCoordinator: VibesCoordinator | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -290,6 +292,20 @@ app.whenReady().then(async () => {
 	processManager = new ProcessManager();
 	// Note: webServer is created on-demand when user enables web interface (see setupWebServerCallbacks)
 	agentDetector = new AgentDetector();
+
+	// Initialize VIBES instrumentation coordinator
+	// The coordinator subscribes to ProcessManager events to capture VIBES annotations.
+	// It respects the vibesEnabled setting — does nothing when disabled.
+	try {
+		vibesCoordinator = new VibesCoordinator({ settingsStore: store });
+		vibesCoordinator.attachToProcessManager(processManager);
+		logger.info('VIBES coordinator initialized', 'Startup', {
+			enabled: vibesCoordinator.isEnabled(),
+		});
+	} catch (error) {
+		logger.warn('Failed to initialize VIBES coordinator', 'Startup', { error: String(error) });
+		vibesCoordinator = null;
+	}
 
 	// Load custom agent paths from settings
 	const allAgentConfigs = agentConfigsStore.get('configs', {});
@@ -451,6 +467,7 @@ function setupIpcHandlers() {
 		settingsStore: store,
 		getMainWindow: () => mainWindow,
 		sessionsStore,
+		getVibesCoordinator: () => vibesCoordinator,
 	});
 
 	// Persistence operations - extracted to src/main/ipc/handlers/persistence.ts
@@ -685,6 +702,7 @@ function setupProcessListeners() {
 				REGEX_SYNOPSIS_SESSION,
 			},
 			logger,
+			getVibesCoordinator: () => vibesCoordinator,
 		});
 	}
 }

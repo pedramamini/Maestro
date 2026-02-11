@@ -34,6 +34,7 @@ export function setupExitListener(
 		| 'debugLog'
 		| 'logger'
 		| 'patterns'
+		| 'getVibesCoordinator'
 	>
 ): void {
 	const {
@@ -51,6 +52,7 @@ export function setupExitListener(
 		debugLog,
 		logger,
 		patterns,
+		getVibesCoordinator,
 	} = deps;
 	const { REGEX_MODERATOR_SESSION } = patterns;
 
@@ -58,6 +60,17 @@ export function setupExitListener(
 		// Remove power block reason for this session
 		// This allows system sleep when no AI sessions are active
 		powerManager.removeBlockReason(`session:${sessionId}`);
+
+		// VIBES instrumentation: notify coordinator of process exit
+		const coordinator = getVibesCoordinator?.();
+		if (coordinator) {
+			coordinator.handleProcessExit(sessionId, code).catch((err) => {
+				logger.warn('[VIBES] Failed to handle process exit', 'ProcessListener', {
+					sessionId,
+					error: String(err),
+				});
+			});
+		}
 
 		// Fast path: skip regex for non-group-chat sessions (performance optimization)
 		// Most sessions don't start with 'group-chat-', so this avoids expensive regex matching

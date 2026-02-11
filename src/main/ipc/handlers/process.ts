@@ -25,6 +25,7 @@ import { buildExpandedEnv } from '../../../shared/pathUtils';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { powerManager } from '../../power-manager';
 import { MaestroSettings } from './persistence';
+import type { VibesCoordinator } from '../../vibes/vibes-coordinator';
 
 const LOG_CONTEXT = '[ProcessManager]';
 
@@ -57,6 +58,8 @@ export interface ProcessHandlerDependencies {
 	settingsStore: Store<MaestroSettings>;
 	getMainWindow: () => BrowserWindow | null;
 	sessionsStore: Store<{ sessions: any[] }>;
+	/** VIBES instrumentation coordinator (null when disabled or unavailable) */
+	getVibesCoordinator?: () => VibesCoordinator | null;
 }
 
 /**
@@ -72,7 +75,7 @@ export interface ProcessHandlerDependencies {
  * - runCommand: Execute a single command and capture output
  */
 export function registerProcessHandlers(deps: ProcessHandlerDependencies): void {
-	const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore, getMainWindow } =
+	const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore, getMainWindow, getVibesCoordinator } =
 		deps;
 
 	// Spawn a new process for a session
@@ -491,6 +494,32 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				// This prevents system sleep while AI is processing
 				if (config.toolType !== 'terminal') {
 					powerManager.addBlockReason(`session:${config.sessionId}`);
+				}
+
+				// VIBES instrumentation: notify coordinator of process spawn
+				const coordinator = getVibesCoordinator?.();
+				if (coordinator) {
+					coordinator.handleProcessSpawn(config.sessionId, {
+						...config,
+						command: commandToSpawn,
+						args: argsToSpawn,
+						projectPath: config.cwd,
+					}).catch((err) => {
+						logger.warn('[VIBES] Failed to handle process spawn', LOG_CONTEXT, {
+							sessionId: config.sessionId,
+							error: String(err),
+						});
+					});
+
+					// Record the initial prompt if present
+					if (config.prompt) {
+						coordinator.handlePromptSent(config.sessionId, config.prompt).catch((err) => {
+							logger.warn('[VIBES] Failed to record initial prompt', LOG_CONTEXT, {
+								sessionId: config.sessionId,
+								error: String(err),
+							});
+						});
+					}
 				}
 
 				// Emit SSH remote status event for renderer to update session state
