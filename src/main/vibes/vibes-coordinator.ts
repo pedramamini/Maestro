@@ -6,7 +6,6 @@
 import type { EventEmitter } from 'events';
 import { logger } from '../utils/logger';
 import { VibesSessionManager } from './vibes-session';
-import type { VibesSessionState } from './vibes-session';
 import { ClaudeCodeInstrumenter } from './instrumenters/claude-code-instrumenter';
 import { CodexInstrumenter } from './instrumenters/codex-instrumenter';
 import { MaestroInstrumenter } from './instrumenters/maestro-instrumenter';
@@ -15,7 +14,6 @@ import {
 	VIBES_SETTINGS_DEFAULTS,
 	getVibesSettingWithDefault,
 } from '../../shared/vibes-settings';
-import type { VibesSettingsConfig } from '../../shared/vibes-settings';
 import type { VibesAssuranceLevel } from '../../shared/vibes-types';
 import type { ProcessConfig, ToolExecution, UsageStats } from '../process-manager/types';
 

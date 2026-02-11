@@ -3,7 +3,7 @@
 // writes to the project's .ai-audit/ directory via vibes-io.
 
 import { generateUUID } from '../../shared/uuid';
-import { createEnvironmentEntry, createSessionRecord } from './vibes-annotations';
+import { createSessionRecord } from './vibes-annotations';
 import { appendAnnotation, addManifestEntry } from './vibes-io';
 import type {
 	VibesAssuranceLevel,
