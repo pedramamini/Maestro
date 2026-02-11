@@ -11,6 +11,7 @@
 
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import type { Session } from '../types';
+import type { VibesAnnotationUpdate } from './useVibesLive';
 
 // ============================================================================
 // Types
@@ -47,10 +48,14 @@ const POLL_INTERVAL_MS = 15_000;
  *
  * @param sessions - Array of all sessions to track.
  * @param enabled - Whether polling is active (tied to vibesEnabled setting).
+ * @param liveUpdates - Optional map from sessionId → live annotation updates
+ *   from the `useVibesLive` hook. When provided, live counts are merged with
+ *   polled data (higher count wins) for more responsive session list badges.
  */
 export function useVibesSessionIndicators(
 	sessions: Session[],
 	enabled: boolean,
+	liveUpdates?: Map<string, VibesAnnotationUpdate>,
 ): UseVibesSessionIndicatorsReturn {
 	const [indicators, setIndicators] = useState<Map<string, VibesIndicatorData>>(new Map());
 	const [isLoading, setIsLoading] = useState(false);
@@ -149,8 +154,49 @@ export function useVibesSessionIndicators(
 		};
 	}, [enabled, uniquePaths, fetchIndicators]);
 
+	// Merge live annotation counts into indicators (higher count wins).
+	// liveUpdates is keyed by sessionId; we map each session to its project path.
+	const mergedIndicators = useMemo(() => {
+		if (!liveUpdates || liveUpdates.size === 0) {
+			return indicators;
+		}
+
+		// Build a map of projectPath → max live annotation count
+		const liveCountByProject = new Map<string, number>();
+		for (const session of sessions) {
+			const projectPath = session.projectRoot || session.cwd;
+			if (!projectPath) continue;
+
+			const liveData = liveUpdates.get(session.id);
+			if (liveData) {
+				const existing = liveCountByProject.get(projectPath) ?? 0;
+				liveCountByProject.set(
+					projectPath,
+					Math.max(existing, liveData.annotationCount),
+				);
+			}
+		}
+
+		if (liveCountByProject.size === 0) {
+			return indicators;
+		}
+
+		const merged = new Map(indicators);
+		for (const [projectPath, liveCount] of liveCountByProject) {
+			const existing = merged.get(projectPath);
+			if (existing) {
+				// Use the higher count between polled and live data
+				merged.set(projectPath, {
+					...existing,
+					annotationCount: Math.max(existing.annotationCount, liveCount),
+				});
+			}
+		}
+		return merged;
+	}, [indicators, liveUpdates, sessions]);
+
 	return useMemo(
-		() => ({ indicators, isLoading }),
-		[indicators, isLoading],
+		() => ({ indicators: mergedIndicators, isLoading }),
+		[mergedIndicators, isLoading],
 	);
 }

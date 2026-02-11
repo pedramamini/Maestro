@@ -33,6 +33,25 @@ export interface VibesSettingsStore {
 	get<T>(key: string, defaultValue?: T): T;
 }
 
+/** Function type for safely sending IPC messages to the renderer. */
+export type SafeSendFn = (channel: string, ...args: unknown[]) => void;
+
+// ============================================================================
+// Annotation Update Payload
+// ============================================================================
+
+/** Payload for the `vibes:annotation-update` IPC event. */
+export interface VibesAnnotationUpdatePayload {
+	sessionId: string;
+	annotationCount: number;
+	lastAnnotation: {
+		type: string;
+		filePath?: string;
+		action?: string;
+		timestamp: string;
+	};
+}
+
 // ============================================================================
 // Agent-Type-to-Instrumenter Mapping
 // ============================================================================
@@ -78,9 +97,17 @@ export class VibesCoordinator {
 	/** Whether the vibescheck binary missing warning has been logged this session. */
 	private vibesBinaryMissingLogged = false;
 
-	constructor(params: { settingsStore: VibesSettingsStore }) {
+	/** Optional safeSend function for emitting IPC events to the renderer. */
+	private safeSend: SafeSendFn | null = null;
+
+	constructor(params: { settingsStore: VibesSettingsStore; safeSend?: SafeSendFn }) {
 		this.settingsStore = params.settingsStore;
-		this.sessionManager = new VibesSessionManager();
+		this.safeSend = params.safeSend ?? null;
+		this.sessionManager = new VibesSessionManager({
+			onAnnotationRecorded: (sessionId, state) => {
+				this.emitAnnotationUpdate(sessionId, state);
+			},
+		});
 
 		const assuranceLevel = this.getAssuranceLevel();
 
@@ -627,6 +654,44 @@ export class VibesCoordinator {
 			'vibesAutoInit',
 			VIBES_SETTINGS_DEFAULTS.vibesAutoInit,
 		);
+	}
+
+	/**
+	 * Emit a `vibes:annotation-update` IPC event to the renderer whenever
+	 * an annotation is recorded. Wrapped in try-catch so it never interferes
+	 * with annotation recording.
+	 */
+	private emitAnnotationUpdate(
+		sessionId: string,
+		state: {
+			annotationCount: number;
+			lastAnnotation?: VibesAnnotation;
+		},
+	): void {
+		if (!this.safeSend) {
+			return;
+		}
+
+		try {
+			const last = state.lastAnnotation;
+			const payload: VibesAnnotationUpdatePayload = {
+				sessionId,
+				annotationCount: state.annotationCount,
+				lastAnnotation: {
+					type: last?.type ?? 'unknown',
+					filePath: last && 'file_path' in last ? last.file_path : undefined,
+					action: last && 'action' in last ? last.action : undefined,
+					timestamp: last?.timestamp ?? new Date().toISOString(),
+				},
+			};
+			this.safeSend('vibes:annotation-update', payload);
+		} catch (err) {
+			logger.debug(
+				'[VibesCoordinator] Failed to emit annotation-update event',
+				'VibesCoordinator',
+				{ error: String(err) },
+			);
+		}
 	}
 
 	/**

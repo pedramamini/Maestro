@@ -2671,6 +2671,18 @@ interface MaestroAPI {
 		}>;
 		findBinary: (customPath?: string) => Promise<{ path: string | null; version: string | null }>;
 		clearBinaryCache: () => Promise<void>;
+		onAnnotationUpdate: (
+			callback: (payload: {
+				sessionId: string;
+				annotationCount: number;
+				lastAnnotation: {
+					type: string;
+					filePath?: string;
+					action?: string;
+					timestamp: string;
+				};
+			}) => void
+		) => () => void;
 	};
 }
 

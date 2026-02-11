@@ -29,6 +29,8 @@ interface LiveAnnotation {
 interface VibesLiveMonitorProps {
 	theme: Theme;
 	projectPath: string | undefined;
+	/** Optional live annotation count from useVibesLive hook (push-based). */
+	liveAnnotationCount?: number;
 }
 
 // ============================================================================
@@ -140,6 +142,7 @@ function ActionIcon({ action, size = 12 }: { action: string; size?: number }): R
 export const VibesLiveMonitor: React.FC<VibesLiveMonitorProps> = ({
 	theme,
 	projectPath,
+	liveAnnotationCount,
 }) => {
 	const [annotations, setAnnotations] = useState<LiveAnnotation[]>([]);
 	const [totalCount, setTotalCount] = useState<number>(0);
@@ -240,6 +243,21 @@ export const VibesLiveMonitor: React.FC<VibesLiveMonitorProps> = ({
 	// Derived state
 	// ========================================================================
 
+	// Prefer push-based live count when available, fall back to polled totalCount
+	const displayCount = liveAnnotationCount !== undefined ? liveAnnotationCount : totalCount;
+
+	// Auto-scroll and trigger fetch when live count changes
+	useEffect(() => {
+		if (liveAnnotationCount !== undefined && liveAnnotationCount > prevCountRef.current) {
+			prevCountRef.current = liveAnnotationCount;
+			if (feedRef.current) {
+				feedRef.current.scrollTop = feedRef.current.scrollHeight;
+			}
+			// Trigger a fetch to refresh the feed entries
+			fetchLatest();
+		}
+	}, [liveAnnotationCount, fetchLatest]);
+
 	const hasAnnotations = annotations.length > 0;
 	const pulseColor = useMemo(() => {
 		if (!isPolling || !projectPath) return theme.colors.textDim;
@@ -281,7 +299,7 @@ export const VibesLiveMonitor: React.FC<VibesLiveMonitorProps> = ({
 					className="text-[10px] ml-auto tabular-nums"
 					style={{ color: theme.colors.textDim }}
 				>
-					{totalCount} annotation{totalCount !== 1 ? 's' : ''}
+					{displayCount} annotation{displayCount !== 1 ? 's' : ''}
 				</span>
 			</div>
 

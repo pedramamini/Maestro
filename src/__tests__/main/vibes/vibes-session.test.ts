@@ -462,6 +462,103 @@ describe('vibes-session', () => {
 	});
 
 	// ========================================================================
+	// onAnnotationRecorded callback
+	// ========================================================================
+	describe('onAnnotationRecorded callback', () => {
+		it('should invoke callback on session start', async () => {
+			const callback = vi.fn();
+			const mgr = new VibesSessionManager({ onAnnotationRecorded: callback });
+
+			await mgr.startSession('sess-1', tmpDir, 'claude-code', 'medium');
+
+			expect(callback).toHaveBeenCalledTimes(1);
+			expect(callback).toHaveBeenCalledWith('sess-1', {
+				annotationCount: 1,
+				lastAnnotation: expect.objectContaining({
+					type: 'session',
+					event: 'start',
+				}),
+			});
+		});
+
+		it('should invoke callback on session end', async () => {
+			const callback = vi.fn();
+			const mgr = new VibesSessionManager({ onAnnotationRecorded: callback });
+
+			await mgr.startSession('sess-1', tmpDir, 'claude-code', 'medium');
+			callback.mockClear();
+
+			await mgr.endSession('sess-1');
+
+			expect(callback).toHaveBeenCalledTimes(1);
+			expect(callback).toHaveBeenCalledWith('sess-1', {
+				annotationCount: 2,
+				lastAnnotation: expect.objectContaining({
+					type: 'session',
+					event: 'end',
+				}),
+			});
+		});
+
+		it('should invoke callback on recordAnnotation', async () => {
+			const callback = vi.fn();
+			const mgr = new VibesSessionManager({ onAnnotationRecorded: callback });
+
+			await mgr.startSession('sess-1', tmpDir, 'claude-code', 'medium');
+			callback.mockClear();
+
+			const lineAnnotation: VibesLineAnnotation = {
+				type: 'line',
+				file_path: 'src/index.ts',
+				line_start: 1,
+				line_end: 10,
+				environment_hash: 'e'.repeat(64),
+				action: 'create',
+				timestamp: FIXED_ISO,
+				assurance_level: 'medium',
+			};
+
+			await mgr.recordAnnotation('sess-1', lineAnnotation);
+
+			expect(callback).toHaveBeenCalledTimes(1);
+			expect(callback).toHaveBeenCalledWith('sess-1', {
+				annotationCount: 2, // start + line
+				lastAnnotation: lineAnnotation,
+			});
+		});
+
+		it('should not invoke callback for inactive or unknown sessions', async () => {
+			const callback = vi.fn();
+			const mgr = new VibesSessionManager({ onAnnotationRecorded: callback });
+
+			const lineAnnotation: VibesLineAnnotation = {
+				type: 'line',
+				file_path: 'src/index.ts',
+				line_start: 1,
+				line_end: 10,
+				environment_hash: 'e'.repeat(64),
+				action: 'create',
+				timestamp: FIXED_ISO,
+				assurance_level: 'medium',
+			};
+
+			// Unknown session
+			await mgr.recordAnnotation('nonexistent', lineAnnotation);
+			expect(callback).not.toHaveBeenCalled();
+		});
+
+		it('should work without callback (backward compatibility)', async () => {
+			// No callback - should not throw
+			const mgr = new VibesSessionManager();
+			await mgr.startSession('sess-1', tmpDir, 'claude-code', 'medium');
+
+			const state = mgr.getSession('sess-1');
+			expect(state).not.toBeNull();
+			expect(state!.annotationCount).toBe(1);
+		});
+	});
+
+	// ========================================================================
 	// Integration: Full Session Lifecycle
 	// ========================================================================
 	describe('integration', () => {

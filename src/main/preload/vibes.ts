@@ -52,6 +52,21 @@ export interface VibesLogOptions {
 }
 
 /**
+ * Payload for the `vibes:annotation-update` event emitted by the main process
+ * whenever annotations are written. Used by the renderer for live counts.
+ */
+export interface VibesAnnotationUpdatePayload {
+	sessionId: string;
+	annotationCount: number;
+	lastAnnotation: {
+		type: string;
+		filePath?: string;
+		action?: string;
+		timestamp: string;
+	};
+}
+
+/**
  * Creates the VIBES API object for preload exposure.
  */
 export function createVibesApi() {
@@ -97,6 +112,20 @@ export function createVibesApi() {
 
 		clearBinaryCache: (): Promise<void> =>
 			ipcRenderer.invoke('vibes:clearBinaryCache'),
+
+		/**
+		 * Subscribe to live annotation update events from the main process.
+		 * Emitted whenever the VibesCoordinator records an annotation.
+		 * Returns a cleanup function to unsubscribe.
+		 */
+		onAnnotationUpdate: (
+			callback: (payload: VibesAnnotationUpdatePayload) => void,
+		): (() => void) => {
+			const handler = (_: unknown, payload: VibesAnnotationUpdatePayload) =>
+				callback(payload);
+			ipcRenderer.on('vibes:annotation-update', handler);
+			return () => ipcRenderer.removeListener('vibes:annotation-update', handler);
+		},
 	};
 }
 

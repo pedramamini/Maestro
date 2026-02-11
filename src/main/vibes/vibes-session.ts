@@ -41,6 +41,12 @@ export interface VibesSessionState {
 // Session Manager
 // ============================================================================
 
+/** Callback invoked when an annotation is recorded for a session. */
+export type OnAnnotationRecordedFn = (
+	sessionId: string,
+	state: { annotationCount: number; lastAnnotation?: VibesAnnotation },
+) => void;
+
 /**
  * Manages VIBES session lifecycle and annotation recording for agent sessions.
  * Each Maestro agent session maps to one VibesSessionState. The manager
@@ -48,6 +54,11 @@ export interface VibesSessionState {
  */
 export class VibesSessionManager {
 	private sessions: Map<string, VibesSessionState> = new Map();
+	private onAnnotationRecorded: OnAnnotationRecordedFn | null = null;
+
+	constructor(params?: { onAnnotationRecorded?: OnAnnotationRecordedFn }) {
+		this.onAnnotationRecorded = params?.onAnnotationRecorded ?? null;
+	}
 
 	/**
 	 * Start a new VIBES session for an agent.
@@ -86,6 +97,10 @@ export class VibesSessionManager {
 		});
 		await appendAnnotation(projectPath, startRecord);
 		state.annotationCount++;
+		this.onAnnotationRecorded?.(sessionId, {
+			annotationCount: state.annotationCount,
+			lastAnnotation: startRecord,
+		});
 
 		return state;
 	}
@@ -109,6 +124,10 @@ export class VibesSessionManager {
 		});
 		await appendAnnotation(state.projectPath, endRecord);
 		state.annotationCount++;
+		this.onAnnotationRecorded?.(sessionId, {
+			annotationCount: state.annotationCount,
+			lastAnnotation: endRecord,
+		});
 
 		state.isActive = false;
 	}
@@ -141,6 +160,10 @@ export class VibesSessionManager {
 
 		await appendAnnotation(state.projectPath, annotation);
 		state.annotationCount++;
+		this.onAnnotationRecorded?.(sessionId, {
+			annotationCount: state.annotationCount,
+			lastAnnotation: annotation,
+		});
 	}
 
 	/**

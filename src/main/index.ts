@@ -297,7 +297,7 @@ app.whenReady().then(async () => {
 	// The coordinator subscribes to ProcessManager events to capture VIBES annotations.
 	// It respects the vibesEnabled setting — does nothing when disabled.
 	try {
-		vibesCoordinator = new VibesCoordinator({ settingsStore: store });
+		vibesCoordinator = new VibesCoordinator({ settingsStore: store, safeSend });
 		vibesCoordinator.attachToProcessManager(processManager);
 		logger.info('VIBES coordinator initialized', 'Startup', {
 			enabled: vibesCoordinator.isEnabled(),

@@ -6,14 +6,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 // Hoist mock for ipcRenderer
-const { mockInvoke } = vi.hoisted(() => ({
+const { mockInvoke, mockOn, mockRemoveListener } = vi.hoisted(() => ({
 	mockInvoke: vi.fn(),
+	mockOn: vi.fn(),
+	mockRemoveListener: vi.fn(),
 }));
 
 // Mock electron
 vi.mock('electron', () => ({
 	ipcRenderer: {
 		invoke: mockInvoke,
+		on: mockOn,
+		removeListener: mockRemoveListener,
 	},
 }));
 
@@ -42,10 +46,11 @@ describe('vibes preload API', () => {
 			expect(api).toHaveProperty('build');
 			expect(api).toHaveProperty('findBinary');
 			expect(api).toHaveProperty('clearBinaryCache');
+			expect(api).toHaveProperty('onAnnotationUpdate');
 		});
 
-		it('should have exactly 12 methods', () => {
-			expect(Object.keys(api)).toHaveLength(12);
+		it('should have exactly 13 methods', () => {
+			expect(Object.keys(api)).toHaveLength(13);
 		});
 	});
 
@@ -224,6 +229,55 @@ describe('vibes preload API', () => {
 			await api.clearBinaryCache();
 
 			expect(mockInvoke).toHaveBeenCalledWith('vibes:clearBinaryCache');
+		});
+	});
+
+	describe('onAnnotationUpdate', () => {
+		it('should register a listener on vibes:annotation-update channel', () => {
+			const callback = vi.fn();
+
+			api.onAnnotationUpdate(callback);
+
+			expect(mockOn).toHaveBeenCalledWith('vibes:annotation-update', expect.any(Function));
+		});
+
+		it('should return a cleanup function that removes the listener', () => {
+			const callback = vi.fn();
+
+			const cleanup = api.onAnnotationUpdate(callback);
+			cleanup();
+
+			expect(mockRemoveListener).toHaveBeenCalledWith(
+				'vibes:annotation-update',
+				expect.any(Function),
+			);
+		});
+
+		it('should forward the payload to the callback (unwrapping the event arg)', () => {
+			const callback = vi.fn();
+			let registeredHandler: (event: unknown, payload: unknown) => void;
+
+			mockOn.mockImplementation((_channel: string, handler: (event: unknown, payload: unknown) => void) => {
+				registeredHandler = handler;
+			});
+
+			api.onAnnotationUpdate(callback);
+
+			const payload = {
+				sessionId: 'sess-1',
+				annotationCount: 5,
+				lastAnnotation: {
+					type: 'line',
+					filePath: '/test.ts',
+					action: 'create',
+					timestamp: '2026-02-10T12:00:00.000Z',
+				},
+			};
+
+			// Simulate IPC event (first arg is the IPC event, second is the payload)
+			registeredHandler!(null, payload);
+
+			expect(callback).toHaveBeenCalledWith(payload);
 		});
 	});
 });
