@@ -242,11 +242,11 @@ describe('app-lifecycle/window-manager', () => {
 				expect(result).toBeInstanceOf(MockBrowserWindow);
 			});
 
-			it('repositions off-screen windows onto the primary display', async () => {
-				mockWindowStateStore.store.multiWindowState.windows[0].x = 4000;
-				mockWindowStateStore.store.multiWindowState.windows[0].y = 2500;
+		it('repositions off-screen windows onto the primary display', async () => {
+			mockWindowStateStore.store.multiWindowState.windows[0].x = 4000;
+			mockWindowStateStore.store.multiWindowState.windows[0].y = 2500;
 
-				const { createWindowManager } = await import('../../../main/app-lifecycle/window-manager');
+			const { createWindowManager } = await import('../../../main/app-lifecycle/window-manager');
 
 				const windowManager = createWindowManager({
 					windowStateStore: mockWindowStateStore as unknown as Parameters<
@@ -258,13 +258,80 @@ describe('app-lifecycle/window-manager', () => {
 					devServerUrl: 'http://localhost:5173',
 				});
 
-				windowManager.createWindow();
+			windowManager.createWindow();
 
-				expect(lastBrowserWindowOptions?.x).toBe(260);
-				expect(lastBrowserWindowOptions?.y).toBe(90);
-				expect(lastBrowserWindowOptions?.width).toBe(1400);
-				expect(lastBrowserWindowOptions?.height).toBe(900);
+			expect(lastBrowserWindowOptions?.x).toBe(260);
+			expect(lastBrowserWindowOptions?.y).toBe(90);
+			expect(lastBrowserWindowOptions?.width).toBe(1400);
+			expect(lastBrowserWindowOptions?.height).toBe(900);
+		});
+
+		it('centers windows on their preferred secondary display when available', async () => {
+			const secondaryDisplay = {
+				id: 42,
+				workArea: { x: 1920, y: 0, width: 2560, height: 1440 },
+				bounds: { x: 1920, y: 0, width: 2560, height: 1440 },
+			};
+			const savedWindow = mockWindowStateStore.store.multiWindowState.windows[0];
+			savedWindow.x = 9000;
+			savedWindow.y = 9000;
+			savedWindow.displayId = secondaryDisplay.id;
+			mockGetDisplayMatching.mockReturnValue(defaultDisplay);
+			mockGetAllDisplays.mockReturnValue([defaultDisplay, secondaryDisplay]);
+
+			const { createWindowManager } = await import('../../../main/app-lifecycle/window-manager');
+			const windowManager = createWindowManager({
+				windowStateStore: mockWindowStateStore as unknown as Parameters<
+					typeof createWindowManager
+				>[0]['windowStateStore'],
+				isDevelopment: false,
+				preloadPath: '/path/to/preload.js',
+				rendererPath: '/path/to/index.html',
+				devServerUrl: 'http://localhost:5173',
 			});
+
+			windowManager.createWindow();
+
+			const expectedX =
+				secondaryDisplay.workArea.x +
+				Math.round((secondaryDisplay.workArea.width - savedWindow.width) / 2);
+			const expectedY =
+				secondaryDisplay.workArea.y +
+				Math.round((secondaryDisplay.workArea.height - savedWindow.height) / 2);
+			expect(lastBrowserWindowOptions?.x).toBe(expectedX);
+			expect(lastBrowserWindowOptions?.y).toBe(expectedY);
+		});
+
+		it('falls back to the primary display when the saved monitor is missing', async () => {
+			const savedWindow = mockWindowStateStore.store.multiWindowState.windows[0];
+			savedWindow.x = 7500;
+			savedWindow.y = 4800;
+			savedWindow.displayId = 777;
+			mockGetDisplayMatching.mockReturnValue(defaultDisplay);
+			mockGetAllDisplays.mockReturnValue([defaultDisplay]);
+
+			const { createWindowManager } = await import('../../../main/app-lifecycle/window-manager');
+			const windowManager = createWindowManager({
+				windowStateStore: mockWindowStateStore as unknown as Parameters<
+					typeof createWindowManager
+				>[0]['windowStateStore'],
+				isDevelopment: false,
+				preloadPath: '/path/to/preload.js',
+				rendererPath: '/path/to/index.html',
+				devServerUrl: 'http://localhost:5173',
+			});
+
+			windowManager.createWindow();
+
+			const expectedX =
+				defaultDisplay.workArea.x +
+				Math.round((defaultDisplay.workArea.width - savedWindow.width) / 2);
+			const expectedY =
+				defaultDisplay.workArea.y +
+				Math.round((defaultDisplay.workArea.height - savedWindow.height) / 2);
+			expect(lastBrowserWindowOptions?.x).toBe(expectedX);
+			expect(lastBrowserWindowOptions?.y).toBe(expectedY);
+		});
 
 		it('should maximize window if saved state is maximized', async () => {
 			mockWindowStateStore.store.multiWindowState.windows[0].isMaximized = true;

@@ -1,22 +1,21 @@
 import { beforeEach, describe, expect, it, vi, afterEach } from 'vitest';
 import type { BrowserWindow } from 'electron';
-
 import { WindowRegistry } from '../../main/window-registry';
 import type { WindowState as PersistedWindowState } from '../../shared/types/window';
 
 const defaultDisplay = {
 	id: 1,
-	bounds: { x: 0, y: 0, width: 1920, height: 1080 },
 	workArea: { x: 0, y: 0, width: 1920, height: 1080 },
+	bounds: { x: 0, y: 0, width: 1920, height: 1080 },
 };
 
 const mockGetDisplayMatching = vi.fn().mockReturnValue(defaultDisplay);
 
 vi.mock('electron', () => ({
-	BrowserWindow: class MockBrowserWindow {},
 	screen: {
 		getDisplayMatching: (...args: unknown[]) => mockGetDisplayMatching(...args),
 	},
+	BrowserWindow: class MockBrowserWindow {},
 }));
 
 interface MockStore {
