@@ -36,6 +36,8 @@ export interface ProcessConfig {
 	sendPromptViaStdinRaw?: boolean;
 	/** Script to send via stdin for SSH execution (bypasses shell escaping) */
 	sshStdinScript?: string;
+	/** If true, spawn as interactive AI in PTY (full TUI, no --print) */
+	isInteractiveAI?: boolean;
 }
 
 /**
@@ -74,6 +76,8 @@ export interface ManagedProcess {
 	sshRemoteHost?: string;
 	dataBuffer?: string;
 	dataBufferTimeout?: NodeJS.Timeout;
+	/** If true, this is an interactive AI session (full TUI in PTY, no --print) */
+	isInteractiveAI?: boolean;
 }
 
 export interface UsageTotals {

@@ -2606,6 +2606,35 @@ interface MaestroAPI {
 			};
 		}) => Promise<string | null>;
 	};
+
+	// Granola meeting transcript integration (reads local cache)
+	granola: {
+		getDocuments: (limit?: number) => Promise<{
+			success: true;
+			data: Array<{
+				id: string;
+				title: string;
+				createdAt: number;
+				participants: string[];
+				hasTranscript: boolean;
+			}>;
+			cacheAge?: number;
+		} | {
+			success: false;
+			error: 'not_installed' | 'cache_not_found' | 'cache_parse_error';
+		}>;
+		getTranscript: (documentId: string) => Promise<{
+			success: true;
+			data: {
+				documentId: string;
+				plainText: string;
+			};
+			cacheAge?: number;
+		} | {
+			success: false;
+			error: 'not_installed' | 'cache_not_found' | 'cache_parse_error';
+		}>;
+	};
 }
 
 declare global {

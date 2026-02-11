@@ -26,6 +26,7 @@ import {
 } from 'lucide-react';
 import { LogViewer } from './LogViewer';
 import { TerminalOutput } from './TerminalOutput';
+import { XtermTerminal } from './XtermTerminal';
 import { InputArea } from './InputArea';
 import { FilePreview, FilePreviewHandle } from './FilePreview';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -1740,6 +1741,14 @@ export const MainPanel = React.memo(
 												(activeTab.wizardState.generatedDocuments?.length ?? 0) > 0
 											}
 										/>
+									) : activeSession.isInteractiveAI ? (
+										<XtermTerminal
+											key={`xterm-${activeSession.id}-${activeSession.activeTabId}`}
+											sessionId={activeSession.id}
+											tabId={activeSession.activeTabId}
+											theme={theme}
+											fontFamily={props.fontFamily}
+										/>
 									) : (
 										<TerminalOutput
 											key={`${activeSession.id}-${activeSession.activeTabId}`}
@@ -1788,8 +1797,8 @@ export const MainPanel = React.memo(
 									)}
 								</div>
 
-								{/* Input Area (hidden in mobile landscape for focused reading, and during wizard doc generation) */}
-								{!isMobileLandscape && !activeTab?.wizardState?.isGeneratingDocs && (
+								{/* Input Area (hidden in mobile landscape, during wizard doc generation, and for interactive AI sessions) */}
+								{!isMobileLandscape && !activeTab?.wizardState?.isGeneratingDocs && !activeSession.isInteractiveAI && (
 									<div data-tour="input-area">
 										<InputArea
 											session={activeSession}

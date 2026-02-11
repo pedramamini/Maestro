@@ -50,7 +50,7 @@ import type { AgentError } from '../../shared/types';
 
 export type SessionState = 'idle' | 'busy' | 'waiting_input' | 'connecting' | 'error';
 export type FileChangeType = 'modified' | 'added' | 'deleted';
-export type RightPanelTab = 'files' | 'history' | 'autorun';
+export type RightPanelTab = 'files' | 'history' | 'autorun' | 'granola';
 export type SettingsTab = 'general' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands';
 // Note: ScratchPadMode was removed as part of the Scratchpad → Auto Run migration
 export type FocusArea = 'sidebar' | 'main' | 'right';
@@ -705,6 +705,10 @@ export interface Session {
 
 	// Symphony contribution metadata (only set for Symphony sessions)
 	symphonyMetadata?: SymphonySessionMetadata;
+
+	// Interactive AI mode - when true, session runs a fully interactive PTY (e.g., Claude Code TUI)
+	// Output is raw ANSI rendered as terminal, not parsed markdown
+	isInteractiveAI?: boolean;
 }
 
 export interface AgentConfigOption {

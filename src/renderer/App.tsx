@@ -2002,6 +2002,12 @@ function MaestroConsoleInner() {
 			// Filter out empty stdout for terminal commands (AI output should pass through)
 			if (!isFromAi && !data.trim()) return;
 
+			// Skip log processing for interactive AI sessions (xterm.js handles rendering directly)
+			if (isFromAi) {
+				const session = sessionsRef.current.find((s) => s.id === actualSessionId);
+				if (session?.isInteractiveAI) return;
+			}
+
 			// For terminal output, use batched append to shell logs
 			if (!isFromAi) {
 				batchedUpdater.appendLog(actualSessionId, null, false, data);
@@ -9522,6 +9528,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 				customProviderPath,
 				// Per-session SSH remote config (takes precedence over agent-level SSH config)
 				sessionSshRemoteConfig,
+				// Interactive AI mode: Claude Code runs as interactive PTY (full TUI)
+				// Only for local sessions (SSH deferred to future work)
+				isInteractiveAI: agentId === 'claude-code' && !isRemoteSession,
 			};
 			setSessions((prev) => [...prev, newSession]);
 			setActiveSessionId(newId);
@@ -9535,6 +9544,38 @@ You are taking over this conversation. Based on the context above, provide a bri
 				createdAt: Date.now(),
 				isRemote: !!isRemoteSession,
 			});
+			// For interactive AI sessions, spawn the PTY immediately (no prompt needed)
+			// The user will type into the running Claude Code TUI
+			if (agentId === 'claude-code' && !isRemoteSession) {
+				const agent = await window.maestro.agents.get(agentId);
+				if (agent) {
+					const commandToUse = agent.path || agent.command;
+					const targetSessionId = `${newId}-ai-${initialTabId}`;
+					window.maestro.process
+						.spawn({
+							sessionId: targetSessionId,
+							toolType: agentId,
+							cwd: workingDir,
+							command: commandToUse,
+							args: agent.args ?? [],
+							// No prompt - interactive mode
+							sessionCustomPath: customPath,
+							sessionCustomArgs: customArgs,
+							sessionCustomEnvVars: customEnvVars,
+							sessionCustomModel: customModel,
+							sessionCustomContextWindow: customContextWindow,
+						})
+						.then((result) => {
+							if (result.success) {
+								setSessions((prev) =>
+									prev.map((s) => (s.id === newId ? { ...s, aiPid: result.pid } : s))
+								);
+							}
+						})
+						.catch((err) => console.error('Failed to spawn interactive AI:', err));
+				}
+			}
+
 			// Auto-focus the input so user can start typing immediately
 			// Use a small delay to ensure the modal has closed and the UI has updated
 			setActiveFocus('main');
@@ -13440,6 +13481,50 @@ You are taking over this conversation. Based on the context above, provide a bri
 		sidebarContainerRef,
 	});
 
+	// Granola transcript injection handler
+	// Use ref to avoid unstable activeSession object in useCallback deps
+	const activeSessionRef = useRef(activeSession);
+	activeSessionRef.current = activeSession;
+
+	const handleInjectTranscript = useCallback(
+		(title: string, plainText: string) => {
+			const session = activeSessionRef.current;
+			if (!session) return;
+
+			// Sanitize: strip C0/C1 control characters to prevent PTY escape sequence injection.
+			// Keeps safe whitespace (\n \r \t). Strips ESC, BEL, BS, DEL, and C1 codes (U+0080-009F).
+			const stripControl = (s: string) =>
+				s.replace(/[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]|\xc2[\x80-\x9f]/g, '');
+			const safeTitle = stripControl(title);
+			const safeText = stripControl(plainText);
+			const contextText = `[Meeting transcript from "${safeTitle}"]\n\n${safeText}`;
+
+			if (session.isInteractiveAI) {
+				// Write directly to the interactive PTY with bracketed paste
+				const activeTabId = session.activeTabId || session.aiTabs?.[0]?.id;
+				if (activeTabId) {
+					const targetSessionId = `${session.id}-ai-${activeTabId}`;
+					const wrapped = `\x1b[200~${contextText}\x1b[201~\n`;
+					window.maestro.process.write(targetSessionId, wrapped);
+				}
+			} else {
+				// For batch mode sessions, update the input field with the context
+				setSessions((prev) =>
+					prev.map((s) => {
+						if (s.id !== session.id) return s;
+						const tabs = (s.aiTabs || []).map((tab) =>
+							tab.id === (s.activeTabId || s.aiTabs?.[0]?.id)
+								? { ...tab, inputValue: contextText + '\n\n' + (tab.inputValue || '') }
+								: tab
+						);
+						return { ...s, aiTabs: tabs };
+					})
+				);
+			}
+		},
+		[setSessions]
+	);
+
 	const rightPanelProps = useRightPanelProps({
 		// Session & Theme
 		activeSession,
@@ -13530,6 +13615,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 		// Document Graph handlers
 		handleFocusFileInGraph,
 		handleOpenLastDocumentGraph,
+
+		// Granola handlers
+		handleInjectTranscript,
 	});
 
 	return (
