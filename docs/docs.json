@@ -77,6 +77,7 @@
             "group": "Providers & CLI",
             "pages": [
               "provider-notes",
+              "multi-claude",
               "cli"
             ]
           },

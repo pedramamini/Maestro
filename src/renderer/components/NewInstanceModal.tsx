@@ -657,7 +657,7 @@ export function NewInstanceModal({
 				title="Create New Agent"
 				priority={MODAL_PRIORITIES.NEW_INSTANCE}
 				onClose={onClose}
-				width={500}
+				width={600}
 				initialFocusRef={nameInputRef}
 				footer={
 					<ModalFooter
@@ -1509,7 +1509,7 @@ export function EditAgentModal({
 				title={`Edit Agent: ${session.name}`}
 				priority={MODAL_PRIORITIES.NEW_INSTANCE}
 				onClose={onClose}
-				width={500}
+				width={600}
 				initialFocusRef={nameInputRef}
 				customHeader={
 					<div
