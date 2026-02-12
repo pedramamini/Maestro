@@ -625,6 +625,88 @@ export async function initVibesDirectly(
 }
 
 // ============================================================================
+// Commit Hash Backfill
+// ============================================================================
+
+/**
+ * Backfill `commit_hash` on annotations that are missing it.
+ * Reads all annotations, updates matching records, and rewrites the file
+ * atomically. Uses the per-project lock for serialization.
+ *
+ * @param projectPath  Absolute path to the project root.
+ * @param commitHash   The git commit hash to set on matching annotations.
+ * @param sessionId    Optional session ID filter — when provided, only
+ *                     annotations whose `session_id` matches are updated.
+ * @returns The number of annotations that were updated.
+ */
+export async function backfillCommitHash(
+	projectPath: string,
+	commitHash: string,
+	sessionId?: string,
+): Promise<number> {
+	// Flush any pending buffered annotations first so we operate on
+	// the complete set of annotations on disk.
+	await flushAnnotationBuffer(projectPath);
+
+	let updatedCount = 0;
+
+	await withProjectLock(projectPath, async () => {
+		const annotationsPath = path.join(projectPath, AUDIT_DIR, ANNOTATIONS_FILE);
+
+		let raw: string;
+		try {
+			await access(annotationsPath, constants.F_OK);
+			raw = await readFile(annotationsPath, 'utf8');
+		} catch {
+			// No annotations file — nothing to backfill
+			return;
+		}
+
+		const lines = raw.split('\n');
+		const updatedLines: string[] = [];
+		let changed = false;
+
+		for (const line of lines) {
+			if (line.trim().length === 0) {
+				updatedLines.push(line);
+				continue;
+			}
+
+			try {
+				const annotation = JSON.parse(line) as VibesAnnotation;
+
+				// Only backfill line and function annotations (they have commit_hash)
+				if (annotation.type === 'line' || annotation.type === 'function') {
+					const hasCommitHash = 'commit_hash' in annotation && annotation.commit_hash;
+					const matchesSession = !sessionId || (
+						'session_id' in annotation && annotation.session_id === sessionId
+					);
+
+					if (!hasCommitHash && matchesSession) {
+						(annotation as any).commit_hash = commitHash;
+						updatedLines.push(JSON.stringify(annotation));
+						updatedCount++;
+						changed = true;
+						continue;
+					}
+				}
+
+				updatedLines.push(line);
+			} catch {
+				// Preserve malformed lines as-is
+				updatedLines.push(line);
+			}
+		}
+
+		if (changed) {
+			await atomicWriteFile(annotationsPath, updatedLines.join('\n'));
+		}
+	});
+
+	return updatedCount;
+}
+
+// ============================================================================
 // Buffer Inspection (Testing)
 // ============================================================================
 

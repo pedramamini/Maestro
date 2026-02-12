@@ -8,6 +8,7 @@ import * as path from 'path';
 import * as os from 'os';
 
 import type { VibesAssuranceLevel } from '../../shared/vibes-types';
+import { backfillCommitHash } from './vibes-io';
 
 const execFileAsync = promisify(execFile);
 
@@ -413,4 +414,50 @@ export async function vibesModels(
 		return { success: false, error: result.stderr || `Exit code ${result.exitCode}` };
 	}
 	return { success: true, data: result.stdout };
+}
+
+/**
+ * Backfill `commit_hash` on annotations that are missing it.
+ *
+ * Attempts to run `vibescheck backfill-commit --hash <commit> [--session <sessionId>]`
+ * if the binary is available and supports the command. Falls back to the direct
+ * `backfillCommitHash()` implementation from vibes-io when the binary is not
+ * found or the command is unsupported.
+ *
+ * @returns The number of annotations updated.
+ */
+export async function vibesBackfillCommit(
+	projectPath: string,
+	commitHash: string,
+	sessionId?: string,
+	customBinaryPath?: string,
+): Promise<{ success: boolean; updatedCount: number; error?: string }> {
+	// Try vibescheck binary first
+	const binaryPath = await findVibesCheckBinary(customBinaryPath);
+	if (binaryPath) {
+		const args = ['backfill-commit', '--hash', commitHash];
+		if (sessionId) {
+			args.push('--session', sessionId);
+		}
+
+		const result = await execVibesCheck(binaryPath, args, projectPath);
+		if (result.exitCode === 0) {
+			// Parse count from stdout if available (e.g. "Updated 5 annotations")
+			const match = result.stdout.match(/(\d+)/);
+			const count = match ? parseInt(match[1], 10) : 0;
+			return { success: true, updatedCount: count };
+		}
+
+		// If the binary doesn't support the command (e.g. exit code 1 with
+		// "unknown command"), fall through to the direct implementation.
+	}
+
+	// Fallback: direct implementation via vibes-io
+	try {
+		const count = await backfillCommitHash(projectPath, commitHash, sessionId);
+		return { success: true, updatedCount: count };
+	} catch (err) {
+		const errMsg = err instanceof Error ? err.message : String(err);
+		return { success: false, updatedCount: 0, error: errMsg };
+	}
 }

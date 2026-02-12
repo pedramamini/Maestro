@@ -13,7 +13,7 @@ import { CodexInstrumenter } from './instrumenters/codex-instrumenter';
 import { MaestroInstrumenter } from './instrumenters/maestro-instrumenter';
 import { createEnvironmentEntry } from './vibes-annotations';
 import { isVibesInitialized, vibesInit, findVibesCheckBinary } from './vibes-bridge';
-import { initVibesDirectly } from './vibes-io';
+import { initVibesDirectly, backfillCommitHash } from './vibes-io';
 import {
 	VIBES_SETTINGS_DEFAULTS,
 	getVibesSettingWithDefault,
@@ -371,6 +371,62 @@ export class VibesCoordinator {
 				'VibesCoordinator',
 				{ sessionId, error: String(err) },
 			);
+		}
+	}
+
+	// ========================================================================
+	// Git Commit Integration
+	// ========================================================================
+
+	/**
+	 * Called when a git commit occurs in a project.
+	 * Backfills `commit_hash` on annotations that are missing it.
+	 * Targets the most recent active session for the given project path,
+	 * or uses the provided sessionId if given.
+	 *
+	 * Can be wired up to git post-commit hooks or triggered via IPC.
+	 *
+	 * @returns The number of annotations updated.
+	 */
+	async handleGitCommit(
+		projectPath: string,
+		commitHash: string,
+		sessionId?: string,
+	): Promise<number> {
+		if (!this.isEnabled()) {
+			return 0;
+		}
+
+		// If no sessionId provided, find the most recent active session for this project
+		let targetSessionId = sessionId;
+		if (!targetSessionId) {
+			const sessionManager = this.getSessionManager();
+			for (const [sessId, agentType] of this.sessionAgentTypes) {
+				const state = sessionManager.getSession(sessId);
+				if (state && state.isActive && state.projectPath === projectPath) {
+					targetSessionId = state.vibesSessionId;
+					break;
+				}
+			}
+		}
+
+		try {
+			const count = await backfillCommitHash(projectPath, commitHash, targetSessionId);
+			if (count > 0) {
+				logger.info(
+					'[VibesCoordinator] Backfilled commit_hash on annotations',
+					'VibesCoordinator',
+					{ projectPath, commitHash, updatedCount: count },
+				);
+			}
+			return count;
+		} catch (err) {
+			logger.warn(
+				'[VibesCoordinator] Failed to backfill commit_hash',
+				'VibesCoordinator',
+				{ projectPath, commitHash, error: String(err) },
+			);
+			return 0;
 		}
 	}
 

@@ -33,6 +33,7 @@ import {
 	vibesReport,
 	vibesSessions,
 	vibesModels,
+	vibesBackfillCommit,
 } from '../../vibes/vibes-bridge';
 import type { VibesAssuranceLevel } from '../../../shared/vibes-types';
 
@@ -214,4 +215,23 @@ export function registerVibesHandlers(deps: VibesHandlerDependencies): void {
 	ipcMain.handle('vibes:clearBinaryCache', async () => {
 		clearBinaryPathCache();
 	});
+
+	// Backfill commit_hash on annotations missing it
+	ipcMain.handle(
+		'vibes:backfillCommit',
+		async (
+			_event,
+			projectPath: string,
+			commitHash: string,
+			sessionId?: string,
+		) => {
+			try {
+				const customPath = getCustomBinaryPath(settingsStore);
+				return await vibesBackfillCommit(projectPath, commitHash, sessionId, customPath);
+			} catch (error) {
+				logger.error('backfillCommit error', LOG_CONTEXT, { error: String(error) });
+				return { success: false, updatedCount: 0, error: String(error) };
+			}
+		},
+	);
 }

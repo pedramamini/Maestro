@@ -20,6 +20,7 @@ const {
 	mockVibesReport,
 	mockVibesSessions,
 	mockVibesModels,
+	mockVibesBackfillCommit,
 	mockIpcMainHandle,
 } = vi.hoisted(() => ({
 	mockFindBinary: vi.fn(),
@@ -35,6 +36,7 @@ const {
 	mockVibesReport: vi.fn(),
 	mockVibesSessions: vi.fn(),
 	mockVibesModels: vi.fn(),
+	mockVibesBackfillCommit: vi.fn(),
 	mockIpcMainHandle: vi.fn(),
 }));
 
@@ -60,6 +62,7 @@ vi.mock('../../../main/vibes/vibes-bridge', () => ({
 	vibesReport: mockVibesReport,
 	vibesSessions: mockVibesSessions,
 	vibesModels: mockVibesModels,
+	vibesBackfillCommit: mockVibesBackfillCommit,
 }));
 
 // Mock logger
@@ -99,8 +102,8 @@ describe('vibes-handlers', () => {
 	});
 
 	describe('handler registration', () => {
-		it('should register all 12 VIBES IPC handlers', () => {
-			expect(mockIpcMainHandle).toHaveBeenCalledTimes(12);
+		it('should register all 13 VIBES IPC handlers', () => {
+			expect(mockIpcMainHandle).toHaveBeenCalledTimes(13);
 		});
 
 		it('should register handlers with correct channel names', () => {
@@ -117,6 +120,7 @@ describe('vibes-handlers', () => {
 				'vibes:build',
 				'vibes:findBinary',
 				'vibes:clearBinaryCache',
+				'vibes:backfillCommit',
 			];
 			for (const channel of expectedChannels) {
 				expect(handlers[channel]).toBeDefined();
@@ -360,6 +364,43 @@ describe('vibes-handlers', () => {
 		it('should call clearBinaryPathCache', async () => {
 			await handlers['vibes:clearBinaryCache']({});
 			expect(mockClearCache).toHaveBeenCalled();
+		});
+	});
+
+	describe('vibes:backfillCommit', () => {
+		it('should call vibesBackfillCommit with project path, commit hash, and session id', async () => {
+			mockVibesBackfillCommit.mockResolvedValue({ success: true, updatedCount: 5 });
+
+			const result = await handlers['vibes:backfillCommit']({}, '/project', 'abc123', 'sess-1');
+
+			expect(mockVibesBackfillCommit).toHaveBeenCalledWith('/project', 'abc123', 'sess-1', undefined);
+			expect(result).toEqual({ success: true, updatedCount: 5 });
+		});
+
+		it('should work without session id', async () => {
+			mockVibesBackfillCommit.mockResolvedValue({ success: true, updatedCount: 3 });
+
+			const result = await handlers['vibes:backfillCommit']({}, '/project', 'def456');
+
+			expect(mockVibesBackfillCommit).toHaveBeenCalledWith('/project', 'def456', undefined, undefined);
+			expect(result).toEqual({ success: true, updatedCount: 3 });
+		});
+
+		it('should return error on failure', async () => {
+			mockVibesBackfillCommit.mockRejectedValue(new Error('backfill failed'));
+
+			const result = await handlers['vibes:backfillCommit']({}, '/project', 'abc123');
+
+			expect(result).toEqual({ success: false, updatedCount: 0, error: 'Error: backfill failed' });
+		});
+
+		it('should use custom binary path from settings', async () => {
+			mockSettingsStore.get.mockReturnValue('/custom/vibescheck');
+			mockVibesBackfillCommit.mockResolvedValue({ success: true, updatedCount: 1 });
+
+			await handlers['vibes:backfillCommit']({}, '/project', 'abc123', 'sess-1');
+
+			expect(mockVibesBackfillCommit).toHaveBeenCalledWith('/project', 'abc123', 'sess-1', '/custom/vibescheck');
 		});
 	});
 

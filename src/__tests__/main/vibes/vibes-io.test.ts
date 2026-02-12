@@ -28,6 +28,7 @@ import {
 	resetAllBuffers,
 	initVibesDirectly,
 	writeReasoningBlob,
+	backfillCommitHash,
 } from '../../../main/vibes/vibes-io';
 
 import type {
@@ -1032,6 +1033,109 @@ describe('vibes-io', () => {
 			expect(lines).toHaveLength(2);
 			expect(JSON.parse(lines[0])).toEqual(SAMPLE_LINE_ANNOTATION);
 			expect(JSON.parse(lines[1])).toEqual(SAMPLE_SESSION_RECORD);
+		});
+	});
+
+	// ========================================================================
+	// backfillCommitHash (GAP 1 fix)
+	// ========================================================================
+	describe('backfillCommitHash', () => {
+		it('backfills commit_hash on annotations missing it', async () => {
+			const annotation1: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				session_id: 'sess-1',
+			};
+			const annotation2: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				line_start: 20,
+				line_end: 30,
+				session_id: 'sess-1',
+			};
+			await appendAnnotation(tmpDir, annotation1);
+			await appendAnnotation(tmpDir, annotation2);
+			await flushAll();
+
+			const count = await backfillCommitHash(tmpDir, 'abc123commit');
+
+			expect(count).toBe(2);
+			const annotations = await readAnnotations(tmpDir);
+			expect(annotations).toHaveLength(2);
+			expect((annotations[0] as VibesLineAnnotation).commit_hash).toBe('abc123commit');
+			expect((annotations[1] as VibesLineAnnotation).commit_hash).toBe('abc123commit');
+		});
+
+		it('only backfills annotations matching the given session_id', async () => {
+			const annotation1: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				session_id: 'sess-1',
+			};
+			const annotation2: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				line_start: 20,
+				line_end: 30,
+				session_id: 'sess-2',
+			};
+			await appendAnnotation(tmpDir, annotation1);
+			await appendAnnotation(tmpDir, annotation2);
+			await flushAll();
+
+			const count = await backfillCommitHash(tmpDir, 'abc123commit', 'sess-1');
+
+			expect(count).toBe(1);
+			const annotations = await readAnnotations(tmpDir);
+			expect((annotations[0] as VibesLineAnnotation).commit_hash).toBe('abc123commit');
+			expect((annotations[1] as VibesLineAnnotation).commit_hash).toBeUndefined();
+		});
+
+		it('returns count of updated annotations', async () => {
+			await appendAnnotation(tmpDir, SAMPLE_LINE_ANNOTATION);
+			await appendAnnotation(tmpDir, SAMPLE_FUNCTION_ANNOTATION);
+			await appendAnnotation(tmpDir, SAMPLE_SESSION_RECORD);
+			await flushAll();
+
+			const count = await backfillCommitHash(tmpDir, 'def456commit');
+
+			// line and function annotations are updated; session records are not
+			expect(count).toBe(2);
+		});
+
+		it('does not modify annotations that already have commit_hash', async () => {
+			const annotationWithHash: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				commit_hash: 'existing-hash',
+			};
+			const annotationWithoutHash: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				line_start: 20,
+				line_end: 30,
+			};
+			await appendAnnotation(tmpDir, annotationWithHash);
+			await appendAnnotation(tmpDir, annotationWithoutHash);
+			await flushAll();
+
+			const count = await backfillCommitHash(tmpDir, 'new-hash');
+
+			expect(count).toBe(1);
+			const annotations = await readAnnotations(tmpDir);
+			expect((annotations[0] as VibesLineAnnotation).commit_hash).toBe('existing-hash');
+			expect((annotations[1] as VibesLineAnnotation).commit_hash).toBe('new-hash');
+		});
+
+		it('returns 0 when no annotations file exists', async () => {
+			const count = await backfillCommitHash(tmpDir, 'abc123commit');
+			expect(count).toBe(0);
+		});
+
+		it('returns 0 when all annotations already have commit_hash', async () => {
+			const annotation: VibesLineAnnotation = {
+				...SAMPLE_LINE_ANNOTATION,
+				commit_hash: 'existing-hash',
+			};
+			await appendAnnotation(tmpDir, annotation);
+			await flushAll();
+
+			const count = await backfillCommitHash(tmpDir, 'new-hash');
+			expect(count).toBe(0);
 		});
 	});
 
