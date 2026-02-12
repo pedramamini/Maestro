@@ -467,6 +467,8 @@ function MaestroConsoleInner() {
 		setMarkdownEditMode,
 		chatRawTextMode,
 		setChatRawTextMode,
+		chatUserMessagesOnRight,
+		setChatUserMessagesOnRight,
 		showHiddenFiles,
 		setShowHiddenFiles,
 		terminalWidth,
@@ -11065,6 +11067,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		filePreviewLoading,
 		markdownEditMode,
 		chatRawTextMode,
+		chatUserMessagesOnRight,
 		shortcuts,
 		rightPanelOpen,
 		maxOutputLines,
@@ -12380,6 +12383,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 									onReorderQueuedItems={handleReorderGroupChatQueueItems}
 									markdownEditMode={markdownEditMode}
 									onToggleMarkdownEditMode={() => setMarkdownEditMode(!markdownEditMode)}
+									chatUserMessagesOnRight={chatUserMessagesOnRight}
 									maxOutputLines={maxOutputLines}
 									enterToSendAI={enterToSendAI}
 									setEnterToSendAI={setEnterToSendAI}
@@ -12492,6 +12496,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 							setDefaultSaveToHistory={setDefaultSaveToHistory}
 							defaultShowThinking={defaultShowThinking}
 							setDefaultShowThinking={setDefaultShowThinking}
+							chatUserMessagesOnRight={chatUserMessagesOnRight}
+							setChatUserMessagesOnRight={setChatUserMessagesOnRight}
 							fontFamily={fontFamily}
 							setFontFamily={setFontFamily}
 							fontSize={fontSize}

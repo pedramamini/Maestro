@@ -32,6 +32,7 @@ import {
 	PartyPopper,
 	Tag,
 	User,
+	MessageSquare,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -257,6 +258,8 @@ interface SettingsModalProps {
 	setDefaultSaveToHistory: (value: boolean) => void;
 	defaultShowThinking: 'off' | 'on' | 'sticky';
 	setDefaultShowThinking: (value: 'off' | 'on' | 'sticky') => void;
+	chatUserMessagesOnRight: boolean;
+	setChatUserMessagesOnRight: (value: boolean) => void;
 	osNotificationsEnabled: boolean;
 	setOsNotificationsEnabled: (value: boolean) => void;
 	audioFeedbackEnabled: boolean;
@@ -1435,6 +1438,16 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									/>
 								</div>
 							</div>
+
+							<SettingCheckbox
+								icon={MessageSquare}
+								sectionLabel="Chat Layout"
+								title="Place user messages on the right"
+								description="Toggle chat bubble alignment across session and group chat views."
+								checked={props.chatUserMessagesOnRight}
+								onChange={props.setChatUserMessagesOnRight}
+								theme={theme}
+							/>
 
 							{/* Sleep Prevention */}
 							<div>

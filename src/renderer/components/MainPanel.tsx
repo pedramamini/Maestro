@@ -108,6 +108,7 @@ interface MainPanelProps {
 	filePreviewLoading?: { name: string; path: string } | null;
 	markdownEditMode: boolean; // FilePreview: whether editing file content
 	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses
+	chatUserMessagesOnRight: boolean; // Chat alignment preference
 	shortcuts: Record<string, Shortcut>;
 	rightPanelOpen: boolean;
 	maxOutputLines: number;
@@ -388,6 +389,7 @@ export const MainPanel = React.memo(
 			filePreviewLoading,
 			markdownEditMode: _markdownEditMode,
 			chatRawTextMode,
+			chatUserMessagesOnRight,
 			shortcuts,
 			rightPanelOpen,
 			maxOutputLines,
@@ -1770,6 +1772,7 @@ export const MainPanel = React.memo(
 											inputRef={inputRef}
 											logsEndRef={logsEndRef}
 											maxOutputLines={maxOutputLines}
+											userMessagesOnRight={chatUserMessagesOnRight}
 											onDeleteLog={props.onDeleteLog}
 											onRemoveQueuedItem={onRemoveQueuedItem}
 											onInterrupt={handleInterrupt}
