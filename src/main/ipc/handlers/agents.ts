@@ -201,7 +201,8 @@ const SSH_MODEL_TIMEOUT_MS = 10000;
 /**
  * Discover available models for an agent on a remote SSH host.
  * Uses the agent's `models` subcommand over SSH.
- * Returns an empty array on any failure (timeout, non-zero exit, exception).
+ * Returns an empty array on timeout, non-zero exit, or unknown agent.
+ * Throws on unexpected errors (e.g., SSH config issues, parsing bugs).
  */
 async function discoverModelsRemote(
 	agentId: string,
@@ -281,12 +282,16 @@ async function discoverModelsRemote(
 
 		return models;
 	} catch (error) {
-		const errorMessage = error instanceof Error ? error.message : String(error);
-		logger.error(
-			`Failed to discover models for "${agentDef.name}" on remote: ${errorMessage}`,
-			LOG_CONTEXT
-		);
-		return [];
+		// Timeout is an expected SSH failure — return empty gracefully
+		if (error instanceof Error && error.message.includes('SSH model discovery timed out')) {
+			logger.warn(
+				`Timed out discovering models for "${agentDef.name}" on ${sshRemote.host}`,
+				LOG_CONTEXT
+			);
+			return [];
+		}
+		// Unexpected errors should propagate to withIpcErrorLogging / Sentry
+		throw error;
 	}
 }
 
@@ -817,11 +822,7 @@ export function registerAgentsHandlers(deps: AgentsHandlerDependencies): void {
 				if (sshRemoteId) {
 					const sshConfig = getSshRemoteById(settingsStore, sshRemoteId);
 					if (!sshConfig) {
-						logger.warn(
-							`SSH remote not found: ${sshRemoteId}, returning empty models`,
-							LOG_CONTEXT
-						);
-						return [];
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
 					}
 					return discoverModelsRemote(agentId, sshConfig, forceRefresh ?? false);
 				}

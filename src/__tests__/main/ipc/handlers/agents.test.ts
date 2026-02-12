@@ -975,15 +975,15 @@ describe('agents IPC handlers', () => {
 				expect(mockAgentDetector.discoverModels).not.toHaveBeenCalled();
 			});
 
-			it('should return empty array when SSH remote not found', async () => {
+			it('should throw when SSH remote not found', async () => {
 				mockSettingsStore.get.mockReturnValue([
 					{ id: 'remote-1', host: 'dev.example.com', enabled: true },
 				]);
 
 				const handler = handlers.get('agents:getModels');
-				const result = await handler!({} as any, 'opencode', false, 'nonexistent-remote');
-
-				expect(result).toEqual([]);
+				await expect(
+					handler!({} as any, 'opencode', false, 'nonexistent-remote')
+				).rejects.toThrow('SSH remote not found: nonexistent-remote');
 				expect(buildSshCommand).not.toHaveBeenCalled();
 				expect(mockAgentDetector.discoverModels).not.toHaveBeenCalled();
 			});
