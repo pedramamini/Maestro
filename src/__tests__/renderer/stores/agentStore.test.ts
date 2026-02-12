@@ -1478,6 +1478,54 @@ describe('agentStore', () => {
 			expect(spawnCall.prompt).toContain('Create a plan for: user authentication flow');
 		});
 
+		it('appends arguments to prompt when no $ARGUMENTS placeholder exists', async () => {
+			const session = createMockSession({
+				id: 'session-1',
+				aiTabs: [
+					{
+						id: 'tab-1',
+						agentSessionId: 'conv-1',
+						name: null,
+						starred: false,
+						logs: [],
+						inputValue: '',
+						stagedImages: [],
+						createdAt: Date.now(),
+						state: 'idle',
+					},
+				],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.getState().setSessions([session]);
+
+			const deps: ProcessQueuedItemDeps = {
+				...defaultDeps,
+				customAICommands: [
+					{
+						id: 'cmd-commit',
+						command: '/commit',
+						description: 'Commit changes',
+						prompt: 'Please commit all changes with a descriptive message',
+					},
+				],
+			};
+
+			const item = createQueuedItem({
+				tabId: 'tab-1',
+				type: 'command',
+				command: '/commit',
+				commandArgs: 'fix the login bug',
+				text: undefined,
+			});
+
+			await useAgentStore.getState().processQueuedItem('session-1', item, deps);
+
+			const spawnCall = mockSpawn.mock.calls[0][0];
+			// Args should be appended after the prompt since no $ARGUMENTS placeholder
+			expect(spawnCall.prompt).toContain('Please commit all changes with a descriptive message');
+			expect(spawnCall.prompt).toContain('fix the login bug');
+		});
+
 		it('adds error log and resets to idle for unknown command', async () => {
 			const session = createMockSession({
 				id: 'session-1',

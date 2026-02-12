@@ -370,10 +370,15 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 						}
 					}
 
-					// Substitute $ARGUMENTS with command arguments
+					// Substitute $ARGUMENTS with command arguments, or append args if no placeholder
 					let promptWithArgs = matchingCommand.prompt;
 					if (item.commandArgs) {
-						promptWithArgs = promptWithArgs.replace(/\$ARGUMENTS/g, item.commandArgs);
+						if (/\$ARGUMENTS/g.test(promptWithArgs)) {
+							promptWithArgs = promptWithArgs.replace(/\$ARGUMENTS/g, item.commandArgs);
+						} else {
+							// No $ARGUMENTS placeholder — append trailing text after the prompt
+							promptWithArgs = `${promptWithArgs}\n\n${item.commandArgs}`;
+						}
 					} else {
 						promptWithArgs = promptWithArgs.replace(/\$ARGUMENTS/g, '');
 					}
