@@ -207,6 +207,7 @@ export const RightPanel = memo(
 		const historyPanelRef = useRef<HistoryPanelHandle>(null);
 		const autoRunRef = useRef<AutoRunHandle>(null);
 		const panelRef = useRef<HTMLDivElement>(null);
+		const [isResizingRightPanel, setIsResizingRightPanel] = useState(false);
 
 		// Elapsed time for Auto Run display - tracks wall clock time from startTime
 		const [elapsedTime, setElapsedTime] = useState<string>('');
@@ -387,7 +388,7 @@ export const RightPanel = memo(
 			<div
 				ref={panelRef}
 				tabIndex={0}
-				className={`border-l flex flex-col transition-all duration-300 outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
+				className={`border-l flex flex-col ${isResizingRightPanel ? 'transition-none' : 'transition-[width] duration-150'} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
 				style={
 					{
 						width: rightPanelOpen ? `${rightPanelWidth}px` : '0',
@@ -405,6 +406,7 @@ export const RightPanel = memo(
 						className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-20"
 						onMouseDown={(e) => {
 							e.preventDefault();
+							setIsResizingRightPanel(true);
 							const startX = e.clientX;
 							const startWidth = rightPanelWidth;
 							let currentWidth = startWidth;
@@ -420,6 +422,7 @@ export const RightPanel = memo(
 
 							const handleMouseUp = () => {
 								// Only update React state once on mouseup
+								setIsResizingRightPanel(false);
 								setRightPanelWidthState(currentWidth);
 								window.maestro.settings.set('rightPanelWidth', currentWidth);
 								document.removeEventListener('mousemove', handleMouseMove);

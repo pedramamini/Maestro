@@ -6,7 +6,7 @@
  * This panel replaces the RightPanel when a group chat is active.
  */
 
-import { useMemo, useCallback } from 'react';
+import { useMemo, useCallback, useRef, useState } from 'react';
 import { PanelRightClose } from 'lucide-react';
 import type { Theme, GroupChatParticipant, SessionState, Shortcut } from '../types';
 import { ParticipantCard } from './ParticipantCard';
@@ -52,6 +52,9 @@ export function GroupChatParticipants({
 	moderatorState,
 	moderatorUsage,
 }: GroupChatParticipantsProps): JSX.Element | null {
+	const panelRef = useRef<HTMLDivElement>(null);
+	const [isResizingPanel, setIsResizingPanel] = useState(false);
+
 	// Generate consistent colors for all participants (including "Moderator" for the moderator card)
 	const participantColors = useMemo(() => {
 		return buildParticipantColorMap(['Moderator', ...participants.map((p) => p.name)], theme);
@@ -96,7 +99,8 @@ export function GroupChatParticipants({
 
 	return (
 		<div
-			className="relative border-l flex flex-col transition-all duration-300"
+			ref={panelRef}
+			className={`relative border-l flex flex-col ${isResizingPanel ? 'transition-none' : 'transition-[width] duration-150'}`}
 			style={{
 				width: `${width}px`,
 				backgroundColor: theme.colors.bgSidebar,
@@ -108,6 +112,7 @@ export function GroupChatParticipants({
 				className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-20"
 				onMouseDown={(e) => {
 					e.preventDefault();
+					setIsResizingPanel(true);
 					const startX = e.clientX;
 					const startWidth = width;
 					let currentWidth = startWidth;
@@ -115,10 +120,14 @@ export function GroupChatParticipants({
 					const handleMouseMove = (moveEvent: MouseEvent) => {
 						const delta = startX - moveEvent.clientX; // Reversed for right panel
 						currentWidth = Math.max(200, Math.min(600, startWidth + delta));
-						setWidthState(currentWidth);
+						if (panelRef.current) {
+							panelRef.current.style.width = `${currentWidth}px`;
+						}
 					};
 
 					const handleMouseUp = () => {
+						setIsResizingPanel(false);
+						setWidthState(currentWidth);
 						window.maestro.settings.set('rightPanelWidth', currentWidth);
 						document.removeEventListener('mousemove', handleMouseMove);
 						document.removeEventListener('mouseup', handleMouseUp);

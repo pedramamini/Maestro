@@ -1232,6 +1232,7 @@ function SessionListInner(props: SessionListProps) {
 	const isAnyBusy = useMemo(() => sessions.some((s) => s.state === 'busy'), [sessions]);
 
 	const [sessionFilter, setSessionFilter] = useState('');
+	const [isResizingSidebar, setIsResizingSidebar] = useState(false);
 	const sessionFilterOpen = useUIStore((s) => s.sessionFilterOpen);
 	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
 	const [preFilterGroupStates, setPreFilterGroupStates] = useState<Map<string, boolean>>(new Map());
@@ -1907,7 +1908,7 @@ function SessionListInner(props: SessionListProps) {
 		<div
 			ref={sidebarContainerRef}
 			tabIndex={0}
-			className={`border-r flex flex-col shrink-0 transition-all duration-300 outline-none relative z-20 ${activeFocus === 'sidebar' && !activeGroupChatId ? 'ring-1 ring-inset' : ''}`}
+			className={`border-r flex flex-col shrink-0 ${isResizingSidebar ? 'transition-none' : 'transition-[width] duration-150'} outline-none relative z-20 ${activeFocus === 'sidebar' && !activeGroupChatId ? 'ring-1 ring-inset' : ''}`}
 			style={
 				{
 					width: leftSidebarOpen ? `${leftSidebarWidthState}px` : '64px',
@@ -1938,6 +1939,7 @@ function SessionListInner(props: SessionListProps) {
 					className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-20"
 					onMouseDown={(e) => {
 						e.preventDefault();
+						setIsResizingSidebar(true);
 						const startX = e.clientX;
 						const startWidth = leftSidebarWidthState;
 						let currentWidth = startWidth;
@@ -1953,6 +1955,7 @@ function SessionListInner(props: SessionListProps) {
 
 						const handleMouseUp = () => {
 							// Only update React state once on mouseup
+							setIsResizingSidebar(false);
 							setLeftSidebarWidthState(currentWidth);
 							window.maestro.settings.set('leftSidebarWidth', currentWidth);
 							document.removeEventListener('mousemove', handleMouseMove);

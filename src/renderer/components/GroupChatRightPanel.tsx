@@ -81,6 +81,8 @@ export function GroupChatRightPanel({
 }: GroupChatRightPanelProps): JSX.Element | null {
 	// Color preferences state
 	const [colorPreferences, setColorPreferences] = useState<Record<string, number>>({});
+	const [isResizingPanel, setIsResizingPanel] = useState(false);
+	const panelRef = useRef<HTMLDivElement>(null);
 
 	// Load color preferences on mount
 	useEffect(() => {
@@ -235,7 +237,8 @@ export function GroupChatRightPanel({
 
 	return (
 		<div
-			className="relative border-l flex flex-col transition-all duration-300"
+			ref={panelRef}
+			className={`relative border-l flex flex-col ${isResizingPanel ? 'transition-none' : 'transition-[width] duration-150'}`}
 			style={{
 				width: `${width}px`,
 				backgroundColor: theme.colors.bgSidebar,
@@ -247,6 +250,7 @@ export function GroupChatRightPanel({
 				className="absolute top-0 left-0 w-1 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-20"
 				onMouseDown={(e) => {
 					e.preventDefault();
+					setIsResizingPanel(true);
 					const startX = e.clientX;
 					const startWidth = width;
 					let currentWidth = startWidth;
@@ -254,10 +258,14 @@ export function GroupChatRightPanel({
 					const handleMouseMove = (moveEvent: MouseEvent) => {
 						const delta = startX - moveEvent.clientX; // Reversed for right panel
 						currentWidth = Math.max(200, Math.min(600, startWidth + delta));
-						setWidthState(currentWidth);
+						if (panelRef.current) {
+							panelRef.current.style.width = `${currentWidth}px`;
+						}
 					};
 
 					const handleMouseUp = () => {
+						setIsResizingPanel(false);
+						setWidthState(currentWidth);
 						window.maestro.settings.set('rightPanelWidth', currentWidth);
 						document.removeEventListener('mousemove', handleMouseMove);
 						document.removeEventListener('mouseup', handleMouseUp);
