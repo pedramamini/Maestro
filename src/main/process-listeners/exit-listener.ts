@@ -434,7 +434,7 @@ export function setupExitListener(
 		if (webServer) {
 			// Extract base session ID from formats: {id}-ai-{tabId}, {id}-terminal, {id}-batch-{timestamp}, {id}-synopsis-{timestamp}
 			const baseSessionId = sessionId.replace(
-				/-ai-[^-]+$|-terminal$|-batch-\d+$|-synopsis-\d+$/,
+				/-ai-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$|-terminal$|-batch-\d+$|-synopsis-\d+$/i,
 				''
 			);
 			webServer.broadcastToSessionClients(baseSessionId, {

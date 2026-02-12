@@ -80,8 +80,8 @@ describe('Usage Listener', () => {
 			patterns: {
 				REGEX_MODERATOR_SESSION: /^group-chat-(.+)-moderator-/,
 				REGEX_MODERATOR_SESSION_TIMESTAMP: /^group-chat-(.+)-moderator-\d+$/,
-				REGEX_AI_SUFFIX: /-ai-[^-]+$/,
-				REGEX_AI_TAB_ID: /-ai-([^-]+)$/,
+				REGEX_AI_SUFFIX: /-ai-[a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12}$/i,
+				REGEX_AI_TAB_ID: /-ai-([a-f0-9]{8}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{4}-[a-f0-9]{12})$/i,
 				REGEX_BATCH_SESSION: /-batch-\d+$/,
 				REGEX_SYNOPSIS_SESSION: /-synopsis-\d+$/,
 			},
