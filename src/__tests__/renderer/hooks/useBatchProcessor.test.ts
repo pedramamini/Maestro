@@ -21,6 +21,7 @@ import type {
 
 // Import the exported functions directly
 import { countUnfinishedTasks, uncheckAllTasks, useBatchProcessor } from '../../../renderer/hooks';
+import { useBatchStore } from '../../../renderer/stores/batchStore';
 
 // ============================================================================
 // Tests for countUnfinishedTasks

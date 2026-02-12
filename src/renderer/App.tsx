@@ -129,7 +129,7 @@ import { GitStatusProvider } from './contexts/GitStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
 import { useGroupChatStore } from './stores/groupChatStore';
 import type { GroupChatMessagesHandle } from './components/GroupChatMessages';
-import { AutoRunProvider, useAutoRun } from './contexts/AutoRunContext';
+import { useBatchStore } from './stores/batchStore';
 // All session state is read directly from useSessionStore in MaestroConsoleInner.
 import { useSessionStore, selectActiveSession } from './stores/sessionStore';
 import { useAgentStore } from './stores/agentStore';
@@ -996,18 +996,18 @@ function MaestroConsoleInner() {
 	const [isLiveMode, setIsLiveMode] = useState(false);
 	const [webInterfaceUrl, setWebInterfaceUrl] = useState<string | null>(null);
 
-	// Auto Run document management state (Phase 5: now from AutoRunContext)
+	// Auto Run document management state (from batchStore)
 	// Content is per-session in session.autoRunContent
+	const autoRunDocumentList = useBatchStore((s) => s.documentList);
+	const autoRunDocumentTree = useBatchStore((s) => s.documentTree);
+	const autoRunIsLoadingDocuments = useBatchStore((s) => s.isLoadingDocuments);
+	const autoRunDocumentTaskCounts = useBatchStore((s) => s.documentTaskCounts);
 	const {
-		documentList: autoRunDocumentList,
 		setDocumentList: setAutoRunDocumentList,
-		documentTree: autoRunDocumentTree,
 		setDocumentTree: setAutoRunDocumentTree,
-		isLoadingDocuments: autoRunIsLoadingDocuments,
 		setIsLoadingDocuments: setAutoRunIsLoadingDocuments,
-		documentTaskCounts: autoRunDocumentTaskCounts,
 		setDocumentTaskCounts: setAutoRunDocumentTaskCounts,
-	} = useAutoRun();
+	} = useBatchStore.getState();
 
 	// Restore focus when LogViewer closes to ensure global hotkeys work
 	useEffect(() => {
@@ -12635,19 +12635,17 @@ You are taking over this conversation. Based on the context above, provide a bri
  * Wraps MaestroConsoleInner with context providers for centralized state management.
  * Phase 3: InputProvider - centralized input state management
  * Phase 4: Group chat state now lives in groupChatStore (Zustand) — no context wrapper needed
- * Phase 5: AutoRunProvider - centralized Auto Run and batch processing state management
+ * Phase 5: Auto Run state now lives in batchStore (Zustand) — no context wrapper needed
  * Phase 6: Session state now lives in sessionStore (Zustand) — no context wrapper needed
  * Phase 7: InlineWizardProvider - inline /wizard command state management
  * See refactor-details-2.md for full plan.
  */
 export default function MaestroConsole() {
 	return (
-		<AutoRunProvider>
-			<InlineWizardProvider>
-				<InputProvider>
-					<MaestroConsoleInner />
-				</InputProvider>
-			</InlineWizardProvider>
-		</AutoRunProvider>
+		<InlineWizardProvider>
+			<InputProvider>
+				<MaestroConsoleInner />
+			</InputProvider>
+		</InlineWizardProvider>
 	);
 }
