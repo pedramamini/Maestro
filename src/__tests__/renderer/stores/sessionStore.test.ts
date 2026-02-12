@@ -10,6 +10,7 @@ import {
 	selectGroupById,
 	selectSessionCount,
 	selectIsReady,
+	selectIsAnySessionBusy,
 	getSessionState,
 	getSessionActions,
 } from '../../../renderer/stores/sessionStore';
@@ -607,6 +608,37 @@ describe('sessionStore', () => {
 				useSessionStore.getState().setSessionsLoaded(true);
 				useSessionStore.getState().setInitialLoadComplete(true);
 				expect(selectIsReady(useSessionStore.getState())).toBe(true);
+			});
+		});
+
+		describe('selectIsAnySessionBusy', () => {
+			it('returns false when no sessions exist', () => {
+				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(false);
+			});
+
+			it('returns false when all sessions are idle', () => {
+				useSessionStore.getState().setSessions([
+					createMockSession({ id: 'a', state: 'idle' }),
+					createMockSession({ id: 'b', state: 'idle' }),
+				]);
+				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(false);
+			});
+
+			it('returns true when at least one session is busy', () => {
+				useSessionStore.getState().setSessions([
+					createMockSession({ id: 'a', state: 'idle' }),
+					createMockSession({ id: 'b', state: 'busy' }),
+				]);
+				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(true);
+			});
+
+			it('returns false for non-busy active states', () => {
+				useSessionStore.getState().setSessions([
+					createMockSession({ id: 'a', state: 'waiting_input' }),
+					createMockSession({ id: 'b', state: 'connecting' }),
+					createMockSession({ id: 'c', state: 'error' }),
+				]);
+				expect(selectIsAnySessionBusy(useSessionStore.getState())).toBe(false);
 			});
 		});
 	});

@@ -1228,6 +1228,9 @@ function SessionListInner(props: SessionListProps) {
 		contextWarningRedThreshold = 80,
 	} = props;
 
+	// Derive whether any session is busy (for wand sparkle animation)
+	const isAnyBusy = useMemo(() => sessions.some((s) => s.state === 'busy'), [sessions]);
+
 	const [sessionFilter, setSessionFilter] = useState('');
 	const sessionFilterOpen = useUIStore((s) => s.sessionFilterOpen);
 	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
@@ -1970,7 +1973,7 @@ function SessionListInner(props: SessionListProps) {
 				{leftSidebarOpen ? (
 					<>
 						<div className="flex items-center gap-2">
-							<Wand2 className="w-5 h-5" style={{ color: theme.colors.accent }} />
+							<Wand2 className={`w-5 h-5${isAnyBusy ? ' wand-sparkle-active' : ''}`} style={{ color: theme.colors.accent }} />
 							<h1
 								className="font-bold tracking-widest text-lg"
 								style={{ color: theme.colors.textMain }}
@@ -2493,7 +2496,7 @@ function SessionListInner(props: SessionListProps) {
 							className="p-2 rounded hover:bg-white/10 transition-colors"
 							title="Menu"
 						>
-							<Wand2 className="w-6 h-6" style={{ color: theme.colors.accent }} />
+							<Wand2 className={`w-6 h-6${isAnyBusy ? ' wand-sparkle-active' : ''}`} style={{ color: theme.colors.accent }} />
 						</button>
 						{/* Menu Overlay for Collapsed Sidebar */}
 						{menuOpen && (

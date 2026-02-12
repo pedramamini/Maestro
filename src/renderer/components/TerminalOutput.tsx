@@ -961,6 +961,7 @@ interface TerminalOutputProps {
 	onFileClick?: (path: string) => void; // Callback when a file link is clicked
 	onShowErrorDetails?: () => void; // Callback to show the error modal (for error log entries)
 	onFileSaved?: () => void; // Callback when markdown content is saved to file (e.g., to refresh file list)
+	onOpenInTab?: (file: { path: string; name: string; content: string; sshRemoteId?: string }) => void; // Callback to open saved file in a tab
 }
 
 // PERFORMANCE: Wrap in React.memo to prevent re-renders when parent re-renders
@@ -997,6 +998,7 @@ export const TerminalOutput = memo(
 			onFileClick,
 			onShowErrorDetails,
 			onFileSaved,
+			onOpenInTab,
 		} = props;
 
 		// Use the forwarded ref if provided, otherwise create a local one
@@ -1713,6 +1715,7 @@ export const TerminalOutput = memo(
 								: undefined
 						}
 						onFileSaved={onFileSaved}
+						onOpenInTab={onOpenInTab}
 					/>
 				)}
 			</div>

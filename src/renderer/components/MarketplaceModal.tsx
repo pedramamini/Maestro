@@ -1081,7 +1081,7 @@ export function MarketplaceModal({
 				aria-modal="true"
 				aria-labelledby="marketplace-title"
 				tabIndex={-1}
-				className="w-[900px] max-w-[90vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col h-[80vh] outline-none"
+				className="w-[1200px] max-w-[95vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[85vh] outline-none"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					borderColor: theme.colors.border,

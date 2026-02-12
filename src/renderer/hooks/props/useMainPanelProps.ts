@@ -286,6 +286,9 @@ export interface UseMainPanelPropsDeps {
 	// File tree refresh
 	refreshFileTree: (sessionId: string) => Promise<FileTreeChanges | undefined>;
 
+	// Open saved file in tab
+	onOpenSavedFileInTab?: (file: { path: string; name: string; content: string; sshRemoteId?: string }) => void;
+
 	// Complex wizard handlers (passed through from App.tsx)
 	onWizardComplete?: () => void;
 	onWizardLetsGo?: () => void;
@@ -519,6 +522,8 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			onToggleWizardShowThinking: deps.onToggleWizardShowThinking,
 			// File tree refresh
 			refreshFileTree: deps.refreshFileTree,
+			// Open saved file in tab
+			onOpenSavedFileInTab: deps.onOpenSavedFileInTab,
 		}),
 		[
 			// Primitive dependencies for minimal re-computation
@@ -706,6 +711,8 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.onToggleWizardShowThinking,
 			// File tree refresh
 			deps.refreshFileTree,
+			// Open saved file in tab
+			deps.onOpenSavedFileInTab,
 			// Refs (stable, but included for completeness)
 			deps.inputRef,
 			deps.logsEndRef,

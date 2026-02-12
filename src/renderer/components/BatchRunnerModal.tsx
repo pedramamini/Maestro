@@ -343,6 +343,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	const handleSave = () => {
 		onSave(prompt);
 		setSavedPrompt(prompt);
+		// Update initial ref so hasUnsavedConfigChanges doesn't flag a saved prompt as dirty
+		initialPromptRef.current = prompt;
 	};
 
 	const handleGo = () => {

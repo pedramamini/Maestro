@@ -387,6 +387,15 @@ export const selectSessionCount = (state: SessionStore): number => state.session
 export const selectIsReady = (state: SessionStore): boolean =>
 	state.sessionsLoaded && state.initialLoadComplete;
 
+/**
+ * Select whether any session is currently busy (agent actively processing).
+ *
+ * @example
+ * const anyBusy = useSessionStore(selectIsAnySessionBusy);
+ */
+export const selectIsAnySessionBusy = (state: SessionStore): boolean =>
+	state.sessions.some((s) => s.state === 'busy');
+
 // ============================================================================
 // Non-React Access
 // ============================================================================

@@ -3355,6 +3355,9 @@ branch refs/heads/bugfix-123
 					if (args?.includes('--is-inside-work-tree')) {
 						return { stdout: 'true\n', stderr: '', exitCode: 0 };
 					}
+					if (args?.includes('--show-toplevel')) {
+						return { stdout: '/parent/worktree-feature', stderr: '', exitCode: 0 };
+					}
 					if (args?.includes('--git-dir')) {
 						return {
 							stdout: '/parent/main-repo/.git/worktrees/worktree-feature',
@@ -3601,6 +3604,9 @@ branch refs/heads/bugfix-123
 				if (args?.includes('--is-inside-work-tree')) {
 					return { stdout: 'true\n', stderr: '', exitCode: 0 };
 				}
+				if (args?.includes('--show-toplevel')) {
+					return { stdout: '/parent/my-worktree', stderr: '', exitCode: 0 };
+				}
 				if (args?.includes('--git-dir')) {
 					// Worktree has a different git-dir
 					return { stdout: '../main-repo/.git/worktrees/my-worktree', stderr: '', exitCode: 0 };
@@ -3623,6 +3629,59 @@ branch refs/heads/bugfix-123
 			expect(result.gitSubdirs[0].isWorktree).toBe(true);
 			expect(result.gitSubdirs[0].branch).toBe('feature-xyz');
 			expect(result.gitSubdirs[0].repoRoot).toMatch(/main-repo$/);
+		});
+
+		it('should exclude subdirectories that are inside a repo but not worktree roots', async () => {
+			// Simulates a directory like "build/" inside a worktree that passes --is-inside-work-tree
+			// but whose --show-toplevel points to the parent worktree, not itself
+			vi.mocked(mockFs.readdir).mockResolvedValue([
+				{ name: 'actual-worktree', isDirectory: () => true },
+				{ name: 'build', isDirectory: () => true },
+				{ name: 'src', isDirectory: () => true },
+			] as any);
+
+			vi.mocked(execFile.execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
+				const cwdStr = String(cwd);
+
+				if (cwdStr.endsWith('actual-worktree')) {
+					if (args?.includes('--is-inside-work-tree')) {
+						return { stdout: 'true\n', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--show-toplevel')) {
+						return { stdout: '/parent/actual-worktree', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--git-dir')) {
+						return { stdout: '.git', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--git-common-dir')) {
+						return { stdout: '.git', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--abbrev-ref')) {
+						return { stdout: 'feature-branch\n', stderr: '', exitCode: 0 };
+					}
+				}
+
+				// build/ and src/ are subdirectories inside actual-worktree's repo
+				if (cwdStr.endsWith('/build') || cwdStr.endsWith('/src')) {
+					if (args?.includes('--is-inside-work-tree')) {
+						return { stdout: 'true\n', stderr: '', exitCode: 0 };
+					}
+					if (args?.includes('--show-toplevel')) {
+						// Toplevel points to the worktree root, NOT to build/ or src/
+						return { stdout: '/parent/actual-worktree', stderr: '', exitCode: 0 };
+					}
+				}
+
+				return { stdout: '', stderr: 'fatal: not a git repository', exitCode: 128 };
+			});
+
+			const handler = handlers.get('git:scanWorktreeDirectory');
+			const result = await handler!({} as any, '/parent');
+
+			// Only actual-worktree should be included; build/ and src/ should be filtered out
+			expect(result.gitSubdirs).toHaveLength(1);
+			expect(result.gitSubdirs[0].name).toBe('actual-worktree');
+			expect(result.gitSubdirs[0].branch).toBe('feature-branch');
 		});
 	});
 
@@ -3754,6 +3813,9 @@ branch refs/heads/bugfix-123
 				if (args?.includes('--is-inside-work-tree')) {
 					return { stdout: 'true\n', stderr: '', exitCode: 0 };
 				}
+				if (args?.includes('--show-toplevel')) {
+					return { stdout: '/parent/worktrees/new-worktree', stderr: '', exitCode: 0 };
+				}
 				if (args?.includes('--abbrev-ref')) {
 					return { stdout: 'feature-branch\n', stderr: '', exitCode: 0 };
 				}
@@ -3854,9 +3916,12 @@ branch refs/heads/bugfix-123
 			vi.mocked(BrowserWindow.getAllWindows).mockReturnValue([mockWindow] as any);
 
 			// Mock git commands - return main branch
-			vi.mocked(execFile.execFileNoThrow).mockImplementation(async (cmd, args) => {
+			vi.mocked(execFile.execFileNoThrow).mockImplementation(async (cmd, args, cwd) => {
 				if (args?.includes('--is-inside-work-tree')) {
 					return { stdout: 'true\n', stderr: '', exitCode: 0 };
+				}
+				if (args?.includes('--show-toplevel')) {
+					return { stdout: String(cwd), stderr: '', exitCode: 0 };
 				}
 				if (args?.includes('--abbrev-ref')) {
 					return { stdout: 'main\n', stderr: '', exitCode: 0 };
@@ -3960,6 +4025,9 @@ branch refs/heads/bugfix-123
 				if (args?.includes('--is-inside-work-tree')) {
 					checkedPaths.push(cwd as string);
 					return { stdout: 'true\n', stderr: '', exitCode: 0 };
+				}
+				if (args?.includes('--show-toplevel')) {
+					return { stdout: String(cwd), stderr: '', exitCode: 0 };
 				}
 				if (args?.includes('--abbrev-ref')) {
 					return { stdout: 'feature\n', stderr: '', exitCode: 0 };

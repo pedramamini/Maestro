@@ -481,6 +481,31 @@ describe('ChildProcessSpawner', () => {
 		});
 	});
 
+	describe('child process event handling', () => {
+		it('should listen on "close" event (not "exit") to ensure all stdio data is drained', () => {
+			const { spawner } = createTestContext();
+
+			spawner.spawn(createBaseConfig({ prompt: 'test' }));
+
+			// Verify 'close' is registered (ensures all stdout/stderr data is consumed
+			// before exit handler runs — fixes data loss for short-lived processes)
+			const onCalls = mockChildProcess.on.mock.calls as [string, Function][];
+			const eventNames = onCalls.map(([event]) => event);
+			expect(eventNames).toContain('close');
+			expect(eventNames).not.toContain('exit');
+		});
+
+		it('should listen for "error" events on the child process', () => {
+			const { spawner } = createTestContext();
+
+			spawner.spawn(createBaseConfig({ prompt: 'test' }));
+
+			const onCalls = mockChildProcess.on.mock.calls as [string, Function][];
+			const eventNames = onCalls.map(([event]) => event);
+			expect(eventNames).toContain('error');
+		});
+	});
+
 	describe('image handling with non-stream-json agents', () => {
 		it('should use file-based image args for agents without stream-json support', () => {
 			// Override capabilities for this test

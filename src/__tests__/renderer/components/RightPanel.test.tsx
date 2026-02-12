@@ -161,6 +161,7 @@ describe('RightPanel', () => {
 		currentSessionBatchState: undefined, // For session-specific progress display
 		onOpenBatchRunner: vi.fn(),
 		onStopBatchRun: vi.fn(),
+		onKillBatchRun: vi.fn(),
 		onJumpToAgentSession: vi.fn(),
 		onResumeSession: vi.fn(),
 		onOpenSessionAsTab: vi.fn(),
@@ -613,7 +614,8 @@ describe('RightPanel', () => {
 			expect(screen.getByTestId('confirm-modal-title')).toHaveTextContent('Force Kill Process');
 		});
 
-		it('should call process.kill when kill is confirmed', () => {
+		it('should call onKillBatchRun when kill is confirmed', () => {
+			const onKillBatchRun = vi.fn();
 			const currentSessionBatchState: BatchRunState = {
 				isRunning: true,
 				isStopping: true,
@@ -628,7 +630,7 @@ describe('RightPanel', () => {
 				loopEnabled: false,
 				loopIteration: 0,
 			};
-			const props = createDefaultProps({ currentSessionBatchState });
+			const props = createDefaultProps({ currentSessionBatchState, onKillBatchRun });
 			render(<RightPanel {...props} />);
 
 			// Click Kill pill to open modal
@@ -637,10 +639,11 @@ describe('RightPanel', () => {
 			// Click confirm button in modal
 			fireEvent.click(screen.getByTestId('confirm-modal-confirm'));
 
-			expect(window.maestro.process.kill).toHaveBeenCalledWith('session-1');
+			expect(onKillBatchRun).toHaveBeenCalledWith('session-1');
 		});
 
 		it('should dismiss modal without killing when cancel is clicked', () => {
+			const onKillBatchRun = vi.fn();
 			const currentSessionBatchState: BatchRunState = {
 				isRunning: true,
 				isStopping: true,
@@ -655,7 +658,7 @@ describe('RightPanel', () => {
 				loopEnabled: false,
 				loopIteration: 0,
 			};
-			const props = createDefaultProps({ currentSessionBatchState });
+			const props = createDefaultProps({ currentSessionBatchState, onKillBatchRun });
 			render(<RightPanel {...props} />);
 
 			// Click Kill pill to open modal
@@ -667,7 +670,7 @@ describe('RightPanel', () => {
 
 			// Modal should be dismissed, kill should not be called
 			expect(screen.queryByTestId('confirm-modal')).not.toBeInTheDocument();
-			expect(window.maestro.process.kill).not.toHaveBeenCalled();
+			expect(onKillBatchRun).not.toHaveBeenCalled();
 		});
 
 		it('should show loop iteration indicator when loopEnabled', () => {

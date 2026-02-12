@@ -294,6 +294,8 @@ export interface AppConfirmModalsProps {
 	quitConfirmModalOpen: boolean;
 	onConfirmQuit: () => void;
 	onCancelQuit: () => void;
+	/** Session IDs with active auto-runs (batch processing) */
+	activeBatchSessionIds?: string[];
 }
 
 /**
@@ -317,11 +319,25 @@ export function AppConfirmModals({
 	quitConfirmModalOpen,
 	onConfirmQuit,
 	onCancelQuit,
+	activeBatchSessionIds = [],
 }: AppConfirmModalsProps) {
 	// Compute busy agents for QuitConfirmModal
 	const busyAgents = sessions.filter(
 		(s) => s.state === 'busy' && s.busySource === 'ai' && s.toolType !== 'terminal'
 	);
+
+	// Include auto-running sessions that aren't already counted as busy agents
+	const busyAgentIds = new Set(busyAgents.map((s) => s.id));
+	const autoRunOnlySessions = activeBatchSessionIds
+		.filter((id) => !busyAgentIds.has(id))
+		.map((id) => sessions.find((s) => s.id === id))
+		.filter((s): s is Session => !!s);
+
+	const allActiveAgents = [...busyAgents, ...autoRunOnlySessions];
+	const allActiveNames = allActiveAgents.map((s) => {
+		const isAutoRunning = activeBatchSessionIds.includes(s.id);
+		return isAutoRunning && !busyAgentIds.has(s.id) ? `${s.name} (Auto Run)` : s.name;
+	});
 
 	return (
 		<>
@@ -341,8 +357,8 @@ export function AppConfirmModals({
 			{quitConfirmModalOpen && (
 				<QuitConfirmModal
 					theme={theme}
-					busyAgentCount={busyAgents.length}
-					busyAgentNames={busyAgents.map((s) => s.name)}
+					busyAgentCount={allActiveAgents.length}
+					busyAgentNames={allActiveNames}
 					onConfirmQuit={onConfirmQuit}
 					onCancel={onCancelQuit}
 				/>
@@ -1754,6 +1770,8 @@ export interface AppModalsProps {
 	quitConfirmModalOpen: boolean;
 	onConfirmQuit: () => void;
 	onCancelQuit: () => void;
+	/** Session IDs with active auto-runs (batch processing) */
+	activeBatchSessionIds?: string[];
 
 	// --- AppSessionModals props ---
 	newInstanceModalOpen: boolean;
@@ -2112,6 +2130,7 @@ export function AppModals(props: AppModalsProps) {
 		quitConfirmModalOpen,
 		onConfirmQuit,
 		onCancelQuit,
+		activeBatchSessionIds,
 		// Session modals
 		newInstanceModalOpen,
 		onCloseNewInstanceModal,
@@ -2387,6 +2406,7 @@ export function AppModals(props: AppModalsProps) {
 				quitConfirmModalOpen={quitConfirmModalOpen}
 				onConfirmQuit={onConfirmQuit}
 				onCancelQuit={onCancelQuit}
+				activeBatchSessionIds={activeBatchSessionIds}
 			/>
 
 			{/* Session Management Modals */}

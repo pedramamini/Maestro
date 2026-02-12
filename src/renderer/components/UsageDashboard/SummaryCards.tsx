@@ -18,7 +18,7 @@
  */
 
 import React, { useMemo } from 'react';
-import { MessageSquare, Clock, Timer, Bot, Users, Layers, Sunrise, Globe, Zap } from 'lucide-react';
+import { MessageSquare, Clock, Timer, Bot, Users, Layers, Sunrise, Globe, Zap, PanelTop } from 'lucide-react';
 import type { Theme, Session } from '../../types';
 import type { StatsAggregation } from '../../hooks/stats/useStats';
 
@@ -136,6 +136,16 @@ export function SummaryCards({ data, theme, columns = 3, sessions }: SummaryCard
 		return data.totalSessions;
 	}, [sessions, data.totalSessions]);
 
+	// Count open tabs across all sessions (AI + file preview)
+	const openTabCount = useMemo(() => {
+		if (!sessions) return 0;
+		return sessions.reduce((total, s) => {
+			const aiCount = s.aiTabs?.length ?? 0;
+			const fileCount = s.filePreviewTabs?.length ?? 0;
+			return total + aiCount + fileCount;
+		}, 0);
+	}, [sessions]);
+
 	// Calculate derived metrics
 	const { mostActiveAgent, interactiveRatio, peakHour, localVsRemote, queriesPerSession } =
 		useMemo(() => {
@@ -179,6 +189,11 @@ export function SummaryCards({ data, theme, columns = 3, sessions }: SummaryCard
 			icon: <Layers className="w-4 h-4" />,
 			label: 'Agents',
 			value: formatNumber(agentCount),
+		},
+		{
+			icon: <PanelTop className="w-4 h-4" />,
+			label: 'Open Tabs',
+			value: formatNumber(openTabCount),
 		},
 		{
 			icon: <MessageSquare className="w-4 h-4" />,

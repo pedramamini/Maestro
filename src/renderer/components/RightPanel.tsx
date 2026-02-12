@@ -114,6 +114,7 @@ interface RightPanelProps {
 	currentSessionBatchState?: BatchRunState | null; // For locking editor (current session only)
 	onOpenBatchRunner?: () => void;
 	onStopBatchRun?: (sessionId?: string) => void;
+	onKillBatchRun?: (sessionId: string) => void;
 	// Error handling callbacks (Phase 5.10)
 	onSkipCurrentDocument?: () => void;
 	onAbortBatchOnError?: () => void;
@@ -186,6 +187,7 @@ export const RightPanel = memo(
 			currentSessionBatchState,
 			onOpenBatchRunner,
 			onStopBatchRun,
+			onKillBatchRun,
 			// Error handling callbacks (Phase 5.10)
 			onSkipCurrentDocument,
 			onAbortBatchOnError,
@@ -727,7 +729,7 @@ export const RightPanel = memo(
 						destructive
 						onConfirm={() => {
 							if (session?.id) {
-								window.maestro.process.kill(session.id);
+								onKillBatchRun?.(session.id);
 							}
 						}}
 						onClose={() => setShowKillConfirm(false)}

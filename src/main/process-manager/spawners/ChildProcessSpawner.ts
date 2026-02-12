@@ -428,8 +428,12 @@ export class ChildProcessSpawner {
 				});
 			}
 
-			// Handle exit
-			childProcess.on('exit', (code) => {
+			// Handle close (NOT exit) to ensure all stdout/stderr data is fully consumed.
+			// The 'exit' event can fire before the stdio streams have been drained,
+			// which causes data loss for short-lived processes where the result is
+			// emitted near the end of stdout (e.g., tab-naming, batch operations).
+			// The 'close' event guarantees all stdio streams are closed first.
+			childProcess.on('close', (code) => {
 				this.exitHandler.handleExit(sessionId, code || 0);
 			});
 

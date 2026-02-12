@@ -256,6 +256,8 @@ interface MainPanelProps {
 	refreshFileTree?: (
 		sessionId: string
 	) => Promise<import('../utils/fileExplorer').FileTreeChanges | undefined>;
+	// Callback to open a saved file in a tab
+	onOpenSavedFileInTab?: (file: { path: string; name: string; content: string; sshRemoteId?: string }) => void;
 	// File preview navigation
 	canGoBack?: boolean;
 	canGoForward?: boolean;
@@ -1795,6 +1797,7 @@ export const MainPanel = React.memo(
 													? () => props.refreshFileTree?.(activeSession.id)
 													: undefined
 											}
+											onOpenInTab={props.onOpenSavedFileInTab}
 										/>
 									)}
 								</div>
