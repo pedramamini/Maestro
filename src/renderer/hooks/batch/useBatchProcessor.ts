@@ -1224,7 +1224,38 @@ export function useBatchProcessor({
 								`[BatchProcessor] Error running task in ${docEntry.filename} for session ${sessionId}:`,
 								error
 							);
-							// Continue to next task on error
+
+							// Check if an error resolution promise was created (e.g., by onAgentError → pauseBatchOnError)
+							// This handles the case where the agent error (e.g., context limit) triggered a pause,
+							// but processTask threw before the next loop iteration could check for it.
+							const postTaskErrorResolution = errorResolutionRefs.current[sessionId];
+							if (postTaskErrorResolution) {
+								const action = await postTaskErrorResolution.promise;
+								delete errorResolutionRefs.current[sessionId];
+
+								if (action === 'abort') {
+									stopRequestedRefs.current[sessionId] = true;
+									break;
+								}
+
+								if (action === 'skip-document') {
+									skipCurrentDocumentAfterError = true;
+									break;
+								}
+
+								// 'resume' — re-read document to get accurate task count before continuing
+								const { taskCount, checkedCount, content: freshContent } = await readDocAndCountTasks(
+									folderPath,
+									effectiveFilename,
+									sshRemoteId
+								);
+								remainingTasks = taskCount;
+								docCheckedCount = checkedCount;
+								docContent = freshContent;
+								continue;
+							}
+
+							// No error resolution pending — continue to next task on error
 							remainingTasks--;
 						}
 					}

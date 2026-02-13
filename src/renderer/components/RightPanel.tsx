@@ -7,7 +7,7 @@ import React, {
 	useCallback,
 	memo,
 } from 'react';
-import { PanelRightClose, PanelRightOpen, Loader2, GitBranch, Skull } from 'lucide-react';
+import { PanelRightClose, PanelRightOpen, Loader2, GitBranch, Skull, AlertTriangle } from 'lucide-react';
 import type { Session, Theme, RightPanelTab, Shortcut, BatchRunState, FocusArea } from '../types';
 import type { FileTreeChanges } from '../utils/fileExplorer';
 import { FileExplorerPanel } from './FileExplorerPanel';
@@ -537,20 +537,39 @@ export const RightPanel = memo(
 					<div
 						className="mx-4 mb-4 px-4 py-3 rounded border flex-shrink-0"
 						style={{
-							backgroundColor: theme.colors.bgActivity,
-							borderColor: theme.colors.warning,
+							backgroundColor: currentSessionBatchState.errorPaused
+								? `${theme.colors.error}15`
+								: theme.colors.bgActivity,
+							borderColor: currentSessionBatchState.errorPaused
+								? theme.colors.error
+								: theme.colors.warning,
 						}}
 					>
 						{/* Header with status and elapsed time */}
 						<div className="flex items-center justify-between mb-2">
 							<div className="flex items-center gap-2">
-								<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.warning }} />
-								<span
-									className="text-xs font-bold uppercase"
-									style={{ color: theme.colors.textMain }}
-								>
-									{currentSessionBatchState.isStopping ? 'Stopping...' : 'Auto Run Active'}
-								</span>
+								{currentSessionBatchState.errorPaused ? (
+									<AlertTriangle className="w-4 h-4" style={{ color: theme.colors.error }} />
+								) : (
+									<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.warning }} />
+								)}
+								{currentSessionBatchState.errorPaused ? (
+									<button
+										onClick={() => setActiveRightTab('autorun')}
+										className="text-xs font-bold uppercase cursor-pointer hover:underline"
+										style={{ color: theme.colors.error }}
+										title="View error details in Auto Run tab"
+									>
+										Auto Run Paused
+									</button>
+								) : (
+									<span
+										className="text-xs font-bold uppercase"
+										style={{ color: theme.colors.textMain }}
+									>
+										{currentSessionBatchState.isStopping ? 'Stopping...' : 'Auto Run Active'}
+									</span>
+								)}
 								{currentSessionBatchState.worktreeActive && (
 									<span title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`}>
 										<GitBranch className="w-4 h-4" style={{ color: theme.colors.warning }} />
@@ -667,7 +686,7 @@ export const RightPanel = memo(
 													100
 												: 0
 									}%`,
-									backgroundColor: currentSessionBatchState.isStopping
+									backgroundColor: currentSessionBatchState.isStopping || currentSessionBatchState.errorPaused
 										? theme.colors.error
 										: theme.colors.warning,
 								}}
@@ -676,12 +695,14 @@ export const RightPanel = memo(
 
 						{/* Overall completed count with loop info */}
 						<div className="mt-2 flex items-start justify-between gap-2">
-							<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-								{currentSessionBatchState.isStopping
-									? 'Waiting for current task to complete before stopping...'
-									: currentSessionBatchState.totalTasksAcrossAllDocs > 0
-										? `${currentSessionBatchState.completedTasksAcrossAllDocs} of ${currentSessionBatchState.totalTasksAcrossAllDocs} tasks completed`
-										: `${currentSessionBatchState.completedTasks} of ${currentSessionBatchState.totalTasks} tasks completed`}
+							<span className="text-[10px]" style={{ color: currentSessionBatchState.errorPaused ? theme.colors.error : theme.colors.textDim }}>
+								{currentSessionBatchState.errorPaused
+									? (currentSessionBatchState.error?.message || 'Paused due to error')
+									: currentSessionBatchState.isStopping
+										? 'Waiting for current task to complete before stopping...'
+										: currentSessionBatchState.totalTasksAcrossAllDocs > 0
+											? `${currentSessionBatchState.completedTasksAcrossAllDocs} of ${currentSessionBatchState.totalTasksAcrossAllDocs} tasks completed`
+											: `${currentSessionBatchState.completedTasks} of ${currentSessionBatchState.totalTasks} tasks completed`}
 							</span>
 							{/* Loop iteration indicator */}
 							{currentSessionBatchState.loopEnabled && (

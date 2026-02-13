@@ -58,6 +58,11 @@ vi.mock('lucide-react', () => ({
 			Skull
 		</span>
 	),
+	AlertTriangle: ({ className }: { className?: string }) => (
+		<span data-testid="alert-triangle" className={className}>
+			AlertTriangle
+		</span>
+	),
 }));
 
 describe('RightPanel', () => {
@@ -830,6 +835,99 @@ describe('RightPanel', () => {
 			render(<RightPanel {...props} />);
 
 			expect(screen.getByTestId('loader')).toBeInTheDocument();
+		});
+
+		it('should show "Auto Run Paused" when errorPaused is true', () => {
+			const currentSessionBatchState: BatchRunState = {
+				isRunning: true,
+				isStopping: false,
+				documents: ['doc1'],
+				currentDocumentIndex: 0,
+				totalTasks: 10,
+				completedTasks: 9,
+				currentDocTasksTotal: 10,
+				currentDocTasksCompleted: 9,
+				totalTasksAcrossAllDocs: 10,
+				completedTasksAcrossAllDocs: 9,
+				loopEnabled: false,
+				loopIteration: 0,
+				errorPaused: true,
+				error: {
+					type: 'token_exhaustion',
+					message: 'Prompt is too long',
+					recoverable: true,
+					timestamp: Date.now(),
+					agentId: 'test',
+				},
+			};
+			const props = createDefaultProps({ currentSessionBatchState });
+			render(<RightPanel {...props} />);
+
+			expect(screen.getByText('Auto Run Paused')).toBeInTheDocument();
+			expect(screen.queryByText('Auto Run Active')).not.toBeInTheDocument();
+			expect(screen.getByTestId('alert-triangle')).toBeInTheDocument();
+			expect(screen.queryByTestId('loader')).not.toBeInTheDocument();
+		});
+
+		it('should show error message in status text when paused', () => {
+			const currentSessionBatchState: BatchRunState = {
+				isRunning: true,
+				isStopping: false,
+				documents: ['doc1'],
+				currentDocumentIndex: 0,
+				totalTasks: 10,
+				completedTasks: 9,
+				currentDocTasksTotal: 10,
+				currentDocTasksCompleted: 9,
+				totalTasksAcrossAllDocs: 10,
+				completedTasksAcrossAllDocs: 9,
+				loopEnabled: false,
+				loopIteration: 0,
+				errorPaused: true,
+				error: {
+					type: 'token_exhaustion',
+					message: 'Prompt is too long',
+					recoverable: true,
+					timestamp: Date.now(),
+					agentId: 'test',
+				},
+			};
+			const props = createDefaultProps({ currentSessionBatchState });
+			render(<RightPanel {...props} />);
+
+			expect(screen.getByText('Prompt is too long')).toBeInTheDocument();
+			expect(screen.queryByText(/tasks completed/)).not.toBeInTheDocument();
+		});
+
+		it('should switch to Auto Run tab when paused badge is clicked', () => {
+			const setActiveRightTab = vi.fn();
+			const currentSessionBatchState: BatchRunState = {
+				isRunning: true,
+				isStopping: false,
+				documents: ['doc1'],
+				currentDocumentIndex: 0,
+				totalTasks: 10,
+				completedTasks: 9,
+				currentDocTasksTotal: 10,
+				currentDocTasksCompleted: 9,
+				totalTasksAcrossAllDocs: 10,
+				completedTasksAcrossAllDocs: 9,
+				loopEnabled: false,
+				loopIteration: 0,
+				errorPaused: true,
+				error: {
+					type: 'token_exhaustion',
+					message: 'Prompt is too long',
+					recoverable: true,
+					timestamp: Date.now(),
+					agentId: 'test',
+				},
+			};
+			const props = createDefaultProps({ currentSessionBatchState, setActiveRightTab });
+			render(<RightPanel {...props} />);
+
+			fireEvent.click(screen.getByText('Auto Run Paused'));
+			expect(setActiveRightTab).toHaveBeenCalledWith('autorun');
 		});
 	});
 
