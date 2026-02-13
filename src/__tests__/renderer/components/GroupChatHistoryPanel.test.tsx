@@ -460,4 +460,184 @@ describe('GroupChatHistoryPanel', () => {
 			}
 		});
 	});
+
+	// ===== MULTI-FILTER INTERACTIONS =====
+	describe('multi-filter interactions', () => {
+		it('should allow toggling off multiple type filters', () => {
+			const entries = [
+				createMockEntry({ id: 'e1', type: 'delegation', summary: 'Delegated task' }),
+				createMockEntry({ id: 'e2', type: 'response', summary: 'Agent replied' }),
+				createMockEntry({ id: 'e3', type: 'synthesis', summary: 'Synthesized output' }),
+				createMockEntry({ id: 'e4', type: 'error', summary: 'Error occurred' }),
+			];
+			render(<GroupChatHistoryPanel {...defaultProps} entries={entries} />);
+
+			// Toggle off delegation and synthesis
+			fireEvent.click(screen.getByRole('button', { name: /Delegation/i }));
+			fireEvent.click(screen.getByRole('button', { name: /Synthesis/i }));
+
+			expect(screen.queryByText('Delegated task')).not.toBeInTheDocument();
+			expect(screen.getByText('Agent replied')).toBeInTheDocument();
+			expect(screen.queryByText('Synthesized output')).not.toBeInTheDocument();
+			expect(screen.getByText('Error occurred')).toBeInTheDocument();
+		});
+
+		it('should show filter empty state when all type filters are off', () => {
+			const entries = [
+				createMockEntry({ id: 'e1', type: 'delegation', summary: 'A' }),
+				createMockEntry({ id: 'e2', type: 'response', summary: 'B' }),
+			];
+			render(<GroupChatHistoryPanel {...defaultProps} entries={entries} />);
+
+			// Toggle off all types
+			fireEvent.click(screen.getByRole('button', { name: /Delegation/i }));
+			fireEvent.click(screen.getByRole('button', { name: /Response/i }));
+			fireEvent.click(screen.getByRole('button', { name: /Synthesis/i }));
+			fireEvent.click(screen.getByRole('button', { name: /Error/i }));
+
+			expect(screen.getByText('No entries match the selected filters.')).toBeInTheDocument();
+		});
+
+		it('should correctly apply type filter + search filter together', () => {
+			const entries = [
+				createMockEntry({ id: 'e1', type: 'delegation', summary: 'Alpha task' }),
+				createMockEntry({ id: 'e2', type: 'response', summary: 'Alpha response' }),
+				createMockEntry({ id: 'e3', type: 'delegation', summary: 'Beta task' }),
+				createMockEntry({ id: 'e4', type: 'response', summary: 'Beta response' }),
+			];
+			const { container } = render(
+				<GroupChatHistoryPanel {...defaultProps} entries={entries} />
+			);
+
+			// Toggle off delegation type
+			fireEvent.click(screen.getByRole('button', { name: /Delegation/i }));
+
+			// Open search and filter for "Alpha"
+			const panel = container.querySelector('[tabIndex="0"]');
+			fireEvent.keyDown(panel!, { key: 'f', metaKey: true });
+			const searchInput = screen.getByPlaceholderText('Filter group chat history...');
+			fireEvent.change(searchInput, { target: { value: 'Alpha' } });
+
+			// Only "Alpha response" should remain (delegation hidden by type filter, Beta hidden by search)
+			expect(screen.queryByText('Alpha task')).not.toBeInTheDocument();
+			expect(screen.getByText('Alpha response')).toBeInTheDocument();
+			expect(screen.queryByText('Beta task')).not.toBeInTheDocument();
+			expect(screen.queryByText('Beta response')).not.toBeInTheDocument();
+		});
+
+		it('should show correct result count with combined filters', () => {
+			const entries = [
+				createMockEntry({ id: 'e1', type: 'delegation', summary: 'Shared keyword' }),
+				createMockEntry({ id: 'e2', type: 'response', summary: 'Shared keyword' }),
+				createMockEntry({ id: 'e3', type: 'response', summary: 'Other text' }),
+			];
+			const { container } = render(
+				<GroupChatHistoryPanel {...defaultProps} entries={entries} />
+			);
+
+			// Toggle off delegation
+			fireEvent.click(screen.getByRole('button', { name: /Delegation/i }));
+
+			// Search for "Shared"
+			const panel = container.querySelector('[tabIndex="0"]');
+			fireEvent.keyDown(panel!, { key: 'f', metaKey: true });
+			const searchInput = screen.getByPlaceholderText('Filter group chat history...');
+			fireEvent.change(searchInput, { target: { value: 'Shared' } });
+
+			// Only 1 result (response with "Shared keyword")
+			const resultCount = container.querySelector('.text-right');
+			expect(resultCount?.textContent).toMatch(/1 result$/);
+		});
+	});
+
+	// ===== ENTRY RENDERING DETAILS =====
+	describe('entry rendering details', () => {
+		it('should use participantColors prop color over entry participantColor', () => {
+			const entries = [
+				createMockEntry({
+					participantName: 'Agent A',
+					participantColor: '#999999', // entry-level color (fallback)
+				}),
+			];
+			render(<GroupChatHistoryPanel {...defaultProps} entries={entries} />);
+
+			const pill = screen.getByText('Agent A');
+			// Should use participantColors['Agent A'] = '#ff0000', not the entry's #999999
+			expect(pill).toHaveStyle({ color: '#ff0000' });
+		});
+
+		it('should fall back to entry participantColor when not in participantColors map', () => {
+			const entries = [
+				createMockEntry({
+					participantName: 'Unknown Agent',
+					participantColor: '#abcdef',
+				}),
+			];
+			render(<GroupChatHistoryPanel {...defaultProps} entries={entries} />);
+
+			const pill = screen.getByText('Unknown Agent');
+			expect(pill).toHaveStyle({ color: '#abcdef' });
+		});
+
+		it('should render entries with data-entry-id attribute', () => {
+			const entries = [
+				createMockEntry({ id: 'entry-abc' }),
+			];
+			const { container } = render(
+				<GroupChatHistoryPanel {...defaultProps} entries={entries} />
+			);
+
+			expect(container.querySelector('[data-entry-id="entry-abc"]')).toBeInTheDocument();
+		});
+
+		it('should render all four entry types with correct styling', () => {
+			const entries = [
+				createMockEntry({ id: 'e1', type: 'delegation', summary: 'Delegation entry' }),
+				createMockEntry({ id: 'e2', type: 'response', summary: 'Response entry' }),
+				createMockEntry({ id: 'e3', type: 'synthesis', summary: 'Synthesis entry' }),
+				createMockEntry({ id: 'e4', type: 'error', summary: 'Error entry' }),
+			];
+			render(<GroupChatHistoryPanel {...defaultProps} entries={entries} />);
+
+			expect(screen.getByText('Delegation entry')).toBeInTheDocument();
+			expect(screen.getByText('Response entry')).toBeInTheDocument();
+			expect(screen.getByText('Synthesis entry')).toBeInTheDocument();
+			expect(screen.getByText('Error entry')).toBeInTheDocument();
+		});
+	});
+
+	// ===== LAYOUT =====
+	describe('layout', () => {
+		it('should render filter pills, activity graph area, and entry list vertically', () => {
+			const entries = [
+				createMockEntry({ id: 'e1', summary: 'Test entry' }),
+			];
+			const { container } = render(
+				<GroupChatHistoryPanel {...defaultProps} entries={entries} />
+			);
+
+			// Main container should be flex-col (vertical stacking)
+			const mainPanel = container.querySelector('.flex-col.overflow-hidden');
+			expect(mainPanel).toBeInTheDocument();
+
+			// Filter pills should be rendered
+			expect(screen.getByRole('button', { name: /Delegation/i })).toBeInTheDocument();
+
+			// Entry should be in the scrollable list area
+			expect(screen.getByText('Test entry')).toBeInTheDocument();
+		});
+
+		it('should have activity graph with w-full class for full width', () => {
+			const entries = [
+				createMockEntry({ timestamp: Date.now() - 1000, summary: 'Recent' }),
+			];
+			const { container } = render(
+				<GroupChatHistoryPanel {...defaultProps} entries={entries} />
+			);
+
+			// Activity graph should use w-full for full width
+			const graphContainer = container.querySelector('.w-full.flex.flex-col.relative');
+			expect(graphContainer).toBeInTheDocument();
+		});
+	});
 });
