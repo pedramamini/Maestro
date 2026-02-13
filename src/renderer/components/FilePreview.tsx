@@ -41,6 +41,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useClickOutside } from '../hooks/ui/useClickOutside';
 import { Modal, ModalFooter } from './ui/Modal';
 import { MermaidRenderer } from './MermaidRenderer';
+import { CsvTableRenderer } from './CsvTableRenderer';
 import { getEncoder, formatTokenCount } from '../utils/tokenCounter';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { remarkFileLinks, buildFileTreeIndices } from '../utils/remarkFileLinks';
@@ -175,6 +176,8 @@ const getLanguageFromFilename = (filename: string): string => {
 		yml: 'yaml',
 		toml: 'toml',
 		xml: 'xml',
+		csv: 'csv',
+		tsv: 'csv',
 	};
 	return languageMap[ext || ''] || 'text';
 };
@@ -764,6 +767,7 @@ export const FilePreview = React.memo(
 		// Compute derived values - must be before any early returns but after hooks
 		const language = file ? getLanguageFromFilename(file.name) : '';
 		const isMarkdown = language === 'markdown';
+		const isCsv = language === 'csv';
 		const isImage = file ? isImageFile(file.name) : false;
 
 		// Check for binary files - either by extension or by content analysis
@@ -2314,6 +2318,8 @@ export const FilePreview = React.memo(
 								}
 							}}
 						/>
+					) : isCsv && !markdownEditMode ? (
+						<CsvTableRenderer content={file.content} theme={theme} />
 					) : isMarkdown ? (
 						<div
 							ref={markdownContainerRef}

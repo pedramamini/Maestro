@@ -106,6 +106,13 @@ vi.mock('../../../renderer/components/MermaidRenderer', () => ({
 	MermaidRenderer: () => <div data-testid="mermaid-renderer">Mermaid</div>,
 }));
 
+// Mock CsvTableRenderer
+vi.mock('../../../renderer/components/CsvTableRenderer', () => ({
+	CsvTableRenderer: ({ content }: { content: string }) => (
+		<div data-testid="csv-table-renderer">{content.substring(0, 50)}</div>
+	),
+}));
+
 // Mock token counter - getEncoder must return a Promise
 vi.mock('../../../renderer/utils/tokenCounter', () => ({
 	getEncoder: vi.fn(() => Promise.resolve({ encode: () => [1, 2, 3] })),
@@ -1311,6 +1318,67 @@ print("world")
 			expect(onScrollPositionChange).not.toHaveBeenCalled();
 
 			vi.useRealTimers();
+		});
+	});
+
+	describe('CSV file rendering', () => {
+		it('renders CsvTableRenderer for .csv files', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+				/>
+			);
+
+			expect(screen.getByTestId('csv-table-renderer')).toBeInTheDocument();
+		});
+
+		it('renders CsvTableRenderer for .tsv files', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.tsv', content: 'Name\tAge\nAlice\t30', path: '/test/data.tsv' }}
+				/>
+			);
+
+			expect(screen.getByTestId('csv-table-renderer')).toBeInTheDocument();
+		});
+
+		it('shows edit button for CSV files', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+				/>
+			);
+
+			expect(screen.getByTestId('edit-icon')).toBeInTheDocument();
+		});
+
+		it('shows textarea when in edit mode for CSV files', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox');
+			expect(textarea).toBeInTheDocument();
+			expect(textarea).toHaveValue('Name,Age\nAlice,30');
+		});
+
+		it('does not render CsvTableRenderer when in edit mode', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			expect(screen.queryByTestId('csv-table-renderer')).not.toBeInTheDocument();
 		});
 	});
 });
