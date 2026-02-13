@@ -58,6 +58,7 @@ interface GroupChatPanelProps {
 	// Markdown toggle (Cmd+E)
 	markdownEditMode?: boolean;
 	onToggleMarkdownEditMode?: () => void;
+	chatUserMessagesOnRight?: boolean;
 	// Output collapsing
 	maxOutputLines?: number;
 	// Input send behavior
@@ -101,6 +102,7 @@ export function GroupChatPanel({
 	onReorderQueuedItems,
 	markdownEditMode,
 	onToggleMarkdownEditMode,
+	chatUserMessagesOnRight = true,
 	maxOutputLines,
 	enterToSendAI,
 	setEnterToSendAI,
@@ -132,6 +134,7 @@ export function GroupChatPanel({
 				state={state}
 				markdownEditMode={markdownEditMode}
 				onToggleMarkdownEditMode={onToggleMarkdownEditMode}
+				userMessagesOnRight={chatUserMessagesOnRight}
 				maxOutputLines={maxOutputLines}
 				participantColors={participantColors}
 			/>

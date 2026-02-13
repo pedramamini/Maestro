@@ -29,6 +29,7 @@ interface GroupChatMessagesProps {
 	markdownEditMode?: boolean;
 	onToggleMarkdownEditMode?: () => void;
 	maxOutputLines?: number;
+	userMessagesOnRight?: boolean;
 	/** Pre-computed participant colors (if provided, overrides internal color generation) */
 	participantColors?: Record<string, string>;
 }
@@ -48,6 +49,7 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 			markdownEditMode,
 			onToggleMarkdownEditMode,
 			maxOutputLines = 30,
+			userMessagesOnRight = true,
 			participantColors: externalColors,
 		},
 		ref
@@ -216,6 +218,7 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 					messages.map((msg, index) => {
 						const isUser = msg.from === 'user';
 						const isSystem = msg.from === 'system';
+						const alignMessageRight = isUser ? userMessagesOnRight : !userMessagesOnRight;
 						const msgKey = `${msg.timestamp}-${index}`;
 						const isExpanded = expandedMessages.has(msgKey);
 
@@ -241,11 +244,11 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 							<div
 								key={msgKey}
 								data-message-timestamp={msg.timestamp}
-								className={`flex gap-4 group ${isUser ? 'flex-row-reverse' : ''} px-6 py-2`}
+								className={`flex gap-4 group ${alignMessageRight ? 'flex-row-reverse' : ''} px-6 py-2`}
 							>
 								{/* Timestamp - outside bubble, like AI Terminal */}
 								<div
-									className={`w-20 shrink-0 text-[10px] pt-2 ${isUser ? 'text-right' : 'text-left'}`}
+									className={`w-20 shrink-0 text-[10px] pt-2 ${alignMessageRight ? 'text-right' : 'text-left'}`}
 									style={{ color: theme.colors.textDim, opacity: 0.6 }}
 								>
 									{formatTimestamp(msg.timestamp)}
@@ -253,7 +256,7 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 
 								{/* Message bubble */}
 								<div
-									className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${isUser ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
+									className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${alignMessageRight ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
 									style={{
 										backgroundColor: isUser
 											? `color-mix(in srgb, ${theme.colors.accent} 20%, ${theme.colors.bgSidebar})`

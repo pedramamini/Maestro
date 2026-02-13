@@ -79,6 +79,7 @@ interface LogItemProps {
 	// Markdown rendering mode for AI responses (when true, shows raw text)
 	markdownEditMode: boolean;
 	onToggleMarkdownEditMode: () => void;
+	userMessagesOnRight: boolean;
 	// Replay message callback (AI mode only)
 	onReplayMessage?: (text: string, images?: string[]) => void;
 	// File linking support
@@ -121,6 +122,7 @@ const LogItemComponent = memo(
 		ansiConverter,
 		markdownEditMode,
 		onToggleMarkdownEditMode,
+		userMessagesOnRight,
 		onReplayMessage,
 		fileTree,
 		cwd,
@@ -326,15 +328,16 @@ const LogItemComponent = memo(
 				: htmlContent;
 
 		const isUserMessage = log.source === 'user';
+		const alignMessageRight = isUserMessage ? userMessagesOnRight : !userMessagesOnRight;
 
 		return (
 			<div
 				ref={logItemRef}
-				className={`flex gap-4 group ${isUserMessage ? 'flex-row-reverse' : ''} px-6 py-2`}
+				className={`flex gap-4 group ${alignMessageRight ? 'flex-row-reverse' : ''} px-6 py-2`}
 				data-log-index={index}
 			>
 				<div
-					className={`w-20 shrink-0 text-[10px] pt-2 ${isUserMessage ? 'text-right' : 'text-left'}`}
+					className={`w-20 shrink-0 text-[10px] pt-2 ${alignMessageRight ? 'text-right' : 'text-left'}`}
 					style={{ fontFamily, color: theme.colors.textDim, opacity: 0.6 }}
 				>
 					{(() => {
@@ -360,7 +363,7 @@ const LogItemComponent = memo(
 					})()}
 				</div>
 				<div
-					className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${isUserMessage ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
+					className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${alignMessageRight ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
 					style={{
 						backgroundColor: isUserMessage
 							? isAIMode
@@ -954,6 +957,7 @@ interface TerminalOutputProps {
 	initialScrollTop?: number; // Initial scroll position to restore
 	markdownEditMode: boolean; // Whether to show raw markdown or rendered markdown for AI responses
 	setMarkdownEditMode: (value: boolean) => void; // Toggle markdown mode
+	userMessagesOnRight: boolean; // Chat alignment preference
 	onReplayMessage?: (text: string, images?: string[]) => void; // Replay a user message
 	fileTree?: FileNode[]; // File tree for linking file references
 	cwd?: string; // Current working directory for proximity-based matching
@@ -991,6 +995,7 @@ export const TerminalOutput = memo(
 			initialScrollTop,
 			markdownEditMode,
 			setMarkdownEditMode,
+			userMessagesOnRight = true,
 			onReplayMessage,
 			fileTree,
 			cwd,
@@ -1608,6 +1613,7 @@ export const TerminalOutput = memo(
 							ansiConverter={ansiConverter}
 							markdownEditMode={markdownEditMode}
 							onToggleMarkdownEditMode={toggleMarkdownEditMode}
+							userMessagesOnRight={userMessagesOnRight}
 							onReplayMessage={onReplayMessage}
 							fileTree={fileTree}
 							cwd={cwd}
