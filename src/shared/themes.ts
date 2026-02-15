@@ -542,7 +542,7 @@ export const THEMES: Record<ThemeId, Theme> = {
 			bgMain: '#0d0221',
 			bgSidebar: '#0a0118',
 			bgActivity: '#1a0838',
-			border: '#00d4aa',
+			border: '#1a3a4a',
 			textMain: '#f0e6ff',
 			textDim: '#60e0d0',
 			accent: '#00ffcc',
