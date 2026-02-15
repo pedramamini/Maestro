@@ -54,6 +54,11 @@ export function getMigrations(): Migration[] {
 			description: 'Add session_lifecycle table for tracking session creation and closure',
 			up: (db) => migrateV3(db),
 		},
+		{
+			version: 4,
+			description: 'Add compound indexes for time-range + column queries',
+			up: (db) => migrateV4(db),
+		},
 	];
 }
 
@@ -231,4 +236,29 @@ function migrateV3(db: Database.Database): void {
 	runStatements(db, CREATE_SESSION_LIFECYCLE_INDEXES_SQL);
 
 	logger.debug('Created session_lifecycle table', LOG_CONTEXT);
+}
+
+/**
+ * Migration v4: Add compound indexes for time-range queries
+ *
+ * Most aggregation queries filter by start_time/created_at first, then group by
+ * agent_type, source, or project_path. Compound indexes with the time column
+ * leading allow SQLite to use a single index scan for both the range filter
+ * and the grouping/filtering.
+ */
+function migrateV4(db: Database.Database): void {
+	db.prepare(
+		'CREATE INDEX IF NOT EXISTS idx_query_time_agent ON query_events(start_time, agent_type)'
+	).run();
+	db.prepare(
+		'CREATE INDEX IF NOT EXISTS idx_query_time_source ON query_events(start_time, source)'
+	).run();
+	db.prepare(
+		'CREATE INDEX IF NOT EXISTS idx_query_time_project ON query_events(start_time, project_path)'
+	).run();
+	db.prepare(
+		'CREATE INDEX IF NOT EXISTS idx_session_time_agent ON session_lifecycle(created_at, agent_type)'
+	).run();
+
+	logger.debug('Added compound indexes for time-range queries', LOG_CONTEXT);
 }
