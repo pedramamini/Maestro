@@ -1672,7 +1672,7 @@ function SessionListInner(props: SessionListProps) {
 					groupId={options.groupId}
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
-					jumpNumber={getSessionJumpNumber(session.id)}
+					jumpNumber={sessionJumpNumberMap.get(session.id) ?? null}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -1731,7 +1731,7 @@ function SessionListInner(props: SessionListProps) {
 										leftSidebarOpen={leftSidebarOpen}
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
-										jumpNumber={getSessionJumpNumber(child.id)}
+										jumpNumber={sessionJumpNumberMap.get(child.id) ?? null}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}
@@ -1978,14 +1978,17 @@ function SessionListInner(props: SessionListProps) {
 		}
 	}, [sessionFilter]);
 
-	// Get the jump number (1-9, 0=10th) for a session based on its position in visibleSessions
-	const getSessionJumpNumber = (sessionId: string): string | null => {
-		if (!showSessionJumpNumbers) return null;
-		const index = visibleSessions.findIndex((s) => s.id === sessionId);
-		if (index < 0 || index >= 10) return null;
-		// Show 1-9 for positions 0-8, and 0 for position 9 (10th session)
-		return index === 9 ? '0' : String(index + 1);
-	};
+	// Pre-compute session jump numbers as a Map for O(1) lookups instead of O(n) findIndex per session
+	const sessionJumpNumberMap = useMemo(() => {
+		const map = new Map<string, string>();
+		if (!showSessionJumpNumbers) return map;
+		const limit = Math.min(visibleSessions.length, 10);
+		for (let i = 0; i < limit; i++) {
+			// Show 1-9 for positions 0-8, and 0 for position 9 (10th session)
+			map.set(visibleSessions[i].id, i === 9 ? '0' : String(i + 1));
+		}
+		return map;
+	}, [showSessionJumpNumbers, visibleSessions]);
 
 	return (
 		<div
