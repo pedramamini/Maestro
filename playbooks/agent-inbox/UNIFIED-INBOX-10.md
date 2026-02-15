@@ -170,7 +170,7 @@ The agent icon badge (`data-testid="agent-type-badge"`) was added in Phase 08 Ta
 
     **Verify:** `npm run lint` passes. `npm run test -- --testPathPattern="AgentInbox" --no-coverage` — all tests pass.
 
-- [ ] **TASK 3 — Add group expand/collapse toggle.** In `src/renderer/components/AgentInbox.tsx`:
+- [x] **TASK 3 — Add group expand/collapse toggle.** In `src/renderer/components/AgentInbox.tsx`:
 
     1. Add state to track collapsed groups in the `AgentInbox` component function:
         ```typescript
