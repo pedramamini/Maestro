@@ -109,6 +109,52 @@ interface SessionFileInfo {
 }
 
 /**
+ * Cache entry for session file discovery results
+ */
+interface DiscoveryCacheEntry {
+	files: SessionFileInfo[];
+	timestamp: number;
+}
+
+/** TTL for discovery cache in milliseconds (30 seconds) */
+const DISCOVERY_CACHE_TTL_MS = 30_000;
+
+/** Concurrency limit for directory reads */
+const DIR_READ_CONCURRENCY = 10;
+
+/** Cached discovery results */
+const discoveryCache: {
+	claude?: DiscoveryCacheEntry;
+	codex?: DiscoveryCacheEntry;
+} = {};
+
+/**
+ * Invalidate the discovery cache (e.g., when sessions are created/deleted)
+ */
+export function invalidateDiscoveryCache(): void {
+	delete discoveryCache.claude;
+	delete discoveryCache.codex;
+}
+
+/**
+ * Process items in batches with a concurrency limit.
+ * Executes `fn` for each item, processing at most `concurrency` items at a time.
+ */
+async function processInBatches<T, R>(
+	items: T[],
+	concurrency: number,
+	fn: (item: T) => Promise<R>
+): Promise<R[]> {
+	const results: R[] = [];
+	for (let i = 0; i < items.length; i += concurrency) {
+		const batch = items.slice(i, i + concurrency);
+		const batchResults = await Promise.all(batch.map(fn));
+		results.push(...batchResults);
+	}
+	return results;
+}
+
+/**
  * Parse a Claude Code session file and extract stats
  */
 function parseClaudeSessionContent(
@@ -200,64 +246,90 @@ function parseCodexSessionContent(
 
 /**
  * Discover Claude Code session files from ~/.claude/projects/
- * Returns list of files with their mtime for cache comparison
+ * Returns list of files with their mtime for cache comparison.
+ * Uses batched concurrency (10 directories at a time) and a 30s TTL cache.
  */
 async function discoverClaudeSessionFiles(): Promise<SessionFileInfo[]> {
+	// Check cache first
+	const cached = discoveryCache.claude;
+	if (cached && Date.now() - cached.timestamp < DISCOVERY_CACHE_TTL_MS) {
+		return cached.files;
+	}
+
 	const homeDir = os.homedir();
 	const claudeProjectsDir = path.join(homeDir, '.claude', 'projects');
-	const files: SessionFileInfo[] = [];
 
 	try {
 		await fs.access(claudeProjectsDir);
 	} catch {
-		return files;
+		discoveryCache.claude = { files: [], timestamp: Date.now() };
+		return [];
 	}
 
 	const projectDirs = await fs.readdir(claudeProjectsDir);
 
-	for (const projectDir of projectDirs) {
-		const projectPath = path.join(claudeProjectsDir, projectDir);
-		try {
-			const stat = await fs.stat(projectPath);
-			if (!stat.isDirectory()) continue;
+	// Process project directories in batches of DIR_READ_CONCURRENCY
+	const batchResults = await processInBatches(
+		projectDirs,
+		DIR_READ_CONCURRENCY,
+		async (projectDir): Promise<SessionFileInfo[]> => {
+			const projectPath = path.join(claudeProjectsDir, projectDir);
+			try {
+				const stat = await fs.stat(projectPath);
+				if (!stat.isDirectory()) return [];
 
-			const dirFiles = await fs.readdir(projectPath);
-			const sessionFiles = dirFiles.filter((f) => f.endsWith('.jsonl'));
+				const dirFiles = await fs.readdir(projectPath);
+				const sessionFiles = dirFiles.filter((f) => f.endsWith('.jsonl'));
 
-			for (const filename of sessionFiles) {
-				const filePath = path.join(projectPath, filename);
-				try {
-					const fileStat = await fs.stat(filePath);
-					// Skip 0-byte sessions (created but abandoned before any content was written)
-					if (fileStat.size === 0) continue;
-					const sessionKey = `${projectDir}/${filename.replace('.jsonl', '')}`;
-					files.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
-				} catch {
-					// Skip files we can't stat
+				const fileResults: SessionFileInfo[] = [];
+				for (const filename of sessionFiles) {
+					const filePath = path.join(projectPath, filename);
+					try {
+						const fileStat = await fs.stat(filePath);
+						// Skip 0-byte sessions (created but abandoned before any content was written)
+						if (fileStat.size === 0) continue;
+						const sessionKey = `${projectDir}/${filename.replace('.jsonl', '')}`;
+						fileResults.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
+					} catch {
+						// Skip files we can't stat
+					}
 				}
+				return fileResults;
+			} catch {
+				return [];
 			}
-		} catch {
-			// Skip directories we can't access
 		}
-	}
+	);
 
+	const files = batchResults.flat();
+	discoveryCache.claude = { files, timestamp: Date.now() };
 	return files;
 }
 
 /**
  * Discover Codex session files from ~/.codex/sessions/YYYY/MM/DD/
- * Returns list of files with their mtime for cache comparison
+ * Returns list of files with their mtime for cache comparison.
+ * Flattens the year/month/day hierarchy and parallelizes day-level directory reads.
  */
 async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
+	// Check cache first
+	const cached = discoveryCache.codex;
+	if (cached && Date.now() - cached.timestamp < DISCOVERY_CACHE_TTL_MS) {
+		return cached.files;
+	}
+
 	const homeDir = os.homedir();
 	const codexSessionsDir = path.join(homeDir, '.codex', 'sessions');
-	const files: SessionFileInfo[] = [];
 
 	try {
 		await fs.access(codexSessionsDir);
 	} catch {
-		return files;
+		discoveryCache.codex = { files: [], timestamp: Date.now() };
+		return [];
 	}
+
+	// Step 1: Collect all day directories by traversing year/month levels
+	const dayDirs: Array<{ dayDir: string; year: string; month: string; day: string }> = [];
 
 	const years = await fs.readdir(codexSessionsDir);
 	for (const year of years) {
@@ -280,30 +352,12 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 					const days = await fs.readdir(monthDir);
 					for (const day of days) {
 						if (!/^\d{2}$/.test(day)) continue;
-						const dayDir = path.join(monthDir, day);
-
-						try {
-							const dayStat = await fs.stat(dayDir);
-							if (!dayStat.isDirectory()) continue;
-
-							const dirFiles = await fs.readdir(dayDir);
-							for (const file of dirFiles) {
-								if (!file.endsWith('.jsonl')) continue;
-								const filePath = path.join(dayDir, file);
-
-								try {
-									const fileStat = await fs.stat(filePath);
-									// Skip 0-byte sessions (created but abandoned before any content was written)
-									if (fileStat.size === 0) continue;
-									const sessionKey = `${year}/${month}/${day}/${file.replace('.jsonl', '')}`;
-									files.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
-								} catch {
-									// Skip files we can't stat
-								}
-							}
-						} catch {
-							continue;
-						}
+						dayDirs.push({
+							dayDir: path.join(monthDir, day),
+							year,
+							month,
+							day,
+						});
 					}
 				} catch {
 					continue;
@@ -314,6 +368,41 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 		}
 	}
 
+	// Step 2: Process all day directories in parallel batches
+	const batchResults = await processInBatches(
+		dayDirs,
+		DIR_READ_CONCURRENCY,
+		async ({ dayDir, year, month, day }): Promise<SessionFileInfo[]> => {
+			try {
+				const dayStat = await fs.stat(dayDir);
+				if (!dayStat.isDirectory()) return [];
+
+				const dirFiles = await fs.readdir(dayDir);
+				const fileResults: SessionFileInfo[] = [];
+
+				for (const file of dirFiles) {
+					if (!file.endsWith('.jsonl')) continue;
+					const filePath = path.join(dayDir, file);
+
+					try {
+						const fileStat = await fs.stat(filePath);
+						// Skip 0-byte sessions (created but abandoned before any content was written)
+						if (fileStat.size === 0) continue;
+						const sessionKey = `${year}/${month}/${day}/${file.replace('.jsonl', '')}`;
+						fileResults.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
+					} catch {
+						// Skip files we can't stat
+					}
+				}
+				return fileResults;
+			} catch {
+				return [];
+			}
+		}
+	);
+
+	const files = batchResults.flat();
+	discoveryCache.codex = { files, timestamp: Date.now() };
 	return files;
 }
 
