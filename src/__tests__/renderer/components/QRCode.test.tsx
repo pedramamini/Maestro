@@ -521,6 +521,18 @@ describe('QRCode', () => {
 		});
 	});
 
+	describe('memoization', () => {
+		it('QRCode is wrapped with React.memo', () => {
+			const memoType = QRCode as unknown as { $$typeof: symbol; type: { name: string } };
+			expect(memoType.$$typeof).toBe(Symbol.for('react.memo'));
+		});
+
+		it('QRCode preserves display name', () => {
+			const memoType = QRCode as unknown as { type: { name: string } };
+			expect(memoType.type.name).toMatch(/^QRCode/);
+		});
+	});
+
 	describe('Various Value Types', () => {
 		it('should handle URL values', async () => {
 			render(<QRCode value="https://example.com/path?query=1" />);

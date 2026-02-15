@@ -5,7 +5,7 @@
  * No cloud services - all generation happens locally.
  */
 
-import { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo, memo } from 'react';
 import QRCodeLib from 'qrcode';
 
 interface QRCodeProps {
@@ -23,7 +23,7 @@ interface QRCodeProps {
 	className?: string;
 }
 
-export function QRCode({
+export const QRCode = memo(function QRCode({
 	value,
 	size = 128,
 	bgColor = 'transparent',
@@ -61,11 +61,19 @@ export function QRCode({
 			});
 	}, [value, size, bgColor, fgColor]);
 
+	const sizeStyle = useMemo(() => ({ width: size, height: size }), [size]);
+
+	const loadingStyle = useMemo(() => ({
+		width: size,
+		height: size,
+		backgroundColor: 'rgba(255,255,255,0.1)',
+	}), [size]);
+
 	if (error) {
 		return (
 			<div
 				className={`flex items-center justify-center ${className}`}
-				style={{ width: size, height: size }}
+				style={sizeStyle}
 			>
 				<span className="text-xs text-red-500">{error}</span>
 			</div>
@@ -76,11 +84,11 @@ export function QRCode({
 		return (
 			<div
 				className={`flex items-center justify-center ${className}`}
-				style={{ width: size, height: size }}
+				style={sizeStyle}
 			>
 				<div
 					className="animate-pulse rounded"
-					style={{ width: size, height: size, backgroundColor: 'rgba(255,255,255,0.1)' }}
+					style={loadingStyle}
 				/>
 			</div>
 		);
@@ -93,7 +101,9 @@ export function QRCode({
 			width={size}
 			height={size}
 			className={className}
-			style={{ imageRendering: 'pixelated' }}
+			style={imgStyle}
 		/>
 	);
-}
+});
+
+const imgStyle: React.CSSProperties = { imageRendering: 'pixelated' };
