@@ -2153,6 +2153,7 @@ function MaestroConsoleInner() {
 		| null
 	>(null);
 	const getBatchStateRef = useRef<((sessionId: string) => BatchRunState) | null>(null);
+	const resumeAfterErrorRef = useRef<((sessionId: string) => void) | null>(null);
 
 	// Note: thinkingChunkBufferRef and thinkingChunkRafIdRef moved into useAgentListeners hook
 
@@ -2205,6 +2206,81 @@ function MaestroConsoleInner() {
 			unsubWarning();
 			unsubReached();
 		};
+	}, []);
+
+	// Subscribe to account recovery events for auto-resume of paused Auto Runs
+	useEffect(() => {
+		const unsubRecovery = window.maestro.accounts.onRecoveryAvailable((data) => {
+			addToastRef.current({
+				type: 'success',
+				title: 'Account Recovered',
+				message: data.recoveredCount === 1
+					? 'Account is available again'
+					: `${data.recoveredCount} accounts are available again`,
+				duration: 8_000,
+			});
+
+			// Auto-resume any Auto Runs that are paused due to rate limiting
+			const currentSessions = sessionsRef.current;
+			for (const session of currentSessions) {
+				const batchState = getBatchStateRef.current?.(session.id);
+				if (!batchState?.isRunning || batchState.processingState !== 'PAUSED_ERROR') continue;
+				if (!batchState.error) continue;
+
+				// Check if the pause was due to rate limiting
+				const isRateLimitPause =
+					batchState.error.type === 'rate_limited' ||
+					(batchState.error.message?.includes('rate') ?? false) ||
+					(batchState.error.message?.includes('throttle') ?? false) ||
+					(batchState.error.message?.includes('All accounts') ?? false);
+
+				if (isRateLimitPause) {
+					const recoveredForThis = data.recoveredAccountIds.includes(session.accountId || '');
+					if (recoveredForThis || data.recoveredAccountIds.length > 0) {
+						resumeAfterErrorRef.current?.(session.id);
+
+						addToastRef.current({
+							type: 'info',
+							title: 'Auto Run Resuming',
+							message: 'Resuming after account recovery',
+							duration: 5_000,
+						});
+					}
+				}
+			}
+		});
+
+		return () => unsubRecovery();
+	}, []);
+
+	// Subscribe to all-accounts-exhausted throttle events for Auto Run pause
+	useEffect(() => {
+		const unsubThrottled = window.maestro.accounts.onThrottled((data) => {
+			if (!data.noAlternatives) return; // Only handle the exhausted case
+
+			const sessionId = data.sessionId as string;
+			if (!sessionId) return;
+
+			// Check if this session has an active Auto Run
+			const batchState = getBatchStateRef.current?.(sessionId);
+			if (!batchState?.isRunning || batchState.errorPaused) return;
+
+			// Pause the batch with a specific rate_limited error so recovery can auto-resolve it
+			pauseBatchOnErrorRef.current?.(
+				sessionId,
+				{
+					type: 'rate_limited',
+					message: 'All accounts have been rate-limited. Waiting for automatic recovery...',
+					recoverable: true,
+					agentId: (data.agentId as string) || 'claude-code',
+					timestamp: Date.now(),
+				},
+				batchState.currentDocumentIndex,
+				'Waiting for account recovery'
+			);
+		});
+
+		return () => unsubThrottled();
 	}, []);
 
 	// Subscribe to account assignment events (update session state when main process assigns an account)
@@ -5604,6 +5680,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// These are used by the agent error handler which runs in a useEffect with empty deps
 	pauseBatchOnErrorRef.current = pauseBatchOnError;
 	getBatchStateRef.current = getBatchState;
+	resumeAfterErrorRef.current = resumeAfterError;
 
 	// Get batch state for the current session - used for locking the AutoRun editor
 	// This is session-specific so users can edit docs in other sessions while one runs
@@ -7384,8 +7461,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				enabled: boolean;
 				remoteId: string | null;
 				workingDirOverride?: string;
-			}
+			},
+			accountId?: string,
 		) => {
+			// Update session fields immediately
 			setSessions((prev) =>
 				prev.map((s) => {
 					if (s.id !== sessionId) return s;
@@ -7399,11 +7478,45 @@ You are taking over this conversation. Based on the context above, provide a bri
 						customModel,
 						customContextWindow,
 						sessionSshRemoteConfig,
+						...(accountId !== undefined ? { accountId } : {}),
 					};
 				})
 			);
+
+			// Handle account change: resolve name immediately, then trigger switch/assign
+			if (accountId) {
+				const currentSession = sessionsRef.current.find(s => s.id === sessionId);
+				const fromAccountId = currentSession?.accountId;
+
+				// Resolve account name and update session right away
+				window.maestro.accounts.list().then((accounts: any[]) => {
+					const account = accounts.find((a: any) => a.id === accountId);
+					if (account) {
+						setSessions((prev) =>
+							prev.map((s) => {
+								if (s.id !== sessionId) return s;
+								return { ...s, accountId, accountName: account.name };
+							})
+						);
+					}
+				}).catch(() => {});
+
+				if (fromAccountId && fromAccountId !== accountId) {
+					// Full switch: kills running process, reassigns, respawns with new CLAUDE_CONFIG_DIR
+					window.maestro.accounts.executeSwitch({
+						sessionId,
+						fromAccountId,
+						toAccountId: accountId,
+						reason: 'manual',
+						automatic: false,
+					}).catch((err: any) => console.error('Failed to execute account switch:', err));
+				} else {
+					// First assignment or same account — just update registry
+					window.maestro.accounts.assign(sessionId, accountId).catch(() => {});
+				}
+			}
 		},
-		[]
+		[sessionsRef]
 	);
 
 	const handleRenameTab = useCallback(

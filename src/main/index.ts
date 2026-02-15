@@ -60,6 +60,8 @@ import {
 import { initializeStatsDB, closeStatsDB, getStatsDB } from './stats';
 import { AccountRegistry } from './accounts/account-registry';
 import { AccountThrottleHandler } from './accounts/account-throttle-handler';
+import { AccountAuthRecovery } from './accounts/account-auth-recovery';
+import { AccountRecoveryPoller } from './accounts/account-recovery-poller';
 import { getAccountStore } from './stores';
 import { groupChatEmitters } from './ipc/handlers/groupChat';
 import {
@@ -230,6 +232,8 @@ let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
 let accountRegistry: AccountRegistry | null = null;
 let accountThrottleHandler: AccountThrottleHandler | null = null;
+let accountAuthRecovery: AccountAuthRecovery | null = null;
+let accountRecoveryPoller: AccountRecoveryPoller | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -349,7 +353,7 @@ app.whenReady().then(async () => {
 		logger.warn('Continuing without stats - usage tracking will be unavailable', 'Startup');
 	}
 
-	// Initialize account registry and throttle handler for account multiplexing
+	// Initialize account registry, throttle handler, and auth recovery for account multiplexing
 	try {
 		accountRegistry = new AccountRegistry(getAccountStore());
 		accountThrottleHandler = new AccountThrottleHandler(
@@ -359,6 +363,32 @@ app.whenReady().then(async () => {
 	} catch (error) {
 		logger.error(`Failed to initialize account registry: ${error}`, 'Startup');
 		logger.warn('Continuing without account multiplexing', 'Startup');
+	}
+
+	// Initialize auth recovery for automatic re-login on expired tokens
+	if (accountRegistry && processManager && agentDetector) {
+		try {
+			accountAuthRecovery = new AccountAuthRecovery(
+				processManager, accountRegistry, agentDetector, safeSend
+			);
+			logger.info('Account auth recovery initialized', 'Startup');
+		} catch (error) {
+			logger.error(`Failed to initialize auth recovery: ${error}`, 'Startup');
+		}
+	}
+
+	// Initialize recovery poller for timer-based throttle recovery
+	if (accountRegistry) {
+		try {
+			accountRecoveryPoller = new AccountRecoveryPoller({
+				accountRegistry,
+				safeSend,
+			});
+			accountRecoveryPoller.start();
+			logger.info('Account recovery poller started', 'Startup');
+		} catch (error) {
+			logger.error(`Failed to initialize recovery poller: ${error}`, 'Startup');
+		}
 	}
 
 	// Set up IPC handlers
@@ -417,6 +447,11 @@ const quitHandler = createQuitHandler({
 	stopCliWatcher: () => cliWatcher.stop(),
 });
 quitHandler.setup();
+
+// Stop recovery poller on quit (must run before the quit handler's cleanup)
+app.on('before-quit', () => {
+	accountRecoveryPoller?.stop();
+});
 
 // startCliActivityWatcher is now handled by cliWatcher (Phase 4 refactoring)
 
@@ -478,6 +513,7 @@ function setupIpcHandlers() {
 		getMainWindow: () => mainWindow,
 		sessionsStore,
 		getAccountRegistry: () => accountRegistry,
+		getAccountAuthRecovery: () => accountAuthRecovery,
 		safeSend,
 	});
 
@@ -576,6 +612,8 @@ function setupIpcHandlers() {
 	// Register Account Multiplexing handlers (CRUD, assignments, usage queries)
 	registerAccountHandlers({
 		getAccountRegistry: () => accountRegistry,
+		getAccountAuthRecovery: () => accountAuthRecovery,
+		getRecoveryPoller: () => accountRecoveryPoller,
 	});
 
 	// Register Document Graph handlers for file watching
@@ -716,6 +754,7 @@ function setupProcessListeners() {
 			getStatsDB,
 			getAccountRegistry: () => accountRegistry,
 			getThrottleHandler: () => accountThrottleHandler,
+			getAuthRecovery: () => accountAuthRecovery,
 			debugLog,
 			patterns: {
 				REGEX_MODERATOR_SESSION,
