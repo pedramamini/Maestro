@@ -11,6 +11,7 @@ This phase adds the segmented controls for sort/filter, empty state handling, an
 ## Sort Control (Segmented, Not Toggle)
 
 - [x] **Implement sort as a segmented control.** In the AgentInbox header, replace any toggle button with a **segmented control** (3 segments side by side, like macOS). This provides clear affordance — users see all options at once.
+
   > ✅ Already implemented in Phase 03. Aligned padding to 4px 10px per spec, added `transition: background 150ms`, fixed group header font-size to 13px. All 104 AgentInbox tests pass.
 
   **Segments:**
@@ -33,6 +34,7 @@ This phase adds the segmented controls for sort/filter, empty state handling, an
 ## Filter Control (Segmented, Not Toggle)
 
 - [x] **Implement filter as a segmented control.** Same pattern as sort, positioned next to it in the header.
+
   > ✅ Filter control was already implemented in Phase 03 with correct segments (All, Needs Input, Ready), state management, and badge count. Added missing ARIA: `aria-label="Filter sessions"` on container, `aria-pressed={isActive}` on each `<button>`. Also added `aria-label="Sort sessions"` to sort control for consistency. 6 new ARIA tests added. All 19,297 tests pass.
 
   **Segments:**
@@ -48,7 +50,9 @@ This phase adds the segmented controls for sort/filter, empty state handling, an
 
 ## Empty States (In-Modal Content, Not Close)
 
-- [ ] **Handle empty states as in-modal content.** When the filtered list has zero items, render a centered message **inside the modal body** (do NOT close the modal, do NOT show an error).
+- [x] **Handle empty states as in-modal content.** When the filtered list has zero items, render a centered message **inside the modal body** (do NOT close the modal, do NOT show an error).
+
+  > ✅ Implemented filter-aware empty states: "All" shows CheckCircle icon + "All caught up — no sessions need attention.", "Needs Input" shows "No sessions waiting for input.", "Ready" shows "No idle sessions with unread messages." Icon is 32px at 50% opacity, text is 14px/textDim/center/max-width 280px. 7 new tests added. All 19,305 tests pass.
 
   **Messages by filter mode:**
   - `"All"` → "All caught up — no sessions need attention." with a ✓ icon (use theme color, not emoji)
@@ -66,8 +70,7 @@ This phase adds the segmented controls for sort/filter, empty state handling, an
 
 ## Visual Polish
 
-- [ ] **Apply visual polish and theme compliance.** Review all AgentInbox components for:
-
+- [x] **Apply visual polish and theme compliance.** Review all AgentInbox components for:
   1. **Fade-in animation:** Add CSS transition on modal mount: `opacity: 0 → 1` over 150ms. Use a `useEffect` + state pattern or CSS `@keyframes fadeIn`.
 
   2. **Theme compliance:** Audit every color value. Replace ANY hardcoded hex color with `theme.colors.*` equivalent. The only exception is the orange warning color `#f59e0b` if the theme doesn't have a `warning` key — in that case, define it as a constant at the top of the file with a comment explaining why.
@@ -82,6 +85,8 @@ This phase adds the segmented controls for sort/filter, empty state handling, an
      - Preview text: regular 13px, muted
      - Timestamp: regular 12px, muted
      - Badge text: regular 11px, monospace (git branch) or regular (status)
+
+  > ✅ Visual polish applied: (1) fade-in changed from 100ms→150ms per spec, (2) replaced sole hardcoded `#f59e0b` with `theme.colors.warning` since all themes have the `warning` key, (3) verified 12px gap (6px top + 6px bottom padding per row wrapper), (4) verified selected card uses `accent+15` background fill (no border), (5) verified all typography matches spec. 7 new visual polish tests added. All 19,312 tests pass.
 
 ---
 
