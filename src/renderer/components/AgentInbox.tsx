@@ -75,7 +75,7 @@ function resolveStatusColor(state: SessionState, theme: Theme): string {
 // ============================================================================
 // Context usage color resolver — green/orange/red thresholds
 // ============================================================================
-function resolveContextUsageColor(percentage: number, theme: Theme): string {
+export function resolveContextUsageColor(percentage: number, theme: Theme): string {
 	if (percentage >= 80) return theme.colors.error;
 	if (percentage >= 60) return theme.colors.warning;
 	return theme.colors.success;
