@@ -71,7 +71,7 @@ The `AgentInbox` modal is already functional. The shortcut `Alt+Cmd+I` already w
 
     **Verify:** `npm run lint` passes with zero type errors. This is critical — if `setAgentInboxOpen` is missing from ANY of the three locations (deps interface, App.tsx caller, SessionList props), TypeScript will error.
 
-- [ ] **TASK 2 — Add "Unified Inbox" menu entry in SessionList.** In `src/renderer/components/SessionList.tsx`:
+- [x] **TASK 2 — Add "Unified Inbox" menu entry in SessionList.** In `src/renderer/components/SessionList.tsx`:
 
     1. Add `Inbox` to the lucide-react import (line 2–39). Insert it alphabetically among the existing imports (after `Info`).
 
