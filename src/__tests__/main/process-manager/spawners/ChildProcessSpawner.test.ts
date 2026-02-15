@@ -481,6 +481,40 @@ describe('ChildProcessSpawner', () => {
 		});
 	});
 
+	describe('stdin write guard for non-stream-json-input agents', () => {
+		it('should NOT write stream-json to stdin when prompt is already in CLI args (Codex --json)', () => {
+			// Codex uses --json for JSON *output*, not input. The prompt goes as a CLI arg.
+			// Without the promptViaStdin guard, isStreamJsonMode (true from --json) would
+			// cause the prompt to be double-sent: once in CLI args and once via stdin.
+			vi.mocked(getAgentCapabilities).mockReturnValueOnce({
+				supportsStreamJsonInput: false,
+			} as any);
+
+			const { spawner } = createTestContext();
+
+			spawner.spawn(
+				createBaseConfig({
+					toolType: 'codex',
+					command: 'codex',
+					args: ['exec', '--json', '--dangerously-bypass-approvals-and-sandbox'],
+					prompt: 'test prompt',
+				})
+			);
+
+			// Prompt should be in CLI args
+			const spawnArgs = mockSpawn.mock.calls[0][1] as string[];
+			expect(spawnArgs).toContain('--');
+			expect(spawnArgs).toContain('test prompt');
+
+			// stdin should NOT have received the prompt as stream-json
+			// buildStreamJsonMessage should NOT have been called
+			expect(buildStreamJsonMessage).not.toHaveBeenCalled();
+			// stdin.write should only be called for actual stdin delivery, not here
+			// stdin.end should be called (to close stdin for batch mode)
+			expect(mockChildProcess.stdin.end).toHaveBeenCalled();
+		});
+	});
+
 	describe('child process event handling', () => {
 		it('should listen on "close" event (not "exit") to ensure all stdio data is drained', () => {
 			const { spawner } = createTestContext();
