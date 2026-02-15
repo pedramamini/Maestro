@@ -14,6 +14,7 @@
 
 import { BarChart3 } from 'lucide-react';
 import type { Theme } from '../../types';
+import { memo } from 'react';
 
 interface EmptyStateProps {
 	/** Current theme for styling */
@@ -24,7 +25,7 @@ interface EmptyStateProps {
 	message?: string;
 }
 
-export function EmptyState({
+export const EmptyState = memo(function EmptyState({
 	theme,
 	title = 'No usage data yet',
 	message = 'Start using Maestro to see your stats!',
@@ -62,6 +63,6 @@ export function EmptyState({
 			</div>
 		</div>
 	);
-}
+});
 
 export default EmptyState;
