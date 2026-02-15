@@ -107,7 +107,7 @@ The `AgentInbox` modal is already functional. The shortcut `Alt+Cmd+I` already w
 
     **Verify:** `npm run lint` passes.
 
-- [ ] **TASK 3 — Rename "Agent Inbox" / "Inbox" to "Unified Inbox" across ALL references.** This is a multi-file rename. The name must be consistent everywhere:
+- [x] **TASK 3 — Rename "Agent Inbox" / "Inbox" to "Unified Inbox" across ALL references.** This is a multi-file rename. The name must be consistent everywhere:
 
     **In `src/renderer/components/AgentInbox.tsx`:**
     1. Change the `<h2>` text from `Inbox` to `Unified Inbox` (in the header section)

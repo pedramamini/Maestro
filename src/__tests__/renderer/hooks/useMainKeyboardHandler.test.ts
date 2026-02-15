@@ -1283,7 +1283,7 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockAddToast).toHaveBeenCalledWith(
 				expect.objectContaining({
 					type: 'info',
-					title: 'Agent Inbox',
+					title: 'Unified Inbox',
 					message: 'No pending items',
 				})
 			);

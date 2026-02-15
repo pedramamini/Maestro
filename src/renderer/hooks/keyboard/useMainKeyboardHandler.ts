@@ -408,7 +408,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					// Show toast and do NOT open modal
 					ctx.addToast({
 						type: 'info',
-						title: 'Agent Inbox',
+						title: 'Unified Inbox',
 						message: 'No pending items',
 						duration: 1500,
 					});
