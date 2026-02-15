@@ -81,6 +81,36 @@ vi.mock('lucide-react', () => {
 	);
 });
 
+// Global mock for shortcutFormatter to ensure platform-independent test output.
+// Without this, shortcutFormatter detects the platform via navigator.userAgent, producing
+// different output on macOS vs Linux CI. This mock always uses the non-Mac format (Ctrl+, Shift+, etc.)
+// so tests are deterministic regardless of where they run. Individual test files can override
+// this with their own vi.mock() if they need custom behavior.
+const SHORTCUT_KEY_MAP: Record<string, string> = {
+	Meta: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Control: 'Ctrl', Ctrl: 'Ctrl',
+	ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
+	Backspace: 'Backspace', Delete: 'Delete', Enter: 'Enter', Return: 'Enter',
+	Escape: 'Esc', Tab: 'Tab', Space: 'Space',
+};
+const mockFormatKey = (key: string): string => {
+	if (SHORTCUT_KEY_MAP[key]) return SHORTCUT_KEY_MAP[key];
+	if (key.length === 1) return key.toUpperCase();
+	return key;
+};
+vi.mock('../renderer/utils/shortcutFormatter', () => ({
+	formatKey: vi.fn((key: string) => mockFormatKey(key)),
+	formatShortcutKeys: vi.fn((keys: string[], separator?: string) => {
+		const sep = separator ?? '+';
+		return keys.map(mockFormatKey).join(sep);
+	}),
+	formatMetaKey: vi.fn(() => 'Ctrl'),
+	formatEnterToSend: vi.fn((enterToSend: boolean) => enterToSend ? 'Enter' : 'Ctrl + Enter'),
+	formatEnterToSendTooltip: vi.fn((enterToSend: boolean) =>
+		enterToSend ? 'Switch to Ctrl+Enter to send' : 'Switch to Enter to send'
+	),
+	isMacOS: vi.fn(() => false),
+}));
+
 // Mock window.matchMedia for components that use media queries
 // Only mock if window exists (jsdom environment)
 if (typeof window !== 'undefined') {

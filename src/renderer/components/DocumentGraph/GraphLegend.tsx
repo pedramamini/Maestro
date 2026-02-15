@@ -11,9 +11,10 @@
  * The legend is theme-aware and uses the same colors as the actual mind map elements.
  */
 
-import React, { memo } from 'react';
+import { memo } from 'react';
 import { X, AlertTriangle, ExternalLink } from 'lucide-react';
 import type { Theme } from '../../types';
+import { formatShortcutKeys } from '../../utils/shortcutFormatter';
 
 /**
  * Props for the GraphLegend component
@@ -101,7 +102,7 @@ const KEYBOARD_SHORTCUTS: KeyboardShortcutItem[] = [
 		description: 'Close preview / modal',
 	},
 	{
-		keys: '⌘F',
+		keys: formatShortcutKeys(['Meta', 'f']),
 		description: 'Focus search',
 	},
 ];

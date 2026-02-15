@@ -16,15 +16,7 @@ import type { Theme, BatchDocumentEntry } from '../types';
 import { generateId } from '../utils/ids';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
-
-// Platform detection helper (userAgentData is newer but not in all TS types yet)
-const isMacPlatform = (): boolean => {
-	const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-	return (
-		nav.userAgentData?.platform?.toLowerCase().includes('mac') ??
-		navigator.platform.toLowerCase().includes('mac')
-	);
-};
+import { formatMetaKey } from '../utils/shortcutFormatter';
 
 // Tree node type for folder structure
 export interface DocTreeNode {
@@ -206,7 +198,6 @@ function DocumentSelectorModal({
 
 	// Handle refresh
 	const handleRefresh = useCallback(async () => {
-		const _countBefore = allDocuments.length;
 		setRefreshing(true);
 		setRefreshMessage(null);
 
@@ -409,7 +400,6 @@ function DocumentSelectorModal({
 	};
 
 	const allSelected = selectedDocs.size === allDocuments.length && allDocuments.length > 0;
-	const _someSelected = selectedDocs.size > 0;
 
 	// Calculate task count for selected documents
 	const selectedTaskCount = useMemo(() => {
@@ -1033,7 +1023,7 @@ export function DocumentsPanel({
 														documents.filter((d) => d.filename === doc.filename).length > 1;
 													const canDisableReset = !hasDuplicates;
 
-													const modifierKey = isMacPlatform() ? '⌘' : 'Ctrl';
+													const modifierKey = formatMetaKey();
 													let tooltipText: string;
 													if (doc.resetOnCompletion) {
 														if (canDisableReset) {
@@ -1098,23 +1088,17 @@ export function DocumentsPanel({
 												</span>
 											)}
 
-											{/* Remove Button (invisible placeholder when not applicable) */}
-											{doc.isDuplicate || documents.length > 1 || doc.isMissing ? (
-												<button
-													onClick={() => handleRemoveDocument(doc.id)}
-													className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
-													style={{
-														color: doc.isMissing ? theme.colors.error : theme.colors.textDim,
-													}}
-													title={doc.isMissing ? 'Remove missing document' : 'Remove document'}
-												>
-													<X className="w-3.5 h-3.5" />
-												</button>
-											) : (
-												<span className="p-1 shrink-0 invisible">
-													<X className="w-3.5 h-3.5" />
-												</span>
-											)}
+											{/* Remove Button */}
+											<button
+												onClick={() => handleRemoveDocument(doc.id)}
+												className="p-1 rounded hover:bg-white/10 transition-colors shrink-0"
+												style={{
+													color: doc.isMissing ? theme.colors.error : theme.colors.textDim,
+												}}
+												title={doc.isMissing ? 'Remove missing document' : 'Remove document'}
+											>
+												<X className="w-3.5 h-3.5" />
+											</button>
 										</div>
 
 										{/* Drop Indicator Line - After (only for last item) */}

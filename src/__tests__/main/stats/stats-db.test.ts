@@ -852,6 +852,44 @@ describe('Daily backup system', () => {
 		});
 	});
 
+	describe('stale WAL/SHM file cleanup', () => {
+		it('should remove stale WAL/SHM files before integrity check on initialization', async () => {
+			// Track which files are checked/removed
+			const unlinkCalls: string[] = [];
+			mockFsUnlinkSync.mockImplementation((p: unknown) => {
+				if (typeof p === 'string') unlinkCalls.push(p);
+			});
+
+			// existsSync returns true for WAL/SHM files
+			mockFsExistsSync.mockImplementation((p: unknown) => {
+				if (typeof p === 'string' && (p.endsWith('-wal') || p.endsWith('-shm'))) return true;
+				return true;
+			});
+
+			const { StatsDB } = await import('../../../main/stats');
+			const db = new StatsDB();
+			db.initialize();
+
+			// Should have removed WAL and SHM files
+			const walRemoved = unlinkCalls.some((p) => p.endsWith('-wal'));
+			const shmRemoved = unlinkCalls.some((p) => p.endsWith('-shm'));
+			expect(walRemoved).toBe(true);
+			expect(shmRemoved).toBe(true);
+		});
+
+		it('should not fail if WAL/SHM files do not exist', async () => {
+			mockFsExistsSync.mockImplementation((p: unknown) => {
+				if (typeof p === 'string' && (p.endsWith('-wal') || p.endsWith('-shm'))) return false;
+				return true;
+			});
+
+			const { StatsDB } = await import('../../../main/stats');
+			const db = new StatsDB();
+
+			expect(() => db.initialize()).not.toThrow();
+		});
+	});
+
 	describe('WAL checkpoint before backup', () => {
 		it('should checkpoint WAL before creating daily backup', async () => {
 			const today = new Date().toISOString().split('T')[0];

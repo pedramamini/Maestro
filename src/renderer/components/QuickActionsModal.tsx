@@ -9,6 +9,8 @@ import { gitService } from '../services/git';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import type { WizardStep } from './Wizard/WizardContext';
 import { useListNavigation } from '../hooks';
+import { useUIStore } from '../stores/uiStore';
+import { useFileExplorerStore } from '../stores/fileExplorerStore';
 
 interface QuickAction {
 	id: string;
@@ -113,6 +115,8 @@ interface QuickActionsModalProps {
 	onOpenLastDocumentGraph?: () => void;
 	// Symphony
 	onOpenSymphony?: () => void;
+	// Director's Notes
+	onOpenDirectorNotes?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -196,7 +200,15 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		lastGraphFocusFile,
 		onOpenLastDocumentGraph,
 		onOpenSymphony,
+		onOpenDirectorNotes,
 	} = props;
+
+	// UI store actions for search commands (avoid threading more props through 3-layer chain)
+	const setActiveFocus = useUIStore((s) => s.setActiveFocus);
+	const storeSetSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
+	const storeSetOutputSearchOpen = useUIStore((s) => s.setOutputSearchOpen);
+	const storeSetFileTreeFilterOpen = useFileExplorerStore((s) => s.setFileTreeFilterOpen);
+	const storeSetHistorySearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
 
 	const [search, setSearch] = useState('');
 	const [mode, setMode] = useState<'main' | 'move-to-group'>(initialMode);
@@ -794,9 +806,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 									type: 'error',
 									title: 'Error',
 									message:
-										error instanceof Error
-											? error.message
-											: 'Failed to open repository in browser',
+										error instanceof Error ? error.message : 'Failed to open repository in browser',
 								});
 							}
 							setQuickActionOpen(false);
@@ -986,6 +996,21 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 					},
 				]
 			: []),
+		// Director's Notes - unified history and AI synopsis
+		...(onOpenDirectorNotes
+			? [
+					{
+						id: 'directorNotes',
+						label: "Director's Notes",
+						shortcut: shortcuts.directorNotes,
+						subtext: 'View unified history and AI synopsis across all sessions',
+						action: () => {
+							onOpenDirectorNotes();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
 		// Last Document Graph - quick re-open (only when a graph has been opened before)
 		...(lastGraphFocusFile && onOpenLastDocumentGraph
 			? [
@@ -1030,6 +1055,52 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 					},
 				]
 			: []),
+		// Search actions - focus search inputs in various panels
+		{
+			id: 'searchAgents',
+			label: 'Search: Agents',
+			subtext: 'Filter agents in the sidebar',
+			action: () => {
+				setQuickActionOpen(false);
+				setLeftSidebarOpen(true);
+				setActiveFocus('sidebar');
+				setTimeout(() => storeSetSessionFilterOpen(true), 50);
+			},
+		},
+		{
+			id: 'searchMessages',
+			label: 'Search: Message History',
+			subtext: 'Search messages in the current conversation',
+			action: () => {
+				setQuickActionOpen(false);
+				setActiveFocus('main');
+				setTimeout(() => storeSetOutputSearchOpen(true), 50);
+			},
+		},
+		{
+			id: 'searchFiles',
+			label: 'Search: Files',
+			subtext: 'Filter files in the file explorer',
+			action: () => {
+				setQuickActionOpen(false);
+				setRightPanelOpen(true);
+				setActiveRightTab('files');
+				setActiveFocus('right');
+				setTimeout(() => storeSetFileTreeFilterOpen(true), 50);
+			},
+		},
+		{
+			id: 'searchHistory',
+			label: 'Search: History',
+			subtext: 'Search in the history panel',
+			action: () => {
+				setQuickActionOpen(false);
+				setRightPanelOpen(true);
+				setActiveRightTab('history');
+				setActiveFocus('right');
+				setTimeout(() => storeSetHistorySearchFilterOpen(true), 50);
+			},
+		},
 		// Publish document as GitHub Gist - only when file preview is open, gh CLI is available, and not in edit mode
 		...(isFilePreviewOpen && ghCliAvailable && onPublishGist && !markdownEditMode
 			? [
@@ -1261,10 +1332,14 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		})
 		.sort((a, b) => a.label.localeCompare(b.label));
 
+	// Use a ref for filtered actions so the onSelect callback stays stable
+	const filteredRef = useRef(filtered);
+	filteredRef.current = filtered;
+
 	// Callback for when an item is selected (by Enter key or number hotkey)
 	const handleSelectByIndex = useCallback(
 		(index: number) => {
-			const selectedAction = filtered[index];
+			const selectedAction = filteredRef.current[index];
 			if (!selectedAction) return;
 
 			// Don't close modal if action switches modes
@@ -1274,7 +1349,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 				setQuickActionOpen(false);
 			}
 		},
-		[filtered, renamingSession, mode, setQuickActionOpen]
+		[renamingSession, mode, setQuickActionOpen]
 	);
 
 	// Use hook for list navigation (arrow keys, number hotkeys, Enter)
@@ -1296,11 +1371,14 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		selectedItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 	}, [selectedIndex]);
 
-	// Reset selection when search or mode changes
+	// Reset selection when search or mode changes.
+	// resetSelection is intentionally excluded from deps — it changes when filtered.length
+	// changes, but we only want to reset on user-driven search/mode changes, not on every
+	// list length fluctuation from parent re-renders (which causes infinite update loops).
 	useEffect(() => {
 		resetSelection();
 		setFirstVisibleIndex(0);
-	}, [search, mode, resetSelection]);
+	}, [search, mode]);
 
 	// Clear search when switching to move-to-group mode
 	useEffect(() => {

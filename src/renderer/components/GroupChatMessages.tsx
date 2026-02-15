@@ -20,6 +20,7 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { stripMarkdown } from '../utils/textProcessing';
 import { generateParticipantColor, buildParticipantColorMap } from '../utils/participantColors';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 interface GroupChatMessagesProps {
 	theme: Theme;
@@ -112,8 +113,12 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 			[]
 		);
 
-		const copyToClipboard = useCallback((text: string) => {
-			navigator.clipboard.writeText(text);
+		const copyToClipboard = useCallback(async (text: string) => {
+			try {
+				await navigator.clipboard.writeText(text);
+			} catch {
+				// Ignore clipboard errors (e.g. document not focused)
+			}
 		}, []);
 
 		const toggleExpanded = useCallback((msgKey: string) => {
@@ -375,7 +380,7 @@ export const GroupChatMessages = forwardRef<GroupChatMessagesHandle, GroupChatMe
 													style={{
 														color: markdownEditMode ? theme.colors.accent : theme.colors.textDim,
 													}}
-													title={markdownEditMode ? 'Show formatted (⌘E)' : 'Show plain text (⌘E)'}
+													title={markdownEditMode ? `Show formatted (${formatShortcutKeys(['Meta', 'e'])})` : `Show plain text (${formatShortcutKeys(['Meta', 'e'])})`}
 												>
 													{markdownEditMode ? (
 														<Eye className="w-4 h-4" />

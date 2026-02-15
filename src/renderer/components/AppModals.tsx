@@ -286,13 +286,16 @@ export interface AppConfirmModalsProps {
 	confirmModalOpen: boolean;
 	confirmModalMessage: string;
 	confirmModalOnConfirm: (() => void) | null;
+	confirmModalTitle?: string;
+	confirmModalDestructive?: boolean;
 	onCloseConfirmModal: () => void;
 
 	// Quit Confirm Modal
 	quitConfirmModalOpen: boolean;
 	onConfirmQuit: () => void;
-	onConfirmQuitAndDelete: () => void;
 	onCancelQuit: () => void;
+	/** Session IDs with active auto-runs (batch processing) */
+	activeBatchSessionIds?: string[];
 }
 
 /**
@@ -309,17 +312,32 @@ export function AppConfirmModals({
 	confirmModalOpen,
 	confirmModalMessage,
 	confirmModalOnConfirm,
+	confirmModalTitle,
+	confirmModalDestructive,
 	onCloseConfirmModal,
 	// Quit Confirm Modal
 	quitConfirmModalOpen,
 	onConfirmQuit,
-	onConfirmQuitAndDelete,
 	onCancelQuit,
+	activeBatchSessionIds = [],
 }: AppConfirmModalsProps) {
 	// Compute busy agents for QuitConfirmModal
 	const busyAgents = sessions.filter(
 		(s) => s.state === 'busy' && s.busySource === 'ai' && s.toolType !== 'terminal'
 	);
+
+	// Include auto-running sessions that aren't already counted as busy agents
+	const busyAgentIds = new Set(busyAgents.map((s) => s.id));
+	const autoRunOnlySessions = activeBatchSessionIds
+		.filter((id) => !busyAgentIds.has(id))
+		.map((id) => sessions.find((s) => s.id === id))
+		.filter((s): s is Session => !!s);
+
+	const allActiveAgents = [...busyAgents, ...autoRunOnlySessions];
+	const allActiveNames = allActiveAgents.map((s) => {
+		const isAutoRunning = activeBatchSessionIds.includes(s.id);
+		return isAutoRunning && !busyAgentIds.has(s.id) ? `${s.name} (Auto Run)` : s.name;
+	});
 
 	return (
 		<>
@@ -327,6 +345,8 @@ export function AppConfirmModals({
 			{confirmModalOpen && (
 				<ConfirmModal
 					theme={theme}
+					title={confirmModalTitle}
+					destructive={confirmModalDestructive}
 					message={confirmModalMessage}
 					onConfirm={confirmModalOnConfirm}
 					onClose={onCloseConfirmModal}
@@ -337,10 +357,9 @@ export function AppConfirmModals({
 			{quitConfirmModalOpen && (
 				<QuitConfirmModal
 					theme={theme}
-					busyAgentCount={busyAgents.length}
-					busyAgentNames={busyAgents.map((s) => s.name)}
+					busyAgentCount={allActiveAgents.length}
+					busyAgentNames={allActiveNames}
 					onConfirmQuit={onConfirmQuit}
-					onConfirmQuitAndDelete={onConfirmQuitAndDelete}
 					onCancel={onCancelQuit}
 				/>
 			)}
@@ -827,6 +846,9 @@ export interface AppUtilityModalsProps {
 	// Symphony
 	onOpenSymphony?: () => void;
 
+	// Director's Notes
+	onOpenDirectorNotes?: () => void;
+
 	// LightboxModal
 	lightboxImage: string | null;
 	lightboxImages: string[];
@@ -883,6 +905,7 @@ export interface AppUtilityModalsProps {
 	// FileSearchModal
 	fuzzyFileSearchOpen: boolean;
 	filteredFileTree: FileNode[];
+	fileExplorerExpanded?: string[];
 	onCloseFileSearch: () => void;
 	onFileSearchSelect: (file: FlatFileItem) => void;
 
@@ -1021,6 +1044,8 @@ export function AppUtilityModals({
 	onOpenLastDocumentGraph,
 	// Symphony
 	onOpenSymphony,
+	// Director's Notes
+	onOpenDirectorNotes,
 	// LightboxModal
 	lightboxImage,
 	lightboxImages,
@@ -1060,6 +1085,7 @@ export function AppUtilityModals({
 	// FileSearchModal
 	fuzzyFileSearchOpen,
 	filteredFileTree,
+	fileExplorerExpanded,
 	onCloseFileSearch,
 	onFileSearchSelect,
 	// PromptComposerModal
@@ -1174,6 +1200,7 @@ export function AppUtilityModals({
 					lastGraphFocusFile={lastGraphFocusFile}
 					onOpenLastDocumentGraph={onOpenLastDocumentGraph}
 					onOpenSymphony={onOpenSymphony}
+					onOpenDirectorNotes={onOpenDirectorNotes}
 				/>
 			)}
 
@@ -1270,6 +1297,7 @@ export function AppUtilityModals({
 				<FileSearchModal
 					theme={theme}
 					fileTree={filteredFileTree}
+					expandedFolders={fileExplorerExpanded}
 					shortcut={shortcuts.fuzzyFileSearch}
 					onFileSelect={onFileSearchSelect}
 					onClose={onCloseFileSearch}
@@ -1742,11 +1770,14 @@ export interface AppModalsProps {
 	confirmModalOpen: boolean;
 	confirmModalMessage: string;
 	confirmModalOnConfirm: (() => void) | null;
+	confirmModalTitle?: string;
+	confirmModalDestructive?: boolean;
 	onCloseConfirmModal: () => void;
 	quitConfirmModalOpen: boolean;
 	onConfirmQuit: () => void;
-	onConfirmQuitAndDelete: () => void;
 	onCancelQuit: () => void;
+	/** Session IDs with active auto-runs (batch processing) */
+	activeBatchSessionIds?: string[];
 
 	// --- AppSessionModals props ---
 	newInstanceModalOpen: boolean;
@@ -1938,6 +1969,8 @@ export interface AppModalsProps {
 	onOpenMarketplace?: () => void;
 	// Symphony
 	onOpenSymphony?: () => void;
+	// Director's Notes
+	onOpenDirectorNotes?: () => void;
 	tabSwitcherOpen: boolean;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
@@ -1950,6 +1983,7 @@ export interface AppModalsProps {
 	) => void;
 	fuzzyFileSearchOpen: boolean;
 	filteredFileTree: FileNode[];
+	fileExplorerExpanded?: string[];
 	onCloseFileSearch: () => void;
 	onFileSearchSelect: (file: FlatFileItem) => void;
 	promptComposerOpen: boolean;
@@ -2098,11 +2132,13 @@ export function AppModals(props: AppModalsProps) {
 		confirmModalOpen,
 		confirmModalMessage,
 		confirmModalOnConfirm,
+		confirmModalTitle,
+		confirmModalDestructive,
 		onCloseConfirmModal,
 		quitConfirmModalOpen,
 		onConfirmQuit,
-		onConfirmQuitAndDelete,
 		onCancelQuit,
+		activeBatchSessionIds,
 		// Session modals
 		newInstanceModalOpen,
 		onCloseNewInstanceModal,
@@ -2254,12 +2290,15 @@ export function AppModals(props: AppModalsProps) {
 		onOpenMarketplace,
 		// Symphony
 		onOpenSymphony,
+		// Director's Notes
+		onOpenDirectorNotes,
 		tabSwitcherOpen,
 		onCloseTabSwitcher,
 		onTabSelect,
 		onNamedSessionSelect,
 		fuzzyFileSearchOpen,
 		filteredFileTree,
+		fileExplorerExpanded,
 		onCloseFileSearch,
 		onFileSearchSelect,
 		promptComposerOpen,
@@ -2371,11 +2410,13 @@ export function AppModals(props: AppModalsProps) {
 				confirmModalOpen={confirmModalOpen}
 				confirmModalMessage={confirmModalMessage}
 				confirmModalOnConfirm={confirmModalOnConfirm}
+				confirmModalTitle={confirmModalTitle}
+				confirmModalDestructive={confirmModalDestructive}
 				onCloseConfirmModal={onCloseConfirmModal}
 				quitConfirmModalOpen={quitConfirmModalOpen}
 				onConfirmQuit={onConfirmQuit}
-				onConfirmQuitAndDelete={onConfirmQuitAndDelete}
 				onCancelQuit={onCancelQuit}
+				activeBatchSessionIds={activeBatchSessionIds}
 			/>
 
 			{/* Session Management Modals */}
@@ -2557,6 +2598,7 @@ export function AppModals(props: AppModalsProps) {
 				onAutoRunRefresh={onAutoRunRefresh}
 				onOpenMarketplace={onOpenMarketplace}
 				onOpenSymphony={onOpenSymphony}
+				onOpenDirectorNotes={onOpenDirectorNotes}
 				tabSwitcherOpen={tabSwitcherOpen}
 				onCloseTabSwitcher={onCloseTabSwitcher}
 				onTabSelect={onTabSelect}
@@ -2564,6 +2606,7 @@ export function AppModals(props: AppModalsProps) {
 				colorBlindMode={colorBlindMode}
 				fuzzyFileSearchOpen={fuzzyFileSearchOpen}
 				filteredFileTree={filteredFileTree}
+				fileExplorerExpanded={fileExplorerExpanded}
 				onCloseFileSearch={onCloseFileSearch}
 				onFileSearchSelect={onFileSearchSelect}
 				promptComposerOpen={promptComposerOpen}

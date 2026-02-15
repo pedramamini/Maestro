@@ -91,6 +91,7 @@ export interface UseSessionListPropsDeps {
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
 	setSymphonyModalOpen: (open: boolean) => void;
+	setDirectorNotesOpen: (open: boolean) => void;
 	setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
 	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
 	setRenameInstanceModalOpen: (open: boolean) => void;
@@ -133,6 +134,10 @@ export interface UseSessionListPropsDeps {
 	handleEditGroupChat: (id: string) => void;
 	handleOpenRenameGroupChatModal: (id: string) => void;
 	handleOpenDeleteGroupChatModal: (id: string) => void;
+
+	// Context warning thresholds
+	contextWarningYellowThreshold: number;
+	contextWarningRedThreshold: number;
 
 	// Ref
 	sidebarContainerRef: React.RefObject<HTMLDivElement>;
@@ -194,6 +199,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			setProcessMonitorOpen: deps.setProcessMonitorOpen,
 			setUsageDashboardOpen: deps.setUsageDashboardOpen,
 			setSymphonyModalOpen: deps.setSymphonyModalOpen,
+			setDirectorNotesOpen: deps.setDirectorNotesOpen,
 			setQuickActionOpen: deps.setQuickActionOpen,
 
 			// Handlers
@@ -265,6 +271,10 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			groupChatStates: deps.groupChatStates,
 			allGroupChatParticipantStates: deps.allGroupChatParticipantStates,
 
+			// Context warning thresholds
+			contextWarningYellowThreshold: deps.contextWarningYellowThreshold,
+			contextWarningRedThreshold: deps.contextWarningRedThreshold,
+
 			// Ref
 			sidebarContainerRef: deps.sidebarContainerRef,
 		}),
@@ -318,6 +328,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.setProcessMonitorOpen,
 			deps.setUsageDashboardOpen,
 			deps.setSymphonyModalOpen,
+			deps.setDirectorNotesOpen,
 			deps.setQuickActionOpen,
 			deps.setGroups,
 			deps.setSessions,
@@ -356,6 +367,8 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.handleEditGroupChat,
 			deps.handleOpenRenameGroupChatModal,
 			deps.handleOpenDeleteGroupChatModal,
+			deps.contextWarningYellowThreshold,
+			deps.contextWarningRedThreshold,
 			// Refs (stable, but included for completeness)
 			deps.sidebarContainerRef,
 		]

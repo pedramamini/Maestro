@@ -51,7 +51,7 @@ describe('Debug Package Sanitization', () => {
 	describe('sanitizePath', () => {
 		describe('home directory replacement', () => {
 			it('should replace home directory with ~', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 				const testPath = `${homeDir}/Projects/MyApp`;
 
@@ -62,7 +62,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should replace home directory at any position in path', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 				const testPath = `${homeDir}/deeply/nested/folder/file.txt`;
 
@@ -72,7 +72,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle home directory with trailing slash', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 				const testPath = `${homeDir}/`;
 
@@ -82,7 +82,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle path that is exactly the home directory', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 
 				const result = sanitizePath(homeDir);
@@ -91,7 +91,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should not modify paths that do not contain home directory', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const testPath = '/usr/local/bin/app';
 
 				const result = sanitizePath(testPath);
@@ -100,7 +100,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle empty string', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 				const result = sanitizePath('');
 
@@ -110,7 +110,7 @@ describe('Debug Package Sanitization', () => {
 
 		describe('Windows path handling', () => {
 			it('should normalize backslashes to forward slashes', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const testPath = 'C:\\Users\\testuser\\Documents\\Project';
 
 				const result = sanitizePath(testPath);
@@ -121,7 +121,7 @@ describe('Debug Package Sanitization', () => {
 
 			it('should handle Windows-style home directory', async () => {
 				const { sanitizePath: _sanitizePath } =
-					await import('../../../main/debug-package/collectors/settings');
+					await import('../../../main/debug-package/collectors/sanitize');
 
 				// Mock homedir to return Windows-style path
 				const originalHomedir = os.homedir();
@@ -130,7 +130,7 @@ describe('Debug Package Sanitization', () => {
 				// Re-import to get fresh module with mocked homedir
 				vi.resetModules();
 				const { sanitizePath: freshSanitizePath } =
-					await import('../../../main/debug-package/collectors/settings');
+					await import('../../../main/debug-package/collectors/sanitize');
 
 				const testPath = 'C:\\Users\\testuser\\Documents\\Project';
 				const result = freshSanitizePath(testPath);
@@ -141,7 +141,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle mixed slash styles', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const testPath = '/path/to\\mixed\\slashes/file.txt';
 
 				const result = sanitizePath(testPath);
@@ -154,7 +154,7 @@ describe('Debug Package Sanitization', () => {
 
 		describe('edge cases and type handling', () => {
 			it('should return null when given null', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 				// @ts-expect-error - Testing runtime behavior with wrong type
 				const result = sanitizePath(null);
@@ -163,7 +163,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should return undefined when given undefined', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 				// @ts-expect-error - Testing runtime behavior with wrong type
 				const result = sanitizePath(undefined);
@@ -172,7 +172,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should return numbers unchanged', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 				// @ts-expect-error - Testing runtime behavior with wrong type
 				const result = sanitizePath(12345);
@@ -181,7 +181,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should return objects unchanged', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const obj = { path: '/some/path' };
 
 				// @ts-expect-error - Testing runtime behavior with wrong type
@@ -191,7 +191,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle paths with spaces', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 				const testPath = `${homeDir}/My Documents/Project Files/app.tsx`;
 
@@ -201,7 +201,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle paths with special characters', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 				const testPath = `${homeDir}/Projects/@company/app-v2.0#beta`;
 
@@ -211,7 +211,7 @@ describe('Debug Package Sanitization', () => {
 			});
 
 			it('should handle very long paths', async () => {
-				const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+				const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 				const homeDir = os.homedir();
 				const longPath = `${homeDir}/` + 'a/'.repeat(100) + 'file.txt';
 

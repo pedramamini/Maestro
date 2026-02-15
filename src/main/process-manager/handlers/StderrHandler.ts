@@ -7,6 +7,14 @@ import { matchSshErrorPattern } from '../../parsers/error-patterns';
 import { appendToBuffer } from '../utils/bufferUtils';
 import type { ManagedProcess, AgentError } from '../types';
 
+/**
+ * Matches Codex Rust tracing log lines emitted to stderr.
+ * Format: "TIMESTAMP LEVEL module::path: message"
+ * e.g. "2026-02-08T04:39:23.868314Z ERROR codex_core::rollout::list: state db missing ..."
+ */
+const CODEX_TRACING_LINE =
+	/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}[\d.]*Z\s+(?:TRACE|DEBUG|INFO|WARN|ERROR)\s+\w+/;
+
 interface StderrHandlerDependencies {
 	processes: Map<string, ManagedProcess>;
 	emitter: EventEmitter;
@@ -99,23 +107,44 @@ export class StderrHandler {
 				return;
 			}
 
-			// Filter out Codex informational prefix when reading from stdin
-			// Codex outputs "Reading prompt from stdin..." followed by the response to stderr
-			// when operating in stdin mode. Strip this prefix to avoid displaying it.
-			if (toolType === 'codex' && cleanedStderr.startsWith('Reading prompt from stdin...')) {
-				const actualContent = cleanedStderr.replace(/^Reading prompt from stdin\.\.\./, '').trim();
-				if (actualContent) {
-					// The actual response content should be emitted as regular data, not stderr
-					// since it's the agent's response, not an error
+			// Codex writes both Rust tracing diagnostics and actual responses to stderr.
+			// Strip tracing lines (e.g. "2026-02-08T04:39:23Z ERROR codex_core::rollout::list: ...")
+			// and the "Reading prompt from stdin..." prefix, then re-emit any remaining
+			// content as regular data so it renders normally instead of as an error.
+			if (toolType === 'codex') {
+				const lines = cleanedStderr.split('\n');
+				const tracingLines: string[] = [];
+				const contentLines: string[] = [];
+
+				for (const line of lines) {
+					if (CODEX_TRACING_LINE.test(line)) {
+						tracingLines.push(line);
+					} else if (line.startsWith('Reading prompt from stdin...')) {
+						// Strip the prefix; keep any trailing content on the same line
+						const after = line.slice('Reading prompt from stdin...'.length);
+						if (after) contentLines.push(after);
+					} else {
+						contentLines.push(line);
+					}
+				}
+
+				// Log suppressed tracing lines for debugging
+				if (tracingLines.length > 0) {
 					logger.debug(
-						'[ProcessManager] Codex stdin response extracted from stderr',
+						'[ProcessManager] Codex tracing lines filtered from stderr',
 						'ProcessManager',
 						{
 							sessionId,
-							contentPreview: actualContent.substring(0, 100),
+							count: tracingLines.length,
+							preview: tracingLines[0].substring(0, 120),
 						}
 					);
-					this.emitter.emit('data', sessionId, actualContent);
+				}
+
+				const remainingContent = contentLines.join('\n').trim();
+				if (remainingContent) {
+					// Emit as regular data — this is the agent's response, not an error
+					this.emitter.emit('data', sessionId, remainingContent);
 				}
 				return;
 			}

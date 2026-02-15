@@ -132,6 +132,34 @@ describe('theme utilities', () => {
 				expect(getContextColor(90, alternativeTheme)).toBe(alternativeTheme.colors.error);
 			});
 		});
+
+		describe('custom thresholds', () => {
+			it('uses custom yellow threshold', () => {
+				// With yellow=55, 55% should be warning (not success)
+				expect(getContextColor(55, mockTheme, 55, 70)).toBe(mockTheme.colors.warning);
+				// 54% should still be success
+				expect(getContextColor(54, mockTheme, 55, 70)).toBe(mockTheme.colors.success);
+			});
+
+			it('uses custom red threshold', () => {
+				// With red=70, 70% should be error (not warning)
+				expect(getContextColor(70, mockTheme, 55, 70)).toBe(mockTheme.colors.error);
+				// 69% should still be warning
+				expect(getContextColor(69, mockTheme, 55, 70)).toBe(mockTheme.colors.warning);
+			});
+
+			it('returns success below custom yellow threshold', () => {
+				expect(getContextColor(40, mockTheme, 50, 90)).toBe(mockTheme.colors.success);
+			});
+
+			it('returns warning between custom thresholds', () => {
+				expect(getContextColor(60, mockTheme, 50, 90)).toBe(mockTheme.colors.warning);
+			});
+
+			it('returns error at or above custom red threshold', () => {
+				expect(getContextColor(90, mockTheme, 50, 90)).toBe(mockTheme.colors.error);
+			});
+		});
 	});
 
 	// ============================================================================

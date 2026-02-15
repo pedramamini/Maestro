@@ -44,6 +44,8 @@ export function getTimeRangeStart(range: StatsTimeRange): number {
 			return now - 7 * day;
 		case 'month':
 			return now - 30 * day;
+		case 'quarter':
+			return now - 90 * day;
 		case 'year':
 			return now - 365 * day;
 		case 'all':

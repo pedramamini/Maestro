@@ -124,9 +124,9 @@ describe('Debug Package Collectors', () => {
 		});
 	});
 
-	describe('collectSettings - sanitizePath', () => {
+	describe('sanitizePath', () => {
 		it('should replace home directory with ~', async () => {
-			const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+			const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 			const homeDir = os.homedir();
 			const testPath = `${homeDir}/Projects/Test`;
@@ -138,14 +138,14 @@ describe('Debug Package Collectors', () => {
 		});
 
 		it('should handle Windows-style paths', async () => {
-			const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+			const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 			// Mock homedir for Windows
 			const originalHomedir = os.homedir;
 			vi.spyOn(os, 'homedir').mockReturnValue('C:\\Users\\testuser');
 
 			const { sanitizePath: freshSanitizePath } =
-				await import('../../../main/debug-package/collectors/settings');
+				await import('../../../main/debug-package/collectors/sanitize');
 
 			const testPath = 'C:\\Users\\testuser\\Documents\\Project';
 			const sanitized = freshSanitizePath(testPath);
@@ -157,11 +157,49 @@ describe('Debug Package Collectors', () => {
 		});
 
 		it('should return non-string values unchanged', async () => {
-			const { sanitizePath } = await import('../../../main/debug-package/collectors/settings');
+			const { sanitizePath } = await import('../../../main/debug-package/collectors/sanitize');
 
 			expect(sanitizePath(null as any)).toBeNull();
 			expect(sanitizePath(undefined as any)).toBeUndefined();
 			expect(sanitizePath(123 as any)).toBe(123);
+		});
+	});
+
+	describe('sanitizeText', () => {
+		it('should replace home directory in free-text strings', async () => {
+			const { sanitizeText } = await import('../../../main/debug-package/collectors/sanitize');
+
+			const homeDir = os.homedir();
+			const text = `Error loading file ${homeDir}/Projects/secret-project/config.json`;
+
+			const sanitized = sanitizeText(text);
+
+			expect(sanitized).not.toContain(homeDir);
+			expect(sanitized).toContain('~/Projects/secret-project/config.json');
+		});
+	});
+
+	describe('sanitizeLogMessage', () => {
+		it('should truncate messages over 500 chars', async () => {
+			const { sanitizeLogMessage } = await import('../../../main/debug-package/collectors/sanitize');
+
+			const longMessage = 'A'.repeat(600);
+			const sanitized = sanitizeLogMessage(longMessage);
+
+			expect(sanitized.length).toBeLessThan(600);
+			expect(sanitized).toContain('[TRUNCATED]');
+		});
+
+		it('should sanitize paths in messages', async () => {
+			const { sanitizeLogMessage } = await import('../../../main/debug-package/collectors/sanitize');
+
+			const homeDir = os.homedir();
+			const message = `Process started in ${homeDir}/Projects/test`;
+
+			const sanitized = sanitizeLogMessage(message);
+
+			expect(sanitized).not.toContain(homeDir);
+			expect(sanitized).toContain('~/Projects/test');
 		});
 	});
 
@@ -311,7 +349,8 @@ describe('Debug Package Collectors', () => {
 			const session = result[0];
 			// Verify metadata is captured
 			expect(session.id).toBe('session-1');
-			expect(session.name).toBe('Test Session');
+			// Session name is stripped for privacy
+			expect((session as any).name).toBeUndefined();
 			expect(session.toolType).toBe('claude-code');
 			expect(session.state).toBe('idle');
 			expect(session.isGitRepo).toBe(true);
@@ -351,7 +390,6 @@ describe('Debug Package Collectors', () => {
 
 			expect(result).toHaveLength(1);
 			expect(result[0].id).toBe('minimal-session');
-			expect(result[0].name).toBe('Unnamed');
 			expect(result[0].toolType).toBe('unknown');
 			expect(result[0].tabCount).toBe(0);
 			expect(result[0].executionQueueLength).toBe(0);
@@ -360,7 +398,7 @@ describe('Debug Package Collectors', () => {
 	});
 
 	describe('collectAgents', () => {
-		it('should collect agent info with sanitized paths', async () => {
+		it('should collect agent info without binary paths', async () => {
 			const { collectAgents } = await import('../../../main/debug-package/collectors/agents');
 
 			const homeDir = os.homedir();
@@ -393,11 +431,13 @@ describe('Debug Package Collectors', () => {
 			expect(agent.id).toBe('claude-code');
 			expect(agent.name).toBe('Claude Code');
 			expect(agent.available).toBe(true);
-			// Path should be sanitized
-			expect(agent.path).toBe('~/.local/bin/claude');
-			expect(agent.path).not.toContain(homeDir);
-			// Custom path indicator
+			// Binary path and binaryName should NOT be included
+			expect((agent as any).path).toBeUndefined();
+			expect((agent as any).binaryName).toBeUndefined();
+			// Custom path indicator (not the actual path)
 			expect(agent.customPath).toBe('[SET]');
+			// No home dir path should leak
+			expect(JSON.stringify(result)).not.toContain(homeDir);
 			// Capabilities preserved
 			expect(agent.capabilities.supportsResume).toBe(true);
 			// Config options show type only
@@ -413,7 +453,6 @@ describe('Debug Package Collectors', () => {
 			const result = await collectAgents(null);
 
 			expect(result.detectedAgents).toHaveLength(0);
-			expect(result.customPaths).toEqual({});
 			expect(result.customArgsSet).toHaveLength(0);
 			expect(result.customEnvVarsSet).toHaveLength(0);
 		});
@@ -649,7 +688,7 @@ describe('Debug Package Collectors', () => {
 	});
 
 	describe('collectExternalTools', () => {
-		it('should collect external tools availability', async () => {
+		it('should collect external tools availability without paths', async () => {
 			const { detectShells } = await import('../../../main/utils/shellDetector');
 			const { execFileNoThrow } = await import('../../../main/utils/execFile');
 			const { isCloudflaredInstalled } = await import('../../../main/utils/cliDetection');
@@ -673,11 +712,13 @@ describe('Debug Package Collectors', () => {
 
 			const result = await collectExternalTools();
 
-			// Check shells
+			// Check shells (no paths)
 			expect(result.shells).toHaveLength(2);
-			expect(result.shells[0].path).toBe('~/.local/bin/zsh');
-			expect(result.shells[0].path).not.toContain(homeDir);
-			expect(result.shells[1].path).toBe('/bin/bash');
+			expect(result.shells[0].id).toBe('zsh');
+			expect(result.shells[0].available).toBe(true);
+			expect((result.shells[0] as any).path).toBeUndefined();
+			// No home dir paths should leak
+			expect(JSON.stringify(result)).not.toContain(homeDir);
 
 			// Check git
 			expect(result.git.available).toBe(true);
@@ -869,10 +910,14 @@ describe('Debug Package Collectors', () => {
 
 			const chat1 = result.find((c) => c.id === 'chat-1');
 			expect(chat1).toBeDefined();
-			expect(chat1!.name).toBe('Test Chat');
+			// Chat name is stripped for privacy
+			expect((chat1 as any).name).toBeUndefined();
 			expect(chat1!.moderatorAgentId).toBe('claude-code');
 			expect(chat1!.participantCount).toBe(2);
 			expect(chat1!.participants).toHaveLength(2);
+			// Participant names are stripped, only agentId kept
+			expect((chat1!.participants[0] as any).name).toBeUndefined();
+			expect(chat1!.participants[0].agentId).toBe('claude-code');
 			expect(chat1!.messageCount).toBe(3);
 
 			// Verify no message content

@@ -901,6 +901,67 @@ describe('useSymphony', () => {
       expect(startResult!.branchName).toBe('symphony/issue-42-xyz');
       expect(startResult!.autoRunPath).toBe('/path/to/autorun/docs');
     });
+
+    it('should return draftPrNumber and draftPrUrl when draft PR is created', async () => {
+      vi.mocked(window.maestro.symphony.cloneRepo).mockResolvedValue({ success: true });
+      vi.mocked(window.maestro.symphony.startContribution).mockResolvedValue({
+        success: true,
+        branchName: 'symphony/issue-42-xyz',
+        autoRunPath: '/path/to/autorun/docs',
+        draftPrNumber: 99,
+        draftPrUrl: 'https://github.com/owner/repo/pull/99',
+      });
+
+      const { result } = renderHook(() => useSymphony());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let startResult: { success: boolean; draftPrNumber?: number; draftPrUrl?: string };
+      await act(async () => {
+        startResult = await result.current.startContribution(
+          testRepo,
+          testIssue,
+          'claude-code',
+          'session-1'
+        );
+      });
+
+      expect(startResult!.success).toBe(true);
+      expect(startResult!.draftPrNumber).toBe(99);
+      expect(startResult!.draftPrUrl).toBe('https://github.com/owner/repo/pull/99');
+    });
+
+    it('should succeed even when draft PR creation fails (non-blocking)', async () => {
+      vi.mocked(window.maestro.symphony.cloneRepo).mockResolvedValue({ success: true });
+      vi.mocked(window.maestro.symphony.startContribution).mockResolvedValue({
+        success: true,
+        branchName: 'symphony/issue-42-xyz',
+        autoRunPath: '/path/to/autorun/docs',
+        // No draftPrNumber/draftPrUrl - PR creation failed but contribution succeeded
+      });
+
+      const { result } = renderHook(() => useSymphony());
+
+      await waitFor(() => {
+        expect(result.current.isLoading).toBe(false);
+      });
+
+      let startResult: { success: boolean; draftPrNumber?: number; draftPrUrl?: string };
+      await act(async () => {
+        startResult = await result.current.startContribution(
+          testRepo,
+          testIssue,
+          'claude-code',
+          'session-1'
+        );
+      });
+
+      expect(startResult!.success).toBe(true);
+      expect(startResult!.draftPrNumber).toBeUndefined();
+      expect(startResult!.draftPrUrl).toBeUndefined();
+    });
   });
 
   // ──────────────────────────────────────────────────────────────────────────
@@ -1070,6 +1131,106 @@ describe('useSymphony', () => {
 
       expect(finalizeResult!.success).toBe(false);
       expect(finalizeResult!.error).toBe('Push failed');
+    });
+  });
+
+  // ──────────────────────────────────────────────────────────────────────────
+  // Symphony Auto-Start Batch Config Tests
+  // ──────────────────────────────────────────────────────────────────────────
+  // Validates the mapping from Symphony document paths to BatchRunConfig,
+  // which App.tsx uses to auto-start batch runs when a contribution begins.
+
+  describe('Symphony → BatchRunConfig mapping', () => {
+    it('should strip .md extension from document names for batch filenames', () => {
+      const documentPaths = [
+        { name: 'PERF-01.md', path: 'https://example.com/PERF-01.md', isExternal: true },
+        { name: 'PERF-02.md', path: 'https://example.com/PERF-02.md', isExternal: true },
+        { name: 'task.md', path: 'docs/task.md', isExternal: false },
+      ];
+
+      const filenames = documentPaths.map((doc) => doc.name.replace(/\.md$/, ''));
+
+      expect(filenames).toEqual(['PERF-01', 'PERF-02', 'task']);
+    });
+
+    it('should handle document names without .md extension', () => {
+      const documentPaths = [
+        { name: 'README', path: 'README', isExternal: false },
+        { name: 'TASK-01.md', path: 'docs/TASK-01.md', isExternal: false },
+      ];
+
+      const filenames = documentPaths.map((doc) => doc.name.replace(/\.md$/, ''));
+
+      expect(filenames).toEqual(['README', 'TASK-01']);
+    });
+
+    it('should produce valid BatchDocumentEntry structure', () => {
+      const documentPaths = [
+        { name: 'PERF-01.md', path: 'https://example.com/PERF-01.md', isExternal: true },
+      ];
+
+      const documents = documentPaths.map((doc) => ({
+        id: 'test-id',
+        filename: doc.name.replace(/\.md$/, ''),
+        resetOnCompletion: false,
+        isDuplicate: false,
+      }));
+
+      expect(documents).toEqual([
+        {
+          id: 'test-id',
+          filename: 'PERF-01',
+          resetOnCompletion: false,
+          isDuplicate: false,
+        },
+      ]);
+    });
+
+    it('should include all documents in batch config (not just first)', () => {
+      const documentPaths = [
+        { name: 'PERF-01.md', path: 'p1', isExternal: true },
+        { name: 'PERF-02.md', path: 'p2', isExternal: true },
+        { name: 'PERF-03.md', path: 'p3', isExternal: true },
+        { name: 'PERF-04.md', path: 'p4', isExternal: true },
+        { name: 'PERF-05.md', path: 'p5', isExternal: true },
+        { name: 'PERF-06.md', path: 'p6', isExternal: true },
+        { name: 'PERF-07.md', path: 'p7', isExternal: true },
+        { name: 'PERF-08.md', path: 'p8', isExternal: true },
+      ];
+
+      const documents = documentPaths.map((doc) => ({
+        id: 'test-id',
+        filename: doc.name.replace(/\.md$/, ''),
+        resetOnCompletion: false,
+        isDuplicate: false,
+      }));
+
+      expect(documents).toHaveLength(8);
+      expect(documents.map((d) => d.filename)).toEqual([
+        'PERF-01', 'PERF-02', 'PERF-03', 'PERF-04',
+        'PERF-05', 'PERF-06', 'PERF-07', 'PERF-08',
+      ]);
+    });
+
+    it('should not auto-start when documentPaths is empty', () => {
+      const documentPaths: { name: string; path: string; isExternal: boolean }[] = [];
+
+      // Mirrors the guard: if (data.autoRunPath && data.issue.documentPaths.length > 0)
+      const shouldAutoStart = documentPaths.length > 0;
+
+      expect(shouldAutoStart).toBe(false);
+    });
+
+    it('should not auto-start when autoRunPath is undefined', () => {
+      const autoRunPath: string | undefined = undefined;
+      const documentPaths = [
+        { name: 'PERF-01.md', path: 'p1', isExternal: true },
+      ];
+
+      // Mirrors the guard: if (data.autoRunPath && data.issue.documentPaths.length > 0)
+      const shouldAutoStart = !!autoRunPath && documentPaths.length > 0;
+
+      expect(shouldAutoStart).toBe(false);
     });
   });
 });

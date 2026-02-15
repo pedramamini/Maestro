@@ -22,7 +22,7 @@ import type {
 	QueuedItem,
 	Shortcut,
 } from '../types';
-import { formatShortcutKeys, isMacOS } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, formatEnterToSend, formatEnterToSendTooltip } from '../utils/shortcutFormatter';
 import { QueuedItemsList } from './QueuedItemsList';
 import { normalizeMentionName } from '../utils/participantColors';
 
@@ -550,13 +550,11 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 								onClick={() => setEnterToSend(!enterToSend)}
 								className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 px-2 py-1 rounded hover:bg-white/5"
 								title={
-									enterToSend
-										? `Switch to ${isMacOS() ? 'Cmd' : 'Ctrl'}+Enter to send`
-										: 'Switch to Enter to send'
+									formatEnterToSendTooltip(enterToSend)
 								}
 							>
 								<Keyboard className="w-3 h-3" />
-								{enterToSend ? 'Enter' : isMacOS() ? '⌘ + Enter' : 'Ctrl + Enter'}
+								{formatEnterToSend(enterToSend)}
 							</button>
 						</div>
 					</div>

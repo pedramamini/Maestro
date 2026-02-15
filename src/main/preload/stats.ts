@@ -95,7 +95,7 @@ export function createStatsApi() {
 
 		// Get query events with time range and optional filters
 		getStats: (
-			range: 'day' | 'week' | 'month' | 'year' | 'all',
+			range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all',
 			filters?: {
 				agentType?: string;
 				source?: 'user' | 'auto';
@@ -117,7 +117,7 @@ export function createStatsApi() {
 
 		// Get Auto Run sessions within a time range
 		getAutoRunSessions: (
-			range: 'day' | 'week' | 'month' | 'year' | 'all'
+			range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 		): Promise<
 			Array<{
 				id: string;
@@ -150,11 +150,11 @@ export function createStatsApi() {
 		> => ipcRenderer.invoke('stats:get-autorun-tasks', autoRunSessionId),
 
 		// Get aggregated stats for dashboard display
-		getAggregation: (range: 'day' | 'week' | 'month' | 'year' | 'all'): Promise<StatsAggregation> =>
+		getAggregation: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'): Promise<StatsAggregation> =>
 			ipcRenderer.invoke('stats:get-aggregation', range),
 
 		// Export query events to CSV
-		exportCsv: (range: 'day' | 'week' | 'month' | 'year' | 'all'): Promise<string> =>
+		exportCsv: (range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'): Promise<string> =>
 			ipcRenderer.invoke('stats:export-csv', range),
 
 		// Subscribe to stats updates (for real-time dashboard refresh)
@@ -192,7 +192,7 @@ export function createStatsApi() {
 
 		// Get session lifecycle events within a time range
 		getSessionLifecycle: (
-			range: 'day' | 'week' | 'month' | 'year' | 'all'
+			range: 'day' | 'week' | 'month' | 'quarter' | 'year' | 'all'
 		): Promise<
 			Array<{
 				id: string;

@@ -25,6 +25,7 @@ import { generateId } from '../../utils/ids';
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useClickOutside } from '../ui';
 import type { Playbook, BatchDocumentEntry } from '../../types';
+import { DEFAULT_BATCH_PROMPT } from './batchUtils';
 
 /**
  * Configuration passed to the hook for modification detection
@@ -184,11 +185,14 @@ export function usePlaybookManagement(
 
 			// Apply configuration through callback
 			// Note: Worktree settings are no longer managed here - see WorktreeConfigModal
+			// Fall back to default prompt if playbook has no/empty agent prompt
+			const effectivePrompt = playbook.prompt?.trim() ? playbook.prompt : DEFAULT_BATCH_PROMPT;
+
 			onApplyPlaybook({
 				documents: entries,
 				loopEnabled: playbook.loopEnabled,
 				maxLoops: playbook.maxLoops ?? null,
-				prompt: playbook.prompt,
+				prompt: effectivePrompt,
 			});
 
 			setLoadedPlaybook(playbook);

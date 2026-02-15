@@ -164,6 +164,83 @@ describe('StderrHandler', () => {
 		});
 	});
 
+	describe('Codex tracing line filtering', () => {
+		it('should filter Rust tracing lines and emit remaining content as data', () => {
+			const { handler, emitter, sessionId } = createTestContext({
+				toolType: 'codex',
+			});
+
+			const dataSpy = vi.fn();
+			const stderrSpy = vi.fn();
+			emitter.on('data', dataSpy);
+			emitter.on('stderr', stderrSpy);
+
+			handler.handleData(
+				sessionId,
+				'2026-02-08T04:39:23.868314Z ERROR codex_core::rollout::list: state db missing rollout path for thread 019c3b87\nBelow is a concise architecture.'
+			);
+
+			// Tracing line stripped, content emitted as data
+			expect(dataSpy).toHaveBeenCalledWith(sessionId, 'Below is a concise architecture.');
+			expect(stderrSpy).not.toHaveBeenCalled();
+		});
+
+		it('should drop tracing-only stderr without emitting anything', () => {
+			const { handler, emitter, sessionId } = createTestContext({
+				toolType: 'codex',
+			});
+
+			const dataSpy = vi.fn();
+			const stderrSpy = vi.fn();
+			emitter.on('data', dataSpy);
+			emitter.on('stderr', stderrSpy);
+
+			handler.handleData(
+				sessionId,
+				'2026-02-08T04:39:23.868314Z ERROR codex_core::rollout::list: state db missing rollout path for thread abc123'
+			);
+
+			expect(dataSpy).not.toHaveBeenCalled();
+			expect(stderrSpy).not.toHaveBeenCalled();
+		});
+
+		it('should handle mixed tracing lines, stdin prefix, and content', () => {
+			const { handler, emitter, sessionId } = createTestContext({
+				toolType: 'codex',
+			});
+
+			const dataSpy = vi.fn();
+			const stderrSpy = vi.fn();
+			emitter.on('data', dataSpy);
+			emitter.on('stderr', stderrSpy);
+
+			handler.handleData(
+				sessionId,
+				'2026-02-08T10:00:00Z WARN codex_core::something: warning msg\nReading prompt from stdin...\nHere is the response.'
+			);
+
+			expect(dataSpy).toHaveBeenCalledWith(sessionId, 'Here is the response.');
+			expect(stderrSpy).not.toHaveBeenCalled();
+		});
+
+		it('should NOT filter tracing lines for non-Codex agents', () => {
+			const { handler, emitter, sessionId } = createTestContext({
+				toolType: 'claude-code',
+			});
+
+			const stderrSpy = vi.fn();
+			emitter.on('stderr', stderrSpy);
+
+			const tracingLine =
+				'2026-02-08T04:39:23.868314Z ERROR codex_core::rollout::list: state db missing';
+
+			handler.handleData(sessionId, tracingLine);
+
+			// Non-Codex agents should emit as normal stderr
+			expect(stderrSpy).toHaveBeenCalledWith(sessionId, tracingLine);
+		});
+	});
+
 	describe('empty and whitespace handling', () => {
 		it('should not emit empty stderr', () => {
 			const { handler, emitter, sessionId } = createTestContext();

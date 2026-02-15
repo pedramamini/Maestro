@@ -92,7 +92,7 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 				// Generate a unique session ID for this ephemeral request
 				const sessionId = `tab-naming-${uuidv4()}`;
 
-				logger.debug('Starting tab naming request', LOG_CONTEXT, {
+				logger.info('Starting tab naming request', LOG_CONTEXT, {
 					sessionId,
 					agentType: config.agentType,
 					messageLength: config.userMessage.length,
@@ -111,9 +111,15 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 					// Build the prompt: combine the tab naming prompt with the user's message
 					const fullPrompt = `${tabNamingPrompt}\n\n---\n\nUser's message:\n\n${config.userMessage}`;
 
-					// Build agent arguments - minimal configuration, read-only mode
+					// Build agent arguments - read-only mode, runs in parallel
+					// Filter out --dangerously-skip-permissions from base args since tab naming
+					// runs in read-only/plan mode. Without skip-permissions, the agent doesn't
+					// need to acquire a workspace lock and can run in parallel with other instances.
+					const baseArgs = (agent.args ?? []).filter(
+						(arg) => arg !== '--dangerously-skip-permissions'
+					);
 					let finalArgs = buildAgentArgs(agent, {
-						baseArgs: agent.args ?? [],
+						baseArgs,
 						prompt: fullPrompt,
 						cwd: config.cwd,
 						readOnlyMode: true, // Always read-only since we're not modifying anything
@@ -210,7 +216,7 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 						};
 
 						// Listen for process exit
-						const onExit = (exitSessionId: string) => {
+						const onExit = (exitSessionId: string, code?: number) => {
 							if (exitSessionId !== sessionId) return;
 
 							// Clean up
@@ -224,8 +230,9 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 							// Extract the tab name from the output
 							// The agent should return just the tab name, but we clean up any extra whitespace/formatting
 							const tabName = extractTabName(output);
-							logger.debug('Tab naming completed', LOG_CONTEXT, {
+							logger.info('Tab naming completed', LOG_CONTEXT, {
 								sessionId,
+								exitCode: code,
 								outputLength: output.length,
 								tabName,
 							});

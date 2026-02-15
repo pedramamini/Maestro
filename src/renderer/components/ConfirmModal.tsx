@@ -9,9 +9,24 @@ interface ConfirmModalProps {
 	message: string;
 	onConfirm: (() => void) | null;
 	onClose: () => void;
+	title?: string;
+	headerIcon?: React.ReactNode;
+	icon?: React.ReactNode;
+	destructive?: boolean;
+	confirmLabel?: string;
 }
 
-export function ConfirmModal({ theme, message, onConfirm, onClose }: ConfirmModalProps) {
+export function ConfirmModal({
+	theme,
+	message,
+	onConfirm,
+	onClose,
+	title = 'Confirm',
+	headerIcon,
+	icon,
+	destructive = true,
+	confirmLabel,
+}: ConfirmModalProps) {
 	const confirmButtonRef = useRef<HTMLButtonElement>(null);
 
 	const handleConfirm = useCallback(() => {
@@ -21,13 +36,15 @@ export function ConfirmModal({ theme, message, onConfirm, onClose }: ConfirmModa
 		onClose();
 	}, [onConfirm, onClose]);
 
+	const iconColor = destructive ? theme.colors.error : theme.colors.warning;
+
 	return (
 		<Modal
 			theme={theme}
-			title="Confirm Delete"
+			title={title}
 			priority={MODAL_PRIORITIES.CONFIRM}
 			onClose={onClose}
-			headerIcon={<Trash2 className="w-4 h-4" style={{ color: theme.colors.error }} />}
+			headerIcon={headerIcon ?? <Trash2 className="w-4 h-4" style={{ color: iconColor }} />}
 			width={450}
 			zIndex={10000}
 			initialFocusRef={confirmButtonRef}
@@ -36,7 +53,8 @@ export function ConfirmModal({ theme, message, onConfirm, onClose }: ConfirmModa
 					theme={theme}
 					onCancel={onClose}
 					onConfirm={handleConfirm}
-					destructive
+					destructive={destructive}
+					confirmLabel={confirmLabel}
 					confirmButtonRef={confirmButtonRef}
 				/>
 			}
@@ -44,9 +62,9 @@ export function ConfirmModal({ theme, message, onConfirm, onClose }: ConfirmModa
 			<div className="flex gap-4">
 				<div
 					className="flex-shrink-0 p-2 rounded-full h-fit"
-					style={{ backgroundColor: `${theme.colors.error}20` }}
+					style={{ backgroundColor: `${iconColor}20` }}
 				>
-					<AlertTriangle className="w-5 h-5" style={{ color: theme.colors.error }} />
+					{icon ?? <AlertTriangle className="w-5 h-5" style={{ color: iconColor }} />}
 				</div>
 				<p className="leading-relaxed" style={{ color: theme.colors.textMain }}>
 					{message}

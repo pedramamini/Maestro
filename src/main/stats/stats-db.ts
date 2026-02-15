@@ -566,6 +566,10 @@ export class StatsDB {
 					LOG_CONTEXT
 				);
 
+				// Remove stale WAL/SHM sidecar files from backup before validating.
+				// These leftovers from previous sessions can cause false integrity failures.
+				this.removeStaleWalFiles(backup.path);
+
 				// Try to validate the backup before restoring
 				try {
 					const testDb = new Database(backup.path, { readonly: true });
@@ -613,9 +617,36 @@ export class StatsDB {
 	}
 
 	/**
+	 * Remove stale WAL and SHM sidecar files for a database path.
+	 * These can cause false corruption detection when left over from crashes.
+	 */
+	private removeStaleWalFiles(dbFilePath: string): void {
+		const walPath = `${dbFilePath}-wal`;
+		const shmPath = `${dbFilePath}-shm`;
+		try {
+			if (fs.existsSync(walPath)) {
+				fs.unlinkSync(walPath);
+				logger.debug(`Removed stale WAL file: ${walPath}`, LOG_CONTEXT);
+			}
+			if (fs.existsSync(shmPath)) {
+				fs.unlinkSync(shmPath);
+				logger.debug(`Removed stale SHM file: ${shmPath}`, LOG_CONTEXT);
+			}
+		} catch (error) {
+			logger.warn(`Failed to remove stale WAL/SHM files for ${dbFilePath}: ${error}`, LOG_CONTEXT);
+		}
+	}
+
+	/**
 	 * Attempt to open and validate a database, handling corruption if detected.
+	 *
+	 * Removes stale WAL/SHM sidecar files before opening to prevent false
+	 * corruption detection caused by leftover files from previous crashes.
 	 */
 	private openWithCorruptionHandling(): Database.Database | null {
+		// Remove stale WAL/SHM files that may cause false corruption detection
+		this.removeStaleWalFiles(this.dbPath);
+
 		try {
 			const db = new Database(this.dbPath);
 
@@ -634,16 +665,22 @@ export class StatsDB {
 
 		const recoveryResult = this.recoverFromCorruption();
 		if (!recoveryResult.recovered) {
-			logger.error('Database corruption recovery failed', LOG_CONTEXT);
-			return null;
+			logger.error('Database corruption recovery failed, creating fresh database', LOG_CONTEXT);
 		}
 
+		// Always ensure a valid database exists after recovery attempt
 		try {
+			if (!fs.existsSync(this.dbPath)) {
+				// No file exists (recovery may not have restored a backup) — create fresh
+				const db = new Database(this.dbPath);
+				logger.info('Fresh database created after corruption recovery', LOG_CONTEXT);
+				return db;
+			}
 			const db = new Database(this.dbPath);
-			logger.info('Fresh database created after corruption recovery', LOG_CONTEXT);
+			logger.info('Database opened after corruption recovery', LOG_CONTEXT);
 			return db;
 		} catch (error) {
-			logger.error(`Failed to create fresh database after recovery: ${error}`, LOG_CONTEXT);
+			logger.error(`Failed to create database after recovery: ${error}`, LOG_CONTEXT);
 			return null;
 		}
 	}

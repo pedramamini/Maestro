@@ -248,10 +248,11 @@ describe('stats-types.ts', () => {
 
 	describe('StatsTimeRange type', () => {
 		it('should accept valid time ranges', () => {
-			const ranges: StatsTimeRange[] = ['day', 'week', 'month', 'year', 'all'];
+			const ranges: StatsTimeRange[] = ['day', 'week', 'month', 'quarter', 'year', 'all'];
 
-			expect(ranges).toHaveLength(5);
+			expect(ranges).toHaveLength(6);
 			expect(ranges).toContain('day');
+			expect(ranges).toContain('quarter');
 			expect(ranges).toContain('all');
 		});
 	});

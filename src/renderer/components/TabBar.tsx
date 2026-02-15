@@ -23,6 +23,7 @@ import {
 } from 'lucide-react';
 import type { AITab, Theme, FilePreviewTab, UnifiedTab } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
 
 interface TabBarProps {
@@ -251,7 +252,7 @@ const Tab = memo(function Tab({
 		// Only show overlay if there's something meaningful to show:
 		// - Tabs with sessions or logs: always show (for session/context actions)
 		// - Tabs without sessions or logs: show if there are move actions available
-		if (!tab.agentSessionId && !(tab.logs?.length) && isFirstTab && isLastTab) return;
+		if (!tab.agentSessionId && !tab.logs?.length && isFirstTab && isLastTab) return;
 
 		// Open overlay after delay
 		hoverTimeoutRef.current = setTimeout(() => {
@@ -1662,9 +1663,6 @@ function TabBarInner({
 	// Can always close tabs - closing the last one creates a fresh new tab
 	const canClose = true;
 
-	// Count unread tabs for the filter toggle tooltip (reserved for future use)
-	const _unreadCount = tabs.filter((t) => t.hasUnread).length;
-
 	// Filter tabs based on unread filter state
 	// When filter is on, show: unread tabs + active tab + tabs with drafts
 	// The active tab disappears from the filtered list when user navigates away from it
@@ -1920,7 +1918,7 @@ function TabBarInner({
 						onClick={onOpenTabSearch}
 						className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
 						style={{ color: theme.colors.textDim }}
-						title="Search tabs (Cmd+Shift+O)"
+						title={`Search tabs (${formatShortcutKeys(['Meta', 'Shift', 'o'])})`}
 					>
 						<Search className="w-4 h-4" />
 					</button>
@@ -1933,7 +1931,7 @@ function TabBarInner({
 						color: showUnreadOnly ? theme.colors.accent : theme.colors.textDim,
 						opacity: showUnreadOnly ? 1 : 0.5,
 					}}
-					title={showUnreadOnly ? 'Showing unread only (Cmd+U)' : 'Filter unread tabs (Cmd+U)'}
+					title={showUnreadOnly ? `Showing unread only (${formatShortcutKeys(['Meta', 'u'])})` : `Filter unread tabs (${formatShortcutKeys(['Meta', 'u'])})`}
 				>
 					<Mail className="w-4 h-4" />
 					{/* Notification dot */}
@@ -2176,7 +2174,7 @@ function TabBarInner({
 					onClick={onNewTab}
 					className="flex items-center justify-center w-6 h-6 rounded hover:bg-white/10 transition-colors"
 					style={{ color: theme.colors.textDim }}
-					title="New tab (Cmd+T)"
+					title={`New tab (${formatShortcutKeys(['Meta', 't'])})`}
 				>
 					<Plus className="w-4 h-4" />
 				</button>

@@ -54,8 +54,9 @@ import { getStatusColor, getContextColor, formatActiveTime } from '../utils/them
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { SessionItem } from './SessionItem';
 import { GroupChatList } from './GroupChatList';
-import { useLiveOverlay, useClickOutside } from '../hooks';
+import { useLiveOverlay, useClickOutside, useResizablePanel } from '../hooks';
 import { useGitFileStatus } from '../contexts/GitStatusContext';
+import { useUIStore } from '../stores/uiStore';
 
 // ============================================================================
 // SessionContextMenu - Right-click context menu for session items
@@ -440,6 +441,7 @@ interface HamburgerMenuContentProps {
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
 	setSymphonyModalOpen: (open: boolean) => void;
+	setDirectorNotesOpen: (open: boolean) => void;
 	setUpdateCheckModalOpen: (open: boolean) => void;
 	setAboutModalOpen: (open: boolean) => void;
 	setMenuOpen: (open: boolean) => void;
@@ -459,6 +461,7 @@ function HamburgerMenuContent({
 	setProcessMonitorOpen,
 	setUsageDashboardOpen,
 	setSymphonyModalOpen,
+	setDirectorNotesOpen,
 	setUpdateCheckModalOpen,
 	setAboutModalOpen,
 	setMenuOpen,
@@ -698,6 +701,31 @@ function HamburgerMenuContent({
 					{shortcuts.openSymphony ? formatShortcutKeys(shortcuts.openSymphony.keys) : '⇧⌘Y'}
 				</span>
 			</button>
+			<button
+				onClick={() => {
+					setDirectorNotesOpen(true);
+					setMenuOpen(false);
+				}}
+				className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 transition-colors text-left"
+			>
+				<ScrollText className="w-5 h-5" style={{ color: theme.colors.accent }} />
+				<div className="flex-1">
+					<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+						Director's Notes
+					</div>
+					<div className="text-xs" style={{ color: theme.colors.textDim }}>
+						Unified history & AI synopsis
+					</div>
+				</div>
+				{shortcuts.directorNotes && (
+					<span
+						className="text-xs font-mono px-1.5 py-0.5 rounded"
+						style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+					>
+						{formatShortcutKeys(shortcuts.directorNotes.keys)}
+					</span>
+				)}
+			</button>
 			<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
 			<button
 				onClick={() => {
@@ -784,6 +812,8 @@ interface SessionTooltipContentProps {
 	gitFileCount?: number;
 	groupName?: string; // Optional group name (for skinny mode)
 	isInBatch?: boolean; // Whether session is running in auto mode
+	contextWarningYellowThreshold?: number;
+	contextWarningRedThreshold?: number;
 }
 
 const SessionTooltipContent = memo(function SessionTooltipContent({
@@ -792,6 +822,8 @@ const SessionTooltipContent = memo(function SessionTooltipContent({
 	gitFileCount,
 	groupName,
 	isInBatch = false,
+	contextWarningYellowThreshold = 60,
+	contextWarningRedThreshold = 80,
 }: SessionTooltipContentProps) {
 	return (
 		<>
@@ -919,7 +951,12 @@ const SessionTooltipContent = memo(function SessionTooltipContent({
 						className="h-full transition-all"
 						style={{
 							width: `${session.contextUsage}%`,
-							backgroundColor: getContextColor(session.contextUsage, theme),
+							backgroundColor: getContextColor(
+								session.contextUsage,
+								theme,
+								contextWarningYellowThreshold,
+								contextWarningRedThreshold
+							),
 						}}
 					/>
 				</div>
@@ -1041,6 +1078,7 @@ interface SessionListProps {
 	setProcessMonitorOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
 	setSymphonyModalOpen: (open: boolean) => void;
+	setDirectorNotesOpen: (open: boolean) => void;
 	setQuickActionOpen: (open: boolean) => void;
 	toggleGroup: (groupId: string) => void;
 	handleDragStart: (sessionId: string) => void;
@@ -1118,6 +1156,10 @@ interface SessionListProps {
 	groupChatStates?: Map<string, GroupChatState>;
 	/** Participant states for ALL group chats (groupChatId -> Map<participantName, state>) */
 	allGroupChatParticipantStates?: Map<string, Map<string, 'idle' | 'working'>>;
+
+	// Context warning thresholds (to match header bar colors with warning sash)
+	contextWarningYellowThreshold?: number;
+	contextWarningRedThreshold?: number;
 }
 
 function SessionListInner(props: SessionListProps) {
@@ -1160,6 +1202,7 @@ function SessionListInner(props: SessionListProps) {
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setQuickActionOpen,
 		toggleGroup,
 		handleDragStart,
@@ -1210,10 +1253,25 @@ function SessionListInner(props: SessionListProps) {
 		participantStates,
 		groupChatStates,
 		allGroupChatParticipantStates,
+		contextWarningYellowThreshold = 60,
+		contextWarningRedThreshold = 80,
 	} = props;
 
+	// Derive whether any session is busy (for wand sparkle animation)
+	const isAnyBusy = useMemo(() => sessions.some((s) => s.state === 'busy'), [sessions]);
+
 	const [sessionFilter, setSessionFilter] = useState('');
-	const [sessionFilterOpen, setSessionFilterOpen] = useState(false);
+	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } = useResizablePanel({
+		width: leftSidebarWidthState,
+		minWidth: 256,
+		maxWidth: 600,
+		settingsKey: 'leftSidebarWidth',
+		setWidth: setLeftSidebarWidthState,
+		side: 'left',
+		externalRef: sidebarContainerRef,
+	});
+	const sessionFilterOpen = useUIStore((s) => s.sessionFilterOpen);
+	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
 	const [preFilterGroupStates, setPreFilterGroupStates] = useState<Map<string, boolean>>(new Map());
 	const [preFilterBookmarksCollapsed, setPreFilterBookmarksCollapsed] = useState<boolean | null>(
 		null
@@ -1402,11 +1460,6 @@ function SessionListInner(props: SessionListProps) {
 		return worktreeChildrenByParentId.get(parentId) || [];
 	};
 
-	// Helper: Check if a session has worktree children
-	const _hasWorktreeChildren = (sessionId: string): boolean => {
-		return worktreeChildrenByParentId.has(sessionId);
-	};
-
 	// Helper component: Renders a collapsed session pill with subdivided parts for worktrees
 	const renderCollapsedPill = (session: Session, keyPrefix: string, _onExpand: () => void) => {
 		const worktreeChildren = getWorktreeChildren(session.id);
@@ -1473,6 +1526,8 @@ function SessionListInner(props: SessionListProps) {
 									theme={theme}
 									gitFileCount={getFileCount(s.id)}
 									isInBatch={isInBatch}
+									contextWarningYellowThreshold={contextWarningYellowThreshold}
+									contextWarningRedThreshold={contextWarningRedThreshold}
 								/>
 							</div>
 						</div>
@@ -1768,15 +1823,11 @@ function SessionListInner(props: SessionListProps) {
 	}, [sessionFilter, sessions, worktreeChildrenByParentId]);
 
 	// Destructure for backwards compatibility with existing code
-	const _filteredSessions = sessionCategories.filtered;
 	const bookmarkedSessions = sessionCategories.bookmarked;
-	const _bookmarkedParentSessions = sessionCategories.sortedBookmarkedParent;
 	const sortedBookmarkedSessions = sessionCategories.sortedBookmarked;
 	const sortedBookmarkedParentSessions = sessionCategories.sortedBookmarkedParent;
-	const _groupedSessionsById = sessionCategories.groupedMap;
 	const sortedGroupSessionsById = sessionCategories.sortedGrouped;
 	const ungroupedSessions = sessionCategories.ungrouped;
-	const _ungroupedParentSessions = sessionCategories.sortedUngroupedParent;
 	const sortedUngroupedSessions = sessionCategories.sortedUngrouped;
 	const sortedUngroupedParentSessions = sessionCategories.sortedUngroupedParent;
 	const sortedFilteredSessions = sessionCategories.sortedFiltered;
@@ -1894,7 +1945,7 @@ function SessionListInner(props: SessionListProps) {
 		<div
 			ref={sidebarContainerRef}
 			tabIndex={0}
-			className={`border-r flex flex-col shrink-0 transition-all duration-300 outline-none relative z-20 ${activeFocus === 'sidebar' && !activeGroupChatId ? 'ring-1 ring-inset' : ''}`}
+			className={`border-r flex flex-col shrink-0 ${sidebarTransitionClass} outline-none relative z-20 ${activeFocus === 'sidebar' && !activeGroupChatId ? 'ring-1 ring-inset' : ''}`}
 			style={
 				{
 					width: leftSidebarOpen ? `${leftSidebarWidthState}px` : '64px',
@@ -1923,32 +1974,7 @@ function SessionListInner(props: SessionListProps) {
 			{leftSidebarOpen && (
 				<div
 					className="absolute top-0 right-0 w-1 h-full cursor-col-resize hover:bg-blue-500 transition-colors z-20"
-					onMouseDown={(e) => {
-						e.preventDefault();
-						const startX = e.clientX;
-						const startWidth = leftSidebarWidthState;
-						let currentWidth = startWidth;
-
-						const handleMouseMove = (e: MouseEvent) => {
-							const delta = e.clientX - startX;
-							currentWidth = Math.max(256, Math.min(600, startWidth + delta));
-							// Direct DOM update during drag for performance (avoids ~60 re-renders/sec)
-							if (sidebarContainerRef?.current) {
-								sidebarContainerRef.current.style.width = `${currentWidth}px`;
-							}
-						};
-
-						const handleMouseUp = () => {
-							// Only update React state once on mouseup
-							setLeftSidebarWidthState(currentWidth);
-							window.maestro.settings.set('leftSidebarWidth', currentWidth);
-							document.removeEventListener('mousemove', handleMouseMove);
-							document.removeEventListener('mouseup', handleMouseUp);
-						};
-
-						document.addEventListener('mousemove', handleMouseMove);
-						document.addEventListener('mouseup', handleMouseUp);
-					}}
+					onMouseDown={onSidebarResizeStart}
 				/>
 			)}
 
@@ -1960,7 +1986,7 @@ function SessionListInner(props: SessionListProps) {
 				{leftSidebarOpen ? (
 					<>
 						<div className="flex items-center gap-2">
-							<Wand2 className="w-5 h-5" style={{ color: theme.colors.accent }} />
+							<Wand2 className={`w-5 h-5${isAnyBusy ? ' wand-sparkle-active' : ''}`} style={{ color: theme.colors.accent }} />
 							<h1
 								className="font-bold tracking-widest text-lg"
 								style={{ color: theme.colors.textMain }}
@@ -2467,6 +2493,7 @@ function SessionListInner(props: SessionListProps) {
 										setProcessMonitorOpen={setProcessMonitorOpen}
 										setUsageDashboardOpen={setUsageDashboardOpen}
 										setSymphonyModalOpen={setSymphonyModalOpen}
+										setDirectorNotesOpen={setDirectorNotesOpen}
 										setUpdateCheckModalOpen={setUpdateCheckModalOpen}
 										setAboutModalOpen={setAboutModalOpen}
 										setMenuOpen={setMenuOpen}
@@ -2483,7 +2510,7 @@ function SessionListInner(props: SessionListProps) {
 							className="p-2 rounded hover:bg-white/10 transition-colors"
 							title="Menu"
 						>
-							<Wand2 className="w-6 h-6" style={{ color: theme.colors.accent }} />
+							<Wand2 className={`w-6 h-6${isAnyBusy ? ' wand-sparkle-active' : ''}`} style={{ color: theme.colors.accent }} />
 						</button>
 						{/* Menu Overlay for Collapsed Sidebar */}
 						{menuOpen && (
@@ -2508,6 +2535,7 @@ function SessionListInner(props: SessionListProps) {
 									setProcessMonitorOpen={setProcessMonitorOpen}
 									setUsageDashboardOpen={setUsageDashboardOpen}
 									setSymphonyModalOpen={setSymphonyModalOpen}
+									setDirectorNotesOpen={setDirectorNotesOpen}
 									setUpdateCheckModalOpen={setUpdateCheckModalOpen}
 									setAboutModalOpen={setAboutModalOpen}
 									setMenuOpen={setMenuOpen}
@@ -2911,6 +2939,8 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(session.id)}
 										groupName={groups.find((g) => g.id === session.groupId)?.name}
 										isInBatch={isInBatch}
+										contextWarningYellowThreshold={contextWarningYellowThreshold}
+										contextWarningRedThreshold={contextWarningRedThreshold}
 									/>
 								</div>
 							</div>

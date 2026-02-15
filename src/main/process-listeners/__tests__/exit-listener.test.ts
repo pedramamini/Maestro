@@ -54,6 +54,7 @@ describe('Exit Listener', () => {
 				emitParticipantState: vi.fn(),
 				emitParticipantsChanged: vi.fn(),
 				emitModeratorUsage: vi.fn(),
+				emitMessage: vi.fn(),
 			},
 			groupChatRouter: {
 				routeModeratorResponse: vi.fn().mockResolvedValue(undefined),
@@ -97,8 +98,8 @@ describe('Exit Listener', () => {
 			patterns: {
 				REGEX_MODERATOR_SESSION: /^group-chat-(.+)-moderator-/,
 				REGEX_MODERATOR_SESSION_TIMESTAMP: /^group-chat-(.+)-moderator-\d+$/,
-				REGEX_AI_SUFFIX: /-ai-[^-]+$/,
-				REGEX_AI_TAB_ID: /-ai-([^-]+)$/,
+				REGEX_AI_SUFFIX: /-ai-.+$/,
+				REGEX_AI_TAB_ID: /-ai-(.+)$/,
 				REGEX_BATCH_SESSION: /-batch-\d+$/,
 				REGEX_SYNOPSIS_SESSION: /-synopsis-\d+$/,
 			},
@@ -301,6 +302,45 @@ describe('Exit Listener', () => {
 				expect(mockDeps.groupChatRouter.markParticipantResponded).toHaveBeenCalledWith(
 					'test-chat-123',
 					'TestAgent'
+				);
+			});
+		});
+
+		it('should emit recovery system message when recovery starts', async () => {
+			setupListener();
+			const handler = eventHandlers.get('exit');
+			const sessionId = 'group-chat-test-chat-123-participant-TestAgent-abc123';
+
+			handler?.(sessionId, 0);
+
+			await vi.waitFor(() => {
+				expect(mockDeps.groupChatEmitters.emitMessage).toHaveBeenCalledWith(
+					'test-chat-123',
+					expect.objectContaining({
+						from: 'system',
+						content: expect.stringContaining('Creating a new session'),
+					})
+				);
+			});
+		});
+
+		it('should emit failure message when recovery fails', async () => {
+			mockDeps.groupChatRouter.respawnParticipantWithRecovery = vi
+				.fn()
+				.mockRejectedValue(new Error('Recovery failed'));
+			setupListener();
+			const handler = eventHandlers.get('exit');
+			const sessionId = 'group-chat-test-chat-123-participant-TestAgent-abc123';
+
+			handler?.(sessionId, 0);
+
+			await vi.waitFor(() => {
+				expect(mockDeps.groupChatEmitters.emitMessage).toHaveBeenCalledWith(
+					'test-chat-123',
+					expect.objectContaining({
+						from: 'system',
+						content: expect.stringContaining('Failed to create new session'),
+					})
 				);
 			});
 		});

@@ -18,7 +18,7 @@ import {
 	Pin,
 } from 'lucide-react';
 import type { Session, Theme, BatchRunState, Shortcut, ThinkingMode } from '../types';
-import { formatShortcutKeys, isMacOS } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, formatEnterToSend, formatEnterToSendTooltip } from '../utils/shortcutFormatter';
 import type { TabCompletionSuggestion, TabCompletionFilter } from '../hooks';
 import type {
 	SummarizeProgress,
@@ -351,16 +351,17 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 			.slice(0, 10);
 	}, [currentCommandHistory, commandHistoryFilterLower]);
 
-	// Auto-resize textarea when switching tabs
-	// This ensures the textarea height matches the content when switching between tabs
-	// PERF: Only depend on activeTabId, NOT inputValue - inputValue changes on every keystroke
-	// and would cause expensive layout reflow (scrollHeight access) on each character typed
+	// Auto-resize textarea to match content height.
+	// Fires on tab switch AND inputValue changes (handles external updates like session restore,
+	// paste-from-history, programmatic sets). The onChange handler also resizes via rAF for
+	// keystroke responsiveness, but this effect catches all non-keystroke inputValue mutations
+	// that would otherwise leave the textarea at the wrong height.
 	useEffect(() => {
 		if (inputRef.current) {
 			inputRef.current.style.height = 'auto';
 			inputRef.current.style.height = `${Math.min(inputRef.current.scrollHeight, 112)}px`;
 		}
-	}, [session.activeTabId, inputRef]);
+	}, [session.activeTabId, inputValue, inputRef]);
 
 	// Show summarization progress overlay when active for this tab
 	if (isSummarizing && session.inputMode === 'ai' && onCancelSummarize) {
@@ -840,8 +841,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							)}
 							<textarea
 								ref={inputRef}
-								className={`flex-1 bg-transparent text-sm outline-none ${isTerminalMode ? 'pl-1.5' : 'pl-3'} pt-3 pr-3 resize-none min-h-[2.5rem] scrollbar-thin`}
-								style={{ color: theme.colors.textMain, maxHeight: '7rem' }}
+								className={`flex-1 bg-transparent text-sm outline-none ${isTerminalMode ? 'pl-1.5' : 'pl-3'} pt-3 pr-3 resize-none min-h-[3.5rem] scrollbar-thin`}
+								style={{ color: theme.colors.textMain, maxHeight: '11rem' }}
 								placeholder={
 									isTerminalMode
 										? 'Run shell command...'
@@ -906,7 +907,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									const textarea = e.target;
 									requestAnimationFrame(() => {
 										textarea.style.height = 'auto';
-										textarea.style.height = `${Math.min(textarea.scrollHeight, 112)}px`;
+										textarea.style.height = `${Math.min(textarea.scrollHeight, 176)}px`;
 									});
 								}}
 								onKeyDown={handleInputKeyDown}
@@ -916,7 +917,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									handleDrop(e);
 								}}
 								onDragOver={(e) => e.preventDefault()}
-								rows={1}
+								rows={2}
 							/>
 						</div>
 
@@ -1012,7 +1013,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 												? `1px solid ${theme.colors.accent}50`
 												: '1px solid transparent',
 										}}
-										title="Save to History (Cmd+S) - Synopsis added after each completion"
+										title={`Save to History (${formatShortcutKeys(['Meta', 's'])}) - Synopsis added after each completion`}
 									>
 										<History className="w-3 h-3" />
 										<span>History</span>
@@ -1088,19 +1089,17 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									onClick={() => setEnterToSend(!enterToSend)}
 									className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 px-2 py-1 rounded hover:bg-white/5"
 									title={
-										enterToSend
-											? `Switch to ${isMacOS() ? 'Cmd' : 'Ctrl'}+Enter to send`
-											: 'Switch to Enter to send'
+										formatEnterToSendTooltip(enterToSend)
 									}
 								>
 									<Keyboard className="w-3 h-3" />
-									{enterToSend ? 'Enter' : isMacOS() ? '⌘ + Enter' : 'Ctrl + Enter'}
+									{formatEnterToSend(enterToSend)}
 								</button>
 							</div>
 						</div>
 					</div>
 					{/* Context Warning Sash - AI mode only, appears below input when context usage is high */}
-					{session.inputMode === 'ai' && onSummarizeAndContinue && (
+					{session.inputMode === 'ai' && contextWarningsEnabled && onSummarizeAndContinue && (
 						<ContextWarningSash
 							theme={theme}
 							contextUsage={contextUsage}
@@ -1124,7 +1123,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							borderColor: theme.colors.border,
 							color: theme.colors.textDim,
 						}}
-						title="Toggle Mode (Cmd+J)"
+						title={`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`}
 					>
 						{session.inputMode === 'terminal' ? (
 							<Terminal className="w-4 h-4" />

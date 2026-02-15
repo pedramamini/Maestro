@@ -6,7 +6,7 @@
  * Focus defaults to Cancel to prevent accidental data loss.
  */
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useRef } from 'react';
 import { AlertTriangle } from 'lucide-react';
 import type { Theme } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -20,8 +20,6 @@ interface QuitConfirmModalProps {
 	busyAgentNames: string[];
 	/** Callback when user confirms quit */
 	onConfirmQuit: () => void;
-	/** Callback when user confirms quit and requests working directory deletion */
-	onConfirmQuitAndDelete: () => void;
 	/** Callback when user cancels (stays in app) */
 	onCancel: () => void;
 }
@@ -37,7 +35,6 @@ export function QuitConfirmModal({
 	busyAgentCount,
 	busyAgentNames,
 	onConfirmQuit,
-	onConfirmQuitAndDelete,
 	onCancel,
 }: QuitConfirmModalProps): JSX.Element {
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -45,12 +42,6 @@ export function QuitConfirmModal({
 	const cancelButtonRef = useRef<HTMLButtonElement>(null);
 	const onCancelRef = useRef(onCancel);
 	onCancelRef.current = onCancel;
-	const [confirmName, setConfirmName] = useState('');
-
-	// Check if typed name matches any busy agent name (case-insensitive)
-	const deleteEnabled = busyAgentNames.some(
-		(name) => name.toLowerCase() === confirmName.trim().toLowerCase()
-	);
 
 	// Focus Cancel button on mount (safer default action)
 	useEffect(() => {
@@ -93,6 +84,7 @@ export function QuitConfirmModal({
 	};
 
 	const agentText = busyAgentCount === 1 ? 'agent is' : 'agents are';
+	const hasAutoRun = busyAgentNames.some((n) => n.includes('(Auto Run)'));
 	const displayNames = busyAgentNames.slice(0, 3);
 	const remainingCount = busyAgentNames.length - 3;
 
@@ -137,7 +129,7 @@ export function QuitConfirmModal({
 						className="text-sm leading-relaxed"
 						style={{ color: theme.colors.textMain }}
 					>
-						{busyAgentCount} {agentText} currently thinking. Quitting now will interrupt their work.
+						{busyAgentCount} {agentText} currently {hasAutoRun ? 'active' : 'thinking'}. Quitting now will interrupt their work.
 					</p>
 
 					{/* List of busy agents */}
@@ -179,44 +171,8 @@ export function QuitConfirmModal({
 						</div>
 					</div>
 
-					{/* Agent name confirmation input for working directory deletion */}
-					<div className="mt-4">
-						<label
-							className="block text-xs mb-1.5"
-							style={{ color: theme.colors.textDim }}
-							htmlFor="quit-confirm-agent-name"
-						>
-							Enter agent name below to enable working directory deletion
-						</label>
-						<input
-							id="quit-confirm-agent-name"
-							type="text"
-							value={confirmName}
-							onChange={(e) => setConfirmName(e.target.value)}
-							placeholder=""
-							className="w-full px-3 py-1.5 rounded-lg border text-xs outline-none focus:ring-1"
-							style={{
-								backgroundColor: theme.colors.bgMain,
-								borderColor: theme.colors.border,
-								color: theme.colors.textMain,
-							}}
-						/>
-					</div>
-
 					{/* Actions */}
-					<div className="mt-5 flex items-center justify-end gap-2 flex-nowrap">
-						<button
-							onClick={onConfirmQuitAndDelete}
-							disabled={!deleteEnabled}
-							className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors whitespace-nowrap"
-							style={{
-								backgroundColor: deleteEnabled ? theme.colors.error : `${theme.colors.error}40`,
-								color: deleteEnabled ? '#ffffff' : `#ffffff80`,
-								cursor: deleteEnabled ? 'pointer' : 'not-allowed',
-							}}
-						>
-							Quit & Delete Working Dirs
-						</button>
+					<div className="mt-5 flex items-center justify-center gap-2 flex-nowrap">
 						<button
 							onClick={onConfirmQuit}
 							className="px-3 py-1.5 rounded-lg text-xs font-medium transition-colors hover:opacity-90 whitespace-nowrap"

@@ -93,8 +93,25 @@ export function setupExitListener(
 					{ groupChatId }
 				);
 				void (async () => {
+					// Helper to load chat with retry for transient failures
+					const loadChatWithRetry = async () => {
+						try {
+							return await groupChatStorage.loadGroupChat(groupChatId);
+						} catch (firstErr) {
+							debugLog('GroupChat:Debug', ` First chat load failed, retrying after 100ms...`);
+							logger.warn(
+								'[GroupChat] Chat load failed, retrying once',
+								'ProcessListener',
+								{ error: String(firstErr), groupChatId }
+							);
+							// Wait 100ms and retry once for transient I/O issues
+							await new Promise((resolve) => setTimeout(resolve, 100));
+							return await groupChatStorage.loadGroupChat(groupChatId);
+						}
+					};
+
 					try {
-						const chat = await groupChatStorage.loadGroupChat(groupChatId);
+						const chat = await loadChatWithRetry();
 						debugLog('GroupChat:Debug', ` Chat loaded for parsing: ${chat?.name || 'null'}`);
 						const agentType = chat?.moderatorAgentId;
 						debugLog('GroupChat:Debug', ` Agent type for parsing: ${agentType}`);
@@ -140,38 +157,22 @@ export function setupExitListener(
 							);
 						}
 					} catch (err) {
-						debugLog('GroupChat:Debug', ` ERROR loading chat:`, err);
+						debugLog('GroupChat:Debug', ` ERROR loading chat after retry:`, err);
+						// Log what we would have tried to route for debugging
+						const parsedTextForLog = outputParser.extractTextFromStreamJson(bufferedOutput);
 						logger.error(
-							'[GroupChat] Failed to load chat for moderator output parsing',
+							'[GroupChat] Failed to load chat for moderator output parsing after retry',
 							'ProcessListener',
-							{ error: String(err) }
+							{
+								error: String(err),
+								groupChatId,
+								bufferedLength: bufferedOutput.length,
+								parsedTextPreview: parsedTextForLog.substring(0, 500),
+								parsedTextLength: parsedTextForLog.length,
+							}
 						);
-						const parsedText = outputParser.extractTextFromStreamJson(bufferedOutput);
-						if (parsedText.trim()) {
-							const readOnly = groupChatRouter.getGroupChatReadOnlyState(groupChatId);
-							const pm = getProcessManager();
-							const ad = getAgentDetector();
-							groupChatRouter
-								.routeModeratorResponse(
-									groupChatId,
-									parsedText,
-									pm ?? undefined,
-									ad ?? undefined,
-									readOnly
-								)
-								.catch((routeErr) => {
-									debugLog(
-										'GroupChat:Debug',
-										` ERROR routing moderator response (fallback):`,
-										routeErr
-									);
-									logger.error(
-										'[GroupChat] Failed to route moderator response',
-										'ProcessListener',
-										{ error: String(routeErr) }
-									);
-								});
-						}
+						// Do NOT attempt to route the response if chat load still fails after retry
+						// The failure indicates a persistent issue that should be investigated.
 					}
 				})().finally(() => {
 					outputBuffer.clearGroupChatBuffer(sessionId);
@@ -259,10 +260,15 @@ export function setupExitListener(
 				// Handle session recovery and normal processing in an async IIFE
 				void (async () => {
 					// Check if this is a session_not_found error - if so, recover and retry
+					// But don't attempt recovery if this IS already a recovery session (prevent infinite loops)
+					const isRecoverySession = sessionId.includes('-recovery-');
 					const chat = await groupChatStorage.loadGroupChat(groupChatId);
 					const agentType = chat?.participants.find((p) => p.name === participantName)?.agentId;
 
-					if (sessionRecovery.needsSessionRecovery(bufferedOutput, agentType)) {
+					if (
+						!isRecoverySession &&
+						sessionRecovery.needsSessionRecovery(bufferedOutput, agentType)
+					) {
 						debugLog(
 							'GroupChat:Debug',
 							` Session not found error detected for ${participantName} - initiating recovery`
@@ -286,6 +292,12 @@ export function setupExitListener(
 								'GroupChat:Debug',
 								` Re-spawning ${participantName} with recovery context...`
 							);
+							// Notify UI that recovery is in progress
+							groupChatEmitters.emitMessage?.(groupChatId, {
+								timestamp: new Date().toISOString(),
+								from: 'system',
+								content: `Session expired for ${participantName}. Creating a new session...`,
+							});
 							try {
 								await groupChatRouter.respawnParticipantWithRecovery(
 									groupChatId,
@@ -308,6 +320,12 @@ export function setupExitListener(
 										participant: participantName,
 									}
 								);
+								// Notify UI that recovery failed
+								groupChatEmitters.emitMessage?.(groupChatId, {
+									timestamp: new Date().toISOString(),
+									from: 'system',
+									content: `⚠️ Failed to create new session for ${participantName}: ${String(respawnErr)}`,
+								});
 								// Mark as responded since recovery failed
 								markAndMaybeSynthesize();
 							}
@@ -416,7 +434,7 @@ export function setupExitListener(
 		if (webServer) {
 			// Extract base session ID from formats: {id}-ai-{tabId}, {id}-terminal, {id}-batch-{timestamp}, {id}-synopsis-{timestamp}
 			const baseSessionId = sessionId.replace(
-				/-ai-[^-]+$|-terminal$|-batch-\d+$|-synopsis-\d+$/,
+				/-ai-.+$|-terminal$|-batch-\d+$|-synopsis-\d+$/,
 				''
 			);
 			webServer.broadcastToSessionClients(baseSessionId, {

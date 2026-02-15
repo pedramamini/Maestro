@@ -93,6 +93,39 @@ export function formatShortcutKeys(keys: string[], separator?: string): string {
 }
 
 /**
+ * Format the platform-appropriate meta/command key.
+ * Returns '⌘' on macOS, 'Ctrl' on Windows/Linux.
+ */
+export function formatMetaKey(): string {
+	return isMac ? '⌘' : 'Ctrl';
+}
+
+/**
+ * Format the enter-to-send display text.
+ * Used by input areas that toggle between Enter and Cmd+Enter to send.
+ *
+ * @param enterToSend - Whether Enter sends (true) or Cmd/Ctrl+Enter sends (false)
+ * @returns Display string like 'Enter' or '⌘ + Enter' / 'Ctrl + Enter'
+ */
+export function formatEnterToSend(enterToSend: boolean): string {
+	if (enterToSend) return 'Enter';
+	return isMac ? '⌘ + Enter' : 'Ctrl + Enter';
+}
+
+/**
+ * Format the enter-to-send tooltip text for the toggle button.
+ *
+ * @param enterToSend - Whether Enter sends (true) or Cmd/Ctrl+Enter sends (false)
+ * @returns Tooltip like 'Switch to Cmd+Enter to send' or 'Switch to Enter to send'
+ */
+export function formatEnterToSendTooltip(enterToSend: boolean): string {
+	if (enterToSend) {
+		return `Switch to ${isMac ? 'Cmd' : 'Ctrl'}+Enter to send`;
+	}
+	return 'Switch to Enter to send';
+}
+
+/**
  * Check if running on macOS.
  * Useful for conditional rendering.
  */

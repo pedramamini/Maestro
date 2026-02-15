@@ -14,6 +14,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { LightboxModal } from '../../../renderer/components/LightboxModal';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 
 // Mock lucide-react
 vi.mock('lucide-react', () => ({
@@ -448,7 +449,7 @@ describe('LightboxModal', () => {
 			);
 
 			// Click copy button
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 			fireEvent.click(copyButton);
 
 			await waitFor(() => {
@@ -517,7 +518,7 @@ describe('LightboxModal', () => {
 			// Initially shows copy icon
 			expect(screen.getByTestId('copy-icon')).toBeInTheDocument();
 
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 			fireEvent.click(copyButton);
 
 			await waitFor(() => {
@@ -540,7 +541,7 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 
 			// Trigger copy and immediately resolve the promise chain
 			await act(async () => {
@@ -575,7 +576,7 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 			fireEvent.click(copyButton);
 
 			expect(onClose).not.toHaveBeenCalled();
@@ -597,7 +598,7 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 			fireEvent.click(copyButton);
 
 			await waitFor(() => {
@@ -819,7 +820,7 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 			expect(copyButton).toHaveClass('bg-white/10');
 			expect(copyButton).toHaveClass('hover:bg-white/20');
 			expect(copyButton).toHaveClass('rounded-full');

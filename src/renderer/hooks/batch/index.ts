@@ -6,7 +6,13 @@
  */
 
 // Utility functions for markdown task processing
-export { countUnfinishedTasks, countCheckedTasks, uncheckAllTasks } from './batchUtils';
+export {
+	countUnfinishedTasks,
+	countCheckedTasks,
+	uncheckAllTasks,
+	DEFAULT_BATCH_PROMPT,
+	validateAgentPromptHasTaskReference,
+} from './batchUtils';
 
 // Debounce hook for per-session state updates
 export { useSessionDebounce } from './useSessionDebounce';
@@ -113,7 +119,7 @@ export { useMarketplace } from './useMarketplace';
 export type { UseMarketplaceReturn } from './useMarketplace';
 
 // Inline wizard for creating/iterating Auto Run documents
-export { useInlineWizard } from '../useInlineWizard';
+export { useInlineWizard } from './useInlineWizard';
 export type {
 	InlineWizardMode,
 	InlineWizardMessage,
@@ -121,7 +127,7 @@ export type {
 	InlineGeneratedDocument,
 	InlineWizardState,
 	UseInlineWizardReturn,
-} from '../useInlineWizard';
+} from './useInlineWizard';
 
 // Re-export ExistingDocument type from existingDocsDetector for convenience
 export type { ExistingDocument } from '../../utils/existingDocsDetector';

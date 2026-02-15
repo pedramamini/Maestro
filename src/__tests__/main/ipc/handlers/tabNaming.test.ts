@@ -92,9 +92,9 @@ describe('Tab Naming IPC Handlers', () => {
 		name: 'Claude Code',
 		command: 'claude',
 		path: '/usr/local/bin/claude',
-		args: ['--print'],
+		args: ['--print', '--verbose', '--output-format', 'stream-json', '--dangerously-skip-permissions'],
 		batchModeArgs: ['--print'],
-		readOnlyArgs: ['--read-only'],
+		readOnlyArgs: ['--permission-mode', 'plan'],
 	};
 
 	beforeEach(() => {
@@ -215,6 +215,49 @@ describe('Tab Naming IPC Handlers', () => {
 
 			const result = await resultPromise;
 			expect(result).toBe('Login Form Implementation');
+		});
+
+		it('filters out --dangerously-skip-permissions for read-only parallel execution', async () => {
+			const { buildAgentArgs } = await import('../../../../main/utils/agent-args');
+
+			let onDataCallback: ((sessionId: string, data: string) => void) | undefined;
+			let onExitCallback: ((sessionId: string) => void) | undefined;
+
+			mockProcessManager.on.mockImplementation((event: string, callback: (...args: any[]) => void) => {
+				if (event === 'data') onDataCallback = callback;
+				if (event === 'exit') onExitCallback = callback;
+			});
+
+			const resultPromise = invokeHandler('tabNaming:generateTabName', {
+				userMessage: 'Help me with something',
+				agentType: 'claude-code',
+				cwd: '/test/project',
+			});
+
+			await vi.waitFor(() => {
+				expect(mockProcessManager.spawn).toHaveBeenCalled();
+			});
+
+			// Verify buildAgentArgs was called with baseArgs that exclude --dangerously-skip-permissions
+			// This allows the agent to run in read-only mode without acquiring a workspace lock
+			expect(buildAgentArgs).toHaveBeenCalledWith(
+				expect.anything(),
+				expect.objectContaining({
+					baseArgs: expect.not.arrayContaining(['--dangerously-skip-permissions']),
+					readOnlyMode: true,
+				})
+			);
+
+			// Verify the baseArgs still contain the other expected flags
+			const callArgs = (buildAgentArgs as Mock).mock.calls[0][1];
+			expect(callArgs.baseArgs).toContain('--print');
+			expect(callArgs.baseArgs).toContain('--verbose');
+			expect(callArgs.baseArgs).not.toContain('--dangerously-skip-permissions');
+
+			// Complete the handler
+			onDataCallback?.('tab-naming-mock-uuid-1234', 'Test Tab');
+			onExitCallback?.('tab-naming-mock-uuid-1234');
+			await resultPromise;
 		});
 
 		it('extracts tab name from agent output with ANSI codes', async () => {

@@ -15,6 +15,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { SessionList } from '../../../renderer/components/SessionList';
 import type { Session, Group, Theme, Shortcut, AutoRunStats } from '../../../renderer/types';
+import { useUIStore } from '../../../renderer/stores/uiStore';
 
 // Mock QRCodeSVG to avoid complex rendering
 vi.mock('qrcode.react', () => ({
@@ -198,6 +199,8 @@ const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]
 	setProcessMonitorOpen: vi.fn(),
 	setUsageDashboardOpen: vi.fn(),
 	setSymphonyModalOpen: vi.fn(),
+	setDirectorNotesOpen: vi.fn(),
+	setUpdateCheckModalOpen: vi.fn(),
 	setQuickActionOpen: vi.fn(),
 	toggleGroup: vi.fn(),
 	handleDragStart: vi.fn(),
@@ -222,6 +225,8 @@ const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]
 describe('SessionList', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		// Reset uiStore state used by SessionList
+		useUIStore.setState({ sessionFilterOpen: false });
 	});
 
 	afterEach(() => {
@@ -1101,6 +1106,27 @@ describe('SessionList', () => {
 			expect(menuContainer).toHaveClass('scrollbar-thin');
 			// Verify max-height is set via inline style for scroll support
 			expect(menuContainer?.style.maxHeight).toBe('calc(100vh - 90px)');
+		});
+
+		it('shows Director\'s Notes menu item in hamburger menu', () => {
+			const props = createDefaultProps({ leftSidebarOpen: true });
+			render(<SessionList {...props} />);
+
+			fireEvent.click(screen.getByTitle('Menu'));
+
+			expect(screen.getByText("Director's Notes")).toBeInTheDocument();
+			expect(screen.getByText('Unified history & AI synopsis')).toBeInTheDocument();
+		});
+
+		it('opens Director\'s Notes modal from menu', () => {
+			const setDirectorNotesOpen = vi.fn();
+			const props = createDefaultProps({ leftSidebarOpen: true, setDirectorNotesOpen });
+			render(<SessionList {...props} />);
+
+			fireEvent.click(screen.getByTitle('Menu'));
+			fireEvent.click(screen.getByText("Director's Notes"));
+
+			expect(setDirectorNotesOpen).toHaveBeenCalledWith(true);
 		});
 	});
 

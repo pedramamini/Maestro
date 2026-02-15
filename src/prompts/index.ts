@@ -45,4 +45,7 @@ export {
 
 	// Tab naming
 	tabNamingPrompt,
+
+	// Director's Notes
+	directorNotesPrompt,
 } from '../generated/prompts';

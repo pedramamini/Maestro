@@ -89,8 +89,10 @@ export class ChildProcessSpawner {
 		const promptViaStdin = sendPromptViaStdin || sendPromptViaStdinRaw || argsHaveInputStreamJson;
 
 		// Build final args based on batch mode and images
+		// Track whether the prompt was added to CLI args (used later to decide stdin behavior)
 		let finalArgs: string[];
 		let tempImageFiles: string[] = [];
+		let promptAddedToArgs = false;
 
 		if (hasImages && prompt && capabilities.supportsStreamJsonInput) {
 			// For agents that support stream-json input (like Claude Code)
@@ -101,6 +103,7 @@ export class ChildProcessSpawner {
 				? ['--input-format', 'stream-json']
 				: [];
 			finalArgs = [...args, ...needsInputFormat];
+			// Prompt will be sent via stdin as stream-json with embedded images (not in CLI args)
 		} else if (hasImages && prompt && imageArgs) {
 			// For agents that use file-based image args (like Codex, OpenCode)
 			finalArgs = [...args];
@@ -122,6 +125,7 @@ export class ChildProcessSpawner {
 				} else {
 					finalArgs = [...finalArgs, '--', prompt];
 				}
+				promptAddedToArgs = true;
 			}
 			logger.debug('[ProcessManager] Using file-based image args', 'ProcessManager', {
 				sessionId,
@@ -139,6 +143,7 @@ export class ChildProcessSpawner {
 			} else {
 				finalArgs = [...args, '--', prompt];
 			}
+			promptAddedToArgs = true;
 		} else {
 			finalArgs = args;
 		}
@@ -284,6 +289,7 @@ export class ChildProcessSpawner {
 			// IMPORTANT: SSH stdin script mode (sshStdinScript) MUST enable stream-json parsing
 			// because the SSH command wraps the actual agent command. Without this, the output
 			// parser won't process JSON output from remote agents, causing raw JSON to display.
+			// NOTE: sendPromptViaStdinRaw sends RAW text (not JSON), so it should NOT set isStreamJsonMode
 			const argsContain = (pattern: string) => finalArgs.some((arg) => arg.includes(pattern));
 			const isStreamJsonMode =
 				argsContain('stream-json') ||
@@ -291,7 +297,6 @@ export class ChildProcessSpawner {
 				(argsContain('--format') && argsContain('json')) ||
 				(hasImages && !!prompt) ||
 				!!config.sendPromptViaStdin ||
-				!!config.sendPromptViaStdinRaw ||
 				!!config.sshStdinScript;
 
 			// Get the output parser for this agent type
@@ -428,8 +433,12 @@ export class ChildProcessSpawner {
 				});
 			}
 
-			// Handle exit
-			childProcess.on('exit', (code) => {
+			// Handle close (NOT exit) to ensure all stdout/stderr data is fully consumed.
+			// The 'exit' event can fire before the stdio streams have been drained,
+			// which causes data loss for short-lived processes where the result is
+			// emitted near the end of stdout (e.g., tab-naming, batch operations).
+			// The 'close' event guarantees all stdio streams are closed first.
+			childProcess.on('close', (code) => {
 				this.exitHandler.handleExit(sessionId, code || 0);
 			});
 
@@ -438,7 +447,6 @@ export class ChildProcessSpawner {
 				this.exitHandler.handleError(sessionId, error);
 			});
 
-			// Handle stdin for SSH script, stream-json, or batch mode
 			if (config.sshStdinScript) {
 				// SSH stdin script mode: send the entire script to /bin/bash on remote
 				// This bypasses all shell escaping issues by piping the script via stdin
@@ -448,27 +456,31 @@ export class ChildProcessSpawner {
 				});
 				childProcess.stdin?.write(config.sshStdinScript);
 				childProcess.stdin?.end();
-			} else if (isStreamJsonMode && prompt) {
-				if (config.sendPromptViaStdinRaw) {
-					// Send raw prompt via stdin
-					logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {
-						sessionId,
-						promptLength: prompt.length,
-					});
-					childProcess.stdin?.write(prompt);
-					childProcess.stdin?.end();
-				} else {
-					// Stream-json mode: send the message via stdin
-					const streamJsonMessage = buildStreamJsonMessage(prompt, images || []);
-					logger.debug('[ProcessManager] Sending stream-json message via stdin', 'ProcessManager', {
-						sessionId,
-						messageLength: streamJsonMessage.length,
-						imageCount: (images || []).length,
-						hasImages: !!(images && images.length > 0),
-					});
-					childProcess.stdin?.write(streamJsonMessage + '\n');
-					childProcess.stdin?.end();
-				}
+			} else if (config.sendPromptViaStdinRaw && prompt) {
+				// Raw stdin mode: send prompt as literal text (non-stream-json agents on Windows)
+				// Note: When sending via stdin, PowerShell treats the input as literal text,
+				// NOT as code to parse. No escaping is needed for special characters.
+				logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {
+					sessionId,
+					promptLength: prompt.length,
+				});
+				childProcess.stdin?.write(prompt);
+				childProcess.stdin?.end();
+			} else if (isStreamJsonMode && prompt && !promptAddedToArgs) {
+				// Stream-json mode: send the message via stdin as JSON.
+				// Only write when prompt was NOT already added to CLI args.
+				// Without this guard, agents like Codex (whose --json flag sets isStreamJsonMode
+				// for output parsing) would receive the prompt both as a CLI arg and as stream-json
+				// stdin, causing unexpected behavior.
+				const streamJsonMessage = buildStreamJsonMessage(prompt, images || []);
+				logger.debug('[ProcessManager] Sending stream-json message via stdin', 'ProcessManager', {
+					sessionId,
+					messageLength: streamJsonMessage.length,
+					imageCount: (images || []).length,
+					hasImages: !!(images && images.length > 0),
+				});
+				childProcess.stdin?.write(streamJsonMessage + '\n');
+				childProcess.stdin?.end();
 			} else if (isBatchMode) {
 				// Regular batch mode: close stdin immediately
 				logger.debug('[ProcessManager] Closing stdin for batch mode', 'ProcessManager', {

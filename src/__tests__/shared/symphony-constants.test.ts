@@ -8,6 +8,7 @@ import {
   SYMPHONY_REGISTRY_URL,
   GITHUB_API_BASE,
   SYMPHONY_ISSUE_LABEL,
+  SYMPHONY_BLOCKING_LABEL,
   REGISTRY_CACHE_TTL_MS,
   ISSUES_CACHE_TTL_MS,
   BRANCH_TEMPLATE,
@@ -49,6 +50,12 @@ describe('shared/symphony-constants', () => {
     });
   });
 
+  describe('SYMPHONY_BLOCKING_LABEL', () => {
+    it('should be "blocking"', () => {
+      expect(SYMPHONY_BLOCKING_LABEL).toBe('blocking');
+    });
+  });
+
   describe('REGISTRY_CACHE_TTL_MS', () => {
     it('should be 2 hours in milliseconds', () => {
       const twoHoursMs = 2 * 60 * 60 * 1000;
@@ -84,22 +91,15 @@ describe('shared/symphony-constants', () => {
   // Categories Tests
   // ==========================================================================
   describe('SYMPHONY_CATEGORIES', () => {
-    const requiredCategories = [
-      'ai-ml',
-      'developer-tools',
-      'infrastructure',
-      'documentation',
-      'web',
-      'mobile',
-      'data',
-      'security',
-      'other',
-    ];
-
-    it('should have all required category keys', () => {
-      for (const category of requiredCategories) {
+    it('should include core categories used by existing registry entries', () => {
+      const coreCategories = ['ai-ml', 'developer-tools', 'productivity', 'other'];
+      for (const category of coreCategories) {
         expect(SYMPHONY_CATEGORIES).toHaveProperty(category);
       }
+    });
+
+    it('should have at least 10 categories for broad coverage', () => {
+      expect(Object.keys(SYMPHONY_CATEGORIES).length).toBeGreaterThanOrEqual(10);
     });
 
     it('should have entries with label and emoji properties', () => {

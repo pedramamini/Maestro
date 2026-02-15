@@ -8,6 +8,8 @@ import {
   SymphonyError,
   type SymphonyErrorType,
   type SymphonyCategory,
+  type SymphonyLabel,
+  type SymphonyIssue,
   type ContributionStatus,
   type IssueStatus,
 } from '../../shared/symphony-types';
@@ -81,26 +83,11 @@ describe('shared/symphony-types', () => {
   // Type Validation Tests (compile-time checks with runtime verification)
   // ==========================================================================
   describe('SymphonyCategory type', () => {
-    const validCategories: SymphonyCategory[] = [
-      'ai-ml',
-      'developer-tools',
-      'infrastructure',
-      'documentation',
-      'web',
-      'mobile',
-      'data',
-      'security',
-      'other',
-    ];
-
-    it.each(validCategories)('should accept "%s" as a valid category', (category) => {
-      // This test verifies the type at compile-time and that the values are valid
-      const testCategory: SymphonyCategory = category;
-      expect(testCategory).toBe(category);
-    });
-
-    it('should have 9 valid categories', () => {
-      expect(validCategories).toHaveLength(9);
+    it('should accept any string as a category (extensible via registry)', () => {
+      const known: SymphonyCategory = 'ai-ml';
+      const custom: SymphonyCategory = 'my-custom-category';
+      expect(known).toBe('ai-ml');
+      expect(custom).toBe('my-custom-category');
     });
   });
 
@@ -158,6 +145,57 @@ describe('shared/symphony-types', () => {
 
     it('should have 7 valid error types', () => {
       expect(validErrorTypes).toHaveLength(7);
+    });
+  });
+
+  // ==========================================================================
+  // SymphonyLabel Type Tests
+  // ==========================================================================
+  describe('SymphonyLabel type', () => {
+    it('should accept valid label objects', () => {
+      const label: SymphonyLabel = { name: 'blocking', color: 'e4e669' };
+      expect(label.name).toBe('blocking');
+      expect(label.color).toBe('e4e669');
+    });
+  });
+
+  // ==========================================================================
+  // SymphonyIssue labels field Tests
+  // ==========================================================================
+  describe('SymphonyIssue labels field', () => {
+    it('should include labels in issue interface', () => {
+      const issue: SymphonyIssue = {
+        number: 1,
+        title: 'Test',
+        body: '',
+        url: 'https://api.github.com/repos/owner/repo/issues/1',
+        htmlUrl: 'https://github.com/owner/repo/issues/1',
+        author: 'user',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        documentPaths: [],
+        labels: [{ name: 'blocking', color: 'e4e669' }],
+        status: 'available',
+      };
+      expect(issue.labels).toHaveLength(1);
+      expect(issue.labels[0].name).toBe('blocking');
+    });
+
+    it('should allow empty labels array', () => {
+      const issue: SymphonyIssue = {
+        number: 2,
+        title: 'No labels',
+        body: '',
+        url: 'https://api.github.com/repos/owner/repo/issues/2',
+        htmlUrl: 'https://github.com/owner/repo/issues/2',
+        author: 'user',
+        createdAt: '2024-01-01',
+        updatedAt: '2024-01-01',
+        documentPaths: [],
+        labels: [],
+        status: 'available',
+      };
+      expect(issue.labels).toEqual([]);
     });
   });
 });

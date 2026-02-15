@@ -31,6 +31,14 @@ export interface IProcessManager {
 		contextWindow?: number;
 		promptArgs?: (prompt: string) => string[];
 		noPromptSeparator?: boolean;
+		/** Shell to use for spawning (Windows: PowerShell preferred over cmd.exe) */
+		shell?: string;
+		/** Whether to run the command in a shell */
+		runInShell?: boolean;
+		/** Send prompt via stdin in JSON format (for stream-json agents on Windows) */
+		sendPromptViaStdin?: boolean;
+		/** Send prompt via stdin as raw text (for non-stream-json agents on Windows) */
+		sendPromptViaStdinRaw?: boolean;
 	}): { pid: number; success: boolean };
 
 	write(sessionId: string, data: string): boolean;

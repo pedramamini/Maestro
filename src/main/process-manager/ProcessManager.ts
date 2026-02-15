@@ -115,7 +115,9 @@ export class ProcessManager extends EventEmitter {
 	}
 
 	/**
-	 * Send interrupt signal (SIGINT/Ctrl+C) to a process
+	 * Send interrupt signal (SIGINT/Ctrl+C) to a process.
+	 * For child processes, escalates to SIGTERM if the process doesn't exit
+	 * within a short timeout (Claude Code may not immediately exit on SIGINT).
 	 */
 	interrupt(sessionId: string): boolean {
 		const process = this.processes.get(sessionId);
@@ -126,7 +128,28 @@ export class ProcessManager extends EventEmitter {
 				process.ptyProcess.write('\x03');
 				return true;
 			} else if (process.childProcess) {
-				process.childProcess.kill('SIGINT');
+				const child = process.childProcess;
+				child.kill('SIGINT');
+
+				// Escalate to SIGTERM if the process doesn't exit promptly.
+				// Some agents (e.g., Claude Code --print) may not exit on SIGINT alone.
+				const escalationTimer = setTimeout(() => {
+					const stillRunning = this.processes.get(sessionId);
+					if (stillRunning?.childProcess && !stillRunning.childProcess.killed) {
+						logger.warn(
+							'[ProcessManager] Process did not exit after SIGINT, escalating to SIGTERM',
+							'ProcessManager',
+							{ sessionId, pid: stillRunning.pid }
+						);
+						this.kill(sessionId);
+					}
+				}, 2000);
+
+				// Clear the timer if the process exits on its own
+				child.once('exit', () => {
+					clearTimeout(escalationTimer);
+				});
+
 				return true;
 			}
 			return false;

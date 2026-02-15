@@ -10,11 +10,9 @@ import * as path from 'path';
 
 export interface GroupChatInfo {
 	id: string;
-	name: string;
 	moderatorAgentId: string;
 	participantCount: number;
 	participants: Array<{
-		name: string;
 		agentId: string;
 	}>;
 	messageCount: number; // Count only, no content
@@ -70,12 +68,10 @@ export async function collectGroupChats(): Promise<GroupChatInfo[]> {
 
 				const chatInfo: GroupChatInfo = {
 					id: chat.id || path.basename(file, '.json'),
-					name: chat.name || 'Unnamed Group',
 					moderatorAgentId: chat.moderatorAgentId || chat.moderator?.agentId || 'unknown',
 					participantCount: Array.isArray(chat.participants) ? chat.participants.length : 0,
 					participants: Array.isArray(chat.participants)
 						? chat.participants.map((p: any) => ({
-								name: p.name || 'Unknown',
 								agentId: p.agentId || 'unknown',
 							}))
 						: [],

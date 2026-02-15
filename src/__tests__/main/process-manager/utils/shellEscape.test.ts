@@ -1,4 +1,4 @@
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	escapeCmdArg,
 	escapePowerShellArg,
@@ -6,6 +6,7 @@ import {
 	escapePowerShellArgs,
 	isPowerShellShell,
 	escapeArgsForShell,
+	getWindowsShellForAgentExecution,
 } from '../../../../main/process-manager/utils/shellEscape';
 
 describe('shellEscape', () => {
@@ -98,9 +99,9 @@ describe('shellEscape', () => {
 	describe('isPowerShellShell', () => {
 		it('should detect Windows PowerShell', () => {
 			expect(isPowerShellShell('powershell.exe')).toBe(true);
-			expect(isPowerShellShell('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')).toBe(
-				true
-			);
+			expect(
+				isPowerShellShell('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe')
+			).toBe(true);
 			expect(isPowerShellShell('PowerShell.exe')).toBe(true);
 		});
 
@@ -137,4 +138,131 @@ describe('shellEscape', () => {
 			expect(result).toEqual(['"with space"', '"say ""hi"""']);
 		});
 	});
+
+	describe('getWindowsShellForAgentExecution', () => {
+		it('should prefer custom shell path when provided', () => {
+			const result = getWindowsShellForAgentExecution({
+				customShellPath: 'C:\\Custom\\MyShell.exe',
+			});
+			expect(result.shell).toBe('C:\\Custom\\MyShell.exe');
+			expect(result.useShell).toBe(true);
+			expect(result.source).toBe('custom');
+		});
+
+		it('should trim custom shell path', () => {
+			const result = getWindowsShellForAgentExecution({
+				customShellPath: '  C:\\Custom\\MyShell.exe  ',
+			});
+			expect(result.shell).toBe('C:\\Custom\\MyShell.exe');
+			expect(result.source).toBe('custom');
+		});
+
+		it('should use current shell when provided and not cmd.exe', () => {
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'pwsh.exe',
+			});
+			expect(result.shell).toBe('pwsh.exe');
+			expect(result.useShell).toBe(true);
+			expect(result.source).toBe('current');
+		});
+
+		it('should skip cmd.exe as current shell and fall back to PowerShell', () => {
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'cmd.exe',
+			});
+			expect(result.shell).toContain('powershell');
+			expect(result.useShell).toBe(true);
+			expect(result.source).toBe('powershell-default');
+		});
+
+		it('should skip CMD.EXE (case insensitive) and fall back to PowerShell', () => {
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'C:\\Windows\\System32\\CMD.EXE',
+			});
+			expect(result.shell).toContain('powershell');
+			expect(result.source).toBe('powershell-default');
+		});
+
+		it('should NOT skip shells with "cmd" in the path but not the basename', () => {
+			// This tests the fix for overly broad .includes('cmd') check
+			// e.g., C:\Users\commander\bash.exe should not be skipped
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'C:\\Users\\commander\\bash.exe',
+			});
+			expect(result.shell).toBe('C:\\Users\\commander\\bash.exe');
+			expect(result.source).toBe('current');
+		});
+
+		it('should skip bare "cmd" as current shell', () => {
+			const result = getWindowsShellForAgentExecution({
+				currentShell: 'cmd',
+			});
+			expect(result.shell).toContain('powershell');
+			expect(result.source).toBe('powershell-default');
+		});
+
+		it('should default to PowerShell when no options provided', () => {
+			const result = getWindowsShellForAgentExecution();
+			expect(result.shell).toContain('powershell');
+			expect(result.useShell).toBe(true);
+			expect(result.source).toBe('powershell-default');
+		});
+
+		it('should default to PowerShell when empty options provided', () => {
+			const result = getWindowsShellForAgentExecution({});
+			expect(result.shell).toContain('powershell');
+			expect(result.source).toBe('powershell-default');
+		});
+
+		it('should ignore empty custom shell path', () => {
+			const result = getWindowsShellForAgentExecution({
+				customShellPath: '',
+				currentShell: 'bash.exe',
+			});
+			expect(result.shell).toBe('bash.exe');
+			expect(result.source).toBe('current');
+		});
+
+		it('should ignore whitespace-only custom shell path', () => {
+			const result = getWindowsShellForAgentExecution({
+				customShellPath: '   ',
+				currentShell: 'bash.exe',
+			});
+			expect(result.shell).toBe('bash.exe');
+			expect(result.source).toBe('current');
+		});
+
+		it('should prefer custom shell path over current shell', () => {
+			const result = getWindowsShellForAgentExecution({
+				customShellPath: 'C:\\Custom\\Shell.exe',
+				currentShell: 'bash.exe',
+			});
+			expect(result.shell).toBe('C:\\Custom\\Shell.exe');
+			expect(result.source).toBe('custom');
+		});
+
+		it('should use PSHOME environment variable when available', () => {
+			const fs = require('fs');
+			const originalExistsSync = fs.existsSync;
+			const originalPshome = process.env.PSHOME;
+
+			try {
+				process.env.PSHOME = 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0';
+				fs.existsSync = vi.fn((p: string) =>
+					p === 'C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe' ? true : originalExistsSync(p)
+				);
+				const result = getWindowsShellForAgentExecution({});
+				expect(result.shell).toBe('C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe');
+				expect(result.source).toBe('powershell-default');
+			} finally {
+				fs.existsSync = originalExistsSync;
+				if (originalPshome === undefined) {
+					delete process.env.PSHOME;
+				} else {
+					process.env.PSHOME = originalPshome;
+				}
+			}
+		});
+	});
+
 });

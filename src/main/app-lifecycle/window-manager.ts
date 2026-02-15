@@ -110,19 +110,23 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 
 			// Save window state before closing
 			const saveWindowState = () => {
-				const isMaximized = mainWindow.isMaximized();
-				const isFullScreen = mainWindow.isFullScreen();
-				const bounds = mainWindow.getBounds();
+				try {
+					const isMaximized = mainWindow.isMaximized();
+					const isFullScreen = mainWindow.isFullScreen();
+					const bounds = mainWindow.getBounds();
 
-				// Only save bounds if not maximized/fullscreen (to restore proper size later)
-				if (!isMaximized && !isFullScreen) {
-					windowStateStore.set('x', bounds.x);
-					windowStateStore.set('y', bounds.y);
-					windowStateStore.set('width', bounds.width);
-					windowStateStore.set('height', bounds.height);
+					// Only save bounds if not maximized/fullscreen (to restore proper size later)
+					if (!isMaximized && !isFullScreen) {
+						windowStateStore.set('x', bounds.x);
+						windowStateStore.set('y', bounds.y);
+						windowStateStore.set('width', bounds.width);
+						windowStateStore.set('height', bounds.height);
+					}
+					windowStateStore.set('isMaximized', isMaximized);
+					windowStateStore.set('isFullScreen', isFullScreen);
+				} catch {
+					// Ignore ENFILE/ENOSPC errors during window close — non-critical
 				}
-				windowStateStore.set('isMaximized', isMaximized);
-				windowStateStore.set('isFullScreen', isFullScreen);
 			};
 
 			mainWindow.on('close', saveWindowState);

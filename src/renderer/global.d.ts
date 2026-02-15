@@ -42,6 +42,9 @@ interface ProcessConfig {
 		remoteId: string | null;
 		workingDirOverride?: string;
 	};
+	// Windows command line length workaround
+	sendPromptViaStdin?: boolean; // If true, send the prompt via stdin as JSON instead of command line
+	sendPromptViaStdinRaw?: boolean; // If true, send the prompt via stdin as raw text instead of command line
 }
 
 interface AgentConfigOption {
@@ -629,7 +632,7 @@ interface MaestroAPI {
 		) => Promise<boolean>;
 		getCustomEnvVars: (agentId: string) => Promise<Record<string, string> | null>;
 		getAllCustomEnvVars: () => Promise<Record<string, Record<string, string>>>;
-		getModels: (agentId: string, forceRefresh?: boolean) => Promise<string[]>;
+		getModels: (agentId: string, forceRefresh?: boolean, sshRemoteId?: string) => Promise<string[]>;
 		discoverSlashCommands: (
 			agentId: string,
 			cwd: string,
@@ -2496,6 +2499,8 @@ interface MaestroAPI {
 			sessionId: string;
 			agentType: string;
 			totalDocuments: number;
+			draftPrNumber?: number;
+			draftPrUrl?: string;
 		}) => Promise<{ success: boolean; error?: string }>;
 		updateStatus: (params: {
 			contributionId: string;
@@ -2602,6 +2607,69 @@ interface MaestroAPI {
 				workingDirOverride?: string;
 			};
 		}) => Promise<string | null>;
+	};
+
+	// Director's Notes API (unified history + synopsis generation)
+	directorNotes: {
+		getUnifiedHistory: (options: {
+			lookbackDays: number;
+			filter?: 'AUTO' | 'USER' | null;
+			limit?: number;
+			offset?: number;
+		}) => Promise<{
+			entries: Array<{
+				id: string;
+				type: HistoryEntryType;
+				timestamp: number;
+				summary: string;
+				fullResponse?: string;
+				agentSessionId?: string;
+				sessionName?: string;
+				projectPath: string;
+				sessionId?: string;
+				contextUsage?: number;
+				success?: boolean;
+				elapsedTimeMs?: number;
+				validated?: boolean;
+				agentName?: string;
+				sourceSessionId: string;
+				usageStats?: {
+					totalCostUsd: number;
+					inputTokens: number;
+					outputTokens: number;
+					cacheReadTokens: number;
+					cacheWriteTokens: number;
+				};
+			}>;
+			total: number;
+			limit: number;
+			offset: number;
+			hasMore: boolean;
+			stats: {
+				agentCount: number;
+				sessionCount: number;
+				autoCount: number;
+				userCount: number;
+				totalCount: number;
+			};
+		}>;
+		generateSynopsis: (options: {
+			lookbackDays: number;
+			provider: string;
+			customPath?: string;
+			customArgs?: string;
+			customEnvVars?: Record<string, string>;
+		}) => Promise<{
+			success: boolean;
+			synopsis: string;
+			generatedAt?: number;
+			stats?: {
+				agentCount: number;
+				entryCount: number;
+				durationMs: number;
+			};
+			error?: string;
+		}>;
 	};
 }
 

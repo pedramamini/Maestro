@@ -5,7 +5,7 @@
  * Features category tabs, search filtering, keyboard navigation, and playbook tiles grid.
  */
 
-import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -30,6 +30,7 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useMarketplace } from '../hooks/batch/useMarketplace';
 import { generateProseStyles, createMarkdownComponents } from '../utils/markdownConfig';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 // ============================================================================
 // Types
@@ -1081,7 +1082,7 @@ export function MarketplaceModal({
 				aria-modal="true"
 				aria-labelledby="marketplace-title"
 				tabIndex={-1}
-				className="w-[900px] max-w-[90vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col h-[80vh] outline-none"
+				className="w-[1200px] max-w-[95vw] rounded-xl shadow-2xl border overflow-hidden flex flex-col max-h-[85vh] outline-none"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					borderColor: theme.colors.border,
@@ -1149,8 +1150,8 @@ export function MarketplaceModal({
 											</h3>
 											<p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
 												The Playbook Exchange is a curated collection of Auto Run playbooks for
-												common workflows. Browse, preview, and import playbooks directly
-												into your Auto Run folder.
+												common workflows. Browse, preview, and import playbooks directly into your
+												Auto Run folder.
 											</p>
 											<h4
 												className="text-xs font-semibold mb-1"
@@ -1165,14 +1166,14 @@ export function MarketplaceModal({
 											<button
 												onClick={() => {
 													window.maestro.shell.openExternal(
-														'https://github.com/pedramamini/Maestro-Playbooks'
+														'https://github.com/RunMaestro/Maestro-Playbooks'
 													);
 													setShowHelp(false);
 												}}
 												className="text-xs hover:opacity-80 transition-colors"
 												style={{ color: theme.colors.accent }}
 											>
-												github.com/pedramamini/Maestro-Playbooks
+												github.com/RunMaestro/Maestro-Playbooks
 											</button>
 											<div
 												className="mt-3 pt-3 border-t"
@@ -1193,7 +1194,7 @@ export function MarketplaceModal({
 								<button
 									onClick={() => {
 										window.maestro.shell.openExternal(
-											'https://github.com/pedramamini/Maestro-Playbooks'
+											'https://github.com/RunMaestro/Maestro-Playbooks'
 										);
 									}}
 									className="px-2 py-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs"
@@ -1398,13 +1399,13 @@ export function MarketplaceModal({
 							<span className="flex items-center gap-3">
 								<span>
 									<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">
-										{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+F
+										{formatShortcutKeys(['Meta', 'f'])}
 									</kbd>{' '}
 									search
 								</span>
 								<span>
 									<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">
-										{navigator.platform.includes('Mac') ? '⌘' : 'Ctrl'}+Shift+[/]
+										{formatShortcutKeys(['Meta', 'Shift'])}+[/]
 									</kbd>{' '}
 									to switch tabs
 								</span>

@@ -6,445 +6,22 @@ import React, {
 	useImperativeHandle,
 	forwardRef,
 	useMemo,
-	memo,
 } from 'react';
-import { Bot, User, ExternalLink, Check, X, Clock, HelpCircle, Award } from 'lucide-react';
+import { HelpCircle } from 'lucide-react';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import type { Session, Theme, HistoryEntry, HistoryEntryType } from '../types';
 import { HistoryDetailModal } from './HistoryDetailModal';
 import { HistoryHelpModal } from './HistoryHelpModal';
 import { useThrottledCallback, useListNavigation } from '../hooks';
-import { formatElapsedTime } from '../utils/formatters';
-import { stripMarkdown } from '../utils/textProcessing';
-
-// Double checkmark SVG component for validated entries
-const DoubleCheck = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-	<svg
-		className={className}
-		style={style}
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2.5"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<polyline points="15 6 6 17 1 12" />
-		<polyline points="23 6 14 17 11 14" />
-	</svg>
-);
-
-// Lookback period options for the activity graph
-type LookbackPeriod = {
-	label: string;
-	hours: number | null; // null = all time
-	bucketCount: number;
-};
-
-const LOOKBACK_OPTIONS: LookbackPeriod[] = [
-	{ label: '24 hours', hours: 24, bucketCount: 24 },
-	{ label: '72 hours', hours: 72, bucketCount: 24 },
-	{ label: '1 week', hours: 168, bucketCount: 28 },
-	{ label: '2 weeks', hours: 336, bucketCount: 28 },
-	{ label: '1 month', hours: 720, bucketCount: 30 },
-	{ label: '6 months', hours: 4320, bucketCount: 24 },
-	{ label: '1 year', hours: 8760, bucketCount: 24 },
-	{ label: 'All time', hours: null, bucketCount: 24 },
-];
-
-// Activity bar graph component with configurable lookback window
-interface ActivityGraphProps {
-	entries: HistoryEntry[];
-	theme: Theme;
-	referenceTime?: number; // The "end" of the window (defaults to now)
-	onBarClick?: (bucketStartTime: number, bucketEndTime: number) => void;
-	lookbackHours: number | null; // null = all time
-	onLookbackChange: (hours: number | null) => void;
-}
-
-const ActivityGraph: React.FC<ActivityGraphProps> = ({
-	entries,
-	theme,
-	referenceTime,
-	onBarClick,
-	lookbackHours,
-	onLookbackChange,
-}) => {
-	const [hoveredIndex, setHoveredIndex] = useState<number | null>(null);
-	const [contextMenu, setContextMenu] = useState<{ x: number; y: number } | null>(null);
-	const graphRef = useRef<HTMLDivElement>(null);
-
-	// Get the current lookback config
-	const lookbackConfig = useMemo(
-		() => LOOKBACK_OPTIONS.find((o) => o.hours === lookbackHours) || LOOKBACK_OPTIONS[0],
-		[lookbackHours]
-	);
-
-	// Use referenceTime as the end of our window, or current time if not provided
-	const endTime = referenceTime || Date.now();
-
-	// Calculate time range based on lookback setting
-	const { startTime, msPerBucket, bucketCount } = useMemo(() => {
-		if (lookbackHours === null) {
-			// All time: find earliest entry
-			const earliest =
-				entries.length > 0
-					? Math.min(...entries.map((e) => e.timestamp))
-					: endTime - 24 * 60 * 60 * 1000;
-			const totalMs = endTime - earliest;
-			const count = lookbackConfig.bucketCount;
-			return {
-				startTime: earliest,
-				msPerBucket: totalMs / count,
-				bucketCount: count,
-			};
-		} else {
-			const totalMs = lookbackHours * 60 * 60 * 1000;
-			return {
-				startTime: endTime - totalMs,
-				msPerBucket: totalMs / lookbackConfig.bucketCount,
-				bucketCount: lookbackConfig.bucketCount,
-			};
-		}
-	}, [entries, endTime, lookbackHours, lookbackConfig.bucketCount]);
-
-	// Group entries into buckets
-	const bucketData = useMemo(() => {
-		const buckets: { auto: number; user: number }[] = Array.from({ length: bucketCount }, () => ({
-			auto: 0,
-			user: 0,
-		}));
-
-		entries.forEach((entry) => {
-			if (entry.timestamp >= startTime && entry.timestamp <= endTime) {
-				const bucketIndex = Math.min(
-					bucketCount - 1,
-					Math.floor((entry.timestamp - startTime) / msPerBucket)
-				);
-				if (bucketIndex >= 0 && bucketIndex < bucketCount) {
-					if (entry.type === 'AUTO') {
-						buckets[bucketIndex].auto++;
-					} else if (entry.type === 'USER') {
-						buckets[bucketIndex].user++;
-					}
-				}
-			}
-		});
-
-		return buckets;
-	}, [entries, startTime, endTime, msPerBucket, bucketCount]);
-
-	// Find max value for scaling
-	const maxValue = useMemo(() => {
-		return Math.max(1, ...bucketData.map((h) => h.auto + h.user));
-	}, [bucketData]);
-
-	// Total counts for summary tooltip
-	const totalAuto = useMemo(() => bucketData.reduce((sum, h) => sum + h.auto, 0), [bucketData]);
-	const totalUser = useMemo(() => bucketData.reduce((sum, h) => sum + h.user, 0), [bucketData]);
-
-	// Get time range label for tooltip
-	const getTimeRangeLabel = (index: number) => {
-		const bucketStart = new Date(startTime + index * msPerBucket);
-		const bucketEnd = new Date(startTime + (index + 1) * msPerBucket);
-
-		// Format based on lookback period
-		if (lookbackHours !== null && lookbackHours <= 72) {
-			// For short periods, show time of day
-			const formatHour = (date: Date) => {
-				const hour = date.getHours();
-				const ampm = hour >= 12 ? 'PM' : 'AM';
-				const hour12 = hour % 12 || 12;
-				return `${hour12}${ampm}`;
-			};
-			return `${formatHour(bucketStart)} - ${formatHour(bucketEnd)}`;
-		} else {
-			// For longer periods, show dates
-			const formatDate = (date: Date) => {
-				return date.toLocaleDateString([], { month: 'short', day: 'numeric' });
-			};
-			if (formatDate(bucketStart) === formatDate(bucketEnd)) {
-				return formatDate(bucketStart);
-			}
-			return `${formatDate(bucketStart)} - ${formatDate(bucketEnd)}`;
-		}
-	};
-
-	// Get bucket time range as timestamps for click handling
-	const getBucketTimeRange = (index: number): { start: number; end: number } => {
-		return {
-			start: startTime + index * msPerBucket,
-			end: startTime + (index + 1) * msPerBucket,
-		};
-	};
-
-	// Handle bar click
-	const handleBarClick = (index: number) => {
-		const total = bucketData[index].auto + bucketData[index].user;
-		if (total > 0 && onBarClick) {
-			const { start, end } = getBucketTimeRange(index);
-			onBarClick(start, end);
-		}
-	};
-
-	// Handle right-click context menu
-	const handleContextMenu = (e: React.MouseEvent) => {
-		e.preventDefault();
-		setContextMenu({ x: e.clientX, y: e.clientY });
-	};
-
-	// Close context menu when clicking elsewhere
-	useEffect(() => {
-		const handleClick = () => setContextMenu(null);
-		if (contextMenu) {
-			document.addEventListener('click', handleClick);
-			return () => document.removeEventListener('click', handleClick);
-		}
-	}, [contextMenu]);
-
-	// Format the reference time for display (shows what time point we're viewing)
-	const formatReferenceTime = () => {
-		const now = Date.now();
-		const diffMs = now - endTime;
-		const diffMins = Math.floor(diffMs / 60000);
-		const diffHours = Math.floor(diffMins / 60);
-
-		if (diffMins < 1) return 'Now';
-		if (diffMins < 60) return `${diffMins}m ago`;
-		if (diffHours < 24) return `${diffHours}h ago`;
-		return new Date(endTime).toLocaleDateString([], { month: 'short', day: 'numeric' });
-	};
-
-	// Check if we're viewing historical data (not "now")
-	const isHistorical = referenceTime && Date.now() - referenceTime > 60000;
-
-	// Generate labels for the x-axis
-	const getAxisLabels = () => {
-		if (lookbackHours === null) {
-			// All time - show start and end dates
-			return [
-				{
-					label: new Date(startTime).toLocaleDateString([], { month: 'short', day: 'numeric' }),
-					index: 0,
-				},
-				{ label: 'Now', index: bucketCount - 1 },
-			];
-		} else if (lookbackHours <= 24) {
-			return [
-				{ label: `${lookbackHours}h`, index: 0 },
-				{ label: `${Math.floor((lookbackHours * 2) / 3)}h`, index: Math.floor(bucketCount / 3) },
-				{ label: `${Math.floor(lookbackHours / 3)}h`, index: Math.floor((bucketCount * 2) / 3) },
-				{ label: '0h', index: bucketCount - 1 },
-			];
-		} else if (lookbackHours <= 168) {
-			// Up to 1 week - show days
-			const days = Math.floor(lookbackHours / 24);
-			return [
-				{ label: `${days}d`, index: 0 },
-				{ label: `${Math.floor(days / 2)}d`, index: Math.floor(bucketCount / 2) },
-				{ label: 'Now', index: bucketCount - 1 },
-			];
-		} else {
-			// Longer periods - show start/end
-			const startLabel = new Date(startTime).toLocaleDateString([], {
-				month: 'short',
-				day: 'numeric',
-			});
-			return [
-				{ label: startLabel, index: 0 },
-				{ label: 'Now', index: bucketCount - 1 },
-			];
-		}
-	};
-
-	const axisLabels = getAxisLabels();
-
-	return (
-		<div
-			ref={graphRef}
-			className="flex-1 min-w-0 flex flex-col relative mt-0.5"
-			title={
-				hoveredIndex === null
-					? `${isHistorical ? `Viewing: ${formatReferenceTime()} • ` : ''}${lookbackConfig.label}: ${totalAuto} auto, ${totalUser} user (right-click to change)`
-					: undefined
-			}
-			onContextMenu={handleContextMenu}
-		>
-			{/* Context menu for lookback options */}
-			{contextMenu && (
-				<div
-					className="fixed z-50 py-1 rounded border shadow-lg"
-					style={{
-						left: contextMenu.x,
-						top: contextMenu.y,
-						backgroundColor: theme.colors.bgSidebar,
-						borderColor: theme.colors.border,
-						minWidth: '120px',
-					}}
-				>
-					<div
-						className="px-3 py-1 text-[10px] font-bold uppercase"
-						style={{ color: theme.colors.textDim }}
-					>
-						Lookback Period
-					</div>
-					{LOOKBACK_OPTIONS.map((option) => (
-						<button
-							key={option.label}
-							className="w-full px-3 py-1.5 text-left text-xs hover:bg-white/10 transition-colors flex items-center justify-between"
-							style={{
-								color: option.hours === lookbackHours ? theme.colors.accent : theme.colors.textMain,
-							}}
-							onClick={() => {
-								onLookbackChange(option.hours);
-								setContextMenu(null);
-							}}
-						>
-							{option.label}
-							{option.hours === lookbackHours && (
-								<Check className="w-3 h-3" style={{ color: theme.colors.accent }} />
-							)}
-						</button>
-					))}
-				</div>
-			)}
-
-			{/* Hover tooltip - positioned below the graph */}
-			{hoveredIndex !== null && (
-				<div
-					className="absolute top-full mt-1 px-2 py-1.5 rounded text-[10px] font-mono whitespace-nowrap z-20 pointer-events-none"
-					style={{
-						backgroundColor: theme.colors.bgSidebar,
-						border: `1px solid ${theme.colors.border}`,
-						color: theme.colors.textMain,
-						left: `${(hoveredIndex / (bucketCount - 1)) * 100}%`,
-						transform:
-							hoveredIndex < bucketCount * 0.17
-								? 'translateX(0)'
-								: hoveredIndex > bucketCount * 0.83
-									? 'translateX(-100%)'
-									: 'translateX(-50%)',
-					}}
-				>
-					<div className="font-bold mb-1" style={{ color: theme.colors.textMain }}>
-						{getTimeRangeLabel(hoveredIndex)}
-						{isHistorical && (
-							<span className="ml-2 font-normal" style={{ color: theme.colors.accent }}>
-								{formatReferenceTime()}
-							</span>
-						)}
-					</div>
-					<div className="flex flex-col gap-0.5">
-						<div className="flex items-center justify-between gap-3">
-							<span style={{ color: theme.colors.warning }}>Auto</span>
-							<span className="font-bold" style={{ color: theme.colors.warning }}>
-								{bucketData[hoveredIndex].auto}
-							</span>
-						</div>
-						<div className="flex items-center justify-between gap-3">
-							<span style={{ color: theme.colors.accent }}>User</span>
-							<span className="font-bold" style={{ color: theme.colors.accent }}>
-								{bucketData[hoveredIndex].user}
-							</span>
-						</div>
-					</div>
-				</div>
-			)}
-
-			{/* Graph container with border */}
-			<div
-				className="flex items-end gap-px h-6 rounded border px-1 pt-1"
-				style={{ borderColor: theme.colors.border }}
-			>
-				{bucketData.map((bucket, index) => {
-					const total = bucket.auto + bucket.user;
-					const heightPercent = total > 0 ? (total / maxValue) * 100 : 0;
-					const autoPercent = total > 0 ? (bucket.auto / total) * 100 : 0;
-					const userPercent = total > 0 ? (bucket.user / total) * 100 : 0;
-					const isHovered = hoveredIndex === index;
-
-					return (
-						<div
-							key={index}
-							className="flex-1 min-w-0 flex flex-col justify-end rounded-t-sm overflow-visible cursor-pointer"
-							style={{
-								height: '100%',
-								opacity: total > 0 ? 1 : 0.15,
-								transform: isHovered ? 'scaleX(1.5)' : 'scaleX(1)',
-								zIndex: isHovered ? 10 : 1,
-								transition: 'transform 0.1s ease-out',
-								cursor: total > 0 ? 'pointer' : 'default',
-							}}
-							onMouseEnter={() => setHoveredIndex(index)}
-							onMouseLeave={() => setHoveredIndex(null)}
-							onClick={() => handleBarClick(index)}
-						>
-							<div
-								className="w-full rounded-t-sm overflow-hidden flex flex-col justify-end"
-								style={{
-									height: `${Math.max(heightPercent, total > 0 ? 15 : 8)}%`,
-									minHeight: total > 0 ? '3px' : '1px',
-								}}
-							>
-								{/* Auto portion (bottom) - warning color */}
-								{bucket.auto > 0 && (
-									<div
-										style={{
-											height: `${autoPercent}%`,
-											backgroundColor: theme.colors.warning,
-											minHeight: '1px',
-										}}
-									/>
-								)}
-								{/* User portion (top) - accent color */}
-								{bucket.user > 0 && (
-									<div
-										style={{
-											height: `${userPercent}%`,
-											backgroundColor: theme.colors.accent,
-											minHeight: '1px',
-										}}
-									/>
-								)}
-								{/* Empty bar placeholder */}
-								{total === 0 && (
-									<div
-										style={{
-											height: '100%',
-											backgroundColor: theme.colors.border,
-										}}
-									/>
-								)}
-							</div>
-						</div>
-					);
-				})}
-			</div>
-			{/* Axis labels below */}
-			<div className="relative h-3 mt-0.5">
-				{axisLabels.map(({ label, index }) => (
-					<span
-						key={`${label}-${index}`}
-						className="absolute text-[8px] font-mono"
-						style={{
-							color: theme.colors.textDim,
-							left:
-								index === 0
-									? '0'
-									: index === bucketCount - 1
-										? 'auto'
-										: `${(index / (bucketCount - 1)) * 100}%`,
-							right: index === bucketCount - 1 ? '0' : 'auto',
-							transform: index > 0 && index < bucketCount - 1 ? 'translateX(-50%)' : 'none',
-						}}
-					>
-						{label}
-					</span>
-				))}
-			</div>
-		</div>
-	);
-};
+import {
+	ActivityGraph,
+	HistoryEntryItem,
+	HistoryFilterToggle,
+	MAX_HISTORY_IN_MEMORY,
+	ESTIMATED_ROW_HEIGHT,
+	ESTIMATED_ROW_HEIGHT_SIMPLE,
+} from './History';
+import { useUIStore } from '../stores/uiStore';
 
 interface HistoryPanelProps {
 	session: Session;
@@ -463,260 +40,8 @@ export interface HistoryPanelHandle {
 	refreshHistory: () => void;
 }
 
-// Constants for history pagination
-const MAX_HISTORY_IN_MEMORY = 500; // Maximum entries to keep in memory
-// Note: With virtualization, display count is managed by the virtualizer
-const _INITIAL_DISPLAY_COUNT = 50; // Kept for reference, prefixed to satisfy linter
-
-// Estimated row heights for virtualization
-// Entry breakdown: p-3 (24px padding) + header (~24px) + mb-2 (8px) + summary (~48px for 3 lines)
-// Footer adds: mt-2 pt-2 border-t (~20px)
-const ESTIMATED_ROW_HEIGHT = 124; // Height for entry with footer
-const ESTIMATED_ROW_HEIGHT_SIMPLE = 104; // Height for entry without footer
-
 // Module-level storage for scroll positions (persists across session switches)
 const scrollPositionCache = new Map<string, number>();
-
-// ============================================================================
-// HistoryEntryItem - Memoized component for individual history entries
-// ============================================================================
-
-interface HistoryEntryItemProps {
-	entry: HistoryEntry;
-	index: number;
-	isSelected: boolean;
-	theme: Theme;
-	onOpenDetailModal: (entry: HistoryEntry, index: number) => void;
-	onOpenSessionAsTab?: (agentSessionId: string) => void;
-	onOpenAboutModal?: () => void;
-}
-
-const HistoryEntryItem = memo(function HistoryEntryItem({
-	entry,
-	index,
-	isSelected,
-	theme,
-	onOpenDetailModal,
-	onOpenSessionAsTab,
-	onOpenAboutModal,
-}: HistoryEntryItemProps) {
-	// Get pill color based on type
-	const getPillColor = (type: HistoryEntryType) => {
-		switch (type) {
-			case 'AUTO':
-				return {
-					bg: theme.colors.warning + '20',
-					text: theme.colors.warning,
-					border: theme.colors.warning + '40',
-				};
-			case 'USER':
-				return {
-					bg: theme.colors.accent + '20',
-					text: theme.colors.accent,
-					border: theme.colors.accent + '40',
-				};
-			default:
-				return {
-					bg: theme.colors.bgActivity,
-					text: theme.colors.textDim,
-					border: theme.colors.border,
-				};
-		}
-	};
-
-	// Get icon for entry type
-	const getEntryIcon = (type: HistoryEntryType) => {
-		switch (type) {
-			case 'AUTO':
-				return Bot;
-			case 'USER':
-				return User;
-			default:
-				return Bot;
-		}
-	};
-
-	// Format timestamp
-	const formatTime = (timestamp: number) => {
-		const date = new Date(timestamp);
-		const now = new Date();
-		const isToday = date.toDateString() === now.toDateString();
-
-		if (isToday) {
-			return date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
-		} else {
-			return (
-				date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' }) +
-				' ' +
-				date.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' })
-			);
-		}
-	};
-
-	const colors = getPillColor(entry.type);
-	const Icon = getEntryIcon(entry.type);
-
-	return (
-		<div
-			onClick={() => onOpenDetailModal(entry, index)}
-			className="p-3 rounded border transition-colors cursor-pointer hover:bg-white/5"
-			style={{
-				borderColor: isSelected ? theme.colors.accent : theme.colors.border,
-				backgroundColor: isSelected ? theme.colors.accent + '10' : 'transparent',
-				outline: isSelected ? `2px solid ${theme.colors.accent}` : 'none',
-				outlineOffset: '1px',
-			}}
-		>
-			{/* Header Row */}
-			<div className="flex items-center justify-between mb-2 gap-2">
-				<div className="flex items-center gap-2 min-w-0 flex-1">
-					{/* Success/Failure Indicator for AUTO entries */}
-					{entry.type === 'AUTO' && entry.success !== undefined && (
-						<span
-							className="flex items-center justify-center w-5 h-5 rounded-full flex-shrink-0"
-							style={{
-								backgroundColor: entry.success
-									? entry.validated
-										? theme.colors.success
-										: theme.colors.success + '20'
-									: theme.colors.error + '20',
-								border: `1px solid ${
-									entry.success
-										? entry.validated
-											? theme.colors.success
-											: theme.colors.success + '40'
-										: theme.colors.error + '40'
-								}`,
-							}}
-							title={
-								entry.success
-									? entry.validated
-										? 'Task completed successfully and human-validated'
-										: 'Task completed successfully'
-									: 'Task failed'
-							}
-						>
-							{entry.success ? (
-								entry.validated ? (
-									<DoubleCheck className="w-3 h-3" style={{ color: '#ffffff' }} />
-								) : (
-									<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
-								)
-							) : (
-								<X className="w-3 h-3" style={{ color: theme.colors.error }} />
-							)}
-						</span>
-					)}
-
-					{/* Type Pill */}
-					<span
-						className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold uppercase flex-shrink-0"
-						style={{
-							backgroundColor: colors.bg,
-							color: colors.text,
-							border: `1px solid ${colors.border}`,
-						}}
-					>
-						<Icon className="w-2.5 h-2.5" />
-						{entry.type}
-					</span>
-
-					{/* Session Name or ID Octet (clickable) - opens session as new tab */}
-					{entry.agentSessionId && (
-						<button
-							onClick={(e) => {
-								e.stopPropagation();
-								onOpenSessionAsTab?.(entry.agentSessionId!);
-							}}
-							className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors hover:opacity-80 min-w-0 max-w-[200px] ${entry.sessionName ? '' : 'font-mono uppercase'}`}
-							style={{
-								backgroundColor: theme.colors.accent + '20',
-								color: theme.colors.accent,
-								border: `1px solid ${theme.colors.accent}40`,
-							}}
-							title={entry.sessionName || entry.agentSessionId}
-						>
-							<span className="truncate">
-								{entry.sessionName || entry.agentSessionId.split('-')[0].toUpperCase()}
-							</span>
-							<ExternalLink className="w-2.5 h-2.5 flex-shrink-0" />
-						</button>
-					)}
-				</div>
-
-				{/* Timestamp */}
-				<span className="text-[10px] flex-shrink-0" style={{ color: theme.colors.textDim }}>
-					{formatTime(entry.timestamp)}
-				</span>
-			</div>
-
-			{/* Summary - 3 lines max, strip markdown for list view */}
-			<p
-				className="text-xs leading-relaxed overflow-hidden"
-				style={{
-					color: theme.colors.textMain,
-					display: '-webkit-box',
-					WebkitLineClamp: 3,
-					WebkitBoxOrient: 'vertical' as const,
-				}}
-			>
-				{entry.summary ? stripMarkdown(entry.summary) : 'No summary available'}
-			</p>
-
-			{/* Footer Row - Time, Cost, and Achievement Action */}
-			{(entry.elapsedTimeMs !== undefined ||
-				(entry.usageStats && entry.usageStats.totalCostUsd > 0) ||
-				entry.achievementAction) && (
-				<div
-					className="flex items-center gap-3 mt-2 pt-2 border-t"
-					style={{ borderColor: theme.colors.border }}
-				>
-					{/* Elapsed Time */}
-					{entry.elapsedTimeMs !== undefined && (
-						<div className="flex items-center gap-1">
-							<Clock className="w-3 h-3" style={{ color: theme.colors.textDim }} />
-							<span className="text-[10px] font-mono" style={{ color: theme.colors.textDim }}>
-								{formatElapsedTime(entry.elapsedTimeMs)}
-							</span>
-						</div>
-					)}
-					{/* Cost */}
-					{entry.usageStats && entry.usageStats.totalCostUsd > 0 && (
-						<span
-							className="text-[10px] font-mono font-bold px-1.5 py-0.5 rounded-full"
-							style={{
-								backgroundColor: theme.colors.success + '15',
-								color: theme.colors.success,
-								border: `1px solid ${theme.colors.success}30`,
-							}}
-						>
-							${entry.usageStats.totalCostUsd.toFixed(2)}
-						</span>
-					)}
-					{/* Achievement Action Button */}
-					{entry.achievementAction === 'openAbout' && onOpenAboutModal && (
-						<button
-							onClick={(e) => {
-								e.stopPropagation();
-								onOpenAboutModal();
-							}}
-							className="flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold transition-colors hover:opacity-80 ml-auto"
-							style={{
-								backgroundColor: theme.colors.warning + '20',
-								color: theme.colors.warning,
-								border: `1px solid ${theme.colors.warning}40`,
-							}}
-							title="View achievements"
-						>
-							<Award className="w-3 h-3" />
-							View Achievements
-						</button>
-					)}
-				</div>
-			)}
-		</div>
-	);
-});
 
 export const HistoryPanel = React.memo(
 	forwardRef<HistoryPanelHandle, HistoryPanelProps>(function HistoryPanel(
@@ -739,7 +64,8 @@ export const HistoryPanel = React.memo(
 		const [isLoading, setIsLoading] = useState(true);
 		const [detailModalEntry, setDetailModalEntry] = useState<HistoryEntry | null>(null);
 		const [searchFilter, setSearchFilter] = useState('');
-		const [searchFilterOpen, setSearchFilterOpen] = useState(false);
+		const searchFilterOpen = useUIStore((s) => s.historySearchFilterOpen);
+		const setSearchFilterOpen = useUIStore((s) => s.setHistorySearchFilterOpen);
 		const [graphReferenceTime, setGraphReferenceTime] = useState<number | undefined>(undefined);
 		const [helpModalOpen, setHelpModalOpen] = useState(false);
 		const [graphLookbackHours, setGraphLookbackHours] = useState<number | null>(null); // default to "All time"
@@ -747,6 +73,11 @@ export const HistoryPanel = React.memo(
 		const listRef = useRef<HTMLDivElement>(null);
 		const searchInputRef = useRef<HTMLInputElement>(null);
 		const hasRestoredScroll = useRef<boolean>(false);
+
+		// Reset search filter state when unmounting (e.g., tab switch) to prevent stale store state
+		useEffect(() => {
+			return () => setSearchFilterOpen(false);
+		}, [setSearchFilterOpen]);
 
 		// Load history entries function - reusable for initial load and refresh
 		// When isRefresh=true, preserve scroll position
@@ -829,12 +160,20 @@ export const HistoryPanel = React.memo(
 			});
 		};
 
-		// Filter entries based on active filters and search text
+		// Filter entries based on active filters, search text, and lookback period
 		const allFilteredEntries = useMemo(
-			() =>
-				historyEntries.filter((entry) => {
+			() => {
+				// Compute lookback cutoff once (null = all time, no cutoff)
+				const cutoffTime = graphLookbackHours !== null
+					? Date.now() - graphLookbackHours * 60 * 60 * 1000
+					: 0;
+
+				return historyEntries.filter((entry) => {
 					if (!entry || !entry.type) return false;
 					if (!activeFilters.has(entry.type)) return false;
+
+					// Apply lookback time filter
+					if (cutoffTime > 0 && entry.timestamp < cutoffTime) return false;
 
 					// Apply text search filter
 					if (searchFilter) {
@@ -849,8 +188,9 @@ export const HistoryPanel = React.memo(
 					}
 
 					return true;
-				}),
-			[historyEntries, activeFilters, searchFilter]
+				});
+			},
+			[historyEntries, activeFilters, searchFilter, graphLookbackHours]
 		);
 
 		// Note: With virtualization, we no longer need to slice entries
@@ -1029,7 +369,7 @@ export const HistoryPanel = React.memo(
 			hasRestoredScroll.current = false;
 		}, [session.id]);
 
-		// Reset selected index and graph reference time when filters change
+		// Reset selected index and graph reference time when filters or lookback change
 		useEffect(() => {
 			setSelectedIndex(-1);
 			setGraphReferenceTime(undefined); // Reset to "now" when filters change
@@ -1037,7 +377,7 @@ export const HistoryPanel = React.memo(
 			if (listRef.current) {
 				listRef.current.scrollTop = 0;
 			}
-		}, [activeFilters, searchFilter, setSelectedIndex]);
+		}, [activeFilters, searchFilter, graphLookbackHours, setSelectedIndex]);
 
 		// Scroll selected item into view when selectedIndex changes (keyboard navigation)
 		useEffect(() => {
@@ -1105,74 +445,18 @@ export const HistoryPanel = React.memo(
 			[session.id, setSelectedIndex]
 		);
 
-		// Get pill color based on type (used by filter buttons in header)
-		const getPillColor = (type: HistoryEntryType) => {
-			switch (type) {
-				case 'AUTO':
-					return {
-						bg: theme.colors.warning + '20',
-						text: theme.colors.warning,
-						border: theme.colors.warning + '40',
-					};
-				case 'USER':
-					return {
-						bg: theme.colors.accent + '20',
-						text: theme.colors.accent,
-						border: theme.colors.accent + '40',
-					};
-				default:
-					return {
-						bg: theme.colors.bgActivity,
-						text: theme.colors.textDim,
-						border: theme.colors.border,
-					};
-			}
-		};
-
-		// Get icon for entry type (used by filter buttons in header)
-		const getEntryIcon = (type: HistoryEntryType) => {
-			switch (type) {
-				case 'AUTO':
-					return Bot;
-				case 'USER':
-					return User;
-				default:
-					return Bot;
-			}
-		};
-
 		return (
 			<div className="flex flex-col h-full">
 				{/* Filter Pills + Activity Graph + Help Button */}
 				<div className="flex items-start gap-3 mb-4 pt-2">
 					{/* Left-justified filter pills */}
-					<div className="flex gap-2 flex-shrink-0">
-						{(['AUTO', 'USER'] as HistoryEntryType[]).map((type) => {
-							const isActive = activeFilters.has(type);
-							const colors = getPillColor(type);
-							const Icon = getEntryIcon(type);
+					<HistoryFilterToggle
+						activeFilters={activeFilters}
+						onToggleFilter={toggleFilter}
+						theme={theme}
+					/>
 
-							return (
-								<button
-									key={type}
-									onClick={() => toggleFilter(type)}
-									className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-bold uppercase transition-all ${
-										isActive ? 'opacity-100' : 'opacity-40'
-									}`}
-									style={{
-										backgroundColor: isActive ? colors.bg : 'transparent',
-										color: isActive ? colors.text : theme.colors.textDim,
-										border: `1px solid ${isActive ? colors.border : theme.colors.border}`,
-									}}
-								>
-									<Icon className="w-3 h-3" />
-									{type}
-								</button>
-							);
-						})}
-					</div>
-
-					{/* 24-hour activity bar graph */}
+					{/* Activity graph — lookback period also filters the entry list */}
 					<ActivityGraph
 						entries={historyEntries}
 						theme={theme}

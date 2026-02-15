@@ -51,6 +51,7 @@ import {
 	registerSymphonyHandlers,
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
+	registerDirectorNotesHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -64,6 +65,7 @@ import {
 	setGetCustomEnvVarsCallback,
 	setGetAgentConfigCallback,
 	setSshStore,
+	setGetCustomShellPathCallback,
 	markParticipantResponded,
 	spawnModeratorSynthesis,
 	getGroupChatReadOnlyState,
@@ -435,6 +437,12 @@ function setupIpcHandlers() {
 	// Uses HistoryManager singleton for per-session storage
 	registerHistoryHandlers();
 
+	// Director's Notes - unified history + synopsis generation
+	registerDirectorNotesHandlers({
+		getProcessManager: () => processManager,
+		getAgentDetector: () => agentDetector,
+	});
+
 	// Agent management operations - extracted to src/main/ipc/handlers/agents.ts
 	registerAgentsHandlers({
 		getAgentDetector: () => agentDetector,
@@ -585,6 +593,11 @@ function setupIpcHandlers() {
 
 	// Set up SSH store for group chat SSH remote execution support
 	setSshStore(createSshRemoteStoreAdapter(store));
+
+	// Set up callback for group chat to get custom shell path (for Windows PowerShell preference)
+	// This is used by both group-chat-router.ts and group-chat-agent.ts via the shared config module
+	const getCustomShellPathFn = () => store.get('customShellPath', '') as string | undefined;
+	setGetCustomShellPathCallback(getCustomShellPathFn);
 
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(() => mainWindow);

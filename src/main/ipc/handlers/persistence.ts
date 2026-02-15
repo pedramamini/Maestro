@@ -87,7 +87,18 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 	});
 
 	ipcMain.handle('settings:set', async (_, key: string, value: any) => {
-		settingsStore.set(key, value);
+		try {
+			settingsStore.set(key, value);
+		} catch (err) {
+			// ENOSPC / ENFILE errors are transient disk issues — log and return false
+			// so the renderer doesn't see an unhandled rejection.
+			const code = (err as NodeJS.ErrnoException).code;
+			logger.warn(
+				`Failed to persist setting '${key}': ${code || (err as Error).message}`,
+				'Settings'
+			);
+			return false;
+		}
 		logger.info(`Settings updated: ${key}`, 'Settings', { key, value });
 
 		const webServer = getWebServer();
@@ -205,7 +216,19 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 			}
 		}
 
-		sessionsStore.set('sessions', sessions);
+		try {
+			sessionsStore.set('sessions', sessions);
+		} catch (err) {
+			// ENOSPC, ENFILE, or JSON serialization failures are recoverable —
+			// the next debounced write will succeed when conditions improve.
+			// Log but don't throw so the renderer doesn't see an unhandled rejection.
+			const code = (err as NodeJS.ErrnoException).code;
+			logger.warn(
+				`Failed to persist sessions: ${code || (err as Error).message}`,
+				'Sessions'
+			);
+			return false;
+		}
 
 		return true;
 	});
@@ -216,7 +239,16 @@ export function registerPersistenceHandlers(deps: PersistenceHandlerDependencies
 	});
 
 	ipcMain.handle('groups:setAll', async (_, groups: any[]) => {
-		groupsStore.set('groups', groups);
+		try {
+			groupsStore.set('groups', groups);
+		} catch (err) {
+			const code = (err as NodeJS.ErrnoException).code;
+			logger.warn(
+				`Failed to persist groups: ${code || (err as Error).message}`,
+				'Groups'
+			);
+			return false;
+		}
 		return true;
 	});
 

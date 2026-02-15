@@ -2,8 +2,8 @@
  * External Tools Collector
  *
  * Collects information about external dependencies:
- * - Available shells
- * - Git availability
+ * - Available shells (no paths)
+ * - Git availability and version
  * - gh CLI status
  * - cloudflared status
  */
@@ -11,14 +11,12 @@
 import { detectShells } from '../../utils/shellDetector';
 import { execFileNoThrow } from '../../utils/execFile';
 import { isCloudflaredInstalled } from '../../utils/cliDetection';
-import { sanitizePath } from './settings';
 
 export interface ExternalToolsInfo {
 	shells: Array<{
 		id: string;
 		name: string;
 		available: boolean;
-		path?: string; // Sanitized
 	}>;
 	git: {
 		available: boolean;
@@ -27,7 +25,6 @@ export interface ExternalToolsInfo {
 	github: {
 		ghCliInstalled: boolean;
 		ghCliAuthenticated: boolean;
-		ghPath?: string; // "[SET]" if custom, "[DEFAULT]" otherwise
 	};
 	cloudflared: {
 		installed: boolean;
@@ -36,6 +33,7 @@ export interface ExternalToolsInfo {
 
 /**
  * Collect information about external tools and dependencies.
+ * No installation paths are included — only availability and versions.
  */
 export async function collectExternalTools(): Promise<ExternalToolsInfo> {
 	const result: ExternalToolsInfo = {
@@ -52,14 +50,13 @@ export async function collectExternalTools(): Promise<ExternalToolsInfo> {
 		},
 	};
 
-	// Detect available shells
+	// Detect available shells (no paths)
 	try {
 		const shells = await detectShells();
 		result.shells = shells.map((shell) => ({
 			id: shell.id,
 			name: shell.name,
 			available: shell.available,
-			path: shell.path ? sanitizePath(shell.path) : undefined,
 		}));
 	} catch {
 		// Shells detection failed, leave empty
@@ -70,7 +67,6 @@ export async function collectExternalTools(): Promise<ExternalToolsInfo> {
 		const gitResult = await execFileNoThrow('git', ['--version']);
 		if (gitResult.exitCode === 0) {
 			result.git.available = true;
-			// Extract version from "git version X.Y.Z"
 			const match = gitResult.stdout.match(/git version (\S+)/);
 			if (match) {
 				result.git.version = match[1];
@@ -86,7 +82,6 @@ export async function collectExternalTools(): Promise<ExternalToolsInfo> {
 		if (ghResult.exitCode === 0) {
 			result.github.ghCliInstalled = true;
 
-			// Check if authenticated
 			const authResult = await execFileNoThrow('gh', ['auth', 'status']);
 			result.github.ghCliAuthenticated = authResult.exitCode === 0;
 		}

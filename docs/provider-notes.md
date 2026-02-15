@@ -27,7 +27,7 @@ Additional CLI arguments are appended to every call to the agent. Common use cas
 Environment variables are passed to the agent process. Use these for:
 
 - API keys and authentication tokens
-- Configuration overrides (e.g., `CLAUDE_CONFIG_DIR` for isolated Claude configurations)
+- Configuration overrides (e.g., `CLAUDE_CONFIG_DIR` for [multiple Claude accounts](/multi-claude))
 - Provider-specific settings
 
 <Note>
@@ -46,6 +46,10 @@ The `MAESTRO_SESSION_RESUMED` variable is automatically set to `1` when resuming
 | Model selection | ❌ Configured via Anthropic account |
 | Context operations | ✅ Merge, export, and transfer |
 | Thinking display | ✅ Streaming assistant messages |
+| Mid-turn input | ❌ Batch mode only ([details](#mid-turn-input)) |
+
+**Notes**:
+- Claude Code's TUI supports injecting user messages mid-turn (between tool calls in its agentic loop), but this is not available in batch mode (`--print`). Maestro uses batch mode, so new messages are queued and sent after the current turn completes via `--resume`. This is a limitation of the CLI's batch interface, not Maestro.
 
 ## Codex (OpenAI)
 

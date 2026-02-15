@@ -28,6 +28,7 @@ import {
 import { groupChatParticipantPrompt } from '../../prompts';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
+import { getWindowsSpawnConfig } from './group-chat-config';
 
 /**
  * In-memory store for active participant sessions.
@@ -180,6 +181,8 @@ export async function addParticipant(
 	let spawnCwd = cwd;
 	let spawnPrompt: string | undefined = prompt;
 	let spawnEnvVars = configResolution.effectiveCustomEnvVars ?? effectiveEnvVars;
+	let spawnShell: string | undefined;
+	let spawnRunInShell = false;
 
 	// Apply SSH wrapping if SSH is configured and store is available
 	if (sshStore && sessionOverrides?.sshRemoteConfig) {
@@ -208,6 +211,14 @@ export async function addParticipant(
 		}
 	}
 
+	// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
+	const winConfig = getWindowsSpawnConfig(agentId, sessionOverrides?.sshRemoteConfig);
+	if (winConfig.shell) {
+		spawnShell = winConfig.shell;
+		spawnRunInShell = winConfig.runInShell;
+		console.log(`[GroupChat:Debug] Windows shell config for participant: ${winConfig.shell}`);
+	}
+
 	// Spawn the participant agent
 	console.log(`[GroupChat:Debug] Spawning participant agent...`);
 	const result = processManager.spawn({
@@ -222,6 +233,10 @@ export async function addParticipant(
 		customEnvVars: spawnEnvVars,
 		promptArgs: agentConfig?.promptArgs,
 		noPromptSeparator: agentConfig?.noPromptSeparator,
+		shell: spawnShell,
+		runInShell: spawnRunInShell,
+		sendPromptViaStdin: winConfig.sendPromptViaStdin,
+		sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 	});
 
 	console.log(`[GroupChat:Debug] Spawn result: ${JSON.stringify(result)}`);

@@ -24,8 +24,8 @@ import {
 	processLogTextHelper,
 	filterTextByLinesHelper,
 	getCachedAnsiHtml,
-	stripMarkdown,
 } from '../utils/textProcessing';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { QueuedItemsList } from './QueuedItemsList';
 import { LogFilterControls } from './LogFilterControls';
@@ -741,15 +741,12 @@ const LogItemComponent = memo(
 										onFileClick={onFileClick}
 									/>
 								) : (
-									// Plain text mode (strip markdown formatting for readability)
+									// Raw markdown source mode (show original text with markdown syntax visible)
 									<div
 										className="whitespace-pre-wrap text-sm break-words"
 										style={{ color: theme.colors.textMain }}
 									>
-										{highlightMatches(
-											isAIMode ? stripMarkdown(filteredText) : filteredText,
-											outputSearchQuery
-										)}
+										{highlightMatches(filteredText, outputSearchQuery)}
 									</div>
 								)}
 							</>
@@ -765,7 +762,7 @@ const LogItemComponent = memo(
 								onClick={onToggleMarkdownEditMode}
 								className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
 								style={{ color: markdownEditMode ? theme.colors.accent : theme.colors.textDim }}
-								title={markdownEditMode ? 'Show formatted (⌘E)' : 'Show plain text (⌘E)'}
+								title={markdownEditMode ? `Show formatted (${formatShortcutKeys(['Meta', 'e'])})` : `Show plain text (${formatShortcutKeys(['Meta', 'e'])})`}
 							>
 								{markdownEditMode ? <Eye className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
 							</button>
@@ -965,6 +962,7 @@ interface TerminalOutputProps {
 	onFileClick?: (path: string) => void; // Callback when a file link is clicked
 	onShowErrorDetails?: () => void; // Callback to show the error modal (for error log entries)
 	onFileSaved?: () => void; // Callback when markdown content is saved to file (e.g., to refresh file list)
+	onOpenInTab?: (file: { path: string; name: string; content: string; sshRemoteId?: string }) => void; // Callback to open saved file in a tab
 }
 
 // PERFORMANCE: Wrap in React.memo to prevent re-renders when parent re-renders
@@ -1001,6 +999,7 @@ export const TerminalOutput = memo(
 			onFileClick,
 			onShowErrorDetails,
 			onFileSaved,
+			onOpenInTab,
 		} = props;
 
 		// Use the forwarded ref if provided, otherwise create a local one
@@ -1717,6 +1716,7 @@ export const TerminalOutput = memo(
 								: undefined
 						}
 						onFileSaved={onFileSaved}
+						onOpenInTab={onOpenInTab}
 					/>
 				)}
 			</div>

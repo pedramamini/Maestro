@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FilePreview } from '../../../renderer/components/FilePreview';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -22,6 +23,9 @@ vi.mock('lucide-react', () => ({
 	Share2: () => <span data-testid="share-icon">Share2</span>,
 	GitGraph: () => <span data-testid="gitgraph-icon">GitGraph</span>,
 	List: () => <span data-testid="list-icon">List</span>,
+	ExternalLink: () => <span data-testid="external-link-icon">ExternalLink</span>,
+	RefreshCw: () => <span data-testid="refresh-icon">RefreshCw</span>,
+	X: () => <span data-testid="x-icon">X</span>,
 }));
 
 // Mock react-markdown
@@ -103,6 +107,15 @@ vi.mock('../../../renderer/components/MermaidRenderer', () => ({
 	MermaidRenderer: () => <div data-testid="mermaid-renderer">Mermaid</div>,
 }));
 
+// Mock CsvTableRenderer
+vi.mock('../../../renderer/components/CsvTableRenderer', () => ({
+	CsvTableRenderer: ({ content, searchQuery, delimiter }: { content: string; searchQuery?: string; delimiter?: string }) => (
+		<div data-testid="csv-table-renderer" data-search={searchQuery ?? ''} data-delimiter={delimiter ?? ','}>
+			{content.substring(0, 50)}
+		</div>
+	),
+}));
+
 // Mock token counter - getEncoder must return a Promise
 vi.mock('../../../renderer/utils/tokenCounter', () => ({
 	getEncoder: vi.fn(() => Promise.resolve({ encode: () => [1, 2, 3] })),
@@ -111,7 +124,10 @@ vi.mock('../../../renderer/utils/tokenCounter', () => ({
 
 // Mock shortcut formatter
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
-	formatShortcutKeys: vi.fn((keys: string) => keys),
+	formatShortcutKeys: vi.fn((keys: string[]) => {
+		const keyMap: Record<string, string> = { Meta: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Control: 'Ctrl' };
+		return keys.map((k: string) => keyMap[k] || k.toUpperCase()).join('+');
+	}),
 	isMacOS: vi.fn(() => false),
 }));
 
@@ -173,7 +189,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			const graphButton = screen.getByTitle('View in Document Graph (⌘⇧G)');
+			const graphButton = screen.getByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`);
 			expect(graphButton).toBeInTheDocument();
 			expect(screen.getByTestId('gitgraph-icon')).toBeInTheDocument();
 		});
@@ -188,7 +204,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			const graphButton = screen.getByTitle('View in Document Graph (⌘⇧G)');
+			const graphButton = screen.getByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`);
 			fireEvent.click(graphButton);
 
 			expect(onOpenInGraph).toHaveBeenCalledOnce();
@@ -202,7 +218,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(screen.queryByTitle('View in Document Graph (⌘⇧G)')).not.toBeInTheDocument();
+			expect(screen.queryByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`)).not.toBeInTheDocument();
 		});
 
 		it('does not show Document Graph button for non-markdown files', () => {
@@ -215,7 +231,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(screen.queryByTitle('View in Document Graph (⌘⇧G)')).not.toBeInTheDocument();
+			expect(screen.queryByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`)).not.toBeInTheDocument();
 		});
 
 		it('shows Document Graph button for uppercase .MD extension', () => {
@@ -228,7 +244,210 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(screen.getByTitle('View in Document Graph (⌘⇧G)')).toBeInTheDocument();
+			expect(screen.getByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`)).toBeInTheDocument();
+		});
+	});
+
+	describe('Open in Default App button', () => {
+		it('shows Open in Default App button with ExternalLink icon', () => {
+			render(<FilePreview {...defaultProps} />);
+
+			const button = screen.getByTitle('Open in Default App');
+			expect(button).toBeInTheDocument();
+			expect(screen.getByTestId('external-link-icon')).toBeInTheDocument();
+		});
+
+		it('calls shell.openExternal with file:// URL when clicked', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'readme.md', content: '# Readme', path: '/test/readme.md' }}
+				/>
+			);
+
+			const button = screen.getByTitle('Open in Default App');
+			fireEvent.click(button);
+
+			expect(window.maestro?.shell?.openExternal).toHaveBeenCalledWith('file:///test/readme.md');
+		});
+
+		it('hides Open in Default App button for SSH remote sessions', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					sshRemoteId="remote-host-1"
+				/>
+			);
+
+			expect(screen.queryByTitle('Open in Default App')).not.toBeInTheDocument();
+		});
+	});
+
+	describe('file changed on disk banner', () => {
+		it('shows reload banner when polling detects a newer mtime', async () => {
+			vi.useFakeTimers();
+			const onReloadFile = vi.fn();
+
+			// Mock stat to return a newer mtime than lastModified
+			const mockStat = vi.fn().mockResolvedValue({
+				modifiedAt: new Date(2000).toISOString(),
+				size: 100,
+				isFile: true,
+				isDirectory: false,
+			});
+			window.maestro.fs.stat = mockStat;
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					lastModified={1000}
+					onReloadFile={onReloadFile}
+				/>
+			);
+
+			// Banner should not be visible initially
+			expect(screen.queryByText('File changed on disk.')).not.toBeInTheDocument();
+
+			// Advance timer to trigger the 3s polling interval
+			await act(async () => {
+				vi.advanceTimersByTime(3000);
+			});
+
+			expect(screen.getByText('File changed on disk.')).toBeInTheDocument();
+			expect(screen.getByTestId('refresh-icon')).toBeInTheDocument();
+
+			vi.useRealTimers();
+		});
+
+		it('calls onReloadFile when Reload button is clicked', async () => {
+			vi.useFakeTimers();
+			const onReloadFile = vi.fn();
+
+			window.maestro.fs.stat = vi.fn().mockResolvedValue({
+				modifiedAt: new Date(2000).toISOString(),
+				size: 100,
+				isFile: true,
+				isDirectory: false,
+			});
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					lastModified={1000}
+					onReloadFile={onReloadFile}
+				/>
+			);
+
+			await act(async () => {
+				vi.advanceTimersByTime(3000);
+			});
+
+			const reloadButton = screen.getByText('Reload');
+			fireEvent.click(reloadButton);
+
+			expect(onReloadFile).toHaveBeenCalledOnce();
+			// Banner should be dismissed after reload
+			expect(screen.queryByText('File changed on disk.')).not.toBeInTheDocument();
+
+			vi.useRealTimers();
+		});
+
+		it('dismisses banner when X button is clicked', async () => {
+			vi.useFakeTimers();
+
+			window.maestro.fs.stat = vi.fn().mockResolvedValue({
+				modifiedAt: new Date(2000).toISOString(),
+				size: 100,
+				isFile: true,
+				isDirectory: false,
+			});
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					lastModified={1000}
+					onReloadFile={vi.fn()}
+				/>
+			);
+
+			await act(async () => {
+				vi.advanceTimersByTime(3000);
+			});
+
+			expect(screen.getByText('File changed on disk.')).toBeInTheDocument();
+
+			const dismissButton = screen.getByTitle('Dismiss');
+			fireEvent.click(dismissButton);
+
+			expect(screen.queryByText('File changed on disk.')).not.toBeInTheDocument();
+
+			vi.useRealTimers();
+		});
+
+		it('shows unsaved edits warning when in edit mode with changes', async () => {
+			vi.useFakeTimers();
+
+			window.maestro.fs.stat = vi.fn().mockResolvedValue({
+				modifiedAt: new Date(2000).toISOString(),
+				size: 100,
+				isFile: true,
+				isDirectory: false,
+			});
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.md', content: '# Original', path: '/test/test.md' }}
+					markdownEditMode={true}
+					externalEditContent="# Modified by user"
+					lastModified={1000}
+					onReloadFile={vi.fn()}
+				/>
+			);
+
+			await act(async () => {
+				vi.advanceTimersByTime(3000);
+			});
+
+			expect(
+				screen.getByText(/File changed on disk\. You have unsaved edits/)
+			).toBeInTheDocument();
+
+			vi.useRealTimers();
+		});
+
+		it('does not poll when lastModified is not provided', async () => {
+			vi.useFakeTimers();
+			const mockStat = vi.fn().mockResolvedValue({
+				modifiedAt: new Date(2000).toISOString(),
+				size: 100,
+				isFile: true,
+				isDirectory: false,
+			});
+			window.maestro.fs.stat = mockStat;
+
+			render(
+				<FilePreview
+					{...defaultProps}
+					onReloadFile={vi.fn()}
+				/>
+			);
+
+			// Allow the initial file stats fetch to complete
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			const callsAfterMount = mockStat.mock.calls.length;
+
+			// Advance timers past multiple poll intervals — no additional calls should happen
+			await act(async () => {
+				vi.advanceTimersByTime(6000);
+			});
+
+			expect(mockStat).toHaveBeenCalledTimes(callsAfterMount);
+
+			vi.useRealTimers();
 		});
 	});
 
@@ -315,6 +534,84 @@ describe('FilePreview', () => {
 			const textarea = screen.getByRole('textbox');
 			expect(textarea).toBeInTheDocument();
 			expect(textarea).toHaveValue('{"key": "value"}');
+		});
+	});
+
+	describe('edit mode keyboard navigation', () => {
+		const multiLineContent = 'Line 1\nLine 2\nLine 3\nLine 4\nLine 5';
+
+		it('Cmd+Shift+Up selects from cursor to beginning of document', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.txt', content: multiLineContent, path: '/test/test.txt' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+			// Place cursor at position 14 (start of Line 3)
+			textarea.setSelectionRange(14, 14);
+
+			fireEvent.keyDown(textarea, { key: 'ArrowUp', metaKey: true, shiftKey: true });
+
+			expect(textarea.selectionStart).toBe(0);
+			expect(textarea.selectionEnd).toBe(14);
+		});
+
+		it('Cmd+Shift+Down selects from cursor to end of document', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.txt', content: multiLineContent, path: '/test/test.txt' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+			// Place cursor at position 14 (start of Line 3)
+			textarea.setSelectionRange(14, 14);
+
+			fireEvent.keyDown(textarea, { key: 'ArrowDown', metaKey: true, shiftKey: true });
+
+			expect(textarea.selectionStart).toBe(14);
+			expect(textarea.selectionEnd).toBe(multiLineContent.length);
+		});
+
+		it('Cmd+Up moves cursor to beginning without selection', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.txt', content: multiLineContent, path: '/test/test.txt' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+			textarea.setSelectionRange(14, 14);
+
+			fireEvent.keyDown(textarea, { key: 'ArrowUp', metaKey: true });
+
+			expect(textarea.selectionStart).toBe(0);
+			expect(textarea.selectionEnd).toBe(0);
+		});
+
+		it('Cmd+Down moves cursor to end without selection', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'test.txt', content: multiLineContent, path: '/test/test.txt' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox') as HTMLTextAreaElement;
+			textarea.setSelectionRange(14, 14);
+
+			fireEvent.keyDown(textarea, { key: 'ArrowDown', metaKey: true });
+
+			expect(textarea.selectionStart).toBe(multiLineContent.length);
+			expect(textarea.selectionEnd).toBe(multiLineContent.length);
 		});
 	});
 
@@ -1027,6 +1324,71 @@ print("world")
 			expect(onScrollPositionChange).not.toHaveBeenCalled();
 
 			vi.useRealTimers();
+		});
+	});
+
+	describe('CSV file rendering', () => {
+		it('renders CsvTableRenderer for .csv files with comma delimiter', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+				/>
+			);
+
+			const renderer = screen.getByTestId('csv-table-renderer');
+			expect(renderer).toBeInTheDocument();
+			expect(renderer).toHaveAttribute('data-delimiter', ',');
+		});
+
+		it('renders CsvTableRenderer for .tsv files with tab delimiter', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.tsv', content: 'Name\tAge\nAlice\t30', path: '/test/data.tsv' }}
+				/>
+			);
+
+			const renderer = screen.getByTestId('csv-table-renderer');
+			expect(renderer).toBeInTheDocument();
+			expect(renderer).toHaveAttribute('data-delimiter', '\t');
+		});
+
+		it('shows edit button for CSV files', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+				/>
+			);
+
+			expect(screen.getByTestId('edit-icon')).toBeInTheDocument();
+		});
+
+		it('shows textarea when in edit mode for CSV files', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			const textarea = screen.getByRole('textbox');
+			expect(textarea).toBeInTheDocument();
+			expect(textarea).toHaveValue('Name,Age\nAlice,30');
+		});
+
+		it('does not render CsvTableRenderer when in edit mode', () => {
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'data.csv', content: 'Name,Age\nAlice,30', path: '/test/data.csv' }}
+					markdownEditMode={true}
+				/>
+			);
+
+			expect(screen.queryByTestId('csv-table-renderer')).not.toBeInTheDocument();
 		});
 	});
 });

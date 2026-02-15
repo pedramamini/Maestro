@@ -8,6 +8,9 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
+// Undo the global mock from setup.ts — this file tests the real module
+vi.unmock('../../../renderer/utils/shortcutFormatter');
+
 describe('shortcutFormatter', () => {
 	// Store original navigator to restore after tests
 	const originalNavigator = global.navigator;

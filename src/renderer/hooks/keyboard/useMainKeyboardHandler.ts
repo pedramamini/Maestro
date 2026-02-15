@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import type { Session, AITab, ThinkingMode } from '../../types';
 import { getInitialRenameValue } from '../../utils/tabHelpers';
+import { useModalStore } from '../../stores/modalStore';
 
 /**
  * Context object passed to the main keyboard handler via ref.
@@ -134,16 +135,18 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				if (ctx.hasOpenModal()) {
 					// TRUE MODAL is open - block most shortcuts from App.tsx
 					// The modal's own handler will handle Cmd+Shift+[] if it supports it
-					// BUT allow layout shortcuts (sidebar toggles), system utility shortcuts, session jump, and jumpToBottom to work
+					// BUT allow layout shortcuts (sidebar toggles), system utility shortcuts, session jump,
+					// jumpToBottom, and markdown toggle to work (these are benign viewing preferences)
 					if (
 						!isLayoutShortcut &&
 						!isSystemUtilShortcut &&
 						!isSessionJumpShortcut &&
-						!isJumpToBottomShortcut
+						!isJumpToBottomShortcut &&
+						!isMarkdownToggleShortcut
 					) {
 						return;
 					}
-					// Fall through to handle layout/system utility/session jump/jumpToBottom shortcuts below
+					// Fall through to handle layout/system utility/session jump/jumpToBottom/markdown toggle shortcuts below
 				} else {
 					// Only OVERLAYS are open (file tabs, LogViewer, etc.)
 					// Allow Cmd+Shift+[] to fall through to App.tsx handler
@@ -401,6 +404,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setSymphonyModalOpen(true);
 				trackShortcut('openSymphony');
+			} else if (ctx.isShortcut(e, 'directorNotes')) {
+				e.preventDefault();
+				ctx.setDirectorNotesOpen(true);
+				trackShortcut('directorNotes');
 			} else if (ctx.isShortcut(e, 'jumpToBottom')) {
 				e.preventDefault();
 				// Jump to the bottom of the current main panel output (AI logs or terminal output)
@@ -414,8 +421,9 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			} else if (ctx.isShortcut(e, 'toggleMarkdownMode')) {
 				// Toggle markdown raw mode for AI message history
 				// Skip when in AutoRun panel (it has its own Cmd+E handler for edit/preview toggle)
-				// Skip when file tab is active (it handles its own Cmd+E)
 				// Skip when Auto Run is running (editing is locked)
+				// Note: FilePreview handles its own Cmd+E with stopPropagation when focused,
+				// so if the event reaches here, the user isn't interacting with a file tab.
 				// Check both state-based detection AND DOM-based detection for robustness
 				const isInAutoRunPanel = ctx.activeFocus === 'right' && ctx.activeRightTab === 'autorun';
 				// Also check if the focused element is within an autorun panel (handles edge cases where activeFocus state may be stale)
@@ -424,9 +432,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				// Check if Auto Run is running and editing is locked (running without worktree)
 				const isAutoRunLocked =
 					ctx.activeBatchRunState?.isRunning && !ctx.activeBatchRunState?.worktreeActive;
-				// Check if a file tab is active (new tab-based file preview)
-				const hasActiveFileTab = !!ctx.activeSession?.activeFileTabId;
-				if (!isInAutoRunPanel && !isInAutoRunDOM && !hasActiveFileTab && !isAutoRunLocked) {
+				if (!isInAutoRunPanel && !isInAutoRunDOM && !isAutoRunLocked) {
 					e.preventDefault();
 					// Toggle chat raw text mode (not file preview edit mode)
 					ctx.setChatRawTextMode(!ctx.chatRawTextMode);
@@ -498,14 +504,13 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					} else if (closeResult.type === 'ai' && closeResult.tabId) {
 						// AI tab - need to handle wizard confirmation
 						if (closeResult.isWizardTab) {
-							ctx.setConfirmModalMessage(
-								'Close this wizard? Your progress will be lost and cannot be restored.'
-							);
-							ctx.setConfirmModalOnConfirm(() => () => {
-								ctx.performTabClose(closeResult.tabId);
-								trackShortcut('closeTab');
+							useModalStore.getState().openModal('confirm', {
+								message: 'Close this wizard? Your progress will be lost and cannot be restored.',
+								onConfirm: () => {
+									ctx.performTabClose(closeResult.tabId);
+									trackShortcut('closeTab');
+								},
 							});
-							ctx.setConfirmModalOpen(true);
 						} else {
 							// Regular AI tab - close it using performTabClose
 							// This ensures the tab is added to unifiedClosedTabHistory for Cmd+Shift+T

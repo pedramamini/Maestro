@@ -271,6 +271,19 @@ describe('persistence IPC handlers', () => {
 			expect(result).toBe(true);
 			expect(mockSettingsStore.set).toHaveBeenCalledWith('activeThemeId', 'dark');
 		});
+
+		it('should return false on ENOSPC write error', async () => {
+			const error = new Error('ENOSPC: no space left on device') as NodeJS.ErrnoException;
+			error.code = 'ENOSPC';
+			mockSettingsStore.set.mockImplementation(() => {
+				throw error;
+			});
+
+			const handler = handlers.get('settings:set');
+			const result = await handler!({} as any, 'fontSize', 16);
+
+			expect(result).toBe(false);
+		});
 	});
 
 	describe('settings:getAll', () => {
@@ -620,6 +633,32 @@ describe('persistence IPC handlers', () => {
 				expect.objectContaining({ id: 'session-3' })
 			);
 		});
+
+		it('should return false on ENOSPC write error', async () => {
+			const error = new Error('ENOSPC: no space left on device') as NodeJS.ErrnoException;
+			error.code = 'ENOSPC';
+			mockSessionsStore.set.mockImplementation(() => {
+				throw error;
+			});
+			mockSessionsStore.get.mockReturnValue([]);
+
+			const handler = handlers.get('sessions:setAll');
+			const result = await handler!({} as any, [{ id: 's1', name: 'S1', state: 'idle' }]);
+
+			expect(result).toBe(false);
+		});
+
+		it('should return false on JSON serialization error', async () => {
+			mockSessionsStore.set.mockImplementation(() => {
+				throw new TypeError('Converting circular structure to JSON');
+			});
+			mockSessionsStore.get.mockReturnValue([]);
+
+			const handler = handlers.get('sessions:setAll');
+			const result = await handler!({} as any, [{ id: 's1', name: 'S1', state: 'idle' }]);
+
+			expect(result).toBe(false);
+		});
 	});
 
 	describe('groups:getAll', () => {
@@ -667,6 +706,19 @@ describe('persistence IPC handlers', () => {
 
 			expect(mockGroupsStore.set).toHaveBeenCalledWith('groups', []);
 			expect(result).toBe(true);
+		});
+
+		it('should return false on ENOSPC write error', async () => {
+			const error = new Error('ENOSPC: no space left on device') as NodeJS.ErrnoException;
+			error.code = 'ENOSPC';
+			mockGroupsStore.set.mockImplementation(() => {
+				throw error;
+			});
+
+			const handler = handlers.get('groups:setAll');
+			const result = await handler!({} as any, [{ id: 'g1', name: 'G1' }]);
+
+			expect(result).toBe(false);
 		});
 	});
 

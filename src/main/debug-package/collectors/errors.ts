@@ -3,10 +3,13 @@
  *
  * Collects error states from sessions and recent error logs.
  * - Only error type and metadata, no full error messages that might contain sensitive data
+ * - Error log messages are sanitized and data fields are dropped
  */
 
 import Store from 'electron-store';
 import { logger, LogEntry } from '../../utils/logger';
+import { sanitizeLogMessage } from './sanitize';
+import type { SanitizedLogEntry } from './logs';
 
 export interface ErrorsInfo {
 	currentSessionErrors: Array<{
@@ -16,8 +19,20 @@ export interface ErrorsInfo {
 		timestamp: number;
 		agentId: string;
 	}>;
-	recentErrorLogs: LogEntry[]; // Filtered to error level only
+	recentErrorLogs: SanitizedLogEntry[];
 	errorCount24h: number;
+}
+
+/**
+ * Sanitize an error log entry — same approach as the logs collector.
+ */
+function sanitizeErrorEntry(entry: LogEntry): SanitizedLogEntry {
+	return {
+		timestamp: entry.timestamp,
+		level: entry.level,
+		message: sanitizeLogMessage(entry.message),
+		context: entry.context,
+	};
 }
 
 /**
@@ -44,12 +59,12 @@ export function collectErrors(sessionsStore: Store<any>): ErrorsInfo {
 		}
 	}
 
-	// Get recent error logs
+	// Get recent error logs (sanitized)
 	const allLogs = logger.getLogs();
 	const errorLogs = allLogs.filter((log) => log.level === 'error');
 
-	// Get last 100 error logs
-	result.recentErrorLogs = errorLogs.slice(-100);
+	// Get last 100 error logs, sanitized
+	result.recentErrorLogs = errorLogs.slice(-100).map(sanitizeErrorEntry);
 
 	// Count errors in last 24 hours
 	const oneDayAgo = Date.now() - 24 * 60 * 60 * 1000;

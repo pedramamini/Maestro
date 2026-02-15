@@ -3,6 +3,7 @@ import { Folder, FileText, Play, CheckSquare } from 'lucide-react';
 import type { Theme } from '../types';
 import { Modal, ModalFooter, FormInput } from './ui';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 interface AutoRunSetupModalProps {
 	theme: Theme;
@@ -247,7 +248,7 @@ export function AutoRunSetupModal({
 								title={
 									sshRemoteId
 										? `Folder picker unavailable for SSH remote${sshRemoteHost ? ` (${sshRemoteHost})` : ''}. Enter the remote path manually.`
-										: 'Browse folders (Cmd+O)'
+										: `Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
 								}
 							>
 								<Folder className="w-5 h-5" />

@@ -11,7 +11,7 @@
 
 /**
  * The Symphony registry listing all registered repositories.
- * Hosted at: https://raw.githubusercontent.com/pedramamini/Maestro/main/symphony-registry.json
+ * Hosted at: https://raw.githubusercontent.com/RunMaestro/Maestro/main/symphony-registry.json
  */
 export interface SymphonyRegistry {
   /** Schema version for forward compatibility */
@@ -54,16 +54,13 @@ export interface RegisteredRepository {
 /**
  * Categories for organizing Symphony repositories.
  */
-export type SymphonyCategory =
-  | 'ai-ml'           // AI/ML tools and libraries
-  | 'developer-tools' // Developer productivity tools
-  | 'infrastructure'  // DevOps, cloud, infrastructure
-  | 'documentation'   // Documentation projects
-  | 'web'             // Web frameworks and libraries
-  | 'mobile'          // Mobile development
-  | 'data'            // Data processing, databases
-  | 'security'        // Security tools
-  | 'other';          // Miscellaneous
+/**
+ * Category for organizing Symphony repositories.
+ * This is a plain string so new categories can be added to the registry
+ * without requiring code changes. Known categories have display info
+ * in SYMPHONY_CATEGORIES; unknown ones fall back to title-cased name.
+ */
+export type SymphonyCategory = string;
 
 // ============================================================================
 // GitHub Issue Types (Fetched via GitHub API)
@@ -83,6 +80,16 @@ export interface DocumentReference {
   path: string;
   /** Whether this is an external URL that needs to be downloaded */
   isExternal: boolean;
+}
+
+/**
+ * A GitHub label on an issue.
+ */
+export interface SymphonyLabel {
+  /** Label name */
+  name: string;
+  /** Label hex color (without #) */
+  color: string;
 }
 
 /**
@@ -108,6 +115,8 @@ export interface SymphonyIssue {
   updatedAt: string;
   /** Parsed Auto Run document references from issue body */
   documentPaths: DocumentReference[];
+  /** GitHub labels on this issue (excluding runmaestro.ai) */
+  labels: SymphonyLabel[];
   /** Availability status */
   status: IssueStatus;
   /** If in progress, the PR working on it */

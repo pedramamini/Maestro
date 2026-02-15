@@ -107,8 +107,12 @@ export function GroupChatInfoOverlay({
 }: GroupChatInfoOverlayProps): JSX.Element | null {
 	const [isExporting, setIsExporting] = useState(false);
 
-	const copyToClipboard = useCallback((text: string) => {
-		navigator.clipboard.writeText(text);
+	const copyToClipboard = useCallback(async (text: string) => {
+		try {
+			await navigator.clipboard.writeText(text);
+		} catch {
+			// Ignore clipboard errors (e.g. document not focused)
+		}
 	}, []);
 
 	const openInFinder = useCallback(() => {

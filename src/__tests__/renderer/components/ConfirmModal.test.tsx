@@ -81,7 +81,7 @@ describe('ConfirmModal', () => {
 				<ConfirmModal theme={testTheme} message="Test" onConfirm={vi.fn()} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByText('Confirm Delete')).toBeInTheDocument();
+			expect(screen.getByRole('heading', { name: 'Confirm' })).toBeInTheDocument();
 			expect(screen.getByTestId('x-icon')).toBeInTheDocument();
 		});
 
@@ -100,7 +100,7 @@ describe('ConfirmModal', () => {
 
 			const dialog = screen.getByRole('dialog');
 			expect(dialog).toHaveAttribute('aria-modal', 'true');
-			expect(dialog).toHaveAttribute('aria-label', 'Confirm Delete');
+			expect(dialog).toHaveAttribute('aria-label', 'Confirm');
 		});
 	});
 
@@ -223,7 +223,7 @@ describe('ConfirmModal', () => {
 				<ConfirmModal theme={testTheme} message="Test" onConfirm={vi.fn()} onClose={vi.fn()} />
 			);
 
-			expect(screen.getByRole('heading', { name: 'Confirm Delete' })).toBeInTheDocument();
+			expect(screen.getByRole('heading', { name: 'Confirm' })).toBeInTheDocument();
 		});
 	});
 });
