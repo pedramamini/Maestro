@@ -1895,6 +1895,11 @@ function SessionListInner(props: SessionListProps) {
 		[groups]
 	);
 
+	const groupById = useMemo(
+		() => new Map(groups.map((g) => [g.id, g])),
+		[groups]
+	);
+
 	// When filter opens, apply filter mode preferences (or defaults on first open)
 	// When filter closes, save current states as filter mode preferences and restore original states
 	useEffect(() => {
@@ -2650,7 +2655,7 @@ function SessionListInner(props: SessionListProps) {
 									style={styles.accentText}
 								>
 									{sortedBookmarkedSessions.map((session) => {
-										const group = groups.find((g) => g.id === session.groupId);
+										const group = session.groupId ? groupById.get(session.groupId) : undefined;
 										return renderSessionWithWorktrees(session, 'bookmark', {
 											keyPrefix: 'bookmark',
 											group,
@@ -2969,7 +2974,7 @@ function SessionListInner(props: SessionListProps) {
 										session={session}
 										theme={theme}
 										gitFileCount={getFileCount(session.id)}
-										groupName={groups.find((g) => g.id === session.groupId)?.name}
+										groupName={session.groupId ? groupById.get(session.groupId)?.name : undefined}
 										isInBatch={isInBatch}
 										contextWarningYellowThreshold={contextWarningYellowThreshold}
 										contextWarningRedThreshold={contextWarningRedThreshold}
