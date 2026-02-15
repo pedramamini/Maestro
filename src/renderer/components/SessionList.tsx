@@ -60,6 +60,7 @@ import { useUIStore } from '../stores/uiStore';
 
 // ============================================================================
 // SessionContextMenu - Right-click context menu for session items
+// PERF: Memoized to prevent re-renders when parent list re-renders
 // ============================================================================
 
 interface SessionContextMenuProps {
@@ -83,7 +84,7 @@ interface SessionContextMenuProps {
 	onCreateGroup?: () => void; // Creates a new group from the Move to Group submenu
 }
 
-function SessionContextMenu({
+const SessionContextMenu = memo(function SessionContextMenu({
 	x,
 	y,
 	theme,
@@ -430,10 +431,11 @@ function SessionContextMenu({
 			)}
 		</div>
 	);
-}
+});
 
 // ============================================================================
 // HamburgerMenuContent - Shared menu content for expanded/collapsed sidebar
+// PERF: Memoized to prevent re-renders when parent list re-renders
 // ============================================================================
 
 interface HamburgerMenuContentProps {
@@ -456,7 +458,7 @@ interface HamburgerMenuContentProps {
 	setQuickActionOpen: (open: boolean) => void;
 }
 
-function HamburgerMenuContent({
+const HamburgerMenuContent = memo(function HamburgerMenuContent({
 	theme,
 	shortcuts,
 	onNewAgentSession,
@@ -816,7 +818,7 @@ function HamburgerMenuContent({
 			</button>
 		</div>
 	);
-}
+});
 
 // ============================================================================
 // SessionTooltipContent - Shared tooltip content for session hover previews
