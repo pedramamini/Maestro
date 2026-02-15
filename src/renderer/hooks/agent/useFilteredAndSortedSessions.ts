@@ -90,12 +90,21 @@ export function useFilteredAndSortedSessions(
 		[showAllSessions, namedOnly]
 	);
 
+	// Pre-compute a Map for O(1) search result lookups (avoids O(n) find per session)
+	const searchResultMap = useMemo(() => {
+		const map = new Map<string, SearchResult>();
+		for (const r of searchResults) {
+			map.set(r.sessionId, r);
+		}
+		return map;
+	}, [searchResults]);
+
 	// Get search result info for a session (for display purposes)
 	const getSearchResultInfo = useCallback(
 		(sessionId: string): SearchResult | undefined => {
-			return searchResults.find((r) => r.sessionId === sessionId);
+			return searchResultMap.get(sessionId);
 		},
-		[searchResults]
+		[searchResultMap]
 	);
 
 	// Filter sessions by search - use different strategies based on search mode
