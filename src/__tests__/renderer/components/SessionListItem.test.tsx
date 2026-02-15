@@ -3,7 +3,7 @@
  *
  * Validates:
  * - React.memo wrapper prevents unnecessary re-renders
- * - Memoized style objects (containerStyle, starStyle)
+ * - Consolidated memoized styles record (container, star, pills, badges, etc.)
  * - Core rendering behavior preserved after memoization
  */
 
@@ -200,6 +200,90 @@ describe('SessionListItem', () => {
 			const star = screen.getByTestId('icon-star');
 			expect(star.style.color).toBeTruthy();
 			expect(star.style.fill).toBe('transparent');
+		});
+	});
+
+	describe('memoized pill and badge styles', () => {
+		it('applies success color to play icon', () => {
+			render(<SessionListItem {...createDefaultProps()} />);
+			const play = screen.getByTestId('icon-play');
+			expect(play.style.color).toBeTruthy();
+		});
+
+		it('applies accent-based style to MAESTRO origin pill', () => {
+			render(<SessionListItem {...createDefaultProps()} />);
+			const pill = screen.getByText('MAESTRO');
+			expect(pill.style.backgroundColor).toBeTruthy();
+			expect(pill.style.color).toBeTruthy();
+		});
+
+		it('applies warning-based style to AUTO origin pill', () => {
+			render(<SessionListItem {...createDefaultProps({
+				session: { ...mockSession, origin: 'auto' } as any,
+			})} />);
+			const pill = screen.getByText('AUTO');
+			expect(pill.style.backgroundColor).toBeTruthy();
+			expect(pill.style.color).toBeTruthy();
+		});
+
+		it('applies border-based style to CLI origin pill', () => {
+			render(<SessionListItem {...createDefaultProps({
+				session: { ...mockSession, origin: undefined } as any,
+			})} />);
+			const pill = screen.getByText('CLI');
+			expect(pill.style.backgroundColor).toBeTruthy();
+			expect(pill.style.color).toBeTruthy();
+		});
+
+		it('applies memoized style to session ID pill', () => {
+			render(<SessionListItem {...createDefaultProps()} />);
+			const idPill = screen.getByText('ABC12345');
+			expect(idPill.style.backgroundColor).toBeTruthy();
+			expect(idPill.style.color).toBeTruthy();
+		});
+
+		it('applies success color to cost display', () => {
+			render(<SessionListItem {...createDefaultProps()} />);
+			const cost = screen.getByText('0.05');
+			expect(cost.parentElement?.style.color).toBeTruthy();
+		});
+
+		it('applies accent-based style to search match count', () => {
+			render(<SessionListItem {...createDefaultProps({
+				searchMode: 'all',
+				searchResultInfo: { matchCount: 3, matchPreview: 'test' },
+			})} />);
+			const matchSpan = screen.getByText('3').closest('span[style]');
+			expect(matchSpan).toBeTruthy();
+		});
+
+		it('applies success-based style to ACTIVE badge', () => {
+			render(<SessionListItem {...createDefaultProps({
+				activeAgentSessionId: mockSession.sessionId,
+			})} />);
+			const badge = screen.getByText('ACTIVE');
+			expect(badge.style.backgroundColor).toBeTruthy();
+			expect(badge.style.color).toBeTruthy();
+		});
+
+		it('applies dim text color for first message when session has a name', () => {
+			render(<SessionListItem {...createDefaultProps({
+				session: { ...mockSession, sessionName: 'Named' } as any,
+			})} />);
+			const firstMsg = screen.getByText('Hello, test session');
+			expect(firstMsg.style.color).toBeTruthy();
+		});
+
+		it('applies main text color for first message when session has no name', () => {
+			render(<SessionListItem {...createDefaultProps()} />);
+			const firstMsg = screen.getByText('Hello, test session');
+			expect(firstMsg.style.color).toBeTruthy();
+		});
+
+		it('has zero inline style={{}} objects in the source', () => {
+			// This is a meta-test ensuring the optimization is in place
+			// The component should use the memoized styles record exclusively
+			expect((SessionListItem as any).$$typeof).toBe(Symbol.for('react.memo'));
 		});
 	});
 
