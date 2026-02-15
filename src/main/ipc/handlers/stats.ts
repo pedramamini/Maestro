@@ -239,7 +239,7 @@ export function registerStatsHandlers(deps: StatsHandlerDependencies): void {
 		'stats:get-database-size',
 		withIpcErrorLogging(handlerOpts('getDatabaseSize'), async () => {
 			const db = getStatsDB();
-			return db.getDatabaseSize();
+			return await db.getDatabaseSize();
 		})
 	);
 
