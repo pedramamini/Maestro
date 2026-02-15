@@ -32,6 +32,7 @@ import {
 	PartyPopper,
 	Tag,
 	User,
+	Users,
 	Clapperboard,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
@@ -60,6 +61,7 @@ import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
 import { SshRemoteIgnoreSection } from './Settings/SshRemoteIgnoreSection';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
+import { AccountsPanel } from './AccountsPanel';
 import { AGENT_TILES } from './Wizard/screens/AgentSelectionScreen';
 
 // Feature flags - set to true to enable dormant features
@@ -286,7 +288,8 @@ interface SettingsModalProps {
 		| 'theme'
 		| 'notifications'
 		| 'aicommands'
-		| 'ssh';
+		| 'ssh'
+		| 'accounts';
 	hasNoAgents?: boolean;
 	onThemeImportError?: (message: string) => void;
 	onThemeImportSuccess?: (message: string) => void;
@@ -334,7 +337,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
-		'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh' | 'director-notes'
+		'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh' | 'accounts' | 'director-notes'
 	>('general');
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -554,10 +557,11 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				| 'notifications'
 				| 'aicommands'
 				| 'ssh'
+				| 'accounts'
 				| 'director-notes'
 			> = FEATURE_FLAGS.LLM_SETTINGS
-				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh', 'director-notes']
-				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh', 'director-notes'];
+				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh', 'accounts', 'director-notes']
+				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh', 'accounts', 'director-notes'];
 			const currentIndex = tabs.indexOf(activeTab);
 
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {
@@ -1026,6 +1030,16 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					>
 						<Server className="w-4 h-4" />
 						{activeTab === 'ssh' && <span>SSH Hosts</span>}
+					</button>
+					<button
+						onClick={() => setActiveTab('accounts')}
+						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'accounts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						style={{ color: activeTab === 'accounts' ? theme.colors.textMain : theme.colors.textDim }}
+						tabIndex={-1}
+						title="Accounts"
+					>
+						<Users className="w-4 h-4" />
+						{activeTab === 'accounts' && <span>Accounts</span>}
 					</button>
 					<button
 						onClick={() => setActiveTab('director-notes')}
@@ -2743,6 +2757,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							/>
 						</div>
 					)}
+
+					{activeTab === 'accounts' && <AccountsPanel theme={theme} />}
 
 					{activeTab === 'director-notes' && (() => {
 						// Compute derived values for director-notes tab
