@@ -128,9 +128,10 @@ The `AgentInbox` modal is already functional. The shortcut `Alt+Cmd+I` already w
 
     **Verify:** `npm run test -- --testPathPattern="AgentInbox|useMainKeyboardHandler" --no-coverage` — all tests pass. `npm run lint` passes.
 
-- [ ] **TASK 4 — Final verification and full regression.** Run:
+- [x] **TASK 4 — Final verification and full regression.** Run:
     ```bash
     npm run lint
     npm run test -- --testPathPattern="AgentInbox|useAgentInbox|agentInboxHelpers|useMainKeyboardHandler" --no-coverage
     ```
     Verify: zero TypeScript errors, all tests pass. If any test still references `'Agent Inbox'` as expected text (not as a component/variable name), fix it. Report total test count and pass rate.
+    > ✅ Completed: `npm run lint` — zero TypeScript errors (all 3 tsconfig targets pass). Tests: 4 test files, **204 tests passed** (96 AgentInbox component + 40 useAgentInbox hook + 17 agentInboxHelpers + 51 useMainKeyboardHandler), 100% pass rate. Grep confirmed no remaining `'Agent Inbox'` in user-facing expected text — only in code comments, describe blocks, and variable names.
