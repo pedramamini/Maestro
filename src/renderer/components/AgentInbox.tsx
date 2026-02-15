@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { List, type ListImperativeAPI } from 'react-window';
-import { X, CheckCircle } from 'lucide-react';
+import { X, CheckCircle, Edit3, ChevronDown, ChevronRight } from 'lucide-react';
 import type { Theme, Session, Group, SessionState } from '../types';
 import type { InboxItem, InboxFilterMode, InboxSortMode } from '../types/agent-inbox';
 import { STATUS_LABELS, STATUS_COLORS } from '../types/agent-inbox';
@@ -128,7 +128,7 @@ function InboxItemCardContent({
 		>
 			{/* Card content */}
 			<div style={{ padding: '8px 12px', display: 'flex', flexDirection: 'column', justifyContent: 'center', gap: 6, flex: 1 }}>
-				{/* Row 1: group / session name + timestamp */}
+				{/* Row 1: group / (agent_icon) session name / (pencil) tab name + timestamp */}
 				<div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
 					{item.groupName && (
 						<>
@@ -138,6 +138,13 @@ function InboxItemCardContent({
 							<span style={{ fontSize: 12, color: theme.colors.textDim }}>/</span>
 						</>
 					)}
+					<span
+						title={item.toolType}
+						aria-label={`Agent: ${item.toolType}`}
+						style={{ fontSize: 14, flexShrink: 0 }}
+					>
+						{getAgentIcon(item.toolType)}
+					</span>
 					<span
 						style={{
 							fontSize: 14,
@@ -152,7 +159,9 @@ function InboxItemCardContent({
 						{item.sessionName}
 						{item.tabName && (
 							<span style={{ fontWeight: 400, color: theme.colors.textDim }}>
-								{' / '}{item.tabName}
+								{' / '}
+								<Edit3 style={{ width: 10, height: 10, display: 'inline', verticalAlign: 'middle', marginRight: 2 }} />
+								{item.tabName}
 							</span>
 						)}
 					</span>
@@ -176,17 +185,6 @@ function InboxItemCardContent({
 
 				{/* Row 3: badges */}
 				<div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
-					<span
-						data-testid="agent-type-badge"
-						title={item.toolType}
-						aria-label={`Agent: ${item.toolType}`}
-						style={{
-							fontSize: 11,
-							lineHeight: 1,
-						}}
-					>
-						{getAgentIcon(item.toolType)}
-					</span>
 					{item.gitBranch && (
 						<span
 							data-testid="git-branch-badge"
