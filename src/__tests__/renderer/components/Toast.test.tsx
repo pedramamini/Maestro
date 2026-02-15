@@ -9,6 +9,7 @@
  * - Session navigation clicks
  * - Animation states
  * - Duration formatting
+ * - Memoization (React.memo wrapping)
  */
 
 import React from 'react';
@@ -370,6 +371,18 @@ describe('Toast', () => {
 
 			const { container } = render(<ToastContainer theme={mockTheme} />);
 			expect(container.querySelector('.h-1.rounded-b-lg')).not.toBeInTheDocument();
+		});
+	});
+
+	describe('memoization', () => {
+		it('ToastContainer is wrapped with React.memo', () => {
+			const memoType = ToastContainer as unknown as { $$typeof: symbol; type: { name: string } };
+			expect(memoType.$$typeof).toBe(Symbol.for('react.memo'));
+		});
+
+		it('ToastContainer preserves display name', () => {
+			const memoType = ToastContainer as unknown as { type: { name: string } };
+			expect(memoType.type.name).toMatch(/^ToastContainer/);
 		});
 	});
 });

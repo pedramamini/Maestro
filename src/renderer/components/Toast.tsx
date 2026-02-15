@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { memo, useEffect, useMemo, useState } from 'react';
 import type { Theme } from '../types';
 import { useToast, Toast as ToastType } from '../contexts/ToastContext';
 
@@ -26,7 +26,7 @@ function formatDuration(ms: number): string {
 	return parts.join(' ') || '0s';
 }
 
-function ToastItem({
+const ToastItem = memo(function ToastItem({
 	toast,
 	theme,
 	onRemove,
@@ -73,6 +73,34 @@ function ToastItem({
 	// Check if toast is clickable (has session navigation)
 	const isClickable = toast.sessionId && onSessionClick;
 
+	// Memoize type color to avoid recalculating on every render
+	const typeColor = useMemo(() => {
+		switch (toast.type) {
+			case 'success':
+				return theme.colors.success;
+			case 'error':
+				return theme.colors.error;
+			case 'warning':
+				return theme.colors.warning;
+			default:
+				return theme.colors.accent;
+		}
+	}, [toast.type, theme.colors.success, theme.colors.error, theme.colors.warning, theme.colors.accent]);
+
+	// Memoize icon style to prevent new object on every render
+	const iconStyle = useMemo(() => ({
+		color: typeColor,
+		backgroundColor: `${typeColor}20`,
+	} as React.CSSProperties), [typeColor]);
+
+	// Memoize container style to prevent new object on every render
+	const containerStyle = useMemo(() => ({
+		backgroundColor: theme.colors.bgSidebar,
+		border: `1px solid ${theme.colors.border}`,
+		minWidth: '320px',
+		maxWidth: '400px',
+	} as React.CSSProperties), [theme.colors.bgSidebar, theme.colors.border]);
+
 	// Icon based on type
 	const getIcon = () => {
 		switch (toast.type) {
@@ -118,19 +146,6 @@ function ToastItem({
 		}
 	};
 
-	const getTypeColor = () => {
-		switch (toast.type) {
-			case 'success':
-				return theme.colors.success;
-			case 'error':
-				return theme.colors.error;
-			case 'warning':
-				return theme.colors.warning;
-			default:
-				return theme.colors.accent;
-		}
-	};
-
 	return (
 		<div
 			className="relative overflow-hidden transition-all duration-300 ease-out"
@@ -146,21 +161,13 @@ function ToastItem({
 		>
 			<div
 				className={`flex items-start gap-3 p-4 rounded-lg shadow-lg backdrop-blur-sm ${isClickable ? 'cursor-pointer hover:brightness-110' : ''}`}
-				style={{
-					backgroundColor: theme.colors.bgSidebar,
-					border: `1px solid ${theme.colors.border}`,
-					minWidth: '320px',
-					maxWidth: '400px',
-				}}
+				style={containerStyle}
 				onClick={isClickable ? handleToastClick : undefined}
 			>
 				{/* Icon */}
 				<div
 					className="flex-shrink-0 p-1 rounded"
-					style={{
-						color: getTypeColor(),
-						backgroundColor: `${getTypeColor()}20`,
-					}}
+					style={iconStyle}
 				>
 					{getIcon()}
 				</div>
@@ -281,7 +288,7 @@ function ToastItem({
 				<div
 					className="absolute bottom-0 left-0 h-1 rounded-b-lg transition-all ease-linear"
 					style={{
-						backgroundColor: getTypeColor(),
+						backgroundColor: typeColor,
 						width: '100%',
 						animation: `shrink ${toast.duration}ms linear forwards`,
 					}}
@@ -296,9 +303,9 @@ function ToastItem({
       `}</style>
 		</div>
 	);
-}
+});
 
-export function ToastContainer({ theme, onSessionClick }: ToastContainerProps) {
+export const ToastContainer = memo(function ToastContainer({ theme, onSessionClick }: ToastContainerProps) {
 	const { toasts, removeToast } = useToast();
 
 	if (toasts.length === 0) return null;
@@ -321,4 +328,4 @@ export function ToastContainer({ theme, onSessionClick }: ToastContainerProps) {
 			</div>
 		</div>
 	);
-}
+});
