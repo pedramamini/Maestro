@@ -271,6 +271,9 @@ function MaestroConsoleInner() {
 		// Process Monitor
 		processMonitorOpen,
 		setProcessMonitorOpen,
+		// Agent Inbox
+		agentInboxOpen,
+		setAgentInboxOpen,
 		// Usage Dashboard
 		usageDashboardOpen,
 		setUsageDashboardOpen,
@@ -909,6 +912,7 @@ function MaestroConsoleInner() {
 	const handleCloseAboutModal = useCallback(() => setAboutModalOpen(false), []);
 	const handleCloseUpdateCheckModal = useCallback(() => setUpdateCheckModalOpen(false), []);
 	const handleCloseProcessMonitor = useCallback(() => setProcessMonitorOpen(false), []);
+	const handleCloseAgentInbox = useCallback(() => setAgentInboxOpen(false), []);
 	const handleCloseLogViewer = useCallback(() => setLogViewerOpen(false), []);
 
 	// Confirm modal close handler
@@ -10683,7 +10687,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setAgentSessionsOpen,
 		setLogViewerOpen,
 		setProcessMonitorOpen,
+		setAgentInboxOpen,
 		setUsageDashboardOpen,
+		addToast,
 		logsEndRef,
 		inputRef,
 		terminalOutputRef,
@@ -11419,6 +11425,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setUpdateCheckModalOpen,
 		setLogViewerOpen,
 		setProcessMonitorOpen,
+		setAgentInboxOpen,
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
@@ -11703,6 +11710,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onCloseProcessMonitor={handleCloseProcessMonitor}
 					onNavigateToSession={handleProcessMonitorNavigateToSession}
 					onNavigateToGroupChat={handleProcessMonitorNavigateToGroupChat}
+					agentInboxOpen={agentInboxOpen}
+					onCloseAgentInbox={handleCloseAgentInbox}
 					usageDashboardOpen={usageDashboardOpen}
 					onCloseUsageDashboard={() => setUsageDashboardOpen(false)}
 					defaultStatsTimeRange={defaultStatsTimeRange}
