@@ -541,6 +541,21 @@ describe('ExecutionQueueIndicator', () => {
 		});
 	});
 
+	describe('memoization', () => {
+		it('should be wrapped with React.memo', () => {
+			// React.memo wrapped components have $$typeof === Symbol.for('react.memo')
+			expect((ExecutionQueueIndicator as unknown as { $$typeof: symbol }).$$typeof).toBe(
+				Symbol.for('react.memo')
+			);
+		});
+
+		it('should preserve display name for debugging', () => {
+			// React.memo preserves the function name for DevTools
+			const memoType = ExecutionQueueIndicator as unknown as { type: { name: string } };
+			expect(memoType.type.name).toMatch(/^ExecutionQueueIndicator/);
+		});
+	});
+
 	describe('visual indicators', () => {
 		it('should render ListOrdered icon', () => {
 			const session = createSession({
