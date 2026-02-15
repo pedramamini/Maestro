@@ -15,7 +15,7 @@
  * @module components/SessionListItem
  */
 
-import React from 'react';
+import React, { memo, useMemo } from 'react';
 import {
 	Star,
 	Play,
@@ -85,7 +85,7 @@ export interface SessionListItemProps {
 /**
  * SessionListItem component for rendering a single session row
  */
-export function SessionListItem({
+export const SessionListItem = memo(function SessionListItem({
 	session,
 	index,
 	selectedIndex,
@@ -110,15 +110,22 @@ export function SessionListItem({
 	const isRenaming = renamingSessionId === session.sessionId;
 	const isActive = activeAgentSessionId === session.sessionId;
 
+	const containerStyle = useMemo(() => ({
+		backgroundColor: isSelected ? theme.colors.accent + '15' : 'transparent',
+		borderColor: theme.colors.border + '50',
+	}), [isSelected, theme.colors.accent, theme.colors.border]);
+
+	const starStyle = useMemo(() => ({
+		color: isStarred ? theme.colors.warning : theme.colors.textDim,
+		fill: isStarred ? theme.colors.warning : 'transparent',
+	}), [isStarred, theme.colors.warning, theme.colors.textDim]);
+
 	return (
 		<div
 			ref={isSelected ? (selectedItemRef as React.RefObject<HTMLDivElement>) : null}
 			onClick={() => onSessionClick(session)}
 			className="w-full text-left px-6 py-4 flex items-start gap-4 hover:bg-white/5 transition-colors border-b group cursor-pointer"
-			style={{
-				backgroundColor: isSelected ? theme.colors.accent + '15' : 'transparent',
-				borderColor: theme.colors.border + '50',
-			}}
+			style={containerStyle}
 		>
 			{/* Star button */}
 			<button
@@ -128,10 +135,7 @@ export function SessionListItem({
 			>
 				<Star
 					className="w-4 h-4"
-					style={{
-						color: isStarred ? theme.colors.warning : theme.colors.textDim,
-						fill: isStarred ? theme.colors.warning : 'transparent',
-					}}
+					style={starStyle}
 				/>
 			</button>
 
@@ -308,4 +312,4 @@ export function SessionListItem({
 			)}
 		</div>
 	);
-}
+});
