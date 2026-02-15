@@ -1634,6 +1634,27 @@ function SessionListInner(props: SessionListProps) {
 		return map;
 	}, [sessions, toggleBookmark]);
 
+	// PERF: Pre-compute group toggle/drop handlers as Maps for stable references in render loops
+	const toggleGroupHandlers = useMemo(() => {
+		const map = new Map<string, () => void>();
+		groups.forEach((g) => {
+			map.set(g.id, () => toggleGroup(g.id));
+		});
+		return map;
+	}, [groups, toggleGroup]);
+
+	const dropOnGroupHandlers = useMemo(() => {
+		const map = new Map<string, () => void>();
+		groups.forEach((g) => {
+			map.set(g.id, () => handleDropOnGroup(g.id));
+		});
+		return map;
+	}, [groups, handleDropOnGroup]);
+
+	// PERF: Stable callbacks for section expand (avoids new function refs in collapsed pill render loops)
+	const expandBookmarks = useCallback(() => setBookmarksCollapsed(false), [setBookmarksCollapsed]);
+	const expandUngrouped = useCallback(() => setUngroupedCollapsed(false), [setUngroupedCollapsed]);
+
 	// Pre-compute session jump numbers as a Map for O(1) lookups instead of O(n) findIndex per session
 	const sessionJumpNumberMap = useMemo(() => {
 		const map = new Map<string, string>();
@@ -2668,10 +2689,10 @@ function SessionListInner(props: SessionListProps) {
 								/* Collapsed Bookmarks Palette - uses subdivided pills for worktrees */
 								<div
 									className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
-									onClick={() => setBookmarksCollapsed(false)}
+									onClick={expandBookmarks}
 								>
 									{sortedBookmarkedParentSessions.map((s) =>
-										renderCollapsedPill(s, 'bookmark-collapsed', () => setBookmarksCollapsed(false))
+										renderCollapsedPill(s, 'bookmark-collapsed', expandBookmarks)
 									)}
 								</div>
 							)}
@@ -2685,9 +2706,9 @@ function SessionListInner(props: SessionListProps) {
 							<div key={group.id} className="mb-1">
 								<div
 									className="px-3 py-1.5 flex items-center justify-between cursor-pointer hover:bg-opacity-50 group"
-									onClick={() => toggleGroup(group.id)}
+									onClick={toggleGroupHandlers.get(group.id)}
 									onDragOver={handleDragOver}
-									onDrop={() => handleDropOnGroup(group.id)}
+									onDrop={dropOnGroupHandlers.get(group.id)}
 								>
 									<div
 										className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider flex-1"
@@ -2760,7 +2781,7 @@ function SessionListInner(props: SessionListProps) {
 											renderSessionWithWorktrees(session, 'group', {
 												keyPrefix: `group-${group.id}`,
 												groupId: group.id,
-												onDrop: () => handleDropOnGroup(group.id),
+												onDrop: dropOnGroupHandlers.get(group.id),
 											})
 										)}
 									</div>
@@ -2768,13 +2789,13 @@ function SessionListInner(props: SessionListProps) {
 									/* Collapsed Group Palette - uses subdivided pills for worktrees */
 									<div
 										className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
-										onClick={() => toggleGroup(group.id)}
+										onClick={toggleGroupHandlers.get(group.id)}
 									>
 										{groupSessions
 											.filter((s) => !s.parentSessionId)
 											.map((s) =>
-												renderCollapsedPill(s, `group-collapsed-${group.id}`, () =>
-													toggleGroup(group.id)
+												renderCollapsedPill(s, `group-collapsed-${group.id}`,
+													toggleGroupHandlers.get(group.id)!
 												)
 											)}
 									</div>
@@ -2852,12 +2873,10 @@ function SessionListInner(props: SessionListProps) {
 								/* Collapsed Ungrouped Palette - uses subdivided pills for worktrees */
 								<div
 									className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
-									onClick={() => setUngroupedCollapsed(false)}
+									onClick={expandUngrouped}
 								>
 									{sortedUngroupedParentSessions.map((s) =>
-										renderCollapsedPill(s, 'ungrouped-collapsed', () =>
-											setUngroupedCollapsed(false)
-										)
+										renderCollapsedPill(s, 'ungrouped-collapsed', expandUngrouped)
 									)}
 								</div>
 							)}
