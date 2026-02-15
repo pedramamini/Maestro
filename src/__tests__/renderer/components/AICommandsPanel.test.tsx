@@ -1343,6 +1343,190 @@ describe('AICommandsPanel', () => {
 		});
 	});
 
+	describe('Memoized styles', () => {
+		it('should apply memoized styles to command cards in the list', () => {
+			const commands = [
+				createMockCommand({ id: 'cmd-1', command: '/styled', description: 'Styled command' }),
+			];
+
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={commands}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			// Command card container should use cardContainer style
+			const commandCard = screen.getByText('/styled').closest('.rounded-lg');
+			expect(commandCard).toHaveStyle({
+				backgroundColor: mockTheme.colors.bgMain,
+				borderColor: mockTheme.colors.border,
+			});
+		});
+
+		it('should apply memoized accent style to command names in the loop', () => {
+			const commands = [
+				createMockCommand({ id: 'cmd-1', command: '/alpha' }),
+				createMockCommand({ id: 'cmd-2', command: '/beta' }),
+			];
+
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={commands}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			// Both command names should use the same memoized accent style
+			const alpha = screen.getByText('/alpha');
+			const beta = screen.getByText('/beta');
+			expect(alpha).toHaveStyle({ color: mockTheme.colors.accent });
+			expect(beta).toHaveStyle({ color: mockTheme.colors.accent });
+		});
+
+		it('should apply memoized builtInPill style to built-in badge', () => {
+			const commands = [
+				createMockCommand({ id: 'cmd-1', command: '/builtin', isBuiltIn: true }),
+			];
+
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={commands}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			const builtInBadge = screen.getByText('Built-in').closest('span');
+			expect(builtInBadge).toHaveStyle({
+				backgroundColor: mockTheme.colors.bgActivity,
+				color: mockTheme.colors.textDim,
+			});
+		});
+
+		it('should apply memoized promptDisplay style to expanded prompt', () => {
+			const commands = [
+				createMockCommand({ id: 'cmd-1', command: '/test', prompt: 'Test prompt here' }),
+			];
+
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={commands}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			expandCommand('/test');
+
+			const promptBlock = screen.getByText('Test prompt here');
+			expect(promptBlock).toHaveStyle({
+				backgroundColor: mockTheme.colors.bgActivity,
+				color: mockTheme.colors.textMain,
+			});
+		});
+
+		it('should apply memoized errorText style to delete button', () => {
+			const commands = [
+				createMockCommand({ id: 'cmd-1', command: '/deletable', isBuiltIn: false }),
+			];
+
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={commands}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			expandCommand('/deletable');
+
+			const deleteButton = screen.getByTitle('Delete command');
+			expect(deleteButton).toHaveStyle({ color: mockTheme.colors.error });
+		});
+
+		it('should apply memoized variableCode style to template variable codes', () => {
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={[]}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			// Expand template variables section
+			const toggleButton = screen.getByText('Template Variables').closest('button')!;
+			fireEvent.click(toggleButton);
+
+			const variableCode = screen.getByText('{{AGENT_NAME}}');
+			expect(variableCode).toHaveStyle({
+				backgroundColor: mockTheme.colors.bgActivity,
+				color: mockTheme.colors.accent,
+			});
+		});
+
+		it('should apply memoized createButton style to Create button', () => {
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={[]}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			fireEvent.click(screen.getByRole('button', { name: /Add Command/i }));
+
+			const createButton = screen.getByRole('button', { name: /Create/i });
+			expect(createButton).toHaveStyle({
+				backgroundColor: mockTheme.colors.success,
+				color: '#000000',
+			});
+		});
+
+		it('should apply memoized cancelButton style in create form', () => {
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={[]}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			fireEvent.click(screen.getByRole('button', { name: /Add Command/i }));
+
+			const cancelButton = screen.getByRole('button', { name: /Cancel/i });
+			expect(cancelButton).toHaveStyle({
+				backgroundColor: mockTheme.colors.bgActivity,
+				color: mockTheme.colors.textMain,
+			});
+		});
+
+		it('should apply memoized inputField style to edit form inputs', () => {
+			const commands = [
+				createMockCommand({ id: 'cmd-1', command: '/editable', description: 'Edit me' }),
+			];
+
+			render(
+				<AICommandsPanel
+					theme={mockTheme}
+					customAICommands={commands}
+					setCustomAICommands={mockSetCustomAICommands}
+				/>
+			);
+
+			expandCommand('/editable');
+			fireEvent.click(screen.getByTitle('Edit command'));
+
+			const commandInput = screen.getByDisplayValue('/editable');
+			expect(commandInput).toHaveStyle({
+				borderColor: mockTheme.colors.border,
+				color: mockTheme.colors.textMain,
+			});
+		});
+	});
+
 	describe('Template autocomplete integration', () => {
 		it('should render autocomplete dropdown in create form', () => {
 			render(
