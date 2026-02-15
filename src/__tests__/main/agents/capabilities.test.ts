@@ -57,11 +57,12 @@ describe('agent-capabilities', () => {
 			expect(DEFAULT_CAPABILITIES.supportsBatchMode).toBe(false);
 			expect(DEFAULT_CAPABILITIES.supportsStreaming).toBe(false);
 			expect(DEFAULT_CAPABILITIES.supportsResultMessages).toBe(false);
+			expect(DEFAULT_CAPABILITIES.imageResumeMode).toBeUndefined();
 		});
 
-		it('should be a conservative default (all false)', () => {
-			const allFalse = Object.values(DEFAULT_CAPABILITIES).every((v) => v === false);
-			expect(allFalse).toBe(true);
+		it('should be a conservative default (all false or undefined)', () => {
+			const allFalsy = Object.values(DEFAULT_CAPABILITIES).every((v) => v === false || v === undefined);
+			expect(allFalsy).toBe(true);
 		});
 	});
 
@@ -81,6 +82,7 @@ describe('agent-capabilities', () => {
 			expect(capabilities.supportsBatchMode).toBe(true);
 			expect(capabilities.supportsStreaming).toBe(true);
 			expect(capabilities.supportsResultMessages).toBe(true);
+			expect(capabilities.imageResumeMode).toBeUndefined();
 		});
 
 		it('should have capabilities for terminal', () => {
@@ -106,6 +108,7 @@ describe('agent-capabilities', () => {
 			expect(capabilities.supportsStreaming).toBe(true);
 			expect(capabilities.supportsSlashCommands).toBe(false);
 			expect(capabilities.supportsResultMessages).toBe(false);
+			expect(capabilities.imageResumeMode).toBe('prompt-embed');
 		});
 
 		it('should have capabilities for gemini-cli', () => {
@@ -260,6 +263,7 @@ describe('agent-capabilities', () => {
 				'supportsThinkingDisplay',
 				'supportsContextMerge',
 				'supportsContextExport',
+				'imageResumeMode',
 			];
 
 			const defaultKeys = Object.keys(DEFAULT_CAPABILITIES);

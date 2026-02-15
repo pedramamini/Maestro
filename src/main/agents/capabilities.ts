@@ -69,6 +69,11 @@ export interface AgentCapabilities {
 
 	/** Agent can export its context for transfer to other sessions/agents */
 	supportsContextExport: boolean;
+
+	/** How images should be handled on resume when -i flag is not available.
+	 * 'prompt-embed': Save images to temp files and embed file paths in the prompt text.
+	 * undefined: Use default image handling (or no special resume handling needed). */
+	imageResumeMode?: 'prompt-embed';
 }
 
 /**
@@ -95,6 +100,7 @@ export const DEFAULT_CAPABILITIES: AgentCapabilities = {
 	supportsThinkingDisplay: false,
 	supportsContextMerge: false,
 	supportsContextExport: false,
+	imageResumeMode: undefined,
 };
 
 /**
@@ -133,6 +139,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: true, // Emits streaming assistant messages
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
+		imageResumeMode: undefined,
 	},
 
 	/**
@@ -159,6 +166,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: false, // Terminal is not an AI agent
 		supportsContextMerge: false, // Terminal is not an AI agent
 		supportsContextExport: false, // Terminal has no AI context
+		imageResumeMode: undefined,
 	},
 
 	/**
@@ -188,6 +196,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: true, // Emits reasoning tokens (o3/o4-mini)
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
+		imageResumeMode: 'prompt-embed', // codex exec resume doesn't support -i; embed file paths in prompt text
 	},
 
 	/**
@@ -216,6 +225,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: false, // Not yet investigated
 		supportsContextMerge: false, // Not yet investigated - PLACEHOLDER
 		supportsContextExport: false, // Not yet investigated - PLACEHOLDER
+		imageResumeMode: undefined,
 	},
 
 	/**
@@ -244,6 +254,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: false, // Not yet investigated
 		supportsContextMerge: false, // Not yet investigated - PLACEHOLDER
 		supportsContextExport: false, // Not yet investigated - PLACEHOLDER
+		imageResumeMode: undefined,
 	},
 
 	/**
@@ -273,6 +284,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: true, // Emits streaming text chunks
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session storage supports context export
+		imageResumeMode: undefined,
 	},
 
 	/**
@@ -301,6 +313,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsThinkingDisplay: true, // Emits thinking content in messages - Verified
 		supportsContextMerge: true, // Can receive merged context via prompts
 		supportsContextExport: true, // Session files are exportable
+		imageResumeMode: undefined,
 	},
 };
 
@@ -323,5 +336,5 @@ export function getAgentCapabilities(agentId: string): AgentCapabilities {
  */
 export function hasCapability(agentId: string, capability: keyof AgentCapabilities): boolean {
 	const capabilities = getAgentCapabilities(agentId);
-	return capabilities[capability];
+	return !!capabilities[capability];
 }
