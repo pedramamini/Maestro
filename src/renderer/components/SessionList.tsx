@@ -1510,12 +1510,12 @@ function SessionListInner(props: SessionListProps) {
 	}, [sortedSessions]);
 
 	// Helper: Get worktree children for a parent session
-	const getWorktreeChildren = (parentId: string): Session[] => {
+	const getWorktreeChildren = useCallback((parentId: string): Session[] => {
 		return worktreeChildrenByParentId.get(parentId) || [];
-	};
+	}, [worktreeChildrenByParentId]);
 
 	// Helper component: Renders a collapsed session pill with subdivided parts for worktrees
-	const renderCollapsedPill = (session: Session, keyPrefix: string, _onExpand: () => void) => {
+	const renderCollapsedPill = useCallback((session: Session, keyPrefix: string, _onExpand: () => void) => {
 		const worktreeChildren = getWorktreeChildren(session.id);
 		const allSessions = [session, ...worktreeChildren];
 		const hasWorktrees = worktreeChildren.length > 0;
@@ -1587,7 +1587,7 @@ function SessionListInner(props: SessionListProps) {
 				})}
 			</div>
 		);
-	};
+	}, [getWorktreeChildren, activeBatchSessionIds, styles, theme, leftSidebarWidthState, tooltipPosition, setTooltipPosition, setActiveSessionId, getFileCount, contextWarningYellowThreshold, contextWarningRedThreshold]);
 
 	// PERF: Cached callback maps to prevent SessionItem re-renders
 	// These Maps store stable function references keyed by session/editing ID
@@ -1632,8 +1632,20 @@ function SessionListInner(props: SessionListProps) {
 		return map;
 	}, [sessions, toggleBookmark]);
 
+	// Pre-compute session jump numbers as a Map for O(1) lookups instead of O(n) findIndex per session
+	const sessionJumpNumberMap = useMemo(() => {
+		const map = new Map<string, string>();
+		if (!showSessionJumpNumbers) return map;
+		const limit = Math.min(visibleSessions.length, 10);
+		for (let i = 0; i < limit; i++) {
+			// Show 1-9 for positions 0-8, and 0 for position 9 (10th session)
+			map.set(visibleSessions[i].id, i === 9 ? '0' : String(i + 1));
+		}
+		return map;
+	}, [showSessionJumpNumbers, visibleSessions]);
+
 	// Helper component: Renders a session item with its worktree children (if any)
-	const renderSessionWithWorktrees = (
+	const renderSessionWithWorktrees = useCallback((
 		session: Session,
 		variant: 'bookmark' | 'group' | 'flat' | 'ungrouped',
 		options: {
@@ -1778,7 +1790,7 @@ function SessionListInner(props: SessionListProps) {
 		}
 
 		return <div key={`${options.keyPrefix}-${session.id}`}>{content}</div>;
-	};
+	}, [getWorktreeChildren, sortedSessionIndexById, activeFocus, selectedSidebarIndex, activeSessionId, activeGroupChatId, draggingSessionId, editingSessionId, leftSidebarOpen, getFileCount, activeBatchSessionIds, sessionJumpNumberMap, selectHandlers, dragStartHandlers, handleDragOver, handleDropOnUngrouped, contextMenuHandlers, finishRenameHandlers, toggleBookmarkHandlers, startRenamingSession, onToggleWorktreeExpanded, sortedWorktreeChildrenByParentId, styles, theme]);
 
 	// Consolidated session categorization and sorting - computed in a single pass
 	// This replaces 12+ chained useMemo calls with one comprehensive computation
@@ -1977,18 +1989,6 @@ function SessionListInner(props: SessionListProps) {
 			setBookmarksCollapsed(false);
 		}
 	}, [sessionFilter]);
-
-	// Pre-compute session jump numbers as a Map for O(1) lookups instead of O(n) findIndex per session
-	const sessionJumpNumberMap = useMemo(() => {
-		const map = new Map<string, string>();
-		if (!showSessionJumpNumbers) return map;
-		const limit = Math.min(visibleSessions.length, 10);
-		for (let i = 0; i < limit; i++) {
-			// Show 1-9 for positions 0-8, and 0 for position 9 (10th session)
-			map.set(visibleSessions[i].id, i === 9 ? '0' : String(i + 1));
-		}
-		return map;
-	}, [showSessionJumpNumbers, visibleSessions]);
 
 	return (
 		<div
