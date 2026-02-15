@@ -9,6 +9,7 @@ import type { AgentDetector } from '../agents';
 import type { SafeSendFn } from '../utils/safe-send';
 import type { StatsDB } from '../stats';
 import type { AccountRegistry } from '../accounts/account-registry';
+import type { AccountThrottleHandler } from '../accounts/account-throttle-handler';
 import type { GroupChat, GroupChatParticipant } from '../group-chat/group-chat-storage';
 import type { GroupChatMessage, GroupChatState } from '../../shared/group-chat-types';
 import type { ParticipantState } from '../ipc/handlers/groupChat';
@@ -146,6 +147,8 @@ export interface ProcessListenerDependencies {
 	getStatsDB: () => StatsDB;
 	/** Account registry getter (optional — only needed for account multiplexing) */
 	getAccountRegistry?: () => AccountRegistry | null;
+	/** Account throttle handler getter (optional — only needed for account multiplexing) */
+	getThrottleHandler?: () => AccountThrottleHandler | null;
 	/** Debug log function */
 	debugLog: (prefix: string, message: string, ...args: unknown[]) => void;
 	/** Regex patterns */

@@ -59,6 +59,7 @@ import {
 } from './ipc/handlers';
 import { initializeStatsDB, closeStatsDB, getStatsDB } from './stats';
 import { AccountRegistry } from './accounts/account-registry';
+import { AccountThrottleHandler } from './accounts/account-throttle-handler';
 import { getAccountStore } from './stores';
 import { groupChatEmitters } from './ipc/handlers/groupChat';
 import {
@@ -227,6 +228,7 @@ let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
 let accountRegistry: AccountRegistry | null = null;
+let accountThrottleHandler: AccountThrottleHandler | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -346,9 +348,12 @@ app.whenReady().then(async () => {
 		logger.warn('Continuing without stats - usage tracking will be unavailable', 'Startup');
 	}
 
-	// Initialize account registry for account multiplexing
+	// Initialize account registry and throttle handler for account multiplexing
 	try {
 		accountRegistry = new AccountRegistry(getAccountStore());
+		accountThrottleHandler = new AccountThrottleHandler(
+			accountRegistry, getStatsDB, safeSend, logger
+		);
 		logger.info('Account registry initialized', 'Startup');
 	} catch (error) {
 		logger.error(`Failed to initialize account registry: ${error}`, 'Startup');
@@ -701,6 +706,7 @@ function setupProcessListeners() {
 			},
 			getStatsDB,
 			getAccountRegistry: () => accountRegistry,
+			getThrottleHandler: () => accountThrottleHandler,
 			debugLog,
 			patterns: {
 				REGEX_MODERATOR_SESSION,
