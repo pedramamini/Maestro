@@ -21,6 +21,15 @@ vi.mock('lucide-react', () => ({
 			✓
 		</span>
 	),
+	Edit3: ({ style }: { style?: React.CSSProperties }) => (
+		<span data-testid="edit3-icon" style={style}>✎</span>
+	),
+	ChevronDown: ({ style }: { style?: React.CSSProperties }) => (
+		<span data-testid="chevron-down-icon" style={style}>▼</span>
+	),
+	ChevronRight: ({ style }: { style?: React.CSSProperties }) => (
+		<span data-testid="chevron-right-icon" style={style}>▶</span>
+	),
 }));
 
 // Mock layer stack context
@@ -1359,7 +1368,7 @@ describe('AgentInbox', () => {
 			expect(badge.style.backgroundColor).toBeTruthy();
 		});
 
-		it('card has no standalone emoji outside agent-type-badge', () => {
+		it('card has no standalone emoji outside agent icon in Row 1', () => {
 			const groups = [createGroup({ id: 'g1', name: 'Test Group' })];
 			const sessions = [
 				createInboxSession('s1', 't1', { groupId: 'g1' }),
@@ -1373,23 +1382,23 @@ describe('AgentInbox', () => {
 				/>
 			);
 			const option = container.querySelector('[role="option"]');
-			// Remove agent-type-badge content before checking for emojis
+			// Remove agent icon content (now in Row 1 with title attribute) before checking for emojis
 			const clone = option?.cloneNode(true) as HTMLElement;
-			const agentBadge = clone?.querySelector('[data-testid="agent-type-badge"]');
-			if (agentBadge) agentBadge.textContent = '';
+			const agentIcon = clone?.querySelector('[title="claude-code"]');
+			if (agentIcon) agentIcon.textContent = '';
 			const textContent = clone?.textContent ?? '';
-			// No emoji characters outside the agent badge
+			// No emoji characters outside the agent icon
 			const emojiRegex = /[\u{1F600}-\u{1F64F}\u{1F300}-\u{1F5FF}\u{1F680}-\u{1F6FF}\u{1F1E0}-\u{1F1FF}\u{2702}-\u{27B0}]/u;
 			expect(emojiRegex.test(textContent)).toBe(false);
 		});
 
-		it('renders agent icon badge with tooltip', () => {
+		it('renders agent icon in Row 1 with tooltip', () => {
 			const sessions = [createInboxSession('s1', 't1')];
-			render(<AgentInbox theme={theme} sessions={sessions} groups={[]} onClose={onClose} />);
-			const badge = screen.getByTestId('agent-type-badge');
-			expect(badge).toBeTruthy();
-			expect(badge.getAttribute('title')).toBe('claude-code');
-			expect(badge.getAttribute('aria-label')).toBe('Agent: claude-code');
+			const { container } = render(<AgentInbox theme={theme} sessions={sessions} groups={[]} onClose={onClose} />);
+			// Agent icon moved from Row 3 badge to Row 1, identified by title attribute
+			const agentIcon = container.querySelector('[title="claude-code"]');
+			expect(agentIcon).toBeTruthy();
+			expect(agentIcon!.getAttribute('aria-label')).toBe('Agent: claude-code');
 		});
 
 		it('renders tab name after session name when tabName is present', () => {
