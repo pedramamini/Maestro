@@ -80,3 +80,35 @@ related:
 - JSDOM converts 8-digit hex colors (e.g., `#bd93f920`) to `rgba()` format — assertions use the normalized form
 - Both tests exercise the inline `onMouseEnter`/`onMouseLeave` handlers on lines 637–641
 - All 19,340 tests pass with zero regressions
+
+---
+
+## Entry 3: Candidate 1 — `setAgentInboxOpen` in modalStore
+
+| Field | Value |
+|-------|-------|
+| **Test File** | `src/__tests__/renderer/stores/modalStore.test.ts` |
+| **Test Cases Added** | 2 |
+| **Suite Total** | 66 → 68 tests |
+| **Full Suite** | 19,340 → 19,342 tests |
+| **Coverage Before** | ~95.5% (Agent Inbox overall, estimated) |
+| **Coverage After** | ~96% (estimated, +0.5% gain) |
+| **Gain** | +0.5% (modalStore.ts lines 527–529) |
+
+### Test Cases
+
+1. **`opens the agentInbox modal when called with true`**
+   - Calls `getModalActions().setAgentInboxOpen(true)`
+   - Asserts `isOpen('agentInbox')` returns `true`
+   - Verifies the bridge between keyboard shortcut and modal rendering works
+
+2. **`closes the agentInbox modal when called with false`**
+   - Calls `setAgentInboxOpen(true)` then `setAgentInboxOpen(false)`
+   - Asserts modal opens then closes correctly
+   - Confirms the close path properly delegates to `closeModal('agentInbox')`
+
+### Notes
+
+- `setAgentInboxOpen` is defined in `getModalActions()` (not directly on the store), so tests access it via the `getModalActions()` pattern consistent with existing compatibility layer tests
+- This is the last PENDING candidate — all 3 auto-implement candidates are now IMPLEMENTED
+- All 19,342 tests pass with zero regressions

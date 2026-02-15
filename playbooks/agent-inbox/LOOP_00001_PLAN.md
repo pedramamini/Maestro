@@ -23,8 +23,8 @@ related:
 | Metric | Value |
 |--------|-------|
 | **Total Candidates** | 6 |
-| **Auto-Implement (PENDING)** | 1 |
-| **Implemented** | 2 |
+| **Auto-Implement (PENDING)** | 0 |
+| **Implemented** | 3 |
 | **Manual Review (PENDING - MANUAL REVIEW)** | 0 |
 | **Won't Do** | 3 |
 | **Current Coverage (Agent Inbox Overall)** | ~93% |
@@ -42,7 +42,7 @@ related:
 
 | Field | Value |
 |-------|-------|
-| **Status** | `PENDING` |
+| **Status** | `IMPLEMENTED` |
 | **File** | `src/renderer/stores/modalStore.ts` (lines 527–529) |
 | **Importance** | **HIGH** — Bridge between keyboard shortcut and modal rendering; misspelled modal type string = broken inbox |
 | **Testability** | **EASY** — Pure store action, no mocking needed, clear input/output |
