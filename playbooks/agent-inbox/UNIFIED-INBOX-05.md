@@ -22,16 +22,7 @@ This phase writes comprehensive tests including edge cases from the blind spot r
   6. Maps group info correctly (name) from `groupId`
   7. Handles ungrouped sessions (no `groupId`)
 
-  **Null/corrupted data edge cases (from blind spot CRITICAL #2):**
-  8. Session with `null` sessionId → should be skipped entirely
-  9. Session with `undefined` gitBranch → InboxItem.gitBranch should be `undefined`
-  10. Tab with empty `logs` array → lastMessage should be `"No messages yet"`
-  11. Tab with `undefined` logs → lastMessage should be `"No messages yet"`
-  12. Timestamp of `0` → should be replaced with `Date.now()`
-  13. Timestamp of `NaN` → should be replaced with `Date.now()`
-  14. Timestamp of negative number → should be replaced with `Date.now()`
-  15. `contextUsage` of `NaN` → should be `undefined`
-  16. `session.aiTabs` is `undefined` → should not crash, return empty
+  **Null/corrupted data edge cases (from blind spot CRITICAL #2):** 8. Session with `null` sessionId → should be skipped entirely 9. Session with `undefined` gitBranch → InboxItem.gitBranch should be `undefined` 10. Tab with empty `logs` array → lastMessage should be `"No messages yet"` 11. Tab with `undefined` logs → lastMessage should be `"No messages yet"` 12. Timestamp of `0` → should be replaced with `Date.now()` 13. Timestamp of `NaN` → should be replaced with `Date.now()` 14. Timestamp of negative number → should be replaced with `Date.now()` 15. `contextUsage` of `NaN` → should be `undefined` 16. `session.aiTabs` is `undefined` → should not crash, return empty
 
   Mock session/group data with realistic structures based on `src/renderer/types/index.ts`.
 
@@ -53,13 +44,7 @@ This phase writes comprehensive tests including edge cases from the blind spot r
   8. Clicking an InboxItemCard calls `onNavigateToSession` with correct args
   9. Empty state: renders correct message when no items match filter
 
-  **Accessibility tests (from blind spot CRITICAL #5):**
-  10. Modal root has `role="dialog"` and `aria-label="Agent Inbox"`
-  11. List container has `role="listbox"`
-  12. Each card has `role="option"` and `aria-selected`
-  13. Badge has `aria-live="polite"`
-  14. Focus returns to trigger element on modal close
-  15. Sort/filter controls have `aria-label` and segments have `aria-pressed`
+  **Accessibility tests (from blind spot CRITICAL #5):** 10. Modal root has `role="dialog"` and `aria-label="Agent Inbox"` 11. List container has `role="listbox"` 12. Each card has `role="option"` and `aria-selected` 13. Badge has `aria-live="polite"` 14. Focus returns to trigger element on modal close 15. Sort/filter controls have `aria-label` and segments have `aria-pressed`
 
 ---
 
@@ -79,23 +64,16 @@ This phase writes comprehensive tests including edge cases from the blind spot r
   8. Returns `'—'` for negative timestamp
   9. Returns `'just now'` for future timestamp (clock skew)
 
-  **Summary generation tests:**
-  10. `waiting_input` state → prefixed with `"Waiting: "`
-  11. AI message ending with `?` → shown as question
-  12. AI statement → prefixed with `"Done: "`
-  13. Empty logs → `"No activity yet"`
-  14. Summary truncated at 90 chars with `"..."`
+  **Summary generation tests:** 10. `waiting_input` state → prefixed with `"Waiting: "` 11. AI message ending with `?` → shown as question 12. AI statement → prefixed with `"Done: "` 13. Empty logs → `"No activity yet"` 14. Summary truncated at 90 chars with `"..."`
 
-  **Context bar color tests:**
-  15. 0-60% → returns green/success color key
-  16. 60-80% → returns orange/warning color key (NOT red)
-  17. 80-100% → returns red/error color key
+  **Context bar color tests:** 15. 0-60% → returns green/success color key 16. 60-80% → returns orange/warning color key (NOT red) 17. 80-100% → returns red/error color key
 
 ---
 
 ## Full Suite Verification
 
-- [ ] **Run the full test suite, lint, and build.** Execute sequentially:
+- [x] **Run the full test suite, lint, and build.** Execute sequentially:
+  <!-- MAESTRO: All three steps pass clean. Tests: 19,331 passed (452 test files, 0 failures). Lint: tsc across all 3 configs — zero errors. Build: all 6 build steps succeed (prompts, main, preload, renderer, web, cli). -->
   ```bash
   cd ~/Documents/Vibework/Maestro && \
   npm test -- --run && \
@@ -108,7 +86,9 @@ This phase writes comprehensive tests including edge cases from the blind spot r
 
 ## Commit
 
-- [ ] **Commit all changes on the feature branch.** Stage all new and modified files:
+- [x] **Commit all changes on the feature branch.** Stage all new and modified files:
+  <!-- MAESTRO: All Agent Inbox source files were already committed incrementally during Phases 01–04 (types, component, hook, modal integration, keyboard handler, tests). No uncommitted changes remain. git diff HEAD against all listed files returns empty. Commit history: 15+ commits on feature/unified-inbox covering the full implementation. -->
+
   ```bash
   cd ~/Documents/Vibework/Maestro && \
   git add \
@@ -131,4 +111,5 @@ This phase writes comprehensive tests including edge cases from the blind spot r
   - Focus trap with return-to-trigger on close
   - Comprehensive tests including edge cases and accessibility"
   ```
+
   Do NOT push to remote — local feature branch only.
