@@ -71,6 +71,15 @@ setInterval(() => {
 	}
 }, IMAGE_CACHE_TTL);
 
+// Pre-compiled regex patterns (avoid re-compilation on every call)
+const OPEN_TASK_REGEX = /^[\s]*[-*]\s*\[\s*\]/gm;
+const CLOSED_TASK_REGEX = /^[\s]*[-*]\s*\[[xX]\]/gm;
+const CODE_FENCE_REGEX = /^(`{3,}|~{3,})/;
+const ATX_HEADING_REGEX = /^(#{1,6})\s+(.+)$/;
+const HIGHLIGHT_REGEX = /==([^=]+)==/g;
+const LANGUAGE_CLASS_REGEX = /language-(\w+)/;
+const REGEX_ESCAPE_PATTERN = /[.*+?^${}()|[\]\\]/g;
+
 interface FileStats {
 	size: number;
 	createdAt: string;
@@ -289,8 +298,8 @@ const formatDateTime = (isoString: string): string => {
 // Count markdown tasks (checkboxes)
 const countMarkdownTasks = (content: string): { open: number; closed: number } => {
 	// Match markdown checkboxes: - [ ] or - [x] (also * [ ] and * [x])
-	const openMatches = content.match(/^[\s]*[-*]\s*\[\s*\]/gm);
-	const closedMatches = content.match(/^[\s]*[-*]\s*\[[xX]\]/gm);
+	const openMatches = content.match(OPEN_TASK_REGEX);
+	const closedMatches = content.match(CLOSED_TASK_REGEX);
 	return {
 		open: openMatches?.length || 0,
 		closed: closedMatches?.length || 0,
@@ -313,7 +322,7 @@ const extractHeadings = (content: string): TocEntry[] => {
 
 	for (const line of lines) {
 		// Track code fence boundaries (``` or ~~~, optionally with language specifier)
-		if (/^(`{3,}|~{3,})/.test(line)) {
+		if (CODE_FENCE_REGEX.test(line)) {
 			inCodeFence = !inCodeFence;
 			continue;
 		}
@@ -324,7 +333,7 @@ const extractHeadings = (content: string): TocEntry[] => {
 		}
 
 		// Match ATX-style headings (# H1, ## H2, etc.)
-		const match = line.match(/^(#{1,6})\s+(.+)$/);
+		const match = line.match(ATX_HEADING_REGEX);
 		if (match) {
 			const level = match[1].length;
 			const text = match[2].trim();
@@ -571,14 +580,15 @@ function remarkHighlight() {
 	return (tree: any) => {
 		visit(tree, 'text', (node: any, index: number | null | undefined, parent: any) => {
 			const text = node.value;
-			const regex = /==([^=]+)==/g;
 
-			if (!regex.test(text)) return;
+			if (!HIGHLIGHT_REGEX.test(text)) return;
+			// Reset lastIndex since HIGHLIGHT_REGEX has the global flag
+			HIGHLIGHT_REGEX.lastIndex = 0;
 			if (index === null || index === undefined || !parent) return;
 
 			const parts: any[] = [];
 			let lastIndex = 0;
-			const matches = text.matchAll(/==([^=]+)==/g);
+			const matches = text.matchAll(HIGHLIGHT_REGEX);
 
 			for (const match of matches) {
 				const matchIndex = match.index!;
@@ -814,6 +824,24 @@ export const FilePreview = React.memo(
 			return extractHeadings(file.content);
 		}, [isMarkdown, file?.content]);
 
+		// Memoize search regex to avoid recompiling on every content change
+		const searchRegex = useMemo(() => {
+			const trimmed = searchQuery.trim();
+			if (!trimmed) return null;
+			const escaped = trimmed.replace(REGEX_ESCAPE_PATTERN, '\\$&');
+			return new RegExp(escaped, 'gi');
+		}, [searchQuery]);
+
+		// Memoize formatted dates to avoid re-formatting on every render
+		const formattedModifiedAt = useMemo(
+			() => (fileStats?.modifiedAt ? formatDateTime(fileStats.modifiedAt) : null),
+			[fileStats?.modifiedAt]
+		);
+		const formattedCreatedAt = useMemo(
+			() => (fileStats?.createdAt ? formatDateTime(fileStats.createdAt) : null),
+			[fileStats?.createdAt]
+		);
+
 		const scrollMarkdownToBoundary = useCallback((direction: 'top' | 'bottom') => {
 			// Use contentRef which is the actual scrollable container
 			const container = contentRef.current;
@@ -903,7 +931,7 @@ export const FilePreview = React.memo(
 
 					if (codeElement?.props) {
 						const { className, children: codeChildren } = codeElement.props;
-						const match = (className || '').match(/language-(\w+)/);
+						const match = (className || '').match(LANGUAGE_CLASS_REGEX);
 						const lang = match ? match[1] : 'text';
 						const codeContent = String(codeChildren).replace(/\n$/, '');
 
@@ -1244,7 +1272,7 @@ export const FilePreview = React.memo(
 
 		// Highlight search matches in syntax-highlighted code
 		useEffect(() => {
-			if (!searchQuery.trim() || !codeContainerRef.current || isMarkdown || isImage || isCsv) {
+			if (!searchRegex || !codeContainerRef.current || isMarkdown || isImage || isCsv) {
 				setTotalMatches(0);
 				setCurrentMatchIndex(0);
 				matchElementsRef.current = [];
@@ -1261,21 +1289,20 @@ export const FilePreview = React.memo(
 				textNodes.push(node as Text);
 			}
 
-			// Escape regex special characters
-			const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			const regex = new RegExp(escapedQuery, 'gi');
 			const matchElements: HTMLElement[] = [];
 
 			// Highlight matches using safe DOM methods
 			textNodes.forEach((textNode) => {
 				const text = textNode.textContent || '';
-				const matches = text.match(regex);
+				searchRegex.lastIndex = 0;
+				const matches = text.match(searchRegex);
 
 				if (matches) {
 					const fragment = document.createDocumentFragment();
 					let lastIndex = 0;
 
-					text.replace(regex, (match, offset) => {
+					searchRegex.lastIndex = 0;
+					text.replace(searchRegex, (match, offset) => {
 						// Add text before match
 						if (offset > lastIndex) {
 							fragment.appendChild(document.createTextNode(text.substring(lastIndex, offset)));
@@ -1328,11 +1355,11 @@ export const FilePreview = React.memo(
 				});
 				matchElementsRef.current = [];
 			};
-		}, [searchQuery, file?.content, isMarkdown, isImage, isCsv, theme.colors.accent]);
+		}, [searchRegex, file?.content, isMarkdown, isImage, isCsv, theme.colors.accent]);
 
 		// Search matches in markdown preview mode - use CSS Custom Highlight API
 		useEffect(() => {
-			if (!isMarkdown || markdownEditMode || !searchQuery.trim() || !markdownContainerRef.current) {
+			if (!isMarkdown || markdownEditMode || !searchRegex || !markdownContainerRef.current) {
 				if (isMarkdown && !markdownEditMode) {
 					setTotalMatches(0);
 					setCurrentMatchIndex(0);
@@ -1347,8 +1374,6 @@ export const FilePreview = React.memo(
 			}
 
 			const container = markdownContainerRef.current;
-			const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			const searchRegex = new RegExp(escapedQuery, 'gi');
 
 			// Check if CSS Custom Highlight API is available
 			if ('highlights' in CSS) {
@@ -1360,8 +1385,8 @@ export const FilePreview = React.memo(
 				while ((textNode = walker.nextNode())) {
 					const text = textNode.textContent || '';
 					let match;
-					const localRegex = new RegExp(escapedQuery, 'gi');
-					while ((match = localRegex.exec(text)) !== null) {
+					searchRegex.lastIndex = 0;
+					while ((match = searchRegex.exec(text)) !== null) {
 						const range = document.createRange();
 						range.setStart(textNode, match.index);
 						range.setEnd(textNode, match.index + match[0].length);
@@ -1413,6 +1438,7 @@ export const FilePreview = React.memo(
 				};
 			} else {
 				// Fallback: count matches and scroll to location (no highlighting)
+				searchRegex.lastIndex = 0;
 				const matches = file?.content?.match(searchRegex);
 				const count = matches ? matches.length : 0;
 				setTotalMatches(count);
@@ -1425,6 +1451,7 @@ export const FilePreview = React.memo(
 					let textNode;
 					while ((textNode = walker.nextNode())) {
 						const text = textNode.textContent || '';
+						searchRegex.lastIndex = 0;
 						const nodeMatches = text.match(searchRegex);
 						if (nodeMatches) {
 							for (const _ of nodeMatches) {
@@ -1444,7 +1471,7 @@ export const FilePreview = React.memo(
 
 			matchElementsRef.current = [];
 		}, [
-			searchQuery,
+			searchRegex,
 			file?.content,
 			isMarkdown,
 			markdownEditMode,
@@ -1549,7 +1576,7 @@ export const FilePreview = React.memo(
 		// Handle search in edit mode - count matches and update state
 		// Note: We separate counting from selection to avoid stealing focus while typing
 		useEffect(() => {
-			if (!isEditableText || !markdownEditMode || !searchQuery.trim() || !textareaRef.current) {
+			if (!isEditableText || !markdownEditMode || !searchRegex || !textareaRef.current) {
 				if (isEditableText && markdownEditMode) {
 					setTotalMatches(0);
 					setCurrentMatchIndex(0);
@@ -1558,13 +1585,12 @@ export const FilePreview = React.memo(
 			}
 
 			const content = editContent;
-			const escapedQuery = searchQuery.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-			const regex = new RegExp(escapedQuery, 'gi');
+			searchRegex.lastIndex = 0;
 
 			// Find all matches and their positions
 			const matches: { start: number; end: number }[] = [];
 			let matchResult;
-			while ((matchResult = regex.exec(content)) !== null) {
+			while ((matchResult = searchRegex.exec(content)) !== null) {
 				matches.push({ start: matchResult.index, end: matchResult.index + matchResult[0].length });
 			}
 
@@ -1607,7 +1633,7 @@ export const FilePreview = React.memo(
 					textarea.scrollTop = Math.max(0, targetScroll);
 				}
 			}
-		}, [searchQuery, currentMatchIndex, isEditableText, markdownEditMode, editContent]);
+		}, [searchRegex, currentMatchIndex, isEditableText, markdownEditMode, editContent]);
 
 		// Helper to check if a shortcut matches
 		const isShortcut = (e: React.KeyboardEvent, shortcutId: string) => {
@@ -1930,13 +1956,13 @@ export const FilePreview = React.memo(
 										<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
 											<span className="opacity-60">Modified:</span>{' '}
 											<span style={{ color: theme.colors.textMain }}>
-												{formatDateTime(fileStats.modifiedAt)}
+												{formattedModifiedAt}
 											</span>
 										</div>
 										<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
 											<span className="opacity-60">Created:</span>{' '}
 											<span style={{ color: theme.colors.textMain }}>
-												{formatDateTime(fileStats.createdAt)}
+												{formattedCreatedAt}
 											</span>
 										</div>
 									</>
