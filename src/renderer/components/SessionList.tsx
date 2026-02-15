@@ -439,6 +439,7 @@ interface HamburgerMenuContentProps {
 	setSettingsTab: (tab: SettingsTab) => void;
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
+	setAgentInboxOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
 	setSymphonyModalOpen: (open: boolean) => void;
 	setDirectorNotesOpen: (open: boolean) => void;
@@ -459,6 +460,7 @@ function HamburgerMenuContent({
 	setSettingsTab,
 	setLogViewerOpen,
 	setProcessMonitorOpen,
+	setAgentInboxOpen,
 	setUsageDashboardOpen,
 	setSymphonyModalOpen,
 	setDirectorNotesOpen,
@@ -1076,6 +1078,7 @@ interface SessionListProps {
 	setUpdateCheckModalOpen: (open: boolean) => void;
 	setLogViewerOpen: (open: boolean) => void;
 	setProcessMonitorOpen: (open: boolean) => void;
+	setAgentInboxOpen: (open: boolean) => void;
 	setUsageDashboardOpen: (open: boolean) => void;
 	setSymphonyModalOpen: (open: boolean) => void;
 	setDirectorNotesOpen: (open: boolean) => void;
@@ -1200,6 +1203,7 @@ function SessionListInner(props: SessionListProps) {
 		setUpdateCheckModalOpen,
 		setLogViewerOpen,
 		setProcessMonitorOpen,
+		setAgentInboxOpen,
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
@@ -2491,6 +2495,7 @@ function SessionListInner(props: SessionListProps) {
 										setSettingsTab={setSettingsTab}
 										setLogViewerOpen={setLogViewerOpen}
 										setProcessMonitorOpen={setProcessMonitorOpen}
+										setAgentInboxOpen={setAgentInboxOpen}
 										setUsageDashboardOpen={setUsageDashboardOpen}
 										setSymphonyModalOpen={setSymphonyModalOpen}
 										setDirectorNotesOpen={setDirectorNotesOpen}
@@ -2533,6 +2538,7 @@ function SessionListInner(props: SessionListProps) {
 									setSettingsTab={setSettingsTab}
 									setLogViewerOpen={setLogViewerOpen}
 									setProcessMonitorOpen={setProcessMonitorOpen}
+									setAgentInboxOpen={setAgentInboxOpen}
 									setUsageDashboardOpen={setUsageDashboardOpen}
 									setSymphonyModalOpen={setSymphonyModalOpen}
 									setDirectorNotesOpen={setDirectorNotesOpen}
