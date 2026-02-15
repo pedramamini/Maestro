@@ -77,7 +77,7 @@ function resolveStatusColor(state: SessionState, theme: Theme): string {
 // ============================================================================
 function resolveContextUsageColor(percentage: number, theme: Theme): string {
 	if (percentage >= 80) return theme.colors.error;
-	if (percentage >= 60) return '#f59e0b'; // orange warning — NOT red, accessibility decision
+	if (percentage >= 60) return theme.colors.warning;
 	return theme.colors.success;
 }
 
@@ -573,7 +573,7 @@ export default function AgentInbox({
 
 	return (
 		<div
-			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999] animate-in fade-in duration-100"
+			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999] animate-in fade-in duration-150"
 			onClick={handleClose}
 		>
 			<div

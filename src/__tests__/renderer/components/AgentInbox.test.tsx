@@ -1411,7 +1411,7 @@ describe('AgentInbox', () => {
 			expect(fill.style.width).toBe('30%');
 		});
 
-		it('context usage bar uses orange color for 60-79%', () => {
+		it('context usage bar uses theme warning color for 60-79%', () => {
 			const sessions = [
 				createInboxSession('s1', 't1', { contextUsage: 65 }),
 			];
@@ -1425,8 +1425,8 @@ describe('AgentInbox', () => {
 			);
 			const bar = screen.getByTestId('context-usage-bar');
 			const fill = bar.firstElementChild as HTMLElement;
-			// JSDOM converts hex to rgb — #f59e0b → rgb(245, 158, 11)
-			expect(fill.style.backgroundColor).toBe('rgb(245, 158, 11)');
+			// JSDOM converts hex to rgb — theme.colors.warning #f1fa8c → rgb(241, 250, 140)
+			expect(fill.style.backgroundColor).toBe('rgb(241, 250, 140)');
 			expect(fill.style.width).toBe('65%');
 		});
 
@@ -1462,8 +1462,8 @@ describe('AgentInbox', () => {
 				/>
 			);
 			const text = screen.getByTestId('context-usage-text');
-			// JSDOM converts hex to rgb — #f59e0b (orange) → rgb(245, 158, 11)
-			expect(text.style.color).toBe('rgb(245, 158, 11)');
+			// JSDOM converts hex to rgb — theme.colors.warning #f1fa8c → rgb(241, 250, 140)
+			expect(text.style.color).toBe('rgb(241, 250, 140)');
 		});
 
 		it('shows placeholder "Context: \u2014" when contextUsage is undefined', () => {
@@ -1619,6 +1619,50 @@ describe('AgentInbox', () => {
 			expect(screen.getByText('Context: \u2014')).toBeTruthy();
 		});
 
+		it('card row wrapper applies 12px total vertical gap (6px top + 6px bottom padding)', () => {
+			const sessions = [createInboxSession('s1', 't1')];
+			const { container } = render(
+				<AgentInbox
+					theme={theme}
+					sessions={sessions}
+					groups={[]}
+					onClose={onClose}
+				/>
+			);
+			// The row wrapper wraps each card with padding for spacing
+			const option = screen.getByRole('option');
+			const rowWrapper = option.parentElement!;
+			expect(rowWrapper.style.paddingTop).toBe('6px');
+			expect(rowWrapper.style.paddingBottom).toBe('6px');
+			// 6 + 6 = 12px gap between cards
+		});
+
+		it('context usage bar uses theme.colors.warning (not hardcoded hex) for 60-79%', () => {
+			// Verifies the warning color comes from theme, not a hardcoded value
+			const customTheme = {
+				...theme,
+				colors: {
+					...theme.colors,
+					warning: '#ff8800', // custom warning color
+				},
+			};
+			const sessions = [
+				createInboxSession('s1', 't1', { contextUsage: 70 }),
+			];
+			render(
+				<AgentInbox
+					theme={customTheme}
+					sessions={sessions}
+					groups={[]}
+					onClose={onClose}
+				/>
+			);
+			const bar = screen.getByTestId('context-usage-bar');
+			const fill = bar.firstElementChild as HTMLElement;
+			// #ff8800 → rgb(255, 136, 0) — proves it reads from theme, not hardcoded
+			expect(fill.style.backgroundColor).toBe('rgb(255, 136, 0)');
+		});
+
 		it('selected card has tabIndex=0, non-selected has tabIndex=-1', () => {
 			const sessions = [
 				createInboxSession('s1', 't1'),
@@ -1635,6 +1679,102 @@ describe('AgentInbox', () => {
 			const options = screen.getAllByRole('option');
 			expect(options[0].getAttribute('tabindex')).toBe('0');
 			expect(options[1].getAttribute('tabindex')).toBe('-1');
+		});
+	});
+
+	// ==========================================================================
+	// Visual polish
+	// ==========================================================================
+	describe('visual polish', () => {
+		it('modal overlay uses 150ms fade-in animation', () => {
+			const { container } = render(
+				<AgentInbox
+					theme={theme}
+					sessions={[]}
+					groups={[]}
+					onClose={onClose}
+				/>
+			);
+			const overlay = container.querySelector('.modal-overlay');
+			expect(overlay).toBeTruthy();
+			expect(overlay!.className).toContain('fade-in');
+			expect(overlay!.className).toContain('duration-150');
+		});
+
+		it('no hardcoded hex colors remain in context usage color resolver', () => {
+			// Test with two different theme warning colors to prove theme-awareness
+			const theme1 = { ...theme, colors: { ...theme.colors, warning: '#aabbcc' } };
+			const theme2 = { ...theme, colors: { ...theme.colors, warning: '#112233' } };
+			const sessions1 = [createInboxSession('s1', 't1', { contextUsage: 65 })];
+			const sessions2 = [createInboxSession('s1', 't1', { contextUsage: 65 })];
+
+			const { unmount } = render(
+				<AgentInbox theme={theme1} sessions={sessions1} groups={[]} onClose={onClose} />
+			);
+			const text1 = screen.getByTestId('context-usage-text');
+			const color1 = text1.style.color;
+			unmount();
+
+			render(
+				<AgentInbox theme={theme2} sessions={sessions2} groups={[]} onClose={onClose} />
+			);
+			const text2 = screen.getByTestId('context-usage-text');
+			const color2 = text2.style.color;
+
+			// Different themes produce different colors — proves no hardcoded value
+			expect(color1).not.toBe(color2);
+		});
+
+		it('all card colors derive from theme — no hardcoded hex in card styling', () => {
+			const customTheme = {
+				...theme,
+				colors: {
+					...theme.colors,
+					accent: '#111111',
+					textMain: '#222222',
+					textDim: '#333333',
+				},
+			};
+			const sessions = [createInboxSession('s1', 't1')];
+			render(
+				<AgentInbox
+					theme={customTheme}
+					sessions={sessions}
+					groups={[]}
+					onClose={onClose}
+				/>
+			);
+			const sessionName = screen.getByText('Session s1');
+			// textMain #222222 → rgb(34, 34, 34)
+			expect(sessionName.style.color).toBe('rgb(34, 34, 34)');
+		});
+
+		it('modal background uses theme.colors.bgActivity', () => {
+			render(
+				<AgentInbox
+					theme={theme}
+					sessions={[]}
+					groups={[]}
+					onClose={onClose}
+				/>
+			);
+			const dialog = screen.getByRole('dialog');
+			// bgActivity #1e1f29 → rgb(30, 31, 41)
+			expect(dialog.style.backgroundColor).toBe('rgb(30, 31, 41)');
+		});
+
+		it('modal border uses theme.colors.border', () => {
+			render(
+				<AgentInbox
+					theme={theme}
+					sessions={[]}
+					groups={[]}
+					onClose={onClose}
+				/>
+			);
+			const dialog = screen.getByRole('dialog');
+			// border #44475a → rgb(68, 71, 90)
+			expect(dialog.style.borderColor).toBe('rgb(68, 71, 90)');
 		});
 	});
 });
