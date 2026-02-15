@@ -197,6 +197,8 @@ export type ModalId =
 	| 'logViewer'
 	| 'processMonitor'
 	| 'usageDashboard'
+	// Agent Inbox
+	| 'agentInbox'
 	// Confirmations
 	| 'confirm'
 	| 'quitConfirm'
@@ -522,6 +524,10 @@ export function getModalActions() {
 		setProcessMonitorOpen: (open: boolean) =>
 			open ? openModal('processMonitor') : closeModal('processMonitor'),
 
+		// Agent Inbox
+		setAgentInboxOpen: (open: boolean) =>
+			open ? openModal('agentInbox') : closeModal('agentInbox'),
+
 		// Usage Dashboard
 		setUsageDashboardOpen: (open: boolean) =>
 			open ? openModal('usageDashboard') : closeModal('usageDashboard'),
@@ -765,6 +771,7 @@ export function useModalActions() {
 	const firstRunCelebrationData = useModalStore(selectModalData('firstRunCelebration'));
 	const logViewerOpen = useModalStore(selectModalOpen('logViewer'));
 	const processMonitorOpen = useModalStore(selectModalOpen('processMonitor'));
+	const agentInboxOpen = useModalStore(selectModalOpen('agentInbox'));
 	const usageDashboardOpen = useModalStore(selectModalOpen('usageDashboard'));
 	const keyboardMasteryData = useModalStore(selectModalData('keyboardMastery'));
 	const playgroundOpen = useModalStore(selectModalOpen('playground'));
@@ -860,6 +867,9 @@ export function useModalActions() {
 
 		// Process Monitor
 		processMonitorOpen,
+
+		// Agent Inbox
+		agentInboxOpen,
 
 		// Usage Dashboard
 		usageDashboardOpen,
