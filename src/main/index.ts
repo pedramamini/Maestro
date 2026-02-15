@@ -52,11 +52,14 @@ import {
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
+	registerAccountHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
 } from './ipc/handlers';
 import { initializeStatsDB, closeStatsDB, getStatsDB } from './stats';
+import { AccountRegistry } from './accounts/account-registry';
+import { getAccountStore } from './stores';
 import { groupChatEmitters } from './ipc/handlers/groupChat';
 import {
 	routeModeratorResponse,
@@ -223,6 +226,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let accountRegistry: AccountRegistry | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -340,6 +344,15 @@ app.whenReady().then(async () => {
 		// Stats will be unavailable but the app will still function
 		logger.error(`Failed to initialize stats database: ${error}`, 'Startup');
 		logger.warn('Continuing without stats - usage tracking will be unavailable', 'Startup');
+	}
+
+	// Initialize account registry for account multiplexing
+	try {
+		accountRegistry = new AccountRegistry(getAccountStore());
+		logger.info('Account registry initialized', 'Startup');
+	} catch (error) {
+		logger.error(`Failed to initialize account registry: ${error}`, 'Startup');
+		logger.warn('Continuing without account multiplexing', 'Startup');
 	}
 
 	// Set up IPC handlers
@@ -551,6 +564,11 @@ function setupIpcHandlers() {
 		settingsStore: store,
 	});
 
+	// Register Account Multiplexing handlers (CRUD, assignments, usage queries)
+	registerAccountHandlers({
+		getAccountRegistry: () => accountRegistry,
+	});
+
 	// Register Document Graph handlers for file watching
 	registerDocumentGraphHandlers({
 		getMainWindow: () => mainWindow,
@@ -682,6 +700,7 @@ function setupProcessListeners() {
 				calculateContextTokens,
 			},
 			getStatsDB,
+			getAccountRegistry: () => accountRegistry,
 			debugLog,
 			patterns: {
 				REGEX_MODERATOR_SESSION,

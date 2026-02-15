@@ -52,6 +52,7 @@ import { registerSymphonyHandlers, SymphonyHandlerDependencies } from './symphon
 import { registerAgentErrorHandlers } from './agent-error';
 import { registerTabNamingHandlers, TabNamingHandlerDependencies } from './tabNaming';
 import { registerDirectorNotesHandlers, DirectorNotesHandlerDependencies } from './director-notes';
+import { registerAccountHandlers, AccountHandlerDependencies } from './accounts';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -95,6 +96,8 @@ export { registerTabNamingHandlers };
 export type { TabNamingHandlerDependencies };
 export { registerDirectorNotesHandlers };
 export type { DirectorNotesHandlerDependencies };
+export { registerAccountHandlers };
+export type { AccountHandlerDependencies };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
