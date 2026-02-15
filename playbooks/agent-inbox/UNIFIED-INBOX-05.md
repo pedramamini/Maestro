@@ -65,7 +65,8 @@ This phase writes comprehensive tests including edge cases from the blind spot r
 
 ## Helper Tests
 
-- [ ] **Write unit tests for helper functions.** In a dedicated test file or within the hook test file.
+- [x] **Write unit tests for helper functions.** In a dedicated test file or within the hook test file.
+  <!-- MAESTRO: Created src/__tests__/renderer/helpers/agentInboxHelpers.test.ts — 17 tests covering all spec items: 9 formatRelativeTime, 5 summary generation, 3 context bar color. Exported generateSmartSummary and resolveContextUsageColor for direct testing. Full suite: 19,331 tests, 0 failures. -->
 
   **`formatRelativeTime` tests:**
   1. Returns `'just now'` for timestamps < 60s ago

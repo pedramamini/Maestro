@@ -29,7 +29,7 @@ function matchesFilter(
 /**
  * Truncates text to MAX_MESSAGE_LENGTH with ellipsis.
  */
-function truncate(text: string): string {
+export function truncate(text: string): string {
 	if (text.length <= MAX_MESSAGE_LENGTH) return text
 	return text.slice(0, MAX_MESSAGE_LENGTH) + '...'
 }
@@ -51,7 +51,7 @@ function firstSentence(text: string): string {
  * - Last AI message is a statement: "Done: " + first sentence
  * - Empty logs: "No activity yet"
  */
-function generateSmartSummary(
+export function generateSmartSummary(
 	logs: Session['aiLogs'] | undefined,
 	sessionState: Session['state']
 ): string {
