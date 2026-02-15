@@ -1545,7 +1545,7 @@ export function ConversationScreen({
 							backgroundColor:
 								inputValue.trim() && !state.isConversationLoading
 									? theme.colors.accent
-									: theme.colors.border,
+									: theme.colors.bgActivity,
 							color:
 								inputValue.trim() && !state.isConversationLoading
 									? theme.colors.accentForeground
