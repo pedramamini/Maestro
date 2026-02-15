@@ -436,7 +436,7 @@ export default function AgentInbox({
 	}, [onClose]);
 
 	// Layer stack registration via useModalLayer
-	useModalLayer(MODAL_PRIORITIES.AGENT_INBOX, 'Agent Inbox', handleClose);
+	useModalLayer(MODAL_PRIORITIES.AGENT_INBOX, 'Unified Inbox', handleClose);
 
 	// Ref to the virtualized list
 	const listRef = useRef<ListImperativeAPI | null>(null);
@@ -602,7 +602,7 @@ export default function AgentInbox({
 				tabIndex={-1}
 				role="dialog"
 				aria-modal="true"
-				aria-label="Agent Inbox"
+				aria-label="Unified Inbox"
 				className="w-[600px] rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
@@ -623,7 +623,7 @@ export default function AgentInbox({
 				>
 					<div className="flex items-center gap-3">
 						<h2 className="text-base font-semibold" style={{ color: theme.colors.textMain }}>
-							Inbox
+							Unified Inbox
 						</h2>
 						<span
 							aria-live="polite"

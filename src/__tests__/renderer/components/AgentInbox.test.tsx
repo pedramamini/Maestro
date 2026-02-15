@@ -225,11 +225,11 @@ describe('AgentInbox', () => {
 			);
 			const dialog = screen.getByRole('dialog');
 			expect(dialog).toBeTruthy();
-			expect(dialog.getAttribute('aria-label')).toBe('Agent Inbox');
+			expect(dialog.getAttribute('aria-label')).toBe('Unified Inbox');
 			expect(dialog.getAttribute('aria-modal')).toBe('true');
 		});
 
-		it('renders header with title "Inbox"', () => {
+		it('renders header with title "Unified Inbox"', () => {
 			render(
 				<AgentInbox
 					theme={theme}
@@ -238,7 +238,7 @@ describe('AgentInbox', () => {
 					onClose={onClose}
 				/>
 			);
-			expect(screen.getByText('Inbox')).toBeTruthy();
+			expect(screen.getByText('Unified Inbox')).toBeTruthy();
 		});
 
 		it('shows item count badge with "need action" text', () => {
@@ -408,7 +408,7 @@ describe('AgentInbox', () => {
 			expect(mockRegisterLayer).toHaveBeenCalledTimes(1);
 			const call = mockRegisterLayer.mock.calls[0][0];
 			expect(call.type).toBe('modal');
-			expect(call.ariaLabel).toBe('Agent Inbox');
+			expect(call.ariaLabel).toBe('Unified Inbox');
 		});
 
 		it('unregisters modal layer on unmount', () => {
