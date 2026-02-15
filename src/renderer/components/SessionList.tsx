@@ -1028,6 +1028,10 @@ const compareSessionNames = (a: string, b: string): number => {
 	return aStripped.localeCompare(bStripped);
 };
 
+const sortSessionsByName = (list: Session[]): Session[] => {
+	return [...list].sort((a, b) => compareSessionNames(a.name, b.name));
+};
+
 interface SessionListProps {
 	// State
 	theme: Theme;
@@ -1439,10 +1443,7 @@ function SessionListInner(props: SessionListProps) {
 	const sortedWorktreeChildrenByParentId = useMemo(() => {
 		const map = new Map<string, Session[]>();
 		worktreeChildrenByParentId.forEach((children, parentId) => {
-			map.set(
-				parentId,
-				[...children].sort((a, b) => compareSessionNames(a.name, b.name))
-			);
+			map.set(parentId, sortSessionsByName(children));
 		});
 		return map;
 	}, [worktreeChildrenByParentId]);
@@ -1734,8 +1735,8 @@ function SessionListInner(props: SessionListProps) {
 		return <div key={`${options.keyPrefix}-${session.id}`}>{content}</div>;
 	};
 
-	// Consolidated session categorization and sorting - computed in a single pass
-	// This replaces 12+ chained useMemo calls with one comprehensive computation
+	// Consolidated session categorization - computed in a single pass before sorting
+	// This replaces 12+ chained useMemo calls with one comprehensive categorization step
 	const sessionCategories = useMemo(() => {
 		// Step 1: Filter sessions based on search query
 		const query = sessionFilter?.toLowerCase() ?? '';
@@ -1793,44 +1794,52 @@ function SessionListInner(props: SessionListProps) {
 			}
 		}
 
-		// Step 3: Sort each category once
-		const sortFn = (a: Session, b: Session) => compareSessionNames(a.name, b.name);
-
-		const sortedFiltered = [...filtered].sort(sortFn);
-		const sortedBookmarked = [...bookmarked].sort(sortFn);
-		const sortedBookmarkedParent = bookmarked.filter((s) => !s.parentSessionId).sort(sortFn);
-		const sortedUngrouped = [...ungrouped].sort(sortFn);
-		const sortedUngroupedParent = ungrouped.filter((s) => !s.parentSessionId).sort(sortFn);
-
-		// Sort sessions within each group
-		const sortedGrouped = new Map<string, Session[]>();
-		groupedMap.forEach((groupSessions, groupId) => {
-			sortedGrouped.set(groupId, [...groupSessions].sort(sortFn));
-		});
-
 		return {
 			filtered,
 			bookmarked,
 			ungrouped,
 			groupedMap,
-			sortedFiltered,
-			sortedBookmarked,
-			sortedBookmarkedParent,
-			sortedUngrouped,
-			sortedUngroupedParent,
-			sortedGrouped,
 		};
 	}, [sessionFilter, sessions, worktreeChildrenByParentId]);
 
 	// Destructure for backwards compatibility with existing code
 	const bookmarkedSessions = sessionCategories.bookmarked;
-	const sortedBookmarkedSessions = sessionCategories.sortedBookmarked;
-	const sortedBookmarkedParentSessions = sessionCategories.sortedBookmarkedParent;
-	const sortedGroupSessionsById = sessionCategories.sortedGrouped;
 	const ungroupedSessions = sessionCategories.ungrouped;
-	const sortedUngroupedSessions = sessionCategories.sortedUngrouped;
-	const sortedUngroupedParentSessions = sessionCategories.sortedUngroupedParent;
-	const sortedFilteredSessions = sessionCategories.sortedFiltered;
+	const groupedSessionsById = sessionCategories.groupedMap;
+	const filteredSessions = sessionCategories.filtered;
+
+	const sortedBookmarkedSessions = useMemo(
+		() => sortSessionsByName(bookmarkedSessions),
+		[bookmarkedSessions]
+	);
+
+	const sortedBookmarkedParentSessions = useMemo(() => {
+		const parents = bookmarkedSessions.filter((s) => !s.parentSessionId);
+		return sortSessionsByName(parents);
+	}, [bookmarkedSessions]);
+
+	const sortedUngroupedSessions = useMemo(
+		() => sortSessionsByName(ungroupedSessions),
+		[ungroupedSessions]
+	);
+
+	const sortedUngroupedParentSessions = useMemo(() => {
+		const parents = ungroupedSessions.filter((s) => !s.parentSessionId);
+		return sortSessionsByName(parents);
+	}, [ungroupedSessions]);
+
+	const sortedFilteredSessions = useMemo(
+		() => sortSessionsByName(filteredSessions),
+		[filteredSessions]
+	);
+
+	const sortedGroupSessionsById = useMemo(() => {
+		const map = new Map<string, Session[]>();
+		groupedSessionsById.forEach((groupSessions, groupId) => {
+			map.set(groupId, sortSessionsByName(groupSessions));
+		});
+		return map;
+	}, [groupedSessionsById]);
 
 	const sortedGroups = useMemo(
 		() => [...groups].sort((a, b) => compareSessionNames(a.name, b.name)),
@@ -1892,7 +1901,7 @@ function SessionListInner(props: SessionListProps) {
 	}, [sessionFilterOpen]);
 
 	// Temporarily expand groups when filtering to show matching sessions
-	// Note: Only depend on sessionFilter and sessions (not filteredSessions which changes reference each render)
+	// Note: Keep dependencies limited to sessionFilter and sessions to avoid unnecessary effect churn
 	useEffect(() => {
 		if (sessionFilter) {
 			// Find groups that contain matching sessions (search session name AND AI tab names)
