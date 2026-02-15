@@ -103,6 +103,12 @@ export function useFilteredAndSortedSessions(
 		// First filter by showAllSessions
 		const visibleSessions = sessions.filter(isSessionVisible);
 
+		// Pre-compute timestamps to avoid creating Date objects in sort comparisons
+		const timestampCache = new Map<string, number>();
+		for (const s of visibleSessions) {
+			timestampCache.set(s.sessionId, new Date(s.modifiedAt).getTime());
+		}
+
 		// Sort starred sessions to the top, then by modified date
 		const sortWithStarred = (sessionList: ClaudeSession[]) => {
 			return [...sessionList].sort((a, b) => {
@@ -110,8 +116,8 @@ export function useFilteredAndSortedSessions(
 				const bStarred = starredSessions.has(b.sessionId);
 				if (aStarred && !bStarred) return -1;
 				if (!aStarred && bStarred) return 1;
-				// Within same starred status, sort by most recent
-				return new Date(b.modifiedAt).getTime() - new Date(a.modifiedAt).getTime();
+				// Within same starred status, sort by most recent (using pre-computed timestamps)
+				return (timestampCache.get(b.sessionId) ?? 0) - (timestampCache.get(a.sessionId) ?? 0);
 			});
 		};
 

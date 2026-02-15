@@ -541,6 +541,12 @@ export function AgentSessionsBrowser({
 		};
 	}, [aggregateStats]);
 
+	// Memoize formatted timestamp to avoid duplicate Date construction + toLocaleString()
+	const formattedSessionTimestamp = useMemo(
+		() => (viewingSession ? new Date(viewingSession.timestamp).toLocaleString() : ''),
+		[viewingSession?.timestamp]
+	);
+
 	// Reset selected index when search changes
 	useEffect(() => {
 		setSelectedIndex(0);
@@ -837,7 +843,7 @@ export function AgentSessionsBrowser({
 									<span>•</span>
 									<span
 										className="relative group cursor-default"
-										title={new Date(viewingSession.timestamp).toLocaleString()}
+										title={formattedSessionTimestamp}
 									>
 										{formatRelativeTime(viewingSession.modifiedAt)}
 										<span
@@ -847,7 +853,7 @@ export function AgentSessionsBrowser({
 												color: theme.colors.textMain,
 											}}
 										>
-											{new Date(viewingSession.timestamp).toLocaleString()}
+											{formattedSessionTimestamp}
 										</span>
 									</span>
 								</div>
