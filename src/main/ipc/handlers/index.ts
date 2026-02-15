@@ -54,6 +54,7 @@ import { registerTabNamingHandlers, TabNamingHandlerDependencies } from './tabNa
 import { registerDirectorNotesHandlers, DirectorNotesHandlerDependencies } from './director-notes';
 import { registerCueHandlers, CueHandlerDependencies } from './cue';
 import { registerWakatimeHandlers } from './wakatime';
+import { registerAccountHandlers, AccountHandlerDependencies } from './accounts';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -102,6 +103,8 @@ export type { DirectorNotesHandlerDependencies };
 export { registerCueHandlers };
 export type { CueHandlerDependencies };
 export { registerWakatimeHandlers };
+export { registerAccountHandlers };
+export type { AccountHandlerDependencies };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
