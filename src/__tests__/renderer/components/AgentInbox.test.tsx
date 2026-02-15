@@ -1261,6 +1261,104 @@ describe('AgentInbox', () => {
 	});
 
 	// ==========================================================================
+	// Group expand/collapse toggle
+	// ==========================================================================
+	describe('group expand/collapse toggle', () => {
+		it('renders chevron toggle on group headers in grouped mode', () => {
+			const groups = [createGroup({ id: 'g1', name: 'Alpha Group' })];
+			const sessions = [
+				createInboxSession('s1', 't1', { groupId: 'g1' }),
+				createInboxSession('s2', 't2'),
+			];
+			render(
+				<AgentInbox
+					theme={theme}
+					sessions={sessions}
+					groups={groups}
+					onClose={onClose}
+				/>
+			);
+			// Switch to Grouped mode
+			fireEvent.click(screen.getByText('Grouped'));
+			// Group headers should have chevron-down icons (expanded by default)
+			const chevrons = screen.getAllByTestId('chevron-down-icon');
+			expect(chevrons.length).toBeGreaterThanOrEqual(1);
+		});
+
+		it('collapses group items when group header is clicked', () => {
+			const groups = [createGroup({ id: 'g1', name: 'Alpha Group' })];
+			const sessions = [
+				createInboxSession('s1', 't1', { groupId: 'g1' }),
+				createInboxSession('s2', 't2'),
+			];
+			render(
+				<AgentInbox
+					theme={theme}
+					sessions={sessions}
+					groups={groups}
+					onClose={onClose}
+				/>
+			);
+			// Switch to Grouped mode
+			fireEvent.click(screen.getByText('Grouped'));
+
+			// Both sessions should be visible initially
+			expect(screen.getByText('Session s1')).toBeTruthy();
+			expect(screen.getByText('Session s2')).toBeTruthy();
+
+			// Find the group header by locating the chevron-down icon and clicking its parent div
+			const chevrons = screen.getAllByTestId('chevron-down-icon');
+			// The first chevron's parent is the "Alpha Group" header div
+			const alphaHeaderDiv = chevrons[0].parentElement!;
+			expect(alphaHeaderDiv.textContent).toContain('Alpha Group');
+			fireEvent.click(alphaHeaderDiv);
+
+			// Session s1 (in Alpha Group) should be hidden
+			expect(screen.queryByText('Session s1')).toBeNull();
+			// Session s2 (in Ungrouped) should still be visible
+			expect(screen.getByText('Session s2')).toBeTruthy();
+			// Chevron should now be right (collapsed) for Alpha Group
+			expect(screen.getByTestId('chevron-right-icon')).toBeTruthy();
+		});
+
+		it('expands collapsed group when header is clicked again', () => {
+			const groups = [createGroup({ id: 'g1', name: 'Alpha Group' })];
+			const sessions = [
+				createInboxSession('s1', 't1', { groupId: 'g1' }),
+				createInboxSession('s2', 't2'),
+			];
+			render(
+				<AgentInbox
+					theme={theme}
+					sessions={sessions}
+					groups={groups}
+					onClose={onClose}
+				/>
+			);
+			// Switch to Grouped mode
+			fireEvent.click(screen.getByText('Grouped'));
+
+			// Click first chevron's parent to collapse Alpha Group
+			const chevrons = screen.getAllByTestId('chevron-down-icon');
+			const alphaHeaderDiv = chevrons[0].parentElement!;
+			fireEvent.click(alphaHeaderDiv);
+
+			// Session s1 should be hidden
+			expect(screen.queryByText('Session s1')).toBeNull();
+
+			// Click the collapsed header (now shows ChevronRight) to expand
+			const collapsedChevron = screen.getByTestId('chevron-right-icon');
+			fireEvent.click(collapsedChevron.parentElement!);
+
+			// Session s1 should reappear
+			expect(screen.getByText('Session s1')).toBeTruthy();
+			// Chevron should be down again (expanded)
+			const downChevrons = screen.getAllByTestId('chevron-down-icon');
+			expect(downChevrons.length).toBeGreaterThanOrEqual(1);
+		});
+	});
+
+	// ==========================================================================
 	// InboxItemCard visual hierarchy
 	// ==========================================================================
 	describe('InboxItemCard', () => {

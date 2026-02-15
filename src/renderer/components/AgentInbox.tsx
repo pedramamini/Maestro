@@ -346,6 +346,8 @@ interface RowExtraProps {
 	theme: Theme;
 	selectedIndex: number;
 	onNavigate: (item: InboxItem) => void;
+	collapsedGroups: Set<string>;
+	onToggleGroup: (groupName: string) => void;
 }
 
 function InboxRow({
@@ -355,6 +357,8 @@ function InboxRow({
 	theme,
 	selectedIndex,
 	onNavigate,
+	collapsedGroups,
+	onToggleGroup,
 }: {
 	ariaAttributes: { 'aria-posinset': number; 'aria-setsize': number; role: 'listitem' };
 	index: number;
@@ -364,6 +368,7 @@ function InboxRow({
 	if (!row) return null;
 
 	if (row.type === 'header') {
+		const isCollapsed = collapsedGroups.has(row.groupName);
 		return (
 			<div
 				style={{
@@ -377,8 +382,14 @@ function InboxRow({
 					letterSpacing: '0.5px',
 					textTransform: 'uppercase',
 					borderBottom: `1px solid ${theme.colors.border}60`,
+					cursor: 'pointer',
 				}}
+				onClick={() => onToggleGroup(row.groupName)}
 			>
+				{isCollapsed
+					? <ChevronRight style={{ width: 14, height: 14, marginRight: 4, flexShrink: 0 }} />
+					: <ChevronDown style={{ width: 14, height: 14, marginRight: 4, flexShrink: 0 }} />
+				}
 				{row.groupName}
 			</div>
 		);
@@ -432,9 +443,30 @@ export default function AgentInbox({
 	const [filterMode, setFilterMode] = useState<InboxFilterMode>('all');
 	const [sortMode, setSortMode] = useState<InboxSortMode>('newest');
 	const [selectedIndex, setSelectedIndex] = useState(0);
+	const [collapsedGroups, setCollapsedGroups] = useState<Set<string>>(new Set());
+
+	const toggleGroup = useCallback((groupName: string) => {
+		setCollapsedGroups(prev => {
+			const next = new Set(prev);
+			if (next.has(groupName)) {
+				next.delete(groupName);
+			} else {
+				next.add(groupName);
+			}
+			return next;
+		});
+	}, []);
 
 	const items = useAgentInbox(sessions, groups, filterMode, sortMode);
-	const rows = useMemo(() => buildRows(items, sortMode), [items, sortMode]);
+	const allRows = useMemo(() => buildRows(items, sortMode), [items, sortMode]);
+	const rows = useMemo(() => {
+		if (collapsedGroups.size === 0) return allRows;
+		return allRows.filter(row => {
+			if (row.type === 'header') return true;
+			const itemGroup = row.item.groupName ?? 'Ungrouped';
+			return !collapsedGroups.has(itemGroup);
+		});
+	}, [allRows, collapsedGroups]);
 
 	// Store trigger element ref for focus restoration
 	const triggerRef = useRef<Element | null>(null);
@@ -599,8 +631,10 @@ export default function AgentInbox({
 			theme,
 			selectedIndex,
 			onNavigate: handleNavigate,
+			collapsedGroups,
+			onToggleGroup: toggleGroup,
 		}),
-		[rows, theme, selectedIndex, handleNavigate]
+		[rows, theme, selectedIndex, handleNavigate, collapsedGroups, toggleGroup]
 	);
 
 	// Calculate list height
