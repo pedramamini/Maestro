@@ -550,9 +550,7 @@ export function AgentSessionsModal({
 												msg.type === 'user' ? theme.colors.accent : theme.colors.bgMain,
 											color:
 												msg.type === 'user'
-													? theme.mode === 'light'
-														? '#fff'
-														: '#000'
+													? theme.colors.accentForeground
 													: theme.colors.textMain,
 										}}
 									>
@@ -564,9 +562,7 @@ export function AgentSessionsModal({
 											style={{
 												color:
 													msg.type === 'user'
-														? theme.mode === 'light'
-															? '#fff'
-															: '#000'
+														? theme.colors.accentForeground
 														: theme.colors.textDim,
 											}}
 										>

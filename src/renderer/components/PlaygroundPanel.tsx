@@ -828,8 +828,8 @@ ${staggerDelays.map((delay, i) => `svg.wand-sparkle-active path:nth-child(${i + 
 												onClick={() => setShowKeyboardMasteryCelebration(true)}
 												className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded font-medium transition-colors"
 												style={{
-													backgroundColor: '#9B59B6',
-													color: '#fff',
+													backgroundColor: theme.colors.accent,
+													color: theme.colors.accentForeground,
 												}}
 											>
 												<Music className="w-4 h-4" />
