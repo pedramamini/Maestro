@@ -5,6 +5,7 @@ import { logger } from '../../utils/logger';
 import { appendToBuffer } from '../utils/bufferUtils';
 import { aggregateModelUsage, type ModelStats } from '../../parsers/usage-aggregator';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
+import { MAX_RECONNECT_OUTPUT_BUFFER } from '../constants';
 import type { ManagedProcess, UsageStats, UsageTotals, AgentError } from '../types';
 import type { DataBufferManager } from './DataBufferManager';
 
@@ -306,6 +307,9 @@ export class StdoutHandler {
 			});
 			this.emitter.emit('thinking-chunk', sessionId, event.text);
 			managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+			if (managedProcess.streamedText.length > MAX_RECONNECT_OUTPUT_BUFFER) {
+				managedProcess.streamedText = managedProcess.streamedText.slice(-MAX_RECONNECT_OUTPUT_BUFFER);
+			}
 		}
 
 		// Handle tool execution events (OpenCode, Codex)
@@ -336,6 +340,7 @@ export class StdoutHandler {
 		// Handle result
 		if (outputParser.isResultMessage(event) && !managedProcess.resultEmitted) {
 			managedProcess.resultEmitted = true;
+			const usedStreamedTextFallback = !event.text && !!managedProcess.streamedText;
 			const resultText = event.text || managedProcess.streamedText || '';
 
 			// Log synopsis result processing (for debugging empty synopsis issue)
@@ -357,7 +362,9 @@ export class StdoutHandler {
 					hasEventText: !!event.text,
 					hasStreamedText: !!managedProcess.streamedText,
 				});
-				this.bufferManager.emitDataBuffered(sessionId, resultText);
+				// Skip buffer retention when result text is sourced from streamedText
+				// to avoid double-appending already-captured output
+				this.bufferManager.emitDataBuffered(sessionId, resultText, usedStreamedTextFallback);
 			} else if (sessionId.includes('-synopsis-')) {
 				logger.warn(
 					'[ProcessManager] Synopsis result is empty - no text to emit',

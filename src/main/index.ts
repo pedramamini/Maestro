@@ -4,7 +4,8 @@ import os from 'os';
 import crypto from 'crypto';
 // Sentry is imported dynamically below to avoid module-load-time access to electron.app
 // which causes "Cannot read properties of undefined (reading 'getAppPath')" errors
-import { ProcessManager } from './process-manager';
+import { ProcessManager, ProcessStateStore } from './process-manager';
+import type { ProcessSnapshot } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
 import { logger } from './utils/logger';
@@ -221,6 +222,7 @@ const agentSessionOriginsStore = getAgentSessionOriginsStore();
 
 let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
+const processStateStore = new ProcessStateStore();
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
 
@@ -692,6 +694,34 @@ function setupProcessListeners() {
 				REGEX_SYNOPSIS_SESSION,
 			},
 			logger,
+		});
+
+		// Hook spawn/exit events to update process state snapshot for renderer reconnection.
+		// The getter is called at write time so the snapshot reflects current state,
+		// not stale data from when the debounce was triggered.
+		const getProcessSnapshots = (): ProcessSnapshot[] => {
+			if (!processManager) return [];
+			return processManager.getAll().map((p) => ({
+				sessionId: p.sessionId,
+				pid: p.pid,
+				toolType: p.toolType,
+				cwd: p.cwd,
+				isTerminal: p.isTerminal,
+				startTime: p.startTime,
+				command: p.command,
+				args: p.args,
+				isBatchMode: p.isBatchMode || false,
+				tabId: p.tabId,
+			}));
+		};
+
+		const scheduleSnapshotUpdate = () => processStateStore.saveSnapshot(getProcessSnapshots);
+		processManager.on('spawn', scheduleSnapshotUpdate);
+		processManager.on('exit', scheduleSnapshotUpdate);
+
+		// Clear snapshot on clean shutdown so stale data isn't used on next launch
+		app.on('will-quit', () => {
+			processStateStore.clear().catch(() => {});
 		});
 	}
 }

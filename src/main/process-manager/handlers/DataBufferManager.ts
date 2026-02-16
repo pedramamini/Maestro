@@ -1,6 +1,6 @@
 import { EventEmitter } from 'events';
 import { logger } from '../../utils/logger';
-import { DATA_BUFFER_FLUSH_INTERVAL, DATA_BUFFER_SIZE_THRESHOLD } from '../constants';
+import { DATA_BUFFER_FLUSH_INTERVAL, DATA_BUFFER_SIZE_THRESHOLD, MAX_RECONNECT_OUTPUT_BUFFER } from '../constants';
 import type { ManagedProcess } from '../types';
 
 /**
@@ -15,12 +15,19 @@ export class DataBufferManager {
 	/**
 	 * Buffer data and emit in batches.
 	 * Data is accumulated and flushed every 50ms or when buffer exceeds 8KB.
+	 *
+	 * @param skipBufferRetention - If true, skip appending to streamedText.
+	 *   Used when re-emitting data already captured in streamedText (e.g. result fallback).
 	 */
-	emitDataBuffered(sessionId: string, data: string): void {
+	emitDataBuffered(sessionId: string, data: string, skipBufferRetention = false): void {
 		const managedProcess = this.processes.get(sessionId);
 		if (!managedProcess) {
 			this.emitter.emit('data', sessionId, data);
 			return;
+		}
+
+		if (skipBufferRetention) {
+			managedProcess.skipNextRetention = true;
 		}
 
 		managedProcess.dataBuffer = (managedProcess.dataBuffer || '') + data;
@@ -50,8 +57,22 @@ export class DataBufferManager {
 		}
 
 		if (managedProcess.dataBuffer) {
+			const flushedData = managedProcess.dataBuffer;
+			const skipRetention = managedProcess.skipNextRetention;
+			managedProcess.skipNextRetention = false;
+
+			// Retain output for renderer reconnection after reload.
+			// Skip when the data being flushed was already captured in streamedText
+			// (e.g. result emission that falls back to streamedText as the source).
+			if (!skipRetention) {
+				managedProcess.streamedText = (managedProcess.streamedText || '') + flushedData;
+				if (managedProcess.streamedText.length > MAX_RECONNECT_OUTPUT_BUFFER) {
+					managedProcess.streamedText = managedProcess.streamedText.slice(-MAX_RECONNECT_OUTPUT_BUFFER);
+				}
+			}
+
 			try {
-				this.emitter.emit('data', sessionId, managedProcess.dataBuffer);
+				this.emitter.emit('data', sessionId, flushedData);
 			} catch (err) {
 				logger.error('[ProcessManager] Error flushing data buffer', 'ProcessManager', {
 					sessionId,
