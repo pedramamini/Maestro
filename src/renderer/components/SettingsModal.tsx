@@ -2264,8 +2264,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									)}
 								</div>
 							</div>
-
-
 						</div>
 					)}
 

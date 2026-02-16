@@ -14,6 +14,7 @@ import type { QueryCompleteData } from '../../process-manager/types';
 describe('WakaTime Listener', () => {
 	let mockProcessManager: ProcessManager;
 	let mockWakaTimeManager: WakaTimeManager;
+	let mockSettingsStore: any;
 	let eventHandlers: Map<string, (...args: unknown[]) => void>;
 
 	beforeEach(() => {
@@ -33,10 +34,18 @@ describe('WakaTime Listener', () => {
 			sendHeartbeat: vi.fn().mockResolvedValue(undefined),
 			removeSession: vi.fn(),
 		} as unknown as WakaTimeManager;
+
+		mockSettingsStore = {
+			get: vi.fn((key: string, defaultValue?: any) => {
+				if (key === 'wakatimeEnabled') return true;
+				return defaultValue;
+			}),
+			onDidChange: vi.fn(),
+		};
 	});
 
 	it('should register data, thinking-chunk, query-complete, and exit event listeners', () => {
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		expect(mockProcessManager.on).toHaveBeenCalledWith('data', expect.any(Function));
 		expect(mockProcessManager.on).toHaveBeenCalledWith('thinking-chunk', expect.any(Function));
@@ -55,7 +64,7 @@ describe('WakaTime Listener', () => {
 			projectPath: '/home/user/project',
 		} as any);
 
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('data');
 		handler?.('session-abc', 'some output data');
@@ -78,7 +87,7 @@ describe('WakaTime Listener', () => {
 			projectPath: '/home/user/project',
 		} as any);
 
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('thinking-chunk');
 		handler?.('session-thinking', 'reasoning text...');
@@ -100,7 +109,7 @@ describe('WakaTime Listener', () => {
 			startTime: Date.now(),
 		} as any);
 
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('data');
 		handler?.('session-terminal', 'terminal output');
@@ -111,7 +120,7 @@ describe('WakaTime Listener', () => {
 	it('should skip heartbeat on data event when process not found', () => {
 		vi.mocked(mockProcessManager.get).mockReturnValue(undefined);
 
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('data');
 		handler?.('session-unknown', 'data');
@@ -129,7 +138,7 @@ describe('WakaTime Listener', () => {
 			startTime: Date.now(),
 		} as any);
 
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('data');
 		handler?.('session-no-path', 'output');
@@ -142,7 +151,7 @@ describe('WakaTime Listener', () => {
 	});
 
 	it('should send heartbeat on query-complete with projectPath', () => {
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('query-complete');
 		const queryData: QueryCompleteData = {
@@ -165,7 +174,7 @@ describe('WakaTime Listener', () => {
 	});
 
 	it('should fallback to sessionId when projectPath is missing on query-complete', () => {
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('query-complete');
 		const queryData: QueryCompleteData = {
@@ -186,11 +195,100 @@ describe('WakaTime Listener', () => {
 	});
 
 	it('should remove session on exit event', () => {
-		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager);
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
 
 		const handler = eventHandlers.get('exit');
 		handler?.('session-exit-123');
 
 		expect(mockWakaTimeManager.removeSession).toHaveBeenCalledWith('session-exit-123');
+	});
+
+	it('should skip heartbeat on data event when WakaTime is disabled', () => {
+		mockSettingsStore.get.mockImplementation((key: string, defaultValue?: any) => {
+			if (key === 'wakatimeEnabled') return false;
+			return defaultValue;
+		});
+
+		vi.mocked(mockProcessManager.get).mockReturnValue({
+			sessionId: 'session-abc',
+			toolType: 'claude-code',
+			cwd: '/home/user/project',
+			pid: 1234,
+			isTerminal: false,
+			startTime: Date.now(),
+			projectPath: '/home/user/project',
+		} as any);
+
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
+
+		const handler = eventHandlers.get('data');
+		handler?.('session-abc', 'some output data');
+
+		expect(mockProcessManager.get).not.toHaveBeenCalled();
+		expect(mockWakaTimeManager.sendHeartbeat).not.toHaveBeenCalled();
+	});
+
+	it('should skip heartbeat on thinking-chunk event when WakaTime is disabled', () => {
+		mockSettingsStore.get.mockImplementation((key: string, defaultValue?: any) => {
+			if (key === 'wakatimeEnabled') return false;
+			return defaultValue;
+		});
+
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
+
+		const handler = eventHandlers.get('thinking-chunk');
+		handler?.('session-thinking', 'reasoning...');
+
+		expect(mockProcessManager.get).not.toHaveBeenCalled();
+		expect(mockWakaTimeManager.sendHeartbeat).not.toHaveBeenCalled();
+	});
+
+	it('should skip heartbeat on query-complete event when WakaTime is disabled', () => {
+		mockSettingsStore.get.mockImplementation((key: string, defaultValue?: any) => {
+			if (key === 'wakatimeEnabled') return false;
+			return defaultValue;
+		});
+
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
+
+		const handler = eventHandlers.get('query-complete');
+		const queryData: QueryCompleteData = {
+			sessionId: 'session-abc',
+			agentType: 'claude-code',
+			source: 'user',
+			startTime: Date.now(),
+			duration: 5000,
+			projectPath: '/home/user/project',
+		};
+
+		handler?.('session-abc', queryData);
+
+		expect(mockWakaTimeManager.sendHeartbeat).not.toHaveBeenCalled();
+	});
+
+	it('should react to onDidChange for wakatimeEnabled', () => {
+		setupWakaTimeListener(mockProcessManager, mockWakaTimeManager, mockSettingsStore);
+
+		// Verify onDidChange was registered
+		expect(mockSettingsStore.onDidChange).toHaveBeenCalledWith('wakatimeEnabled', expect.any(Function));
+
+		// Simulate runtime toggle: disable WakaTime
+		const changeCallback = mockSettingsStore.onDidChange.mock.calls[0][1];
+		changeCallback(false);
+
+		vi.mocked(mockProcessManager.get).mockReturnValue({
+			sessionId: 'session-abc',
+			toolType: 'claude-code',
+			cwd: '/home/user/project',
+			pid: 1234,
+			isTerminal: false,
+			startTime: Date.now(),
+			projectPath: '/home/user/project',
+		} as any);
+
+		const handler = eventHandlers.get('data');
+		handler?.('session-abc', 'output');
+
+		expect(mockWakaTimeManager.sendHeartbeat).not.toHaveBeenCalled();
 	});
 });

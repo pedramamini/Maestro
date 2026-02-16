@@ -716,6 +716,6 @@ function setupProcessListeners() {
 		});
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
-		setupWakaTimeListener(processManager, wakatimeManager);
+		setupWakaTimeListener(processManager, wakatimeManager, store);
 	}
 }

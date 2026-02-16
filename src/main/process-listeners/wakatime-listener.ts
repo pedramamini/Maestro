@@ -10,9 +10,11 @@
  */
 
 import path from 'path';
+import type Store from 'electron-store';
 import type { ProcessManager } from '../process-manager';
 import type { QueryCompleteData } from '../process-manager/types';
 import type { WakaTimeManager } from '../wakatime-manager';
+import type { MaestroSettings } from '../stores/types';
 
 /** Helper to send a heartbeat for a managed process */
 function heartbeatForSession(
@@ -24,7 +26,7 @@ function heartbeatForSession(
 	if (!managedProcess || managedProcess.isTerminal) return;
 	const projectDir = managedProcess.projectPath || managedProcess.cwd;
 	const projectName = projectDir ? path.basename(projectDir) : sessionId;
-	void wakaTimeManager.sendHeartbeat(sessionId, projectName, managedProcess.cwd);
+	void wakaTimeManager.sendHeartbeat(sessionId, projectName, projectDir);
 }
 
 /**
@@ -34,22 +36,31 @@ function heartbeatForSession(
  */
 export function setupWakaTimeListener(
 	processManager: ProcessManager,
-	wakaTimeManager: WakaTimeManager
+	wakaTimeManager: WakaTimeManager,
+	settingsStore: Store<MaestroSettings>
 ): void {
+	// Cache enabled state so data/thinking-chunk listeners can bail out
+	// without hitting the store on every stdout chunk
+	let enabled = settingsStore.get('wakatimeEnabled', false);
+	settingsStore.onDidChange('wakatimeEnabled', (v) => { enabled = !!v; });
+
 	// Send heartbeat on any AI output (covers interactive sessions)
 	// The 2-minute debounce in WakaTimeManager prevents flooding
 	processManager.on('data', (sessionId: string) => {
+		if (!enabled) return;
 		heartbeatForSession(processManager, wakaTimeManager, sessionId);
 	});
 
 	// Send heartbeat during AI thinking (extended thinking / reasoning)
 	// This ensures time spent on long reasoning is captured
 	processManager.on('thinking-chunk', (sessionId: string) => {
+		if (!enabled) return;
 		heartbeatForSession(processManager, wakaTimeManager, sessionId);
 	});
 
 	// Also send heartbeat on query-complete for batch/auto-run processes
 	processManager.on('query-complete', (_sessionId: string, queryData: QueryCompleteData) => {
+		if (!enabled) return;
 		const projectName = queryData.projectPath ? path.basename(queryData.projectPath) : queryData.sessionId;
 		void wakaTimeManager.sendHeartbeat(queryData.sessionId, projectName, queryData.projectPath);
 	});
