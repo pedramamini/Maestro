@@ -55,6 +55,7 @@ import { getBadgeForTime } from '../constants/conductorBadges';
 import { getStatusColor, getContextColor, formatActiveTime } from '../utils/theme';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { SessionItem } from './SessionItem';
+import { useAccountUsage } from '../hooks/useAccountUsage';
 import { GroupChatList } from './GroupChatList';
 import { useLiveOverlay, useClickOutside, useResizablePanel } from '../hooks';
 import { useGitFileStatus } from '../contexts/GitStatusContext';
@@ -1299,6 +1300,9 @@ function SessionListInner(props: SessionListProps) {
 	// Derive whether any session is busy (for wand sparkle animation)
 	const isAnyBusy = useMemo(() => sessions.some((s) => s.state === 'busy'), [sessions]);
 
+	// Account usage metrics for SessionItem badge tooltips
+	const { metrics: accountUsageMetrics } = useAccountUsage();
+
 	const [sessionFilter, setSessionFilter] = useState('');
 	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } = useResizablePanel({
 		width: leftSidebarWidthState,
@@ -1660,6 +1664,7 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
+					accountUsagePercent={session.accountId ? accountUsageMetrics[session.accountId]?.usagePercent : undefined}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -1722,6 +1727,7 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
+										accountUsagePercent={child.accountId ? accountUsageMetrics[child.accountId]?.usagePercent : undefined}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}

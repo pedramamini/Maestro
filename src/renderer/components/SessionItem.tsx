@@ -35,6 +35,7 @@ export interface SessionItemProps {
 	gitFileCount?: number;
 	isInBatch?: boolean;
 	jumpNumber?: string | null; // Session jump shortcut number (1-9, 0)
+	accountUsagePercent?: number | null; // Usage % for assigned account (passed from parent to avoid N hook instances)
 
 	// Handlers
 	onSelect: () => void;
@@ -75,6 +76,7 @@ export const SessionItem = memo(function SessionItem({
 	gitFileCount,
 	isInBatch = false,
 	jumpNumber,
+	accountUsagePercent,
 	onSelect,
 	onDragStart,
 	onDragOver,
@@ -184,7 +186,7 @@ export const SessionItem = memo(function SessionItem({
 									backgroundColor: `${theme.colors.accent}25`,
 									color: theme.colors.accentText || theme.colors.accent,
 								}}
-								title={`Virtuoso: ${session.accountName}`}
+								title={`Virtuoso: ${session.accountName}${accountUsagePercent != null ? ` (${Math.round(accountUsagePercent)}%)` : ''}`}
 							>
 								{session.accountName.split('@')[0]?.slice(0, 10)?.toUpperCase() || 'ACC'}
 							</span>
