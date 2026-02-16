@@ -15,6 +15,7 @@ import {
 	type GraphLegendProps,
 } from '../../../../renderer/components/DocumentGraph/GraphLegend';
 import type { Theme } from '../../../../renderer/types';
+import { formatShortcutKeys } from '../../../../renderer/utils/shortcutFormatter';
 
 // Mock theme for testing
 const mockTheme: Theme = {
@@ -185,7 +186,7 @@ describe('GraphLegend', () => {
 		it('displays search shortcut', () => {
 			render(<GraphLegend {...defaultProps} />);
 
-			expect(screen.getByText('⌘F')).toBeInTheDocument();
+			expect(screen.getByText(formatShortcutKeys(['Meta', 'f']))).toBeInTheDocument();
 			expect(screen.getByText('Focus search')).toBeInTheDocument();
 		});
 	});

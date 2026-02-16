@@ -1,6 +1,6 @@
 {
   "schemaVersion": "1.0",
-  "lastUpdated": "2025-01-01T00:00:00Z",
+  "lastUpdated": "2026-02-14T00:00:00Z",
   "repositories": [
     {
       "slug": "RunMaestro/Maestro",
@@ -16,6 +16,51 @@
       "isActive": true,
       "featured": true,
       "addedAt": "2025-01-01"
+    },
+    {
+      "slug": "pedramamini/Podsidian",
+      "name": "Podsidian",
+      "description": "An MCP-capable intelligent Apple podcast transcription and summarization to markdown tool.",
+      "url": "https://github.com/pedramamini/Podsidian",
+      "category": "productivity",
+      "tags": ["mcp", "podcasts", "obsidian", "markdown", "transcription", "python"],
+      "maintainer": {
+        "name": "Pedram Amini",
+        "url": "https://github.com/pedramamini"
+      },
+      "isActive": true,
+      "featured": false,
+      "addedAt": "2026-02-14"
+    },
+    {
+      "slug": "pedramamini/RSSidian",
+      "name": "RSSidian",
+      "description": "An MCP-capable intelligent RSS feed ingestion and summarization to markdown tool.",
+      "url": "https://github.com/pedramamini/RSSidian",
+      "category": "productivity",
+      "tags": ["mcp", "rss", "obsidian", "markdown", "summarization", "python"],
+      "maintainer": {
+        "name": "Pedram Amini",
+        "url": "https://github.com/pedramamini"
+      },
+      "isActive": true,
+      "featured": false,
+      "addedAt": "2026-02-14"
+    },
+    {
+      "slug": "thedotmack/claude-mem",
+      "name": "claude-mem",
+      "description": "A Claude Code plugin that automatically captures everything Claude does during your coding sessions, compresses it with AI, and injects relevant context back into future sessions.",
+      "url": "https://github.com/thedotmack/claude-mem",
+      "category": "ai-ml",
+      "tags": ["claude-code", "memory", "ai-agents", "plugin", "typescript"],
+      "maintainer": {
+        "name": "thedotmack",
+        "url": "https://github.com/thedotmack"
+      },
+      "isActive": true,
+      "featured": false,
+      "addedAt": "2026-02-14"
     }
   ]
 }

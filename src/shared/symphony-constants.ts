@@ -56,6 +56,8 @@ Closes #{issue}
 *Contributed via [Maestro Symphony](https://runmaestro.ai)*`;
 
 // Categories with display info
+// New categories can be added here without changing the SymphonyCategory type.
+// Unknown categories in the registry fall back to title-cased name with 📦 emoji.
 export const SYMPHONY_CATEGORIES: Record<string, { label: string; emoji: string }> = {
   'ai-ml': { label: 'AI & ML', emoji: '🤖' },
   'developer-tools': { label: 'Developer Tools', emoji: '🛠️' },
@@ -64,7 +66,20 @@ export const SYMPHONY_CATEGORIES: Record<string, { label: string; emoji: string 
   'web': { label: 'Web', emoji: '🌐' },
   'mobile': { label: 'Mobile', emoji: '📱' },
   'data': { label: 'Data', emoji: '📊' },
+  'productivity': { label: 'Productivity', emoji: '⚡' },
   'security': { label: 'Security', emoji: '🔒' },
+  'automation': { label: 'Automation', emoji: '🔄' },
+  'cli': { label: 'CLI', emoji: '💻' },
+  'design': { label: 'Design', emoji: '🎨' },
+  'education': { label: 'Education', emoji: '🎓' },
+  'fintech': { label: 'Fintech', emoji: '💰' },
+  'gaming': { label: 'Gaming', emoji: '🎮' },
+  'healthcare': { label: 'Healthcare', emoji: '🏥' },
+  'iot': { label: 'IoT', emoji: '📡' },
+  'media': { label: 'Media', emoji: '🎬' },
+  'networking': { label: 'Networking', emoji: '🔗' },
+  'science': { label: 'Science', emoji: '🔬' },
+  'testing': { label: 'Testing', emoji: '🧪' },
   'other': { label: 'Other', emoji: '📦' },
 };
 

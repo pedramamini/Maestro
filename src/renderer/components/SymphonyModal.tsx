@@ -57,6 +57,7 @@ import { useSymphony } from '../hooks/symphony';
 import { useContributorStats, type Achievement } from '../hooks/symphony/useContributorStats';
 import { AgentCreationDialog, type AgentCreationConfig } from './AgentCreationDialog';
 import { generateProseStyles, createMarkdownComponents } from '../utils/markdownConfig';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 
 // ============================================================================
 // Types
@@ -67,6 +68,8 @@ export interface SymphonyContributionData {
 	localPath: string;
 	autoRunPath?: string;
 	branchName?: string;
+	draftPrNumber?: number;
+	draftPrUrl?: string;
 	agentType: string;
 	sessionName: string;
 	repo: RegisteredRepository;
@@ -870,8 +873,22 @@ function RepositoryDetailView({
 							style={{ backgroundColor: theme.colors.bgMain }}
 						>
 							<div className="text-center">
-								<Music className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.textDim }} />
-								<p style={{ color: theme.colors.textDim }}>Select an issue to see details</p>
+								{!isLoadingIssues && issues.length === 0 ? (
+									<>
+										<CheckCircle className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.textDim }} />
+										<p className="text-sm" style={{ color: theme.colors.textMain }}>
+											No outstanding work for this project
+										</p>
+										<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+											There are no issues labeled with runmaestro.ai
+										</p>
+									</>
+								) : (
+									<>
+										<Music className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.textDim }} />
+										<p style={{ color: theme.colors.textDim }}>Select an issue to see details</p>
+									</>
+								)}
 							</div>
 						</div>
 					)}
@@ -1461,6 +1478,8 @@ export function SymphonyModal({
 					localPath: config.workingDirectory,
 					autoRunPath: result.autoRunPath,
 					branchName: result.branchName,
+					draftPrNumber: result.draftPrNumber,
+					draftPrUrl: result.draftPrUrl,
 					agentType: config.agentType,
 					sessionName: config.sessionName,
 					repo: config.repo,
@@ -1896,7 +1915,7 @@ export function SymphonyModal({
 																		: '1px solid transparent',
 															}}
 														>
-															<span>{info?.emoji}</span>
+															<span>{info?.emoji ?? '📦'}</span>
 															<span>{info?.label ?? cat}</span>
 														</button>
 													);
@@ -1972,7 +1991,7 @@ export function SymphonyModal({
 										<span>
 											{filteredRepositories.length} repositories • Contribute to open source with AI
 										</span>
-										<span>↑↓←→ navigate • Enter select • / search • ⌘⇧[] tabs</span>
+										<span>{`↑↓←→ navigate • Enter select • / search • ${formatShortcutKeys(['Meta', 'Shift'])}[] tabs`}</span>
 									</div>
 								</>
 							)}

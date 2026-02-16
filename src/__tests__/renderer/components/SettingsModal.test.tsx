@@ -18,6 +18,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { SettingsModal } from '../../../renderer/components/SettingsModal';
+import { formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import type {
 	Theme,
 	Shortcut,
@@ -39,6 +40,9 @@ vi.mock('../../../renderer/contexts/LayerStackContext', () => ({
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys: string[]) => keys.join('+')),
 	isMacOS: vi.fn(() => false), // Test environment is not Mac
+	formatMetaKey: vi.fn(() => 'Ctrl'),
+	formatEnterToSend: vi.fn((enterToSend: boolean) => enterToSend ? 'Enter' : 'Ctrl + Enter'),
+	formatEnterToSendTooltip: vi.fn((enterToSend: boolean) => enterToSend ? 'Switch to Ctrl+Enter to send' : 'Switch to Enter to send'),
 }));
 
 // Mock AICommandsPanel
@@ -66,6 +70,9 @@ vi.mock('../../../renderer/components/CustomThemeBuilder', () => ({
 	),
 }));
 
+// Shared mock fns so tests can assert on useSettings setters
+const mockSetDirectorNotesSettings = vi.fn();
+
 // Mock useSettings hook (used for context management settings and SSH remote ignore settings)
 vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 	useSettings: () => ({
@@ -89,6 +96,12 @@ vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 		setSshRemoteIgnorePatterns: vi.fn(),
 		sshRemoteHonorGitignore: false,
 		setSshRemoteHonorGitignore: vi.fn(),
+		// Director's Notes settings
+		directorNotesSettings: {
+			provider: 'claude-code',
+			defaultLookbackDays: 7,
+		},
+		setDirectorNotesSettings: mockSetDirectorNotesSettings,
 	}),
 }));
 
@@ -249,6 +262,13 @@ describe('SettingsModal', () => {
 				name: 'Claude Code',
 				available: true,
 				path: '/usr/local/bin/claude',
+				hidden: false,
+			},
+			{
+				id: 'codex',
+				name: 'Codex',
+				available: true,
+				path: '/usr/local/bin/codex',
 				hidden: false,
 			},
 			{ id: 'openai-codex', name: 'OpenAI Codex', available: false, hidden: false },
@@ -424,14 +444,14 @@ describe('SettingsModal', () => {
 		});
 
 		it('should wrap around when navigating past last tab', async () => {
-			render(<SettingsModal {...createDefaultProps({ initialTab: 'ssh' })} />);
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'director-notes' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
 			});
 
-			// Start on SSH tab (last tab)
-			expect(screen.getByText('No SSH remotes configured')).toBeInTheDocument();
+			// Start on Director's Notes tab (last tab)
+			expect(screen.getByText("Director's Notes", { selector: 'h3' })).toBeInTheDocument();
 
 			// Press Cmd+Shift+] to wrap to general
 			fireEvent.keyDown(window, { key: ']', metaKey: true, shiftKey: true });
@@ -454,14 +474,14 @@ describe('SettingsModal', () => {
 			// Start on general tab (first tab)
 			expect(screen.getByText('Default Terminal Shell')).toBeInTheDocument();
 
-			// Press Cmd+Shift+[ to wrap to SSH (last tab)
+			// Press Cmd+Shift+[ to wrap to Director's Notes (last tab)
 			fireEvent.keyDown(window, { key: '[', metaKey: true, shiftKey: true });
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			expect(screen.getByText('No SSH remotes configured')).toBeInTheDocument();
+			expect(screen.getByText("Director's Notes", { selector: 'h3' })).toBeInTheDocument();
 		});
 	});
 
@@ -822,8 +842,7 @@ describe('SettingsModal', () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			// Test environment doesn't have Mac user agent, so it shows Ctrl + Enter
-			expect(screen.getByText(/⌘ \+ Enter|Ctrl \+ Enter/)).toBeInTheDocument();
+			expect(screen.getByText(formatEnterToSend(false))).toBeInTheDocument();
 		});
 	});
 
@@ -1979,6 +1998,187 @@ describe('SettingsModal', () => {
 
 			// shells.detect should only have been called once
 			expect(window.maestro.shells.detect).toHaveBeenCalledTimes(1);
+		});
+	});
+
+	describe('Director\'s Notes settings tab', () => {
+		it('should render Director\'s Notes tab button', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByTitle("Director's Notes")).toBeInTheDocument();
+		});
+
+		it('should switch to Director\'s Notes tab when clicked', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			const tab = screen.getByTitle("Director's Notes");
+			fireEvent.click(tab);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByText("Director's Notes", { selector: 'h3' })).toBeInTheDocument();
+		});
+
+		it('should render provider dropdown with detected available agents', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Navigate to Director's Notes tab
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			expect(screen.getByText('Synopsis Provider')).toBeInTheDocument();
+
+			// With the default mock, only claude-code is available and supported
+			const select = screen.getByLabelText('Select synopsis provider agent');
+			expect(select).toBeInTheDocument();
+
+			const options = select.querySelectorAll('option');
+			expect(options.length).toBeGreaterThanOrEqual(1);
+			expect(options[0]).toHaveValue('claude-code');
+			expect(options[0]).toHaveTextContent('Claude Code');
+		});
+
+		it('should render Customize button for provider configuration', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Navigate to Director's Notes tab
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			const customizeButton = screen.getByTitle('Customize provider settings');
+			expect(customizeButton).toBeInTheDocument();
+			expect(customizeButton).toHaveTextContent('Customize');
+		});
+
+		it('should render default lookback period slider with range 1-90', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Check the label shows current value
+			expect(screen.getByText(/Default Lookback Period: 7 days/)).toBeInTheDocument();
+
+			// Check the range input
+			const slider = screen.getByRole('slider');
+			expect(slider).toBeInTheDocument();
+			expect(slider).toHaveAttribute('min', '1');
+			expect(slider).toHaveAttribute('max', '90');
+			expect(slider).toHaveValue('7');
+		});
+
+		it('should show description text for the feature', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByText(/unified view of your work across all Maestro sessions/)).toBeInTheDocument();
+			expect(screen.getByText(/AI agent used to generate synopsis summaries/)).toBeInTheDocument();
+			expect(screen.getByText(/How far back to look when generating notes/)).toBeInTheDocument();
+		});
+
+		it('should call setDirectorNotesSettings when provider is changed', async () => {
+			mockSetDirectorNotesSettings.mockClear();
+
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			const select = screen.getByDisplayValue('Claude Code');
+			fireEvent.change(select, { target: { value: 'codex' } });
+
+			expect(mockSetDirectorNotesSettings).toHaveBeenCalledWith({
+				provider: 'codex',
+				defaultLookbackDays: 7,
+			});
+		});
+
+		it('should call setDirectorNotesSettings when lookback slider is changed', async () => {
+			mockSetDirectorNotesSettings.mockClear();
+
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			const slider = screen.getByRole('slider');
+			fireEvent.change(slider, { target: { value: '30' } });
+
+			expect(mockSetDirectorNotesSettings).toHaveBeenCalledWith({
+				provider: 'claude-code',
+				defaultLookbackDays: 30,
+			});
+		});
+
+		it('should render lookback scale markers', async () => {
+			render(<SettingsModal {...createDefaultProps()} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			fireEvent.click(screen.getByTitle("Director's Notes"));
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			expect(screen.getByText('1 day')).toBeInTheDocument();
+			expect(screen.getByText('90 days')).toBeInTheDocument();
 		});
 	});
 });

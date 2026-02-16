@@ -91,22 +91,15 @@ describe('shared/symphony-constants', () => {
   // Categories Tests
   // ==========================================================================
   describe('SYMPHONY_CATEGORIES', () => {
-    const requiredCategories = [
-      'ai-ml',
-      'developer-tools',
-      'infrastructure',
-      'documentation',
-      'web',
-      'mobile',
-      'data',
-      'security',
-      'other',
-    ];
-
-    it('should have all required category keys', () => {
-      for (const category of requiredCategories) {
+    it('should include core categories used by existing registry entries', () => {
+      const coreCategories = ['ai-ml', 'developer-tools', 'productivity', 'other'];
+      for (const category of coreCategories) {
         expect(SYMPHONY_CATEGORIES).toHaveProperty(category);
       }
+    });
+
+    it('should have at least 10 categories for broad coverage', () => {
+      expect(Object.keys(SYMPHONY_CATEGORIES).length).toBeGreaterThanOrEqual(10);
     });
 
     it('should have entries with label and emoji properties', () => {

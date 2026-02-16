@@ -83,26 +83,11 @@ describe('shared/symphony-types', () => {
   // Type Validation Tests (compile-time checks with runtime verification)
   // ==========================================================================
   describe('SymphonyCategory type', () => {
-    const validCategories: SymphonyCategory[] = [
-      'ai-ml',
-      'developer-tools',
-      'infrastructure',
-      'documentation',
-      'web',
-      'mobile',
-      'data',
-      'security',
-      'other',
-    ];
-
-    it.each(validCategories)('should accept "%s" as a valid category', (category) => {
-      // This test verifies the type at compile-time and that the values are valid
-      const testCategory: SymphonyCategory = category;
-      expect(testCategory).toBe(category);
-    });
-
-    it('should have 9 valid categories', () => {
-      expect(validCategories).toHaveLength(9);
+    it('should accept any string as a category (extensible via registry)', () => {
+      const known: SymphonyCategory = 'ai-ml';
+      const custom: SymphonyCategory = 'my-custom-category';
+      expect(known).toBe('ai-ml');
+      expect(custom).toBe('my-custom-category');
     });
   });
 

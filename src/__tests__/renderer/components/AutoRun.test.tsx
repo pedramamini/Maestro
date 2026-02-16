@@ -8,6 +8,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import React from 'react';
 import { AutoRun, AutoRunHandle } from '../../../renderer/components/AutoRun';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, BatchRunState, SessionState } from '../../../renderer/types';
 
 // Helper to render with LayerStackProvider (required by AutoRunSearchBar)
@@ -1745,14 +1746,14 @@ describe('Lightbox Functionality', () => {
 		});
 
 		// Verify copy button is present
-		const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+		const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
 		expect(copyButton).toBeInTheDocument();
 
 		// Click it - the actual clipboard copy may fail but we're testing the button renders/clicks
 		fireEvent.click(copyButton);
 
 		// The button should still be there
-		expect(screen.getByTitle('Copy image to clipboard (⌘C)')).toBeInTheDocument();
+		expect(screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)).toBeInTheDocument();
 	});
 
 	it('closes lightbox when clicking overlay background', async () => {
@@ -3294,7 +3295,7 @@ describe('Responsive Bottom Panel', () => {
 		fireEvent.change(textarea, { target: { value: 'Modified content' } });
 
 		// In non-compact mode, Save should show text label
-		const saveButton = screen.getByTitle('Save changes (⌘S)');
+		const saveButton = screen.getByTitle(`Save changes (${formatShortcutKeys(['Meta', 's'])})`);
 		expect(saveButton).toBeInTheDocument();
 		expect(saveButton).toHaveTextContent('Save');
 	});

@@ -61,6 +61,9 @@ const DocumentGraphView = lazy(() =>
 		default: m.DocumentGraphView,
 	}))
 );
+const DirectorNotesModal = lazy(() =>
+	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
+);
 
 // Re-import the type for SymphonyContributionData (types don't need lazy loading)
 import type { SymphonyContributionData } from './components/SymphonyModal';
@@ -401,6 +404,9 @@ function MaestroConsoleInner() {
 		// Symphony Modal
 		symphonyModalOpen,
 		setSymphonyModalOpen,
+		// Director's Notes Modal
+		directorNotesOpen,
+		setDirectorNotesOpen,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -1153,6 +1159,12 @@ function MaestroConsoleInner() {
 			// Migration: ensure projectRoot is set (for sessions created before this field was added)
 			if (!session.projectRoot) {
 				session = { ...session, projectRoot: session.cwd };
+			}
+
+			// Migration: ensure fileTreeAutoRefreshInterval is set (default 180s for legacy sessions)
+			if (session.fileTreeAutoRefreshInterval == null) {
+				console.warn(`[restoreSession] Session missing fileTreeAutoRefreshInterval, defaulting to 180s`);
+				session = { ...session, fileTreeAutoRefreshInterval: 180 };
 			}
 
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
@@ -3575,6 +3587,37 @@ You are taking over this conversation. Based on the context above, provide a bri
 			defaultSaveToHistory,
 			defaultShowThinking,
 		});
+
+	// --- DIRECTOR'S NOTES SESSION NAVIGATION ---
+	// Handles cross-agent navigation: close modal → switch agent → resume session
+	const pendingResumeRef = useRef<{ agentSessionId: string; targetSessionId: string } | null>(null);
+
+	const handleDirectorNotesResumeSession = useCallback(
+		(sourceSessionId: string, agentSessionId: string) => {
+			// Close the Director's Notes modal
+			setDirectorNotesOpen(false);
+
+			// If already on the right agent, resume directly
+			if (activeSession?.id === sourceSessionId) {
+				handleResumeSession(agentSessionId);
+				return;
+			}
+
+			// Switch to the target agent and defer resume until activeSession updates
+			pendingResumeRef.current = { agentSessionId, targetSessionId: sourceSessionId };
+			setActiveSessionId(sourceSessionId);
+		},
+		[activeSession?.id, handleResumeSession, setActiveSessionId, setDirectorNotesOpen]
+	);
+
+	// Effect: process pending resume after agent switch completes
+	useEffect(() => {
+		if (pendingResumeRef.current && activeSession?.id === pendingResumeRef.current.targetSessionId) {
+			const { agentSessionId } = pendingResumeRef.current;
+			pendingResumeRef.current = null;
+			handleResumeSession(agentSessionId);
+		}
+	}, [activeSession?.id, handleResumeSession]);
 
 	// --- AGENT IPC LISTENERS ---
 	// Extracted hook for all window.maestro.process.onXxx listeners
@@ -10687,6 +10730,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setFuzzyFileSearchOpen,
 		setMarketplaceModalOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
 		// Group chat context
@@ -11377,6 +11421,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setGroups,
 		setSessions,
 		setRenameInstanceModalOpen,
@@ -11827,6 +11872,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onAutoRunRefresh={handleAutoRunRefresh}
 					onOpenMarketplace={handleOpenMarketplace}
 					onOpenSymphony={() => setSymphonyModalOpen(true)}
+					onOpenDirectorNotes={() => setDirectorNotesOpen(true)}
 					tabSwitcherOpen={tabSwitcherOpen}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
@@ -12157,6 +12203,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 										branchName: data.branchName || '',
 										totalDocuments: data.issue.documentPaths.length,
 										agentType: data.agentType,
+										draftPrNumber: data.draftPrNumber,
+										draftPrUrl: data.draftPrUrl,
 									})
 									.catch((err: unknown) => {
 										console.error('[Symphony] Failed to register active contribution:', err);
@@ -12178,7 +12226,44 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 								// Switch to Auto Run tab so user sees the documents
 								setActiveRightTab('autorun');
+
+								// Auto-start batch run with all contribution documents
+								if (data.autoRunPath && data.issue.documentPaths.length > 0) {
+									const batchConfig: BatchRunConfig = {
+										documents: data.issue.documentPaths.map((doc) => ({
+											id: generateId(),
+											filename: doc.name.replace(/\.md$/, ''),
+											resetOnCompletion: false,
+											isDuplicate: false,
+										})),
+										prompt: DEFAULT_BATCH_PROMPT,
+										loopEnabled: false,
+									};
+
+									// Small delay to ensure session state is fully propagated
+									setTimeout(() => {
+										console.log(
+											'[Symphony] Auto-starting batch run with',
+											batchConfig.documents.length,
+											'documents'
+										);
+										startBatchRun(newId, batchConfig, data.autoRunPath!);
+									}, 500);
+								}
 							}}
+						/>
+					</Suspense>
+				)}
+
+				{/* --- DIRECTOR'S NOTES MODAL (lazy-loaded) --- */}
+				{directorNotesOpen && (
+					<Suspense fallback={null}>
+						<DirectorNotesModal
+							theme={theme}
+							onClose={() => setDirectorNotesOpen(false)}
+							onResumeSession={handleDirectorNotesResumeSession}
+							fileTree={activeSession?.fileTree}
+							onFileClick={(path: string) => handleFileClick({ name: path.split('/').pop() || path, type: 'file' }, path)}
 						/>
 					</Suspense>
 				)}

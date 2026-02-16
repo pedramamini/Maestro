@@ -13,11 +13,18 @@ import type {
 	ContextManagementSettings,
 	KeyboardMasteryStats,
 	ThinkingMode,
+	DirectorNotesSettings,
 } from '../../types';
 import { DEFAULT_CUSTOM_THEME_COLORS } from '../../constants/themes';
 import { DEFAULT_SHORTCUTS, TAB_SHORTCUTS, FIXED_SHORTCUTS } from '../../constants/shortcuts';
 import { getLevelIndex } from '../../constants/keyboardMastery';
 import { commitCommandPrompt } from '../../../prompts';
+
+// Default Director's Notes settings
+const DEFAULT_DIRECTOR_NOTES_SETTINGS: DirectorNotesSettings = {
+	provider: 'claude-code',
+	defaultLookbackDays: 7,
+};
 
 // Default context management settings
 const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
@@ -358,6 +365,10 @@ export interface UseSettingsReturn {
 	// Windows warning suppression
 	suppressWindowsWarning: boolean;
 	setSuppressWindowsWarning: (value: boolean) => void;
+
+	// Director's Notes settings
+	directorNotesSettings: DirectorNotesSettings;
+	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
 }
 
 export function useSettings(): UseSettingsReturn {
@@ -521,6 +532,11 @@ export function useSettings(): UseSettingsReturn {
 
 	// Windows warning suppression
 	const [suppressWindowsWarning, setSuppressWindowsWarningState] = useState(false); // Default: show warning
+
+	// Director's Notes settings
+	const [directorNotesSettings, setDirectorNotesSettingsState] = useState<DirectorNotesSettings>(
+		DEFAULT_DIRECTOR_NOTES_SETTINGS
+	);
 
 	// Wrapper functions that persist to electron-store
 	// PERF: All wrapped in useCallback to prevent re-renders
@@ -1351,6 +1367,12 @@ export function useSettings(): UseSettingsReturn {
 		window.maestro.settings.set('suppressWindowsWarning', value);
 	}, []);
 
+	// Director's Notes settings setter
+	const setDirectorNotesSettings = useCallback((value: DirectorNotesSettings) => {
+		setDirectorNotesSettingsState(value);
+		window.maestro.settings.set('directorNotesSettings', value);
+	}, []);
+
 	// Load settings from electron-store
 	// This function is called on mount and on system resume (after sleep/suspend)
 	// PERF: Use batch loading to reduce IPC calls from ~60 to 3
@@ -1427,6 +1449,7 @@ export function useSettings(): UseSettingsReturn {
 			const savedAutomaticTabNamingEnabled = allSettings['automaticTabNamingEnabled'];
 			const savedFileTabAutoRefreshEnabled = allSettings['fileTabAutoRefreshEnabled'];
 			const savedSuppressWindowsWarning = allSettings['suppressWindowsWarning'];
+			const savedDirectorNotesSettings = allSettings['directorNotesSettings'];
 
 			// Conductor Profile (About Me)
 			if (savedConductorProfile !== undefined)
@@ -1542,6 +1565,22 @@ export function useSettings(): UseSettingsReturn {
 						return key;
 					});
 					migratedShortcuts[id] = { ...shortcut, keys: migratedKeys };
+				}
+
+				// Migration: directorNotes changed to Meta+Shift+O (was Alt+Meta+D, briefly Meta+Shift+D)
+				const directorNotesSaved = migratedShortcuts['directorNotes'];
+				if (directorNotesSaved) {
+					const savedKeysJson = JSON.stringify(directorNotesSaved.keys);
+					if (savedKeysJson === JSON.stringify(['Alt', 'Meta', 'd']) || savedKeysJson === JSON.stringify(['Meta', 'Shift', 'd'])) {
+						migratedShortcuts['directorNotes'] = { ...directorNotesSaved, keys: ['Meta', 'Shift', 'o'] };
+						needsMigration = true;
+					}
+				}
+				// Also restore viewGitDiff if it was swapped to Alt+Meta+D during the brief Shift+D migration
+				const viewGitDiffSaved = migratedShortcuts['viewGitDiff'];
+				if (viewGitDiffSaved && JSON.stringify(viewGitDiffSaved.keys) === JSON.stringify(['Alt', 'Meta', 'd'])) {
+					migratedShortcuts['viewGitDiff'] = { ...viewGitDiffSaved, keys: ['Meta', 'Shift', 'd'] };
+					needsMigration = true;
 				}
 
 				// If migration was needed, save the corrected shortcuts
@@ -1804,6 +1843,14 @@ export function useSettings(): UseSettingsReturn {
 			if (savedSuppressWindowsWarning !== undefined) {
 				setSuppressWindowsWarningState(savedSuppressWindowsWarning as boolean);
 			}
+
+			// Director's Notes settings
+			if (savedDirectorNotesSettings !== undefined) {
+				setDirectorNotesSettingsState({
+					...DEFAULT_DIRECTOR_NOTES_SETTINGS,
+					...(savedDirectorNotesSettings as Partial<DirectorNotesSettings>),
+				});
+			}
 		} catch (error) {
 			console.error('[Settings] Failed to load settings:', error);
 		} finally {
@@ -1990,6 +2037,8 @@ export function useSettings(): UseSettingsReturn {
 			setFileTabAutoRefreshEnabled,
 			suppressWindowsWarning,
 			setSuppressWindowsWarning,
+			directorNotesSettings,
+			setDirectorNotesSettings,
 		}),
 		[
 			// State values
@@ -2140,6 +2189,8 @@ export function useSettings(): UseSettingsReturn {
 			setFileTabAutoRefreshEnabled,
 			suppressWindowsWarning,
 			setSuppressWindowsWarning,
+			directorNotesSettings,
+			setDirectorNotesSettings,
 		]
 	);
 }

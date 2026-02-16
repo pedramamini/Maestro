@@ -11,6 +11,7 @@ import {
 	Pencil,
 } from 'lucide-react';
 import type { Theme } from '../types';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { ConfirmModal } from './ConfirmModal';
@@ -717,7 +718,7 @@ export function LogViewer({
 						className="px-1.5 py-0.5 rounded mx-1 font-bold"
 						style={{ backgroundColor: theme.colors.bgActivity }}
 					>
-						⌘F
+						{formatShortcutKeys(['Meta', 'f'])}
 					</kbd>{' '}
 					to search
 				</div>

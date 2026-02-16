@@ -54,16 +54,13 @@ export interface RegisteredRepository {
 /**
  * Categories for organizing Symphony repositories.
  */
-export type SymphonyCategory =
-  | 'ai-ml'           // AI/ML tools and libraries
-  | 'developer-tools' // Developer productivity tools
-  | 'infrastructure'  // DevOps, cloud, infrastructure
-  | 'documentation'   // Documentation projects
-  | 'web'             // Web frameworks and libraries
-  | 'mobile'          // Mobile development
-  | 'data'            // Data processing, databases
-  | 'security'        // Security tools
-  | 'other';          // Miscellaneous
+/**
+ * Category for organizing Symphony repositories.
+ * This is a plain string so new categories can be added to the registry
+ * without requiring code changes. Known categories have display info
+ * in SYMPHONY_CATEGORIES; unknown ones fall back to title-cased name.
+ */
+export type SymphonyCategory = string;
 
 // ============================================================================
 // GitHub Issue Types (Fetched via GitHub API)

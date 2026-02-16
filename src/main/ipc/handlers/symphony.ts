@@ -1350,6 +1350,8 @@ This PR will be updated automatically when the Auto Run completes.`;
 				branchName: string;
 				totalDocuments: number;
 				agentType: string;
+				draftPrNumber?: number;
+				draftPrUrl?: string;
 			}): Promise<{ success: boolean; error?: string }> => {
 				const {
 					contributionId,
@@ -1362,6 +1364,8 @@ This PR will be updated automatically when the Auto Run completes.`;
 					branchName,
 					totalDocuments,
 					agentType,
+					draftPrNumber,
+					draftPrUrl,
 				} = params;
 
 				const state = await readState(app);
@@ -1373,7 +1377,7 @@ This PR will be updated automatically when the Auto Run completes.`;
 					return { success: true };
 				}
 
-				// Create active contribution entry (without PR info initially)
+				// Create active contribution entry
 				const contribution: ActiveContribution = {
 					id: contributionId,
 					repoSlug,
@@ -1382,9 +1386,8 @@ This PR will be updated automatically when the Auto Run completes.`;
 					issueTitle,
 					localPath,
 					branchName,
-					// PR info will be set later when first commit creates the draft PR
-					draftPrNumber: undefined,
-					draftPrUrl: undefined,
+					draftPrNumber,
+					draftPrUrl,
 					startedAt: new Date().toISOString(),
 					status: 'running',
 					progress: {
@@ -2391,7 +2394,58 @@ This PR will be updated automatically when the Auto Run completes.`;
 							? path.dirname(resolvedDocs[0].path)
 							: localPath;
 
-					// 5. Broadcast status update (no PR yet - will be created on first commit)
+					// 5. Create empty commit, push branch, and open draft PR to claim the issue
+					let draftPrNumber: number | undefined;
+					let draftPrUrl: string | undefined;
+
+					const baseBranch = await getDefaultBranch(localPath);
+					const commitMsg = `[Symphony] Start contribution for #${issueNumber}`;
+					const emptyCommitResult = await execFileNoThrow(
+						'git',
+						['commit', '--allow-empty', '-m', commitMsg],
+						localPath
+					);
+
+					if (emptyCommitResult.exitCode === 0) {
+						const prTitle = `[WIP] Symphony: ${issueTitle} (#${issueNumber})`;
+						const prBody = `## Maestro Symphony Contribution
+
+Working on #${issueNumber} via [Maestro Symphony](https://runmaestro.ai).
+
+**Status:** In Progress
+**Started:** ${new Date().toISOString()}
+
+---
+
+This PR will be updated automatically when the Auto Run completes.`;
+
+						const prResult = await createDraftPR(localPath, baseBranch, prTitle, prBody);
+						if (prResult.success) {
+							draftPrNumber = prResult.prNumber;
+							draftPrUrl = prResult.prUrl;
+
+							// Update metadata with PR info
+							const metaContent = JSON.parse(
+								await fs.readFile(metadataPath, 'utf-8')
+							);
+							metaContent.prCreated = true;
+							metaContent.draftPrNumber = draftPrNumber;
+							metaContent.draftPrUrl = draftPrUrl;
+							await fs.writeFile(metadataPath, JSON.stringify(metaContent, null, 2));
+						} else {
+							logger.warn('Failed to create draft PR, continuing without claim', LOG_CONTEXT, {
+								contributionId,
+								error: prResult.error,
+							});
+						}
+					} else {
+						logger.warn('Empty commit failed, continuing without draft PR', LOG_CONTEXT, {
+							contributionId,
+							error: emptyCommitResult.stderr,
+						});
+					}
+
+					// 6. Broadcast status update
 					const mainWindow = getMainWindow?.();
 					if (isWebContentsAvailable(mainWindow)) {
 						mainWindow.webContents.send('symphony:contributionStarted', {
@@ -2399,7 +2453,8 @@ This PR will be updated automatically when the Auto Run completes.`;
 							sessionId,
 							branchName,
 							autoRunPath,
-							// No PR yet - will be created on first commit
+							draftPrNumber,
+							draftPrUrl,
 						});
 					}
 
@@ -2409,13 +2464,15 @@ This PR will be updated automatically when the Auto Run completes.`;
 						branchName,
 						documentCount: resolvedDocs.length,
 						hasExternalDocs,
+						draftPrNumber,
 					});
 
 					return {
 						success: true,
 						branchName,
 						autoRunPath,
-						// draftPrNumber and draftPrUrl will be set when PR is created on first commit
+						draftPrNumber,
+						draftPrUrl,
 					};
 				} catch (error) {
 					logger.error('Symphony contribution failed', LOG_CONTEXT, { error });

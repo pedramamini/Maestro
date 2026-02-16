@@ -1,6 +1,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { QuickActionsModal } from '../../../renderer/components/QuickActionsModal';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Session, Group, Theme, Shortcut } from '../../../renderer/types';
 import { useUIStore } from '../../../renderer/stores/uiStore';
 import { useFileExplorerStore } from '../../../renderer/stores/fileExplorerStore';
@@ -284,7 +285,7 @@ describe('QuickActionsModal', () => {
 			render(<QuickActionsModal {...props} />);
 
 			expect(screen.getByText('Toggle Sidebar')).toBeInTheDocument();
-			expect(screen.getByText('Cmd+B')).toBeInTheDocument();
+			expect(screen.getByText(formatShortcutKeys(mockShortcuts.toggleSidebar.keys))).toBeInTheDocument();
 		});
 
 		it('renders Settings action', () => {
@@ -1451,6 +1452,68 @@ describe('QuickActionsModal', () => {
 				const curr = labels[i]!;
 				expect(prev.localeCompare(curr)).toBeLessThanOrEqual(0);
 			}
+		});
+	});
+
+	describe("Director's Notes action", () => {
+		it("shows Director's Notes command when onOpenDirectorNotes is provided", () => {
+			const onOpenDirectorNotes = vi.fn();
+			const props = createDefaultProps({
+				onOpenDirectorNotes,
+				shortcuts: {
+					...mockShortcuts,
+					directorNotes: { id: 'directorNotes', keys: ['Cmd', 'Shift', 'D'], enabled: true },
+				},
+			});
+			render(<QuickActionsModal {...props} />);
+
+			expect(screen.getByText("Director's Notes")).toBeInTheDocument();
+			expect(
+				screen.getByText('View unified history and AI synopsis across all sessions')
+			).toBeInTheDocument();
+		});
+
+		it("handles Director's Notes action - calls onOpenDirectorNotes and closes modal", () => {
+			const onOpenDirectorNotes = vi.fn();
+			const props = createDefaultProps({ onOpenDirectorNotes });
+			render(<QuickActionsModal {...props} />);
+
+			fireEvent.click(screen.getByText("Director's Notes"));
+
+			expect(onOpenDirectorNotes).toHaveBeenCalled();
+			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
+		});
+
+		it("does not show Director's Notes when onOpenDirectorNotes is not provided", () => {
+			const props = createDefaultProps();
+			render(<QuickActionsModal {...props} />);
+
+			expect(screen.queryByText("Director's Notes")).not.toBeInTheDocument();
+		});
+
+		it("Director's Notes appears when searching for 'director'", () => {
+			const onOpenDirectorNotes = vi.fn();
+			const props = createDefaultProps({ onOpenDirectorNotes });
+			render(<QuickActionsModal {...props} />);
+
+			const input = screen.getByPlaceholderText('Type a command or jump to agent...');
+			fireEvent.change(input, { target: { value: 'director' } });
+
+			expect(screen.getByText("Director's Notes")).toBeInTheDocument();
+		});
+
+		it("displays shortcut keys for Director's Notes when shortcut is configured", () => {
+			const onOpenDirectorNotes = vi.fn();
+			const props = createDefaultProps({
+				onOpenDirectorNotes,
+				shortcuts: {
+					...mockShortcuts,
+					directorNotes: { id: 'directorNotes', keys: ['Cmd', 'Shift', 'D'], enabled: true },
+				},
+			});
+			render(<QuickActionsModal {...props} />);
+
+			expect(screen.getByText(formatShortcutKeys(['Cmd', 'Shift', 'D']))).toBeInTheDocument();
 		});
 	});
 
