@@ -375,7 +375,7 @@ export function AccountsPanel({ theme }: AccountsPanelProps) {
 							Registered Virtuosos
 						</label>
 						<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-							AI Account Providers
+							AI Provider Accounts
 						</p>
 					</div>
 					<button

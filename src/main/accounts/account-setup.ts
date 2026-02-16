@@ -41,11 +41,15 @@ export async function validateBaseClaudeDir(): Promise<{
 		errors.push(`${baseDir} does not exist. Run 'claude' at least once to create it.`);
 	}
 
-	// Check for .claude.json (auth tokens)
+	// Check for auth tokens — Claude Code uses .credentials.json (current) or .claude.json (legacy)
 	try {
-		await fs.access(path.join(baseDir, '.claude.json'));
+		await fs.access(path.join(baseDir, '.credentials.json'));
 	} catch {
-		errors.push('No .claude.json found — Claude Code may not be authenticated.');
+		try {
+			await fs.access(path.join(baseDir, '.claude.json'));
+		} catch {
+			errors.push('No .credentials.json or .claude.json found — Claude Code may not be authenticated.');
+		}
 	}
 
 	return { valid: errors.length === 0, baseDir, errors };
@@ -98,9 +102,11 @@ function extractEmailFromClaudeJson(content: string): string | null {
 	try {
 		const json = JSON.parse(content);
 		// Try common field names where email might be stored
+		// Claude Code stores it at oauthAccount.emailAddress
 		return json.email
 			|| json.accountEmail
 			|| json.primaryEmail
+			|| json.oauthAccount?.emailAddress
 			|| json.oauthAccount?.email
 			|| json.account?.email
 			|| null;
@@ -250,6 +256,51 @@ export async function repairAccountSymlinks(configDir: string): Promise<{
 	}
 
 	return { repaired, errors };
+}
+
+/**
+ * Sync credentials from the base ~/.claude directory to an account directory.
+ * Used after the user runs `claude login` in the base dir to propagate
+ * fresh OAuth tokens to the account directory.
+ *
+ * Copies .credentials.json from ~/.claude to the target configDir.
+ */
+export async function syncCredentialsFromBase(configDir: string): Promise<{
+	success: boolean;
+	error?: string;
+}> {
+	const baseDir = path.join(os.homedir(), '.claude');
+	const baseCreds = path.join(baseDir, '.credentials.json');
+	const targetCreds = path.join(configDir, '.credentials.json');
+
+	try {
+		// Verify base credentials exist
+		try {
+			await fs.access(baseCreds);
+		} catch {
+			return { success: false, error: 'No .credentials.json found in base ~/.claude directory' };
+		}
+
+		// Verify target directory exists
+		try {
+			const stat = await fs.stat(configDir);
+			if (!stat.isDirectory()) {
+				return { success: false, error: `${configDir} is not a directory` };
+			}
+		} catch {
+			return { success: false, error: `${configDir} does not exist` };
+		}
+
+		// Copy the credentials
+		const content = await fs.readFile(baseCreds, 'utf-8');
+		await fs.writeFile(targetCreds, content, 'utf-8');
+
+		logger.info(`Synced credentials from ${baseCreds} to ${targetCreds}`, LOG_CONTEXT);
+		return { success: true };
+	} catch (error) {
+		logger.error('Failed to sync credentials', LOG_CONTEXT, { error: String(error) });
+		return { success: false, error: String(error) };
+	}
 }
 
 /**

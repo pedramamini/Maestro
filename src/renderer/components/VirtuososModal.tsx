@@ -33,7 +33,7 @@ export function VirtuososModal({ isOpen, onClose, theme }: VirtuososModalProps) 
 		>
 			<div className="mb-1">
 				<p className="text-xs" style={{ color: theme.colors.textDim }}>
-					AI Account Providers
+					AI Provider Accounts
 				</p>
 			</div>
 			<AccountsPanel theme={theme} />

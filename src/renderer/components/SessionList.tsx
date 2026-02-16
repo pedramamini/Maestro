@@ -638,7 +638,7 @@ function HamburgerMenuContent({
 						Virtuosos
 					</div>
 					<div className="text-xs" style={{ color: theme.colors.textDim }}>
-						AI Account Providers
+						AI Provider Accounts
 					</div>
 				</div>
 			</button>

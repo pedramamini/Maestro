@@ -153,13 +153,13 @@ describe('account-setup', () => {
 			expect(result.errors[0]).toContain('does not exist');
 		});
 
-		it('should report missing .claude.json', async () => {
+		it('should report missing credentials files', async () => {
 			mockStat.mockResolvedValue({ isDirectory: () => true });
 			mockAccess.mockRejectedValue(new Error('ENOENT'));
 
 			const result = await validateBaseClaudeDir();
 			expect(result.valid).toBe(false);
-			expect(result.errors).toContain('No .claude.json found — Claude Code may not be authenticated.');
+			expect(result.errors).toContain('No .credentials.json or .claude.json found — Claude Code may not be authenticated.');
 		});
 	});
 

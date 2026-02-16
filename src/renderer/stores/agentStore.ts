@@ -224,9 +224,11 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 
 		get().clearAgentError(sessionId);
 
-		// Switch to terminal mode for re-auth
-		useSessionStore.getState().setActiveSessionId(sessionId);
-		updateSession(sessionId, (s) => ({ ...s, inputMode: 'terminal' }));
+		// Trigger automatic auth recovery via main process
+		// This will spawn `claude login`, open browser for OAuth, and respawn the agent
+		window.maestro.accounts.triggerAuthRecovery(sessionId).catch((err) => {
+			console.error('[authenticateAfterError] Auth recovery failed:', err);
+		});
 	},
 
 	processQueuedItem: async (sessionId, item, deps) => {
