@@ -175,15 +175,25 @@ export function AccountTrendChart({
 	}, [data, compact]);
 
 	const rangeToggle = (small: boolean) => (
-		<div className={`flex gap-${small ? '0.5' : '1'} ${small ? 'mb-0.5' : 'mb-2'}`}>
+		<div style={{
+			display: 'flex',
+			gap: small ? 2 : 4,
+			marginBottom: small ? 2 : 6,
+		}}>
 			{(Object.keys(TIME_RANGE_LABELS) as TimeRange[]).map(r => (
 				<button
 					key={r}
 					onClick={() => setRange(r)}
-					className={`${small ? 'text-[8px] px-1 py-0' : 'text-[10px] px-1.5 py-0.5'} rounded ${range === r ? 'font-bold' : ''}`}
 					style={{
-						backgroundColor: range === r ? theme.colors.accent + '20' : 'transparent',
+						fontSize: small ? 9 : 10,
+						padding: small ? '1px 4px' : '2px 6px',
+						borderRadius: 3,
+						border: 'none',
+						cursor: 'pointer',
+						fontWeight: range === r ? 700 : 400,
+						backgroundColor: range === r ? theme.colors.accent + '25' : theme.colors.bgActivity,
 						color: range === r ? theme.colors.accent : theme.colors.textDim,
+						lineHeight: 1.2,
 					}}
 				>
 					{TIME_RANGE_LABELS[r]}
