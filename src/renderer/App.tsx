@@ -1441,6 +1441,13 @@ function MaestroConsoleInner() {
 								return session;
 							}));
 						}
+						// Re-register assignments for sessions that have accountId but were
+						// created before the assign() call was added to session creation
+						for (const session of restoredSessions) {
+							if (session.accountId && session.toolType === 'claude-code') {
+								window.maestro.accounts.assign(session.id, session.accountId).catch(() => {});
+							}
+						}
 					} catch (reconcileError) {
 						console.error('[App] Account reconciliation failed:', reconcileError);
 					}
@@ -8290,6 +8297,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 					if (defaultAccount) {
 						newSession.accountId = defaultAccount.id;
 						newSession.accountName = defaultAccount.name;
+						// Register assignment with main process so usage listener tracks this session
+						window.maestro.accounts.assign(newId, defaultAccount.id).catch(() => {});
 					}
 				} catch {
 					// Accounts not configured or unavailable — proceed without assignment
@@ -12773,6 +12782,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					isOpen={virtuososOpen}
 					onClose={() => setVirtuososOpen(false)}
 					theme={theme}
+					sessions={sessions}
 				/>
 
 				{/* --- EMPTY STATE VIEW (when no sessions) --- */}
