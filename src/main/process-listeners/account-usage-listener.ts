@@ -10,6 +10,7 @@ import type { StatsDB } from '../stats';
 import type { UsageStats } from './types';
 import { DEFAULT_TOKEN_WINDOW_MS } from '../../shared/account-types';
 import { getWindowBounds } from '../accounts/account-utils';
+import { REGEX_SESSION_SUFFIX } from '../constants';
 
 const LOG_CONTEXT = 'account-usage-listener';
 
@@ -38,30 +39,48 @@ export function setupAccountUsageListener(
 	processManager.on('usage', (sessionId: string, usageStats: UsageStats) => {
 		try {
 			const accountRegistry = getAccountRegistry();
-			if (!accountRegistry) return; // Account system not initialized
+			if (!accountRegistry) {
+				return;
+			}
 
-			// Look up the account assigned to this session
-			const assignment = accountRegistry.getAssignment(sessionId);
-			if (!assignment) return; // No account assigned — skip
+			// Usage events arrive with compound session IDs (e.g. "{id}-ai-{tabId}")
+			// but assignments may be keyed by base session ID (from reconcileSessions on restore).
+			// Try compound ID first (from spawn-time assignment), then base ID (from restore).
+			let assignment = accountRegistry.getAssignment(sessionId);
+			if (!assignment) {
+				const baseSessionId = sessionId.replace(REGEX_SESSION_SUFFIX, '');
+				if (baseSessionId !== sessionId) {
+					assignment = accountRegistry.getAssignment(baseSessionId);
+				}
+			}
+			if (!assignment) {
+				return;
+			}
 
 			const account = accountRegistry.get(assignment.accountId);
-			if (!account) return; // Account was deleted — skip
+			if (!account) {
+				return;
+			}
 
 			const statsDb = getStatsDB();
-			if (!statsDb.isReady()) return; // Stats DB not ready
+			if (!statsDb.isReady()) {
+				return;
+			}
 
 			const windowMs = account.tokenWindowMs || DEFAULT_TOKEN_WINDOW_MS;
 			const now = Date.now();
 			const { start, end } = getWindowBounds(now, windowMs);
 
-			// Aggregate tokens into the account's current window
-			statsDb.upsertAccountUsageWindow(account.id, start, end, {
+			const tokensToWrite = {
 				inputTokens: usageStats.inputTokens || 0,
 				outputTokens: usageStats.outputTokens || 0,
 				cacheReadTokens: usageStats.cacheReadInputTokens || 0,
 				cacheCreationTokens: usageStats.cacheCreationInputTokens || 0,
 				costUsd: usageStats.totalCostUsd || 0,
-			});
+			};
+
+			// Aggregate tokens into the account's current window
+			statsDb.upsertAccountUsageWindow(account.id, start, end, tokensToWrite);
 
 			// Read back aggregated window usage and broadcast to renderer
 			const windowUsage = statsDb.getAccountUsageInWindow(account.id, start, end);

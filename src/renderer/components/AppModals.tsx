@@ -266,9 +266,9 @@ export const AppInfoModals = memo(function AppInfoModals({
 						isOpen={usageDashboardOpen}
 						onClose={onCloseUsageDashboard}
 						theme={theme}
+						sessions={sessions}
 						defaultTimeRange={defaultStatsTimeRange}
 						colorBlindMode={colorBlindMode}
-						sessions={sessions}
 					/>
 				</Suspense>
 			)}

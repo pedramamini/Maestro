@@ -782,7 +782,7 @@ export function AccountsPanel({ theme }: AccountsPanelProps) {
 												style={{
 													backgroundColor: account.autoSwitchEnabled
 														? theme.colors.accent
-														: theme.colors.border,
+														: theme.colors.bgActivity,
 												}}
 											>
 												<div
@@ -1128,7 +1128,7 @@ export function AccountsPanel({ theme }: AccountsPanelProps) {
 							style={{
 								backgroundColor: switchConfig.enabled
 									? theme.colors.accent
-									: theme.colors.border,
+									: theme.colors.bgActivity,
 							}}
 						>
 							<div
@@ -1157,7 +1157,7 @@ export function AccountsPanel({ theme }: AccountsPanelProps) {
 							style={{
 								backgroundColor: switchConfig.promptBeforeSwitch
 									? theme.colors.accent
-									: theme.colors.border,
+									: theme.colors.bgActivity,
 							}}
 						>
 							<div
