@@ -37,7 +37,7 @@ import { gitService } from '../services/git';
 import { remoteUrlToBrowserUrl } from '../../shared/gitUtils';
 import { useGitBranch, useGitDetail, useGitFileStatus } from '../contexts/GitStatusContext';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
-import { calculateContextTokens } from '../utils/contextUsage';
+import { calculateContextDisplay } from '../utils/contextUsage';
 import { useAgentCapabilities, useHoverTooltip } from '../hooks';
 import type {
 	Session,
@@ -257,7 +257,12 @@ interface MainPanelProps {
 		sessionId: string
 	) => Promise<import('../utils/fileExplorer').FileTreeChanges | undefined>;
 	// Callback to open a saved file in a tab
-	onOpenSavedFileInTab?: (file: { path: string; name: string; content: string; sshRemoteId?: string }) => void;
+	onOpenSavedFileInTab?: (file: {
+		path: string;
+		name: string;
+		content: string;
+		sshRemoteId?: string;
+	}) => void;
 	// File preview navigation
 	canGoBack?: boolean;
 	canGoForward?: boolean;
@@ -594,46 +599,27 @@ export const MainPanel = React.memo(
 			return configured > 0 ? configured : reported;
 		}, [configuredContextWindow, activeTab?.usageStats?.contextWindow]);
 
-		// Compute context tokens using agent-specific calculation.
-		// Claude: input + cacheRead + cacheCreation (total input for the request)
-		// Codex: input + output (combined limit)
-		// When values are accumulated from multi-tool turns, total may exceed contextWindow.
-		// In that case, derive tokens from session.contextUsage (preserved last valid percentage).
-		const activeTabContextTokens = useMemo(() => {
-			if (!activeTab?.usageStats) return 0;
-			const raw = calculateContextTokens(
+		// Compute context tokens and percentage using the shared helper.
+		// Handles accumulated multi-tool turns by falling back to session.contextUsage.
+		const { tokens: activeTabContextTokens, percentage: activeTabContextUsage } = useMemo(() => {
+			if (!activeTab?.usageStats) return { tokens: 0, percentage: 0 };
+			return calculateContextDisplay(
 				{
 					inputTokens: activeTab.usageStats.inputTokens,
 					outputTokens: activeTab.usageStats.outputTokens,
 					cacheCreationInputTokens: activeTab.usageStats.cacheCreationInputTokens ?? 0,
 					cacheReadInputTokens: activeTab.usageStats.cacheReadInputTokens ?? 0,
 				},
-				activeSession?.toolType
+				activeTabContextWindow,
+				activeSession?.toolType,
+				activeSession?.contextUsage
 			);
-
-			// If raw exceeds window, values are accumulated from multi-tool turns.
-			// Fall back to deriving from the preserved contextUsage percentage.
-			const effectiveWindow = activeTabContextWindow || 200000;
-			if (raw > effectiveWindow && activeSession?.contextUsage != null) {
-				return Math.round((activeSession.contextUsage / 100) * effectiveWindow);
-			}
-
-			return raw;
 		}, [
 			activeTab?.usageStats,
 			activeSession?.toolType,
 			activeTabContextWindow,
 			activeSession?.contextUsage,
 		]);
-
-		// Compute context usage percentage from context tokens and window size.
-		// Since we already handle accumulated values in activeTabContextTokens,
-		// we just calculate the percentage directly.
-		const activeTabContextUsage = useMemo(() => {
-			if (!activeTabContextWindow || activeTabContextWindow === 0) return 0;
-			if (activeTabContextTokens === 0) return 0;
-			return Math.round((activeTabContextTokens / activeTabContextWindow) * 100);
-		}, [activeTabContextTokens, activeTabContextWindow]);
 
 		// PERF: Track panel width for responsive widget hiding with threshold-based updates
 		// Only update state when width crosses a meaningful threshold (20px) to prevent
@@ -855,8 +841,16 @@ export const MainPanel = React.memo(
 		// Memoize sshRemoteId to prevent object recreation
 		const filePreviewSshRemoteId = useMemo(
 			() =>
-				activeSession?.sshRemoteId || activeSession?.sessionSshRemoteConfig?.remoteId || undefined,
-			[activeSession?.sshRemoteId, activeSession?.sessionSshRemoteConfig?.remoteId]
+				activeSession?.sshRemoteId ||
+				(activeSession?.sessionSshRemoteConfig?.enabled
+					? activeSession.sessionSshRemoteConfig.remoteId
+					: undefined) ||
+				undefined,
+			[
+				activeSession?.sshRemoteId,
+				activeSession?.sessionSshRemoteConfig?.enabled,
+				activeSession?.sessionSshRemoteConfig?.remoteId,
+			]
 		);
 
 		// Handler to view git diff
@@ -867,7 +861,7 @@ export const MainPanel = React.memo(
 				activeSession.inputMode === 'terminal'
 					? activeSession.shellCwd || activeSession.cwd
 					: activeSession.cwd;
-			const diff = await gitService.getDiff(cwd);
+			const diff = await gitService.getDiff(cwd, undefined, filePreviewSshRemoteId);
 
 			if (diff.diff) {
 				setGitDiffPreview(diff.diff);
@@ -983,8 +977,17 @@ export const MainPanel = React.memo(
 											{/* SSH Host Pill - show SSH remote name when running remotely (replaces GIT/LOCAL badge) */}
 											{activeSession.sessionSshRemoteConfig?.enabled && sshRemoteName ? (
 												<span
-													className="flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-purple-500/30 text-purple-500 bg-purple-500/10 max-w-[120px]"
-													title={`SSH Remote: ${sshRemoteName}`}
+													className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-purple-500/30 text-purple-500 bg-purple-500/10 max-w-[120px] ${
+														activeSession.isGitRepo ? 'cursor-pointer hover:bg-purple-500/20' : ''
+													}`}
+													title={`SSH Remote: ${sshRemoteName}${activeSession.isGitRepo && gitInfo?.branch ? ` (${gitInfo.branch})` : ''}`}
+													onClick={(e) => {
+														e.stopPropagation();
+														if (activeSession.isGitRepo) {
+															refreshGitStatus(); // Refresh git info immediately on click
+															setGitLogOpen?.(true);
+														}
+													}}
 												>
 													<Server className="w-3 h-3 shrink-0" />
 													<span className="truncate uppercase">{sshRemoteName}</span>
@@ -1522,7 +1525,7 @@ export const MainPanel = React.memo(
 												setAgentSessionsOpen(true);
 											}}
 											className="p-2 rounded hover:bg-white/5"
-											title={`Agent Sessions (${shortcuts.agentSessions?.keys?.join('+').replace('Meta', 'Cmd').replace('Shift', '⇧') || 'Cmd+⇧+L'})`}
+											title={`Agent Sessions (${shortcuts.agentSessions ? formatShortcutKeys(shortcuts.agentSessions.keys) : formatShortcutKeys(['Meta', 'Shift', 'l'])})`}
 											data-tour="agent-sessions-button"
 										>
 											<List className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -1861,7 +1864,7 @@ export const MainPanel = React.memo(
 											thinkingSessions={thinkingSessions}
 											onSessionClick={handleSessionClick}
 											autoRunState={currentSessionBatchState || undefined}
-											onStopAutoRun={onStopBatchRun}
+											onStopAutoRun={() => onStopBatchRun?.(activeSession.id)}
 											onOpenQueueBrowser={onOpenQueueBrowser}
 											tabReadOnlyMode={activeTab?.readOnlyMode ?? false}
 											onToggleTabReadOnlyMode={props.onToggleTabReadOnlyMode}

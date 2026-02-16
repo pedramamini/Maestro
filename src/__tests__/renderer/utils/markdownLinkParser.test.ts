@@ -13,6 +13,7 @@ import {
 	parseMarkdownLinks,
 	extractDomain,
 	type ParsedMarkdownLinks,
+	type ParseMarkdownLinksOptions,
 } from '../../../renderer/utils/markdownLinkParser';
 
 // ---------------------------------------------------------------------------
@@ -969,6 +970,105 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 				expect(result.externalLinks).toHaveLength(1);
 				expect(result.externalLinks[0].domain).toBe('twitter.com');
 			});
+		});
+	});
+
+	// -----------------------------------------------------------------------
+	// File-tree-aware fallback resolution (allFiles option)
+	// -----------------------------------------------------------------------
+	describe('file-tree-aware fallback resolution', () => {
+		const allFiles = [
+			'Market Research/INDEX.md',
+			'Market Research/Vendors/PlexTrac.md',
+			'Market Research/Vendors/AttackForge.md',
+			'Market Research/Competitors/Cyver-Core.md',
+			'notes/readme.md',
+			'docs/guide.md',
+			'docs/advanced/config.md',
+			'standalone.md',
+		];
+		const options: ParseMarkdownLinksOptions = { allFiles };
+
+		it('should resolve wiki links to files in different directories', () => {
+			const content = 'See [[PlexTrac]] and [[AttackForge]] for vendor details.';
+			const result = parseMarkdownLinks(content, 'Market Research/INDEX.md', options);
+
+			expect(result.internalLinks).toContain('Market Research/Vendors/PlexTrac.md');
+			expect(result.internalLinks).toContain('Market Research/Vendors/AttackForge.md');
+		});
+
+		it('should resolve wiki links with partial paths via fallback', () => {
+			const content = 'See [[Competitors/Cyver-Core]] for details.';
+			const result = parseMarkdownLinks(content, 'Market Research/INDEX.md', options);
+
+			expect(result.internalLinks).toContain('Market Research/Competitors/Cyver-Core.md');
+		});
+
+		it('should prefer relative resolution when file exists at relative path', () => {
+			// If a file exists at the relative path, use it directly (no fallback needed)
+			const content = '[[guide]]';
+			const result = parseMarkdownLinks(content, 'docs/readme.md', {
+				allFiles: ['docs/guide.md', 'other/guide.md'],
+			});
+
+			expect(result.internalLinks).toContain('docs/guide.md');
+		});
+
+		it('should fall back to filename match when relative path not in file tree', () => {
+			// File at relative path "somedir/guide.md" doesn't exist, but "docs/guide.md" does
+			const content = '[[guide]]';
+			const result = parseMarkdownLinks(content, 'somedir/index.md', {
+				allFiles: ['docs/guide.md'],
+			});
+
+			expect(result.internalLinks).toContain('docs/guide.md');
+		});
+
+		it('should resolve standard markdown links via fallback', () => {
+			const content = '[PlexTrac](PlexTrac.md)';
+			const result = parseMarkdownLinks(content, 'Market Research/INDEX.md', options);
+
+			expect(result.internalLinks).toContain('Market Research/Vendors/PlexTrac.md');
+		});
+
+		it('should pick closest match when multiple files share a filename', () => {
+			const content = '[[readme]]';
+			// From Market Research directory, "notes/readme.md" is equally far;
+			// the important thing is it resolves to something valid
+			const result = parseMarkdownLinks(content, 'docs/index.md', {
+				allFiles: ['docs/readme.md', 'notes/readme.md'],
+			});
+
+			// Should prefer docs/readme.md since it shares the docs/ prefix with the current file
+			expect(result.internalLinks).toContain('docs/readme.md');
+		});
+
+		it('should still work without allFiles (backward compatible)', () => {
+			const content = 'See [[other-doc]] for more info.';
+			const result = parseMarkdownLinks(content, 'docs/readme.md');
+
+			// Without allFiles, resolves relative to current file
+			expect(result.internalLinks).toContain('docs/other-doc.md');
+		});
+
+		it('should handle wiki link that resolves nowhere even with fallback', () => {
+			const content = '[[nonexistent-document]]';
+			const result = parseMarkdownLinks(content, 'docs/readme.md', options);
+
+			// Should still include the relative resolution (docs/nonexistent-document.md)
+			// even though it's not in allFiles - the parser doesn't filter by existence
+			expect(result.internalLinks).toHaveLength(1);
+		});
+
+		it('should deduplicate when relative and fallback resolve to same path', () => {
+			const content = '[[standalone]]';
+			const result = parseMarkdownLinks(content, 'index.md', {
+				allFiles: ['standalone.md'],
+			});
+
+			// relative resolves to standalone.md, which is in allFiles - no fallback needed
+			expect(result.internalLinks).toHaveLength(1);
+			expect(result.internalLinks).toContain('standalone.md');
 		});
 	});
 });

@@ -89,10 +89,12 @@ export class ChildProcessSpawner {
 		const promptViaStdin = sendPromptViaStdin || sendPromptViaStdinRaw || argsHaveInputStreamJson;
 
 		// Build final args based on batch mode and images
+		// Track whether the prompt was added to CLI args (used later to decide stdin behavior)
 		let finalArgs: string[];
 		let tempImageFiles: string[] = [];
 		// effectivePrompt may be modified (e.g., image path prefix prepended for resume mode)
 		let effectivePrompt = prompt;
+		let promptAddedToArgs = false;
 
 		if (hasImages && prompt && capabilities.supportsStreamJsonInput) {
 			// For agents that support stream-json input (like Claude Code)
@@ -103,6 +105,7 @@ export class ChildProcessSpawner {
 				? ['--input-format', 'stream-json']
 				: [];
 			finalArgs = [...args, ...needsInputFormat];
+			// Prompt will be sent via stdin as stream-json with embedded images (not in CLI args)
 		} else if (hasImages && prompt && imageArgs) {
 			// For agents that use file-based image args (like Codex, OpenCode)
 			finalArgs = [...args];
@@ -129,6 +132,7 @@ export class ChildProcessSpawner {
 					} else {
 						finalArgs = [...finalArgs, '--', effectivePrompt];
 					}
+					promptAddedToArgs = true;
 				}
 				logger.debug('[ProcessManager] Resume mode: embedded image paths in prompt', 'ProcessManager', {
 					sessionId,
@@ -149,6 +153,7 @@ export class ChildProcessSpawner {
 					} else {
 						finalArgs = [...finalArgs, '--', prompt];
 					}
+					promptAddedToArgs = true;
 				}
 				logger.debug('[ProcessManager] Using file-based image args', 'ProcessManager', {
 					sessionId,
@@ -167,6 +172,7 @@ export class ChildProcessSpawner {
 			} else {
 				finalArgs = [...args, '--', prompt];
 			}
+			promptAddedToArgs = true;
 		} else {
 			finalArgs = args;
 		}
@@ -489,8 +495,12 @@ export class ChildProcessSpawner {
 				});
 				childProcess.stdin?.write(effectivePrompt);
 				childProcess.stdin?.end();
-			} else if (isStreamJsonMode && effectivePrompt) {
-				// Stream-json mode: send the message via stdin as JSON
+			} else if (isStreamJsonMode && effectivePrompt && !promptAddedToArgs) {
+				// Stream-json mode: send the message via stdin as JSON.
+				// Only write when prompt was NOT already added to CLI args.
+				// Without this guard, agents like Codex (whose --json flag sets isStreamJsonMode
+				// for output parsing) would receive the prompt both as a CLI arg and as stream-json
+				// stdin, causing unexpected behavior.
 				const streamJsonMessage = buildStreamJsonMessage(effectivePrompt, images || []);
 				logger.debug('[ProcessManager] Sending stream-json message via stdin', 'ProcessManager', {
 					sessionId,

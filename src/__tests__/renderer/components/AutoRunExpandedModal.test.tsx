@@ -17,6 +17,7 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { AutoRunExpandedModal } from '../../../renderer/components/AutoRunExpandedModal';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, BatchRunState, SessionState, Shortcut } from '../../../renderer/types';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 
 // Mock createPortal to render in same container
 vi.mock('react-dom', async () => {
@@ -95,7 +96,10 @@ vi.mock('../../../renderer/components/AutoRun', () => ({
 
 // Mock shortcut formatter
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
-	formatShortcutKeys: vi.fn((keys: string[]) => keys.join('+')),
+	formatShortcutKeys: vi.fn((keys: string[]) => {
+		const keyMap: Record<string, string> = { Meta: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Control: 'Ctrl' };
+		return keys.map((k: string) => keyMap[k] || (k.length === 1 ? k.toUpperCase() : k)).join('+');
+	}),
 	isMacOS: vi.fn(() => false),
 }));
 
@@ -620,7 +624,7 @@ describe('AutoRunExpandedModal', () => {
 			renderWithProvider(<AutoRunExpandedModal {...props} />);
 
 			const collapseButton = screen.getByRole('button', { name: /collapse/i });
-			expect(collapseButton).toHaveAttribute('title', 'Collapse (Meta+Shift+A)');
+			expect(collapseButton).toHaveAttribute('title', `Collapse (${formatShortcutKeys(['Meta', 'Shift', 'A'])})`);
 		});
 
 		it('should show default Esc shortcut in Collapse button when no shortcut provided', () => {
@@ -876,7 +880,7 @@ describe('AutoRunExpandedModal', () => {
 	});
 
 	describe('Save Button Keyboard Shortcut Hint', () => {
-		it('should show ⌘S shortcut on Save button hover', async () => {
+		it('should show Ctrl+S shortcut on Save button hover', async () => {
 			autoRunRefMethods.isDirty.mockReturnValue(true);
 
 			const props = createDefaultProps({ mode: 'edit' });
@@ -890,7 +894,7 @@ describe('AutoRunExpandedModal', () => {
 			// Find the shortcut hint element
 			const shortcutHint = container.querySelector('span.opacity-0.group-hover\\:opacity-100');
 			expect(shortcutHint).toBeInTheDocument();
-			expect(shortcutHint).toHaveTextContent('⌘S');
+			expect(shortcutHint).toHaveTextContent(formatShortcutKeys(['Meta', 's']));
 		});
 	});
 });

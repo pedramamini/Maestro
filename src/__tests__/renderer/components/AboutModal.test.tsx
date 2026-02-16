@@ -364,7 +364,7 @@ describe('AboutModal', () => {
 			fireEvent.click(githubLinks[0]);
 
 			expect(window.maestro.shell.openExternal).toHaveBeenCalledWith(
-				'https://github.com/pedramamini/Maestro'
+				'https://github.com/RunMaestro/Maestro'
 			);
 		});
 

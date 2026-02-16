@@ -362,7 +362,7 @@ export function DebugPackageModal({ theme, isOpen, onClose }: DebugPackageModalP
 							<strong style={{ color: theme.colors.textMain }}>To submit:</strong>
 						</p>
 						<ol className="list-decimal list-inside space-y-1">
-							<li>Open a GitHub issue at github.com/pedramamini/Maestro/issues</li>
+							<li>Open a GitHub issue at github.com/RunMaestro/Maestro/issues</li>
 							<li>Describe the problem you encountered</li>
 							<li>Attach the generated zip file</li>
 						</ol>

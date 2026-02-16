@@ -489,51 +489,22 @@ function buildArgsForAgent(agent: any): string[] {
 		}
 
 		case 'codex': {
-			// Codex requires exec batch mode with JSON output for wizard conversations
-			// Must include these explicitly since wizard pre-builds args before IPC handler
-			const args = [];
-
-			// Add batch mode prefix: 'exec'
-			if (agent.batchModePrefix) {
-				args.push(...agent.batchModePrefix);
-			}
-
-			// Add base args (if any)
-			args.push(...(agent.args || []));
-
-			// Add batch mode args: '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'
-			if (agent.batchModeArgs) {
-				args.push(...agent.batchModeArgs);
-			}
-
-			// Add JSON output: '--json'
-			if (agent.jsonOutputArgs) {
-				args.push(...agent.jsonOutputArgs);
-			}
-
-			return args;
+			// Return only base args — the IPC handler's buildAgentArgs() adds
+			// batchModePrefix, batchModeArgs, jsonOutputArgs, and workingDirArgs
+			// automatically when a prompt is present. Adding them here would
+			// duplicate flags and cause "unexpected argument" exit code 2.
+			return [...(agent.args || [])];
 		}
 
 		case 'opencode': {
-			// OpenCode requires 'run' batch mode with JSON output for wizard conversations
-			const args = [];
-
-			// Add batch mode prefix: 'run'
-			if (agent.batchModePrefix) {
-				args.push(...agent.batchModePrefix);
-			}
-
-			// Add base args (if any)
-			args.push(...(agent.args || []));
+			// Return base args plus read-only restriction for wizard conversations.
+			// The IPC handler's buildAgentArgs() adds batchModePrefix, jsonOutputArgs,
+			// and workingDirArgs automatically when a prompt is present.
+			const args = [...(agent.args || [])];
 
 			// Add read-only mode: '--agent plan'
 			if (agent.readOnlyArgs) {
 				args.push(...agent.readOnlyArgs);
-			}
-
-			// Add JSON output: '--format json'
-			if (agent.jsonOutputArgs) {
-				args.push(...agent.jsonOutputArgs);
 			}
 
 			return args;

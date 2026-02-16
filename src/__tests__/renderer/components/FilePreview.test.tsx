@@ -2,6 +2,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, act } from '@testing-library/react';
 import { FilePreview } from '../../../renderer/components/FilePreview';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -123,7 +124,10 @@ vi.mock('../../../renderer/utils/tokenCounter', () => ({
 
 // Mock shortcut formatter
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
-	formatShortcutKeys: vi.fn((keys: string) => keys),
+	formatShortcutKeys: vi.fn((keys: string[]) => {
+		const keyMap: Record<string, string> = { Meta: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Control: 'Ctrl' };
+		return keys.map((k: string) => keyMap[k] || k.toUpperCase()).join('+');
+	}),
 	isMacOS: vi.fn(() => false),
 }));
 
@@ -185,7 +189,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			const graphButton = screen.getByTitle('View in Document Graph (⌘⇧G)');
+			const graphButton = screen.getByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`);
 			expect(graphButton).toBeInTheDocument();
 			expect(screen.getByTestId('gitgraph-icon')).toBeInTheDocument();
 		});
@@ -200,7 +204,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			const graphButton = screen.getByTitle('View in Document Graph (⌘⇧G)');
+			const graphButton = screen.getByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`);
 			fireEvent.click(graphButton);
 
 			expect(onOpenInGraph).toHaveBeenCalledOnce();
@@ -214,7 +218,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(screen.queryByTitle('View in Document Graph (⌘⇧G)')).not.toBeInTheDocument();
+			expect(screen.queryByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`)).not.toBeInTheDocument();
 		});
 
 		it('does not show Document Graph button for non-markdown files', () => {
@@ -227,7 +231,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(screen.queryByTitle('View in Document Graph (⌘⇧G)')).not.toBeInTheDocument();
+			expect(screen.queryByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`)).not.toBeInTheDocument();
 		});
 
 		it('shows Document Graph button for uppercase .MD extension', () => {
@@ -240,7 +244,7 @@ describe('FilePreview', () => {
 				/>
 			);
 
-			expect(screen.getByTitle('View in Document Graph (⌘⇧G)')).toBeInTheDocument();
+			expect(screen.getByTitle(`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`)).toBeInTheDocument();
 		});
 	});
 

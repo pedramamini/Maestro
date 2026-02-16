@@ -30,9 +30,10 @@ icon: sparkles
 - 💾 **Draft Auto-Save** - Never lose work. Drafts are automatically saved and restored per session.
 - 🏷️ **[Automatic Tab Naming](./general-usage#automatic-tab-naming)** - Tabs are automatically named based on your first message. No more "New Session" clutter — each tab gets a descriptive, relevant name.
 - 🔔 **Custom Notifications** - Execute any command when agents complete tasks, perfect for audio alerts, logging, or integration with your notification stack.
-- 🎨 **[Beautiful Themes](https://github.com/pedramamini/Maestro/blob/main/THEMES.md)** - 17 built-in themes across dark (Dracula, Monokai, Nord, Tokyo Night, Catppuccin Mocha, Gruvbox Dark), light (GitHub, Solarized, One Light, Gruvbox Light, Catppuccin Latte, Ayu Light), and vibe (Pedurple, Maestro's Choice, Dre Synth, InQuest) categories, plus a fully customizable theme builder.
+- 🎨 **[Beautiful Themes](https://github.com/RunMaestro/Maestro/blob/main/THEMES.md)** - 17 built-in themes across dark (Dracula, Monokai, Nord, Tokyo Night, Catppuccin Mocha, Gruvbox Dark), light (GitHub, Solarized, One Light, Gruvbox Light, Catppuccin Latte, Ayu Light), and vibe (Pedurple, Maestro's Choice, Dre Synth, InQuest) categories, plus a fully customizable theme builder.
 - 💰 **Cost Tracking** - Real-time token usage and cost tracking per session and globally.
 - 📊 **[Usage Dashboard](./usage-dashboard)** - Comprehensive analytics for tracking AI usage patterns. View aggregated statistics, compare agent performance, analyze activity heatmaps, and export data to CSV. Access via `Opt+Cmd+U` / `Alt+Ctrl+U`.
+- 🎬 **[Director's Notes](./director-notes)** - Bird's-eye view of all agent activity in a unified timeline. Aggregate history from every agent, search and filter entries, and generate AI-powered synopses of recent work. Access via `Cmd+Shift+O` / `Ctrl+Shift+O`.
 - 🏆 **[Achievements](./achievements)** - Level up from Apprentice to Titan of the Baton based on cumulative Auto Run time. 11 conductor-themed ranks to unlock.
 
 > **Note**: Maestro currently supports Claude Code, Codex (OpenAI), OpenCode, and Factory Droid as fully-integrated providers. Support for additional providers (Gemini CLI, Qwen3 Coder) is planned for future releases based on community demand.

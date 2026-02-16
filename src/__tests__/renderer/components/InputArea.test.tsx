@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, act, within, waitFor } from '@testing-library/react';
 import userEvent from '@testing-library/user-event';
 import { InputArea } from '../../../renderer/components/InputArea';
+import { formatShortcutKeys, formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import type { Session, Theme } from '../../../renderer/types';
 
 // Mock scrollIntoView since jsdom doesn't support it
@@ -233,7 +234,7 @@ describe('InputArea', () => {
 			const props = createDefaultProps();
 			render(<InputArea {...props} />);
 
-			expect(screen.getByTitle('Toggle Mode (Cmd+J)')).toBeInTheDocument();
+			expect(screen.getByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`)).toBeInTheDocument();
 		});
 
 		it('renders the send button', () => {
@@ -257,8 +258,7 @@ describe('InputArea', () => {
 			render(<InputArea {...props} />);
 
 			const button = screen.getByTitle('Switch to Enter to send');
-			// Test environment doesn't have Mac user agent, so it shows Ctrl + Enter
-			expect(button).toHaveTextContent(/⌘ \+ Enter|Ctrl \+ Enter/);
+			expect(button).toHaveTextContent(formatEnterToSend(false));
 		});
 	});
 
@@ -1498,7 +1498,7 @@ describe('InputArea', () => {
 			const props = createDefaultProps({ toggleInputMode });
 			render(<InputArea {...props} />);
 
-			fireEvent.click(screen.getByTitle('Toggle Mode (Cmd+J)'));
+			fireEvent.click(screen.getByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`));
 
 			expect(toggleInputMode).toHaveBeenCalled();
 		});
@@ -1744,7 +1744,7 @@ describe('InputArea', () => {
 			render(<InputArea {...props} />);
 
 			// Terminal icon should be in the mode toggle button
-			const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
+			const modeButton = screen.getByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`);
 			expect(modeButton.querySelector('[data-testid="terminal-icon"]')).toBeInTheDocument();
 		});
 
@@ -1754,7 +1754,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
+			const modeButton = screen.getByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`);
 			expect(modeButton.querySelector('[data-testid="cpu-icon"]')).toBeInTheDocument();
 		});
 
@@ -1779,7 +1779,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
+			const modeButton = screen.getByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`);
 			// wand2 icon should be shown with accent color
 			expect(modeButton.querySelector('[data-testid="wand2-icon"]')).toBeInTheDocument();
 		});
@@ -1803,7 +1803,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const modeButton = screen.getByTitle('Toggle Mode (Cmd+J)');
+			const modeButton = screen.getByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`);
 			expect(modeButton.querySelector('[data-testid="terminal-icon"]')).toBeInTheDocument();
 		});
 	});
@@ -2111,7 +2111,7 @@ describe('InputArea', () => {
 			expect(screen.getByTestId('wizard-input-panel')).toBeInTheDocument();
 			// Normal components should NOT be rendered
 			expect(screen.queryByTestId('thinking-status-pill')).not.toBeInTheDocument();
-			expect(screen.queryByTitle('Toggle Mode (Cmd+J)')).not.toBeInTheDocument();
+			expect(screen.queryByTitle(`Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`)).not.toBeInTheDocument();
 			expect(screen.queryByTitle('Send message')).not.toBeInTheDocument();
 		});
 

@@ -32,21 +32,6 @@ interface AutoRunSession {
 	projectPath?: string;
 }
 
-/**
- * Auto Run task data shape from the API
- */
-interface AutoRunTask {
-	id: string;
-	autoRunSessionId: string;
-	sessionId: string;
-	agentType: string;
-	taskIndex: number;
-	taskContent?: string;
-	startTime: number;
-	duration: number;
-	success: boolean;
-}
-
 interface AutoRunStatsProps {
 	/** Current time range for filtering */
 	timeRange: StatsTimeRange;
@@ -145,32 +130,34 @@ function MetricCard({ icon, label, value, subValue, theme }: MetricCardProps) {
 }
 
 /**
- * Group tasks by date for the mini bar chart
+ * Group sessions by local date and sum tasksCompleted for the bar chart.
+ * Uses session-level tasksCompleted (actual checkboxes) rather than task records
+ * (agent invocations), which can batch multiple checkboxes per invocation.
  */
-function groupTasksByDate(
-	tasks: AutoRunTask[]
+function groupSessionsByDate(
+	sessions: AutoRunSession[]
 ): { date: string; count: number; successCount: number }[] {
 	const grouped: Record<string, { count: number; successCount: number }> = {};
 
-	tasks.forEach((task) => {
-		const date = new Date(task.startTime).toISOString().split('T')[0];
+	sessions.forEach((session) => {
+		// Use local date string to match what users see in labels/tooltips
+		const d = new Date(session.startTime);
+		const date = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 		if (!grouped[date]) {
 			grouped[date] = { count: 0, successCount: 0 };
 		}
-		grouped[date].count++;
-		if (task.success) {
-			grouped[date].successCount++;
-		}
+		grouped[date].count += session.tasksCompleted ?? 0;
+		grouped[date].successCount += session.tasksCompleted ?? 0;
 	});
 
 	return Object.entries(grouped)
 		.map(([date, stats]) => ({ date, ...stats }))
+		.filter((entry) => entry.count > 0)
 		.sort((a, b) => a.date.localeCompare(b.date));
 }
 
 export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProps) {
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
-	const [allTasks, setAllTasks] = useState<AutoRunTask[]>([]);
 	const [loading, setLoading] = useState(true);
 	const [error, setError] = useState<string | null>(null);
 	const [hoveredBar, setHoveredBar] = useState<{
@@ -180,23 +167,14 @@ export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProp
 	} | null>(null);
 	const [tooltipPos, setTooltipPos] = useState<{ x: number; y: number } | null>(null);
 
-	// Fetch Auto Run sessions and their tasks
+	// Fetch Auto Run sessions (metrics and chart both derive from session-level data)
 	const fetchData = useCallback(async () => {
 		setLoading(true);
 		setError(null);
 
 		try {
-			// Get all Auto Run sessions for the time range
 			const autoRunSessions = await window.maestro.stats.getAutoRunSessions(timeRange);
 			setSessions(autoRunSessions);
-
-			// Fetch tasks for all sessions
-			const taskPromises = autoRunSessions.map((session) =>
-				window.maestro.stats.getAutoRunTasks(session.id)
-			);
-			const taskResults = await Promise.all(taskPromises);
-			const tasks = taskResults.flat();
-			setAllTasks(tasks);
 		} catch (err) {
 			console.error('Failed to fetch Auto Run stats:', err);
 			setError(err instanceof Error ? err.message : 'Failed to load Auto Run stats');
@@ -217,17 +195,17 @@ export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProp
 		return () => unsubscribe();
 	}, [fetchData]);
 
-	// Calculate metrics
+	// Calculate metrics from session-level data (tasksCompleted = checkboxes, not agent invocations)
 	const metrics = useMemo(() => {
 		const totalSessions = sessions.length;
-		const totalTasksCompleted = allTasks.filter((t) => t.success).length;
-		const totalTasksAttempted = allTasks.length;
+		const totalTasksCompleted = sessions.reduce((sum, s) => sum + (s.tasksCompleted ?? 0), 0);
+		const totalTasksAttempted = sessions.reduce((sum, s) => sum + (s.tasksTotal ?? 0), 0);
 
-		// Average tasks per session
+		// Average tasks per session (completed checkboxes per session)
 		const avgTasksPerSession =
 			totalSessions > 0 ? (totalTasksCompleted / totalSessions).toFixed(1) : '0';
 
-		// Success rate
+		// Success rate (completed / attempted checkboxes)
 		const successRate =
 			totalTasksAttempted > 0 ? Math.round((totalTasksCompleted / totalTasksAttempted) * 100) : 0;
 
@@ -235,9 +213,8 @@ export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProp
 		const totalSessionDuration = sessions.reduce((sum, s) => sum + s.duration, 0);
 		const avgSessionDuration = totalSessions > 0 ? totalSessionDuration / totalSessions : 0;
 
-		// Average task duration
-		const totalTaskDuration = allTasks.reduce((sum, t) => sum + t.duration, 0);
-		const avgTaskDuration = totalTasksAttempted > 0 ? totalTaskDuration / totalTasksAttempted : 0;
+		// Average task duration (session time / checkboxes completed)
+		const avgTaskDuration = totalTasksCompleted > 0 ? totalSessionDuration / totalTasksCompleted : 0;
 
 		return {
 			totalSessions,
@@ -248,14 +225,12 @@ export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProp
 			avgSessionDuration,
 			avgTaskDuration,
 		};
-	}, [sessions, allTasks]);
+	}, [sessions]);
 
-	// Group tasks by date for chart
+	// Group sessions by date for chart (uses session-level tasksCompleted)
 	const tasksByDate = useMemo(() => {
-		const grouped = groupTasksByDate(allTasks);
-		// Return last 14 days max
-		return grouped.slice(-14);
-	}, [allTasks]);
+		return groupSessionsByDate(sessions);
+	}, [sessions]);
 
 	// Max count for bar height calculation
 	const maxCount = useMemo(() => {
@@ -513,19 +488,26 @@ export function AutoRunStats({ timeRange, theme, columns = 6 }: AutoRunStatsProp
 }
 
 /**
+ * Parse a local YYYY-MM-DD date string without UTC shift.
+ * new Date("2026-02-13") parses as UTC midnight, which shifts to the previous
+ * day in negative UTC offsets. Appending T00:00 forces local-time parsing.
+ */
+function parseLocalDate(dateStr: string): Date {
+	return new Date(dateStr + 'T00:00');
+}
+
+/**
  * Format date for X-axis labels (short format)
  */
 function formatDateLabel(dateStr: string): string {
-	const date = new Date(dateStr);
-	return date.toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
+	return parseLocalDate(dateStr).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 }
 
 /**
  * Format date for tooltip (full format)
  */
 function formatFullDate(dateStr: string): string {
-	const date = new Date(dateStr);
-	return date.toLocaleDateString('en-US', {
+	return parseLocalDate(dateStr).toLocaleDateString('en-US', {
 		weekday: 'short',
 		month: 'short',
 		day: 'numeric',

@@ -369,19 +369,21 @@ describe('AutoRunStats', () => {
 		});
 
 		it('formats seconds only correctly', async () => {
-			const shortTasks = [
+			// Session with 90s duration and 2 tasks completed → avg task = 45s, avg session = 1m 30s
+			const shortSession = [
 				{
-					...mockTasksSession1[0],
-					duration: 45000, // 45 seconds
+					...mockSessions[0],
+					duration: 90000,
+					tasksCompleted: 2,
+					tasksTotal: 2,
 				},
 			];
-			mockStatsApi.getAutoRunSessions.mockResolvedValue([mockSessions[0]]);
-			mockStatsApi.getAutoRunTasks.mockResolvedValue(shortTasks);
+			mockStatsApi.getAutoRunSessions.mockResolvedValue(shortSession);
 
 			render(<AutoRunStats timeRange="week" theme={theme} />);
 
 			await waitFor(() => {
-				// Avg task should be 45s
+				// Avg task should be 45s (90s / 2 tasks)
 				expect(screen.getByText('45s')).toBeInTheDocument();
 			});
 		});
@@ -401,9 +403,15 @@ describe('AutoRunStats', () => {
 		});
 
 		it('calculates 0% success rate correctly', async () => {
-			const failedTasks = mockTasksSession1.map((t) => ({ ...t, success: false }));
-			mockStatsApi.getAutoRunSessions.mockResolvedValue([mockSessions[0]]);
-			mockStatsApi.getAutoRunTasks.mockResolvedValue(failedTasks);
+			// Session with 0 tasks completed out of 5 → 0% success rate
+			const failedSession = [
+				{
+					...mockSessions[0],
+					tasksCompleted: 0,
+					tasksTotal: 5,
+				},
+			];
+			mockStatsApi.getAutoRunSessions.mockResolvedValue(failedSession);
 
 			render(<AutoRunStats timeRange="week" theme={theme} />);
 
@@ -424,7 +432,7 @@ describe('AutoRunStats', () => {
 			});
 		});
 
-		it('shows empty chart message when no tasks', async () => {
+		it('shows empty chart message when no tasks completed', async () => {
 			mockStatsApi.getAutoRunSessions.mockResolvedValue([
 				{
 					...mockSessions[0],
@@ -432,7 +440,6 @@ describe('AutoRunStats', () => {
 					tasksCompleted: 0,
 				},
 			]);
-			mockStatsApi.getAutoRunTasks.mockResolvedValue([]);
 
 			render(<AutoRunStats timeRange="week" theme={theme} />);
 

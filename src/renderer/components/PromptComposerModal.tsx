@@ -4,7 +4,7 @@ import type { Theme, ThinkingMode } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { estimateTokenCount } from '../../shared/formatters';
-import { isMacOS } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, formatEnterToSend, formatEnterToSendTooltip } from '../utils/shortcutFormatter';
 
 interface PromptComposerModalProps {
 	isOpen: boolean;
@@ -293,7 +293,7 @@ export function PromptComposerModal({
 										maxWidth: '200px',
 									}}
 									onClick={() => onOpenLightbox?.(img, stagedImages, 'staged')}
-									title="Click to view (⌘+Shift+L)"
+									title={`Click to view (${formatShortcutKeys(['Meta', 'Shift', 'l'])})`}
 								/>
 								{setStagedImages && (
 									<button
@@ -377,7 +377,7 @@ export function PromptComposerModal({
 										? `1px solid ${theme.colors.accent}50`
 										: '1px solid transparent',
 								}}
-								title="Save to History (Cmd+S) - Synopsis added after each completion"
+								title={`Save to History (${formatShortcutKeys(['Meta', 's'])}) - Synopsis added after each completion`}
 							>
 								<History className="w-3 h-3" />
 								<span>History</span>
@@ -452,14 +452,12 @@ export function PromptComposerModal({
 								onClick={onToggleEnterToSend}
 								className="flex items-center gap-1 text-[10px] opacity-50 hover:opacity-100 px-2 py-1 rounded hover:bg-white/5"
 								title={
-									enterToSend
-										? `Switch to ${isMacOS() ? 'Cmd' : 'Ctrl'}+Enter to send`
-										: 'Switch to Enter to send'
+									formatEnterToSendTooltip(enterToSend)
 								}
 							>
 								<Keyboard className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 								<span style={{ color: theme.colors.textDim }}>
-									{enterToSend ? 'Enter' : isMacOS() ? '⌘ + Enter' : 'Ctrl + Enter'}
+									{formatEnterToSend(enterToSend)}
 								</span>
 							</button>
 						)}

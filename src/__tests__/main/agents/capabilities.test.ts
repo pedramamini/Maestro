@@ -57,12 +57,11 @@ describe('agent-capabilities', () => {
 			expect(DEFAULT_CAPABILITIES.supportsBatchMode).toBe(false);
 			expect(DEFAULT_CAPABILITIES.supportsStreaming).toBe(false);
 			expect(DEFAULT_CAPABILITIES.supportsResultMessages).toBe(false);
-			expect(DEFAULT_CAPABILITIES.imageResumeMode).toBeUndefined();
 		});
 
-		it('should be a conservative default (all false or undefined)', () => {
-			const allFalsy = Object.values(DEFAULT_CAPABILITIES).every((v) => v === false || v === undefined);
-			expect(allFalsy).toBe(true);
+		it('should be a conservative default (all false)', () => {
+			const allFalse = Object.values(DEFAULT_CAPABILITIES).every((v) => v === false);
+			expect(allFalse).toBe(true);
 		});
 	});
 
@@ -263,7 +262,6 @@ describe('agent-capabilities', () => {
 				'supportsThinkingDisplay',
 				'supportsContextMerge',
 				'supportsContextExport',
-				'imageResumeMode',
 			];
 
 			const defaultKeys = Object.keys(DEFAULT_CAPABILITIES);
@@ -271,11 +269,15 @@ describe('agent-capabilities', () => {
 		});
 
 		it('should have all agent capabilities contain all required fields', () => {
-			const expectedKeys = Object.keys(DEFAULT_CAPABILITIES);
+			const requiredKeys = Object.keys(DEFAULT_CAPABILITIES);
 
 			for (const [agentId, capabilities] of Object.entries(AGENT_CAPABILITIES)) {
 				const agentKeys = Object.keys(capabilities);
-				expect(agentKeys.sort()).toEqual(expectedKeys.sort());
+				// Every required key must be present in each agent
+				for (const key of requiredKeys) {
+					expect(agentKeys).toContain(key);
+				}
+				// Agent may have optional keys (e.g., imageResumeMode) not in DEFAULT_CAPABILITIES
 			}
 		});
 	});

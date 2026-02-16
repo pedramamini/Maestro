@@ -61,6 +61,9 @@ const DocumentGraphView = lazy(() =>
 		default: m.DocumentGraphView,
 	}))
 );
+const DirectorNotesModal = lazy(() =>
+	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
+);
 
 // Re-import the type for SymphonyContributionData (types don't need lazy loading)
 import type { SymphonyContributionData } from './components/SymphonyModal';
@@ -401,6 +404,9 @@ function MaestroConsoleInner() {
 		// Symphony Modal
 		symphonyModalOpen,
 		setSymphonyModalOpen,
+		// Director's Notes Modal
+		directorNotesOpen,
+		setDirectorNotesOpen,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -1155,6 +1161,19 @@ function MaestroConsoleInner() {
 				session = { ...session, projectRoot: session.cwd };
 			}
 
+			// Migration: default autoRunFolderPath for sessions that don't have one
+			if (!session.autoRunFolderPath && session.projectRoot) {
+				session = { ...session, autoRunFolderPath: `${session.projectRoot}/${AUTO_RUN_FOLDER_NAME}` };
+			}
+
+			// Migration: ensure fileTreeAutoRefreshInterval is set (default 180s for legacy sessions)
+			if (session.fileTreeAutoRefreshInterval == null) {
+				console.warn(
+					`[restoreSession] Session missing fileTreeAutoRefreshInterval, defaulting to 180s`
+				);
+				session = { ...session, fileTreeAutoRefreshInterval: 180 };
+			}
+
 			// Sessions must have aiTabs - if missing, this is a data corruption issue
 			// Create a default tab to prevent crashes when code calls .find() on aiTabs
 			if (!session.aiTabs || session.aiTabs.length === 0) {
@@ -1258,7 +1277,9 @@ function MaestroConsoleInner() {
 				// we must fall back to sessionSshRemoteConfig.remoteId. See CLAUDE.md "SSH Remote Sessions".
 				const sshRemoteId =
 					correctedSession.sshRemoteId ||
-					correctedSession.sessionSshRemoteConfig?.remoteId ||
+					(correctedSession.sessionSshRemoteConfig?.enabled
+						? correctedSession.sessionSshRemoteConfig.remoteId
+						: undefined) ||
 					undefined;
 
 				// For SSH remote sessions, defer git operations to background to avoid blocking
@@ -1386,7 +1407,11 @@ function MaestroConsoleInner() {
 					// For remote (SSH) sessions, fetch git info in background to avoid blocking
 					// startup on SSH connection timeouts. This runs after UI is shown.
 					for (const session of restoredSessions) {
-						const sshRemoteId = session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId;
+						const sshRemoteId =
+							session.sshRemoteId ||
+							(session.sessionSshRemoteConfig?.enabled
+								? session.sessionSshRemoteConfig.remoteId
+								: undefined);
 						if (sshRemoteId) {
 							// Fire and forget - don't await, let it update sessions when done
 							fetchGitInfoInBackground(session.id, session.cwd, sshRemoteId);
@@ -1656,7 +1681,9 @@ function MaestroConsoleInner() {
 					// Get SSH remote ID for remote git operations
 					const sshRemoteId =
 						parentSession.sshRemoteId ||
-						parentSession.sessionSshRemoteConfig?.remoteId ||
+						(parentSession.sessionSshRemoteConfig?.enabled
+							? parentSession.sessionSshRemoteConfig.remoteId
+							: undefined) ||
 						undefined;
 					const scanResult = await window.maestro.git.scanWorktreeDirectory(
 						parentSession.worktreeConfig!.basePath,
@@ -1949,7 +1976,17 @@ function MaestroConsoleInner() {
 
 		const unsubModeratorUsage = window.maestro.groupChat.onModeratorUsage?.((id, usage) => {
 			if (id === activeGroupChatId) {
-				setModeratorUsage(usage);
+				// When contextUsage is -1, tokens were accumulated from multi-tool turns.
+				// Preserve previous context/token values; only update cost.
+				if (usage.contextUsage < 0) {
+					setModeratorUsage((prev) =>
+						prev
+							? { ...prev, totalCost: usage.totalCost }
+							: { contextUsage: 0, totalCost: usage.totalCost, tokenCount: 0 }
+					);
+				} else {
+					setModeratorUsage(usage);
+				}
 			}
 		});
 
@@ -2048,6 +2085,7 @@ function MaestroConsoleInner() {
 	const fileTreeContainerRef = useRef<HTMLDivElement>(null);
 	const fileTreeFilterInputRef = useRef<HTMLInputElement>(null);
 	const fileTreeKeyboardNavRef = useRef(false); // Track if selection change came from keyboard
+	const recentlyCreatedWorktreePathsRef = useRef(new Set<string>()); // Prevent duplicate UI entries from file watcher
 	const rightPanelRef = useRef<RightPanelHandle>(null);
 	const mainPanelRef = useRef<MainPanelHandle>(null);
 
@@ -3558,6 +3596,40 @@ You are taking over this conversation. Based on the context above, provide a bri
 			defaultSaveToHistory,
 			defaultShowThinking,
 		});
+
+	// --- DIRECTOR'S NOTES SESSION NAVIGATION ---
+	// Handles cross-agent navigation: close modal → switch agent → resume session
+	const pendingResumeRef = useRef<{ agentSessionId: string; targetSessionId: string } | null>(null);
+
+	const handleDirectorNotesResumeSession = useCallback(
+		(sourceSessionId: string, agentSessionId: string) => {
+			// Close the Director's Notes modal
+			setDirectorNotesOpen(false);
+
+			// If already on the right agent, resume directly
+			if (activeSession?.id === sourceSessionId) {
+				handleResumeSession(agentSessionId);
+				return;
+			}
+
+			// Switch to the target agent and defer resume until activeSession updates
+			pendingResumeRef.current = { agentSessionId, targetSessionId: sourceSessionId };
+			setActiveSessionId(sourceSessionId);
+		},
+		[activeSession?.id, handleResumeSession, setActiveSessionId, setDirectorNotesOpen]
+	);
+
+	// Effect: process pending resume after agent switch completes
+	useEffect(() => {
+		if (
+			pendingResumeRef.current &&
+			activeSession?.id === pendingResumeRef.current.targetSessionId
+		) {
+			const { agentSessionId } = pendingResumeRef.current;
+			pendingResumeRef.current = null;
+			handleResumeSession(agentSessionId);
+		}
+	}, [activeSession?.id, handleResumeSession]);
 
 	// --- AGENT IPC LISTENERS ---
 	// Extracted hook for all window.maestro.process.onXxx listeners
@@ -6228,6 +6300,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 		const cleanup = window.maestro.git.onWorktreeDiscovered(async (data) => {
 			const { sessionId, worktree } = data;
 
+			// Skip worktrees that were just manually created (prevents duplicate UI entries)
+			if (recentlyCreatedWorktreePathsRef.current.has(worktree.path)) {
+				return;
+			}
+
 			// Skip main/master/HEAD branches (already filtered by main process, but double-check)
 			if (
 				worktree.branch === 'main' ||
@@ -6663,13 +6740,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 	// Handler to stop batch run (with confirmation)
 	// If targetSessionId is provided, stops that specific session's batch run.
-	// Otherwise, stops the first active batch run or falls back to active session.
+	// Otherwise, falls back to active session, then first active batch run.
 	const handleStopBatchRun = useCallback(
 		(targetSessionId?: string) => {
-			// Use provided targetSessionId, or fall back to first active batch, or active session
+			// Use provided targetSessionId, or fall back to active session, or first active batch
 			const sessionId =
 				targetSessionId ??
-				(activeBatchSessionIds.length > 0 ? activeBatchSessionIds[0] : activeSession?.id);
+				activeSession?.id ??
+				(activeBatchSessionIds.length > 0 ? activeBatchSessionIds[0] : undefined);
 			console.log(
 				'[App:handleStopBatchRun] targetSessionId:',
 				targetSessionId,
@@ -6899,12 +6977,28 @@ You are taking over this conversation. Based on the context above, provide a bri
 				customModel?: string;
 			}
 		) => {
-			const chat = await window.maestro.groupChat.create(name, moderatorAgentId, moderatorConfig);
-			setGroupChats((prev) => [chat, ...prev]);
-			setShowNewGroupChatModal(false);
-			handleOpenGroupChat(chat.id);
+			try {
+				const chat = await window.maestro.groupChat.create(name, moderatorAgentId, moderatorConfig);
+				setGroupChats((prev) => [chat, ...prev]);
+				setShowNewGroupChatModal(false);
+				handleOpenGroupChat(chat.id);
+			} catch (err) {
+				setShowNewGroupChatModal(false);
+				const message = err instanceof Error ? err.message : '';
+				const isValidationError = message.includes('Invalid moderator agent ID');
+				addToast({
+					type: 'error',
+					title: 'Group Chat',
+					message: isValidationError
+						? message.replace(/^Error invoking remote method '[^']+': /, '')
+						: 'Failed to create group chat',
+				});
+				if (!isValidationError) {
+					throw err; // Unexpected — let Sentry capture via unhandledrejection
+				}
+			}
 		},
-		[handleOpenGroupChat]
+		[handleOpenGroupChat, addToast]
 	);
 
 	const handleDeleteGroupChat = useCallback(
@@ -7112,6 +7206,16 @@ You are taking over this conversation. Based on the context above, provide a bri
 					if (s.id !== activeSession.id) return s;
 					// Find the tab to get its agentSessionId for persistence
 					const tab = s.aiTabs.find((t) => t.id === renameTabId);
+					const oldName = tab?.name;
+
+					window.maestro.logger.log('info', `Tab renamed: "${oldName || '(auto)'}" → "${newName || '(cleared)'}"`, 'TabNaming', {
+						tabId: renameTabId,
+						sessionId: activeSession.id,
+						agentSessionId: tab?.agentSessionId,
+						oldName,
+						newName: newName || null,
+					});
+
 					if (tab?.agentSessionId) {
 						// Persist name to agent session metadata (async, fire and forget)
 						// Use projectRoot (not cwd) for consistent session storage access
@@ -7119,16 +7223,38 @@ You are taking over this conversation. Based on the context above, provide a bri
 						if (agentId === 'claude-code') {
 							window.maestro.claude
 								.updateSessionName(s.projectRoot, tab.agentSessionId, newName || '')
-								.catch((err) => console.error('Failed to persist tab name:', err));
+								.catch((err) => {
+									window.maestro.logger.log('error', 'Failed to persist tab name to Claude session storage', 'TabNaming', {
+										tabId: renameTabId,
+										agentSessionId: tab.agentSessionId,
+										error: String(err),
+									});
+								});
 						} else {
 							window.maestro.agentSessions
 								.setSessionName(agentId, s.projectRoot, tab.agentSessionId, newName || null)
-								.catch((err) => console.error('Failed to persist tab name:', err));
+								.catch((err) => {
+									window.maestro.logger.log('error', 'Failed to persist tab name to agent session storage', 'TabNaming', {
+										tabId: renameTabId,
+										agentSessionId: tab.agentSessionId,
+										agentType: agentId,
+										error: String(err),
+									});
+								});
 						}
 						// Also update past history entries with this agentSessionId
 						window.maestro.history
 							.updateSessionName(tab.agentSessionId, newName || '')
-							.catch((err) => console.error('Failed to update history session names:', err));
+							.catch((err) => {
+								window.maestro.logger.log('warn', 'Failed to update history session names', 'TabNaming', {
+									agentSessionId: tab.agentSessionId,
+									error: String(err),
+								});
+							});
+					} else {
+						window.maestro.logger.log('info', 'Tab renamed (no agentSessionId, skipping persistence)', 'TabNaming', {
+							tabId: renameTabId,
+						});
 					}
 					return {
 						...s,
@@ -7855,6 +7981,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				customProviderPath,
 				// Per-session SSH remote config (takes precedence over agent-level SSH config)
 				sessionSshRemoteConfig,
+				// Default Auto Run folder path (user can change later)
+				autoRunFolderPath: `${workingDir}/${AUTO_RUN_FOLDER_NAME}`,
 			};
 			setSessions((prev) => [...prev, newSession]);
 			setActiveSessionId(newId);
@@ -8262,7 +8390,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 			activeSession.inputMode === 'terminal'
 				? activeSession.shellCwd || activeSession.cwd
 				: activeSession.cwd;
-		const diff = await gitService.getDiff(cwd);
+		const sshRemoteId =
+			activeSession.sshRemoteId ||
+			(activeSession.sessionSshRemoteConfig?.enabled
+				? activeSession.sessionSshRemoteConfig.remoteId
+				: undefined) ||
+			undefined;
+		const diff = await gitService.getDiff(cwd, undefined, sshRemoteId);
 
 		if (diff.diff) {
 			setGitDiffPreview(diff.diff);
@@ -9891,6 +10025,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 					sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
 				};
 
+				// Mark path so the file watcher discovery handler skips it
+				recentlyCreatedWorktreePathsRef.current.add(worktreePath);
+				setTimeout(() => recentlyCreatedWorktreePathsRef.current.delete(worktreePath), 10000);
+
 				setSessions((prev) => [...prev, worktreeSession]);
 
 				// Expand parent's worktrees
@@ -10043,6 +10181,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Inherit SSH configuration from parent session
 				sessionSshRemoteConfig: createWorktreeSession.sessionSshRemoteConfig,
 			};
+
+			// Mark path so the file watcher discovery handler skips it
+			recentlyCreatedWorktreePathsRef.current.add(worktreePath);
+			setTimeout(() => recentlyCreatedWorktreePathsRef.current.delete(worktreePath), 10000);
 
 			setSessions((prev) => [...prev, worktreeSession]);
 
@@ -10635,6 +10777,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setFuzzyFileSearchOpen,
 		setMarketplaceModalOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
 		// Group chat context
@@ -11325,6 +11468,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		setProcessMonitorOpen,
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
+		setDirectorNotesOpen,
 		setGroups,
 		setSessions,
 		setRenameInstanceModalOpen,
@@ -11775,6 +11919,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onAutoRunRefresh={handleAutoRunRefresh}
 					onOpenMarketplace={handleOpenMarketplace}
 					onOpenSymphony={() => setSymphonyModalOpen(true)}
+					onOpenDirectorNotes={() => setDirectorNotesOpen(true)}
 					tabSwitcherOpen={tabSwitcherOpen}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
@@ -11809,7 +11954,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 								? setStagedImages
 								: undefined
 					}
-					onPromptImageAttachBlocked={undefined}
 					onPromptOpenLightbox={handleSetLightboxImage}
 					promptTabSaveToHistory={activeGroupChatId ? false : (activeTab?.saveToHistory ?? false)}
 					onPromptToggleTabSaveToHistory={
@@ -12103,6 +12247,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 										branchName: data.branchName || '',
 										totalDocuments: data.issue.documentPaths.length,
 										agentType: data.agentType,
+										draftPrNumber: data.draftPrNumber,
+										draftPrUrl: data.draftPrUrl,
 									})
 									.catch((err: unknown) => {
 										console.error('[Symphony] Failed to register active contribution:', err);
@@ -12124,7 +12270,46 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 								// Switch to Auto Run tab so user sees the documents
 								setActiveRightTab('autorun');
+
+								// Auto-start batch run with all contribution documents
+								if (data.autoRunPath && data.issue.documentPaths.length > 0) {
+									const batchConfig: BatchRunConfig = {
+										documents: data.issue.documentPaths.map((doc) => ({
+											id: generateId(),
+											filename: doc.name.replace(/\.md$/, ''),
+											resetOnCompletion: false,
+											isDuplicate: false,
+										})),
+										prompt: DEFAULT_BATCH_PROMPT,
+										loopEnabled: false,
+									};
+
+									// Small delay to ensure session state is fully propagated
+									setTimeout(() => {
+										console.log(
+											'[Symphony] Auto-starting batch run with',
+											batchConfig.documents.length,
+											'documents'
+										);
+										startBatchRun(newId, batchConfig, data.autoRunPath!);
+									}, 500);
+								}
 							}}
+						/>
+					</Suspense>
+				)}
+
+				{/* --- DIRECTOR'S NOTES MODAL (lazy-loaded) --- */}
+				{directorNotesOpen && (
+					<Suspense fallback={null}>
+						<DirectorNotesModal
+							theme={theme}
+							onClose={() => setDirectorNotesOpen(false)}
+							onResumeSession={handleDirectorNotesResumeSession}
+							fileTree={activeSession?.fileTree}
+							onFileClick={(path: string) =>
+								handleFileClick({ name: path.split('/').pop() || path, type: 'file' }, path)
+							}
 						/>
 					</Suspense>
 				)}

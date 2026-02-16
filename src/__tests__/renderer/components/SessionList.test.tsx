@@ -24,7 +24,7 @@ vi.mock('qrcode.react', () => ({
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
-	Wand2: () => <span data-testid="icon-wand" />,
+	Wand2: ({ className }: { className?: string }) => <span data-testid="icon-wand" className={className} />,
 	Plus: () => <span data-testid="icon-plus" />,
 	Settings: () => <span data-testid="icon-settings" />,
 	ChevronRight: () => <span data-testid="icon-chevron-right" />,
@@ -199,6 +199,8 @@ const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]
 	setProcessMonitorOpen: vi.fn(),
 	setUsageDashboardOpen: vi.fn(),
 	setSymphonyModalOpen: vi.fn(),
+	setDirectorNotesOpen: vi.fn(),
+	setUpdateCheckModalOpen: vi.fn(),
 	setQuickActionOpen: vi.fn(),
 	toggleGroup: vi.fn(),
 	handleDragStart: vi.fn(),
@@ -1105,6 +1107,27 @@ describe('SessionList', () => {
 			// Verify max-height is set via inline style for scroll support
 			expect(menuContainer?.style.maxHeight).toBe('calc(100vh - 90px)');
 		});
+
+		it('shows Director\'s Notes menu item in hamburger menu', () => {
+			const props = createDefaultProps({ leftSidebarOpen: true });
+			render(<SessionList {...props} />);
+
+			fireEvent.click(screen.getByTitle('Menu'));
+
+			expect(screen.getByText("Director's Notes")).toBeInTheDocument();
+			expect(screen.getByText('Unified history & AI synopsis')).toBeInTheDocument();
+		});
+
+		it('opens Director\'s Notes modal from menu', () => {
+			const setDirectorNotesOpen = vi.fn();
+			const props = createDefaultProps({ leftSidebarOpen: true, setDirectorNotesOpen });
+			render(<SessionList {...props} />);
+
+			fireEvent.click(screen.getByTitle('Menu'));
+			fireEvent.click(screen.getByText("Director's Notes"));
+
+			expect(setDirectorNotesOpen).toHaveBeenCalledWith(true);
+		});
 	});
 
 	// ============================================================================
@@ -1150,6 +1173,49 @@ describe('SessionList', () => {
 			render(<SessionList {...props} />);
 
 			expect(screen.getByText('AUTO')).toBeInTheDocument();
+		});
+
+		it('activates wand sparkle animation when a session is busy', () => {
+			const sessions = [createMockSession({ id: 's1', name: 'Busy Session', state: 'busy' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				leftSidebarOpen: true,
+			});
+			render(<SessionList {...props} />);
+
+			const wandIcons = screen.getAllByTestId('icon-wand');
+			const hasSparkle = wandIcons.some((el) => el.className.includes('wand-sparkle-active'));
+			expect(hasSparkle).toBe(true);
+		});
+
+		it('activates wand sparkle animation when auto-run is active', () => {
+			const sessions = [createMockSession({ id: 's1', name: 'Auto Session', state: 'idle' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				leftSidebarOpen: true,
+				activeBatchSessionIds: ['s1'],
+			});
+			render(<SessionList {...props} />);
+
+			const wandIcons = screen.getAllByTestId('icon-wand');
+			const hasSparkle = wandIcons.some((el) => el.className.includes('wand-sparkle-active'));
+			expect(hasSparkle).toBe(true);
+		});
+
+		it('does not activate wand sparkle when no sessions are busy or in auto-run', () => {
+			const sessions = [createMockSession({ id: 's1', name: 'Idle Session', state: 'idle' })];
+			const props = createDefaultProps({
+				sessions,
+				sortedSessions: sessions,
+				leftSidebarOpen: true,
+			});
+			render(<SessionList {...props} />);
+
+			const wandIcons = screen.getAllByTestId('icon-wand');
+			const hasSparkle = wandIcons.some((el) => el.className.includes('wand-sparkle-active'));
+			expect(hasSparkle).toBe(false);
 		});
 
 		it('shows GIT badge for git repos', () => {

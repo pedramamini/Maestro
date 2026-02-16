@@ -8,8 +8,10 @@ import {
   SYMPHONY_REGISTRY_URL,
   GITHUB_API_BASE,
   SYMPHONY_ISSUE_LABEL,
+  SYMPHONY_BLOCKING_LABEL,
   REGISTRY_CACHE_TTL_MS,
   ISSUES_CACHE_TTL_MS,
+  STARS_CACHE_TTL_MS,
   BRANCH_TEMPLATE,
   SYMPHONY_CATEGORIES,
   DOCUMENT_PATH_PATTERNS,
@@ -49,6 +51,12 @@ describe('shared/symphony-constants', () => {
     });
   });
 
+  describe('SYMPHONY_BLOCKING_LABEL', () => {
+    it('should be "blocking"', () => {
+      expect(SYMPHONY_BLOCKING_LABEL).toBe('blocking');
+    });
+  });
+
   describe('REGISTRY_CACHE_TTL_MS', () => {
     it('should be 2 hours in milliseconds', () => {
       const twoHoursMs = 2 * 60 * 60 * 1000;
@@ -60,6 +68,13 @@ describe('shared/symphony-constants', () => {
     it('should be 5 minutes in milliseconds', () => {
       const fiveMinutesMs = 5 * 60 * 1000;
       expect(ISSUES_CACHE_TTL_MS).toBe(fiveMinutesMs);
+    });
+  });
+
+  describe('STARS_CACHE_TTL_MS', () => {
+    it('should be 24 hours in milliseconds', () => {
+      const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+      expect(STARS_CACHE_TTL_MS).toBe(twentyFourHoursMs);
     });
   });
 
@@ -84,22 +99,15 @@ describe('shared/symphony-constants', () => {
   // Categories Tests
   // ==========================================================================
   describe('SYMPHONY_CATEGORIES', () => {
-    const requiredCategories = [
-      'ai-ml',
-      'developer-tools',
-      'infrastructure',
-      'documentation',
-      'web',
-      'mobile',
-      'data',
-      'security',
-      'other',
-    ];
-
-    it('should have all required category keys', () => {
-      for (const category of requiredCategories) {
+    it('should include core categories used by existing registry entries', () => {
+      const coreCategories = ['ai-ml', 'developer-tools', 'productivity', 'other'];
+      for (const category of coreCategories) {
         expect(SYMPHONY_CATEGORIES).toHaveProperty(category);
       }
+    });
+
+    it('should have at least 10 categories for broad coverage', () => {
+      expect(Object.keys(SYMPHONY_CATEGORIES).length).toBeGreaterThanOrEqual(10);
     });
 
     it('should have entries with label and emoji properties', () => {

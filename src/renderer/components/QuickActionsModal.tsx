@@ -115,6 +115,8 @@ interface QuickActionsModalProps {
 	onOpenLastDocumentGraph?: () => void;
 	// Symphony
 	onOpenSymphony?: () => void;
+	// Director's Notes
+	onOpenDirectorNotes?: () => void;
 }
 
 export function QuickActionsModal(props: QuickActionsModalProps) {
@@ -198,6 +200,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		lastGraphFocusFile,
 		onOpenLastDocumentGraph,
 		onOpenSymphony,
+		onOpenDirectorNotes,
 	} = props;
 
 	// UI store actions for search commands (avoid threading more props through 3-layer chain)
@@ -754,7 +757,13 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 								activeSession.inputMode === 'terminal'
 									? activeSession.shellCwd || activeSession.cwd
 									: activeSession.cwd;
-							const diff = await gitService.getDiff(cwd);
+							const sshRemoteId =
+								activeSession.sshRemoteId ||
+								(activeSession.sessionSshRemoteConfig?.enabled
+									? activeSession.sessionSshRemoteConfig.remoteId
+									: undefined) ||
+								undefined;
+							const diff = await gitService.getDiff(cwd, undefined, sshRemoteId);
 							if (diff.diff) {
 								setGitDiffPreview(diff.diff);
 							}
@@ -988,6 +997,21 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 						subtext: 'Contribute to open source projects',
 						action: () => {
 							onOpenSymphony();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Director's Notes - unified history and AI synopsis
+		...(onOpenDirectorNotes
+			? [
+					{
+						id: 'directorNotes',
+						label: "Director's Notes",
+						shortcut: shortcuts.directorNotes,
+						subtext: 'View unified history and AI synopsis across all sessions',
+						action: () => {
+							onOpenDirectorNotes();
 							setQuickActionOpen(false);
 						},
 					},
@@ -1314,10 +1338,14 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		})
 		.sort((a, b) => a.label.localeCompare(b.label));
 
+	// Use a ref for filtered actions so the onSelect callback stays stable
+	const filteredRef = useRef(filtered);
+	filteredRef.current = filtered;
+
 	// Callback for when an item is selected (by Enter key or number hotkey)
 	const handleSelectByIndex = useCallback(
 		(index: number) => {
-			const selectedAction = filtered[index];
+			const selectedAction = filteredRef.current[index];
 			if (!selectedAction) return;
 
 			// Don't close modal if action switches modes
@@ -1327,7 +1355,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 				setQuickActionOpen(false);
 			}
 		},
-		[filtered, renamingSession, mode, setQuickActionOpen]
+		[renamingSession, mode, setQuickActionOpen]
 	);
 
 	// Use hook for list navigation (arrow keys, number hotkeys, Enter)
@@ -1349,11 +1377,14 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		selectedItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 	}, [selectedIndex]);
 
-	// Reset selection when search or mode changes
+	// Reset selection when search or mode changes.
+	// resetSelection is intentionally excluded from deps — it changes when filtered.length
+	// changes, but we only want to reset on user-driven search/mode changes, not on every
+	// list length fluctuation from parent re-renders (which causes infinite update loops).
 	useEffect(() => {
 		resetSelection();
 		setFirstVisibleIndex(0);
-	}, [search, mode, resetSelection]);
+	}, [search, mode]);
 
 	// Clear search when switching to move-to-group mode
 	useEffect(() => {

@@ -56,7 +56,7 @@ export function expandTilde(filePath: string, homeDir?: string): string {
 /**
  * Encode a project path the same way Claude Code does.
  * Claude replaces all non-alphanumeric characters with '-'.
- * See: https://github.com/pedramamini/Maestro/issues/348
+ * See: https://github.com/RunMaestro/Maestro/issues/348
  */
 export function encodeClaudeProjectPath(projectPath: string): string {
 	return projectPath.replace(/[^a-zA-Z0-9]/g, '-');

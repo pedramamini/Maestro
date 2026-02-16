@@ -28,15 +28,7 @@ import {
 	validateAgentPromptHasTaskReference,
 } from '../hooks';
 import { generateId } from '../utils/ids';
-
-// Platform detection helper (userAgentData is newer but not in all TS types yet)
-const isMacPlatform = (): boolean => {
-	const nav = navigator as Navigator & { userAgentData?: { platform?: string } };
-	return (
-		nav.userAgentData?.platform?.toLowerCase().includes('mac') ??
-		navigator.platform.toLowerCase().includes('mac')
-	);
-};
+import { formatMetaKey } from '../utils/shortcutFormatter';
 
 // Re-export for external consumers
 export { DEFAULT_BATCH_PROMPT, validateAgentPromptHasTaskReference } from '../hooks';
@@ -779,7 +771,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 							className="px-1.5 py-0.5 rounded border text-[10px] font-mono"
 							style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
 						>
-							{isMacPlatform() ? '⌘' : 'Ctrl'} + Drag
+							{formatMetaKey()} + Drag
 						</span>
 						<span>to copy document</span>
 					</div>

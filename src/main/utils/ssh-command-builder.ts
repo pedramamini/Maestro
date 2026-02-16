@@ -12,7 +12,7 @@ import { shellEscape, buildShellCommand } from './shell-escape';
 import { expandTilde } from '../../shared/pathUtils';
 import { logger } from './logger';
 import { resolveSshPath } from './cliDetection';
-import { parseDataUrl } from '../process-manager/utils/imageUtils';
+import { parseDataUrl, buildImagePromptPrefix } from '../process-manager/utils/imageUtils';
 
 /**
  * Result of building an SSH command.
@@ -287,7 +287,7 @@ export async function buildSshCommandWithStdin(
 
 	// For prompt-embed mode (resumed sessions), prepend image paths to stdinInput/prompt
 	if (remoteImagePaths.length > 0) {
-		const imagePrefix = `[Attached images: ${remoteImagePaths.join(', ')}]\n\n`;
+		const imagePrefix = buildImagePromptPrefix(remoteImagePaths);
 		if (remoteOptions.stdinInput !== undefined) {
 			remoteOptions.stdinInput = imagePrefix + remoteOptions.stdinInput;
 		} else if (remoteOptions.prompt) {

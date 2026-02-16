@@ -25,6 +25,7 @@ import {
 	filterTextByLinesHelper,
 	getCachedAnsiHtml,
 } from '../utils/textProcessing';
+import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { MarkdownRenderer } from './MarkdownRenderer';
 import { QueuedItemsList } from './QueuedItemsList';
 import { LogFilterControls } from './LogFilterControls';
@@ -473,8 +474,20 @@ const LogItemComponent = memo(
 									thinking
 								</span>
 							</div>
-							<div className="whitespace-pre-wrap">
-								{log.text}
+							<div className="whitespace-pre-wrap text-sm break-words">
+								{isAIMode && !markdownEditMode ? (
+									<MarkdownRenderer
+										content={log.text}
+										theme={theme}
+										onCopy={copyToClipboard}
+										fileTree={fileTree}
+										cwd={cwd}
+										projectRoot={projectRoot}
+										onFileClick={onFileClick}
+									/>
+								) : (
+									log.text
+								)}
 							</div>
 						</div>
 					)}
@@ -761,7 +774,7 @@ const LogItemComponent = memo(
 								onClick={onToggleMarkdownEditMode}
 								className="p-1.5 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100"
 								style={{ color: markdownEditMode ? theme.colors.accent : theme.colors.textDim }}
-								title={markdownEditMode ? 'Show formatted (⌘E)' : 'Show plain text (⌘E)'}
+								title={markdownEditMode ? `Show formatted (${formatShortcutKeys(['Meta', 'e'])})` : `Show plain text (${formatShortcutKeys(['Meta', 'e'])})`}
 							>
 								{markdownEditMode ? <Eye className="w-4 h-4" /> : <FileText className="w-4 h-4" />}
 							</button>
