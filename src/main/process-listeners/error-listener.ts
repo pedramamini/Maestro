@@ -12,6 +12,7 @@ import type { ProcessListenerDependencies } from './types';
 import type { AccountThrottleHandler } from '../accounts/account-throttle-handler';
 import type { AccountAuthRecovery } from '../accounts/account-auth-recovery';
 import type { AccountRegistry } from '../accounts/account-registry';
+import { REGEX_SESSION_SUFFIX } from '../constants';
 
 /**
  * Sets up the agent-error listener.
@@ -45,7 +46,16 @@ export function setupErrorListener(
 		const accountRegistry = accountDeps.getAccountRegistry();
 		if (!accountRegistry) return;
 
-		const assignment = accountRegistry.getAssignment(sessionId);
+		// Try compound session ID first, then fall back to base session ID.
+		// Assignments may be keyed by base ID (from reconcileSessions on restore)
+		// while error events arrive with compound IDs (e.g. "{id}-ai-{tabId}").
+		let assignment = accountRegistry.getAssignment(sessionId);
+		if (!assignment) {
+			const baseSessionId = sessionId.replace(REGEX_SESSION_SUFFIX, '');
+			if (baseSessionId !== sessionId) {
+				assignment = accountRegistry.getAssignment(baseSessionId);
+			}
+		}
 		if (!assignment) return;
 
 		if (agentError.type === 'auth_expired') {

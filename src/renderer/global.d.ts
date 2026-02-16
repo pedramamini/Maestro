@@ -2118,6 +2118,11 @@ interface MaestroAPI {
 			projectPath?: string;
 			tabId?: string;
 			isRemote?: boolean;
+			inputTokens?: number;
+			outputTokens?: number;
+			cacheReadTokens?: number;
+			cacheCreationTokens?: number;
+			costUsd?: number;
 		}) => Promise<string>;
 		// Start an Auto Run session (returns session ID)
 		startAutoRun: (session: {

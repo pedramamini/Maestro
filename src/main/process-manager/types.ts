@@ -134,6 +134,11 @@ export interface QueryCompleteData {
 	duration: number;
 	projectPath?: string;
 	tabId?: string;
+	inputTokens?: number;
+	outputTokens?: number;
+	cacheReadTokens?: number;
+	cacheCreationTokens?: number;
+	costUsd?: number;
 }
 
 // Re-export for backwards compatibility

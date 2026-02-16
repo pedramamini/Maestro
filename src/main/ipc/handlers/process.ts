@@ -28,6 +28,7 @@ import { buildSshCommandWithStdin } from '../../utils/ssh-command-builder';
 import { buildStreamJsonMessage } from '../../process-manager/utils/streamJsonBuilder';
 import { getWindowsShellForAgentExecution } from '../../process-manager/utils/shellEscape';
 import { buildExpandedEnv } from '../../../shared/pathUtils';
+import { REGEX_SESSION_SUFFIX } from '../../constants';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { powerManager } from '../../power-manager';
 import { MaestroSettings } from './persistence';
@@ -298,8 +299,12 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				const registry = getAccountRegistry?.();
 				if (registry) {
 					const envToInject: Record<string, string> = customEnvVarsToPass ? { ...customEnvVarsToPass } : {};
+					// Use base session ID for assignment (strip -ai-{tabId} etc.) so
+					// assignments are keyed consistently regardless of spawn vs restore.
+					const baseSessionIdForAccount = config.sessionId
+						.replace(REGEX_SESSION_SUFFIX, '');
 					const assignedAccountId = injectAccountEnv(
-						config.sessionId,
+						baseSessionIdForAccount,
 						config.toolType,
 						envToInject,
 						registry,
