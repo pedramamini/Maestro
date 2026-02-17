@@ -262,7 +262,7 @@ export const QueuedItemsList = memo(
 								<button
 									onClick={handleConfirmRemove}
 									className="px-3 py-1.5 rounded text-sm"
-									style={{ backgroundColor: theme.colors.error, color: 'white' }}
+									style={{ backgroundColor: theme.colors.error, color: theme.colors.errorForeground }}
 									autoFocus
 								>
 									Remove
