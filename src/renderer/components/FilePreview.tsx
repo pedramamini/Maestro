@@ -2093,7 +2093,7 @@ export const FilePreview = React.memo(
 								className="px-2 py-1 text-xs font-medium rounded hover:opacity-80 transition-opacity"
 								style={{
 									backgroundColor: theme.colors.accent,
-									color: theme.colors.accentForeground ?? '#000',
+									color: theme.colors.accentForeground,
 								}}
 							>
 								Reload

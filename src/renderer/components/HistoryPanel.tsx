@@ -597,7 +597,7 @@ const HistoryEntryItem = memo(function HistoryEntryItem({
 						>
 							{entry.success ? (
 								entry.validated ? (
-									<DoubleCheck className="w-3 h-3" style={{ color: '#ffffff' }} />
+									<DoubleCheck className="w-3 h-3" style={{ color: theme.colors.successForeground }} />
 								) : (
 									<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
 								)

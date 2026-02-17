@@ -1193,7 +1193,7 @@ ${staggerDelays.map((delay, i) => `svg.wand-sparkle-active path:nth-child(${i + 
 										className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded font-medium transition-colors"
 										style={{
 											backgroundColor: copySuccess ? theme.colors.success : theme.colors.bgMain,
-											color: copySuccess ? '#fff' : theme.colors.textMain,
+											color: copySuccess ? theme.colors.successForeground : theme.colors.textMain,
 											border: `1px solid ${copySuccess ? theme.colors.success : theme.colors.border}`,
 										}}
 									>
@@ -1497,7 +1497,7 @@ ${staggerDelays.map((delay, i) => `svg.wand-sparkle-active path:nth-child(${i + 
 											className="w-full flex items-center justify-center gap-2 px-4 py-2 rounded font-medium transition-colors"
 											style={{
 												backgroundColor: batonCopySuccess ? theme.colors.success : theme.colors.bgMain,
-												color: batonCopySuccess ? '#fff' : theme.colors.textMain,
+												color: batonCopySuccess ? theme.colors.successForeground : theme.colors.textMain,
 												border: `1px solid ${batonCopySuccess ? theme.colors.success : theme.colors.border}`,
 											}}
 										>

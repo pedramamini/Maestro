@@ -276,7 +276,7 @@ export function HistoryDetailModal({
 								>
 									{entry.success ? (
 										entry.validated ? (
-											<DoubleCheck className="w-4 h-4" style={{ color: '#ffffff' }} />
+											<DoubleCheck className="w-4 h-4" style={{ color: theme.colors.successForeground }} />
 										) : (
 											<CheckCircle className="w-4 h-4" style={{ color: theme.colors.success }} />
 										)
