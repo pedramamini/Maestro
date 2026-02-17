@@ -33,6 +33,7 @@ import {
 	Tag,
 	Timer,
 	User,
+	ArrowDownToLine,
 	Clapperboard,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
@@ -280,6 +281,8 @@ interface SettingsModalProps {
 	setCrashReportingEnabled: (value: boolean) => void;
 	customAICommands: CustomAICommand[];
 	setCustomAICommands: (commands: CustomAICommand[]) => void;
+	autoScrollAiMode: boolean;
+	setAutoScrollAiMode: (value: boolean) => void;
 	encoreFeatures: EncoreFeatureFlags;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 	initialTab?:
@@ -1587,6 +1590,17 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
 								checked={automaticTabNamingEnabled}
 								onChange={setAutomaticTabNamingEnabled}
+								theme={theme}
+							/>
+
+							{/* Auto-scroll AI Output */}
+							<SettingCheckbox
+								icon={ArrowDownToLine}
+								sectionLabel="Auto-scroll AI Output"
+								title="Auto-scroll AI output"
+								description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
+								checked={props.autoScrollAiMode}
+								onChange={props.setAutoScrollAiMode}
 								theme={theme}
 							/>
 

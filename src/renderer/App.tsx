@@ -547,6 +547,10 @@ function MaestroConsoleInner() {
 		// File tab refresh settings
 		fileTabAutoRefreshEnabled,
 
+		// Auto-scroll settings
+		autoScrollAiMode,
+		setAutoScrollAiMode,
+
 		// Windows warning suppression
 		suppressWindowsWarning,
 		setSuppressWindowsWarning,
@@ -10837,6 +10841,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Session bookmark toggle
 		toggleBookmark,
+
+		// Auto-scroll AI mode toggle
+		autoScrollAiMode,
+		setAutoScrollAiMode,
 	};
 
 	// Update flat file list when active session's tree, expanded folders, filter, or hidden files setting changes
@@ -11214,6 +11222,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 		filePreviewLoading,
 		markdownEditMode,
 		chatRawTextMode,
+		autoScrollAiMode,
+		setAutoScrollAiMode,
 		shortcuts,
 		rightPanelOpen,
 		maxOutputLines,
@@ -11947,6 +11957,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onOpenMarketplace={handleOpenMarketplace}
 					onOpenSymphony={() => setSymphonyModalOpen(true)}
 					onOpenDirectorNotes={encoreFeatures.directorNotes ? () => setDirectorNotesOpen(true) : undefined}
+					autoScrollAiMode={autoScrollAiMode}
+					setAutoScrollAiMode={setAutoScrollAiMode}
 					tabSwitcherOpen={tabSwitcherOpen}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
 					onTabSelect={handleUtilityTabSelect}
@@ -12709,6 +12721,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 							setCrashReportingEnabled={setCrashReportingEnabled}
 							customAICommands={customAICommands}
 							setCustomAICommands={setCustomAICommands}
+							autoScrollAiMode={autoScrollAiMode}
+							setAutoScrollAiMode={setAutoScrollAiMode}
 							encoreFeatures={encoreFeatures}
 							setEncoreFeatures={setEncoreFeatures}
 							initialTab={settingsTab}

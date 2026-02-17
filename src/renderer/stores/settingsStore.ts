@@ -241,6 +241,7 @@ export interface SettingsStoreState {
 	automaticTabNamingEnabled: boolean;
 	fileTabAutoRefreshEnabled: boolean;
 	suppressWindowsWarning: boolean;
+	autoScrollAiMode: boolean;
 	encoreFeatures: EncoreFeatureFlags;
 	directorNotesSettings: DirectorNotesSettings;
 	wakatimeApiKey: string;
@@ -304,6 +305,7 @@ export interface SettingsStoreActions {
 	setAutomaticTabNamingEnabled: (value: boolean) => void;
 	setFileTabAutoRefreshEnabled: (value: boolean) => void;
 	setSuppressWindowsWarning: (value: boolean) => void;
+	setAutoScrollAiMode: (value: boolean) => void;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
 	setWakatimeApiKey: (value: string) => void;
@@ -443,6 +445,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	automaticTabNamingEnabled: true,
 	fileTabAutoRefreshEnabled: false,
 	suppressWindowsWarning: false,
+	autoScrollAiMode: false,
 	encoreFeatures: DEFAULT_ENCORE_FEATURES,
 	directorNotesSettings: DEFAULT_DIRECTOR_NOTES_SETTINGS,
 	wakatimeApiKey: '',
@@ -733,6 +736,11 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	setSuppressWindowsWarning: (value) => {
 		set({ suppressWindowsWarning: value });
 		window.maestro.settings.set('suppressWindowsWarning', value);
+	},
+
+	setAutoScrollAiMode: (value) => {
+		set({ autoScrollAiMode: value });
+		window.maestro.settings.set('autoScrollAiMode', value);
 	},
 
 	setEncoreFeatures: (value) => {
@@ -1604,6 +1612,9 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['suppressWindowsWarning'] !== undefined)
 			patch.suppressWindowsWarning = allSettings['suppressWindowsWarning'] as boolean;
 
+		if (allSettings['autoScrollAiMode'] !== undefined)
+			patch.autoScrollAiMode = allSettings['autoScrollAiMode'] as boolean;
+
 		// Encore Features (merge with defaults to preserve new flags)
 		if (allSettings['encoreFeatures'] !== undefined) {
 			patch.encoreFeatures = {
@@ -1729,6 +1740,7 @@ export function getSettingsActions() {
 		setAutomaticTabNamingEnabled: state.setAutomaticTabNamingEnabled,
 		setFileTabAutoRefreshEnabled: state.setFileTabAutoRefreshEnabled,
 		setSuppressWindowsWarning: state.setSuppressWindowsWarning,
+		setAutoScrollAiMode: state.setAutoScrollAiMode,
 		setEncoreFeatures: state.setEncoreFeatures,
 		setDirectorNotesSettings: state.setDirectorNotesSettings,
 		setWakatimeApiKey: state.setWakatimeApiKey,
