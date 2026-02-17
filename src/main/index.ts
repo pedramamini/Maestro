@@ -51,6 +51,8 @@ import {
 	registerSymphonyHandlers,
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
+	registerDirectorNotesHandlers,
+	registerWakatimeHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -109,6 +111,8 @@ import {
 } from './app-lifecycle';
 // Phase 3 refactoring - process listeners
 import { setupProcessListeners as setupProcessListenersModule } from './process-listeners';
+import { setupWakaTimeListener } from './process-listeners/wakatime-listener';
+import { WakaTimeManager } from './wakatime-manager';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -164,6 +168,21 @@ if (!installationId) {
 	store.set('installationId', installationId);
 	logger.info('Generated new installation ID', 'Startup', { installationId });
 }
+
+// Initialize WakaTime heartbeat manager
+const wakatimeManager = new WakaTimeManager(store);
+
+// Auto-install WakaTime CLI on startup if enabled
+if (store.get('wakatimeEnabled', false)) {
+	wakatimeManager.ensureCliInstalled();
+}
+
+// Auto-install WakaTime CLI when user enables the feature
+store.onDidChange('wakatimeEnabled', (newValue) => {
+	if (newValue === true) {
+		wakatimeManager.ensureCliInstalled();
+	}
+});
 
 // Initialize Sentry for crash reporting (dynamic import to avoid module-load-time errors)
 // Only enable in production - skip during development to avoid noise from hot-reload artifacts
@@ -436,6 +455,12 @@ function setupIpcHandlers() {
 	// Uses HistoryManager singleton for per-session storage
 	registerHistoryHandlers();
 
+	// Director's Notes - unified history + synopsis generation
+	registerDirectorNotesHandlers({
+		getProcessManager: () => processManager,
+		getAgentDetector: () => agentDetector,
+	});
+
 	// Agent management operations - extracted to src/main/ipc/handlers/agents.ts
 	registerAgentsHandlers({
 		getAgentDetector: () => agentDetector,
@@ -632,6 +657,9 @@ function setupIpcHandlers() {
 		agentConfigsStore,
 		settingsStore: store,
 	});
+
+	// Register WakaTime handlers (CLI check, API key validation)
+	registerWakatimeHandlers(wakatimeManager);
 }
 
 // Handle process output streaming (set up after initialization)
@@ -686,5 +714,8 @@ function setupProcessListeners() {
 			},
 			logger,
 		});
+
+		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
+		setupWakaTimeListener(processManager, wakatimeManager, store);
 	}
 }

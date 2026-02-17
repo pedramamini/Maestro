@@ -105,12 +105,25 @@ describe('HistoryDetailModal', () => {
 			expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
 		});
 
-		it('should render Delete button', () => {
+		it('should render Delete button when onDelete is provided', () => {
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry()}
+					onClose={mockOnClose}
+					onDelete={mockOnDelete}
+				/>
+			);
+
+			expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument();
+		});
+
+		it('should not render Delete button when onDelete is not provided', () => {
 			render(
 				<HistoryDetailModal theme={mockTheme} entry={createMockEntry()} onClose={mockOnClose} />
 			);
 
-			expect(screen.getByRole('button', { name: /Delete/i })).toBeInTheDocument();
+			expect(screen.queryByTitle('Delete this history entry')).not.toBeInTheDocument();
 		});
 
 		it('should display timestamp in formatted format', () => {
@@ -878,7 +891,7 @@ describe('HistoryDetailModal', () => {
 			expect(confirmDeleteButton).toHaveAttribute('tabIndex', '0');
 		});
 
-		it('should not call onDelete if callback is not provided', () => {
+		it('should not render delete button when onDelete is not provided', () => {
 			render(
 				<HistoryDetailModal
 					theme={mockTheme}
@@ -888,12 +901,8 @@ describe('HistoryDetailModal', () => {
 				/>
 			);
 
-			fireEvent.click(screen.getByTitle('Delete this history entry'));
-			const deleteButtons = screen.getAllByRole('button', { name: 'Delete' });
-			fireEvent.click(deleteButtons[deleteButtons.length - 1]);
-
-			// Should still close without error
-			expect(mockOnClose).toHaveBeenCalled();
+			// Delete button should not be present when onDelete is not provided
+			expect(screen.queryByTitle('Delete this history entry')).not.toBeInTheDocument();
 		});
 	});
 
@@ -1296,7 +1305,12 @@ describe('HistoryDetailModal', () => {
 	describe('Accessibility', () => {
 		it('should have proper button roles', () => {
 			render(
-				<HistoryDetailModal theme={mockTheme} entry={createMockEntry()} onClose={mockOnClose} />
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry()}
+					onClose={mockOnClose}
+					onDelete={mockOnDelete}
+				/>
 			);
 
 			expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
@@ -1309,6 +1323,7 @@ describe('HistoryDetailModal', () => {
 					theme={mockTheme}
 					entry={createMockEntry({ agentSessionId: 'test-session-id' })}
 					onClose={mockOnClose}
+					onDelete={mockOnDelete}
 				/>
 			);
 
@@ -1336,6 +1351,146 @@ describe('HistoryDetailModal', () => {
 
 			expect(screen.getByTitle('Previous entry (←)')).toBeInTheDocument();
 			expect(screen.getByTitle('Next entry (→)')).toBeInTheDocument();
+		});
+	});
+
+	describe('Sessionless Context (Director Notes)', () => {
+		// Director's Notes uses HistoryDetailModal without session-specific callbacks
+		// (no onResumeSession, onDelete, onUpdate, onJumpToAgentSession).
+		// The modal must render gracefully with only required props + navigation.
+
+		it('should render with only required props (no session callbacks)', () => {
+			const entry = createMockEntry({
+				type: 'AUTO',
+				summary: 'Unified history entry',
+				agentSessionId: 'abc12345-def6-7890-ghij-klmnopqrstuv',
+				success: true,
+			});
+			render(<HistoryDetailModal theme={mockTheme} entry={entry} onClose={mockOnClose} />);
+
+			// Core content renders
+			expect(screen.getByText('AUTO')).toBeInTheDocument();
+			expect(screen.getByText('Unified history entry')).toBeInTheDocument();
+			expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+
+			// Session-specific actions are hidden
+			expect(screen.queryByText('Resume')).not.toBeInTheDocument();
+			expect(screen.queryByTitle('Delete this history entry')).not.toBeInTheDocument();
+			expect(screen.queryByText('Validated')).not.toBeInTheDocument();
+		});
+
+		it('should support navigation without session callbacks', () => {
+			const mockEntries: HistoryEntry[] = [
+				createMockEntry({ id: 'unified-0', summary: 'Entry 0' }),
+				createMockEntry({ id: 'unified-1', summary: 'Entry 1' }),
+				createMockEntry({ id: 'unified-2', summary: 'Entry 2' }),
+			];
+
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={mockEntries[1]}
+					onClose={mockOnClose}
+					filteredEntries={mockEntries}
+					currentIndex={1}
+					onNavigate={mockOnNavigate}
+				/>
+			);
+
+			// Navigation works without session context
+			expect(screen.getByText('Prev')).toBeInTheDocument();
+			expect(screen.getByText('Next')).toBeInTheDocument();
+
+			fireEvent.click(screen.getByRole('button', { name: 'Next' }));
+			expect(mockOnNavigate).toHaveBeenCalledWith(mockEntries[2], 2);
+		});
+
+		it('should display session ID octet without resume button when onResumeSession is absent', () => {
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry({
+						agentSessionId: 'abc12345-def6-7890-ghij-klmnopqrstuv',
+					})}
+					onClose={mockOnClose}
+					// No onResumeSession provided
+				/>
+			);
+
+			// Session ID octet is still visible (copyable)
+			expect(screen.getByText('ABC12345')).toBeInTheDocument();
+			// But Resume button is not shown
+			expect(screen.queryByText('Resume')).not.toBeInTheDocument();
+		});
+
+		it('should render file linking props without session callbacks', () => {
+			render(
+				<HistoryDetailModal
+					theme={mockTheme}
+					entry={createMockEntry({ summary: 'Check `src/index.ts` for details' })}
+					onClose={mockOnClose}
+					fileTree={[]}
+					onFileClick={vi.fn()}
+					// No session callbacks
+				/>
+			);
+
+			// Should render without error
+			expect(screen.getByRole('button', { name: 'Close' })).toBeInTheDocument();
+		});
+
+		it('should display agentName as prominent header when present', () => {
+			const entryWithAgent = {
+				...createMockEntry({ summary: 'Did some work' }),
+				agentName: 'My Project Session',
+			} as HistoryEntry;
+
+			render(<HistoryDetailModal theme={mockTheme} entry={entryWithAgent} onClose={mockOnClose} />);
+
+			// Both the h2 header and the inline pill share the same title
+			const elements = screen.getAllByTitle('My Project Session');
+			const agentHeader = elements.find((el) => el.tagName === 'H2');
+			expect(agentHeader).toBeDefined();
+			expect(agentHeader).toBeInTheDocument();
+			expect(agentHeader).toHaveClass('text-lg', 'font-bold');
+		});
+
+		it('should show sessionName as subheading when both agentName and sessionName exist', () => {
+			const entryWithBoth = {
+				...createMockEntry({ sessionName: 'Tab Name' }),
+				agentName: 'Session Name',
+			} as HistoryEntry;
+
+			render(<HistoryDetailModal theme={mockTheme} entry={entryWithBoth} onClose={mockOnClose} />);
+
+			// agentName is the prominent header
+			const agentHeader = screen.getByTitle('Session Name');
+			expect(agentHeader).toHaveClass('text-lg', 'font-bold');
+
+			// sessionName is the smaller subheading
+			const sessionHeader = screen.getByTitle('Tab Name');
+			expect(sessionHeader).toHaveClass('text-sm', 'font-medium');
+		});
+
+		it('should show agentName pill inline when agentName exists but sessionName does not', () => {
+			const entryWithAgentOnly = {
+				...createMockEntry({ summary: 'Work done' }),
+				agentName: 'Pill Agent',
+			} as HistoryEntry;
+			// Ensure no sessionName
+			delete (entryWithAgentOnly as any).sessionName;
+
+			render(
+				<HistoryDetailModal theme={mockTheme} entry={entryWithAgentOnly} onClose={mockOnClose} />
+			);
+
+			// Agent name pill should be in the metadata row
+			const pills = screen.getAllByTitle('Pill Agent');
+			// One is the header h2, the other is the pill in metadata row
+			expect(pills.length).toBe(2);
+			const pillElement = pills.find((el) => el.tagName === 'SPAN');
+			expect(pillElement).toBeDefined();
+			expect(pillElement).toHaveClass('rounded-full', 'text-[10px]', 'font-bold');
 		});
 	});
 

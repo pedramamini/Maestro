@@ -2,6 +2,7 @@ import React from 'react';
 import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { TabBar } from '../../../renderer/components/TabBar';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { AITab, Theme, FilePreviewTab } from '../../../renderer/types';
 
 // Mock lucide-react icons
@@ -210,7 +211,9 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(screen.getByTitle('New tab (Cmd+T)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`New tab (${formatShortcutKeys(['Meta', 't'])})`)
+			).toBeInTheDocument();
 		});
 
 		it('renders unread filter button', () => {
@@ -241,7 +244,9 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(screen.getByTitle('Search tabs (Cmd+Shift+O)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`Search tabs (${formatShortcutKeys(['Meta', 'Shift', 'o'])})`)
+			).toBeInTheDocument();
 		});
 
 		it('does not render tab search button when onOpenTabSearch not provided', () => {
@@ -256,7 +261,9 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(screen.queryByTitle('Search tabs (Cmd+Shift+O)')).not.toBeInTheDocument();
+			expect(
+				screen.queryByTitle(`Search tabs (${formatShortcutKeys(['Meta', 'Shift', 'o'])})`)
+			).not.toBeInTheDocument();
 		});
 	});
 
@@ -441,7 +448,7 @@ describe('TabBar', () => {
 				/>
 			);
 
-			fireEvent.click(screen.getByTitle('New tab (Cmd+T)'));
+			fireEvent.click(screen.getByTitle(`New tab (${formatShortcutKeys(['Meta', 't'])})`));
 			expect(mockOnNewTab).toHaveBeenCalled();
 		});
 	});
@@ -729,7 +736,9 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(screen.getByTitle('Filter unread tabs (Cmd+U)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`Filter unread tabs (${formatShortcutKeys(['Meta', 'u'])})`)
+			).toBeInTheDocument();
 
 			rerender(
 				<TabBar
@@ -743,7 +752,9 @@ describe('TabBar', () => {
 				/>
 			);
 
-			expect(screen.getByTitle('Showing unread only (Cmd+U)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`Showing unread only (${formatShortcutKeys(['Meta', 'u'])})`)
+			).toBeInTheDocument();
 		});
 	});
 
@@ -761,7 +772,9 @@ describe('TabBar', () => {
 				/>
 			);
 
-			fireEvent.click(screen.getByTitle('Search tabs (Cmd+Shift+O)'));
+			fireEvent.click(
+				screen.getByTitle(`Search tabs (${formatShortcutKeys(['Meta', 'Shift', 'o'])})`)
+			);
 			expect(mockOnOpenTabSearch).toHaveBeenCalled();
 		});
 	});
@@ -1734,7 +1747,9 @@ describe('TabBar', () => {
 			);
 
 			// Should still render the new tab button
-			expect(screen.getByTitle('New tab (Cmd+T)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`New tab (${formatShortcutKeys(['Meta', 't'])})`)
+			).toBeInTheDocument();
 		});
 
 		it('handles special characters in tab names', () => {

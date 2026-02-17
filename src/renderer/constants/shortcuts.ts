@@ -68,6 +68,16 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 	fuzzyFileSearch: { id: 'fuzzyFileSearch', label: 'Fuzzy File Search', keys: ['Meta', 'g'] },
 	toggleBookmark: { id: 'toggleBookmark', label: 'Toggle Bookmark', keys: ['Meta', 'Shift', 'b'] },
 	openSymphony: { id: 'openSymphony', label: 'Maestro Symphony', keys: ['Meta', 'Shift', 'y'] },
+	toggleAutoScroll: {
+		id: 'toggleAutoScroll',
+		label: 'Toggle Auto-Scroll AI Output',
+		keys: ['Alt', 'Meta', 's'],
+	},
+	directorNotes: {
+		id: 'directorNotes',
+		label: "Director's Notes",
+		keys: ['Meta', 'Shift', 'o'],
+	},
 };
 
 // Non-editable shortcuts (displayed in help but not configurable)
@@ -92,6 +102,11 @@ export const FIXED_SHORTCUTS: Record<string, Shortcut> = {
 	searchOutput: {
 		id: 'searchOutput',
 		label: 'Search Output (in Main Window)',
+		keys: ['Meta', 'f'],
+	},
+	searchDirectorNotes: {
+		id: 'searchDirectorNotes',
+		label: "Search Director's Notes",
 		keys: ['Meta', 'f'],
 	},
 	filePreviewBack: {

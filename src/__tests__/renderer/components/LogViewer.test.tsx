@@ -15,6 +15,7 @@ import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { LogViewer } from '../../../renderer/components/LogViewer';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme } from '../../../renderer/types';
 
 // Mock theme
@@ -1098,7 +1099,7 @@ describe('LogViewer', () => {
 
 			await waitFor(() => {
 				expect(screen.getByText(/Press/)).toBeInTheDocument();
-				expect(screen.getByText('⌘F')).toBeInTheDocument();
+				expect(screen.getByText(formatShortcutKeys(['Meta', 'f']))).toBeInTheDocument();
 				expect(screen.getByText(/to search/)).toBeInTheDocument();
 			});
 		});

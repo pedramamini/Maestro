@@ -15,6 +15,7 @@ import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { TabSwitcherModal } from '../../../renderer/components/TabSwitcherModal';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
 import type { Theme, AITab } from '../../../renderer/types';
 
@@ -675,7 +676,9 @@ describe('TabSwitcherModal', () => {
 
 			expect(screen.getByText('2 tabs')).toBeInTheDocument();
 			expect(
-				screen.getByText('↑↓ navigate • Enter select • ⌘1-9 quick select')
+				screen.getByText(
+					`↑↓ navigate • Enter select • ${formatShortcutKeys(['Meta'])}1-9 quick select`
+				)
 			).toBeInTheDocument();
 		});
 
@@ -695,9 +698,7 @@ describe('TabSwitcherModal', () => {
 				/>
 			);
 
-			// In jsdom environment, navigator.userAgent doesn't contain 'Mac'
-			// so shortcut formatter uses Ctrl+T format instead of ⌘T
-			expect(screen.getByText('Ctrl+T')).toBeInTheDocument();
+			expect(screen.getByText(formatShortcutKeys(['Meta', 'T']))).toBeInTheDocument();
 		});
 
 		it('renders empty state for no tabs', () => {
@@ -2108,7 +2109,9 @@ describe('TabSwitcherModal', () => {
 
 	describe('file tab support', () => {
 		// Helper to create a test file tab
-		const createTestFileTab = (overrides: Partial<import('../../../renderer/types').FilePreviewTab> = {}) => ({
+		const createTestFileTab = (
+			overrides: Partial<import('../../../renderer/types').FilePreviewTab> = {}
+		) => ({
 			id: `file-tab-${Math.random().toString(36).substr(2, 9)}`,
 			path: '/test/project/src/example.ts',
 			name: 'example',
@@ -2220,9 +2223,7 @@ describe('TabSwitcherModal', () => {
 		});
 
 		it('shows unsaved indicator for file tabs with edits', () => {
-			const fileTabs = [
-				createTestFileTab({ name: 'unsaved', editContent: 'some edited content' }),
-			];
+			const fileTabs = [createTestFileTab({ name: 'unsaved', editContent: 'some edited content' })];
 
 			renderWithLayerStack(
 				<TabSwitcherModal
@@ -2269,10 +2270,7 @@ describe('TabSwitcherModal', () => {
 
 		it('sorts file tabs alphabetically with AI tabs', () => {
 			const aiTabs = [createTestTab({ name: 'Beta AI' })];
-			const fileTabs = [
-				createTestFileTab({ name: 'Zeta' }),
-				createTestFileTab({ name: 'Alpha' }),
-			];
+			const fileTabs = [createTestFileTab({ name: 'Zeta' }), createTestFileTab({ name: 'Alpha' })];
 
 			renderWithLayerStack(
 				<TabSwitcherModal

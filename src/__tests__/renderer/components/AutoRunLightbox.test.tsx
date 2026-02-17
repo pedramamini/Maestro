@@ -16,6 +16,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { AutoRunLightbox } from '../../../renderer/components/AutoRunLightbox';
 import { LayerStackProvider } from '../../../renderer/contexts/LayerStackContext';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme } from '../../../renderer/types';
 
 // Helper to wrap component in LayerStackProvider
@@ -184,7 +185,9 @@ describe('AutoRunLightbox', () => {
 			const props = createDefaultProps();
 			renderWithProviders(<AutoRunLightbox {...props} />);
 
-			expect(screen.getByTitle('Copy image to clipboard (⌘C)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			).toBeInTheDocument();
 			expect(screen.getByTestId('copy-icon')).toBeInTheDocument();
 		});
 
@@ -635,7 +638,9 @@ describe('AutoRunLightbox', () => {
 			const props = createDefaultProps();
 			renderWithProviders(<AutoRunLightbox {...props} />);
 
-			fireEvent.click(screen.getByTitle('Copy image to clipboard (⌘C)'));
+			fireEvent.click(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			);
 
 			await waitFor(() => {
 				expect(global.fetch).toHaveBeenCalledWith('data:image/png;base64,mock-data-image1.png');
@@ -676,7 +681,9 @@ describe('AutoRunLightbox', () => {
 			// Initially shows copy icon
 			expect(screen.getByTestId('copy-icon')).toBeInTheDocument();
 
-			fireEvent.click(screen.getByTitle('Copy image to clipboard (⌘C)'));
+			fireEvent.click(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			);
 
 			await waitFor(() => {
 				expect(screen.getByTestId('check-icon')).toBeInTheDocument();
@@ -690,7 +697,9 @@ describe('AutoRunLightbox', () => {
 			const props = createDefaultProps();
 			renderWithProviders(<AutoRunLightbox {...props} />);
 
-			const copyButton = screen.getByTitle('Copy image to clipboard (⌘C)');
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 
 			// Trigger copy and immediately resolve the promise chain
 			await act(async () => {
@@ -717,7 +726,9 @@ describe('AutoRunLightbox', () => {
 			const props = createDefaultProps({ onClose });
 			renderWithProviders(<AutoRunLightbox {...props} />);
 
-			fireEvent.click(screen.getByTitle('Copy image to clipboard (⌘C)'));
+			fireEvent.click(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			);
 
 			// onClose should NOT be called because stopPropagation prevents backdrop click
 			expect(onClose).not.toHaveBeenCalled();
@@ -730,7 +741,9 @@ describe('AutoRunLightbox', () => {
 			const props = createDefaultProps();
 			renderWithProviders(<AutoRunLightbox {...props} />);
 
-			fireEvent.click(screen.getByTitle('Copy image to clipboard (⌘C)'));
+			fireEvent.click(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			);
 
 			await waitFor(() => {
 				expect(consoleSpy).toHaveBeenCalledWith(
@@ -751,7 +764,9 @@ describe('AutoRunLightbox', () => {
 			});
 			renderWithProviders(<AutoRunLightbox {...props} />);
 
-			fireEvent.click(screen.getByTitle('Copy image to clipboard (⌘C)'));
+			fireEvent.click(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			);
 
 			await waitFor(() => {
 				expect(global.fetch).toHaveBeenCalledWith('https://example.com/image.png');
@@ -1120,7 +1135,9 @@ describe('AutoRunLightbox', () => {
 
 			expect(screen.getByTitle('Previous image (←)')).toBeInTheDocument();
 			expect(screen.getByTitle('Next image (→)')).toBeInTheDocument();
-			expect(screen.getByTitle('Copy image to clipboard (⌘C)')).toBeInTheDocument();
+			expect(
+				screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`)
+			).toBeInTheDocument();
 			expect(screen.getByTitle('Delete image (Delete key)')).toBeInTheDocument();
 			expect(screen.getByTitle('Close (ESC)')).toBeInTheDocument();
 		});

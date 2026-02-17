@@ -17,6 +17,7 @@ import { PhaseReviewScreen } from '../../../../renderer/components/Wizard/screen
 import { WizardExitConfirmModal } from '../../../../renderer/components/Wizard/WizardExitConfirmModal';
 import { LayerStackProvider } from '../../../../renderer/contexts/LayerStackContext';
 import type { Theme, AgentConfig } from '../../../../renderer/types';
+import { formatShortcutKeys } from '../../../../renderer/utils/shortcutFormatter';
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
@@ -583,7 +584,7 @@ describe('Wizard Keyboard Navigation', () => {
 			renderWithProviders(<ConversationScreenWrapper theme={mockTheme} />);
 
 			// Find the keyboard shortcut label
-			const shortcutLabel = screen.getByText('⌘⇧K');
+			const shortcutLabel = screen.getByText(formatShortcutKeys(['Meta', 'Shift', 'k']));
 			expect(shortcutLabel).toBeInTheDocument();
 			expect(shortcutLabel.tagName.toLowerCase()).toBe('kbd');
 		});
@@ -908,7 +909,7 @@ describe('Wizard Keyboard Navigation', () => {
 			});
 
 			// Verify keyboard hints are visible
-			expect(screen.getByText('⌘E')).toBeInTheDocument();
+			expect(screen.getByText(formatShortcutKeys(['Meta', 'e']))).toBeInTheDocument();
 			expect(screen.getByText(/toggle edit\/preview/i)).toBeInTheDocument();
 			expect(screen.getByText('Tab')).toBeInTheDocument();
 			expect(screen.getByText('Enter')).toBeInTheDocument();

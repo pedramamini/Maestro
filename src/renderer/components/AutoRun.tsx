@@ -29,7 +29,6 @@ import {
 	RefreshCw,
 	Maximize2,
 	AlertTriangle,
-	SkipForward,
 	XCircle,
 	RotateCcw,
 	LayoutGrid,
@@ -336,7 +335,7 @@ const AttachmentImage = memo(function AttachmentImage({
 
 	if (loading) {
 		return (
-			<div
+			<span
 				className="inline-flex items-center gap-2 px-3 py-2 rounded"
 				style={{ backgroundColor: theme.colors.bgActivity }}
 			>
@@ -344,13 +343,13 @@ const AttachmentImage = memo(function AttachmentImage({
 				<span className="text-xs" style={{ color: theme.colors.textDim }}>
 					Loading image...
 				</span>
-			</div>
+			</span>
 		);
 	}
 
 	if (error) {
 		return (
-			<div
+			<span
 				className="inline-flex items-center gap-2 px-3 py-2 rounded"
 				style={{
 					backgroundColor: theme.colors.bgActivity,
@@ -362,7 +361,7 @@ const AttachmentImage = memo(function AttachmentImage({
 				<span className="text-xs" style={{ color: theme.colors.error }}>
 					{error}
 				</span>
-			</div>
+			</span>
 		);
 	}
 
@@ -484,7 +483,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		onOpenBatchRunner,
 		onStopBatchRun,
 		// Error handling callbacks (Phase 5.10)
-		onSkipCurrentDocument,
+		onSkipCurrentDocument: _onSkipCurrentDocument,
 		onAbortBatchOnError,
 		onResumeAfterError,
 		sessionState,
@@ -1836,24 +1835,6 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 								)}
 							</div>
 							<div className="flex gap-2 flex-wrap">
-								{/* Skip button - only show if there are more documents */}
-								{batchRunState &&
-									batchRunState.currentDocumentIndex < batchRunState.documents.length - 1 &&
-									onSkipCurrentDocument && (
-										<button
-											onClick={onSkipCurrentDocument}
-											className="flex items-center gap-1.5 px-2 py-1 rounded text-[10px] font-medium transition-colors hover:opacity-80"
-											style={{
-												backgroundColor: theme.colors.bgActivity,
-												color: theme.colors.textMain,
-												border: `1px solid ${theme.colors.border}`,
-											}}
-											title="Skip this document and continue with the next one"
-										>
-											<SkipForward className="w-3 h-3" />
-											Skip Document
-										</button>
-									)}
 								{/* Resume button - for recoverable errors */}
 								{batchError.recoverable && onResumeAfterError && (
 									<button
@@ -2159,7 +2140,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 								color: theme.colors.accentForeground,
 								border: `1px solid ${theme.colors.accent}`,
 							}}
-							title="Save changes (⌘S)"
+							title={`Save changes (${formatShortcutKeys(['Meta', 's'])})`}
 						>
 							{isCompact ? <Save className="w-3.5 h-3.5" /> : 'Save'}
 							{/* Keyboard shortcut overlay on hover - only show in non-compact mode */}
@@ -2172,7 +2153,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 										border: `1px solid ${theme.colors.border}`,
 									}}
 								>
-									⌘S
+									{formatShortcutKeys(['Meta', 's'])}
 								</span>
 							)}
 						</button>

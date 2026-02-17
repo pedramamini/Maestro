@@ -13,6 +13,7 @@ import type { ToolType, ProcessConfig } from '../types';
 import type { InlineWizardMessage } from '../hooks/batch/useInlineWizard';
 import type { ExistingDocument as BaseExistingDocument } from '../utils/existingDocsDetector';
 import { logger } from '../utils/logger';
+import { getStdinFlags } from '../utils/spawnHelpers';
 import { wizardInlineIteratePrompt, wizardInlineNewPrompt } from '../../prompts';
 import {
 	parseStructuredOutput,
@@ -489,51 +490,22 @@ function buildArgsForAgent(agent: any): string[] {
 		}
 
 		case 'codex': {
-			// Codex requires exec batch mode with JSON output for wizard conversations
-			// Must include these explicitly since wizard pre-builds args before IPC handler
-			const args = [];
-
-			// Add batch mode prefix: 'exec'
-			if (agent.batchModePrefix) {
-				args.push(...agent.batchModePrefix);
-			}
-
-			// Add base args (if any)
-			args.push(...(agent.args || []));
-
-			// Add batch mode args: '--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'
-			if (agent.batchModeArgs) {
-				args.push(...agent.batchModeArgs);
-			}
-
-			// Add JSON output: '--json'
-			if (agent.jsonOutputArgs) {
-				args.push(...agent.jsonOutputArgs);
-			}
-
-			return args;
+			// Return only base args — the IPC handler's buildAgentArgs() adds
+			// batchModePrefix, batchModeArgs, jsonOutputArgs, and workingDirArgs
+			// automatically when a prompt is present. Adding them here would
+			// duplicate flags and cause "unexpected argument" exit code 2.
+			return [...(agent.args || [])];
 		}
 
 		case 'opencode': {
-			// OpenCode requires 'run' batch mode with JSON output for wizard conversations
-			const args = [];
-
-			// Add batch mode prefix: 'run'
-			if (agent.batchModePrefix) {
-				args.push(...agent.batchModePrefix);
-			}
-
-			// Add base args (if any)
-			args.push(...(agent.args || []));
+			// Return base args plus read-only restriction for wizard conversations.
+			// The IPC handler's buildAgentArgs() adds batchModePrefix, jsonOutputArgs,
+			// and workingDirArgs automatically when a prompt is present.
+			const args = [...(agent.args || [])];
 
 			// Add read-only mode: '--agent plan'
 			if (agent.readOnlyArgs) {
 				args.push(...agent.readOnlyArgs);
-			}
-
-			// Add JSON output: '--format json'
-			if (agent.jsonOutputArgs) {
-				args.push(...agent.jsonOutputArgs);
 			}
 
 			return args;
@@ -608,15 +580,10 @@ export async function sendWizardMessage(
 		// Build args for the agent
 		const argsForSpawn = agent ? buildArgsForAgent(agent) : [];
 
-		// On Windows, use stdin to bypass cmd.exe ~8KB command line length limit
-		// Note: Use navigator.platform in renderer (process.platform is not available in browser context)
-		const isWindows = navigator.platform.toLowerCase().includes('win');
-		// Use agent capabilities to determine stdin mode
-		// Agents that support --input-format stream-json use sendPromptViaStdin (JSON format)
-		// Agents that don't support stream-json use sendPromptViaStdinRaw (raw text)
-		const supportsStreamJson = agent?.capabilities?.supportsStreamJsonInput ?? false;
-		const sendViaStdin = isWindows && supportsStreamJson;
-		const sendViaStdinRaw = isWindows && !supportsStreamJson;
+		const { sendPromptViaStdin: sendViaStdin, sendPromptViaStdinRaw: sendViaStdinRaw } = getStdinFlags({
+			isSshSession: !!session.sessionSshRemoteConfig?.enabled,
+			supportsStreamJsonInput: agent?.capabilities?.supportsStreamJsonInput ?? false,
+		});
 		if (sendViaStdin && !argsForSpawn.includes('--input-format')) {
 			// Add --input-format stream-json when using stdin with stream-json compatible agents
 			argsForSpawn.push('--input-format', 'stream-json');
@@ -628,7 +595,6 @@ export async function sendWizardMessage(
 			promptLength: fullPrompt.length,
 			sendViaStdin,
 			sendViaStdinRaw,
-			supportsStreamJson,
 		});
 
 		// Spawn agent and collect output

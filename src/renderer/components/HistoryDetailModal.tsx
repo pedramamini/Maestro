@@ -1,4 +1,4 @@
-import React, { useEffect, useRef, useState, useCallback, useMemo } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import {
 	X,
 	Bot,
@@ -26,23 +26,7 @@ import { MarkdownRenderer } from './MarkdownRenderer';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
 import { calculateContextDisplay } from '../utils/contextUsage';
 import { getContextColor } from '../utils/theme';
-
-// Double checkmark SVG component for validated entries
-const DoubleCheck = ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
-	<svg
-		className={className}
-		style={style}
-		viewBox="0 0 24 24"
-		fill="none"
-		stroke="currentColor"
-		strokeWidth="2.5"
-		strokeLinecap="round"
-		strokeLinejoin="round"
-	>
-		<polyline points="15 6 6 17 1 12" />
-		<polyline points="23 6 14 17 11 14" />
-	</svg>
-);
+import { DoubleCheck } from './History';
 
 interface HistoryDetailModalProps {
 	theme: Theme;
@@ -62,7 +46,6 @@ interface HistoryDetailModalProps {
 	projectRoot?: string;
 	onFileClick?: (path: string) => void;
 }
-
 
 export function HistoryDetailModal({
 	theme,
@@ -200,6 +183,9 @@ export function HistoryDetailModal({
 	const colors = getPillColor();
 	const Icon = entry.type === 'AUTO' ? Bot : User;
 
+	// Access agentName from unified history entries (Director's Notes)
+	const agentName = (entry as HistoryEntry & { agentName?: string }).agentName;
+
 	// For AUTO entries:
 	//   - summary = short 1-2 sentence synopsis (shown in list view and toast)
 	//   - fullResponse = complete synopsis with details (shown in detail view)
@@ -236,11 +222,22 @@ export function HistoryDetailModal({
 					</button>
 
 					<div className="flex flex-col gap-3 pr-8">
-						{/* Session Name - prominent header when available */}
-						{entry.sessionName && (
+						{/* Agent Name - shown as prominent header when available (from Director's Notes) */}
+						{agentName && (
 							<h2
 								className="text-lg font-bold truncate"
 								style={{ color: theme.colors.textMain }}
+								title={agentName}
+							>
+								{agentName}
+							</h2>
+						)}
+
+						{/* Session Name - shown as header if no agent name, or as subheading if agent name is present */}
+						{entry.sessionName && (
+							<h2
+								className={`truncate ${agentName ? 'text-sm font-medium' : 'text-lg font-bold'}`}
+								style={{ color: agentName ? theme.colors.textDim : theme.colors.textMain }}
 								title={entry.sessionName}
 							>
 								{entry.sessionName}
@@ -298,6 +295,21 @@ export function HistoryDetailModal({
 								<Icon className="w-2.5 h-2.5" />
 								{entry.type}
 							</span>
+
+							{/* Agent Name Pill - shown inline when agentName exists but isn't already in the header */}
+							{agentName && !entry.sessionName && (
+								<span
+									className="px-2 py-0.5 rounded-full text-[10px] font-bold truncate max-w-[200px]"
+									style={{
+										backgroundColor: theme.colors.bgActivity,
+										color: theme.colors.textMain,
+										border: `1px solid ${theme.colors.border}`,
+									}}
+									title={agentName}
+								>
+									{agentName}
+								</span>
+							)}
 
 							{/* Session ID Octet - copyable */}
 							{entry.agentSessionId && (
@@ -518,20 +530,24 @@ export function HistoryDetailModal({
 					className="flex items-center justify-between px-6 py-4 border-t shrink-0"
 					style={{ borderColor: theme.colors.border }}
 				>
-					{/* Delete button */}
-					<button
-						onClick={() => setShowDeleteConfirm(true)}
-						className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors hover:opacity-90"
-						style={{
-							backgroundColor: theme.colors.error + '20',
-							color: theme.colors.error,
-							border: `1px solid ${theme.colors.error}40`,
-						}}
-						title="Delete this history entry"
-					>
-						<Trash2 className="w-4 h-4" />
-						Delete
-					</button>
+					{/* Delete button - only shown when onDelete handler is provided */}
+					{onDelete ? (
+						<button
+							onClick={() => setShowDeleteConfirm(true)}
+							className="flex items-center gap-2 px-3 py-2 rounded text-sm font-medium transition-colors hover:opacity-90"
+							style={{
+								backgroundColor: theme.colors.error + '20',
+								color: theme.colors.error,
+								border: `1px solid ${theme.colors.error}40`,
+							}}
+							title="Delete this history entry"
+						>
+							<Trash2 className="w-4 h-4" />
+							Delete
+						</button>
+					) : (
+						<div />
+					)}
 
 					{/* Prev/Next navigation buttons - centered */}
 					{canNavigate && (

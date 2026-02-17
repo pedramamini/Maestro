@@ -829,10 +829,7 @@ export function TabSwitcherModal({
 												style={{ backgroundColor: theme.colors.success }}
 											/>
 										) : (
-											<FileText
-												className="w-3.5 h-3.5"
-												style={{ color: theme.colors.textDim }}
-											/>
+											<FileText className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
 										)}
 									</div>
 
@@ -979,7 +976,7 @@ export function TabSwitcherModal({
 						{filteredItems.length}{' '}
 						{viewMode === 'open' ? 'tabs' : viewMode === 'starred' ? 'starred' : 'sessions'}
 					</span>
-					<span>↑↓ navigate • Enter select • ⌘1-9 quick select</span>
+					<span>{`↑↓ navigate • Enter select • ${formatShortcutKeys(['Meta'])}1-9 quick select`}</span>
 				</div>
 			</div>
 		</div>

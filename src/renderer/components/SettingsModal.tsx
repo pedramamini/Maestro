@@ -31,7 +31,10 @@ import {
 	Monitor,
 	PartyPopper,
 	Tag,
+	Timer,
 	User,
+	ArrowDownToLine,
+	Clapperboard,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -42,6 +45,8 @@ import type {
 	ShellInfo,
 	CustomAICommand,
 	LLMProvider,
+	AgentConfig,
+	ToolType,
 } from '../types';
 import { CustomThemeBuilder } from './CustomThemeBuilder';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -49,13 +54,15 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AICommandsPanel } from './AICommandsPanel';
 import { SpecKitCommandsPanel } from './SpecKitCommandsPanel';
 import { OpenSpecCommandsPanel } from './OpenSpecCommandsPanel';
-import { formatShortcutKeys, isMacOS } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, formatMetaKey, formatEnterToSend } from '../utils/shortcutFormatter';
 import { ToggleButtonGroup } from './ToggleButtonGroup';
 import { SettingCheckbox } from './SettingCheckbox';
 import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
 import { SshRemoteIgnoreSection } from './Settings/SshRemoteIgnoreSection';
+import { AgentConfigPanel } from './shared/AgentConfigPanel';
+import { AGENT_TILES } from './Wizard/screens/AgentSelectionScreen';
 
 // Feature flags - set to true to enable dormant features
 const FEATURE_FLAGS = {
@@ -273,6 +280,8 @@ interface SettingsModalProps {
 	setCrashReportingEnabled: (value: boolean) => void;
 	customAICommands: CustomAICommand[];
 	setCustomAICommands: (commands: CustomAICommand[]) => void;
+	autoScrollAiMode: boolean;
+	setAutoScrollAiMode: (value: boolean) => void;
 	initialTab?:
 		| 'general'
 		| 'display'
@@ -323,10 +332,26 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		// Automatic tab naming settings
 		automaticTabNamingEnabled,
 		setAutomaticTabNamingEnabled,
+		// Director's Notes settings
+		directorNotesSettings,
+		setDirectorNotesSettings,
+		// WakaTime integration settings
+		wakatimeApiKey,
+		setWakatimeApiKey,
+		wakatimeEnabled,
+		setWakatimeEnabled,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
-		'general' | 'display' | 'llm' | 'shortcuts' | 'theme' | 'notifications' | 'aicommands' | 'ssh'
+		| 'general'
+		| 'display'
+		| 'llm'
+		| 'shortcuts'
+		| 'theme'
+		| 'notifications'
+		| 'aicommands'
+		| 'ssh'
+		| 'director-notes'
 	>('general');
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -364,6 +389,86 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		deletedAutoRunTasks: number;
 		error?: string;
 	} | null>(null);
+
+	// Director's Notes agent configuration state
+	const [dnDetectedAgents, setDnDetectedAgents] = useState<AgentConfig[]>([]);
+	const [dnIsDetecting, setDnIsDetecting] = useState(false);
+	const [dnIsConfigExpanded, setDnIsConfigExpanded] = useState(false);
+	const [dnCustomPath, setDnCustomPath] = useState(directorNotesSettings.customPath || '');
+	const [dnCustomArgs, setDnCustomArgs] = useState(directorNotesSettings.customArgs || '');
+	const [dnCustomEnvVars, setDnCustomEnvVars] = useState<Record<string, string>>(
+		directorNotesSettings.customEnvVars || {}
+	);
+	const [dnAgentConfig, setDnAgentConfig] = useState<Record<string, any>>({});
+	const [dnAvailableModels, setDnAvailableModels] = useState<string[]>([]);
+	const [dnLoadingModels, setDnLoadingModels] = useState(false);
+	const [dnRefreshingAgent, setDnRefreshingAgent] = useState(false);
+	const dnAgentConfigRef = useRef<Record<string, any>>({});
+
+	// WakaTime CLI check and API key validation state
+	const [wakatimeCliStatus, setWakatimeCliStatus] = useState<{
+		available: boolean;
+		version?: string;
+	} | null>(null);
+	const [wakatimeKeyValid, setWakatimeKeyValid] = useState<boolean | null>(null);
+	const [wakatimeKeyValidating, setWakatimeKeyValidating] = useState(false);
+
+	// Check WakaTime CLI availability when section renders or toggle is enabled
+	// Retries after a delay to allow auto-installer time to complete
+	useEffect(() => {
+		if (!isOpen || !wakatimeEnabled) return;
+		let cancelled = false;
+		let retryTimer: ReturnType<typeof setTimeout> | null = null;
+
+		window.maestro.wakatime
+			.checkCli()
+			.then((status) => {
+				if (cancelled) return;
+				setWakatimeCliStatus(status);
+				// Retry after 3 seconds if CLI wasn't found (auto-install may be in progress)
+				if (!status.available) {
+					retryTimer = setTimeout(() => {
+						if (!cancelled) {
+							window.maestro.wakatime
+								.checkCli()
+								.then((retryStatus) => {
+									if (!cancelled) setWakatimeCliStatus(retryStatus);
+								})
+								.catch(() => {
+									if (!cancelled) setWakatimeCliStatus({ available: false });
+								});
+						}
+					}, 3000);
+				}
+			})
+			.catch(() => {
+				if (cancelled) return;
+				setWakatimeCliStatus({ available: false });
+				// Also retry on error, in case CLI is being installed
+				retryTimer = setTimeout(() => {
+					if (!cancelled) {
+						window.maestro.wakatime
+							.checkCli()
+							.then((retryStatus) => {
+								if (!cancelled) setWakatimeCliStatus(retryStatus);
+							})
+							.catch(() => {
+								if (!cancelled) setWakatimeCliStatus({ available: false });
+							});
+					}
+				}, 3000);
+			});
+
+		return () => {
+			cancelled = true;
+			if (retryTimer) clearTimeout(retryTimer);
+		};
+	}, [isOpen, wakatimeEnabled]);
+
+	// Reset validation state when API key changes
+	useEffect(() => {
+		setWakatimeKeyValid(null);
+	}, [wakatimeApiKey]);
 
 	// Layer stack integration
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -425,6 +530,60 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			setStatsClearResult(null);
 		}
 	}, [isOpen, initialTab]);
+
+	// Detect agents when Director's Notes tab is active
+	useEffect(() => {
+		if (!isOpen || activeTab !== 'director-notes') return;
+		let cancelled = false;
+		setDnIsDetecting(true);
+		window.maestro.agents
+			.detect()
+			.then((agents) => {
+				if (cancelled) return;
+				const available = agents.filter((a: AgentConfig) => a.available && !a.hidden);
+				setDnDetectedAgents(available);
+				setDnIsDetecting(false);
+			})
+			.catch(() => {
+				if (!cancelled) setDnIsDetecting(false);
+			});
+		return () => {
+			cancelled = true;
+		};
+	}, [isOpen, activeTab]);
+
+	// Sync local Director's Notes custom config state from settings when tab opens
+	useEffect(() => {
+		if (activeTab === 'director-notes') {
+			setDnCustomPath(directorNotesSettings.customPath || '');
+			setDnCustomArgs(directorNotesSettings.customArgs || '');
+			setDnCustomEnvVars(directorNotesSettings.customEnvVars || {});
+			setDnIsConfigExpanded(false);
+		}
+	}, [activeTab]);
+
+	// Load agent config when expanding Director's Notes configuration panel
+	useEffect(() => {
+		if (dnIsConfigExpanded && directorNotesSettings.provider) {
+			const agentId = directorNotesSettings.provider;
+			window.maestro.agents.getConfig(agentId).then((config) => {
+				setDnAgentConfig(config || {});
+				dnAgentConfigRef.current = config || {};
+			});
+			// Load models if agent supports it
+			const agent = dnDetectedAgents.find((a) => a.id === agentId);
+			if (agent?.capabilities?.supportsModelSelection) {
+				setDnLoadingModels(true);
+				window.maestro.agents
+					.getModels(agentId)
+					.then((models) => {
+						setDnAvailableModels(models);
+					})
+					.catch(() => {})
+					.finally(() => setDnLoadingModels(false));
+			}
+		}
+	}, [dnIsConfigExpanded, directorNotesSettings.provider, dnDetectedAgents]);
 
 	// Store onClose in a ref to avoid re-registering layer when onClose changes
 	const onCloseRef = useRef(onClose);
@@ -488,9 +647,29 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				| 'notifications'
 				| 'aicommands'
 				| 'ssh'
+				| 'director-notes'
 			> = FEATURE_FLAGS.LLM_SETTINGS
-				? ['general', 'display', 'llm', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh']
-				: ['general', 'display', 'shortcuts', 'theme', 'notifications', 'aicommands', 'ssh'];
+				? [
+						'general',
+						'display',
+						'llm',
+						'shortcuts',
+						'theme',
+						'notifications',
+						'aicommands',
+						'ssh',
+						'director-notes',
+					]
+				: [
+						'general',
+						'display',
+						'shortcuts',
+						'theme',
+						'notifications',
+						'aicommands',
+						'ssh',
+						'director-notes',
+					];
 			const currentIndex = tabs.indexOf(activeTab);
 
 			if ((e.metaKey || e.ctrlKey) && e.shiftKey && e.key === '[') {
@@ -960,6 +1139,18 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<Server className="w-4 h-4" />
 						{activeTab === 'ssh' && <span>SSH Hosts</span>}
 					</button>
+					<button
+						onClick={() => setActiveTab('director-notes')}
+						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'director-notes' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						style={{
+							color: activeTab === 'director-notes' ? theme.colors.textMain : theme.colors.textDim,
+						}}
+						tabIndex={-1}
+						title="Director's Notes"
+					>
+						<Clapperboard className="w-4 h-4" />
+						{activeTab === 'director-notes' && <span>Director's Notes</span>}
+					</button>
 					<div className="flex-1 flex justify-end items-center pr-4">
 						<button onClick={onClose} tabIndex={-1}>
 							<X className="w-5 h-5 opacity-50 hover:opacity-100" />
@@ -1316,7 +1507,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								</label>
 								<p className="text-xs opacity-50 mb-3">
 									Configure how to send messages in each mode. Choose between Enter or{' '}
-									{isMacOS() ? 'Command' : 'Ctrl'}+Enter for each input type.
+									{formatMetaKey()}+Enter for each input type.
 								</p>
 
 								{/* AI Mode Setting */}
@@ -1337,13 +1528,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											{props.enterToSendAI ? 'Enter' : isMacOS() ? '⌘ + Enter' : 'Ctrl + Enter'}
+											{formatEnterToSend(props.enterToSendAI)}
 										</button>
 									</div>
 									<p className="text-xs opacity-50">
 										{props.enterToSendAI
 											? 'Press Enter to send. Use Shift+Enter for new line.'
-											: `Press ${isMacOS() ? 'Command' : 'Ctrl'}+Enter to send. Enter creates new line.`}
+											: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 									</p>
 								</div>
 
@@ -1365,17 +1556,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											{props.enterToSendTerminal
-												? 'Enter'
-												: isMacOS()
-													? '⌘ + Enter'
-													: 'Ctrl + Enter'}
+											{formatEnterToSend(props.enterToSendTerminal)}
 										</button>
 									</div>
 									<p className="text-xs opacity-50">
 										{props.enterToSendTerminal
 											? 'Press Enter to send. Use Shift+Enter for new line.'
-											: `Press ${isMacOS() ? 'Command' : 'Ctrl'}+Enter to send. Enter creates new line.`}
+											: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 									</p>
 								</div>
 							</div>
@@ -1399,6 +1586,17 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
 								checked={automaticTabNamingEnabled}
 								onChange={setAutomaticTabNamingEnabled}
+								theme={theme}
+							/>
+
+							{/* Auto-scroll AI Output */}
+							<SettingCheckbox
+								icon={ArrowDownToLine}
+								sectionLabel="Auto-scroll AI Output"
+								title="Auto-scroll AI output"
+								description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
+								checked={props.autoScrollAiMode}
+								onChange={props.setAutoScrollAiMode}
 								theme={theme}
 							/>
 
@@ -1846,6 +2044,106 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 													<span>{statsClearResult.error || 'Failed to clear stats data'}</span>
 												</>
 											)}
+										</div>
+									)}
+
+									{/* Divider */}
+									<div className="border-t" style={{ borderColor: theme.colors.border }} />
+
+									{/* WakaTime Integration */}
+									<div className="flex items-center justify-between">
+										<div>
+											<p
+												className="text-sm flex items-center gap-2"
+												style={{ color: theme.colors.textMain }}
+											>
+												<Timer className="w-3.5 h-3.5 opacity-60" />
+												Enable WakaTime tracking
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Track coding activity in Maestro sessions via WakaTime.
+											</p>
+										</div>
+										<button
+											onClick={() => setWakatimeEnabled(!wakatimeEnabled)}
+											className="relative w-10 h-5 rounded-full transition-colors"
+											style={{
+												backgroundColor: wakatimeEnabled
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={wakatimeEnabled}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													wakatimeEnabled ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+
+									{/* CLI not found warning */}
+									{wakatimeEnabled && wakatimeCliStatus && !wakatimeCliStatus.available && (
+										<p className="text-xs mt-1" style={{ color: theme.colors.warning }}>
+											WakaTime CLI is being installed automatically...
+										</p>
+									)}
+
+									{/* API Key Input (only shown when enabled) */}
+									{wakatimeEnabled && (
+										<div>
+											<label className="block text-xs opacity-60 mb-1">API Key</label>
+											<div
+												className="flex items-center border rounded px-3 py-2"
+												style={{
+													backgroundColor: theme.colors.bgMain,
+													borderColor: theme.colors.border,
+												}}
+											>
+												<Key className="w-4 h-4 mr-2 opacity-50" />
+												<input
+													type="password"
+													value={wakatimeApiKey}
+													onChange={(e) => setWakatimeApiKey(e.target.value)}
+													onBlur={() => {
+														if (wakatimeApiKey) {
+															setWakatimeKeyValidating(true);
+															setWakatimeKeyValid(null);
+															window.maestro.wakatime
+																.validateApiKey(wakatimeApiKey)
+																.then((result) => setWakatimeKeyValid(result.valid))
+																.catch(() => setWakatimeKeyValid(false))
+																.finally(() => setWakatimeKeyValidating(false));
+														}
+													}}
+													className="bg-transparent flex-1 text-sm outline-none"
+													style={{ color: theme.colors.textMain }}
+													placeholder="waka_..."
+												/>
+												{wakatimeKeyValidating && (
+													<span className="ml-2 text-xs opacity-50">...</span>
+												)}
+												{!wakatimeKeyValidating && wakatimeKeyValid === true && (
+													<Check className="w-4 h-4 ml-2" style={{ color: theme.colors.success }} />
+												)}
+												{!wakatimeKeyValidating && wakatimeKeyValid === false && wakatimeApiKey && (
+													<X className="w-4 h-4 ml-2" style={{ color: theme.colors.error }} />
+												)}
+												{wakatimeApiKey && (
+													<button
+														onClick={() => setWakatimeApiKey('')}
+														className="ml-2 opacity-50 hover:opacity-100"
+														title="Clear API key"
+													>
+														<X className="w-3 h-3" />
+													</button>
+												)}
+											</div>
+											<p className="text-[10px] mt-1.5 opacity-50">
+												Get your API key from wakatime.com/settings/api-key. Keys are stored locally
+												in ~/.maestro/settings.json.
+											</p>
 										</div>
 									)}
 								</div>
@@ -2583,7 +2881,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											className="px-1.5 py-0.5 rounded font-mono"
 											style={{ backgroundColor: theme.colors.bgActivity }}
 										>
-											⌘/
+											{formatShortcutKeys(['Meta', '/'])}
 										</kbd>{' '}
 										from the main interface to view the full list of keyboard shortcuts.
 									</p>
@@ -2670,6 +2968,336 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							/>
 						</div>
 					)}
+
+					{activeTab === 'director-notes' &&
+						(() => {
+							// Compute derived values for director-notes tab
+							const dnAvailableTiles = AGENT_TILES.filter((tile) => {
+								if (!tile.supported) return false;
+								return dnDetectedAgents.some((a: AgentConfig) => a.id === tile.id);
+							});
+							const dnSelectedAgentConfig = dnDetectedAgents.find(
+								(a) => a.id === directorNotesSettings.provider
+							);
+							const dnSelectedTile = AGENT_TILES.find(
+								(t) => t.id === directorNotesSettings.provider
+							);
+							const dnHasCustomization =
+								dnCustomPath || dnCustomArgs || Object.keys(dnCustomEnvVars).length > 0;
+
+							const handleDnAgentChange = (agentId: ToolType) => {
+								setDirectorNotesSettings({
+									...directorNotesSettings,
+									provider: agentId,
+									customPath: undefined,
+									customArgs: undefined,
+									customEnvVars: undefined,
+								});
+								setDnCustomPath('');
+								setDnCustomArgs('');
+								setDnCustomEnvVars({});
+								setDnAgentConfig({});
+								dnAgentConfigRef.current = {};
+								if (dnIsConfigExpanded) {
+									window.maestro.agents.getConfig(agentId).then((config) => {
+										setDnAgentConfig(config || {});
+										dnAgentConfigRef.current = config || {};
+									});
+									const agent = dnDetectedAgents.find((a) => a.id === agentId);
+									if (agent?.capabilities?.supportsModelSelection) {
+										setDnLoadingModels(true);
+										window.maestro.agents
+											.getModels(agentId)
+											.then((models) => {
+												setDnAvailableModels(models);
+											})
+											.catch(() => {})
+											.finally(() => setDnLoadingModels(false));
+									}
+								}
+							};
+
+							const handleDnRefreshAgent = async () => {
+								setDnRefreshingAgent(true);
+								try {
+									const agents = await window.maestro.agents.detect();
+									const available = agents.filter((a: AgentConfig) => a.available && !a.hidden);
+									setDnDetectedAgents(available);
+								} finally {
+									setDnRefreshingAgent(false);
+								}
+							};
+
+							const handleDnRefreshModels = async () => {
+								if (!directorNotesSettings.provider) return;
+								setDnLoadingModels(true);
+								try {
+									const models = await window.maestro.agents.getModels(
+										directorNotesSettings.provider,
+										true
+									);
+									setDnAvailableModels(models);
+								} catch (err) {
+									console.error('Failed to refresh models:', err);
+								} finally {
+									setDnLoadingModels(false);
+								}
+							};
+
+							// Persist custom config to settings on blur
+							const persistDnCustomConfig = () => {
+								setDirectorNotesSettings({
+									...directorNotesSettings,
+									customPath: dnCustomPath || undefined,
+									customArgs: dnCustomArgs || undefined,
+									customEnvVars:
+										Object.keys(dnCustomEnvVars).length > 0 ? dnCustomEnvVars : undefined,
+								});
+							};
+
+							return (
+								<div className="p-6 space-y-8">
+									<div>
+										<h3 className="text-sm font-bold mb-4" style={{ color: theme.colors.textMain }}>
+											Director's Notes
+										</h3>
+										<p className="text-xs mb-6" style={{ color: theme.colors.textDim }}>
+											Director's Notes provides a unified view of your work across all Maestro
+											sessions, with AI-generated summaries of accomplishments, challenges, and next
+											steps.
+										</p>
+									</div>
+
+									{/* Provider Selection - Agent dropdown with Customize button */}
+									<div>
+										<label
+											className="block text-xs font-bold opacity-70 uppercase mb-2"
+											style={{ color: theme.colors.textMain }}
+										>
+											Synopsis Provider
+										</label>
+
+										{dnIsDetecting ? (
+											<div className="flex items-center gap-2 py-2">
+												<div
+													className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+													style={{
+														borderColor: theme.colors.accent,
+														borderTopColor: 'transparent',
+													}}
+												/>
+												<span className="text-sm" style={{ color: theme.colors.textDim }}>
+													Detecting agents...
+												</span>
+											</div>
+										) : dnAvailableTiles.length === 0 ? (
+											<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+												No agents available. Please install Claude Code, OpenCode, Codex, or Factory
+												Droid.
+											</div>
+										) : (
+											<div className="flex items-center gap-2">
+												{/* Dropdown */}
+												<div className="relative flex-1">
+													<select
+														value={directorNotesSettings.provider}
+														onChange={(e) => handleDnAgentChange(e.target.value as ToolType)}
+														className="w-full px-3 py-2 pr-10 rounded-lg border outline-none appearance-none cursor-pointer text-sm"
+														style={{
+															backgroundColor: theme.colors.bgMain,
+															borderColor: theme.colors.border,
+															color: theme.colors.textMain,
+														}}
+														aria-label="Select synopsis provider agent"
+													>
+														{dnAvailableTiles.map((tile) => {
+															const isBeta =
+																tile.id === 'codex' ||
+																tile.id === 'opencode' ||
+																tile.id === 'factory-droid';
+															return (
+																<option key={tile.id} value={tile.id}>
+																	{tile.name}
+																	{isBeta ? ' (Beta)' : ''}
+																</option>
+															);
+														})}
+													</select>
+													<ChevronDown
+														className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+														style={{ color: theme.colors.textDim }}
+													/>
+												</div>
+
+												{/* Customize button */}
+												<button
+													onClick={() => setDnIsConfigExpanded((prev) => !prev)}
+													className="flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors hover:bg-white/5"
+													style={{
+														borderColor: dnIsConfigExpanded
+															? theme.colors.accent
+															: theme.colors.border,
+														color: dnIsConfigExpanded ? theme.colors.accent : theme.colors.textDim,
+														backgroundColor: dnIsConfigExpanded
+															? `${theme.colors.accent}10`
+															: 'transparent',
+													}}
+													title="Customize provider settings"
+												>
+													<Settings className="w-4 h-4" />
+													<span className="text-sm">Customize</span>
+													{dnHasCustomization && (
+														<span
+															className="w-2 h-2 rounded-full"
+															style={{ backgroundColor: theme.colors.accent }}
+														/>
+													)}
+												</button>
+											</div>
+										)}
+
+										{/* Expandable Configuration Panel */}
+										{dnIsConfigExpanded && dnSelectedAgentConfig && dnSelectedTile && (
+											<div
+												className="mt-3 p-4 rounded-lg border"
+												style={{
+													backgroundColor: theme.colors.bgActivity,
+													borderColor: theme.colors.border,
+												}}
+											>
+												<div className="flex items-center justify-between mb-3">
+													<span
+														className="text-xs font-medium"
+														style={{ color: theme.colors.textDim }}
+													>
+														{dnSelectedTile.name} Configuration
+													</span>
+													{dnHasCustomization && (
+														<div className="flex items-center gap-1">
+															<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
+															<span className="text-xs" style={{ color: theme.colors.success }}>
+																Customized
+															</span>
+														</div>
+													)}
+												</div>
+												<AgentConfigPanel
+													theme={theme}
+													agent={dnSelectedAgentConfig}
+													customPath={dnCustomPath}
+													onCustomPathChange={setDnCustomPath}
+													onCustomPathBlur={persistDnCustomConfig}
+													onCustomPathClear={() => {
+														setDnCustomPath('');
+														setDirectorNotesSettings({
+															...directorNotesSettings,
+															customPath: undefined,
+														});
+													}}
+													customArgs={dnCustomArgs}
+													onCustomArgsChange={setDnCustomArgs}
+													onCustomArgsBlur={persistDnCustomConfig}
+													onCustomArgsClear={() => {
+														setDnCustomArgs('');
+														setDirectorNotesSettings({
+															...directorNotesSettings,
+															customArgs: undefined,
+														});
+													}}
+													customEnvVars={dnCustomEnvVars}
+													onEnvVarKeyChange={(oldKey, newKey, value) => {
+														const newVars = { ...dnCustomEnvVars };
+														delete newVars[oldKey];
+														newVars[newKey] = value;
+														setDnCustomEnvVars(newVars);
+													}}
+													onEnvVarValueChange={(key, value) => {
+														setDnCustomEnvVars({ ...dnCustomEnvVars, [key]: value });
+													}}
+													onEnvVarRemove={(key) => {
+														const newVars = { ...dnCustomEnvVars };
+														delete newVars[key];
+														setDnCustomEnvVars(newVars);
+													}}
+													onEnvVarAdd={() => {
+														let newKey = 'NEW_VAR';
+														let counter = 1;
+														while (dnCustomEnvVars[newKey]) {
+															newKey = `NEW_VAR_${counter}`;
+															counter++;
+														}
+														setDnCustomEnvVars({ ...dnCustomEnvVars, [newKey]: '' });
+													}}
+													onEnvVarsBlur={persistDnCustomConfig}
+													agentConfig={dnAgentConfig}
+													onConfigChange={(key, value) => {
+														const newConfig = { ...dnAgentConfig, [key]: value };
+														setDnAgentConfig(newConfig);
+														dnAgentConfigRef.current = newConfig;
+													}}
+													onConfigBlur={async () => {
+														if (directorNotesSettings.provider) {
+															await window.maestro.agents.setConfig(
+																directorNotesSettings.provider,
+																dnAgentConfigRef.current
+															);
+														}
+													}}
+													availableModels={dnAvailableModels}
+													loadingModels={dnLoadingModels}
+													onRefreshModels={handleDnRefreshModels}
+													onRefreshAgent={handleDnRefreshAgent}
+													refreshingAgent={dnRefreshingAgent}
+													compact
+													showBuiltInEnvVars
+												/>
+											</div>
+										)}
+
+										<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+											The AI agent used to generate synopsis summaries
+										</p>
+									</div>
+
+									{/* Default Lookback Period */}
+									<div>
+										<label
+											className="block text-xs font-bold mb-2"
+											style={{ color: theme.colors.textMain }}
+										>
+											Default Lookback Period: {directorNotesSettings.defaultLookbackDays} days
+										</label>
+										<input
+											type="range"
+											min={1}
+											max={90}
+											value={directorNotesSettings.defaultLookbackDays}
+											onChange={(e) =>
+												setDirectorNotesSettings({
+													...directorNotesSettings,
+													defaultLookbackDays: parseInt(e.target.value, 10),
+												})
+											}
+											className="w-full"
+										/>
+										<div
+											className="flex justify-between text-[10px] mt-1"
+											style={{ color: theme.colors.textDim }}
+										>
+											<span>1 day</span>
+											<span>7</span>
+											<span>14</span>
+											<span>30</span>
+											<span>60</span>
+											<span>90 days</span>
+										</div>
+										<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+											How far back to look when generating notes (can be adjusted per-report)
+										</p>
+									</div>
+								</div>
+							);
+						})()}
 				</div>
 			</div>
 		</div>

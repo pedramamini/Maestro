@@ -25,6 +25,7 @@ import { MermaidRenderer } from '../../MermaidRenderer';
 import type { GeneratedDocument } from '../WizardContext';
 import { DocumentSelector } from './DocumentSelector';
 import { generateProseStyles, createMarkdownComponents } from '../../../utils/markdownConfig';
+import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
 
 // Memoize plugin arrays - they never change
 const REMARK_PLUGINS = [remarkGfm];
@@ -523,7 +524,7 @@ export function DocumentEditor({
 										mode === 'edit' && !isLocked ? theme.colors.accent : theme.colors.border
 									}`,
 								}}
-								title="Edit document (⌘E)"
+								title={`Edit document (${formatShortcutKeys(['Meta', 'e'])})`}
 							>
 								<Edit className="w-3.5 h-3.5" />
 								Edit
@@ -540,7 +541,7 @@ export function DocumentEditor({
 										mode === 'preview' ? theme.colors.accent : theme.colors.border
 									}`,
 								}}
-								title="Preview document (⌘E)"
+								title={`Preview document (${formatShortcutKeys(['Meta', 'e'])})`}
 							>
 								<Eye className="w-3.5 h-3.5" />
 								Preview
@@ -578,7 +579,7 @@ export function DocumentEditor({
 								mode === 'edit' && !isLocked ? theme.colors.accent : theme.colors.border
 							}`,
 						}}
-						title="Edit document (⌘E)"
+						title={`Edit document (${formatShortcutKeys(['Meta', 'e'])})`}
 					>
 						<Edit className="w-3.5 h-3.5" />
 						Edit
@@ -593,7 +594,7 @@ export function DocumentEditor({
 							color: mode === 'preview' ? theme.colors.textMain : theme.colors.textDim,
 							border: `1px solid ${mode === 'preview' ? theme.colors.accent : theme.colors.border}`,
 						}}
-						title="Preview document (⌘E)"
+						title={`Preview document (${formatShortcutKeys(['Meta', 'e'])})`}
 					>
 						<Eye className="w-3.5 h-3.5" />
 						Preview

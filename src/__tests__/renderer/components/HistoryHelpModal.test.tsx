@@ -18,7 +18,6 @@ vi.mock('../../../renderer/contexts/LayerStackContext', () => ({
 	}),
 }));
 
-
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
 	X: ({ className, style }: { className?: string; style?: React.CSSProperties }) => (
@@ -435,7 +434,7 @@ describe('HistoryHelpModal', () => {
 			render(<HistoryHelpModal {...defaultProps} />);
 
 			expect(screen.getByText('Click any bar')).toBeInTheDocument();
-			expect(screen.getByText(/to filter the history list/)).toBeInTheDocument();
+			expect(screen.getByText(/to jump to entries within that time bucket/)).toBeInTheDocument();
 		});
 
 		it('describes hover functionality', () => {

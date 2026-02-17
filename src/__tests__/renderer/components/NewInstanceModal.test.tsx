@@ -7,6 +7,7 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
 import { NewInstanceModal } from '../../../renderer/components/NewInstanceModal';
+import { formatShortcutKeys } from '../../../renderer/utils/shortcutFormatter';
 import type { Theme, Session } from '../../../renderer/types';
 import type { AgentConfig } from '../../../renderer/types';
 
@@ -629,10 +630,14 @@ describe('NewInstanceModal', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByTitle('Browse folders (Cmd+O)')).toBeInTheDocument();
+				expect(
+					screen.getByTitle(`Browse folders (${formatShortcutKeys(['Meta', 'o'])})`)
+				).toBeInTheDocument();
 			});
 
-			const folderButton = screen.getByTitle('Browse folders (Cmd+O)');
+			const folderButton = screen.getByTitle(
+				`Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
+			);
 			await act(async () => {
 				fireEvent.click(folderButton);
 			});
@@ -661,13 +666,17 @@ describe('NewInstanceModal', () => {
 			);
 
 			await waitFor(() => {
-				expect(screen.getByTitle('Browse folders (Cmd+O)')).toBeInTheDocument();
+				expect(
+					screen.getByTitle(`Browse folders (${formatShortcutKeys(['Meta', 'o'])})`)
+				).toBeInTheDocument();
 			});
 
 			const dirInput = screen.getByPlaceholderText('Select directory...');
 			fireEvent.change(dirInput, { target: { value: '/existing/path' } });
 
-			const folderButton = screen.getByTitle('Browse folders (Cmd+O)');
+			const folderButton = screen.getByTitle(
+				`Browse folders (${formatShortcutKeys(['Meta', 'o'])})`
+			);
 			await act(async () => {
 				fireEvent.click(folderButton);
 			});
