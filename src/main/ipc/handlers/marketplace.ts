@@ -858,9 +858,13 @@ export function registerMarketplaceHandlers(deps: MarketplaceHandlerDependencies
 						}
 					} catch (error) {
 						if ((error as NodeJS.ErrnoException).code !== 'ENOENT') {
-							logger.warn(`Failed to read local assets directory: ${localAssetsPath}`, LOG_CONTEXT, {
-								error,
-							});
+							logger.warn(
+								`Failed to read local assets directory: ${localAssetsPath}`,
+								LOG_CONTEXT,
+								{
+									error,
+								}
+							);
 						}
 					}
 

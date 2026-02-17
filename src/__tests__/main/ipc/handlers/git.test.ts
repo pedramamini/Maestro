@@ -1188,7 +1188,6 @@ COMMIT_STARTdef987654321|Jane Smith|2024-01-14T09:00:00+00:00||Add feature
 			expect(result.entries).toHaveLength(2);
 			expect(result.entries[0].subject).toBe('Initial commit');
 		});
-
 	});
 
 	describe('git:commitCount', () => {

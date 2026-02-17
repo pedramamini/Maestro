@@ -24,7 +24,9 @@ vi.mock('qrcode.react', () => ({
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
-	Wand2: ({ className }: { className?: string }) => <span data-testid="icon-wand" className={className} />,
+	Wand2: ({ className }: { className?: string }) => (
+		<span data-testid="icon-wand" className={className} />
+	),
 	Plus: () => <span data-testid="icon-plus" />,
 	Settings: () => <span data-testid="icon-settings" />,
 	ChevronRight: () => <span data-testid="icon-chevron-right" />,
@@ -1108,7 +1110,7 @@ describe('SessionList', () => {
 			expect(menuContainer?.style.maxHeight).toBe('calc(100vh - 90px)');
 		});
 
-		it('shows Director\'s Notes menu item in hamburger menu', () => {
+		it("shows Director's Notes menu item in hamburger menu", () => {
 			const props = createDefaultProps({ leftSidebarOpen: true });
 			render(<SessionList {...props} />);
 
@@ -1118,7 +1120,7 @@ describe('SessionList', () => {
 			expect(screen.getByText('Unified history & AI synopsis')).toBeInTheDocument();
 		});
 
-		it('opens Director\'s Notes modal from menu', () => {
+		it("opens Director's Notes modal from menu", () => {
 			const setDirectorNotesOpen = vi.fn();
 			const props = createDefaultProps({ leftSidebarOpen: true, setDirectorNotesOpen });
 			render(<SessionList {...props} />);

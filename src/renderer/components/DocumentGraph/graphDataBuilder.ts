@@ -7,7 +7,11 @@
  * Used by the DocumentGraphView component to visualize document connections.
  */
 
-import { parseMarkdownLinks, ExternalLink, type ParseMarkdownLinksOptions } from '../../utils/markdownLinkParser';
+import {
+	parseMarkdownLinks,
+	ExternalLink,
+	type ParseMarkdownLinksOptions,
+} from '../../utils/markdownLinkParser';
 import { computeDocumentStats, DocumentStats } from '../../utils/documentStats';
 import { getRendererPerfMetrics } from '../../utils/logger';
 import { PERFORMANCE_THRESHOLDS } from '../../../shared/performance-metrics';
@@ -676,7 +680,12 @@ export async function buildGraphData(options: BuildOptions): Promise<GraphData> 
 					}
 
 					// Parse just the links from this file (use SSH-aware parsing)
-					const entry = await parseFileLinksOnlyWithSsh(rootPath, filePath, sshRemoteId, parseOptions);
+					const entry = await parseFileLinksOnlyWithSsh(
+						rootPath,
+						filePath,
+						sshRemoteId,
+						parseOptions
+					);
 					if (!entry) {
 						filesScanned++;
 						continue;
@@ -1095,7 +1104,11 @@ async function parseFileWithSsh(
 		}
 
 		// Parse links from content (with file-tree-aware fallback if allFiles provided)
-		const { internalLinks, externalLinks } = parseMarkdownLinks(contentForParsing, relativePath, parseOptions);
+		const { internalLinks, externalLinks } = parseMarkdownLinks(
+			contentForParsing,
+			relativePath,
+			parseOptions
+		);
 
 		// Compute document statistics
 		const stats = computeDocumentStats(contentForParsing, relativePath, fileSize);

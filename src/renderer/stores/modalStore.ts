@@ -559,7 +559,10 @@ export function getModalActions() {
 
 		// Rename Instance Modal
 		setRenameInstanceModalOpen: (open: boolean) => {
-			if (!open) { closeModal('renameInstance'); return; }
+			if (!open) {
+				closeModal('renameInstance');
+				return;
+			}
 			const current = useModalStore.getState().getData('renameInstance');
 			openModal('renameInstance', current ?? { sessionId: '', value: '' });
 		},
@@ -579,7 +582,10 @@ export function getModalActions() {
 
 		// Rename Tab Modal
 		setRenameTabModalOpen: (open: boolean) => {
-			if (!open) { closeModal('renameTab'); return; }
+			if (!open) {
+				closeModal('renameTab');
+				return;
+			}
 			const current = useModalStore.getState().getData('renameTab');
 			openModal('renameTab', current ?? { tabId: '', initialName: '' });
 		},
@@ -599,14 +605,21 @@ export function getModalActions() {
 
 		// Rename Group Modal
 		setRenameGroupModalOpen: (open: boolean) => {
-			if (!open) { closeModal('renameGroup'); return; }
+			if (!open) {
+				closeModal('renameGroup');
+				return;
+			}
 			const current = useModalStore.getState().getData('renameGroup');
 			openModal('renameGroup', current ?? { groupId: '', value: '', emoji: '📂' });
 		},
 		setRenameGroupId: (groupId: string | null) => {
 			if (!groupId) return;
 			const current = useModalStore.getState().getData('renameGroup');
-			openModal('renameGroup', { groupId, value: current?.value ?? '', emoji: current?.emoji ?? '📂' });
+			openModal('renameGroup', {
+				groupId,
+				value: current?.value ?? '',
+				emoji: current?.emoji ?? '📂',
+			});
 		},
 		setRenameGroupValue: (value: string) => {
 			const current = useModalStore.getState().getData('renameGroup');

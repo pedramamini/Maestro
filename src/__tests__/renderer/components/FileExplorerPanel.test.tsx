@@ -769,11 +769,16 @@ describe('FileExplorerPanel', () => {
 
 		it('skips auto-refresh when previous call is still in flight', async () => {
 			let resolveRefresh: () => void;
-			const slowRefresh = vi.fn(() => new Promise<void>((resolve) => {
-				resolveRefresh = resolve;
-			}));
+			const slowRefresh = vi.fn(
+				() =>
+					new Promise<void>((resolve) => {
+						resolveRefresh = resolve;
+					})
+			);
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 1 });
-			render(<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={slowRefresh} />);
+			render(
+				<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={slowRefresh} />
+			);
 
 			// First interval fires, refresh starts but doesn't resolve
 			await act(async () => {
@@ -804,14 +809,19 @@ describe('FileExplorerPanel', () => {
 			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 			const failingRefresh = vi.fn().mockRejectedValue(new Error('network failure'));
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 5 });
-			render(<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={failingRefresh} />);
+			render(
+				<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={failingRefresh} />
+			);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(5000);
 			});
 
 			expect(failingRefresh).toHaveBeenCalledTimes(1);
-			expect(errorSpy).toHaveBeenCalledWith('[FileExplorer] Auto-refresh failed:', expect.any(Error));
+			expect(errorSpy).toHaveBeenCalledWith(
+				'[FileExplorer] Auto-refresh failed:',
+				expect.any(Error)
+			);
 
 			// Spin timeout should still clear, allowing the next refresh to fire
 			await act(async () => {
@@ -1778,7 +1788,9 @@ describe('FileExplorerPanel', () => {
 			const openButton = screen.getByText('Open in Default App');
 			fireEvent.click(openButton);
 
-			expect(mockShell.openExternal).toHaveBeenCalledWith('file:///Users/test/project/package.json');
+			expect(mockShell.openExternal).toHaveBeenCalledWith(
+				'file:///Users/test/project/package.json'
+			);
 		});
 
 		it('does not show Open in Default App option for SSH sessions', () => {

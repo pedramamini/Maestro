@@ -126,7 +126,7 @@ import { useAgentListeners } from './hooks/agent/useAgentListeners';
 
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
-import { useToast } from './contexts/ToastContext';
+import { useNotificationStore, notifyToast } from './stores/notificationStore';
 import { useModalActions, useModalStore } from './stores/modalStore';
 import { GitStatusProvider } from './contexts/GitStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
@@ -195,7 +195,7 @@ import {
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
-import { validateNewSession, getProviderDisplayName } from './utils/sessionValidation';
+import { validateNewSession } from './utils/sessionValidation';
 import { formatLogsForClipboard } from './utils/contextExtractor';
 import { getSlashCommandDescription } from './constants/app';
 import { useUIStore } from './stores/uiStore';
@@ -205,14 +205,6 @@ import { useFileExplorerStore } from './stores/fileExplorerStore';
 function MaestroConsoleInner() {
 	// --- LAYER STACK (for blocking shortcuts when modals are open) ---
 	const { hasOpenLayers, hasOpenModal } = useLayerStack();
-
-	// --- TOAST NOTIFICATIONS ---
-	const {
-		addToast,
-		setDefaultDuration: setToastDefaultDuration,
-		setAudioFeedback,
-		setOsNotifications,
-	} = useToast();
 
 	// --- MODAL STATE (from modalStore, replaces ModalContext) ---
 	const {
@@ -794,7 +786,7 @@ function MaestroConsoleInner() {
 			?.getInitializationResult()
 			.then((result) => {
 				if (result?.userMessage) {
-					addToast({
+					notifyToast({
 						type: 'warning',
 						title: 'Statistics Database',
 						message: result.userMessage,
@@ -805,7 +797,7 @@ function MaestroConsoleInner() {
 				}
 			})
 			.catch(console.error);
-	}, [addToast]);
+	}, []);
 
 	// Compute map of session names to SSH remote names (for group chat participant cards)
 	const sessionSshRemoteNames = useMemo(() => {
@@ -1080,20 +1072,18 @@ function MaestroConsoleInner() {
 		[recordShortcutUsage, onKeyboardMasteryLevelUp]
 	);
 
-	// Sync toast duration setting to ToastContext
+	// Sync toast settings to notificationStore
 	useEffect(() => {
-		setToastDefaultDuration(toastDuration);
-	}, [toastDuration, setToastDefaultDuration]);
+		useNotificationStore.getState().setDefaultDuration(toastDuration);
+	}, [toastDuration]);
 
-	// Sync audio feedback settings to ToastContext for TTS on toast notifications
 	useEffect(() => {
-		setAudioFeedback(audioFeedbackEnabled, audioFeedbackCommand);
-	}, [audioFeedbackEnabled, audioFeedbackCommand, setAudioFeedback]);
+		useNotificationStore.getState().setAudioFeedback(audioFeedbackEnabled, audioFeedbackCommand);
+	}, [audioFeedbackEnabled, audioFeedbackCommand]);
 
-	// Sync OS notifications setting to ToastContext
 	useEffect(() => {
-		setOsNotifications(osNotificationsEnabled);
-	}, [osNotificationsEnabled, setOsNotifications]);
+		useNotificationStore.getState().setOsNotifications(osNotificationsEnabled);
+	}, [osNotificationsEnabled]);
 
 	// Expose playground() function for developer console
 	useEffect(() => {
@@ -1167,7 +1157,10 @@ function MaestroConsoleInner() {
 
 			// Migration: default autoRunFolderPath for sessions that don't have one
 			if (!session.autoRunFolderPath && session.projectRoot) {
-				session = { ...session, autoRunFolderPath: `${session.projectRoot}/${AUTO_RUN_FOLDER_NAME}` };
+				session = {
+					...session,
+					autoRunFolderPath: `${session.projectRoot}/${AUTO_RUN_FOLDER_NAME}`,
+				};
 			}
 
 			// Migration: ensure fileTreeAutoRefreshInterval is set (default 180s for legacy sessions)
@@ -2093,14 +2086,12 @@ function MaestroConsoleInner() {
 	const rightPanelRef = useRef<RightPanelHandle>(null);
 	const mainPanelRef = useRef<MainPanelHandle>(null);
 
-	// Refs for toast notifications (to access latest values in event handlers)
-	const addToastRef = useRef(addToast);
+	// Refs for accessing latest values in event handlers
 	const updateGlobalStatsRef = useRef(updateGlobalStats);
 	const customAICommandsRef = useRef(customAICommands);
 	const speckitCommandsRef = useRef(speckitCommands);
 	const openspecCommandsRef = useRef(openspecCommands);
 	const fileTabAutoRefreshEnabledRef = useRef(fileTabAutoRefreshEnabled);
-	addToastRef.current = addToast;
 	updateGlobalStatsRef.current = updateGlobalStats;
 	customAICommandsRef.current = customAICommands;
 	speckitCommandsRef.current = speckitCommands;
@@ -2129,7 +2120,7 @@ function MaestroConsoleInner() {
 
 	// Note: thinkingChunkBufferRef and thinkingChunkRafIdRef moved into useAgentListeners hook
 
-	// Expose addToast to window for debugging/testing
+	// Expose notifyToast to window for debugging/testing
 	useEffect(() => {
 		(window as any).__maestroDebug = {
 			addToast: (
@@ -2137,10 +2128,10 @@ function MaestroConsoleInner() {
 				title: string,
 				message: string
 			) => {
-				addToastRef.current({ type, title, message });
+				notifyToast({ type, title, message });
 			},
 			testToast: () => {
-				addToastRef.current({
+				notifyToast({
 					type: 'success',
 					title: 'Test Notification',
 					message: 'This is a test toast notification from the console!',
@@ -2723,7 +2714,7 @@ function MaestroConsoleInner() {
 					: info.sessionName;
 
 			// Show toast notification in the UI
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'Session Merged',
 				message: `Created "${info.sessionName}" from ${sourceInfo}${tokenInfo}.${savedInfo}`,
@@ -2767,7 +2758,7 @@ function MaestroConsoleInner() {
 					);
 				}
 
-				addToast({
+				notifyToast({
 					type: 'success',
 					title: 'Context Merged',
 					message: `"${result.sourceSessionName || 'Current Session'}" → "${
@@ -2803,7 +2794,7 @@ function MaestroConsoleInner() {
 			setSendToAgentModalOpen(false);
 
 			// Show toast notification in the UI
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'Context Transferred',
 				message: `Created "${sessionName}" with transferred context`,
@@ -2884,7 +2875,7 @@ function MaestroConsoleInner() {
 			);
 
 			if (!result.success) {
-				addToast({
+				notifyToast({
 					type: 'error',
 					title: 'Merge Failed',
 					message: result.error || 'Failed to merge contexts',
@@ -2895,7 +2886,7 @@ function MaestroConsoleInner() {
 
 			return result;
 		},
-		[activeSession, executeMerge, addToast]
+		[activeSession, executeMerge]
 	);
 
 	// TransferProgressModal handlers
@@ -3034,7 +3025,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const tokenInfo = estimatedTokens > 0 ? ` (~${estimatedTokens.toLocaleString()} tokens)` : '';
 
 			// Show success toast
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'Context Sent',
 				message: `"${sourceName}" → "${targetSession.name}"${tokenInfo}`,
@@ -3132,7 +3123,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 			return { success: true, newSessionId: targetSessionId, newTabId };
 		},
-		[activeSession, sessions, setSessions, setActiveSessionId, addToast, resetTransfer]
+		[activeSession, sessions, setSessions, setActiveSessionId, resetTransfer]
 	);
 
 	// Summarize & Continue hook for context compaction (non-blocking, per-tab)
@@ -3158,7 +3149,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const targetTab = activeSession.aiTabs.find((t) => t.id === targetTabId);
 
 			if (!targetTab || !canSummarize(activeSession.contextUsage, targetTab.logs)) {
-				addToast({
+				notifyToast({
 					type: 'warning',
 					title: 'Cannot Compact',
 					message: `Context too small. Need at least ${minContextUsagePercent}% usage, ~2k tokens, or 8+ messages to compact.`,
@@ -3194,7 +3185,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 					// Show success notification with click-to-navigate
 					const reductionPercent = result.systemLogEntry.text.match(/(\d+)%/)?.[1] ?? '0';
-					addToast({
+					notifyToast({
 						type: 'success',
 						title: 'Context Compacted',
 						message: `Reduced context by ${reductionPercent}%. Click to view the new tab.`,
@@ -3214,7 +3205,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 			minContextUsagePercent,
 			startSummarize,
 			setSessions,
-			addToast,
 			clearTabState,
 		]
 	);
@@ -3348,12 +3338,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 			? hasActiveSessionCapability('supportsImageInputOnResume')
 			: hasActiveSessionCapability('supportsImageInput');
 	}, [activeSession, isResumingSession, hasActiveSessionCapability]);
-	const blockCodexResumeImages =
-		!!activeSession &&
-		activeSession.toolType === 'codex' &&
-		isResumingSession &&
-		!hasActiveSessionCapability('supportsImageInputOnResume');
-
 	// Track previous active tab to detect tab switches
 	const prevActiveTabIdRef = useRef<string | undefined>(activeTab?.id);
 
@@ -3647,7 +3631,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 	// onUsage, onAgentError, onThinkingChunk, onSshRemote, onToolExecution)
 	useAgentListeners({
 		batchedUpdater,
-		addToastRef,
 		addHistoryEntryRef,
 		spawnBackgroundSynopsisRef,
 		getBatchStateRef,
@@ -4984,7 +4967,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		navigator.clipboard
 			.writeText(text)
 			.then(() => {
-				addToastRef.current({
+				notifyToast({
 					type: 'success',
 					title: 'Context Copied',
 					message: 'Conversation copied to clipboard.',
@@ -4992,7 +4975,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			})
 			.catch((err) => {
 				console.error('Failed to copy context:', err);
-				addToastRef.current({
+				notifyToast({
 					type: 'error',
 					title: 'Copy Failed',
 					message: 'Failed to copy context to clipboard.',
@@ -5018,14 +5001,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 				},
 				themeRef.current
 			);
-			addToastRef.current({
+			notifyToast({
 				type: 'success',
 				title: 'Export Complete',
 				message: 'Conversation exported as HTML.',
 			});
 		} catch (err) {
 			console.error('Failed to export tab:', err);
-			addToastRef.current({
+			notifyToast({
 				type: 'error',
 				title: 'Export Failed',
 				message: 'Failed to export conversation as HTML.',
@@ -5129,7 +5112,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				message = `Completed ${info.completedTasks} of ${info.totalTasks} tasks`;
 			}
 
-			addToast({
+			notifyToast({
 				type: toastType,
 				title: 'Auto-Run Complete',
 				message,
@@ -5262,7 +5245,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 											message += ` | New personal best! #${longestRun.rank} on longest runs!`;
 										}
 
-										addToastRef.current({
+										notifyToast({
 											type: 'success',
 											title: 'Leaderboard Updated',
 											message,
@@ -5303,7 +5286,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 			if (info.success) {
 				// PR created successfully - show success toast with PR URL
-				addToast({
+				notifyToast({
 					type: 'success',
 					title: 'PR Created',
 					message: info.prUrl || 'Pull request created successfully',
@@ -5313,7 +5296,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				});
 			} else {
 				// PR creation failed - show warning (not error, since the auto-run itself succeeded)
-				addToast({
+				notifyToast({
 					type: 'warning',
 					title: 'PR Creation Failed',
 					message: info.error || 'Failed to create pull request',
@@ -5818,7 +5801,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				);
 
 				// Show toast
-				addToast({
+				notifyToast({
 					type: 'success',
 					title: 'History Entry Added',
 					message: parsed.shortSummary,
@@ -5879,7 +5862,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				})
 			);
 		}
-	}, [activeSession, groups, spawnBackgroundSynopsis, addHistoryEntry, setSessions, addToast]);
+	}, [activeSession, groups, spawnBackgroundSynopsis, addHistoryEntry, setSessions]);
 
 	// Handler for the built-in /skills command (Claude Code only)
 	// Lists available skills from .claude/skills/ directories
@@ -6450,7 +6433,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				prev.map((s) => (s.id === sessionId ? { ...s, worktreesExpanded: true } : s))
 			);
 
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'New Worktree Discovered',
 				message: worktree.branch || worktree.name,
@@ -6637,7 +6620,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					});
 
 					for (const session of newSessionsToAdd) {
-						addToast({
+						notifyToast({
 							type: 'success',
 							title: 'New Worktree Discovered',
 							message: session.name,
@@ -6726,13 +6709,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 			if (activeSession?.autoRunFolderPath) {
 				handleAutoRunRefresh();
 			}
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'Playbook Imported',
 				message: `Successfully imported playbook to ${folderName}`,
 			});
 		},
-		[activeSession?.autoRunFolderPath, handleAutoRunRefresh, addToast]
+		[activeSession?.autoRunFolderPath, handleAutoRunRefresh]
 	);
 
 	// File tree auto-refresh interval change handler (kept in App.tsx as it's not Auto Run specific)
@@ -6987,10 +6970,26 @@ You are taking over this conversation. Based on the context above, provide a bri
 				customModel?: string;
 			}
 		) => {
-			const chat = await window.maestro.groupChat.create(name, moderatorAgentId, moderatorConfig);
-			setGroupChats((prev) => [chat, ...prev]);
-			setShowNewGroupChatModal(false);
-			handleOpenGroupChat(chat.id);
+			try {
+				const chat = await window.maestro.groupChat.create(name, moderatorAgentId, moderatorConfig);
+				setGroupChats((prev) => [chat, ...prev]);
+				setShowNewGroupChatModal(false);
+				handleOpenGroupChat(chat.id);
+			} catch (err) {
+				setShowNewGroupChatModal(false);
+				const message = err instanceof Error ? err.message : '';
+				const isValidationError = message.includes('Invalid moderator agent ID');
+				notifyToast({
+					type: 'error',
+					title: 'Group Chat',
+					message: isValidationError
+						? message.replace(/^Error invoking remote method '[^']+': /, '')
+						: 'Failed to create group chat',
+				});
+				if (!isValidationError) {
+					throw err; // Unexpected — let Sentry capture via unhandledrejection
+				}
+			}
 		},
 		[handleOpenGroupChat]
 	);
@@ -7202,13 +7201,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 					const tab = s.aiTabs.find((t) => t.id === renameTabId);
 					const oldName = tab?.name;
 
-					window.maestro.logger.log('info', `Tab renamed: "${oldName || '(auto)'}" → "${newName || '(cleared)'}"`, 'TabNaming', {
-						tabId: renameTabId,
-						sessionId: activeSession.id,
-						agentSessionId: tab?.agentSessionId,
-						oldName,
-						newName: newName || null,
-					});
+					window.maestro.logger.log(
+						'info',
+						`Tab renamed: "${oldName || '(auto)'}" → "${newName || '(cleared)'}"`,
+						'TabNaming',
+						{
+							tabId: renameTabId,
+							sessionId: activeSession.id,
+							agentSessionId: tab?.agentSessionId,
+							oldName,
+							newName: newName || null,
+						}
+					);
 
 					if (tab?.agentSessionId) {
 						// Persist name to agent session metadata (async, fire and forget)
@@ -7218,37 +7222,57 @@ You are taking over this conversation. Based on the context above, provide a bri
 							window.maestro.claude
 								.updateSessionName(s.projectRoot, tab.agentSessionId, newName || '')
 								.catch((err) => {
-									window.maestro.logger.log('error', 'Failed to persist tab name to Claude session storage', 'TabNaming', {
-										tabId: renameTabId,
-										agentSessionId: tab.agentSessionId,
-										error: String(err),
-									});
+									window.maestro.logger.log(
+										'error',
+										'Failed to persist tab name to Claude session storage',
+										'TabNaming',
+										{
+											tabId: renameTabId,
+											agentSessionId: tab.agentSessionId,
+											error: String(err),
+										}
+									);
 								});
 						} else {
 							window.maestro.agentSessions
 								.setSessionName(agentId, s.projectRoot, tab.agentSessionId, newName || null)
 								.catch((err) => {
-									window.maestro.logger.log('error', 'Failed to persist tab name to agent session storage', 'TabNaming', {
-										tabId: renameTabId,
-										agentSessionId: tab.agentSessionId,
-										agentType: agentId,
-										error: String(err),
-									});
+									window.maestro.logger.log(
+										'error',
+										'Failed to persist tab name to agent session storage',
+										'TabNaming',
+										{
+											tabId: renameTabId,
+											agentSessionId: tab.agentSessionId,
+											agentType: agentId,
+											error: String(err),
+										}
+									);
 								});
 						}
 						// Also update past history entries with this agentSessionId
 						window.maestro.history
 							.updateSessionName(tab.agentSessionId, newName || '')
 							.catch((err) => {
-								window.maestro.logger.log('warn', 'Failed to update history session names', 'TabNaming', {
-									agentSessionId: tab.agentSessionId,
-									error: String(err),
-								});
+								window.maestro.logger.log(
+									'warn',
+									'Failed to update history session names',
+									'TabNaming',
+									{
+										agentSessionId: tab.agentSessionId,
+										error: String(err),
+									}
+								);
 							});
 					} else {
-						window.maestro.logger.log('info', 'Tab renamed (no agentSessionId, skipping persistence)', 'TabNaming', {
-							tabId: renameTabId,
-						});
+						window.maestro.logger.log(
+							'info',
+							'Tab renamed (no agentSessionId, skipping persistence)',
+							'TabNaming',
+							{
+								tabId: renameTabId,
+							}
+						);
 					}
 					return {
 						...s,
@@ -7730,7 +7754,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				} catch (error) {
 					console.error('Failed to move working directory to trash:', error);
 					// Show a toast notification about the failure
-					addToast({
+					notifyToast({
 						title: 'Failed to Erase Directory',
 						message: error instanceof Error ? error.message : 'Unknown error',
 						type: 'error',
@@ -7749,14 +7773,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				setActiveSessionId('');
 			}
 		},
-		[
-			sessions,
-			setSessions,
-			setActiveSessionId,
-			flushSessionPersistence,
-			setRemovedWorktreePaths,
-			addToast,
-		]
+		[sessions, setSessions, setActiveSessionId, flushSessionPersistence, setRemovedWorktreePaths]
 	);
 
 	// Delete an entire worktree group and all its agents
@@ -7820,7 +7837,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					setActiveSessionId('');
 				}
 
-				addToast({
+				notifyToast({
 					type: 'success',
 					title: 'Group Removed',
 					message: `Removed "${group.name}" and ${sessionCount} agent${
@@ -7866,7 +7883,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			const validation = validateNewSession(name, workingDir, agentId as ToolType, sessions);
 			if (!validation.valid) {
 				console.error(`Session validation failed: ${validation.error}`);
-				addToast({
+				notifyToast({
 					type: 'error',
 					title: 'Session Creation Failed',
 					message: validation.error || 'Cannot create duplicate session',
@@ -8036,7 +8053,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			);
 			if (!validation.valid) {
 				console.error(`Wizard session validation failed: ${validation.error}`);
-				addToast({
+				notifyToast({
 					type: 'error',
 					title: 'Session Creation Failed',
 					message: validation.error || 'Cannot create duplicate session',
@@ -8223,7 +8240,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 			setActiveFocus,
 			startBatchRun,
 			sessions,
-			addToast,
 		]
 	);
 
@@ -9508,15 +9524,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 	};
 
 	// Image Handlers
-	const showImageAttachBlockedNotice = useCallback(() => {
-		const agentName = activeSession?.toolType
-			? getProviderDisplayName(activeSession.toolType)
-			: 'the agent';
-		const message = `Images are only available in the initial message to ${agentName}. Please start a new session if you want to include an image.`;
-		setSuccessFlashNotification(message);
-		setTimeout(() => setSuccessFlashNotification(null), 4000);
-	}, [setSuccessFlashNotification, activeSession?.toolType]);
-
 	const handlePaste = (e: React.ClipboardEvent) => {
 		// Allow image pasting in group chat or direct AI mode
 		const isGroupChatActive = !!activeGroupChatId;
@@ -9550,12 +9557,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 		// Image handling requires AI mode or group chat
 		if (!isGroupChatActive && !isDirectAIMode) return;
-
-		if (hasImage && isDirectAIMode && !isGroupChatActive && blockCodexResumeImages) {
-			e.preventDefault();
-			showImageAttachBlockedNotice();
-			return;
-		}
 
 		for (let i = 0; i < items.length; i++) {
 			if (items[i].type.indexOf('image') !== -1) {
@@ -9605,12 +9606,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 		if (!isGroupChatActive && !isDirectAIMode) return;
 
 		const files = e.dataTransfer.files;
-		const hasImage = Array.from(files).some((file) => file.type.startsWith('image/'));
-
-		if (hasImage && isDirectAIMode && !isGroupChatActive && blockCodexResumeImages) {
-			showImageAttachBlockedNotice();
-			return;
-		}
 
 		for (let i = 0; i < files.length; i++) {
 			if (files[i].type.startsWith('image/')) {
@@ -9868,7 +9863,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						setSessions((prev) =>
 							prev.map((s) => (s.id === activeSession.id ? { ...s, worktreesExpanded: true } : s))
 						);
-						addToast({
+						notifyToast({
 							type: 'success',
 							title: 'Worktrees Discovered',
 							message: `Found ${newWorktreeSessions.length} worktree sub-agent${
@@ -9881,7 +9876,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				console.error('Failed to scan for worktrees:', err);
 			}
 		},
-		[activeSession, sessions, addToast]
+		[activeSession, sessions]
 	);
 
 	const handleDisableWorktreeConfig = useCallback(() => {
@@ -9909,17 +9904,17 @@ You are taking over this conversation. Based on the context above, provide a bri
 				? ` Removed ${worktreeChildCount} worktree sub-agent${worktreeChildCount > 1 ? 's' : ''}.`
 				: '';
 
-		addToast({
+		notifyToast({
 			type: 'success',
 			title: 'Worktrees Disabled',
 			message: `Worktree configuration cleared for this agent.${childMessage}`,
 		});
-	}, [activeSession, sessions, addToast]);
+	}, [activeSession, sessions]);
 
 	const handleCreateWorktreeFromConfig = useCallback(
 		async (branchName: string, basePath: string) => {
 			if (!activeSession || !basePath) {
-				addToast({
+				notifyToast({
 					type: 'error',
 					title: 'Error',
 					message: 'No worktree directory configured',
@@ -10051,14 +10046,14 @@ You are taking over this conversation. Based on the context above, provide a bri
 					prev.map((s) => (s.id === activeSession.id ? { ...s, worktreesExpanded: true } : s))
 				);
 
-				addToast({
+				notifyToast({
 					type: 'success',
 					title: 'Worktree Created',
 					message: branchName,
 				});
 			} catch (err) {
 				console.error('[WorktreeConfig] Failed to create worktree:', err);
-				addToast({
+				notifyToast({
 					type: 'error',
 					title: 'Failed to Create Worktree',
 					message: err instanceof Error ? err.message : String(err),
@@ -10066,7 +10061,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				throw err; // Re-throw so the modal can show the error
 			}
 		},
-		[activeSession, defaultSaveToHistory, addToast]
+		[activeSession, defaultSaveToHistory]
 	);
 
 	const handleCloseCreateWorktreeModal = useCallback(() => {
@@ -10219,13 +10214,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 				);
 			}
 
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'Worktree Created',
 				message: branchName,
 			});
 		},
-		[createWorktreeSession, defaultSaveToHistory, addToast]
+		[createWorktreeSession, defaultSaveToHistory]
 	);
 
 	const handleCloseCreatePRModal = useCallback(() => {
@@ -10236,7 +10231,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 	const handlePRCreated = useCallback(
 		async (prDetails: PRDetails) => {
 			const session = createPRSession || activeSession;
-			addToast({
+			notifyToast({
 				type: 'success',
 				title: 'Pull Request Created',
 				message: prDetails.title,
@@ -10265,7 +10260,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 			}
 			setCreatePRSession(null);
 		},
-		[createPRSession, activeSession, addToast]
+		[createPRSession, activeSession]
 	);
 
 	const handleCloseDeleteWorktreeModal = useCallback(() => {
@@ -10869,7 +10864,23 @@ You are taking over this conversation. Based on the context above, provide a bri
 		// Use filteredFileTree when available (it returns the full tree when no filter is active)
 		// Then apply hidden files filter to match what FileExplorerPanel displays
 		const displayTree = filterHiddenFiles(filteredFileTree);
-		setFlatFileList(flattenTree(displayTree, expandedSet));
+		const newFlatList = flattenTree(displayTree, expandedSet);
+
+		// Preserve selection identity: track the selected item by path, not index.
+		// When folders expand/collapse, the flat list shifts — re-locate the selected item.
+		const { flatFileList: oldList, selectedFileIndex: oldIndex } = useFileExplorerStore.getState();
+		const selectedPath = oldList[oldIndex]?.fullPath;
+		if (selectedPath) {
+			const newIndex = newFlatList.findIndex((item) => item.fullPath === selectedPath);
+			if (newIndex >= 0) {
+				setSelectedFileIndex(newIndex);
+			} else {
+				// Item no longer visible (inside collapsed folder) — clamp to valid range
+				setSelectedFileIndex(Math.min(oldIndex, Math.max(0, newFlatList.length - 1)));
+			}
+		}
+
+		setFlatFileList(newFlatList);
 	}, [activeSession?.fileExplorerExpanded, filteredFileTree, showHiddenFiles]);
 
 	// Handle pending jump path from /jump command
@@ -11977,9 +11988,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 								? setStagedImages
 								: undefined
 					}
-					onPromptImageAttachBlocked={
-						activeGroupChatId || !blockCodexResumeImages ? undefined : showImageAttachBlockedNotice
-					}
 					onPromptOpenLightbox={handleSetLightboxImage}
 					promptTabSaveToHistory={activeGroupChatId ? false : (activeTab?.saveToHistory ?? false)}
 					onPromptToggleTabSaveToHistory={
@@ -12135,7 +12143,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 								const agent = await window.maestro.agents.get(data.agentType);
 								if (!agent) {
 									console.error(`Agent not found: ${data.agentType}`);
-									addToast({
+									notifyToast({
 										type: 'error',
 										title: 'Symphony Error',
 										message: `Agent not found: ${data.agentType}`,
@@ -12152,7 +12160,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 								);
 								if (!validation.valid) {
 									console.error(`Session validation failed: ${validation.error}`);
-									addToast({
+									notifyToast({
 										type: 'error',
 										title: 'Session Creation Failed',
 										message: validation.error || 'Cannot create duplicate session',
@@ -12366,7 +12374,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 							// Copy the gist URL to clipboard
 							navigator.clipboard.writeText(gistUrl).catch(() => {});
 							// Show a toast notification
-							addToast({
+							notifyToast({
 								type: 'success',
 								title: 'Gist Published',
 								message: `${isPublic ? 'Public' : 'Secret'} gist created! URL copied to clipboard.`,

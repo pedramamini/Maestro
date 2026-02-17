@@ -1260,19 +1260,20 @@ function SessionListInner(props: SessionListProps) {
 	// Derive whether any session is busy or in auto-run (for wand sparkle animation)
 	const isAnyBusy = useMemo(
 		() => sessions.some((s) => s.state === 'busy') || activeBatchSessionIds.length > 0,
-		[sessions, activeBatchSessionIds],
+		[sessions, activeBatchSessionIds]
 	);
 
 	const [sessionFilter, setSessionFilter] = useState('');
-	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } = useResizablePanel({
-		width: leftSidebarWidthState,
-		minWidth: 256,
-		maxWidth: 600,
-		settingsKey: 'leftSidebarWidth',
-		setWidth: setLeftSidebarWidthState,
-		side: 'left',
-		externalRef: sidebarContainerRef,
-	});
+	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } =
+		useResizablePanel({
+			width: leftSidebarWidthState,
+			minWidth: 256,
+			maxWidth: 600,
+			settingsKey: 'leftSidebarWidth',
+			setWidth: setLeftSidebarWidthState,
+			side: 'left',
+			externalRef: sidebarContainerRef,
+		});
 	const sessionFilterOpen = useUIStore((s) => s.sessionFilterOpen);
 	const setSessionFilterOpen = useUIStore((s) => s.setSessionFilterOpen);
 	const [preFilterGroupStates, setPreFilterGroupStates] = useState<Map<string, boolean>>(new Map());
@@ -1989,7 +1990,10 @@ function SessionListInner(props: SessionListProps) {
 				{leftSidebarOpen ? (
 					<>
 						<div className="flex items-center gap-2">
-							<Wand2 className={`w-5 h-5${isAnyBusy ? ' wand-sparkle-active' : ''}`} style={{ color: theme.colors.accent }} />
+							<Wand2
+								className={`w-5 h-5${isAnyBusy ? ' wand-sparkle-active' : ''}`}
+								style={{ color: theme.colors.accent }}
+							/>
 							<h1
 								className="font-bold tracking-widest text-lg"
 								style={{ color: theme.colors.textMain }}
@@ -2513,7 +2517,10 @@ function SessionListInner(props: SessionListProps) {
 							className="p-2 rounded hover:bg-white/10 transition-colors"
 							title="Menu"
 						>
-							<Wand2 className={`w-6 h-6${isAnyBusy ? ' wand-sparkle-active' : ''}`} style={{ color: theme.colors.accent }} />
+							<Wand2
+								className={`w-6 h-6${isAnyBusy ? ' wand-sparkle-active' : ''}`}
+								style={{ color: theme.colors.accent }}
+							/>
 						</button>
 						{/* Menu Overlay for Collapsed Sidebar */}
 						{menuOpen && (

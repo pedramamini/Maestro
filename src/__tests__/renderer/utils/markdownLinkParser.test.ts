@@ -79,9 +79,7 @@ describe('extractDomain', () => {
 	});
 
 	it('should handle URLs with deep paths', () => {
-		expect(extractDomain('https://github.com/org/repo/blob/main/src/file.ts')).toBe(
-			'github.com'
-		);
+		expect(extractDomain('https://github.com/org/repo/blob/main/src/file.ts')).toBe('github.com');
 	});
 
 	it('should return original for malformed URLs without match', () => {
@@ -180,8 +178,7 @@ describe('parseMarkdownLinks', () => {
 		});
 
 		it('should skip various image extensions in wiki links', () => {
-			const content =
-				'[[a.jpeg]] [[b.webp]] [[c.svg]] [[d.bmp]] [[e.ico]] [[real-doc]]';
+			const content = '[[a.jpeg]] [[b.webp]] [[c.svg]] [[d.bmp]] [[e.ico]] [[real-doc]]';
 			const result = parseMarkdownLinks(content, 'readme.md');
 
 			expect(result.internalLinks).toHaveLength(1);
@@ -692,7 +689,8 @@ Also see [another doc](./other.md) here.
 		});
 
 		it('should handle wiki links with special characters', () => {
-			const content = 'See [[link-with-\u00E9mojis-\uD83C\uDF89]] and [[\u65E5\u672C\u8A9E\u30EA\u30F3\u30AF]].';
+			const content =
+				'See [[link-with-\u00E9mojis-\uD83C\uDF89]] and [[\u65E5\u672C\u8A9E\u30EA\u30F3\u30AF]].';
 			const result = parseMarkdownLinks(content, 'doc.md');
 
 			expect(result.internalLinks).toHaveLength(2);
@@ -784,9 +782,7 @@ with newline](./file.md).`;
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
-				expect(result.externalLinks[0].url).toBe(
-					'https://example.com/wiki/Term_(disambiguation)'
-				);
+				expect(result.externalLinks[0].url).toBe('https://example.com/wiki/Term_(disambiguation)');
 			});
 
 			it('should handle multiple URLs with parentheses in same content', () => {
@@ -814,8 +810,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 			});
 
 			it('should handle URLs with special characters in query parameters', () => {
-				const content =
-					'[Encode](https://example.com/api?data=%7B%22key%22%3A%22value%22%7D)';
+				const content = '[Encode](https://example.com/api?data=%7B%22key%22%3A%22value%22%7D)';
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
@@ -827,9 +822,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
-				expect(result.externalLinks[0].url).toBe(
-					'https://example.com/search?q=hello+world'
-				);
+				expect(result.externalLinks[0].url).toBe('https://example.com/search?q=hello+world');
 			});
 		});
 
@@ -847,9 +840,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
-				expect(result.externalLinks[0].url).toBe(
-					'https://example.com/page?id=123#heading'
-				);
+				expect(result.externalLinks[0].url).toBe('https://example.com/page?id=123#heading');
 			});
 		});
 
@@ -885,9 +876,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
-				expect(result.externalLinks[0].url).toBe(
-					'https://example.com/path%20with%20spaces'
-				);
+				expect(result.externalLinks[0].url).toBe('https://example.com/path%20with%20spaces');
 			});
 
 			it('should handle URLs with unicode path segments', () => {
@@ -917,8 +906,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 
 		describe('complex real-world URLs', () => {
 			it('should handle GitHub file URLs', () => {
-				const content =
-					'[Code](https://github.com/user/repo/blob/main/src/index.ts#L10-L20)';
+				const content = '[Code](https://github.com/user/repo/blob/main/src/index.ts#L10-L20)';
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
@@ -927,8 +915,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 			});
 
 			it('should handle Google search URLs', () => {
-				const content =
-					'[Google](https://www.google.com/search?q=markdown+tutorial&source=hp)';
+				const content = '[Google](https://www.google.com/search?q=markdown+tutorial&source=hp)';
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
@@ -936,8 +923,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 			});
 
 			it('should handle YouTube URLs with video IDs', () => {
-				const content =
-					'[Video](https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s)';
+				const content = '[Video](https://www.youtube.com/watch?v=dQw4w9WgXcQ&t=30s)';
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
@@ -945,8 +931,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 			});
 
 			it('should handle Amazon product URLs', () => {
-				const content =
-					'[Product](https://www.amazon.com/dp/B08N5WRWNW?ref=cm_sw_r_cp_api)';
+				const content = '[Product](https://www.amazon.com/dp/B08N5WRWNW?ref=cm_sw_r_cp_api)';
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);
@@ -963,8 +948,7 @@ See [First](https://en.wikipedia.org/wiki/A_(letter)) and
 			});
 
 			it('should handle Twitter/X status URLs', () => {
-				const content =
-					'[Tweet](https://twitter.com/user/status/1234567890123456789)';
+				const content = '[Tweet](https://twitter.com/user/status/1234567890123456789)';
 				const result = parseMarkdownLinks(content, 'readme.md');
 
 				expect(result.externalLinks).toHaveLength(1);

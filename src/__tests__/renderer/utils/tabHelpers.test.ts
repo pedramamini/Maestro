@@ -52,7 +52,13 @@ import {
 	extractQuickTabName,
 } from '../../../renderer/utils/tabHelpers';
 import type { LogEntry } from '../../../renderer/types';
-import type { Session, AITab, ClosedTab, ClosedTabEntry, FilePreviewTab } from '../../../renderer/types';
+import type {
+	Session,
+	AITab,
+	ClosedTab,
+	ClosedTabEntry,
+	FilePreviewTab,
+} from '../../../renderer/types';
 
 // Mock the generateId function to return predictable IDs
 vi.mock('../../../renderer/utils/ids', () => ({
@@ -2384,15 +2390,23 @@ describe('tabHelpers', () => {
 
 	describe('extractQuickTabName', () => {
 		it('extracts PR number from GitHub PR URL', () => {
-			expect(extractQuickTabName('https://github.com/RunMaestro/Maestro/pull/380 review this PR')).toBe('PR #380');
+			expect(
+				extractQuickTabName('https://github.com/RunMaestro/Maestro/pull/380 review this PR')
+			).toBe('PR #380');
 		});
 
 		it('extracts issue number from GitHub issue URL', () => {
-			expect(extractQuickTabName('thoughts on this issue? https://github.com/RunMaestro/Maestro/issues/381')).toBe('Issue #381');
+			expect(
+				extractQuickTabName(
+					'thoughts on this issue? https://github.com/RunMaestro/Maestro/issues/381'
+				)
+			).toBe('Issue #381');
 		});
 
 		it('extracts discussion number from GitHub discussion URL', () => {
-			expect(extractQuickTabName('https://github.com/org/repo/discussions/42')).toBe('Discussion #42');
+			expect(extractQuickTabName('https://github.com/org/repo/discussions/42')).toBe(
+				'Discussion #42'
+			);
 		});
 
 		it('extracts Jira-style ticket ID', () => {
@@ -2421,12 +2435,18 @@ describe('tabHelpers', () => {
 
 		it('prefers GitHub URL over inline reference when both present', () => {
 			// URL pattern matches first
-			expect(extractQuickTabName('review PR #999 at https://github.com/org/repo/pull/123')).toBe('PR #123');
+			expect(extractQuickTabName('review PR #999 at https://github.com/org/repo/pull/123')).toBe(
+				'PR #123'
+			);
 		});
 
 		it('handles URLs with query params and fragments', () => {
-			expect(extractQuickTabName('https://github.com/org/repo/pull/456?diff=split#review')).toBe('PR #456');
-			expect(extractQuickTabName('https://github.com/org/repo/issues/789?q=is%3Aopen')).toBe('Issue #789');
+			expect(extractQuickTabName('https://github.com/org/repo/pull/456?diff=split#review')).toBe(
+				'PR #456'
+			);
+			expect(extractQuickTabName('https://github.com/org/repo/issues/789?q=is%3Aopen')).toBe(
+				'Issue #789'
+			);
 		});
 	});
 });

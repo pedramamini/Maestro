@@ -956,7 +956,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 							? theme.colors.bgActivity
 							: isSelected
 								? 'rgba(255,255,255,0.1)'
-								: 'transparent',
+								: undefined,
 					}}
 					onMouseDown={(e) => {
 						// Prevent focus from leaving the filter input when filtering

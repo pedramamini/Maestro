@@ -582,10 +582,10 @@ export function closeFileTab(session: Session, tabId: string): CloseFileTabResul
 	}
 
 	// Add to unified closed tab history
-	const updatedUnifiedHistory = [
-		closedTabEntry,
-		...(session.unifiedClosedTabHistory || []),
-	].slice(0, MAX_CLOSED_TAB_HISTORY);
+	const updatedUnifiedHistory = [closedTabEntry, ...(session.unifiedClosedTabHistory || [])].slice(
+		0,
+		MAX_CLOSED_TAB_HISTORY
+	);
 
 	return {
 		closedTabEntry,
@@ -623,10 +623,10 @@ export function addAiTabToUnifiedHistory(
 		closedAt: Date.now(),
 	};
 
-	const updatedUnifiedHistory = [
-		closedTabEntry,
-		...(session.unifiedClosedTabHistory || []),
-	].slice(0, MAX_CLOSED_TAB_HISTORY);
+	const updatedUnifiedHistory = [closedTabEntry, ...(session.unifiedClosedTabHistory || [])].slice(
+		0,
+		MAX_CLOSED_TAB_HISTORY
+	);
 
 	return {
 		...session,
