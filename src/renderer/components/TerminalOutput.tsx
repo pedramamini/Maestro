@@ -1318,6 +1318,13 @@ export const TerminalOutput = memo(
 			return collapsedLogs.filter((log) => log.text.toLowerCase().includes(lowerQuery));
 		}, [collapsedLogs, debouncedSearchQuery]);
 
+		// Track visible log activity, including in-place updates to the last entry (e.g. thinking stream)
+		const lastVisibleLogActivityKey = useMemo(() => {
+			const lastLog = filteredLogs[filteredLogs.length - 1];
+			if (!lastLog) return 'empty';
+			return `${filteredLogs.length}:${lastLog.id}:${lastLog.text.length}:${lastLog.timestamp}`;
+		}, [filteredLogs]);
+
 		// PERF: Throttle scroll handler to reduce state updates (4ms = ~240fps for smooth scrollbar)
 		// The actual logic is in handleScrollInner, wrapped with useThrottledCallback
 		const handleScrollInner = useCallback(() => {
@@ -1358,7 +1365,13 @@ export const TerminalOutput = memo(
 					scrollSaveTimerRef.current = null;
 				}, 200);
 			}
-		}, [activeTabId, filteredLogs.length, onScrollPositionChange, onAtBottomChange, autoScrollAiMode]);
+		}, [
+			activeTabId,
+			filteredLogs.length,
+			onScrollPositionChange,
+			onAtBottomChange,
+			autoScrollAiMode,
+		]);
 
 		// PERF: Throttle at 16ms (60fps) instead of 4ms to reduce state updates during scroll
 		const handleScroll = useThrottledCallback(handleScrollInner, 16);
@@ -1456,7 +1469,7 @@ export const TerminalOutput = memo(
 					}
 				});
 			}
-		}, [session.inputMode, filteredLogs.length, autoScrollAiMode, autoScrollPaused]);
+		}, [session.inputMode, lastVisibleLogActivityKey, autoScrollAiMode, autoScrollPaused]);
 
 		// Restore scroll position when component mounts or initialScrollTop changes
 		// Uses requestAnimationFrame to ensure DOM is ready
@@ -1766,9 +1779,19 @@ export const TerminalOutput = memo(
 							color: isAutoScrollActive ? theme.colors.accentForeground : theme.colors.textDim,
 							border: `1px solid ${isAutoScrollActive ? 'transparent' : theme.colors.border}`,
 						}}
-						title={isAutoScrollActive ? 'Auto-scroll ON (click to disable)' : autoScrollPaused ? 'Auto-scroll paused (click to resume)' : 'Auto-scroll OFF (click to enable)'}
+						title={
+							isAutoScrollActive
+								? 'Auto-scroll ON (click to disable)'
+								: autoScrollPaused
+									? 'Auto-scroll paused (click to resume)'
+									: 'Auto-scroll OFF (click to enable)'
+						}
 					>
-						{isAutoScrollActive ? <ArrowDownToLine className="w-4 h-4" /> : <ScrollText className="w-4 h-4" />}
+						{isAutoScrollActive ? (
+							<ArrowDownToLine className="w-4 h-4" />
+						) : (
+							<ScrollText className="w-4 h-4" />
+						)}
 					</button>
 				)}
 
