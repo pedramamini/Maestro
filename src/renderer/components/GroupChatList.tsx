@@ -21,7 +21,7 @@ interface GroupChatContextMenuProps {
 	isArchived: boolean;
 	onEdit: () => void;
 	onRename: () => void;
-	onArchive: () => void;
+	onArchive?: () => void;
 	onDelete: () => void;
 	onClose: () => void;
 }
@@ -93,21 +93,23 @@ function GroupChatContextMenu({
 				<Edit3 className="w-3.5 h-3.5" />
 				Rename
 			</button>
-			<button
-				onClick={() => {
-					onArchive();
-					onClose();
-				}}
-				className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2"
-				style={{ color: theme.colors.textMain }}
-			>
-				{isArchived ? (
-					<ArchiveRestore className="w-3.5 h-3.5" />
-				) : (
-					<Archive className="w-3.5 h-3.5" />
-				)}
-				{isArchived ? 'Unarchive' : 'Archive'}
-			</button>
+			{onArchive && (
+				<button
+					onClick={() => {
+						onArchive();
+						onClose();
+					}}
+					className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2"
+					style={{ color: theme.colors.textMain }}
+				>
+					{isArchived ? (
+						<ArchiveRestore className="w-3.5 h-3.5" />
+					) : (
+						<Archive className="w-3.5 h-3.5" />
+					)}
+					{isArchived ? 'Unarchive' : 'Archive'}
+				</button>
+			)}
 			<button
 				onClick={() => {
 					onDelete();
@@ -136,7 +138,7 @@ interface GroupChatListProps {
 	onEditGroupChat: (id: string) => void;
 	onRenameGroupChat: (id: string) => void;
 	onDeleteGroupChat: (id: string) => void;
-	onArchiveGroupChat: (id: string, archived: boolean) => void;
+	onArchiveGroupChat?: (id: string, archived: boolean) => void;
 	/** Controlled expanded state (lifted to parent for keyboard navigation) */
 	isExpanded?: boolean;
 	/** Callback when expanded state changes */
@@ -253,7 +255,7 @@ export function GroupChatList({
 					)}
 				</div>
 				<div className="flex items-center gap-1.5">
-					{archivedCount > 0 && (
+					{onArchiveGroupChat && archivedCount > 0 && (
 						<button
 							onClick={(e) => {
 								e.stopPropagation();
@@ -386,10 +388,10 @@ export function GroupChatList({
 					isArchived={!!groupChats.find((c) => c.id === contextMenu.chatId)?.archived}
 					onEdit={() => onEditGroupChat(contextMenu.chatId)}
 					onRename={() => onRenameGroupChat(contextMenu.chatId)}
-					onArchive={() => {
+					onArchive={onArchiveGroupChat ? () => {
 						const chat = groupChats.find((c) => c.id === contextMenu.chatId);
 						if (chat) onArchiveGroupChat(chat.id, !chat.archived);
-					}}
+					} : undefined}
 					onDelete={() => onDeleteGroupChat(contextMenu.chatId)}
 					onClose={() => setContextMenu(null)}
 				/>

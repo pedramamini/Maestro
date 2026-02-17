@@ -2869,7 +2869,6 @@ function SessionListInner(props: SessionListProps) {
 						onEditGroupChat &&
 						onRenameGroupChat &&
 						onDeleteGroupChat &&
-						onArchiveGroupChat &&
 						sessions.filter((s) => s.toolType !== 'terminal').length >= 2 && (
 							<GroupChatList
 								theme={theme}
