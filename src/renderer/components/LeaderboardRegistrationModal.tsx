@@ -1253,7 +1253,7 @@ export function LeaderboardRegistrationModal({
 									className="px-3 py-1.5 text-xs rounded transition-colors flex items-center gap-1.5"
 									style={{
 										backgroundColor: theme.colors.error,
-										color: theme.colors.accentForeground,
+										color: theme.colors.errorForeground,
 									}}
 								>
 									<UserX className="w-3.5 h-3.5" />

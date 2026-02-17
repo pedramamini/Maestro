@@ -573,7 +573,11 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 								? theme.colors.warning
 								: theme.colors.accent
 							: theme.colors.border,
-						color: message.trim() ? theme.colors.accentForeground : theme.colors.textDim,
+						color: message.trim()
+						? isBusy
+							? theme.colors.warningForeground
+							: theme.colors.accentForeground
+						: theme.colors.textDim,
 					}}
 					title={isBusy ? 'Queue message' : 'Send message'}
 				>
