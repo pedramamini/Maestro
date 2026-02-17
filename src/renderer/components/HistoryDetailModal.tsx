@@ -212,7 +212,7 @@ export function HistoryDetailModal({
 	return (
 		<div className="fixed inset-0 flex items-center justify-center z-[9999]">
 			{/* Backdrop */}
-			<div className="absolute inset-0 bg-black/60" onClick={onClose} />
+			<div className="absolute inset-0" style={{ backgroundColor: theme.colors.overlay }} onClick={onClose} />
 
 			{/* Modal */}
 			<div
@@ -590,7 +590,7 @@ export function HistoryDetailModal({
 					className="fixed inset-0 flex items-center justify-center z-[10001]"
 					onClick={() => setShowDeleteConfirm(false)}
 				>
-					<div className="absolute inset-0 bg-black/60" />
+					<div className="absolute inset-0" style={{ backgroundColor: theme.colors.overlay }} />
 					<div
 						className="relative w-[400px] border rounded-lg shadow-2xl overflow-hidden"
 						style={{

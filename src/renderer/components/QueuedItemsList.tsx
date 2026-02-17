@@ -234,7 +234,7 @@ export const QueuedItemsList = memo(
 				{queueRemoveConfirmId && (
 					<div
 						className="fixed inset-0 flex items-center justify-center z-50"
-						style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+						style={{ backgroundColor: theme.colors.overlay }}
 						onClick={() => setQueueRemoveConfirmId(null)}
 						onKeyDown={handleModalKeyDown}
 					>

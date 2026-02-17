@@ -33,6 +33,7 @@ const mockTheme: Theme = {
 		error: '#ff5555',
 		warning: '#ffb86c',
 		success: '#50fa7b',
+		info: '#8be9fd',
 		syntaxComment: '#6272a4',
 		syntaxKeyword: '#ff79c6',
 	},
@@ -935,7 +936,7 @@ describe('LogViewer', () => {
 
 			await waitFor(() => {
 				const levelPill = screen.getByText('info');
-				expect(levelPill).toHaveStyle({ color: '#3b82f6' });
+				expect(levelPill).toHaveStyle({ color: mockTheme.colors.info });
 			});
 		});
 
@@ -946,7 +947,7 @@ describe('LogViewer', () => {
 
 			await waitFor(() => {
 				const levelPill = screen.getByText('warn');
-				expect(levelPill).toHaveStyle({ color: '#f59e0b' });
+				expect(levelPill).toHaveStyle({ color: mockTheme.colors.warning });
 			});
 		});
 
@@ -957,7 +958,7 @@ describe('LogViewer', () => {
 
 			await waitFor(() => {
 				const levelPill = screen.getByText('error');
-				expect(levelPill).toHaveStyle({ color: '#ef4444' });
+				expect(levelPill).toHaveStyle({ color: mockTheme.colors.error });
 			});
 		});
 

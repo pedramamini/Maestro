@@ -49,6 +49,7 @@ const mockTheme: Theme = {
 		headerBg: '#202020',
 		scrollbarTrack: '#1a1a1a',
 		scrollbarThumb: '#444444',
+		overlayHeavy: 'rgba(0, 0, 0, 0.8)',
 	},
 };
 
@@ -1004,7 +1005,7 @@ describe('PromptComposerModal', () => {
 			);
 
 			const overlay = container.querySelector('.fixed.inset-0');
-			expect(overlay).toHaveStyle({ backgroundColor: 'rgba(0,0,0,0.7)' });
+			expect(overlay).toHaveStyle({ backgroundColor: mockTheme.colors.overlayHeavy });
 		});
 
 		it('should have modal content with rounded corners and border', () => {

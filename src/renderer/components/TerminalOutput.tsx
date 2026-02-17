@@ -1691,7 +1691,7 @@ export const TerminalOutput = memo(
 						style={{
 							backgroundColor: theme.colors.accent,
 							color: theme.colors.accentForeground,
-							textShadow: '0 1px 2px rgba(0, 0, 0, 0.3)',
+							textShadow: `0 1px 2px ${theme.colors.shadow}`,
 						}}
 					>
 						Copied to Clipboard

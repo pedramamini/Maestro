@@ -1580,7 +1580,7 @@ export function ProcessMonitor(props: ProcessMonitorProps) {
 			{killConfirmProcessId && (
 				<div
 					className="fixed inset-0 flex items-center justify-center z-[10000]"
-					style={{ backgroundColor: 'rgba(0,0,0,0.5)' }}
+					style={{ backgroundColor: theme.colors.overlay }}
 					onClick={() => setKillConfirmProcessId(null)}
 				>
 					<div
