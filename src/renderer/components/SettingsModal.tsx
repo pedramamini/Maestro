@@ -1675,28 +1675,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								theme={theme}
 							/>
 
-							{/* Automatic Tab Naming */}
-							<SettingCheckbox
-								icon={Tag}
-								sectionLabel="Automatic Tab Naming"
-								title="Automatically name tabs based on first message"
-								description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
-								checked={automaticTabNamingEnabled}
-								onChange={setAutomaticTabNamingEnabled}
-								theme={theme}
-							/>
-
-							{/* Auto-scroll AI Output */}
-							<SettingCheckbox
-								icon={ArrowDownToLine}
-								sectionLabel="Auto-scroll AI Output"
-								title="Auto-scroll AI output"
-								description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
-								checked={props.autoScrollAiMode}
-								onChange={props.setAutoScrollAiMode}
-								theme={theme}
-							/>
-
 							{/* Default Thinking Toggle - Three states: Off, On, Sticky */}
 							<div>
 								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
@@ -1730,6 +1708,28 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									/>
 								</div>
 							</div>
+
+							{/* Automatic Tab Naming */}
+							<SettingCheckbox
+								icon={Tag}
+								sectionLabel="Automatic Tab Naming"
+								title="Automatically name tabs based on first message"
+								description="When you send your first message to a new tab, an AI will analyze it and generate a descriptive tab name. The naming request runs in parallel and leaves no history."
+								checked={automaticTabNamingEnabled}
+								onChange={setAutomaticTabNamingEnabled}
+								theme={theme}
+							/>
+
+							{/* Auto-scroll AI Output */}
+							<SettingCheckbox
+								icon={ArrowDownToLine}
+								sectionLabel="Auto-scroll AI Output"
+								title="Auto-scroll AI output"
+								description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
+								checked={props.autoScrollAiMode}
+								onChange={props.setAutoScrollAiMode}
+								theme={theme}
+							/>
 
 							{/* Sleep Prevention */}
 							<div>
