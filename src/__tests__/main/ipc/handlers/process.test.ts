@@ -102,7 +102,9 @@ vi.mock('../../../../main/utils/ssh-command-builder', () => ({
 
 		// Build the stdin script that would be sent to bash
 		const scriptLines: string[] = [];
-		scriptLines.push('export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"');
+		scriptLines.push(
+			'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"'
+		);
 
 		if (remoteOptions.cwd) {
 			scriptLines.push(`cd '${remoteOptions.cwd}' || exit 1`);
@@ -115,7 +117,8 @@ vi.mock('../../../../main/utils/ssh-command-builder', () => ({
 		}
 
 		// Build command with args
-		const cmdWithArgs = `${remoteOptions.command} ${remoteOptions.args.map((a: string) => `'${a}'`).join(' ')}`.trim();
+		const cmdWithArgs =
+			`${remoteOptions.command} ${remoteOptions.args.map((a: string) => `'${a}'`).join(' ')}`.trim();
 		scriptLines.push(`exec ${cmdWithArgs}`);
 
 		let stdinScript = scriptLines.join('\n') + '\n';
@@ -1311,7 +1314,8 @@ describe('process IPC handlers', () => {
 			});
 
 			// Verify buildSshCommandWithStdin was called with stream-json stdinInput containing images
-			const { buildSshCommandWithStdin: mockBuildSsh } = await import('../../../../main/utils/ssh-command-builder');
+			const { buildSshCommandWithStdin: mockBuildSsh } =
+				await import('../../../../main/utils/ssh-command-builder');
 			const sshCallArgs = vi.mocked(mockBuildSsh).mock.calls[0][1];
 
 			// stdinInput should be a stream-json message (not raw prompt text)
@@ -1363,7 +1367,8 @@ describe('process IPC handlers', () => {
 			});
 
 			// Verify buildSshCommandWithStdin was called with images and imageArgs
-			const { buildSshCommandWithStdin: mockBuildSsh } = await import('../../../../main/utils/ssh-command-builder');
+			const { buildSshCommandWithStdin: mockBuildSsh } =
+				await import('../../../../main/utils/ssh-command-builder');
 			const sshCallArgs = vi.mocked(mockBuildSsh).mock.calls[0][1];
 
 			// images should be passed through to the SSH builder
@@ -1410,7 +1415,8 @@ describe('process IPC handlers', () => {
 				},
 			});
 
-			const { buildSshCommandWithStdin: mockBuildSsh } = await import('../../../../main/utils/ssh-command-builder');
+			const { buildSshCommandWithStdin: mockBuildSsh } =
+				await import('../../../../main/utils/ssh-command-builder');
 			const sshCallArgs = vi.mocked(mockBuildSsh).mock.calls[0][1];
 
 			// images and imageArgs should NOT be passed (they're in the stream-json stdinInput)
@@ -1452,7 +1458,8 @@ describe('process IPC handlers', () => {
 				},
 			});
 
-			const { buildSshCommandWithStdin: mockBuildSsh } = await import('../../../../main/utils/ssh-command-builder');
+			const { buildSshCommandWithStdin: mockBuildSsh } =
+				await import('../../../../main/utils/ssh-command-builder');
 			const sshCallArgs = vi.mocked(mockBuildSsh).mock.calls[0][1];
 
 			// stdinInput should be the raw prompt, not stream-json
@@ -1462,6 +1469,112 @@ describe('process IPC handlers', () => {
 			// No images or imageArgs
 			expect(sshCallArgs.images).toBeUndefined();
 			expect(sshCallArgs.imageArgs).toBeUndefined();
+		});
+
+		it('should merge globalShellEnvVars with effectiveCustomEnvVars when passing to SSH handler', async () => {
+			// PHASE 4 VERIFICATION: Ensure SSH handler merges global env vars with session custom env vars
+			// This test verifies that globalShellEnvVars are properly passed to buildSshCommandWithStdin
+			// where they are merged with effectiveCustomEnvVars
+			const mockAgent = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				binaryName: 'claude',
+				requiresPty: false,
+				capabilities: {
+					supportsStreamJsonInput: true,
+				},
+			};
+
+			// Mock applyAgentConfigOverrides to return session-level custom env vars
+			const { applyAgentConfigOverrides } = await import('../../../../main/utils/agent-args');
+			vi.mocked(applyAgentConfigOverrides).mockReturnValue({
+				args: ['--print'],
+				modelSource: 'none',
+				customArgsSource: 'none',
+				customEnvSource: 'session',
+				effectiveCustomEnvVars: {
+					SESSION_API_KEY: 'session-key-placeholder',
+					DEBUG_MODE: 'debug_override_from_session', // DUPLICATE: also in global
+				},
+			});
+
+			mockAgentDetector.getAgent.mockResolvedValue(mockAgent);
+
+			// Mock settings to return both global and session SSH config
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'sshRemotes') return [mockSshRemote];
+				if (key === 'shellEnvVars') {
+					// Global environment variables set by user in Settings
+					// Using non-secret placeholders instead of literal secrets
+					return {
+						GLOBAL_KEY_PLACEHOLDER: 'global_value_1',
+						PROXY_URL_PLACEHOLDER: 'proxy_value_default',
+						DEBUG_MODE: 'global_debug_setting', // DUPLICATE: also in session to test override
+					};
+				}
+				return defaultValue;
+			});
+
+			mockProcessManager.spawn.mockReturnValue({ pid: 12345, success: true });
+
+			const handler = handlers.get('process:spawn');
+			await handler!({} as any, {
+				sessionId: 'session-with-globals',
+				toolType: 'claude-code',
+				cwd: '/home/devuser/project',
+				command: 'claude',
+				args: ['--print'],
+				prompt: 'Hello from SSH',
+				// Session-level custom env vars - includes duplicate key to test override
+				sessionCustomEnvVars: {
+					SESSION_API_KEY: 'session-key-placeholder',
+					DEBUG_MODE: 'debug_override_from_session', // DUPLICATE: overrides global value
+				},
+				// Session-level SSH config
+				sessionSshRemoteConfig: {
+					enabled: true,
+					remoteId: 'remote-1',
+				},
+			});
+
+			// Verify buildSshCommandWithStdin was called with merged env vars
+			const { buildSshCommandWithStdin: mockBuildSsh } =
+				await import('../../../../main/utils/ssh-command-builder');
+			const buildSshCalls = vi.mocked(mockBuildSsh).mock.calls;
+			expect(buildSshCalls.length).toBeGreaterThan(0);
+
+			const lastCall = buildSshCalls[buildSshCalls.length - 1];
+			const remoteOptions = lastCall[1];
+
+			// 1. Verify env parameter contains both global and session vars
+			expect(remoteOptions.env).toBeDefined();
+			if (remoteOptions.env) {
+				expect(remoteOptions.env).toEqual(
+					expect.objectContaining({
+						GLOBAL_KEY_PLACEHOLDER: 'global_value_1',
+						PROXY_URL_PLACEHOLDER: 'proxy_value_default',
+						DEBUG_MODE: 'debug_override_from_session', // SESSION override of global
+						SESSION_API_KEY: 'session-key-placeholder',
+					})
+				);
+
+				// 2. Session vars should override global vars if same key exists
+				// DEBUG_MODE appears in both global and session - session should win
+				expect(remoteOptions.env.DEBUG_MODE).toBe('debug_override_from_session');
+				expect(remoteOptions.env.SESSION_API_KEY).toBe('session-key-placeholder');
+			}
+
+			// 3. Verify stdin script contains the merged env exports
+			const spawnCall = mockProcessManager.spawn.mock.calls[0][0];
+			expect(spawnCall.sshStdinScript).toContain('GLOBAL_KEY_PLACEHOLDER=');
+			expect(spawnCall.sshStdinScript).toContain('PROXY_URL_PLACEHOLDER=');
+			expect(spawnCall.sshStdinScript).toContain('DEBUG_MODE=');
+			expect(spawnCall.sshStdinScript).toContain('SESSION_API_KEY=');
+
+			// 4. Verify precedence: session vars are applied after global vars (last value wins)
+			// The stdinScript should have DEBUG_MODE with session override value and SESSION_API_KEY with session value
+			expect(spawnCall.sshStdinScript).toMatch(/export DEBUG_MODE=.*debug_override_from_session/);
+			expect(spawnCall.sshStdinScript).toMatch(/export SESSION_API_KEY=.*session-key-placeholder/);
 		});
 
 		it('should fall back to config.command when agent.binaryName is not available', async () => {

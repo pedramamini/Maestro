@@ -567,7 +567,8 @@ export function AgentConfigPanel({
 					</button>
 				</div>
 				<p className="text-xs opacity-50 mt-2">
-					Environment variables passed to all calls to this agent
+					Agent-specific environment variables (overrides global environment variables from
+					Settings). These are passed to all calls to this agent.
 				</p>
 			</div>
 

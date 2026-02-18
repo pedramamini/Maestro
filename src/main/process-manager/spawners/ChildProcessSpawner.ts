@@ -63,6 +63,7 @@ export class ChildProcessSpawner {
 			promptArgs,
 			contextWindow,
 			customEnvVars,
+			shellEnvVars,
 			noPromptSeparator,
 			sendPromptViaStdin,
 			sendPromptViaStdinRaw,
@@ -208,7 +209,19 @@ export class ChildProcessSpawner {
 		try {
 			// Build environment
 			const isResuming = finalArgs.includes('--resume') || finalArgs.includes('--session');
-			const env = buildChildProcessEnv(customEnvVars, isResuming);
+			const env = buildChildProcessEnv(customEnvVars, isResuming, shellEnvVars);
+
+			// Log environment variable application for troubleshooting
+			if (shellEnvVars && Object.keys(shellEnvVars).length > 0) {
+				const globalVarKeys = Object.keys(shellEnvVars);
+				logger.debug('[ProcessManager] Applying global environment variables', 'ProcessManager', {
+					sessionId: config.sessionId,
+					globalVarCount: globalVarKeys.length,
+					globalVarKeys: globalVarKeys.slice(0, 10), // First 10 keys for visibility
+					hasCustomVars: !!(customEnvVars && Object.keys(customEnvVars).length > 0),
+					customVarCount: customEnvVars ? Object.keys(customEnvVars).length : 0,
+				});
+			}
 
 			logger.debug('[ProcessManager] About to spawn child process', 'ProcessManager', {
 				command,

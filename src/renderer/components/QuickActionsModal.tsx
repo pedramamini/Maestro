@@ -646,6 +646,15 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 			},
 		},
 		{
+			id: 'configureEnvVars',
+			label: 'Configure Global Environment Variables',
+			action: () => {
+				setSettingsModalOpen(true);
+				setSettingsTab('general');
+				setQuickActionOpen(false);
+			},
+		},
+		{
 			id: 'shortcuts',
 			label: 'View Shortcuts',
 			shortcut: shortcuts.help,

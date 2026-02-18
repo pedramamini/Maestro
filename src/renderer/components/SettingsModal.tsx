@@ -35,6 +35,7 @@ import {
 	User,
 	ArrowDownToLine,
 	Clapperboard,
+	HelpCircle,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -93,15 +94,50 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 		}));
 	});
 	const [nextId, setNextId] = useState(Object.keys(envVars).length);
+	const [validationErrors, setValidationErrors] = useState<Record<number, string>>({});
+
+	// Validate environment variable format
+	const validateEntry = (entry: EnvVarEntry): string | null => {
+		if (!entry.key.trim()) {
+			return null; // Empty keys are OK (will be ignored)
+		}
+		// Check for valid variable name format (alphanumeric and underscore)
+		if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.key)) {
+			return `Invalid variable name: only letters, numbers, and underscores allowed and must not start with a number.`;
+		}
+		// Check if value contains special characters that might need quoting
+		if (
+			entry.value &&
+			/[&|;`$<>()]/.test(entry.value) &&
+			!entry.value.startsWith('"') &&
+			!entry.value.startsWith("'")
+		) {
+			return `Invalid value: contains disallowed special characters; quote or escape them if you intend to include them.`;
+		}
+		return null;
+	};
 
 	// Sync entries back to parent when they change (but debounced to avoid focus issues)
 	const commitChanges = (newEntries: EnvVarEntry[]) => {
 		const newEnvVars: Record<string, string> = {};
+		const errors: Record<number, string> = {};
+
+		// Collect all errors first
 		newEntries.forEach((entry) => {
-			if (entry.key.trim()) {
+			const error = validateEntry(entry);
+			if (error) {
+				errors[entry.id] = error;
+			}
+		});
+
+		// Only add valid entries to newEnvVars
+		newEntries.forEach((entry) => {
+			if (!errors[entry.id] && entry.key.trim()) {
 				newEnvVars[entry.key] = entry.value;
 			}
 		});
+
+		setValidationErrors(errors);
 		setEnvVars(newEnvVars);
 	};
 
@@ -167,37 +203,55 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 		<div>
 			<label className="block text-xs opacity-60 mb-1">Environment Variables (optional)</label>
 			<div className="space-y-2">
-				{entries.map((entry) => (
-					<div key={entry.id} className="flex gap-2 items-center">
-						<input
-							type="text"
-							value={entry.key}
-							onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
-							placeholder="VARIABLE"
-							className="flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono"
-							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-						/>
-						<span className="text-xs" style={{ color: theme.colors.textDim }}>
-							=
-						</span>
-						<input
-							type="text"
-							value={entry.value}
-							onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
-							placeholder="value"
-							className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
-							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-						/>
-						<button
-							onClick={() => removeEntry(entry.id)}
-							className="p-2 rounded hover:bg-white/10 transition-colors"
-							title="Remove variable"
-							style={{ color: theme.colors.textDim }}
-						>
-							<Trash2 className="w-3 h-3" />
-						</button>
-					</div>
-				))}
+				{entries.map((entry) => {
+					const error = validationErrors[entry.id];
+					return (
+						<div key={entry.id}>
+							<div className="flex gap-2 items-center">
+								<input
+									type="text"
+									value={entry.key}
+									onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
+									placeholder="VARIABLE"
+									className={`flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono ${
+										entry.key.trim() &&
+										!validateEntry({ id: entry.id, key: entry.key, value: entry.value })
+											? ''
+											: ''
+									}`}
+									style={{
+										borderColor: error ? '#ef4444' : theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+								/>
+								<span className="text-xs" style={{ color: theme.colors.textDim }}>
+									=
+								</span>
+								<input
+									type="text"
+									value={entry.value}
+									onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
+									placeholder="value"
+									className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
+									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+								/>
+								<button
+									onClick={() => removeEntry(entry.id)}
+									className="p-2 rounded hover:bg-white/10 transition-colors"
+									title="Remove variable"
+									style={{ color: theme.colors.textDim }}
+								>
+									<Trash2 className="w-3 h-3" />
+								</button>
+							</div>
+							{error && (
+								<p className="text-xs mt-1 px-2" style={{ color: '#ef4444' }}>
+									⚠ {error}
+								</p>
+							)}
+						</div>
+					);
+				})}
 				<button
 					onClick={addEntry}
 					className="flex items-center gap-1 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
@@ -207,9 +261,16 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 					Add Variable
 				</button>
 			</div>
-			<p className="text-xs opacity-50 mt-1">
-				Environment variables passed to every shell session.
-			</p>
+			<div className="mt-2 space-y-1">
+				<p className="text-xs opacity-50">
+					Environment variables passed to all terminal sessions and AI agent processes.
+				</p>
+				{Object.keys(envVars).length > 0 && (
+					<p className="text-xs opacity-60">
+						✓ Valid ({Object.keys(envVars).length} variables loaded)
+					</p>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -1428,7 +1489,37 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</p>
 										</div>
 
-										{/* Shell Environment Variables */}
+										{/* Global Environment Variables */}
+										<div className="flex items-start gap-2 mb-2">
+											<div className="flex-1">
+												<p className="text-xs opacity-50">
+													<strong>Global Environment Variables</strong> apply to all terminal
+													sessions and AI agent processes. Format: KEY=VALUE (one per line).
+													Variables with special characters should be quoted. Agent-specific
+													settings can override these values. Typical use cases: API keys, proxy
+													settings, custom tool paths.
+												</p>
+											</div>
+											<div
+												className="group relative flex-shrink-0 mt-0.5 outline-none"
+												tabIndex={0}
+												title="Environment variables configured here are available to all terminal sessions, all AI agent processes (Claude, OpenCode, etc.), and any spawned child processes. Agent-specific settings can override these values."
+											>
+												<HelpCircle
+													className="w-4 h-4 cursor-help"
+													style={{ color: theme.colors.textDim }}
+												/>
+												<div className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal">
+													<p className="mb-1 font-semibold">Environment variables apply to:</p>
+													<ul className="list-disc list-inside space-y-0.5">
+														<li>All terminal sessions</li>
+														<li>All AI agent processes (Claude, OpenCode, etc.)</li>
+														<li>Any spawned child processes</li>
+													</ul>
+													<p className="mt-1">Agent-specific settings can override these values.</p>
+												</div>
+											</div>
+										</div>
 										<EnvVarsEditor
 											envVars={props.shellEnvVars}
 											setEnvVars={props.setShellEnvVars}
@@ -2180,8 +2271,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											Settings folder
 										</p>
 										<p className="text-xs opacity-60 mt-0.5">
-											Choose where Maestro stores settings, sessions, and groups. Use a synced
-											folder (iCloud Drive, Dropbox, OneDrive) to share across devices.
+											Choose where Maestro stores settings, sessions, and groups (including global
+											environment variables, agents, and configurations). Use a synced folder
+											(iCloud Drive, Dropbox, OneDrive) to share across devices.
 										</p>
 										<p className="text-xs opacity-50 mt-1 italic">
 											Note: Only run Maestro on one device at a time to avoid sync conflicts.
@@ -2452,8 +2544,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										theme={theme}
 									/>
 									<p className="text-xs opacity-50 mt-2">
-										Position your messages on the left or right side of the chat.
-										AI responses appear on the opposite side.
+										Position your messages on the left or right side of the chat. AI responses
+										appear on the opposite side.
 									</p>
 								</div>
 							)}
@@ -3005,9 +3097,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									Encore Features
 								</h3>
 								<p className="text-xs" style={{ color: theme.colors.textDim }}>
-									Optional features that extend Maestro's capabilities. Enable the ones you want. Disabled features
-									are completely hidden from shortcuts, menus, and the command palette. Contributors building new
-									features should consider gating them here to keep the core experience focused.
+									Optional features that extend Maestro's capabilities. Enable the ones you want.
+									Disabled features are completely hidden from shortcuts, menus, and the command
+									palette. Contributors building new features should consider gating them here to
+									keep the core experience focused.
 								</p>
 							</div>
 
@@ -3015,17 +3108,33 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<div
 								className="rounded-lg border"
 								style={{
-									borderColor: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.border,
-									backgroundColor: encoreFeatures.directorNotes ? `${theme.colors.accent}08` : 'transparent',
+									borderColor: encoreFeatures.directorNotes
+										? theme.colors.accent
+										: theme.colors.border,
+									backgroundColor: encoreFeatures.directorNotes
+										? `${theme.colors.accent}08`
+										: 'transparent',
 								}}
 							>
 								{/* Feature Toggle Header */}
 								<button
 									className="w-full flex items-center justify-between p-4 text-left"
-									onClick={() => setEncoreFeatures({ ...encoreFeatures, directorNotes: !encoreFeatures.directorNotes })}
+									onClick={() =>
+										setEncoreFeatures({
+											...encoreFeatures,
+											directorNotes: !encoreFeatures.directorNotes,
+										})
+									}
 								>
 									<div className="flex items-center gap-3">
-										<Clapperboard className="w-5 h-5" style={{ color: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.textDim }} />
+										<Clapperboard
+											className="w-5 h-5"
+											style={{
+												color: encoreFeatures.directorNotes
+													? theme.colors.accent
+													: theme.colors.textDim,
+											}}
+										/>
 										<div>
 											<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
 												Director's Notes
@@ -3037,285 +3146,351 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									</div>
 									<div
 										className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.directorNotes ? '' : 'opacity-50'}`}
-										style={{ backgroundColor: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.border }}
+										style={{
+											backgroundColor: encoreFeatures.directorNotes
+												? theme.colors.accent
+												: theme.colors.border,
+										}}
 									>
 										<div
 											className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-											style={{ transform: encoreFeatures.directorNotes ? 'translateX(22px)' : 'translateX(2px)' }}
+											style={{
+												transform: encoreFeatures.directorNotes
+													? 'translateX(22px)'
+													: 'translateX(2px)',
+											}}
 										/>
 									</div>
 								</button>
 
 								{/* Director's Notes Settings (shown when enabled) */}
-								{encoreFeatures.directorNotes && (() => {
-									const dnAvailableTiles = AGENT_TILES.filter((tile) => {
-										if (!tile.supported) return false;
-										return dnDetectedAgents.some((a: AgentConfig) => a.id === tile.id);
-									});
-									const dnSelectedAgentConfig = dnDetectedAgents.find((a) => a.id === directorNotesSettings.provider);
-									const dnSelectedTile = AGENT_TILES.find((t) => t.id === directorNotesSettings.provider);
-									const dnHasCustomization = dnCustomPath || dnCustomArgs || Object.keys(dnCustomEnvVars).length > 0;
-
-									const handleDnAgentChange = (agentId: ToolType) => {
-										setDirectorNotesSettings({
-											...directorNotesSettings,
-											provider: agentId,
-											customPath: undefined,
-											customArgs: undefined,
-											customEnvVars: undefined,
+								{encoreFeatures.directorNotes &&
+									(() => {
+										const dnAvailableTiles = AGENT_TILES.filter((tile) => {
+											if (!tile.supported) return false;
+											return dnDetectedAgents.some((a: AgentConfig) => a.id === tile.id);
 										});
-										setDnCustomPath('');
-										setDnCustomArgs('');
-										setDnCustomEnvVars({});
-										setDnAgentConfig({});
-										dnAgentConfigRef.current = {};
-										if (dnIsConfigExpanded) {
-											window.maestro.agents.getConfig(agentId).then((config) => {
-												setDnAgentConfig(config || {});
-												dnAgentConfigRef.current = config || {};
+										const dnSelectedAgentConfig = dnDetectedAgents.find(
+											(a) => a.id === directorNotesSettings.provider
+										);
+										const dnSelectedTile = AGENT_TILES.find(
+											(t) => t.id === directorNotesSettings.provider
+										);
+										const dnHasCustomization =
+											dnCustomPath || dnCustomArgs || Object.keys(dnCustomEnvVars).length > 0;
+
+										const handleDnAgentChange = (agentId: ToolType) => {
+											setDirectorNotesSettings({
+												...directorNotesSettings,
+												provider: agentId,
+												customPath: undefined,
+												customArgs: undefined,
+												customEnvVars: undefined,
 											});
-											const agent = dnDetectedAgents.find((a) => a.id === agentId);
-											if (agent?.capabilities?.supportsModelSelection) {
-												setDnLoadingModels(true);
-												window.maestro.agents.getModels(agentId).then((models) => {
-													setDnAvailableModels(models);
-												}).catch(() => {}).finally(() => setDnLoadingModels(false));
-											}
-										}
-									};
-
-									const handleDnRefreshAgent = async () => {
-										setDnRefreshingAgent(true);
-										try {
-											const agents = await window.maestro.agents.detect();
-											const available = agents.filter((a: AgentConfig) => a.available && !a.hidden);
-											setDnDetectedAgents(available);
-										} finally {
-											setDnRefreshingAgent(false);
-										}
-									};
-
-									const handleDnRefreshModels = async () => {
-										if (!directorNotesSettings.provider) return;
-										setDnLoadingModels(true);
-										try {
-											const models = await window.maestro.agents.getModels(directorNotesSettings.provider, true);
-											setDnAvailableModels(models);
-										} catch (err) {
-											console.error('Failed to refresh models:', err);
-										} finally {
-											setDnLoadingModels(false);
-										}
-									};
-
-									const persistDnCustomConfig = () => {
-										setDirectorNotesSettings({
-											...directorNotesSettings,
-											customPath: dnCustomPath || undefined,
-											customArgs: dnCustomArgs || undefined,
-											customEnvVars: Object.keys(dnCustomEnvVars).length > 0 ? dnCustomEnvVars : undefined,
-										});
-									};
-
-									return (
-									<div className="px-4 pb-4 space-y-6 border-t" style={{ borderColor: theme.colors.border }}>
-										{/* Provider Selection */}
-										<div className="pt-4">
-											<label
-												className="block text-xs font-bold opacity-70 uppercase mb-2"
-												style={{ color: theme.colors.textMain }}
-											>
-												Synopsis Provider
-											</label>
-
-											{dnIsDetecting ? (
-												<div className="flex items-center gap-2 py-2">
-													<div
-														className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-														style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
-													/>
-													<span className="text-sm" style={{ color: theme.colors.textDim }}>
-														Detecting agents...
-													</span>
-												</div>
-											) : dnAvailableTiles.length === 0 ? (
-												<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
-													No agents available. Please install Claude Code, OpenCode, Codex, or Factory Droid.
-												</div>
-											) : (
-												<div className="flex items-center gap-2">
-													<div className="relative flex-1">
-														<select
-															value={directorNotesSettings.provider}
-															onChange={(e) => handleDnAgentChange(e.target.value as ToolType)}
-															className="w-full px-3 py-2 pr-10 rounded-lg border outline-none appearance-none cursor-pointer text-sm"
-															style={{
-																backgroundColor: theme.colors.bgMain,
-																borderColor: theme.colors.border,
-																color: theme.colors.textMain,
-															}}
-															aria-label="Select synopsis provider agent"
-														>
-															{dnAvailableTiles.map((tile) => {
-																const isBeta = tile.id === 'codex' || tile.id === 'opencode' || tile.id === 'factory-droid';
-																return (
-																	<option key={tile.id} value={tile.id}>
-																		{tile.name}{isBeta ? ' (Beta)' : ''}
-																	</option>
-																);
-															})}
-														</select>
-														<ChevronDown
-															className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-															style={{ color: theme.colors.textDim }}
-														/>
-													</div>
-
-													<button
-														onClick={() => setDnIsConfigExpanded((prev) => !prev)}
-														className="flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors hover:bg-white/5"
-														style={{
-															borderColor: dnIsConfigExpanded ? theme.colors.accent : theme.colors.border,
-															color: dnIsConfigExpanded ? theme.colors.accent : theme.colors.textDim,
-															backgroundColor: dnIsConfigExpanded ? `${theme.colors.accent}10` : 'transparent',
-														}}
-														title="Customize provider settings"
-													>
-														<Settings className="w-4 h-4" />
-														<span className="text-sm">Customize</span>
-														{dnHasCustomization && (
-															<span
-																className="w-2 h-2 rounded-full"
-																style={{ backgroundColor: theme.colors.accent }}
-															/>
-														)}
-													</button>
-												</div>
-											)}
-
-											{dnIsConfigExpanded && dnSelectedAgentConfig && dnSelectedTile && (
-												<div
-													className="mt-3 p-4 rounded-lg border"
-													style={{
-														backgroundColor: theme.colors.bgActivity,
-														borderColor: theme.colors.border,
-													}}
-												>
-													<div className="flex items-center justify-between mb-3">
-														<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
-															{dnSelectedTile.name} Configuration
-														</span>
-														{dnHasCustomization && (
-															<div className="flex items-center gap-1">
-																<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
-																<span className="text-xs" style={{ color: theme.colors.success }}>
-																	Customized
-																</span>
-															</div>
-														)}
-													</div>
-													<AgentConfigPanel
-														theme={theme}
-														agent={dnSelectedAgentConfig}
-														customPath={dnCustomPath}
-														onCustomPathChange={setDnCustomPath}
-														onCustomPathBlur={persistDnCustomConfig}
-														onCustomPathClear={() => {
-															setDnCustomPath('');
-															setDirectorNotesSettings({ ...directorNotesSettings, customPath: undefined });
-														}}
-														customArgs={dnCustomArgs}
-														onCustomArgsChange={setDnCustomArgs}
-														onCustomArgsBlur={persistDnCustomConfig}
-														onCustomArgsClear={() => {
-															setDnCustomArgs('');
-															setDirectorNotesSettings({ ...directorNotesSettings, customArgs: undefined });
-														}}
-														customEnvVars={dnCustomEnvVars}
-														onEnvVarKeyChange={(oldKey, newKey, value) => {
-															const newVars = { ...dnCustomEnvVars };
-															delete newVars[oldKey];
-															newVars[newKey] = value;
-															setDnCustomEnvVars(newVars);
-														}}
-														onEnvVarValueChange={(key, value) => {
-															setDnCustomEnvVars({ ...dnCustomEnvVars, [key]: value });
-														}}
-														onEnvVarRemove={(key) => {
-															const newVars = { ...dnCustomEnvVars };
-															delete newVars[key];
-															setDnCustomEnvVars(newVars);
-														}}
-														onEnvVarAdd={() => {
-															let newKey = 'NEW_VAR';
-															let counter = 1;
-															while (dnCustomEnvVars[newKey]) {
-																newKey = `NEW_VAR_${counter}`;
-																counter++;
-															}
-															setDnCustomEnvVars({ ...dnCustomEnvVars, [newKey]: '' });
-														}}
-														onEnvVarsBlur={persistDnCustomConfig}
-														agentConfig={dnAgentConfig}
-														onConfigChange={(key, value) => {
-															const newConfig = { ...dnAgentConfig, [key]: value };
-															setDnAgentConfig(newConfig);
-															dnAgentConfigRef.current = newConfig;
-														}}
-														onConfigBlur={async () => {
-															if (directorNotesSettings.provider) {
-																await window.maestro.agents.setConfig(directorNotesSettings.provider, dnAgentConfigRef.current);
-															}
-														}}
-														availableModels={dnAvailableModels}
-														loadingModels={dnLoadingModels}
-														onRefreshModels={handleDnRefreshModels}
-														onRefreshAgent={handleDnRefreshAgent}
-														refreshingAgent={dnRefreshingAgent}
-														compact
-														showBuiltInEnvVars
-													/>
-												</div>
-											)}
-
-											<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-												The AI agent used to generate synopsis summaries
-											</p>
-										</div>
-
-										{/* Default Lookback Period */}
-										<div>
-											<label className="block text-xs font-bold mb-2" style={{ color: theme.colors.textMain }}>
-												Default Lookback Period: {directorNotesSettings.defaultLookbackDays} days
-											</label>
-											<input
-												type="range"
-												min={1}
-												max={90}
-												value={directorNotesSettings.defaultLookbackDays}
-												onChange={(e) =>
-													setDirectorNotesSettings({
-														...directorNotesSettings,
-														defaultLookbackDays: parseInt(e.target.value, 10),
-													})
+											setDnCustomPath('');
+											setDnCustomArgs('');
+											setDnCustomEnvVars({});
+											setDnAgentConfig({});
+											dnAgentConfigRef.current = {};
+											if (dnIsConfigExpanded) {
+												window.maestro.agents.getConfig(agentId).then((config) => {
+													setDnAgentConfig(config || {});
+													dnAgentConfigRef.current = config || {};
+												});
+												const agent = dnDetectedAgents.find((a) => a.id === agentId);
+												if (agent?.capabilities?.supportsModelSelection) {
+													setDnLoadingModels(true);
+													window.maestro.agents
+														.getModels(agentId)
+														.then((models) => {
+															setDnAvailableModels(models);
+														})
+														.catch(() => {})
+														.finally(() => setDnLoadingModels(false));
 												}
-												className="w-full"
-											/>
-											<div className="flex justify-between text-[10px] mt-1" style={{ color: theme.colors.textDim }}>
-												<span>1 day</span>
-												<span>7</span>
-												<span>14</span>
-												<span>30</span>
-												<span>60</span>
-												<span>90 days</span>
+											}
+										};
+
+										const handleDnRefreshAgent = async () => {
+											setDnRefreshingAgent(true);
+											try {
+												const agents = await window.maestro.agents.detect();
+												const available = agents.filter(
+													(a: AgentConfig) => a.available && !a.hidden
+												);
+												setDnDetectedAgents(available);
+											} finally {
+												setDnRefreshingAgent(false);
+											}
+										};
+
+										const handleDnRefreshModels = async () => {
+											if (!directorNotesSettings.provider) return;
+											setDnLoadingModels(true);
+											try {
+												const models = await window.maestro.agents.getModels(
+													directorNotesSettings.provider,
+													true
+												);
+												setDnAvailableModels(models);
+											} catch (err) {
+												console.error('Failed to refresh models:', err);
+											} finally {
+												setDnLoadingModels(false);
+											}
+										};
+
+										const persistDnCustomConfig = () => {
+											setDirectorNotesSettings({
+												...directorNotesSettings,
+												customPath: dnCustomPath || undefined,
+												customArgs: dnCustomArgs || undefined,
+												customEnvVars:
+													Object.keys(dnCustomEnvVars).length > 0 ? dnCustomEnvVars : undefined,
+											});
+										};
+
+										return (
+											<div
+												className="px-4 pb-4 space-y-6 border-t"
+												style={{ borderColor: theme.colors.border }}
+											>
+												{/* Provider Selection */}
+												<div className="pt-4">
+													<label
+														className="block text-xs font-bold opacity-70 uppercase mb-2"
+														style={{ color: theme.colors.textMain }}
+													>
+														Synopsis Provider
+													</label>
+
+													{dnIsDetecting ? (
+														<div className="flex items-center gap-2 py-2">
+															<div
+																className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+																style={{
+																	borderColor: theme.colors.accent,
+																	borderTopColor: 'transparent',
+																}}
+															/>
+															<span className="text-sm" style={{ color: theme.colors.textDim }}>
+																Detecting agents...
+															</span>
+														</div>
+													) : dnAvailableTiles.length === 0 ? (
+														<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+															No agents available. Please install Claude Code, OpenCode, Codex, or
+															Factory Droid.
+														</div>
+													) : (
+														<div className="flex items-center gap-2">
+															<div className="relative flex-1">
+																<select
+																	value={directorNotesSettings.provider}
+																	onChange={(e) => handleDnAgentChange(e.target.value as ToolType)}
+																	className="w-full px-3 py-2 pr-10 rounded-lg border outline-none appearance-none cursor-pointer text-sm"
+																	style={{
+																		backgroundColor: theme.colors.bgMain,
+																		borderColor: theme.colors.border,
+																		color: theme.colors.textMain,
+																	}}
+																	aria-label="Select synopsis provider agent"
+																>
+																	{dnAvailableTiles.map((tile) => {
+																		const isBeta =
+																			tile.id === 'codex' ||
+																			tile.id === 'opencode' ||
+																			tile.id === 'factory-droid';
+																		return (
+																			<option key={tile.id} value={tile.id}>
+																				{tile.name}
+																				{isBeta ? ' (Beta)' : ''}
+																			</option>
+																		);
+																	})}
+																</select>
+																<ChevronDown
+																	className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+																	style={{ color: theme.colors.textDim }}
+																/>
+															</div>
+
+															<button
+																onClick={() => setDnIsConfigExpanded((prev) => !prev)}
+																className="flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors hover:bg-white/5"
+																style={{
+																	borderColor: dnIsConfigExpanded
+																		? theme.colors.accent
+																		: theme.colors.border,
+																	color: dnIsConfigExpanded
+																		? theme.colors.accent
+																		: theme.colors.textDim,
+																	backgroundColor: dnIsConfigExpanded
+																		? `${theme.colors.accent}10`
+																		: 'transparent',
+																}}
+																title="Customize provider settings"
+															>
+																<Settings className="w-4 h-4" />
+																<span className="text-sm">Customize</span>
+																{dnHasCustomization && (
+																	<span
+																		className="w-2 h-2 rounded-full"
+																		style={{ backgroundColor: theme.colors.accent }}
+																	/>
+																)}
+															</button>
+														</div>
+													)}
+
+													{dnIsConfigExpanded && dnSelectedAgentConfig && dnSelectedTile && (
+														<div
+															className="mt-3 p-4 rounded-lg border"
+															style={{
+																backgroundColor: theme.colors.bgActivity,
+																borderColor: theme.colors.border,
+															}}
+														>
+															<div className="flex items-center justify-between mb-3">
+																<span
+																	className="text-xs font-medium"
+																	style={{ color: theme.colors.textDim }}
+																>
+																	{dnSelectedTile.name} Configuration
+																</span>
+																{dnHasCustomization && (
+																	<div className="flex items-center gap-1">
+																		<Check
+																			className="w-3 h-3"
+																			style={{ color: theme.colors.success }}
+																		/>
+																		<span
+																			className="text-xs"
+																			style={{ color: theme.colors.success }}
+																		>
+																			Customized
+																		</span>
+																	</div>
+																)}
+															</div>
+															<AgentConfigPanel
+																theme={theme}
+																agent={dnSelectedAgentConfig}
+																customPath={dnCustomPath}
+																onCustomPathChange={setDnCustomPath}
+																onCustomPathBlur={persistDnCustomConfig}
+																onCustomPathClear={() => {
+																	setDnCustomPath('');
+																	setDirectorNotesSettings({
+																		...directorNotesSettings,
+																		customPath: undefined,
+																	});
+																}}
+																customArgs={dnCustomArgs}
+																onCustomArgsChange={setDnCustomArgs}
+																onCustomArgsBlur={persistDnCustomConfig}
+																onCustomArgsClear={() => {
+																	setDnCustomArgs('');
+																	setDirectorNotesSettings({
+																		...directorNotesSettings,
+																		customArgs: undefined,
+																	});
+																}}
+																customEnvVars={dnCustomEnvVars}
+																onEnvVarKeyChange={(oldKey, newKey, value) => {
+																	const newVars = { ...dnCustomEnvVars };
+																	delete newVars[oldKey];
+																	newVars[newKey] = value;
+																	setDnCustomEnvVars(newVars);
+																}}
+																onEnvVarValueChange={(key, value) => {
+																	setDnCustomEnvVars({ ...dnCustomEnvVars, [key]: value });
+																}}
+																onEnvVarRemove={(key) => {
+																	const newVars = { ...dnCustomEnvVars };
+																	delete newVars[key];
+																	setDnCustomEnvVars(newVars);
+																}}
+																onEnvVarAdd={() => {
+																	let newKey = 'NEW_VAR';
+																	let counter = 1;
+																	while (dnCustomEnvVars[newKey]) {
+																		newKey = `NEW_VAR_${counter}`;
+																		counter++;
+																	}
+																	setDnCustomEnvVars({ ...dnCustomEnvVars, [newKey]: '' });
+																}}
+																onEnvVarsBlur={persistDnCustomConfig}
+																agentConfig={dnAgentConfig}
+																onConfigChange={(key, value) => {
+																	const newConfig = { ...dnAgentConfig, [key]: value };
+																	setDnAgentConfig(newConfig);
+																	dnAgentConfigRef.current = newConfig;
+																}}
+																onConfigBlur={async () => {
+																	if (directorNotesSettings.provider) {
+																		await window.maestro.agents.setConfig(
+																			directorNotesSettings.provider,
+																			dnAgentConfigRef.current
+																		);
+																	}
+																}}
+																availableModels={dnAvailableModels}
+																loadingModels={dnLoadingModels}
+																onRefreshModels={handleDnRefreshModels}
+																onRefreshAgent={handleDnRefreshAgent}
+																refreshingAgent={dnRefreshingAgent}
+																compact
+																showBuiltInEnvVars
+															/>
+														</div>
+													)}
+
+													<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+														The AI agent used to generate synopsis summaries
+													</p>
+												</div>
+
+												{/* Default Lookback Period */}
+												<div>
+													<label
+														className="block text-xs font-bold mb-2"
+														style={{ color: theme.colors.textMain }}
+													>
+														Default Lookback Period: {directorNotesSettings.defaultLookbackDays}{' '}
+														days
+													</label>
+													<input
+														type="range"
+														min={1}
+														max={90}
+														value={directorNotesSettings.defaultLookbackDays}
+														onChange={(e) =>
+															setDirectorNotesSettings({
+																...directorNotesSettings,
+																defaultLookbackDays: parseInt(e.target.value, 10),
+															})
+														}
+														className="w-full"
+													/>
+													<div
+														className="flex justify-between text-[10px] mt-1"
+														style={{ color: theme.colors.textDim }}
+													>
+														<span>1 day</span>
+														<span>7</span>
+														<span>14</span>
+														<span>30</span>
+														<span>60</span>
+														<span>90 days</span>
+													</div>
+													<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+														How far back to look when generating notes (can be adjusted per-report)
+													</p>
+												</div>
 											</div>
-											<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-												How far back to look when generating notes (can be adjusted per-report)
-											</p>
-										</div>
-									</div>
-									);
-								})()}
+										);
+									})()}
 							</div>
 						</div>
 					)}
