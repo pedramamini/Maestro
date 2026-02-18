@@ -101,17 +101,21 @@ export class ExitHandler {
 
 		// Handle stream-json mode: emit accumulated streamed text if no result was emitted
 		// Some agents (like Factory Droid) don't send explicit "done" events, they just exit
-		if (isStreamJsonMode && !managedProcess.resultEmitted && managedProcess.streamedText) {
-			managedProcess.resultEmitted = true;
-			logger.debug(
-				'[ProcessManager] Emitting streamed text at exit (no result event)',
-				'ProcessManager',
-				{
-					sessionId,
-					streamedTextLength: managedProcess.streamedText.length,
-				}
-			);
-			this.bufferManager.emitDataBuffered(sessionId, managedProcess.streamedText);
+		// For Codex, prefer codexPendingResult (the actual agent_message) over streamedText (reasoning)
+		if (isStreamJsonMode && !managedProcess.resultEmitted) {
+			const fallbackText = managedProcess.codexPendingResult || managedProcess.streamedText;
+			if (fallbackText) {
+				managedProcess.resultEmitted = true;
+				logger.debug(
+					'[ProcessManager] Emitting streamed text at exit (no result event)',
+					'ProcessManager',
+					{
+						sessionId,
+						streamedTextLength: fallbackText.length,
+					}
+				);
+				this.bufferManager.emitDataBuffered(sessionId, fallbackText);
+			}
 		}
 
 		// Check for errors using the parser (if not already emitted)
