@@ -78,6 +78,7 @@ export interface AgentConfig {
 	available: boolean;
 	path?: string;
 	customPath?: string; // User-specified custom path (shown in UI even if not available)
+	detectedVersion?: string; // Version string detected by running `<binary> --version`
 	requiresPty?: boolean; // Whether this agent needs a pseudo-terminal
 	configOptions?: AgentConfigOption[]; // Agent-specific configuration
 	hidden?: boolean; // If true, agent is hidden from UI (internal use only)
@@ -99,12 +100,13 @@ export interface AgentConfig {
 	defaultEnvVars?: Record<string, string>; // Default environment variables for this agent (merged with user customEnvVars)
 	readOnlyEnvOverrides?: Record<string, string>; // Env var overrides applied in read-only mode (replaces keys from defaultEnvVars)
 	readOnlyCliEnforced?: boolean; // Whether the agent's CLI enforces read-only mode (false = prompt-only enforcement)
+	versionArgs?: string[]; // Args to run for version detection (e.g., ['--version'])
 }
 
 /**
  * Agent definition without runtime detection state (used for static definitions)
  */
-export type AgentDefinition = Omit<AgentConfig, 'available' | 'path' | 'capabilities'>;
+export type AgentDefinition = Omit<AgentConfig, 'available' | 'path' | 'capabilities' | 'detectedVersion'>;
 
 // ============ Agent Definitions ============
 
@@ -139,6 +141,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		resumeArgs: (sessionId: string) => ['--resume', sessionId], // Resume with session ID
 		readOnlyArgs: ['--permission-mode', 'plan'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --permission-mode plan
+		versionArgs: ['--version'],
 	},
 	{
 		id: 'codex',
@@ -162,6 +165,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		modelArgs: (modelId: string) => ['-m', modelId], // Model selection (e.g., '-m gpt-4o')
 		workingDirArgs: (dir: string) => ['-C', dir], // Set working directory
 		imageArgs: (imagePath: string) => ['-i', imagePath], // Image attachment: codex exec -i /path/to/image.png
+		versionArgs: ['--version'],
 		// Agent-specific configuration options shown in UI
 		configOptions: [
 			{
