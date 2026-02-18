@@ -423,11 +423,15 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 							agent?.capabilities?.imageResumeMode === 'prompt-embed' &&
 							config.agentSessionId;
 
+						// Merge global environment variables with session custom env vars
+						// Session vars take precedence over global vars
+						const mergedSshEnvVars = { ...globalShellEnvVars, ...(effectiveCustomEnvVars || {}) };
+
 						const sshCommand = await buildSshCommandWithStdin(sshResult.config, {
 							command: remoteCommand,
 							args: sshArgs,
 							cwd: config.cwd,
-							env: effectiveCustomEnvVars,
+							env: mergedSshEnvVars,
 							// prompt is not passed as CLI arg - it goes via stdinInput
 							stdinInput,
 							// File-based image agents (Codex, OpenCode): pass images for remote temp file creation

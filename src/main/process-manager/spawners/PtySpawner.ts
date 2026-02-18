@@ -85,8 +85,9 @@ export class PtySpawner {
 					);
 				}
 			} else {
-				// For AI agents in PTY mode: pass full env (they need NODE_PATH, etc.)
-				ptyEnv = process.env;
+				// For AI agents in PTY mode: merge global shell env vars with process env
+				// This ensures agents receive both system env vars (NODE_PATH, etc.) and global env vars
+				ptyEnv = shellEnvVars ? { ...process.env, ...shellEnvVars } : process.env;
 			}
 
 			const ptyProcess = pty.spawn(ptyCommand, ptyArgs, {
