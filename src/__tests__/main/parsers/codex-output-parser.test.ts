@@ -477,4 +477,91 @@ describe('CodexOutputParser', () => {
 			});
 		});
 	});
+
+	describe('tool name carryover (tool_call → tool_result)', () => {
+		it('should carry tool name from tool_call to subsequent tool_result', () => {
+			// Use a fresh parser instance to avoid state pollution from other tests
+			const p = new CodexOutputParser();
+
+			// First: tool_call with tool name
+			const callEvent = p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_call', tool: 'shell', args: { command: ['ls'] } },
+			}));
+			expect(callEvent?.toolName).toBe('shell');
+
+			// Then: tool_result should inherit the tool name
+			const resultEvent = p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: 'file1.txt\nfile2.txt' },
+			}));
+			expect(resultEvent?.toolName).toBe('shell');
+		});
+
+		it('should reset tool name after tool_result so it does not leak to next pair', () => {
+			const p = new CodexOutputParser();
+
+			// tool_call → tool_result pair
+			p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_call', tool: 'shell', args: {} },
+			}));
+			p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: 'ok' },
+			}));
+
+			// Next tool_result without a preceding tool_call should have no name
+			const orphanResult = p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: 'orphan' },
+			}));
+			expect(orphanResult?.toolName).toBeUndefined();
+		});
+	});
+
+	describe('tool output truncation', () => {
+		it('should truncate output exceeding 10,000 characters', () => {
+			const p = new CodexOutputParser();
+			const largeOutput = 'x'.repeat(15000);
+
+			const event = p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: largeOutput },
+			}));
+
+			const output = (event?.toolState as { output: string }).output;
+			expect(output.length).toBeLessThan(15000);
+			expect(output).toContain('... [output truncated, 15000 chars total]');
+			// First 10000 chars should be preserved
+			expect(output.startsWith('x'.repeat(10000))).toBe(true);
+		});
+
+		it('should not truncate output under 10,000 characters', () => {
+			const p = new CodexOutputParser();
+			const normalOutput = 'y'.repeat(9999);
+
+			const event = p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: normalOutput },
+			}));
+
+			const output = (event?.toolState as { output: string }).output;
+			expect(output).toBe(normalOutput);
+		});
+
+		it('should truncate byte array output exceeding limit', () => {
+			const p = new CodexOutputParser();
+			// Create a byte array that decodes to >10K chars
+			const byteArray = Array(15000).fill(65); // 'A' repeated 15000 times
+
+			const event = p.parseJsonLine(JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: byteArray },
+			}));
+
+			const output = (event?.toolState as { output: string }).output;
+			expect(output).toContain('... [output truncated, 15000 chars total]');
+		});
+	});
 });
