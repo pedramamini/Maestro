@@ -128,8 +128,10 @@ import {
 	useWorktreeHandlers,
 	// Session restoration
 	useSessionRestoration,
+	// Input keyboard handling
+	useInputKeyDown,
 } from './hooks';
-import type { TabCompletionSuggestion, TabCompletionFilter } from './hooks';
+import type { TabCompletionSuggestion } from './hooks';
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
 
@@ -6261,194 +6263,19 @@ You are taking over this conversation. Based on the context above, provide a bri
 		}
 	};
 
-	const handleInputKeyDown = (e: React.KeyboardEvent) => {
-		// Cmd+F opens output search from input field - handle first, before any modal logic
-		if (e.key === 'f' && (e.metaKey || e.ctrlKey)) {
-			e.preventDefault();
-			setOutputSearchOpen(true);
-			return;
-		}
-
-		// Handle command history modal
-		if (commandHistoryOpen) {
-			return; // Let the modal handle keys
-		}
-
-		// Handle tab completion dropdown (terminal mode only)
-		if (tabCompletionOpen && activeSession?.inputMode === 'terminal') {
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				const newIndex = Math.min(
-					selectedTabCompletionIndex + 1,
-					tabCompletionSuggestions.length - 1
-				);
-				setSelectedTabCompletionIndex(newIndex);
-				// Sync file tree to highlight the corresponding file/folder
-				syncFileTreeToTabCompletion(tabCompletionSuggestions[newIndex]);
-				return;
-			} else if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				const newIndex = Math.max(selectedTabCompletionIndex - 1, 0);
-				setSelectedTabCompletionIndex(newIndex);
-				// Sync file tree to highlight the corresponding file/folder
-				syncFileTreeToTabCompletion(tabCompletionSuggestions[newIndex]);
-				return;
-			} else if (e.key === 'Tab') {
-				e.preventDefault();
-				// Tab cycles through filter types (only in git repos, otherwise just accept)
-				if (activeSession?.isGitRepo) {
-					const filters: TabCompletionFilter[] = ['all', 'history', 'branch', 'tag', 'file'];
-					const currentIndex = filters.indexOf(tabCompletionFilter);
-					// Shift+Tab goes backwards, Tab goes forwards
-					const nextIndex = e.shiftKey
-						? (currentIndex - 1 + filters.length) % filters.length
-						: (currentIndex + 1) % filters.length;
-					setTabCompletionFilter(filters[nextIndex]);
-					setSelectedTabCompletionIndex(0);
-				} else {
-					// In non-git repos, Tab accepts the selection (like Enter)
-					if (tabCompletionSuggestions[selectedTabCompletionIndex]) {
-						setInputValue(tabCompletionSuggestions[selectedTabCompletionIndex].value);
-						syncFileTreeToTabCompletion(tabCompletionSuggestions[selectedTabCompletionIndex]);
-					}
-					setTabCompletionOpen(false);
-				}
-				return;
-			} else if (e.key === 'Enter') {
-				e.preventDefault();
-				if (tabCompletionSuggestions[selectedTabCompletionIndex]) {
-					setInputValue(tabCompletionSuggestions[selectedTabCompletionIndex].value);
-					// Final sync on acceptance
-					syncFileTreeToTabCompletion(tabCompletionSuggestions[selectedTabCompletionIndex]);
-				}
-				setTabCompletionOpen(false);
-				return;
-			} else if (e.key === 'Escape') {
-				e.preventDefault();
-				setTabCompletionOpen(false);
-				inputRef.current?.focus();
-				return;
-			}
-		}
-
-		// Handle @ mention completion dropdown (AI mode only)
-		if (atMentionOpen && activeSession?.inputMode === 'ai') {
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				setSelectedAtMentionIndex((prev) => Math.min(prev + 1, atMentionSuggestions.length - 1));
-				return;
-			} else if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				setSelectedAtMentionIndex((prev) => Math.max(prev - 1, 0));
-				return;
-			} else if (e.key === 'Tab' || e.key === 'Enter') {
-				e.preventDefault();
-				const selected = atMentionSuggestions[selectedAtMentionIndex];
-				if (selected) {
-					// Replace the @filter with the selected file path
-					const beforeAt = inputValue.substring(0, atMentionStartIndex);
-					const afterFilter = inputValue.substring(
-						atMentionStartIndex + 1 + atMentionFilter.length
-					);
-					setInputValue(beforeAt + '@' + selected.value + ' ' + afterFilter);
-				}
-				setAtMentionOpen(false);
-				setAtMentionFilter('');
-				setAtMentionStartIndex(-1);
-				return;
-			} else if (e.key === 'Escape') {
-				e.preventDefault();
-				setAtMentionOpen(false);
-				setAtMentionFilter('');
-				setAtMentionStartIndex(-1);
-				inputRef.current?.focus();
-				return;
-			}
-		}
-
-		// Handle slash command autocomplete
-		if (slashCommandOpen) {
-			const isTerminalMode = activeSession?.inputMode === 'terminal';
-			const filteredCommands = allSlashCommands.filter((cmd) => {
-				// Check if command is only available in terminal mode
-				if ('terminalOnly' in cmd && cmd.terminalOnly && !isTerminalMode) return false;
-				// Check if command is only available in AI mode
-				if ('aiOnly' in cmd && cmd.aiOnly && isTerminalMode) return false;
-				// Check if command matches input
-				return cmd.command.toLowerCase().startsWith(inputValue.toLowerCase());
-			});
-
-			if (e.key === 'ArrowDown') {
-				e.preventDefault();
-				setSelectedSlashCommandIndex((prev) => Math.min(prev + 1, filteredCommands.length - 1));
-			} else if (e.key === 'ArrowUp') {
-				e.preventDefault();
-				setSelectedSlashCommandIndex((prev) => Math.max(prev - 1, 0));
-			} else if (e.key === 'Tab' || e.key === 'Enter') {
-				// Tab or Enter fills in the command text (user can then press Enter again to execute)
-				e.preventDefault();
-				if (filteredCommands[selectedSlashCommandIndex]) {
-					setInputValue(filteredCommands[selectedSlashCommandIndex].command);
-					setSlashCommandOpen(false);
-					inputRef.current?.focus();
-				}
-			} else if (e.key === 'Escape') {
-				e.preventDefault();
-				setSlashCommandOpen(false);
-			}
-			return;
-		}
-
-		if (e.key === 'Enter') {
-			// Use the appropriate setting based on input mode
-			const currentEnterToSend =
-				activeSession?.inputMode === 'terminal' ? enterToSendTerminal : enterToSendAI;
-
-			if (currentEnterToSend && !e.shiftKey && !e.metaKey) {
-				e.preventDefault();
-				processInput();
-			} else if (!currentEnterToSend && (e.metaKey || e.ctrlKey)) {
-				e.preventDefault();
-				processInput();
-			}
-		} else if (e.key === 'Escape') {
-			e.preventDefault();
-			inputRef.current?.blur();
-			terminalOutputRef.current?.focus();
-		} else if (e.key === 'ArrowUp') {
-			// Only show command history in terminal mode, not AI mode
-			if (activeSession?.inputMode === 'terminal') {
-				e.preventDefault();
-				setCommandHistoryOpen(true);
-				setCommandHistoryFilter(inputValue);
-				setCommandHistorySelectedIndex(0);
-			}
-		} else if (e.key === 'Tab') {
-			// Always prevent default Tab behavior to avoid focus change
-			e.preventDefault();
-
-			// Tab completion in terminal mode when not showing slash commands
-			if (activeSession?.inputMode === 'terminal' && !slashCommandOpen) {
-				// Only show suggestions if there's input
-				if (inputValue.trim()) {
-					const suggestions = getTabCompletionSuggestions(inputValue);
-					if (suggestions.length > 0) {
-						// If only one suggestion, auto-complete it
-						if (suggestions.length === 1) {
-							setInputValue(suggestions[0].value);
-						} else {
-							// Show dropdown for multiple suggestions
-							setSelectedTabCompletionIndex(0);
-							setTabCompletionFilter('all'); // Reset filter when opening
-							setTabCompletionOpen(true);
-						}
-					}
-				}
-			}
-			// In AI mode, Tab is already handled by @ mention completion above
-			// We just need to prevent default here
-		}
-	};
+	// handleInputKeyDown — provided by useInputKeyDown hook (Phase 2F)
+	const { handleInputKeyDown } = useInputKeyDown({
+		inputValue,
+		setInputValue,
+		tabCompletionSuggestions,
+		atMentionSuggestions,
+		allSlashCommands,
+		syncFileTreeToTabCompletion,
+		processInput,
+		getTabCompletionSuggestions,
+		inputRef,
+		terminalOutputRef,
+	});
 
 	// Image Handlers
 	const handlePaste = (e: React.ClipboardEvent) => {

@@ -31,3 +31,7 @@ export { useAtMentionCompletion } from './useAtMentionCompletion';
 // Template variable autocomplete
 export { useTemplateAutocomplete } from './useTemplateAutocomplete';
 export type { AutocompleteState } from './useTemplateAutocomplete';
+
+// Input keyboard handling (slash commands, tab completion, @ mentions, enter-to-send)
+export { useInputKeyDown } from './useInputKeyDown';
+export type { InputKeyDownDeps, InputKeyDownReturn } from './useInputKeyDown';
