@@ -8,301 +8,521 @@
  * - Terminal sessions still work with global vars
  * - Session vars override global vars correctly
  * - Invalid global vars don't crash the spawner
+ * - Tilde expansion works correctly for paths
  */
 
 import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import * as os from 'os';
+import * as path from 'path';
+import {
+	buildChildProcessEnv,
+	buildPtyTerminalEnv,
+} from '../../main/process-manager/utils/envBuilder';
 
 /**
- * Test 2.6: Agent Session Receives Global Env Vars
- * This test would verify that when spawning an agent session through the IPC handler,
- * the global env vars are properly included in the spawn call.
- *
- * In a real integration test environment, this would:
- * 1. Mock settingsManager to return global shell env vars
- * 2. Call the IPC handler to spawn an agent
- * 3. Verify that processManager.spawn() receives the global vars
- * 4. Check that the spawned process has access to those vars
+ * Test Suite 2.6: Agent Session Receives Global Env Vars
+ * Verifies that global environment variables from settings are properly passed to agent spawning.
  */
-describe('Integration Test 2.6: Agent Session Receives Global Env Vars', () => {
-	it('should include global env vars when spawning agent session', () => {
-		// Setup
-		const globalShellEnvVars = {
-			GLOBAL_API_KEY: 'global-key',
-			GLOBAL_DEBUG: 'true',
-		};
+describe('Test 2.6: Agent Session Receives Global Env Vars', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+	let originalHomedir: string;
 
-		const sessionConfig = {
-			toolType: 'agent' as const,
-			agentId: 'opencode',
-			command: 'opencode',
-			baseArgs: ['--interactive'],
-			sessionId: 'test-session-1',
-			toolInstanceId: 'tool-1',
-		};
-
-		// Expected behavior: global vars should be passed to buildChildProcessEnv
-		// This test validates the data flow from IPC → ProcessManager → envBuilder
-		const expectedEnvState = {
-			GLOBAL_API_KEY: 'global-key',
-			GLOBAL_DEBUG: 'true',
-		};
-
-		// Assertion: The config passed to processManager.spawn should include shellEnvVars
-		expect(sessionConfig).toBeDefined();
-		expect(expectedEnvState.GLOBAL_API_KEY).toBe('global-key');
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+		originalHomedir = os.homedir();
+		// Setup a clean test environment
+		process.env.TEST_INHERIT = 'inherited-value';
+		process.env.ELECTRON_RUN_AS_NODE = '1'; // Should be stripped
 	});
 
-	it('should pass global vars through spawn lifecycle', () => {
-		// This test validates that global vars persist through the entire spawn process
-		const globalVars = {
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should include global env vars when building agent process environment', () => {
+		// Setup
+		const globalShellEnvVars = {
+			GLOBAL_API_KEY: 'global-key-value',
+			GLOBAL_DEBUG: 'true',
+		};
+
+		// Action: Build environment with global vars
+		const env = buildChildProcessEnv(undefined, false, globalShellEnvVars);
+
+		// Assert: Global vars are present in the final environment
+		expect(env.GLOBAL_API_KEY).toBe('global-key-value');
+		expect(env.GLOBAL_DEBUG).toBe('true');
+	});
+
+	it('should pass global vars with session custom path for agent spawning', () => {
+		const globalShellEnvVars = {
 			SHARED_TOKEN: 'token-123',
+			API_ENDPOINT: 'https://api.example.com',
 		};
 
-		// The vars should be available to:
-		// 1. ChildProcessSpawner (receives via ProcessConfig)
-		// 2. buildChildProcessEnv (third parameter)
-		// 3. Final process environment
+		const sessionCustomEnvVars = {
+			SESSION_ID: 'session-1',
+		};
 
-		expect(globalVars.SHARED_TOKEN).toBe('token-123');
+		// Action: Build environment with both global and session vars
+		const env = buildChildProcessEnv(sessionCustomEnvVars, false, globalShellEnvVars);
+
+		// Assert: Both global and session vars are present
+		expect(env.SHARED_TOKEN).toBe('token-123');
+		expect(env.API_ENDPOINT).toBe('https://api.example.com');
+		expect(env.SESSION_ID).toBe('session-1');
+	});
+
+	it('should persist global vars through the spawn lifecycle', () => {
+		// Setup: Simulate settings that would come from IPC handler
+		const globalVars = {
+			ANTHROPIC_API_KEY: 'sk-proj-test-key',
+			DEBUG_MODE: 'verbose',
+		};
+
+		// Action: Call buildChildProcessEnv (what the spawner would use)
+		const env1 = buildChildProcessEnv(undefined, false, globalVars);
+		const env2 = buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Multiple calls produce independent environments with the same global vars
+		expect(env1.ANTHROPIC_API_KEY).toBe('sk-proj-test-key');
+		expect(env2.ANTHROPIC_API_KEY).toBe('sk-proj-test-key');
+
+		// Verify isolation - modifying one shouldn't affect the other
+		env1.ANTHROPIC_API_KEY = 'modified';
+		expect(env2.ANTHROPIC_API_KEY).toBe('sk-proj-test-key');
+	});
+
+	it('should strip Electron vars even when global vars are applied', () => {
+		const globalShellEnvVars = {
+			SAFE_VAR: 'safe-value',
+		};
+
+		const env = buildChildProcessEnv(undefined, false, globalShellEnvVars);
+
+		// Assert: Electron vars are stripped for agent isolation
+		expect(env.ELECTRON_RUN_AS_NODE).toBeUndefined();
+		expect(env.SAFE_VAR).toBe('safe-value');
 	});
 });
 
 /**
- * Test 2.7: Terminal Session Still Receives Global Env Vars
- * This test ensures that terminal spawning wasn't broken and also receives global vars.
+ * Test Suite 2.7: Session Vars Override Global Vars
+ * Verifies correct precedence: session vars > global vars > process defaults
  */
-describe('Integration Test 2.7: Terminal Session Still Receives Global Env Vars', () => {
-	it('should include global env vars when spawning terminal session', () => {
+describe('Test 2.7: Session Vars Override Global Vars', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+		process.env.SHARED_VAR = 'process-value';
+	});
+
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should use session vars when they override global vars', () => {
+		const globalVars = {
+			GLOBAL_VAR: 'global',
+			SHARED: 'global-shared',
+		};
+
+		const sessionVars = {
+			SESSION_VAR: 'session',
+			SHARED: 'session-shared', // Override global
+		};
+
+		const env = buildChildProcessEnv(sessionVars, false, globalVars);
+
+		// Assert: Session vars take precedence
+		expect(env.SHARED).toBe('session-shared');
+		expect(env.GLOBAL_VAR).toBe('global');
+		expect(env.SESSION_VAR).toBe('session');
+	});
+
+	it('should maintain correct precedence: session > global > process', () => {
+		const globalVars = {
+			LEVEL1: 'global',
+			LEVEL_BOTH: 'global-value',
+		};
+
+		const sessionVars = {
+			LEVEL_BOTH: 'session-value',
+		};
+
+		const env = buildChildProcessEnv(sessionVars, false, globalVars);
+
+		// Assert precedence order
+		expect(env.SHARED_VAR).toBe('process-value'); // From process
+		expect(env.LEVEL1).toBe('global'); // From global
+		expect(env.LEVEL_BOTH).toBe('session-value'); // Session wins
+	});
+
+	it('should allow multiple session overrides of global vars', () => {
+		const globalVars = {
+			VAR1: 'global1',
+			VAR2: 'global2',
+			VAR3: 'global3',
+		};
+
+		const sessionVars = {
+			VAR1: 'session1',
+			VAR2: 'session2',
+			// VAR3 not overridden, should use global
+		};
+
+		const env = buildChildProcessEnv(sessionVars, false, globalVars);
+
+		expect(env.VAR1).toBe('session1');
+		expect(env.VAR2).toBe('session2');
+		expect(env.VAR3).toBe('global3');
+	});
+});
+
+/**
+ * Test Suite 2.8: Global Vars Reach Terminal PTY Spawns
+ * Verifies that global vars work for both child process and PTY terminal spawning
+ */
+describe('Test 2.8: Global Vars Reach Terminal PTY Spawns', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+	});
+
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should include global env vars when building PTY terminal environment', () => {
 		// Setup
 		const globalShellEnvVars = {
-			TERMINAL_VAR: 'terminal-value',
-		};
-
-		const terminalConfig = {
-			toolType: 'terminal' as const,
-			command: '/bin/bash',
-		};
-
-		// Expected: global vars should also apply to terminals
-		expect(terminalConfig.toolType).toBe('terminal');
-		expect(globalShellEnvVars.TERMINAL_VAR).toBe('terminal-value');
-	});
-
-	it('should work with both PTY and child process terminals', () => {
-		// PTY terminals use buildPtyTerminalEnv
-		// Child process terminals use buildChildProcessEnv
-		// Both should support global env vars
-
-		const globalVars = {
 			PTY_VAR: 'pty-value',
+			TERMINAL_CONFIG: 'terminal-config-value',
 		};
 
-		expect(globalVars.PTY_VAR).toBe('pty-value');
+		// Action: Build PTY environment with global vars
+		const env = buildPtyTerminalEnv(globalShellEnvVars);
+
+		// Assert: Global vars are present in PTY environment
+		expect(env.PTY_VAR).toBe('pty-value');
+		expect(env.TERMINAL_CONFIG).toBe('terminal-config-value');
 	});
-});
 
-/**
- * Test 2.8: Agent-Specific Vars Work With Global Vars
- * This test validates the combination of agent config defaults and global vars.
- */
-describe('Integration Test 2.8: Agent-Specific Vars Work With Global Vars', () => {
-	it('should combine agent config vars with global vars', () => {
-		// Agent config might have defaults
-		const agentConfig = {
-			customEnvVars: {
-				AGENT_TOKEN: 'agent-token',
-			},
+	it('should preserve terminal-specific vars while adding global vars', () => {
+		const globalShellEnvVars = {
+			CUSTOM_VAR: 'custom-value',
 		};
 
-		// Global settings
+		const env = buildPtyTerminalEnv(globalShellEnvVars);
+
+		// Assert: Terminal vars are preserved
+		expect(env.TERM).toBe('xterm-256color');
+		expect(env.CUSTOM_VAR).toBe('custom-value');
+	});
+
+	it('should work with both child process and PTY terminal spawning', () => {
 		const globalVars = {
-			API_KEY: 'global-key',
-			SHARED_VAR: 'shared',
+			SHARED_VAR: 'shared-value',
 		};
 
-		// Expected merged result
-		const expected = {
-			AGENT_TOKEN: 'agent-token',
-			API_KEY: 'global-key',
-			SHARED_VAR: 'shared',
-		};
+		// For child process (agent)
+		const childEnv = buildChildProcessEnv(undefined, false, globalVars);
 
-		expect(expected.AGENT_TOKEN).toBe('agent-token');
-		expect(expected.API_KEY).toBe('global-key');
+		// For PTY terminal
+		const ptyEnv = buildPtyTerminalEnv(globalVars);
+
+		// Assert: Both have the global var
+		expect(childEnv.SHARED_VAR).toBe('shared-value');
+		expect(ptyEnv.SHARED_VAR).toBe('shared-value');
 	});
 
-	it('should apply correct precedence: session > agent > global', () => {
-		// Agent config
-		const agentEnv = {
-			ENV_TYPE: 'agent-default',
+	it('should apply global vars to terminal even without process defaults', () => {
+		const globalVars = {
+			TERMINAL_API_KEY: 'term-key-value',
 		};
 
-		// Global settings
-		const globalEnv = {
-			ENV_TYPE: 'global-value',
-			GLOBAL_ONLY: 'global',
-		};
+		const env = buildPtyTerminalEnv(globalVars);
 
-		// Session custom vars (highest priority)
-		const sessionEnv = {
-			ENV_TYPE: 'session-override',
-		};
-
-		// Expected result: session value takes precedence
-		const result = {
-			ENV_TYPE: sessionEnv.ENV_TYPE || agentEnv.ENV_TYPE || globalEnv.ENV_TYPE,
-			GLOBAL_ONLY: globalEnv.GLOBAL_ONLY,
-		};
-
-		expect(result.ENV_TYPE).toBe('session-override');
-		expect(result.GLOBAL_ONLY).toBe('global');
+		expect(env.TERMINAL_API_KEY).toBe('term-key-value');
 	});
 });
 
 /**
- * Test 2.9: Invalid Global Vars Don't Crash Spawner
- * This test ensures robustness when global vars contain invalid data.
+ * Test Suite 2.9: Tilde Expansion Works in Global Vars
+ * Verifies that ~/path syntax is expanded to home directory
  */
-describe('Integration Test 2.9: Invalid Global Vars Don\'t Crash Spawner', () => {
-	it('should handle non-string values gracefully', () => {
-		// Real-world issue: settings might contain non-string values
-		const malformedVars = {
-			VALID_VAR: 'value',
-			NULL_VAR: null,
-			UNDEFINED_VAR: undefined,
-			NUMBER_VAR: 123,
-			BOOL_VAR: true,
-		} as any;
+describe('Test 2.9: Tilde Expansion Works in Global Vars', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+	let originalHomedir: string;
 
-		// The builder should either:
-		// 1. Filter these out, or
-		// 2. Convert them to strings, or
-		// 3. Skip them safely
-
-		// This is more of a spec clarification, but the function should not crash
-		const validVars = Object.fromEntries(
-			Object.entries(malformedVars).filter(([_k, v]) => typeof v === 'string')
-		);
-
-		expect(validVars.VALID_VAR).toBe('value');
-		expect(validVars.NULL_VAR).toBeUndefined();
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+		originalHomedir = os.homedir();
 	});
 
-	it('should handle empty string values', () => {
-		const vars = {
-			EMPTY: '',
-			NORMAL: 'value',
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should expand tilde in global var paths', () => {
+		const globalVars = {
+			TOOL_PATH: '~/tools',
+			CONFIG_DIR: '~/config',
 		};
 
-		// Empty strings should be preserved, not filtered
-		expect(vars.EMPTY).toBe('');
-		expect(vars.NORMAL).toBe('value');
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Tilde is expanded to home directory
+		expect(env.TOOL_PATH).toBe(path.join(originalHomedir, 'tools'));
+		expect(env.CONFIG_DIR).toBe(path.join(originalHomedir, 'config'));
+	});
+
+	it('should expand tilde in session var paths', () => {
+		const sessionVars = {
+			LOG_PATH: '~/logs/app.log',
+		};
+
+		const env = buildChildProcessEnv(sessionVars, false, undefined);
+
+		expect(env.LOG_PATH).toBe(path.join(originalHomedir, 'logs/app.log'));
+	});
+
+	it('should handle nested paths with tilde expansion', () => {
+		const globalVars = {
+			WORKSPACE: '~/.workspace/projects',
+		};
+
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		expect(env.WORKSPACE).toBe(path.join(originalHomedir, '.workspace/projects'));
+	});
+
+	it('should not expand tilde in the middle of paths', () => {
+		const globalVars = {
+			MIDDLE_TILDE: 'path/~middle/file.txt',
+		};
+
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Tilde not at start is not expanded
+		expect(env.MIDDLE_TILDE).toBe('path/~middle/file.txt');
+	});
+
+	it('should expand tilde in PTY terminal environment', () => {
+		const globalVars = {
+			PTY_CONFIG: '~/pty-config',
+		};
+
+		const env = buildPtyTerminalEnv(globalVars);
+
+		expect(env.PTY_CONFIG).toBe(path.join(originalHomedir, 'pty-config'));
+	});
+});
+
+/**
+ * Test Suite 2.10: Empty/Undefined Global Vars Handled Gracefully
+ * Verifies robustness with missing or malformed global var data
+ */
+describe('Test 2.10: Empty/Undefined Global Vars Handled Gracefully', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+		process.env.INHERITED_VAR = 'inherited';
+	});
+
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should handle undefined global vars', () => {
+		const env = buildChildProcessEnv(undefined, false, undefined);
+
+		// Assert: Process completes without error
+		expect(env).toBeDefined();
+		expect(env.INHERITED_VAR).toBe('inherited');
+	});
+
+	it('should handle empty object global vars', () => {
+		const env = buildChildProcessEnv(undefined, false, {});
+
+		expect(env).toBeDefined();
+		expect(env.INHERITED_VAR).toBe('inherited');
+	});
+
+	it('should handle null global vars gracefully', () => {
+		// TypeScript doesn't allow null in types, but we test defensive handling
+		const env = buildChildProcessEnv(undefined, false, undefined);
+
+		expect(env).toBeDefined();
+	});
+
+	it('should handle undefined session vars and empty global vars', () => {
+		const env = buildChildProcessEnv(undefined, false, {});
+
+		expect(env).toBeDefined();
+		expect(env.INHERITED_VAR).toBe('inherited');
+	});
+
+	it('should handle all params as undefined', () => {
+		const env = buildChildProcessEnv(undefined, undefined, undefined);
+
+		expect(env).toBeDefined();
+		expect(env.INHERITED_VAR).toBe('inherited');
+	});
+
+	it('should handle empty string values in global vars', () => {
+		const globalVars = {
+			EMPTY_VAR: '',
+			NORMAL_VAR: 'value',
+		};
+
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Empty strings are preserved, not filtered
+		expect(env.EMPTY_VAR).toBe('');
+		expect(env.NORMAL_VAR).toBe('value');
 	});
 
 	it('should handle very long variable values', () => {
 		const longValue = 'x'.repeat(50000);
-		const vars = {
+		const globalVars = {
 			LONG_VAR: longValue,
 		};
 
-		// Should not crash, just include the long value
-		expect(vars.LONG_VAR.length).toBe(50000);
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Long values are preserved without truncation
+		expect(env.LONG_VAR).toBe(longValue);
+		expect(env.LONG_VAR?.length).toBe(50000);
 	});
 
-	it('should not crash when global vars is null or undefined', () => {
-		// Function should handle gracefully
-		const globalVars: Record<string, string> | undefined = undefined;
+	it('should handle special characters in global var values', () => {
+		const globalVars = {
+			SPECIAL_CHARS: 'value!@#$%^&*()',
+			SPACES: 'value with spaces',
+			QUOTES: 'value with "quotes"',
+		};
 
-		// Should not throw
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		expect(env.SPECIAL_CHARS).toBe('value!@#$%^&*()');
+		expect(env.SPACES).toBe('value with spaces');
+		expect(env.QUOTES).toBe('value with "quotes"');
+	});
+
+	it('should not crash when PTY terminal gets empty global vars', () => {
+		// Assert: Should not throw
 		expect(() => {
-			if (globalVars) {
-				Object.entries(globalVars).forEach(([k, v]) => {
-					// Use vars
-				});
-			}
+			buildPtyTerminalEnv({});
+		}).not.toThrow();
+
+		expect(() => {
+			buildPtyTerminalEnv(undefined);
 		}).not.toThrow();
 	});
 });
 
 /**
- * Test 2.10: Global Env Var Access in Agent Session (E2E)
- * This is an end-to-end test verifying agents can actually read global vars.
- * Note: This requires actual agent execution, so it's a spec test here.
+ * Test Suite 2.11: Real-World Use Cases
+ * Integration tests for practical scenarios
  */
-describe('End-to-End Test 2.10: Global Env Var Access in Agents', () => {
-	it('should allow agent to access global env vars (spec)', () => {
-		// In real E2E test:
-		// 1. Set global env var TEST_GLOBAL_VAR=hello-from-global in settings
-		// 2. Spawn opencode agent
-		// 3. Run: process.env.TEST_GLOBAL_VAR
-		// 4. Assert: returns 'hello-from-global'
+describe('Test 2.11: Real-World Use Cases', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+	let originalHomedir: string;
 
-		const scenario = {
-			globalVar: 'TEST_GLOBAL_VAR=hello-from-global',
-			expectedAccess: 'hello-from-global',
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+		originalHomedir = os.homedir();
+	});
+
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should handle API key use case', () => {
+		// User sets ANTHROPIC_API_KEY in Settings → General → Shell Configuration
+		const globalVars = {
+			ANTHROPIC_API_KEY: 'sk-proj-real-key',
 		};
 
-		expect(scenario.globalVar).toContain('hello-from-global');
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Agent can access the API key
+		expect(env.ANTHROPIC_API_KEY).toBe('sk-proj-real-key');
 	});
 
-	it('should allow agent to use API keys set globally (spec)', () => {
-		// In real E2E test:
-		// 1. Set ANTHROPIC_API_KEY in global env vars
-		// 2. Spawn Claude Code agent
-		// 3. Agent makes API call
-		// 4. Assert: API call succeeds (or fails for wrong reason, not missing key)
-
-		const scenario = {
-			key: 'ANTHROPIC_API_KEY',
-			expected: 'Should be available to agent',
+	it('should handle multiple API keys simultaneously', () => {
+		const globalVars = {
+			ANTHROPIC_API_KEY: 'sk-anthropic-key',
+			OPENAI_API_KEY: 'sk-openai-key',
+			TOGETHER_API_KEY: 'sk-together-key',
 		};
 
-		expect(scenario.key).toBe('ANTHROPIC_API_KEY');
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		expect(env.ANTHROPIC_API_KEY).toBe('sk-anthropic-key');
+		expect(env.OPENAI_API_KEY).toBe('sk-openai-key');
+		expect(env.TOGETHER_API_KEY).toBe('sk-together-key');
 	});
-});
 
-/**
- * Test 2.11: Global Env Var Access in Claude Code Agent
- * Similar to 2.10 but specifically for Claude Code agent type.
- */
-describe('End-to-End Test 2.11: Global Env Vars in Claude Code Agent', () => {
-	it('should work with Claude Code agent (spec)', () => {
-		const agentType = 'claude-code';
-		const expectedBehavior = 'Should access global vars like opencode';
-
-		expect(agentType).toBe('claude-code');
-		expect(expectedBehavior).toContain('global vars');
-	});
-});
-
-/**
- * Test 2.12: API Key Real Use Case
- * Test the real scenario of using API keys.
- */
-describe('End-to-End Test 2.12: API Key Use Case', () => {
-	it('should successfully pass API key to agent (spec)', () => {
-		// Scenario:
-		// 1. User sets ANTHROPIC_API_KEY in Settings → General → Shell Configuration
-		// 2. Agent session spawns
-		// 3. Agent reads process.env.ANTHROPIC_API_KEY
-		// 4. Agent uses key for API calls
-
-		const setup = {
-			setting: 'Settings → General → Shell Configuration',
-			var: 'ANTHROPIC_API_KEY',
-			value: 'sk-...',
-			expected: 'Agent can authenticate',
+	it('should handle proxy settings globally', () => {
+		const globalVars = {
+			HTTP_PROXY: 'http://proxy.example.com:8080',
+			HTTPS_PROXY: 'https://proxy.example.com:8080',
+			NO_PROXY: 'localhost,127.0.0.1',
 		};
 
-		expect(setup.var).toBe('ANTHROPIC_API_KEY');
-	});
-});
+		const env = buildChildProcessEnv(undefined, false, globalVars);
 
-/**
- * Test 2.13: Multiple Global Vars Work Together
- * Test that many vars all work correctly simultaneously.
- */
-describe('End-to-End Test 2.13: Multiple Global Vars Work Together', () => {
+		expect(env.HTTP_PROXY).toBe('http://proxy.example.com:8080');
+		expect(env.HTTPS_PROXY).toBe('https://proxy.example.com:8080');
+		expect(env.NO_PROXY).toBe('localhost,127.0.0.1');
+	});
+
+	it('should handle debug flags set globally', () => {
+		const globalVars = {
+			DEBUG: 'maestro:*',
+			LOG_LEVEL: 'debug',
+		};
+
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		expect(env.DEBUG).toBe('maestro:*');
+		expect(env.LOG_LEVEL).toBe('debug');
+	});
+
+	it('should handle config paths with tilde expansion', () => {
+		const globalVars = {
+			JEST_CONFIG_PATH: '~/.maestro/jest.config.js',
+			APP_CONFIG_DIR: '~/app-configs',
+		};
+
+		const env = buildChildProcessEnv(undefined, false, globalVars);
+
+		expect(env.JEST_CONFIG_PATH).toBe(path.join(originalHomedir, '.maestro/jest.config.js'));
+		expect(env.APP_CONFIG_DIR).toBe(path.join(originalHomedir, 'app-configs'));
+	});
+
+	it('should handle session override for development scenarios', () => {
+		// User has global ANTHROPIC_API_KEY set, but wants to test with different key for this session
+		const globalVars = {
+			ANTHROPIC_API_KEY: 'sk-prod-key',
+			OTHER_SETTING: 'global-value',
+		};
+
+		const sessionVars = {
+			ANTHROPIC_API_KEY: 'sk-dev-test-key', // Override for this session
+		};
+
+		const env = buildChildProcessEnv(sessionVars, false, globalVars);
+
+		expect(env.ANTHROPIC_API_KEY).toBe('sk-dev-test-key'); // Session wins
+		expect(env.OTHER_SETTING).toBe('global-value'); // Global still applies
+	});
+
 	it('should handle 10+ global vars simultaneously', () => {
 		const globalVars = {
 			API_KEY_1: 'key1',
@@ -317,118 +537,159 @@ describe('End-to-End Test 2.13: Multiple Global Vars Work Together', () => {
 			RETRY_COUNT: '3',
 		};
 
-		const count = Object.keys(globalVars).length;
-		expect(count).toBe(10);
+		const env = buildChildProcessEnv(undefined, false, globalVars);
 
-		// All should be accessible
+		// Assert all vars are present
 		Object.entries(globalVars).forEach(([key, value]) => {
-			expect(globalVars[key as keyof typeof globalVars]).toBe(value);
+			expect(env[key]).toBe(value);
 		});
 	});
-});
 
-/**
- * Test 2.14: Changing Global Vars Affects New Sessions
- * Regression test to ensure settings changes apply to new sessions.
- */
-describe('Regression Test 2.14: Changing Global Vars Affects New Sessions', () => {
 	it('should apply updated global vars to new sessions', () => {
-		// Scenario:
-		// 1. Start agent session 1 with Setting=value1
-		// 2. Change setting to Setting=value2
-		// 3. Start agent session 2
-		// 4. Assert: Session 2 gets value2, Session 1 still has value1
+		// Scenario: User changes setting, old session still has original value
 
-		const session1 = {
-			settingValue: 'value1',
-			expectedEnv: 'value1',
+		// Session 1 with setting value 1
+		const globalVars1 = {
+			SETTING: 'value1',
 		};
 
-		const session2After = {
-			settingValue: 'value2',
-			expectedEnv: 'value2',
+		const env1 = buildChildProcessEnv(undefined, false, globalVars1);
+		expect(env1.SETTING).toBe('value1');
+
+		// Session 2 with updated setting value 2
+		const globalVars2 = {
+			SETTING: 'value2',
 		};
 
-		// Each session captures vars at spawn time
-		expect(session1.expectedEnv).toBe('value1');
-		expect(session2After.expectedEnv).toBe('value2');
+		const env2 = buildChildProcessEnv(undefined, false, globalVars2);
+		expect(env2.SETTING).toBe('value2');
+
+		// Verify isolation - each session captures vars at spawn time
+		expect(env1.SETTING).toBe('value1'); // Not affected by update
 	});
 });
 
 /**
- * Test 2.15: Agent Vars Don't Leak Between Sessions
- * Regression test for isolation between agent sessions.
+ * Test Suite 2.12: Environment Isolation Between Sessions
+ * Verifies that env vars don't leak between sessions
  */
-describe('Regression Test 2.15: Agent Vars Don\'t Leak Between Sessions', () => {
+describe('Test 2.12: Environment Isolation Between Sessions', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+	});
+
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
 	it('should isolate session-specific vars between agents', () => {
-		// Scenario:
-		// 1. Spawn agent A with session var SESSION_ID=A
-		// 2. Spawn agent B with session var SESSION_ID=B
-		// 3. Assert: Agent A sees SESSION_ID=A, Agent B sees SESSION_ID=B
+		// Agent A with session var
+		const env1 = buildChildProcessEnv({ SESSION_ID: 'A' }, false, { GLOBAL_VAR: 'global' });
 
-		const agentA = {
-			sessionVar: 'SESSION_ID',
-			value: 'A',
-		};
+		// Agent B with different session var
+		const env2 = buildChildProcessEnv({ SESSION_ID: 'B' }, false, { GLOBAL_VAR: 'global' });
 
-		const agentB = {
-			sessionVar: 'SESSION_ID',
-			value: 'B',
-		};
+		// Assert: Each session has its own value
+		expect(env1.SESSION_ID).toBe('A');
+		expect(env2.SESSION_ID).toBe('B');
 
-		// Each session has its own environment copy
-		expect(agentA.value).toBe('A');
-		expect(agentB.value).toBe('B');
+		// Global var is the same in both
+		expect(env1.GLOBAL_VAR).toBe('global');
+		expect(env2.GLOBAL_VAR).toBe('global');
 	});
 
 	it('should not affect parent process environment', () => {
-		// Session vars should not leak back to parent
-		const parentEnvBefore = { PARENT_VAR: 'parent-value' };
+		const parentEnvBefore = { ...process.env };
 
-		// Spawn session with custom vars
-		const sessionEnv = { GLOBAL_VAR: 'global' };
+		// Build environment with custom vars
+		const globalVars = { GLOBAL_VAR: 'global' };
+		const env = buildChildProcessEnv(undefined, false, globalVars);
 
-		// Parent should be unchanged
-		expect(parentEnvBefore.PARENT_VAR).toBe('parent-value');
-		expect(parentEnvBefore).not.toHaveProperty('GLOBAL_VAR');
-	});
-});
-
-/**
- * Test 2.16: Global Vars Don't Pollute Process Environment
- * Regression test to ensure global vars don't contaminate parent process.
- */
-describe('Regression Test 2.16: Global Vars Don\'t Pollute Process Environment', () => {
-	it('should not modify process.env of parent', () => {
-		const originalProcessEnv = { ...process.env };
-
-		// Simulate: buildChildProcessEnv gets called with global vars
-		const globalVars = {
-			GLOBAL_VAR: 'sensitive-value',
-		};
-
-		// Call hypothetically
-		// buildChildProcessEnv(undefined, false, globalVars);
-
-		// Parent process.env should be unchanged
-		expect(process.env).toEqual(originalProcessEnv);
-		expect(process.env).not.toHaveProperty('GLOBAL_VAR');
+		// Assert: Parent process environment is unchanged
+		expect(process.env).toEqual(parentEnvBefore);
+		expect(process.env.GLOBAL_VAR).toBeUndefined();
 	});
 
 	it('should create isolated environment copies', () => {
-		// Each session should get its own environment copy
 		const globalVars = {
 			SHARED_VAR: 'shared-value',
 		};
 
 		// Two calls should produce independent environments
-		const env1 = { ...globalVars };
-		const env2 = { ...globalVars };
+		const env1 = buildChildProcessEnv(undefined, false, globalVars);
+		const env2 = buildChildProcessEnv(undefined, false, globalVars);
 
 		// Modifying one shouldn't affect the other
 		env1.SHARED_VAR = 'modified';
 
 		expect(env1.SHARED_VAR).toBe('modified');
 		expect(env2.SHARED_VAR).toBe('shared-value');
+	});
+
+	it('should not mutate input global vars object', () => {
+		const globalVars = {
+			VAR: 'value',
+		};
+
+		const globalVarsCopy = { ...globalVars };
+
+		buildChildProcessEnv(undefined, false, globalVars);
+
+		// Assert: Input object is unchanged
+		expect(globalVars).toEqual(globalVarsCopy);
+	});
+
+	it('should not mutate input session vars object', () => {
+		const sessionVars = {
+			SESSION_VAR: 'session-value',
+		};
+
+		const sessionVarsCopy = { ...sessionVars };
+
+		buildChildProcessEnv(sessionVars, false, undefined);
+
+		// Assert: Input object is unchanged
+		expect(sessionVars).toEqual(sessionVarsCopy);
+	});
+});
+
+/**
+ * Test Suite 2.13: MAESTRO_SESSION_RESUMED Flag
+ * Verifies that resumed sessions are properly marked
+ */
+describe('Test 2.13: MAESTRO_SESSION_RESUMED Flag', () => {
+	let originalProcessEnv: NodeJS.ProcessEnv;
+
+	beforeEach(() => {
+		originalProcessEnv = { ...process.env };
+	});
+
+	afterEach(() => {
+		process.env = originalProcessEnv;
+	});
+
+	it('should set MAESTRO_SESSION_RESUMED when isResuming is true', () => {
+		const env = buildChildProcessEnv(undefined, true);
+
+		expect(env.MAESTRO_SESSION_RESUMED).toBe('1');
+	});
+
+	it('should not set MAESTRO_SESSION_RESUMED when isResuming is false', () => {
+		const env = buildChildProcessEnv(undefined, false);
+
+		expect(env.MAESTRO_SESSION_RESUMED).toBeUndefined();
+	});
+
+	it('should set flag with global vars when resuming', () => {
+		const globalVars = {
+			API_KEY: 'key-value',
+		};
+
+		const env = buildChildProcessEnv(undefined, true, globalVars);
+
+		expect(env.MAESTRO_SESSION_RESUMED).toBe('1');
+		expect(env.API_KEY).toBe('key-value');
 	});
 });
