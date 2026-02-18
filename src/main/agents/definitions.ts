@@ -212,6 +212,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		imageArgs: undefined,
 		modelArgs: (modelId: string) => ['-m', modelId],
 		promptArgs: (prompt: string) => ['-p', prompt],
+		versionArgs: ['--version'],
 		configOptions: [
 			{
 				key: 'model',
@@ -249,6 +250,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		binaryName: 'qwen3-coder',
 		command: 'qwen3-coder',
 		args: [],
+		versionArgs: ['--version'],
 	},
 	{
 		id: 'opencode',
@@ -256,6 +258,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		binaryName: 'opencode',
 		command: 'opencode',
 		args: [], // Base args (none for OpenCode - batch mode uses 'run' subcommand)
+		versionArgs: ['--version'],
 		// OpenCode CLI argument builders
 		// Batch mode: opencode run --format json [--model provider/model] [--session <id>] [--agent plan] "prompt"
 		// YOLO mode (auto-approve all permissions) is enabled via OPENCODE_CONFIG_CONTENT env var.
@@ -318,6 +321,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		command: 'droid',
 		args: [], // Base args for interactive mode (none)
 		requiresPty: false, // Batch mode uses child process
+		versionArgs: ['--version'],
 
 		// Batch mode: droid exec [options] "prompt"
 		batchModePrefix: ['exec'],
@@ -402,6 +406,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		binaryName: 'aider',
 		command: 'aider',
 		args: [], // Base args (placeholder - to be configured when implemented)
+		versionArgs: ['--version'],
 	},
 ];
 
