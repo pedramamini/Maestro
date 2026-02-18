@@ -3164,7 +3164,6 @@ function MaestroConsoleInner() {
 									groupChat={groupChats.find((c) => c.id === activeGroupChatId)!}
 									messages={groupChatMessages}
 									state={groupChatState}
-									groups={groups}
 									totalCost={(() => {
 										const chat = groupChats.find((c) => c.id === activeGroupChatId);
 										const participantsCost = (chat?.participants || []).reduce(

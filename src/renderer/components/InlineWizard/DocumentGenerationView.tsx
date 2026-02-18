@@ -65,7 +65,7 @@ export interface DocumentGenerationViewProps {
 /**
  * Document selector dropdown for switching between generated documents
  */
-function DocumentSelector({
+export function DocumentSelector({
 	documents,
 	selectedIndex,
 	onSelect,
@@ -313,7 +313,7 @@ function MarkdownImage({
 /**
  * Document editor component with edit/preview modes
  */
-function DocumentEditor({
+export function DocumentEditor({
 	content,
 	onContentChange,
 	mode,
