@@ -77,7 +77,9 @@ async function detectAgentVersion(
 		// Parse version from output: try each whitespace-separated part
 		// to find one that looks like a semver (starts with digit, contains dots)
 		const parts = stdout.split(/\s+/);
-		const version = parts.find(p => /^\d+\.\d+/.test(p));
+		const version = parts
+			.map(p => p.replace(/^v/i, ''))
+			.find(p => /^\d+\.\d+/.test(p));
 
 		if (!version) {
 			logger.warn(`Could not parse version from ${agentId} output: "${stdout}"`, LOG_CONTEXT);

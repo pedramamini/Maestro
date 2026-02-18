@@ -1555,6 +1555,74 @@ describe('agent-detector', () => {
 
 			vi.useRealTimers();
 		});
+
+		it('should parse version with v prefix', async () => {
+			mockExecFileNoThrow.mockImplementation(async (cmd, args) => {
+				if (args[0] === 'gemini') {
+					return { stdout: '/usr/bin/gemini\n', stderr: '', exitCode: 0 };
+				}
+				if (cmd === '/usr/bin/gemini' && args[0] === '--version') {
+					return { stdout: 'Gemini CLI v0.29.0\n', stderr: '', exitCode: 0 };
+				}
+				return { stdout: '', stderr: '', exitCode: 1 };
+			});
+
+			const agents = await detector.detectAgents();
+			const gemini = agents.find(a => a.id === 'gemini-cli');
+
+			expect(gemini?.detectedVersion).toBe('0.29.0');
+		});
+
+		it('should parse version from path-prefixed output', async () => {
+			mockExecFileNoThrow.mockImplementation(async (cmd, args) => {
+				if (args[0] === 'opencode') {
+					return { stdout: '/usr/bin/opencode\n', stderr: '', exitCode: 0 };
+				}
+				if (cmd === '/usr/bin/opencode' && args[0] === '--version') {
+					return { stdout: '/opt/homebrew/bin/opencode 0.0.55\n', stderr: '', exitCode: 0 };
+				}
+				return { stdout: '', stderr: '', exitCode: 1 };
+			});
+
+			const agents = await detector.detectAgents();
+			const opencode = agents.find(a => a.id === 'opencode');
+
+			expect(opencode?.detectedVersion).toBe('0.0.55');
+		});
+
+		it('should parse aider version format', async () => {
+			mockExecFileNoThrow.mockImplementation(async (cmd, args) => {
+				if (args[0] === 'aider') {
+					return { stdout: '/usr/bin/aider\n', stderr: '', exitCode: 0 };
+				}
+				if (cmd === '/usr/bin/aider' && args[0] === '--version') {
+					return { stdout: 'aider 0.86.3\n', stderr: '', exitCode: 0 };
+				}
+				return { stdout: '', stderr: '', exitCode: 1 };
+			});
+
+			const agents = await detector.detectAgents();
+			const aider = agents.find(a => a.id === 'aider');
+
+			expect(aider?.detectedVersion).toBe('0.86.3');
+		});
+
+		it('should handle uppercase V prefix', async () => {
+			mockExecFileNoThrow.mockImplementation(async (cmd, args) => {
+				if (args[0] === 'droid') {
+					return { stdout: '/usr/bin/droid\n', stderr: '', exitCode: 0 };
+				}
+				if (cmd === '/usr/bin/droid' && args[0] === '--version') {
+					return { stdout: 'Factory Droid V0.4.0\n', stderr: '', exitCode: 0 };
+				}
+				return { stdout: '', stderr: '', exitCode: 1 };
+			});
+
+			const agents = await detector.detectAgents();
+			const droid = agents.find(a => a.id === 'factory-droid');
+
+			expect(droid?.detectedVersion).toBe('0.4.0');
+		});
 	});
 
 	describe('version comparison with AGENT_MIN_VERSIONS', () => {
