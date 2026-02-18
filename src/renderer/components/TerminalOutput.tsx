@@ -504,6 +504,11 @@ const LogItemComponent = memo(
 								| Record<string, unknown>
 								| undefined;
 							const safeStr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+							const truncate = (v: unknown, max: number): string | null => {
+								const s = safeStr(v);
+								if (!s) return null;
+								return s.length > max ? s.substring(0, max) + '…' : s;
+							};
 							const toolDetail = toolInput
 								? safeStr(toolInput.command) ||
 									safeStr(toolInput.pattern) ||
@@ -512,6 +517,11 @@ const LogItemComponent = memo(
 									safeStr(toolInput.description) || // Task tool
 									safeStr(toolInput.prompt) || // Task tool fallback
 									safeStr(toolInput.task_id) || // TaskOutput tool
+									// Codex-specific tool arg patterns
+									safeStr(toolInput.path) || // Codex file operations
+									safeStr(toolInput.cmd) || // Codex shell commands
+									safeStr(toolInput.code) || // Codex code execution
+									truncate(toolInput.content, 100) || // Codex write operations (truncated)
 									null
 								: null;
 

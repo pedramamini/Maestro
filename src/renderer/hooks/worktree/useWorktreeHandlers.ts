@@ -122,7 +122,8 @@ function buildWorktreeSession(params: BuildWorktreeSessionParams): Session {
 		createdAt: Date.now(),
 		state: 'idle',
 		saveToHistory: params.defaultSaveToHistory,
-		showThinking: params.defaultShowThinking,
+		// Codex: default thinking to 'on' since reasoning is the main visibility into agent activity
+		showThinking: params.parentSession.toolType === 'codex' ? 'on' : params.defaultShowThinking,
 	};
 
 	return {

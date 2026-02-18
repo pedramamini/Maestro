@@ -1360,7 +1360,8 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 
 									if (!targetTab.showThinking || targetTab.showThinking === 'off') continue;
 
-									if (isLikelyConcatenatedToolNames(bufferedContent)) {
+									// Codex emits reasoning as complete blocks, not streams — large content is expected
+									if (bufferedContent.length <= 500 && isLikelyConcatenatedToolNames(bufferedContent)) {
 										console.warn(
 											'[App] Skipping malformed thinking chunk (concatenated tool names):',
 											bufferedContent.substring(0, 100)
@@ -1371,7 +1372,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									const lastLog = targetTab.logs[targetTab.logs.length - 1];
 									if (lastLog?.source === 'thinking') {
 										const combinedText = lastLog.text + bufferedContent;
-										if (isLikelyConcatenatedToolNames(combinedText)) {
+										if (combinedText.length <= 500 && isLikelyConcatenatedToolNames(combinedText)) {
 											console.warn(
 												'[App] Detected malformed thinking content, replacing instead of appending'
 											);

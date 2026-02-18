@@ -375,7 +375,8 @@ export function useTabHandlers(): TabHandlersReturn {
 				if (s.id !== currentSession.id) return s;
 				const result = createTab(s, {
 					saveToHistory: defaultSaveToHistory,
-					showThinking: defaultShowThinking,
+					// Codex: default thinking to 'on' since reasoning is the main visibility into agent activity
+					showThinking: s.toolType === 'codex' ? 'on' : defaultShowThinking,
 				});
 				if (!result) return s;
 				return result.session;
@@ -679,7 +680,8 @@ export function useTabHandlers(): TabHandlersReturn {
 				if (s.id !== activeSessionId) return s;
 				const result = createTab(s, {
 					saveToHistory: defaultSaveToHistory,
-					showThinking: defaultShowThinking,
+					// Codex: default thinking to 'on' since reasoning is the main visibility into agent activity
+					showThinking: s.toolType === 'codex' ? 'on' : defaultShowThinking,
 				});
 				if (!result) return s;
 				return result.session;

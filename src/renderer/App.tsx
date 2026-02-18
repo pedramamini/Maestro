@@ -5225,7 +5225,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				createdAt: Date.now(),
 				state: 'idle',
 				saveToHistory: defaultSaveToHistory,
-				showThinking: defaultShowThinking,
+				// Codex: default thinking to 'on' since reasoning is the main visibility into agent activity
+				showThinking: agentId === 'codex' ? 'on' : defaultShowThinking,
 			};
 
 			const newSession: Session = {
