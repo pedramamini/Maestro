@@ -205,7 +205,33 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					config.shell ||
 					(config.toolType === 'terminal' ? settingsStore.get('defaultShell', 'zsh') : undefined);
 				let shellArgsStr: string | undefined;
-				let shellEnvVars: Record<string, string> | undefined;
+
+				// Load global shell environment variables for ALL process types (terminals and agents)
+				//
+				// IMPORTANT: These are the user-defined global env vars from Settings → General → Shell Configuration.
+				// They apply to BOTH terminal sessions AND agent processes. This allows users to set API keys,
+				// proxy settings, and other environment variables once and have them apply everywhere.
+				//
+				// Precedence order (highest to lowest):
+				// 1. Session-level overrides (config.sessionCustomEnvVars)
+				// 2. Global vars (shellEnvVars from Settings) - loaded here
+				// 3. Process defaults (with Electron/IDE vars stripped for agents)
+				//
+				// The actual merging happens in buildChildProcessEnv() or buildPtyTerminalEnv().
+				const globalShellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
+
+				// Debug logging when global env vars are configured
+				if (Object.keys(globalShellEnvVars).length > 0) {
+					logger.debug(
+						`Applying ${Object.keys(globalShellEnvVars).length} global environment variables to ${config.toolType}`,
+						LOG_CONTEXT,
+						{
+							sessionId: config.sessionId,
+							toolType: config.toolType,
+							globalEnvVarKeys: Object.keys(globalShellEnvVars).join(', '),
+						}
+					);
+				}
 
 				if (config.toolType === 'terminal') {
 					// Custom shell path overrides the detected/selected shell path
@@ -214,9 +240,8 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						shellToUse = customShellPath.trim();
 						logger.debug('Using custom shell path for terminal', LOG_CONTEXT, { customShellPath });
 					}
-					// Load additional shell args and env vars
+					// Load additional shell args (env vars are loaded globally for both terminals and agents)
 					shellArgsStr = settingsStore.get('shellArgs', '');
-					shellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
 				}
 
 				// Extract session ID from args for logging (supports both --resume and --session flags)
@@ -398,11 +423,15 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 							agent?.capabilities?.imageResumeMode === 'prompt-embed' &&
 							config.agentSessionId;
 
+						// Merge global environment variables with session custom env vars
+						// Session vars take precedence over global vars
+						const mergedSshEnvVars = { ...globalShellEnvVars, ...(effectiveCustomEnvVars || {}) };
+
 						const sshCommand = await buildSshCommandWithStdin(sshResult.config, {
 							command: remoteCommand,
 							args: sshArgs,
 							cwd: config.cwd,
-							env: effectiveCustomEnvVars,
+							env: mergedSshEnvVars,
 							// prompt is not passed as CLI arg - it goes via stdinInput
 							stdinInput,
 							// File-based image agents (Codex, OpenCode): pass images for remote temp file creation
@@ -454,6 +483,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					shellToUse,
 					isWindows,
 					isSshCommand: !!sshRemoteUsed,
+					globalEnvVarsCount: Object.keys(globalShellEnvVars).length,
 				});
 
 				const result = processManager.spawn({
@@ -472,7 +502,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					shell: shellToUse,
 					runInShell: useShell,
 					shellArgs: shellArgsStr, // Shell-specific CLI args (for terminal sessions)
-					shellEnvVars: shellEnvVars, // Shell-specific env vars (for terminal sessions)
+					shellEnvVars: globalShellEnvVars, // Global shell env vars (for both terminals and agents)
 					contextWindow, // Pass configured context window to process manager
 					// When using SSH, env vars are passed in the stdin script, not locally
 					customEnvVars: customEnvVarsToPass,

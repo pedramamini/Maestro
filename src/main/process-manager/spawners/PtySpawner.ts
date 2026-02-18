@@ -4,7 +4,7 @@ import { stripControlSequences } from '../../utils/terminalFilter';
 import { logger } from '../../utils/logger';
 import type { ProcessConfig, ManagedProcess, SpawnResult } from '../types';
 import type { DataBufferManager } from '../handlers/DataBufferManager';
-import { buildPtyTerminalEnv } from '../utils/envBuilder';
+import { buildPtyTerminalEnv, buildChildProcessEnv } from '../utils/envBuilder';
 
 /**
  * Handles spawning of PTY (pseudo-terminal) processes.
@@ -70,9 +70,25 @@ export class PtySpawner {
 			let ptyEnv: NodeJS.ProcessEnv;
 			if (isTerminal) {
 				ptyEnv = buildPtyTerminalEnv(shellEnvVars);
+
+				// Log environment variable application for terminal sessions
+				if (shellEnvVars && Object.keys(shellEnvVars).length > 0) {
+					const globalVarKeys = Object.keys(shellEnvVars);
+					logger.debug(
+						'[ProcessManager] Applying global environment variables to terminal session',
+						'ProcessManager',
+						{
+							sessionId,
+							globalVarCount: globalVarKeys.length,
+							globalVarKeys: globalVarKeys.slice(0, 10), // First 10 keys for visibility
+						}
+					);
+				}
 			} else {
-				// For AI agents in PTY mode: pass full env (they need NODE_PATH, etc.)
-				ptyEnv = process.env;
+				// For AI agents in PTY mode: use same env building logic as child processes
+				// This ensures tilde expansion (~/ paths), Electron var stripping, and consistent
+				// global shell environment variable handling across all spawner types
+				ptyEnv = buildChildProcessEnv(undefined, false, shellEnvVars);
 			}
 
 			const ptyProcess = pty.spawn(ptyCommand, ptyArgs, {

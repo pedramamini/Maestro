@@ -16,6 +16,7 @@ icon: sparkles
 - 💻 **[Command Line Interface](./cli)** - Full CLI (`maestro-cli`) for headless operation. List agents/groups, run playbooks from cron jobs or CI/CD pipelines, with human-readable or JSONL output for scripting.
 - 🚀 **Multi-Agent Management** - Run unlimited agents in parallel. Each agent has its own workspace, conversation history, and isolated context.
 - 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when the agent becomes ready. Never lose a thought.
+- 🔐 **[Global Environment Variables](./configuration#global-environment-variables)** - Configure environment variables once in Settings and they apply to all agent processes and terminal sessions. Perfect for API keys, proxy settings, and tool paths.
 
 ## Core Features
 

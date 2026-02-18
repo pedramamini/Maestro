@@ -226,6 +226,9 @@ async function spawnClaudeAgent(
 	agentSessionId?: string
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
+		// Note: CLI agent spawner doesn't have access to settingsStore with global shell env vars.
+		// For CLI, we rely on the environment that Maestro itself is running in.
+		// Global shell env vars are primarily used by the desktop app's process manager.
 		const env = buildExpandedEnv();
 
 		// Build args: base args + session handling + prompt
@@ -376,6 +379,9 @@ async function spawnCodexAgent(
 	agentSessionId?: string
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
+		// Note: CLI agent spawner doesn't have access to settingsStore with global shell env vars.
+		// For CLI, we rely on the environment that Maestro itself is running in.
+		// Global shell env vars are primarily used by the desktop app's process manager.
 		const env = buildExpandedEnv();
 
 		const args = [...CODEX_ARGS];

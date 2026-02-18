@@ -35,6 +35,7 @@ import {
 	User,
 	ArrowDownToLine,
 	Clapperboard,
+	HelpCircle,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -93,15 +94,50 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 		}));
 	});
 	const [nextId, setNextId] = useState(Object.keys(envVars).length);
+	const [validationErrors, setValidationErrors] = useState<Record<number, string>>({});
+
+	// Validate environment variable format
+	const validateEntry = (entry: EnvVarEntry): string | null => {
+		if (!entry.key.trim()) {
+			return null; // Empty keys are OK (will be ignored)
+		}
+		// Check for valid variable name format (alphanumeric and underscore)
+		if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.key)) {
+			return `Invalid variable name. Use letters, numbers, and underscores only.`;
+		}
+		// Check if value contains special characters that might need quoting
+		if (
+			entry.value &&
+			/[&|;`$<>()]/.test(entry.value) &&
+			!entry.value.startsWith('"') &&
+			!entry.value.startsWith("'")
+		) {
+			return `Value contains special characters. Consider quoting or escaping.`;
+		}
+		return null;
+	};
 
 	// Sync entries back to parent when they change (but debounced to avoid focus issues)
 	const commitChanges = (newEntries: EnvVarEntry[]) => {
 		const newEnvVars: Record<string, string> = {};
+		const errors: Record<number, string> = {};
+
+		// Collect all errors first
 		newEntries.forEach((entry) => {
-			if (entry.key.trim()) {
+			const error = validateEntry(entry);
+			if (error) {
+				errors[entry.id] = error;
+			}
+		});
+
+		// Only add valid entries to newEnvVars
+		newEntries.forEach((entry) => {
+			if (!errors[entry.id] && entry.key.trim()) {
 				newEnvVars[entry.key] = entry.value;
 			}
 		});
+
+		setValidationErrors(errors);
 		setEnvVars(newEnvVars);
 	};
 
@@ -167,37 +203,55 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 		<div>
 			<label className="block text-xs opacity-60 mb-1">Environment Variables (optional)</label>
 			<div className="space-y-2">
-				{entries.map((entry) => (
-					<div key={entry.id} className="flex gap-2 items-center">
-						<input
-							type="text"
-							value={entry.key}
-							onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
-							placeholder="VARIABLE"
-							className="flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono"
-							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-						/>
-						<span className="text-xs" style={{ color: theme.colors.textDim }}>
-							=
-						</span>
-						<input
-							type="text"
-							value={entry.value}
-							onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
-							placeholder="value"
-							className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
-							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-						/>
-						<button
-							onClick={() => removeEntry(entry.id)}
-							className="p-2 rounded hover:bg-white/10 transition-colors"
-							title="Remove variable"
-							style={{ color: theme.colors.textDim }}
-						>
-							<Trash2 className="w-3 h-3" />
-						</button>
-					</div>
-				))}
+				{entries.map((entry) => {
+					const error = validationErrors[entry.id];
+					return (
+						<div key={entry.id}>
+							<div className="flex gap-2 items-center">
+								<input
+									type="text"
+									value={entry.key}
+									onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
+									placeholder="VARIABLE"
+									className={`flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono ${
+										entry.key.trim() &&
+										!validateEntry({ id: entry.id, key: entry.key, value: entry.value })
+											? ''
+											: ''
+									}`}
+									style={{
+										borderColor: error ? '#ef4444' : theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+								/>
+								<span className="text-xs" style={{ color: theme.colors.textDim }}>
+									=
+								</span>
+								<input
+									type="text"
+									value={entry.value}
+									onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
+									placeholder="value"
+									className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
+									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+								/>
+								<button
+									onClick={() => removeEntry(entry.id)}
+									className="p-2 rounded hover:bg-white/10 transition-colors"
+									title="Remove variable"
+									style={{ color: theme.colors.textDim }}
+								>
+									<Trash2 className="w-3 h-3" />
+								</button>
+							</div>
+							{error && (
+								<p className="text-xs mt-1 px-2" style={{ color: '#ef4444' }}>
+									⚠ {error}
+								</p>
+							)}
+						</div>
+					);
+				})}
 				<button
 					onClick={addEntry}
 					className="flex items-center gap-1 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
@@ -207,9 +261,17 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 					Add Variable
 				</button>
 			</div>
-			<p className="text-xs opacity-50 mt-1">
-				Environment variables passed to every shell session.
-			</p>
+			<div className="mt-2 space-y-1">
+				<p className="text-xs opacity-50">
+					Environment variables passed to all terminal sessions and AI agent processes.
+				</p>
+				{entries.length > 0 && (
+					<p className="text-xs opacity-60">
+						✓ Valid ({entries.filter((e) => e.key.trim() && !validationErrors[e.id]).length}{' '}
+						variables loaded)
+					</p>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -1428,7 +1490,37 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</p>
 										</div>
 
-										{/* Shell Environment Variables */}
+										{/* Global Environment Variables */}
+										<div className="flex items-start gap-2 mb-2">
+											<div className="flex-1">
+												<p className="text-xs opacity-50">
+													<strong>Global Environment Variables</strong> apply to all terminal
+													sessions and AI agent processes. Format: KEY=VALUE (one per line).
+													Variables with special characters should be quoted. Agent-specific
+													settings can override these values. Typical use cases: API keys, proxy
+													settings, custom tool paths.
+												</p>
+											</div>
+											<div
+												className="group relative flex-shrink-0 mt-0.5 outline-none"
+												tabIndex={0}
+												title="Environment variables configured here are available to all terminal sessions, all AI agent processes (Claude, OpenCode, etc.), and any spawned child processes. Agent-specific settings can override these values."
+											>
+												<HelpCircle
+													className="w-4 h-4 cursor-help"
+													style={{ color: theme.colors.textDim }}
+												/>
+												<div className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal">
+													<p className="mb-1 font-semibold">Environment variables apply to:</p>
+													<ul className="list-disc list-inside space-y-0.5">
+														<li>All terminal sessions</li>
+														<li>All AI agent processes (Claude, OpenCode, etc.)</li>
+														<li>Any spawned child processes</li>
+													</ul>
+													<p className="mt-1">Agent-specific settings can override these values.</p>
+												</div>
+											</div>
+										</div>
 										<EnvVarsEditor
 											envVars={props.shellEnvVars}
 											setEnvVars={props.setShellEnvVars}
@@ -2180,8 +2272,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											Settings folder
 										</p>
 										<p className="text-xs opacity-60 mt-0.5">
-											Choose where Maestro stores settings, sessions, and groups. Use a synced
-											folder (iCloud Drive, Dropbox, OneDrive) to share across devices.
+											Choose where Maestro stores settings, sessions, and groups (including global
+											environment variables, agents, and configurations). Use a synced folder
+											(iCloud Drive, Dropbox, OneDrive) to share across devices.
 										</p>
 										<p className="text-xs opacity-50 mt-1 italic">
 											Note: Only run Maestro on one device at a time to avoid sync conflicts.
