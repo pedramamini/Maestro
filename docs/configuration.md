@@ -73,7 +73,7 @@ Configure environment variables once in Settings and they automatically apply to
 
 ### Example Configuration
 
-```
+```env
 ANTHROPIC_API_KEY=sk-proj-xxxxx
 HTTP_PROXY=http://proxy.company.com:8080
 HTTPS_PROXY=http://proxy.company.com:8080

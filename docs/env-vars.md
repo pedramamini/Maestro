@@ -42,7 +42,7 @@ This feature solves all of these issues by providing a single, unified source of
 
 ### Architecture Overview
 
-```
+```text
 ┌─────────────────────────────────────────────────────────────┐
 │                    User Settings UI                          │
 │        (Settings → General → Shell Configuration)            │
@@ -97,7 +97,7 @@ This feature solves all of these issues by providing a single, unified source of
 
 #### For Terminal Sessions
 
-```
+```text
 1. User opens Settings → General → Shell Configuration
 2. Enters environment variables: KEY=VALUE (one per line)
 3. Clicks Save or Auto-Save triggers
@@ -113,7 +113,7 @@ This feature solves all of these issues by providing a single, unified source of
 
 #### For Agent Processes
 
-```
+```text
 1. Global env vars stored in electron-store as before
 2. User requests to spawn agent (Claude Code, Codex, etc.)
 3. IPC handler loads: settingsStore.get('shellEnvVars', {})
@@ -132,7 +132,7 @@ This feature solves all of these issues by providing a single, unified source of
 
 The environment variable precedence (highest to lowest) is:
 
-```
+```text
 Priority 1: Session-Level Custom Environment Variables
             (set in spawn request for this specific session)
                     ▲
