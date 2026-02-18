@@ -110,6 +110,7 @@ interface MainPanelProps {
 	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses
 	autoScrollAiMode: boolean; // Whether to auto-scroll in AI mode
 	setAutoScrollAiMode: (value: boolean) => void; // Toggle auto-scroll in AI mode
+	userMessageAlignment: 'left' | 'right'; // User message bubble alignment
 	shortcuts: Record<string, Shortcut>;
 	rightPanelOpen: boolean;
 	maxOutputLines: number;
@@ -1804,6 +1805,7 @@ export const MainPanel = React.memo(
 											}
 											autoScrollAiMode={props.autoScrollAiMode}
 											setAutoScrollAiMode={props.setAutoScrollAiMode}
+											userMessageAlignment={props.userMessageAlignment}
 											onOpenInTab={props.onOpenSavedFileInTab}
 										/>
 									)}

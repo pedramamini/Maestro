@@ -275,6 +275,10 @@ export interface UseSettingsReturn {
 	autoScrollAiMode: boolean;
 	setAutoScrollAiMode: (value: boolean) => void;
 
+	// Message alignment
+	userMessageAlignment: 'left' | 'right';
+	setUserMessageAlignment: (value: 'left' | 'right') => void;
+
 	// Encore Features - optional features disabled by default
 	encoreFeatures: EncoreFeatureFlags;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;

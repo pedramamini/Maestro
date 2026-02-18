@@ -30,7 +30,7 @@ See [Performance Guidelines](#performance-guidelines) for specific practices.
 - [Performance Guidelines](#performance-guidelines)
 - [Debugging Guide](#debugging-guide)
 - [Commit Messages](#commit-messages)
-- [Pull Request Process](#pull-request-process)
+- [Pull Request Process](#pull-request-process) (includes [automated code review](#automated-code-review))
 - [Building for Release](#building-for-release)
 - [Documentation](#documentation)
 
@@ -802,6 +802,33 @@ Example: `feat: add context usage visualization`
 
 ## Pull Request Process
 
+### Automated Code Review
+
+PRs are automatically reviewed by two AI-powered tools:
+
+**[CodeRabbit](https://coderabbit.ai)** — Line-level code review. When you open or update a PR, CodeRabbit will:
+
+- Post a **PR summary** with a walkthrough of changes
+- Leave **inline review comments** on potential issues
+- Provide a **sequence diagram** for complex changes
+
+| Command | Effect |
+|---------|--------|
+| `@coderabbitai review` | Trigger a full review (useful for existing PRs) |
+| `@coderabbitai summary` | Regenerate the PR summary |
+| `@coderabbitai resolve` | Resolve all CodeRabbit review comments |
+| `@coderabbitai configuration` | Show current repo settings |
+
+You can reply to any CodeRabbit comment to ask follow-up questions — it responds conversationally.
+
+**[Greptile](https://greptile.com)** — Codebase-aware review with deeper architectural context. Greptile indexes the full repo and reviews PRs with understanding of how changes relate to the broader codebase.
+
+| Command | Effect |
+|---------|--------|
+| `@greptile` | Ask Greptile a question or request a review in any PR comment |
+
+Reply to Greptile comments the same way you would CodeRabbit.
+
 ### Before Opening a PR
 
 All PRs must pass these checks before review:
@@ -847,7 +874,8 @@ All PRs must pass these checks before review:
    - Why it's needed
    - How to test it
    - Screenshots for UI changes
-5. Wait for review — maintainers may request changes
+5. CodeRabbit will automatically review your PR
+6. Address any CodeRabbit and maintainer feedback
 
 ## Building for Release
 

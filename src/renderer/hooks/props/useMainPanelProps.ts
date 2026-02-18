@@ -65,6 +65,7 @@ export interface UseMainPanelPropsDeps {
 	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses
 	autoScrollAiMode: boolean; // Whether to auto-scroll in AI mode
 	setAutoScrollAiMode: (value: boolean) => void; // Toggle auto-scroll in AI mode
+	userMessageAlignment: 'left' | 'right'; // User message bubble alignment
 	shortcuts: Record<string, Shortcut>;
 	rightPanelOpen: boolean;
 	maxOutputLines: number;
@@ -338,6 +339,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			chatRawTextMode: deps.chatRawTextMode,
 			autoScrollAiMode: deps.autoScrollAiMode,
 			setAutoScrollAiMode: deps.setAutoScrollAiMode,
+			userMessageAlignment: deps.userMessageAlignment,
 			shortcuts: deps.shortcuts,
 			rightPanelOpen: deps.rightPanelOpen,
 			maxOutputLines: deps.maxOutputLines,
@@ -561,6 +563,7 @@ export function useMainPanelProps(deps: UseMainPanelPropsDeps) {
 			deps.chatRawTextMode,
 			deps.autoScrollAiMode,
 			deps.setAutoScrollAiMode,
+			deps.userMessageAlignment,
 			deps.shortcuts,
 			deps.rightPanelOpen,
 			deps.maxOutputLines,

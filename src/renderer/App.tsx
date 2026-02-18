@@ -526,6 +526,10 @@ function MaestroConsoleInner() {
 		autoScrollAiMode,
 		setAutoScrollAiMode,
 
+		// Message alignment
+		userMessageAlignment,
+		setUserMessageAlignment,
+
 		// Windows warning suppression
 		setSuppressWindowsWarning,
 
@@ -7097,6 +7101,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		chatRawTextMode,
 		autoScrollAiMode,
 		setAutoScrollAiMode,
+		userMessageAlignment,
 		shortcuts,
 		rightPanelOpen,
 		maxOutputLines,
@@ -8600,6 +8605,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 							setCustomAICommands={setCustomAICommands}
 							autoScrollAiMode={autoScrollAiMode}
 							setAutoScrollAiMode={setAutoScrollAiMode}
+							userMessageAlignment={userMessageAlignment}
+							setUserMessageAlignment={setUserMessageAlignment}
 							encoreFeatures={encoreFeatures}
 							setEncoreFeatures={setEncoreFeatures}
 							initialTab={settingsTab}

@@ -242,6 +242,7 @@ export interface SettingsStoreState {
 	fileTabAutoRefreshEnabled: boolean;
 	suppressWindowsWarning: boolean;
 	autoScrollAiMode: boolean;
+	userMessageAlignment: 'left' | 'right';
 	encoreFeatures: EncoreFeatureFlags;
 	directorNotesSettings: DirectorNotesSettings;
 	wakatimeApiKey: string;
@@ -306,6 +307,7 @@ export interface SettingsStoreActions {
 	setFileTabAutoRefreshEnabled: (value: boolean) => void;
 	setSuppressWindowsWarning: (value: boolean) => void;
 	setAutoScrollAiMode: (value: boolean) => void;
+	setUserMessageAlignment: (value: 'left' | 'right') => void;
 	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
 	setWakatimeApiKey: (value: string) => void;
@@ -446,6 +448,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	fileTabAutoRefreshEnabled: false,
 	suppressWindowsWarning: false,
 	autoScrollAiMode: false,
+	userMessageAlignment: 'right',
 	encoreFeatures: DEFAULT_ENCORE_FEATURES,
 	directorNotesSettings: DEFAULT_DIRECTOR_NOTES_SETTINGS,
 	wakatimeApiKey: '',
@@ -741,6 +744,11 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	setAutoScrollAiMode: (value) => {
 		set({ autoScrollAiMode: value });
 		window.maestro.settings.set('autoScrollAiMode', value);
+	},
+
+	setUserMessageAlignment: (value) => {
+		set({ userMessageAlignment: value });
+		window.maestro.settings.set('userMessageAlignment', value);
 	},
 
 	setEncoreFeatures: (value) => {
@@ -1614,6 +1622,9 @@ export async function loadAllSettings(): Promise<void> {
 
 		if (allSettings['autoScrollAiMode'] !== undefined)
 			patch.autoScrollAiMode = allSettings['autoScrollAiMode'] as boolean;
+
+		if (allSettings['userMessageAlignment'] !== undefined)
+			patch.userMessageAlignment = allSettings['userMessageAlignment'] as 'left' | 'right';
 
 		// Encore Features (merge with defaults to preserve new flags)
 		if (allSettings['encoreFeatures'] !== undefined) {

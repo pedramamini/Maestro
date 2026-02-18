@@ -1,12 +1,13 @@
 /**
  * @file auto-scroll.test.tsx
- * @description Tests for the auto-scroll feature across multiple components
+ * @description Tests for the unified auto-scroll button (single down-arrow, right side)
  *
  * Test coverage includes:
- * - Settings integration (default value, persistence, SettingsModal rendering)
- * - Keyboard shortcut registration and handling
- * - TerminalOutput auto-scroll button behavior (rendering, clicking, state)
- * - Props threading from useMainPanelProps through MainPanel to TerminalOutput
+ * - Settings integration (keyboard shortcut registration)
+ * - Button rendering (visibility conditions, visual states)
+ * - Click behavior (pin to bottom, unpin, re-pin after scroll-up)
+ * - Pause/resume on scroll (dims on scroll-up, re-highlights on scroll-to-bottom)
+ * - Props threading (backward compatibility without auto-scroll props)
  */
 
 import React from 'react';
@@ -156,42 +157,7 @@ describe('Auto-scroll feature', () => {
 	});
 
 	describe('settings integration', () => {
-		it('autoScrollAiMode defaults to false (button shows inactive state)', () => {
-			// When autoScrollAiMode is false (default), the button should show inactive styling
-			const setAutoScrollAiMode = vi.fn();
-			const props = createDefaultProps({
-				autoScrollAiMode: false,
-				setAutoScrollAiMode,
-			});
-
-			render(<TerminalOutput {...props} />);
-
-			const button = screen.getByTitle('Auto-scroll OFF (click to enable)');
-			expect(button).toBeInTheDocument();
-			// Inactive state uses bgSidebar background
-			expect(button).toHaveStyle({ backgroundColor: defaultTheme.colors.bgSidebar });
-		});
-
-		it('autoScrollAiMode persists when toggled via button click', async () => {
-			const setAutoScrollAiMode = vi.fn();
-			const props = createDefaultProps({
-				autoScrollAiMode: false,
-				setAutoScrollAiMode,
-			});
-
-			render(<TerminalOutput {...props} />);
-
-			const button = screen.getByTitle('Auto-scroll OFF (click to enable)');
-			await act(async () => {
-				fireEvent.click(button);
-			});
-
-			// Should call the setter to toggle (false -> true)
-			expect(setAutoScrollAiMode).toHaveBeenCalledWith(true);
-		});
-
 		it('setting is rendered in SettingsModal with correct label (shortcut registration)', () => {
-			// Verify the toggleAutoScroll shortcut is registered in DEFAULT_SHORTCUTS
 			expect(DEFAULT_SHORTCUTS.toggleAutoScroll).toBeDefined();
 			expect(DEFAULT_SHORTCUTS.toggleAutoScroll.label).toBe('Toggle Auto-Scroll AI Output');
 			expect(DEFAULT_SHORTCUTS.toggleAutoScroll.keys).toEqual(['Alt', 'Meta', 's']);
@@ -207,19 +173,16 @@ describe('Auto-scroll feature', () => {
 		});
 	});
 
-	describe('TerminalOutput button rendering', () => {
-		it('auto-scroll button does NOT render when autoScrollAiMode prop is not provided', () => {
-			// When setAutoScrollAiMode is not passed, button should not render
-			const props = createDefaultProps({
-				// No autoScrollAiMode or setAutoScrollAiMode
-			});
+	describe('button rendering', () => {
+		it('button does NOT render when setAutoScrollAiMode prop is not provided', () => {
+			const props = createDefaultProps();
 
 			render(<TerminalOutput {...props} />);
 
-			expect(screen.queryByTitle(/Auto-scroll/)).not.toBeInTheDocument();
+			expect(screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)).not.toBeInTheDocument();
 		});
 
-		it('auto-scroll button renders when autoScrollAiMode is true and inputMode is ai', () => {
+		it('button renders with accent styling when auto-scroll is active (pinned at bottom)', () => {
 			const props = createDefaultProps({
 				autoScrollAiMode: true,
 				setAutoScrollAiMode: vi.fn(),
@@ -228,10 +191,25 @@ describe('Auto-scroll feature', () => {
 
 			render(<TerminalOutput {...props} />);
 
-			expect(screen.getByTitle('Auto-scroll ON (click to disable)')).toBeInTheDocument();
+			const button = screen.getByTitle('Auto-scroll ON (click to unpin)');
+			expect(button).toBeInTheDocument();
+			expect(button).toHaveStyle({ backgroundColor: defaultTheme.colors.accent });
+			expect(button).toHaveStyle({ color: defaultTheme.colors.accentForeground });
 		});
 
-		it('auto-scroll button does NOT render in terminal mode', () => {
+		it('button is hidden when auto-scroll is off and at bottom (nothing to do)', () => {
+			const props = createDefaultProps({
+				autoScrollAiMode: false,
+				setAutoScrollAiMode: vi.fn(),
+			});
+
+			render(<TerminalOutput {...props} />);
+
+			// At bottom with auto-scroll off = no button visible
+			expect(screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)).not.toBeInTheDocument();
+		});
+
+		it('button does NOT render in terminal mode', () => {
 			const props = createDefaultProps({
 				autoScrollAiMode: true,
 				setAutoScrollAiMode: vi.fn(),
@@ -240,10 +218,48 @@ describe('Auto-scroll feature', () => {
 
 			render(<TerminalOutput {...props} />);
 
-			expect(screen.queryByTitle(/Auto-scroll/)).not.toBeInTheDocument();
+			expect(screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)).not.toBeInTheDocument();
 		});
 
-		it('clicking the button toggles autoScrollAiMode when not paused', async () => {
+		it('shows dimmed button when scrolled up (not pinned)', async () => {
+			const logs: LogEntry[] = Array.from({ length: 20 }, (_, i) =>
+				createLogEntry({ id: `log-${i}`, text: `Message ${i}`, source: i % 2 === 0 ? 'user' : 'stdout' })
+			);
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				autoScrollAiMode: false,
+				setAutoScrollAiMode: vi.fn(),
+			});
+
+			const { container } = render(<TerminalOutput {...props} />);
+
+			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
+
+			// Simulate scroll away from bottom
+			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 2000, configurable: true });
+			Object.defineProperty(scrollContainer, 'scrollTop', { value: 500, configurable: true });
+			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
+
+			fireEvent.scroll(scrollContainer);
+
+			await act(async () => {
+				vi.advanceTimersByTime(50);
+			});
+
+			const button = screen.getByTitle('Scroll to bottom (click to pin)');
+			expect(button).toBeInTheDocument();
+			expect(button).toHaveStyle({ backgroundColor: defaultTheme.colors.bgSidebar });
+		});
+	});
+
+	describe('click behavior', () => {
+		it('clicking when pinned at bottom disables auto-scroll (unpin)', async () => {
 			const setAutoScrollAiMode = vi.fn();
 			const props = createDefaultProps({
 				autoScrollAiMode: true,
@@ -252,46 +268,65 @@ describe('Auto-scroll feature', () => {
 
 			render(<TerminalOutput {...props} />);
 
-			const button = screen.getByTitle('Auto-scroll ON (click to disable)');
+			const button = screen.getByTitle('Auto-scroll ON (click to unpin)');
 			await act(async () => {
 				fireEvent.click(button);
 			});
 
-			// Should toggle from true to false
 			expect(setAutoScrollAiMode).toHaveBeenCalledWith(false);
 		});
 
-		it('button shows active state when auto-scroll is on and not paused', () => {
-			const props = createDefaultProps({
-				autoScrollAiMode: true,
-				setAutoScrollAiMode: vi.fn(),
+		it('clicking when scrolled up enables auto-scroll and scrolls to bottom (pin)', async () => {
+			const setAutoScrollAiMode = vi.fn();
+			const logs: LogEntry[] = Array.from({ length: 20 }, (_, i) =>
+				createLogEntry({ id: `log-${i}`, text: `Message ${i}`, source: i % 2 === 0 ? 'user' : 'stdout' })
+			);
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
 			});
 
-			render(<TerminalOutput {...props} />);
-
-			const button = screen.getByTitle('Auto-scroll ON (click to disable)');
-			// Active state uses accent background
-			expect(button).toHaveStyle({ backgroundColor: defaultTheme.colors.accent });
-			expect(button).toHaveStyle({ color: defaultTheme.colors.accentForeground });
-		});
-
-		it('button shows inactive state when autoScrollAiMode is false', () => {
 			const props = createDefaultProps({
+				session,
 				autoScrollAiMode: false,
-				setAutoScrollAiMode: vi.fn(),
+				setAutoScrollAiMode,
 			});
 
-			render(<TerminalOutput {...props} />);
+			const { container } = render(<TerminalOutput {...props} />);
 
-			const button = screen.getByTitle('Auto-scroll OFF (click to enable)');
-			// Inactive state uses bgSidebar background
-			expect(button).toHaveStyle({ backgroundColor: defaultTheme.colors.bgSidebar });
-			expect(button).toHaveStyle({ color: defaultTheme.colors.textDim });
+			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
+			const scrollToSpy = vi.fn();
+			scrollContainer.scrollTo = scrollToSpy;
+
+			// Simulate scroll away from bottom
+			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 2000, configurable: true });
+			Object.defineProperty(scrollContainer, 'scrollTop', { value: 500, configurable: true });
+			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
+
+			fireEvent.scroll(scrollContainer);
+
+			await act(async () => {
+				vi.advanceTimersByTime(50);
+			});
+
+			const button = screen.getByTitle('Scroll to bottom (click to pin)');
+			await act(async () => {
+				fireEvent.click(button);
+			});
+
+			// Should enable auto-scroll
+			expect(setAutoScrollAiMode).toHaveBeenCalledWith(true);
+			// Should scroll to bottom
+			expect(scrollToSpy).toHaveBeenCalledWith({
+				top: 2000,
+				behavior: 'smooth',
+			});
 		});
 	});
 
-	describe('auto-scroll pause and resume behavior', () => {
-		it('auto-scroll pauses when user scrolls away from bottom', async () => {
+	describe('pause and resume on scroll', () => {
+		it('auto-scroll dims when user scrolls up (paused)', async () => {
 			const setAutoScrollAiMode = vi.fn();
 			const logs: LogEntry[] = Array.from({ length: 20 }, (_, i) =>
 				createLogEntry({ id: `log-${i}`, text: `Message ${i}`, source: i % 2 === 0 ? 'user' : 'stdout' })
@@ -312,25 +347,24 @@ describe('Auto-scroll feature', () => {
 
 			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
 
-			// Simulate scroll away from bottom (more than 50px from bottom)
+			// Simulate scroll away from bottom
 			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 2000, configurable: true });
 			Object.defineProperty(scrollContainer, 'scrollTop', { value: 500, configurable: true });
 			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
 
 			fireEvent.scroll(scrollContainer);
 
-			// Wait for throttle
 			await act(async () => {
 				vi.advanceTimersByTime(50);
 			});
 
-			// After scrolling up, the button should show "paused" state
-			// The component internally sets autoScrollPaused to true
-			const button = screen.getByTitle(/Auto-scroll paused/);
+			// After scrolling up with auto-scroll on, button should show dimmed "pin" state
+			const button = screen.getByTitle('Scroll to bottom (click to pin)');
 			expect(button).toBeInTheDocument();
+			expect(button).toHaveStyle({ backgroundColor: defaultTheme.colors.bgSidebar });
 		});
 
-		it('clicking resume when paused snaps to bottom and clears pause', async () => {
+		it('clicking re-pins after scroll-up and scrolls to bottom', async () => {
 			const setAutoScrollAiMode = vi.fn();
 			const logs: LogEntry[] = Array.from({ length: 20 }, (_, i) =>
 				createLogEntry({ id: `log-${i}`, text: `Message ${i}`, source: i % 2 === 0 ? 'user' : 'stdout' })
@@ -364,49 +398,69 @@ describe('Auto-scroll feature', () => {
 				vi.advanceTimersByTime(50);
 			});
 
-			// Should now show paused state
-			const pausedButton = screen.getByTitle(/Auto-scroll paused/);
-			expect(pausedButton).toBeInTheDocument();
-
-			// Click to resume
+			const button = screen.getByTitle('Scroll to bottom (click to pin)');
 			await act(async () => {
-				fireEvent.click(pausedButton);
+				fireEvent.click(button);
 			});
 
-			// Should have called scrollTo to snap to bottom
+			// Should re-enable auto-scroll and scroll to bottom
+			expect(setAutoScrollAiMode).toHaveBeenCalledWith(true);
 			expect(scrollToSpy).toHaveBeenCalledWith({
-				top: 2000, // scrollHeight
-				behavior: 'auto',
+				top: 2000,
+				behavior: 'smooth',
 			});
-
-			// Button should now show active state (not paused)
-			expect(screen.getByTitle('Auto-scroll ON (click to disable)')).toBeInTheDocument();
 		});
 	});
 
 	describe('props threading', () => {
 		it('TerminalOutput accepts and uses autoScrollAiMode and setAutoScrollAiMode props', () => {
-			// This tests that the props interface is properly defined and used
 			const setAutoScrollAiMode = vi.fn();
 			const props = createDefaultProps({
 				autoScrollAiMode: true,
 				setAutoScrollAiMode,
 			});
 
-			// Should render without errors and show the auto-scroll button
 			const { container } = render(<TerminalOutput {...props} />);
 			expect(container).toBeTruthy();
-			expect(screen.getByTitle('Auto-scroll ON (click to disable)')).toBeInTheDocument();
+			expect(screen.getByTitle('Auto-scroll ON (click to unpin)')).toBeInTheDocument();
 		});
 
 		it('TerminalOutput renders correctly without auto-scroll props (backward compatible)', () => {
-			// When auto-scroll props are not provided, component should render normally
 			const props = createDefaultProps();
 
 			const { container } = render(<TerminalOutput {...props} />);
 			expect(container).toBeTruthy();
-			// No auto-scroll button should be rendered
-			expect(screen.queryByTitle(/Auto-scroll/)).not.toBeInTheDocument();
+			expect(screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)).not.toBeInTheDocument();
+		});
+	});
+
+	describe('button positioning based on userMessageAlignment', () => {
+		it('button is on the left when user messages are right (AI on left)', () => {
+			const props = createDefaultProps({
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+				userMessageAlignment: 'right',
+			});
+
+			render(<TerminalOutput {...props} />);
+
+			const button = screen.getByTitle('Auto-scroll ON (click to unpin)');
+			expect(button.className).toContain('left-6');
+			expect(button.className).not.toContain('right-6');
+		});
+
+		it('button is on the right when user messages are left (AI on right)', () => {
+			const props = createDefaultProps({
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+				userMessageAlignment: 'left',
+			});
+
+			render(<TerminalOutput {...props} />);
+
+			const button = screen.getByTitle('Auto-scroll ON (click to unpin)');
+			expect(button.className).toContain('right-6');
+			expect(button.className).not.toContain('left-6');
 		});
 	});
 });
