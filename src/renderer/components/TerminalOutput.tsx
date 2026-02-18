@@ -330,7 +330,7 @@ const LogItemComponent = memo(
 				: htmlContent;
 
 		const isUserMessage = log.source === 'user';
-		const isReversed = userMessageAlignment === 'right' ? isUserMessage : !isUserMessage;
+		const isReversed = userMessageAlignment === 'left' ? isUserMessage : !isUserMessage;
 
 		return (
 			<div
