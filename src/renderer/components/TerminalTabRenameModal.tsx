@@ -43,7 +43,7 @@ export const TerminalTabRenameModal = memo(function TerminalTabRenameModal({
 		<Modal
 			theme={theme}
 			title="Rename Terminal Tab"
-			priority={MODAL_PRIORITIES.CONFIRM}
+			priority={MODAL_PRIORITIES.TERMINAL_TAB_RENAME}
 			onClose={onClose}
 			width={380}
 			closeOnBackdropClick

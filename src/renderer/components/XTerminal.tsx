@@ -5,6 +5,7 @@ import { WebglAddon } from '@xterm/addon-webgl';
 import { WebLinksAddon } from '@xterm/addon-web-links';
 import { SearchAddon, type ISearchOptions } from '@xterm/addon-search';
 import { Unicode11Addon } from '@xterm/addon-unicode11';
+import * as Sentry from '@sentry/electron/renderer';
 import '@xterm/xterm/css/xterm.css';
 import type { Theme } from '../types';
 
@@ -179,7 +180,7 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 	},
 	ref
 ) {
-	const containerRef = useRef<HTMLDivElement>(null);
+	const containerRef = useRef<HTMLDivElement | null>(null);
 	const terminalRef = useRef<Terminal | null>(null);
 	const addonsRef = useRef<XTerminalAddons>({
 		fit: null,
@@ -206,7 +207,19 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			addonsRef.current.fit.fit();
 			const { cols, rows } = terminalRef.current;
 			onResize?.(cols, rows);
-			window.maestro.process.resize(sessionId, cols, rows).catch(() => {});
+			window.maestro.process.resize(sessionId, cols, rows).catch((error) => {
+				Sentry.captureException(error, {
+					tags: {
+						component: 'XTerminal',
+						operation: 'process.resize',
+					},
+					extra: {
+						sessionId,
+						cols,
+						rows,
+					},
+				});
+			});
 		}, 100);
 	}, [onResize, sessionId]);
 
@@ -253,6 +266,18 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 			});
 			terminal.loadAddon(webglInstance);
 		} catch (error) {
+			Sentry.captureException(error, {
+				tags: {
+					component: 'XTerminal',
+					operation: 'webgl.init',
+				},
+				extra: {
+					sessionId,
+					fontFamily,
+					fontSize: fontSize ?? 14,
+					themeId: theme.id,
+				},
+			});
 			console.warn('WebGL addon failed to load, using canvas renderer', error);
 		}
 
@@ -441,10 +466,16 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 		[searchOptions]
 	);
 
+	const setContainerRef = useCallback((el: HTMLDivElement | null) => {
+		containerRef.current = el;
+		el?.focus();
+	}, []);
+
 	return (
 		<div
-			ref={containerRef}
-			className="h-full w-full overflow-hidden"
+			ref={setContainerRef}
+			tabIndex={0}
+			className="h-full w-full overflow-hidden outline-none"
 			data-session-id={sessionId}
 			data-theme-id={theme.id}
 			data-font-family={fontFamily}

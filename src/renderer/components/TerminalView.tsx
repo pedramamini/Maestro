@@ -14,6 +14,7 @@ import { TerminalTabBar } from './TerminalTabBar';
 import { TerminalSearchBar } from './TerminalSearchBar';
 import type { Session, TerminalTab, Theme } from '../types';
 import { getActiveTerminalTab, getTerminalSessionId } from '../utils/terminalTabHelpers';
+import { captureException } from '../utils/sentry';
 
 const SHELL_EXIT_MESSAGE =
 	'\r\n\x1b[33mShell exited.\x1b[0m Press any key to close, or Ctrl+Shift+` for new terminal.\r\n';
@@ -166,7 +167,24 @@ export const TerminalView = memo(
 
 					onTabStateChange(tab.id, 'exited', 1);
 					onTabPidChange(tab.id, 0);
-				} catch {
+				} catch (error) {
+					captureException(error, {
+						tags: {
+							component: 'TerminalView',
+							operation: 'spawnPtyForTab',
+							api: 'window.maestro.process.spawnTerminalTab',
+						},
+						extra: {
+							sessionId: session.id,
+							tabId: tab.id,
+							terminalSessionId,
+							cwd: tab.cwd || session.cwd,
+							shell: defaultShell,
+							hasShellArgs: Boolean(shellArgs),
+							hasShellEnvVars: Boolean(shellEnvVars && Object.keys(shellEnvVars).length > 0),
+						},
+					});
+
 					if (!getLatestTab(tab.id)) {
 						return;
 					}
