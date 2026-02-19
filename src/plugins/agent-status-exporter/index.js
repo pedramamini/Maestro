@@ -1,14 +1,24 @@
 /**
- * Agent Dashboard Plugin
+ * Agent Status Exporter Plugin
  *
- * Writes real-time agent status to a JSON file for external consumption.
+ * Exports real-time agent status to a JSON file for external consumption.
  * Main-process-only plugin — no renderer/iframe UI.
+ *
+ * A heartbeat timer writes status every 10 seconds even when idle,
+ * so consumers can distinguish "no active agents" from "stale data."
  */
+
+const fsPromises = require('fs').promises;
+const pathModule = require('path');
+
+const LOG_TAG = '[agent-status-exporter]';
+const HEARTBEAT_INTERVAL_MS = 10000;
 
 /** @type {Map<string, object>} */
 const agents = new Map();
 
 let debounceTimer = null;
+let heartbeatTimer = null;
 let api = null;
 
 function debounceWriteStatus() {
@@ -65,9 +75,24 @@ async function writeStatus() {
 			},
 		};
 
-		await api.storage.write('status.json', JSON.stringify(output, null, 2));
+		const json = JSON.stringify(output, null, 2);
+
+		// Check for custom output path; fall back to plugin storage
+		let customPath = null;
+		try {
+			customPath = await api.settings.get('outputPath');
+		} catch {
+			// settings:read not available — use default
+		}
+
+		if (customPath && typeof customPath === 'string' && pathModule.isAbsolute(customPath)) {
+			await fsPromises.mkdir(pathModule.dirname(customPath), { recursive: true });
+			await fsPromises.writeFile(customPath, json, 'utf-8');
+		} else {
+			await api.storage.write('status.json', json);
+		}
 	} catch (err) {
-		console.error('[agent-dashboard] Failed to write status:', err);
+		console.error(`${LOG_TAG} Failed to write status:`, err);
 	}
 }
 
@@ -101,7 +126,7 @@ async function activate(pluginApi) {
 			agent.startTime = proc.startTime || Date.now();
 		}
 	} catch (err) {
-		console.error('[agent-dashboard] Failed to get active processes:', err);
+		console.error(`${LOG_TAG} Failed to get active processes:`, err);
 	}
 
 	// Subscribe to usage updates
@@ -154,15 +179,25 @@ async function activate(pluginApi) {
 		}
 	});
 
-	// Write initial status
-	debounceWriteStatus();
+	// Write initial status immediately
+	await writeStatus();
+
+	// Start heartbeat — writes status every 10s even when idle so consumers
+	// always see a fresh timestamp and know Maestro is running
+	heartbeatTimer = setInterval(() => {
+		writeStatus();
+	}, HEARTBEAT_INTERVAL_MS);
 }
 
 async function deactivate() {
-	// Clear pending debounce
+	// Clear pending timers
 	if (debounceTimer) {
 		clearTimeout(debounceTimer);
 		debounceTimer = null;
+	}
+	if (heartbeatTimer) {
+		clearInterval(heartbeatTimer);
+		heartbeatTimer = null;
 	}
 
 	// Mark all agents as exited and write final status

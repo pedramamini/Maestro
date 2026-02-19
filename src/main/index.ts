@@ -381,10 +381,12 @@ app.whenReady().then(async () => {
 			getProcessManager: () => processManager,
 			getMainWindow: () => mainWindow,
 			settingsStore: store,
+			sessionsStore,
 			app,
 			ipcBridge: pluginIpcBridge,
 		});
 		pluginManager.setHost(pluginHost);
+		pluginManager.setSettingsStore(store);
 		await pluginManager.initialize();
 		logger.info('Plugin system initialized', 'Startup');
 	} catch (error) {

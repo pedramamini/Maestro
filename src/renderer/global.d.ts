@@ -2706,12 +2706,17 @@ interface MaestroAPI {
 	};
 
 	// Plugin system API
+	// IPC handlers use createIpcHandler which wraps responses as { success: true, ...result }
 	plugins: {
-		getAll: () => Promise<import('../shared/plugin-types').LoadedPlugin[]>;
-		enable: (id: string) => Promise<void>;
-		disable: (id: string) => Promise<void>;
-		getDir: () => Promise<string>;
-		refresh: () => Promise<void>;
+		getAll: () => Promise<{ success: boolean; plugins?: import('../shared/plugin-types').LoadedPlugin[]; error?: string }>;
+		enable: (id: string) => Promise<{ success: boolean; enabled?: boolean; error?: string }>;
+		disable: (id: string) => Promise<{ success: boolean; disabled?: boolean; error?: string }>;
+		getDir: () => Promise<{ success: boolean; dir?: string; error?: string }>;
+		refresh: () => Promise<{ success: boolean; plugins?: import('../shared/plugin-types').LoadedPlugin[]; error?: string }>;
+		settings: {
+			get: (pluginId: string) => Promise<{ success: boolean; settings?: Record<string, unknown>; error?: string }>;
+			set: (pluginId: string, key: string, value: unknown) => Promise<{ success: boolean; set?: boolean; error?: string }>;
+		};
 		bridge: {
 			invoke: (pluginId: string, channel: string, ...args: unknown[]) => Promise<unknown>;
 			send: (pluginId: string, channel: string, ...args: unknown[]) => void;

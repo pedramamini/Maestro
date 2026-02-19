@@ -15,12 +15,18 @@ export interface PluginBridgeApi {
 	send: (pluginId: string, channel: string, ...args: unknown[]) => void;
 }
 
+export interface PluginSettingsApi {
+	get: (pluginId: string) => Promise<unknown>;
+	set: (pluginId: string, key: string, value: unknown) => Promise<unknown>;
+}
+
 export interface PluginsApi {
 	getAll: () => Promise<unknown>;
 	enable: (id: string) => Promise<unknown>;
 	disable: (id: string) => Promise<unknown>;
 	getDir: () => Promise<unknown>;
 	refresh: () => Promise<unknown>;
+	settings: PluginSettingsApi;
 	bridge: PluginBridgeApi;
 }
 
@@ -38,6 +44,11 @@ export function createPluginsApi(): PluginsApi {
 		getDir: () => ipcRenderer.invoke('plugins:getDir'),
 
 		refresh: () => ipcRenderer.invoke('plugins:refresh'),
+
+		settings: {
+			get: (pluginId: string) => ipcRenderer.invoke('plugins:settings:get', pluginId),
+			set: (pluginId: string, key: string, value: unknown) => ipcRenderer.invoke('plugins:settings:set', pluginId, key, value),
+		},
 
 		bridge: {
 			invoke: (pluginId: string, channel: string, ...args: unknown[]) =>

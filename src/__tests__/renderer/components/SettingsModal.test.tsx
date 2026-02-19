@@ -460,14 +460,14 @@ describe('SettingsModal', () => {
 		});
 
 		it('should wrap around when navigating past last tab', async () => {
-			render(<SettingsModal {...createDefaultProps({ initialTab: 'encore' })} />);
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'plugins' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
 			});
 
-			// Start on Encore Features tab (last tab)
-			expect(screen.getByText('Encore Features', { selector: 'h3' })).toBeInTheDocument();
+			// Start on Plugins tab (last tab)
+			expect(screen.getByText('Plugins')).toBeInTheDocument();
 
 			// Press Cmd+Shift+] to wrap to general
 			fireEvent.keyDown(window, { key: ']', metaKey: true, shiftKey: true });
@@ -490,14 +490,14 @@ describe('SettingsModal', () => {
 			// Start on general tab (first tab)
 			expect(screen.getByText('Default Terminal Shell')).toBeInTheDocument();
 
-			// Press Cmd+Shift+[ to wrap to Encore Features (last tab)
+			// Press Cmd+Shift+[ to wrap to Plugins (last tab)
 			fireEvent.keyDown(window, { key: '[', metaKey: true, shiftKey: true });
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			expect(screen.getByText('Encore Features', { selector: 'h3' })).toBeInTheDocument();
+			expect(screen.getByText('Plugins')).toBeInTheDocument();
 		});
 	});
 

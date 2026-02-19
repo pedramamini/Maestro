@@ -13,7 +13,7 @@ import { logger } from './utils/logger';
 import { captureException } from './utils/sentry';
 import type { ProcessManager } from './process-manager';
 import type Store from 'electron-store';
-import type { MaestroSettings } from './stores/types';
+import type { MaestroSettings, SessionsData } from './stores/types';
 import type {
 	LoadedPlugin,
 	PluginAPI,
@@ -43,6 +43,7 @@ export interface PluginHostDependencies {
 	getProcessManager: () => ProcessManager | null;
 	getMainWindow: () => BrowserWindow | null;
 	settingsStore: Store<MaestroSettings>;
+	sessionsStore?: Store<SessionsData>;
 	app: App;
 	ipcBridge?: PluginIpcBridge;
 }
@@ -201,17 +202,27 @@ export class PluginHost {
 		}
 
 		const getProcessManager = this.deps.getProcessManager;
+		const sessionsStore = this.deps.sessionsStore;
 
 		return {
 			getActiveProcesses: async () => {
 				const pm = getProcessManager();
 				if (!pm) return [];
-				return pm.getAll().map((p) => ({
-					sessionId: p.sessionId,
-					toolType: p.toolType,
-					pid: p.pid,
-					startTime: p.startTime,
-				}));
+				// Look up session names from the sessions store
+				const storedSessions = sessionsStore?.get('sessions', []) ?? [];
+				const nameMap = new Map(storedSessions.map((s) => [s.id, s.name]));
+
+				return pm.getAll().map((p) => {
+					// Process sessionId format: {baseId}-ai-{tabId}, {baseId}-terminal, etc.
+					const baseId = p.sessionId.replace(/-ai-.+$|-terminal$|-batch-\d+$|-synopsis-\d+$/, '');
+					return {
+						sessionId: p.sessionId,
+						toolType: p.toolType,
+						pid: p.pid,
+						startTime: p.startTime,
+						name: nameMap.get(baseId) || null,
+					};
+				});
 			},
 
 			onData: (callback) => {

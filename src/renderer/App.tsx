@@ -61,10 +61,6 @@ const DocumentGraphView = lazy(() =>
 const DirectorNotesModal = lazy(() =>
 	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
 );
-const PluginManagerModal = lazy(() =>
-	import('./components/PluginManager').then((m) => ({ default: m.PluginManager }))
-);
-
 // Re-import the type for SymphonyContributionData (types don't need lazy loading)
 import type { SymphonyContributionData } from './components/SymphonyModal';
 
@@ -384,9 +380,6 @@ function MaestroConsoleInner() {
 		// Director's Notes Modal
 		directorNotesOpen,
 		setDirectorNotesOpen,
-		// Plugin Manager Modal
-		pluginManagerOpen,
-		setPluginManagerOpen,
 	} = useModalActions();
 
 	// --- PLUGIN REGISTRY ---
@@ -8258,21 +8251,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 					</Suspense>
 				)}
 
-				{/* --- PLUGIN MANAGER MODAL (lazy-loaded) --- */}
-				{pluginManagerOpen && (
-					<Suspense fallback={null}>
-						<PluginManagerModal
-							theme={theme}
-							plugins={pluginRegistry.plugins}
-							loading={pluginRegistry.loading}
-							onClose={() => setPluginManagerOpen(false)}
-							onEnablePlugin={pluginRegistry.enablePlugin}
-							onDisablePlugin={pluginRegistry.disablePlugin}
-							onRefresh={pluginRegistry.refreshPlugins}
-						/>
-					</Suspense>
-				)}
-
 				{/* --- GIST PUBLISH MODAL --- */}
 				{/* Supports both file preview tabs and tab context gist publishing */}
 				{gistPublishModalOpen && (activeFileTab || tabGistContent) && (
@@ -8653,7 +8631,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 							hasNoAgents={hasNoAgents}
 							onThemeImportError={(msg) => setFlashNotification(msg)}
 							onThemeImportSuccess={(msg) => setFlashNotification(msg)}
-							onOpenPluginManager={() => setPluginManagerOpen(true)}
+							pluginRegistry={pluginRegistry}
 						/>
 					</Suspense>
 				)}

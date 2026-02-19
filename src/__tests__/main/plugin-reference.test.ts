@@ -1,16 +1,16 @@
 /**
- * Tests for Reference Plugins (Agent Dashboard & Notification Webhook)
+ * Tests for Reference Plugins (Agent Status Exporter & Notification Webhook)
  *
  * Covers:
- * - Agent Dashboard: activate/deactivate exports, event subscriptions, debounced writes, JSON schema
+ * - Agent Status Exporter: activate/deactivate exports, event subscriptions, debounced writes, JSON schema
  * - Notification Webhook: activate/deactivate exports, webhook sending, settings-based gating
  */
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
-// ─── Agent Dashboard Tests ───────────────────────────────────────────────────
+// ─── Agent Status Exporter Tests ────────────────────────────────────────────
 
-describe('Agent Dashboard Plugin', () => {
+describe('Agent Status Exporter Plugin', () => {
 	let dashboard: any;
 	let mockApi: any;
 	let storageWrites: Array<{ filename: string; data: string }>;
@@ -23,7 +23,7 @@ describe('Agent Dashboard Plugin', () => {
 
 		// Fresh module for each test to reset module-level state
 		vi.resetModules();
-		dashboard = require('../../plugins/agent-dashboard/index.js');
+		dashboard = require('../../plugins/agent-status-exporter/index.js');
 
 		mockApi = {
 			process: {
@@ -57,10 +57,15 @@ describe('Agent Dashboard Plugin', () => {
 				list: vi.fn().mockResolvedValue([]),
 				delete: vi.fn().mockResolvedValue(undefined),
 			},
+			settings: {
+				get: vi.fn().mockResolvedValue(undefined),
+			},
 		};
 	});
 
-	afterEach(() => {
+	afterEach(async () => {
+		// Clean up heartbeat timer by deactivating
+		try { await dashboard.deactivate(); } catch { /* ignore if not activated */ }
 		vi.useRealTimers();
 	});
 
@@ -88,9 +93,8 @@ describe('Agent Dashboard Plugin', () => {
 		]);
 
 		await dashboard.activate(mockApi);
-		// Trigger debounced write
-		await vi.advanceTimersByTimeAsync(500);
 
+		// activate() now writes immediately (no debounce needed)
 		expect(storageWrites.length).toBeGreaterThanOrEqual(1);
 		const output = JSON.parse(storageWrites[storageWrites.length - 1].data);
 		expect(output.agents).toHaveLength(1);
@@ -105,7 +109,6 @@ describe('Agent Dashboard Plugin', () => {
 		]);
 
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
 
 		const output = JSON.parse(storageWrites[storageWrites.length - 1].data);
 
@@ -139,8 +142,7 @@ describe('Agent Dashboard Plugin', () => {
 
 	it('debounces multiple rapid writes (only last one within 500ms executes)', async () => {
 		await dashboard.activate(mockApi);
-		// Let initial debounce fire
-		await vi.advanceTimersByTimeAsync(500);
+		// activate() writes immediately; capture baseline
 		const initialWriteCount = storageWrites.length;
 
 		// Simulate rapid usage events
@@ -166,7 +168,6 @@ describe('Agent Dashboard Plugin', () => {
 
 	it('updates token counts on usage events', async () => {
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
 
 		const usageCb = eventHandlers['usage'][0];
 		usageCb('sess-1', {
@@ -190,7 +191,6 @@ describe('Agent Dashboard Plugin', () => {
 
 	it('updates lastTool on tool execution events', async () => {
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
 
 		const toolCb = eventHandlers['tool'][0];
 		toolCb('sess-1', { name: 'Edit' });
@@ -210,7 +210,6 @@ describe('Agent Dashboard Plugin', () => {
 		]);
 
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
 
 		const exitCb = eventHandlers['exit'][0];
 		exitCb('sess-1', 0);
@@ -229,7 +228,6 @@ describe('Agent Dashboard Plugin', () => {
 		]);
 
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
 
 		const exitCb = eventHandlers['exit'][0];
 		exitCb('sess-1', 0);
@@ -243,7 +241,6 @@ describe('Agent Dashboard Plugin', () => {
 
 	it('catches agents that started between getActiveProcesses and event subscription via onData', async () => {
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
 
 		const dataCb = eventHandlers['data'][0];
 		dataCb('late-sess', 'some output');
@@ -260,8 +257,6 @@ describe('Agent Dashboard Plugin', () => {
 		]);
 
 		await dashboard.activate(mockApi);
-		await vi.advanceTimersByTimeAsync(500);
-
 		await dashboard.deactivate();
 
 		const output = JSON.parse(storageWrites[storageWrites.length - 1].data);

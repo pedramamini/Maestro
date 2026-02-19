@@ -412,6 +412,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setDirectorNotesOpen?.(true);
 				trackShortcut('directorNotes');
+			} else if (ctx.isShortcut(e, 'openPlugins')) {
+				e.preventDefault();
+				useModalStore.getState().openModal('settings', { tab: 'plugins' });
+				trackShortcut('openPlugins');
 			} else if (ctx.isShortcut(e, 'jumpToBottom')) {
 				e.preventDefault();
 				// Jump to the bottom of the current main panel output (AI logs or terminal output)

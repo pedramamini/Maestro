@@ -1,7 +1,7 @@
 {
 	"id": "notification-webhook",
 	"name": "Notification Webhook",
-	"version": "1.0.0",
+	"version": "1.5.0",
 	"description": "Send webhook notifications when agents complete tasks or encounter errors.",
 	"author": "Maestro Core",
 	"firstParty": true,

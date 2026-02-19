@@ -52,6 +52,7 @@ import type {
 	EncoreFeatureFlags,
 } from '../types';
 import { CustomThemeBuilder } from './CustomThemeBuilder';
+import { PluginManager } from './PluginManager';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { AICommandsPanel } from './AICommandsPanel';
@@ -358,11 +359,18 @@ interface SettingsModalProps {
 		| 'notifications'
 		| 'aicommands'
 		| 'ssh'
-		| 'encore';
+		| 'encore'
+		| 'plugins';
 	hasNoAgents?: boolean;
 	onThemeImportError?: (message: string) => void;
 	onThemeImportSuccess?: (message: string) => void;
-	onOpenPluginManager?: () => void;
+	pluginRegistry?: {
+		plugins: import('../../shared/plugin-types').LoadedPlugin[];
+		loading: boolean;
+		enablePlugin: (id: string) => Promise<void>;
+		disablePlugin: (id: string) => Promise<void>;
+		refreshPlugins: () => Promise<void>;
+	};
 }
 
 export const SettingsModal = memo(function SettingsModal(props: SettingsModalProps) {
@@ -421,6 +429,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		| 'aicommands'
 		| 'ssh'
 		| 'encore'
+		| 'plugins'
 	>('general');
 	const [systemFonts, setSystemFonts] = useState<string[]>([]);
 	const [customFonts, setCustomFonts] = useState<string[]>([]);
@@ -717,6 +726,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				| 'aicommands'
 				| 'ssh'
 				| 'encore'
+				| 'plugins'
 			> = FEATURE_FLAGS.LLM_SETTINGS
 				? [
 						'general',
@@ -728,6 +738,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						'aicommands',
 						'ssh',
 						'encore',
+						'plugins',
 					]
 				: [
 						'general',
@@ -738,6 +749,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						'aicommands',
 						'ssh',
 						'encore',
+						'plugins',
 					];
 			const currentIndex = tabs.indexOf(activeTab);
 
@@ -1219,6 +1231,18 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					>
 						<FlaskConical className="w-4 h-4" />
 						{activeTab === 'encore' && <span>Encore Features</span>}
+					</button>
+					<button
+						onClick={() => setActiveTab('plugins')}
+						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'plugins' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						style={{
+							color: activeTab === 'plugins' ? theme.colors.textMain : theme.colors.textDim,
+						}}
+						tabIndex={-1}
+						title="Plugins"
+					>
+						<Puzzle className="w-4 h-4" />
+						{activeTab === 'plugins' && <span>Plugins</span>}
 					</button>
 					<div className="flex-1 flex justify-end items-center pr-4">
 						<button onClick={onClose} tabIndex={-1}>
@@ -2441,29 +2465,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								</div>
 							</div>
 
-							{/* Plugins */}
-							{props.onOpenPluginManager && (
-								<div>
-									<label className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
-										<Puzzle className="w-3 h-3" />
-										Plugins
-									</label>
-									<p className="text-xs opacity-50 mb-2">
-										Manage installed plugins, enable/disable them, and configure permissions.
-									</p>
-									<button
-										onClick={() => {
-											props.onOpenPluginManager?.();
-											onClose();
-										}}
-										className="flex items-center gap-2 px-3 py-2 rounded border text-sm hover:bg-white/5 transition-colors"
-										style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-									>
-										<Puzzle className="w-4 h-4" style={{ color: theme.colors.accent }} />
-										Open Plugin Manager
-									</button>
-								</div>
-							)}
 						</div>
 					)}
 
@@ -3520,6 +3521,31 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							</div>
 						</div>
 					)}
+
+					{activeTab === 'plugins' && (() => {
+						const registry = props.pluginRegistry;
+						if (!registry) {
+							return (
+								<div className="text-center py-8" style={{ color: theme.colors.textDim }}>
+									<Puzzle className="w-8 h-8 mx-auto opacity-50 mb-2" />
+									<p className="text-sm">Plugin system not available</p>
+								</div>
+							);
+						}
+
+						return (
+							<PluginManager
+								theme={theme}
+								plugins={registry.plugins}
+								loading={registry.loading}
+								onClose={onClose}
+								onEnablePlugin={registry.enablePlugin}
+								onDisablePlugin={registry.disablePlugin}
+								onRefresh={registry.refreshPlugins}
+								embedded={true}
+							/>
+						);
+					})()}
 				</div>
 			</div>
 		</div>

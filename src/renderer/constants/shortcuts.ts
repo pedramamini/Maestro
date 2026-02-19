@@ -78,6 +78,11 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		label: "Director's Notes",
 		keys: ['Meta', 'Shift', 'o'],
 	},
+	openPlugins: {
+		id: 'openPlugins',
+		label: 'Open Plugins',
+		keys: ['Meta', 'Shift', 'x'],
+	},
 };
 
 // Non-editable shortcuts (displayed in help but not configurable)

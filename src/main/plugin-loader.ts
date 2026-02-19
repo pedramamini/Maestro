@@ -133,11 +133,106 @@ export async function loadPlugin(pluginPath: string): Promise<LoadedPlugin> {
 		return errorPlugin(message);
 	}
 
+	// Attempt to load README.md if present
+	let readme: string | undefined;
+	try {
+		readme = await fs.readFile(path.join(pluginPath, 'README.md'), 'utf-8');
+	} catch {
+		// No README — that's fine
+	}
+
 	return {
 		manifest: parsed,
 		state: 'discovered',
 		path: pluginPath,
+		readme,
 	};
+}
+
+/**
+ * Copies bundled first-party plugins from src/plugins/ to userData/plugins/.
+ * Only copies if the plugin doesn't already exist in userData (preserves user modifications).
+ * On version mismatch, overwrites with the bundled version (first-party plugins are always updated).
+ */
+export async function bootstrapBundledPlugins(pluginsDir: string): Promise<void> {
+	// Resolve bundled plugins directory relative to the app root
+	// In dev: src/plugins/  In production: resources/plugins/ (if packaged)
+	const bundledDir = path.join(__dirname, '..', 'plugins');
+
+	let bundledEntries: string[];
+	try {
+		bundledEntries = await fs.readdir(bundledDir);
+	} catch {
+		// No bundled plugins directory — this is fine in some build configurations
+		logger.debug('No bundled plugins directory found, skipping bootstrap', LOG_CONTEXT);
+		return;
+	}
+
+	await fs.mkdir(pluginsDir, { recursive: true });
+
+	// Clean up deprecated/renamed plugin directories
+	const deprecatedPlugins = ['agent-dashboard'];
+	for (const oldId of deprecatedPlugins) {
+		const oldPath = path.join(pluginsDir, oldId);
+		try {
+			await fs.rm(oldPath, { recursive: true, force: true });
+			logger.info(`Removed deprecated plugin directory '${oldId}'`, LOG_CONTEXT);
+		} catch {
+			// Doesn't exist or already removed — fine
+		}
+	}
+
+	for (const entry of bundledEntries) {
+		const srcPath = path.join(bundledDir, entry);
+		const destPath = path.join(pluginsDir, entry);
+
+		try {
+			const stat = await fs.stat(srcPath);
+			if (!stat.isDirectory()) continue;
+
+			// Check if bundled plugin has a valid manifest
+			const srcManifestPath = path.join(srcPath, 'manifest.json');
+			let srcManifestRaw: string;
+			try {
+				srcManifestRaw = await fs.readFile(srcManifestPath, 'utf-8');
+			} catch {
+				continue; // Skip entries without manifest.json
+			}
+
+			const srcManifest = JSON.parse(srcManifestRaw);
+
+			// Check if destination already exists
+			let shouldCopy = false;
+			try {
+				const destManifestPath = path.join(destPath, 'manifest.json');
+				const destManifestRaw = await fs.readFile(destManifestPath, 'utf-8');
+				const destManifest = JSON.parse(destManifestRaw);
+				// Overwrite if version differs (update bundled plugins)
+				if (destManifest.version !== srcManifest.version) {
+					shouldCopy = true;
+					logger.info(`Updating bundled plugin '${entry}' from v${destManifest.version} to v${srcManifest.version}`, LOG_CONTEXT);
+				}
+			} catch {
+				// Destination doesn't exist or has invalid manifest — copy it
+				shouldCopy = true;
+				logger.info(`Installing bundled plugin '${entry}' v${srcManifest.version}`, LOG_CONTEXT);
+			}
+
+			if (shouldCopy) {
+				// Remove existing destination if it exists
+				await fs.rm(destPath, { recursive: true, force: true });
+				await fs.mkdir(destPath, { recursive: true });
+
+				// Copy all files from source to destination
+				const files = await fs.readdir(srcPath);
+				for (const file of files) {
+					await fs.copyFile(path.join(srcPath, file), path.join(destPath, file));
+				}
+			}
+		} catch (err) {
+			logger.warn(`Failed to bootstrap bundled plugin '${entry}': ${err instanceof Error ? err.message : String(err)}`, LOG_CONTEXT);
+		}
+	}
 }
 
 /**

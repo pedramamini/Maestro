@@ -130,6 +130,8 @@ export interface LoadedPlugin {
 	path: string;
 	/** Error message if state is 'error' */
 	error?: string;
+	/** README.md content loaded from the plugin directory, if present */
+	readme?: string;
 }
 
 // ============================================================================
@@ -154,7 +156,7 @@ export interface PluginToolExecution {
  * Requires 'process:read' permission.
  */
 export interface PluginProcessAPI {
-	getActiveProcesses(): Promise<Array<{ sessionId: string; toolType: string; pid: number; startTime: number }>>;
+	getActiveProcesses(): Promise<Array<{ sessionId: string; toolType: string; pid: number; startTime: number; name: string | null }>>;
 	onData(callback: (sessionId: string, data: string) => void): () => void;
 	onUsage(callback: (sessionId: string, stats: UsageStats) => void): () => void;
 	onToolExecution(callback: (sessionId: string, tool: PluginToolExecution) => void): () => void;

@@ -31,10 +31,16 @@ export function usePluginRegistry(): UsePluginRegistryReturn {
 
 	const refreshPlugins = useCallback(async () => {
 		try {
-			const all = await window.maestro.plugins.getAll();
-			setPlugins(all);
+			const result = await window.maestro.plugins.getAll();
+			// IPC handlers return { success: true, plugins: [...] } via createIpcHandler
+			if (result?.success && Array.isArray(result.plugins)) {
+				setPlugins(result.plugins);
+			} else {
+				setPlugins([]);
+			}
 		} catch (err) {
 			console.error('Failed to fetch plugins:', err);
+			setPlugins([]);
 		} finally {
 			setLoading(false);
 		}

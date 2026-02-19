@@ -8,7 +8,7 @@
 import type { App } from 'electron';
 import type Store from 'electron-store';
 import { logger } from './utils/logger';
-import { getPluginsDir, discoverPlugins } from './plugin-loader';
+import { getPluginsDir, discoverPlugins, bootstrapBundledPlugins } from './plugin-loader';
 import type { LoadedPlugin } from '../shared/plugin-types';
 import type { PluginHost } from './plugin-host';
 import type { MaestroSettings } from './stores/types';
@@ -47,6 +47,9 @@ export class PluginManager {
 	 * First-party plugins are auto-enabled unless explicitly disabled by user.
 	 */
 	async initialize(): Promise<void> {
+		// Copy bundled first-party plugins to userData/plugins/ if not already present
+		await bootstrapBundledPlugins(this.pluginsDir);
+
 		const discovered = await discoverPlugins(this.pluginsDir);
 
 		this.plugins.clear();
@@ -177,6 +180,40 @@ export class PluginManager {
 	 */
 	getPluginsDir(): string {
 		return this.pluginsDir;
+	}
+
+	/**
+	 * Get a plugin-scoped setting value.
+	 * Keys are namespaced to `plugin:<id>:<key>`.
+	 */
+	getPluginSetting(pluginId: string, key: string): unknown {
+		if (!this.settingsStore) return undefined;
+		return this.settingsStore.get(`plugin:${pluginId}:${key}` as any);
+	}
+
+	/**
+	 * Set a plugin-scoped setting value.
+	 * Keys are namespaced to `plugin:<id>:<key>`.
+	 */
+	setPluginSetting(pluginId: string, key: string, value: unknown): void {
+		if (!this.settingsStore) return;
+		this.settingsStore.set(`plugin:${pluginId}:${key}` as any, value as any);
+	}
+
+	/**
+	 * Get all settings for a specific plugin (stripped of the namespace prefix).
+	 */
+	getAllPluginSettings(pluginId: string): Record<string, unknown> {
+		if (!this.settingsStore) return {};
+		const prefix = `plugin:${pluginId}:`;
+		const all = this.settingsStore.store;
+		const result: Record<string, unknown> = {};
+		for (const [k, v] of Object.entries(all)) {
+			if (k.startsWith(prefix) && !k.endsWith(':userDisabled')) {
+				result[k.slice(prefix.length)] = v;
+			}
+		}
+		return result;
 	}
 }
 

@@ -42,9 +42,9 @@ const mockPlugins: LoadedPlugin[] = [
 describe('usePluginRegistry', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
-		vi.mocked(window.maestro.plugins.getAll).mockResolvedValue(mockPlugins);
-		vi.mocked(window.maestro.plugins.enable).mockResolvedValue(undefined);
-		vi.mocked(window.maestro.plugins.disable).mockResolvedValue(undefined);
+		vi.mocked(window.maestro.plugins.getAll).mockResolvedValue({ success: true, plugins: mockPlugins });
+		vi.mocked(window.maestro.plugins.enable).mockResolvedValue({ success: true, enabled: true });
+		vi.mocked(window.maestro.plugins.disable).mockResolvedValue({ success: true, disabled: true });
 	});
 
 	it('loads plugins on mount', async () => {
@@ -135,21 +135,24 @@ describe('usePluginRegistry', () => {
 	});
 
 	it('returns empty tabs when no plugins have UI', async () => {
-		vi.mocked(window.maestro.plugins.getAll).mockResolvedValue([
-			{
-				manifest: {
-					id: 'no-ui',
-					name: 'No UI Plugin',
-					version: '1.0.0',
-					description: 'No UI',
-					author: 'Test',
-					main: 'index.js',
-					permissions: [],
+		vi.mocked(window.maestro.plugins.getAll).mockResolvedValue({
+			success: true,
+			plugins: [
+				{
+					manifest: {
+						id: 'no-ui',
+						name: 'No UI Plugin',
+						version: '1.0.0',
+						description: 'No UI',
+						author: 'Test',
+						main: 'index.js',
+						permissions: [],
+					},
+					state: 'active',
+					path: '/plugins/no-ui',
 				},
-				state: 'active',
-				path: '/plugins/no-ui',
-			},
-		]);
+			],
+		});
 
 		const { result } = renderHook(() => usePluginRegistry());
 

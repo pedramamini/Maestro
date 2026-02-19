@@ -119,6 +119,29 @@ export function registerPluginHandlers(deps: PluginHandlerDependencies): void {
 	);
 
 	// -------------------------------------------------------------------------
+	// plugins:settings:get — get all settings for a plugin
+	// -------------------------------------------------------------------------
+	ipcMain.handle(
+		'plugins:settings:get',
+		createIpcHandler(handlerOpts('settings:get', false), async (pluginId: string) => {
+			const pm = requirePluginManager();
+			return { settings: pm.getAllPluginSettings(pluginId) };
+		})
+	);
+
+	// -------------------------------------------------------------------------
+	// plugins:settings:set — set a single plugin setting
+	// -------------------------------------------------------------------------
+	ipcMain.handle(
+		'plugins:settings:set',
+		createIpcHandler(handlerOpts('settings:set'), async (pluginId: string, key: string, value: unknown) => {
+			const pm = requirePluginManager();
+			pm.setPluginSetting(pluginId, key, value);
+			return { set: true };
+		})
+	);
+
+	// -------------------------------------------------------------------------
 	// plugins:bridge:invoke — invoke a handler registered by a main-process plugin
 	// -------------------------------------------------------------------------
 	ipcMain.handle(
