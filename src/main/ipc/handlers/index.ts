@@ -53,6 +53,7 @@ import { registerAgentErrorHandlers } from './agent-error';
 import { registerTabNamingHandlers, TabNamingHandlerDependencies } from './tabNaming';
 import { registerDirectorNotesHandlers, DirectorNotesHandlerDependencies } from './director-notes';
 import { registerWakatimeHandlers } from './wakatime';
+import { registerPluginHandlers, PluginHandlerDependencies } from './plugins';
 import { AgentDetector } from '../../agents';
 import { ProcessManager } from '../../process-manager';
 import { WebServer } from '../../web-server';
@@ -97,6 +98,8 @@ export type { TabNamingHandlerDependencies };
 export { registerDirectorNotesHandlers };
 export type { DirectorNotesHandlerDependencies };
 export { registerWakatimeHandlers };
+export { registerPluginHandlers };
+export type { PluginHandlerDependencies };
 export type { AgentsHandlerDependencies };
 export type { ProcessHandlerDependencies };
 export type { PersistenceHandlerDependencies };
@@ -279,6 +282,10 @@ export function registerAllHandlers(deps: HandlerDependencies): void {
 	registerDirectorNotesHandlers({
 		getProcessManager: deps.getProcessManager,
 		getAgentDetector: deps.getAgentDetector,
+	});
+	// Register plugin system handlers
+	registerPluginHandlers({
+		app: deps.app,
 	});
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(deps.getMainWindow);

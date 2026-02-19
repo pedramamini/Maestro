@@ -391,3 +391,14 @@ export interface GlobalAgentStats {
 	/** Per-provider breakdown */
 	byProvider: Record<string, ProviderStats>;
 }
+
+// ============================================================================
+// Plugin Types (re-exported from plugin-types.ts)
+// ============================================================================
+
+export type {
+	PluginManifest,
+	PluginPermission,
+	PluginState,
+	LoadedPlugin,
+} from './plugin-types';
