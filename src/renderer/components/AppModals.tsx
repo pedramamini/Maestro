@@ -417,6 +417,7 @@ export interface AppSessionModalsProps {
 		customContextWindow?: number
 	) => void;
 	editAgentSession: Session | null;
+	onSwitchProviderFromEdit?: () => void; // Opens SwitchProviderModal (Virtuosos)
 
 	// RenameSessionModal
 	renameSessionModalOpen: boolean;
@@ -460,6 +461,7 @@ export function AppSessionModals({
 	onCloseEditAgentModal,
 	onSaveEditAgent,
 	editAgentSession,
+	onSwitchProviderFromEdit,
 	// RenameSessionModal
 	renameSessionModalOpen,
 	renameSessionValue,
@@ -495,6 +497,7 @@ export function AppSessionModals({
 				theme={theme}
 				session={editAgentSession}
 				existingSessions={existingSessions}
+				onSwitchProvider={onSwitchProviderFromEdit}
 			/>
 
 			{/* --- RENAME SESSION MODAL --- */}
@@ -1836,6 +1839,7 @@ export interface AppModalsProps {
 		customContextWindow?: number
 	) => void;
 	editAgentSession: Session | null;
+	onSwitchProviderFromEdit?: () => void; // Opens SwitchProviderModal (Virtuosos)
 	renameSessionModalOpen: boolean;
 	renameSessionValue: string;
 	setRenameSessionValue: (value: string) => void;
@@ -2174,6 +2178,7 @@ export function AppModals(props: AppModalsProps) {
 		onCloseEditAgentModal,
 		onSaveEditAgent,
 		editAgentSession,
+		onSwitchProviderFromEdit,
 		renameSessionModalOpen,
 		renameSessionValue,
 		setRenameSessionValue,
@@ -2464,6 +2469,7 @@ export function AppModals(props: AppModalsProps) {
 				onCloseEditAgentModal={onCloseEditAgentModal}
 				onSaveEditAgent={onSaveEditAgent}
 				editAgentSession={editAgentSession}
+				onSwitchProviderFromEdit={onSwitchProviderFromEdit}
 				renameSessionModalOpen={renameSessionModalOpen}
 				renameSessionValue={renameSessionValue}
 				setRenameSessionValue={setRenameSessionValue}

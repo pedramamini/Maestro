@@ -38,6 +38,7 @@ import {
 	Command,
 	User,
 	Users,
+	ArrowRightLeft,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type {
@@ -84,6 +85,7 @@ interface SessionContextMenuProps {
 	onConfigureWorktrees?: () => void; // Opens full worktree config modal
 	onDeleteWorktree?: () => void; // For worktree child sessions to delete
 	onCreateGroup?: () => void; // Creates a new group from the Move to Group submenu
+	onSwitchProvider?: () => void; // Opens SwitchProviderModal (Virtuosos)
 }
 
 function SessionContextMenu({
@@ -105,6 +107,7 @@ function SessionContextMenu({
 	onConfigureWorktrees,
 	onDeleteWorktree,
 	onCreateGroup,
+	onSwitchProvider,
 }: SessionContextMenuProps) {
 	const menuRef = useRef<HTMLDivElement>(null);
 	const moveToGroupRef = useRef<HTMLDivElement>(null);
@@ -211,6 +214,21 @@ function SessionContextMenu({
 				<Settings className="w-3.5 h-3.5" />
 				Edit Agent...
 			</button>
+
+			{/* Switch Provider (Virtuosos vertical swapping) */}
+			{onSwitchProvider && session.toolType !== 'terminal' && (
+				<button
+					onClick={() => {
+						onSwitchProvider();
+						onDismiss();
+					}}
+					className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2"
+					style={{ color: theme.colors.textMain }}
+				>
+					<ArrowRightLeft className="w-3.5 h-3.5" />
+					Switch Provider...
+				</button>
+			)}
 
 			{/* Account info - non-clickable info item */}
 			{session.accountId && (
@@ -1141,6 +1159,9 @@ interface SessionListProps {
 	onDeleteSession?: (id: string) => void;
 	onDeleteWorktreeGroup?: (groupId: string) => void;
 
+	// Provider switching (Virtuosos)
+	onSwitchProvider?: (sessionId: string) => void;
+
 	// Rename modal handlers (for context menu rename)
 	setRenameInstanceModalOpen: (open: boolean) => void;
 	setRenameInstanceValue: (value: string) => void;
@@ -1265,6 +1286,7 @@ function SessionListInner(props: SessionListProps) {
 		addNewSession,
 		onDeleteSession,
 		onDeleteWorktreeGroup,
+		onSwitchProvider,
 		setRenameInstanceModalOpen,
 		setRenameInstanceValue,
 		setRenameInstanceSessionId,
@@ -3107,6 +3129,7 @@ function SessionListInner(props: SessionListProps) {
 							? () => onCreateGroupAndMove(contextMenuSession.id)
 							: createNewGroup
 					}
+					onSwitchProvider={onSwitchProvider ? () => onSwitchProvider(contextMenuSession.id) : undefined}
 				/>
 			)}
 		</div>

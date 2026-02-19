@@ -73,6 +73,7 @@ interface EditAgentModalProps {
 	theme: any;
 	session: Session | null;
 	existingSessions: Session[];
+	onSwitchProvider?: () => void; // Opens SwitchProviderModal (Virtuosos)
 }
 
 // Supported agents that are fully implemented
@@ -1200,6 +1201,7 @@ export function EditAgentModal({
 	theme,
 	session,
 	existingSessions,
+	onSwitchProvider,
 }: EditAgentModalProps) {
 	const [instanceName, setInstanceName] = useState('');
 	const [nudgeMessage, setNudgeMessage] = useState('');
@@ -1588,7 +1590,7 @@ export function EditAgentModal({
 						heightClass="p-2"
 					/>
 
-					{/* Agent Provider (read-only) */}
+					{/* Agent Provider (read-only, with optional switch button) */}
 					<div>
 						<label
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
@@ -1596,18 +1598,33 @@ export function EditAgentModal({
 						>
 							Agent Provider
 						</label>
-						<div
-							className="p-2 rounded border text-sm"
-							style={{
-								borderColor: theme.colors.border,
-								color: theme.colors.textDim,
-								backgroundColor: theme.colors.bgActivity,
-							}}
-						>
-							{agentName}
+						<div className="flex items-center gap-2">
+							<div
+								className="flex-1 p-2 rounded border text-sm"
+								style={{
+									borderColor: theme.colors.border,
+									color: theme.colors.textDim,
+									backgroundColor: theme.colors.bgActivity,
+								}}
+							>
+								{agentName}
+							</div>
+							{onSwitchProvider && (
+								<button
+									onClick={() => {
+										onSwitchProvider();
+									}}
+									className="px-3 py-2 rounded border text-xs transition-colors hover:bg-white/5"
+									style={{ borderColor: theme.colors.border, color: theme.colors.accent }}
+								>
+									Switch...
+								</button>
+							)}
 						</div>
 						<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-							Provider cannot be changed after creation.
+							{onSwitchProvider
+								? 'Switch to a different provider. Context will be transferred.'
+								: 'Provider cannot be changed after creation.'}
 						</p>
 					</div>
 
