@@ -484,7 +484,7 @@ describe('CodexOutputParser', () => {
 			expect(error?.type).toBe('token_exhaustion');
 		});
 
-		it('should detect errors from turn.failed JSON', () => {
+		it('should detect errors from turn.failed JSON with object error', () => {
 			const line = JSON.stringify({
 				type: 'turn.failed',
 				error: {
@@ -494,6 +494,17 @@ describe('CodexOutputParser', () => {
 			});
 			const error = parser.detectErrorFromLine(line);
 			expect(error).not.toBeNull();
+			expect(error?.agentId).toBe('codex');
+		});
+
+		it('should detect errors from turn.failed JSON with string error', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: 'rate limit exceeded',
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.type).toBe('rate_limited');
 			expect(error?.agentId).toBe('codex');
 		});
 
