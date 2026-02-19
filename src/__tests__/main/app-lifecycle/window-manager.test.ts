@@ -510,7 +510,7 @@ describe('app-lifecycle/window-manager', () => {
 			expect(mockEvent.preventDefault).not.toHaveBeenCalled();
 		});
 
-		it('should deny all permission requests', async () => {
+		it('should allow clipboard permissions and deny all others', async () => {
 			const { createWindowManager } = await import('../../../main/app-lifecycle/window-manager');
 
 			const windowManager = createWindowManager({
@@ -529,12 +529,25 @@ describe('app-lifecycle/window-manager', () => {
 				mockWebContents.session.setPermissionRequestHandler
 			).toHaveBeenCalledWith(expect.any(Function));
 
-			// Verify the handler denies all permissions
 			const handler =
 				mockWebContents.session.setPermissionRequestHandler.mock.calls[0][0];
-			const callback = vi.fn();
-			handler(null, 'camera', callback);
-			expect(callback).toHaveBeenCalledWith(false);
+
+			// Clipboard permissions should be allowed
+			const allowedCb = vi.fn();
+			handler(null, 'clipboard-read', allowedCb);
+			expect(allowedCb).toHaveBeenCalledWith(true);
+
+			const writeCb = vi.fn();
+			handler(null, 'clipboard-sanitized-write', writeCb);
+			expect(writeCb).toHaveBeenCalledWith(true);
+
+			// All other permissions should be denied
+			const deniedPermissions = ['camera', 'microphone', 'geolocation', 'notifications', 'midi'];
+			for (const perm of deniedPermissions) {
+				const cb = vi.fn();
+				handler(null, perm, cb);
+				expect(cb).toHaveBeenCalledWith(false);
+			}
 		});
 	});
 });

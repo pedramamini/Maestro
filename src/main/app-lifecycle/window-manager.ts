@@ -185,11 +185,15 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 				logger.warn(`Blocked navigation to: ${url}`, 'Window');
 			});
 
-			// Deny all browser permission requests (camera, mic, geolocation, etc.)
-			// Maestro is a terminal app — none of these are needed
+			// Deny most browser permission requests (camera, mic, geolocation, etc.)
+			// Allow clipboard access for copy-to-clipboard functionality
 			mainWindow.webContents.session.setPermissionRequestHandler(
-				(_webContents, _permission, callback) => {
-					callback(false);
+				(_webContents, permission, callback) => {
+					if (permission === 'clipboard-read' || permission === 'clipboard-sanitized-write') {
+						callback(true);
+					} else {
+						callback(false);
+					}
 				}
 			);
 
