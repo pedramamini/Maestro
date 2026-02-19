@@ -215,6 +215,58 @@ describe('CodexOutputParser', () => {
 				expect(event?.type).toBe('error');
 				expect(event?.text).toBe('Connection failed');
 			});
+
+			it('should parse error messages with object error field', () => {
+				const line = JSON.stringify({
+					type: 'error',
+					error: { message: 'Model not found', type: 'invalid_request_error' },
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('Model not found');
+			});
+		});
+
+		describe('turn.failed events', () => {
+			it('should parse turn.failed with nested error message', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+					error: {
+						message:
+							'stream disconnected before completion: The model gpt-5.3-codex does not exist or you do not have access to it.',
+					},
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toContain('gpt-5.3-codex does not exist');
+			});
+
+			it('should parse turn.failed with string error', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+					error: 'API connection lost',
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('API connection lost');
+			});
+
+			it('should parse turn.failed with no error details', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('Turn failed');
+			});
 		});
 
 		it('should handle invalid JSON as text', () => {
@@ -430,6 +482,19 @@ describe('CodexOutputParser', () => {
 			const error = parser.detectErrorFromLine(line);
 			expect(error).not.toBeNull();
 			expect(error?.type).toBe('token_exhaustion');
+		});
+
+		it('should detect errors from turn.failed JSON', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: {
+					message:
+						'stream disconnected before completion: The model gpt-5.3-codex does not exist or you do not have access to it.',
+				},
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.agentId).toBe('codex');
 		});
 
 		it('should NOT detect errors from plain text (only JSON)', () => {

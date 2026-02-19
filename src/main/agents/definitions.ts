@@ -156,15 +156,30 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'], // Full access mode
 		workingDirArgs: (dir: string) => ['-C', dir], // Set working directory
 		imageArgs: (imagePath: string) => ['-i', imagePath], // Image attachment: codex exec -i /path/to/image.png
+		modelArgs: (modelId: string) => ['-m', modelId], // Model selection: codex exec -m gpt-5.3-codex
 		// Agent-specific configuration options shown in UI
 		configOptions: [
+			{
+				key: 'model',
+				type: 'text',
+				label: 'Model',
+				description:
+					'Model override (e.g., gpt-5.3-codex, o3). Leave empty to use the default from ~/.codex/config.toml.',
+				default: '', // Empty = use Codex's default model from config.toml
+				argBuilder: (value: string) => {
+					if (value && value.trim()) {
+						return ['-m', value.trim()];
+					}
+					return [];
+				},
+			},
 			{
 				key: 'contextWindow',
 				type: 'number',
 				label: 'Context Window Size',
 				description:
-					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2), 128000 (GPT-4o).',
-				default: 400000, // Default for GPT-5.2 models
+					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2/5.3), 128000 (GPT-4o).',
+				default: 400000, // Default for GPT-5.2+ models
 			},
 		],
 	},

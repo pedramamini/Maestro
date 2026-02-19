@@ -56,9 +56,14 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 	// GPT-5 family (Codex default)
 	'gpt-5': 200000,
 	'gpt-5.1': 200000,
+	'gpt-5.1-codex': 200000,
 	'gpt-5.1-codex-max': 200000,
 	'gpt-5.2': 400000,
+	'gpt-5.2-codex': 400000,
 	'gpt-5.2-codex-max': 400000,
+	'gpt-5.3': 400000,
+	'gpt-5.3-codex': 400000,
+	'gpt-5.3-codex-max': 400000,
 	// Default fallback (Codex defaults to GPT-5.2)
 	default: 400000,
 };
@@ -121,11 +126,17 @@ function readCodexConfig(): { model?: string; contextWindow?: number } {
  * Based on verified Codex CLI v0.73.0+ output
  */
 interface CodexRawMessage {
-	type?: 'thread.started' | 'turn.started' | 'item.completed' | 'turn.completed' | 'error';
+	type?:
+		| 'thread.started'
+		| 'turn.started'
+		| 'item.completed'
+		| 'turn.completed'
+		| 'turn.failed'
+		| 'error';
 	thread_id?: string;
 	item?: CodexItem;
 	usage?: CodexUsage;
-	error?: string;
+	error?: string | { message?: string; type?: string };
 }
 
 /**
@@ -243,11 +254,33 @@ export class CodexOutputParser implements AgentOutputParser {
 			return event;
 		}
 
-		// Handle error messages
-		if (msg.type === 'error' || msg.error) {
+		// Handle turn.failed (API errors, model not found, stream disconnections)
+		// Format: {"type":"turn.failed","error":{"message":"stream disconnected before completion: ..."}}
+		if (msg.type === 'turn.failed') {
+			const errorMessage =
+				typeof msg.error === 'object' && msg.error?.message
+					? msg.error.message
+					: typeof msg.error === 'string'
+						? msg.error
+						: 'Turn failed';
 			return {
 				type: 'error',
-				text: msg.error || 'Unknown error',
+				text: errorMessage,
+				raw: msg,
+			};
+		}
+
+		// Handle error messages
+		if (msg.type === 'error' || msg.error) {
+			const errorText =
+				typeof msg.error === 'object' && msg.error?.message
+					? msg.error.message
+					: typeof msg.error === 'string'
+						? msg.error
+						: 'Unknown error';
+			return {
+				type: 'error',
+				text: errorText,
 				raw: msg,
 			};
 		}
@@ -454,10 +487,15 @@ export class CodexOutputParser implements AgentOutputParser {
 		try {
 			const parsed = JSON.parse(line);
 			// Check for error type messages
+			// Codex uses type: 'error' for some errors and type: 'turn.failed' for others
 			if (parsed.type === 'error' && parsed.error) {
-				errorText = parsed.error;
+				errorText =
+					typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || JSON.stringify(parsed.error);
+			} else if (parsed.type === 'turn.failed' && parsed.error?.message) {
+				// Handle turn.failed format: {"type":"turn.failed","error":{"message":"..."}}
+				errorText = parsed.error.message;
 			} else if (parsed.error) {
-				errorText = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+				errorText = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || JSON.stringify(parsed.error);
 			}
 			// If no error field in JSON, this is normal output - don't check it
 		} catch {
