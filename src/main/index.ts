@@ -94,6 +94,7 @@ import {
 import { checkWslEnvironment } from './utils/wslDetector';
 import { createPluginManager } from './plugin-manager';
 import { PluginHost } from './plugin-host';
+import { PluginIpcBridge } from './plugin-ipc-bridge';
 // Extracted modules (Phase 1 refactoring)
 import { parseParticipantSessionId } from './group-chat/session-parser';
 import { extractTextFromStreamJson } from './group-chat/output-parser';
@@ -244,6 +245,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+const pluginIpcBridge = new PluginIpcBridge();
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -380,6 +382,7 @@ app.whenReady().then(async () => {
 			getMainWindow: () => mainWindow,
 			settingsStore: store,
 			app,
+			ipcBridge: pluginIpcBridge,
 		});
 		pluginManager.setHost(pluginHost);
 		await pluginManager.initialize();
@@ -683,7 +686,7 @@ function setupIpcHandlers() {
 	registerWakatimeHandlers(wakatimeManager);
 
 	// Register Plugin system IPC handlers
-	registerPluginHandlers({ app });
+	registerPluginHandlers({ app, ipcBridge: pluginIpcBridge });
 }
 
 // Handle process output streaming (set up after initialization)
