@@ -23,6 +23,7 @@
 
 import type { ToolType, AgentError } from '../../shared/types';
 import type { AgentOutputParser, ParsedEvent } from './agent-output-parser';
+import { captureException } from '../utils/sentry';
 import { getErrorPatterns, matchErrorPattern } from './error-patterns';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -363,7 +364,12 @@ export class CodexOutputParser implements AgentOutputParser {
 			// stack overflow on large arrays (spread operator has argument limit ~10K)
 			try {
 				decoded = Buffer.from(output).toString('utf-8');
-			} catch {
+			} catch (err) {
+				captureException(err, {
+					operation: 'codexParser:decodeToolOutput',
+					outputType: typeof output,
+					outputLength: output.length,
+				});
 				decoded = output.toString();
 			}
 		} else {

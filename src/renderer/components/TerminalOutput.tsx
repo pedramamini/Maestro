@@ -1369,12 +1369,17 @@ export const TerminalOutput = memo(
 				if (activeTabId) {
 					tabReadStateRef.current.set(activeTabId, filteredLogs.length);
 				}
-			} else if (autoScrollAiMode && !isProgrammaticScrollRef.current) {
-				// Pause auto-scroll when user scrolls away from bottom.
-				// Skip if this scroll event was triggered by our own scrollTo() call
-				// (isProgrammaticScrollRef guards against the race condition where
-				// scrollHeight grows between the scrollTo and the onScroll handler).
-				setAutoScrollPaused(true);
+			} else if (autoScrollAiMode) {
+				if (isProgrammaticScrollRef.current) {
+					// This scroll event was triggered by our own scrollTo() call —
+					// consume the guard flag here inside the throttled handler to avoid
+					// the race where queueMicrotask clears the flag before a deferred
+					// throttled invocation fires (throttle delay is 16ms > microtask).
+					isProgrammaticScrollRef.current = false;
+				} else {
+					// Genuine user scroll away from bottom — pause auto-scroll
+					setAutoScrollPaused(true);
+				}
 			}
 
 			// Throttled scroll position save (200ms)
@@ -1486,19 +1491,14 @@ export const TerminalOutput = memo(
 				if (!scrollContainerRef.current) return;
 				requestAnimationFrame(() => {
 					if (scrollContainerRef.current) {
-						// Set guard flag BEFORE scrollTo — prevents the scroll handler
-						// from interpreting this programmatic scroll as a user scroll-up
-						// and falsely pausing auto-scroll.
+						// Set guard flag BEFORE scrollTo — the throttled scroll handler
+						// checks this flag and consumes it (clears it) when it fires,
+						// preventing the programmatic scroll from being misinterpreted
+						// as a user scroll-up that should pause auto-scroll.
 						isProgrammaticScrollRef.current = true;
 						scrollContainerRef.current.scrollTo({
 							top: scrollContainerRef.current.scrollHeight,
 							behavior: 'auto',
-						});
-						// Clear after current task — the onScroll event fires synchronously
-						// for behavior:'auto', so the handler sees the flag during this tick.
-						// queueMicrotask ensures it's cleared before the next user interaction.
-						queueMicrotask(() => {
-							isProgrammaticScrollRef.current = false;
 						});
 					}
 				});
