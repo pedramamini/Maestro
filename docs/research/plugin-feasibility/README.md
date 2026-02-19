@@ -176,50 +176,50 @@ After v1 validates the architecture with internal/first-party plugins:
 
 ## Dependency Graph
 
+> **Updated post-Phase 01:** The phase numbering below reflects the revised plan where middleware (Gap #9) is deferred to v2. The original Phase 04 (Middleware & Event Interception) was replaced with Main-Process Plugin Activation & Storage.
+
 ```
 Phase 02: Plugin Manifest + Loader (#6)
     │
-    ├── Phase 03: Renderer Sandbox (#2) + UI Registration (#10)
+    ├── Phase 03: Plugin API Surface + Sandboxing (#2)
     │       │
-    │       └── Agent Dashboard Widget [TRIVIAL]
-    │
-    ├── Phase 04: Main-Process Plugin Component (#1) + Plugin IPC Bridge (#3 partial)
-    │       │
-    │       ├── Plugin-Scoped Storage (#8)
-    │       │       │
-    │       │       ├── AI Auditor [MODERATE]
-    │       │       │
-    │       │       └── Third-Party Notifications [MODERATE]
-    │       │
-    │       └── Process Control API (kill/interrupt exposure)
+    │       └── Phase 04: Main-Process Activation + Storage (#1, #3, #8)
     │               │
-    │               └── Agent Guardrails [MODERATE-HARD]
-    │
-    └── Phase 05 (v2): Advanced Infrastructure
-            │
-            ├── Dynamic Right Panel Tabs (#5)
-            ├── Middleware/Interception Layer (#9)
-            ├── Plugin Route Registration (Gap E)
-            └── Plugin Marketplace
-                    │
-                    └── External Tool Integration [EASY-TO-MODERATE]
+    │               └── Phase 05: Plugin UI Registration (#10, #5, #4)
+    │                       │
+    │                       └── Phase 06: Reference Plugins
+    │                               │
+    │                               ├── Agent Dashboard [TRIVIAL] — validates renderer-only plugins
+    │                               │
+    │                               └── Notification Webhook [MODERATE] — validates main-process-only plugins
+    │                                       │
+    │                                       └── Phase 07: Settings, Distribution, v2 Roadmap
+    │                                               │
+    │                                               └── Phase 08: Documentation & Developer Guide
+
+v2 (deferred — documented in Phase 07):
+    ├── Middleware/Interception Layer (#9) — enables Guardrails pre-execution blocking
+    ├── Plugin Route Registration (Gap E) — enables External Tool Integration plugins
+    ├── IPC Batch Lifecycle Events (#11) — replaces renderer→main bridge workaround
+    ├── Third-Party Plugin Sandboxing — vm2/worker threads for untrusted plugins
+    └── Plugin Marketplace — community plugin discovery + distribution
 
 Independent (can proceed in parallel with any phase):
     ├── Core Web Server Enhancements (Gaps A, B, C, D)
-    ├── Reserved Modal Priority Range (#4)
-    └── IPC Batch Lifecycle Events (#11)
+    └── Reserved Modal Priority Range (#4, convention-only)
 ```
 
 ### Critical Path
 
 The minimum path to a working plugin:
 
-1. **Plugin manifest + loader** → defines how plugins are discovered and initialized
-2. **Renderer sandbox + UI registration** → enables the Dashboard (simplest plugin, validates the architecture)
-3. **Main-process component + storage** → enables Auditor and Notifications (validates split-architecture plugins)
-4. **Process control API** → enables Guardrails (validates enforcement plugins)
+1. **Plugin manifest + loader** (Phase 02) → defines how plugins are discovered and initialized
+2. **API surface + sandboxing** (Phase 03) → scoped API based on declared permissions
+3. **Main-process activation + storage** (Phase 04) → enables main-process plugins, plugin-scoped data persistence, IPC bridge for split-architecture plugins
+4. **UI registration** (Phase 05) → Right Panel tabs, Plugin Manager modal
+5. **Reference plugins** (Phase 06) → Dashboard (renderer-only) + Notification Webhook (main-process-only) validate both architectures end-to-end
 
-Each phase produces a working plugin concept, providing incremental validation of the architecture.
+Each phase builds on the previous one. The two reference plugins in Phase 06 are the first concrete validation that the system works.
 
 ---
 

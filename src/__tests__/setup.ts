@@ -537,6 +537,17 @@ const mockMaestro = {
 	},
 	// Synchronous platform string (replaces async os.getPlatform IPC)
 	platform: 'darwin',
+	plugins: {
+		getAll: vi.fn().mockResolvedValue([]),
+		enable: vi.fn().mockResolvedValue(undefined),
+		disable: vi.fn().mockResolvedValue(undefined),
+		getDir: vi.fn().mockResolvedValue('/tmp/plugins'),
+		refresh: vi.fn().mockResolvedValue(undefined),
+		bridge: {
+			invoke: vi.fn().mockResolvedValue(undefined),
+			send: vi.fn(),
+		},
+	},
 };
 
 // Only mock window.maestro if window exists (jsdom environment)
