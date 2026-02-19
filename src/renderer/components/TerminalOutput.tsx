@@ -33,6 +33,29 @@ import { SaveMarkdownModal } from './SaveMarkdownModal';
 import { generateTerminalProseStyles } from '../utils/markdownConfig';
 
 // ============================================================================
+// Tool display helpers (pure functions, hoisted out of render path)
+// ============================================================================
+
+/** Type-safe string extraction — returns null for non-strings */
+const safeStr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
+
+/** Handle command values that may be strings or string arrays (Codex uses arrays) */
+const safeCommand = (v: unknown): string | null => {
+	if (typeof v === 'string') return v;
+	if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string')) {
+		return v.join(' ');
+	}
+	return null;
+};
+
+/** Truncate a value to max length with ellipsis, returns null for non-strings */
+const truncateStr = (v: unknown, max: number): string | null => {
+	const s = safeStr(v);
+	if (!s) return null;
+	return s.length > max ? s.substring(0, max) + '\u2026' : s;
+};
+
+// ============================================================================
 // LogItem - Memoized component for individual log entries
 // ============================================================================
 
@@ -499,24 +522,9 @@ const LogItemComponent = memo(
 					{log.source === 'tool' &&
 						(() => {
 							// Extract tool input details for display
-							// Use type checks to ensure we only render strings (prevents React error #31)
 							const toolInput = log.metadata?.toolState?.input as
 								| Record<string, unknown>
 								| undefined;
-							const safeStr = (v: unknown): string | null => (typeof v === 'string' ? v : null);
-							// Handle command values that may be strings or string arrays (Codex uses arrays)
-							const safeCommand = (v: unknown): string | null => {
-								if (typeof v === 'string') return v;
-								if (Array.isArray(v) && v.length > 0 && v.every((x) => typeof x === 'string')) {
-									return v.join(' ');
-								}
-								return null;
-							};
-							const truncate = (v: unknown, max: number): string | null => {
-								const s = safeStr(v);
-								if (!s) return null;
-								return s.length > max ? s.substring(0, max) + '\u2026' : s;
-							};
 							const toolDetail = toolInput
 								? safeCommand(toolInput.command) ||
 									safeStr(toolInput.pattern) ||
@@ -529,7 +537,7 @@ const LogItemComponent = memo(
 									safeStr(toolInput.path) || // Codex file operations
 									safeStr(toolInput.cmd) || // Codex shell commands
 									safeStr(toolInput.code) || // Codex code execution
-									truncate(toolInput.content, 100) || // Codex write operations (truncated)
+									truncateStr(toolInput.content, 100) || // Codex write operations (truncated)
 									null
 								: null;
 
