@@ -65,6 +65,22 @@ vi.mock('../../../renderer/utils/tabHelpers', () => ({
 		session.tabs?.find((t) => t.id === session.activeTabId) || session.tabs?.[0],
 }));
 
+// Mock MutationObserver for JSDOM — store callback on observe() so tests
+// can trigger it manually to simulate DOM mutations.
+class MockMutationObserver {
+	private callback: MutationCallback;
+	observe = vi.fn(() => {
+		// Store callback so rerender-triggered DOM changes can flush it
+		(window as any).__mutationCallback = this.callback;
+	});
+	disconnect = vi.fn();
+	takeRecords = vi.fn().mockReturnValue([]);
+	constructor(callback: MutationCallback) {
+		this.callback = callback;
+	}
+}
+vi.stubGlobal('MutationObserver', MockMutationObserver);
+
 // Default theme for testing
 const defaultTheme: Theme = {
 	id: 'test-theme' as any,
@@ -431,6 +447,190 @@ describe('Auto-scroll feature', () => {
 			const { container } = render(<TerminalOutput {...props} />);
 			expect(container).toBeTruthy();
 			expect(screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)).not.toBeInTheDocument();
+		});
+	});
+
+	describe('thinking stream auto-scroll', () => {
+		it('auto-scrolls when thinking log text grows in-place (same array length)', async () => {
+			// Setup: auto-scroll enabled, one thinking log entry
+			const thinkingLog = createLogEntry({
+				id: 'thinking-1',
+				text: 'Let me analyze',
+				source: 'thinking',
+			});
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: [thinkingLog], isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+			});
+
+			const { container, rerender } = render(<TerminalOutput {...props} />);
+
+			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
+			const scrollToSpy = vi.fn();
+			scrollContainer.scrollTo = scrollToSpy;
+			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
+
+			scrollToSpy.mockClear();
+
+			// Simulate thinking chunk update: text grows but array length stays the same
+			const updatedThinkingLog = { ...thinkingLog, text: 'Let me analyze this code carefully' };
+			const updatedSession = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: [updatedThinkingLog], isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			rerender(<TerminalOutput {...createDefaultProps({
+				session: updatedSession,
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+			})} />);
+
+			// Trigger MutationObserver callback (simulates DOM mutation)
+			(window as any).__mutationCallback?.([]);
+
+			await act(async () => {
+				vi.advanceTimersByTime(20); // Flush RAF + any timers
+			});
+
+			// KEY ASSERTION: scrollTo should fire despite array length being unchanged.
+			// The MutationObserver detects the DOM text change and triggers scroll.
+			expect(scrollToSpy).toHaveBeenCalled();
+		});
+
+		it('does not increment unread badge count on thinking text growth', async () => {
+			// The unread badge should only increment on NEW entries, not in-place updates
+			const thinkingLog = createLogEntry({
+				id: 'thinking-1',
+				text: 'Thinking...',
+				source: 'thinking',
+			});
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: [thinkingLog], isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				autoScrollAiMode: false, // OFF — so badge system is active
+				setAutoScrollAiMode: vi.fn(),
+			});
+
+			const { container, rerender } = render(<TerminalOutput {...props} />);
+			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
+
+			// Simulate scroll away from bottom (so badge would show)
+			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 2000, configurable: true });
+			Object.defineProperty(scrollContainer, 'scrollTop', { value: 500, configurable: true });
+			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
+			fireEvent.scroll(scrollContainer);
+			await act(async () => { vi.advanceTimersByTime(50); });
+
+			// Update thinking text (in-place, same array length)
+			const updatedLog = { ...thinkingLog, text: 'Thinking about a lot of things...' };
+			const updatedSession = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: [updatedLog], isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			rerender(<TerminalOutput {...createDefaultProps({
+				session: updatedSession,
+				autoScrollAiMode: false,
+				setAutoScrollAiMode: vi.fn(),
+			})} />);
+
+			await act(async () => { vi.advanceTimersByTime(50); });
+
+			// Badge should NOT appear — no new entries were added
+			expect(screen.queryByText('1')).not.toBeInTheDocument();
+		});
+
+		it('auto-scrolls when tool event appends new entry after thinking', async () => {
+			const thinkingLog = createLogEntry({ id: 'thinking-1', text: 'Thinking...', source: 'thinking' });
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: [thinkingLog], isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+			});
+
+			const { container, rerender } = render(<TerminalOutput {...props} />);
+			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
+			const scrollToSpy = vi.fn();
+			scrollContainer.scrollTo = scrollToSpy;
+			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 1000, configurable: true });
+			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
+			scrollToSpy.mockClear();
+
+			// Tool event arrives: new entry appended
+			const toolLog = createLogEntry({ id: 'tool-1', text: 'grep_search', source: 'tool' });
+			const updatedSession = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs: [thinkingLog, toolLog], isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			rerender(<TerminalOutput {...createDefaultProps({
+				session: updatedSession,
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+			})} />);
+
+			// Trigger MutationObserver callback (simulates DOM mutation from new node)
+			(window as any).__mutationCallback?.([]);
+
+			await act(async () => { vi.advanceTimersByTime(20); });
+
+			expect(scrollToSpy).toHaveBeenCalled();
+		});
+	});
+
+	describe('programmatic scroll guard', () => {
+		it('still pauses auto-scroll on genuine user scroll-up', async () => {
+			const logs = Array.from({ length: 20 }, (_, i) =>
+				createLogEntry({ id: `log-${i}`, text: `Message ${i}`, source: i % 2 === 0 ? 'user' : 'stdout' })
+			);
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({
+				session,
+				autoScrollAiMode: true,
+				setAutoScrollAiMode: vi.fn(),
+			});
+
+			const { container } = render(<TerminalOutput {...props} />);
+			const scrollContainer = container.querySelector('.overflow-y-auto') as HTMLElement;
+
+			// Simulate user scroll to middle of content (genuine scroll-up)
+			Object.defineProperty(scrollContainer, 'scrollHeight', { value: 2000, configurable: true });
+			Object.defineProperty(scrollContainer, 'scrollTop', { value: 500, configurable: true });
+			Object.defineProperty(scrollContainer, 'clientHeight', { value: 400, configurable: true });
+
+			fireEvent.scroll(scrollContainer);
+
+			await act(async () => {
+				vi.advanceTimersByTime(50);
+			});
+
+			// Should show paused state (user scrolled up — not a programmatic scroll)
+			const button = screen.getByTitle('Scroll to bottom (click to pin)');
+			expect(button).toBeInTheDocument();
 		});
 	});
 
