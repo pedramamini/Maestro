@@ -127,6 +127,11 @@ export class PluginHost {
 		this.pluginModules.delete(pluginId);
 		this.pluginStorages.delete(pluginId);
 		this.destroyPluginContext(pluginId);
+
+		// Remove any IPC bridge handlers registered by this plugin
+		if (this.deps.ipcBridge) {
+			this.deps.ipcBridge.unregisterAll(pluginId);
+		}
 	}
 
 	/**
@@ -325,11 +330,16 @@ export class PluginHost {
 			onStatsUpdate: (callback) => {
 				const win = getMainWindow();
 				if (!win) return () => {};
-				const handler = () => callback();
-				win.webContents.on('ipc-message', (_event, channel) => {
-					if (channel === 'stats:updated') handler();
-				});
-				const unsub = () => {};
+				const listener = (_event: unknown, channel: string) => {
+					if (channel === 'stats:updated') callback();
+				};
+				win.webContents.on('ipc-message', listener);
+				const unsub = () => {
+					const currentWin = getMainWindow();
+					if (currentWin) {
+						currentWin.webContents.removeListener('ipc-message', listener);
+					}
+				};
 				eventSubscriptions.push(unsub);
 				return unsub;
 			},

@@ -16,6 +16,7 @@ This guide has been split into focused sub-documents for progressive disclosure:
 | [[CLAUDE-AGENTS.md]] | Supported agents and capabilities |
 | [[CLAUDE-SESSION.md]] | Session interface (agent data model) and code conventions |
 | [[CLAUDE-PLATFORM.md]] | Cross-platform concerns (Windows, Linux, macOS, SSH remote) |
+| [[CLAUDE-PLUGINS.md]] | Plugin system architecture, API surface, and development guide |
 | [AGENT_SUPPORT.md](AGENT_SUPPORT.md) | Detailed agent integration guide |
 
 ---
@@ -125,7 +126,8 @@ src/
 │   ├── agent-*.ts          # Agent detection, capabilities, session storage
 │   ├── parsers/            # Per-agent output parsers + error patterns
 │   ├── storage/            # Per-agent session storage implementations
-│   ├── ipc/handlers/       # IPC handler modules (stats, git, playbooks, etc.)
+│   ├── plugin-*.ts         # Plugin system (loader, manager, host, storage)
+│   ├── ipc/handlers/       # IPC handler modules (stats, git, playbooks, plugins, etc.)
 │   └── utils/              # Utilities (execFile, ssh-spawn-wrapper, etc.)
 │
 ├── renderer/               # React frontend (desktop)
@@ -145,6 +147,8 @@ src/
 │   └── services/          # Playbook and batch processing
 │
 ├── prompts/                # System prompts (editable .md files)
+│
+├── plugins/                # Bundled first-party plugins (JS, copied to dist/)
 │
 ├── shared/                 # Shared types and utilities
 │
@@ -194,6 +198,9 @@ src/
 | Add Director's Notes feature | `src/renderer/components/DirectorNotes/`, `src/main/ipc/handlers/director-notes.ts` |
 | Add Encore Feature | `src/renderer/types/index.ts` (flag), `useSettings.ts` (state), `SettingsModal.tsx` (toggle UI), gate in `App.tsx` + keyboard handler |
 | Modify history components | `src/renderer/components/History/` |
+| Add/modify plugin | `src/plugins/`, `src/main/plugin-*.ts` (see [[CLAUDE-PLUGINS.md]]) |
+| Add plugin IPC handler | `src/main/ipc/handlers/plugins.ts`, `src/main/preload/plugins.ts` |
+| Add plugin permission | `src/shared/plugin-types.ts`, `src/main/plugin-host.ts` |
 
 ---
 

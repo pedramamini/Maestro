@@ -223,7 +223,7 @@ describe('PluginHost', () => {
 
 			const processes = await ctx.api.process!.getActiveProcesses();
 			expect(processes).toEqual([
-				{ sessionId: 's1', toolType: 'claude-code', pid: 1234, startTime: 1000 },
+				{ sessionId: 's1', toolType: 'claude-code', pid: 1234, startTime: 1000, name: null },
 			]);
 		});
 

@@ -145,7 +145,7 @@ async function activate(pluginApi) {
 		const agent = ensureAgent(sessionId);
 		try {
 			agent.lastTool = {
-				name: (tool && tool.name) || 'unknown',
+				name: (tool && tool.toolName) || 'unknown',
 				timestamp: Date.now(),
 			};
 		} catch {

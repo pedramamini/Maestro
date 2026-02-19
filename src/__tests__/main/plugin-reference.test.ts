@@ -193,7 +193,7 @@ describe('Agent Status Exporter Plugin', () => {
 		await dashboard.activate(mockApi);
 
 		const toolCb = eventHandlers['tool'][0];
-		toolCb('sess-1', { name: 'Edit' });
+		toolCb('sess-1', { toolName: 'Edit' });
 
 		await vi.advanceTimersByTimeAsync(500);
 

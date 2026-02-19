@@ -47,6 +47,19 @@ export class PluginManager {
 	 * First-party plugins are auto-enabled unless explicitly disabled by user.
 	 */
 	async initialize(): Promise<void> {
+		// Deactivate any currently active plugins before re-scanning
+		if (this.host) {
+			for (const plugin of this.plugins.values()) {
+				if (plugin.state === 'active') {
+					try {
+						await this.host.deactivatePlugin(plugin.manifest.id);
+					} catch (err) {
+						logger.warn(`Failed to deactivate '${plugin.manifest.id}' during re-init: ${err}`, LOG_CONTEXT);
+					}
+				}
+			}
+		}
+
 		// Copy bundled first-party plugins to userData/plugins/ if not already present
 		await bootstrapBundledPlugins(this.pluginsDir);
 

@@ -80,7 +80,6 @@ function PluginSettings({
 	theme: Theme;
 }) {
 	const settings = plugin.manifest.settings;
-	if (!settings || settings.length === 0) return null;
 
 	const [values, setValues] = useState<Record<string, unknown>>({});
 	const [localValues, setLocalValues] = useState<Record<string, string>>({});
@@ -132,7 +131,7 @@ function PluginSettings({
 		handleSave(key, value);
 	}, [handleSave]);
 
-	if (!loaded) return null;
+	if (!loaded || !settings || settings.length === 0) return null;
 
 	return (
 		<div className="space-y-3">
@@ -249,7 +248,18 @@ function PluginSettings({
 							<input
 								type="number"
 								value={typeof savedValue === 'number' ? savedValue : ''}
-								onChange={(e) => handleSave(setting.key, Number(e.target.value))}
+								onChange={(e) => {
+									const num = Number(e.target.value);
+									if (!isNaN(num) && e.target.value !== '') {
+										handleSave(setting.key, num);
+									}
+								}}
+								onBlur={(e) => {
+									const num = Number(e.target.value);
+									if (!isNaN(num) && e.target.value !== '') {
+										handleSave(setting.key, num);
+									}
+								}}
 								className="w-full px-2 py-1.5 rounded text-xs border bg-transparent outline-none"
 								style={{
 									borderColor: theme.colors.border,
