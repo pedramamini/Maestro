@@ -129,7 +129,7 @@ export const ACCOUNT_SWITCH_DEFAULTS: AccountSwitchConfig = {
 /** Default token window: 5 hours in milliseconds */
 export const DEFAULT_TOKEN_WINDOW_MS = 5 * 60 * 60 * 1000;
 
-import type { ToolType } from './types';
+import type { ToolType, AgentErrorType } from './types';
 
 /**
  * Configuration for automated provider failover (Virtuosos vertical swapping).
@@ -155,3 +155,33 @@ export const DEFAULT_PROVIDER_SWITCH_CONFIG: ProviderSwitchConfig = {
 	errorWindowMs: 5 * 60 * 1000, // 5 minutes
 	fallbackProviders: [],
 };
+
+/**
+ * Failover suggestion emitted when a provider exceeds the error threshold.
+ * Sent from main process to renderer via IPC to trigger SwitchProviderModal or auto-switch.
+ */
+export interface FailoverSuggestion {
+	sessionId: string;
+	sessionName: string;
+	currentProvider: ToolType;
+	suggestedProvider: ToolType;
+	errorCount: number;
+	windowMs: number;
+	recentErrors: Array<{
+		type: AgentErrorType;
+		message: string;
+		timestamp: number;
+	}>;
+}
+
+/**
+ * Error statistics for a single provider type.
+ * Used by the ProviderPanel health dashboard.
+ */
+export interface ProviderErrorStats {
+	toolType: ToolType;
+	activeErrorCount: number;
+	totalErrorsInWindow: number;
+	lastErrorAt: number | null;
+	sessionsWithErrors: number;
+}

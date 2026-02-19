@@ -2761,6 +2761,38 @@ interface MaestroAPI {
 		}>;
 	};
 
+	// Provider Error Tracking API (error stats, failover suggestions)
+	providers: {
+		getErrorStats: (toolType: string) => Promise<{
+			toolType: string;
+			activeErrorCount: number;
+			totalErrorsInWindow: number;
+			lastErrorAt: number | null;
+			sessionsWithErrors: number;
+		} | null>;
+		getAllErrorStats: () => Promise<Record<string, {
+			toolType: string;
+			activeErrorCount: number;
+			totalErrorsInWindow: number;
+			lastErrorAt: number | null;
+			sessionsWithErrors: number;
+		}>>;
+		clearSessionErrors: (sessionId: string) => Promise<void>;
+		onFailoverSuggest: (handler: (data: {
+			sessionId: string;
+			sessionName: string;
+			currentProvider: string;
+			suggestedProvider: string;
+			errorCount: number;
+			windowMs: number;
+			recentErrors: Array<{
+				type: string;
+				message: string;
+				timestamp: number;
+			}>;
+		}) => void) => () => void;
+	};
+
 	// WakaTime API (CLI check, API key validation)
 	wakatime: {
 		checkCli: () => Promise<{ available: boolean; version?: string }>;

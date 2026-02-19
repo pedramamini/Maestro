@@ -1882,6 +1882,46 @@ function MaestroConsoleInner() {
 		};
 	}, [encoreFeatures.virtuosos]);
 
+	// Subscribe to provider failover suggestion events (Virtuosos provider switching)
+	useEffect(() => {
+		if (!encoreFeatures.virtuosos) return;
+
+		const cleanup = window.maestro.providers.onFailoverSuggest(async (suggestion) => {
+			// Find the session
+			const session = sessionsRef.current.find(s => s.id === suggestion.sessionId);
+			if (!session) return;
+
+			// Load provider switch config from settings
+			let providerConfig: { promptBeforeSwitch?: boolean } = { promptBeforeSwitch: true };
+			try {
+				const saved = await window.maestro.settings.get('providerSwitchConfig');
+				if (saved && typeof saved === 'object') {
+					providerConfig = saved as typeof providerConfig;
+				}
+			} catch {
+				// Use default
+			}
+
+			// Show toast notification
+			notifyToast({
+				type: 'warning',
+				title: 'Provider Issues Detected',
+				message: `${getAgentDisplayName(suggestion.currentProvider as ToolType)} had ${suggestion.errorCount} errors. ${
+					providerConfig.promptBeforeSwitch !== false
+						? 'Suggesting switch...'
+						: `Auto-switching to ${getAgentDisplayName(suggestion.suggestedProvider as ToolType)}`
+				}`,
+				duration: 8_000,
+			});
+
+			// Always open SwitchProviderModal for manual confirmation
+			// (auto-switch path will be invoked once handleConfirmProviderSwitch is available)
+			setSwitchProviderSession(session);
+		});
+
+		return cleanup;
+	}, [encoreFeatures.virtuosos]);
+
 	// Keyboard navigation state
 	// Note: selectedSidebarIndex/setSelectedSidebarIndex are destructured from useUIStore() above
 	// Note: activeTab is memoized later at line ~3795 - use that for all tab operations
@@ -4941,6 +4981,9 @@ You are taking over this conversation. Based on the context above, provide a bri
 						: s
 				));
 			}
+
+			// Clear provider error tracking for source session
+			window.maestro.providers.clearSessionErrors(switchProviderSession.id).catch(() => {});
 
 			// Navigate to the new session
 			setActiveSessionId(result.newSessionId!);

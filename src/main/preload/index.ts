@@ -50,6 +50,7 @@ import { createSymphonyApi } from './symphony';
 import { createTabNamingApi } from './tabNaming';
 import { createDirectorNotesApi } from './directorNotes';
 import { createAccountsApi } from './accounts';
+import { createProvidersApi } from './providers';
 import { createWakatimeApi } from './wakatime';
 
 // Expose protected methods that allow the renderer process to use
@@ -190,6 +191,9 @@ contextBridge.exposeInMainWorld('maestro', {
 	// Account Multiplexing API (usage events, limit warnings)
 	accounts: createAccountsApi(),
 
+	// Provider Error Tracking API (error stats, failover suggestions)
+	providers: createProvidersApi(),
+
 	// WakaTime API (CLI check, API key validation)
 	wakatime: createWakatimeApi(),
 });
@@ -265,6 +269,8 @@ export {
 	createDirectorNotesApi,
 	// Accounts
 	createAccountsApi,
+	// Providers
+	createProvidersApi,
 	// WakaTime
 	createWakatimeApi,
 };
@@ -477,6 +483,10 @@ export type {
 	AccountUsageUpdate,
 	AccountLimitEvent,
 } from './accounts';
+export type {
+	// From providers
+	ProvidersApi,
+} from './providers';
 export type {
 	// From wakatime
 	WakatimeApi,
