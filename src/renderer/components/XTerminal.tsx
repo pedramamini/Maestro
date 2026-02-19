@@ -467,13 +467,15 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 
 	const setContainerRef = useCallback((el: HTMLDivElement | null) => {
 		containerRef.current = el;
-		el?.focus();
 	}, []);
 
 	return (
 		<div
 			ref={setContainerRef}
 			tabIndex={0}
+			onMouseDown={() => {
+				terminalRef.current?.focus();
+			}}
 			className="h-full w-full overflow-hidden outline-none"
 			data-session-id={sessionId}
 			data-theme-id={theme.id}

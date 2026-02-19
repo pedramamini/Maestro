@@ -191,7 +191,18 @@ import {
 	navigateToPrevUnifiedTab,
 	hasActiveWizard,
 } from './utils/tabHelpers';
-import { createTerminalTab } from './utils/terminalTabHelpers';
+import {
+	addTerminalTab,
+	closeTerminalTab,
+	createTerminalTab,
+	reopenTerminalTab,
+	renameTerminalTab,
+	reorderTerminalTabs,
+	setActiveTerminalTab,
+	updateTerminalTabCwd,
+	updateTerminalTabPid,
+	updateTerminalTabState,
+} from './utils/terminalTabHelpers';
 import { shouldOpenExternally, flattenTree } from './utils/fileExplorer';
 import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
@@ -6588,6 +6599,121 @@ You are taking over this conversation. Based on the context above, provide a bri
 		[]
 	);
 
+	const handleTerminalTabSelect = useCallback(
+		(sessionId: string, tabId: string) => {
+			setSessions((prev) =>
+				prev.map((session) =>
+					session.id === sessionId ? setActiveTerminalTab(session, tabId) : session
+				)
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalTabClose = useCallback(
+		(sessionId: string, tabId: string) => {
+			setSessions((prev) =>
+				prev.map((session) => {
+					if (session.id !== sessionId) {
+						return session;
+					}
+
+					const result = closeTerminalTab(session, tabId);
+					return result ? result.session : session;
+				})
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalNewTab = useCallback(
+		(sessionId: string) => {
+			setSessions((prev) =>
+				prev.map((session) => {
+					if (session.id !== sessionId) {
+						return session;
+					}
+
+					return addTerminalTab(session, defaultShell || 'zsh').session;
+				})
+			);
+		},
+		[defaultShell, setSessions]
+	);
+
+	const handleReopenTerminalTab = useCallback(
+		(sessionId: string) => {
+			setSessions((prev) =>
+				prev.map((session) => {
+					if (session.id !== sessionId) {
+						return session;
+					}
+
+					const result = reopenTerminalTab(session);
+					return result ? result.session : session;
+				})
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalTabRename = useCallback(
+		(sessionId: string, tabId: string, name: string) => {
+			setSessions((prev) =>
+				prev.map((session) =>
+					session.id === sessionId ? renameTerminalTab(session, tabId, name) : session
+				)
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalTabReorder = useCallback(
+		(sessionId: string, fromIndex: number, toIndex: number) => {
+			setSessions((prev) =>
+				prev.map((session) =>
+					session.id === sessionId ? reorderTerminalTabs(session, fromIndex, toIndex) : session
+				)
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalTabStateChange = useCallback(
+		(sessionId: string, tabId: string, state: 'idle' | 'busy' | 'exited', exitCode?: number) => {
+			setSessions((prev) =>
+				prev.map((session) =>
+					session.id === sessionId
+						? updateTerminalTabState(session, tabId, state, exitCode)
+						: session
+				)
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalTabCwdChange = useCallback(
+		(sessionId: string, tabId: string, cwd: string) => {
+			setSessions((prev) =>
+				prev.map((session) =>
+					session.id === sessionId ? updateTerminalTabCwd(session, tabId, cwd) : session
+				)
+			);
+		},
+		[setSessions]
+	);
+
+	const handleTerminalTabPidChange = useCallback(
+		(sessionId: string, tabId: string, pid: number) => {
+			setSessions((prev) =>
+				prev.map((session) =>
+					session.id === sessionId ? updateTerminalTabPid(session, tabId, pid) : session
+				)
+			);
+		},
+		[setSessions]
+	);
+
 	// Update keyboardHandlerRef synchronously during render (before effects run)
 	// This must be placed after all handler functions and state are defined to avoid TDZ errors
 	// The ref is provided by useMainKeyboardHandler hook
@@ -6753,6 +6879,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 		// Auto-scroll AI mode toggle
 		autoScrollAiMode,
 		setAutoScrollAiMode,
+		handleTerminalTabSelect,
+		handleTerminalTabClose,
+		handleTerminalNewTab,
+		handleReopenTerminalTab,
 	};
 
 	// Update flat file list when active session's tree, expanded folders, filter, or hidden files setting changes
@@ -8560,7 +8690,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 				{/* --- CENTER WORKSPACE (hidden when no sessions, group chat is active, or log viewer is open) --- */}
 				{sessions.length > 0 && !activeGroupChatId && !logViewerOpen && (
-					<MainPanel ref={mainPanelRef} {...mainPanelProps} />
+					<MainPanel
+						ref={mainPanelRef}
+						{...mainPanelProps}
+						onTerminalTabSelect={handleTerminalTabSelect}
+						onTerminalTabClose={handleTerminalTabClose}
+						onTerminalNewTab={handleTerminalNewTab}
+						onTerminalTabRename={handleTerminalTabRename}
+						onTerminalTabReorder={handleTerminalTabReorder}
+						onTerminalTabStateChange={handleTerminalTabStateChange}
+						onTerminalTabCwdChange={handleTerminalTabCwdChange}
+						onTerminalTabPidChange={handleTerminalTabPidChange}
+					/>
 				)}
 
 				{/* --- RIGHT PANEL (hidden in mobile landscape, when no sessions, group chat is active, or log viewer is open) --- */}

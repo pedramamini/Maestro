@@ -75,6 +75,7 @@ export const TerminalView = memo(
 		const terminalRefs = useRef<Map<string, XTerminalHandle>>(new Map());
 		const latestTabsRef = useRef<TerminalTab[]>(session.terminalTabs);
 		const shellExitedTabsRef = useRef<Set<string>>(new Set());
+		const spawningTabsRef = useRef<Set<string>>(new Set());
 		const [focusedTabId, setFocusedTabId] = useState<string | null>(null);
 		const activeTab = getActiveTerminalTab(session);
 
@@ -88,6 +89,12 @@ export const TerminalView = memo(
 				const tab = tabsById.get(tabId);
 				if (!tab || tab.state !== 'exited' || tab.pid > 0) {
 					shellExitedTabsRef.current.delete(tabId);
+				}
+			}
+
+			for (const tabId of spawningTabsRef.current) {
+				if (!tabsById.has(tabId)) {
+					spawningTabsRef.current.delete(tabId);
 				}
 			}
 		}, [session.terminalTabs]);
@@ -133,9 +140,15 @@ export const TerminalView = memo(
 
 		const spawnPtyForTab = useCallback(
 			async (tab: TerminalTab, allowExited = false) => {
-				if (tab.pid > 0 || (!allowExited && tab.state === 'exited')) {
+				if (
+					tab.pid > 0 ||
+					(!allowExited && tab.state === 'exited') ||
+					spawningTabsRef.current.has(tab.id)
+				) {
 					return;
 				}
+
+				spawningTabsRef.current.add(tab.id);
 
 				const terminalSessionId = getTerminalSessionId(session.id, tab.id);
 				const tabShell = tab.shellType ?? defaultShell;
@@ -156,6 +169,7 @@ export const TerminalView = memo(
 						// Spawn resolves asynchronously, so ignore late success for tabs that were
 						// closed (or already marked exited) while the process request was in flight.
 						if (!latestTab || (!allowExited && latestTab.state === 'exited')) {
+							void window.maestro.process.kill(terminalSessionId).catch(() => undefined);
 							return;
 						}
 
@@ -196,6 +210,8 @@ export const TerminalView = memo(
 
 					onTabStateChange(tab.id, 'exited', 1);
 					onTabPidChange(tab.id, 0);
+				} finally {
+					spawningTabsRef.current.delete(tab.id);
 				}
 			},
 			[
@@ -267,6 +283,7 @@ export const TerminalView = memo(
 					setFocusedTabId(null);
 				}
 				shellExitedTabsRef.current.delete(tabId);
+				spawningTabsRef.current.delete(tabId);
 				try {
 					if (tab && tab.pid > 0) {
 						try {
@@ -448,7 +465,7 @@ export const TerminalView = memo(
 										theme={theme}
 										fontFamily={fontFamily}
 										fontSize={fontSize}
-										processInputEnabled={tab.pid > 0}
+										processInputEnabled={tab.state !== 'exited'}
 										onFocus={() => {
 											setFocusedTabId(tab.id);
 										}}

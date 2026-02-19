@@ -76,11 +76,6 @@ const TerminalTabComponent = memo(function TerminalTabComponent({
 
 	return (
 		<div
-			ref={(el) => {
-				if (isActive) {
-					el?.focus();
-				}
-			}}
 			data-testid={`terminal-tab-${tab.id}`}
 			data-transition-state={transitionState}
 			title={tabHoverTitle}
