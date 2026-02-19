@@ -162,6 +162,19 @@ interface CodexUsage {
 }
 
 /**
+ * Extract a human-readable error message from Codex's polymorphic error field.
+ * Codex sends errors as either a plain string or { message?, type? } object.
+ */
+function extractErrorText(
+	error: CodexRawMessage['error'],
+	fallback = 'Unknown error'
+): string {
+	if (typeof error === 'object' && error?.message) return error.message;
+	if (typeof error === 'string') return error;
+	return fallback;
+}
+
+/**
  * Codex CLI Output Parser Implementation
  *
  * Transforms Codex's JSON format into normalized ParsedEvents.
@@ -257,30 +270,18 @@ export class CodexOutputParser implements AgentOutputParser {
 		// Handle turn.failed (API errors, model not found, stream disconnections)
 		// Format: {"type":"turn.failed","error":{"message":"stream disconnected before completion: ..."}}
 		if (msg.type === 'turn.failed') {
-			const errorMessage =
-				typeof msg.error === 'object' && msg.error?.message
-					? msg.error.message
-					: typeof msg.error === 'string'
-						? msg.error
-						: 'Turn failed';
 			return {
 				type: 'error',
-				text: errorMessage,
+				text: extractErrorText(msg.error, 'Turn failed'),
 				raw: msg,
 			};
 		}
 
 		// Handle error messages
 		if (msg.type === 'error' || msg.error) {
-			const errorText =
-				typeof msg.error === 'object' && msg.error?.message
-					? msg.error.message
-					: typeof msg.error === 'string'
-						? msg.error
-						: 'Unknown error';
 			return {
 				type: 'error',
-				text: errorText,
+				text: extractErrorText(msg.error),
 				raw: msg,
 			};
 		}
@@ -488,14 +489,9 @@ export class CodexOutputParser implements AgentOutputParser {
 			const parsed = JSON.parse(line);
 			// Check for error type messages
 			// Codex uses type: 'error' for some errors and type: 'turn.failed' for others
-			if (parsed.type === 'error' && parsed.error) {
-				errorText =
-					typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || JSON.stringify(parsed.error);
-			} else if (parsed.type === 'turn.failed' && parsed.error?.message) {
-				// Handle turn.failed format: {"type":"turn.failed","error":{"message":"..."}}
-				errorText = parsed.error.message;
-			} else if (parsed.error) {
-				errorText = typeof parsed.error === 'string' ? parsed.error : parsed.error?.message || JSON.stringify(parsed.error);
+			if (parsed.type === 'error' || parsed.type === 'turn.failed' || parsed.error) {
+				errorText = extractErrorText(parsed.error);
+				if (errorText === 'Unknown error') errorText = null; // No useful info to match
 			}
 			// If no error field in JSON, this is normal output - don't check it
 		} catch {
