@@ -1500,6 +1500,13 @@ export const TerminalOutput = memo(
 							top: scrollContainerRef.current.scrollHeight,
 							behavior: 'auto',
 						});
+						// Fallback: if scrollTo is a no-op (already at bottom), the browser
+						// won't fire a scroll event, so the handler never consumes the guard.
+						// Clear it after 32ms (2x the 16ms throttle window) to prevent a
+						// stale true from eating the next genuine user scroll-up.
+						setTimeout(() => {
+							isProgrammaticScrollRef.current = false;
+						}, 32);
 					}
 				});
 			};
