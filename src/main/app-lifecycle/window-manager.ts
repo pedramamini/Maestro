@@ -3,6 +3,7 @@
  * Handles window state persistence, DevTools, crash detection, and auto-updater initialization.
  */
 
+import * as path from 'path';
 import { BrowserWindow, ipcMain } from 'electron';
 import type Store from 'electron-store';
 import type { WindowState } from '../stores/types';
@@ -177,8 +178,8 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 					const devUrl = new URL(devServerUrl);
 					if (parsedUrl.origin === devUrl.origin) return;
 				} else {
-					// In production, only allow file:// protocol (the built app)
-					if (parsedUrl.protocol === 'file:') return;
+					// In production, only allow file:// URLs within the app's renderer directory
+					if (parsedUrl.protocol === 'file:' && url.includes(path.dirname(rendererPath).replace(/\\/g, '/'))) return;
 				}
 				event.preventDefault();
 				logger.warn(`Blocked navigation to: ${url}`, 'Window');

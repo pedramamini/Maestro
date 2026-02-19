@@ -4,21 +4,20 @@
 	var progressText = document.getElementById('splash-text');
 
 	// Capture any errors and display them on the splash screen
-	window.onerror = function(message, source, lineno, colno, error) {
+	window.addEventListener('error', function(event) {
 		if (progressText) {
 			progressText.style.color = '#ff6b6b';
-			progressText.textContent = 'Error: ' + (error?.message || message);
+			progressText.textContent = 'Error: ' + (event.error?.message || event.message);
 		}
-		console.error('[Splash] Error:', message, source, lineno, colno, error);
-		return false;
-	};
-	window.onunhandledrejection = function(event) {
+		console.error('[Splash] Error:', event.message, event.filename, event.lineno, event.colno, event.error);
+	});
+	window.addEventListener('unhandledrejection', function(event) {
 		if (progressText) {
 			progressText.style.color = '#ff6b6b';
 			progressText.textContent = 'Error: ' + (event.reason?.message || String(event.reason));
 		}
 		console.error('[Splash] Unhandled rejection:', event.reason);
-	};
+	});
 
 	// Animate progress bar while waiting for React
 	var interval = setInterval(function() {

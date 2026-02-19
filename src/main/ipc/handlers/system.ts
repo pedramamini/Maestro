@@ -196,13 +196,12 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 		if (!url || typeof url !== 'string') {
 			throw new Error('Invalid URL: URL must be a non-empty string');
 		}
-		const parsed = (() => {
-			try {
-				return new URL(url);
-			} catch {
-				throw new Error(`Invalid URL: ${url}`);
-			}
-		})();
+		let parsed: URL;
+		try {
+			parsed = new URL(url);
+		} catch {
+			throw new Error(`Invalid URL: ${url}`);
+		}
 		if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
 			throw new Error(`Protocol not allowed: ${parsed.protocol}`);
 		}
