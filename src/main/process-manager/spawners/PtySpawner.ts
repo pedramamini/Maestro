@@ -2,6 +2,7 @@ import { EventEmitter } from 'events';
 import * as pty from 'node-pty';
 import { stripControlSequences } from '../../utils/terminalFilter';
 import { logger } from '../../utils/logger';
+import { parseShellArgs } from '../../utils/shell-escape';
 import type { ProcessConfig, ManagedProcess, SpawnResult } from '../types';
 import type { DataBufferManager } from '../handlers/DataBufferManager';
 import { buildPtyTerminalEnv, buildChildProcessEnv } from '../utils/envBuilder';
@@ -69,16 +70,7 @@ export class PtySpawner {
 
 					// Append custom shell arguments from user configuration
 					if (shellArgs && shellArgs.trim()) {
-						const customShellArgsArray = shellArgs.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-						const cleanedArgs = customShellArgsArray.map((arg) => {
-							if (
-								(arg.startsWith('"') && arg.endsWith('"')) ||
-								(arg.startsWith("'") && arg.endsWith("'"))
-							) {
-								return arg.slice(1, -1);
-							}
-							return arg;
-						});
+						const cleanedArgs = parseShellArgs(shellArgs);
 						if (cleanedArgs.length > 0) {
 							logger.debug('Appending custom shell args', 'ProcessManager', {
 								shellArgs: cleanedArgs,

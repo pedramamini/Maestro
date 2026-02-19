@@ -21,8 +21,10 @@ import { getSshRemoteConfig, createSshRemoteStoreAdapter } from '../../utils/ssh
 import { buildSshCommandWithStdin } from '../../utils/ssh-command-builder';
 import { buildStreamJsonMessage } from '../../process-manager/utils/streamJsonBuilder';
 import { getWindowsShellForAgentExecution } from '../../process-manager/utils/shellEscape';
+import { getDefaultShell } from '../../stores/defaults';
 import { buildExpandedEnv } from '../../../shared/pathUtils';
 import type { SshRemoteConfig } from '../../../shared/types';
+import type { SpawnTerminalTabConfig } from '../../preload/process';
 import { powerManager } from '../../power-manager';
 import { MaestroSettings } from './persistence';
 
@@ -74,20 +76,6 @@ export interface ProcessHandlerDependencies {
 export function registerProcessHandlers(deps: ProcessHandlerDependencies): void {
 	const { getProcessManager, getAgentDetector, agentConfigsStore, settingsStore, getMainWindow } =
 		deps;
-	type SpawnTerminalTabConfig = {
-		sessionId: string;
-		cwd: string;
-		shell?: string;
-		shellArgs?: string;
-		shellEnvVars?: Record<string, string>;
-		cols?: number;
-		rows?: number;
-		sessionSshRemoteConfig?: {
-			enabled: boolean;
-			remoteId: string | null;
-			workingDirOverride?: string;
-		};
-	};
 
 	// Spawn a new process for a session
 	// Supports agent-specific argument builders for batch mode, JSON output, resume, read-only mode, YOLO mode
@@ -581,6 +569,13 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 		'process:spawnTerminalTab',
 		withIpcErrorLogging(handlerOpts('spawnTerminalTab'), async (config: SpawnTerminalTabConfig) => {
 			const processManager = requireProcessManager(getProcessManager);
+			const customShellPath = settingsStore.get('customShellPath', '').trim();
+			const globalShellEnvVars = settingsStore.get('shellEnvVars', {}) as Record<string, string>;
+			const shellToUse = config.shell || customShellPath || getDefaultShell();
+			const mergedShellEnvVars = {
+				...globalShellEnvVars,
+				...(config.shellEnvVars || {}),
+			};
 			let sshRemoteConfig: SshRemoteConfig | null = null;
 
 			if (config.sessionSshRemoteConfig?.enabled && config.sessionSshRemoteConfig?.remoteId) {
@@ -597,15 +592,16 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 			logger.info('Spawning terminal tab', LOG_CONTEXT, {
 				sessionId: config.sessionId,
 				cwd: config.cwd,
+				shell: shellToUse,
 				sshRemote: sshRemoteConfig?.name || null,
 			});
 
 			return processManager.spawnTerminalTab({
 				sessionId: config.sessionId,
 				cwd: config.cwd,
-				shell: config.shell,
+				shell: shellToUse,
 				shellArgs: config.shellArgs,
-				shellEnvVars: config.shellEnvVars,
+				shellEnvVars: mergedShellEnvVars,
 				cols: config.cols,
 				rows: config.rows,
 				...(sshRemoteConfig ? { sshRemoteConfig } : {}),

@@ -42,7 +42,7 @@ vi.mock('../../../../main/utils/agent-args', () => ({
 	buildAgentArgs: vi.fn((agent, opts) => opts.baseArgs || []),
 	applyAgentConfigOverrides: vi.fn((agent, args, opts) => ({
 		args,
-		modelSource: 'none' as const,
+		modelSource: 'default' as const,
 		customArgsSource: 'none' as const,
 		customEnvSource: 'none' as const,
 		effectiveCustomEnvVars: undefined,
@@ -312,6 +312,44 @@ describe('process IPC handlers', () => {
 	});
 
 	describe('process:spawnTerminalTab', () => {
+		it('should apply global shell settings and merge shell env vars', async () => {
+			mockProcessManager.spawnTerminalTab.mockReturnValue({ pid: 3333, success: true });
+			mockSettingsStore.get.mockImplementation((key, defaultValue) => {
+				if (key === 'customShellPath') return '/opt/custom/shell';
+				if (key === 'shellEnvVars') {
+					return {
+						GLOBAL_ONLY: 'global',
+						SHARED: 'global-value',
+					};
+				}
+				return defaultValue;
+			});
+
+			const handler = handlers.get('process:spawnTerminalTab');
+			await handler!({} as any, {
+				sessionId: 'tab-with-settings',
+				cwd: '/test/project',
+				shellEnvVars: {
+					TAB_ONLY: 'tab',
+					SHARED: 'tab-value',
+				},
+			});
+
+			expect(mockProcessManager.spawnTerminalTab).toHaveBeenCalledWith({
+				sessionId: 'tab-with-settings',
+				cwd: '/test/project',
+				shell: '/opt/custom/shell',
+				shellArgs: undefined,
+				shellEnvVars: {
+					GLOBAL_ONLY: 'global',
+					TAB_ONLY: 'tab',
+					SHARED: 'tab-value',
+				},
+				cols: undefined,
+				rows: undefined,
+			});
+		});
+
 		it('should spawn terminal tab PTY using full terminal session id', async () => {
 			mockProcessManager.spawnTerminalTab.mockReturnValue({ pid: 4567, success: true });
 
@@ -369,7 +407,7 @@ describe('process IPC handlers', () => {
 				cwd: '/test/project',
 				shell: '/bin/zsh',
 				shellArgs: undefined,
-				shellEnvVars: undefined,
+				shellEnvVars: {},
 				cols: undefined,
 				rows: undefined,
 				sshRemoteConfig: {

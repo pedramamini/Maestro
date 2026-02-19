@@ -18,7 +18,7 @@ import { logger } from '../utils/logger';
 import { getDefaultShell } from '../stores/defaults';
 import type { SshRemoteConfig } from '../../shared/types';
 import { expandTilde } from '../../shared/pathUtils';
-import { buildShellCommand } from '../utils/shell-escape';
+import { buildShellCommand, parseShellArgs } from '../utils/shell-escape';
 
 /**
  * ProcessManager orchestrates spawning and managing processes for sessions.
@@ -106,7 +106,7 @@ export class ProcessManager extends EventEmitter {
 				sshArgs.push(sshRemoteConfig.host);
 			}
 
-			const remoteShellArgs = ['-l', '-i', ...this.parseShellArgs(shellArgs)];
+			const remoteShellArgs = ['-l', '-i', ...parseShellArgs(shellArgs)];
 			sshArgs.push(buildShellCommand(terminalShell, remoteShellArgs));
 
 			return this.spawn({
@@ -145,23 +145,6 @@ export class ProcessManager extends EventEmitter {
 		}
 
 		return Math.floor(value);
-	}
-
-	private parseShellArgs(shellArgs?: string): string[] {
-		if (!shellArgs || !shellArgs.trim()) {
-			return [];
-		}
-
-		const parsedArgs = shellArgs.match(/(?:[^\s"']+|"[^"]*"|'[^']*')+/g) || [];
-		return parsedArgs.map((arg) => {
-			if (
-				(arg.startsWith('"') && arg.endsWith('"')) ||
-				(arg.startsWith("'") && arg.endsWith("'"))
-			) {
-				return arg.slice(1, -1);
-			}
-			return arg;
-		});
 	}
 
 	private shouldUsePty(config: ProcessConfig): boolean {
