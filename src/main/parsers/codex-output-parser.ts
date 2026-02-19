@@ -485,11 +485,13 @@ export class CodexOutputParser implements AgentOutputParser {
 		// Only detect errors from structured JSON error events
 		// Do NOT pattern match on arbitrary text - it causes false positives
 		let errorText: string | null = null;
+		let parsedJson: unknown = null;
 		try {
 			const parsed = JSON.parse(line);
 			// Check for error type messages
 			// Codex uses type: 'error' for some errors and type: 'turn.failed' for others
 			if (parsed.type === 'error' || parsed.type === 'turn.failed' || parsed.error) {
+				parsedJson = parsed;
 				errorText = extractErrorText(parsed.error);
 				if (errorText === 'Unknown error') errorText = null; // No useful info to match
 			}
@@ -519,6 +521,21 @@ export class CodexOutputParser implements AgentOutputParser {
 				raw: {
 					errorLine: line,
 				},
+				parsedJson,
+			};
+		}
+
+		// Structured error event that didn't match a known pattern —
+		// still report it rather than silently dropping
+		if (parsedJson) {
+			return {
+				type: 'unknown',
+				message: errorText,
+				recoverable: true,
+				agentId: this.agentId,
+				timestamp: Date.now(),
+				raw: { errorLine: line },
+				parsedJson,
 			};
 		}
 

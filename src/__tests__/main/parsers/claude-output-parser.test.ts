@@ -622,6 +622,26 @@ describe('ClaudeOutputParser', () => {
 			const error = parser.detectErrorFromLine(line);
 			expect(error?.raw?.errorLine).toBe(line);
 		});
+
+		it('should return unknown error for unrecognized structured JSON errors', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: { message: 'some novel error we have never seen before' },
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.type).toBe('unknown');
+			expect(error?.message).toBe('some novel error we have never seen before');
+			expect(error?.agentId).toBe('claude-code');
+			expect(error?.recoverable).toBe(true);
+			expect(error?.parsedJson).toBeDefined();
+		});
+
+		it('should include parsedJson on matched pattern errors', () => {
+			const line = JSON.stringify({ type: 'error', message: 'Invalid API key' });
+			const error = parser.detectErrorFromLine(line);
+			expect(error?.parsedJson).toBeDefined();
+		});
 	});
 
 	describe('detectErrorFromExit', () => {

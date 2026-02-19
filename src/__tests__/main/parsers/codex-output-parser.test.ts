@@ -494,7 +494,10 @@ describe('CodexOutputParser', () => {
 			});
 			const error = parser.detectErrorFromLine(line);
 			expect(error).not.toBeNull();
+			expect(error?.type).toBe('unknown');
 			expect(error?.agentId).toBe('codex');
+			expect(error?.recoverable).toBe(true);
+			expect(error?.parsedJson).toBeDefined();
 		});
 
 		it('should detect errors from turn.failed JSON with string error', () => {
@@ -517,6 +520,12 @@ describe('CodexOutputParser', () => {
 
 		it('should return null for non-error lines', () => {
 			expect(parser.detectErrorFromLine('normal output')).toBeNull();
+		});
+
+		it('should include parsedJson on matched pattern errors', () => {
+			const line = JSON.stringify({ type: 'error', error: 'rate limit exceeded' });
+			const error = parser.detectErrorFromLine(line);
+			expect(error?.parsedJson).toBeDefined();
 		});
 	});
 
