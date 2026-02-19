@@ -131,6 +131,9 @@ export const DEFAULT_TOKEN_WINDOW_MS = 5 * 60 * 60 * 1000;
 
 import type { ToolType, AgentErrorType } from './types';
 
+/** Controls what happens when switching back to a provider with an existing archived session. */
+export type ProviderSwitchBehavior = 'always-new' | 'merge-back';
+
 /**
  * Configuration for automated provider failover (Virtuosos vertical swapping).
  * Stored in settings alongside account switch config.
@@ -146,6 +149,8 @@ export interface ProviderSwitchConfig {
 	errorWindowMs: number;
 	/** Ordered list of fallback providers (tried in order) */
 	fallbackProviders: ToolType[];
+	/** Default behavior when switching back to a provider with an archived session */
+	switchBehavior: ProviderSwitchBehavior;
 }
 
 export const DEFAULT_PROVIDER_SWITCH_CONFIG: ProviderSwitchConfig = {
@@ -154,6 +159,7 @@ export const DEFAULT_PROVIDER_SWITCH_CONFIG: ProviderSwitchConfig = {
 	errorThreshold: 3,
 	errorWindowMs: 5 * 60 * 1000, // 5 minutes
 	fallbackProviders: [],
+	switchBehavior: 'merge-back',
 };
 
 /**

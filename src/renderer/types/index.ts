@@ -722,6 +722,8 @@ export interface Session {
 	archivedByMigration?: boolean;
 	/** Migration generation counter (0 = original, increments with each switch) */
 	migrationGeneration?: number;
+	/** Timestamp of last merge-back (when an archived session was reactivated with new context) */
+	lastMergeBackAt?: number;
 }
 
 export interface AgentConfigOption {

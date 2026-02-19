@@ -4955,6 +4955,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 		targetProvider: ToolType;
 		groomContext: boolean;
 		archiveSource: boolean;
+		mergeBackInto?: Session;
 	}) => {
 		if (!switchProviderSession) return;
 
@@ -4967,17 +4968,29 @@ You are taking over this conversation. Based on the context above, provide a bri
 			targetProvider: request.targetProvider,
 			groomContext: request.groomContext,
 			archiveSource: request.archiveSource,
+			mergeBackInto: request.mergeBackInto,
 		});
 
 		if (result.success && result.newSession) {
-			// Add the new session to state
-			setSessions(prev => [...prev, result.newSession!]);
+			if (result.mergedBack && request.mergeBackInto) {
+				// Merge-back: replace the archived session with the reactivated one
+				setSessions(prev => prev.map(s =>
+					s.id === request.mergeBackInto!.id ? result.newSession! : s
+				));
+			} else {
+				// Always-new: add the new session to state
+				setSessions(prev => [...prev, result.newSession!]);
+			}
 
 			// Mark source as archived if requested
 			if (request.archiveSource) {
 				setSessions(prev => prev.map(s =>
 					s.id === switchProviderSession.id
-						? { ...s, archivedByMigration: true, migratedToSessionId: result.newSessionId }
+						? {
+							...s,
+							archivedByMigration: true,
+							migratedToSessionId: result.newSessionId,
+						}
 						: s
 				));
 			}
@@ -4985,14 +4998,15 @@ You are taking over this conversation. Based on the context above, provide a bri
 			// Clear provider error tracking for source session
 			window.maestro.providers.clearSessionErrors(switchProviderSession.id).catch(() => {});
 
-			// Navigate to the new session
+			// Navigate to the new/reactivated session
 			setActiveSessionId(result.newSessionId!);
 
 			// Show success toast
+			const action = result.mergedBack ? 'Merged back to' : 'Switched to';
 			notifyToast({
 				type: 'success',
 				title: 'Provider Switched',
-				message: `Switched to ${getAgentDisplayName(request.targetProvider)}`,
+				message: `${action} ${getAgentDisplayName(request.targetProvider)}`,
 				duration: 5_000,
 			});
 		}
@@ -9713,6 +9727,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 						}}
 						sourceSession={switchProviderSession}
 						sourceTabId={getActiveTab(switchProviderSession)?.id || ''}
+						sessions={sessions}
 						onConfirmSwitch={handleConfirmProviderSwitch}
 					/>
 				)}

@@ -10,7 +10,7 @@ import type { ProviderSwitchConfig, FailoverSuggestion } from '../../../shared/a
 
 describe('ProviderErrorTracker', () => {
 	let tracker: ProviderErrorTracker;
-	let onFailoverSuggest: ReturnType<typeof vi.fn>;
+	let onFailoverSuggest: ReturnType<typeof vi.fn<(data: FailoverSuggestion) => void>>;
 	const defaultConfig: ProviderSwitchConfig = {
 		enabled: true,
 		promptBeforeSwitch: true,

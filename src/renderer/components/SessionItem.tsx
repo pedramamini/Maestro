@@ -1,5 +1,5 @@
 import React, { memo } from 'react';
-import { Activity, GitBranch, Bot, Bookmark, AlertCircle, Server } from 'lucide-react';
+import { Activity, GitBranch, Bot, Bookmark, AlertCircle, Server, RefreshCw } from 'lucide-react';
 import type { Session, Group, Theme } from '../types';
 import { getStatusColor } from '../utils/theme';
 
@@ -211,6 +211,16 @@ export const SessionItem = memo(function SessionItem({
 						style={{ color: theme.colors.textDim }}
 					>
 						Provider switched — archived
+					</div>
+				)}
+				{/* Merge-back refresh indicator (session was reactivated with new context) */}
+				{!session.archivedByMigration && session.lastMergeBackAt && (
+					<div
+						className="flex items-center gap-1 text-[9px] mt-0.5"
+						style={{ color: theme.colors.accent }}
+					>
+						<RefreshCw className="w-2.5 h-2.5" />
+						<span>Context refreshed</span>
 					</div>
 				)}
 			</div>
