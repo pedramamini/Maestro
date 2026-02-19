@@ -13,7 +13,7 @@
  * - Confidence badge for assistant messages (when confidence is available)
  */
 
-import React from 'react';
+import React, { useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import type { Theme } from '../../types';
 import { getConfidenceColor } from '../Wizard/services/wizardPrompts';
@@ -87,7 +87,10 @@ export const WizardMessageBubble = React.memo(function WizardMessageBubble({
 }: WizardMessageBubbleProps): JSX.Element {
 	const isUser = message.role === 'user';
 	const isSystem = message.role === 'system';
-	const wizardMarkdownComponents = createWizardBubbleMarkdownComponents(theme);
+	const wizardMarkdownComponents = useMemo(
+		() => createWizardBubbleMarkdownComponents(theme),
+		[theme]
+	);
 
 	return (
 		<div

@@ -367,15 +367,20 @@ p, span, div, article, section {
   display: list-item !important;
 }
 
-.prose li > p {
+.prose li > p:first-child {
   display: inline !important;
   margin: 0 !important;
   vertical-align: baseline;
   line-height: inherit;
 }
 
-.prose li > p + ul,
-.prose li > p + ol {
+.prose li > p:not(:first-child) {
+  display: block !important;
+  margin: 0.5em 0 0 !important;
+}
+
+.prose li > p:first-child + ul,
+.prose li > p:first-child + ol {
   margin-top: 0 !important;
 }
 
@@ -385,11 +390,11 @@ p, span, div, article, section {
 .prose li > em:first-child,
 .prose li > code:first-child,
 .prose li > a:first-child,
-.prose li > p > strong:first-child,
-.prose li > p > b:first-child,
-.prose li > p > em:first-child,
-.prose li > p > code:first-child,
-.prose li > p > a:first-child {
+.prose li > p:first-child > strong:first-child,
+.prose li > p:first-child > b:first-child,
+.prose li > p:first-child > em:first-child,
+.prose li > p:first-child > code:first-child,
+.prose li > p:first-child > a:first-child {
   vertical-align: baseline;
   line-height: inherit;
 }

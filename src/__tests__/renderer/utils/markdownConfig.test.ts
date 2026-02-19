@@ -219,14 +219,17 @@ describe('generateProseStyles', () => {
 		it('should include baseline alignment selectors for styled first-child content inside list-item paragraphs', () => {
 			const css = generateProseStyles({ theme: mockTheme, compactSpacing: true });
 			expect(css).toContain(
-				'.prose li > p > strong:first-child, .prose li > p > b:first-child, .prose li > p > em:first-child, .prose li > p > code:first-child, .prose li > p > a:first-child { vertical-align: baseline; line-height: inherit; }'
+				'.prose li > p:first-child > strong:first-child, .prose li > p:first-child > b:first-child, .prose li > p:first-child > em:first-child, .prose li > p:first-child > code:first-child, .prose li > p:first-child > a:first-child { vertical-align: baseline; line-height: inherit; }'
 			);
 		});
 
-		it('should normalize list-item paragraphs even when compactSpacing is false', () => {
+		it('should normalize only first list-item paragraph inline and keep subsequent paragraphs block-level', () => {
 			const css = generateProseStyles({ theme: mockTheme, compactSpacing: false });
 			expect(css).toContain(
-				'.prose li > p { margin: 0 !important; display: inline; vertical-align: baseline; line-height: inherit; }'
+				'.prose li > p:first-child { margin: 0 !important; display: inline; vertical-align: baseline; line-height: inherit; }'
+			);
+			expect(css).toContain(
+				'.prose li > p:not(:first-child) { display: block; margin: 0.5em 0 0 !important; }'
 			);
 		});
 
@@ -530,7 +533,10 @@ describe('generateTerminalProseStyles', () => {
 	it('should include li inline styling rules', () => {
 		const css = generateTerminalProseStyles(mockTheme, scopeSelector);
 		expect(css).toContain(
-			`${scopeSelector} .prose li > p { margin: 0 !important; display: inline; vertical-align: baseline; line-height: inherit; }`
+			`${scopeSelector} .prose li > p:first-child { margin: 0 !important; display: inline; vertical-align: baseline; line-height: inherit; }`
+		);
+		expect(css).toContain(
+			`${scopeSelector} .prose li > p:not(:first-child) { display: block; margin: 0.5em 0 0 !important; }`
 		);
 	});
 
@@ -542,7 +548,7 @@ describe('generateTerminalProseStyles', () => {
 	it('should include extra vertical-align rule for styled first-child content in list items', () => {
 		const css = generateTerminalProseStyles(mockTheme, scopeSelector);
 		expect(css).toContain(`${scopeSelector} .prose li > strong:first-child`);
-		expect(css).toContain(`${scopeSelector} .prose li > p > strong:first-child`);
+		expect(css).toContain(`${scopeSelector} .prose li > p:first-child > strong:first-child`);
 		expect(css).toContain('vertical-align: baseline');
 	});
 

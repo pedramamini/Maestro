@@ -202,17 +202,21 @@ export const MobileMarkdownRenderer = memo(
 				}}
 			>
 				<style>{`
-          .mobile-markdown-content li > p {
+          .mobile-markdown-content li > p:first-of-type {
             display: inline;
             margin: 0;
             vertical-align: baseline;
             line-height: inherit;
           }
-          .mobile-markdown-content li > p > strong:first-child,
-          .mobile-markdown-content li > p > b:first-child,
-          .mobile-markdown-content li > p > em:first-child,
-          .mobile-markdown-content li > p > code:first-child,
-          .mobile-markdown-content li > p > a:first-child {
+          .mobile-markdown-content li > p:not(:first-of-type) {
+            display: block;
+            margin: 0.5em 0 0;
+          }
+          .mobile-markdown-content li > p:first-of-type > strong:first-child,
+          .mobile-markdown-content li > p:first-of-type > b:first-child,
+          .mobile-markdown-content li > p:first-of-type > em:first-child,
+          .mobile-markdown-content li > p:first-of-type > code:first-child,
+          .mobile-markdown-content li > p:first-of-type > a:first-child {
             vertical-align: baseline;
             line-height: inherit;
           }

@@ -13,7 +13,7 @@
  * - Structured output parsing (confidence, ready, message)
  */
 
-import { useEffect, useRef, useState, useCallback } from 'react';
+import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import ReactMarkdown from 'react-markdown';
 import { Brain } from 'lucide-react';
 import type { Theme } from '../../../types';
@@ -141,15 +141,16 @@ function MessageBubble({
 	theme,
 	agentName,
 	providerName,
+	wizardMarkdownComponents,
 }: {
 	message: WizardMessage;
 	theme: Theme;
 	agentName: string;
 	providerName?: string;
+	wizardMarkdownComponents: ReturnType<typeof createWizardBubbleMarkdownComponents>;
 }): JSX.Element {
 	const isUser = message.role === 'user';
 	const isSystem = message.role === 'system';
-	const wizardMarkdownComponents = createWizardBubbleMarkdownComponents(theme);
 
 	return (
 		<div className={`flex ${isUser ? 'justify-end' : 'justify-start'} mb-4`}>
@@ -472,6 +473,11 @@ export function ConversationScreen({
 	showThinking,
 	setShowThinking,
 }: ConversationScreenProps): JSX.Element {
+	const wizardMarkdownComponents = useMemo(
+		() => createWizardBubbleMarkdownComponents(theme),
+		[theme]
+	);
+
 	const {
 		state,
 		addMessage,
@@ -1263,6 +1269,7 @@ export function ConversationScreen({
 						message={message}
 						theme={theme}
 						agentName={state.agentName || 'Agent'}
+						wizardMarkdownComponents={wizardMarkdownComponents}
 						providerName={
 							state.selectedAgent === 'claude-code'
 								? 'Claude'
