@@ -267,9 +267,6 @@ describe('FileExplorerPanel', () => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
 
-		// Set up window.maestro with platform so getRevealLabel works synchronously
-		(window as any).maestro = { platform: 'darwin' };
-
 		defaultProps = {
 			session: createMockSession(),
 			theme: mockTheme,
