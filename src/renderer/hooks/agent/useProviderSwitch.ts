@@ -47,6 +47,12 @@ export interface ProviderSwitchRequest {
 	groomContext: boolean;
 	/** Whether to auto-archive source session after switch */
 	archiveSource: boolean;
+	/**
+	 * When set, reactivate this archived session instead of creating a new one.
+	 * The groomed context from the source is appended to the target session's logs.
+	 * Mutually exclusive with createMergedSession — uses session mutation instead.
+	 */
+	mergeBackInto?: Session;
 }
 
 export interface ProviderSwitchResult {
@@ -59,6 +65,8 @@ export interface ProviderSwitchResult {
 	newTabId?: string;
 	/** Tokens saved via grooming */
 	tokensSaved?: number;
+	/** Whether this was a merge-back into an existing session */
+	mergedBack?: boolean;
 	/** Error message (if failed) */
 	error?: string;
 }
@@ -70,6 +78,43 @@ export interface UseProviderSwitchResult {
 	error: string | null;
 	cancelSwitch: () => void;
 	reset: () => void;
+}
+
+// ============================================================================
+// Helpers
+// ============================================================================
+
+/**
+ * Walk the provenance chain backwards from `currentSession` to find
+ * an archived session running `targetProvider`.
+ */
+export function findArchivedPredecessor(
+	sessions: Session[],
+	currentSession: Session,
+	targetProvider: ToolType,
+): Session | null {
+	let cursor: Session | undefined = currentSession;
+	const visited = new Set<string>();
+
+	while (cursor) {
+		if (visited.has(cursor.id)) break; // prevent cycles
+		visited.add(cursor.id);
+
+		if (
+			cursor.archivedByMigration &&
+			cursor.toolType === targetProvider &&
+			cursor.id !== currentSession.id
+		) {
+			return cursor;
+		}
+
+		if (cursor.migratedFromSessionId) {
+			cursor = sessions.find(s => s.id === cursor!.migratedFromSessionId);
+		} else {
+			break;
+		}
+	}
+	return null;
 }
 
 // ============================================================================
@@ -144,7 +189,7 @@ export function useProviderSwitch(): UseProviderSwitchResult {
 	 */
 	const switchProvider = useCallback(
 		async (request: ProviderSwitchRequest): Promise<ProviderSwitchResult> => {
-			const { sourceSession, sourceTabId, targetProvider, groomContext } = request;
+			const { sourceSession, sourceTabId, targetProvider, groomContext, mergeBackInto } = request;
 
 			const store = useOperationStore.getState();
 
@@ -294,53 +339,105 @@ export function useProviderSwitch(): UseProviderSwitchResult {
 					return { success: false, error: 'Provider switch cancelled' };
 				}
 
-				// Step 4: Create new session via extended createMergedSession
-				useOperationStore.getState().setTransferState({
-					state: 'creating',
-					progress: {
-						stage: 'creating',
-						progress: 80,
-						message: `Creating ${getAgentDisplayName(targetProvider)} session...`,
-					},
-				});
-
-				const { session: newSession, tabId: newTabId } = createMergedSession({
-					name: sourceSession.name,
-					projectRoot: sourceSession.projectRoot,
-					toolType: targetProvider,
-					mergedLogs: contextLogs,
-					groupId: sourceSession.groupId,
-					// Identity carry-over
-					nudgeMessage: sourceSession.nudgeMessage,
-					bookmarked: sourceSession.bookmarked,
-					sessionSshRemoteConfig: sourceSession.sessionSshRemoteConfig,
-					autoRunFolderPath: sourceSession.autoRunFolderPath,
-					// Provenance
-					migratedFromSessionId: sourceSession.id,
-					migratedAt: Date.now(),
-					migrationGeneration: (sourceSession.migrationGeneration || 0) + 1,
-				});
-
-				// Step 5: Add transfer notice to new session tab
 				const sourceName = getAgentDisplayName(sourceSession.toolType);
 				const targetName = getAgentDisplayName(targetProvider);
 				const groomNote = groomContext
 					? 'Context groomed and optimized.'
 					: 'Context preserved as-is.';
 
-				const transferNotice: LogEntry = {
-					id: `provider-switch-notice-${Date.now()}`,
-					timestamp: Date.now(),
-					source: 'system',
-					text: `Provider switched from ${sourceName} to ${targetName}. ${groomNote}`,
-				};
+				let resultSession: Session;
+				let resultTabId: string;
 
-				const activeTab = newSession.aiTabs.find((t) => t.id === newTabId);
-				if (activeTab) {
-					activeTab.logs = [transferNotice, ...activeTab.logs];
+				if (mergeBackInto) {
+					// Step 4a: Merge-back mode — reactivate the archived session
+					useOperationStore.getState().setTransferState({
+						state: 'creating',
+						progress: {
+							stage: 'creating',
+							progress: 80,
+							message: `Reactivating ${targetName} session...`,
+						},
+					});
+
+					// Reactivate the archived session by mutating its fields
+					const reactivated: Session = {
+						...mergeBackInto,
+						archivedByMigration: false,
+						migratedFromSessionId: sourceSession.id,
+						migratedAt: Date.now(),
+						migrationGeneration: (mergeBackInto.migrationGeneration || 0) + 1,
+						migratedToSessionId: undefined,
+						lastMergeBackAt: Date.now(),
+					};
+
+					// Append context logs to the reactivated session's active tab
+					const mergeTab = reactivated.aiTabs[0];
+					if (mergeTab) {
+						const separator: LogEntry = {
+							id: `merge-separator-${Date.now()}`,
+							timestamp: Date.now(),
+							source: 'system',
+							text: `── Context merged from ${sourceName} session ──`,
+						};
+
+						const switchNotice: LogEntry = {
+							id: `provider-switch-notice-${Date.now()}`,
+							timestamp: Date.now(),
+							source: 'system',
+							text: `Provider switched back from ${sourceName} to ${targetName}. ${groomNote}`,
+						};
+
+						mergeTab.logs = [...mergeTab.logs, separator, switchNotice, ...contextLogs];
+					}
+
+					resultSession = reactivated;
+					resultTabId = mergeTab?.id || reactivated.aiTabs[0]?.id || '';
+				} else {
+					// Step 4b: Create new session via extended createMergedSession
+					useOperationStore.getState().setTransferState({
+						state: 'creating',
+						progress: {
+							stage: 'creating',
+							progress: 80,
+							message: `Creating ${targetName} session...`,
+						},
+					});
+
+					const { session: newSession, tabId: newTabId } = createMergedSession({
+						name: sourceSession.name,
+						projectRoot: sourceSession.projectRoot,
+						toolType: targetProvider,
+						mergedLogs: contextLogs,
+						groupId: sourceSession.groupId,
+						// Identity carry-over
+						nudgeMessage: sourceSession.nudgeMessage,
+						bookmarked: sourceSession.bookmarked,
+						sessionSshRemoteConfig: sourceSession.sessionSshRemoteConfig,
+						autoRunFolderPath: sourceSession.autoRunFolderPath,
+						// Provenance
+						migratedFromSessionId: sourceSession.id,
+						migratedAt: Date.now(),
+						migrationGeneration: (sourceSession.migrationGeneration || 0) + 1,
+					});
+
+					// Add transfer notice to new session tab
+					const transferNotice: LogEntry = {
+						id: `provider-switch-notice-${Date.now()}`,
+						timestamp: Date.now(),
+						source: 'system',
+						text: `Provider switched from ${sourceName} to ${targetName}. ${groomNote}`,
+					};
+
+					const activeTab = newSession.aiTabs.find((t) => t.id === newTabId);
+					if (activeTab) {
+						activeTab.logs = [transferNotice, ...activeTab.logs];
+					}
+
+					resultSession = newSession;
+					resultTabId = newTabId;
 				}
 
-				// Step 6: Complete
+				// Step 5: Complete
 				useOperationStore.getState().setTransferState({
 					state: 'complete',
 					progress: {
@@ -352,10 +449,11 @@ export function useProviderSwitch(): UseProviderSwitchResult {
 
 				return {
 					success: true,
-					newSession,
-					newSessionId: newSession.id,
-					newTabId,
+					newSession: resultSession,
+					newSessionId: resultSession.id,
+					newTabId: resultTabId,
 					tokensSaved,
+					mergedBack: !!mergeBackInto,
 				};
 			} catch (err) {
 				const errorMessage =

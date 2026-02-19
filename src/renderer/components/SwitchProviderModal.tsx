@@ -5,6 +5,10 @@
  * archive source) before initiating a provider switch. Shows current provider,
  * available targets with availability status, and estimated token count.
  *
+ * When a target provider is selected and an archived session on that provider
+ * exists in the provenance chain, shows a merge-back panel letting users choose
+ * to reactivate the existing session instead of creating a new one.
+ *
  * Pattern references:
  * - AccountSwitchModal for themed modal structure
  * - SendToAgentModal for agent selection + keyboard navigation
@@ -12,13 +16,16 @@
  */
 
 import React, { useState, useEffect, useMemo, useCallback, useRef } from 'react';
-import { ArrowDown, Shuffle } from 'lucide-react';
+import { ArrowDown, Shuffle, Info } from 'lucide-react';
 import type { Theme, Session, ToolType, AgentConfig } from '../types';
+import type { ProviderSwitchBehavior } from '../../shared/account-types';
+import { DEFAULT_PROVIDER_SWITCH_CONFIG } from '../../shared/account-types';
 import { Modal } from './ui/Modal';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { getAgentIcon } from '../constants/agentIcons';
 import { getAgentDisplayName } from '../services/contextGroomer';
 import { formatTokensCompact } from '../utils/formatters';
+import { findArchivedPredecessor } from '../hooks/agent/useProviderSwitch';
 
 export interface SwitchProviderModalProps {
 	theme: Theme;
@@ -28,11 +35,15 @@ export interface SwitchProviderModalProps {
 	sourceSession: Session;
 	/** Active tab ID for context extraction */
 	sourceTabId: string;
+	/** All sessions (for provenance chain walking) */
+	sessions: Session[];
 	/** Callback when user confirms the switch */
 	onConfirmSwitch: (request: {
 		targetProvider: ToolType;
 		groomContext: boolean;
 		archiveSource: boolean;
+		/** If set, merge back into this session instead of creating new */
+		mergeBackInto?: Session;
 	}) => void;
 }
 
@@ -51,12 +62,25 @@ function estimateTokensFromLogs(logs: { text: string }[]): number {
 	return Math.round(totalChars / 4);
 }
 
+/** Format a timestamp as relative time (e.g., "2 hours ago"). */
+function formatRelativeTime(timestamp: number): string {
+	const diff = Date.now() - timestamp;
+	const minutes = Math.floor(diff / 60_000);
+	if (minutes < 1) return 'just now';
+	if (minutes < 60) return `${minutes} minute${minutes === 1 ? '' : 's'} ago`;
+	const hours = Math.floor(minutes / 60);
+	if (hours < 24) return `${hours} hour${hours === 1 ? '' : 's'} ago`;
+	const days = Math.floor(hours / 24);
+	return `${days} day${days === 1 ? '' : 's'} ago`;
+}
+
 export function SwitchProviderModal({
 	theme,
 	isOpen,
 	onClose,
 	sourceSession,
 	sourceTabId,
+	sessions,
 	onConfirmSwitch,
 }: SwitchProviderModalProps) {
 	// Provider selection
@@ -67,8 +91,16 @@ export function SwitchProviderModal({
 	const [groomContext, setGroomContext] = useState(true);
 	const [archiveSource, setArchiveSource] = useState(true);
 
+	// Merge-back choice: 'new' = create new session, 'merge' = reactivate archived
+	const [mergeChoice, setMergeChoice] = useState<'new' | 'merge'>('merge');
+
 	// Detected agents
 	const [providers, setProviders] = useState<ProviderOption[]>([]);
+
+	// Stored switch behavior preference
+	const [switchBehavior, setSwitchBehavior] = useState<ProviderSwitchBehavior>(
+		DEFAULT_PROVIDER_SWITCH_CONFIG.switchBehavior
+	);
 
 	// Ref for scrolling highlighted item into view
 	const highlightedRef = useRef<HTMLButtonElement>(null);
@@ -115,6 +147,22 @@ export function SwitchProviderModal({
 		};
 	}, [isOpen, sourceSession.toolType]);
 
+	// Load switch behavior preference
+	useEffect(() => {
+		if (!isOpen) return;
+
+		(async () => {
+			try {
+				const saved = await window.maestro.settings.get('providerSwitchConfig');
+				if (saved && typeof saved === 'object' && 'switchBehavior' in (saved as Record<string, unknown>)) {
+					setSwitchBehavior((saved as { switchBehavior: ProviderSwitchBehavior }).switchBehavior);
+				}
+			} catch {
+				// Use default
+			}
+		})();
+	}, [isOpen]);
+
 	// Reset state when modal opens
 	useEffect(() => {
 		if (isOpen) {
@@ -122,8 +170,9 @@ export function SwitchProviderModal({
 			setHighlightedIndex(0);
 			setGroomContext(true);
 			setArchiveSource(true);
+			setMergeChoice(switchBehavior === 'merge-back' ? 'merge' : 'new');
 		}
-	}, [isOpen]);
+	}, [isOpen, switchBehavior]);
 
 	// Scroll highlighted item into view
 	useEffect(() => {
@@ -143,6 +192,19 @@ export function SwitchProviderModal({
 		[providers]
 	);
 
+	// Find archived predecessor when target provider changes
+	const archivedPredecessor = useMemo(() => {
+		if (!selectedProvider) return null;
+		return findArchivedPredecessor(sessions, sourceSession, selectedProvider);
+	}, [sessions, sourceSession, selectedProvider]);
+
+	// Reset merge choice default when predecessor changes
+	useEffect(() => {
+		if (archivedPredecessor) {
+			setMergeChoice(switchBehavior === 'merge-back' ? 'merge' : 'new');
+		}
+	}, [archivedPredecessor, switchBehavior]);
+
 	// Handle confirm
 	const handleConfirm = useCallback(() => {
 		if (!selectedProvider) return;
@@ -150,8 +212,9 @@ export function SwitchProviderModal({
 			targetProvider: selectedProvider,
 			groomContext,
 			archiveSource,
+			mergeBackInto: archivedPredecessor && mergeChoice === 'merge' ? archivedPredecessor : undefined,
 		});
-	}, [selectedProvider, groomContext, archiveSource, onConfirmSwitch]);
+	}, [selectedProvider, groomContext, archiveSource, archivedPredecessor, mergeChoice, onConfirmSwitch]);
 
 	// Keyboard navigation handler
 	const handleKeyDown = useCallback(
@@ -231,7 +294,9 @@ export function SwitchProviderModal({
 							color: theme.colors.accentForeground,
 						}}
 					>
-						Switch Provider
+						{archivedPredecessor && mergeChoice === 'merge'
+							? 'Merge & Switch'
+							: 'Switch Provider'}
 					</button>
 				</div>
 			}
@@ -372,6 +437,66 @@ export function SwitchProviderModal({
 						)}
 					</div>
 				</div>
+
+				{/* Merge-back panel (when archived predecessor found) */}
+				{archivedPredecessor && selectedProvider && (
+					<div
+						className="rounded-lg border p-3"
+						style={{
+							borderColor: `${theme.colors.accent}40`,
+							backgroundColor: `${theme.colors.accent}08`,
+						}}
+					>
+						<div className="flex items-start gap-2 mb-3">
+							<Info className="w-3.5 h-3.5 mt-0.5 shrink-0" style={{ color: theme.colors.accent }} />
+							<div className="text-xs" style={{ color: theme.colors.textMain }}>
+								<span className="font-medium">Previous {getAgentDisplayName(selectedProvider)} session found</span>
+								<div className="mt-1" style={{ color: theme.colors.textDim }}>
+									&ldquo;{archivedPredecessor.name || 'Unnamed Agent'}&rdquo; was previously on {getAgentDisplayName(selectedProvider)} before switching to {currentProviderName}
+									{archivedPredecessor.migratedAt ? ` ${formatRelativeTime(archivedPredecessor.migratedAt)}` : ''}.
+								</div>
+							</div>
+						</div>
+
+						{/* Merge-back radio options */}
+						<div className="space-y-2 ml-5">
+							<label className="flex items-start gap-2 cursor-pointer">
+								<input
+									type="radio"
+									name="mergeChoice"
+									checked={mergeChoice === 'new'}
+									onChange={() => setMergeChoice('new')}
+									className="mt-0.5"
+								/>
+								<div>
+									<div className="text-xs" style={{ color: theme.colors.textMain }}>
+										Create new session
+									</div>
+									<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
+										Start fresh on {getAgentDisplayName(selectedProvider)} with transferred context (creates a new agent entry)
+									</div>
+								</div>
+							</label>
+							<label className="flex items-start gap-2 cursor-pointer">
+								<input
+									type="radio"
+									name="mergeChoice"
+									checked={mergeChoice === 'merge'}
+									onChange={() => setMergeChoice('merge')}
+									className="mt-0.5"
+								/>
+								<div>
+									<div className="text-xs" style={{ color: theme.colors.textMain }}>
+										Merge & update existing session
+									</div>
+									<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
+										Reactivate the archived {getAgentDisplayName(selectedProvider)} session and append current context to it
+									</div>
+								</div>
+							</label>
+						</div>
+					</div>
+				)}
 
 				{/* Options */}
 				<div>

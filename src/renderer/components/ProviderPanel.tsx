@@ -311,7 +311,7 @@ export function ProviderPanel({ theme, sessions = [] }: ProviderPanelProps) {
 
 			{/* Failover Configuration */}
 			<div style={sectionStyle}>
-				<div style={sectionTitleStyle}>Provider Failover</div>
+				<div style={sectionTitleStyle}>Automatic Failover</div>
 
 				{/* Enable automatic failover toggle */}
 				<div className="flex items-center justify-between mb-3">
@@ -509,6 +509,48 @@ export function ProviderPanel({ theme, sessions = [] }: ProviderPanelProps) {
 							/>
 						</div>
 					)}
+				</div>
+			</div>
+
+			{/* Switch Behavior */}
+			<div style={sectionStyle}>
+				<div style={sectionTitleStyle}>Switch Behavior</div>
+				<div style={dimStyle} className="mb-2">
+					When switching back to a provider that already has an archived session:
+				</div>
+				<div className="flex gap-4">
+					<label className="flex items-center gap-2 cursor-pointer">
+						<input
+							type="radio"
+							name="switchBehavior"
+							checked={(config.switchBehavior ?? 'merge-back') === 'merge-back'}
+							onChange={() => saveConfig({ switchBehavior: 'merge-back' })}
+						/>
+						<div>
+							<div style={{ color: theme.colors.textMain, fontSize: 12, fontWeight: 500 }}>
+								Merge & update
+							</div>
+							<div style={{ color: theme.colors.textDim, fontSize: 10 }}>
+								Reactivate the archived session and append new context
+							</div>
+						</div>
+					</label>
+					<label className="flex items-center gap-2 cursor-pointer">
+						<input
+							type="radio"
+							name="switchBehavior"
+							checked={config.switchBehavior === 'always-new'}
+							onChange={() => saveConfig({ switchBehavior: 'always-new' })}
+						/>
+						<div>
+							<div style={{ color: theme.colors.textMain, fontSize: 12, fontWeight: 500 }}>
+								Always new
+							</div>
+							<div style={{ color: theme.colors.textDim, fontSize: 10 }}>
+								Create a fresh session each time
+							</div>
+						</div>
+					</label>
 				</div>
 			</div>
 
