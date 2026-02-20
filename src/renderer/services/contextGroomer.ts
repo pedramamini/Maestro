@@ -100,6 +100,25 @@ export const AGENT_ARTIFACTS: Record<ToolType, string[]> = {
 		'Opus',
 		'Sonnet',
 	],
+	'gemini-cli': [
+		// Slash commands
+		'/help',
+		'/tools',
+		'/memory',
+		'/stats',
+		'/restore',
+		'/mcp',
+		// Brand and model references
+		'Gemini',
+		'Google',
+		'Gemini CLI',
+		'gemini-cli',
+		'gemini-2.5-pro',
+		'gemini-2.5-flash',
+		'gemini-2.0-flash',
+		'gemini-3-pro-preview',
+		'gemini-3-flash-preview',
+	],
 	terminal: [
 		// Terminal has no agent-specific artifacts
 	],
