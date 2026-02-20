@@ -152,6 +152,14 @@ export const AGENT_TARGET_NOTES: Record<ToolType, string> = {
     It can read and edit files, run commands, search code, and interact with git.
     It has tiered autonomy levels for controlling operation permissions.
   `,
+	'gemini-cli': `
+    Gemini CLI is Google's AI coding assistant powered by Gemini models.
+    It can read and edit files, run shell commands, search code, fetch web pages, and use Google Search.
+    It supports MCP (Model Context Protocol) servers for extensibility.
+    It has approval modes: default, auto_edit, yolo, and plan (read-only).
+    Models include gemini-2.5-pro, gemini-2.5-flash, and gemini-3 preview models.
+    It supports tool calling with 15+ built-in tools.
+  `,
 	terminal: `
     Terminal is a raw shell interface.
     It executes shell commands directly without AI interpretation.
@@ -167,6 +175,7 @@ export function getAgentDisplayName(agentType: ToolType): string {
 		opencode: 'OpenCode',
 		codex: 'OpenAI Codex',
 		'factory-droid': 'Factory Droid',
+		'gemini-cli': 'Gemini CLI',
 		terminal: 'Terminal',
 	};
 	return names[agentType] || agentType;
