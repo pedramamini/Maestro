@@ -100,6 +100,7 @@ export interface UseSessionListPropsDeps {
 	handleToggleWorktreeExpanded: (sessionId: string) => void;
 	handleConfigureCue: (session: Session) => void;
 	handleSwitchProvider?: (sessionId: string) => void;
+	handleUnarchive?: (sessionId: string) => void;
 	openWizardModal: () => void;
 	handleStartTour: () => void;
 
@@ -187,6 +188,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 
 			// Provider switching (Virtuosos)
 			onSwitchProvider: deps.handleSwitchProvider,
+			onUnarchive: deps.handleUnarchive,
 
 			// Auto mode
 			activeBatchSessionIds: deps.activeBatchSessionIds,
@@ -275,6 +277,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.handleConfigureCue,
 			deps.handleToggleWorktreeExpanded,
 			deps.handleSwitchProvider,
+			deps.handleUnarchive,
 			deps.openWizardModal,
 			deps.handleStartTour,
 			deps.handleOpenGroupChat,
