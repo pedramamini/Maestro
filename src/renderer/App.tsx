@@ -5858,8 +5858,8 @@ You are taking over this conversation. Based on the context above, provide a bri
 				return;
 			}
 
-			// Handle AI mode for batch-mode agents (Claude Code, Codex, OpenCode)
-			const supportedBatchAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
+			// Handle AI mode for batch-mode agents (Claude Code, Codex, OpenCode, Gemini)
+			const supportedBatchAgents: ToolType[] = ['claude-code', 'codex', 'opencode', 'gemini-cli'];
 			if (!supportedBatchAgents.includes(session.toolType)) {
 				console.log('[Remote] Not a batch-mode agent, skipping');
 				return;

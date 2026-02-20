@@ -335,7 +335,7 @@ export function NewGroupChatModal({
 						</div>
 					) : availableTiles.length === 0 ? (
 						<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
-							No agents available. Please install Claude Code, OpenCode, Codex, or Factory Droid.
+							No agents available. Please install Claude Code, OpenCode, Codex, Factory Droid, or Gemini CLI.
 						</div>
 					) : (
 						<div className="flex items-center gap-2">
@@ -355,7 +355,10 @@ export function NewGroupChatModal({
 								>
 									{availableTiles.map((tile) => {
 										const isBeta =
-											tile.id === 'codex' || tile.id === 'opencode' || tile.id === 'factory-droid';
+											tile.id === 'codex' ||
+											tile.id === 'opencode' ||
+											tile.id === 'factory-droid' ||
+											tile.id === 'gemini-cli';
 										return (
 											<option key={tile.id} value={tile.id}>
 												{tile.name}
