@@ -29,6 +29,7 @@ const VALID_TOOL_TYPES = new Set<string>([
 	'codex',
 	'terminal',
 	'factory-droid',
+	'gemini-cli',
 ]);
 
 /**
@@ -685,6 +686,70 @@ export const FACTORY_DROID_ERROR_PATTERNS: AgentErrorPatterns = {
 };
 
 // ============================================================================
+// Gemini CLI Error Patterns
+// ============================================================================
+
+export const GEMINI_ERROR_PATTERNS: AgentErrorPatterns = {
+	auth_expired: [
+		{
+			pattern: /credentials.*expired|oauth.*expired|authentication.*failed|login.*required/i,
+			message: 'Gemini authentication expired. Run: gemini login',
+			recoverable: true,
+		},
+		{
+			pattern: /GEMINI_API_KEY.*invalid|invalid.*api.?key/i,
+			message: 'Invalid Gemini API key. Check your GEMINI_API_KEY environment variable.',
+			recoverable: true,
+		},
+	],
+
+	rate_limited: [
+		{
+			pattern: /rate.?limit|too many requests|429|quota.*exceeded|resource.*exhausted/i,
+			message: 'Gemini API rate limit exceeded. Wait and retry.',
+			recoverable: true,
+		},
+	],
+
+	token_exhaustion: [
+		{
+			pattern: /turn.*limit.*exceeded|FatalTurnLimitedError|Maximum session turns exceeded/i,
+			message: 'Gemini turn limit exceeded. Start a new session.',
+			recoverable: false,
+		},
+		{
+			pattern: /context.*length|token.*limit/i,
+			message: 'Gemini context length exceeded. Start a new session.',
+			recoverable: false,
+		},
+	],
+
+	network_error: [
+		{
+			pattern: /network.*error|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch.*failed/i,
+			message: 'Network error. Check your internet connection.',
+			recoverable: true,
+		},
+	],
+
+	permission_denied: [
+		{
+			pattern: /path.*not.*in.*workspace|permission.*denied|sandbox/i,
+			message: 'Permission denied. File is outside the workspace sandbox.',
+			recoverable: false,
+		},
+	],
+
+	agent_crashed: [
+		{
+			pattern: /FatalInputError|FatalConfigError|unhandled.*exception|SIGKILL|SIGTERM/i,
+			message: 'Gemini CLI crashed unexpectedly. Check logs for details.',
+			recoverable: false,
+		},
+	],
+};
+
+// ============================================================================
 // SSH Error Patterns
 // ============================================================================
 
@@ -875,6 +940,7 @@ const patternRegistry = new Map<ToolType, AgentErrorPatterns>([
 	['opencode', OPENCODE_ERROR_PATTERNS],
 	['codex', CODEX_ERROR_PATTERNS],
 	['factory-droid', FACTORY_DROID_ERROR_PATTERNS],
+	['gemini-cli', GEMINI_ERROR_PATTERNS],
 ]);
 
 /**

@@ -21,7 +21,7 @@ import type { ModeratorConfig, GroupChatHistoryEntry } from '../../shared/group-
  * Valid agent IDs that can be used as moderators.
  * Must match available agents from agent-detector.
  */
-const VALID_MODERATOR_AGENT_IDS: ToolType[] = ['claude-code', 'codex', 'opencode', 'factory-droid'];
+const VALID_MODERATOR_AGENT_IDS: ToolType[] = ['claude-code', 'codex', 'opencode', 'factory-droid', 'gemini-cli'];
 
 // ---------------------------------------------------------------------------
 // Write serialization & atomic file I/O

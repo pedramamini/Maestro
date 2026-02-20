@@ -1774,9 +1774,9 @@ describe('NewInstanceModal', () => {
 
 		it('should have tabindex=-1 for unsupported agents (coming soon)', async () => {
 			// Note: tabIndex is based on isSupported (in SUPPORTED_AGENTS), not availability
-			// gemini-cli is not in SUPPORTED_AGENTS so it should have tabIndex=-1
+			// terminal is not in SUPPORTED_AGENTS so it should have tabIndex=-1
 			vi.mocked(window.maestro.agents.detect).mockResolvedValue([
-				createAgentConfig({ id: 'gemini-cli', name: 'Gemini CLI', available: false }),
+				createAgentConfig({ id: 'terminal', name: 'Terminal', available: false }),
 			]);
 
 			render(
@@ -1790,7 +1790,7 @@ describe('NewInstanceModal', () => {
 			);
 
 			await waitFor(() => {
-				const option = screen.getByRole('option', { name: /Gemini CLI/i });
+				const option = screen.getByRole('option', { name: /Terminal/i });
 				expect(option).toHaveAttribute('tabIndex', '-1');
 			});
 		});

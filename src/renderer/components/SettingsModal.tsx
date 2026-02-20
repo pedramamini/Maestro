@@ -3157,7 +3157,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 															aria-label="Select synopsis provider agent"
 														>
 															{dnAvailableTiles.map((tile) => {
-																const isBeta = tile.id === 'codex' || tile.id === 'opencode' || tile.id === 'factory-droid';
+																const isBeta = tile.id === 'codex' || tile.id === 'opencode' || tile.id === 'factory-droid' || tile.id === 'gemini-cli';
 																return (
 																	<option key={tile.id} value={tile.id}>
 																		{tile.name}{isBeta ? ' (Beta)' : ''}

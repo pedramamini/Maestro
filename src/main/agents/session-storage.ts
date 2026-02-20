@@ -22,7 +22,7 @@ const LOG_CONTEXT = '[AgentSessionStorage]';
 /**
  * Known agent IDs that have session storage support
  */
-const KNOWN_AGENT_IDS: ToolType[] = ['claude-code', 'codex', 'opencode', 'factory-droid'];
+const KNOWN_AGENT_IDS: ToolType[] = ['claude-code', 'codex', 'opencode', 'factory-droid', 'gemini-cli'];
 
 /**
  * Session origin types - indicates how the session was created
