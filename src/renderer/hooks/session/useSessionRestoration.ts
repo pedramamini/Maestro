@@ -298,8 +298,10 @@ export function useSessionRestoration(): SessionRestorationReturn {
 				filePreviewTabs: correctedSession.filePreviewTabs || [],
 				activeFileTabId: correctedSession.activeFileTabId ?? null,
 				unifiedTabOrder:
-					correctedSession.unifiedTabOrder ||
-					resetAiTabs.map((tab) => ({ type: 'ai' as const, id: tab.id })),
+					correctedSession.unifiedTabOrder || [
+						...resetAiTabs.map((tab) => ({ type: 'ai' as const, id: tab.id })),
+						...(correctedSession.filePreviewTabs || []).map((tab) => ({ type: 'file' as const, id: tab.id })),
+					],
 			};
 		} catch (error) {
 			console.error(`Error restoring session ${session.id}:`, error);

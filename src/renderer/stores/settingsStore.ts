@@ -247,6 +247,8 @@ export interface SettingsStoreState {
 	directorNotesSettings: DirectorNotesSettings;
 	wakatimeApiKey: string;
 	wakatimeEnabled: boolean;
+	useNativeTitleBar: boolean;
+	autoHideMenuBar: boolean;
 }
 
 export interface SettingsStoreActions {
@@ -312,6 +314,8 @@ export interface SettingsStoreActions {
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
 	setWakatimeApiKey: (value: string) => void;
 	setWakatimeEnabled: (value: boolean) => void;
+	setUseNativeTitleBar: (value: boolean) => void;
+	setAutoHideMenuBar: (value: boolean) => void;
 
 	// Async setters
 	setLogLevel: (value: string) => Promise<void>;
@@ -453,6 +457,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	directorNotesSettings: DEFAULT_DIRECTOR_NOTES_SETTINGS,
 	wakatimeApiKey: '',
 	wakatimeEnabled: false,
+	useNativeTitleBar: false,
+	autoHideMenuBar: false,
 
 	// ============================================================================
 	// Simple Setters
@@ -769,6 +775,16 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	setWakatimeEnabled: (value) => {
 		set({ wakatimeEnabled: value });
 		window.maestro.settings.set('wakatimeEnabled', value);
+	},
+
+	setUseNativeTitleBar: (value) => {
+		set({ useNativeTitleBar: value });
+		window.maestro.settings.set('useNativeTitleBar', value);
+	},
+
+	setAutoHideMenuBar: (value) => {
+		set({ autoHideMenuBar: value });
+		window.maestro.settings.set('autoHideMenuBar', value);
 	},
 
 	// ============================================================================
@@ -1648,6 +1664,12 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['wakatimeEnabled'] !== undefined)
 			patch.wakatimeEnabled = allSettings['wakatimeEnabled'] as boolean;
 
+		if (allSettings['useNativeTitleBar'] !== undefined)
+			patch.useNativeTitleBar = allSettings['useNativeTitleBar'] as boolean;
+
+		if (allSettings['autoHideMenuBar'] !== undefined)
+			patch.autoHideMenuBar = allSettings['autoHideMenuBar'] as boolean;
+
 		// Apply the entire patch in one setState call
 		patch.settingsLoaded = true;
 		useSettingsStore.setState(patch);
@@ -1756,5 +1778,7 @@ export function getSettingsActions() {
 		setDirectorNotesSettings: state.setDirectorNotesSettings,
 		setWakatimeApiKey: state.setWakatimeApiKey,
 		setWakatimeEnabled: state.setWakatimeEnabled,
+		setUseNativeTitleBar: state.setUseNativeTitleBar,
+		setAutoHideMenuBar: state.setAutoHideMenuBar,
 	};
 }

@@ -17,6 +17,8 @@ import {
 	getActiveTab,
 	getInitialRenameValue,
 	hasActiveWizard,
+	buildUnifiedTabs,
+	ensureInUnifiedTabOrder,
 } from '../../utils/tabHelpers';
 import { generateId } from '../../utils/ids';
 import { useSessionStore, selectActiveSession } from '../../stores/sessionStore';
@@ -146,24 +148,10 @@ export function useTabHandlers(): TabHandlersReturn {
 	);
 
 	// UNIFIED TAB SYSTEM: Combine aiTabs and filePreviewTabs according to unifiedTabOrder
+	// Uses shared buildUnifiedTabs which also appends orphaned tabs as a safety net
 	const unifiedTabs = useMemo((): UnifiedTab[] => {
 		if (!activeSession) return [];
-
-		const { aiTabs, filePreviewTabs, unifiedTabOrder } = activeSession;
-		const aiTabMap = new Map(aiTabs.map((tab) => [tab.id, tab]));
-		const fileTabMap = new Map(filePreviewTabs.map((tab) => [tab.id, tab]));
-
-		return unifiedTabOrder
-			.map((ref): UnifiedTab | null => {
-				if (ref.type === 'ai') {
-					const tab = aiTabMap.get(ref.id);
-					return tab ? { type: 'ai', id: ref.id, data: tab } : null;
-				} else {
-					const tab = fileTabMap.get(ref.id);
-					return tab ? { type: 'file', id: ref.id, data: tab } : null;
-				}
-			})
-			.filter((tab): tab is UnifiedTab => tab !== null);
+		return buildUnifiedTabs(activeSession);
 	}, [activeSession?.aiTabs, activeSession?.filePreviewTabs, activeSession?.unifiedTabOrder]);
 
 	// Get the active file preview tab (if a file tab is active)
@@ -222,6 +210,7 @@ export function useTabHandlers(): TabHandlersReturn {
 							filePreviewTabs: updatedTabs,
 							activeFileTabId: existingTab.id,
 							activeTabId: s.activeTabId,
+							unifiedTabOrder: ensureInUnifiedTabOrder(s.unifiedTabOrder, 'file', existingTab.id),
 						};
 					}
 

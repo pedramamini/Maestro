@@ -292,6 +292,12 @@ export interface UseSettingsReturn {
 	setWakatimeApiKey: (value: string) => void;
 	wakatimeEnabled: boolean;
 	setWakatimeEnabled: (value: boolean) => void;
+
+	// Window chrome settings
+	useNativeTitleBar: boolean;
+	setUseNativeTitleBar: (value: boolean) => void;
+	autoHideMenuBar: boolean;
+	setAutoHideMenuBar: (value: boolean) => void;
 }
 
 export function useSettings(): UseSettingsReturn {

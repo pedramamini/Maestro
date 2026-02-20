@@ -7,6 +7,7 @@ import {
 	ClosedTab,
 	ClosedTabEntry,
 	FilePreviewTab,
+	UnifiedTab,
 	UnifiedTabRef,
 	LogEntry,
 	UsageStats,
@@ -15,6 +16,64 @@ import {
 } from '../types';
 import { generateId } from './ids';
 import { getAutoRunFolderPath } from './existingDocsDetector';
+
+/**
+ * Build the unified tab list from a session's tab data.
+ * Follows unifiedTabOrder, then appends any orphaned tabs as a safety net
+ * (e.g., from migration or state corruption).
+ *
+ * Single source of truth — used by useTabHandlers and tabStore selectors.
+ */
+export function buildUnifiedTabs(session: Session): UnifiedTab[] {
+	if (!session) return [];
+	const { aiTabs, filePreviewTabs, unifiedTabOrder } = session;
+
+	const aiTabMap = new Map((aiTabs || []).map((tab) => [tab.id, tab]));
+	const fileTabMap = new Map((filePreviewTabs || []).map((tab) => [tab.id, tab]));
+
+	const result: UnifiedTab[] = [];
+
+	// Follow unified order for tabs that have entries
+	for (const ref of unifiedTabOrder || []) {
+		if (ref.type === 'ai') {
+			const tab = aiTabMap.get(ref.id);
+			if (tab) {
+				result.push({ type: 'ai', id: ref.id, data: tab });
+				aiTabMap.delete(ref.id);
+			}
+		} else {
+			const tab = fileTabMap.get(ref.id);
+			if (tab) {
+				result.push({ type: 'file', id: ref.id, data: tab });
+				fileTabMap.delete(ref.id);
+			}
+		}
+	}
+
+	// Append any orphaned tabs not in unified order (data integrity fallback)
+	for (const [id, tab] of aiTabMap) {
+		result.push({ type: 'ai', id, data: tab });
+	}
+	for (const [id, tab] of fileTabMap) {
+		result.push({ type: 'file', id, data: tab });
+	}
+
+	return result;
+}
+
+/**
+ * Ensure a tab ID is present in unifiedTabOrder.
+ * Returns the order unchanged if already present, or with the tab appended.
+ */
+export function ensureInUnifiedTabOrder(
+	unifiedTabOrder: UnifiedTabRef[],
+	type: 'ai' | 'file',
+	id: string
+): UnifiedTabRef[] {
+	const exists = unifiedTabOrder.some((ref) => ref.type === type && ref.id === id);
+	if (exists) return unifiedTabOrder;
+	return [...unifiedTabOrder, { type, id }];
+}
 
 /**
  * Get the initial name to show in the rename modal.
@@ -705,6 +764,7 @@ export function reopenUnifiedClosedTab(session: Session): ReopenUnifiedClosedTab
 						...session,
 						activeTabId: existingTab.id,
 						activeFileTabId: null,
+						unifiedTabOrder: ensureInUnifiedTabOrder(session.unifiedTabOrder, 'ai', existingTab.id),
 						unifiedClosedTabHistory: remainingHistory,
 					},
 					wasDuplicate: true,
@@ -773,6 +833,7 @@ export function reopenUnifiedClosedTab(session: Session): ReopenUnifiedClosedTab
 				session: {
 					...session,
 					activeFileTabId: existingTab.id,
+					unifiedTabOrder: ensureInUnifiedTabOrder(session.unifiedTabOrder, 'file', existingTab.id),
 					unifiedClosedTabHistory: remainingHistory,
 				},
 				wasDuplicate: true,

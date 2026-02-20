@@ -36,6 +36,7 @@ import {
 	ArrowDownToLine,
 	Clapperboard,
 	HelpCircle,
+	AppWindow,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -407,6 +408,11 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setWakatimeApiKey,
 		wakatimeEnabled,
 		setWakatimeEnabled,
+		// Window chrome settings
+		useNativeTitleBar,
+		setUseNativeTitleBar,
+		autoHideMenuBar,
+		setAutoHideMenuBar,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
@@ -2549,6 +2555,89 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									</p>
 								</div>
 							)}
+
+							{/* Window Chrome Settings */}
+							<div>
+								<label
+									className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2"
+									style={{ color: theme.colors.textDim }}
+								>
+									<AppWindow className="w-3 h-3" />
+									Window Chrome
+								</label>
+								<div
+									className="p-3 rounded border space-y-3"
+									style={{
+										borderColor: theme.colors.border,
+										backgroundColor: theme.colors.bgMain,
+									}}
+								>
+									{/* Native Title Bar */}
+									<div className="flex items-center justify-between">
+										<div>
+											<p className="text-sm" style={{ color: theme.colors.textMain }}>
+												Use native title bar
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Use the OS native title bar instead of Maestro&apos;s custom title bar.
+												Requires restart.
+											</p>
+										</div>
+										<button
+											onClick={() => setUseNativeTitleBar(!useNativeTitleBar)}
+											className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+											tabIndex={0}
+											style={{
+												backgroundColor: useNativeTitleBar
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={useNativeTitleBar}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													useNativeTitleBar ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+
+									{/* Auto-Hide Menu Bar */}
+									<div
+										className="flex items-center justify-between pt-3 border-t"
+										style={{ borderColor: theme.colors.border }}
+									>
+										<div>
+											<p className="text-sm" style={{ color: theme.colors.textMain }}>
+												Auto-hide menu bar
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Hide the application menu bar. Press Alt to toggle visibility. Applies to
+												Windows and Linux. Requires restart.
+											</p>
+										</div>
+										<button
+											onClick={() => setAutoHideMenuBar(!autoHideMenuBar)}
+											className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+											tabIndex={0}
+											style={{
+												backgroundColor: autoHideMenuBar
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={autoHideMenuBar}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													autoHideMenuBar ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+								</div>
+							</div>
 
 							{/* Document Graph Settings */}
 							<div>
