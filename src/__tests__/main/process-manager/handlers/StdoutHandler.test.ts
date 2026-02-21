@@ -47,7 +47,7 @@ vi.mock('../../../../main/parsers/error-patterns', () => ({
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
-import { StdoutHandler } from '../../../../main/process-manager/handlers/StdoutHandler';
+import { StdoutHandler, extractDeniedPath } from '../../../../main/process-manager/handlers/StdoutHandler';
 import type { ManagedProcess } from '../../../../main/process-manager/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -1248,3 +1248,57 @@ function createMinimalOutputParser(usageReturn: {
 		detectErrorFromLine: vi.fn(() => null),
 	};
 }
+
+// ── extractDeniedPath tests ─────────────────────────────────────────────────
+
+describe('extractDeniedPath', () => {
+	it('extracts directory from path with single quotes and "not in workspace"', () => {
+		const result = extractDeniedPath("path '/home/user/project/src' not in workspace");
+		expect(result).toBe('/home/user/project/src');
+	});
+
+	it('extracts parent directory when path is a file', () => {
+		const result = extractDeniedPath("path '/home/user/project/src/main.ts' not in workspace");
+		expect(result).toBe('/home/user/project/src');
+	});
+
+	it('extracts directory from double-quoted path', () => {
+		const result = extractDeniedPath('path "/home/user/project" not in workspace');
+		expect(result).toBe('/home/user/project');
+	});
+
+	it('extracts directory from "is outside" pattern', () => {
+		const result = extractDeniedPath("'/tmp/data' is outside the allowed workspace");
+		expect(result).toBe('/tmp/data');
+	});
+
+	it('extracts directory from permission denied pattern', () => {
+		const result = extractDeniedPath("'/etc/config.json' permission denied");
+		expect(result).toBe('/etc');
+	});
+
+	it('extracts bare path without quotes', () => {
+		const result = extractDeniedPath('/usr/local/bin not in workspace');
+		expect(result).toBe('/usr/local/bin');
+	});
+
+	it('extracts parent dir for bare file path', () => {
+		const result = extractDeniedPath('/usr/local/bin/tool.py not in workspace');
+		expect(result).toBe('/usr/local/bin');
+	});
+
+	it('returns null when no path pattern matches', () => {
+		const result = extractDeniedPath('some random error message');
+		expect(result).toBeNull();
+	});
+
+	it('returns null for empty string', () => {
+		const result = extractDeniedPath('');
+		expect(result).toBeNull();
+	});
+
+	it('handles tilde paths', () => {
+		const result = extractDeniedPath("'~/projects/foo' not in workspace");
+		expect(result).toBe('~/projects/foo');
+	});
+});

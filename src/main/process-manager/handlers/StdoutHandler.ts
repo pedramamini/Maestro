@@ -8,6 +8,38 @@ import { matchSshErrorPattern } from '../../parsers/error-patterns';
 import type { ManagedProcess, UsageStats, UsageTotals, AgentError } from '../types';
 import type { DataBufferManager } from './DataBufferManager';
 
+/**
+ * Extract the denied directory path from a Gemini CLI sandbox violation error message.
+ * Returns the parent directory if the path looks like a file, or the path as-is for directories.
+ * Returns null if no path can be extracted.
+ */
+export function extractDeniedPath(errorMsg: string): string | null {
+	const patterns = [
+		// path '/foo/bar' not in workspace
+		/path\s+['"]([^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside)/i,
+		// '/foo/bar' not in workspace
+		/['"]([\/~][^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside|permission\s+denied)/i,
+		// /foo/bar not in workspace (bare path)
+		/(\/[^\s:'"]+)\s*(?:not\s+in\s+workspace|is\s+outside)/i,
+	];
+
+	for (const pattern of patterns) {
+		const match = errorMsg.match(pattern);
+		if (match) {
+			const extracted = match[1];
+			// Check if it looks like a file (has a dot-extension at the end)
+			if (/\.\w+$/.test(extracted)) {
+				// Return parent directory
+				const lastSlash = extracted.lastIndexOf('/');
+				return lastSlash > 0 ? extracted.substring(0, lastSlash) : extracted;
+			}
+			return extracted;
+		}
+	}
+
+	return null;
+}
+
 interface StdoutHandlerDependencies {
 	processes: Map<string, ManagedProcess>;
 	emitter: EventEmitter;
@@ -357,6 +389,33 @@ export class StdoutHandler {
 				state: event.toolState,
 				timestamp: Date.now(),
 			});
+		}
+
+		// Detect Gemini CLI sandbox violations from tool_result error events
+		if (event.type === 'tool_use' && managedProcess.toolType === 'gemini-cli' && event.toolState) {
+			const errorMsg =
+				(event.toolState as Record<string, unknown>)?.error &&
+				typeof ((event.toolState as Record<string, unknown>).error as Record<string, unknown>)?.message === 'string'
+					? ((event.toolState as Record<string, unknown>).error as Record<string, unknown>).message as string
+					: typeof (event.toolState as Record<string, unknown>)?.error === 'string'
+						? (event.toolState as Record<string, unknown>).error as string
+						: null;
+
+			if (errorMsg && /path.*not.*in.*workspace|permission.*denied.*sandbox/i.test(errorMsg)) {
+				const deniedPath = extractDeniedPath(errorMsg);
+				if (deniedPath) {
+					logger.info('[ProcessManager] Gemini sandbox violation detected', 'WorkspaceApproval', {
+						sessionId,
+						deniedPath,
+						errorMessage: errorMsg,
+					});
+					this.emitter.emit('workspace-approval-request', sessionId, {
+						deniedPath,
+						errorMessage: errorMsg,
+						timestamp: Date.now(),
+					});
+				}
+			}
 		}
 
 		// Handle tool_use blocks embedded in text events (Claude Code mixed content)

@@ -420,6 +420,14 @@ export function createProcessApi() {
 			ipcRenderer.on('agent:error', handler);
 			return () => ipcRenderer.removeListener('agent:error', handler);
 		},
+
+		/** Subscribe to workspace approval requests (Gemini sandbox violations) */
+		onWorkspaceApproval: (callback: (sessionId: string, request: { deniedPath: string; errorMessage: string; timestamp: number }) => void): (() => void) => {
+			const handler = (_: unknown, sessionId: string, request: { deniedPath: string; errorMessage: string; timestamp: number }) =>
+				callback(sessionId, request);
+			ipcRenderer.on('process:workspace-approval', handler);
+			return () => ipcRenderer.removeListener('process:workspace-approval', handler);
+		},
 	};
 }
 

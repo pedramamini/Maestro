@@ -15,6 +15,7 @@ import { setupDataListener } from './data-listener';
 import { setupUsageListener } from './usage-listener';
 import { setupSessionIdListener } from './session-id-listener';
 import { setupErrorListener } from './error-listener';
+import { setupWorkspaceApprovalListener } from './workspace-approval-listener';
 import { setupStatsListener } from './stats-listener';
 import { setupExitListener } from './exit-listener';
 
@@ -46,6 +47,9 @@ export function setupProcessListeners(
 
 	// Agent error listener
 	setupErrorListener(processManager, deps);
+
+	// Workspace approval listener (Gemini sandbox violations)
+	setupWorkspaceApprovalListener(processManager, deps);
 
 	// Stats/query-complete listener
 	setupStatsListener(processManager, deps);
