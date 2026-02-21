@@ -715,7 +715,7 @@ function setupProcessListeners() {
 				REGEX_SYNOPSIS_SESSION,
 			},
 			logger,
-		});
+		}, geminiSessionStatsStore);
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
 		setupWakaTimeListener(processManager, wakatimeManager, store);

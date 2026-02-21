@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger';
 import { appendToBuffer } from '../utils/bufferUtils';
 import { aggregateModelUsage, type ModelStats } from '../../parsers/usage-aggregator';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
-import type { ManagedProcess, UsageStats, UsageTotals, AgentError } from '../types';
+import type { ManagedProcess, UsageStats, UsageTotals, AgentError, GeminiSessionStatsEvent } from '../types';
 import type { DataBufferManager } from './DataBufferManager';
 
 /**
@@ -314,6 +314,18 @@ export class StdoutHandler {
 			});
 
 			this.emitter.emit('usage', sessionId, normalizedUsageStats);
+
+			// Emit per-turn stats for Gemini sessions so the stats listener can accumulate them
+			if (managedProcess.toolType === 'gemini-cli') {
+				const geminiStats: GeminiSessionStatsEvent = {
+					sessionId,
+					inputTokens: usage.inputTokens,
+					outputTokens: usage.outputTokens,
+					cacheReadTokens: usage.cacheReadTokens || 0,
+					reasoningTokens: usage.reasoningTokens || 0,
+				};
+				this.emitter.emit('gemini-session-stats', sessionId, geminiStats);
+			}
 		}
 
 		// Extract session ID
@@ -347,35 +359,39 @@ export class StdoutHandler {
 		}
 
 		// Handle streaming text events (OpenCode, Codex reasoning, Gemini messages)
-		// Two paths based on whether the event is a streaming delta or a complete message:
+		// Three paths based on partial flag and agent type:
 		//
 		// 1. Partial/delta events (isPartial === true):
 		//    Accumulate in streamedText for the result event to emit later.
 		//    Also emit as thinking-chunk for live streaming display (when showThinking is on).
-		//    Used by: Claude Code, OpenCode.
+		//    Used by: Claude Code, OpenCode, Gemini CLI (delta: true).
 		//
-		// 2. Complete/non-delta events (isPartial === false or undefined):
-		//    Emit directly as data via emitDataBuffered for immediate UI display.
-		//    NOT accumulated in streamedText — the data is already emitted.
-		//    Used by: Gemini CLI (sends complete message events, not streaming deltas).
+		// 2. Complete/non-delta events from Gemini CLI (isPartial === false):
+		//    Same as partial: accumulate in streamedText + emit thinking-chunk.
+		//    Text is deferred to result time (via streamedText fallback) or exit time
+		//    (ExitHandler). This keeps Gemini text flowing through the same pipeline as
+		//    partial events — thinking entries persist in chat history when showThinking
+		//    is 'on' or 'sticky', and text appears as stdout at result/exit time.
 		//
-		// This distinction is critical because thinking-chunk events are dropped by the
-		// renderer when showThinking is 'off' (the default). Agents that send complete
-		// messages (not deltas) would have invisible output if we only used thinking-chunk.
+		// 3. Complete/non-delta events from other agents:
+		//    Emit as thinking-chunk (for thinking display) AND as data via emitDataBuffered
+		//    (for immediate display). The thinking entry may be cleared quickly by the data
+		//    flush, but for most agents non-partial text is rare.
 		if (event.type === 'text' && event.text) {
-			if (event.isPartial) {
-				// Streaming delta: accumulate for result event, emit thinking-chunk for live display
+			if (event.isPartial || managedProcess.toolType === 'gemini-cli') {
+				// Streaming delta OR Gemini complete message:
+				// Accumulate for result-time emission, emit thinking-chunk for live display
 				managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
 				logger.debug('[ProcessManager] Emitting thinking-chunk', 'ProcessManager', {
 					sessionId,
 					textLength: event.text.length,
+					isPartial: event.isPartial,
+					toolType: managedProcess.toolType,
 				});
 				this.emitter.emit('thinking-chunk', sessionId, event.text);
 			} else {
-				// Complete message: emit as thinking-chunk for thinking display
-				// (renderer drops this when showThinking is 'off')...
+				// Other agents' non-partial text: emit both thinking-chunk and data
 				this.emitter.emit('thinking-chunk', sessionId, event.text);
-				// ...AND as stdout data for always-visible display
 				logger.debug('[ProcessManager] Emitting non-partial text as data', 'ProcessManager', {
 					sessionId,
 					textLength: event.text.length,
@@ -459,9 +475,11 @@ export class StdoutHandler {
 		}
 
 		// Handle result
-		// Emit text from the result event or from accumulated partial (delta) text.
-		// Non-partial text was already emitted directly in the text handler above,
-		// so streamedText only contains partial/delta text that needs deferred emission.
+		// Emit text from the result event or from accumulated streamedText.
+		// For partial/delta text and Gemini CLI non-partial text, content is accumulated
+		// in streamedText during streaming (emitted as thinking-chunks for live display)
+		// and deferred here for final data emission. Other agents' non-partial text was
+		// already emitted directly via emitDataBuffered in the text handler above.
 		if (
 			managedProcess.toolType !== 'codex' &&
 			outputParser.isResultMessage(event) &&

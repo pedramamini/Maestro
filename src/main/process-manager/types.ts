@@ -106,6 +106,14 @@ export interface CommandResult {
 /**
  * Events emitted by ProcessManager
  */
+export interface GeminiSessionStatsEvent {
+	sessionId: string;
+	inputTokens: number;
+	outputTokens: number;
+	cacheReadTokens: number;
+	reasoningTokens: number;
+}
+
 export interface ProcessManagerEvents {
 	data: (sessionId: string, data: string) => void;
 	stderr: (sessionId: string, data: string) => void;
@@ -118,6 +126,7 @@ export interface ProcessManagerEvents {
 	'tool-execution': (sessionId: string, tool: ToolExecution) => void;
 	'slash-commands': (sessionId: string, commands: unknown[]) => void;
 	'query-complete': (sessionId: string, data: QueryCompleteData) => void;
+	'gemini-session-stats': (sessionId: string, stats: GeminiSessionStatsEvent) => void;
 }
 
 export interface ToolExecution {

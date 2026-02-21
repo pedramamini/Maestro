@@ -6,8 +6,10 @@
  * into smaller, focused modules for better maintainability.
  */
 
+import type Store from 'electron-store';
 import type { ProcessManager } from '../process-manager';
 import type { ProcessListenerDependencies } from './types';
+import type { GeminiSessionStatsData } from '../stores/types';
 
 // Import individual listener setup functions
 import { setupForwardingListeners } from './forwarding-listeners';
@@ -18,6 +20,7 @@ import { setupErrorListener } from './error-listener';
 import { setupWorkspaceApprovalListener } from './workspace-approval-listener';
 import { setupStatsListener } from './stats-listener';
 import { setupExitListener } from './exit-listener';
+import { setupGeminiStatsListener } from './gemini-stats-listener';
 
 // Re-export types for consumers
 export type { ProcessListenerDependencies, ParticipantInfo } from './types';
@@ -31,7 +34,8 @@ export type { ProcessListenerDependencies, ParticipantInfo } from './types';
  */
 export function setupProcessListeners(
 	processManager: ProcessManager,
-	deps: ProcessListenerDependencies
+	deps: ProcessListenerDependencies,
+	geminiStatsStore?: Store<GeminiSessionStatsData>
 ): void {
 	// Simple forwarding listeners (slash-commands, thinking-chunk, tool-execution, stderr, command-exit)
 	setupForwardingListeners(processManager, deps);
@@ -56,4 +60,7 @@ export function setupProcessListeners(
 
 	// Exit listener (with group chat routing, recovery, and synthesis)
 	setupExitListener(processManager, deps);
+
+	// Gemini session stats listener (accumulates per-turn token usage)
+	setupGeminiStatsListener(processManager, deps, geminiStatsStore);
 }
