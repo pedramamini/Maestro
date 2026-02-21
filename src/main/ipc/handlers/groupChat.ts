@@ -437,16 +437,10 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 		'groupChat:sendToModerator',
 		withIpcErrorLogging(
 			handlerOpts('sendToModerator'),
+			// TODO: Image embedding in moderator prompts not yet implemented — images saved separately via groupChat:saveImage
 			async (id: string, message: string, images?: string[], readOnly?: boolean): Promise<void> => {
 				id = validateGroupChatId(id);
 				validateMessageContent(message);
-				console.log(`[GroupChat:Debug] ========== USER MESSAGE RECEIVED ==========`);
-				console.log(`[GroupChat:Debug] Group Chat ID: ${id}`);
-				console.log(
-					`[GroupChat:Debug] Message: "${message.substring(0, 200)}${message.length > 200 ? '...' : ''}"`
-				);
-				console.log(`[GroupChat:Debug] Read-only: ${readOnly ?? false}`);
-				console.log(`[GroupChat:Debug] Images: ${images?.length ?? 0}`);
 
 				const processManager = getProcessManager();
 				if (!processManager) {
@@ -457,9 +451,6 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 					throw new Error('Agent detector not initialized');
 				}
 
-				console.log(`[GroupChat:Debug] Process manager available: ${!!processManager}`);
-				console.log(`[GroupChat:Debug] Agent detector available: ${!!agentDetector}`);
-
 				// Route through the user message router which handles logging and forwarding
 				await routeUserMessage(
 					id,
@@ -468,9 +459,6 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 					agentDetector,
 					readOnly
 				);
-
-				console.log(`[GroupChat:Debug] User message routed to moderator`);
-				console.log(`[GroupChat:Debug] ===========================================`);
 
 				logger.debug(`Sent message to moderator in ${id}`, LOG_CONTEXT, {
 					messageLength: message.length,
@@ -931,9 +919,6 @@ Respond with ONLY the summary text, no additional commentary.`;
 		participantName: string,
 		state: ParticipantState
 	): void => {
-		console.log(
-			`[GroupChat:IPC] emitParticipantState: chatId=${groupChatId}, participant=${participantName}, state=${state}`
-		);
 		const mainWindow = getMainWindow();
 		if (isWebContentsAvailable(mainWindow)) {
 			mainWindow.webContents.send(
@@ -942,11 +927,8 @@ Respond with ONLY the summary text, no additional commentary.`;
 				participantName,
 				state
 			);
-			console.log(`[GroupChat:IPC] Sent 'groupChat:participantState' event`);
 		} else {
-			console.warn(
-				`[GroupChat:IPC] WARNING: mainWindow not available, cannot send participant state`
-			);
+			logger.warn('mainWindow not available, cannot send participant state', LOG_CONTEXT, { groupChatId, participantName });
 		}
 	};
 
