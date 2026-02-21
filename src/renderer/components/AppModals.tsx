@@ -105,6 +105,8 @@ import { RenameGroupChatModal } from './RenameGroupChatModal';
 import { GroupChatInfoOverlay } from './GroupChatInfoOverlay';
 
 // Agent/Transfer Modal Components
+import { WorkspaceApprovalModal } from './WorkspaceApprovalModal';
+import type { WorkspaceApprovalModalData } from '../stores/modalStore';
 import { AgentErrorModal, type RecoveryAction } from './AgentErrorModal';
 import { MergeSessionModal, type MergeOptions } from './MergeSessionModal';
 import { SendToAgentModal, type SendToAgentOptions } from './SendToAgentModal';
@@ -1657,6 +1659,11 @@ export interface AppAgentModalsProps {
 	sendToAgentModalOpen: boolean;
 	onCloseSendToAgent: () => void;
 	onSendToAgent: (targetSessionId: string, options: SendToAgentOptions) => Promise<MergeResult>;
+
+	// WorkspaceApprovalModal
+	workspaceApprovalData: WorkspaceApprovalModalData | undefined;
+	onApproveWorkspaceDir: (sessionId: string, directory: string) => void;
+	onDenyWorkspaceDir: () => void;
 }
 
 /**
@@ -1707,6 +1714,10 @@ export const AppAgentModals = memo(function AppAgentModals({
 	sendToAgentModalOpen,
 	onCloseSendToAgent,
 	onSendToAgent,
+	// WorkspaceApprovalModal
+	workspaceApprovalData,
+	onApproveWorkspaceDir,
+	onDenyWorkspaceDir,
 }: AppAgentModalsProps) {
 	return (
 		<>
@@ -1755,6 +1766,23 @@ export const AppAgentModals = memo(function AppAgentModals({
 					recoveryActions={groupChatRecoveryActions}
 					onDismiss={onClearGroupChatError}
 					dismissible={groupChatError.error.recoverable}
+				/>
+			)}
+
+			{/* --- WORKSPACE APPROVAL MODAL (Gemini sandbox) --- */}
+			{workspaceApprovalData && (
+				<WorkspaceApprovalModal
+					theme={theme}
+					deniedPath={workspaceApprovalData.deniedPath}
+					errorMessage={workspaceApprovalData.errorMessage}
+					sessionName={
+						sessions.find((s) => s.id === workspaceApprovalData.sessionId)?.name || 'Gemini CLI'
+					}
+					sshRemoteId={
+						sessions.find((s) => s.id === workspaceApprovalData.sessionId)?.sshRemoteId
+					}
+					onApprove={(directory) => onApproveWorkspaceDir(workspaceApprovalData.sessionId, directory)}
+					onDeny={onDenyWorkspaceDir}
 				/>
 			)}
 
@@ -2144,6 +2172,11 @@ export interface AppModalsProps {
 	onCompleteTransfer: () => void;
 	onCloseSendToAgent: () => void;
 	onSendToAgent: (targetSessionId: string, options: SendToAgentOptions) => Promise<MergeResult>;
+
+	// WorkspaceApprovalModal
+	workspaceApprovalData: WorkspaceApprovalModalData | undefined;
+	onApproveWorkspaceDir: (sessionId: string, directory: string) => void;
+	onDenyWorkspaceDir: () => void;
 }
 
 /**
@@ -2485,6 +2518,10 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onCompleteTransfer,
 		onCloseSendToAgent,
 		onSendToAgent,
+		// Workspace approval
+		workspaceApprovalData,
+		onApproveWorkspaceDir,
+		onDenyWorkspaceDir,
 	} = props;
 
 	const sourceSession = useMemo(
@@ -2819,6 +2856,9 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				sendToAgentModalOpen={sendToAgentModalOpen}
 				onCloseSendToAgent={onCloseSendToAgent}
 				onSendToAgent={onSendToAgent}
+				workspaceApprovalData={workspaceApprovalData}
+				onApproveWorkspaceDir={onApproveWorkspaceDir}
+				onDenyWorkspaceDir={onDenyWorkspaceDir}
 			/>
 		</>
 	);
