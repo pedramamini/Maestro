@@ -53,7 +53,12 @@ export function buildAgentArgs(
 		finalArgs = [...agent.batchModePrefix, ...finalArgs];
 	}
 
-	if (agent.batchModeArgs && options.prompt) {
+	// Skip batchModeArgs when readOnlyMode is active and agent defines readOnlyArgs.
+	// For Codex, batchModeArgs includes --dangerously-bypass-approvals-and-sandbox which
+	// conflicts with --sandbox read-only from readOnlyArgs. The read-only sandbox mode
+	// doesn't need the bypass flag since exec mode doesn't prompt interactively.
+	const skipBatchForReadOnly = options.readOnlyMode && agent.readOnlyArgs?.length;
+	if (agent.batchModeArgs && options.prompt && !skipBatchForReadOnly) {
 		finalArgs = [...finalArgs, ...agent.batchModeArgs];
 	}
 

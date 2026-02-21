@@ -145,8 +145,9 @@ interface CodexRawMessage {
  */
 interface CodexItem {
 	id?: string;
-	type?: 'reasoning' | 'agent_message' | 'tool_call' | 'tool_result';
+	type?: 'reasoning' | 'agent_message' | 'tool_call' | 'tool_result' | 'error';
 	text?: string;
+	message?: string;
 	tool?: string;
 	args?: Record<string, unknown>;
 	output?: string | number[];
@@ -350,6 +351,15 @@ export class CodexOutputParser implements AgentOutputParser {
 					raw: msg,
 				};
 			}
+
+			case 'error':
+				// Error items from Codex (e.g., account warnings, sandbox violations)
+				// Surface as error events so they can be displayed in group chat UI
+				return {
+					type: 'error',
+					text: item.message || item.text || 'Unknown item error',
+					raw: msg,
+				};
 
 			default:
 				// Unknown item type - preserve as system event
