@@ -346,6 +346,7 @@ interface MaestroAPI {
 				}
 			) => void
 		) => () => void;
+		onWorkspaceApproval: (callback: (sessionId: string, request: { deniedPath: string; errorMessage: string; timestamp: number }) => void) => () => void;
 	};
 	agentError: {
 		clearError: (sessionId: string) => Promise<{ success: boolean }>;
