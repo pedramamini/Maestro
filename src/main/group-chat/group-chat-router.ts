@@ -30,8 +30,8 @@ import {
 	getModeratorSystemPrompt,
 	getModeratorSynthesisPrompt,
 } from './group-chat-moderator';
-import { addParticipant } from './group-chat-agent';
-import { AgentDetector } from '../agents';
+import { addParticipant, addFreshParticipant } from './group-chat-agent';
+import { AgentDetector, getVisibleAgentDefinitions } from '../agents';
 import { powerManager } from '../power-manager';
 import { logger } from '../utils/logger';
 import { captureException } from '../utils/sentry';
@@ -357,6 +357,58 @@ export async function routeUserMessage(
 						groupChatId,
 					});
 					// Continue with other participants even if one fails
+				}
+			} else {
+				// Fall back to agent type lookup from agent definitions
+				const agentDef = getVisibleAgentDefinitions().find(
+					(def) =>
+						mentionMatches(mentionedName, def.name) ||
+						def.id.toLowerCase() === mentionedName.toLowerCase()
+				);
+				if (agentDef) {
+					try {
+						const agent = await agentDetector.getAgent(agentDef.id);
+						if (agent?.available) {
+							const participantName = agentDef.name;
+							const defaultCwd = os.homedir();
+							const agentConfigValues =
+								getAgentConfigCallback?.(agentDef.id) || {};
+							console.log(
+								`[GroupChatRouter] Auto-adding fresh participant @${participantName} from agent type @${mentionedName}`
+							);
+							await addFreshParticipant(
+								groupChatId,
+								participantName,
+								agentDef.id,
+								processManager,
+								defaultCwd,
+								agentDetector,
+								agentConfigValues,
+							);
+							existingParticipantNames.add(participantName);
+
+							// Emit participant changed event so UI updates
+							const updatedChatForEmit = await loadGroupChat(groupChatId);
+							if (updatedChatForEmit) {
+								groupChatEmitters.emitParticipantsChanged?.(
+									groupChatId,
+									updatedChatForEmit.participants
+								);
+							}
+						}
+					} catch (error) {
+						logger.error(
+							`Failed to auto-add fresh participant ${mentionedName} from agent type`,
+							LOG_CONTEXT,
+							{ error, groupChatId }
+						);
+						captureException(error, {
+							operation: 'groupChat:autoAddFreshParticipant',
+							participantName: mentionedName,
+							groupChatId,
+						});
+						// Continue with other participants even if one fails
+					}
 				}
 			}
 		}
@@ -742,6 +794,58 @@ export async function routeModeratorResponse(
 						groupChatId,
 					});
 					// Continue with other participants even if one fails
+				}
+			} else if (agentDetector) {
+				// Fall back to agent type lookup from agent definitions
+				const agentDef = getVisibleAgentDefinitions().find(
+					(def) =>
+						mentionMatches(mentionedName, def.name) ||
+						def.id.toLowerCase() === mentionedName.toLowerCase()
+				);
+				if (agentDef) {
+					try {
+						const agent = await agentDetector.getAgent(agentDef.id);
+						if (agent?.available) {
+							const participantName = agentDef.name;
+							const defaultCwd = os.homedir();
+							const agentConfigValues =
+								getAgentConfigCallback?.(agentDef.id) || {};
+							console.log(
+								`[GroupChatRouter] Auto-adding fresh participant @${participantName} from agent type @${mentionedName} (moderator mention)`
+							);
+							await addFreshParticipant(
+								groupChatId,
+								participantName,
+								agentDef.id,
+								processManager,
+								defaultCwd,
+								agentDetector,
+								agentConfigValues,
+							);
+							existingParticipantNames.add(participantName);
+
+							// Emit participant changed event so UI updates
+							const updatedChatForEmit = await loadGroupChat(groupChatId);
+							if (updatedChatForEmit) {
+								groupChatEmitters.emitParticipantsChanged?.(
+									groupChatId,
+									updatedChatForEmit.participants
+								);
+							}
+						}
+					} catch (error) {
+						logger.error(
+							`Failed to auto-add fresh participant ${mentionedName} from agent type (moderator)`,
+							LOG_CONTEXT,
+							{ error, groupChatId }
+						);
+						captureException(error, {
+							operation: 'groupChat:autoAddFreshParticipant',
+							participantName: mentionedName,
+							groupChatId,
+						});
+						// Continue with other participants even if one fails
+					}
 				}
 			}
 		}

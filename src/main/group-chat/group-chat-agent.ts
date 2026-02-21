@@ -270,6 +270,46 @@ export async function addParticipant(
 }
 
 /**
+ * Adds a fresh participant to a group chat by agent type, without any session overrides.
+ *
+ * Unlike `addParticipant()`, this creates a participant from an agent type definition
+ * alone (no session reference). The agent spawns with pure defaults — no custom model,
+ * custom args, custom env vars, or SSH remote config.
+ *
+ * @param groupChatId - The ID of the group chat
+ * @param name - The participant's name (must be unique within the chat)
+ * @param agentId - The agent type to use (e.g., 'claude-code')
+ * @param processManager - The process manager to use for spawning
+ * @param cwd - Working directory for the agent (defaults to home directory)
+ * @param agentDetector - Optional agent detector for resolving agent paths
+ * @param agentConfigValues - Optional agent config values (from config store)
+ * @returns The created participant
+ */
+export async function addFreshParticipant(
+	groupChatId: string,
+	name: string,
+	agentId: string,
+	processManager: IProcessManager,
+	cwd: string = os.homedir(),
+	agentDetector?: AgentDetector,
+	agentConfigValues?: Record<string, any>,
+): Promise<GroupChatParticipant> {
+	// Delegate to addParticipant with no session overrides, no custom env vars, no SSH
+	return addParticipant(
+		groupChatId,
+		name,
+		agentId,
+		processManager,
+		cwd,
+		agentDetector,
+		agentConfigValues,
+		undefined, // no customEnvVars
+		undefined, // no sessionOverrides
+		undefined, // no sshStore
+	);
+}
+
+/**
  * Sends a message to a specific participant in a group chat.
  *
  * @param groupChatId - The ID of the group chat

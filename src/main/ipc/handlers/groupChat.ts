@@ -55,6 +55,7 @@ export type { _IProcessManager as IProcessManager };
 // Group chat agent imports
 import {
 	addParticipant,
+	addFreshParticipant,
 	sendToParticipant,
 	removeParticipant,
 	clearAllParticipantSessions,
@@ -487,6 +488,44 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 					customEnvVars
 				);
 				logger.info(`Added participant: ${name}`, LOG_CONTEXT);
+				return participant;
+			}
+		)
+	);
+
+	// Add a fresh participant (by agent type, no session overrides)
+	ipcMain.handle(
+		'groupChat:addFreshParticipant',
+		withIpcErrorLogging(
+			handlerOpts('addFreshParticipant'),
+			async (
+				id: string,
+				agentId: string,
+				name: string,
+				cwd?: string
+			): Promise<GroupChatParticipant> => {
+				const processManager = getProcessManager();
+				if (!processManager) {
+					throw new Error('Process manager not initialized');
+				}
+
+				const agentDetector = getAgentDetector();
+				const agentConfigValues = getAgentConfig?.(agentId) || {};
+
+				logger.info(
+					`Adding fresh participant ${name} (${agentId}) to ${id}`,
+					LOG_CONTEXT
+				);
+				const participant = await addFreshParticipant(
+					id,
+					name,
+					agentId,
+					processManager,
+					cwd || os.homedir(),
+					agentDetector ?? undefined,
+					agentConfigValues,
+				);
+				logger.info(`Added fresh participant: ${name}`, LOG_CONTEXT);
 				return participant;
 			}
 		)
