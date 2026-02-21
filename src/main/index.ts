@@ -865,7 +865,7 @@ function setupProcessListeners() {
 				const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
 				return !!ef.maestroCue;
 			},
-		});
+		}, geminiSessionStatsStore);
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
 		setupWakaTimeListener(processManager, wakatimeManager, store);
