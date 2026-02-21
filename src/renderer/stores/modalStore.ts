@@ -108,6 +108,13 @@ export interface AgentErrorModalData {
 	sessionId: string;
 }
 
+/** Workspace approval modal data (Gemini sandbox violation) */
+export interface WorkspaceApprovalModalData {
+	sessionId: string;
+	deniedPath: string;
+	errorMessage: string;
+}
+
 /** Delete agent modal data */
 export interface DeleteAgentModalData {
 	session: Session;
@@ -161,6 +168,7 @@ export type ModalId =
 	| 'deleteAgent'
 	| 'renameInstance'
 	| 'agentError'
+	| 'workspaceApproval'
 	// Quick Actions
 	| 'quickAction'
 	| 'tabSwitcher'
@@ -236,6 +244,7 @@ export interface ModalDataMap {
 	agentSessions: AgentSessionsModalData;
 	wizardResume: WizardResumeModalData;
 	agentError: AgentErrorModalData;
+	workspaceApproval: WorkspaceApprovalModalData;
 	deleteAgent: DeleteAgentModalData;
 	createWorktree: WorktreeModalData;
 	createPR: WorktreeModalData;
