@@ -96,6 +96,34 @@ let getAgentConfigCallback: GetAgentConfigCallback | null = null;
 let sshStore: SshRemoteSettingsStore | null = null;
 
 /**
+ * Build additional --include-directories args for Gemini CLI in group chat.
+ * Gemini CLI has stricter sandbox enforcement than other agents and needs
+ * explicit directory approval for each path it accesses. In group chat,
+ * this means the project directories, the group chat shared folder, and
+ * the home directory all need to be included.
+ *
+ * For non-Gemini agents, returns an empty array (no-op).
+ */
+function buildGeminiWorkspaceDirArgs(
+	agent: { workingDirArgs?: (dir: string) => string[]; id?: string } | null | undefined,
+	agentId: string,
+	directories: string[]
+): string[] {
+	if (agentId !== 'gemini-cli' || !agent?.workingDirArgs) {
+		return [];
+	}
+	const args: string[] = [];
+	const seen = new Set<string>();
+	for (const dir of directories) {
+		if (dir && dir.trim() && !seen.has(dir)) {
+			seen.add(dir);
+			args.push(...agent.workingDirArgs(dir));
+		}
+	}
+	return args;
+}
+
+/**
  * Tracks pending participant responses for each group chat.
  * When all pending participants have responded, we spawn a moderator synthesis round.
  * Maps groupChatId -> Set<participantName>
@@ -461,10 +489,18 @@ ${message}`;
 			console.log(
 				`[GroupChat:Debug] agentConfigValues for ${chat.moderatorAgentId}: ${JSON.stringify(agentConfigValues)}`
 			);
+
+			// For Gemini CLI: use the group chat folder as CWD instead of homedir.
+			// Gemini's workspace sandbox requires a concrete project directory as CWD;
+			// using homedir causes "path not in workspace" errors.
+			// Other agents keep homedir as CWD for backward compatibility.
+			const groupChatFolder = getGroupChatDir(groupChatId);
+			const moderatorCwd = chat.moderatorAgentId === 'gemini-cli' ? groupChatFolder : os.homedir();
+
 			const baseArgs = buildAgentArgs(agent, {
 				baseArgs: args,
 				prompt: fullPrompt,
-				cwd: os.homedir(),
+				cwd: moderatorCwd,
 				readOnlyMode: true,
 			});
 			const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -473,14 +509,20 @@ ${message}`;
 				sessionCustomArgs: chat.moderatorConfig?.customArgs,
 				sessionCustomEnvVars: chat.moderatorConfig?.customEnvVars,
 			});
-			const finalArgs = configResolution.args;
+
+			// For Gemini CLI: disable workspace sandbox for the moderator.
+			// The moderator is already read-only (--approval-mode plan), so disabling
+			// the sandbox is safe and avoids "path not in workspace" errors when
+			// Gemini needs to coordinate across multiple agent workspaces.
+			const geminiNoSandbox = chat.moderatorAgentId === 'gemini-cli' ? ['--no-sandbox'] : [];
+			const finalArgs = [...configResolution.args, ...geminiNoSandbox];
 			console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
 			console.log(`[GroupChat:Debug] Full prompt length: ${fullPrompt.length} chars`);
 			console.log(`[GroupChat:Debug] ========== SPAWNING MODERATOR PROCESS ==========`);
 			console.log(`[GroupChat:Debug] Session ID: ${sessionId}`);
 			console.log(`[GroupChat:Debug] Tool Type: ${chat.moderatorAgentId}`);
-			console.log(`[GroupChat:Debug] CWD: ${os.homedir()}`);
+			console.log(`[GroupChat:Debug] CWD: ${moderatorCwd}`);
 			console.log(`[GroupChat:Debug] Command: ${command}`);
 			console.log(`[GroupChat:Debug] ReadOnly: true`);
 
@@ -496,7 +538,7 @@ ${message}`;
 				// Prepare spawn config with potential SSH wrapping
 				let spawnCommand = command;
 				let spawnArgs = finalArgs;
-				let spawnCwd = os.homedir();
+				let spawnCwd = moderatorCwd;
 				let spawnPrompt: string | undefined = fullPrompt;
 				let spawnEnvVars =
 					configResolution.effectiveCustomEnvVars ??
@@ -511,7 +553,7 @@ ${message}`;
 						{
 							command,
 							args: finalArgs,
-							cwd: os.homedir(),
+							cwd: moderatorCwd,
 							prompt: fullPrompt,
 							customEnvVars:
 								configResolution.effectiveCustomEnvVars ??
@@ -858,6 +900,14 @@ export async function routeModeratorResponse(
 				sessionCustomEnvVars: matchingSession?.customEnvVars,
 			});
 
+			// For Gemini CLI: add --include-directories for project dir and group chat folder
+			const geminiParticipantDirArgs = buildGeminiWorkspaceDirArgs(
+				agent,
+				participant.agentId,
+				[cwd, groupChatFolder, os.homedir()]
+			);
+			const participantFinalArgs = [...configResolution.args, ...geminiParticipantDirArgs];
+
 			try {
 				// Emit participant state change to show this participant is working
 				groupChatEmitters.emitParticipantState?.(groupChatId, participantName, 'working');
@@ -865,7 +915,7 @@ export async function routeModeratorResponse(
 
 				// Log spawn details for debugging
 				const spawnCommand = agent.path || agent.command;
-				const spawnArgs = configResolution.args;
+				const spawnArgs = participantFinalArgs;
 				console.log(`[GroupChat:Debug] Spawn command: ${spawnCommand}`);
 				console.log(`[GroupChat:Debug] Spawn args: ${JSON.stringify(spawnArgs)}`);
 				console.log(
@@ -1229,10 +1279,15 @@ Review the agent responses above. Either:
 2. @mention specific agents for follow-up if you need more information`;
 
 	const agentConfigValues = getAgentConfigCallback?.(chat.moderatorAgentId) || {};
+
+	// For Gemini CLI: use the group chat folder as CWD (same as moderator spawn)
+	const synthGroupChatFolder = getGroupChatDir(groupChatId);
+	const synthCwd = chat.moderatorAgentId === 'gemini-cli' ? synthGroupChatFolder : os.homedir();
+
 	const baseArgs = buildAgentArgs(agent, {
 		baseArgs: args,
 		prompt: synthesisPrompt,
-		cwd: os.homedir(),
+		cwd: synthCwd,
 		readOnlyMode: true,
 	});
 	const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -1241,7 +1296,10 @@ Review the agent responses above. Either:
 		sessionCustomArgs: chat.moderatorConfig?.customArgs,
 		sessionCustomEnvVars: chat.moderatorConfig?.customEnvVars,
 	});
-	const finalArgs = configResolution.args;
+
+	// For Gemini CLI: disable workspace sandbox (same rationale as moderator spawn)
+	const geminiSynthNoSandbox = chat.moderatorAgentId === 'gemini-cli' ? ['--no-sandbox'] : [];
+	const finalArgs = [...configResolution.args, ...geminiSynthNoSandbox];
 	console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
 	console.log(`[GroupChat:Debug] Synthesis prompt length: ${synthesisPrompt.length} chars`);
@@ -1265,7 +1323,7 @@ Review the agent responses above. Either:
 		const spawnResult = processManager.spawn({
 			sessionId,
 			toolType: chat.moderatorAgentId,
-			cwd: os.homedir(),
+			cwd: synthCwd,
 			command,
 			args: finalArgs,
 			readOnlyMode: true,
@@ -1409,12 +1467,20 @@ export async function respawnParticipantWithRecovery(
 		sessionCustomEnvVars: matchingSession?.customEnvVars,
 	});
 
+	// For Gemini CLI: add --include-directories for group chat folder and home dir
+	const geminiRecoveryDirArgs = buildGeminiWorkspaceDirArgs(
+		agent,
+		participant.agentId,
+		[cwd, groupChatFolder, os.homedir()]
+	);
+	const recoveryFinalArgs = [...configResolution.args, ...geminiRecoveryDirArgs];
+
 	// Emit participant state change to show this participant is working
 	groupChatEmitters.emitParticipantState?.(groupChatId, participantName, 'working');
 
 	// Spawn the recovery process — with SSH wrapping if configured
 	let finalSpawnCommand = agent.path || agent.command;
-	let finalSpawnArgs = configResolution.args;
+	let finalSpawnArgs = recoveryFinalArgs;
 	let finalSpawnCwd = cwd;
 	let finalSpawnPrompt: string | undefined = fullPrompt;
 	let finalSpawnEnvVars =

@@ -762,7 +762,13 @@ export const GEMINI_ERROR_PATTERNS: AgentErrorPatterns = {
 
 	permission_denied: [
 		{
-			pattern: /path.*not.*in.*workspace|permission.*denied|sandbox/i,
+			pattern: /(?:path\s+)?['"]?([/~][\w/.~-]+)['"]?\s+(?:is\s+)?not\s+in\s+(?:the\s+)?workspace/i,
+			message: (match: RegExpMatchArray) =>
+				`Workspace sandbox: "${match[1]}" is outside the allowed workspace. Add the directory via --include-directories or agent settings.`,
+			recoverable: false,
+		},
+		{
+			pattern: /path.*not.*in.*workspace|permission.*denied.*sandbox|sandbox.*permission/i,
 			message: 'Permission denied. File is outside the workspace sandbox.',
 			recoverable: false,
 		},

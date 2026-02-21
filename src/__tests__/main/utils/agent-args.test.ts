@@ -243,10 +243,11 @@ describe('buildAgentArgs', () => {
 			agentSessionId: 'abc',
 		});
 
+		// batchModeArgs (--skip-git) is omitted when readOnlyMode is true
+		// and agent has readOnlyArgs — they conflict (e.g. Gemini -y vs --approval-mode)
 		expect(result).toEqual([
 			'run',
 			'--print',
-			'--skip-git',
 			'--format',
 			'json',
 			'-C',

@@ -54,7 +54,13 @@ export function buildAgentArgs(
 	}
 
 	if (agent.batchModeArgs && options.prompt) {
-		finalArgs = [...finalArgs, ...agent.batchModeArgs];
+		// Skip batch mode args (-y) when readOnlyMode is active and the agent has
+		// readOnlyArgs (e.g. --approval-mode plan). Gemini CLI rejects -y combined
+		// with --approval-mode; the approval-mode flag already controls approval behavior.
+		const skipBatchForReadOnly = options.readOnlyMode && agent.readOnlyArgs?.length;
+		if (!skipBatchForReadOnly) {
+			finalArgs = [...finalArgs, ...agent.batchModeArgs];
+		}
 	}
 
 	if (agent.jsonOutputArgs && !finalArgs.some((arg) => agent.jsonOutputArgs!.includes(arg))) {

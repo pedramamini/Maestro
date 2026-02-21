@@ -178,7 +178,10 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		batchModeArgs: ['-y'],
 		jsonOutputArgs: ['--output-format', 'stream-json'],
 		resumeArgs: (sessionId: string) => ['--resume', sessionId],
-		readOnlyArgs: ['--approval-mode', 'plan'],
+		// Note: --approval-mode plan requires experimental.plan to be enabled in Gemini CLI config.
+		// Until that feature is generally available, readOnlyArgs is empty and read-only
+		// behavior is enforced via system prompt instructions instead.
+		readOnlyArgs: [],
 		yoloModeArgs: ['-y'],
 		workingDirArgs: (dir: string) => ['--include-directories', dir],
 		imageArgs: undefined,
