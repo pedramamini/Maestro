@@ -565,7 +565,8 @@ describe('CodexOutputParser', () => {
 			});
 			const error = parser.detectErrorFromLine(line);
 			expect(error).not.toBeNull();
-			expect(error?.type).toBe('unknown');
+			// Matches "model.*does not exist" pattern in agent_crashed
+			expect(error?.type).toBe('agent_crashed');
 			expect(error?.agentId).toBe('codex');
 			expect(error?.recoverable).toBe(true);
 			expect(error?.parsedJson).toBeDefined();

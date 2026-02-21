@@ -229,6 +229,52 @@ describe('buildAgentArgs', () => {
 		expect(result).toEqual(['--print']);
 	});
 
+	// -- skipBatchForReadOnly --
+	it('skips batchModeArgs when readOnlyMode is true and agent has readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModePrefix: ['exec'],
+			batchModeArgs: ['--dangerously-bypass', '--skip-git'],
+			readOnlyArgs: ['--sandbox', 'read-only'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: [],
+			prompt: 'hello',
+			readOnlyMode: true,
+		});
+		// batchModePrefix should still be added, but batchModeArgs should be skipped
+		expect(result).toContain('exec');
+		expect(result).toContain('--sandbox');
+		expect(result).not.toContain('--dangerously-bypass');
+		expect(result).not.toContain('--skip-git');
+	});
+
+	it('includes batchModeArgs when readOnlyMode is true but agent has no readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--skip-git'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--print'],
+			prompt: 'hello',
+			readOnlyMode: true,
+		});
+		expect(result).toContain('--skip-git');
+	});
+
+	it('includes batchModeArgs when readOnlyMode is false even with readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--dangerously-bypass', '--skip-git'],
+			readOnlyArgs: ['--sandbox', 'read-only'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: [],
+			prompt: 'hello',
+			readOnlyMode: false,
+		});
+		expect(result).toContain('--dangerously-bypass');
+		expect(result).toContain('--skip-git');
+		expect(result).not.toContain('--sandbox');
+	});
+
 	// -- combined --
 	it('combines multiple options together', () => {
 		const agent = makeAgent({
@@ -242,6 +288,7 @@ describe('buildAgentArgs', () => {
 			resumeArgs: (sid: string) => ['--resume', sid],
 		});
 
+		// When readOnlyMode is true and readOnlyArgs exist, batchModeArgs are skipped
 		const result = buildAgentArgs(agent, {
 			baseArgs: ['--print'],
 			prompt: 'do stuff',
