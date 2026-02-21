@@ -13,6 +13,8 @@ import {
 	parseGeminiSessionContent,
 } from '../../../../main/ipc/handlers/agentSessions';
 import * as agentSessionStorage from '../../../../main/agents';
+import { GEMINI_SESSION_STATS_DEFAULTS } from '../../../../main/stores/defaults';
+import type { GeminiSessionStatsData, GeminiSessionTokenStats } from '../../../../main/stores/types';
 
 // Mock electron's ipcMain
 vi.mock('electron', () => ({
@@ -491,6 +493,33 @@ describe('agentSessions IPC handlers', () => {
 			});
 
 			expect(getGeminiStatsStore()).toBe(mockStore);
+		});
+
+		it('should have correct schema defaults with empty stats record', () => {
+			// Verify the store defaults match the expected GeminiSessionStatsData shape
+			expect(GEMINI_SESSION_STATS_DEFAULTS).toEqual({ stats: {} });
+			expect(GEMINI_SESSION_STATS_DEFAULTS.stats).toEqual({});
+		});
+
+		it('should accept GeminiSessionTokenStats entries keyed by session UUID', () => {
+			// Verify the store schema supports the expected data shape
+			const entry: GeminiSessionTokenStats = {
+				inputTokens: 100,
+				outputTokens: 50,
+				cacheReadTokens: 10,
+				reasoningTokens: 5,
+				lastUpdatedMs: Date.now(),
+			};
+			const storeData: GeminiSessionStatsData = {
+				stats: { 'gemini-uuid-abc': entry },
+			};
+			expect(storeData.stats['gemini-uuid-abc']).toMatchObject({
+				inputTokens: 100,
+				outputTokens: 50,
+				cacheReadTokens: 10,
+				reasoningTokens: 5,
+			});
+			expect(storeData.stats['gemini-uuid-abc'].lastUpdatedMs).toBeGreaterThan(0);
 		});
 	});
 
