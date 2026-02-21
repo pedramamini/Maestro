@@ -172,6 +172,7 @@ describe('groupChat IPC handlers', () => {
 				'groupChat:getModeratorSessionId',
 				// Participant handlers
 				'groupChat:addParticipant',
+				'groupChat:addFreshParticipant',
 				'groupChat:sendToParticipant',
 				'groupChat:removeParticipant',
 				'groupChat:resetParticipantContext',
