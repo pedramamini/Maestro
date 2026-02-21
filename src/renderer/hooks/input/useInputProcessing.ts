@@ -1022,6 +1022,7 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							// For other agents (OpenCode, etc.): use raw text via stdin
 							sendPromptViaStdin,
 							sendPromptViaStdinRaw,
+							additionalWorkspaceDirs: freshSession.approvedWorkspaceDirs,
 						});
 					} catch (error) {
 						console.error('Failed to spawn agent batch process:', error);
