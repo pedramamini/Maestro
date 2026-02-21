@@ -26,6 +26,9 @@ export const MODAL_PRIORITIES = {
 	/** Quit confirmation modal - highest priority, blocks app quit */
 	QUIT_CONFIRM: 1020,
 
+	/** Workspace approval modal - above agent error, blocks until user decides */
+	WORKSPACE_APPROVAL: 1015,
+
 	/** Agent error modal - critical, shows recovery options */
 	AGENT_ERROR: 1010,
 
