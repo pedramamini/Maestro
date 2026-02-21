@@ -48,6 +48,15 @@ import { setGetCustomShellPathCallback, getWindowsSpawnConfig } from './group-ch
 // Import emitters from IPC handlers (will be populated after handlers are registered)
 import { groupChatEmitters } from '../ipc/handlers/groupChat';
 
+// Import lock and synthesis guards
+import {
+	acquireChatLock,
+	releaseChatLock,
+	isSynthesisInProgress,
+	markSynthesisStarted,
+	clearSynthesisInProgress,
+} from './group-chat-lock';
+
 const LOG_CONTEXT = '[GroupChatRouter]';
 
 // Re-export setGetCustomShellPathCallback for index.ts to use
@@ -284,6 +293,11 @@ export async function routeUserMessage(
 	}
 
 	console.log(`[GroupChat:Debug] Moderator is active: true`);
+
+	// Acquire chat lock to prevent concurrent operations (delete, moderator change)
+	if (!acquireChatLock(groupChatId, 'processing user message')) {
+		throw new Error('Group chat is busy processing a previous message');
+	}
 
 	// Auto-add participants mentioned by the user if they match available sessions
 	if (processManager && agentDetector && getSessionsCallback) {
@@ -625,19 +639,23 @@ ${message}`;
 				groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 				// Remove power block reason on error since we're going idle
 				powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+				releaseChatLock(groupChatId);
 				throw new Error(
 					`Failed to start ${chat.moderatorAgentId}. Check that it's properly configured and accessible.`
 				);
 			}
 		} else {
 			console.log(`[GroupChat:Debug] WARNING: No session ID prefix found for moderator`);
+			releaseChatLock(groupChatId);
 		}
 	} else if (processManager && !agentDetector) {
 		console.error(`[GroupChat:Debug] ERROR: AgentDetector not available!`);
 		console.error(`[GroupChatRouter] AgentDetector not available, cannot spawn moderator`);
+		releaseChatLock(groupChatId);
 		throw new Error('AgentDetector not available');
 	} else {
 		console.log(`[GroupChat:Debug] WARNING: No processManager provided, skipping spawn`);
+		releaseChatLock(groupChatId);
 	}
 }
 
@@ -1077,6 +1095,8 @@ export async function routeModeratorResponse(
 					participantName,
 					groupChatId,
 				});
+				// Reset participant UI state to idle on spawn failure
+				groupChatEmitters.emitParticipantState?.(groupChatId, participantName, 'idle');
 				// Continue with other participants even if one fails
 			}
 		}
@@ -1088,11 +1108,17 @@ export async function routeModeratorResponse(
 		console.log(`[GroupChat:Debug] Emitted state change: idle`);
 		// Remove power block reason since round is complete
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+		// Release chat lock - conversation round is complete
+		releaseChatLock(groupChatId);
 	}
 
-	// Store pending participants for synthesis tracking
+	// Store pending participants for synthesis tracking (merge with existing to avoid overwriting round 1)
 	if (participantsToRespond.size > 0) {
-		pendingParticipantResponses.set(groupChatId, participantsToRespond);
+		const existing = pendingParticipantResponses.get(groupChatId) || new Set<string>();
+		for (const name of participantsToRespond) {
+			existing.add(name);
+		}
+		pendingParticipantResponses.set(groupChatId, existing);
 		console.log(
 			`[GroupChat:Debug] Waiting for ${participantsToRespond.size} participant(s) to respond: ${[...participantsToRespond].join(', ')}`
 		);
@@ -1240,12 +1266,20 @@ export async function spawnModeratorSynthesis(
 	console.log(`[GroupChat:Debug] Group Chat ID: ${groupChatId}`);
 	console.log(`[GroupChat:Debug] All participants have responded, starting synthesis round...`);
 
+	// Guard against duplicate synthesis triggers
+	if (isSynthesisInProgress(groupChatId)) {
+		logger.warn('Synthesis already in progress, skipping duplicate', LOG_CONTEXT, { groupChatId });
+		return;
+	}
+	markSynthesisStarted(groupChatId);
+
 	const chat = await loadGroupChat(groupChatId);
 	if (!chat) {
 		logger.error(`Cannot spawn synthesis - chat not found: ${groupChatId}`, LOG_CONTEXT);
 		// Reset UI state and remove power block on early return
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+		clearSynthesisInProgress(groupChatId);
 		return;
 	}
 
@@ -1256,6 +1290,7 @@ export async function spawnModeratorSynthesis(
 		// Reset UI state and remove power block on early return
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+		clearSynthesisInProgress(groupChatId);
 		return;
 	}
 
@@ -1270,6 +1305,7 @@ export async function spawnModeratorSynthesis(
 		// Reset UI state and remove power block on early return
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+		clearSynthesisInProgress(groupChatId);
 		return;
 	}
 
@@ -1291,6 +1327,7 @@ export async function spawnModeratorSynthesis(
 		// Reset UI state and remove power block on early return
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+		clearSynthesisInProgress(groupChatId);
 		return;
 	}
 
@@ -1397,6 +1434,7 @@ Review the agent responses above. Either:
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		// Remove power block reason on synthesis error since we're going idle
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
+		clearSynthesisInProgress(groupChatId);
 	}
 }
 

@@ -74,6 +74,9 @@ import {
 // Group chat router imports
 import { routeUserMessage } from '../../group-chat/group-chat-router';
 
+// Group chat lock imports
+import { isChatLocked } from '../../group-chat/group-chat-lock';
+
 // Agent detector import
 import { AgentDetector } from '../../agents';
 import { groomContext } from '../../utils/context-groomer';
@@ -243,6 +246,12 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 			id = validateGroupChatId(id);
 			logger.info(`Deleting group chat: ${id}`, LOG_CONTEXT);
 
+			// Check if a concurrent operation is in progress
+			const lockState = isChatLocked(id);
+			if (lockState.locked) {
+				throw new Error('Cannot delete group chat while ' + lockState.operation + ' is in progress. Try again after the operation completes.');
+			}
+
 			// Kill moderator and all participants first
 			const processManager = getProcessManager();
 			await killModerator(id, processManager ?? undefined);
@@ -303,6 +312,10 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 
 				// Kill existing moderator if agent is changing
 				if (moderatorChanged) {
+					const lockState = isChatLocked(id);
+					if (lockState.locked) {
+						throw new Error('Cannot change moderator while ' + lockState.operation + ' is in progress. Try again after the operation completes.');
+					}
 					const processManager = getProcessManager();
 					await killModerator(id, processManager ?? undefined);
 				}
