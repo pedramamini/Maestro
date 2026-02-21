@@ -208,12 +208,12 @@ export function useBatchedSessionUpdates(
 								const logData = aiTabLogs.get(tab.id);
 								if (!logData) return tab;
 
-								// Clear thinking/tool entries when new AI output arrives (final result replaces thinking)
-								// BUT: if showThinking is 'sticky', preserve both thinking and tool logs
+								// Preserve thinking/tool entries when showThinking is enabled ('on' or 'sticky')
+								// so individual thoughts persist in chat history during streaming.
+								// Only clear them when showThinking is 'off' (or unset).
 								const existingLogs = tab.logs.filter((log) => {
 									if (log.source === 'thinking' || log.source === 'tool') {
-										// Only preserve thinking/tool logs in sticky mode
-										return tab.showThinking === 'sticky';
+										return tab.showThinking === 'on' || tab.showThinking === 'sticky';
 									}
 									return true;
 								});

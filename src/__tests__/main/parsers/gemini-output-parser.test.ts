@@ -114,7 +114,7 @@ describe('GeminiOutputParser', () => {
 				expect(event?.toolState).toEqual({
 					id: 'tool_123',
 					name: 'read_file',
-					parameters: { path: 'README.md' },
+					input: { path: 'README.md' },
 					status: 'running',
 				});
 			});

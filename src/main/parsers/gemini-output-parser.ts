@@ -165,8 +165,10 @@ export class GeminiOutputParser implements AgentOutputParser {
 					toolState: {
 						id: event.tool_id,
 						name: event.tool_name,
-						parameters: event.parameters,
 						status: 'running',
+						// Map parameters to input so the renderer can extract tool details
+						// (command, file_path, pattern, etc.) — matches OpenCode/Codex shape
+						input: event.parameters,
 					},
 					raw: event,
 				};

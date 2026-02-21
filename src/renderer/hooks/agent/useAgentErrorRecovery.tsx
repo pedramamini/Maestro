@@ -102,19 +102,33 @@ function getRecoveryActionsForError(
 			}
 			break;
 
-		case 'rate_limited':
-			// Rate limited - offer retry after delay
+		case 'rate_limited': {
+			// Check if this is a capacity/model-specific error (Gemini)
+			const isCapacityError = error.message?.includes('capacity') || error.message?.includes('model');
 			if (options.onRetry) {
 				actions.push({
 					id: 'retry',
 					label: 'Try Again',
-					description: 'Wait a moment and retry',
+					description: isCapacityError
+						? 'Retry — the model may have capacity now'
+						: 'Wait a moment and retry',
 					primary: true,
 					icon: <RefreshCw className="w-4 h-4" />,
 					onClick: options.onRetry,
 				});
 			}
+			// For capacity errors, also offer starting a new session so the user can change model
+			if (isCapacityError && options.onNewSession) {
+				actions.push({
+					id: 'new-session',
+					label: 'New Session (Change Model)',
+					description: 'Start fresh with a different model selection',
+					icon: <MessageSquarePlus className="w-4 h-4" />,
+					onClick: options.onNewSession,
+				});
+			}
 			break;
+		}
 
 		case 'network_error':
 			// Network error - offer retry or check connection

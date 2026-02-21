@@ -204,6 +204,73 @@ describe('error-patterns', () => {
 			expect(result).not.toBeNull();
 			expect(result?.type).toBe('agent_crashed');
 		});
+
+		it('should match capacity unavailable with model name', () => {
+			const result = matchErrorPattern(
+				GEMINI_ERROR_PATTERNS,
+				'No capacity available for model gemini-3-flash-preview on the server'
+			);
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('rate_limited');
+			expect(result?.message).toContain('gemini-3-flash-preview');
+			expect(result?.message).toContain('different model');
+			expect(result?.recoverable).toBe(true);
+		});
+
+		it('should match max attempts reached with model name', () => {
+			const result = matchErrorPattern(
+				GEMINI_ERROR_PATTERNS,
+				'Max attempts reached for model gemini-3-flash-preview'
+			);
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('rate_limited');
+			expect(result?.message).toContain('gemini-3-flash-preview');
+			expect(result?.message).toContain('retry limit');
+		});
+
+		it('should match max attempts reached without model name', () => {
+			const result = matchErrorPattern(
+				GEMINI_ERROR_PATTERNS,
+				'Max attempts reached'
+			);
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('rate_limited');
+			expect(result?.message).toContain('retry limit');
+			expect(result?.message).toContain('different model');
+		});
+
+		it('should match RetryableQuotaError with model name', () => {
+			const result = matchErrorPattern(
+				GEMINI_ERROR_PATTERNS,
+				'RetryableQuotaError: No capacity available for model gemini-3-flash-preview on the server'
+			);
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('rate_limited');
+			expect(result?.message).toContain('gemini-3-flash-preview');
+		});
+
+		it('should still match generic rate limit text', () => {
+			const result = matchErrorPattern(GEMINI_ERROR_PATTERNS, 'rate limit exceeded');
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('rate_limited');
+		});
+
+		it('should still match generic 429 errors', () => {
+			const result = matchErrorPattern(GEMINI_ERROR_PATTERNS, 'HTTP 429 Too Many Requests');
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('rate_limited');
+		});
+
+		it('should match streamGenerateContent API error with model path', () => {
+			const result = matchErrorPattern(
+				GEMINI_ERROR_PATTERNS,
+				'streamGenerateContent failed for models/gemini-2.5-pro error 500'
+			);
+			expect(result).not.toBeNull();
+			expect(result?.type).toBe('agent_crashed');
+			expect(result?.message).toContain('gemini-2.5-pro');
+			expect(result?.recoverable).toBe(true);
+		});
 	});
 
 	describe('getErrorPatterns', () => {

@@ -705,8 +705,36 @@ export const GEMINI_ERROR_PATTERNS: AgentErrorPatterns = {
 
 	rate_limited: [
 		{
+			// Capacity unavailable for a specific model — user should switch models
+			pattern: /no capacity available for model\s+(\S+)/i,
+			message: (match: RegExpMatchArray) =>
+				`No capacity available for model "${match[1]}". Try a different model (e.g., set model to "pro" or "flash" in agent settings).`,
+			recoverable: true,
+		},
+		{
+			// Retry exhaustion with model info — e.g., "Max attempts reached for model gemini-3-flash"
+			pattern: /max\s+attempts?\s+reached.*?model\s+(\S+)/i,
+			message: (match: RegExpMatchArray) =>
+				`Gemini API retry limit reached for model "${match[1]}". Try a different model in agent settings.`,
+			recoverable: true,
+		},
+		{
+			// Retry exhaustion without model info
+			pattern: /max\s+attempts?\s+reached/i,
+			message: 'Gemini API retry limit reached. Try a different model or wait before retrying.',
+			recoverable: true,
+		},
+		{
+			// RetryableQuotaError with model name
+			pattern: /RetryableQuotaError:.*?model\s+(\S+)/i,
+			message: (match: RegExpMatchArray) =>
+				`Gemini quota error for model "${match[1]}". Switch to a different model or wait for capacity.`,
+			recoverable: true,
+		},
+		{
+			// Generic rate limit / quota errors (no model info available)
 			pattern: /rate.?limit|too many requests|429|quota.*exceeded|resource.*exhausted/i,
-			message: 'Gemini API rate limit exceeded. Wait and retry.',
+			message: 'Gemini API rate limit exceeded. Wait a moment and retry.',
 			recoverable: true,
 		},
 	],
@@ -747,7 +775,21 @@ export const GEMINI_ERROR_PATTERNS: AgentErrorPatterns = {
 			recoverable: false,
 		},
 		{
-			pattern: /\[Function: paramsSerializer\]|streamGenerateContent.*error|cloudcode-pa\.googleapis\.com.*error/i,
+			// Internal API error with model name — extract from URL path like "models/gemini-2.5-pro"
+			pattern: /(?:streamGenerateContent|cloudcode-pa\.googleapis\.com).*models\/([^/:?\s]+)/i,
+			message: (match: RegExpMatchArray) =>
+				`Gemini API error (model: ${match[1]}). Try a different model or retry.`,
+			recoverable: true,
+		},
+		{
+			// Internal API error without model info
+			pattern: /(?:streamGenerateContent|cloudcode-pa\.googleapis\.com).*error/i,
+			message: 'Gemini CLI internal API error. Try again or check your model/auth configuration.',
+			recoverable: true,
+		},
+		{
+			// Fallback for Axios dump patterns without model info
+			pattern: /\[Function: paramsSerializer\]/i,
 			message: 'Gemini CLI internal API error. Try again or check your model/auth configuration.',
 			recoverable: true,
 		},
