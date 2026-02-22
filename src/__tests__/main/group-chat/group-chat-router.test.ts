@@ -1472,5 +1472,292 @@ describe('group-chat-router', () => {
 			expect(prompt).toContain('READ-ONLY MODE');
 			expect(prompt).toContain('do not modify any files');
 		});
+
+		// ===========================================================================
+		// Test 6.1: Mixed agents — Claude moderator + Codex participant resume independently
+		// ===========================================================================
+		describe('mixed agent resume (Claude moderator + Codex participant)', () => {
+			// Agent detector that returns different configs based on agentId
+			let mixedAgentDetector: AgentDetector;
+
+			const claudeConfig = {
+				id: 'claude-code',
+				name: 'Claude Code',
+				binaryName: 'claude',
+				command: 'claude',
+				args: [],
+				available: true,
+				path: '/usr/local/bin/claude',
+				capabilities: {},
+				resumeArgs: (sessionId: string) => ['--resume', sessionId],
+				batchModePrefix: ['--print'],
+				batchModeArgs: ['--skip-git-repo-check'],
+				jsonOutputArgs: ['--output-format', 'stream-json'],
+				readOnlyArgs: ['--permission-mode', 'plan'],
+			};
+
+			const codexConfig = {
+				id: 'codex',
+				name: 'Codex',
+				binaryName: 'codex',
+				command: 'codex',
+				args: [],
+				available: true,
+				path: '/usr/local/bin/codex',
+				capabilities: {},
+				resumeArgs: (sessionId: string) => ['resume', sessionId],
+				batchModePrefix: ['exec'],
+				batchModeArgs: ['--skip-git-repo-check'],
+				jsonOutputArgs: ['--json'],
+				readOnlyArgs: ['--sandbox', 'read-only'],
+			};
+
+			beforeEach(() => {
+				mixedAgentDetector = {
+					getAgent: vi.fn().mockImplementation(async (agentId: string) => {
+						if (agentId === 'codex') return codexConfig;
+						return claudeConfig;
+					}),
+					detectAgents: vi.fn().mockResolvedValue([]),
+					clearCache: vi.fn(),
+					setCustomPaths: vi.fn(),
+					getCustomPaths: vi.fn().mockReturnValue({}),
+					discoverModels: vi.fn().mockResolvedValue([]),
+					clearModelCache: vi.fn(),
+				} as unknown as AgentDetector;
+			});
+
+			it('Claude moderator resumes with --resume while Codex participant resumes with resume (no dash prefix)', async () => {
+				const chat = await createTestChatWithModerator('Mixed Resume Test');
+				await addParticipant(chat.id, 'CodexWorker', 'codex', mockProcessManager);
+
+				// Simulate: both agents completed first turn and captured session IDs
+				await updateGroupChat(chat.id, { moderatorAgentSessionId: 'claude-session-001' });
+				await updateParticipant(chat.id, 'CodexWorker', {
+					agentSessionId: 'codex-thread-abc',
+				});
+
+				// Clear spawn mock from setup
+				mockProcessManager.spawn.mockClear();
+
+				// Step 1: User sends follow-up message → moderator resumes with Claude's args
+				await routeUserMessage(
+					chat.id,
+					'Follow-up question for mixed test',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const moderatorSpawn = mockProcessManager.spawn.mock.calls.find(
+					(call) =>
+						call[0]?.prompt?.includes('Follow-up question') &&
+						!call[0]?.sessionId?.includes('participant')
+				);
+				expect(moderatorSpawn).toBeDefined();
+
+				// Verify Claude-style resume args: --resume <session_id>
+				const modArgs = moderatorSpawn?.[0].args as string[];
+				expect(modArgs).toContain('--resume');
+				expect(modArgs).toContain('claude-session-001');
+				// Should NOT contain Codex-style bare 'resume'
+				const resumeIndex = modArgs.indexOf('--resume');
+				expect(modArgs[resumeIndex + 1]).toBe('claude-session-001');
+
+				// Verify resume prompt (not full prompt)
+				const modPrompt = moderatorSpawn?.[0].prompt as string;
+				expect(modPrompt).toContain('## New User Message');
+				expect(modPrompt).not.toContain('## Chat History:');
+
+				// Step 2: Moderator delegates to Codex participant → participant resumes with Codex's args
+				mockProcessManager.spawn.mockClear();
+
+				await routeModeratorResponse(
+					chat.id,
+					'@CodexWorker: Implement the API endpoint',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const participantSpawn = mockProcessManager.spawn.mock.calls.find((call) =>
+					call[0]?.sessionId?.includes('participant')
+				);
+				expect(participantSpawn).toBeDefined();
+
+				// Verify Codex-style resume args: resume <session_id> (no -- prefix)
+				const partArgs = participantSpawn?.[0].args as string[];
+				expect(partArgs).toContain('resume');
+				expect(partArgs).toContain('codex-thread-abc');
+				// Verify it's the bare 'resume' not '--resume'
+				expect(partArgs).not.toContain('--resume');
+
+				// Verify resume prompt (not full prompt)
+				const partPrompt = participantSpawn?.[0].prompt as string;
+				expect(partPrompt).toContain('## New Task in Group Chat');
+				expect(partPrompt).toContain('Implement the API endpoint');
+			});
+
+			it('synthesis round resumes Claude moderator with independent session ID from participant', async () => {
+				const chat = await createTestChatWithModerator('Mixed Synthesis Test');
+				await addParticipant(chat.id, 'CodexWorker', 'codex', mockProcessManager);
+
+				// Store separate session IDs for moderator and participant
+				await updateGroupChat(chat.id, { moderatorAgentSessionId: 'claude-synth-002' });
+				await updateParticipant(chat.id, 'CodexWorker', {
+					agentSessionId: 'codex-thread-xyz',
+				});
+
+				mockProcessManager.spawn.mockClear();
+
+				// Spawn synthesis — should resume the Claude moderator, not the Codex participant
+				await spawnModeratorSynthesis(chat.id, mockProcessManager, mixedAgentDetector);
+
+				const synthSpawn = mockProcessManager.spawn.mock.calls[0];
+				expect(synthSpawn).toBeDefined();
+
+				// Verify Claude-style resume args (moderator's session, not participant's)
+				const synthArgs = synthSpawn?.[0].args as string[];
+				expect(synthArgs).toContain('--resume');
+				expect(synthArgs).toContain('claude-synth-002');
+				// Should NOT contain the Codex session ID
+				expect(synthArgs).not.toContain('codex-thread-xyz');
+				// Should NOT contain bare 'resume' (that's Codex's style)
+				const bareResumeIndices = synthArgs
+					.map((arg, i) => (arg === 'resume' ? i : -1))
+					.filter((i) => i >= 0);
+				expect(bareResumeIndices).toHaveLength(0);
+
+				// Verify resume synthesis prompt
+				const synthPrompt = synthSpawn?.[0].prompt as string;
+				expect(synthPrompt).toContain('## Your Task:');
+				expect(synthPrompt).toContain('## Recent Participant Responses:');
+			});
+
+			it('moderator and participant use different batch mode prefixes', async () => {
+				const chat = await createTestChatWithModerator('Mixed Prefix Test');
+				await addParticipant(chat.id, 'CodexWorker', 'codex', mockProcessManager);
+
+				// Set session IDs for resume
+				await updateGroupChat(chat.id, { moderatorAgentSessionId: 'claude-pfx-test' });
+				await updateParticipant(chat.id, 'CodexWorker', {
+					agentSessionId: 'codex-pfx-test',
+				});
+
+				mockProcessManager.spawn.mockClear();
+
+				// Send user message → moderator spawn
+				await routeUserMessage(chat.id, 'Prefix test', mockProcessManager, mixedAgentDetector);
+
+				const modSpawn = mockProcessManager.spawn.mock.calls.find(
+					(call) => !call[0]?.sessionId?.includes('participant')
+				);
+				const modArgs = modSpawn?.[0].args as string[];
+				// Claude uses --print as batch prefix
+				expect(modArgs).toContain('--print');
+				// Claude should NOT have 'exec'
+				expect(modArgs).not.toContain('exec');
+
+				mockProcessManager.spawn.mockClear();
+
+				// Delegate to Codex participant
+				await routeModeratorResponse(
+					chat.id,
+					'@CodexWorker: Do the task',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const partSpawn = mockProcessManager.spawn.mock.calls.find((call) =>
+					call[0]?.sessionId?.includes('participant')
+				);
+				const partArgs = partSpawn?.[0].args as string[];
+				// Codex uses 'exec' as batch prefix
+				expect(partArgs).toContain('exec');
+				// Codex should NOT have '--print'
+				expect(partArgs).not.toContain('--print');
+			});
+
+			it('first turn uses full prompt for both agent types, subsequent turns use resume', async () => {
+				const chat = await createTestChatWithModerator('Mixed First+Resume Test');
+				await addParticipant(chat.id, 'CodexWorker', 'codex', mockProcessManager);
+
+				// NO stored session IDs — first turn for both
+				mockProcessManager.spawn.mockClear();
+
+				// First turn: moderator should use full prompt
+				await routeUserMessage(chat.id, 'First message', mockProcessManager, mixedAgentDetector);
+
+				const firstModSpawn = mockProcessManager.spawn.mock.calls.find(
+					(call) =>
+						call[0]?.prompt?.includes('First message') &&
+						!call[0]?.sessionId?.includes('participant')
+				);
+				expect(firstModSpawn).toBeDefined();
+				const firstModArgs = firstModSpawn?.[0].args as string[];
+				expect(firstModArgs).not.toContain('--resume');
+				const firstModPrompt = firstModSpawn?.[0].prompt as string;
+				expect(firstModPrompt).toContain('## Chat History:');
+
+				mockProcessManager.spawn.mockClear();
+
+				// First delegation: participant should use full prompt
+				await routeModeratorResponse(
+					chat.id,
+					'@CodexWorker: First task',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const firstPartSpawn = mockProcessManager.spawn.mock.calls.find((call) =>
+					call[0]?.sessionId?.includes('participant')
+				);
+				expect(firstPartSpawn).toBeDefined();
+				const firstPartArgs = firstPartSpawn?.[0].args as string[];
+				expect(firstPartArgs).not.toContain('resume');
+				const firstPartPrompt = firstPartSpawn?.[0].prompt as string;
+				expect(firstPartPrompt).not.toContain('## New Task in Group Chat');
+
+				// Now simulate session IDs being captured after first turn
+				await updateGroupChat(chat.id, { moderatorAgentSessionId: 'claude-2nd-turn' });
+				await updateParticipant(chat.id, 'CodexWorker', {
+					agentSessionId: 'codex-2nd-turn',
+				});
+
+				// Release chat lock for the next message
+				releaseChatLock(chat.id);
+				mockProcessManager.spawn.mockClear();
+
+				// Second turn: moderator should resume
+				await routeUserMessage(chat.id, 'Second message', mockProcessManager, mixedAgentDetector);
+
+				const secondModSpawn = mockProcessManager.spawn.mock.calls.find(
+					(call) =>
+						call[0]?.prompt?.includes('Second message') &&
+						!call[0]?.sessionId?.includes('participant')
+				);
+				expect(secondModSpawn).toBeDefined();
+				const secondModArgs = secondModSpawn?.[0].args as string[];
+				expect(secondModArgs).toContain('--resume');
+				expect(secondModArgs).toContain('claude-2nd-turn');
+
+				mockProcessManager.spawn.mockClear();
+
+				// Second delegation: Codex participant should resume
+				await routeModeratorResponse(
+					chat.id,
+					'@CodexWorker: Second task',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const secondPartSpawn = mockProcessManager.spawn.mock.calls.find((call) =>
+					call[0]?.sessionId?.includes('participant')
+				);
+				expect(secondPartSpawn).toBeDefined();
+				const secondPartArgs = secondPartSpawn?.[0].args as string[];
+				expect(secondPartArgs).toContain('resume');
+				expect(secondPartArgs).toContain('codex-2nd-turn');
+				expect(secondPartArgs).not.toContain('--resume');
+			});
+		});
 	});
 });
