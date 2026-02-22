@@ -221,10 +221,10 @@ describe('buildAgentArgs', () => {
 	});
 
 	// -- skipBatchForReadOnly --
-	it('skips batchModeArgs when readOnlyMode is true and agent has readOnlyArgs', () => {
+	it('skips sandbox bypass from batchModeArgs when readOnlyMode is true and agent has readOnlyArgs', () => {
 		const agent = makeAgent({
 			batchModePrefix: ['exec'],
-			batchModeArgs: ['--dangerously-bypass', '--skip-git'],
+			batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git'],
 			readOnlyArgs: ['--sandbox', 'read-only'],
 		});
 		const result = buildAgentArgs(agent, {
@@ -232,11 +232,12 @@ describe('buildAgentArgs', () => {
 			prompt: 'hello',
 			readOnlyMode: true,
 		});
-		// batchModePrefix should still be added, but batchModeArgs should be skipped
+		// batchModePrefix should still be added
 		expect(result).toContain('exec');
 		expect(result).toContain('--sandbox');
-		expect(result).not.toContain('--dangerously-bypass');
-		expect(result).not.toContain('--skip-git');
+		// Sandbox bypass should be removed, but non-sandbox flags preserved
+		expect(result).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+		expect(result).toContain('--skip-git');
 	});
 
 	it('includes batchModeArgs when readOnlyMode is true but agent has no readOnlyArgs', () => {
@@ -279,7 +280,7 @@ describe('buildAgentArgs', () => {
 			resumeArgs: (sid: string) => ['--resume', sid],
 		});
 
-		// When readOnlyMode is true and readOnlyArgs exist, batchModeArgs are skipped
+		// When readOnlyMode is true and readOnlyArgs exist, only sandbox bypass flags are skipped
 		const result = buildAgentArgs(agent, {
 			baseArgs: ['--print'],
 			prompt: 'do stuff',
@@ -293,6 +294,7 @@ describe('buildAgentArgs', () => {
 		expect(result).toEqual([
 			'run',
 			'--print',
+			'--skip-git',
 			'--format',
 			'json',
 			'-C',
@@ -448,12 +450,7 @@ describe('applyAgentConfigOverrides', () => {
 		const result = applyAgentConfigOverrides(agent, [], {
 			sessionCustomArgs: '--flag "arg with spaces" \'another arg\' plain',
 		});
-		expect(result.args).toEqual([
-			'--flag',
-			'arg with spaces',
-			'another arg',
-			'plain',
-		]);
+		expect(result.args).toEqual(['--flag', 'arg with spaces', 'another arg', 'plain']);
 		expect(result.customArgsSource).toBe('session');
 	});
 
@@ -595,11 +592,7 @@ describe('getContextWindowValue', () => {
 			],
 		});
 
-		const result = getContextWindowValue(
-			agent,
-			{ contextWindow: 50000 },
-			200000
-		);
+		const result = getContextWindowValue(agent, { contextWindow: 50000 }, 200000);
 		expect(result).toBe(200000);
 	});
 
@@ -684,11 +677,7 @@ describe('getContextWindowValue', () => {
 			],
 		});
 
-		const result = getContextWindowValue(
-			agent,
-			{ contextWindow: 50000 },
-			undefined
-		);
+		const result = getContextWindowValue(agent, { contextWindow: 50000 }, undefined);
 		expect(result).toBe(50000);
 	});
 });

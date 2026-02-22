@@ -53,13 +53,21 @@ export function buildAgentArgs(
 		finalArgs = [...agent.batchModePrefix, ...finalArgs];
 	}
 
-	// Skip batchModeArgs when readOnlyMode is active and agent defines readOnlyArgs.
-	// For Codex, batchModeArgs includes --dangerously-bypass-approvals-and-sandbox which
-	// conflicts with --sandbox read-only from readOnlyArgs. The read-only sandbox mode
-	// doesn't need the bypass flag since exec mode doesn't prompt interactively.
+	// When readOnlyMode is active and agent defines readOnlyArgs, skip sandbox-bypassing
+	// flags from batchModeArgs (e.g., --dangerously-bypass-approvals-and-sandbox) since
+	// they conflict with --sandbox read-only. Non-sandbox flags like --skip-git-repo-check
+	// are still needed and are preserved.
 	const skipBatchForReadOnly = options.readOnlyMode && agent.readOnlyArgs?.length;
-	if (agent.batchModeArgs && options.prompt && !skipBatchForReadOnly) {
-		finalArgs = [...finalArgs, ...agent.batchModeArgs];
+	if (agent.batchModeArgs && options.prompt) {
+		if (skipBatchForReadOnly) {
+			const sandboxBypassFlags = new Set(['--dangerously-bypass-approvals-and-sandbox']);
+			const safeArgs = agent.batchModeArgs.filter((arg) => !sandboxBypassFlags.has(arg));
+			if (safeArgs.length > 0) {
+				finalArgs = [...finalArgs, ...safeArgs];
+			}
+		} else {
+			finalArgs = [...finalArgs, ...agent.batchModeArgs];
+		}
 	}
 
 	if (agent.jsonOutputArgs && !finalArgs.some((arg) => agent.jsonOutputArgs!.includes(arg))) {
