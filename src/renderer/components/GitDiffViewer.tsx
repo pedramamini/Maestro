@@ -196,7 +196,7 @@ export const GitDiffViewer = memo(function GitDiffViewer({
 						const fileStats = getDiffStats(file.parsedDiff);
 						return (
 							<button
-								key={index}
+								key={file.newPath || file.oldPath || `file-${index}`}
 								ref={(el) => (tabRefs.current[index] = el)}
 								onClick={() => setActiveTab(index)}
 								className={`px-4 py-3 text-sm whitespace-nowrap transition-colors ${

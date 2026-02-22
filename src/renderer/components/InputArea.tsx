@@ -455,8 +455,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 			{/* Only show staged images in AI mode */}
 			{session.inputMode === 'ai' && stagedImages.length > 0 && (
 				<div className="flex gap-2 mb-3 pb-2 overflow-x-auto overflow-y-visible scrollbar-thin">
-					{stagedImages.map((img, idx) => (
-						<div key={idx} className="relative group shrink-0">
+					{stagedImages.map((img) => (
+						<div key={img} className="relative group shrink-0">
 							<img
 								src={img}
 								className="h-16 rounded border cursor-pointer hover:opacity-80 transition-opacity"
@@ -470,7 +470,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									setStagedImages((p) => p.filter((_, i) => i !== idx));
+									setStagedImages((p) => p.filter((x) => x !== img));
 								}}
 								className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors opacity-90 hover:opacity-100"
 							>

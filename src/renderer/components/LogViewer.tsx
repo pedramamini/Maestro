@@ -532,7 +532,7 @@ export function LogViewer({
 				<div className="flex h-2 w-full mb-2 rounded-sm overflow-hidden">
 					{filteredLogs.map((log, idx) => (
 						<div
-							key={idx}
+							key={`${log.timestamp}-${log.level}-${idx}`}
 							className="flex-1 transition-all hover:opacity-70 cursor-pointer"
 							style={{
 								backgroundColor: getLevelColor(log.level),
@@ -597,7 +597,7 @@ export function LogViewer({
 				) : (
 					filteredLogs.map((log, index) => (
 						<div
-							key={index}
+							key={`${log.timestamp}-${log.level}-${index}`}
 							className="rounded p-3 border"
 							style={{
 								backgroundColor: theme.colors.bgActivity,
