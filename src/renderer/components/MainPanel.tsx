@@ -1690,6 +1690,7 @@ export const MainPanel = React.memo(
 												activeTab.wizardState.isGeneratingDocs ||
 												(activeTab.wizardState.generatedDocuments?.length ?? 0) > 0
 											}
+											setLightboxImage={setLightboxImage}
 										/>
 									) : (
 										<TerminalOutput

@@ -72,6 +72,8 @@ export interface WizardMessage {
 	confidence?: number;
 	/** Parsed ready flag from assistant responses */
 	ready?: boolean;
+	/** Base64-encoded image data URLs attached to this message */
+	images?: string[];
 }
 
 /**

@@ -1693,7 +1693,7 @@ function MaestroConsoleInner() {
 	// Wrapper for sendInlineWizardMessage that adds thinking content callback
 	// This extracts thinking content from the streaming response and stores it in wizardState
 	const sendWizardMessageWithThinking = useCallback(
-		async (content: string) => {
+		async (content: string, images?: string[]) => {
 			// Clear previous thinking content and tool executions when starting a new message
 			if (activeSession) {
 				const activeTab = getActiveTab(activeSession);
@@ -1726,7 +1726,7 @@ function MaestroConsoleInner() {
 			const sessionId = activeSession?.id;
 			const tabId = activeSession ? getActiveTab(activeSession)?.id : undefined;
 
-			await sendInlineWizardMessage(content, {
+			await sendInlineWizardMessage(content, images, {
 				onThinkingChunk: (chunk) => {
 					// Early return if session/tab IDs weren't captured
 					if (!sessionId || !tabId) {
@@ -1880,6 +1880,7 @@ function MaestroConsoleInner() {
 						timestamp: msg.timestamp,
 						confidence: msg.confidence,
 						ready: msg.ready,
+						images: msg.images,
 					})),
 					previousUIState: tabWizardState.previousUIState ?? {
 						readOnlyMode: false,
@@ -4788,12 +4789,13 @@ function MaestroConsoleInner() {
 		const wizardState = activeTabLocal?.wizardState;
 		if (!wizardState) return;
 
-		// Convert wizard conversation history to log entries
+		// Convert wizard conversation history to log entries (including images)
 		const wizardLogEntries: LogEntry[] = wizardState.conversationHistory.map((msg) => ({
 			id: `wizard-${msg.id}`,
 			timestamp: msg.timestamp,
 			source: msg.role === 'user' ? 'user' : 'ai',
 			text: msg.content,
+			images: msg.images,
 			delivered: true,
 		}));
 
