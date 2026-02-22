@@ -215,6 +215,7 @@ export interface SettingsStoreState {
 	shortcuts: Record<string, Shortcut>;
 	tabShortcuts: Record<string, Shortcut>;
 	customAICommands: CustomAICommand[];
+	totalActiveTimeMs: number;
 	globalStats: GlobalStats;
 	autoRunStats: AutoRunStats;
 	usageStats: MaestroUsageStats;
@@ -322,6 +323,10 @@ export interface SettingsStoreActions {
 	setMaxLogBuffer: (value: number) => Promise<void>;
 	setPreventSleepEnabled: (value: boolean) => Promise<void>;
 
+	// Standalone active time
+	setTotalActiveTimeMs: (value: number) => void;
+	addTotalActiveTimeMs: (delta: number) => void;
+
 	// Global stats
 	setGlobalStats: (value: GlobalStats) => void;
 	updateGlobalStats: (delta: Partial<GlobalStats>) => void;
@@ -425,6 +430,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	shortcuts: DEFAULT_SHORTCUTS,
 	tabShortcuts: TAB_SHORTCUTS,
 	customAICommands: DEFAULT_AI_COMMANDS,
+	totalActiveTimeMs: 0,
 	globalStats: DEFAULT_GLOBAL_STATS,
 	autoRunStats: DEFAULT_AUTO_RUN_STATS,
 	usageStats: DEFAULT_USAGE_STATS,
@@ -812,6 +818,22 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 			set({ preventSleepEnabled: prev });
 			throw error; // Let Sentry capture
 		}
+	},
+
+	// ============================================================================
+	// Standalone Active Time Actions
+	// ============================================================================
+
+	setTotalActiveTimeMs: (value) => {
+		set({ totalActiveTimeMs: value });
+		window.maestro.settings.set('totalActiveTimeMs', value);
+	},
+
+	addTotalActiveTimeMs: (delta) => {
+		const prev = get().totalActiveTimeMs;
+		const updated = prev + delta;
+		set({ totalActiveTimeMs: updated });
+		window.maestro.settings.set('totalActiveTimeMs', updated);
 	},
 
 	// ============================================================================
@@ -1493,6 +1515,18 @@ export async function loadAllSettings(): Promise<void> {
 			};
 		}
 
+		// Standalone totalActiveTimeMs: migrate from globalStats if needed
+		if (allSettings['totalActiveTimeMs'] !== undefined) {
+			patch.totalActiveTimeMs = allSettings['totalActiveTimeMs'] as number;
+		} else {
+			// One-time migration: copy from globalStats.totalActiveTimeMs if it exists and is > 0
+			const legacyGlobalStats = allSettings['globalStats'] as Partial<GlobalStats> | undefined;
+			if (legacyGlobalStats?.totalActiveTimeMs && legacyGlobalStats.totalActiveTimeMs > 0) {
+				patch.totalActiveTimeMs = legacyGlobalStats.totalActiveTimeMs;
+				window.maestro.settings.set('totalActiveTimeMs', legacyGlobalStats.totalActiveTimeMs);
+			}
+		}
+
 		if (allSettings['autoRunStats'] !== undefined) {
 			let stats = {
 				...DEFAULT_AUTO_RUN_STATS,
@@ -1729,6 +1763,8 @@ export function getSettingsActions() {
 		setShortcuts: state.setShortcuts,
 		setTabShortcuts: state.setTabShortcuts,
 		setCustomAICommands: state.setCustomAICommands,
+		setTotalActiveTimeMs: state.setTotalActiveTimeMs,
+		addTotalActiveTimeMs: state.addTotalActiveTimeMs,
 		setGlobalStats: state.setGlobalStats,
 		updateGlobalStats: state.updateGlobalStats,
 		setAutoRunStats: state.setAutoRunStats,

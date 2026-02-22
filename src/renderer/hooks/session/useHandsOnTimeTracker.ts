@@ -17,17 +17,17 @@ const PERSIST_INTERVAL_MS = 30000; // Persist to settings every 30 seconds
  * just that the user is actively using Maestro.
  */
 export function useHandsOnTimeTracker(
-	updateGlobalStats: (delta: { totalActiveTimeMs: number }) => void
+	addTotalActiveTimeMs: (delta: number) => void
 ): void {
 	const lastActivityRef = useRef<number>(Date.now());
 	const isActiveRef = useRef<boolean>(false);
 	const accumulatedTimeRef = useRef<number>(0);
 	const lastPersistRef = useRef<number>(Date.now());
 	const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
-	const updateGlobalStatsRef = useRef(updateGlobalStats);
+	const addTotalActiveTimeMsRef = useRef(addTotalActiveTimeMs);
 
 	// Keep ref in sync
-	updateGlobalStatsRef.current = updateGlobalStats;
+	addTotalActiveTimeMsRef.current = addTotalActiveTimeMs;
 
 	// Persist accumulated time to settings
 	const persistAccumulatedTime = useCallback(() => {
@@ -35,7 +35,7 @@ export function useHandsOnTimeTracker(
 			const timeToAdd = accumulatedTimeRef.current;
 			accumulatedTimeRef.current = 0;
 			lastPersistRef.current = Date.now();
-			updateGlobalStatsRef.current({ totalActiveTimeMs: timeToAdd });
+			addTotalActiveTimeMsRef.current(timeToAdd);
 		}
 	}, []);
 
@@ -139,7 +139,7 @@ export function useHandsOnTimeTracker(
 			if (accumulatedTimeRef.current > 0) {
 				const timeToAdd = accumulatedTimeRef.current;
 				accumulatedTimeRef.current = 0;
-				updateGlobalStatsRef.current({ totalActiveTimeMs: timeToAdd });
+				addTotalActiveTimeMsRef.current(timeToAdd);
 			}
 		};
 

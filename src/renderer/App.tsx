@@ -453,8 +453,10 @@ function MaestroConsoleInner() {
 		setTabShortcuts,
 		customAICommands,
 		setCustomAICommands,
-		globalStats,
+		globalStats: _globalStats,
 		updateGlobalStats,
+		totalActiveTimeMs,
+		addTotalActiveTimeMs,
 		autoRunStats,
 		updateAutoRunProgress,
 		usageStats,
@@ -2461,7 +2463,7 @@ function MaestroConsoleInner() {
 
 	// Initialize global hands-on time tracker (persists to settings)
 	// Tracks total time user spends actively using Maestro (5-minute idle timeout)
-	useHandsOnTimeTracker(updateGlobalStats);
+	useHandsOnTimeTracker(addTotalActiveTimeMs);
 
 	// Track elapsed time for active auto-runs and update achievement stats every minute
 	// This allows badges to be unlocked during an auto-run, not just when it completes
@@ -5498,7 +5500,7 @@ function MaestroConsoleInner() {
 					onCloseAboutModal={handleCloseAboutModal}
 					autoRunStats={autoRunStats}
 					usageStats={usageStats}
-					handsOnTimeMs={globalStats.totalActiveTimeMs}
+					handsOnTimeMs={totalActiveTimeMs}
 					onOpenLeaderboardRegistration={handleOpenLeaderboardRegistrationFromAbout}
 					isLeaderboardRegistered={isLeaderboardRegistered}
 					updateCheckModalOpen={updateCheckModalOpen}

@@ -146,6 +146,11 @@ export interface UseSettingsReturn {
 	customAICommands: CustomAICommand[];
 	setCustomAICommands: (value: CustomAICommand[]) => void;
 
+	// Standalone active time (migrated from globalStats.totalActiveTimeMs)
+	totalActiveTimeMs: number;
+	setTotalActiveTimeMs: (value: number) => void;
+	addTotalActiveTimeMs: (delta: number) => void;
+
 	// Global Stats (persistent across restarts)
 	globalStats: GlobalStats;
 	setGlobalStats: (value: GlobalStats) => void;
