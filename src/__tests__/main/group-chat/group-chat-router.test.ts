@@ -80,6 +80,7 @@ import {
 	createGroupChat,
 	deleteGroupChat,
 	loadGroupChat,
+	listGroupChats,
 	updateGroupChat,
 	updateParticipant,
 	GroupChatParticipant,
@@ -1449,6 +1450,103 @@ describe('group-chat-router', () => {
 			expect(prompt).toContain('## New User Message');
 		});
 
+		it('session IDs persist to disk and resume works after simulated app restart', async () => {
+			const chat = await createTestChatWithModerator('App Restart Test');
+			await addParticipant(chat.id, 'Worker', 'claude-code', mockProcessManager);
+
+			// Store session IDs (simulates what session-id-listener does after first turn)
+			await updateGroupChat(chat.id, { moderatorAgentSessionId: 'mod-restart-session' });
+			await updateParticipant(chat.id, 'Worker', {
+				agentSessionId: 'worker-restart-session',
+			});
+
+			// === SIMULATE APP RESTART: reload from disk ===
+			const reloaded = await loadGroupChat(chat.id);
+			expect(reloaded).not.toBeNull();
+			expect(reloaded!.moderatorAgentSessionId).toBe('mod-restart-session');
+			expect(reloaded!.participants[0].agentSessionId).toBe('worker-restart-session');
+
+			// === Verify moderator resume works after restart ===
+			mockProcessManager.spawn.mockClear();
+
+			await routeUserMessage(chat.id, 'After restart', mockProcessManager, resumeAgentDetector);
+
+			const modSpawn = mockProcessManager.spawn.mock.calls.find(
+				(call) =>
+					call[0]?.prompt?.includes('After restart') && !call[0]?.sessionId?.includes('participant')
+			);
+			expect(modSpawn).toBeDefined();
+			const modArgs = modSpawn?.[0].args as string[];
+			expect(modArgs).toContain('--resume');
+			expect(modArgs).toContain('mod-restart-session');
+			expect(modSpawn?.[0].prompt as string).toContain('## New User Message');
+
+			// === Verify participant resume works after restart ===
+			mockProcessManager.spawn.mockClear();
+
+			await routeModeratorResponse(
+				chat.id,
+				'@Worker: Post-restart task',
+				mockProcessManager,
+				resumeAgentDetector
+			);
+
+			const partSpawn = mockProcessManager.spawn.mock.calls.find((call) =>
+				call[0]?.sessionId?.includes('participant')
+			);
+			expect(partSpawn).toBeDefined();
+			const partArgs = partSpawn?.[0].args as string[];
+			expect(partArgs).toContain('--resume');
+			expect(partArgs).toContain('worker-restart-session');
+			expect(partSpawn?.[0].prompt as string).toContain('## New Task in Group Chat');
+		});
+
+		it('synthesis resumes after app restart with persisted moderator session ID', async () => {
+			const chat = await createTestChatWithModerator('Synthesis Restart Test');
+			await addParticipant(chat.id, 'Worker', 'claude-code', mockProcessManager);
+
+			// Store moderator session ID
+			await updateGroupChat(chat.id, { moderatorAgentSessionId: 'synth-restart-id' });
+
+			// Reload from disk (simulate restart)
+			const reloaded = await loadGroupChat(chat.id);
+			expect(reloaded!.moderatorAgentSessionId).toBe('synth-restart-id');
+
+			// Spawn synthesis — should resume with persisted ID
+			mockProcessManager.spawn.mockClear();
+
+			await spawnModeratorSynthesis(chat.id, mockProcessManager, resumeAgentDetector);
+
+			const synthSpawn = mockProcessManager.spawn.mock.calls[0];
+			expect(synthSpawn).toBeDefined();
+			const synthArgs = synthSpawn?.[0].args as string[];
+			expect(synthArgs).toContain('--resume');
+			expect(synthArgs).toContain('synth-restart-id');
+		});
+
+		it('listGroupChats loads all session IDs from disk (simulates post-restart enumeration)', async () => {
+			// Create two chats with session IDs
+			const chat1 = await createTestChatWithModerator('Restart List Test 1');
+			const chat2 = await createTestChatWithModerator('Restart List Test 2');
+			await addParticipant(chat1.id, 'Agent1', 'claude-code', mockProcessManager);
+
+			await updateGroupChat(chat1.id, { moderatorAgentSessionId: 'list-mod-1' });
+			await updateGroupChat(chat2.id, { moderatorAgentSessionId: 'list-mod-2' });
+			await updateParticipant(chat1.id, 'Agent1', { agentSessionId: 'list-part-1' });
+
+			// Reload all chats (simulates what app startup does)
+			const allChats = await listGroupChats();
+			const loaded1 = allChats.find((c) => c.id === chat1.id);
+			const loaded2 = allChats.find((c) => c.id === chat2.id);
+
+			expect(loaded1).toBeDefined();
+			expect(loaded1!.moderatorAgentSessionId).toBe('list-mod-1');
+			expect(loaded1!.participants[0].agentSessionId).toBe('list-part-1');
+
+			expect(loaded2).toBeDefined();
+			expect(loaded2!.moderatorAgentSessionId).toBe('list-mod-2');
+		});
+
 		it('participant resume prompt includes read-only instruction', async () => {
 			const chat = await createTestChatWithModerator('Participant Resume RO Test');
 			await addParticipant(chat.id, 'Worker', 'claude-code', mockProcessManager);
@@ -1674,6 +1772,81 @@ describe('group-chat-router', () => {
 				expect(partArgs).toContain('exec');
 				// Codex should NOT have '--print'
 				expect(partArgs).not.toContain('--print');
+			});
+
+			it('session IDs survive app restart (reload from disk) and resume works', async () => {
+				const chat = await createTestChatWithModerator('App Restart Mixed Test');
+				await addParticipant(chat.id, 'CodexWorker', 'codex', mockProcessManager);
+
+				// Simulate first turn: store session IDs (as would happen after agent responses)
+				await updateGroupChat(chat.id, { moderatorAgentSessionId: 'claude-restart-001' });
+				await updateParticipant(chat.id, 'CodexWorker', {
+					agentSessionId: 'codex-restart-thread',
+				});
+
+				// === SIMULATE APP RESTART ===
+				// Re-load chat from disk (this is exactly what happens on app restart)
+				const reloadedChat = await loadGroupChat(chat.id);
+				expect(reloadedChat).not.toBeNull();
+
+				// Verify session IDs survived the reload
+				expect(reloadedChat!.moderatorAgentSessionId).toBe('claude-restart-001');
+				const reloadedParticipant = reloadedChat!.participants.find(
+					(p) => p.name === 'CodexWorker'
+				);
+				expect(reloadedParticipant).toBeDefined();
+				expect(reloadedParticipant!.agentSessionId).toBe('codex-restart-thread');
+
+				// === VERIFY RESUME WORKS AFTER RELOAD ===
+				mockProcessManager.spawn.mockClear();
+
+				// Send a user message — moderator should resume with the persisted session ID
+				await routeUserMessage(
+					chat.id,
+					'Post-restart message',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const moderatorSpawn = mockProcessManager.spawn.mock.calls.find(
+					(call) =>
+						call[0]?.prompt?.includes('Post-restart message') &&
+						!call[0]?.sessionId?.includes('participant')
+				);
+				expect(moderatorSpawn).toBeDefined();
+
+				// Args should include --resume with the persisted session ID
+				const modArgs = moderatorSpawn?.[0].args as string[];
+				expect(modArgs).toContain('--resume');
+				expect(modArgs).toContain('claude-restart-001');
+
+				// Prompt should be resume-style (not full prompt)
+				const modPrompt = moderatorSpawn?.[0].prompt as string;
+				expect(modPrompt).toContain('## New User Message');
+				expect(modPrompt).not.toContain('## Chat History:');
+
+				// Now delegate to Codex participant — should also resume with persisted ID
+				mockProcessManager.spawn.mockClear();
+
+				await routeModeratorResponse(
+					chat.id,
+					'@CodexWorker: Post-restart task',
+					mockProcessManager,
+					mixedAgentDetector
+				);
+
+				const participantSpawn = mockProcessManager.spawn.mock.calls.find((call) =>
+					call[0]?.sessionId?.includes('participant')
+				);
+				expect(participantSpawn).toBeDefined();
+
+				const partArgs = participantSpawn?.[0].args as string[];
+				expect(partArgs).toContain('resume');
+				expect(partArgs).toContain('codex-restart-thread');
+				expect(partArgs).not.toContain('--resume');
+
+				const partPrompt = participantSpawn?.[0].prompt as string;
+				expect(partPrompt).toContain('## New Task in Group Chat');
 			});
 
 			it('first turn uses full prompt for both agent types, subsequent turns use resume', async () => {
