@@ -20,7 +20,7 @@
  * positioning in the flex layout and must remain in App.tsx.
  */
 
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, memo, useMemo } from 'react';
 import type {
 	Theme,
 	Session,
@@ -173,7 +173,7 @@ export interface AppInfoModalsProps {
  * NOTE: LogViewer is intentionally excluded - it's a content replacement component
  * that needs to be positioned in the flex layout, not an overlay modal.
  */
-export function AppInfoModals({
+export const AppInfoModals = memo(function AppInfoModals({
 	theme,
 	// Shortcuts Help Modal
 	shortcutsHelpOpen,
@@ -269,7 +269,7 @@ export function AppInfoModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP CONFIRM MODALS - Confirmation modals
@@ -305,7 +305,7 @@ export interface AppConfirmModalsProps {
  * - ConfirmModal: General-purpose confirmation dialog
  * - QuitConfirmModal: Quit app confirmation with busy agent warnings
  */
-export function AppConfirmModals({
+export const AppConfirmModals = memo(function AppConfirmModals({
 	theme,
 	sessions,
 	// Confirm Modal
@@ -365,7 +365,7 @@ export function AppConfirmModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP SESSION MODALS - Session management modals
@@ -444,7 +444,7 @@ export interface AppSessionModalsProps {
  * - RenameSessionModal: Rename an agent session
  * - RenameTabModal: Rename a conversation tab
  */
-export function AppSessionModals({
+export const AppSessionModals = memo(function AppSessionModals({
 	theme,
 	sessions,
 	activeSessionId,
@@ -478,24 +478,28 @@ export function AppSessionModals({
 	return (
 		<>
 			{/* --- NEW INSTANCE MODAL --- */}
-			<NewInstanceModal
-				isOpen={newInstanceModalOpen}
-				onClose={onCloseNewInstanceModal}
-				onCreate={onCreateSession}
-				theme={theme}
-				existingSessions={existingSessions}
-				sourceSession={sourceSession}
-			/>
+			{newInstanceModalOpen && (
+				<NewInstanceModal
+					isOpen={newInstanceModalOpen}
+					onClose={onCloseNewInstanceModal}
+					onCreate={onCreateSession}
+					theme={theme}
+					existingSessions={existingSessions}
+					sourceSession={sourceSession}
+				/>
+			)}
 
 			{/* --- EDIT AGENT MODAL --- */}
-			<EditAgentModal
-				isOpen={editAgentModalOpen}
-				onClose={onCloseEditAgentModal}
-				onSave={onSaveEditAgent}
-				theme={theme}
-				session={editAgentSession}
-				existingSessions={existingSessions}
-			/>
+			{editAgentModalOpen && (
+				<EditAgentModal
+					isOpen={editAgentModalOpen}
+					onClose={onCloseEditAgentModal}
+					onSave={onSaveEditAgent}
+					theme={theme}
+					session={editAgentSession}
+					existingSessions={existingSessions}
+				/>
+			)}
 
 			{/* --- RENAME SESSION MODAL --- */}
 			{renameSessionModalOpen && (
@@ -524,7 +528,7 @@ export function AppSessionModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP GROUP MODALS - Group management modals
@@ -560,7 +564,7 @@ export interface AppGroupModalsProps {
  * - CreateGroupModal: Create a new session group
  * - RenameGroupModal: Rename an existing group
  */
-export function AppGroupModals({
+export const AppGroupModals = memo(function AppGroupModals({
 	theme,
 	groups,
 	setGroups,
@@ -606,7 +610,7 @@ export function AppGroupModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP WORKTREE MODALS - Worktree/PR management modals
@@ -655,7 +659,7 @@ export interface AppWorktreeModalsProps {
  * - CreatePRModal: Create a pull request from a worktree branch
  * - DeleteWorktreeModal: Remove a worktree session (optionally delete on disk)
  */
-export function AppWorktreeModals({
+export const AppWorktreeModals = memo(function AppWorktreeModals({
 	theme,
 	activeSession,
 	// WorktreeConfigModal
@@ -735,7 +739,7 @@ export function AppWorktreeModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP UTILITY MODALS - Utility and workflow modals
@@ -961,7 +965,7 @@ export interface AppUtilityModalsProps {
  * - GitDiffViewer: View git diffs
  * - GitLogViewer: View git log
  */
-export function AppUtilityModals({
+export const AppUtilityModals = memo(function AppUtilityModals({
 	theme,
 	sessions,
 	setSessions,
@@ -1327,43 +1331,47 @@ export function AppUtilityModals({
 			)}
 
 			{/* --- PROMPT COMPOSER MODAL --- */}
-			<PromptComposerModal
-				isOpen={promptComposerOpen}
-				onClose={onClosePromptComposer}
-				theme={theme}
-				initialValue={promptComposerInitialValue}
-				onSubmit={onPromptComposerSubmit}
-				onSend={onPromptComposerSend}
-				sessionName={promptComposerSessionName}
-				stagedImages={promptComposerStagedImages}
-				setStagedImages={setPromptComposerStagedImages}
-				onImageAttachBlocked={onPromptImageAttachBlocked}
-				onOpenLightbox={onPromptOpenLightbox}
-				tabSaveToHistory={promptTabSaveToHistory}
-				onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
-				tabReadOnlyMode={promptTabReadOnlyMode}
-				onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
-				tabShowThinking={promptTabShowThinking}
-				onToggleTabShowThinking={onPromptToggleTabShowThinking}
-				supportsThinking={promptSupportsThinking}
-				enterToSend={promptEnterToSend}
-				onToggleEnterToSend={onPromptToggleEnterToSend}
-			/>
+			{promptComposerOpen && (
+				<PromptComposerModal
+					isOpen={promptComposerOpen}
+					onClose={onClosePromptComposer}
+					theme={theme}
+					initialValue={promptComposerInitialValue}
+					onSubmit={onPromptComposerSubmit}
+					onSend={onPromptComposerSend}
+					sessionName={promptComposerSessionName}
+					stagedImages={promptComposerStagedImages}
+					setStagedImages={setPromptComposerStagedImages}
+					onImageAttachBlocked={onPromptImageAttachBlocked}
+					onOpenLightbox={onPromptOpenLightbox}
+					tabSaveToHistory={promptTabSaveToHistory}
+					onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
+					tabReadOnlyMode={promptTabReadOnlyMode}
+					onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+					tabShowThinking={promptTabShowThinking}
+					onToggleTabShowThinking={onPromptToggleTabShowThinking}
+					supportsThinking={promptSupportsThinking}
+					enterToSend={promptEnterToSend}
+					onToggleEnterToSend={onPromptToggleEnterToSend}
+				/>
+			)}
 
 			{/* --- EXECUTION QUEUE BROWSER --- */}
-			<ExecutionQueueBrowser
-				isOpen={queueBrowserOpen}
-				onClose={onCloseQueueBrowser}
-				sessions={sessions}
-				activeSessionId={activeSessionId}
-				theme={theme}
-				onRemoveItem={onRemoveQueueItem}
-				onSwitchSession={onSwitchQueueSession}
-				onReorderItems={onReorderQueueItems}
-			/>
+			{queueBrowserOpen && (
+				<ExecutionQueueBrowser
+					isOpen={queueBrowserOpen}
+					onClose={onCloseQueueBrowser}
+					sessions={sessions}
+					activeSessionId={activeSessionId}
+					theme={theme}
+					onRemoveItem={onRemoveQueueItem}
+					onSwitchSession={onSwitchQueueSession}
+					onReorderItems={onReorderQueueItems}
+				/>
+			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP GROUP CHAT MODALS - Group Chat management modals
@@ -1423,7 +1431,7 @@ export interface AppGroupChatModalsProps {
  * - EditGroupChatModal: Edit group chat settings (name, moderator)
  * - GroupChatInfoOverlay: View group chat info and statistics
  */
-export function AppGroupChatModals({
+export const AppGroupChatModals = memo(function AppGroupChatModals({
 	theme,
 	groupChats,
 	// NewGroupChatModal
@@ -1524,7 +1532,7 @@ export function AppGroupChatModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP AGENT MODALS - Agent error and context transfer modals
@@ -1608,7 +1616,7 @@ export interface AppAgentModalsProps {
  * - TransferProgressModal: Show progress during cross-agent context transfer
  * - SendToAgentModal: Send session context to another Maestro session
  */
-export function AppAgentModals({
+export const AppAgentModals = memo(function AppAgentModals({
 	theme,
 	sessions,
 	activeSession,
@@ -1737,7 +1745,7 @@ export function AppAgentModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // UNIFIED APP MODALS - Single component combining all modal groups
@@ -2117,7 +2125,7 @@ export interface AppModalsProps {
  * - AppGroupChatModals: Group Chat modals
  * - AppAgentModals: Agent error and transfer modals
  */
-export function AppModals(props: AppModalsProps) {
+export const AppModals = memo(function AppModals(props: AppModalsProps) {
 	const {
 		// Common props
 		theme,
@@ -2397,6 +2405,11 @@ export function AppModals(props: AppModalsProps) {
 		onSendToAgent,
 	} = props;
 
+	const sourceSession = useMemo(
+		() => (duplicatingSessionId ? sessions.find((s) => s.id === duplicatingSessionId) : undefined),
+		[duplicatingSessionId, sessions]
+	);
+
 	return (
 		<>
 			{/* Info/Display Modals */}
@@ -2457,9 +2470,7 @@ export function AppModals(props: AppModalsProps) {
 				onCloseNewInstanceModal={onCloseNewInstanceModal}
 				onCreateSession={onCreateSession}
 				existingSessions={existingSessions}
-				sourceSession={
-					duplicatingSessionId ? sessions.find((s) => s.id === duplicatingSessionId) : undefined
-				}
+				sourceSession={sourceSession}
 				editAgentModalOpen={editAgentModalOpen}
 				onCloseEditAgentModal={onCloseEditAgentModal}
 				onSaveEditAgent={onSaveEditAgent}
@@ -2723,4 +2734,4 @@ export function AppModals(props: AppModalsProps) {
 			/>
 		</>
 	);
-}
+});

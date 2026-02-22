@@ -85,7 +85,6 @@ vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	useGitFileStatus: () => ({
 		getFileCount: () => 0,
 		hasChanges: () => false,
-		isLoading: false,
 	}),
 	useGitBranch: () => ({
 		getBranchInfo: () => undefined,

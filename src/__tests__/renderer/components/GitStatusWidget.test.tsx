@@ -34,7 +34,6 @@ vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	useGitFileStatus: () => ({
 		getFileCount: mockGetFileCount,
 		hasChanges: (sessionId: string) => mockGetFileCount(sessionId) > 0,
-		isLoading: false,
 	}),
 	useGitDetail: () => ({
 		getFileDetails: mockGetFileDetails,

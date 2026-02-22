@@ -243,7 +243,6 @@ vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	useGitFileStatus: () => ({
 		getFileCount: (sessionId: string) => mockGitStatusData[sessionId]?.fileCount ?? 0,
 		hasChanges: (sessionId: string) => (mockGitStatusData[sessionId]?.fileCount ?? 0) > 0,
-		isLoading: false,
 	}),
 	useGitBranch: () => ({
 		getBranchInfo: (sessionId: string) => {

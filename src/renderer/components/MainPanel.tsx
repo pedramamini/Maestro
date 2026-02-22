@@ -633,16 +633,27 @@ export const MainPanel = React.memo(
 
 		// Derive gitInfo format from focused context data for backward compatibility
 		const branchInfo = activeSession ? getBranchInfo(activeSession.id) : undefined;
-		const gitInfo =
-			branchInfo && activeSession?.isGitRepo
-				? {
-						branch: branchInfo.branch || '',
-						remote: branchInfo.remote || '',
-						behind: branchInfo.behind,
-						ahead: branchInfo.ahead,
-						uncommittedChanges: getFileCount(activeSession.id),
-					}
-				: null;
+		const fileCount = activeSession ? getFileCount(activeSession.id) : 0;
+		const gitInfo = useMemo(
+			() =>
+				branchInfo && activeSession?.isGitRepo
+					? {
+							branch: branchInfo.branch || '',
+							remote: branchInfo.remote || '',
+							behind: branchInfo.behind,
+							ahead: branchInfo.ahead,
+							uncommittedChanges: fileCount,
+						}
+					: null,
+			[
+				branchInfo?.branch,
+				branchInfo?.remote,
+				branchInfo?.behind,
+				branchInfo?.ahead,
+				activeSession?.isGitRepo,
+				fileCount,
+			]
+		);
 
 		// Copy notification state (centered flash notice)
 		const [copyNotification, setCopyNotification] = useState<string | null>(null);
