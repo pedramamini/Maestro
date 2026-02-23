@@ -32,7 +32,12 @@ export interface AttachmentsHandlerDependencies {
  * resolved path stays within the expected attachments base directory.
  */
 function sanitizeSessionId(sessionId: string, baseDir: string): string {
-	if (!sessionId || sessionId.includes('/') || sessionId.includes('\\') || sessionId.includes('..')) {
+	if (
+		!sessionId ||
+		sessionId.includes('/') ||
+		sessionId.includes('\\') ||
+		sessionId.includes('..')
+	) {
 		throw new Error(`Invalid session ID: ${sessionId}`);
 	}
 	const safe = path.basename(sessionId);

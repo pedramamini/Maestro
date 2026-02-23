@@ -283,28 +283,31 @@ export function registerFilesystemHandlers(): void {
 	});
 
 	// Write content to file (supports SSH remote)
-	ipcMain.handle('fs:writeFile', async (_, filePath: string, content: string, sshRemoteId?: string) => {
-		try {
-			// SSH remote: dispatch to remote fs operations
-			if (sshRemoteId) {
-				const sshConfig = getSshRemoteById(sshRemoteId);
-				if (!sshConfig) {
-					throw new Error(`SSH remote not found: ${sshRemoteId}`);
+	ipcMain.handle(
+		'fs:writeFile',
+		async (_, filePath: string, content: string, sshRemoteId?: string) => {
+			try {
+				// SSH remote: dispatch to remote fs operations
+				if (sshRemoteId) {
+					const sshConfig = getSshRemoteById(sshRemoteId);
+					if (!sshConfig) {
+						throw new Error(`SSH remote not found: ${sshRemoteId}`);
+					}
+					const result = await writeFileRemote(filePath, content, sshConfig);
+					if (!result.success) {
+						throw new Error(result.error || 'Failed to write remote file');
+					}
+					return { success: true };
 				}
-				const result = await writeFileRemote(filePath, content, sshConfig);
-				if (!result.success) {
-					throw new Error(result.error || 'Failed to write remote file');
-				}
-				return { success: true };
-			}
 
-			// Local: use standard fs operations
-			await fs.writeFile(filePath, content, 'utf-8');
-			return { success: true };
-		} catch (error) {
-			throw new Error(`Failed to write file: ${error}`);
+				// Local: use standard fs operations
+				await fs.writeFile(filePath, content, 'utf-8');
+				return { success: true };
+			} catch (error) {
+				throw new Error(`Failed to write file: ${error}`);
+			}
 		}
-	});
+	);
 
 	// Rename a file or folder (supports SSH remote)
 	ipcMain.handle('fs:rename', async (_, oldPath: string, newPath: string, sshRemoteId?: string) => {

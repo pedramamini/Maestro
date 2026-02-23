@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
 	X,
 	Key,
@@ -202,7 +202,7 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 
 	return (
 		<div>
-			<label className="block text-xs opacity-60 mb-1">Environment Variables (optional)</label>
+			<div className="block text-xs opacity-60 mb-1">Environment Variables (optional)</div>
 			<div className="space-y-2">
 				{entries.map((entry) => {
 					const error = validationErrors[entry.id];
@@ -485,6 +485,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 	} | null>(null);
 	const [wakatimeKeyValid, setWakatimeKeyValid] = useState<boolean | null>(null);
 	const [wakatimeKeyValidating, setWakatimeKeyValidating] = useState(false);
+	const handleWakatimeApiKeyChange = useCallback(
+		(value: string) => {
+			setWakatimeApiKey(value);
+			setWakatimeKeyValid(null);
+		},
+		[setWakatimeApiKey]
+	);
 
 	// Check WakaTime CLI availability when section renders or toggle is enabled
 	// Retries after a delay to allow auto-installer time to complete
@@ -537,11 +544,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			if (retryTimer) clearTimeout(retryTimer);
 		};
 	}, [isOpen, wakatimeEnabled]);
-
-	// Reset validation state when API key changes
-	useEffect(() => {
-		setWakatimeKeyValid(null);
-	}, [wakatimeApiKey]);
 
 	// Layer stack integration
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -1059,6 +1061,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			className="space-y-6 outline-none"
 			tabIndex={0}
 			onKeyDown={handleThemePickerKeyDown}
+			role="group"
+			aria-label="Theme picker"
 		>
 			{['dark', 'light', 'vibe'].map((mode) => (
 				<div key={mode}>
@@ -1236,10 +1240,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-5">
 							{/* About Me (Conductor Profile) */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 									<User className="w-3 h-3" />
 									About Me
-								</label>
+								</div>
 								<p className="text-xs opacity-50 mb-2">
 									Tell us a little about yourself so that agents created under Maestro know how to
 									work and communicate with you. As the conductor, you orchestrate the symphony of
@@ -1272,10 +1276,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Default Shell */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 									<Terminal className="w-3 h-3" />
 									Default Terminal Shell
-								</label>
+								</div>
 								<p className="text-xs opacity-50 mb-2">
 									Choose which shell to use for terminal sessions. Select any shell and configure a
 									custom path if needed.
@@ -1433,9 +1437,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										{/* Custom Shell Path */}
 										<div>
-											<label className="block text-xs opacity-60 mb-1">
-												Custom Path (optional)
-											</label>
+											<div className="block text-xs opacity-60 mb-1">Custom Path (optional)</div>
 											<div className="flex gap-2">
 												<input
 													type="text"
@@ -1465,9 +1467,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 										{/* Shell Arguments */}
 										<div>
-											<label className="block text-xs opacity-60 mb-1">
+											<div className="block text-xs opacity-60 mb-1">
 												Additional Arguments (optional)
-											</label>
+											</div>
 											<div className="flex gap-2">
 												<input
 													type="text"
@@ -1537,9 +1539,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* System Log Level */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									System Log Level
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[
 										{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
@@ -1558,15 +1560,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* GitHub CLI Path */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Terminal className="w-3 h-3" />
 									GitHub CLI (gh) Path
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 								>
-									<label className="block text-xs opacity-60 mb-1">Custom Path (optional)</label>
+									<div className="block text-xs opacity-60 mb-1">Custom Path (optional)</div>
 									<div className="flex gap-2">
 										<input
 											type="text"
@@ -1604,10 +1606,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Input Behavior Settings */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Keyboard className="w-3 h-3" />
 									Input Send Behavior
-								</label>
+								</div>
 								<p className="text-xs opacity-50 mb-3">
 									Configure how to send messages in each mode. Choose between Enter or{' '}
 									{formatMetaKey()}+Enter for each input type.
@@ -1619,7 +1621,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 								>
 									<div className="flex items-center justify-between mb-2">
-										<label className="text-sm font-medium">AI Interaction Mode</label>
+										<div className="text-sm font-medium">AI Interaction Mode</div>
 										<button
 											onClick={() => props.setEnterToSendAI(!props.enterToSendAI)}
 											className="px-3 py-1.5 rounded text-xs font-mono transition-all"
@@ -1647,7 +1649,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 								>
 									<div className="flex items-center justify-between mb-2">
-										<label className="text-sm font-medium">Terminal Mode</label>
+										<div className="text-sm font-medium">Terminal Mode</div>
 										<button
 											onClick={() => props.setEnterToSendTerminal(!props.enterToSendTerminal)}
 											className="px-3 py-1.5 rounded text-xs font-mono transition-all"
@@ -1683,10 +1685,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Default Thinking Toggle - Three states: Off, On, Sticky */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Brain className="w-3 h-3" />
 									Default Thinking Mode
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -1739,10 +1741,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Sleep Prevention */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Battery className="w-3 h-3" />
 									Power
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -1809,10 +1811,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Rendering Options */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Monitor className="w-3 h-3" />
 									Rendering Options
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -1951,7 +1953,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Stats Data Management */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Database className="w-3 h-3" />
 									Usage & Stats
 									<span
@@ -1963,7 +1965,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										Beta
 									</span>
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2001,9 +2003,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Default Time Range */}
 									<div>
-										<label className="block text-xs opacity-60 mb-2">
+										<div className="block text-xs opacity-60 mb-2">
 											Default dashboard time range
-										</label>
+										</div>
 										<select
 											value={defaultStatsTimeRange}
 											onChange={(e) =>
@@ -2048,9 +2050,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Clear Old Data Dropdown */}
 									<div>
-										<label className="block text-xs opacity-60 mb-2">
-											Clear stats older than...
-										</label>
+										<div className="block text-xs opacity-60 mb-2">Clear stats older than...</div>
 										<div className="flex items-center gap-2">
 											<select
 												id="clear-stats-period"
@@ -2196,7 +2196,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									{/* API Key Input (only shown when enabled) */}
 									{wakatimeEnabled && (
 										<div>
-											<label className="block text-xs opacity-60 mb-1">API Key</label>
+											<div className="block text-xs opacity-60 mb-1">API Key</div>
 											<div
 												className="flex items-center border rounded px-3 py-2"
 												style={{
@@ -2208,7 +2208,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												<input
 													type="password"
 													value={wakatimeApiKey}
-													onChange={(e) => setWakatimeApiKey(e.target.value)}
+													onChange={(e) => handleWakatimeApiKeyChange(e.target.value)}
 													onBlur={() => {
 														if (wakatimeApiKey) {
 															setWakatimeKeyValidating(true);
@@ -2235,7 +2235,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												)}
 												{wakatimeApiKey && (
 													<button
-														onClick={() => setWakatimeApiKey('')}
+														onClick={() => handleWakatimeApiKeyChange('')}
 														className="ml-2 opacity-50 hover:opacity-100"
 														title="Clear API key"
 													>
@@ -2254,7 +2254,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Settings Storage Location */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<FolderSync className="w-3 h-3" />
 									Storage Location
 									<span
@@ -2266,7 +2266,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										Beta
 									</span>
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2288,7 +2288,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Default Location */}
 									<div>
-										<label className="block text-xs opacity-60 mb-1">Default Location</label>
+										<div className="block text-xs opacity-60 mb-1">Default Location</div>
 										<div
 											className="text-xs p-2 rounded font-mono truncate"
 											style={{ backgroundColor: theme.colors.bgActivity }}
@@ -2301,9 +2301,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									{/* Current Location (if different) */}
 									{customSyncPath && (
 										<div>
-											<label className="block text-xs opacity-60 mb-1">
-												Current Location (Custom)
-											</label>
+											<div className="block text-xs opacity-60 mb-1">Current Location (Custom)</div>
 											<div
 												className="text-xs p-2 rounded font-mono truncate flex items-center gap-2"
 												style={{
@@ -2465,9 +2463,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Font Size */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Font Size
-								</label>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Font Size</div>
 								<ToggleButtonGroup
 									options={[
 										{ value: 12, label: 'Small' },
@@ -2483,9 +2479,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Terminal Width */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									Terminal Width (Columns)
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[80, 100, 120, 160]}
 									value={props.terminalWidth}
@@ -2496,9 +2492,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Max Log Buffer */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									Maximum Log Buffer
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[1000, 5000, 10000, 25000]}
 									value={props.maxLogBuffer}
@@ -2513,9 +2509,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Max Output Lines */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									Max Output Lines per Response
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[
 										{ value: 15 },
@@ -2537,9 +2533,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							{/* Message Alignment */}
 							{props.setUserMessageAlignment && (
 								<div>
-									<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+									<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 										User Message Alignment
-									</label>
+									</div>
 									<ToggleButtonGroup
 										options={[
 											{ value: 'right', label: 'Right' },
@@ -2641,7 +2637,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Document Graph Settings */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Sparkles className="w-3 h-3" />
 									Document Graph
 									<span
@@ -2653,7 +2649,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										Beta
 									</span>
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2691,9 +2687,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Max Nodes */}
 									<div>
-										<label className="block text-xs opacity-60 mb-2">
-											Maximum nodes to display
-										</label>
+										<div className="block text-xs opacity-60 mb-2">Maximum nodes to display</div>
 										<div className="flex items-center gap-3">
 											<input
 												type="range"
@@ -2724,10 +2718,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Context Window Warnings */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<AlertTriangle className="w-3 h-3" />
 									Context Window Warnings
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2803,7 +2797,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{/* Yellow Warning Threshold */}
 										<div>
 											<div className="flex items-center justify-between mb-2">
-												<label
+												<div
 													className="text-xs font-medium flex items-center gap-2"
 													style={{ color: theme.colors.textMain }}
 												>
@@ -2812,7 +2806,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 														style={{ backgroundColor: '#eab308' }}
 													/>
 													Yellow warning threshold
-												</label>
+												</div>
 												<span
 													className="text-xs font-mono px-2 py-0.5 rounded"
 													style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#fde047' }}
@@ -2851,7 +2845,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{/* Red Warning Threshold */}
 										<div>
 											<div className="flex items-center justify-between mb-2">
-												<label
+												<div
 													className="text-xs font-medium flex items-center gap-2"
 													style={{ color: theme.colors.textMain }}
 												>
@@ -2860,7 +2854,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 														style={{ backgroundColor: '#ef4444' }}
 													/>
 													Red warning threshold
-												</label>
+												</div>
 												<span
 													className="text-xs font-mono px-2 py-0.5 rounded"
 													style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}
@@ -2902,9 +2896,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					{activeTab === 'llm' && FEATURE_FLAGS.LLM_SETTINGS && (
 						<div className="space-y-5">
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									LLM Provider
-								</label>
+								</div>
 								<select
 									value={props.llmProvider}
 									onChange={(e) => props.setLlmProvider(e.target.value as LLMProvider)}
@@ -2918,9 +2912,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							</div>
 
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Model Slug
-								</label>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Model Slug</div>
 								<input
 									value={props.modelSlug}
 									onChange={(e) => props.setModelSlug(e.target.value)}
@@ -2934,9 +2926,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{props.llmProvider !== 'ollama' && (
 								<div>
-									<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-										API Key
-									</label>
+									<div className="block text-xs font-bold opacity-70 uppercase mb-2">API Key</div>
 									<div
 										className="flex items-center border rounded px-3 py-2"
 										style={{
@@ -3346,12 +3336,12 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											>
 												{/* Provider Selection */}
 												<div className="pt-4">
-													<label
+													<div
 														className="block text-xs font-bold opacity-70 uppercase mb-2"
 														style={{ color: theme.colors.textMain }}
 													>
 														Synopsis Provider
-													</label>
+													</div>
 
 													{dnIsDetecting ? (
 														<div className="flex items-center gap-2 py-2">
@@ -3542,13 +3532,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 												{/* Default Lookback Period */}
 												<div>
-													<label
+													<div
 														className="block text-xs font-bold mb-2"
 														style={{ color: theme.colors.textMain }}
 													>
 														Default Lookback Period: {directorNotesSettings.defaultLookbackDays}{' '}
 														days
-													</label>
+													</div>
 													<input
 														type="range"
 														min={1}

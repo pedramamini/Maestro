@@ -230,9 +230,7 @@ export const WizardMessageBubble = React.memo(function WizardMessageBubble({
 								style={{
 									objectFit: 'contain',
 									maxWidth: '200px',
-									borderColor: isUser
-										? `${theme.colors.accentForeground}30`
-										: theme.colors.border,
+									borderColor: isUser ? `${theme.colors.accentForeground}30` : theme.colors.border,
 								}}
 								onClick={() => setLightboxImage?.(img, message.images, 'history')}
 							/>

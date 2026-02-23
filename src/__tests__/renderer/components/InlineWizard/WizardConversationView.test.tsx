@@ -408,6 +408,11 @@ describe('WizardConversationView', () => {
 
 			const container = screen.getByTestId('wizard-conversation-view');
 
+			// Let the initial programmatic scroll guard reset before simulating user scroll
+			act(() => {
+				vi.advanceTimersByTime(20);
+			});
+
 			// Simulate user scrolling up (not near bottom)
 			Object.defineProperty(container, 'scrollHeight', { value: 1000, configurable: true });
 			Object.defineProperty(container, 'clientHeight', { value: 400, configurable: true });

@@ -985,7 +985,8 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						}
 
 						const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
-							isSshSession: !!freshSession.sshRemoteId || !!freshSession.sessionSshRemoteConfig?.enabled,
+							isSshSession:
+								!!freshSession.sshRemoteId || !!freshSession.sessionSshRemoteConfig?.enabled,
 							supportsStreamJsonInput: agent.capabilities?.supportsStreamJsonInput ?? false,
 						});
 

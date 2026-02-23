@@ -249,7 +249,11 @@ export interface UseInlineWizardReturn {
 	 * @param images - Optional base64-encoded image data URLs to attach
 	 * @param callbacks - Optional callbacks for streaming progress
 	 */
-	sendMessage: (content: string, images?: string[], callbacks?: ConversationCallbacks) => Promise<void>;
+	sendMessage: (
+		content: string,
+		images?: string[],
+		callbacks?: ConversationCallbacks
+	) => Promise<void>;
 	/**
 	 * Set the confidence level.
 	 * @param value - Confidence value (0-100)
@@ -750,7 +754,11 @@ export function useInlineWizard(): UseInlineWizardReturn {
 	 * Uses the current tab ID to determine which wizard to send to.
 	 */
 	const sendMessage = useCallback(
-		async (content: string, images?: string[], callbacks?: ConversationCallbacks): Promise<void> => {
+		async (
+			content: string,
+			images?: string[],
+			callbacks?: ConversationCallbacks
+		): Promise<void> => {
 			// Only allow wizard for agents that support structured output
 			const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
 

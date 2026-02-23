@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { GitStatusWidget } from '../../../renderer/components/GitStatusWidget';
 import type { Theme } from '../../../renderer/types';
 import type { GitStatusData, GitFileChange } from '../../../renderer/contexts/GitStatusContext';
@@ -723,6 +723,7 @@ describe('GitStatusWidget', () => {
 			);
 			render(<GitStatusWidget {...defaultProps} />);
 			// Check that additions/deletions/modifiedCount are displayed
+			// Both compact (fileCount=20) and full mode (modifiedCount=20) show '20'
 			expect(screen.getByText('190')).toBeInTheDocument();
 			expect(screen.getByText('27')).toBeInTheDocument();
 			// '20' appears in both compact (fileCount) and full (modifiedCount) views

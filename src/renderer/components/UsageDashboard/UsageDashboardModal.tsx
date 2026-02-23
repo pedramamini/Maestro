@@ -48,7 +48,12 @@ const OVERVIEW_SECTIONS = [
 	'activity-heatmap',
 	'duration-trends',
 ] as const;
-const AGENTS_SECTIONS = ['session-stats', 'agent-efficiency', 'agent-comparison', 'agent-usage'] as const;
+const AGENTS_SECTIONS = [
+	'session-stats',
+	'agent-efficiency',
+	'agent-comparison',
+	'agent-usage',
+] as const;
 const ACTIVITY_SECTIONS = ['activity-heatmap', 'weekday-comparison', 'duration-trends'] as const;
 const AUTORUN_SECTIONS = ['autorun-stats', 'tasks-by-hour', 'longest-autoruns'] as const;
 
@@ -135,13 +140,15 @@ const VIEW_MODE_TABS: { value: ViewMode; label: string }[] = [
 	{ value: 'autorun', label: 'Auto Run' },
 ];
 
+const EMPTY_SESSIONS: Session[] = [];
+
 export function UsageDashboardModal({
 	isOpen,
 	onClose,
 	theme,
 	colorBlindMode = false,
 	defaultTimeRange = 'week',
-	sessions = [],
+	sessions = EMPTY_SESSIONS,
 }: UsageDashboardModalProps) {
 	const [timeRange, setTimeRange] = useState<StatsTimeRange>(defaultTimeRange);
 	const [viewMode, setViewMode] = useState<ViewMode>('overview');
@@ -161,6 +168,8 @@ export function UsageDashboardModal({
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+	const viewModeRef = useRef(viewMode);
+	viewModeRef.current = viewMode;
 
 	// Reset time range to default when modal opens
 	useEffect(() => {
@@ -262,6 +271,11 @@ export function UsageDashboardModal({
 		}
 	}, [isOpen]);
 
+	const switchViewMode = useCallback((mode: ViewMode) => {
+		setViewMode(mode);
+		setFocusedSection(null);
+	}, []);
+
 	// Handle Cmd+Shift+[ and Cmd+Shift+] for tab navigation
 	useEffect(() => {
 		if (!isOpen) return;
@@ -272,24 +286,23 @@ export function UsageDashboardModal({
 				e.preventDefault();
 				e.stopPropagation();
 
-				const currentIndex = VIEW_MODE_TABS.findIndex((tab) => tab.value === viewMode);
+				const currentIndex = VIEW_MODE_TABS.findIndex((tab) => tab.value === viewModeRef.current);
 
 				if (e.key === '[') {
 					// Previous tab
 					const prevIndex = currentIndex > 0 ? currentIndex - 1 : VIEW_MODE_TABS.length - 1;
-					setViewMode(VIEW_MODE_TABS[prevIndex].value);
+					switchViewMode(VIEW_MODE_TABS[prevIndex].value);
 				} else {
 					// Next tab
 					const nextIndex = currentIndex < VIEW_MODE_TABS.length - 1 ? currentIndex + 1 : 0;
-					setViewMode(VIEW_MODE_TABS[nextIndex].value);
+					switchViewMode(VIEW_MODE_TABS[nextIndex].value);
 				}
-				setFocusedSection(null);
 			}
 		};
 
 		window.addEventListener('keydown', handleKeyDown, true);
 		return () => window.removeEventListener('keydown', handleKeyDown, true);
-	}, [isOpen, viewMode]);
+	}, [isOpen, switchViewMode]);
 
 	// Track container width for responsive layout
 	useEffect(() => {
@@ -386,13 +399,11 @@ export function UsageDashboardModal({
 			if (event.key === 'ArrowLeft' || event.key === 'ArrowUp') {
 				event.preventDefault();
 				const prevIndex = currentIndex > 0 ? currentIndex - 1 : VIEW_MODE_TABS.length - 1;
-				setViewMode(VIEW_MODE_TABS[prevIndex].value);
-				setFocusedSection(null);
+				switchViewMode(VIEW_MODE_TABS[prevIndex].value);
 			} else if (event.key === 'ArrowRight' || event.key === 'ArrowDown') {
 				event.preventDefault();
 				const nextIndex = currentIndex < VIEW_MODE_TABS.length - 1 ? currentIndex + 1 : 0;
-				setViewMode(VIEW_MODE_TABS[nextIndex].value);
-				setFocusedSection(null);
+				switchViewMode(VIEW_MODE_TABS[nextIndex].value);
 			} else if (event.key === 'Tab' && !event.shiftKey) {
 				// Tab into content area - focus first section
 				if (currentSections.length > 0 && data) {
@@ -401,7 +412,7 @@ export function UsageDashboardModal({
 				}
 			}
 		},
-		[viewMode, currentSections, data, navigateToSection]
+		[viewMode, switchViewMode, currentSections, data, navigateToSection]
 	);
 
 	// Handle keyboard navigation for chart sections
@@ -451,11 +462,6 @@ export function UsageDashboardModal({
 		[]
 	);
 
-	// Reset focused section when view mode changes
-	useEffect(() => {
-		setFocusedSection(null);
-	}, [viewMode]);
-
 	// Handle export to CSV
 	const handleExport = async () => {
 		setIsExporting(true);
@@ -490,13 +496,24 @@ export function UsageDashboardModal({
 			className="fixed inset-0 modal-overlay flex items-center justify-center z-[9999] animate-in fade-in duration-100"
 			onClick={onClose}
 		>
+			<button
+				type="button"
+				className="absolute inset-0"
+				tabIndex={-1}
+				onClick={(e) => {
+					e.stopPropagation();
+					onClose();
+				}}
+				aria-label="Close usage dashboard"
+			/>
 			<div
 				ref={containerRef}
 				tabIndex={-1}
 				role="dialog"
 				aria-modal="true"
 				aria-label="Usage Dashboard"
-				className="rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
+				className="relative z-10 rounded-xl shadow-2xl border overflow-hidden flex flex-col outline-none"
+				onClick={(e) => e.stopPropagation()}
 				style={{
 					backgroundColor: theme.colors.bgActivity,
 					borderColor: theme.colors.border,
@@ -505,7 +522,6 @@ export function UsageDashboardModal({
 					height: '85vh',
 					maxHeight: '900px',
 				}}
-				onClick={(e) => e.stopPropagation()}
 			>
 				{/* Header */}
 				<div
@@ -637,7 +653,7 @@ export function UsageDashboardModal({
 					{VIEW_MODE_TABS.map((tab) => (
 						<button
 							key={tab.value}
-							onClick={() => setViewMode(tab.value)}
+							onClick={() => switchViewMode(tab.value)}
 							className="px-4 py-2 rounded-lg text-sm font-medium transition-colors outline-none"
 							style={{
 								backgroundColor:
@@ -730,7 +746,12 @@ export function UsageDashboardModal({
 										data-testid="section-summary-cards"
 									>
 										<ChartErrorBoundary theme={theme} chartName="Summary Cards">
-											<SummaryCards data={data} theme={theme} columns={layout.summaryCardsCols} sessions={sessions} />
+											<SummaryCards
+												data={data}
+												theme={theme}
+												columns={layout.summaryCardsCols}
+												sessions={sessions}
+											/>
 										</ChartErrorBoundary>
 									</div>
 
@@ -1147,10 +1168,7 @@ export function UsageDashboardModal({
 										data-testid="section-tasks-by-hour"
 									>
 										<ChartErrorBoundary theme={theme} chartName="Tasks by Hour">
-											<TasksByHourChart
-												timeRange={timeRange}
-												theme={theme}
-											/>
+											<TasksByHourChart timeRange={timeRange} theme={theme} />
 										</ChartErrorBoundary>
 									</div>
 
@@ -1172,10 +1190,7 @@ export function UsageDashboardModal({
 										data-testid="section-longest-autoruns"
 									>
 										<ChartErrorBoundary theme={theme} chartName="Longest Auto Runs">
-											<LongestAutoRunsTable
-												timeRange={timeRange}
-												theme={theme}
-											/>
+											<LongestAutoRunsTable timeRange={timeRange} theme={theme} />
 										</ChartErrorBoundary>
 									</div>
 								</>

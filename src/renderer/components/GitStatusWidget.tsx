@@ -89,7 +89,7 @@ export const GitStatusWidget = memo(function GitStatusWidget({
 				title={`+${additions} −${deletions} ~${modified}`}
 			>
 				{/* Compact mode: just show file count - shown at narrow widths via CSS */}
-				<span className="header-git-status-compact flex items-center gap-1">
+				<span className="header-git-status-compact flex items-center gap-1" aria-hidden="true">
 					<FileDiff className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 					<span style={{ color: theme.colors.textDim }}>{fileCount}</span>
 				</span>

@@ -123,7 +123,9 @@ describe('generateProseStyles', () => {
 			// Standard heading margin is 0.67em 0
 			expect(css).toContain('margin: 0.67em 0 !important');
 			// Standard paragraph margin is 0.5em 0
-			expect(css).toContain(`.prose p { color: ${mockTheme.colors.textMain}; margin: 0.5em 0 !important`);
+			expect(css).toContain(
+				`.prose p { color: ${mockTheme.colors.textMain}; margin: 0.5em 0 !important`
+			);
 		});
 
 		it('should not include first-child/last-child overrides by default (compactSpacing defaults to false)', () => {
@@ -180,7 +182,9 @@ describe('generateProseStyles', () => {
 		it('should use smaller heading margins when true', () => {
 			const css = generateProseStyles({ theme: mockTheme, compactSpacing: true });
 			// Compact heading margin is 0.25em 0
-			expect(css).toContain(`.prose h1 { color: ${mockTheme.colors.textMain}; font-size: 2em; font-weight: bold; margin: 0.25em 0 !important`);
+			expect(css).toContain(
+				`.prose h1 { color: ${mockTheme.colors.textMain}; font-size: 2em; font-weight: bold; margin: 0.25em 0 !important`
+			);
 		});
 
 		it('should use zero paragraph margin when true', () => {
@@ -446,7 +450,9 @@ describe('generateAutoRunProseStyles', () => {
 		expect(css).toContain('margin: 0.67em 0 !important');
 		// Should not have compact first-child/last-child overrides
 		// (the raw string check: compact adds " > *:first-child" but standard does not)
-		expect(css).not.toContain('.autorun-panel .prose > *:first-child { margin-top: 0 !important; }');
+		expect(css).not.toContain(
+			'.autorun-panel .prose > *:first-child { margin-top: 0 !important; }'
+		);
 	});
 
 	it('should produce identical output to generateProseStyles with matching options', () => {
@@ -504,7 +510,9 @@ describe('generateTerminalProseStyles', () => {
 
 	it('should use bgSidebar for th background', () => {
 		const css = generateTerminalProseStyles(mockTheme, scopeSelector);
-		expect(css).toContain(`${scopeSelector} .prose th { background-color: ${mockTheme.colors.bgSidebar}`);
+		expect(css).toContain(
+			`${scopeSelector} .prose th { background-color: ${mockTheme.colors.bgSidebar}`
+		);
 	});
 
 	it('should include compact spacing (first-child/last-child overrides)', () => {
