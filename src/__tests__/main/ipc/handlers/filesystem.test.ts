@@ -463,10 +463,7 @@ describe('filesystem handlers', () => {
 				global.fetch = vi.fn();
 				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
 
-				const result = await handler!(
-					{},
-					'http://169.254.169.254/latest/meta-data/'
-				);
+				const result = await handler!({}, 'http://169.254.169.254/latest/meta-data/');
 				expect(result).toBeNull();
 				expect(global.fetch).not.toHaveBeenCalled();
 			});

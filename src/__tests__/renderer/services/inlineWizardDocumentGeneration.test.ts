@@ -362,11 +362,22 @@ CONTENT:
 	});
 
 	describe('generateWizardFolderBaseName', () => {
-		it('should generate date-based folder name in Wizard-YYYY-MM-DD format', () => {
+		it('should generate date-prefixed folder name with project name', () => {
+			const result = generateWizardFolderBaseName('My Cool Project');
+
+			// Should match YYYY-MM-DD-My-Cool-Project
+			expect(result).toMatch(/^\d{4}-\d{2}-\d{2}-My-Cool-Project$/);
+		});
+
+		it('should fall back to Wizard suffix when no project name given', () => {
 			const result = generateWizardFolderBaseName();
 
-			// Should match the pattern Wizard-YYYY-MM-DD
-			expect(result).toMatch(/^Wizard-\d{4}-\d{2}-\d{2}$/);
+			expect(result).toMatch(/^\d{4}-\d{2}-\d{2}-Wizard$/);
+		});
+
+		it('should fall back to Wizard suffix for empty/whitespace project name', () => {
+			expect(generateWizardFolderBaseName('')).toMatch(/^\d{4}-\d{2}-\d{2}-Wizard$/);
+			expect(generateWizardFolderBaseName('   ')).toMatch(/^\d{4}-\d{2}-\d{2}-Wizard$/);
 		});
 
 		it('should use current date', () => {
@@ -374,7 +385,7 @@ CONTENT:
 			const year = now.getFullYear();
 			const month = String(now.getMonth() + 1).padStart(2, '0');
 			const day = String(now.getDate()).padStart(2, '0');
-			const expected = `Wizard-${year}-${month}-${day}`;
+			const expected = `${year}-${month}-${day}-Wizard`;
 
 			expect(generateWizardFolderBaseName()).toBe(expected);
 		});
@@ -382,14 +393,24 @@ CONTENT:
 		it('should pad single-digit months and days with zeros', () => {
 			const result = generateWizardFolderBaseName();
 
-			// Extract month and day parts
+			// Extract date parts (YYYY-MM-DD-Name)
 			const parts = result.split('-');
-			const month = parts[2];
-			const day = parts[3];
+			const month = parts[1];
+			const day = parts[2];
 
 			// Should be exactly 2 digits
 			expect(month).toHaveLength(2);
 			expect(day).toHaveLength(2);
+		});
+
+		it('should sanitize special characters from project name', () => {
+			const result = generateWizardFolderBaseName('my/project@v2!');
+			expect(result).toMatch(/^\d{4}-\d{2}-\d{2}-Myprojectv2$/);
+		});
+
+		it('should convert spaces and hyphens to PascalCase-hyphenated', () => {
+			const result = generateWizardFolderBaseName('worktree from autorun');
+			expect(result).toMatch(/^\d{4}-\d{2}-\d{2}-Worktree-From-Autorun$/);
 		});
 	});
 

@@ -249,6 +249,12 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		onToggleWizardShowThinking,
 	} = props;
 
+	const setCommandHistoryFilterRef = React.useCallback((el: HTMLInputElement | null) => {
+		if (el) {
+			el.focus();
+		}
+	}, []);
+
 	// Get agent capabilities for conditional feature rendering
 	const { hasCapability } = useAgentCapabilities(session.toolType);
 
@@ -329,17 +335,17 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 	);
 
 	// Use scroll-into-view hooks for all dropdown lists
-	const slashCommandItemRefs = useScrollIntoView<HTMLDivElement>(
+	const slashCommandItemRefs = useScrollIntoView<HTMLButtonElement>(
 		slashCommandOpen,
 		safeSelectedIndex,
 		filteredSlashCommands.length
 	);
-	const tabCompletionItemRefs = useScrollIntoView<HTMLDivElement>(
+	const tabCompletionItemRefs = useScrollIntoView<HTMLButtonElement>(
 		tabCompletionOpen,
 		selectedTabCompletionIndex,
 		tabCompletionSuggestions.length
 	);
-	const atMentionItemRefs = useScrollIntoView<HTMLDivElement>(
+	const atMentionItemRefs = useScrollIntoView<HTMLButtonElement>(
 		atMentionOpen,
 		selectedAtMentionIndex,
 		atMentionSuggestions.length
@@ -456,23 +462,29 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 			{session.inputMode === 'ai' && stagedImages.length > 0 && (
 				<div className="flex gap-2 mb-3 pb-2 overflow-x-auto overflow-y-visible scrollbar-thin">
 					{stagedImages.map((img, idx) => (
-						<div key={idx} className="relative group shrink-0">
-							<img
-								src={img}
-								className="h-16 rounded border cursor-pointer hover:opacity-80 transition-opacity"
-								style={{
-									borderColor: theme.colors.border,
-									objectFit: 'contain',
-									maxWidth: '200px',
-								}}
+						<div key={img} className="relative group shrink-0">
+							<button
+								type="button"
+								className="p-0 bg-transparent outline-none focus-visible:ring-2 focus-visible:ring-accent rounded"
 								onClick={() => setLightboxImage(img, stagedImages, 'staged')}
-							/>
+							>
+								<img
+									src={img}
+									alt={`Staged image ${idx + 1}`}
+									className="h-16 rounded border cursor-pointer hover:opacity-80 transition-opacity block"
+									style={{
+										borderColor: theme.colors.border,
+										objectFit: 'contain',
+										maxWidth: '200px',
+									}}
+								/>
+							</button>
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
 									setStagedImages((p) => p.filter((_, i) => i !== idx));
 								}}
-								className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors opacity-90 hover:opacity-100"
+								className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors opacity-90 hover:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-white"
 							>
 								<X className="w-3 h-3" />
 							</button>
@@ -492,10 +504,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 						style={{ overscrollBehavior: 'contain' }}
 					>
 						{filteredSlashCommands.map((cmd, idx) => (
-							<div
+							<button
+								type="button"
 								key={cmd.command}
 								ref={(el) => (slashCommandItemRefs.current[idx] = el)}
-								className={`px-4 py-3 cursor-pointer transition-colors ${
+								className={`w-full px-4 py-3 text-left transition-colors ${
 									idx === safeSelectedIndex ? 'font-semibold' : ''
 								}`}
 								style={{
@@ -516,7 +529,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							>
 								<div className="font-mono text-sm">{cmd.command}</div>
 								<div className="text-xs opacity-70 mt-0.5">{cmd.description}</div>
-							</div>
+							</button>
 						))}
 					</div>
 				</div>
@@ -530,7 +543,8 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 				>
 					<div className="p-2">
 						<input
-							autoFocus
+							ref={setCommandHistoryFilterRef}
+							tabIndex={0}
 							type="text"
 							className="w-full bg-transparent outline-none text-sm p-2 border-b"
 							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
@@ -574,9 +588,10 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							const isMostRecent = idx === 0;
 
 							return (
-								<div
-									key={idx}
-									className={`px-3 py-2 cursor-pointer text-sm font-mono ${isSelected ? 'ring-1 ring-inset' : ''} ${isMostRecent ? 'font-semibold' : ''}`}
+								<button
+									type="button"
+									key={cmd}
+									className={`w-full px-3 py-2 text-left text-sm font-mono ${isSelected ? 'ring-1 ring-inset' : ''} ${isMostRecent ? 'font-semibold' : ''}`}
 									style={
 										{
 											backgroundColor: isSelected
@@ -598,7 +613,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 									onMouseEnter={() => setCommandHistorySelectedIndex(idx)}
 								>
 									{cmd}
-								</div>
+								</button>
 							);
 						})}
 						{filteredCommandHistory.length === 0 && (
@@ -692,10 +707,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								const typeLabel = suggestion.type;
 
 								return (
-									<div
+									<button
+										type="button"
 										key={`${suggestion.type}-${suggestion.value}`}
 										ref={(el) => (tabCompletionItemRefs.current[idx] = el)}
-										className={`px-3 py-2 cursor-pointer text-sm font-mono flex items-center gap-2 ${isSelected ? 'ring-1 ring-inset' : ''}`}
+										className={`w-full px-3 py-2 text-left text-sm font-mono flex items-center gap-2 ${isSelected ? 'ring-1 ring-inset' : ''}`}
 										style={
 											{
 												backgroundColor: isSelected ? theme.colors.bgActivity : 'transparent',
@@ -727,7 +743,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 										/>
 										<span className="flex-1 truncate">{suggestion.displayText}</span>
 										<span className="text-[10px] opacity-40 flex-shrink-0">{typeLabel}</span>
-									</div>
+									</button>
 								);
 							})
 						) : (
@@ -770,10 +786,11 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							const IconComponent = suggestion.type === 'folder' ? Folder : File;
 
 							return (
-								<div
+								<button
+									type="button"
 									key={`${suggestion.type}-${suggestion.value}`}
 									ref={(el) => (atMentionItemRefs.current[idx] = el)}
-									className={`px-3 py-2 cursor-pointer text-sm font-mono flex items-center gap-2 ${isSelected ? 'ring-1 ring-inset' : ''}`}
+									className={`w-full px-3 py-2 text-left text-sm font-mono flex items-center gap-2 ${isSelected ? 'ring-1 ring-inset' : ''}`}
 									style={
 										{
 											backgroundColor: isSelected ? theme.colors.bgActivity : 'transparent',
@@ -815,7 +832,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 										</span>
 									)}
 									<span className="text-[10px] opacity-40 flex-shrink-0">{suggestion.type}</span>
-								</div>
+								</button>
 							);
 						})}
 					</div>

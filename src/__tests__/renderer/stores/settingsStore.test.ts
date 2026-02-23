@@ -7,7 +7,6 @@ import {
 	getSettingsState,
 	getSettingsActions,
 	DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
-	DEFAULT_GLOBAL_STATS,
 	DEFAULT_AUTO_RUN_STATS,
 	DEFAULT_USAGE_STATS,
 	DEFAULT_KEYBOARD_MASTERY_STATS,
@@ -63,7 +62,7 @@ function resetStore() {
 		shortcuts: DEFAULT_SHORTCUTS,
 		tabShortcuts: TAB_SHORTCUTS,
 		customAICommands: DEFAULT_AI_COMMANDS,
-		globalStats: DEFAULT_GLOBAL_STATS,
+		totalActiveTimeMs: 0,
 		autoRunStats: DEFAULT_AUTO_RUN_STATS,
 		usageStats: DEFAULT_USAGE_STATS,
 		ungroupedCollapsed: false,
@@ -160,7 +159,7 @@ describe('settingsStore', () => {
 			expect(state.shortcuts).toEqual(DEFAULT_SHORTCUTS);
 			expect(state.tabShortcuts).toEqual(TAB_SHORTCUTS);
 			expect(state.customAICommands).toEqual(DEFAULT_AI_COMMANDS);
-			expect(state.globalStats).toEqual(DEFAULT_GLOBAL_STATS);
+			expect(state.totalActiveTimeMs).toBe(0);
 			expect(state.autoRunStats).toEqual(DEFAULT_AUTO_RUN_STATS);
 			expect(state.usageStats).toEqual(DEFAULT_USAGE_STATS);
 			expect(state.ungroupedCollapsed).toBe(false);
@@ -705,62 +704,42 @@ describe('settingsStore', () => {
 	});
 
 	// ========================================================================
-	// 5. Global Stats Actions
+	// 5. Standalone Active Time Actions
 	// ========================================================================
 
-	describe('global stats actions', () => {
-		it('setGlobalStats directly replaces stats', () => {
-			const newStats = {
-				...DEFAULT_GLOBAL_STATS,
-				totalSessions: 10,
-				totalMessages: 50,
-				totalCostUsd: 1.25,
-			};
-			useSettingsStore.getState().setGlobalStats(newStats);
-			expect(useSettingsStore.getState().globalStats).toEqual(newStats);
-			expect(window.maestro.settings.set).toHaveBeenCalledWith('globalStats', newStats);
+	describe('standalone active time actions', () => {
+		it('setTotalActiveTimeMs replaces the value and persists', () => {
+			useSettingsStore.getState().setTotalActiveTimeMs(120000);
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(120000);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 120000);
 		});
 
-		it('updateGlobalStats adds delta to each field', () => {
-			// Set initial state
-			useSettingsStore.getState().setGlobalStats({
-				totalSessions: 5,
-				totalMessages: 20,
-				totalInputTokens: 1000,
-				totalOutputTokens: 500,
-				totalCacheReadTokens: 100,
-				totalCacheCreationTokens: 50,
-				totalCostUsd: 1.0,
-				totalActiveTimeMs: 60000,
-			});
+		it('addTotalActiveTimeMs increments the value and persists', () => {
+			useSettingsStore.setState({ totalActiveTimeMs: 50000 });
 			vi.clearAllMocks();
 
-			useSettingsStore.getState().updateGlobalStats({
-				totalSessions: 1,
-				totalMessages: 3,
-				totalCostUsd: 0.5,
-			});
-
-			const result = useSettingsStore.getState().globalStats;
-			expect(result.totalSessions).toBe(6);
-			expect(result.totalMessages).toBe(23);
-			expect(result.totalCostUsd).toBe(1.5);
-			// Unchanged fields
-			expect(result.totalInputTokens).toBe(1000);
-			expect(result.totalOutputTokens).toBe(500);
-			expect(window.maestro.settings.set).toHaveBeenCalledWith('globalStats', result);
+			useSettingsStore.getState().addTotalActiveTimeMs(10000);
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(60000);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 60000);
 		});
 
-		it('updateGlobalStats treats missing delta fields as 0', () => {
-			useSettingsStore.getState().setGlobalStats({
-				...DEFAULT_GLOBAL_STATS,
-				totalSessions: 5,
-			});
+		it('addTotalActiveTimeMs accumulates across multiple calls', () => {
+			useSettingsStore.setState({ totalActiveTimeMs: 0 });
 			vi.clearAllMocks();
 
-			useSettingsStore.getState().updateGlobalStats({});
+			useSettingsStore.getState().addTotalActiveTimeMs(5000);
+			useSettingsStore.getState().addTotalActiveTimeMs(3000);
+			useSettingsStore.getState().addTotalActiveTimeMs(2000);
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(10000);
+		});
 
-			expect(useSettingsStore.getState().globalStats.totalSessions).toBe(5);
+		it('setTotalActiveTimeMs overwrites previous value', () => {
+			useSettingsStore.setState({ totalActiveTimeMs: 99999 });
+			vi.clearAllMocks();
+
+			useSettingsStore.getState().setTotalActiveTimeMs(0);
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(0);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 0);
 		});
 	});
 
@@ -1513,20 +1492,39 @@ describe('settingsStore', () => {
 			);
 		});
 
-		it('stats objects merge with defaults (picks up new fields)', async () => {
+		it('totalActiveTimeMs migration: copies from legacy globalStats when standalone field absent', async () => {
 			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
 				globalStats: {
-					totalSessions: 42,
-					// Missing other fields - should get defaults
+					totalActiveTimeMs: 60000,
+				},
+				// No standalone totalActiveTimeMs field
+			});
+
+			await loadAllSettings();
+
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(60000);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 60000);
+		});
+
+		it('totalActiveTimeMs migration: standalone field takes precedence over legacy globalStats', async () => {
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
+				totalActiveTimeMs: 99000,
+				globalStats: {
+					totalActiveTimeMs: 60000,
 				},
 			});
 
 			await loadAllSettings();
 
-			const stats = useSettingsStore.getState().globalStats;
-			expect(stats.totalSessions).toBe(42);
-			expect(stats.totalMessages).toBe(0); // default
-			expect(stats.totalCostUsd).toBe(0); // default
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(99000);
+		});
+
+		it('totalActiveTimeMs migration: defaults to 0 when neither source exists', async () => {
+			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({});
+
+			await loadAllSettings();
+
+			expect(useSettingsStore.getState().totalActiveTimeMs).toBe(0);
 		});
 
 		it('validates documentGraphMaxNodes on load (rejects out-of-range)', async () => {

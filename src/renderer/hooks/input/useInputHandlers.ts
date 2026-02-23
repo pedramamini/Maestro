@@ -64,7 +64,7 @@ export interface UseInputHandlersDeps {
 	/** Handler for /wizard command */
 	handleWizardCommand: (args: string) => void;
 	/** Handler for sending wizard messages */
-	sendWizardMessageWithThinking: (content: string) => Promise<void>;
+	sendWizardMessageWithThinking: (content: string, images?: string[]) => Promise<void>;
 	/** Whether wizard is active for current tab */
 	isWizardActiveForCurrentTab: boolean;
 	/** Handler for /skills command */

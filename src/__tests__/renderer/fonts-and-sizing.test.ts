@@ -21,7 +21,6 @@ import React from 'react';
 import {
 	useSettingsStore,
 	DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
-	DEFAULT_GLOBAL_STATS,
 	DEFAULT_AUTO_RUN_STATS,
 	DEFAULT_USAGE_STATS,
 	DEFAULT_KEYBOARD_MASTERY_STATS,
@@ -105,7 +104,7 @@ describe('Cross-platform Fonts and Sizing', () => {
 			shortcuts: DEFAULT_SHORTCUTS,
 			tabShortcuts: TAB_SHORTCUTS,
 			customAICommands: DEFAULT_AI_COMMANDS,
-			globalStats: DEFAULT_GLOBAL_STATS,
+			totalActiveTimeMs: 0,
 			autoRunStats: DEFAULT_AUTO_RUN_STATS,
 			usageStats: DEFAULT_USAGE_STATS,
 			ungroupedCollapsed: false,

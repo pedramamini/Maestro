@@ -59,6 +59,12 @@ export interface WizardConversationViewProps {
 	toolExecutions?: Array<{ toolName: string; state?: unknown; timestamp: number }>;
 	/** Whether document generation has started (to hide Let's Go button once generation begins) */
 	hasStartedGenerating?: boolean;
+	/** Callback to open the lightbox for an image */
+	setLightboxImage?: (
+		image: string | null,
+		contextImages?: string[],
+		source?: 'staged' | 'history'
+	) => void;
 }
 
 /**
@@ -571,14 +577,53 @@ export function WizardConversationView({
 	thinkingContent = '',
 	toolExecutions = [],
 	hasStartedGenerating = false,
+	setLightboxImage,
 }: WizardConversationViewProps): JSX.Element {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const messagesEndRef = useRef<HTMLDivElement>(null);
 	const [fillerPhrase, setFillerPhrase] = useState(() => getNextFillerPhrase());
 
-	// Auto-scroll to bottom on new messages or when loading state changes
+	// Track whether user has scrolled away from the bottom.
+	// When true, we suppress auto-scroll so the user can read history.
+	const userScrolledUpRef = useRef(false);
+	// Guard to distinguish programmatic scrolls from user scrolls
+	const isProgrammaticScrollRef = useRef(false);
+
+	// Detect user scroll to decide whether to auto-scroll
+	useEffect(() => {
+		const container = containerRef.current;
+		if (!container) return;
+
+		const handleScroll = () => {
+			// Ignore programmatic scrolls
+			if (isProgrammaticScrollRef.current) return;
+
+			const { scrollTop, scrollHeight, clientHeight } = container;
+			// Consider "near bottom" if within 80px of the bottom
+			const isNearBottom = scrollHeight - scrollTop - clientHeight < 80;
+			userScrolledUpRef.current = !isNearBottom;
+		};
+
+		container.addEventListener('scroll', handleScroll, { passive: true });
+		return () => container.removeEventListener('scroll', handleScroll);
+	}, []);
+
+	// Auto-scroll to bottom on new messages or when loading state changes,
+	// but only if the user hasn't scrolled up to read history.
 	const scrollToBottom = useCallback(() => {
-		messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+		if (userScrolledUpRef.current) return;
+		const container = containerRef.current;
+		if (!container) return;
+
+		isProgrammaticScrollRef.current = true;
+		container.scrollTo({
+			top: container.scrollHeight,
+			behavior: 'auto',
+		});
+		// Reset guard after browser paints
+		requestAnimationFrame(() => {
+			isProgrammaticScrollRef.current = false;
+		});
 	}, []);
 
 	useEffect(() => {
@@ -592,6 +637,29 @@ export function WizardConversationView({
 		error,
 		scrollToBottom,
 	]);
+
+	// Always scroll to bottom when a new user message is added (they just sent it)
+	const prevHistoryLenRef = useRef(conversationHistory.length);
+	useEffect(() => {
+		const prevLen = prevHistoryLenRef.current;
+		prevHistoryLenRef.current = conversationHistory.length;
+
+		if (conversationHistory.length > prevLen) {
+			const lastMsg = conversationHistory[conversationHistory.length - 1];
+			if (lastMsg?.role === 'user') {
+				// User just sent a message - scroll to bottom regardless of scroll position
+				userScrolledUpRef.current = false;
+				const container = containerRef.current;
+				if (container) {
+					isProgrammaticScrollRef.current = true;
+					container.scrollTo({ top: container.scrollHeight, behavior: 'auto' });
+					requestAnimationFrame(() => {
+						isProgrammaticScrollRef.current = false;
+					});
+				}
+			}
+		}
+	}, [conversationHistory]);
 
 	// Get a new filler phrase when requested by the TypingIndicator
 	const handleRequestNewPhrase = useCallback(() => {
@@ -696,6 +764,7 @@ export function WizardConversationView({
 					theme={theme}
 					agentName={agentName}
 					providerName={providerName}
+					setLightboxImage={setLightboxImage}
 				/>
 			))}
 

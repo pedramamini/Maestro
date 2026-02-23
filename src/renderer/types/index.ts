@@ -74,6 +74,8 @@ export interface WizardMessage {
 	confidence?: number;
 	/** Parsed ready flag from assistant responses */
 	ready?: boolean;
+	/** Base64-encoded image data URLs attached to this message */
+	images?: string[];
 }
 
 /**
@@ -335,18 +337,6 @@ export interface BatchRunState {
 	errorPaused?: boolean; // True if batch is paused waiting for error resolution
 	errorDocumentIndex?: number; // Which document had the error (for skip functionality)
 	errorTaskDescription?: string; // Description of the task that failed (for UI display)
-}
-
-// Persistent global statistics (survives app restarts)
-export interface GlobalStats {
-	totalSessions: number;
-	totalMessages: number;
-	totalInputTokens: number;
-	totalOutputTokens: number;
-	totalCacheReadTokens: number;
-	totalCacheCreationTokens: number;
-	totalCostUsd: number;
-	totalActiveTimeMs: number;
 }
 
 // Badge unlock record for history tracking

@@ -897,7 +897,9 @@ export const MainPanel = React.memo(
 								<div className="flex items-center gap-4 min-w-0 overflow-hidden">
 									<div className="flex items-center gap-2 text-sm font-medium min-w-0 overflow-hidden">
 										{/* Session name - hidden at narrow widths via CSS container query */}
-										<span className="header-session-name truncate max-w-[150px]">{activeSession.name}</span>
+										<span className="header-session-name truncate max-w-[150px]">
+											{activeSession.name}
+										</span>
 										<div
 											className="relative shrink-0"
 											onMouseEnter={
@@ -947,7 +949,9 @@ export const MainPanel = React.memo(
 														<>
 															<GitBranch className="w-3 h-3 shrink-0" />
 															{/* Hide branch name text at narrow widths via CSS container query */}
-															<span className="header-git-branch-text truncate">{gitInfo?.branch || 'GIT'}</span>
+															<span className="header-git-branch-text truncate">
+																{gitInfo?.branch || 'GIT'}
+															</span>
 														</>
 													) : (
 														'LOCAL'
@@ -1260,6 +1264,7 @@ export const MainPanel = React.memo(
 												<span
 													className="header-context-label-compact text-[10px] font-bold uppercase hidden"
 													style={{ color: theme.colors.textDim }}
+													aria-hidden="true"
 												>
 													Context
 												</span>
@@ -1690,6 +1695,7 @@ export const MainPanel = React.memo(
 												activeTab.wizardState.isGeneratingDocs ||
 												(activeTab.wizardState.generatedDocuments?.length ?? 0) > 0
 											}
+											setLightboxImage={setLightboxImage}
 										/>
 									) : (
 										<TerminalOutput

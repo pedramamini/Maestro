@@ -1,17 +1,11 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { renderHook, act, waitFor } from '@testing-library/react';
 import { useSettings } from '../../../renderer/hooks';
-import type {
-	GlobalStats,
-	AutoRunStats,
-	OnboardingStats,
-	CustomAICommand,
-} from '../../../renderer/types';
+import type { AutoRunStats, OnboardingStats, CustomAICommand } from '../../../renderer/types';
 import { DEFAULT_SHORTCUTS } from '../../../renderer/constants/shortcuts';
 import {
 	useSettingsStore,
 	DEFAULT_CONTEXT_MANAGEMENT_SETTINGS,
-	DEFAULT_GLOBAL_STATS,
 	DEFAULT_AUTO_RUN_STATS,
 	DEFAULT_USAGE_STATS,
 	DEFAULT_KEYBOARD_MASTERY_STATS,
@@ -74,7 +68,7 @@ describe('useSettings', () => {
 			shortcuts: DEFAULT_SHORTCUTS,
 			tabShortcuts: TAB_SHORTCUTS,
 			customAICommands: DEFAULT_AI_COMMANDS,
-			globalStats: DEFAULT_GLOBAL_STATS,
+			totalActiveTimeMs: 0,
 			autoRunStats: DEFAULT_AUTO_RUN_STATS,
 			usageStats: DEFAULT_USAGE_STATS,
 			ungroupedCollapsed: false,
@@ -243,20 +237,11 @@ describe('useSettings', () => {
 			expect(result.current.customAICommands[0].isBuiltIn).toBe(true);
 		});
 
-		it('should have default global stats (all zeros)', async () => {
+		it('should have default totalActiveTimeMs of 0', async () => {
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
 
-			expect(result.current.globalStats).toEqual({
-				totalSessions: 0,
-				totalMessages: 0,
-				totalInputTokens: 0,
-				totalOutputTokens: 0,
-				totalCacheReadTokens: 0,
-				totalCacheCreationTokens: 0,
-				totalCostUsd: 0,
-				totalActiveTimeMs: 0,
-			});
+			expect(result.current.totalActiveTimeMs).toBe(0);
 		});
 
 		it('should have default auto-run stats (all zeros)', async () => {
@@ -416,23 +401,15 @@ describe('useSettings', () => {
 			expect(commitCmd).toBeDefined();
 		});
 
-		it('should merge saved global stats with defaults', async () => {
-			const savedStats: Partial<GlobalStats> = {
-				totalSessions: 100,
-				totalMessages: 500,
-			};
-
+		it('should load saved totalActiveTimeMs', async () => {
 			vi.mocked(window.maestro.settings.getAll).mockResolvedValue({
-				globalStats: savedStats,
+				totalActiveTimeMs: 60000,
 			});
 
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
 
-			expect(result.current.globalStats.totalSessions).toBe(100);
-			expect(result.current.globalStats.totalMessages).toBe(500);
-			// Other fields should have default values
-			expect(result.current.globalStats.totalInputTokens).toBe(0);
+			expect(result.current.totalActiveTimeMs).toBe(60000);
 		});
 
 		it('should merge saved auto-run stats with defaults', async () => {
@@ -908,76 +885,48 @@ describe('useSettings', () => {
 		});
 	});
 
-	describe('global stats', () => {
-		it('should update globalStats with setGlobalStats', async () => {
+	describe('totalActiveTimeMs', () => {
+		it('should set totalActiveTimeMs with setTotalActiveTimeMs', async () => {
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
 
-			const newStats: GlobalStats = {
-				totalSessions: 10,
-				totalMessages: 100,
-				totalInputTokens: 5000,
-				totalOutputTokens: 3000,
-				totalCacheReadTokens: 1000,
-				totalCacheCreationTokens: 500,
-				totalCostUsd: 1.5,
-				totalActiveTimeMs: 3600000,
-			};
 			act(() => {
-				result.current.setGlobalStats(newStats);
+				result.current.setTotalActiveTimeMs(3600000);
 			});
 
-			expect(result.current.globalStats).toEqual(newStats);
-			expect(window.maestro.settings.set).toHaveBeenCalledWith('globalStats', newStats);
+			expect(result.current.totalActiveTimeMs).toBe(3600000);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 3600000);
 		});
 
-		it('should update globalStats incrementally with updateGlobalStats', async () => {
+		it('should increment totalActiveTimeMs with addTotalActiveTimeMs', async () => {
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
 
-			// First update
 			act(() => {
-				result.current.updateGlobalStats({
-					totalSessions: 5,
-					totalMessages: 20,
-				});
+				result.current.addTotalActiveTimeMs(30000);
 			});
 
-			expect(result.current.globalStats.totalSessions).toBe(5);
-			expect(result.current.globalStats.totalMessages).toBe(20);
-			expect(result.current.globalStats.totalInputTokens).toBe(0); // unchanged
+			expect(result.current.totalActiveTimeMs).toBe(30000);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 30000);
 
-			// Second update
+			// Second increment
 			act(() => {
-				result.current.updateGlobalStats({
-					totalSessions: 3,
-					totalInputTokens: 1000,
-				});
+				result.current.addTotalActiveTimeMs(15000);
 			});
 
-			expect(result.current.globalStats.totalSessions).toBe(8); // 5 + 3
-			expect(result.current.globalStats.totalMessages).toBe(20); // unchanged
-			expect(result.current.globalStats.totalInputTokens).toBe(1000);
+			expect(result.current.totalActiveTimeMs).toBe(45000);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 45000);
 		});
 
-		it('should persist updated globalStats', async () => {
+		it('should persist totalActiveTimeMs after set', async () => {
 			const { result } = renderHook(() => useSettings());
 			await waitForSettingsLoaded(result);
 
 			act(() => {
-				result.current.updateGlobalStats({
-					totalSessions: 1,
-					totalCostUsd: 0.5,
-				});
+				result.current.setTotalActiveTimeMs(120000);
 			});
 
-			expect(window.maestro.settings.set).toHaveBeenCalledWith(
-				'globalStats',
-				expect.objectContaining({
-					totalSessions: 1,
-					totalCostUsd: 0.5,
-				})
-			);
+			expect(window.maestro.settings.set).toHaveBeenCalledWith('totalActiveTimeMs', 120000);
 		});
 	});
 

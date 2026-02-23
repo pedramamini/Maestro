@@ -453,8 +453,8 @@ function MaestroConsoleInner() {
 		setTabShortcuts,
 		customAICommands,
 		setCustomAICommands,
-		globalStats,
-		updateGlobalStats,
+		totalActiveTimeMs,
+		addTotalActiveTimeMs,
 		autoRunStats,
 		updateAutoRunProgress,
 		usageStats,
@@ -796,12 +796,10 @@ function MaestroConsoleInner() {
 	const mainPanelRef = useRef<MainPanelHandle>(null);
 
 	// Refs for accessing latest values in event handlers
-	const updateGlobalStatsRef = useRef(updateGlobalStats);
 	const customAICommandsRef = useRef(customAICommands);
 	const speckitCommandsRef = useRef(speckitCommands);
 	const openspecCommandsRef = useRef(openspecCommands);
 	const fileTabAutoRefreshEnabledRef = useRef(fileTabAutoRefreshEnabled);
-	updateGlobalStatsRef.current = updateGlobalStats;
 	customAICommandsRef.current = customAICommands;
 	speckitCommandsRef.current = speckitCommands;
 	openspecCommandsRef.current = openspecCommands;
@@ -1541,7 +1539,6 @@ function MaestroConsoleInner() {
 		spawnBackgroundSynopsisRef,
 		getBatchStateRef,
 		pauseBatchOnErrorRef,
-		updateGlobalStatsRef,
 		rightPanelRef,
 		processQueuedItemRef,
 		contextWarningYellowThreshold: contextManagementSettings.contextWarningYellowThreshold,
@@ -1693,7 +1690,7 @@ function MaestroConsoleInner() {
 	// Wrapper for sendInlineWizardMessage that adds thinking content callback
 	// This extracts thinking content from the streaming response and stores it in wizardState
 	const sendWizardMessageWithThinking = useCallback(
-		async (content: string) => {
+		async (content: string, images?: string[]) => {
 			// Clear previous thinking content and tool executions when starting a new message
 			if (activeSession) {
 				const activeTab = getActiveTab(activeSession);
@@ -1726,7 +1723,7 @@ function MaestroConsoleInner() {
 			const sessionId = activeSession?.id;
 			const tabId = activeSession ? getActiveTab(activeSession)?.id : undefined;
 
-			await sendInlineWizardMessage(content, {
+			await sendInlineWizardMessage(content, images, {
 				onThinkingChunk: (chunk) => {
 					// Early return if session/tab IDs weren't captured
 					if (!sessionId || !tabId) {
@@ -1880,6 +1877,7 @@ function MaestroConsoleInner() {
 						timestamp: msg.timestamp,
 						confidence: msg.confidence,
 						ready: msg.ready,
+						images: msg.images,
 					})),
 					previousUIState: tabWizardState.previousUIState ?? {
 						readOnlyMode: false,
@@ -2461,7 +2459,7 @@ function MaestroConsoleInner() {
 
 	// Initialize global hands-on time tracker (persists to settings)
 	// Tracks total time user spends actively using Maestro (5-minute idle timeout)
-	useHandsOnTimeTracker(updateGlobalStats);
+	useHandsOnTimeTracker(addTotalActiveTimeMs);
 
 	// Track elapsed time for active auto-runs and update achievement stats every minute
 	// This allows badges to be unlocked during an auto-run, not just when it completes
@@ -3277,8 +3275,6 @@ function MaestroConsoleInner() {
 			};
 			setSessions((prev) => [...prev, newSession]);
 			setActiveSessionId(newId);
-			// Track session creation in global stats
-			updateGlobalStats({ totalSessions: 1 });
 			// Record session lifecycle for Usage Dashboard
 			window.maestro.stats.recordSessionCreated({
 				sessionId: newId,
@@ -3447,7 +3443,6 @@ function MaestroConsoleInner() {
 			// Add session and make it active
 			setSessions((prev) => [...prev, newSession]);
 			setActiveSessionId(newId);
-			updateGlobalStats({ totalSessions: 1 });
 			// Record session lifecycle for Usage Dashboard
 			window.maestro.stats.recordSessionCreated({
 				sessionId: newId,
@@ -3512,7 +3507,6 @@ function MaestroConsoleInner() {
 			defaultSaveToHistory,
 			setSessions,
 			setActiveSessionId,
-			updateGlobalStats,
 			clearResumeState,
 			completeWizard,
 			setActiveRightTab,
@@ -4788,12 +4782,13 @@ function MaestroConsoleInner() {
 		const wizardState = activeTabLocal?.wizardState;
 		if (!wizardState) return;
 
-		// Convert wizard conversation history to log entries
+		// Convert wizard conversation history to log entries (including images)
 		const wizardLogEntries: LogEntry[] = wizardState.conversationHistory.map((msg) => ({
 			id: `wizard-${msg.id}`,
 			timestamp: msg.timestamp,
 			source: msg.role === 'user' ? 'user' : 'ai',
 			text: msg.content,
+			images: msg.images,
 			delivered: true,
 		}));
 
@@ -5498,7 +5493,7 @@ function MaestroConsoleInner() {
 					onCloseAboutModal={handleCloseAboutModal}
 					autoRunStats={autoRunStats}
 					usageStats={usageStats}
-					handsOnTimeMs={globalStats.totalActiveTimeMs}
+					handsOnTimeMs={totalActiveTimeMs}
 					onOpenLeaderboardRegistration={handleOpenLeaderboardRegistrationFromAbout}
 					isLeaderboardRegistered={isLeaderboardRegistered}
 					updateCheckModalOpen={updateCheckModalOpen}
@@ -6016,7 +6011,6 @@ function MaestroConsoleInner() {
 									});
 
 								// Track stats
-								updateGlobalStats({ totalSessions: 1 });
 								window.maestro.stats.recordSessionCreated({
 									sessionId: newId,
 									agentType: data.agentType,

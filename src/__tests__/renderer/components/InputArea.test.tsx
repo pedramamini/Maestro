@@ -1172,9 +1172,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const items = screen
-				.getAllByText(/ls -la|cd src|main/)
-				.map((el) => el.closest('div[class*="cursor-pointer"]'));
+			const items = screen.getAllByText(/ls -la|cd src|main/).map((el) => el.closest('button'));
 
 			// The second item (index 1) should have the ring class indicating selection
 			expect(items[1]).toHaveClass('ring-1');
@@ -1197,7 +1195,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const secondItem = screen.getByText('cd src').closest('div[class*="cursor-pointer"]');
+			const secondItem = screen.getByText('cd src').closest('button');
 			fireEvent.mouseEnter(secondItem!);
 
 			expect(setSelectedTabCompletionIndex).toHaveBeenCalledWith(1);

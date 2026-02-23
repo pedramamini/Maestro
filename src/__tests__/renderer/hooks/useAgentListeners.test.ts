@@ -181,7 +181,6 @@ function createMockDeps(overrides: Partial<UseAgentListenersDeps> = {}): UseAgen
 		spawnBackgroundSynopsisRef: { current: null },
 		getBatchStateRef: { current: null },
 		pauseBatchOnErrorRef: { current: null },
-		updateGlobalStatsRef: { current: null },
 		rightPanelRef: { current: null },
 		processQueuedItemRef: { current: null },
 		contextWarningYellowThreshold: 80,

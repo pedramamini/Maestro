@@ -199,16 +199,16 @@ const LogItemComponent = memo(
 			let searchIndex = 0;
 
 			while (searchIndex < lowerText.length) {
-				const idx = lowerText.indexOf(lowerQuery, searchIndex);
-				if (idx === -1) break;
+				const matchStart = lowerText.indexOf(lowerQuery, searchIndex);
+				if (matchStart === -1) break;
 
-				if (idx > lastIndex) {
-					parts.push(text.substring(lastIndex, idx));
+				if (matchStart > lastIndex) {
+					parts.push(text.substring(lastIndex, matchStart));
 				}
 
 				parts.push(
 					<span
-						key={`match-${idx}`}
+						key={`match-${matchStart}`}
 						style={{
 							backgroundColor: theme.colors.warning,
 							color: theme.mode === 'light' ? '#fff' : '#000',
@@ -216,11 +216,11 @@ const LogItemComponent = memo(
 							borderRadius: '2px',
 						}}
 					>
-						{text.substring(idx, idx + query.length)}
+						{text.substring(matchStart, matchStart + query.length)}
 					</span>
 				);
 
-				lastIndex = idx + query.length;
+				lastIndex = matchStart + query.length;
 				searchIndex = lastIndex;
 			}
 
@@ -242,15 +242,15 @@ const LogItemComponent = memo(
 			let searchIndex = 0;
 
 			while (searchIndex < lowerText.length) {
-				const idx = lowerText.indexOf(lowerQuery, searchIndex);
-				if (idx === -1) break;
+				const matchStart = lowerText.indexOf(lowerQuery, searchIndex);
+				if (matchStart === -1) break;
 
-				result += text.substring(lastIndex, idx);
+				result += text.substring(lastIndex, matchStart);
 				result += `<mark style="background-color: ${theme.colors.warning}; color: ${theme.mode === 'light' ? '#fff' : '#000'}; padding: 1px 2px; border-radius: 2px;">`;
-				result += text.substring(idx, idx + query.length);
+				result += text.substring(matchStart, matchStart + query.length);
 				result += '</mark>';
 
-				lastIndex = idx + query.length;
+				lastIndex = matchStart + query.length;
 				searchIndex = lastIndex;
 			}
 
@@ -430,13 +430,19 @@ const LogItemComponent = memo(
 							style={{ overscrollBehavior: 'contain' }}
 						>
 							{log.images.map((img, imgIdx) => (
-								<img
-									key={imgIdx}
-									src={img}
-									className="h-20 rounded border cursor-zoom-in shrink-0"
-									style={{ objectFit: 'contain', maxWidth: '200px' }}
+								<button
+									key={`${img}-${imgIdx}`}
+									type="button"
+									className="shrink-0 p-0 bg-transparent outline-none focus:ring-2 focus:ring-accent rounded"
 									onClick={() => setLightboxImage(img, log.images, 'history')}
-								/>
+								>
+									<img
+										src={img}
+										alt={`Terminal output image ${imgIdx + 1}`}
+										className="h-20 rounded border cursor-zoom-in block"
+										style={{ objectFit: 'contain', maxWidth: '200px' }}
+									/>
+								</button>
 							))}
 						</div>
 					)}
@@ -943,7 +949,7 @@ LogItemComponent.displayName = 'LogItemComponent';
 // Separate component for elapsed time to prevent re-renders of the entire list
 const ElapsedTimeDisplay = memo(
 	({ thinkingStartTime, textColor }: { thinkingStartTime: number; textColor: string }) => {
-		const [elapsedSeconds, setElapsedSeconds] = useState(
+		const [elapsedSeconds, setElapsedSeconds] = useState(() =>
 			Math.floor((Date.now() - thinkingStartTime) / 1000)
 		);
 
@@ -1607,6 +1613,8 @@ export const TerminalOutput = memo(
 			<div
 				ref={terminalOutputRef}
 				tabIndex={0}
+				role="region"
+				aria-label="Terminal output"
 				className="terminal-output flex-1 flex flex-col overflow-hidden transition-colors outline-none relative"
 				style={{
 					backgroundColor:
@@ -1688,7 +1696,6 @@ export const TerminalOutput = memo(
 								color: theme.colors.textMain,
 								backgroundColor: theme.colors.bgSidebar,
 							}}
-							autoFocus
 						/>
 					</div>
 				)}
@@ -1821,7 +1828,7 @@ export const TerminalOutput = memo(
 									}
 								}
 							}}
-							className={`absolute bottom-4 ${userMessageAlignment === 'right' ? 'left-6' : 'right-6'} flex items-center gap-2 px-3 py-2 rounded-full shadow-lg transition-all hover:scale-105 z-20`}
+							className={`absolute bottom-4 ${userMessageAlignment === 'right' ? 'left-6' : 'right-6'} flex items-center gap-2 px-3 py-2 rounded-full shadow-lg transition-all hover:scale-105 z-20 outline-none`}
 							style={{
 								backgroundColor: isAutoScrollActive
 									? theme.colors.accent

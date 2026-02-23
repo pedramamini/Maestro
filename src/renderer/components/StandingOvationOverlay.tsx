@@ -333,13 +333,14 @@ export function StandingOvationOverlay({
 	const copyToClipboard = useCallback(async () => {
 		try {
 			const canvas = await generateShareImage();
-			canvas.toBlob(async (blob) => {
-				if (blob) {
-					await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
-					setCopySuccess(true);
-					setTimeout(() => setCopySuccess(false), 2000);
-				}
-			}, 'image/png');
+			const blob = await new Promise<Blob | null>((resolve) => {
+				canvas.toBlob((b) => resolve(b), 'image/png');
+			});
+			if (blob) {
+				await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+				setCopySuccess(true);
+				setTimeout(() => setCopySuccess(false), 2000);
+			}
 		} catch (error) {
 			console.error('Failed to copy to clipboard:', error);
 		}
@@ -592,9 +593,9 @@ export function StandingOvationOverlay({
 									}}
 								>
 									<button
-										onClick={() => {
-											copyToClipboard();
-											setShareMenuOpen(false);
+										onClick={async () => {
+											await copyToClipboard();
+											setTimeout(() => setShareMenuOpen(false), 1000);
 										}}
 										className="w-full flex items-center gap-3 px-3 py-2 rounded hover:bg-white/10 transition-colors"
 									>

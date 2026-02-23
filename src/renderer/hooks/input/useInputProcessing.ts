@@ -66,7 +66,7 @@ export interface UseInputProcessingDeps {
 	/** Handler for the /wizard built-in command (starts the inline wizard for Auto Run documents) */
 	onWizardCommand?: (args: string) => void;
 	/** Handler for sending messages to the wizard (when wizard is active) */
-	onWizardSendMessage?: (content: string) => Promise<void>;
+	onWizardSendMessage?: (content: string, images?: string[]) => Promise<void>;
 	/** Whether the wizard is currently active for the active tab */
 	isWizardActive?: boolean;
 	/** Handler for the /skills built-in command (lists Claude Code skills) */
@@ -350,14 +350,17 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					return;
 				}
 
+				// Capture staged images before clearing
+				const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
+
 				// Clear input
 				setInputValue('');
 				setStagedImages([]);
 				syncAiInputToSession('');
 				if (inputRef.current) inputRef.current.style.height = 'auto';
 
-				// Send to wizard
-				onWizardSendMessage(effectiveInputValue).catch((error) => {
+				// Send to wizard (with images if any were staged)
+				onWizardSendMessage(effectiveInputValue, imagesToSend).catch((error) => {
 					console.error('[processInput] Wizard message failed:', error);
 				});
 				return;
@@ -982,7 +985,8 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						}
 
 						const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
-							isSshSession: !!freshSession.sshRemoteId || !!freshSession.sessionSshRemoteConfig?.enabled,
+							isSshSession:
+								!!freshSession.sshRemoteId || !!freshSession.sessionSshRemoteConfig?.enabled,
 							supportsStreamJsonInput: agent.capabilities?.supportsStreamJsonInput ?? false,
 						});
 

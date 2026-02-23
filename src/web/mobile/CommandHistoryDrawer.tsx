@@ -146,7 +146,8 @@ function SwipeableHistoryItem({
 		>
 			{/* Delete action button (revealed on swipe left) */}
 			{onDelete && (
-				<div
+				<button
+					type="button"
 					style={{
 						position: 'absolute',
 						top: 0,
@@ -160,6 +161,7 @@ function SwipeableHistoryItem({
 						cursor: 'pointer',
 						opacity: showDeleteAction || offsetX < -20 ? 1 : 0,
 						transition: 'opacity 0.15s ease',
+						border: 'none',
 					}}
 					onClick={handleDeleteTap}
 					aria-label="Delete command"
@@ -177,11 +179,12 @@ function SwipeableHistoryItem({
 						<polyline points="3 6 5 6 21 6" />
 						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2" />
 					</svg>
-				</div>
+				</button>
 			)}
 
 			{/* Swipeable item content */}
-			<div
+			<button
+				type="button"
 				{...swipeHandlers}
 				onClick={handleTap}
 				onTouchStart={(e) => {
@@ -206,8 +209,10 @@ function SwipeableHistoryItem({
 					transition: isSwiping ? 'none' : 'transform 0.3s ease, background-color 0.15s ease',
 					transform: `translateX(${translateX}px)`,
 					WebkitTapHighlightColor: 'transparent',
+					border: 'none',
 					borderBottom: `1px solid ${colors.border}`,
 					touchAction: 'pan-y',
+					width: '100%',
 				}}
 			>
 				{/* Mode indicator icon */}
@@ -293,7 +298,7 @@ function SwipeableHistoryItem({
 						‹
 					</div>
 				)}
-			</div>
+			</button>
 		</div>
 	);
 }
@@ -337,10 +342,10 @@ export function CommandHistoryDrawer({
 		return () => window.removeEventListener('resize', handleResize);
 	}, []);
 
-	// Reset drag offset when drawer opens/closes
-	useEffect(() => {
+	const closeDrawer = useCallback(() => {
 		setDragOffset(0);
-	}, [isOpen]);
+		onClose();
+	}, [onClose]);
 
 	/**
 	 * Handle touch start on drawer handle
@@ -386,18 +391,18 @@ export function CommandHistoryDrawer({
 			// Check for flick gesture
 			if (velocity > FLICK_VELOCITY_THRESHOLD) {
 				// Fast flick down - close
-				onClose();
+				closeDrawer();
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 			} else if (dragOffset > maxDrawerHeight * SNAP_THRESHOLD) {
 				// Dragged past threshold - close
-				onClose();
+				closeDrawer();
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 			}
 
 			// Reset drag offset with animation
 			setDragOffset(0);
 		},
-		[dragOffset, maxDrawerHeight, onClose]
+		[closeDrawer, dragOffset, maxDrawerHeight]
 	);
 
 	/**
@@ -407,9 +412,9 @@ export function CommandHistoryDrawer({
 		(command: string) => {
 			triggerHaptic(HAPTIC_PATTERNS.tap);
 			onSelectCommand(command);
-			onClose();
+			closeDrawer();
 		},
-		[onSelectCommand, onClose]
+		[closeDrawer, onSelectCommand]
 	);
 
 	/**
@@ -450,16 +455,16 @@ export function CommandHistoryDrawer({
 	const handleClearAll = useCallback(() => {
 		triggerHaptic(HAPTIC_PATTERNS.interrupt);
 		onClearHistory?.();
-		onClose();
-	}, [onClearHistory, onClose]);
+		closeDrawer();
+	}, [closeDrawer, onClearHistory]);
 
 	/**
 	 * Handle backdrop tap to close
 	 */
 	const handleBackdropTap = useCallback(() => {
-		onClose();
+		closeDrawer();
 		setLongPressId(null);
-	}, [onClose]);
+	}, [closeDrawer]);
 
 	// Calculate current drawer height
 	const currentHeight = isOpen
@@ -474,7 +479,9 @@ export function CommandHistoryDrawer({
 	return (
 		<>
 			{/* Backdrop overlay */}
-			<div
+			<button
+				type="button"
+				tabIndex={-1}
 				onClick={handleBackdropTap}
 				style={{
 					position: 'fixed',
@@ -487,7 +494,10 @@ export function CommandHistoryDrawer({
 					transition: isDragging.current ? 'none' : 'opacity 0.3s ease',
 					zIndex: 199,
 					pointerEvents: isOpen ? 'auto' : 'none',
+					border: 'none',
+					padding: 0,
 				}}
+				aria-label="Close command history drawer"
 			/>
 
 			{/* Drawer container */}
