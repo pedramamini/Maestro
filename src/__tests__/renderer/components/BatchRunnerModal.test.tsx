@@ -2439,7 +2439,7 @@ describe('Worktree Loading State', () => {
 		});
 
 		// Enable worktree toggle (should be visible since session has worktreeConfig)
-		const toggleButton = screen.getByText('Run in Worktree');
+		const toggleButton = screen.getByText('Dispatch to a separate worktree');
 		fireEvent.click(toggleButton);
 
 		// The select should now be visible with "Create New Worktree" as default

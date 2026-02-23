@@ -10,7 +10,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act } from '@testing-library/react';
+import { render, screen, fireEvent, act, within } from '@testing-library/react';
 import { GitStatusWidget } from '../../../renderer/components/GitStatusWidget';
 import type { Theme } from '../../../renderer/types';
 import type { GitStatusData, GitFileChange } from '../../../renderer/contexts/GitStatusContext';
@@ -228,8 +228,10 @@ describe('GitStatusWidget', () => {
 				})
 			);
 			render(<GitStatusWidget {...defaultProps} />);
-			// Component displays modifiedCount with FileEdit icon
-			expect(screen.getByText('2')).toBeInTheDocument();
+			// Component displays modifiedCount in full mode (orange text) and fileCount in compact mode
+			// When values match, multiple elements exist — scope to the full-mode span
+			const fullMode = document.querySelector('.header-git-status-full')!;
+			expect(within(fullMode).getByText('2')).toBeInTheDocument();
 		});
 
 		it('should calculate totals from multiple files', () => {
@@ -260,7 +262,9 @@ describe('GitStatusWidget', () => {
 				})
 			);
 			render(<GitStatusWidget {...defaultProps} />);
-			expect(screen.getByText('1')).toBeInTheDocument();
+			// fileCount (compact) and modifiedCount (full) are both 1 — scope to compact span
+			const compact = document.querySelector('.header-git-status-compact')!;
+			expect(within(compact).getByText('1')).toBeInTheDocument();
 		});
 
 		it('should handle untracked files (?)', () => {
@@ -721,10 +725,11 @@ describe('GitStatusWidget', () => {
 				})
 			);
 			render(<GitStatusWidget {...defaultProps} />);
-			// Check that additions/deletions/modifiedCount are displayed
-			expect(screen.getByText('190')).toBeInTheDocument();
-			expect(screen.getByText('27')).toBeInTheDocument();
-			expect(screen.getByText('20')).toBeInTheDocument();
+			// fileCount (compact) and modifiedCount (full) are both 20 — scope queries
+			const fullMode = document.querySelector('.header-git-status-full')!;
+			expect(within(fullMode).getByText('190')).toBeInTheDocument();
+			expect(within(fullMode).getByText('27')).toBeInTheDocument();
+			expect(within(fullMode).getByText('20')).toBeInTheDocument();
 		});
 
 		it('should handle very large numbers', () => {
