@@ -633,8 +633,8 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 						onRefreshDocuments={onRefreshDocuments}
 					/>
 
-					{/* Run in Worktree Section */}
-					{activeSession && (
+					{/* Run in Worktree Section — hidden for non-git repos since worktrees require git */}
+					{activeSession?.isGitRepo && (
 						<WorktreeRunSection
 							theme={theme}
 							activeSession={activeSession}
