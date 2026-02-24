@@ -87,6 +87,38 @@ export function detectLanguageFromPath(filePath: string): string | undefined {
 	return EXTENSION_LANGUAGE_MAP.get(ext);
 }
 
+/** Tool names that represent file write operations across supported agents */
+export const WRITE_TOOL_NAMES = new Set<string>([
+	'Write',
+	'Edit',
+	'write_to_file',
+	'str_replace_based_edit_tool',
+	'create_file',
+	'write',
+	'patch',
+	'NotebookEdit',
+]);
+
+/**
+ * Extract a file path from a tool-execution event if the tool is a write operation.
+ * Returns null if the tool is not a write operation or no file path is found.
+ */
+export function extractFilePathFromToolExecution(toolExecution: {
+	toolName: string;
+	state: unknown;
+	timestamp: number;
+}): string | null {
+	if (!WRITE_TOOL_NAMES.has(toolExecution.toolName)) return null;
+
+	const input = (toolExecution.state as any)?.input;
+	if (!input || typeof input !== 'object') return null;
+
+	const filePath = input.file_path ?? input.path;
+	if (typeof filePath === 'string' && filePath.length > 0) return filePath;
+
+	return null;
+}
+
 /** Map Node.js platform to WakaTime release naming */
 function getWakaTimePlatform(): string | null {
 	switch (process.platform) {

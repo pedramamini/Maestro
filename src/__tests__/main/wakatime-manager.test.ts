@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WakaTimeManager, detectLanguageFromPath } from '../../main/wakatime-manager';
+import { WakaTimeManager, detectLanguageFromPath, WRITE_TOOL_NAMES, extractFilePathFromToolExecution } from '../../main/wakatime-manager';
 
 // Mock electron
 vi.mock('electron', () => ({
@@ -671,6 +671,128 @@ describe('WakaTimeManager', () => {
 
 			// detectCli (1, cached) + first heartbeat (1) + second heartbeat (1) = 3
 			expect(execFileNoThrow).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe('WRITE_TOOL_NAMES', () => {
+		it('should contain all expected write tool names', () => {
+			const expected = [
+				'Write', 'Edit', 'write_to_file', 'str_replace_based_edit_tool',
+				'create_file', 'write', 'patch', 'NotebookEdit',
+			];
+			for (const name of expected) {
+				expect(WRITE_TOOL_NAMES.has(name)).toBe(true);
+			}
+			expect(WRITE_TOOL_NAMES.size).toBe(expected.length);
+		});
+
+		it('should not contain non-write tool names', () => {
+			expect(WRITE_TOOL_NAMES.has('Read')).toBe(false);
+			expect(WRITE_TOOL_NAMES.has('search')).toBe(false);
+			expect(WRITE_TOOL_NAMES.has('Bash')).toBe(false);
+		});
+	});
+
+	describe('extractFilePathFromToolExecution', () => {
+		it('should extract file_path from a Write tool execution', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Write',
+				state: { input: { file_path: '/project/src/index.ts' } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBe('/project/src/index.ts');
+		});
+
+		it('should extract path from a Codex write_to_file tool execution', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'write_to_file',
+				state: { input: { path: '/project/src/main.py' } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBe('/project/src/main.py');
+		});
+
+		it('should prefer file_path over path when both are present', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Edit',
+				state: { input: { file_path: '/preferred.ts', path: '/fallback.ts' } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBe('/preferred.ts');
+		});
+
+		it('should return null for non-write tool names', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Read',
+				state: { input: { file_path: '/project/src/index.ts' } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
+		});
+
+		it('should return null when state has no input', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Write',
+				state: { status: 'completed' },
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
+		});
+
+		it('should return null when state is null', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Write',
+				state: null,
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
+		});
+
+		it('should return null when input has no file path fields', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Edit',
+				state: { input: { content: 'some code' } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
+		});
+
+		it('should return null when file_path is empty string', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Write',
+				state: { input: { file_path: '' } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
+		});
+
+		it('should return null when path value is not a string', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Write',
+				state: { input: { file_path: 123 } },
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
+		});
+
+		it('should work for all write tool names', () => {
+			for (const toolName of WRITE_TOOL_NAMES) {
+				const result = extractFilePathFromToolExecution({
+					toolName,
+					state: { input: { file_path: `/project/${toolName}.ts` } },
+					timestamp: Date.now(),
+				});
+				expect(result).toBe(`/project/${toolName}.ts`);
+			}
+		});
+
+		it('should handle input being a non-object value', () => {
+			const result = extractFilePathFromToolExecution({
+				toolName: 'Write',
+				state: { input: 'not an object' },
+				timestamp: Date.now(),
+			});
+			expect(result).toBeNull();
 		});
 	});
 
