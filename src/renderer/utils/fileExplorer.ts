@@ -189,13 +189,19 @@ interface LoadingState {
  * @param currentDepth - Current recursion depth (internal use)
  * @param sshContext - Optional SSH context for remote file operations
  * @param onProgress - Optional callback for progress updates (useful for SSH)
+ * @param localIgnorePatterns - Optional glob patterns to ignore for local (non-SSH) scans.
+ *   When provided, replaces the hardcoded defaults. Comes from the localIgnorePatterns setting.
+ * @param localHonorGitignore - Whether to parse and honor local .gitignore files (default: false).
+ *   When true, patterns from the root .gitignore are merged with localIgnorePatterns.
  */
 export async function loadFileTree(
 	dirPath: string,
 	maxDepth = 10,
 	currentDepth = 0,
 	sshContext?: SshContext,
-	onProgress?: FileTreeProgressCallback
+	onProgress?: FileTreeProgressCallback,
+	localIgnorePatterns?: string[],
+	localHonorGitignore?: boolean
 ): Promise<FileTreeNode[]> {
 	const isRemote = Boolean(sshContext?.sshRemoteId);
 
@@ -219,8 +225,18 @@ export async function loadFileTree(
 			}
 		}
 	} else {
-		// For local: use default hardcoded patterns (backward compatible)
-		ignorePatterns = ['node_modules', '__pycache__'];
+		// For local: use configurable patterns from settings, falling back to hardcoded defaults
+		ignorePatterns = localIgnorePatterns ?? ['node_modules', '__pycache__'];
+
+		// If honor gitignore is enabled, try to parse the local .gitignore
+		if (localHonorGitignore) {
+			try {
+				const gitignorePatterns = await fetchLocalGitignorePatterns(dirPath);
+				ignorePatterns = [...ignorePatterns, ...gitignorePatterns];
+			} catch {
+				// Silently ignore - .gitignore may not exist or be readable
+			}
+		}
 	}
 
 	// Initialize loading state at the top level
@@ -280,6 +296,52 @@ async function fetchRemoteGitignorePatterns(
 			}
 
 			// Only add non-empty patterns
+			if (pattern) {
+				patterns.push(pattern);
+			}
+		}
+
+		return patterns;
+	} catch {
+		return [];
+	}
+}
+
+/**
+ * Fetch and parse .gitignore patterns from a local directory.
+ * Reuses the same parsing logic as the remote variant but reads via local fs.
+ * @param dirPath - The local directory path
+ * @returns Array of gitignore patterns (simplified name-based matching)
+ */
+async function fetchLocalGitignorePatterns(dirPath: string): Promise<string[]> {
+	try {
+		const gitignorePath = `${dirPath}/.gitignore`;
+		const content = await window.maestro.fs.readFile(gitignorePath);
+
+		if (!content) {
+			return [];
+		}
+
+		const patterns: string[] = [];
+		const lines = content.split('\n');
+
+		for (const line of lines) {
+			const trimmed = line.trim();
+
+			if (!trimmed || trimmed.startsWith('#')) {
+				continue;
+			}
+
+			if (trimmed.startsWith('!')) {
+				continue;
+			}
+
+			let pattern = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
+
+			if (pattern.endsWith('/')) {
+				pattern = pattern.slice(0, -1);
+			}
+
 			if (pattern) {
 				patterns.push(pattern);
 			}

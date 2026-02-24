@@ -100,6 +100,10 @@ export interface UseFileTreeManagementDeps {
 	sshRemoteIgnorePatterns?: string[];
 	/** Whether to honor .gitignore files on remote hosts */
 	sshRemoteHonorGitignore?: boolean;
+	/** Local file indexing ignore patterns (glob patterns) */
+	localIgnorePatterns?: string[];
+	/** Whether to honor local .gitignore files */
+	localHonorGitignore?: boolean;
 }
 
 /**
@@ -138,6 +142,8 @@ export function useFileTreeManagement(
 		rightPanelRef,
 		sshRemoteIgnorePatterns,
 		sshRemoteHonorGitignore,
+		localIgnorePatterns,
+		localHonorGitignore,
 	} = deps;
 
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
@@ -173,7 +179,7 @@ export function useFileTreeManagement(
 				// Fetch tree and stats in parallel
 				// Pass SSH context for remote file operations
 				const [newTree, stats] = await Promise.all([
-					loadFileTree(treeRoot, 10, 0, sshContext),
+					loadFileTree(treeRoot, 10, 0, sshContext, undefined, localIgnorePatterns, localHonorGitignore),
 					window.maestro.fs.directorySize(treeRoot, sshContext?.sshRemoteId),
 				]);
 				const oldTree = session.fileTree || [];
@@ -218,7 +224,7 @@ export function useFileTreeManagement(
 				return undefined;
 			}
 		},
-		[sessionsRef, setSessions, sshContextOptions]
+		[sessionsRef, setSessions, sshContextOptions, localIgnorePatterns, localHonorGitignore]
 	);
 
 	/**
@@ -244,7 +250,7 @@ export function useFileTreeManagement(
 				// Refresh file tree, stats, git repo status, branches, and tags in parallel
 				// Pass SSH context for remote file operations
 				const [tree, stats, isGitRepo] = await Promise.all([
-					loadFileTree(treeRoot, 10, 0, sshContext),
+					loadFileTree(treeRoot, 10, 0, sshContext, undefined, localIgnorePatterns, localHonorGitignore),
 					window.maestro.fs.directorySize(treeRoot, sshContext?.sshRemoteId),
 					gitService.isRepo(gitRoot, sshContext?.sshRemoteId),
 				]);
@@ -305,7 +311,7 @@ export function useFileTreeManagement(
 				);
 			}
 		},
-		[sessions, setSessions, rightPanelRef, sshContextOptions]
+		[sessions, setSessions, rightPanelRef, sshContextOptions, localIgnorePatterns, localHonorGitignore]
 	);
 
 	// Ref to track pending retry timers per session
@@ -386,8 +392,8 @@ export function useFileTreeManagement(
 
 			// Load tree with progress callback for SSH sessions
 			const treePromise = sshContext
-				? loadFileTree(treeRoot, 10, 0, sshContext, onProgress)
-				: loadFileTree(treeRoot, 10, 0, sshContext);
+				? loadFileTree(treeRoot, 10, 0, sshContext, onProgress, localIgnorePatterns, localHonorGitignore)
+				: loadFileTree(treeRoot, 10, 0, sshContext, undefined, localIgnorePatterns, localHonorGitignore);
 
 			Promise.all([treePromise, window.maestro.fs.directorySize(treeRoot, sshContext?.sshRemoteId)])
 				.then(([tree, stats]) => {
@@ -433,7 +439,7 @@ export function useFileTreeManagement(
 					);
 				});
 		}
-	}, [activeSessionId, sessions, setSessions, sshContextOptions]);
+	}, [activeSessionId, sessions, setSessions, sshContextOptions, localIgnorePatterns, localHonorGitignore]);
 
 	// Cleanup retry timers on unmount
 	useEffect(() => {
