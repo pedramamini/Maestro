@@ -1911,12 +1911,14 @@ export const FilePreview = React.memo(
 							</button>
 						</div>
 						</div>
+						{showStatsBar && directoryPath && (
 						<div
 							className="text-xs opacity-50 truncate mt-1"
 							style={{ color: theme.colors.textDim }}
 						>
 							{directoryPath}
 						</div>
+						)}
 					</div>
 					{/* File Stats subbar - hidden on scroll */}
 					{((fileStats || tokenCount !== null || taskCounts) && showStatsBar) ||
