@@ -1097,7 +1097,7 @@ const FileTab = memo(function FileTab({
 	const handleOpenInDefaultApp = useCallback(
 		(e: React.MouseEvent) => {
 			e.stopPropagation();
-			window.maestro?.shell?.openExternal(`file://${tab.path}`);
+			window.maestro?.shell?.openPath(tab.path);
 			setOverlayOpen(false);
 		},
 		[tab.path]

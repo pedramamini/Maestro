@@ -118,7 +118,7 @@ beforeEach(() => {
 	// Setup window.maestro
 	(window as any).maestro = {
 		...(window as any).maestro,
-		shell: { openExternal: vi.fn() },
+		shell: { openExternal: vi.fn(), openPath: vi.fn() },
 		fs: {
 			readFile: vi.fn().mockResolvedValue('file content'),
 			stat: vi.fn().mockResolvedValue({ modifiedAt: '2024-01-01T00:00:00Z' }),
@@ -285,8 +285,8 @@ describe('useFileExplorerEffects', () => {
 				await result.current.handleMainPanelFileClick('docs/manual.pdf');
 			});
 
-			expect(window.maestro.shell.openExternal).toHaveBeenCalledWith(
-				'file:///test/project/docs/manual.pdf'
+			expect(window.maestro.shell.openPath).toHaveBeenCalledWith(
+				'/test/project/docs/manual.pdf'
 			);
 			expect(handleOpenFileTab).not.toHaveBeenCalled();
 		});

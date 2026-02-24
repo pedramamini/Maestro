@@ -885,7 +885,11 @@ export const FilePreview = React.memo(
 										targetElement.scrollIntoView({ behavior: 'smooth', block: 'start' });
 									}
 								} else if (href) {
-									window.maestro.shell.openExternal(href);
+									if (/^file:\/\//.test(href)) {
+										window.maestro.shell.openPath(href.replace(/^file:\/\//, ''));
+									} else {
+										window.maestro.shell.openExternal(href);
+									}
 								}
 							}}
 							style={{ color: theme.colors.accent, textDecoration: 'underline', cursor: 'pointer' }}
@@ -1890,7 +1894,7 @@ export const FilePreview = React.memo(
 							)}
 							{!sshRemoteId && (
 								<button
-									onClick={() => window.maestro?.shell?.openExternal(`file://${file.path}`)}
+									onClick={() => window.maestro?.shell?.openPath(file.path)}
 									className="p-2 rounded hover:bg-white/10 transition-colors"
 									style={{ color: theme.colors.textDim }}
 									title="Open in Default App"
@@ -2208,7 +2212,7 @@ export const FilePreview = React.memo(
 									This file cannot be displayed as text.
 								</p>
 								<button
-									onClick={() => window.maestro.shell.openExternal(`file://${file.path}`)}
+									onClick={() => window.maestro.shell.openPath(file.path)}
 									className="mt-4 px-4 py-2 rounded text-sm hover:opacity-80 transition-opacity"
 									style={{
 										backgroundColor: theme.colors.accent,

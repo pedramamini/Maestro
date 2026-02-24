@@ -2993,14 +2993,14 @@ describe('FileTab overlay menu', () => {
 		vi.useRealTimers();
 	});
 
-	it('calls openExternal when clicking Open in Default App', async () => {
+	it('calls openPath when clicking Open in Default App', async () => {
 		vi.useFakeTimers();
-		const mockOpenExternal = vi.fn().mockResolvedValue(undefined);
+		const mockOpenPath = vi.fn().mockResolvedValue(undefined);
 		window.maestro = {
 			...window.maestro,
 			shell: {
 				...window.maestro.shell,
-				openExternal: mockOpenExternal,
+				openPath: mockOpenPath,
 			},
 		} as typeof window.maestro;
 
@@ -3031,7 +3031,7 @@ describe('FileTab overlay menu', () => {
 			fireEvent.click(openButton);
 		});
 
-		expect(mockOpenExternal).toHaveBeenCalledWith('file:///path/to/document.md');
+		expect(mockOpenPath).toHaveBeenCalledWith('/path/to/document.md');
 
 		vi.useRealTimers();
 	});

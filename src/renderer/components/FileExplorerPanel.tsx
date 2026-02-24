@@ -614,7 +614,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 	const handleOpenInDefaultApp = useCallback(() => {
 		if (contextMenu) {
 			const absolutePath = `${session.fullPath}/${contextMenu.path}`;
-			window.maestro?.shell?.openExternal(`file://${absolutePath}`);
+			window.maestro?.shell?.openPath(absolutePath);
 		}
 		setContextMenu(null);
 	}, [contextMenu, session.fullPath]);
@@ -622,10 +622,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 	const handleOpenInExplorer = useCallback(() => {
 		if (contextMenu) {
 			const absolutePath = `${session.fullPath}/${contextMenu.path}`;
-			// Extract the directory path to reveal in file manager
-			const isFolder = contextMenu.node.type === 'folder';
-			const pathToOpen = isFolder ? absolutePath : absolutePath.split('/').slice(0, -1).join('/');
-			window.maestro?.shell?.openExternal(`file://${pathToOpen}`);
+			window.maestro?.shell?.showItemInFolder(absolutePath);
 		}
 		setContextMenu(null);
 	}, [contextMenu, session.fullPath]);
