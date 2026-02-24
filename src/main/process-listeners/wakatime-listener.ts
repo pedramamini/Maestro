@@ -7,13 +7,17 @@
  * The `thinking-chunk` event fires while the AI is actively reasoning (extended thinking).
  * Together these ensure heartbeats cover the full duration of AI activity.
  * The `query-complete` event fires only for batch/auto-run processes.
+ *
+ * When detailed tracking is enabled, `tool-execution` events accumulate file paths
+ * from write operations, which are flushed as file-level heartbeats on `query-complete`.
  */
 
 import path from 'path';
 import type Store from 'electron-store';
 import type { ProcessManager } from '../process-manager';
-import type { QueryCompleteData } from '../process-manager/types';
+import type { QueryCompleteData, ToolExecution } from '../process-manager/types';
 import type { WakaTimeManager } from '../wakatime-manager';
+import { extractFilePathFromToolExecution } from '../wakatime-manager';
 import type { MaestroSettings } from '../stores/types';
 
 /** Helper to send a heartbeat for a managed process */
@@ -46,6 +50,16 @@ export function setupWakaTimeListener(
 		enabled = !!v;
 	});
 
+	// Cache detailed tracking state for file-level heartbeats
+	let detailedEnabled = settingsStore.get('wakatimeDetailedTracking', false) as boolean;
+	settingsStore.onDidChange('wakatimeDetailedTracking', (val: unknown) => {
+		detailedEnabled = val as boolean;
+	});
+
+	// Per-session accumulator for file paths from tool-execution events.
+	// Outer key: sessionId, inner key: filePath (deduplicates, keeping latest timestamp).
+	const pendingFiles = new Map<string, Map<string, { filePath: string; timestamp: number }>>();
+
 	// Send heartbeat on any AI output (covers interactive sessions)
 	// The 2-minute debounce in WakaTimeManager prevents flooding
 	processManager.on('data', (sessionId: string) => {
@@ -60,6 +74,21 @@ export function setupWakaTimeListener(
 		heartbeatForSession(processManager, wakaTimeManager, sessionId);
 	});
 
+	// Collect file paths from write-tool executions for file-level heartbeats
+	processManager.on('tool-execution', (sessionId: string, toolExecution: ToolExecution) => {
+		if (!enabled || !detailedEnabled) return;
+
+		const filePath = extractFilePathFromToolExecution(toolExecution);
+		if (!filePath) return;
+
+		let sessionFiles = pendingFiles.get(sessionId);
+		if (!sessionFiles) {
+			sessionFiles = new Map();
+			pendingFiles.set(sessionId, sessionFiles);
+		}
+		sessionFiles.set(filePath, { filePath, timestamp: toolExecution.timestamp });
+	});
+
 	// Also send heartbeat on query-complete for batch/auto-run processes
 	processManager.on('query-complete', (_sessionId: string, queryData: QueryCompleteData) => {
 		if (!enabled) return;
@@ -67,10 +96,26 @@ export function setupWakaTimeListener(
 			? path.basename(queryData.projectPath)
 			: queryData.sessionId;
 		void wakaTimeManager.sendHeartbeat(queryData.sessionId, projectName, queryData.projectPath);
+
+		// Flush accumulated file heartbeats
+		if (!detailedEnabled) return;
+		const sessionFiles = pendingFiles.get(queryData.sessionId);
+		if (!sessionFiles || sessionFiles.size === 0) return;
+
+		const filesArray = Array.from(sessionFiles.values()).map((f) => ({
+			filePath: path.isAbsolute(f.filePath)
+				? f.filePath
+				: path.resolve(queryData.projectPath || '', f.filePath),
+			timestamp: f.timestamp,
+		}));
+
+		void wakaTimeManager.sendFileHeartbeats(filesArray, projectName, queryData.projectPath);
+		pendingFiles.delete(queryData.sessionId);
 	});
 
-	// Clean up debounce tracking when a process exits
+	// Clean up debounce tracking and pending file data when a process exits
 	processManager.on('exit', (sessionId: string) => {
 		wakaTimeManager.removeSession(sessionId);
+		pendingFiles.delete(sessionId);
 	});
 }
