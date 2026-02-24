@@ -235,10 +235,13 @@ function fetchJson(url: string, maxRedirects = 5): Promise<unknown> {
 	});
 }
 
+/** How long a successfully-detected branch is cached before re-checking (5 min). */
+const BRANCH_CACHE_TTL_MS = 5 * 60 * 1000;
+
 export class WakaTimeManager {
 	private settingsStore: Store<MaestroSettings>;
 	private lastHeartbeatPerSession: Map<string, number> = new Map();
-	private branchCache: Map<string, string> = new Map();
+	private branchCache: Map<string, { branch: string; timestamp: number }> = new Map();
 	private languageCache: Map<string, string> = new Map();
 	private cliPath: string | null = null;
 	private cliDetected = false;
@@ -514,15 +517,23 @@ export class WakaTimeManager {
 
 	/**
 	 * Detect the current git branch for a project directory.
-	 * Result is cached per session to avoid running git on every heartbeat.
+	 * Successful results are cached per session with a TTL so branch switches
+	 * are picked up. Failures are never cached — the next heartbeat retries.
 	 */
 	private async detectBranch(sessionId: string, cwd: string): Promise<string | null> {
 		const cached = this.branchCache.get(sessionId);
-		if (cached !== undefined) return cached || null;
+		if (cached && cached.branch && Date.now() - cached.timestamp < BRANCH_CACHE_TTL_MS) {
+			return cached.branch;
+		}
 
 		const result = await execFileNoThrow('git', ['rev-parse', '--abbrev-ref', 'HEAD'], cwd);
 		const branch = result.exitCode === 0 ? result.stdout.trim() : '';
-		this.branchCache.set(sessionId, branch);
+		if (branch) {
+			this.branchCache.set(sessionId, { branch, timestamp: Date.now() });
+		} else {
+			// Don't cache failures — retry on next heartbeat
+			this.branchCache.delete(sessionId);
+		}
 		return branch || null;
 	}
 
@@ -617,7 +628,7 @@ export class WakaTimeManager {
 		if (!(await this.ensureCliInstalled())) return;
 
 		const branch = projectCwd
-			? await this.detectBranch('file-heartbeat', projectCwd)
+			? await this.detectBranch(`file:${projectCwd}`, projectCwd)
 			: null;
 
 		const primary = files[0];
