@@ -2204,7 +2204,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Detailed file tracking toggle (only shown when enabled) */}
 									{wakatimeEnabled && (
-										<div className="flex items-center justify-between pl-4">
+										<div className="flex items-center justify-between">
 											<div>
 												<p
 													className="text-sm"
@@ -2213,7 +2213,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 													Detailed file tracking
 												</p>
 												<p className="text-xs opacity-50 mt-0.5">
-													Send file paths for write operations to WakaTime for per-file time tracking. File paths (not content) are sent to WakaTime servers.
+													Track per-file write activity. Sends file paths (not content) to WakaTime.
 												</p>
 											</div>
 											<button
