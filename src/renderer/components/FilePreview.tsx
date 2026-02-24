@@ -990,8 +990,9 @@ export const FilePreview = React.memo(
 		const directoryPath = file ? file.path.substring(0, file.path.lastIndexOf('/')) : '';
 
 		// Icon-only buttons size up when path isn't consuming vertical space
-		const headerIconClass = directoryPath ? 'w-4 h-4' : 'w-5 h-5';
-		const headerBtnClass = directoryPath
+		const showPath = showStatsBar && !!directoryPath;
+		const headerIconClass = showPath ? 'w-4 h-4' : 'w-5 h-5';
+		const headerBtnClass = showPath
 			? 'p-2 rounded hover:bg-white/10 transition-colors'
 			: 'p-2.5 rounded hover:bg-white/10 transition-colors';
 
@@ -1911,7 +1912,7 @@ export const FilePreview = React.memo(
 							</button>
 						</div>
 						</div>
-						{showStatsBar && directoryPath && (
+						{showPath && (
 						<div
 							className="text-xs opacity-50 truncate mt-1"
 							style={{ color: theme.colors.textDim }}
