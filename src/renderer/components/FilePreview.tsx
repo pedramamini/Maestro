@@ -1906,7 +1906,7 @@ export const FilePreview = React.memo(
 						</div>
 						</div>
 						<div
-							className="text-xs opacity-50 truncate mt-1 pl-8"
+							className="text-xs opacity-50 truncate mt-1"
 							style={{ color: theme.colors.textDim }}
 						>
 							{directoryPath}
