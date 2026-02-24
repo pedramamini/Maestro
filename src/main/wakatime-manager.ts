@@ -24,6 +24,69 @@ const LOG_CONTEXT = '[WakaTime]';
 const HEARTBEAT_DEBOUNCE_MS = 120_000; // 2 minutes - WakaTime deduplicates within this window
 const UPDATE_CHECK_INTERVAL_MS = 24 * 60 * 60 * 1000; // Check for CLI updates once per day
 
+/** Map file extensions (without dot, lowercase) to WakaTime language names */
+const EXTENSION_LANGUAGE_MAP = new Map<string, string>([
+	['ts', 'TypeScript'],
+	['tsx', 'TypeScript'],
+	['js', 'JavaScript'],
+	['jsx', 'JavaScript'],
+	['mjs', 'JavaScript'],
+	['cjs', 'JavaScript'],
+	['py', 'Python'],
+	['rb', 'Ruby'],
+	['rs', 'Rust'],
+	['go', 'Go'],
+	['java', 'Java'],
+	['kt', 'Kotlin'],
+	['swift', 'Swift'],
+	['c', 'C'],
+	['cpp', 'C++'],
+	['h', 'C'],
+	['hpp', 'C++'],
+	['cs', 'C#'],
+	['php', 'PHP'],
+	['ex', 'Elixir'],
+	['exs', 'Elixir'],
+	['dart', 'Dart'],
+	['json', 'JSON'],
+	['yaml', 'YAML'],
+	['yml', 'YAML'],
+	['toml', 'TOML'],
+	['md', 'Markdown'],
+	['html', 'HTML'],
+	['css', 'CSS'],
+	['scss', 'SCSS'],
+	['less', 'LESS'],
+	['sql', 'SQL'],
+	['sh', 'Shell Script'],
+	['bash', 'Shell Script'],
+	['zsh', 'Shell Script'],
+	['vue', 'Vue.js'],
+	['svelte', 'Svelte'],
+	['lua', 'Lua'],
+	['zig', 'Zig'],
+	['r', 'R'],
+	['scala', 'Scala'],
+	['clj', 'Clojure'],
+	['erl', 'Erlang'],
+	['hs', 'Haskell'],
+	['ml', 'OCaml'],
+	['nim', 'Nim'],
+	['cr', 'Crystal'],
+	['tf', 'HCL'],
+	['proto', 'Protocol Buffer'],
+]);
+
+/**
+ * Detect the WakaTime language name from a file path's extension.
+ * Returns undefined if the extension is not recognized.
+ */
+export function detectLanguageFromPath(filePath: string): string | undefined {
+	const ext = path.extname(filePath).replace(/^\./, '').toLowerCase();
+	if (!ext) return undefined;
+	return EXTENSION_LANGUAGE_MAP.get(ext);
+}
+
 /** Map Node.js platform to WakaTime release naming */
 function getWakaTimePlatform(): string | null {
 	switch (process.platform) {

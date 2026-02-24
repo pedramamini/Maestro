@@ -5,7 +5,7 @@
  */
 
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { WakaTimeManager } from '../../main/wakatime-manager';
+import { WakaTimeManager, detectLanguageFromPath } from '../../main/wakatime-manager';
 
 // Mock electron
 vi.mock('electron', () => ({
@@ -671,6 +671,90 @@ describe('WakaTimeManager', () => {
 
 			// detectCli (1, cached) + first heartbeat (1) + second heartbeat (1) = 3
 			expect(execFileNoThrow).toHaveBeenCalledTimes(3);
+		});
+	});
+
+	describe('detectLanguageFromPath', () => {
+		it('should detect TypeScript from .ts extension', () => {
+			expect(detectLanguageFromPath('/project/src/index.ts')).toBe('TypeScript');
+		});
+
+		it('should detect TypeScript from .tsx extension', () => {
+			expect(detectLanguageFromPath('/project/src/App.tsx')).toBe('TypeScript');
+		});
+
+		it('should detect JavaScript from .js extension', () => {
+			expect(detectLanguageFromPath('/project/src/index.js')).toBe('JavaScript');
+		});
+
+		it('should detect JavaScript from .mjs extension', () => {
+			expect(detectLanguageFromPath('/project/src/config.mjs')).toBe('JavaScript');
+		});
+
+		it('should detect JavaScript from .cjs extension', () => {
+			expect(detectLanguageFromPath('/project/src/config.cjs')).toBe('JavaScript');
+		});
+
+		it('should detect Python from .py extension', () => {
+			expect(detectLanguageFromPath('/project/main.py')).toBe('Python');
+		});
+
+		it('should detect Rust from .rs extension', () => {
+			expect(detectLanguageFromPath('/project/src/main.rs')).toBe('Rust');
+		});
+
+		it('should detect Go from .go extension', () => {
+			expect(detectLanguageFromPath('/project/main.go')).toBe('Go');
+		});
+
+		it('should detect C++ from .cpp extension', () => {
+			expect(detectLanguageFromPath('/project/src/main.cpp')).toBe('C++');
+		});
+
+		it('should detect C from .h extension', () => {
+			expect(detectLanguageFromPath('/project/include/header.h')).toBe('C');
+		});
+
+		it('should detect Shell Script from .sh extension', () => {
+			expect(detectLanguageFromPath('/project/scripts/build.sh')).toBe('Shell Script');
+		});
+
+		it('should detect Markdown from .md extension', () => {
+			expect(detectLanguageFromPath('/project/README.md')).toBe('Markdown');
+		});
+
+		it('should detect JSON from .json extension', () => {
+			expect(detectLanguageFromPath('/project/package.json')).toBe('JSON');
+		});
+
+		it('should detect YAML from .yml extension', () => {
+			expect(detectLanguageFromPath('/project/.github/workflows/ci.yml')).toBe('YAML');
+		});
+
+		it('should detect HCL from .tf extension', () => {
+			expect(detectLanguageFromPath('/infra/main.tf')).toBe('HCL');
+		});
+
+		it('should detect Protocol Buffer from .proto extension', () => {
+			expect(detectLanguageFromPath('/proto/service.proto')).toBe('Protocol Buffer');
+		});
+
+		it('should return undefined for unknown extensions', () => {
+			expect(detectLanguageFromPath('/project/data.xyz')).toBeUndefined();
+		});
+
+		it('should return undefined for files without extension', () => {
+			expect(detectLanguageFromPath('/project/Makefile')).toBeUndefined();
+		});
+
+		it('should handle case-insensitive extensions', () => {
+			expect(detectLanguageFromPath('/project/main.PY')).toBe('Python');
+			expect(detectLanguageFromPath('/project/app.TSX')).toBe('TypeScript');
+		});
+
+		it('should handle paths with multiple dots', () => {
+			expect(detectLanguageFromPath('/project/config.test.ts')).toBe('TypeScript');
+			expect(detectLanguageFromPath('/project/styles.module.css')).toBe('CSS');
 		});
 	});
 });
