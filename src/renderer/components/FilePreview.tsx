@@ -1792,23 +1792,16 @@ export const FilePreview = React.memo(
 				<div className="shrink-0" style={{ backgroundColor: theme.colors.bgSidebar }}>
 					{/* Main header row */}
 					<div
-						className="border-b flex items-center justify-between px-6 py-3"
+						className="border-b px-6 py-3"
 						style={{ borderColor: theme.colors.border }}
 					>
-						<div className="flex items-center gap-3">
-							<FileCode className="w-5 h-5 shrink-0" style={{ color: theme.colors.accent }} />
-							<div className="min-w-0">
-								<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+						<div className="flex items-center justify-between">
+							<div className="flex items-center gap-3 min-w-0">
+								<FileCode className="w-5 h-5 shrink-0" style={{ color: theme.colors.accent }} />
+								<div className="text-sm font-medium truncate" style={{ color: theme.colors.textMain }}>
 									{file.name}
 								</div>
-								<div
-									className="text-xs opacity-50 truncate"
-									style={{ color: theme.colors.textDim }}
-								>
-									{directoryPath}
-								</div>
 							</div>
-						</div>
 						<div className="flex items-center gap-2 shrink-0">
 							{/* Save button - shown in edit mode with changes for any editable text file */}
 							{isEditableText && markdownEditMode && onSave && (
@@ -1910,6 +1903,13 @@ export const FilePreview = React.memo(
 							>
 								<FolderOpen className="w-4 h-4" />
 							</button>
+						</div>
+						</div>
+						<div
+							className="text-xs opacity-50 truncate mt-1 pl-8"
+							style={{ color: theme.colors.textDim }}
+						>
+							{directoryPath}
 						</div>
 					</div>
 					{/* File Stats subbar - hidden on scroll */}
