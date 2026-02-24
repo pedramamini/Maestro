@@ -145,8 +145,9 @@ describe('useFileTreeManagement', () => {
 			returnedChanges = await result.current.refreshFileTree(state.getSessions()[0].id);
 		});
 
-		// For local sessions (no sshRemoteId), sshContext and localOptions are undefined
-		expect(loadFileTree).toHaveBeenCalledWith('/test/project', 10, 0, undefined, undefined, undefined);
+		// loadFileTree is now called with (path, maxDepth, currentDepth, sshContext)
+		// For local sessions (no sshRemoteId), sshContext is undefined
+		expect(loadFileTree).toHaveBeenCalledWith('/test/project', 10, 0, undefined, undefined, undefined, undefined);
 		expect(compareFileTrees).toHaveBeenCalledWith(initialTree, nextTree);
 		expect(returnedChanges).toEqual(changes);
 		expect(state.getSessions()[0].fileTree).toEqual(nextTree);
@@ -198,8 +199,9 @@ describe('useFileTreeManagement', () => {
 		});
 
 		// loadFileTree always uses projectRoot (treeRoot), not shellCwd
-		// Git operations use shellCwd when inputMode is 'terminal'
-		expect(loadFileTree).toHaveBeenCalledWith('/test/project', 10, 0, undefined, undefined, undefined);
+		// But git operations use shellCwd when inputMode is 'terminal'
+		// The second parameter is sshRemoteId, which is undefined for local sessions
+		expect(loadFileTree).toHaveBeenCalledWith('/test/project', 10, 0, undefined, undefined, undefined, undefined);
 		expect(gitService.isRepo).toHaveBeenCalledWith('/test/shell', undefined);
 		expect(gitService.getBranches).toHaveBeenCalledWith('/test/shell', undefined);
 		expect(gitService.getTags).toHaveBeenCalledWith('/test/shell', undefined);
@@ -257,7 +259,7 @@ describe('useFileTreeManagement', () => {
 
 		await waitFor(() => {
 			// loadFileTree is now called with (path, maxDepth, currentDepth, sshContext)
-			expect(loadFileTree).toHaveBeenCalledWith('/test/project', 10, 0, undefined, undefined, undefined);
+			expect(loadFileTree).toHaveBeenCalledWith('/test/project', 10, 0, undefined, undefined, undefined, undefined);
 			expect(state.getSessions()[0].fileTree).toEqual(nextTree);
 		});
 	});
@@ -295,7 +297,7 @@ describe('useFileTreeManagement', () => {
 			remoteCwd: '/remote/project',
 			honorGitignore: undefined,
 			ignorePatterns: undefined,
-		}, undefined, undefined);
+		}, undefined, undefined, undefined);
 	});
 
 	it('fetches stats for sessions with file tree but no stats (migration)', async () => {

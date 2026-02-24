@@ -167,8 +167,8 @@ export function IgnorePatternsSection({
 							className="text-xs mt-1 ml-7"
 							style={{ color: theme.colors.textDim }}
 						>
-							When enabled, patterns from remote .gitignore files will also be
-							excluded from indexing.
+							When enabled, patterns from .gitignore files will also be excluded
+							from indexing.
 						</p>
 					</div>
 				)}
