@@ -46,6 +46,9 @@ export type DocumentGraphLayoutType = 'mindmap' | 'radial' | 'force';
 // Default Constants
 // ============================================================================
 
+/** Default local ignore patterns for new installations (includes .git, node_modules, __pycache__) */
+export const DEFAULT_LOCAL_IGNORE_PATTERNS = ['.git', 'node_modules', '__pycache__'];
+
 export const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
 	autoGroomContexts: true,
 	maxContextTokens: 100000,
@@ -449,7 +452,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	preventSleepEnabled: false,
 	disableGpuAcceleration: false,
 	disableConfetti: false,
-	localIgnorePatterns: ['.git', 'node_modules', '__pycache__'],
+	localIgnorePatterns: [...DEFAULT_LOCAL_IGNORE_PATTERNS],
 	localHonorGitignore: true,
 	sshRemoteIgnorePatterns: ['.git', '*cache*'],
 	sshRemoteHonorGitignore: true,
