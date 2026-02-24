@@ -414,6 +414,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		// Local file indexing ignore patterns
 		localIgnorePatterns,
 		setLocalIgnorePatterns,
+		localHonorGitignore,
+		setLocalHonorGitignore,
 		// SSH Remote file indexing settings
 		sshRemoteIgnorePatterns,
 		setSshRemoteIgnorePatterns,
@@ -2960,6 +2962,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								ignorePatterns={localIgnorePatterns}
 								onIgnorePatternsChange={setLocalIgnorePatterns}
 								defaultPatterns={['.git', 'node_modules', '__pycache__']}
+								showHonorGitignore
+								honorGitignore={localHonorGitignore}
+								onHonorGitignoreChange={setLocalHonorGitignore}
+								onReset={() => setLocalHonorGitignore(true)}
 							/>
 						</div>
 					)}
