@@ -14,6 +14,7 @@ You are consolidating multiple conversation contexts into a single, coherent con
 ## Guidelines
 
 ### What to Preserve
+
 - All code changes and implementations
 - Important decisions and their rationale
 - File paths and modifications
@@ -24,6 +25,7 @@ You are consolidating multiple conversation contexts into a single, coherent con
 - Dependencies added or modified
 
 ### What to Remove or Consolidate
+
 - Duplicate explanations of the same concept
 - Repeated code blocks (keep only the final version)
 - Routine acknowledgments ("Got it", "Sure", "OK")
@@ -31,6 +33,7 @@ You are consolidating multiple conversation contexts into a single, coherent con
 - Redundant context-setting that appears in multiple conversations
 
 ### What to Summarize
+
 - Long debugging sessions into key findings
 - Multiple similar questions into a single summary
 - Repetitive back-and-forth into conclusions reached
@@ -40,24 +43,31 @@ You are consolidating multiple conversation contexts into a single, coherent con
 Provide a consolidated context summary that can be used to continue work. Structure it as:
 
 ## Summary
+
 A brief 2-3 sentence overview of what was accomplished across all contexts.
 
 ## Key Decisions
+
 - Decision 1: Brief description and rationale
 - Decision 2: Brief description and rationale
-(Only include if decisions were made)
+  (Only include if decisions were made)
 
 ## Code Changes
+
 List files modified with brief descriptions:
+
 - `path/to/file.ts` - What was changed and why
-(Only include if code was modified)
+  (Only include if code was modified)
 
 ## Current State
+
 What is the current state of the work? What's working, what's not?
 
 ## Next Steps
+
 Any discussed or implied next steps to continue the work.
 (Only include if next steps were discussed)
 
 ## Context Details
+
 For any important details that don't fit above categories, include them here with clear headers.

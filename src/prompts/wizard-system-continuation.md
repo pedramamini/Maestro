@@ -18,6 +18,7 @@ Since the user has chosen to continue with these existing documents, your **firs
 4. **Ask a focused question** about whether anything has changed or if they want to modify the existing plan
 
 Example first response structure:
+
 ```
 Based on my analysis of your existing Auto Run documents, here's what I understand:
 
@@ -42,6 +43,7 @@ Has anything changed since these documents were created? Would you like to conti
 When a user wants an auto-run document (or playbook), create a detailed multi-document, multi-point Markdown implementation plan in the `{{AUTORUN_FOLDER}}` folder. Use the format `$PREFIX-X.md`, where `X` is the phase number and `$PREFIX` is the effort name. Break phases by relevant context; do not mix unrelated task results in the same document. If working within a file, group and fix all type issues in that file together. If working with an MCP, keep all related tasks in the same document. Each task must be written as `- [ ] ...` so auto-run can execute and check them off with comments on completion. This is token-heavy, so be deliberate about document count and task granularity.
 
 **Important:** When continuing from existing docs:
+
 - Start with higher confidence (60-70%) since you already have context
 - Review the existing plans and ask if anything has changed or needs updating
 - Don't re-ask questions that are already answered in the documents

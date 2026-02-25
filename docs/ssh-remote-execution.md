@@ -11,6 +11,7 @@ Run AI agents on remote machines via SSH instead of locally. This enables you to
 SSH Remote Execution wraps agent commands in SSH, executing them on a configured remote host while streaming output back to Maestro. Your local Maestro instance remains the control center, but the AI agent runs remotely.
 
 **Use cases:**
+
 - Run agents on a powerful cloud VM with more CPU/RAM
 - Access tools or SDKs installed only on specific servers
 - Work with codebases that require particular OS or architecture
@@ -29,16 +30,16 @@ SSH Remote Execution wraps agent commands in SSH, executing them on a configured
 
 ![SSH Remote Hosts Settings](./screenshots/ssh-agents-servers.png)
 
-| Field | Description |
-|-------|-------------|
-| **Name** | Display name for this remote (e.g., "Dev Server", "GPU Box") |
-| **Host** | Hostname or IP address (or SSH config Host pattern when using SSH config) |
-| **Port** | SSH port (default: 22) |
-| **Username** | SSH username for authentication (optional when using SSH config) |
-| **Private Key Path** | Path to your SSH private key (optional when using SSH config) |
-| **Remote Working Directory** | Optional default working directory on the remote host |
-| **Environment Variables** | Optional key-value pairs to set on the remote |
-| **Enabled** | Toggle to temporarily disable without deleting |
+| Field                        | Description                                                               |
+| ---------------------------- | ------------------------------------------------------------------------- |
+| **Name**                     | Display name for this remote (e.g., "Dev Server", "GPU Box")              |
+| **Host**                     | Hostname or IP address (or SSH config Host pattern when using SSH config) |
+| **Port**                     | SSH port (default: 22)                                                    |
+| **Username**                 | SSH username for authentication (optional when using SSH config)          |
+| **Private Key Path**         | Path to your SSH private key (optional when using SSH config)             |
+| **Remote Working Directory** | Optional default working directory on the remote host                     |
+| **Environment Variables**    | Optional key-value pairs to set on the remote                             |
+| **Enabled**                  | Toggle to temporarily disable without deleting                            |
 
 5. Click **Test Connection** to verify connectivity
 6. Click **Save** to store the configuration
@@ -59,12 +60,14 @@ When adding a new remote, Maestro automatically detects hosts defined in your SS
 #### How It Works
 
 When using SSH config mode:
+
 - **Host** becomes the SSH config Host pattern (e.g., `dev-server` instead of `192.168.1.100`)
 - **Username** and **Private Key Path** become optional—SSH inherits them from your config
 - **Port** defaults to your config's value (only sent to SSH if overriding a non-default port)
 - You can still override any field to customize the connection
 
 Example `~/.ssh/config`:
+
 ```
 Host dev-server
     HostName 192.168.1.100
@@ -80,6 +83,7 @@ Host gpu-box
 ```
 
 With the above config, you can:
+
 1. Select "dev-server" from the dropdown
 2. Leave username/key fields empty (inherited from config)
 3. Optionally override specific settings
@@ -88,12 +92,14 @@ With the above config, you can:
 #### Field Labels
 
 When using SSH config mode, field labels indicate which values are optional:
+
 - **Username (optional)** — leave empty to use SSH config's `User`
 - **Private Key Path (optional)** — leave empty to use SSH config's `IdentityFile`
 
 #### Clearing SSH Config Mode
 
 To switch back to manual configuration:
+
 1. Click the **×** button next to "Using SSH Config" indicator
 2. Fill in all required fields manually
 
@@ -109,6 +115,7 @@ A successful test shows the remote hostname. Failed tests display specific error
 ### Setting a Global Default
 
 Click the checkmark icon next to any remote to set it as the **global default**. When set:
+
 - The "Default" badge appears next to the remote name
 - The default remote is highlighted in selection dropdowns
 - New sessions still require explicit selection — the default serves as a visual indicator of your preferred remote
@@ -130,10 +137,10 @@ Each session can have its own SSH remote setting configured when creating the se
 
 ![SSH Agent Mapping](./screenshots/ssh-agents-mapping.png)
 
-| Option | Behavior |
-|--------|----------|
-| **Local Execution** | Runs the agent on your local machine (default) |
-| **[Remote Name]** | Runs the agent on the specified SSH remote host |
+| Option              | Behavior                                        |
+| ------------------- | ----------------------------------------------- |
+| **Local Execution** | Runs the agent on your local machine (default)  |
+| **[Remote Name]**   | Runs the agent on the specified SSH remote host |
 
 ### How It Works
 
@@ -163,6 +170,7 @@ Remote agents support all the features you'd expect from local agents:
 ### Remote File System Access
 
 The File Explorer works seamlessly with remote agents:
+
 - Browse files and directories on the remote host
 - Open and edit files directly
 - Use `@` file mentions to reference remote files in prompts
@@ -170,6 +178,7 @@ The File Explorer works seamlessly with remote agents:
 ### Remote Auto Run
 
 Run Auto Run playbooks on remote projects:
+
 - Auto Run documents can reference files on the remote host
 - Task execution happens on the remote machine
 - Progress and results stream back to Maestro in real-time
@@ -177,6 +186,7 @@ Run Auto Run playbooks on remote projects:
 ### Remote Git Worktrees
 
 Create and manage git worktrees on remote repositories:
+
 - Worktree sub-agents run on the same remote host
 - Branch isolation works just like local worktrees
 - PR creation connects to the remote repository
@@ -184,6 +194,7 @@ Create and manage git worktrees on remote repositories:
 ### Remote Command Terminal
 
 The Command Terminal executes commands on the remote host:
+
 - Full PTY support for interactive commands
 - Tab completion works with remote file paths
 - Command history is preserved per-session
@@ -200,6 +211,7 @@ Remote agents can participate in Group Chat alongside local agents. This enables
 - Synthesize information across different machines and codebases
 
 This is especially useful for:
+
 - Comparing implementations across different environments
 - Coordinating changes that span multiple servers
 - Getting perspectives from agents with access to different resources
@@ -208,26 +220,26 @@ This is especially useful for:
 
 ### Authentication Errors
 
-| Error | Solution |
-|-------|----------|
-| "Permission denied (publickey)" | Ensure your SSH key is added to the remote's `~/.ssh/authorized_keys` |
-| "Host key verification failed" | Add the host to known_hosts: `ssh-keyscan hostname >> ~/.ssh/known_hosts` |
-| "Enter passphrase for key" | Use a key without a passphrase, or add it to ssh-agent: `ssh-add ~/.ssh/your_key` |
+| Error                           | Solution                                                                          |
+| ------------------------------- | --------------------------------------------------------------------------------- |
+| "Permission denied (publickey)" | Ensure your SSH key is added to the remote's `~/.ssh/authorized_keys`             |
+| "Host key verification failed"  | Add the host to known_hosts: `ssh-keyscan hostname >> ~/.ssh/known_hosts`         |
+| "Enter passphrase for key"      | Use a key without a passphrase, or add it to ssh-agent: `ssh-add ~/.ssh/your_key` |
 
 ### Connection Errors
 
-| Error | Solution |
-|-------|----------|
-| "Connection refused" | Verify SSH server is running on the remote host |
-| "Connection timed out" | Check network connectivity and firewall rules |
-| "Could not resolve hostname" | Verify the hostname/IP is correct |
-| "No route to host" | Check network path to the remote host |
+| Error                        | Solution                                        |
+| ---------------------------- | ----------------------------------------------- |
+| "Connection refused"         | Verify SSH server is running on the remote host |
+| "Connection timed out"       | Check network connectivity and firewall rules   |
+| "Could not resolve hostname" | Verify the hostname/IP is correct               |
+| "No route to host"           | Check network path to the remote host           |
 
 ### Agent Errors
 
-| Error | Solution |
-|-------|----------|
-| "Command not found" | Install the AI agent on the remote host |
+| Error                    | Solution                                 |
+| ------------------------ | ---------------------------------------- |
+| "Command not found"      | Install the AI agent on the remote host  |
 | "Agent binary not found" | Ensure the agent is in the remote's PATH |
 
 ### Tips

@@ -83,11 +83,11 @@ Include a brief description of what you were doing when the slowness occurred (e
 
 The exported file contains **only React rendering metrics**:
 
-| Included | Not Included |
-|----------|--------------|
-| Component names and render durations | Conversation content |
-| What triggered each re-render | API keys or tokens |
-| Render counts per component | File contents from your projects |
-| Component tree structure | Personal data |
+| Included                             | Not Included                     |
+| ------------------------------------ | -------------------------------- |
+| Component names and render durations | Conversation content             |
+| What triggered each re-render        | API keys or tokens               |
+| Render counts per component          | File contents from your projects |
+| Component tree structure             | Personal data                    |
 
 The profile is safe to share publicly.

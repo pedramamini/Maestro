@@ -3236,7 +3236,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											}}
 										/>
 										<div>
-											<div className="text-sm font-bold flex items-center gap-2" style={{ color: theme.colors.textMain }}>
+											<div
+												className="text-sm font-bold flex items-center gap-2"
+												style={{ color: theme.colors.textMain }}
+											>
 												Director's Notes
 												<span
 													className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"

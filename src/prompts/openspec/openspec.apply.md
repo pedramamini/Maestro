@@ -1,5 +1,7 @@
 ### Stage 2: Implementing Changes
+
 Track these steps as TODOs and complete them one by one.
+
 1. **Read proposal.md** - Understand what's being built
 2. **Read design.md** (if exists) - Review technical decisions
 3. **Read tasks.md** - Get implementation checklist

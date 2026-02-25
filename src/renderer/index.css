@@ -3,349 +3,349 @@
 @tailwind utilities;
 
 * {
-  margin: 0;
-  padding: 0;
-  box-sizing: border-box;
+	margin: 0;
+	padding: 0;
+	box-sizing: border-box;
 }
 
 html,
 body,
 #root {
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
+	width: 100%;
+	height: 100%;
+	overflow: hidden;
 }
 
 body {
-  font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
-  -webkit-font-smoothing: antialiased;
-  -moz-osx-font-smoothing: grayscale;
+	font-family: 'JetBrains Mono', 'Fira Code', 'Courier New', monospace;
+	-webkit-font-smoothing: antialiased;
+	-moz-osx-font-smoothing: grayscale;
 }
 
 /* Placeholder text styling - ensure clear distinction from actual input values */
 /* Uses lower opacity and italic to clearly indicate placeholder state */
 input::placeholder,
 textarea::placeholder {
-  opacity: 0.35;
-  font-style: italic;
+	opacity: 0.35;
+	font-style: italic;
 }
 
 /* Custom scrollbar styles - subtle by default, brighter on hover */
 .scrollbar-thin::-webkit-scrollbar {
-  width: 6px;
-  height: 6px;
+	width: 6px;
+	height: 6px;
 }
 
 .scrollbar-thin::-webkit-scrollbar-track {
-  background: transparent;
+	background: transparent;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.15);
-  border-radius: 3px;
-  transition: background-color 0.2s ease;
+	background: rgba(255, 255, 255, 0.15);
+	border-radius: 3px;
+	transition: background-color 0.2s ease;
 }
 
 .scrollbar-thin::-webkit-scrollbar-thumb:hover {
-  background: rgba(255, 255, 255, 0.3);
+	background: rgba(255, 255, 255, 0.3);
 }
 
 /* Scrollbar with highlight color when actively scrolling */
 .scrollbar-thin.scrolling::-webkit-scrollbar-thumb {
-  background: var(--highlight-color, var(--accent-color, rgba(99, 102, 241, 0.8)));
-  transition: background-color 0.15s ease;
+	background: var(--highlight-color, var(--accent-color, rgba(99, 102, 241, 0.8)));
+	transition: background-color 0.15s ease;
 }
 
 .scrollbar-thin.scrolling::-webkit-scrollbar-thumb:hover {
-  background: var(--highlight-color, var(--accent-color, rgba(99, 102, 241, 1)));
+	background: var(--highlight-color, var(--accent-color, rgba(99, 102, 241, 1)));
 }
 
 /* Scrollbar fading out state - gradual transition to transparent */
 .scrollbar-thin.fading::-webkit-scrollbar-thumb {
-  background: transparent;
-  transition: background-color 0.5s ease;
+	background: transparent;
+	transition: background-color 0.5s ease;
 }
 
 .no-scrollbar::-webkit-scrollbar {
-  display: none;
+	display: none;
 }
 
 .no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
+	-ms-overflow-style: none;
+	scrollbar-width: none;
 }
 
 /* Animations */
 @keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-  to {
-    opacity: 1;
-  }
+	from {
+		opacity: 0;
+	}
+	to {
+		opacity: 1;
+	}
 }
 
 @keyframes slide-up {
-  from {
-    opacity: 0;
-    transform: translateY(20px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	from {
+		opacity: 0;
+		transform: translateY(20px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 @keyframes slide-down {
-  from {
-    opacity: 0;
-    transform: translateY(-10px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	from {
+		opacity: 0;
+		transform: translateY(-10px);
+	}
+	to {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 @keyframes scale-in {
-  from {
-    opacity: 0;
-    transform: scale(0.95);
-  }
-  to {
-    opacity: 1;
-    transform: scale(1);
-  }
+	from {
+		opacity: 0;
+		transform: scale(0.95);
+	}
+	to {
+		opacity: 1;
+		transform: scale(1);
+	}
 }
 
 @keyframes highlight-pulse {
-  0% {
-    box-shadow: 0 0 0 0 var(--pulse-color, rgba(99, 102, 241, 0.4));
-  }
-  70% {
-    box-shadow: 0 0 0 6px var(--pulse-color, rgba(99, 102, 241, 0));
-  }
-  100% {
-    box-shadow: 0 0 0 0 var(--pulse-color, rgba(99, 102, 241, 0));
-  }
+	0% {
+		box-shadow: 0 0 0 0 var(--pulse-color, rgba(99, 102, 241, 0.4));
+	}
+	70% {
+		box-shadow: 0 0 0 6px var(--pulse-color, rgba(99, 102, 241, 0));
+	}
+	100% {
+		box-shadow: 0 0 0 0 var(--pulse-color, rgba(99, 102, 241, 0));
+	}
 }
 
 @keyframes check-pop {
-  0% {
-    transform: scale(0);
-    opacity: 0;
-  }
-  50% {
-    transform: scale(1.2);
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+	0% {
+		transform: scale(0);
+		opacity: 0;
+	}
+	50% {
+		transform: scale(1.2);
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
 }
 
 @keyframes token-update {
-  0% {
-    color: var(--token-highlight, rgba(99, 102, 241, 1));
-    transform: scale(1.1);
-  }
-  100% {
-    color: inherit;
-    transform: scale(1);
-  }
+	0% {
+		color: var(--token-highlight, rgba(99, 102, 241, 1));
+		transform: scale(1.1);
+	}
+	100% {
+		color: inherit;
+		transform: scale(1);
+	}
 }
 
 @keyframes progress-stripe {
-  0% {
-    background-position: 0 0;
-  }
-  100% {
-    background-position: 40px 0;
-  }
+	0% {
+		background-position: 0 0;
+	}
+	100% {
+		background-position: 40px 0;
+	}
 }
 
 /* Usage Dashboard - New data indicator animations */
 @keyframes pulse-fade {
-  0% {
-    opacity: 1;
-  }
-  80% {
-    opacity: 1;
-  }
-  100% {
-    opacity: 0;
-  }
+	0% {
+		opacity: 1;
+	}
+	80% {
+		opacity: 1;
+	}
+	100% {
+		opacity: 0;
+	}
 }
 
 @keyframes pulse-dot {
-  0% {
-    transform: scale(1);
-    opacity: 1;
-  }
-  50% {
-    transform: scale(1.5);
-    opacity: 0.5;
-  }
-  100% {
-    transform: scale(1);
-    opacity: 1;
-  }
+	0% {
+		transform: scale(1);
+		opacity: 1;
+	}
+	50% {
+		transform: scale(1.5);
+		opacity: 0.5;
+	}
+	100% {
+		transform: scale(1);
+		opacity: 1;
+	}
 }
 
 /* Usage Dashboard - Skeleton loading animation */
 @keyframes skeleton-shimmer {
-  0% {
-    opacity: 0.3;
-  }
-  50% {
-    opacity: 0.5;
-  }
-  100% {
-    opacity: 0.3;
-  }
+	0% {
+		opacity: 0.3;
+	}
+	50% {
+		opacity: 0.5;
+	}
+	100% {
+		opacity: 0.3;
+	}
 }
 
 /* Usage Dashboard - View mode transition animations */
 @keyframes dashboard-content-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(8px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	0% {
+		opacity: 0;
+		transform: translateY(8px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 @keyframes dashboard-content-exit {
-  0% {
-    opacity: 1;
-    transform: translateY(0);
-  }
-  100% {
-    opacity: 0;
-    transform: translateY(-8px);
-  }
+	0% {
+		opacity: 1;
+		transform: translateY(0);
+	}
+	100% {
+		opacity: 0;
+		transform: translateY(-8px);
+	}
 }
 
 /* Usage Dashboard - Staggered card entrance animation */
 @keyframes dashboard-card-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(12px) scale(0.98);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0) scale(1);
-  }
+	0% {
+		opacity: 0;
+		transform: translateY(12px) scale(0.98);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0) scale(1);
+	}
 }
 
 /* Usage Dashboard - Chart section enter animation */
 @keyframes dashboard-section-enter {
-  0% {
-    opacity: 0;
-    transform: translateY(16px);
-  }
-  100% {
-    opacity: 1;
-    transform: translateY(0);
-  }
+	0% {
+		opacity: 0;
+		transform: translateY(16px);
+	}
+	100% {
+		opacity: 1;
+		transform: translateY(0);
+	}
 }
 
 /* Usage Dashboard animation utility classes */
 .dashboard-content-enter {
-  animation: dashboard-content-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+	animation: dashboard-content-enter 0.25s cubic-bezier(0.4, 0, 0.2, 1) forwards;
 }
 
 .dashboard-card-enter {
-  animation: dashboard-card-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  opacity: 0;
+	animation: dashboard-card-enter 0.3s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+	opacity: 0;
 }
 
 .dashboard-section-enter {
-  animation: dashboard-section-enter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
-  opacity: 0;
+	animation: dashboard-section-enter 0.35s cubic-bezier(0.4, 0, 0.2, 1) forwards;
+	opacity: 0;
 }
 
 .animate-in {
-  animation: fade-in 0.2s ease-in;
+	animation: fade-in 0.2s ease-in;
 }
 
 .animate-slide-up {
-  animation: slide-up 0.25s ease-out;
+	animation: slide-up 0.25s ease-out;
 }
 
 .animate-slide-down {
-  animation: slide-down 0.2s ease-out;
+	animation: slide-down 0.2s ease-out;
 }
 
 .animate-scale-in {
-  animation: scale-in 0.2s ease-out;
+	animation: scale-in 0.2s ease-out;
 }
 
 .animate-highlight-pulse {
-  animation: highlight-pulse 0.6s ease-out;
+	animation: highlight-pulse 0.6s ease-out;
 }
 
 .animate-check-pop {
-  animation: check-pop 0.3s ease-out;
+	animation: check-pop 0.3s ease-out;
 }
 
 .animate-token-update {
-  animation: token-update 0.4s ease-out;
+	animation: token-update 0.4s ease-out;
 }
 
 /* Animated progress bar with stripes for indeterminate state */
 .progress-bar-animated {
-  background-image: linear-gradient(
-    45deg,
-    rgba(255, 255, 255, 0.15) 25%,
-    transparent 25%,
-    transparent 50%,
-    rgba(255, 255, 255, 0.15) 50%,
-    rgba(255, 255, 255, 0.15) 75%,
-    transparent 75%,
-    transparent
-  );
-  background-size: 40px 40px;
-  animation: progress-stripe 1s linear infinite;
+	background-image: linear-gradient(
+		45deg,
+		rgba(255, 255, 255, 0.15) 25%,
+		transparent 25%,
+		transparent 50%,
+		rgba(255, 255, 255, 0.15) 50%,
+		rgba(255, 255, 255, 0.15) 75%,
+		transparent 75%,
+		transparent
+	);
+	background-size: 40px 40px;
+	animation: progress-stripe 1s linear infinite;
 }
 
 /* Shimmer effect for drag-and-drop */
 @keyframes shimmer {
-  0% {
-    transform: translateX(-100%);
-  }
-  100% {
-    transform: translateX(100%);
-  }
+	0% {
+		transform: translateX(-100%);
+	}
+	100% {
+		transform: translateX(100%);
+	}
 }
 
 /* Restore list styling for markdown preview prose containers */
 .prose ul {
-  list-style-type: disc !important;
-  list-style-position: outside !important;
+	list-style-type: disc !important;
+	list-style-position: outside !important;
 }
 
 .prose ol {
-  list-style-type: decimal !important;
-  list-style-position: outside !important;
+	list-style-type: decimal !important;
+	list-style-position: outside !important;
 }
 
 .prose li {
-  display: list-item !important;
+	display: list-item !important;
 }
 
 .prose li > p {
-  display: inline !important;
-  margin: 0 !important;
-  vertical-align: baseline;
-  line-height: inherit;
+	display: inline !important;
+	margin: 0 !important;
+	vertical-align: baseline;
+	line-height: inherit;
 }
 
 .prose li > p + ul,
 .prose li > p + ol {
-  margin-top: 0 !important;
+	margin-top: 0 !important;
 }
 
 /* Fix bullet alignment when first element is bold/styled */
@@ -359,29 +359,29 @@ textarea::placeholder {
 .prose li > p > em:first-child,
 .prose li > p > code:first-child,
 .prose li > p > a:first-child {
-  vertical-align: baseline;
-  line-height: inherit;
+	vertical-align: baseline;
+	line-height: inherit;
 }
 
 .prose li::marker {
-  font-weight: normal;
+	font-weight: normal;
 }
 
 /* Nested lists */
 .prose ul ul {
-  list-style-type: circle !important;
+	list-style-type: circle !important;
 }
 
 .prose ul ul ul {
-  list-style-type: square !important;
+	list-style-type: square !important;
 }
 
 .prose ol ol {
-  list-style-type: lower-alpha !important;
+	list-style-type: lower-alpha !important;
 }
 
 .prose ol ol ol {
-  list-style-type: lower-roman !important;
+	list-style-type: lower-roman !important;
 }
 
 /* Modal overlay - solid background without GPU-intensive blur */
@@ -389,80 +389,102 @@ textarea::placeholder {
 /* Old: bg-black/60 backdrop-blur-sm or bg-black/70 backdrop-blur-sm */
 /* New: bg-black/85 (solid, no blur) */
 .modal-overlay {
-  background-color: rgba(0, 0, 0, 0.85);
+	background-color: rgba(0, 0, 0, 0.85);
 }
 
 /* Document Graph - Search highlight animation for matching nodes */
 @keyframes search-highlight-glow {
-  0% {
-    box-shadow: 0 0 0 3px var(--search-highlight-color, rgba(99, 102, 241, 0.4)), 0 4px 12px var(--search-shadow-color, rgba(99, 102, 241, 0.2));
-  }
-  50% {
-    box-shadow: 0 0 0 5px var(--search-highlight-color, rgba(99, 102, 241, 0.25)), 0 4px 16px var(--search-shadow-color, rgba(99, 102, 241, 0.3));
-  }
-  100% {
-    box-shadow: 0 0 0 3px var(--search-highlight-color, rgba(99, 102, 241, 0.4)), 0 4px 12px var(--search-shadow-color, rgba(99, 102, 241, 0.2));
-  }
+	0% {
+		box-shadow:
+			0 0 0 3px var(--search-highlight-color, rgba(99, 102, 241, 0.4)),
+			0 4px 12px var(--search-shadow-color, rgba(99, 102, 241, 0.2));
+	}
+	50% {
+		box-shadow:
+			0 0 0 5px var(--search-highlight-color, rgba(99, 102, 241, 0.25)),
+			0 4px 16px var(--search-shadow-color, rgba(99, 102, 241, 0.3));
+	}
+	100% {
+		box-shadow:
+			0 0 0 3px var(--search-highlight-color, rgba(99, 102, 241, 0.4)),
+			0 4px 12px var(--search-shadow-color, rgba(99, 102, 241, 0.2));
+	}
 }
 
 .search-highlight {
-  animation: search-highlight-glow 2s ease-in-out infinite;
+	animation: search-highlight-glow 2s ease-in-out infinite;
 }
 
 /* Wand sparkle animation - sparkle paths vanish/reappear with subtle movement */
 @keyframes wand-sparkle {
-  0%, 100% {
-    opacity: 1;
-    transform: translate(0, 0);
-  }
-  35% {
-    opacity: 0;
-    transform: translate(0.5px, -0.5px);
-  }
-  65% {
-    opacity: 0;
-    transform: translate(-0.5px, 0.5px);
-  }
+	0%,
+	100% {
+		opacity: 1;
+		transform: translate(0, 0);
+	}
+	35% {
+		opacity: 0;
+		transform: translate(0.5px, -0.5px);
+	}
+	65% {
+		opacity: 0;
+		transform: translate(-0.5px, 0.5px);
+	}
 }
 
 /* Target sparkle paths (3rd-8th children in Lucide Wand2 SVG) */
-svg.wand-sparkle-active path:nth-child(n+3) {
-  animation: wand-sparkle 3s ease-in-out infinite;
+svg.wand-sparkle-active path:nth-child(n + 3) {
+	animation: wand-sparkle 3s ease-in-out infinite;
 }
 
 /* Stagger each sparkle for organic feel (non-uniform delays) */
-svg.wand-sparkle-active path:nth-child(3) { animation-delay: 0s; }
-svg.wand-sparkle-active path:nth-child(4) { animation-delay: 0.5s; }
-svg.wand-sparkle-active path:nth-child(5) { animation-delay: 1s; }
-svg.wand-sparkle-active path:nth-child(6) { animation-delay: 1.5s; }
-svg.wand-sparkle-active path:nth-child(7) { animation-delay: 0.7s; }
-svg.wand-sparkle-active path:nth-child(8) { animation-delay: 1.2s; }
+svg.wand-sparkle-active path:nth-child(3) {
+	animation-delay: 0s;
+}
+svg.wand-sparkle-active path:nth-child(4) {
+	animation-delay: 0.5s;
+}
+svg.wand-sparkle-active path:nth-child(5) {
+	animation-delay: 1s;
+}
+svg.wand-sparkle-active path:nth-child(6) {
+	animation-delay: 1.5s;
+}
+svg.wand-sparkle-active path:nth-child(7) {
+	animation-delay: 0.7s;
+}
+svg.wand-sparkle-active path:nth-child(8) {
+	animation-delay: 1.2s;
+}
 
 @media (prefers-reduced-motion: reduce) {
-  svg.wand-sparkle-active path:nth-child(n+3) {
-    animation: none;
-  }
+	svg.wand-sparkle-active path:nth-child(n + 3) {
+		animation: none;
+	}
 }
 
 /* React Flow - Document Graph edge hover styling */
 /* Subtle glow effect on edge hover */
 .react-flow__edge-path {
-  transition: stroke 0.2s ease, stroke-width 0.2s ease, filter 0.2s ease;
+	transition:
+		stroke 0.2s ease,
+		stroke-width 0.2s ease,
+		filter 0.2s ease;
 }
 
 .react-flow__edge:hover .react-flow__edge-path {
-  filter: drop-shadow(0 0 3px var(--edge-hover-color, currentColor));
-  stroke-width: 2.5;
+	filter: drop-shadow(0 0 3px var(--edge-hover-color, currentColor));
+	stroke-width: 2.5;
 }
 
 /* Edge path styling for better visibility */
 .react-flow__edge.selected .react-flow__edge-path {
-  stroke-width: 3;
+	stroke-width: 3;
 }
 
 /* Smooth step edge marker hover effect */
 .react-flow__edge:hover .react-flow__edge-textwrapper {
-  opacity: 1;
+	opacity: 1;
 }
 
 /* Reduced motion preference - accessibility best practice */
@@ -476,8 +498,8 @@ svg.wand-sparkle-active path:nth-child(8) { animation-delay: 1.2s; }
 
 /* Define the header as a container query context */
 .header-container {
-  container-type: inline-size;
-  container-name: header;
+	container-type: inline-size;
+	container-name: header;
 }
 
 /* Default: all elements visible */
@@ -487,113 +509,113 @@ svg.wand-sparkle-active path:nth-child(8) { animation-delay: 1.2s; }
 .header-context-widget,
 .header-git-branch-text,
 .header-git-status-full {
-  display: flex;
+	display: flex;
 }
 
 /* Git status compact mode hidden by default (shown at narrow widths) */
 .header-git-status-compact {
-  display: none;
+	display: none;
 }
 
 /* At narrower widths, progressively hide elements */
 /* Below 700px: Use compact context display (handled by compact class) */
 @container header (max-width: 700px) {
-  .header-context-label-full {
-    display: none;
-  }
-  .header-context-label-compact {
-    display: block;
-  }
-  .header-context-gauge {
-    width: 4rem; /* w-16 */
-  }
+	.header-context-label-full {
+		display: none;
+	}
+	.header-context-label-compact {
+		display: block;
+	}
+	.header-context-gauge {
+		width: 4rem; /* w-16 */
+	}
 }
 
 /* Below 550px: Show compact git status (file count only), hide full breakdown */
 @container header (max-width: 550px) {
-  .header-git-status-full {
-    display: none;
-  }
-  .header-git-status-compact {
-    display: flex;
-  }
+	.header-git-status-full {
+		display: none;
+	}
+	.header-git-status-compact {
+		display: flex;
+	}
 }
 
 /* Below 500px: Hide git branch text, show icon only */
 @container header (max-width: 500px) {
-  .header-git-branch-text {
-    display: none;
-  }
+	.header-git-branch-text {
+		display: none;
+	}
 }
 
 /* Below 400px: Hide UUID pill */
 @container header (max-width: 400px) {
-  .header-uuid-pill {
-    display: none;
-  }
+	.header-uuid-pill {
+		display: none;
+	}
 }
 
 /* Below 350px: Hide cost widget */
 @container header (max-width: 350px) {
-  .header-cost-widget {
-    display: none;
-  }
+	.header-cost-widget {
+		display: none;
+	}
 }
 
 /* Below 300px: Hide session name */
 @container header (max-width: 300px) {
-  .header-session-name {
-    display: none;
-  }
+	.header-session-name {
+		display: none;
+	}
 }
 
 /* When AUTO mode button is visible, we need earlier breakpoints.
    Use a modifier class on the container to shift thresholds. */
 .header-container.header-auto-mode .header-context-label-full {
-  display: none;
+	display: none;
 }
 .header-container.header-auto-mode .header-context-label-compact {
-  display: block;
+	display: block;
 }
 
 @container header (max-width: 880px) {
-  .header-container.header-auto-mode .header-context-gauge {
-    width: 4rem;
-  }
+	.header-container.header-auto-mode .header-context-gauge {
+		width: 4rem;
+	}
 }
 
 /* Below 730px in auto-mode: Show compact git status */
 @container header (max-width: 730px) {
-  .header-container.header-auto-mode .header-git-status-full {
-    display: none;
-  }
-  .header-container.header-auto-mode .header-git-status-compact {
-    display: flex;
-  }
+	.header-container.header-auto-mode .header-git-status-full {
+		display: none;
+	}
+	.header-container.header-auto-mode .header-git-status-compact {
+		display: flex;
+	}
 }
 
 @container header (max-width: 680px) {
-  .header-container.header-auto-mode .header-git-branch-text {
-    display: none;
-  }
+	.header-container.header-auto-mode .header-git-branch-text {
+		display: none;
+	}
 }
 
 @container header (max-width: 580px) {
-  .header-container.header-auto-mode .header-uuid-pill {
-    display: none;
-  }
+	.header-container.header-auto-mode .header-uuid-pill {
+		display: none;
+	}
 }
 
 @container header (max-width: 530px) {
-  .header-container.header-auto-mode .header-cost-widget {
-    display: none;
-  }
+	.header-container.header-auto-mode .header-cost-widget {
+		display: none;
+	}
 }
 
 @container header (max-width: 480px) {
-  .header-container.header-auto-mode .header-session-name {
-    display: none;
-  }
+	.header-container.header-auto-mode .header-session-name {
+		display: none;
+	}
 }
 
 /* ==========================================
@@ -601,47 +623,47 @@ svg.wand-sparkle-active path:nth-child(8) { animation-delay: 1.2s; }
    ========================================== */
 
 @media (prefers-reduced-motion: reduce) {
-  .animate-pulse,
-  .animate-spin,
-  .animate-bounce {
-    animation: none !important;
-  }
+	.animate-pulse,
+	.animate-spin,
+	.animate-bounce {
+		animation: none !important;
+	}
 
-  .transition-all,
-  .transition-colors,
-  .transition-opacity,
-  .transition-transform {
-    transition: none !important;
-  }
+	.transition-all,
+	.transition-colors,
+	.transition-opacity,
+	.transition-transform {
+		transition: none !important;
+	}
 
-  /* Disable React Flow edge animations */
-  .react-flow__edge-path {
-    transition: none !important;
-  }
+	/* Disable React Flow edge animations */
+	.react-flow__edge-path {
+		transition: none !important;
+	}
 
-  /* Disable new data indicator animations */
-  [data-testid="new-data-indicator"],
-  [data-testid="new-data-indicator"] span {
-    animation: none !important;
-  }
+	/* Disable new data indicator animations */
+	[data-testid='new-data-indicator'],
+	[data-testid='new-data-indicator'] span {
+		animation: none !important;
+	}
 
-  /* Disable skeleton loading animations */
-  [data-testid="skeleton-box"],
-  [data-testid="skeleton-circle"] {
-    animation: none !important;
-  }
+	/* Disable skeleton loading animations */
+	[data-testid='skeleton-box'],
+	[data-testid='skeleton-circle'] {
+		animation: none !important;
+	}
 
-  /* Disable Usage Dashboard state transition animations */
-  .dashboard-content-enter,
-  .dashboard-card-enter,
-  .dashboard-section-enter {
-    animation: none !important;
-    opacity: 1 !important;
-    transform: none !important;
-  }
+	/* Disable Usage Dashboard state transition animations */
+	.dashboard-content-enter,
+	.dashboard-card-enter,
+	.dashboard-section-enter {
+		animation: none !important;
+		opacity: 1 !important;
+		transform: none !important;
+	}
 
-  /* Disable Document Graph search highlight animations */
-  .search-highlight {
-    animation: none !important;
-  }
+	/* Disable Document Graph search highlight animations */
+	.search-highlight {
+		animation: none !important;
+	}
 }

@@ -48,7 +48,7 @@ const { openWizard } = useWizard();
 openWizard();
 
 // Keyboard shortcut (default)
-Cmd+Shift+N  // Opens wizard
+Cmd + Shift + N; // Opens wizard
 
 // Also available in:
 // - Command K menu: "New Agent Wizard"
@@ -87,25 +87,29 @@ The Wizard maintains two types of state:
    - Cleared on completion or when user chooses "Just Quit"
 
 **State Save Triggers:**
+
 - Auto-save: When `currentStep` changes (step > 1) - `WizardContext.tsx` useEffect with `saveResumeState()`
 - Manual save: User clicks "Save & Exit" - `MaestroWizard.tsx` `handleConfirmExit()`
 
 **State Clear Triggers:**
+
 - Wizard completion: `App.tsx` wizard completion handler + `WizardContext.tsx` `COMPLETE_WIZARD` action
 - User quits: "Quit without saving" button - `MaestroWizard.tsx` `handleQuitWithoutSaving()`
 - User starts fresh: "Start Fresh" in resume modal - `App.tsx` resume handlers
 
 **Opening Wizard Logic:**
 The `openWizard()` function in `WizardContext.tsx` handles state initialization:
+
 ```typescript
 // If previous wizard was completed, reset in-memory state first
 if (state.isComplete === true) {
-  dispatch({ type: 'RESET_WIZARD' });  // Clear stale state
+	dispatch({ type: 'RESET_WIZARD' }); // Clear stale state
 }
-dispatch({ type: 'OPEN_WIZARD' });  // Show wizard UI
+dispatch({ type: 'OPEN_WIZARD' }); // Show wizard UI
 ```
 
 This ensures:
+
 - **Fresh starts**: Completed wizards don't contaminate new runs
 - **Resume works**: Abandoned wizards (isComplete: false) preserve state
 - **No race conditions**: Persisted state is checked after wizard opens
@@ -135,22 +139,22 @@ The tour highlights UI elements with spotlight cutouts:
 
 ### Customization Points
 
-| What | Where |
-|------|-------|
-| Add wizard step | `WizardContext.tsx` (WIZARD_TOTAL_STEPS, WizardStep type, STEP_INDEX) |
-| Modify wizard prompts | `src/prompts/wizard-*.md` (content), `services/wizardPrompts.ts` (logic) |
-| Change confidence threshold | `READY_CONFIDENCE_THRESHOLD` in wizardPrompts.ts (default: 80) |
-| Add tour step | `tour/tourSteps.ts` array |
-| Modify Auto Run document format | `src/prompts/wizard-document-generation.md` |
-| Change wizard keyboard shortcut | `shortcuts.ts` → `openWizard` |
+| What                            | Where                                                                    |
+| ------------------------------- | ------------------------------------------------------------------------ |
+| Add wizard step                 | `WizardContext.tsx` (WIZARD_TOTAL_STEPS, WizardStep type, STEP_INDEX)    |
+| Modify wizard prompts           | `src/prompts/wizard-*.md` (content), `services/wizardPrompts.ts` (logic) |
+| Change confidence threshold     | `READY_CONFIDENCE_THRESHOLD` in wizardPrompts.ts (default: 80)           |
+| Add tour step                   | `tour/tourSteps.ts` array                                                |
+| Modify Auto Run document format | `src/prompts/wizard-document-generation.md`                              |
+| Change wizard keyboard shortcut | `shortcuts.ts` → `openWizard`                                            |
 
 ### Related Settings
 
 ```typescript
 // In useSettings.ts
-wizardCompleted: boolean    // First wizard completion
-tourCompleted: boolean      // First tour completion
-firstAutoRunCompleted: boolean  // Triggers celebration modal
+wizardCompleted: boolean; // First wizard completion
+tourCompleted: boolean; // First tour completion
+firstAutoRunCompleted: boolean; // Triggers celebration modal
 ```
 
 ---
@@ -195,8 +199,8 @@ src/renderer/contexts/InlineWizardContext.tsx  # State provider
 
 ### Customization Points
 
-| What | Where |
-|------|-------|
-| Modify inline wizard prompts | `src/prompts/wizard-*.md` |
-| Change confidence threshold | `READY_CONFIDENCE_THRESHOLD` in wizardPrompts.ts |
-| Modify generation UI | `DocumentGenerationView.tsx`, `AustinFactsDisplay.tsx` |
+| What                         | Where                                                  |
+| ---------------------------- | ------------------------------------------------------ |
+| Modify inline wizard prompts | `src/prompts/wizard-*.md`                              |
+| Change confidence threshold  | `READY_CONFIDENCE_THRESHOLD` in wizardPrompts.ts       |
+| Modify generation UI         | `DocumentGenerationView.tsx`, `AustinFactsDisplay.tsx` |

@@ -67,6 +67,7 @@ The tasks.md should be immediately executable - each task must be specific enoug
 ## Code Reuse Principle
 
 **Before generating tasks that create new code**, consider whether similar functionality already exists in the codebase. Tasks should include guidance to:
+
 - Search for existing utilities, helpers, hooks, or services that accomplish similar goals
 - Follow established patterns rather than inventing new ones
 - Extend or compose existing code when possible

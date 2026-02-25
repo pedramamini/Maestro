@@ -5,18 +5,20 @@ Core implementation patterns for the Maestro codebase. For the main guide, see [
 ## 1. Process Management
 
 Each agent runs **two processes** simultaneously:
+
 - AI agent process (Claude Code, etc.) - spawned with `-ai` suffix
 - Terminal process (PTY shell) - spawned with `-terminal` suffix
 
 ```typescript
 // Agent stores both PIDs (code interface: Session object)
-session.aiPid       // AI agent process
-session.terminalPid // Terminal process
+session.aiPid; // AI agent process
+session.terminalPid; // Terminal process
 ```
 
 ## 2. Security Requirements
 
 **Always use `execFileNoThrow`** for external commands:
+
 ```typescript
 import { execFileNoThrow } from './utils/execFile';
 const result = await execFileNoThrow('git', ['status'], cwd);
@@ -28,14 +30,15 @@ const result = await execFileNoThrow('git', ['status'], cwd);
 ## 3. Settings Persistence
 
 Add new settings in `useSettings.ts`:
+
 ```typescript
 // 1. Add state with default value
 const [mySetting, setMySettingState] = useState(defaultValue);
 
 // 2. Add wrapper that persists
 const setMySetting = (value) => {
-  setMySettingState(value);
-  window.maestro.settings.set('mySetting', value);
+	setMySettingState(value);
+	window.maestro.settings.set('mySetting', value);
 };
 
 // 3. Load from batch response in useEffect (settings use batch loading)
@@ -60,20 +63,21 @@ const onCloseRef = useRef(onClose);
 onCloseRef.current = onClose;
 
 useEffect(() => {
-  if (isOpen) {
-    const id = registerLayer({
-      type: 'modal',
-      priority: MODAL_PRIORITIES.YOUR_MODAL,
-      onEscape: () => onCloseRef.current(),
-    });
-    return () => unregisterLayer(id);
-  }
+	if (isOpen) {
+		const id = registerLayer({
+			type: 'modal',
+			priority: MODAL_PRIORITIES.YOUR_MODAL,
+			onEscape: () => onCloseRef.current(),
+		});
+		return () => unregisterLayer(id);
+	}
 }, [isOpen, registerLayer, unregisterLayer]);
 ```
 
 ## 5. Theme Colors
 
 Themes have 13 required colors. Use inline styles for theme colors:
+
 ```typescript
 style={{ color: theme.colors.textMain }}  // Correct
 className="text-gray-500"                  // Wrong for themed text
@@ -100,34 +104,36 @@ session.activeFileTabId: string | null     // Active file tab (null if AI tab ac
 ### When Adding Tabs
 
 Always update both the tab array AND `unifiedTabOrder`:
+
 ```typescript
 // CORRECT — tab appears in TabBar
 return {
-  ...s,
-  aiTabs: [...s.aiTabs, newTab],
-  activeTabId: newTabId,
-  unifiedTabOrder: [...s.unifiedTabOrder, { type: 'ai', id: newTabId }],
+	...s,
+	aiTabs: [...s.aiTabs, newTab],
+	activeTabId: newTabId,
+	unifiedTabOrder: [...s.unifiedTabOrder, { type: 'ai', id: newTabId }],
 };
 
 // WRONG — tab content renders but no tab visible
 return {
-  ...s,
-  aiTabs: [...s.aiTabs, newTab],
-  activeTabId: newTabId,
-  // unifiedTabOrder not updated — ghost tab!
+	...s,
+	aiTabs: [...s.aiTabs, newTab],
+	activeTabId: newTabId,
+	// unifiedTabOrder not updated — ghost tab!
 };
 ```
 
 ### When Activating Existing Tabs
 
 Use `ensureInUnifiedTabOrder()` to repair orphaned tabs defensively:
+
 ```typescript
 import { ensureInUnifiedTabOrder } from '../utils/tabHelpers';
 
 return {
-  ...s,
-  activeFileTabId: existingTab.id,
-  unifiedTabOrder: ensureInUnifiedTabOrder(s.unifiedTabOrder, 'file', existingTab.id),
+	...s,
+	activeFileTabId: existingTab.id,
+	unifiedTabOrder: ensureInUnifiedTabOrder(s.unifiedTabOrder, 'file', existingTab.id),
 };
 ```
 
@@ -139,12 +145,13 @@ return {
 ## 7. Execution Queue
 
 Messages are queued when the AI is busy:
+
 ```typescript
 // Queue items for sequential execution
 interface QueuedItem {
-  type: 'message' | 'slashCommand';
-  content: string;
-  timestamp: number;
+	type: 'message' | 'slashCommand';
+	content: string;
+	timestamp: number;
 }
 
 // Add to queue instead of sending directly when busy
@@ -154,6 +161,7 @@ session.executionQueue.push({ type: 'message', content, timestamp: Date.now() })
 ## 8. Auto Run
 
 File-based document automation system:
+
 ```typescript
 // Auto Run state on session
 session.autoRunFolderPath?: string;    // Document folder path
@@ -182,6 +190,7 @@ playbook-folder/
 ```
 
 Documents can reference assets using `{{AUTORUN_FOLDER}}/assets/filename`. The manifest lists assets explicitly:
+
 ```json
 {
   "id": "example-playbook",
@@ -195,6 +204,7 @@ Documents can reference assets using `{{AUTORUN_FOLDER}}/assets/filename`. The m
 AI conversation tabs display a hover overlay menu after a 400ms delay when hovering over tabs with an established provider session. The overlay includes tab management and context operations:
 
 **Menu Structure:**
+
 ```typescript
 // Tab operations (always shown)
 - Copy Session ID (if provider session exists)
@@ -215,6 +225,7 @@ AI conversation tabs display a hover overlay menu after a 400ms delay when hover
 ```
 
 **Implementation Pattern:**
+
 ```typescript
 const [overlayOpen, setOverlayOpen] = useState(false);
 const [overlayPosition, setOverlayPosition] = useState<{ top: number; left: number } | null>(null);
@@ -241,6 +252,7 @@ const handleMouseEnter = () => {
 ```
 
 **Key Features:**
+
 - Appears after 400ms hover delay (only for tabs with `agentSessionId`)
 - Fixed positioning at tab bottom
 - Mouse can move from tab to overlay without closing
@@ -277,11 +289,13 @@ const sshId = session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId;
 ```
 
 This applies to any operation that needs to run on the remote:
+
 - `window.maestro.fs.readDir(path, sshId)`
 - `gitService.isRepo(path, sshId)`
 - Directory existence checks for `cd` command tracking
 
 Similarly for checking if an agent is remote:
+
 ```typescript
 // WRONG
 const isRemote = !!session.sshRemoteId;
@@ -306,6 +320,7 @@ When debugging visual issues (tooltips clipped, elements not visible, scroll beh
 4. **Fixed Positioning:** Elements with `position: fixed` inside transformed parents won't position relative to viewport—check ancestor transforms
 
 **Common fixes:**
+
 ```typescript
 // Tooltip/overlay escaping parent overflow
 import { createPortal } from 'react-dom';

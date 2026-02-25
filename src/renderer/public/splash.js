@@ -1,17 +1,24 @@
-(function() {
+(function () {
 	var progress = 0;
 	var progressBar = document.getElementById('splash-progress');
 	var progressText = document.getElementById('splash-text');
 
 	// Capture any errors and display them on the splash screen
-	window.addEventListener('error', function(event) {
+	window.addEventListener('error', function (event) {
 		if (progressText) {
 			progressText.style.color = '#ff6b6b';
 			progressText.textContent = 'Error: ' + (event.error?.message || event.message);
 		}
-		console.error('[Splash] Error:', event.message, event.filename, event.lineno, event.colno, event.error);
+		console.error(
+			'[Splash] Error:',
+			event.message,
+			event.filename,
+			event.lineno,
+			event.colno,
+			event.error
+		);
 	});
-	window.addEventListener('unhandledrejection', function(event) {
+	window.addEventListener('unhandledrejection', function (event) {
 		if (progressText) {
 			progressText.style.color = '#ff6b6b';
 			progressText.textContent = 'Error: ' + (event.reason?.message || String(event.reason));
@@ -20,7 +27,7 @@
 	});
 
 	// Animate progress bar while waiting for React
-	var interval = setInterval(function() {
+	var interval = setInterval(function () {
 		// Slow progress that caps at 70% until React takes over
 		progress += Math.random() * 3 + 1;
 		if (progress > 70) progress = 70;
@@ -29,10 +36,12 @@
 
 	// Store interval ID so React can clear it
 	window.__splashInterval = interval;
-	window.__splashProgress = function() { return progress; };
+	window.__splashProgress = function () {
+		return progress;
+	};
 
 	// Function for React to call when ready
-	window.__hideSplash = function() {
+	window.__hideSplash = function () {
 		clearInterval(interval);
 
 		// Complete the progress bar
@@ -45,7 +54,7 @@
 			if (splash) {
 				splash.classList.add('hidden');
 				// Remove from DOM after animation
-				setTimeout(function() {
+				setTimeout(function () {
 					if (splash && splash.parentNode) {
 						splash.parentNode.removeChild(splash);
 					}
@@ -55,7 +64,7 @@
 
 		// Wait for fonts to be loaded to prevent layout shift from font swap
 		if (document.fonts && document.fonts.ready) {
-			document.fonts.ready.then(function() {
+			document.fonts.ready.then(function () {
 				// Small delay after fonts ready for any final layout settling
 				setTimeout(fadeOut, 50);
 			});

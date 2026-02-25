@@ -35,12 +35,12 @@ When developing or running Maestro with WSL2, always clone and run from the **na
 
 Using Windows mounts causes several critical issues:
 
-| Issue | Symptom |
-|-------|---------|
-| Socket binding failures | `EPERM: operation not permitted` when starting dev server |
-| Electron sandbox crashes | `FATAL:sandbox_host_linux.cc` errors |
-| npm install failures | Timeouts, `ENOTEMPTY` rename errors |
-| Git corruption | Missing index files, spurious lock files |
+| Issue                    | Symptom                                                   |
+| ------------------------ | --------------------------------------------------------- |
+| Socket binding failures  | `EPERM: operation not permitted` when starting dev server |
+| Electron sandbox crashes | `FATAL:sandbox_host_linux.cc` errors                      |
+| npm install failures     | Timeouts, `ENOTEMPTY` rename errors                       |
+| Git corruption           | Missing index files, spurious lock files                  |
 
 ### Recommended WSL2 Setup
 
@@ -60,6 +60,7 @@ npm run dev
 ### Accessing Files from Windows
 
 You can browse your WSL2 files from Windows Explorer using:
+
 ```
 \\wsl$\Ubuntu\home\<username>\maestro
 ```
@@ -67,6 +68,7 @@ You can browse your WSL2 files from Windows Explorer using:
 ### Troubleshooting WSL2
 
 If you encounter `electron-rebuild` failures, try setting the temp directory:
+
 ```bash
 TMPDIR=/tmp npm run rebuild
 ```
