@@ -284,6 +284,36 @@ describe('restoreSession — Corruption recovery', () => {
 		expect(restored!.filePreviewTabs).toEqual([]);
 		expect(restored!.activeFileTabId).toBeNull();
 	});
+
+	it('clears orphaned activeFileTabId when inputMode is terminal', async () => {
+		const session = createMockSession({
+			inputMode: 'terminal',
+			activeFileTabId: 'orphaned-file-tab',
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.activeFileTabId).toBeNull();
+	});
+
+	it('preserves activeFileTabId when inputMode is ai', async () => {
+		const session = createMockSession({
+			inputMode: 'ai',
+			activeFileTabId: 'valid-file-tab',
+		});
+		const { result } = renderHook(() => useSessionRestoration());
+
+		let restored: Session;
+		await act(async () => {
+			restored = await result.current.restoreSession(session);
+		});
+
+		expect(restored!.activeFileTabId).toBe('valid-file-tab');
+	});
 });
 
 // ============================================================================

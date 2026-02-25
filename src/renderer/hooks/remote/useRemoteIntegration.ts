@@ -155,7 +155,13 @@ export function useRemoteIntegration(deps: UseRemoteIntegrationDeps): UseRemoteI
 
 					return prev.map((s) => {
 						if (s.id !== sessionId) return s;
-						return { ...s, inputMode: mode };
+						// Clear activeFileTabId when switching to terminal mode to prevent
+						// orphaned file preview without tab bar
+						return {
+							...s,
+							inputMode: mode,
+							...(mode === 'terminal' && { activeFileTabId: null }),
+						};
 					});
 				});
 			}

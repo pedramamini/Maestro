@@ -188,6 +188,16 @@ export function useSessionRestoration(): SessionRestorationReturn {
 				};
 			}
 
+			// Fix inconsistency: activeFileTabId should only be set in AI mode.
+			// If inputMode is 'terminal' but a file tab is still active, clear it to prevent
+			// rendering a file preview without a tab bar (orphaned file preview bug).
+			if (session.inputMode !== 'ai' && session.activeFileTabId) {
+				console.warn(
+					`[restoreSession] Session has activeFileTabId='${session.activeFileTabId}' but inputMode='${session.inputMode}' — clearing orphaned file tab reference`
+				);
+				session = { ...session, activeFileTabId: null };
+			}
+
 			// Detect and fix inputMode/toolType mismatch
 			let correctedSession = { ...session };
 			let aiAgentType = correctedSession.toolType;

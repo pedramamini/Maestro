@@ -319,6 +319,47 @@ describe('useRemoteIntegration', () => {
 			const result = typeof updater === 'function' ? updater([session]) : updater;
 			expect(result).toEqual([session]);
 		});
+
+		it('clears activeFileTabId when switching to terminal mode', () => {
+			const session = createMockSession({
+				id: 'session-1',
+				inputMode: 'ai',
+				activeFileTabId: 'file-tab-1',
+			});
+			const deps = createDeps({ sessions: [session] });
+
+			renderHook(() => useRemoteIntegration(deps));
+
+			act(() => {
+				onRemoteSwitchModeHandler?.('session-1', 'terminal');
+			});
+
+			const updater = deps.setSessions.mock.calls[0][0];
+			const result = typeof updater === 'function' ? updater([session]) : updater;
+			expect(result[0].inputMode).toBe('terminal');
+			expect(result[0].activeFileTabId).toBeNull();
+		});
+
+		it('preserves activeFileTabId when switching to ai mode', () => {
+			const session = createMockSession({
+				id: 'session-1',
+				inputMode: 'terminal',
+				activeFileTabId: null,
+			});
+			const deps = createDeps({ sessions: [session] });
+
+			renderHook(() => useRemoteIntegration(deps));
+
+			act(() => {
+				onRemoteSwitchModeHandler?.('session-1', 'ai');
+			});
+
+			const updater = deps.setSessions.mock.calls[0][0];
+			const result = typeof updater === 'function' ? updater([session]) : updater;
+			expect(result[0].inputMode).toBe('ai');
+			// activeFileTabId should not be set to some arbitrary value
+			expect(result[0].activeFileTabId).toBeNull();
+		});
 	});
 
 	describe('remote interrupt handling', () => {
