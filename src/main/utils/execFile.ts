@@ -134,10 +134,20 @@ export async function execFileNoThrow(
 	} catch (error: any) {
 		// execFile throws on non-zero exit codes
 		// Use ?? instead of || to correctly handle exit code 0 (which is falsy but valid)
+
+		// When execFile kills a process due to timeout, error.killed is true and
+		// error.code is undefined (process didn't exit normally). We surface this
+		// as 'ETIMEDOUT' so callers (e.g., remote-fs retry logic) can detect it.
+		// Note: maxBuffer kills also set error.killed, but those have
+		// error.code = 'ERR_CHILD_PROCESS_STDIO_MAXBUFFER', so we exclude them.
+		const isTimeout = timeout && error.killed && !error.code;
+
 		return {
 			stdout: error.stdout || '',
-			stderr: error.stderr || error.message || '',
-			exitCode: error.code ?? 1,
+			stderr: isTimeout
+				? `${error.stderr || ''}\nETIMEDOUT: process timed out after ${timeout}ms`
+				: error.stderr || error.message || '',
+			exitCode: isTimeout ? 'ETIMEDOUT' : (error.code ?? 1),
 		};
 	}
 }
