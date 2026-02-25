@@ -328,6 +328,7 @@ function IssueCard({
 			onKeyDown={
 				isSelectable
 					? (e) => {
+							if (e.target !== e.currentTarget) return;
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
 								onSelect();
@@ -335,7 +336,7 @@ function IssueCard({
 						}
 					: undefined
 			}
-			className={`w-full p-3 rounded-lg border text-left transition-all ${
+			className={`w-full p-3 rounded-lg border text-left transition-all outline-none focus-visible:ring-2 ${
 				isBlocked
 					? 'opacity-75 hover:bg-white/5 cursor-pointer'
 					: !isAvailable
