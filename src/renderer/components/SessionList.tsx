@@ -2804,18 +2804,19 @@ function SessionListInner(props: SessionListProps) {
 								<div className="relative">
 									<div
 										className={`w-3 h-3 rounded-full ${shouldPulse ? 'animate-pulse' : ''}`}
-										style={
-											session.toolType === 'claude-code' && !session.agentSessionId && !isInBatch
+										style={{
+											opacity: activeSessionId === session.id ? 1 : 0.25,
+											...(session.toolType === 'claude-code' &&
+											!session.agentSessionId &&
+											!isInBatch
 												? {
 														border: `1.5px solid ${theme.colors.textDim}`,
 														backgroundColor: 'transparent',
-														opacity: activeSessionId === session.id ? 1 : 0.25,
 													}
 												: {
 														backgroundColor: effectiveStatusColor,
-														opacity: activeSessionId === session.id ? 1 : 0.25,
-													}
-										}
+													}),
+										}}
 										title={
 											session.toolType === 'claude-code' && !session.agentSessionId
 												? 'No active Claude session'
