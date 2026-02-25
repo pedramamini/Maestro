@@ -1299,8 +1299,12 @@ export function navigateToLastUnifiedTab(session: Session): NavigateToUnifiedTab
 		return null;
 	}
 
-	const lastIndex = session.unifiedTabOrder.length - 1;
-	return navigateToUnifiedTabByIndex(session, lastIndex);
+	// Find the last valid tab, skipping orphaned entries
+	for (let i = session.unifiedTabOrder.length - 1; i >= 0; i--) {
+		const result = navigateToUnifiedTabByIndex(session, i);
+		if (result) return result;
+	}
+	return null;
 }
 
 /**
@@ -1355,22 +1359,28 @@ export function navigateToNextUnifiedTab(
 	}
 
 	const currentIndex = getCurrentUnifiedTabIndex(session);
+	const length = session.unifiedTabOrder.length;
 
-	// If current tab not found, go to first tab
+	// If current tab not found, go to first valid tab
 	if (currentIndex === -1) {
-		return navigateToUnifiedTabByIndex(session, 0);
+		for (let i = 0; i < length; i++) {
+			const result = navigateToUnifiedTabByIndex(session, i);
+			if (result) return result;
+		}
+		return null;
 	}
 
 	// When showUnreadOnly is true, we need to skip AI tabs that are read and have no drafts
 	if (showUnreadOnly) {
-		const length = session.unifiedTabOrder.length;
 		for (let offset = 1; offset < length; offset++) {
 			const nextIndex = (currentIndex + offset) % length;
 			const tabRef = session.unifiedTabOrder[nextIndex];
 
-			// File tabs are always navigable
+			// File tabs are always navigable (if they still exist)
 			if (tabRef.type === 'file') {
-				return navigateToUnifiedTabByIndex(session, nextIndex);
+				const result = navigateToUnifiedTabByIndex(session, nextIndex);
+				if (result) return result;
+				continue; // Orphaned file tab, skip
 			}
 
 			// For AI tabs, check if it's unread or has a draft
@@ -1383,9 +1393,13 @@ export function navigateToNextUnifiedTab(
 		return null;
 	}
 
-	// Simple case: just go to next tab with wrap-around
-	const nextIndex = (currentIndex + 1) % session.unifiedTabOrder.length;
-	return navigateToUnifiedTabByIndex(session, nextIndex);
+	// Find next valid tab with wrap-around, skipping orphaned entries
+	for (let offset = 1; offset < length; offset++) {
+		const nextIndex = (currentIndex + offset) % length;
+		const result = navigateToUnifiedTabByIndex(session, nextIndex);
+		if (result) return result;
+	}
+	return null;
 }
 
 /**
@@ -1415,22 +1429,28 @@ export function navigateToPrevUnifiedTab(
 	}
 
 	const currentIndex = getCurrentUnifiedTabIndex(session);
+	const length = session.unifiedTabOrder.length;
 
-	// If current tab not found, go to last tab
+	// If current tab not found, go to last valid tab
 	if (currentIndex === -1) {
-		return navigateToLastUnifiedTab(session);
+		for (let i = length - 1; i >= 0; i--) {
+			const result = navigateToUnifiedTabByIndex(session, i);
+			if (result) return result;
+		}
+		return null;
 	}
 
 	// When showUnreadOnly is true, we need to skip AI tabs that are read and have no drafts
 	if (showUnreadOnly) {
-		const length = session.unifiedTabOrder.length;
 		for (let offset = 1; offset < length; offset++) {
 			const prevIndex = (currentIndex - offset + length) % length;
 			const tabRef = session.unifiedTabOrder[prevIndex];
 
-			// File tabs are always navigable
+			// File tabs are always navigable (if they still exist)
 			if (tabRef.type === 'file') {
-				return navigateToUnifiedTabByIndex(session, prevIndex);
+				const result = navigateToUnifiedTabByIndex(session, prevIndex);
+				if (result) return result;
+				continue; // Orphaned file tab, skip
 			}
 
 			// For AI tabs, check if it's unread or has a draft
@@ -1443,10 +1463,13 @@ export function navigateToPrevUnifiedTab(
 		return null;
 	}
 
-	// Simple case: just go to previous tab with wrap-around
-	const length = session.unifiedTabOrder.length;
-	const prevIndex = (currentIndex - 1 + length) % length;
-	return navigateToUnifiedTabByIndex(session, prevIndex);
+	// Find previous valid tab with wrap-around, skipping orphaned entries
+	for (let offset = 1; offset < length; offset++) {
+		const prevIndex = (currentIndex - offset + length) % length;
+		const result = navigateToUnifiedTabByIndex(session, prevIndex);
+		if (result) return result;
+	}
+	return null;
 }
 
 /**
