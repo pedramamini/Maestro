@@ -363,6 +363,10 @@ function MaestroConsoleInner() {
 		setMarkdownEditMode,
 		chatRawTextMode,
 		setChatRawTextMode,
+		showHiddenFiles,
+		setShowHiddenFiles,
+		terminalWidth,
+		setTerminalWidth,
 		logLevel,
 		logViewerSelectedLevels,
 		setLogViewerSelectedLevels,
@@ -492,6 +496,7 @@ function MaestroConsoleInner() {
 	const bookmarksCollapsed = useUIStore((s) => s.bookmarksCollapsed);
 	// groupChatsExpanded moved to useCycleSession hook
 	const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
+	const selectedFileIndex = useFileExplorerStore((s) => s.selectedFileIndex);
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 	const fileTreeFilterOpen = useFileExplorerStore((s) => s.fileTreeFilterOpen);
 	const editingGroupId = useUIStore((s) => s.editingGroupId);
@@ -515,7 +520,8 @@ function MaestroConsoleInner() {
 		setSelectedSidebarIndex,
 	} = useUIStore.getState();
 
-	const { setFileTreeFilterOpen } = useFileExplorerStore.getState();
+	const { setSelectedFileIndex, setFileTreeFilter, setFileTreeFilterOpen } =
+		useFileExplorerStore.getState();
 
 	// --- GROUP CHAT STATE (now in groupChatStore) ---
 
@@ -626,6 +632,8 @@ function MaestroConsoleInner() {
 	// Content is per-session in session.autoRunContent
 	const autoRunDocumentList = useBatchStore((s) => s.documentList);
 	const autoRunDocumentTree = useBatchStore((s) => s.documentTree);
+	const autoRunIsLoadingDocuments = useBatchStore((s) => s.isLoadingDocuments);
+	const autoRunDocumentTaskCounts = useBatchStore((s) => s.documentTaskCounts);
 	const {
 		setDocumentList: setAutoRunDocumentList,
 		setDocumentTree: setAutoRunDocumentTree,
@@ -1761,8 +1769,16 @@ function MaestroConsoleInner() {
 		},
 		[activeSession]
 	);
-	// File tab selection from TabSwitcher - reuse the proper handler which includes auto-refresh
-	const handleUtilityFileTabSelect = handleSelectFileTab;
+	const handleUtilityFileTabSelect = useCallback(
+		(tabId: string) => {
+			if (!activeSession) return;
+			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs)
+			setSessions((prev) =>
+				prev.map((s) => (s.id === activeSession.id ? { ...s, activeFileTabId: tabId } : s))
+			);
+		},
+		[activeSession]
+	);
 	const handleNamedSessionSelect = useCallback(
 		(agentSessionId: string, _projectPath: string, sessionName: string, starred?: boolean) => {
 			// Open a closed named session as a new tab - use handleResumeSession to properly load messages
@@ -2272,17 +2288,57 @@ function MaestroConsoleInner() {
 	});
 
 	const rightPanelProps = useRightPanelProps({
-		// Theme (computed externally from settingsStore + themeId)
+		// Session & Theme
+		activeSession,
 		theme,
+		shortcuts,
+
+		// Panel state
+		rightPanelOpen,
+		rightPanelWidth,
+
+		// Tab state
+		activeRightTab,
+
+		// Focus management
+		activeFocus,
+
+		// File explorer state
+		fileTreeFilter,
+		fileTreeFilterOpen,
+		filteredFileTree,
+		selectedFileIndex,
+		showHiddenFiles,
+
+		// Auto Run state
+		autoRunDocumentList,
+		autoRunDocumentTree,
+		autoRunIsLoadingDocuments,
+		autoRunDocumentTaskCounts,
+
+		// Batch processing (convert null to undefined for component props)
+		activeBatchRunState: activeBatchRunState ?? undefined,
+		currentSessionBatchState: currentSessionBatchState ?? undefined,
+
+		// Document Graph
+		lastGraphFocusFilePath: lastGraphFocusFilePath || undefined,
 
 		// Refs
 		fileTreeContainerRef,
 		fileTreeFilterInputRef,
 
-		// Tab handler (custom logic: checks autorun folder before switching)
-		handleSetActiveRightTab,
+		// Setters
+		setRightPanelOpen,
+		setRightPanelWidth,
+		setActiveFocus,
+		setFileTreeFilter,
+		setFileTreeFilterOpen,
+		setSelectedFileIndex,
+		setShowHiddenFiles,
+		setSessions,
 
-		// File explorer handlers
+		// Handlers
+		handleSetActiveRightTab,
 		toggleFolder,
 		handleFileClick,
 		expandAllFolders,
@@ -2301,8 +2357,7 @@ function MaestroConsoleInner() {
 		handleAutoRunRefresh,
 		handleAutoRunOpenSetup,
 
-		// Batch processing (computed by useBatchHandlers, not a raw store field)
-		currentSessionBatchState: currentSessionBatchState ?? undefined,
+		// Batch processing handlers
 		handleOpenBatchRunner,
 		handleStopBatchRun,
 		handleKillBatchRun,
