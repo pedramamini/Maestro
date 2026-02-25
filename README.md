@@ -108,16 +108,16 @@ npm run dev
 
 ### Essential Keyboard Shortcuts
 
-| Action | macOS | Windows/Linux |
-|--------|-------|---------------|
-| Quick Actions | `Cmd+K` | `Ctrl+K` |
-| New Agent | `Cmd+N` | `Ctrl+N` |
-| Switch AI/Terminal | `Cmd+J` | `Ctrl+J` |
+| Action              | macOS             | Windows/Linux       |
+| ------------------- | ----------------- | ------------------- |
+| Quick Actions       | `Cmd+K`           | `Ctrl+K`            |
+| New Agent           | `Cmd+N`           | `Ctrl+N`            |
+| Switch AI/Terminal  | `Cmd+J`           | `Ctrl+J`            |
 | Previous/Next Agent | `Cmd+[` / `Cmd+]` | `Ctrl+[` / `Ctrl+]` |
-| Toggle Sidebar | `Cmd+B` | `Ctrl+B` |
-| New Tab | `Cmd+T` | `Ctrl+T` |
-| Usage Dashboard | `Opt+Cmd+U` | `Alt+Ctrl+U` |
-| All Shortcuts | `Cmd+/` | `Ctrl+/` |
+| Toggle Sidebar      | `Cmd+B`           | `Ctrl+B`            |
+| New Tab             | `Cmd+T`           | `Ctrl+T`            |
+| Usage Dashboard     | `Opt+Cmd+U`       | `Alt+Ctrl+U`        |
+| All Shortcuts       | `Cmd+/`           | `Ctrl+/`            |
 
 [Full keyboard shortcut reference](https://docs.runmaestro.ai/keyboard-shortcuts)
 
@@ -127,25 +127,25 @@ npm run dev
   <img src="docs/screenshots/main-screen.png" alt="Maestro Main Screen" width="800">
 </p>
 
-*Main screen with multiple agents and conversation*
+_Main screen with multiple agents and conversation_
 
 <p align="center">
   <img src="docs/screenshots/group-chat.png" alt="Group Chat" width="800">
 </p>
 
-*Group Chat coordinates multiple AI agents in a single conversation*
+_Group Chat coordinates multiple AI agents in a single conversation_
 
 <p align="center">
   <img src="docs/screenshots/cmd-k-1.png" alt="Command Palette" width="800">
 </p>
 
-*Quick Actions palette for rapid navigation (CTRL/CMD + K)*
+_Quick Actions palette for rapid navigation (CTRL/CMD + K)_
 
 <p align="center">
   <img src="docs/screenshots/git-diff.png" alt="Git Diff Viewer" width="800">
 </p>
 
-*Git diff viewer with syntax highlighting*
+_Git diff viewer with syntax highlighting_
 
 [See more...](docs/screenshots/)
 
@@ -173,6 +173,7 @@ Full documentation and usage guide available at **[docs.runmaestro.ai](https://d
 Meet the team behind Maestro at [runmaestro.ai/team](https://runmaestro.ai/team/).
 
 ### Contributing
+
 See [CONTRIBUTING.md](CONTRIBUTING.md) for development setup, architecture details, and contribution guidelines.
 
 ## License

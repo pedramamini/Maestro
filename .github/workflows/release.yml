@@ -5,8 +5,8 @@ name: Release Maestro
 on:
   push:
     tags:
-      - 'v*.*.*'      # Semantic version tags (e.g., v1.0.0)
-      - '20*'         # Date-based tags (e.g., 2025-11-27)
+      - 'v*.*.*' # Semantic version tags (e.g., v1.0.0)
+      - '20*' # Date-based tags (e.g., 2025-11-27)
   workflow_dispatch:
 
 permissions:
@@ -412,7 +412,7 @@ jobs:
           npm_config_arch: arm64
           npm_config_target_arch: arm64
           npm_config_build_from_source: true
-          USE_SYSTEM_FPM: "true"
+          USE_SYSTEM_FPM: 'true'
           BUILD_VERSION: ${{ steps.version.outputs.VERSION }}
         run: |
           # Critical: Clean build directories to force fresh compilation
@@ -729,7 +729,7 @@ jobs:
         with:
           webhook: ${{ secrets.DISCORD_WEBHOOK_URL }}
           nodetail: true
-          title: "🎉 Maestro ${{ github.ref_name }} Released!"
+          title: '🎉 Maestro ${{ github.ref_name }} Released!'
           description: |
             ${{ steps.release_notes.outputs.notes }}
 

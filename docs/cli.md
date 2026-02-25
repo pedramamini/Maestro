@@ -48,20 +48,20 @@ The response is always JSON:
 
 ```json
 {
-  "agentId": "a1b2c3d4-...",
-  "agentName": "My Agent",
-  "sessionId": "abc123def456",
-  "response": "The authentication flow works by...",
-  "success": true,
-  "usage": {
-    "inputTokens": 1000,
-    "outputTokens": 500,
-    "cacheReadInputTokens": 200,
-    "cacheCreationInputTokens": 100,
-    "totalCostUsd": 0.05,
-    "contextWindow": 200000,
-    "contextUsagePercent": 1
-  }
+	"agentId": "a1b2c3d4-...",
+	"agentName": "My Agent",
+	"sessionId": "abc123def456",
+	"response": "The authentication flow works by...",
+	"success": true,
+	"usage": {
+		"inputTokens": 1000,
+		"outputTokens": 500,
+		"cacheReadInputTokens": 200,
+		"cacheCreationInputTokens": 100,
+		"totalCostUsd": 0.05,
+		"contextWindow": 200000,
+		"contextUsagePercent": 1
+	}
 }
 ```
 
@@ -69,9 +69,9 @@ On failure, `success` is `false` and an `error` field is included:
 
 ```json
 {
-  "success": false,
-  "error": "Agent not found: bad-id",
-  "code": "AGENT_NOT_FOUND"
+	"success": false,
+	"error": "Agent not found: bad-id",
+	"code": "AGENT_NOT_FOUND"
 }
 ```
 
@@ -103,36 +103,36 @@ maestro-cli list sessions <agent-id> -s "authentication"
 maestro-cli list sessions <agent-id> -l 50 -k 0 -s "refactor" --json
 ```
 
-| Flag | Description | Default |
-|------|-------------|---------|
-| `-l, --limit <count>` | Maximum number of sessions to return | 25 |
-| `-k, --skip <count>` | Number of sessions to skip (for pagination) | 0 |
-| `-s, --search <keyword>` | Filter by keyword in session name or first message | — |
-| `--json` | Output as JSON | — |
+| Flag                     | Description                                        | Default |
+| ------------------------ | -------------------------------------------------- | ------- |
+| `-l, --limit <count>`    | Maximum number of sessions to return               | 25      |
+| `-k, --skip <count>`     | Number of sessions to skip (for pagination)        | 0       |
+| `-s, --search <keyword>` | Filter by keyword in session name or first message | —       |
+| `--json`                 | Output as JSON                                     | —       |
 
 JSON output includes full session metadata:
 
 ```json
 {
-  "success": true,
-  "agentId": "a1b2c3d4-...",
-  "agentName": "My Agent",
-  "totalCount": 42,
-  "filteredCount": 3,
-  "sessions": [
-    {
-      "sessionId": "abc123",
-      "sessionName": "Auth refactor",
-      "modifiedAt": "2026-02-08T10:00:00.000Z",
-      "firstMessage": "Help me refactor the auth module...",
-      "messageCount": 12,
-      "costUsd": 0.05,
-      "inputTokens": 5000,
-      "outputTokens": 2000,
-      "durationSeconds": 300,
-      "starred": true
-    }
-  ]
+	"success": true,
+	"agentId": "a1b2c3d4-...",
+	"agentName": "My Agent",
+	"totalCount": 42,
+	"filteredCount": 3,
+	"sessions": [
+		{
+			"sessionId": "abc123",
+			"sessionName": "Auth refactor",
+			"modifiedAt": "2026-02-08T10:00:00.000Z",
+			"firstMessage": "Help me refactor the auth module...",
+			"messageCount": 12,
+			"costUsd": 0.05,
+			"inputTokens": 5000,
+			"outputTokens": 2000,
+			"durationSeconds": 300,
+			"starred": true
+		}
+	]
 }
 ```
 

@@ -9,6 +9,7 @@ The Playbook Exchange is a curated collection of community-contributed playbooks
 ## Opening the Exchange
 
 Open the Playbook Exchange using:
+
 - **Quick Actions** — `Cmd+K` / `Ctrl+K` → search "Playbook Exchange"
 - **Auto Run panel** — Click the **Exchange** button (grid icon)
 
@@ -56,6 +57,7 @@ Clicking a playbook tile (or pressing `Enter`) opens the detail view where you c
 3. Click **Import Playbook**
 
 The import creates:
+
 - A subfolder in your Auto Run folder with the playbook name
 - All markdown task documents copied to that folder
 - An `assets/` subfolder with any supporting files (configs, scripts, templates) if the playbook includes them
@@ -87,19 +89,19 @@ Click the **?** help button in the Exchange header for more information about co
 
 ### List View
 
-| Action | macOS | Windows/Linux |
-|--------|-------|---------------|
-| Navigate tiles | Arrow keys | Arrow keys |
-| Open detail view | `Enter` | `Enter` |
-| Focus search | `Cmd+F` | `Ctrl+F` |
+| Action              | macOS           | Windows/Linux    |
+| ------------------- | --------------- | ---------------- |
+| Navigate tiles      | Arrow keys      | Arrow keys       |
+| Open detail view    | `Enter`         | `Enter`          |
+| Focus search        | `Cmd+F`         | `Ctrl+F`         |
 | Switch category tab | `Cmd+Shift+[/]` | `Ctrl+Shift+[/]` |
-| Close modal | `Esc` | `Esc` |
+| Close modal         | `Esc`           | `Esc`            |
 
 ### Detail View
 
-| Action | macOS | Windows/Linux |
-|--------|-------|---------------|
+| Action                 | macOS           | Windows/Linux    |
+| ---------------------- | --------------- | ---------------- |
 | Previous/next document | `Cmd+Shift+[/]` | `Ctrl+Shift+[/]` |
-| Page up/down | `Opt+Up/Down` | `Alt+Up/Down` |
-| Scroll to top/bottom | `Cmd+Up/Down` | `Ctrl+Up/Down` |
-| Back to list | `Esc` | `Esc` |
+| Page up/down           | `Opt+Up/Down`   | `Alt+Up/Down`    |
+| Scroll to top/bottom   | `Cmd+Up/Down`   | `Ctrl+Up/Down`   |
+| Back to list           | `Esc`           | `Esc`            |

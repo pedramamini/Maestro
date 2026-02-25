@@ -6,17 +6,17 @@ Essential guidance for working with this codebase. For detailed architecture, se
 
 This guide has been split into focused sub-documents for progressive disclosure:
 
-| Document | Description |
-|----------|-------------|
-| [[CLAUDE-PATTERNS.md]] | Core implementation patterns (process management, settings, modals, themes, Auto Run, SSH, Encore Features) |
-| [[CLAUDE-IPC.md]] | IPC API surface (`window.maestro.*` namespaces) |
-| [[CLAUDE-PERFORMANCE.md]] | Performance best practices (React optimization, debouncing, batching) |
-| [[CLAUDE-WIZARD.md]] | Onboarding Wizard, Inline Wizard, and Tour System |
-| [[CLAUDE-FEATURES.md]] | Usage Dashboard and Document Graph features |
-| [[CLAUDE-AGENTS.md]] | Supported agents and capabilities |
-| [[CLAUDE-SESSION.md]] | Session interface (agent data model) and code conventions |
-| [[CLAUDE-PLATFORM.md]] | Cross-platform concerns (Windows, Linux, macOS, SSH remote) |
-| [AGENT_SUPPORT.md](AGENT_SUPPORT.md) | Detailed agent integration guide |
+| Document                             | Description                                                                                                 |
+| ------------------------------------ | ----------------------------------------------------------------------------------------------------------- |
+| [[CLAUDE-PATTERNS.md]]               | Core implementation patterns (process management, settings, modals, themes, Auto Run, SSH, Encore Features) |
+| [[CLAUDE-IPC.md]]                    | IPC API surface (`window.maestro.*` namespaces)                                                             |
+| [[CLAUDE-PERFORMANCE.md]]            | Performance best practices (React optimization, debouncing, batching)                                       |
+| [[CLAUDE-WIZARD.md]]                 | Onboarding Wizard, Inline Wizard, and Tour System                                                           |
+| [[CLAUDE-FEATURES.md]]               | Usage Dashboard and Document Graph features                                                                 |
+| [[CLAUDE-AGENTS.md]]                 | Supported agents and capabilities                                                                           |
+| [[CLAUDE-SESSION.md]]                | Session interface (agent data model) and code conventions                                                   |
+| [[CLAUDE-PLATFORM.md]]               | Cross-platform concerns (Windows, Linux, macOS, SSH remote)                                                 |
+| [AGENT_SUPPORT.md](AGENT_SUPPORT.md) | Detailed agent integration guide                                                                            |
 
 ---
 
@@ -25,21 +25,27 @@ This guide has been split into focused sub-documents for progressive disclosure:
 Core behaviors for effective collaboration. Failures here cause the most rework.
 
 ### Surface Assumptions Early
+
 Before implementing non-trivial work, explicitly state assumptions. Never silently fill in ambiguous requirements—the most common failure mode is guessing wrong and running with it. Format: "Assumptions: 1) X, 2) Y. Correct me now or I proceed."
 
 ### Manage Confusion Actively
+
 When encountering inconsistencies, conflicting requirements, or unclear specs: **STOP**. Name the specific confusion, present the tradeoff, and wait for resolution. Bad: silently picking one interpretation. Good: "I see X in file A but Y in file B—which takes precedence?"
 
 ### Push Back When Warranted
+
 Not a yes-machine. When an approach has clear problems: point out the issue directly, explain the concrete downside, propose an alternative, then accept the decision if overridden. Sycophancy ("Of course!") followed by implementing a bad idea helps no one.
 
 ### Enforce Simplicity
+
 Natural tendency is to overcomplicate—actively resist. Before finishing: Can this be fewer lines? Are abstractions earning their complexity? Would a senior dev say "why didn't you just..."? Prefer the boring, obvious solution.
 
 ### Maintain Scope Discipline
+
 Touch only what's asked. Do NOT: remove comments you don't understand, "clean up" orthogonal code, refactor adjacent systems as side effects, or delete seemingly-unused code without approval. Surgical precision, not unsolicited renovation.
 
 ### Dead Code Hygiene
+
 After refactoring: identify now-unreachable code, list it explicitly, ask "Should I remove these now-unused elements: [list]?" Don't leave corpses. Don't delete without asking.
 
 ---
@@ -58,6 +64,7 @@ In Maestro, the terms "agent" and "session" have distinct meanings:
 Use "agent" in user-facing language. Reserve "session" for provider-level conversation contexts or when documenting the code interface.
 
 ### UI Components
+
 - **Left Bar** - Left sidebar with agent list and groups (`SessionList.tsx`)
 - **Right Bar** - Right sidebar with Files, History, Auto Run tabs (`RightPanel.tsx`)
 - **Main Window** - Center workspace (`MainPanel.tsx`)
@@ -66,6 +73,7 @@ Use "agent" in user-facing language. Reserve "session" for provider-level conver
   - **System Log Viewer** - Special view for system logs (`LogViewer.tsx`)
 
 ### Agent States (color-coded)
+
 - **Green** - Ready/idle
 - **Yellow** - Agent thinking/busy
 - **Red** - No connection/error
@@ -85,13 +93,13 @@ Maestro is an Electron desktop app for managing multiple AI coding assistants si
 
 ### Supported Agents
 
-| ID | Name | Status |
-|----|------|--------|
-| `claude-code` | Claude Code | **Active** |
-| `codex` | OpenAI Codex | **Active** |
-| `opencode` | OpenCode | **Active** |
+| ID              | Name          | Status     |
+| --------------- | ------------- | ---------- |
+| `claude-code`   | Claude Code   | **Active** |
+| `codex`         | OpenAI Codex  | **Active** |
+| `opencode`      | OpenCode      | **Active** |
 | `factory-droid` | Factory Droid | **Active** |
-| `terminal` | Terminal | Internal |
+| `terminal`      | Terminal      | Internal   |
 
 See [[CLAUDE-AGENTS.md]] for capabilities and integration details.
 
@@ -155,45 +163,45 @@ src/
 
 ## Key Files for Common Tasks
 
-| Task | Primary Files |
-|------|---------------|
-| Add IPC handler | `src/main/index.ts`, `src/main/preload.ts` |
-| Add UI component | `src/renderer/components/` |
-| Add web/mobile component | `src/web/components/`, `src/web/mobile/` |
-| Add keyboard shortcut | `src/renderer/constants/shortcuts.ts`, `App.tsx` |
-| Add theme | `src/renderer/constants/themes.ts` |
-| Add modal | Component + `src/renderer/constants/modalPriorities.ts` |
-| Add tab overlay menu | See Tab Hover Overlay Menu pattern in [[CLAUDE-PATTERNS.md]] |
-| Add setting | `src/renderer/hooks/useSettings.ts`, `src/main/index.ts` |
-| Add template variable | `src/shared/templateVariables.ts`, `src/renderer/utils/templateVariables.ts` |
-| Modify system prompts | `src/prompts/*.md` (wizard, Auto Run, etc.) |
-| Add Spec-Kit command | `src/prompts/speckit/`, `src/main/speckit-manager.ts` |
-| Add OpenSpec command | `src/prompts/openspec/`, `src/main/openspec-manager.ts` |
-| Add CLI command | `src/cli/commands/`, `src/cli/index.ts` |
-| Configure agent | `src/main/agent-detector.ts`, `src/main/agent-capabilities.ts` |
-| Add agent output parser | `src/main/parsers/`, `src/main/parsers/index.ts` |
-| Add agent session storage | `src/main/storage/`, `src/main/agent-session-storage.ts` |
-| Add agent error patterns | `src/main/parsers/error-patterns.ts` |
-| Add playbook feature | `src/cli/services/playbooks.ts` |
-| Add marketplace playbook | `src/main/ipc/handlers/marketplace.ts` (import from GitHub) |
-| Playbook import/export | `src/main/ipc/handlers/playbooks.ts` (ZIP handling with assets) |
-| Modify wizard flow | `src/renderer/components/Wizard/` (see [[CLAUDE-WIZARD.md]]) |
-| Add tour step | `src/renderer/components/Wizard/tour/tourSteps.ts` |
-| Modify file linking | `src/renderer/utils/remarkFileLinks.ts` (remark plugin for `[[wiki]]` and path links) |
-| Add documentation page | `docs/*.md`, `docs/docs.json` (navigation) |
-| Add documentation screenshot | `docs/screenshots/` (PNG, kebab-case naming) |
-| MCP server integration | See [MCP Server docs](https://docs.runmaestro.ai/mcp-server) |
-| Add stats/analytics feature | `src/main/stats-db.ts`, `src/main/ipc/handlers/stats.ts` |
-| Add Usage Dashboard chart | `src/renderer/components/UsageDashboard/` |
-| Add Document Graph feature | `src/renderer/components/DocumentGraph/`, `src/main/ipc/handlers/documentGraph.ts` |
-| Add colorblind palette | `src/renderer/constants/colorblindPalettes.ts` |
-| Add performance metrics | `src/shared/performance-metrics.ts` |
-| Add power management | `src/main/power-manager.ts`, `src/main/ipc/handlers/system.ts` |
-| Spawn agent with SSH support | `src/main/utils/ssh-spawn-wrapper.ts` (required for SSH remote execution) |
-| Modify file preview tabs | `TabBar.tsx`, `FilePreview.tsx`, `MainPanel.tsx` (see ARCHITECTURE.md → File Preview Tab System) |
-| Add Director's Notes feature | `src/renderer/components/DirectorNotes/`, `src/main/ipc/handlers/director-notes.ts` |
-| Add Encore Feature | `src/renderer/types/index.ts` (flag), `useSettings.ts` (state), `SettingsModal.tsx` (toggle UI), gate in `App.tsx` + keyboard handler |
-| Modify history components | `src/renderer/components/History/` |
+| Task                         | Primary Files                                                                                                                         |
+| ---------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
+| Add IPC handler              | `src/main/index.ts`, `src/main/preload.ts`                                                                                            |
+| Add UI component             | `src/renderer/components/`                                                                                                            |
+| Add web/mobile component     | `src/web/components/`, `src/web/mobile/`                                                                                              |
+| Add keyboard shortcut        | `src/renderer/constants/shortcuts.ts`, `App.tsx`                                                                                      |
+| Add theme                    | `src/renderer/constants/themes.ts`                                                                                                    |
+| Add modal                    | Component + `src/renderer/constants/modalPriorities.ts`                                                                               |
+| Add tab overlay menu         | See Tab Hover Overlay Menu pattern in [[CLAUDE-PATTERNS.md]]                                                                          |
+| Add setting                  | `src/renderer/hooks/useSettings.ts`, `src/main/index.ts`                                                                              |
+| Add template variable        | `src/shared/templateVariables.ts`, `src/renderer/utils/templateVariables.ts`                                                          |
+| Modify system prompts        | `src/prompts/*.md` (wizard, Auto Run, etc.)                                                                                           |
+| Add Spec-Kit command         | `src/prompts/speckit/`, `src/main/speckit-manager.ts`                                                                                 |
+| Add OpenSpec command         | `src/prompts/openspec/`, `src/main/openspec-manager.ts`                                                                               |
+| Add CLI command              | `src/cli/commands/`, `src/cli/index.ts`                                                                                               |
+| Configure agent              | `src/main/agent-detector.ts`, `src/main/agent-capabilities.ts`                                                                        |
+| Add agent output parser      | `src/main/parsers/`, `src/main/parsers/index.ts`                                                                                      |
+| Add agent session storage    | `src/main/storage/`, `src/main/agent-session-storage.ts`                                                                              |
+| Add agent error patterns     | `src/main/parsers/error-patterns.ts`                                                                                                  |
+| Add playbook feature         | `src/cli/services/playbooks.ts`                                                                                                       |
+| Add marketplace playbook     | `src/main/ipc/handlers/marketplace.ts` (import from GitHub)                                                                           |
+| Playbook import/export       | `src/main/ipc/handlers/playbooks.ts` (ZIP handling with assets)                                                                       |
+| Modify wizard flow           | `src/renderer/components/Wizard/` (see [[CLAUDE-WIZARD.md]])                                                                          |
+| Add tour step                | `src/renderer/components/Wizard/tour/tourSteps.ts`                                                                                    |
+| Modify file linking          | `src/renderer/utils/remarkFileLinks.ts` (remark plugin for `[[wiki]]` and path links)                                                 |
+| Add documentation page       | `docs/*.md`, `docs/docs.json` (navigation)                                                                                            |
+| Add documentation screenshot | `docs/screenshots/` (PNG, kebab-case naming)                                                                                          |
+| MCP server integration       | See [MCP Server docs](https://docs.runmaestro.ai/mcp-server)                                                                          |
+| Add stats/analytics feature  | `src/main/stats-db.ts`, `src/main/ipc/handlers/stats.ts`                                                                              |
+| Add Usage Dashboard chart    | `src/renderer/components/UsageDashboard/`                                                                                             |
+| Add Document Graph feature   | `src/renderer/components/DocumentGraph/`, `src/main/ipc/handlers/documentGraph.ts`                                                    |
+| Add colorblind palette       | `src/renderer/constants/colorblindPalettes.ts`                                                                                        |
+| Add performance metrics      | `src/shared/performance-metrics.ts`                                                                                                   |
+| Add power management         | `src/main/power-manager.ts`, `src/main/ipc/handlers/system.ts`                                                                        |
+| Spawn agent with SSH support | `src/main/utils/ssh-spawn-wrapper.ts` (required for SSH remote execution)                                                             |
+| Modify file preview tabs     | `TabBar.tsx`, `FilePreview.tsx`, `MainPanel.tsx` (see ARCHITECTURE.md → File Preview Tab System)                                      |
+| Add Director's Notes feature | `src/renderer/components/DirectorNotes/`, `src/main/ipc/handlers/director-notes.ts`                                                   |
+| Add Encore Feature           | `src/renderer/types/index.ts` (flag), `useSettings.ts` (state), `SettingsModal.tsx` (toggle UI), gate in `App.tsx` + keyboard handler |
+| Modify history components    | `src/renderer/components/History/`                                                                                                    |
 
 ---
 
@@ -204,33 +212,36 @@ src/
 Maestro uses Sentry for error tracking. Field data from production crashes is invaluable for improving code quality.
 
 **DO let exceptions bubble up:**
+
 ```typescript
 // WRONG - silently swallowing errors hides bugs from Sentry
 try {
-  await riskyOperation();
+	await riskyOperation();
 } catch (e) {
-  console.error(e);  // Lost to the void
+	console.error(e); // Lost to the void
 }
 
 // CORRECT - let unhandled exceptions reach Sentry
-await riskyOperation();  // Crashes are reported automatically
+await riskyOperation(); // Crashes are reported automatically
 ```
 
 **DO handle expected/recoverable errors explicitly:**
+
 ```typescript
 // CORRECT - known failure modes should be handled gracefully
 try {
-  await fetchUserData();
+	await fetchUserData();
 } catch (e) {
-  if (e.code === 'NETWORK_ERROR') {
-    showOfflineMessage();  // Expected, recoverable
-  } else {
-    throw e;  // Unexpected - let Sentry capture it
-  }
+	if (e.code === 'NETWORK_ERROR') {
+		showOfflineMessage(); // Expected, recoverable
+	} else {
+		throw e; // Unexpected - let Sentry capture it
+	}
 }
 ```
 
 **DO use Sentry utilities for explicit reporting:**
+
 ```typescript
 import { captureException, captureMessage } from '../utils/sentry';
 
@@ -252,6 +263,7 @@ await captureMessage('Unusual state detected', 'warning', { state });
 Agents can be configured to run on remote hosts via SSH. Without proper SSH wrapping, agents will always execute locally, breaking the user's expected behavior.
 
 **Required pattern:**
+
 1. Check if the session has `sshRemoteConfig` with `enabled: true`
 2. Use `wrapSpawnWithSsh()` from `src/main/utils/ssh-spawn-wrapper.ts` to wrap the spawn config
 3. Pass the SSH store (available via `createSshRemoteStoreAdapter(settingsStore)`)
@@ -262,12 +274,13 @@ import { createSshRemoteStoreAdapter } from '../utils/ssh-remote-resolver';
 
 // Before spawning, wrap the config with SSH if needed
 if (sshStore && session.sshRemoteConfig?.enabled) {
-  const sshWrapped = await wrapSpawnWithSsh(spawnConfig, session.sshRemoteConfig, sshStore);
-  // Use sshWrapped.command, sshWrapped.args, sshWrapped.cwd, etc.
+	const sshWrapped = await wrapSpawnWithSsh(spawnConfig, session.sshRemoteConfig, sshStore);
+	// Use sshWrapped.command, sshWrapped.args, sshWrapped.cwd, etc.
 }
 ```
 
 **Also ensure:**
+
 - The correct agent type is used (don't hardcode `claude-code`)
 - Custom agent configuration (customPath, customArgs, customEnvVars) is passed through
 - Agent's `binaryName` is used for remote execution (not local paths)
@@ -288,20 +301,24 @@ Initial hypotheses are often wrong. Before implementing any fix:
 4. **Feature not working:** Verify the code path is actually being executed (add temporary `console.log`, check output, then remove)
 
 **Historical patterns that wasted time:**
+
 - Tab naming bug: Modal coordination was "fixed" when the actual issue was an unregistered IPC handler
 - Tooltip clipping: Attempted `overflow: visible` on element when parent container had `overflow: hidden`
 - Session validation: Fixed renderer calls when handler wasn't wired in main process
 
 ### Focus Not Working
+
 1. Add `tabIndex={0}` or `tabIndex={-1}`
 2. Add `outline-none` class
 3. Use `ref={(el) => el?.focus()}` for auto-focus
 
 ### Settings Not Persisting
+
 1. Check wrapper function calls `window.maestro.settings.set()`
 2. Check loading code in `useSettings.ts` useEffect
 
 ### Modal Escape Not Working
+
 1. Register with layer stack (don't handle Escape locally)
 2. Check priority is set correctly
 
@@ -314,16 +331,18 @@ Maestro provides a hosted MCP (Model Context Protocol) server for AI application
 **Server URL:** `https://docs.runmaestro.ai/mcp`
 
 **Available Tools:**
+
 - `SearchMaestro` - Search the Maestro knowledge base for documentation, code examples, API references, and guides
 
 **Connect from Claude Desktop/Code:**
+
 ```json
 {
-  "mcpServers": {
-    "maestro": {
-      "url": "https://docs.runmaestro.ai/mcp"
-    }
-  }
+	"mcpServers": {
+		"maestro": {
+			"url": "https://docs.runmaestro.ai/mcp"
+		}
+	}
 }
 ```
 

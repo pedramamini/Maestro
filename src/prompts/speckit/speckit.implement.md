@@ -11,6 +11,7 @@ $ARGUMENTS
 ```
 
 The user input may contain:
+
 - A feature name or spec directory path (e.g., `user-auth`, `specs/1-my-feature`)
 - Empty (you should scan for specs in `specs/` directory)
 
@@ -63,6 +64,7 @@ Each Auto Run document MUST follow this exact format:
 ## Task Writing Guidelines
 
 Each task should be:
+
 - **Specific**: Not "set up the feature" but "Create UserAuthService class with login/logout methods"
 - **Actionable**: Clear what needs to be done
 - **Verifiable**: You can tell when it's complete
@@ -70,6 +72,7 @@ Each task should be:
 - **Reuse-aware**: Search for existing utilities, patterns, or services in the codebase before creating new implementations to avoid duplication
 
 Preserve any markers from the original tasks.md:
+
 - `[P]` = Parallelizable (can run with other `[P]` tasks)
 - `[US1]`, `[US2]` = User Story groupings
 - Task IDs (T001, T002, etc.) for traceability

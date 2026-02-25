@@ -975,7 +975,8 @@ function ActiveContributionCard({
 				)
 			: 0;
 
-	const canFinalize = contribution.status === 'ready_for_review' || contribution.status === 'completed';
+	const canFinalize =
+		contribution.status === 'ready_for_review' || contribution.status === 'completed';
 
 	const handleOpenExternal = useCallback((url: string) => {
 		window.maestro.shell.openExternal(url);

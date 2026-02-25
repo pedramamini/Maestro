@@ -13,6 +13,7 @@ Maestro provides a hosted MCP (Model Context Protocol) server that allows AI app
 The MCP server exposes a `SearchMaestro` tool that enables AI assistants to find relevant documentation, code examples, API references, and guides from the Maestro knowledge base. When connected, your AI assistant can proactively search the documentation while generating responses—not just when explicitly asked.
 
 **MCP Server URL:**
+
 ```
 https://docs.runmaestro.ai/mcp
 ```
@@ -24,12 +25,14 @@ https://docs.runmaestro.ai/mcp
 Search across the Maestro knowledge base to find relevant information.
 
 **Use this tool when you need to:**
+
 - Answer questions about Maestro features and functionality
 - Find specific documentation pages
 - Understand how features work
 - Locate implementation details and code examples
 
 **Returns:**
+
 - Contextual content with titles
 - Direct links to documentation pages
 
@@ -41,11 +44,11 @@ Add the MCP server to your Claude Desktop configuration (`claude_desktop_config.
 
 ```json
 {
-  "mcpServers": {
-    "maestro": {
-      "url": "https://docs.runmaestro.ai/mcp"
-    }
-  }
+	"mcpServers": {
+		"maestro": {
+			"url": "https://docs.runmaestro.ai/mcp"
+		}
+	}
 }
 ```
 
@@ -55,11 +58,11 @@ Add to your Claude Code MCP settings:
 
 ```json
 {
-  "mcpServers": {
-    "maestro": {
-      "url": "https://docs.runmaestro.ai/mcp"
-    }
-  }
+	"mcpServers": {
+		"maestro": {
+			"url": "https://docs.runmaestro.ai/mcp"
+		}
+	}
 }
 ```
 
@@ -77,11 +80,11 @@ For VS Code with MCP support, add to your MCP configuration:
 
 ```json
 {
-  "mcpServers": {
-    "maestro": {
-      "url": "https://docs.runmaestro.ai/mcp"
-    }
-  }
+	"mcpServers": {
+		"maestro": {
+			"url": "https://docs.runmaestro.ai/mcp"
+		}
+	}
 }
 ```
 

@@ -12,20 +12,20 @@ import { defineConfig } from 'vitest/config';
 import path from 'path';
 
 export default defineConfig({
-  test: {
-    include: ['src/__tests__/e2e/**/*.test.ts'],
-    environment: 'node',
-    testTimeout: 30000,
-    hookTimeout: 10000,
-    globals: true,
-    reporters: ['verbose'],
-    sequence: {
-      shuffle: false, // Run tests in order
-    },
-  },
-  resolve: {
-    alias: {
-      '@': path.resolve(__dirname, './src'),
-    },
-  },
+	test: {
+		include: ['src/__tests__/e2e/**/*.test.ts'],
+		environment: 'node',
+		testTimeout: 30000,
+		hookTimeout: 10000,
+		globals: true,
+		reporters: ['verbose'],
+		sequence: {
+			shuffle: false, // Run tests in order
+		},
+	},
+	resolve: {
+		alias: {
+			'@': path.resolve(__dirname, './src'),
+		},
+	},
 });

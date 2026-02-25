@@ -10,21 +10,23 @@ OpenSpec is a spec-driven development tool from [Fission-AI/OpenSpec](https://gi
 
 Maestro offers two complementary spec-driven development tools:
 
-| Feature | OpenSpec | Spec-Kit |
-|---------|----------|----------|
-| **Focus** | Change management & proposals | Feature specifications |
-| **Workflow** | Proposal → Apply → Archive | Constitution → Specify → Plan → Tasks |
-| **Best For** | Iterative changes, brownfield projects | New features, greenfield development |
-| **Output** | Change proposals with spec deltas | Feature specifications and task lists |
-| **Directory** | `openspec/` | `specs/` or project root |
+| Feature       | OpenSpec                               | Spec-Kit                              |
+| ------------- | -------------------------------------- | ------------------------------------- |
+| **Focus**     | Change management & proposals          | Feature specifications                |
+| **Workflow**  | Proposal → Apply → Archive             | Constitution → Specify → Plan → Tasks |
+| **Best For**  | Iterative changes, brownfield projects | New features, greenfield development  |
+| **Output**    | Change proposals with spec deltas      | Feature specifications and task lists |
+| **Directory** | `openspec/`                            | `specs/` or project root              |
 
 **Use OpenSpec when:**
+
 - Making iterative changes to existing features
 - You need explicit change proposals before implementation
 - Working on brownfield projects with existing specifications
 - You want a clear archive of completed changes
 
 **Use Spec-Kit when:**
+
 - Defining new features from scratch
 - Establishing project constitutions and principles
 - Creating detailed feature specifications
@@ -47,6 +49,7 @@ Create a change proposal before writing any code:
 5. Validates with `openspec validate <change-id> --strict`
 
 **Creates:** A `openspec/changes/<change-id>/` directory with:
+
 - `proposal.md` — Why and what
 - `tasks.md` — Implementation checklist
 - `specs/<capability>/spec.md` — Spec deltas
@@ -113,19 +116,26 @@ Changes use explicit operation headers:
 
 ```markdown
 ## ADDED Requirements
+
 ### Requirement: New Feature
+
 The system SHALL provide...
 
 #### Scenario: Success case
+
 - **WHEN** user performs action
 - **THEN** expected result
 
 ## MODIFIED Requirements
+
 ### Requirement: Existing Feature
+
 [Complete updated requirement text]
 
 ## REMOVED Requirements
+
 ### Requirement: Old Feature
+
 **Reason**: [Why removing]
 **Migration**: [How to handle]
 ```
@@ -134,14 +144,14 @@ The system SHALL provide...
 
 The OpenSpec CLI provides these essential commands:
 
-| Command | Purpose |
-|---------|---------|
-| `openspec list` | Display active changes in `changes/` |
-| `openspec list --specs` | List existing capability specs |
-| `openspec show <change-id>` | View change or spec details |
-| `openspec validate <change-id> --strict` | Comprehensive validation |
-| `openspec archive <change-id> --yes` | Archive after deployment |
-| `openspec spec list --long` | Enumerate all specifications |
+| Command                                  | Purpose                              |
+| ---------------------------------------- | ------------------------------------ |
+| `openspec list`                          | Display active changes in `changes/` |
+| `openspec list --specs`                  | List existing capability specs       |
+| `openspec show <change-id>`              | View change or spec details          |
+| `openspec validate <change-id> --strict` | Comprehensive validation             |
+| `openspec archive <change-id> --yes`     | Archive after deployment             |
+| `openspec spec list --long`              | Enumerate all specifications         |
 
 ## Viewing & Managing Commands
 

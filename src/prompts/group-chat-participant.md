@@ -20,8 +20,8 @@ After completing your work, you MUST respond with a single cohesive message stru
 
 3. **Details (OPTIONAL):** After the blank line, provide any additional details, code snippets, or explanations. Markdown formatting is encouraged here for beautiful, readable responses.
 
-Example response structure:
----
+## Example response structure:
+
 Created the new API endpoint for user profile updates with validation and error handling. The endpoint now supports partial updates and returns appropriate HTTP status codes.
 
 ## Implementation Details
@@ -30,10 +30,10 @@ Created the new API endpoint for user profile updates with validation and error 
 // Your code here
 ```
 
-The changes include...
----
+## The changes include...
 
 Additional guidelines:
+
 1. Reference the chat log at "{{LOG_PATH}}" for context on what others have said
 2. Focus on your assigned role and tasks
 3. Be collaborative and professional

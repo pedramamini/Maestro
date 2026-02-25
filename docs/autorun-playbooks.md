@@ -78,6 +78,7 @@ Looking for pre-built playbooks? The [Playbook Exchange](./playbook-exchange) of
 ## Progress Tracking
 
 The runner will:
+
 - Process tasks serially from top to bottom
 - Skip documents with no unchecked tasks
 - Show progress: "Document X of Y" and "Task X of Y"
@@ -98,9 +99,9 @@ This isolation is critical for playbooks with `Reset on Completion` documents th
 
 Maestro sets environment variables that your agent hooks can use to customize behavior:
 
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `MAESTRO_SESSION_RESUMED` | `1` | Set when resuming an existing session (not set for new sessions) |
+| Variable                  | Value | Description                                                      |
+| ------------------------- | ----- | ---------------------------------------------------------------- |
+| `MAESTRO_SESSION_RESUMED` | `1`   | Set when resuming an existing session (not set for new sessions) |
 
 **Example: Conditional Hook Execution**
 
@@ -117,12 +118,14 @@ This works with any agent provider (Claude Code, Codex, OpenCode) since the envi
 ## History & Tracking
 
 Each completed task is logged to the History panel with:
+
 - **AUTO** label indicating automated execution
 - **Session ID** pill (clickable to jump to that AI conversation)
 - **Summary** of what the agent accomplished
 - **Full response** viewable by clicking the entry
 
 **Keyboard navigation in History**:
+
 - `Up/Down Arrow` - Navigate entries
 - `Enter` - View full response
 - `Esc` - Close detail view and return to list
@@ -132,12 +135,14 @@ Each completed task is logged to the History panel with:
 For editing complex Auto Run documents, use the **Expanded Editor** — a fullscreen modal that provides more screen real-estate.
 
 **To open the Expanded Editor:**
+
 - Click the **expand icon** (↗️) in the top-right corner of the Auto Run panel
 - Or press `Cmd+Shift+E` (Mac) / `Ctrl+Shift+E` (Windows/Linux) to toggle
 
 ![Expanded Auto Run Editor](./screenshots/autorun-expanded.png)
 
 The Expanded Editor provides:
+
 - **Edit/Preview toggle** — Switch between editing markdown and previewing rendered output
 - **Document selector** — Switch between documents without closing the modal
 - **Run controls** — Start, stop, and monitor Auto Run progress from the expanded view
@@ -159,6 +164,7 @@ Paste images directly into your documents. Images are saved to an `images/` subf
 ## Stopping the Runner
 
 Click the **Stop** button at any time. The runner will:
+
 - Complete the current task before stopping
 - Preserve all completed work
 - Allow you to resume later by clicking Run again

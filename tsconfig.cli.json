@@ -1,22 +1,22 @@
 {
-  "compilerOptions": {
-    "target": "ES2020",
-    "lib": ["ES2020"],
-    "module": "CommonJS",
-    "moduleResolution": "node",
-    "outDir": "dist/cli",
-    "rootDir": "src",
-    "resolveJsonModule": true,
-    "esModuleInterop": true,
-    "skipLibCheck": true,
-    "strict": true,
-    "noUnusedLocals": true,
-    "noUnusedParameters": true,
-    "noFallthroughCasesInSwitch": true,
-    "declaration": false,
-    "sourceMap": true
-  },
-  // CLI uses shared types, prompts for auto-run synopsis, and types for module declarations
-  "include": ["src/cli/**/*", "src/shared/**/*", "src/prompts/**/*", "src/types/**/*"],
-  "exclude": ["node_modules", "dist", "release"]
+	"compilerOptions": {
+		"target": "ES2020",
+		"lib": ["ES2020"],
+		"module": "CommonJS",
+		"moduleResolution": "node",
+		"outDir": "dist/cli",
+		"rootDir": "src",
+		"resolveJsonModule": true,
+		"esModuleInterop": true,
+		"skipLibCheck": true,
+		"strict": true,
+		"noUnusedLocals": true,
+		"noUnusedParameters": true,
+		"noFallthroughCasesInSwitch": true,
+		"declaration": false,
+		"sourceMap": true
+	},
+	// CLI uses shared types, prompts for auto-run synopsis, and types for module declarations
+	"include": ["src/cli/**/*", "src/shared/**/*", "src/prompts/**/*", "src/types/**/*"],
+	"exclude": ["node_modules", "dist", "release"]
 }

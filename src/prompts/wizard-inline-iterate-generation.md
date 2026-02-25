@@ -16,6 +16,7 @@ Do NOT write, create, or modify files anywhere else.
 
 **READ ACCESS (Unrestricted):**
 You may READ files from anywhere to inform your planning:
+
 - Read any file in: `{{DIRECTORY_PATH}}`
 - Examine project structure, code, and configuration
 
@@ -34,10 +35,12 @@ The following Auto Run documents already exist:
 ## Iterate Mode Guidelines
 
 You can either:
+
 1. **Create new phase files** (e.g., Phase-03-NewFeature.md) when adding entirely new work
 2. **Update existing files** when modifying or extending current phases
 
 When deciding:
+
 - Add a NEW phase if the work is independent and follows existing phases
 - UPDATE an existing phase if the work extends or modifies that phase's scope
 - You can do BOTH: update an existing phase AND create new phases
@@ -71,6 +74,7 @@ Each task checkbox (`- [ ]`) starts a **fresh AI context**. The entire document 
 ### What Makes a Good Task
 
 Each task should be:
+
 - **Self-contained**: Everything needed to complete the work is in one place
 - **Context-appropriate**: All items in a task belong in the same mental context
 - **Actionable**: Clear what needs to be done
@@ -80,12 +84,14 @@ Each task should be:
 ### Grouping Rules
 
 **DO group together:**
+
 - Multiple file creations that serve the same purpose
 - All fixes/changes within a single file
 - Related configuration (ESLint + Prettier + tsconfig)
 - Simple model + service + route for one small feature
 
 **DO NOT group together:**
+
 - Writing code and writing tests (separate contexts)
 - Writing tests and running tests (separate contexts)
 - Unrelated features, even if both are "simple"
@@ -142,6 +148,7 @@ When tasks produce documentation, research, notes, reports, or any knowledge art
 Unless the user specifies otherwise, tasks that create non-code artifacts should specify:
 
 1. **YAML Front Matter** - Metadata header for filtering and querying:
+
    ```yaml
    ---
    type: research | note | report | analysis | reference
@@ -150,7 +157,7 @@ Unless the user specifies otherwise, tasks that create non-code artifacts should
    tags:
      - relevant-tag
    related:
-     - "[[Other-Document]]"
+     - '[[Other-Document]]'
    ---
    ```
 
@@ -171,6 +178,7 @@ When a task involves research, documentation, or knowledge capture, include outp
 ```
 
 Apply structured markdown output for:
+
 - Research findings and competitive analysis
 - Architecture decision records (ADRs)
 - Technical specifications and designs
@@ -185,6 +193,7 @@ Do NOT apply for source code, config files, or generated assets.
 Use your Write tool to save each phase document immediately after you finish writing it. This way, files appear in real-time for the user.
 
 File paths for the Auto Run folder:
+
 - New files: `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Phase-XX-[Description].md`
 - Updates: Use the exact existing file path to overwrite
 - **Always use two-digit phase numbers** (01, 02, etc.) to ensure correct lexicographic sorting
@@ -192,6 +201,7 @@ File paths for the Auto Run folder:
 **Multi-phase efforts:** When creating 3 or more phase documents for a single effort, place them in a dedicated subdirectory prefixed with today's date (e.g., `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/YYYY-MM-DD-Feature-Name/FEATURE-NAME-01.md`). This allows users to add the entire folder at once and keeps related documents organized with a clear creation date.
 
 **IMPORTANT**:
+
 - Write files one at a time, IN ORDER (lower phase numbers first)
 - Do NOT wait until you've finished all documents to write them - save each one as soon as it's complete
 - When updating, provide the COMPLETE updated document content, not just the additions

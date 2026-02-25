@@ -22,6 +22,7 @@ Simply list the paths to your Auto Run documents:
 ```
 
 That's it! No special formatting required. The system will:
+
 - Parse the `.md` file paths from the issue body
 - Clone your repository when a contributor starts
 - Run each document in sequence via Auto Run
@@ -33,14 +34,17 @@ The following formats are recognized:
 
 ```markdown
 # Bare paths (recommended)
+
 .maestro/autorun/task-1.md
 .maestro/autorun/task-2.md
 
 # Markdown list items
+
 - .maestro/autorun/task-1.md
 - `.maestro/autorun/task-2.md`
 
 # Numbered lists
+
 1. .maestro/autorun/task-1.md
 2. .maestro/autorun/task-2.md
 ```
@@ -52,6 +56,7 @@ The following formats are recognized:
 **Labels**: `runmaestro.ai`
 
 **Body**:
+
 ```markdown
 Add test coverage for the authentication module.
 
@@ -81,9 +86,11 @@ Each `.md` file should be a complete Auto Run document:
 # Task: Add Unit Tests for Auth Module
 
 ## Context
+
 The authentication module at `src/auth/` needs test coverage.
 
 ## Objectives
+
 - [ ] Create `src/__tests__/auth.test.ts`
 - [ ] Add tests for `login()` function
 - [ ] Add tests for `logout()` function
@@ -92,6 +99,7 @@ The authentication module at `src/auth/` needs test coverage.
 - [ ] Verify coverage > 80%
 
 ## Constraints
+
 - Use Jest testing framework
 - Follow existing test patterns in the codebase
 - Do not modify production code
@@ -110,11 +118,13 @@ The authentication module at `src/auth/` needs test coverage.
 Add the `blocking` label to any issue that has unmet prerequisites. Blocked issues are visible to contributors but grayed out and cannot be started. This lets maintainers create dependency trees across issues.
 
 **How it works:**
+
 1. Add the `blocking` label to an issue that depends on other work being completed first
 2. Contributors see the issue in a separate "Blocked" section, grayed out with a lock icon
 3. When the prerequisite is met, remove the `blocking` label to make the issue available
 
 **Example workflow:**
+
 ```
 Issue #1: Set up database schema           → available (no blocking label)
 Issue #2: Add API endpoints (needs #1)     → blocking label applied
@@ -126,6 +136,7 @@ When #1 is completed, remove `blocking` from #2. When #2 is completed, remove `b
 ## Issue Availability
 
 An issue is **available** for contribution when:
+
 - It has the `runmaestro.ai` label
 - It is **open** (not closed)
 - It does **not** have the `blocking` label

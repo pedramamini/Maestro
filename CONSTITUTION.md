@@ -25,11 +25,12 @@ The first two tenets address these modes directly. The remaining tenets apply to
 
 ## The Six Tenets
 
-### 1. Unattended Excellence *(Solo Mode)*
+### 1. Unattended Excellence _(Solo Mode)_
 
 The measure of Maestro's success is how long agents run without intervention.
 
 **What this means in practice:**
+
 - Auto Run is a first-class citizen, not an afterthought
 - Error recovery should be automatic where possible
 - Agents should be self-healing and self-continuing
@@ -39,11 +40,12 @@ The measure of Maestro's success is how long agents run without intervention.
 **The Autonomy Principle:**
 Every feature we build should extend the runway of unattended operation. If a feature requires more babysitting, it's moving backwards.
 
-### 2. The Conductor's Perspective *(Interactive Mode)*
+### 2. The Conductor's Perspective _(Interactive Mode)_
 
 You are the maestro. The agents are your orchestra. The interface is your podium. Fleet management is critical for optimal interactive experience.
 
 **What this means in practice:**
+
 - Overview and control trump granular details
 - Point at an agent, give direction, move on
 - Status should be glanceable, not readable
@@ -60,6 +62,7 @@ A conductor doesn't play every instrument—they ensure each section knows its p
 Your hands never leave the keyboard. Every action, every navigation, every command flows through deliberate keystrokes.
 
 **What this means in practice:**
+
 - Focus must always be predictable and intentional
 - Escape always returns you to a known, useful state
 - Every modal, every panel, every input has a keyboard path
@@ -74,6 +77,7 @@ When you press a key, you must know where focus will land. When you press Escape
 The interface must be faster than thought. Latency kills flow.
 
 **What this means in practice:**
+
 - UI interactions respond in milliseconds, not seconds
 - Switching sessions is instantaneous
 - Keyboard navigation has zero perceptible delay
@@ -81,13 +85,14 @@ The interface must be faster than thought. Latency kills flow.
 - Perceived performance matters as much as actual performance
 
 **The Speed Imperative:**
-If you can fly through the interface with your keyboard, but the interface can't keep up, keyboard-first is a lie. Speed is what makes sovereignty *feel* sovereign.
+If you can fly through the interface with your keyboard, but the interface can't keep up, keyboard-first is a lie. Speed is what makes sovereignty _feel_ sovereign.
 
 ### 5. Delightful Focus
 
 We solve fleet management brilliantly. We don't solve everything.
 
 **What this means in practice:**
+
 - Say no to feature creep that dilutes the core experience
 - Polish what exists before adding what's new
 - Every interaction should feel responsive and intentional
@@ -95,13 +100,14 @@ We solve fleet management brilliantly. We don't solve everything.
 - Latency is a bug
 
 **The Delight Standard:**
-Users should smile when they use Maestro. Not because it's cute, but because it's *satisfying*—like a perfectly weighted keyboard or a door that closes with a solid click.
+Users should smile when they use Maestro. Not because it's cute, but because it's _satisfying_—like a perfectly weighted keyboard or a door that closes with a solid click.
 
 ### 6. Transparent Complexity
 
 Power users deserve depth. New users deserve simplicity. Both get what they need.
 
 **What this means in practice:**
+
 - Progressive disclosure of advanced features
 - Sensible defaults that work out of the box
 - Power features accessible but not intrusive
@@ -174,4 +180,4 @@ You're conducting.
 
 ---
 
-*This Constitution is a living document. It evolves as Maestro evolves, but its core principles remain: keyboard-first, unattended-focused, delightfully simple, and always in service of the conductor.*
+_This Constitution is a living document. It evolves as Maestro evolves, but its core principles remain: keyboard-first, unattended-focused, delightfully simple, and always in service of the conductor._

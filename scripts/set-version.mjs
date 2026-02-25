@@ -17,24 +17,24 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 
 function getGitHash() {
-  try {
-    const hash = execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], {
-      encoding: 'utf8',
-      stdio: ['pipe', 'pipe', 'pipe']
-    }).trim();
-    return hash;
-  } catch {
-    return 'unknown';
-  }
+	try {
+		const hash = execFileSync('git', ['rev-parse', '--short=8', 'HEAD'], {
+			encoding: 'utf8',
+			stdio: ['pipe', 'pipe', 'pipe'],
+		}).trim();
+		return hash;
+	} catch {
+		return 'unknown';
+	}
 }
 
 function getPackageVersion() {
-  try {
-    const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
-    return packageJson.version;
-  } catch {
-    return 'unknown';
-  }
+	try {
+		const packageJson = JSON.parse(readFileSync(join(__dirname, '..', 'package.json'), 'utf-8'));
+		return packageJson.version;
+	} catch {
+		return 'unknown';
+	}
 }
 
 const gitHash = getGitHash();
@@ -45,11 +45,11 @@ const version = `${packageVersion} ${gitHash} (local)`;
 process.env.VITE_APP_VERSION = version;
 
 // Get the command and args to run
-const [,, ...args] = process.argv;
+const [, , ...args] = process.argv;
 
 if (args.length === 0) {
-  console.log(`VITE_APP_VERSION=${version}`);
-  process.exit(0);
+	console.log(`VITE_APP_VERSION=${version}`);
+	process.exit(0);
 }
 
 // Run the command with the environment variable set
@@ -57,16 +57,16 @@ const command = args[0];
 const commandArgs = args.slice(1);
 
 const child = spawn(command, commandArgs, {
-  stdio: 'inherit',
-  shell: true,
-  env: { ...process.env, VITE_APP_VERSION: version }
+	stdio: 'inherit',
+	shell: true,
+	env: { ...process.env, VITE_APP_VERSION: version },
 });
 
 child.on('close', (code) => {
-  process.exit(code ?? 0);
+	process.exit(code ?? 0);
 });
 
 child.on('error', (err) => {
-  console.error(`Failed to run command: ${err.message}`);
-  process.exit(1);
+	console.error(`Failed to run command: ${err.message}`);
+	process.exit(1);
 });
