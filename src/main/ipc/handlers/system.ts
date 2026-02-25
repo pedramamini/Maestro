@@ -244,6 +244,21 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 		shell.showItemInFolder(absolutePath);
 	});
 
+	// Shell operations - open file/folder in default application
+	ipcMain.handle('shell:openPath', async (_event, itemPath: string) => {
+		if (!itemPath || typeof itemPath !== 'string') {
+			throw new Error('Invalid path: path must be a non-empty string');
+		}
+		const absolutePath = path.resolve(itemPath);
+		if (!fsSync.existsSync(absolutePath)) {
+			throw new Error(`Path does not exist: ${absolutePath}`);
+		}
+		const errorMessage = await shell.openPath(absolutePath);
+		if (errorMessage) {
+			throw new Error(errorMessage);
+		}
+	});
+
 	// ============ Tunnel Handlers (Cloudflare) ============
 
 	ipcMain.handle('tunnel:isCloudflaredInstalled', async () => {

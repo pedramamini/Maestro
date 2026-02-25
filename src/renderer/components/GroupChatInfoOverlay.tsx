@@ -118,7 +118,7 @@ export function GroupChatInfoOverlay({
 	const openInFinder = useCallback(() => {
 		// Get the parent directory (remove /images from path)
 		const chatDir = groupChat.imagesDir.replace(/\/images\/?$/, '');
-		window.maestro.shell.openExternal(`file://${chatDir}`);
+		window.maestro.shell.openPath(chatDir);
 	}, [groupChat.imagesDir]);
 
 	const handleExport = useCallback(async () => {

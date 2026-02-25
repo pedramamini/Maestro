@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { SettingsModal } from '../../../renderer/components/SettingsModal';
 import { formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import type {
@@ -100,6 +100,11 @@ vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 		setSshRemoteIgnorePatterns: vi.fn(),
 		sshRemoteHonorGitignore: false,
 		setSshRemoteHonorGitignore: vi.fn(),
+		// Local file indexing ignore settings
+		localIgnorePatterns: ['.git', 'node_modules', '__pycache__'],
+		setLocalIgnorePatterns: vi.fn(),
+		localHonorGitignore: true,
+		setLocalHonorGitignore: vi.fn(),
 		// Director's Notes settings
 		directorNotesSettings: {
 			provider: 'claude-code',
@@ -1349,7 +1354,9 @@ describe('SettingsModal', () => {
 
 			const customFontInput = screen.getByPlaceholderText('Add custom font name...');
 			fireEvent.change(customFontInput, { target: { value: 'My Custom Font' } });
-			fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+			// Scope to the font input's parent container to avoid ambiguous "Add" button matches
+			const fontContainer = customFontInput.closest('div')!.parentElement!;
+			fireEvent.click(within(fontContainer).getByRole('button', { name: 'Add' }));
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
@@ -1385,7 +1392,9 @@ describe('SettingsModal', () => {
 
 			const customFontInput = screen.getByPlaceholderText('Add custom font name...');
 			fireEvent.change(customFontInput, { target: { value: '   ' } });
-			fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+			// Scope to the font input's parent container to avoid ambiguous "Add" button matches
+			const fontContainer = customFontInput.closest('div')!.parentElement!;
+			fireEvent.click(within(fontContainer).getByRole('button', { name: 'Add' }));
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);

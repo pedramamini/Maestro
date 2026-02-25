@@ -134,7 +134,7 @@ export function useFileExplorerEffects(
 			// Check if file should be opened externally (PDF, etc.)
 			if (!sshRemoteId && shouldOpenExternally(filename)) {
 				const fullPath = `${currentSession.fullPath}/${relativePath}`;
-				window.maestro.shell.openExternal(`file://${fullPath}`);
+				window.maestro.shell.openPath(fullPath);
 				return;
 			}
 

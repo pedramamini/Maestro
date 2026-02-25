@@ -61,6 +61,7 @@ export interface UseSessionListPropsDeps {
 	handleEditGroupChat: (id: string) => void;
 	handleOpenRenameGroupChatModal: (id: string) => void;
 	handleOpenDeleteGroupChatModal: (id: string) => void;
+	handleArchiveGroupChat: (id: string, archived: boolean) => void;
 }
 
 /**
@@ -117,6 +118,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			onEditGroupChat: deps.handleEditGroupChat,
 			onRenameGroupChat: deps.handleOpenRenameGroupChatModal,
 			onDeleteGroupChat: deps.handleOpenDeleteGroupChatModal,
+			onArchiveGroupChat: deps.handleArchiveGroupChat,
 		}),
 		[
 			deps.theme,
@@ -157,6 +159,7 @@ export function useSessionListProps(deps: UseSessionListPropsDeps) {
 			deps.handleEditGroupChat,
 			deps.handleOpenRenameGroupChatModal,
 			deps.handleOpenDeleteGroupChatModal,
+			deps.handleArchiveGroupChat,
 		]
 	);
 }

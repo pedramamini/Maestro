@@ -32,6 +32,7 @@ vi.mock('electron', () => ({
 	},
 	shell: {
 		openExternal: vi.fn(),
+		openPath: vi.fn(),
 		showItemInFolder: vi.fn(),
 	},
 	BrowserWindow: {
@@ -210,6 +211,7 @@ describe('system IPC handlers', () => {
 				// Shell handlers
 				'shells:detect',
 				'shell:openExternal',
+				'shell:openPath',
 				'shell:trashItem',
 				'shell:showItemInFolder',
 				// Tunnel handlers
@@ -593,6 +595,45 @@ describe('system IPC handlers', () => {
 
 			await expect(handler!({} as any, '/non/existent/path')).rejects.toThrow(
 				'Path does not exist'
+			);
+		});
+	});
+
+	describe('shell:openPath', () => {
+		it('should open file in default application', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(true);
+			vi.mocked(shell.openPath).mockResolvedValue('');
+
+			const handler = handlers.get('shell:openPath');
+			await handler!({} as any, '/path/to/file.txt');
+
+			expect(shell.openPath).toHaveBeenCalledWith('/path/to/file.txt');
+		});
+
+		it('should throw error for empty path', async () => {
+			const handler = handlers.get('shell:openPath');
+
+			await expect(handler!({} as any, '')).rejects.toThrow('Invalid path');
+		});
+
+		it('should throw error for non-existent path', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(false);
+
+			const handler = handlers.get('shell:openPath');
+
+			await expect(handler!({} as any, '/non/existent/path')).rejects.toThrow(
+				'Path does not exist'
+			);
+		});
+
+		it('should throw error when shell.openPath returns error message', async () => {
+			vi.mocked(fsSync.existsSync).mockReturnValue(true);
+			vi.mocked(shell.openPath).mockResolvedValue('No application found');
+
+			const handler = handlers.get('shell:openPath');
+
+			await expect(handler!({} as any, '/path/to/file.xyz')).rejects.toThrow(
+				'No application found'
 			);
 		});
 	});

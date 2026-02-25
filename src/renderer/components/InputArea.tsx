@@ -482,7 +482,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 							<button
 								onClick={(e) => {
 									e.stopPropagation();
-									setStagedImages((p) => p.filter((_, i) => i !== idx));
+									setStagedImages((p) => p.filter((x) => x !== img));
 								}}
 								className="absolute top-0.5 right-0.5 bg-red-500 text-white rounded-full p-1 shadow-md hover:bg-red-600 transition-colors opacity-90 hover:opacity-100 outline-none focus-visible:ring-2 focus-visible:ring-white"
 							>

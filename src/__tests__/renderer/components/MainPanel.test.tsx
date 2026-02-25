@@ -245,7 +245,6 @@ vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	useGitFileStatus: () => ({
 		getFileCount: (sessionId: string) => mockGitStatusData[sessionId]?.fileCount ?? 0,
 		hasChanges: (sessionId: string) => (mockGitStatusData[sessionId]?.fileCount ?? 0) > 0,
-		isLoading: false,
 	}),
 	useGitBranch: () => ({
 		getBranchInfo: (sessionId: string) => {
@@ -1012,7 +1011,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			expect(screen.getByText('Context Window')).toBeInTheDocument();
+			expect(screen.getAllByText(/^Context( Window)?$/)[0]).toBeInTheDocument();
 		});
 
 		it('should not display context window in terminal mode', () => {
@@ -1020,8 +1019,8 @@ describe('MainPanel', () => {
 
 			render(<MainPanel {...defaultProps} activeSession={session} />);
 
-			// Label shows "Context" or "Context Window" depending on panel width
-			expect(screen.queryByText(/^Context( Window)?$/)).not.toBeInTheDocument();
+			// Target the full "Context Window" label (compact "Context" label is also rendered but hidden via CSS)
+			expect(screen.queryByText('Context Window')).not.toBeInTheDocument();
 		});
 
 		it('should not display context window widget when agent does not support usage stats', () => {
@@ -1742,7 +1741,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText('Context Window');
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			fireEvent.mouseEnter(contextWidget.parentElement!);
 
 			await waitFor(() => {
@@ -1754,7 +1753,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText('Context Window');
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			fireEvent.mouseEnter(contextWidget.parentElement!);
 
 			await waitFor(() => {
@@ -1776,7 +1775,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText('Context Window');
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			const contextContainer = contextWidget.parentElement!;
 
 			// Hover to open
@@ -1819,7 +1818,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} activeSession={session} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText('Context Window');
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			fireEvent.mouseEnter(contextWidget.parentElement!);
 
 			await waitFor(() => {

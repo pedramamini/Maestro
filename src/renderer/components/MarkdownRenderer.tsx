@@ -315,8 +315,10 @@ export const MarkdownRenderer = memo(
 										if (isMaestroFile && filePath && onFileClick) {
 											onFileClick(filePath);
 										} else if (href) {
-											// Only open http/https/file URLs directly; convert git SSH URLs first
-											if (/^https?:\/\//.test(href) || /^file:\/\//.test(href)) {
+											// Open http/https URLs via openExternal; file:// URLs via openPath
+											if (/^file:\/\//.test(href)) {
+												window.maestro.shell.openPath(href.replace(/^file:\/\//, ''));
+											} else if (/^https?:\/\//.test(href)) {
 												window.maestro.shell.openExternal(href);
 											} else {
 												// Attempt to convert non-standard URLs (e.g. git@host:user/repo)

@@ -288,7 +288,7 @@ describe('FilePreview', () => {
 			expect(screen.getByTestId('external-link-icon')).toBeInTheDocument();
 		});
 
-		it('calls shell.openExternal with file:// URL when clicked', () => {
+		it('calls shell.openPath with file path when clicked', () => {
 			render(
 				<FilePreview
 					{...defaultProps}
@@ -299,7 +299,7 @@ describe('FilePreview', () => {
 			const button = screen.getByTitle('Open in Default App');
 			fireEvent.click(button);
 
-			expect(window.maestro?.shell?.openExternal).toHaveBeenCalledWith('file:///test/readme.md');
+			expect(window.maestro?.shell?.openPath).toHaveBeenCalledWith('/test/readme.md');
 		});
 
 		it('hides Open in Default App button for SSH remote sessions', () => {

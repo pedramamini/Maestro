@@ -925,11 +925,12 @@ describe('FileExplorerPanel', () => {
 			const session = createMockSession({ fileExplorerExpanded: ['src'] });
 			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
 			// Virtualized tree uses paddingLeft for indentation
-			// index.ts is at depth 1, so paddingLeft should be 8 + 1*16 = 24px
+			// index.ts is a file at depth 1, so paddingLeft = 8 + max(0, 1-1)*16 = 8px
+			// (files use depth-1 to align icons with parent folder icons)
 			const nestedItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
 				el.textContent?.includes('index.ts')
 			);
-			expect(nestedItem).toHaveStyle({ paddingLeft: '24px' });
+			expect(nestedItem).toHaveStyle({ paddingLeft: '8px' });
 		});
 
 		it('displays file name with truncate class', () => {
@@ -1785,8 +1786,40 @@ describe('FileExplorerPanel', () => {
 			expect(screen.queryByText('Open in Default App')).not.toBeInTheDocument();
 		});
 
-		it('calls shell.openExternal with full file path when Open in Default App is clicked', () => {
-			const mockShell = { openExternal: vi.fn().mockResolvedValue(undefined) };
+		it('calls shell.showItemInFolder with full path when Reveal in Finder is clicked', () => {
+			const mockShell = { showItemInFolder: vi.fn().mockResolvedValue(undefined) };
+			(window as any).maestro = { platform: 'darwin', shell: mockShell };
+
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('package.json')
+			);
+			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+			const revealButton = screen.getByText('Reveal in Finder');
+			fireEvent.click(revealButton);
+
+			expect(mockShell.showItemInFolder).toHaveBeenCalledWith('/Users/test/project/package.json');
+		});
+
+		it('calls shell.showItemInFolder with folder path when Reveal in Finder is clicked on folder', () => {
+			const mockShell = { showItemInFolder: vi.fn().mockResolvedValue(undefined) };
+			(window as any).maestro = { platform: 'darwin', shell: mockShell };
+
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const folderItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('src')
+			);
+			fireEvent.contextMenu(folderItem!, { clientX: 100, clientY: 200 });
+
+			const revealButton = screen.getByText('Reveal in Finder');
+			fireEvent.click(revealButton);
+
+			expect(mockShell.showItemInFolder).toHaveBeenCalledWith('/Users/test/project/src');
+		});
+
+		it('calls shell.openPath with full file path when Open in Default App is clicked', () => {
+			const mockShell = { openPath: vi.fn().mockResolvedValue(undefined) };
 			(window as any).maestro = { platform: 'darwin', shell: mockShell };
 
 			const { container } = render(<FileExplorerPanel {...defaultProps} />);
@@ -1798,9 +1831,7 @@ describe('FileExplorerPanel', () => {
 			const openButton = screen.getByText('Open in Default App');
 			fireEvent.click(openButton);
 
-			expect(mockShell.openExternal).toHaveBeenCalledWith(
-				'file:///Users/test/project/package.json'
-			);
+			expect(mockShell.openPath).toHaveBeenCalledWith('/Users/test/project/package.json');
 		});
 
 		it('does not show Open in Default App option for SSH sessions', () => {

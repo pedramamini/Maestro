@@ -402,6 +402,12 @@ describe('WizardConversationView', () => {
 				/>
 			);
 
+			// Flush the rAF callback from the initial programmatic scroll so the
+			// isProgrammaticScrollRef guard is reset before we simulate a user scroll
+			act(() => {
+				vi.advanceTimersByTime(16);
+			});
+
 			const container = screen.getByTestId('wizard-conversation-view');
 
 			// Let the initial programmatic scroll guard reset before simulating user scroll

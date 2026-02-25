@@ -36,6 +36,7 @@ const mockTheme: Theme = {
 		success: '#00ff00',
 		warning: '#ffff00',
 		error: '#ff0000',
+		accent: '#6366f1',
 	},
 };
 
@@ -57,6 +58,7 @@ const alternativeTheme: Theme = {
 		success: '#22c55e',
 		warning: '#f59e0b',
 		error: '#ef4444',
+		accent: '#8b5cf6',
 	},
 };
 
@@ -432,18 +434,18 @@ describe('theme utilities', () => {
 				expect(svg).toBeInTheDocument();
 			});
 
-			it('applies textDim color to undefined file type icon', () => {
+			it('applies accent color to undefined file type icon', () => {
 				const icon = getFileIcon(undefined, mockTheme);
 				const { container } = render(icon);
 				const svg = container.querySelector('svg');
-				expect(svg).toHaveStyle({ color: mockTheme.colors.textDim });
+				expect(svg).toHaveStyle({ color: mockTheme.colors.accent });
 			});
 
-			it('uses alternative theme textDim color', () => {
+			it('uses alternative theme accent color', () => {
 				const icon = getFileIcon(undefined, alternativeTheme);
 				const { container } = render(icon);
 				const svg = container.querySelector('svg');
-				expect(svg).toHaveStyle({ color: alternativeTheme.colors.textDim });
+				expect(svg).toHaveStyle({ color: alternativeTheme.colors.accent });
 			});
 		});
 
@@ -461,13 +463,13 @@ describe('theme utilities', () => {
 		});
 
 		describe('unknown file type', () => {
-			it('treats unknown file type as default (textDim color)', () => {
+			it('treats unknown file type as default (accent color)', () => {
 				// Cast to test the default case with an invalid type
 				const unknownType = 'unknown' as FileChangeType;
 				const icon = getFileIcon(unknownType, mockTheme);
 				const { container } = render(icon);
 				const svg = container.querySelector('svg');
-				expect(svg).toHaveStyle({ color: mockTheme.colors.textDim });
+				expect(svg).toHaveStyle({ color: mockTheme.colors.accent });
 			});
 		});
 	});

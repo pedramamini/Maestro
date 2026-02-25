@@ -997,6 +997,7 @@ function MaestroConsoleInner() {
 		handleCloseGroupChat,
 		handleCreateGroupChat,
 		handleUpdateGroupChat,
+		handleArchiveGroupChat,
 		deleteGroupChatWithConfirmation,
 		handleProcessMonitorNavigateToGroupChat,
 		handleOpenModeratorSession,
@@ -4177,6 +4178,8 @@ function MaestroConsoleInner() {
 		rightPanelRef,
 		sshRemoteIgnorePatterns: settings.sshRemoteIgnorePatterns,
 		sshRemoteHonorGitignore: settings.sshRemoteHonorGitignore,
+		localIgnorePatterns: settings.localIgnorePatterns,
+		localHonorGitignore: settings.localHonorGitignore,
 	});
 
 	// --- FILE EXPLORER EFFECTS ---
@@ -4715,12 +4718,12 @@ function MaestroConsoleInner() {
 		// Merge session modal and send to agent modal
 		setMergeSessionModalOpen,
 		setSendToAgentModalOpen,
-		// Summarize and continue
-		canSummarizeActiveTab: (() => {
+		// Summarize and continue (getter: evaluated lazily only when shortcut fires)
+		get canSummarizeActiveTab() {
 			if (!activeSession || !activeSession.activeTabId) return false;
 			const activeTab = activeSession.aiTabs.find((t) => t.id === activeSession.activeTabId);
 			return canSummarize(activeSession.contextUsage, activeTab?.logs);
-		})(),
+		},
 		summarizeAndContinue: handleSummarizeAndContinue,
 
 		// Keyboard mastery gamification
@@ -5141,6 +5144,7 @@ function MaestroConsoleInner() {
 		handleEditGroupChat,
 		handleOpenRenameGroupChatModal,
 		handleOpenDeleteGroupChatModal,
+		handleArchiveGroupChat,
 	});
 
 	const rightPanelProps = useRightPanelProps({

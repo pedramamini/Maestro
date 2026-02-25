@@ -382,8 +382,8 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 		[showFlashNotification]
 	);
 
-	const removeImage = useCallback((index: number) => {
-		setStagedImages((prev) => prev.filter((_, i) => i !== index));
+	const removeImage = useCallback((img: string) => {
+		setStagedImages((prev) => prev.filter((x) => x !== img));
 	}, []);
 
 	const isBusy = state !== 'idle';
@@ -443,17 +443,17 @@ export const GroupChatInput = React.memo(function GroupChatInput({
 			{/* Staged images preview */}
 			{stagedImages.length > 0 && (
 				<div className="flex gap-2 mb-2 flex-wrap">
-					{stagedImages.map((img, index) => (
-						<div key={index} className="relative group">
+					{stagedImages.map((img) => (
+						<div key={img} className="relative group">
 							<img
 								src={img}
-								alt={`Staged ${index + 1}`}
+								alt="Staged image"
 								className="w-16 h-16 object-cover rounded border cursor-pointer hover:opacity-80 transition-opacity"
 								style={{ borderColor: theme.colors.border }}
 								onClick={() => onOpenLightbox?.(img, stagedImages, 'staged')}
 							/>
 							<button
-								onClick={() => removeImage(index)}
+								onClick={() => removeImage(img)}
 								className="absolute -top-1 -right-1 w-4 h-4 rounded-full flex items-center justify-center text-xs opacity-0 group-hover:opacity-100 transition-opacity"
 								style={{
 									backgroundColor: theme.colors.error,

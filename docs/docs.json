@@ -58,7 +58,6 @@
               "keyboard-shortcuts",
               "slash-commands",
               "history",
-              "director-notes",
               "context-management",
               "document-graph",
               "usage-dashboard",
@@ -81,6 +80,14 @@
             ]
           },
           {
+            "group": "Encore Features",
+            "icon": "flask",
+            "pages": [
+              "encore-features",
+              "director-notes"
+            ]
+          },
+          {
             "group": "Providers & CLI",
             "pages": [
               "provider-notes",
@@ -100,6 +107,7 @@
             "pages": [
               "releases",
               "achievements",
+              "performance-profiling",
               "troubleshooting"
             ],
             "icon": "life-ring"

@@ -1072,6 +1072,7 @@ interface SessionListProps {
 	onEditGroupChat?: (id: string) => void;
 	onRenameGroupChat?: (id: string) => void;
 	onDeleteGroupChat?: (id: string) => void;
+	onArchiveGroupChat?: (id: string, archived: boolean) => void;
 }
 
 function SessionListInner(props: SessionListProps) {
@@ -1168,6 +1169,7 @@ function SessionListInner(props: SessionListProps) {
 		onEditGroupChat,
 		onRenameGroupChat,
 		onDeleteGroupChat,
+		onArchiveGroupChat,
 	} = props;
 
 	// Derive whether any session is busy or in auto-run (for wand sparkle animation)
@@ -2764,6 +2766,7 @@ function SessionListInner(props: SessionListProps) {
 								onEditGroupChat={onEditGroupChat}
 								onRenameGroupChat={onRenameGroupChat}
 								onDeleteGroupChat={onDeleteGroupChat}
+								onArchiveGroupChat={onArchiveGroupChat}
 								isExpanded={groupChatsExpanded}
 								onExpandedChange={setGroupChatsExpanded}
 								groupChatState={groupChatState}

@@ -182,6 +182,17 @@ interface LoadingState {
 	isRemote: boolean;
 }
 
+/** Default local ignore patterns (used when no user-configured patterns are provided) */
+export const LOCAL_IGNORE_DEFAULTS = ['node_modules', '__pycache__'];
+
+/** Options for local (non-SSH) file tree loading */
+export interface LocalFileTreeOptions {
+	/** Glob patterns to ignore. When provided, replaces LOCAL_IGNORE_DEFAULTS. */
+	ignorePatterns?: string[];
+	/** Whether to parse and honor the root .gitignore file (default: false). */
+	honorGitignore?: boolean;
+}
+
 /**
  * Load file tree from directory recursively
  * @param dirPath - The directory path to load
@@ -189,13 +200,15 @@ interface LoadingState {
  * @param currentDepth - Current recursion depth (internal use)
  * @param sshContext - Optional SSH context for remote file operations
  * @param onProgress - Optional callback for progress updates (useful for SSH)
+ * @param localOptions - Optional configuration for local (non-SSH) scans
  */
 export async function loadFileTree(
 	dirPath: string,
 	maxDepth = 10,
 	currentDepth = 0,
 	sshContext?: SshContext,
-	onProgress?: FileTreeProgressCallback
+	onProgress?: FileTreeProgressCallback,
+	localOptions?: LocalFileTreeOptions
 ): Promise<FileTreeNode[]> {
 	const isRemote = Boolean(sshContext?.sshRemoteId);
 
@@ -219,8 +232,20 @@ export async function loadFileTree(
 			}
 		}
 	} else {
-		// For local: use default hardcoded patterns (backward compatible)
-		ignorePatterns = ['node_modules', '__pycache__'];
+		// For local: use configurable patterns from settings, falling back to hardcoded defaults
+		ignorePatterns = localOptions?.ignorePatterns ?? LOCAL_IGNORE_DEFAULTS;
+
+		// If honor gitignore is enabled, try to parse the local .gitignore
+		if (localOptions?.honorGitignore) {
+			try {
+				const content = await window.maestro.fs.readFile(`${dirPath}/.gitignore`);
+				if (content) {
+					ignorePatterns = [...ignorePatterns, ...parseGitignoreContent(content)];
+				}
+			} catch {
+				// .gitignore may not exist or be readable — not an error
+			}
+		}
 	}
 
 	// Initialize loading state at the top level
@@ -236,56 +261,51 @@ export async function loadFileTree(
 }
 
 /**
+ * Parse raw .gitignore content into simplified name-based patterns.
+ * Shared between local and remote gitignore handling.
+ * Skips comments, empty lines, and negation patterns (!).
+ * Strips leading `/` and trailing `/` since we match against names, not paths.
+ */
+export function parseGitignoreContent(content: string): string[] {
+	const patterns: string[] = [];
+
+	for (const line of content.split('\n')) {
+		const trimmed = line.trim();
+
+		// Skip empty lines, comments, and negation patterns
+		if (!trimmed || trimmed.startsWith('#') || trimmed.startsWith('!')) {
+			continue;
+		}
+
+		// Remove leading slash (we match against names, not paths)
+		let pattern = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
+
+		// Remove trailing slash (we match the folder name itself)
+		if (pattern.endsWith('/')) {
+			pattern = pattern.slice(0, -1);
+		}
+
+		if (pattern) {
+			patterns.push(pattern);
+		}
+	}
+
+	return patterns;
+}
+
+/**
  * Fetch and parse .gitignore patterns from a remote directory.
  * @param dirPath - The remote directory path
  * @param sshRemoteId - The SSH remote config ID
- * @returns Array of gitignore patterns (only folder patterns, simplified)
+ * @returns Array of gitignore patterns (simplified name-based matching)
  */
 async function fetchRemoteGitignorePatterns(
 	dirPath: string,
 	sshRemoteId: string
 ): Promise<string[]> {
 	try {
-		const gitignorePath = `${dirPath}/.gitignore`;
-		const content = await window.maestro.fs.readFile(gitignorePath, sshRemoteId);
-
-		if (!content) {
-			return [];
-		}
-
-		// Parse gitignore content - extract simple patterns
-		// We focus on folder patterns (lines without extensions or with trailing /)
-		const patterns: string[] = [];
-		const lines = content.split('\n');
-
-		for (const line of lines) {
-			const trimmed = line.trim();
-
-			// Skip empty lines and comments
-			if (!trimmed || trimmed.startsWith('#')) {
-				continue;
-			}
-
-			// Skip negation patterns (we don't support them)
-			if (trimmed.startsWith('!')) {
-				continue;
-			}
-
-			// Remove leading slash (we match against names, not paths)
-			let pattern = trimmed.startsWith('/') ? trimmed.slice(1) : trimmed;
-
-			// Remove trailing slash (we match the folder name itself)
-			if (pattern.endsWith('/')) {
-				pattern = pattern.slice(0, -1);
-			}
-
-			// Only add non-empty patterns
-			if (pattern) {
-				patterns.push(pattern);
-			}
-		}
-
-		return patterns;
+		const content = await window.maestro.fs.readFile(`${dirPath}/.gitignore`, sshRemoteId);
+		return content ? parseGitignoreContent(content) : [];
 	} catch {
 		return [];
 	}
