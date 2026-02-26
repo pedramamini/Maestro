@@ -1,15 +1,6 @@
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import { useVirtualizer } from '@tanstack/react-virtual';
-import {
-	X,
-	CheckCircle,
-	ChevronDown,
-	ChevronRight,
-	Maximize2,
-	Minimize2,
-	Star,
-	Bot,
-} from 'lucide-react';
+import { X, CheckCircle, ChevronDown, ChevronRight, Maximize2, Minimize2, Bot } from 'lucide-react';
 import type { Theme, SessionState } from '../../types';
 import type { InboxItem, InboxFilterMode, InboxSortMode } from '../../types/agent-inbox';
 import { STATUS_LABELS, STATUS_COLORS } from '../../types/agent-inbox';
@@ -238,15 +229,6 @@ function InboxItemCardContent({
 								</>
 							)}
 						</span>
-						{item.starred && (
-							<Star
-								className="w-4 h-4 flex-shrink-0"
-								style={{
-									color: theme.colors.warning,
-									fill: theme.colors.warning,
-								}}
-							/>
-						)}
 						<span
 							style={{
 								fontSize: 12,
@@ -494,7 +476,7 @@ const FILTER_OPTIONS: { value: InboxFilterMode; label: string }[] = [
 	{ value: 'all', label: 'All' },
 	{ value: 'unread', label: 'Unread' },
 	{ value: 'read', label: 'Read' },
-	{ value: 'starred', label: '★ Starred' },
+	{ value: 'starred', label: 'Starred' },
 ];
 
 // Track the identity of the selected row so we can re-find it after rows change
