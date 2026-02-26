@@ -562,6 +562,15 @@ export default function FocusModeView({
 	// ---- Resizable sidebar ----
 	const [sidebarWidth, setSidebarWidth] = useState(220);
 	const isResizingRef = useRef(false);
+	const resizeCleanupRef = useRef<(() => void) | null>(null);
+
+	// Unmount safety: clean up resize listeners if component unmounts mid-drag
+	useEffect(() => {
+		return () => {
+			resizeCleanupRef.current?.();
+			resizeCleanupRef.current = null;
+		};
+	}, []);
 
 	const handleResizeStart = useCallback(
 		(e: React.MouseEvent) => {
@@ -575,13 +584,21 @@ export default function FocusModeView({
 				const newWidth = Math.max(160, Math.min(400, startWidth + (ev.clientX - startX)));
 				setSidebarWidth(newWidth);
 			};
-			const onMouseUp = () => {
+
+			const cleanup = () => {
 				isResizingRef.current = false;
 				document.removeEventListener('mousemove', onMouseMove);
 				document.removeEventListener('mouseup', onMouseUp);
 				document.body.style.cursor = '';
 				document.body.style.userSelect = '';
+				resizeCleanupRef.current = null;
 			};
+
+			const onMouseUp = () => {
+				cleanup();
+			};
+
+			resizeCleanupRef.current = cleanup;
 			document.addEventListener('mousemove', onMouseMove);
 			document.addEventListener('mouseup', onMouseUp);
 			document.body.style.cursor = 'col-resize';

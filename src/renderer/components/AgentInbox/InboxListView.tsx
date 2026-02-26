@@ -1057,8 +1057,11 @@ export default function InboxListView({
 			{/* Body — virtualized list */}
 			<div
 				role="listbox"
+				tabIndex={0}
+				onKeyDown={handleKeyDown}
 				aria-activedescendant={selectedItemId}
 				aria-label="Inbox items"
+				className="outline-none"
 				style={{ flex: 1, overflow: 'hidden' }}
 			>
 				{rows.length === 0 ? (

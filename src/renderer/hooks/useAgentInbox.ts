@@ -146,29 +146,30 @@ function sortItems(items: InboxItem[], sortMode: InboxSortMode): InboxItem[] {
 			});
 			break;
 		case 'byAgent': {
-			// Step 1: Group items by sessionName
-			const agentGroups = new Map<string, InboxItem[]>();
+			// Step 1: Group items by sessionId (unique) — sessionName is display-only
+			const agentGroups = new Map<string, { label: string; items: InboxItem[] }>();
 			for (const item of sorted) {
-				const key = item.sessionName;
-				if (!agentGroups.has(key)) agentGroups.set(key, []);
-				agentGroups.get(key)!.push(item);
+				const key = item.sessionId;
+				if (!agentGroups.has(key)) agentGroups.set(key, { label: item.sessionName, items: [] });
+				agentGroups.get(key)!.items.push(item);
 			}
 
 			// Step 2: Pre-compute metadata per group
-			const groupMeta: { key: string; unreadCount: number; items: InboxItem[] }[] = [];
-			for (const [key, groupItems] of agentGroups) {
-				const unreadCount = groupItems.filter((i) => i.hasUnread).length;
+			const groupMeta: { key: string; label: string; unreadCount: number; items: InboxItem[] }[] =
+				[];
+			for (const [key, group] of agentGroups) {
+				const unreadCount = group.items.filter((i) => i.hasUnread).length;
 				// Sort items within group: newest first
-				groupItems.sort((a, b) => b.timestamp - a.timestamp);
-				groupMeta.push({ key, unreadCount, items: groupItems });
+				group.items.sort((a, b) => b.timestamp - a.timestamp);
+				groupMeta.push({ key, label: group.label, unreadCount, items: group.items });
 			}
 
-			// Step 3: Sort groups — unreads first (by count desc), then zero-unreads (alphabetical)
+			// Step 3: Sort groups — unreads first (by count desc), then zero-unreads (alphabetical by label)
 			groupMeta.sort((a, b) => {
 				if (a.unreadCount > 0 && b.unreadCount === 0) return -1;
 				if (a.unreadCount === 0 && b.unreadCount > 0) return 1;
 				if (a.unreadCount > 0 && b.unreadCount > 0) return b.unreadCount - a.unreadCount;
-				return a.key.localeCompare(b.key);
+				return a.label.localeCompare(b.label);
 			});
 
 			// Step 4: Flatten back
