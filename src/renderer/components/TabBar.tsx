@@ -699,6 +699,7 @@ const Tab = memo(function Tab({
 								borderBottomLeftRadius: '8px',
 								borderBottomRightRadius: '8px',
 								minWidth: '220px',
+								maxWidth: '320px',
 							}}
 						>
 							{/* Header with session name and ID - only show for tabs with sessions */}
@@ -713,7 +714,7 @@ const Tab = memo(function Tab({
 									{/* Session name display */}
 									{tab.name && (
 										<div
-											className="px-3 py-2 text-sm font-medium"
+											className="px-3 py-2 text-sm font-medium break-words"
 											style={{ color: theme.colors.textMain }}
 										>
 											{tab.name}
@@ -722,7 +723,7 @@ const Tab = memo(function Tab({
 
 									{/* Session ID display */}
 									<div
-										className="px-3 py-2 text-[10px] font-mono"
+										className="px-3 py-2 text-[10px] font-mono break-all"
 										style={{ color: theme.colors.textDim }}
 									>
 										{tab.agentSessionId}
@@ -763,7 +764,7 @@ const Tab = memo(function Tab({
 												className="w-3.5 h-3.5 mt-0.5 shrink-0"
 												style={{ color: theme.colors.textDim }}
 											/>
-											<span className={tab.description ? 'line-clamp-3' : 'italic'}>
+											<span className={tab.description ? 'line-clamp-3 break-all' : 'italic'}>
 												{tab.description || 'Add description...'}
 											</span>
 										</button>
