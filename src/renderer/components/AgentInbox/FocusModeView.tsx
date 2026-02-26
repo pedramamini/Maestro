@@ -834,11 +834,11 @@ export default function FocusModeView({
 
 			{/* Subheader info bar — 32px */}
 			<div
-				className="flex items-center justify-end px-4 gap-3 text-xs border-b"
+				className="flex items-center justify-end px-4 py-2 gap-3 text-xs border-b"
 				style={{
-					height: 32,
 					borderColor: theme.colors.border,
 					backgroundColor: theme.colors.bgActivity,
+					color: theme.colors.textDim,
 				}}
 			>
 				{item.gitBranch && (
@@ -974,7 +974,7 @@ export default function FocusModeView({
 							ref={scrollRef}
 							role="log"
 							aria-label="Agent conversation"
-							className="focus-mode-prose flex-1 overflow-y-auto px-4 py-3"
+							className="focus-mode-prose flex-1 overflow-y-auto p-4"
 							style={{
 								minHeight: 0,
 								opacity: isTransitioning ? 0.3 : 1,
@@ -1006,7 +1006,7 @@ export default function FocusModeView({
 
 					{/* Reply input bar */}
 					<div
-						className="flex items-center gap-2 px-4 py-2 border-t"
+						className="flex items-center gap-2 px-4 py-3 border-t"
 						style={{ borderColor: theme.colors.border }}
 					>
 						<textarea
