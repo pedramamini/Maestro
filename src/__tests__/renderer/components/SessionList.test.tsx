@@ -2135,7 +2135,7 @@ describe('SessionList', () => {
 			expect(activeSession).toHaveStyle({ borderColor: defaultTheme.colors.accent });
 		});
 
-		it('shows ring on active session in collapsed mode', () => {
+		it('does not show ring on active session in collapsed mode', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Active' })];
 			useSessionStore.setState({
 				sessions: sessions,
@@ -2147,9 +2147,9 @@ describe('SessionList', () => {
 			});
 			const { container } = render(<SessionList {...props} />);
 
-			// Active session in collapsed mode should have ring-2 class
+			// Active session in collapsed mode should NOT have ring-2 class (brightness alone indicates selection)
 			const activeIndicator = container.querySelector('.ring-2');
-			expect(activeIndicator).toBeInTheDocument();
+			expect(activeIndicator).not.toBeInTheDocument();
 		});
 	});
 
