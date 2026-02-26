@@ -220,28 +220,7 @@ export function useBatchProcessor({
 	// Dispatch batch actions through the store. The store applies batchReducer
 	// synchronously, eliminating the need for manual ref syncing.
 	const dispatch = useCallback((action: BatchAction) => {
-		const prevStates = useBatchStore.getState().batchRunStates;
 		useBatchStore.getState().dispatchBatch(action);
-		const newStates = useBatchStore.getState().batchRunStates;
-
-		// DEBUG: Log dispatch to trace state updates
-		if (
-			action.type === 'START_BATCH' ||
-			action.type === 'UPDATE_PROGRESS' ||
-			action.type === 'SET_STOPPING' ||
-			action.type === 'COMPLETE_BATCH'
-		) {
-			const sessionId = action.sessionId;
-			console.log('[BatchProcessor:dispatch]', action.type, {
-				sessionId,
-				prevIsRunning: prevStates[sessionId]?.isRunning,
-				newIsRunning: newStates[sessionId]?.isRunning,
-				prevIsStopping: prevStates[sessionId]?.isStopping,
-				newIsStopping: newStates[sessionId]?.isStopping,
-				prevCompleted: prevStates[sessionId]?.completedTasksAcrossAllDocs,
-				newCompleted: newStates[sessionId]?.completedTasksAcrossAllDocs,
-			});
-		}
 	}, []);
 
 	// Custom prompts per session — lives in batchStore
@@ -274,10 +253,8 @@ export function useBatchProcessor({
 	// This handles React 18 StrictMode double-render and ensures ref is always correct
 	useEffect(() => {
 		isMountedRef.current = true;
-		console.log('[BatchProcessor] Mounted, isMountedRef set to true');
 		return () => {
 			isMountedRef.current = false;
-			console.log('[BatchProcessor] Unmounting, isMountedRef set to false');
 
 			// Reject all pending error resolution promises with 'abort' to unblock any waiting async code
 			// This prevents memory leaks from promises that would never resolve
@@ -321,7 +298,7 @@ export function useBatchProcessor({
 	}, []);
 
 	// Use extracted debounce hook for batch state updates (replaces manual debounce logic)
-	const { scheduleUpdate: _scheduleDebouncedUpdate, flushUpdate: flushDebouncedUpdate } =
+	const { scheduleUpdate: scheduleDebouncedUpdate, flushUpdate: flushDebouncedUpdate } =
 		useSessionDebounce<Record<string, BatchRunState>>({
 			delayMs: BATCH_STATE_DEBOUNCE_MS,
 			onUpdate: useCallback(
@@ -340,14 +317,6 @@ export function useBatchProcessor({
 						const currentState = useBatchStore.getState().batchRunStates;
 						const newState = updater(currentState);
 						newStateForSession = newState[sessionId] || null;
-
-						// DEBUG: Log to trace progress updates
-						console.log('[BatchProcessor:onUpdate] Debounce fired:', {
-							sessionId,
-							refHasSession: !!currentState[sessionId],
-							refCompletedTasks: currentState[sessionId]?.completedTasksAcrossAllDocs,
-							newCompletedTasks: newStateForSession?.completedTasksAcrossAllDocs,
-						});
 
 						// Dispatch UPDATE_PROGRESS with the computed changes
 						// For complex state changes, we extract the session's new state and dispatch appropriately
@@ -503,85 +472,11 @@ export function useBatchProcessor({
 		(
 			sessionId: string,
 			updater: (prev: Record<string, BatchRunState>) => Record<string, BatchRunState>,
-			_immediate: boolean = false
+			immediate: boolean = false
 		) => {
-			// DEBUG: Bypass debouncing entirely to test if that's the issue
-			// Apply update directly without debouncing
-			const currentState = useBatchStore.getState().batchRunStates;
-			const newState = updater(currentState);
-			const newStateForSession = newState[sessionId] || null;
-
-			console.log('[BatchProcessor:updateBatchStateAndBroadcast] DIRECT update (no debounce)', {
-				sessionId,
-				prevCompleted: currentState[sessionId]?.completedTasksAcrossAllDocs,
-				newCompleted: newStateForSession?.completedTasksAcrossAllDocs,
-			});
-
-			if (newStateForSession) {
-				const prevSessionState = currentState[sessionId] || DEFAULT_BATCH_STATE;
-
-				dispatch({
-					type: 'UPDATE_PROGRESS',
-					sessionId,
-					payload: {
-						currentDocumentIndex:
-							newStateForSession.currentDocumentIndex !== prevSessionState.currentDocumentIndex
-								? newStateForSession.currentDocumentIndex
-								: undefined,
-						currentDocTasksTotal:
-							newStateForSession.currentDocTasksTotal !== prevSessionState.currentDocTasksTotal
-								? newStateForSession.currentDocTasksTotal
-								: undefined,
-						currentDocTasksCompleted:
-							newStateForSession.currentDocTasksCompleted !==
-							prevSessionState.currentDocTasksCompleted
-								? newStateForSession.currentDocTasksCompleted
-								: undefined,
-						totalTasksAcrossAllDocs:
-							newStateForSession.totalTasksAcrossAllDocs !==
-							prevSessionState.totalTasksAcrossAllDocs
-								? newStateForSession.totalTasksAcrossAllDocs
-								: undefined,
-						completedTasksAcrossAllDocs:
-							newStateForSession.completedTasksAcrossAllDocs !==
-							prevSessionState.completedTasksAcrossAllDocs
-								? newStateForSession.completedTasksAcrossAllDocs
-								: undefined,
-						totalTasks:
-							newStateForSession.totalTasks !== prevSessionState.totalTasks
-								? newStateForSession.totalTasks
-								: undefined,
-						completedTasks:
-							newStateForSession.completedTasks !== prevSessionState.completedTasks
-								? newStateForSession.completedTasks
-								: undefined,
-						currentTaskIndex:
-							newStateForSession.currentTaskIndex !== prevSessionState.currentTaskIndex
-								? newStateForSession.currentTaskIndex
-								: undefined,
-						sessionIds:
-							newStateForSession.sessionIds !== prevSessionState.sessionIds
-								? newStateForSession.sessionIds
-								: undefined,
-						accumulatedElapsedMs:
-							newStateForSession.accumulatedElapsedMs !== prevSessionState.accumulatedElapsedMs
-								? newStateForSession.accumulatedElapsedMs
-								: undefined,
-						lastActiveTimestamp:
-							newStateForSession.lastActiveTimestamp !== prevSessionState.lastActiveTimestamp
-								? newStateForSession.lastActiveTimestamp
-								: undefined,
-						loopIteration:
-							newStateForSession.loopIteration !== prevSessionState.loopIteration
-								? newStateForSession.loopIteration
-								: undefined,
-					},
-				});
-			}
-
-			broadcastAutoRunState(sessionId, newStateForSession);
+			scheduleDebouncedUpdate(sessionId, updater, immediate);
 		},
-		[broadcastAutoRunState]
+		[scheduleDebouncedUpdate]
 	);
 
 	// Update ref to always have latest updateBatchStateAndBroadcast (fixes HMR stale closure)
@@ -1658,9 +1553,6 @@ export function useBatchProcessor({
 			// Critical: Always flush debounced updates and dispatch COMPLETE_BATCH to clean up state.
 			// These operations are safe regardless of mount state - React handles reducer dispatches gracefully,
 			// and broadcasts are external calls that don't affect React state.
-			console.log(
-				'[BatchProcessor:startBatchRun] Flushing debounced updates before COMPLETE_BATCH'
-			);
 			flushDebouncedUpdate(sessionId);
 
 			// Reset state for this session using COMPLETE_BATCH action
@@ -1728,7 +1620,6 @@ export function useBatchProcessor({
 	 */
 	const stopBatchRun = useCallback(
 		(sessionId: string) => {
-			console.log('[BatchProcessor:stopBatchRun] Called with sessionId:', sessionId);
 			stopRequestedRefs.current[sessionId] = true;
 			const errorResolution = errorResolutionRefs.current[sessionId];
 			if (errorResolution) {
@@ -1753,8 +1644,6 @@ export function useBatchProcessor({
 	 */
 	const killBatchRun = useCallback(
 		async (sessionId: string) => {
-			console.log('[BatchProcessor:killBatchRun] Force killing session:', sessionId);
-
 			// 1. Kill the agent process and wait for termination before cleaning up state
 			try {
 				await window.maestro.process.kill(sessionId);
