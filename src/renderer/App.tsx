@@ -1539,29 +1539,14 @@ function MaestroConsoleInner() {
 			// is viewing through Focus Mode, not directly in the session).
 			const previousActiveSessionId = activeSessionId;
 
-			// Add optimistic user log entry and activate the target tab
+			// Activate the target tab and mark as read (processInput adds the user log entry)
 			setSessions((prev) =>
 				prev.map((s) => {
 					if (s.id !== sessionId) return s;
 					return {
 						...s,
 						activeTabId: tabId,
-						aiTabs: s.aiTabs.map((t) => {
-							if (t.id !== tabId) return t;
-							return {
-								...t,
-								hasUnread: false,
-								logs: [
-									...t.logs,
-									{
-										id: `user-${Date.now()}`,
-										timestamp: Date.now(),
-										source: 'user' as const,
-										text,
-									},
-								],
-							};
-						}),
+						aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, hasUnread: false } : t)),
 					};
 				})
 			);
