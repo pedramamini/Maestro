@@ -763,7 +763,7 @@ const Tab = memo(function Tab({
 												className="w-3.5 h-3.5 mt-0.5 shrink-0"
 												style={{ color: theme.colors.textDim }}
 											/>
-											<span className={tab.description ? '' : 'italic'}>
+											<span className={tab.description ? 'line-clamp-3' : 'italic'}>
 												{tab.description || 'Add description...'}
 											</span>
 										</button>
