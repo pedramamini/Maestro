@@ -1075,6 +1075,7 @@ export function useTabHandlers(): TabHandlersReturn {
 	}, []);
 
 	const handleUpdateTabDescription = useCallback((tabId: string, description: string) => {
+		const trimmed = description.trim();
 		const { setSessions, activeSessionId } = useSessionStore.getState();
 		setSessions((prev: Session[]) =>
 			prev.map((s) => {
@@ -1082,7 +1083,7 @@ export function useTabHandlers(): TabHandlersReturn {
 				return {
 					...s,
 					aiTabs: s.aiTabs.map((t) =>
-						t.id === tabId ? { ...t, description: description || undefined } : t
+						t.id === tabId ? { ...t, description: trimmed || undefined } : t
 					),
 				};
 			})

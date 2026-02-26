@@ -245,6 +245,7 @@ const Tab = memo(function Tab({
 	const [isEditingDescription, setIsEditingDescription] = useState(false);
 	const [descriptionDraft, setDescriptionDraft] = useState('');
 	const descriptionInputRef = useRef<HTMLTextAreaElement>(null);
+	const skipNextBlurSaveRef = useRef(false);
 	const hoverTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 	const tabRef = useRef<HTMLDivElement>(null);
 
@@ -362,7 +363,7 @@ const Tab = memo(function Tab({
 	);
 
 	const handleStartEditDescription = useCallback(
-		(e: React.MouseEvent) => {
+		(e: React.MouseEvent | React.KeyboardEvent) => {
 			e.stopPropagation();
 			setDescriptionDraft(tab.description || '');
 			setIsEditingDescription(true);
@@ -385,14 +386,25 @@ const Tab = memo(function Tab({
 			e.stopPropagation();
 			if (e.key === 'Enter' && !e.shiftKey) {
 				e.preventDefault();
+				skipNextBlurSaveRef.current = true;
 				handleSaveDescription();
 			} else if (e.key === 'Escape') {
 				e.preventDefault();
+				skipNextBlurSaveRef.current = true;
+				setDescriptionDraft(tab.description || '');
 				setIsEditingDescription(false);
 			}
 		},
-		[handleSaveDescription]
+		[handleSaveDescription, tab.description]
 	);
+
+	const handleDescriptionBlur = useCallback(() => {
+		if (skipNextBlurSaveRef.current) {
+			skipNextBlurSaveRef.current = false;
+			return;
+		}
+		handleSaveDescription();
+	}, [handleSaveDescription]);
 
 	const handleMergeWithClick = useCallback(
 		(e: React.MouseEvent) => {
@@ -740,7 +752,7 @@ const Tab = memo(function Tab({
 											value={descriptionDraft}
 											onChange={(e) => setDescriptionDraft(e.target.value)}
 											onKeyDown={handleDescriptionKeyDown}
-											onBlur={handleSaveDescription}
+											onBlur={handleDescriptionBlur}
 											className="w-full text-xs rounded px-2 py-1.5 resize-none outline-none"
 											style={{
 												backgroundColor: theme.colors.bgMain,
@@ -755,6 +767,14 @@ const Tab = memo(function Tab({
 									) : (
 										<button
 											onClick={handleStartEditDescription}
+											onKeyDown={(e) => {
+												if (e.key === 'Enter' || e.key === ' ') {
+													e.preventDefault();
+													handleStartEditDescription(e);
+												}
+											}}
+											tabIndex={0}
+											aria-label="Edit tab description"
 											className="w-full flex items-start gap-2 rounded text-xs hover:bg-white/5 transition-colors p-1 text-left"
 											style={{
 												color: tab.description ? theme.colors.textMain : theme.colors.textDim,
@@ -764,7 +784,7 @@ const Tab = memo(function Tab({
 												className="w-3.5 h-3.5 mt-0.5 shrink-0"
 												style={{ color: theme.colors.textDim }}
 											/>
-											<span className={tab.description ? 'line-clamp-3 break-all' : 'italic'}>
+											<span className={tab.description ? 'line-clamp-3 break-words' : 'italic'}>
 												{tab.description || 'Add description...'}
 											</span>
 										</button>
