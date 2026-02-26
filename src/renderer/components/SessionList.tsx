@@ -54,7 +54,12 @@ import { getStatusColor, getContextColor, formatActiveTime } from '../utils/them
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { SessionItem } from './SessionItem';
 import { GroupChatList } from './GroupChatList';
-import { useLiveOverlay, useClickOutside, useResizablePanel, useContextMenuPosition } from '../hooks';
+import {
+	useLiveOverlay,
+	useClickOutside,
+	useResizablePanel,
+	useContextMenuPosition,
+} from '../hooks';
 import { useGitFileStatus } from '../contexts/GitStatusContext';
 import { useUIStore } from '../stores/uiStore';
 import { fuzzyMatch } from '../utils/search';
@@ -1904,10 +1909,9 @@ function SessionListInner(props: SessionListProps) {
 		if (sessionFilter) {
 			// Find groups that contain matching sessions (search session name AND AI tab names)
 			const groupsWithMatches = new Set<string>();
-			const query = sessionFilter.toLowerCase();
 			const matchingSessions = sessions.filter((s) => {
-				if (s.name.toLowerCase().includes(query)) return true;
-				if (s.aiTabs?.some((tab) => tab.name?.toLowerCase().includes(query))) return true;
+				if (fuzzyMatch(s.name, sessionFilter)) return true;
+				if (s.aiTabs?.some((tab) => tab.name && fuzzyMatch(tab.name, sessionFilter))) return true;
 				return false;
 			});
 
