@@ -645,7 +645,7 @@ describe('FilePreview', () => {
 			);
 
 			expect(screen.getByText(/Large file preview truncated/)).toBeInTheDocument();
-			expect(screen.getByText(/Use an external editor for the full file/)).toBeInTheDocument();
+			expect(screen.getByText('Load full file')).toBeInTheDocument();
 		});
 
 		it('does not show truncation banner for small files', () => {
@@ -687,6 +687,27 @@ describe('FilePreview', () => {
 			const highlighter = screen.getByTestId('syntax-highlighter');
 			// Content should be truncated to 100KB (LARGE_FILE_PREVIEW_LIMIT)
 			expect(highlighter.textContent?.length).toBe(100 * 1024);
+		});
+
+		it('loads full file content when "Load full file" button is clicked', () => {
+			const largeContent = 'y'.repeat(200 * 1024); // 200KB
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'large.ts', content: largeContent, path: '/test/large.ts' }}
+				/>
+			);
+
+			// Initially truncated
+			const highlighter = screen.getByTestId('syntax-highlighter');
+			expect(highlighter.textContent?.length).toBe(100 * 1024);
+
+			// Click load full file button
+			fireEvent.click(screen.getByText('Load full file'));
+
+			// Banner should disappear and full content should be shown
+			expect(screen.queryByText(/Large file preview truncated/)).not.toBeInTheDocument();
+			expect(highlighter.textContent?.length).toBe(200 * 1024);
 		});
 
 		it('skips token counting for files larger than 1MB', async () => {

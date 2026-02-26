@@ -683,6 +683,7 @@ export const FilePreview = React.memo(
 		const [showStatsBar, setShowStatsBar] = useState(true);
 		const [tokenCount, setTokenCount] = useState<number | null>(null);
 		const [showRemoteImages, setShowRemoteImages] = useState(false);
+		const [showFullContent, setShowFullContent] = useState(false);
 		// Edit mode state - use external content when provided (for file tab persistence)
 		const [internalEditContent, setInternalEditContent] = useState('');
 		// Computed edit content - prefer external if provided
@@ -710,6 +711,11 @@ export const FilePreview = React.memo(
 		const scrollSaveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 		const tocButtonRef = useRef<HTMLButtonElement>(null);
 		const tocOverlayRef = useRef<HTMLDivElement>(null);
+
+		// Reset full content view when file changes
+		useEffect(() => {
+			setShowFullContent(false);
+		}, [file?.path]);
 
 		// File change detection state
 		const [fileChangedOnDisk, setFileChangedOnDisk] = useState(false);
@@ -791,11 +797,11 @@ export const FilePreview = React.memo(
 		// For very large files, truncate content for syntax highlighting to prevent freezes
 		const displayContent = useMemo(() => {
 			if (!file?.content) return '';
-			if (!isMarkdown && !isImage && !isBinary && file.content.length > LARGE_FILE_PREVIEW_LIMIT) {
+			if (!showFullContent && !isMarkdown && !isImage && !isBinary && file.content.length > LARGE_FILE_PREVIEW_LIMIT) {
 				return file.content.substring(0, LARGE_FILE_PREVIEW_LIMIT);
 			}
 			return file.content;
-		}, [file?.content, isMarkdown, isImage, isBinary]);
+		}, [file?.content, isMarkdown, isImage, isBinary, showFullContent]);
 
 		// Track if content is truncated for display
 		const isContentTruncated = file?.content && displayContent.length < file.content.length;
@@ -2420,8 +2426,19 @@ export const FilePreview = React.memo(
 									<span>
 										Large file preview truncated. Showing first{' '}
 										{formatFileSize(LARGE_FILE_PREVIEW_LIMIT)} of{' '}
-										{formatFileSize(file.content.length)}. Use an external editor for the full file.
+										{formatFileSize(file.content.length)}.
 									</span>
+									<button
+										className="px-2 py-0.5 rounded text-xs font-medium hover:brightness-125 transition-all"
+										style={{
+											backgroundColor: theme.colors.warning + '30',
+											border: `1px solid ${theme.colors.warning}60`,
+											color: theme.colors.warning,
+										}}
+										onClick={() => setShowFullContent(true)}
+									>
+										Load full file
+									</button>
 								</div>
 							)}
 							<SyntaxHighlighter
