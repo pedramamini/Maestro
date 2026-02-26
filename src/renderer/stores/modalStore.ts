@@ -138,6 +138,13 @@ export interface KeyboardMasteryData {
 	level: number;
 }
 
+/** Agent Inbox modal data (persisted filter/sort/expand state) */
+export interface AgentInboxModalData {
+	filterMode?: string;
+	sortMode?: string;
+	isExpanded?: boolean;
+}
+
 // ============================================================================
 // Modal ID Registry
 // ============================================================================
@@ -218,7 +225,9 @@ export type ModalId =
 	// Platform Warnings
 	| 'windowsWarning'
 	// Director's Notes
-	| 'directorNotes';
+	| 'directorNotes'
+	// Agent Inbox
+	| 'agentInbox';
 
 /**
  * Type mapping from ModalId to its data type.
@@ -249,6 +258,7 @@ export interface ModalDataMap {
 	firstRunCelebration: FirstRunCelebrationData;
 	keyboardMastery: KeyboardMasteryData;
 	lightbox: LightboxData;
+	agentInbox: AgentInboxModalData;
 }
 
 // Helper type to get data type for a modal ID
@@ -651,6 +661,11 @@ export function getModalActions() {
 			}
 		},
 
+		// Agent Inbox Modal
+		setAgentInboxOpen: (open: boolean) =>
+			open ? openModal('agentInbox') : closeModal('agentInbox'),
+		updateAgentInboxData: (data: Record<string, unknown>) => updateModalData('agentInbox', data),
+
 		// Agent Sessions Browser
 		setAgentSessionsOpen: (open: boolean) =>
 			open
@@ -846,6 +861,7 @@ export function useModalActions() {
 	const symphonyModalOpen = useModalStore(selectModalOpen('symphony'));
 	const windowsWarningModalOpen = useModalStore(selectModalOpen('windowsWarning'));
 	const directorNotesOpen = useModalStore(selectModalOpen('directorNotes'));
+	const agentInboxOpen = useModalStore(selectModalOpen('agentInbox'));
 
 	// Get stable actions
 	const actions = getModalActions();
@@ -1013,6 +1029,9 @@ export function useModalActions() {
 
 		// Director's Notes Modal
 		directorNotesOpen,
+
+		// Agent Inbox Modal
+		agentInboxOpen,
 
 		// Lightbox ref replacements (now stored as data)
 		lightboxIsGroupChat: lightboxData?.isGroupChat ?? false,

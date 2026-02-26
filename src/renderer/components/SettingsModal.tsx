@@ -37,6 +37,7 @@ import {
 	Clapperboard,
 	HelpCircle,
 	AppWindow,
+	Inbox,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -3252,6 +3253,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							>
 								{/* Feature Toggle Header */}
 								<button
+									role="switch"
+									aria-checked={encoreFeatures.directorNotes}
 									className="w-full flex items-center justify-between p-4 text-left"
 									onClick={() =>
 										setEncoreFeatures({
@@ -3637,6 +3640,91 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</div>
 										);
 									})()}
+							</div>
+
+							{/* Unified Inbox Feature Section */}
+							<div
+								className="rounded-lg border"
+								style={{
+									borderColor: encoreFeatures.unifiedInbox
+										? theme.colors.accent
+										: theme.colors.border,
+									backgroundColor: encoreFeatures.unifiedInbox
+										? `${theme.colors.accent}08`
+										: 'transparent',
+								}}
+							>
+								{/* Feature Toggle Header */}
+								<button
+									role="switch"
+									aria-checked={encoreFeatures.unifiedInbox}
+									className="w-full flex items-center justify-between p-4 text-left"
+									onClick={() =>
+										setEncoreFeatures({
+											...encoreFeatures,
+											unifiedInbox: !encoreFeatures.unifiedInbox,
+										})
+									}
+								>
+									<div className="flex items-center gap-3">
+										<Inbox
+											className="w-5 h-5"
+											style={{
+												color: encoreFeatures.unifiedInbox
+													? theme.colors.accent
+													: theme.colors.textDim,
+											}}
+										/>
+										<div>
+											<div
+												className="text-sm font-bold flex items-center gap-2"
+												style={{ color: theme.colors.textMain }}
+											>
+												Unified Inbox
+												<span
+													className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+													style={{
+														backgroundColor: theme.colors.warning + '30',
+														color: theme.colors.warning,
+													}}
+												>
+													Beta
+												</span>
+											</div>
+											<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+												Cross-session notification center with keyboard-first navigation
+											</div>
+										</div>
+									</div>
+									<div
+										className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.unifiedInbox ? '' : 'opacity-50'}`}
+										style={{
+											backgroundColor: encoreFeatures.unifiedInbox
+												? theme.colors.accent
+												: theme.colors.border,
+										}}
+									>
+										<div
+											className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
+											style={{
+												transform: encoreFeatures.unifiedInbox
+													? 'translateX(22px)'
+													: 'translateX(2px)',
+											}}
+										/>
+									</div>
+								</button>
+
+								{/* Unified Inbox Info (shown when enabled) */}
+								{encoreFeatures.unifiedInbox && (
+									<div className="px-4 pb-4">
+										<p className="text-xs" style={{ color: theme.colors.textDim }}>
+											Access via Option+I (Mac) or Alt+I (Windows). Aggregates status updates,
+											errors, and action items from all running agents into a single
+											keyboard-navigable view.
+										</p>
+									</div>
+								)}
 							</div>
 						</div>
 					)}
