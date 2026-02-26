@@ -565,7 +565,7 @@ export default function FocusModeView({
 	onNavigateItem,
 	onQuickReply,
 	onOpenAndReply,
-	onMarkAsRead,
+	onMarkAsRead: _onMarkAsRead,
 	onToggleThinking,
 }: FocusModeViewProps) {
 	const statusColor = resolveStatusColor(item.state, theme);
