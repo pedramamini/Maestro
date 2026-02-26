@@ -13,7 +13,6 @@ import {
 	Brain,
 	Pin,
 	FileText,
-	Star,
 } from 'lucide-react';
 import type { Theme, Session, LogEntry, ThinkingMode } from '../../types';
 import type { InboxItem, InboxFilterMode, InboxSortMode } from '../../types/agent-inbox';
@@ -516,18 +515,7 @@ function FocusSidebar({
 										</span>
 									)}
 								</div>
-								{/* Indicators: starred + unread */}
-								{itm.starred && (
-									<Star
-										className="w-4 h-4 flex-shrink-0"
-										style={{
-											color: theme.colors.warning,
-											fill: theme.colors.warning,
-											alignSelf: 'flex-start',
-											marginTop: 2,
-										}}
-									/>
-								)}
+								{/* Indicators: unread */}
 								{itm.hasUnread && (
 									<span
 										className="flex-shrink-0"
@@ -855,12 +843,6 @@ export default function FocusModeView({
 				)}
 				{hasValidContext && (
 					<span style={{ color: contextColor }}>Context: {item.contextUsage}%</span>
-				)}
-				{item.starred && (
-					<span className="flex items-center gap-1" style={{ color: theme.colors.warning }}>
-						<Star className="w-3.5 h-3.5" style={{ fill: theme.colors.warning }} />
-						<span style={{ fontSize: 12 }}>Starred</span>
-					</span>
 				)}
 				<span
 					style={{
