@@ -40,4 +40,25 @@ describe('path-prober shell path integration', () => {
 		expect(result.exists).toBe(true);
 		expect(result.path).toBe('/tmp/custom/bin/node');
 	});
+
+	it('falls back to base PATH when getShellPath rejects and checkBinaryExists uses base PATH', async () => {
+		// Simulate shell probe failing
+		(getShellPath as any).mockRejectedValue(new Error('fail'));
+
+		const env = await getExpandedEnvWithShell();
+		// Should still return an env with a PATH (the base expanded PATH)
+		expect(env.PATH).toBeDefined();
+		expect((env.PATH ?? '').length).toBeGreaterThan(0);
+
+		// Simulate which/where finding binary in base PATH
+		(execFileNoThrow as any).mockResolvedValue({
+			exitCode: 0,
+			stdout: '/usr/bin/node\n',
+			stderr: '',
+		});
+
+		const result = await checkBinaryExists('node');
+		expect(result.exists).toBe(true);
+		expect(result.path).toBe('/usr/bin/node');
+	});
 });

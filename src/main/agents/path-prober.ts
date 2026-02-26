@@ -161,7 +161,15 @@ export async function getExpandedEnvWithShell(): Promise<NodeJS.ProcessEnv> {
 		env.PATH = merged.join(delim);
 		return env;
 	} catch (err) {
-		// If shell probing fails, just return the base expanded env
+		// If shell probing fails, log debug so diagnostics can distinguish
+		// a probe failure from an absent shell PATH, then fall back to base env.
+		try {
+			logger.debug('Shell PATH probe failed; using base expanded env', LOG_CONTEXT, { err });
+		} catch {
+			// Safe fallback if logger is not available
+			// eslint-disable-next-line no-console
+			console.debug('Shell PATH probe failed; using base expanded env', err);
+		}
 		return env;
 	}
 }
