@@ -174,3 +174,19 @@ Click the **Stop** button at any time. The runner will:
 Auto Run can execute in parallel across different agents without conflicts — each agent works in its own project directory, so there's no risk of clobbering each other's work.
 
 **Same project, parallel work:** To run multiple Auto Runs in the same repository simultaneously, create worktree sub-agents from the git branch menu (see [Git Worktrees](./git-worktrees)). Each worktree operates in an isolated directory with its own branch, enabling true parallel task execution on the same codebase.
+
+### Run in Worktree
+
+You can dispatch an Auto Run directly into a new git worktree from the run configuration modal. This spins up an isolated branch and directory for the entire run, keeping your main working tree clean.
+
+![Run in Worktree](./screenshots/autorun-worktree.png)
+
+| Option                              | Description                                                                                    |
+| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
+| **Dispatch to a separate worktree** | Toggle to enable worktree isolation for this run                                               |
+| **Worktree selection**              | Create a new worktree or select an existing one                                                |
+| **Base Branch**                     | The branch to base the new worktree on (e.g., `main`)                                         |
+| **Worktree Branch Name**            | Name for the new branch — also used as the worktree directory name                             |
+| **Automatically create PR**         | When checked, Maestro opens a pull request from the worktree branch when the run completes     |
+
+This is the recommended workflow for longer Auto Runs — your main branch stays untouched, all changes land on a dedicated branch, and you get a PR at the end ready for review.

@@ -131,6 +131,8 @@ The confirmation dialog shows the full path to the worktree directory so you kno
 | **Code Review**          | Create a worktree to review and iterate on a PR without switching branches |
 | **Parallel Experiments** | Try different approaches simultaneously without git stash/pop              |
 
+**Auto Run integration:** You can dispatch an Auto Run directly into a new worktree from the run configuration modal — no need to create the worktree first. See [Run in Worktree](./autorun-playbooks#run-in-worktree) for details.
+
 ## Tips
 
 - **Name branches descriptively** — The branch name becomes the worktree directory name
