@@ -37,6 +37,7 @@ import {
 	Clapperboard,
 	HelpCircle,
 	AppWindow,
+	Inbox,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
@@ -3637,6 +3638,75 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</div>
 										);
 									})()}
+							</div>
+
+							{/* Unified Inbox Feature Section */}
+							<div
+								className="rounded-lg border"
+								style={{
+									borderColor: encoreFeatures.unifiedInbox
+										? theme.colors.accent
+										: theme.colors.border,
+									backgroundColor: encoreFeatures.unifiedInbox
+										? `${theme.colors.accent}08`
+										: 'transparent',
+								}}
+							>
+								<div className="w-full flex items-center justify-between p-4">
+									<div className="flex items-center gap-3">
+										<Inbox
+											className="w-5 h-5"
+											style={{
+												color: encoreFeatures.unifiedInbox
+													? theme.colors.accent
+													: theme.colors.textDim,
+											}}
+										/>
+										<div>
+											<div
+												className="text-sm font-bold flex items-center gap-2"
+												style={{ color: theme.colors.textMain }}
+											>
+												Unified Inbox
+												<span
+													className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+													style={{
+														backgroundColor: theme.colors.warning + '30',
+														color: theme.colors.warning,
+													}}
+												>
+													Beta
+												</span>
+											</div>
+											<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
+												Cross-agent inbox to triage and reply to all active conversations (Alt+I)
+											</div>
+										</div>
+									</div>
+									<button
+										role="switch"
+										aria-checked={encoreFeatures.unifiedInbox}
+										onClick={(e) => {
+											e.stopPropagation();
+											setEncoreFeatures({
+												...encoreFeatures,
+												unifiedInbox: !encoreFeatures.unifiedInbox,
+											});
+										}}
+										className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0"
+										style={{
+											backgroundColor: encoreFeatures.unifiedInbox
+												? theme.colors.accent
+												: theme.colors.bgActivity,
+										}}
+									>
+										<span
+											className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+												encoreFeatures.unifiedInbox ? 'translate-x-5' : 'translate-x-0.5'
+											}`}
+										/>
+									</button>
+								</div>
 							</div>
 						</div>
 					)}
