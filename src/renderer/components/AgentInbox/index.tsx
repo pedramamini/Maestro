@@ -13,6 +13,7 @@ import type {
 	InboxFilterMode,
 	InboxSortMode,
 } from '../../types/agent-inbox';
+import { isValidFilterMode, isValidSortMode } from '../../types/agent-inbox';
 import { useModalLayer } from '../../hooks/ui/useModalLayer';
 import { MODAL_PRIORITIES } from '../../constants/modalPriorities';
 import { useModalStore, selectModalData } from '../../stores/modalStore';
@@ -70,10 +71,10 @@ export default function AgentInbox({
 	// ---- Filter/sort state (lifted from InboxListView for shared access) ----
 	const inboxData = useModalStore(selectModalData('agentInbox'));
 	const [filterMode, setFilterMode] = useState<InboxFilterMode>(
-		(inboxData?.filterMode as InboxFilterMode) ?? 'unread'
+		isValidFilterMode(inboxData?.filterMode) ? inboxData.filterMode : 'unread'
 	);
 	const [sortMode, setSortMode] = useState<InboxSortMode>(
-		(inboxData?.sortMode as InboxSortMode) ?? 'newest'
+		isValidSortMode(inboxData?.sortMode) ? inboxData.sortMode : 'newest'
 	);
 
 	// ---- Compute live items (used in list mode) ----

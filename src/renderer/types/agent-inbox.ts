@@ -45,3 +45,14 @@ export const STATUS_COLORS: Record<SessionState, string> = {
 
 /** View mode inside the AgentInbox modal */
 export type InboxViewMode = 'list' | 'focus';
+
+const VALID_FILTER_MODES: readonly InboxFilterMode[] = ['all', 'unread', 'read', 'starred'];
+const VALID_SORT_MODES: readonly InboxSortMode[] = ['newest', 'oldest', 'grouped', 'byAgent'];
+
+export function isValidFilterMode(value: unknown): value is InboxFilterMode {
+	return typeof value === 'string' && (VALID_FILTER_MODES as readonly string[]).includes(value);
+}
+
+export function isValidSortMode(value: unknown): value is InboxSortMode {
+	return typeof value === 'string' && (VALID_SORT_MODES as readonly string[]).includes(value);
+}

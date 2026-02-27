@@ -1427,6 +1427,9 @@ function MaestroConsoleInner() {
 	// Agent Inbox: Quick Reply — sends text to target session/tab via processInput
 	const handleAgentInboxQuickReply = useCallback(
 		(sessionId: string, tabId: string, text: string) => {
+			// Guard: ignore if a quick reply is already in progress
+			if (pendingInboxQuickReply) return;
+
 			// Save current active session so we can restore it after sending.
 			const previousActiveSessionId = activeSessionIdRef.current;
 
@@ -1452,7 +1455,7 @@ function MaestroConsoleInner() {
 			});
 			setActiveSessionId(sessionId);
 		},
-		[setSessions, setActiveSessionId, activeSessionIdRef]
+		[pendingInboxQuickReply, setSessions, setActiveSessionId, activeSessionIdRef]
 	);
 
 	// Agent Inbox: Open & Reply — navigates to session with pre-filled input
@@ -4266,6 +4269,7 @@ function MaestroConsoleInner() {
 							sessions={sessions}
 							groups={groups}
 							theme={theme}
+							enterToSendAI={enterToSendAI}
 							onClose={() => setAgentInboxOpen(false)}
 							onNavigateToSession={handleAgentInboxNavigateToSession}
 							onQuickReply={handleAgentInboxQuickReply}

@@ -807,7 +807,9 @@ export default function InboxListView({
 	// Collect focusable header elements for Tab cycling
 	const getHeaderFocusables = useCallback((): HTMLElement[] => {
 		if (!headerRef.current) return [];
-		return Array.from(headerRef.current.querySelectorAll<HTMLElement>('button, [tabindex="0"]'));
+		return Array.from(
+			headerRef.current.querySelectorAll<HTMLElement>('button:not(:disabled), [tabindex="0"]')
+		);
 	}, []);
 
 	// Row-based keyboard handler — arrows navigate rows (headers + items)

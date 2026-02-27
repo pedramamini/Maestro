@@ -463,9 +463,11 @@ const Tab = memo(function Tab({
 
 	// Description editing handlers
 	const descriptionButtonRef = useRef<HTMLButtonElement>(null);
+	const skipBlurSaveRef = useRef(false);
 
 	const handleDescriptionSave = useCallback(
 		(value: string) => {
+			skipBlurSaveRef.current = false;
 			const trimmed = value.trim();
 			if (trimmed !== (tab.description ?? '')) {
 				onUpdateTabDescription?.(tabId, trimmed);
@@ -480,6 +482,7 @@ const Tab = memo(function Tab({
 	);
 
 	const handleDescriptionCancel = useCallback(() => {
+		skipBlurSaveRef.current = true;
 		setDescriptionDraft(tab.description ?? '');
 		setIsEditingDescription(false);
 		requestAnimationFrame(() => {
@@ -501,6 +504,10 @@ const Tab = memo(function Tab({
 	);
 
 	const handleDescriptionBlur = useCallback(() => {
+		if (skipBlurSaveRef.current) {
+			skipBlurSaveRef.current = false;
+			return;
+		}
 		handleDescriptionSave(descriptionDraft);
 	}, [descriptionDraft, handleDescriptionSave]);
 

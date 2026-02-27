@@ -227,7 +227,8 @@ function FocusLogEntry({
 					<div className="flex justify-end">
 						<button
 							onClick={onToggleRaw}
-							className="p-1 rounded opacity-0 group-hover:opacity-50 hover:!opacity-100 transition-opacity"
+							aria-label={showRawMarkdown ? 'Show formatted' : 'Show plain text'}
+							className="p-1 rounded opacity-0 group-hover:opacity-50 focus:opacity-100 hover:!opacity-100 transition-opacity"
 							style={{ color: showRawMarkdown ? theme.colors.accent : theme.colors.textDim }}
 							title={showRawMarkdown ? 'Show formatted' : 'Show plain text'}
 						>
@@ -384,7 +385,7 @@ function FocusSidebar({
 		>();
 		const groupOrder: string[] = [];
 		items.forEach((itm, idx) => {
-			const groupKey = useGroupName ? (itm.groupName ?? 'Ungrouped') : itm.sessionId;
+			const groupKey = useGroupName ? (itm.groupId ?? itm.groupName ?? 'Ungrouped') : itm.sessionId;
 			const groupName = useGroupName ? (itm.groupName ?? 'Ungrouped') : itm.sessionName;
 			if (!groupMap.has(groupKey)) {
 				groupMap.set(groupKey, { groupName, items: [] });
@@ -424,7 +425,7 @@ function FocusSidebar({
 				</div>
 			)}
 			{/* Item list */}
-			<div className="flex-1 overflow-y-auto py-1">
+			<div role="listbox" aria-label="Inbox items" className="flex-1 overflow-y-auto py-1">
 				{(() => {
 					let activeGroup: string | null = null;
 					return rows.map((row, rowIdx) => {
@@ -434,8 +435,7 @@ function FocusSidebar({
 								<div
 									key={`header-${row.groupKey}-${rowIdx}`}
 									tabIndex={0}
-									role="option"
-									aria-selected={false}
+									role="separator"
 									onClick={() => {
 										setCollapsedGroups((prev) => {
 											const next = new Set(prev);
@@ -592,7 +592,7 @@ export default function FocusModeView({
 	onNavigateItem,
 	onQuickReply,
 	onOpenAndReply,
-	onMarkAsRead: _onMarkAsRead,
+	onMarkAsRead,
 	onToggleThinking,
 }: FocusModeViewProps) {
 	const statusColor = resolveStatusColor(item.state, theme);
@@ -600,6 +600,8 @@ export default function FocusModeView({
 
 	// ---- Resizable sidebar ----
 	const [sidebarWidth, setSidebarWidth] = useState(220);
+	const sidebarWidthRef = useRef(sidebarWidth);
+	sidebarWidthRef.current = sidebarWidth;
 	const isResizingRef = useRef(false);
 	const resizeCleanupRef = useRef<(() => void) | null>(null);
 
@@ -611,40 +613,39 @@ export default function FocusModeView({
 		};
 	}, []);
 
-	const handleResizeStart = useCallback(
-		(e: React.MouseEvent) => {
-			e.preventDefault();
-			isResizingRef.current = true;
-			const startX = e.clientX;
-			const startWidth = sidebarWidth;
+	const handleResizeStart = useCallback((e: React.MouseEvent) => {
+		e.preventDefault();
+		// Clean up any lingering listeners from rapid clicks
+		resizeCleanupRef.current?.();
+		isResizingRef.current = true;
+		const startX = e.clientX;
+		const startWidth = sidebarWidthRef.current;
 
-			const onMouseMove = (ev: MouseEvent) => {
-				if (!isResizingRef.current) return;
-				const newWidth = Math.max(160, Math.min(400, startWidth + (ev.clientX - startX)));
-				setSidebarWidth(newWidth);
-			};
+		const onMouseMove = (ev: MouseEvent) => {
+			if (!isResizingRef.current) return;
+			const newWidth = Math.max(160, Math.min(400, startWidth + (ev.clientX - startX)));
+			setSidebarWidth(newWidth);
+		};
 
-			const cleanup = () => {
-				isResizingRef.current = false;
-				document.removeEventListener('mousemove', onMouseMove);
-				document.removeEventListener('mouseup', onMouseUp);
-				document.body.style.cursor = '';
-				document.body.style.userSelect = '';
-				resizeCleanupRef.current = null;
-			};
+		const cleanup = () => {
+			isResizingRef.current = false;
+			document.removeEventListener('mousemove', onMouseMove);
+			document.removeEventListener('mouseup', onMouseUp);
+			document.body.style.cursor = '';
+			document.body.style.userSelect = '';
+			resizeCleanupRef.current = null;
+		};
 
-			const onMouseUp = () => {
-				cleanup();
-			};
+		const onMouseUp = () => {
+			cleanup();
+		};
 
-			resizeCleanupRef.current = cleanup;
-			document.addEventListener('mousemove', onMouseMove);
-			document.addEventListener('mouseup', onMouseUp);
-			document.body.style.cursor = 'col-resize';
-			document.body.style.userSelect = 'none';
-		},
-		[sidebarWidth]
-	);
+		resizeCleanupRef.current = cleanup;
+		document.addEventListener('mousemove', onMouseMove);
+		document.addEventListener('mouseup', onMouseUp);
+		document.body.style.cursor = 'col-resize';
+		document.body.style.userSelect = 'none';
+	}, []);
 	const contextColor = hasValidContext
 		? resolveContextUsageColor(item.contextUsage!, theme)
 		: undefined;
@@ -733,23 +734,19 @@ export default function FocusModeView({
 	const replyInputRef = useRef<HTMLTextAreaElement>(null);
 
 	// Auto-focus reply input when entering focus mode or switching items.
-	// Double rAF ensures focus fires after the browser paints the new item.
 	useEffect(() => {
-		let innerRafId: number | undefined;
-		const outerRafId = requestAnimationFrame(() => {
-			innerRafId = requestAnimationFrame(() => {
-				replyInputRef.current?.focus();
-			});
+		const rafId = requestAnimationFrame(() => {
+			replyInputRef.current?.focus();
 		});
-		return () => {
-			cancelAnimationFrame(outerRafId);
-			if (innerRafId !== undefined) cancelAnimationFrame(innerRafId);
-		};
+		return () => cancelAnimationFrame(rafId);
 	}, [item.sessionId, item.tabId]);
 
-	// Reset reply text when item changes (prev/next navigation)
+	// Reset reply text and textarea height when item changes (prev/next navigation)
 	useEffect(() => {
 		setReplyText('');
+		if (replyInputRef.current) {
+			replyInputRef.current.style.height = 'auto';
+		}
 	}, [item.sessionId, item.tabId]);
 
 	const handleQuickReply = useCallback(() => {
@@ -758,8 +755,9 @@ export default function FocusModeView({
 		if (onQuickReply) {
 			onQuickReply(item.sessionId, item.tabId, text);
 		}
+		onMarkAsRead?.(item.sessionId, item.tabId);
 		setReplyText('');
-	}, [replyText, item, onQuickReply]);
+	}, [replyText, item, onQuickReply, onMarkAsRead]);
 
 	const handleOpenAndReply = useCallback(() => {
 		const text = replyText.trim();
@@ -767,7 +765,8 @@ export default function FocusModeView({
 		if (onOpenAndReply) {
 			onOpenAndReply(item.sessionId, item.tabId, text);
 		}
-	}, [replyText, item, onOpenAndReply]);
+		onMarkAsRead?.(item.sessionId, item.tabId);
+	}, [replyText, item, onOpenAndReply, onMarkAsRead]);
 
 	// ---- Smooth transition on item change ----
 	const [isTransitioning, setIsTransitioning] = useState(false);
@@ -873,6 +872,7 @@ export default function FocusModeView({
 				{/* Right: Close button */}
 				<button
 					onClick={onClose}
+					aria-label="Close inbox"
 					className="p-1.5 rounded"
 					style={{ color: theme.colors.textDim }}
 					onMouseEnter={(e) => (e.currentTarget.style.backgroundColor = `${theme.colors.accent}20`)}
@@ -1152,6 +1152,7 @@ export default function FocusModeView({
 					onClick={() => onNavigateItem((currentIndex - 1 + items.length) % items.length)}
 					disabled={items.length <= 1}
 					aria-disabled={items.length <= 1 ? 'true' : undefined}
+					aria-label="Previous item"
 					className="flex items-center gap-1 text-xs px-3 py-1.5 rounded transition-colors"
 					style={{
 						border: `1px solid ${theme.colors.border}`,
@@ -1192,6 +1193,7 @@ export default function FocusModeView({
 					onClick={() => onNavigateItem((currentIndex + 1) % items.length)}
 					disabled={items.length <= 1}
 					aria-disabled={items.length <= 1 ? 'true' : undefined}
+					aria-label="Next item"
 					className="flex items-center gap-1 text-xs px-3 py-1.5 rounded transition-colors"
 					style={{
 						border: `1px solid ${theme.colors.border}`,
