@@ -731,7 +731,8 @@ const Tab = memo(function Tab({
 								borderBottom: `1px solid ${theme.colors.border}`,
 								borderBottomLeftRadius: '8px',
 								borderBottomRightRadius: '8px',
-								width: '220px',
+								minWidth: '220px',
+								maxWidth: '220px',
 							}}
 						>
 							{/* Header with session name and ID - only show for tabs with sessions */}
@@ -765,7 +766,10 @@ const Tab = memo(function Tab({
 
 							{/* Description section - only render when feature is enabled */}
 							{onUpdateTabDescription && (
-								<div className="px-3 py-2 border-b" style={{ borderColor: theme.colors.border }}>
+								<div
+									className="px-3 py-2 border-b overflow-hidden"
+									style={{ borderColor: theme.colors.border }}
+								>
 									{isEditingDescription ? (
 										<textarea
 											ref={(el) => el?.focus()}
@@ -1492,7 +1496,8 @@ const FileTab = memo(function FileTab({
 								borderBottom: `1px solid ${theme.colors.border}`,
 								borderBottomLeftRadius: '8px',
 								borderBottomRightRadius: '8px',
-								width: '220px',
+								minWidth: '220px',
+								maxWidth: '220px',
 							}}
 						>
 							{/* Actions */}
