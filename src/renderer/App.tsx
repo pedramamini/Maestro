@@ -3859,6 +3859,7 @@ function MaestroConsoleInner() {
 					onOpenDirectorNotes={
 						encoreFeatures.directorNotes ? () => setDirectorNotesOpen(true) : undefined
 					}
+					onOpenAgentInbox={encoreFeatures.unifiedInbox ? () => setAgentInboxOpen(true) : undefined}
 					autoScrollAiMode={autoScrollAiMode}
 					setAutoScrollAiMode={setAutoScrollAiMode}
 					tabSwitcherOpen={tabSwitcherOpen}
