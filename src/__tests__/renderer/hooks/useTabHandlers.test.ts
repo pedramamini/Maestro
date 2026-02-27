@@ -762,6 +762,50 @@ describe('useTabHandlers', () => {
 			expect(getSession().aiTabs[0].showThinking).toBe('off');
 		});
 
+		it('handleUpdateTabDescription sets description on tab', () => {
+			const tab = createMockAITab({ id: 'tab-1' });
+			const { result } = renderWithSession([tab]);
+			act(() => {
+				result.current.handleUpdateTabDescription('tab-1', 'My description');
+			});
+
+			const session = getSession();
+			expect(session.aiTabs[0].description).toBe('My description');
+		});
+
+		it('handleUpdateTabDescription trims whitespace', () => {
+			const tab = createMockAITab({ id: 'tab-1' });
+			const { result } = renderWithSession([tab]);
+			act(() => {
+				result.current.handleUpdateTabDescription('tab-1', '  spaces around  ');
+			});
+
+			const session = getSession();
+			expect(session.aiTabs[0].description).toBe('spaces around');
+		});
+
+		it('handleUpdateTabDescription sets undefined for empty string', () => {
+			const tab = createMockAITab({ id: 'tab-1', description: 'existing' } as any);
+			const { result } = renderWithSession([tab]);
+			act(() => {
+				result.current.handleUpdateTabDescription('tab-1', '');
+			});
+
+			const session = getSession();
+			expect(session.aiTabs[0].description).toBeUndefined();
+		});
+
+		it('handleUpdateTabDescription sets undefined for whitespace-only string', () => {
+			const tab = createMockAITab({ id: 'tab-1', description: 'existing' } as any);
+			const { result } = renderWithSession([tab]);
+			act(() => {
+				result.current.handleUpdateTabDescription('tab-1', '   ');
+			});
+
+			const session = getSession();
+			expect(session.aiTabs[0].description).toBeUndefined();
+		});
+
 		it('handleUpdateTabByClaudeSessionId updates tab by agent session id', () => {
 			const tab = createMockAITab({
 				id: 'tab-1',
