@@ -344,6 +344,9 @@ function MaestroConsoleInner() {
 		// Director's Notes Modal
 		directorNotesOpen,
 		setDirectorNotesOpen,
+		// Agent Inbox Modal (Unified Inbox)
+		agentInboxOpen,
+		setAgentInboxOpen,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -3009,6 +3012,7 @@ function MaestroConsoleInner() {
 		setMarketplaceModalOpen,
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
+		setAgentInboxOpen,
 		encoreFeatures,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
