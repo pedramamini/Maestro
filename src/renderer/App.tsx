@@ -1554,6 +1554,8 @@ function MaestroConsoleInner() {
 					return {
 						...s,
 						activeTabId: tabId,
+						activeFileTabId: null,
+						inputMode: 'ai' as const,
 						aiTabs: s.aiTabs.map((t) => (t.id === tabId ? { ...t, hasUnread: false } : t)),
 					};
 				})
@@ -1584,6 +1586,8 @@ function MaestroConsoleInner() {
 					return {
 						...s,
 						activeTabId: tabId,
+						activeFileTabId: null,
+						inputMode: 'ai' as const,
 						aiTabs: s.aiTabs.map((t) =>
 							t.id === tabId ? { ...t, inputValue: text, hasUnread: false } : t
 						),

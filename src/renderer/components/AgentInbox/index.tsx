@@ -48,23 +48,17 @@ export default function AgentInbox({
 }: AgentInboxProps) {
 	// ---- Focus restoration ----
 	// Capture trigger element synchronously during initial render (before child effects)
-	const triggerRef = useRef<Element | null>(document.activeElement);
-	const rafIdRef = useRef<number | null>(null);
-	useEffect(() => {
-		return () => {
-			if (rafIdRef.current !== null) {
-				cancelAnimationFrame(rafIdRef.current);
-			}
-		};
-	}, []);
+	const triggerRef = useRef<HTMLElement | null>(
+		document.activeElement instanceof HTMLElement ? document.activeElement : null
+	);
 
 	const handleClose = useCallback(() => {
+		const trigger = triggerRef.current;
 		onClose();
-		rafIdRef.current = requestAnimationFrame(() => {
-			rafIdRef.current = null;
-			if (triggerRef.current && triggerRef.current instanceof HTMLElement) {
-				triggerRef.current.focus();
-			}
+		// Schedule focus restoration after React unmounts the modal.
+		// No cleanup needed — the RAF fires once post-unmount and is harmless if trigger is gone.
+		requestAnimationFrame(() => {
+			trigger?.focus();
 		});
 	}, [onClose]);
 
