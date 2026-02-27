@@ -349,16 +349,6 @@ describe('MainPanel', () => {
 		slashCommandOpen: false,
 		slashCommands: [],
 		selectedSlashCommandIndex: 0,
-		shortcuts: defaultShortcuts,
-		rightPanelOpen: false,
-		markdownEditMode: false,
-		chatRawTextMode: false,
-		autoScrollAiMode: true,
-		userMessageAlignment: 'right' as const,
-		maxOutputLines: 5000,
-		gitDiffPreview: null as string | null,
-		fileTreeFilterOpen: false,
-		logViewerSelectedLevels: [] as string[],
 		// File tab system (replaced previewFile)
 		activeFileTabId: null as string | null,
 		activeFileTab: null as import('../../../renderer/types').FilePreviewTab | null,
@@ -370,12 +360,7 @@ describe('MainPanel', () => {
 		setActiveAgentSessionId: vi.fn(),
 		onResumeAgentSession: vi.fn(),
 		onNewAgentSession: vi.fn(),
-		setActiveFocus: vi.fn(),
-		setOutputSearchOpen: vi.fn(),
-		setOutputSearchQuery: vi.fn(),
 		setInputValue: vi.fn(),
-		setEnterToSendAI: vi.fn(),
-		setEnterToSendTerminal: vi.fn(),
 		setStagedImages: vi.fn(),
 		setLightboxImage: vi.fn(),
 		setCommandHistoryOpen: vi.fn(),
@@ -383,12 +368,6 @@ describe('MainPanel', () => {
 		setCommandHistorySelectedIndex: vi.fn(),
 		setSlashCommandOpen: vi.fn(),
 		setSelectedSlashCommandIndex: vi.fn(),
-		setMarkdownEditMode: vi.fn(),
-		setChatRawTextMode: vi.fn(),
-		setAutoScrollAiMode: vi.fn(),
-		setAboutModalOpen: vi.fn(),
-		setRightPanelOpen: vi.fn(),
-		setLogViewerSelectedLevels: vi.fn(),
 		// File tab handlers (replaced setPreviewFile)
 		onFileTabClose: vi.fn(),
 		onFileTabSelect: vi.fn(),
@@ -403,8 +382,6 @@ describe('MainPanel', () => {
 		inputRef: React.createRef<HTMLTextAreaElement>(),
 		logsEndRef: React.createRef<HTMLDivElement>(),
 		terminalOutputRef: React.createRef<HTMLDivElement>(),
-		fileTreeContainerRef: React.createRef<HTMLDivElement>(),
-		fileTreeFilterInputRef: React.createRef<HTMLInputElement>(),
 
 		// Functions
 		toggleInputMode: vi.fn(),
@@ -672,18 +649,19 @@ describe('MainPanel', () => {
 		});
 
 		it('should hide toggle button when rightPanelOpen is true', () => {
-			render(<MainPanel {...defaultProps} rightPanelOpen={true} />);
+			useUIStore.setState({ rightPanelOpen: true });
+			render(<MainPanel {...defaultProps} />);
 
 			expect(screen.queryByTitle(/Show right panel/)).not.toBeInTheDocument();
 		});
 
 		it('should call setRightPanelOpen when toggle button is clicked', () => {
-			const setRightPanelOpen = vi.fn();
-			render(<MainPanel {...defaultProps} rightPanelOpen={false} setRightPanelOpen={setRightPanelOpen} />);
+			useUIStore.setState({ rightPanelOpen: false });
+			render(<MainPanel {...defaultProps} />);
 
 			fireEvent.click(screen.getByTitle(/Show right panel/));
 
-			expect(setRightPanelOpen).toHaveBeenCalledWith(true);
+			expect(useUIStore.getState().rightPanelOpen).toBe(true);
 		});
 	});
 
@@ -1859,14 +1837,15 @@ describe('MainPanel', () => {
 	describe('Input handling', () => {
 		it('should call setActiveSessionId and setActiveFocus when input is focused', () => {
 			const setActiveSessionId = vi.fn();
-			const setActiveFocus = vi.fn();
+			// Set activeFocus to something other than 'main' so we can detect the change
+			useUIStore.setState({ activeFocus: 'sidebar' });
 
-			render(<MainPanel {...defaultProps} activeFocus={'sidebar'} setActiveSessionId={setActiveSessionId} setActiveFocus={setActiveFocus} />);
+			render(<MainPanel {...defaultProps} setActiveSessionId={setActiveSessionId} />);
 
 			fireEvent.focus(screen.getByTestId('input-field'));
 
 			expect(setActiveSessionId).toHaveBeenCalledWith('session-1');
-			expect(setActiveFocus).toHaveBeenCalledWith('main');
+			expect(useUIStore.getState().activeFocus).toBe('main');
 		});
 
 		it('should hide input area in mobile landscape mode', () => {
@@ -2005,28 +1984,31 @@ describe('MainPanel', () => {
 
 	describe('Focus ring', () => {
 		it('should show focus ring when activeFocus is main', () => {
-			const { container } = render(<MainPanel {...defaultProps} activeFocus={'main'} />);
+			useUIStore.setState({ activeFocus: 'main' });
+			const { container } = render(<MainPanel {...defaultProps} />);
 
 			const mainPanel = container.querySelector('.ring-1');
 			expect(mainPanel).toBeInTheDocument();
 		});
 
 		it('should not show focus ring when activeFocus is not main', () => {
-			const { container } = render(<MainPanel {...defaultProps} activeFocus={'sidebar'} />);
+			useUIStore.setState({ activeFocus: 'sidebar' });
+			const { container } = render(<MainPanel {...defaultProps} />);
 
 			const mainPanel = container.querySelector('.ring-1');
 			expect(mainPanel).not.toBeInTheDocument();
 		});
 
 		it('should call setActiveFocus when main panel is clicked', () => {
-			const setActiveFocus = vi.fn();
-			const { container } = render(<MainPanel {...defaultProps} activeFocus={'sidebar'} setActiveFocus={setActiveFocus} />);
+			useUIStore.setState({ activeFocus: 'sidebar' });
+
+			const { container } = render(<MainPanel {...defaultProps} />);
 
 			// Click on the main panel area
 			const mainArea = container.querySelector('[style*="backgroundColor"]');
 			if (mainArea) {
 				fireEvent.click(mainArea);
-				expect(setActiveFocus).toHaveBeenCalledWith('main');
+				expect(useUIStore.getState().activeFocus).toBe('main');
 			}
 		});
 	});

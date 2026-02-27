@@ -102,3 +102,7 @@ export type {
 // Agent IPC listeners (process event routing)
 export { useAgentListeners, getErrorTitleForType } from './useAgentListeners';
 export type { UseAgentListenersDeps } from './useAgentListeners';
+
+// Interrupt handler (stop running AI processes)
+export { useInterruptHandler } from './useInterruptHandler';
+export type { UseInterruptHandlerDeps, UseInterruptHandlerReturn } from './useInterruptHandler';

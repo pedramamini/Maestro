@@ -589,11 +589,7 @@ export function reopenClosedTab(session: Session): ReopenTabResult | null {
 			aiTabs: updatedTabs,
 			activeTabId: restoredTab.id,
 			closedTabHistory: remainingHistory,
-			unifiedTabOrder: ensureInUnifiedTabOrder(
-				session.unifiedTabOrder || [],
-				'ai',
-				restoredTab.id
-			),
+			unifiedTabOrder: ensureInUnifiedTabOrder(session.unifiedTabOrder || [], 'ai', restoredTab.id),
 		},
 		wasDuplicate: false,
 	};
@@ -1289,9 +1285,10 @@ export function navigateToUnifiedTabByIndex(
 
 	const targetTabRef = effectiveOrder[index];
 	// If orphans were repaired, persist the fix in the returned session
-	const repairedSession = effectiveOrder !== session.unifiedTabOrder
-		? { ...session, unifiedTabOrder: effectiveOrder }
-		: session;
+	const repairedSession =
+		effectiveOrder !== session.unifiedTabOrder
+			? { ...session, unifiedTabOrder: effectiveOrder }
+			: session;
 
 	if (targetTabRef.type === 'ai') {
 		// Navigate to AI tab - verify it exists
@@ -1380,15 +1377,11 @@ function getCurrentUnifiedTabIndex(session: Session, effectiveOrder?: UnifiedTab
 
 	// If a file tab is active, find it in the unified order
 	if (session.activeFileTabId) {
-		return order.findIndex(
-			(ref) => ref.type === 'file' && ref.id === session.activeFileTabId
-		);
+		return order.findIndex((ref) => ref.type === 'file' && ref.id === session.activeFileTabId);
 	}
 
 	// Otherwise find the active AI tab
-	return order.findIndex(
-		(ref) => ref.type === 'ai' && ref.id === session.activeTabId
-	);
+	return order.findIndex((ref) => ref.type === 'ai' && ref.id === session.activeTabId);
 }
 
 /**

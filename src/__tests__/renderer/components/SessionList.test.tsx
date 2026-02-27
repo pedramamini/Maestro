@@ -187,95 +187,45 @@ const createMockGroup = (overrides: Partial<Group> = {}): Group => ({
 });
 
 // Create default handler props (state is read from stores)
-// Reads current store state at call time so tests that set store state before rendering
-// get those values propagated as props (matching how App.tsx passes store state to SessionList).
-const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]> = {}) => {
-	const uiState = useUIStore.getState();
-	const sessionState = useSessionStore.getState();
-	const settingsState = useSettingsStore.getState();
-	return {
-		theme: defaultTheme,
-		sessions: sessionState.sessions ?? ([] as Session[]),
-		groups: sessionState.groups ?? ([] as Group[]),
-		sortedSessions: sessionState.sessions ?? ([] as Session[]),
-		activeSessionId: sessionState.activeSessionId ?? '',
-		leftSidebarOpen: uiState.leftSidebarOpen ?? true,
-		leftSidebarWidthState: settingsState.leftSidebarWidth ?? 300,
-		activeFocus: (uiState.activeFocus ?? 'main') as 'main' | 'sidebar' | 'right',
-		selectedSidebarIndex: uiState.selectedSidebarIndex ?? -1,
-		editingGroupId: uiState.editingGroupId ?? (null as string | null),
-		editingSessionId: uiState.editingSessionId ?? (null as string | null),
-		draggingSessionId: uiState.draggingSessionId ?? (null as string | null),
-		shortcuts: settingsState.shortcuts ?? defaultShortcuts,
-		activeBatchSessionIds: [] as string[],
-		isLiveMode: false,
-		webInterfaceUrl: null as string | null,
-		webInterfaceUseCustomPort: false,
-		webInterfaceCustomPort: 3000,
-		bookmarksCollapsed: uiState.bookmarksCollapsed ?? false,
-		ungroupedCollapsed: settingsState.ungroupedCollapsed ?? false,
-		showSessionJumpNumbers: false,
-		visibleSessions: [] as Session[],
-		autoRunStats: settingsState.autoRunStats,
-		toggleGlobalLive: vi.fn(),
-		restartWebServer: vi.fn().mockResolvedValue(null),
-		setWebInterfaceUseCustomPort: vi.fn(),
-		setWebInterfaceCustomPort: vi.fn(),
-		setBookmarksCollapsed: vi.fn(),
-		setUngroupedCollapsed: vi.fn(),
-		setActiveFocus: vi.fn(),
-		setActiveSessionId: vi.fn(),
-		setLeftSidebarOpen: vi.fn(),
-		setLeftSidebarWidthState: vi.fn(),
-		setShortcutsHelpOpen: vi.fn(),
-		setSettingsModalOpen: vi.fn(),
-		setSettingsTab: vi.fn(),
-		setAboutModalOpen: vi.fn(),
-		setUpdateCheckModalOpen: vi.fn(),
-		setLogViewerOpen: vi.fn(),
-		setProcessMonitorOpen: vi.fn(),
-		setUsageDashboardOpen: vi.fn(),
-		setSymphonyModalOpen: vi.fn(),
-		setDirectorNotesOpen: vi.fn(),
-		setQuickActionOpen: vi.fn(),
-		toggleGroup: vi.fn(),
-		handleDragStart: vi.fn(),
-		handleDragOver: vi.fn(),
-		handleDropOnGroup: vi.fn(),
-		handleDropOnUngrouped: vi.fn(),
-		finishRenamingGroup: vi.fn(),
-		finishRenamingSession: vi.fn(),
-		startRenamingGroup: vi.fn(),
-		startRenamingSession: vi.fn(),
-		showConfirmation: vi.fn(),
-		setGroups: vi.fn(),
-		setSessions: vi.fn(),
-		createNewGroup: vi.fn(),
-		onCreateGroupAndMove: vi.fn(),
-		addNewSession: vi.fn(),
-		onDeleteSession: vi.fn(),
-		onDeleteWorktreeGroup: vi.fn(),
-		setRenameInstanceModalOpen: vi.fn(),
-		setRenameInstanceValue: vi.fn(),
-		setRenameInstanceSessionId: vi.fn(),
-		onEditAgent: vi.fn(),
-		onNewAgentSession: vi.fn(),
-		setDuplicatingSessionId: vi.fn(),
-		onToggleWorktreeExpanded: vi.fn(),
-		onOpenCreatePR: vi.fn(),
-		onQuickCreateWorktree: vi.fn(),
-		onOpenWorktreeConfig: vi.fn(),
-		onDeleteWorktree: vi.fn(),
-		openWizard: vi.fn(),
-		startTour: vi.fn(),
-		onOpenGroupChat: vi.fn(),
-		onNewGroupChat: vi.fn(),
-		onEditGroupChat: vi.fn(),
-		onRenameGroupChat: vi.fn(),
-		onDeleteGroupChat: vi.fn(),
-		...overrides,
-	};
-};
+const createDefaultProps = (overrides: Partial<Parameters<typeof SessionList>[0]> = {}) => ({
+	theme: defaultTheme,
+	sortedSessions: [] as Session[],
+	isLiveMode: false,
+	webInterfaceUrl: null,
+	showSessionJumpNumbers: false,
+	visibleSessions: [] as Session[],
+	toggleGlobalLive: vi.fn(),
+	restartWebServer: vi.fn().mockResolvedValue(null),
+	toggleGroup: vi.fn(),
+	handleDragStart: vi.fn(),
+	handleDragOver: vi.fn(),
+	handleDropOnGroup: vi.fn(),
+	handleDropOnUngrouped: vi.fn(),
+	finishRenamingGroup: vi.fn(),
+	finishRenamingSession: vi.fn(),
+	startRenamingGroup: vi.fn(),
+	startRenamingSession: vi.fn(),
+	showConfirmation: vi.fn(),
+	createNewGroup: vi.fn(),
+	onCreateGroupAndMove: vi.fn(),
+	addNewSession: vi.fn(),
+	onDeleteWorktreeGroup: vi.fn(),
+	onEditAgent: vi.fn(),
+	onNewAgentSession: vi.fn(),
+	onToggleWorktreeExpanded: vi.fn(),
+	onOpenCreatePR: vi.fn(),
+	onQuickCreateWorktree: vi.fn(),
+	onOpenWorktreeConfig: vi.fn(),
+	onDeleteWorktree: vi.fn(),
+	openWizard: vi.fn(),
+	startTour: vi.fn(),
+	onOpenGroupChat: vi.fn(),
+	onNewGroupChat: vi.fn(),
+	onEditGroupChat: vi.fn(),
+	onRenameGroupChat: vi.fn(),
+	onDeleteGroupChat: vi.fn(),
+	...overrides,
+});
 
 describe('SessionList', () => {
 	beforeEach(() => {
@@ -391,10 +341,9 @@ describe('SessionList', () => {
 			const session = createMockSession();
 			useSessionStore.setState({ sessions: [session] });
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setLeftSidebarOpen = vi.fn();
+			const setLeftSidebarOpen = vi.spyOn(useUIStore.getState(), 'setLeftSidebarOpen');
 			const props = createDefaultProps({
 				sortedSessions: [session],
-				setLeftSidebarOpen,
 			});
 			render(<SessionList {...props} />);
 
@@ -742,10 +691,9 @@ describe('SessionList', () => {
 				leftSidebarOpen: true,
 				bookmarksCollapsed: false,
 			});
-			const setBookmarksCollapsed = vi.fn();
+			const setBookmarksCollapsed = vi.spyOn(useUIStore.getState(), 'setBookmarksCollapsed');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setBookmarksCollapsed,
 			});
 			render(<SessionList {...props} />);
 
@@ -758,10 +706,9 @@ describe('SessionList', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Test Session', bookmarked: false })];
 			useSessionStore.setState({ sessions: sessions });
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setSessions = vi.fn();
+			const setSessions = vi.spyOn(useSessionStore.getState(), 'setSessions');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setSessions,
 			});
 			render(<SessionList {...props} />);
 
@@ -988,10 +935,9 @@ describe('SessionList', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Click Me' })];
 			useSessionStore.setState({ sessions: sessions });
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setActiveSessionId = vi.fn();
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setActiveSessionId,
 			});
 			render(<SessionList {...props} />);
 
@@ -1046,14 +992,8 @@ describe('SessionList', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Rename Me' })];
 			useSessionStore.setState({ sessions: sessions });
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setRenameInstanceValue = vi.fn();
-			const setRenameInstanceSessionId = vi.fn();
-			const setRenameInstanceModalOpen = vi.fn();
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setRenameInstanceValue,
-				setRenameInstanceSessionId,
-				setRenameInstanceModalOpen,
 			});
 			render(<SessionList {...props} />);
 
@@ -1062,9 +1002,9 @@ describe('SessionList', () => {
 
 			fireEvent.click(screen.getByText('Rename'));
 
-			expect(setRenameInstanceValue).toHaveBeenCalledWith('Rename Me');
-			expect(setRenameInstanceSessionId).toHaveBeenCalledWith('s1');
-			expect(setRenameInstanceModalOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setRenameInstanceValue).toHaveBeenCalledWith('Rename Me');
+			expect(mockModalActions.setRenameInstanceSessionId).toHaveBeenCalledWith('s1');
+			expect(mockModalActions.setRenameInstanceModalOpen).toHaveBeenCalledWith(true);
 		});
 
 		it('triggers delete confirmation from context menu', () => {
@@ -1075,7 +1015,6 @@ describe('SessionList', () => {
 			const props = createDefaultProps({
 				sortedSessions: sessions,
 				showConfirmation,
-				onDeleteSession: undefined, // Use fallback path that calls showConfirmation
 			});
 			render(<SessionList {...props} />);
 
@@ -1094,10 +1033,9 @@ describe('SessionList', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Bookmark Me', bookmarked: false })];
 			useSessionStore.setState({ sessions: sessions });
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setSessions = vi.fn();
+			const setSessions = vi.spyOn(useSessionStore.getState(), 'setSessions');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setSessions,
 			});
 			render(<SessionList {...props} />);
 
@@ -1133,69 +1071,63 @@ describe('SessionList', () => {
 
 		it('opens shortcuts help from menu', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setShortcutsHelpOpen = vi.fn();
-			const props = createDefaultProps({ setShortcutsHelpOpen });
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByTitle('Menu'));
 
 			fireEvent.click(screen.getByText('Keyboard Shortcuts'));
 
-			expect(setShortcutsHelpOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setShortcutsHelpOpen).toHaveBeenCalledWith(true);
 		});
 
 		it('opens settings from menu', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setSettingsModalOpen = vi.fn();
-			const setSettingsTab = vi.fn();
-			const props = createDefaultProps({ setSettingsModalOpen, setSettingsTab });
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByTitle('Menu'));
 
 			fireEvent.click(screen.getByText('Settings'));
 
-			expect(setSettingsModalOpen).toHaveBeenCalledWith(true);
-			expect(setSettingsTab).toHaveBeenCalledWith('general');
+			expect(mockModalActions.setSettingsModalOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setSettingsTab).toHaveBeenCalledWith('general');
 		});
 
 		it('opens log viewer from menu', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setLogViewerOpen = vi.fn();
-			const props = createDefaultProps({ setLogViewerOpen });
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByTitle('Menu'));
 
 			fireEvent.click(screen.getByText('System Logs'));
 
-			expect(setLogViewerOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setLogViewerOpen).toHaveBeenCalledWith(true);
 		});
 
 		it('opens process monitor from menu', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setProcessMonitorOpen = vi.fn();
-			const props = createDefaultProps({ setProcessMonitorOpen });
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByTitle('Menu'));
 
 			fireEvent.click(screen.getByText('Process Monitor'));
 
-			expect(setProcessMonitorOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setProcessMonitorOpen).toHaveBeenCalledWith(true);
 		});
 
 		it('opens about modal from menu', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setAboutModalOpen = vi.fn();
-			const props = createDefaultProps({ setAboutModalOpen });
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByTitle('Menu'));
 
 			fireEvent.click(screen.getByText('About Maestro'));
 
-			expect(setAboutModalOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setAboutModalOpen).toHaveBeenCalledWith(true);
 		});
 
 		it('closes menu with Escape key', () => {
@@ -1232,6 +1164,9 @@ describe('SessionList', () => {
 
 		it("shows Director's Notes menu item in hamburger menu", () => {
 			useUIStore.setState({ leftSidebarOpen: true });
+			useSettingsStore.setState({
+				encoreFeatures: { ...useSettingsStore.getState().encoreFeatures, directorNotes: true },
+			});
 			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
@@ -1243,14 +1178,16 @@ describe('SessionList', () => {
 
 		it("opens Director's Notes modal from menu", () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setDirectorNotesOpen = vi.fn();
-			const props = createDefaultProps({ setDirectorNotesOpen });
+			useSettingsStore.setState({
+				encoreFeatures: { ...useSettingsStore.getState().encoreFeatures, directorNotes: true },
+			});
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByTitle('Menu'));
 			fireEvent.click(screen.getByText("Director's Notes"));
 
-			expect(setDirectorNotesOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setDirectorNotesOpen).toHaveBeenCalledWith(true);
 		});
 	});
 
@@ -1293,7 +1230,6 @@ describe('SessionList', () => {
 			useBatchStore.setState({ batchRunStates: { s1: { isRunning: true } as BatchRunState } });
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				activeBatchSessionIds: ['s1'],
 			});
 			render(<SessionList {...props} />);
 
@@ -1321,7 +1257,6 @@ describe('SessionList', () => {
 			useBatchStore.setState({ batchRunStates: { s1: { isRunning: true } as BatchRunState } });
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				activeBatchSessionIds: ['s1'],
 			});
 			render(<SessionList {...props} />);
 
@@ -1468,8 +1403,8 @@ describe('SessionList', () => {
 		it('updates sidebar width on drag', async () => {
 			useUIStore.setState({ leftSidebarOpen: true });
 			useSettingsStore.setState({ leftSidebarWidth: 300 });
-			const setLeftSidebarWidthState = vi.fn();
-			const props = createDefaultProps({ setLeftSidebarWidthState });
+			const setLeftSidebarWidthState = vi.spyOn(useSettingsStore.getState(), 'setLeftSidebarWidth');
+			const props = createDefaultProps({});
 			const { container } = render(<SessionList {...props} />);
 
 			// Find resize handle (first child with cursor-col-resize)
@@ -1523,12 +1458,11 @@ describe('SessionList', () => {
 			};
 			useUIStore.setState({ leftSidebarOpen: true });
 			useSettingsStore.setState({ autoRunStats: autoRunStats });
-			const setAboutModalOpen = vi.fn();
-			const props = createDefaultProps({ setAboutModalOpen });
+			const props = createDefaultProps({});
 			render(<SessionList {...props} />);
 
 			fireEvent.click(screen.getByText('3'));
-			expect(setAboutModalOpen).toHaveBeenCalledWith(true);
+			expect(mockModalActions.setAboutModalOpen).toHaveBeenCalledWith(true);
 		});
 	});
 
@@ -1600,10 +1534,9 @@ describe('SessionList', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Session 1' })];
 			useSessionStore.setState({ sessions: sessions });
 			useUIStore.setState({ leftSidebarOpen: false });
-			const setActiveSessionId = vi.fn();
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setActiveSessionId,
 			});
 			const { container } = render(<SessionList {...props} />);
 
@@ -1816,10 +1749,9 @@ describe('SessionList', () => {
 				leftSidebarOpen: true,
 				editingSessionId: 'ungrouped-s1',
 			});
-			const setActiveSessionId = vi.fn();
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setActiveSessionId,
 			});
 			render(<SessionList {...props} />);
 
@@ -1910,10 +1842,9 @@ describe('SessionList', () => {
 				groups: [group],
 			});
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setSessions = vi.fn();
+			const setSessions = vi.spyOn(useSessionStore.getState(), 'setSessions');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setSessions,
 			});
 			render(<SessionList {...props} />);
 
@@ -1944,8 +1875,8 @@ describe('SessionList', () => {
 	describe('Focus Management', () => {
 		it('sets activeFocus to sidebar on click', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setActiveFocus = vi.fn();
-			const props = createDefaultProps({ setActiveFocus });
+			const setActiveFocus = vi.spyOn(useUIStore.getState(), 'setActiveFocus');
+			const props = createDefaultProps({});
 			const { container } = render(<SessionList {...props} />);
 
 			fireEvent.click(container.firstChild as HTMLElement);
@@ -1954,8 +1885,8 @@ describe('SessionList', () => {
 
 		it('sets activeFocus to sidebar on focus', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setActiveFocus = vi.fn();
-			const props = createDefaultProps({ setActiveFocus });
+			const setActiveFocus = vi.spyOn(useUIStore.getState(), 'setActiveFocus');
+			const props = createDefaultProps({});
 			const { container } = render(<SessionList {...props} />);
 
 			fireEvent.focus(container.firstChild as HTMLElement);
@@ -2050,10 +1981,9 @@ describe('SessionList', () => {
 				groups: [group],
 			});
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setActiveSessionId = vi.fn();
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setActiveSessionId,
 			});
 			const { container } = render(<SessionList {...props} />);
 
@@ -2135,7 +2065,7 @@ describe('SessionList', () => {
 			expect(activeSession).toHaveStyle({ borderColor: defaultTheme.colors.accent });
 		});
 
-		it('does not show ring on active session in collapsed mode', () => {
+		it('highlights active session in collapsed mode without ring', () => {
 			const sessions = [createMockSession({ id: 's1', name: 'Active' })];
 			useSessionStore.setState({
 				sessions: sessions,
@@ -2147,9 +2077,9 @@ describe('SessionList', () => {
 			});
 			const { container } = render(<SessionList {...props} />);
 
-			// Active session in collapsed mode should NOT have ring-2 class (brightness alone indicates selection)
-			const activeIndicator = container.querySelector('.ring-2');
-			expect(activeIndicator).not.toBeInTheDocument();
+			// Active session in collapsed mode should NOT have ring-2 (removed for cleaner UX)
+			const ringIndicator = container.querySelector('.ring-2');
+			expect(ringIndicator).not.toBeInTheDocument();
 		});
 	});
 
@@ -2741,10 +2671,9 @@ describe('SessionList', () => {
 				groups: [emptyGroup],
 			});
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setActiveSessionId = vi.fn();
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setActiveSessionId,
 			});
 			const { container } = render(<SessionList {...props} />);
 
@@ -2803,12 +2732,10 @@ describe('SessionList', () => {
 				leftSidebarOpen: true,
 				activeFocus: 'sidebar',
 			});
-			const setGroups = vi.fn();
-			const setBookmarksCollapsed = vi.fn();
+			const setGroups = vi.spyOn(useSessionStore.getState(), 'setGroups');
+			const setBookmarksCollapsed = vi.spyOn(useUIStore.getState(), 'setBookmarksCollapsed');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setGroups,
-				setBookmarksCollapsed,
 			});
 			const { container } = render(<SessionList {...props} />);
 
@@ -2870,10 +2797,9 @@ describe('SessionList', () => {
 				leftSidebarOpen: true,
 				activeFocus: 'sidebar',
 			});
-			const setGroups = vi.fn();
+			const setGroups = vi.spyOn(useSessionStore.getState(), 'setGroups');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setGroups,
 			});
 			const { container } = render(<SessionList {...props} />);
 
@@ -2902,10 +2828,9 @@ describe('SessionList', () => {
 				activeFocus: 'sidebar',
 				bookmarksCollapsed: true,
 			});
-			const setBookmarksCollapsed = vi.fn();
+			const setBookmarksCollapsed = vi.spyOn(useUIStore.getState(), 'setBookmarksCollapsed');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
-				setBookmarksCollapsed,
 			});
 			const { container } = render(<SessionList {...props} />);
 
@@ -2970,8 +2895,8 @@ describe('SessionList', () => {
 
 			useUIStore.setState({ leftSidebarOpen: true });
 			useSettingsStore.setState({ leftSidebarWidth: 300 });
-			const setLeftSidebarWidthState = vi.fn();
-			const props = createDefaultProps({ setLeftSidebarWidthState });
+			const setLeftSidebarWidthState = vi.spyOn(useSettingsStore.getState(), 'setLeftSidebarWidth');
+			const props = createDefaultProps({});
 			const { container } = render(<SessionList {...props} />);
 
 			const resizeHandle = container.querySelector('.cursor-col-resize');
@@ -2988,8 +2913,8 @@ describe('SessionList', () => {
 		it('clamps sidebar width within bounds', () => {
 			useUIStore.setState({ leftSidebarOpen: true });
 			useSettingsStore.setState({ leftSidebarWidth: 300 });
-			const setLeftSidebarWidthState = vi.fn();
-			const props = createDefaultProps({ setLeftSidebarWidthState });
+			const setLeftSidebarWidthState = vi.spyOn(useSettingsStore.getState(), 'setLeftSidebarWidth');
+			const props = createDefaultProps({});
 			const { container } = render(<SessionList {...props} />);
 
 			const resizeHandle = container.querySelector('.cursor-col-resize');
@@ -3037,14 +2962,11 @@ describe('SessionList', () => {
 				activeSessionId: 's1',
 			});
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setSessions = vi.fn();
-			const setActiveSessionId = vi.fn();
+			const setSessions = vi.spyOn(useSessionStore.getState(), 'setSessions');
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
 				showConfirmation,
-				setSessions,
-				setActiveSessionId,
-				onDeleteSession: undefined,
 			});
 			render(<SessionList {...props} />);
 
@@ -3070,14 +2992,11 @@ describe('SessionList', () => {
 				activeSessionId: 's1',
 			});
 			useUIStore.setState({ leftSidebarOpen: true });
-			const setSessions = vi.fn();
-			const setActiveSessionId = vi.fn();
+			const setSessions = vi.spyOn(useSessionStore.getState(), 'setSessions');
+			const setActiveSessionId = vi.spyOn(useSessionStore.getState(), 'setActiveSessionId');
 			const props = createDefaultProps({
 				sortedSessions: sessions,
 				showConfirmation,
-				setSessions,
-				setActiveSessionId,
-				onDeleteSession: undefined,
 			});
 			render(<SessionList {...props} />);
 

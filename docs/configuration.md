@@ -10,16 +10,16 @@ Open Settings with `Cmd+,` / `Ctrl+,` or via **Quick Actions** (`Cmd+K` / `Ctrl+
 
 Settings are organized into tabs:
 
-| Tab               | Contents                                                                                                                                                                                             |
-| ----------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| **General**       | About Me (conductor profile), shell configuration, input send behavior, default toggles (history, thinking), automatic tab naming, power management, updates, privacy, usage stats, storage location |
-| **Display**       | Font family and size, terminal width, log level and buffer, max output lines per response, document graph settings, context window warnings                                                          |
-| **Shortcuts**     | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts))                                                                                                                        |
-| **Themes**        | Dark, light, and vibe mode themes, custom theme builder with import/export                                                                                                                           |
-| **Notifications** | OS notifications, custom command notifications, toast notification duration                                                                                                                          |
-| **AI Commands**   | View and edit slash commands, [Spec-Kit](./speckit-commands), and [OpenSpec](./openspec-commands) prompts                                                                                            |
-| **SSH Hosts**     | Configure remote hosts for [SSH agent execution](./ssh-remote-execution)                                                                                                                             |
-| **WakaTime** *(in General tab)* | WakaTime integration toggle, API key, detailed file tracking                                                                                                                  |
+| Tab                             | Contents                                                                                                                                                                                             |
+| ------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **General**                     | About Me (conductor profile), shell configuration, input send behavior, default toggles (history, thinking), automatic tab naming, power management, updates, privacy, usage stats, storage location |
+| **Display**                     | Font family and size, terminal width, log level and buffer, max output lines per response, document graph settings, context window warnings                                                          |
+| **Shortcuts**                   | Customize keyboard shortcuts (see [Keyboard Shortcuts](./keyboard-shortcuts))                                                                                                                        |
+| **Themes**                      | Dark, light, and vibe mode themes, custom theme builder with import/export                                                                                                                           |
+| **Notifications**               | OS notifications, custom command notifications, toast notification duration                                                                                                                          |
+| **AI Commands**                 | View and edit slash commands, [Spec-Kit](./speckit-commands), and [OpenSpec](./openspec-commands) prompts                                                                                            |
+| **SSH Hosts**                   | Configure remote hosts for [SSH agent execution](./ssh-remote-execution)                                                                                                                             |
+| **WakaTime** _(in General tab)_ | WakaTime integration toggle, API key, detailed file tracking                                                                                                                                         |
 
 ## Conductor Profile
 
@@ -292,11 +292,11 @@ File paths (not file content) are sent to WakaTime's servers. This setting defau
 
 File heartbeats are generated for write operations across all supported agents:
 
-| Agent | Tracked Tools |
-|-------|--------------|
-| Claude Code | Write, Edit, NotebookEdit |
-| Codex | write_to_file, str_replace_based_edit_tool, create_file |
-| OpenCode | write, patch |
+| Agent       | Tracked Tools                                           |
+| ----------- | ------------------------------------------------------- |
+| Claude Code | Write, Edit, NotebookEdit                               |
+| Codex       | write_to_file, str_replace_based_edit_tool, create_file |
+| OpenCode    | write, patch                                            |
 
 Read operations and shell commands are excluded to avoid inflating tracked time.
 

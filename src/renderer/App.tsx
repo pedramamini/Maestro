@@ -16,12 +16,7 @@ import { DebugWizardModal } from './components/DebugWizardModal';
 import { DebugPackageModal } from './components/DebugPackageModal';
 import { WindowsWarningModal } from './components/WindowsWarningModal';
 import { GistPublishModal } from './components/GistPublishModal';
-import {
-	MaestroWizard,
-	useWizard,
-	WizardResumeModal,
-	AUTO_RUN_FOLDER_NAME,
-} from './components/Wizard';
+import { MaestroWizard, useWizard, WizardResumeModal } from './components/Wizard';
 import { TourOverlay } from './components/Wizard/tour';
 import { CONDUCTOR_BADGES } from './constants/conductorBadges';
 import { EmptyStateView } from './components/EmptyStateView';
@@ -59,7 +54,6 @@ import {
 	// Batch processing
 	useBatchHandlers,
 	useBatchedSessionUpdates,
-	type PreviousUIState,
 	// Settings
 	useSettings,
 	useDebouncedPersistence,
@@ -112,6 +106,11 @@ import {
 	useAppInitialization,
 	// Session lifecycle operations
 	useSessionLifecycle,
+	useSessionCrud,
+	// Wizard handlers
+	useWizardHandlers,
+	// Interrupt handler
+	useInterruptHandler,
 } from './hooks';
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
@@ -133,18 +132,12 @@ import { ToastContainer } from './components/Toast';
 // Import services
 import { gitService } from './services/git';
 
-// Import prompts and synopsis parsing
-import { autorunSynopsisPrompt } from '../prompts';
-import { parseSynopsis } from '../shared/synopsis';
-import { formatRelativeTime } from '../shared/formatters';
-
 // Import types and constants
 // Note: GroupChat, GroupChatState are imported from types (re-exported from shared)
 import type {
 	ToolType,
 	SessionState,
 	RightPanelTab,
-	LogEntry,
 	Session,
 	AITab,
 	QueuedItem,
@@ -173,7 +166,7 @@ import {
 } from './utils/tabHelpers';
 import { validateNewSession } from './utils/sessionValidation';
 import { formatLogsForClipboard } from './utils/contextExtractor';
-import { getSlashCommandDescription } from './constants/app';
+// getSlashCommandDescription moved to useWizardHandlers
 import { useUIStore } from './stores/uiStore';
 import { useTabStore } from './stores/tabStore';
 import { useFileExplorerStore } from './stores/fileExplorerStore';
@@ -191,9 +184,7 @@ function MaestroConsoleInner() {
 		setSettingsTab,
 		// New Instance Modal
 		newInstanceModalOpen,
-		setNewInstanceModalOpen,
 		duplicatingSessionId,
-		setDuplicatingSessionId,
 		// Edit Agent Modal
 		editAgentModalOpen,
 		setEditAgentModalOpen,
@@ -202,7 +193,6 @@ function MaestroConsoleInner() {
 		// Delete Agent Modal
 		deleteAgentModalOpen,
 		deleteAgentSession,
-		setDeleteAgentSession,
 		// Shortcuts Help Modal
 		shortcutsHelpOpen,
 		setShortcutsHelpOpen,
@@ -268,7 +258,6 @@ function MaestroConsoleInner() {
 		renameInstanceValue,
 		setRenameInstanceValue,
 		renameInstanceSessionId,
-		setRenameInstanceSessionId,
 		// Rename Tab Modal
 		renameTabModalOpen,
 		setRenameTabModalOpen,
@@ -348,7 +337,7 @@ function MaestroConsoleInner() {
 		tourOpen,
 		setTourOpen,
 		tourFromWizard,
-		setTourFromWizard,
+		// setTourFromWizard now used in useWizardHandlers via getModalActions()
 		// Symphony Modal
 		symphonyModalOpen,
 		setSymphonyModalOpen,
@@ -413,16 +402,12 @@ function MaestroConsoleInner() {
 		setDefaultSaveToHistory,
 		defaultShowThinking,
 		setDefaultShowThinking,
-		leftSidebarWidth,
-		setLeftSidebarWidth,
 		rightPanelWidth,
 		setRightPanelWidth,
 		markdownEditMode,
 		setMarkdownEditMode,
 		chatRawTextMode,
 		setChatRawTextMode,
-		showHiddenFiles: _showHiddenFiles,
-		setShowHiddenFiles: _setShowHiddenFiles,
 		terminalWidth,
 		setTerminalWidth,
 		logLevel,
@@ -598,14 +583,11 @@ function MaestroConsoleInner() {
 	const bookmarksCollapsed = useUIStore((s) => s.bookmarksCollapsed);
 	const groupChatsExpanded = useUIStore((s) => s.groupChatsExpanded);
 	const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
-	const _selectedFileIndex = useFileExplorerStore((s) => s.selectedFileIndex);
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 	const fileTreeFilterOpen = useFileExplorerStore((s) => s.fileTreeFilterOpen);
 	const editingGroupId = useUIStore((s) => s.editingGroupId);
 	const editingSessionId = useUIStore((s) => s.editingSessionId);
 	const draggingSessionId = useUIStore((s) => s.draggingSessionId);
-	const outputSearchOpen = useUIStore((s) => s.outputSearchOpen);
-	const outputSearchQuery = useUIStore((s) => s.outputSearchQuery);
 	const flashNotification = useUIStore((s) => s.flashNotification);
 	const successFlashNotification = useUIStore((s) => s.successFlashNotification);
 	const selectedSidebarIndex = useUIStore((s) => s.selectedSidebarIndex);
@@ -617,19 +599,14 @@ function MaestroConsoleInner() {
 		setActiveRightTab,
 		setActiveFocus,
 		setBookmarksCollapsed,
-		setGroupChatsExpanded,
 		setEditingGroupId,
-		setEditingSessionId,
 		setDraggingSessionId,
-		setOutputSearchOpen,
-		setOutputSearchQuery,
 		setFlashNotification,
 		setSuccessFlashNotification,
 		setSelectedSidebarIndex,
 	} = useUIStore.getState();
 
-	const { setSelectedFileIndex: _setSelectedFileIndex, setFileTreeFilter: _setFileTreeFilter, setFileTreeFilterOpen } =
-		useFileExplorerStore.getState();
+	const { setFileTreeFilterOpen } = useFileExplorerStore.getState();
 
 	// --- GROUP CHAT STATE (now in groupChatStore) ---
 
@@ -645,8 +622,6 @@ function MaestroConsoleInner() {
 	const groupChatParticipantColors = useGroupChatStore((s) => s.groupChatParticipantColors);
 	const moderatorUsage = useGroupChatStore((s) => s.moderatorUsage);
 	const participantStates = useGroupChatStore((s) => s.participantStates);
-	const groupChatStates = useGroupChatStore((s) => s.groupChatStates);
-	const allGroupChatParticipantStates = useGroupChatStore((s) => s.allGroupChatParticipantStates);
 	const groupChatError = useGroupChatStore((s) => s.groupChatError);
 
 	// Stable actions from groupChatStore (non-reactive)
@@ -744,8 +719,6 @@ function MaestroConsoleInner() {
 	// Content is per-session in session.autoRunContent
 	const autoRunDocumentList = useBatchStore((s) => s.documentList);
 	const autoRunDocumentTree = useBatchStore((s) => s.documentTree);
-	const _autoRunIsLoadingDocuments = useBatchStore((s) => s.isLoadingDocuments);
-	const _autoRunDocumentTaskCounts = useBatchStore((s) => s.documentTaskCounts);
 	const {
 		setDocumentList: setAutoRunDocumentList,
 		setDocumentTree: setAutoRunDocumentTree,
@@ -844,115 +817,7 @@ function MaestroConsoleInner() {
 	// Note: selectedSidebarIndex/setSelectedSidebarIndex are destructured from useUIStore() above
 	// Note: activeTab is memoized later at line ~3795 - use that for all tab operations
 
-	// Discover slash commands when a session becomes active and doesn't have them yet
-	// Fetches custom Claude commands from .claude/commands/ directories (fast, file system read)
-	// Also spawns Claude briefly to get built-in commands from init message (slower)
-	useEffect(() => {
-		if (!activeSession) return;
-		if (activeSession.toolType !== 'claude-code') return;
-		// Skip if we already have commands
-		if (activeSession.agentCommands && activeSession.agentCommands.length > 0) return;
-
-		// Capture session ID to prevent race conditions when switching sessions
-		const sessionId = activeSession.id;
-		const projectRoot = activeSession.projectRoot;
-		let cancelled = false;
-
-		// Helper to merge commands without duplicates
-		const mergeCommands = (
-			existing: { command: string; description: string }[],
-			newCmds: { command: string; description: string }[]
-		) => {
-			const merged = [...existing];
-			for (const cmd of newCmds) {
-				if (!merged.some((c) => c.command === cmd.command)) {
-					merged.push(cmd);
-				}
-			}
-			return merged;
-		};
-
-		// Fetch custom Claude commands immediately (fast - just reads files)
-		const fetchCustomCommands = async () => {
-			try {
-				const customClaudeCommands = await window.maestro.claude.getCommands(projectRoot);
-				if (cancelled) return;
-
-				// Custom Claude commands already have command and description from the handler
-				const customCommandObjects = (customClaudeCommands || []).map((cmd) => ({
-					command: cmd.command,
-					description: cmd.description,
-				}));
-
-				if (customCommandObjects.length > 0) {
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== sessionId) return s;
-							const existingCommands = s.agentCommands || [];
-							return {
-								...s,
-								agentCommands: mergeCommands(existingCommands, customCommandObjects),
-							};
-						})
-					);
-				}
-			} catch (error) {
-				if (!cancelled) {
-					console.error('[SlashCommandDiscovery] Failed to fetch custom commands:', error);
-				}
-			}
-		};
-
-		// Discover built-in agent slash commands in background (slower - spawns Claude)
-		const discoverAgentCommands = async () => {
-			try {
-				const agentSlashCommands = await window.maestro.agents.discoverSlashCommands(
-					activeSession.toolType,
-					activeSession.cwd,
-					activeSession.customPath
-				);
-				if (cancelled) return;
-
-				// Convert agent slash commands to command objects
-				const agentCommandObjects = (agentSlashCommands || []).map((cmd) => ({
-					command: cmd.startsWith('/') ? cmd : `/${cmd}`,
-					description: getSlashCommandDescription(cmd),
-				}));
-
-				if (agentCommandObjects.length > 0) {
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== sessionId) return s;
-							const existingCommands = s.agentCommands || [];
-							return {
-								...s,
-								agentCommands: mergeCommands(existingCommands, agentCommandObjects),
-							};
-						})
-					);
-				}
-			} catch (error) {
-				if (!cancelled) {
-					console.error('[SlashCommandDiscovery] Failed to discover agent commands:', error);
-				}
-			}
-		};
-
-		// Start both in parallel but don't wait for each other
-		fetchCustomCommands();
-		discoverAgentCommands();
-
-		return () => {
-			cancelled = true;
-		};
-	}, [
-		activeSession?.id,
-		activeSession?.toolType,
-		activeSession?.cwd,
-		activeSession?.customPath,
-		activeSession?.agentCommands,
-		activeSession?.projectRoot,
-	]);
+	// Slash command discovery now in useWizardHandlers hook
 
 	// --- SESSION RESTORATION (extracted hook, Phase 2E) ---
 	const { initialLoadComplete } = useSessionRestoration();
@@ -1438,9 +1303,7 @@ function MaestroConsoleInner() {
 		return items;
 	}, [sessions]);
 
-	// Log entry helpers - delegates to sessionStore action
-	const addLogToTab = useSessionStore.getState().addLogToTab;
-	const addLogToActiveTab = addLogToTab; // without tabId = active tab (same function)
+	// addLogToTab/addLogToActiveTab now used directly via store in useWizardHandlers
 
 	// --- AGENT EXECUTION ---
 	// Extracted hook for agent spawning and execution operations
@@ -1558,15 +1421,7 @@ function MaestroConsoleInner() {
 		);
 	}, []);
 
-	/**
-	 * Toggle bookmark state for a session.
-	 * Used by keyboard shortcut (Cmd+Shift+B) and UI actions.
-	 */
-	const toggleBookmark = useCallback((sessionId: string) => {
-		setSessions((prev) =>
-			prev.map((s) => (s.id === sessionId ? { ...s, bookmarked: !s.bookmarked } : s))
-		);
-	}, []);
+	// toggleBookmark — provided by useSessionCrud hook
 
 	const handleFocusFileInGraph = useFileExplorerStore.getState().focusFileInGraph;
 	const handleOpenLastDocumentGraph = useFileExplorerStore.getState().openLastDocumentGraph;
@@ -1659,739 +1514,45 @@ function MaestroConsoleInner() {
 
 	// Note: spawnBackgroundSynopsisRef and spawnAgentWithPromptRef are now updated in useAgentExecution hook
 
-	// Inline wizard context for /wizard command
-	// This manages the state for the inline wizard that creates/iterates on Auto Run documents
+	// Inline wizard context — hook needs the full context, App.tsx retains pass-through refs
+	const inlineWizardContext = useInlineWizardContext();
 	const {
-		startWizard: startInlineWizard,
-		endWizard: endInlineWizard,
 		clearError: clearInlineWizardError,
 		retryLastMessage: retryInlineWizardMessage,
 		generateDocuments: generateInlineWizardDocuments,
-		sendMessage: sendInlineWizardMessage,
-		// State for syncing to session.wizardState
-		isWizardActive: inlineWizardActive,
-		isWaiting: _inlineWizardIsWaiting,
-		wizardMode: _inlineWizardMode,
-		wizardGoal: _inlineWizardGoal,
-		confidence: _inlineWizardConfidence,
-		ready: _inlineWizardReady,
-		conversationHistory: _inlineWizardConversationHistory,
-		error: _inlineWizardError,
-		isGeneratingDocs: _inlineWizardIsGeneratingDocs,
-		generatedDocuments: _inlineWizardGeneratedDocuments,
-		streamingContent: _inlineWizardStreamingContent,
-		generationProgress: _inlineWizardGenerationProgress,
-		state: _inlineWizardState,
-		wizardTabId: inlineWizardTabId,
-		agentSessionId: _inlineWizardAgentSessionId,
-		// Per-tab wizard state accessors
-		getStateForTab: getInlineWizardStateForTab,
-		isWizardActiveForTab: _isInlineWizardActiveForTab,
-	} = useInlineWizardContext();
+		endWizard: endInlineWizard,
+	} = inlineWizardContext;
 
-	// Wrapper for sendInlineWizardMessage that adds thinking content callback
-	// This extracts thinking content from the streaming response and stores it in wizardState
-	const sendWizardMessageWithThinking = useCallback(
-		async (content: string, images?: string[]) => {
-			// Clear previous thinking content and tool executions when starting a new message
-			if (activeSession) {
-				const activeTab = getActiveTab(activeSession);
-				if (activeTab?.wizardState) {
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== activeSession.id) return s;
-							return {
-								...s,
-								aiTabs: s.aiTabs.map((tab) => {
-									if (tab.id !== activeTab.id) return tab;
-									if (!tab.wizardState) return tab;
-									return {
-										...tab,
-										wizardState: {
-											...tab.wizardState,
-											thinkingContent: '', // Clear previous thinking
-											toolExecutions: [], // Clear previous tool executions
-										},
-									};
-								}),
-							};
-						})
-					);
-				}
-			}
+	// --- WIZARD HANDLERS (extracted hook) ---
+	// Refs for circular deps — set after useInputHandlers/useAutoRunHandlers
+	const handleAutoRunRefreshRef = useRef<(() => void) | null>(null);
+	const setInputValueRef = useRef<((value: string) => void) | null>(null);
 
-			// Send message with thinking callback
-			// Capture session and tab IDs at call time to avoid stale closure issues
-			const sessionId = activeSession?.id;
-			const tabId = activeSession ? getActiveTab(activeSession)?.id : undefined;
-
-			await sendInlineWizardMessage(content, images, {
-				onThinkingChunk: (chunk) => {
-					// Early return if session/tab IDs weren't captured
-					if (!sessionId || !tabId) {
-						return;
-					}
-
-					// Skip JSON-looking content (the structured response) to avoid brief flash of JSON
-					// The wizard expects JSON responses like {"confidence": 80, "ready": true, "message": "..."}
-					const trimmed = chunk.trim();
-					if (
-						trimmed.startsWith('{"') &&
-						(trimmed.includes('"confidence"') || trimmed.includes('"message"'))
-					) {
-						return; // Skip structured response JSON
-					}
-
-					// Accumulate thinking content in the session state
-					// All checks happen inside the updater to use fresh state
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== sessionId) return s;
-							const tab = s.aiTabs.find((t) => t.id === tabId);
-
-							// Only accumulate if showWizardThinking is enabled
-							if (!tab?.wizardState?.showWizardThinking) {
-								return s;
-							}
-
-							return {
-								...s,
-								aiTabs: s.aiTabs.map((t) => {
-									if (t.id !== tabId) return t;
-									if (!t.wizardState) return t;
-									return {
-										...t,
-										wizardState: {
-											...t.wizardState,
-											thinkingContent: (t.wizardState.thinkingContent || '') + chunk,
-										},
-									};
-								}),
-							};
-						})
-					);
-				},
-				onToolExecution: (toolEvent) => {
-					// Early return if session/tab IDs weren't captured
-					if (!sessionId || !tabId) {
-						return;
-					}
-
-					// Accumulate tool executions in the session state
-					// This is crucial for showThinking mode since batch mode doesn't stream assistant messages
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== sessionId) return s;
-							const tab = s.aiTabs.find((t) => t.id === tabId);
-
-							// Only accumulate if showWizardThinking is enabled
-							if (!tab?.wizardState?.showWizardThinking) {
-								return s;
-							}
-
-							return {
-								...s,
-								aiTabs: s.aiTabs.map((t) => {
-									if (t.id !== tabId) return t;
-									if (!t.wizardState) return t;
-									return {
-										...t,
-										wizardState: {
-											...t.wizardState,
-											toolExecutions: [...(t.wizardState.toolExecutions || []), toolEvent],
-										},
-									};
-								}),
-							};
-						})
-					);
-				},
-			});
+	const {
+		sendWizardMessageWithThinking,
+		handleHistoryCommand,
+		handleSkillsCommand,
+		handleWizardCommand,
+		handleLaunchWizardTab,
+		isWizardActiveForCurrentTab,
+		handleWizardComplete,
+		handleWizardLetsGo,
+		handleToggleWizardShowThinking,
+		handleWizardLaunchSession,
+	} = useWizardHandlers({
+		inlineWizardContext,
+		wizardContext: {
+			state: wizardState,
+			completeWizard,
+			clearResumeState,
 		},
-		[activeSession, sendInlineWizardMessage, setSessions]
-	);
-
-	// Sync inline wizard context state to activeTab.wizardState (per-tab wizard state)
-	// This bridges the gap between the context-based state and tab-based UI rendering
-	// Each tab maintains its own independent wizard state
-	useEffect(() => {
-		if (!activeSession) return;
-
-		const activeTab = getActiveTab(activeSession);
-		const activeTabId = activeTab?.id;
-		if (!activeTabId) return;
-
-		// Get the wizard state for the CURRENT tab using the per-tab accessor
-		const tabWizardState = getInlineWizardStateForTab(activeTabId);
-		const hasWizardOnThisTab = tabWizardState?.isActive || tabWizardState?.isGeneratingDocs;
-		const currentTabWizardState = activeTab?.wizardState;
-
-		if (!hasWizardOnThisTab && !currentTabWizardState) {
-			// Neither active nor has state on this tab - nothing to do
-			return;
-		}
-
-		if (!hasWizardOnThisTab && currentTabWizardState) {
-			// Wizard was deactivated on this tab - clear the tab's wizard state
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-					return {
-						...s,
-						aiTabs: s.aiTabs.map((tab) =>
-							tab.id === activeTabId ? { ...tab, wizardState: undefined } : tab
-						),
-					};
-				})
-			);
-			return;
-		}
-
-		if (!tabWizardState) {
-			// No wizard state for this tab - nothing to sync
-			return;
-		}
-
-		// Sync the wizard state to this specific tab
-		// IMPORTANT: showWizardThinking and thinkingContent are preserved from the LATEST state
-		// inside the setSessions updater to avoid stale closure issues. These are managed by
-		// the toggle and onThinkingChunk callback, not by the hook.
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
-
-				// Read the LATEST wizard state from prev, not from captured currentTabWizardState
-				// This prevents stale closure issues when the toggle or callback updates state
-				const latestTab = s.aiTabs.find((tab) => tab.id === activeTabId);
-				const latestWizardState = latestTab?.wizardState;
-
-				const newWizardState = {
-					isActive: tabWizardState.isActive,
-					isWaiting: tabWizardState.isWaiting,
-					mode: tabWizardState.mode === 'ask' ? 'new' : tabWizardState.mode, // Map 'ask' to 'new' for session state
-					goal: tabWizardState.goal ?? undefined,
-					confidence: tabWizardState.confidence,
-					ready: tabWizardState.ready,
-					conversationHistory: tabWizardState.conversationHistory.map((msg) => ({
-						id: msg.id,
-						role: msg.role,
-						content: msg.content,
-						timestamp: msg.timestamp,
-						confidence: msg.confidence,
-						ready: msg.ready,
-						images: msg.images,
-					})),
-					previousUIState: tabWizardState.previousUIState ?? {
-						readOnlyMode: false,
-						saveToHistory: true,
-						showThinking: 'off',
-					},
-					error: tabWizardState.error,
-					isGeneratingDocs: tabWizardState.isGeneratingDocs,
-					generatedDocuments: tabWizardState.generatedDocuments.map((doc) => ({
-						filename: doc.filename,
-						content: doc.content,
-						taskCount: doc.taskCount,
-						savedPath: doc.savedPath,
-					})),
-					streamingContent: tabWizardState.streamingContent,
-					currentDocumentIndex: tabWizardState.currentDocumentIndex,
-					currentGeneratingIndex: tabWizardState.generationProgress?.current,
-					totalDocuments: tabWizardState.generationProgress?.total,
-					autoRunFolderPath: tabWizardState.projectPath
-						? `${tabWizardState.projectPath}/Auto Run Docs`
-						: undefined,
-					// Full path to subfolder where documents are saved (e.g., "/path/Auto Run Docs/Maestro-Marketing")
-					subfolderPath: tabWizardState.subfolderPath ?? undefined,
-					agentSessionId: tabWizardState.agentSessionId ?? undefined,
-					// Track the subfolder name for tab naming after wizard completes
-					subfolderName: tabWizardState.subfolderName ?? undefined,
-					// Preserve thinking state from LATEST state (inside updater) to avoid stale closure
-					showWizardThinking: latestWizardState?.showWizardThinking ?? false,
-					thinkingContent: latestWizardState?.thinkingContent ?? '',
-				};
-
-				return {
-					...s,
-					aiTabs: s.aiTabs.map((tab) =>
-						tab.id === activeTabId ? { ...tab, wizardState: newWizardState } : tab
-					),
-				};
-			})
-		);
-	}, [
-		activeSession?.id,
-		activeSession?.activeTabId,
-		// getInlineWizardStateForTab changes when tabStates Map changes (new wizard state for any tab)
-		// This ensures we re-sync when the active tab's wizard state changes
-		getInlineWizardStateForTab,
-		setSessions,
-	]);
-
-	// Handler for the built-in /history command
-	// Requests a synopsis from the current agent session and saves to history
-	const handleHistoryCommand = useCallback(async () => {
-		if (!activeSession) {
-			console.warn('[handleHistoryCommand] No active session');
-			return;
-		}
-
-		const activeTab = getActiveTab(activeSession);
-		const agentSessionId = activeTab?.agentSessionId;
-
-		if (!agentSessionId) {
-			// No agent session yet - show error log
-			const errorLog: LogEntry = {
-				id: generateId(),
-				timestamp: Date.now(),
-				source: 'system',
-				text: 'No active agent session. Start a conversation first before using /history.',
-			};
-			addLogToActiveTab(activeSession.id, errorLog);
-			return;
-		}
-
-		// Show a pending log entry while synopsis is being generated
-		const pendingLog: LogEntry = {
-			id: generateId(),
-			timestamp: Date.now(),
-			source: 'system',
-			text: 'Generating history synopsis...',
-		};
-		addLogToActiveTab(activeSession.id, pendingLog);
-
-		try {
-			// Build dynamic prompt based on whether there's a previous synopsis timestamp
-			// This ensures the AI only summarizes work since the last synopsis
-			let synopsisPrompt: string;
-			if (activeTab.lastSynopsisTime) {
-				const timeAgo = formatRelativeTime(activeTab.lastSynopsisTime);
-				synopsisPrompt = `${autorunSynopsisPrompt}\n\nIMPORTANT: Only synopsize work done since the last synopsis (${timeAgo}). Do not repeat previous work.`;
-			} else {
-				synopsisPrompt = autorunSynopsisPrompt;
-			}
-			const synopsisTime = Date.now(); // Capture time for updating lastSynopsisTime
-
-			// Request synopsis from the agent
-			const result = await spawnBackgroundSynopsis(
-				activeSession.id,
-				activeSession.cwd,
-				agentSessionId,
-				synopsisPrompt,
-				activeSession.toolType,
-				{
-					customPath: activeSession.customPath,
-					customArgs: activeSession.customArgs,
-					customEnvVars: activeSession.customEnvVars,
-					customModel: activeSession.customModel,
-					customContextWindow: activeSession.customContextWindow,
-					sessionSshRemoteConfig: activeSession.sessionSshRemoteConfig,
-				}
-			);
-
-			if (result.success && result.response) {
-				// Parse the synopsis response
-				const parsed = parseSynopsis(result.response);
-
-				// Check if AI indicated nothing meaningful to report
-				if (parsed.nothingToReport) {
-					// Update the pending log to indicate nothing to report
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== activeSession.id) return s;
-							return {
-								...s,
-								aiTabs: s.aiTabs.map((tab) => {
-									if (tab.id !== activeTab.id) return tab;
-									return {
-										...tab,
-										logs: tab.logs.map((log) =>
-											log.id === pendingLog.id
-												? {
-														...log,
-														text: 'Nothing to report - no history entry created.',
-													}
-												: log
-										),
-									};
-								}),
-							};
-						})
-					);
-					return;
-				}
-
-				// Get group info for the history entry
-				const group = groups.find((g) => g.id === activeSession.groupId);
-				const groupName = group?.name || 'Ungrouped';
-
-				// Calculate elapsed time since last synopsis (or tab creation if no previous synopsis)
-				const elapsedTimeMs = activeTab.lastSynopsisTime
-					? synopsisTime - activeTab.lastSynopsisTime
-					: synopsisTime - activeTab.createdAt;
-
-				// Add to history
-				addHistoryEntry({
-					type: 'AUTO',
-					summary: parsed.shortSummary,
-					fullResponse: parsed.fullSynopsis,
-					agentSessionId: agentSessionId,
-					sessionId: activeSession.id,
-					projectPath: activeSession.cwd,
-					sessionName: activeTab.name || undefined,
-					usageStats: result.usageStats,
-					elapsedTimeMs,
-				});
-
-				// Update the pending log with success AND set lastSynopsisTime
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== activeSession.id) return s;
-						return {
-							...s,
-							aiTabs: s.aiTabs.map((tab) => {
-								if (tab.id !== activeTab.id) return tab;
-								return {
-									...tab,
-									lastSynopsisTime: synopsisTime, // Track when this synopsis was generated
-									logs: tab.logs.map((log) =>
-										log.id === pendingLog.id
-											? {
-													...log,
-													text: `Synopsis saved to history: ${parsed.shortSummary}`,
-												}
-											: log
-									),
-								};
-							}),
-						};
-					})
-				);
-
-				// Show toast
-				notifyToast({
-					type: 'success',
-					title: 'History Entry Added',
-					message: parsed.shortSummary,
-					group: groupName,
-					project: activeSession.name,
-					sessionId: activeSession.id,
-					tabId: activeTab.id,
-					tabName: activeTab.name || undefined,
-				});
-			} else {
-				// Synopsis generation failed
-				setSessions((prev) =>
-					prev.map((s) => {
-						if (s.id !== activeSession.id) return s;
-						return {
-							...s,
-							aiTabs: s.aiTabs.map((tab) => {
-								if (tab.id !== activeTab.id) return tab;
-								return {
-									...tab,
-									logs: tab.logs.map((log) =>
-										log.id === pendingLog.id
-											? {
-													...log,
-													text: 'Failed to generate history synopsis. Try again.',
-												}
-											: log
-									),
-								};
-							}),
-						};
-					})
-				);
-			}
-		} catch (error) {
-			console.error('[handleHistoryCommand] Error:', error);
-			// Update the pending log with error
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-					return {
-						...s,
-						aiTabs: s.aiTabs.map((tab) => {
-							if (tab.id !== activeTab.id) return tab;
-							return {
-								...tab,
-								logs: tab.logs.map((log) =>
-									log.id === pendingLog.id
-										? {
-												...log,
-												text: `Error generating synopsis: ${(error as Error).message}`,
-											}
-										: log
-								),
-							};
-						}),
-					};
-				})
-			);
-		}
-	}, [activeSession, groups, spawnBackgroundSynopsis, addHistoryEntry, setSessions]);
-
-	// Handler for the built-in /skills command (Claude Code only)
-	// Lists available skills from .claude/skills/ directories
-	const handleSkillsCommand = useCallback(async () => {
-		if (!activeSession) {
-			console.warn('[handleSkillsCommand] No active session');
-			return;
-		}
-
-		if (activeSession.toolType !== 'claude-code') {
-			console.warn('[handleSkillsCommand] Skills command only available for Claude Code');
-			return;
-		}
-
-		const activeTab = getActiveTab(activeSession);
-		if (!activeTab) {
-			console.warn('[handleSkillsCommand] No active tab');
-			return;
-		}
-
-		try {
-			// Add user log entry showing the /skills command was requested
-			const userLog: LogEntry = {
-				id: generateId(),
-				timestamp: Date.now(),
-				source: 'user',
-				text: '/skills',
-			};
-			addLogToActiveTab(activeSession.id, userLog);
-
-			// Fetch skills from the IPC handler
-			const skills = await window.maestro.claude.getSkills(activeSession.projectRoot);
-
-			// Format skills as a markdown table
-			let skillsMessage: string;
-			if (skills.length === 0) {
-				skillsMessage =
-					'## Skills\n\nNo Claude Code skills were found in this project.\n\nTo add skills, create `.claude/skills/<skill-name>/skill.md` files in your project.';
-			} else {
-				const formatTokenCount = (tokens: number): string => {
-					if (tokens >= 1000) {
-						return `~${(tokens / 1000).toFixed(1)}k`;
-					}
-					return `~${tokens}`;
-				};
-
-				const projectSkills = skills.filter((s) => s.source === 'project');
-				const userSkills = skills.filter((s) => s.source === 'user');
-
-				const lines: string[] = [
-					`## Skills`,
-					'',
-					`${skills.length} skill${skills.length !== 1 ? 's' : ''} available`,
-					'',
-				];
-
-				if (projectSkills.length > 0) {
-					lines.push('### Project Skills');
-					lines.push('');
-					lines.push('| Skill | Tokens | Description |');
-					lines.push('|-------|--------|-------------|');
-					for (const skill of projectSkills) {
-						const desc =
-							skill.description && skill.description !== 'No description' ? skill.description : '—';
-						lines.push(`| **${skill.name}** | ${formatTokenCount(skill.tokenCount)} | ${desc} |`);
-					}
-					lines.push('');
-				}
-
-				if (userSkills.length > 0) {
-					lines.push('### User Skills');
-					lines.push('');
-					lines.push('| Skill | Tokens | Description |');
-					lines.push('|-------|--------|-------------|');
-					for (const skill of userSkills) {
-						const desc =
-							skill.description && skill.description !== 'No description' ? skill.description : '—';
-						lines.push(`| **${skill.name}** | ${formatTokenCount(skill.tokenCount)} | ${desc} |`);
-					}
-				}
-
-				skillsMessage = lines.join('\n');
-			}
-
-			// Add the skills listing as a system log entry
-			const skillsLog: LogEntry = {
-				id: generateId(),
-				timestamp: Date.now(),
-				source: 'system',
-				text: skillsMessage,
-			};
-			addLogToActiveTab(activeSession.id, skillsLog);
-		} catch (error) {
-			console.error('[handleSkillsCommand] Error:', error);
-			const errorLog: LogEntry = {
-				id: generateId(),
-				timestamp: Date.now(),
-				source: 'system',
-				text: `Error listing skills: ${(error as Error).message}`,
-			};
-			addLogToActiveTab(activeSession.id, errorLog);
-		}
-	}, [activeSession]);
-
-	// Handler for the built-in /wizard command
-	// Starts the inline wizard for creating/iterating on Auto Run documents
-	const handleWizardCommand = useCallback(
-		(args: string) => {
-			if (!activeSession) {
-				console.warn('[handleWizardCommand] No active session');
-				return;
-			}
-
-			const activeTab = getActiveTab(activeSession);
-			if (!activeTab) {
-				console.warn('[handleWizardCommand] No active tab');
-				return;
-			}
-
-			// Capture current UI state for restoration when wizard ends
-			const currentUIState: PreviousUIState = {
-				readOnlyMode: activeTab.readOnlyMode ?? false,
-				saveToHistory: activeTab.saveToHistory ?? true,
-				showThinking: activeTab.showThinking ?? 'off',
-			};
-
-			// Start the inline wizard with the argument text (natural language input)
-			// The wizard will use the intent parser to determine mode (new/iterate/ask)
-			startInlineWizard(
-				args || undefined,
-				currentUIState,
-				activeSession.projectRoot || activeSession.cwd, // Project path for Auto Run folder detection
-				activeSession.toolType, // Agent type for AI conversation
-				activeSession.name, // Session/project name
-				activeTab.id, // Tab ID for per-tab isolation
-				activeSession.id, // Session ID for playbook creation
-				activeSession.autoRunFolderPath, // User-configured Auto Run folder path (if set)
-				activeSession.sessionSshRemoteConfig, // SSH remote config for remote execution
-				conductorProfile, // Conductor profile (user's About Me from settings)
-				{
-					customPath: activeSession.customPath,
-					customArgs: activeSession.customArgs,
-					customEnvVars: activeSession.customEnvVars,
-					customModel: activeSession.customModel,
-				}
-			);
-
-			// Rename the tab to "Wizard" immediately when wizard starts
-			// This provides visual feedback that wizard mode is active
-			// The tab will be renamed again on completion if a subfolder is chosen
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-					return {
-						...s,
-						aiTabs: s.aiTabs.map((tab) =>
-							tab.id === activeTab.id ? { ...tab, name: 'Wizard' } : tab
-						),
-					};
-				})
-			);
-
-			// Show a system log entry indicating wizard started
-			const wizardLog: LogEntry = {
-				id: generateId(),
-				timestamp: Date.now(),
-				source: 'system',
-				text: args
-					? `Starting wizard with: "${args}"`
-					: 'Starting wizard for Auto Run documents...',
-			};
-			addLogToActiveTab(activeSession.id, wizardLog);
-		},
-		[activeSession, startInlineWizard, conductorProfile]
-	);
-
-	// Launch wizard in a new tab - triggered from Auto Run panel button
-	const handleLaunchWizardTab = useCallback(() => {
-		if (!activeSession) {
-			console.warn('[handleLaunchWizardTab] No active session');
-			return;
-		}
-
-		// Create a new tab first
-		const result = createTab(activeSession, {
-			name: 'Wizard',
-			saveToHistory: defaultSaveToHistory,
-			showThinking: defaultShowThinking,
-		});
-		if (!result) {
-			console.warn('[handleLaunchWizardTab] Failed to create new tab');
-			return;
-		}
-
-		const newTab = result.tab;
-		const updatedSession = result.session;
-
-		// Update sessions with new tab and switch to it
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
-				return {
-					...updatedSession,
-					activeTabId: newTab.id,
-				};
-			})
-		);
-
-		// Capture UI state for the new tab (defaults since it's a fresh tab)
-		const currentUIState: PreviousUIState = {
-			readOnlyMode: false,
-			saveToHistory: defaultSaveToHistory,
-			showThinking: defaultShowThinking,
-		};
-
-		// Start the inline wizard in the new tab
-		// Use setTimeout to ensure state is updated before starting wizard
-		setTimeout(() => {
-			startInlineWizard(
-				undefined, // No args - start fresh
-				currentUIState,
-				activeSession.projectRoot || activeSession.cwd,
-				activeSession.toolType,
-				activeSession.name,
-				newTab.id,
-				activeSession.id,
-				activeSession.autoRunFolderPath, // User-configured Auto Run folder path (if set)
-				activeSession.sessionSshRemoteConfig, // SSH remote config for remote execution
-				conductorProfile, // Conductor profile (user's About Me from settings)
-				{
-					customPath: activeSession.customPath,
-					customArgs: activeSession.customArgs,
-					customEnvVars: activeSession.customEnvVars,
-					customModel: activeSession.customModel,
-				}
-			);
-
-			// Show a system log entry
-			const wizardLog = {
-				source: 'system' as const,
-				text: 'Starting wizard for Auto Run documents...',
-			};
-			addLogToTab(activeSession.id, wizardLog, newTab.id);
-		}, 0);
-	}, [
-		activeSession,
-		createTab,
-		defaultSaveToHistory,
-		defaultShowThinking,
-		startInlineWizard,
-		conductorProfile,
-	]);
-
-	// Determine if wizard is active for the current tab
-	// We need to check both the context state and that we're on the wizard's tab
-	// IMPORTANT: Include activeSession?.activeTabId in deps to recompute when user switches tabs
-	const isWizardActiveForCurrentTab = useMemo(() => {
-		if (!activeSession || !inlineWizardActive) return false;
-		const activeTab = getActiveTab(activeSession);
-		return activeTab?.id === inlineWizardTabId;
-	}, [activeSession, activeSession?.activeTabId, inlineWizardActive, inlineWizardTabId]);
+		spawnBackgroundSynopsis,
+		addHistoryEntry,
+		startBatchRun,
+		handleAutoRunRefreshRef,
+		setInputValueRef,
+		inputRef,
+	});
 
 	// --- INPUT HANDLERS (state, completion, processing, keyboard, paste/drop) ---
 	const {
@@ -2436,14 +1597,18 @@ function MaestroConsoleInner() {
 		const activeTab = getActiveTab(activeSession);
 		if (!activeTab?.autoSendOnActivate) return;
 
+		// Capture intended targets so we can verify they haven't changed after the delay
+		const targetSessionId = activeSession.id;
+		const targetTabId = activeTab.id;
+
 		// Clear the flag first to prevent multiple sends
 		setSessions((prev) =>
 			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
+				if (s.id !== targetSessionId) return s;
 				return {
 					...s,
 					aiTabs: s.aiTabs.map((tab) =>
-						tab.id === activeTab.id ? { ...tab, autoSendOnActivate: false } : tab
+						tab.id === targetTabId ? { ...tab, autoSendOnActivate: false } : tab
 					),
 				};
 			})
@@ -2451,9 +1616,19 @@ function MaestroConsoleInner() {
 
 		// Trigger the send after a short delay to ensure state is settled
 		// The inputValue and pendingMergedContext are already set on the tab
-		setTimeout(() => {
+		const timeoutId = setTimeout(() => {
+			// Verify the active session/tab still match the originally intended targets
+			const currentSessions = useSessionStore.getState().sessions;
+			const currentSession = currentSessions.find((s) => s.id === targetSessionId);
+			if (!currentSession) return;
+			const currentTab = getActiveTab(currentSession);
+			if (currentSession.id !== activeSessionIdRef.current || currentTab?.id !== targetTabId)
+				return;
+
 			processInput();
 		}, 100);
+
+		return () => clearTimeout(timeoutId);
 	}, [activeSession?.id, activeSession?.activeTabId]);
 
 	// Initialize activity tracker for per-session time tracking
@@ -2577,6 +1752,10 @@ function MaestroConsoleInner() {
 		autoRunDocumentList,
 		startBatchRun,
 	});
+
+	// Wire up refs for useWizardHandlers (circular dep resolution)
+	handleAutoRunRefreshRef.current = handleAutoRunRefresh;
+	setInputValueRef.current = setInputValue;
 
 	// Handler for marketplace import completion - refresh document list
 	const handleMarketplaceImportComplete = useCallback(
@@ -3048,477 +2227,11 @@ function MaestroConsoleInner() {
 	};
 
 	// showConfirmation, performDeleteSession — provided by useSessionLifecycle hook (Phase 2H)
+	// deleteSession, deleteWorktreeGroup — provided by useSessionCrud hook
 
-	const deleteSession = (id: string) => {
-		const session = sessions.find((s) => s.id === id);
-		if (!session) return;
+	// addNewSession, createNewSession — provided by useSessionCrud hook
 
-		// Open the delete agent modal (setDeleteAgentSession opens the modal with session data)
-		setDeleteAgentSession(session);
-	};
-
-	// Delete an entire worktree group and all its agents
-	const deleteWorktreeGroup = (groupId: string) => {
-		const group = groups.find((g) => g.id === groupId);
-		if (!group) return;
-
-		const groupSessions = sessions.filter((s) => s.groupId === groupId);
-		const sessionCount = groupSessions.length;
-
-		showConfirmation(
-			`Are you sure you want to remove the group "${group.name}" and all ${sessionCount} agent${
-				sessionCount !== 1 ? 's' : ''
-			} in it? This action cannot be undone.`,
-			async () => {
-				// Kill processes and delete playbooks for each session
-				for (const session of groupSessions) {
-					try {
-						await window.maestro.process.kill(`${session.id}-ai`);
-					} catch (error) {
-						console.error('Failed to kill AI process:', error);
-					}
-
-					try {
-						await window.maestro.process.kill(`${session.id}-terminal`);
-					} catch (error) {
-						console.error('Failed to kill terminal process:', error);
-					}
-
-					try {
-						await window.maestro.playbooks.deleteAll(session.id);
-					} catch (error) {
-						console.error('Failed to delete playbooks:', error);
-					}
-				}
-
-				// Track all removed paths to prevent re-discovery
-				const pathsToTrack = groupSessions
-					.filter((s) => s.worktreeParentPath && s.cwd)
-					.map((s) => s.cwd);
-
-				if (pathsToTrack.length > 0) {
-					setRemovedWorktreePaths((prev) => new Set([...prev, ...pathsToTrack]));
-				}
-
-				// Remove all sessions in the group
-				const sessionIdsToRemove = new Set(groupSessions.map((s) => s.id));
-				const newSessions = sessions.filter((s) => !sessionIdsToRemove.has(s.id));
-				setSessions(newSessions);
-
-				// Remove the group
-				setGroups((prev) => prev.filter((g) => g.id !== groupId));
-
-				// Flush immediately for critical operation
-				setTimeout(() => flushSessionPersistence(), 0);
-
-				// Switch to another session if needed
-				if (sessionIdsToRemove.has(activeSessionId) && newSessions.length > 0) {
-					setActiveSessionId(newSessions[0].id);
-				} else if (newSessions.length === 0) {
-					setActiveSessionId('');
-				}
-
-				notifyToast({
-					type: 'success',
-					title: 'Group Removed',
-					message: `Removed "${group.name}" and ${sessionCount} agent${
-						sessionCount !== 1 ? 's' : ''
-					}`,
-				});
-			}
-		);
-	};
-
-	const addNewSession = () => {
-		setNewInstanceModalOpen(true);
-	};
-
-	const createNewSession = async (
-		agentId: string,
-		workingDir: string,
-		name: string,
-		nudgeMessage?: string,
-		customPath?: string,
-		customArgs?: string,
-		customEnvVars?: Record<string, string>,
-		customModel?: string,
-		customContextWindow?: number,
-		customProviderPath?: string,
-		sessionSshRemoteConfig?: {
-			enabled: boolean;
-			remoteId: string | null;
-			workingDirOverride?: string;
-		}
-	) => {
-		// Get agent definition to get correct command
-		const agent = await window.maestro.agents.get(agentId);
-		if (!agent) {
-			console.error(`Agent not found: ${agentId}`);
-			return;
-		}
-
-		try {
-			// Always create a single session for the selected directory
-			// Worktree scanning/creation is now handled explicitly via the worktree config modal
-			// Validate uniqueness before creating
-			const validation = validateNewSession(name, workingDir, agentId as ToolType, sessions);
-			if (!validation.valid) {
-				console.error(`Session validation failed: ${validation.error}`);
-				notifyToast({
-					type: 'error',
-					title: 'Session Creation Failed',
-					message: validation.error || 'Cannot create duplicate session',
-				});
-				return;
-			}
-
-			const newId = generateId();
-			const aiPid = 0;
-
-			// For SSH sessions, defer git check until onSshRemote fires (SSH connection established)
-			// For local sessions, check git repo status immediately
-			const isRemoteSession = sessionSshRemoteConfig?.enabled && sessionSshRemoteConfig.remoteId;
-			let isGitRepo = false;
-			let gitBranches: string[] | undefined;
-			let gitTags: string[] | undefined;
-			let gitRefsCacheTime: number | undefined;
-
-			if (!isRemoteSession) {
-				// Local session - check git repo status now
-				isGitRepo = await gitService.isRepo(workingDir);
-				if (isGitRepo) {
-					[gitBranches, gitTags] = await Promise.all([
-						gitService.getBranches(workingDir),
-						gitService.getTags(workingDir),
-					]);
-					gitRefsCacheTime = Date.now();
-				}
-			}
-			// For SSH sessions: isGitRepo stays false until onSshRemote callback fires
-			// and rechecks with the established SSH connection
-
-			// Create initial fresh tab for new sessions
-			const initialTabId = generateId();
-			const initialTab: AITab = {
-				id: initialTabId,
-				agentSessionId: null,
-				name: null,
-				starred: false,
-				logs: [],
-				inputValue: '',
-				stagedImages: [],
-				createdAt: Date.now(),
-				state: 'idle',
-				saveToHistory: defaultSaveToHistory,
-				showThinking: defaultShowThinking,
-			};
-
-			const newSession: Session = {
-				id: newId,
-				name,
-				toolType: agentId as ToolType,
-				state: 'idle',
-				cwd: workingDir,
-				fullPath: workingDir,
-				projectRoot: workingDir, // Store the initial directory (never changes)
-				isGitRepo,
-				gitBranches,
-				gitTags,
-				gitRefsCacheTime,
-				aiLogs: [], // Deprecated - logs are now in aiTabs
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Shell Session Ready.',
-					},
-				],
-				workLog: [],
-				contextUsage: 0,
-				inputMode: agentId === 'terminal' ? 'terminal' : 'ai',
-				// AI process PID (terminal uses runCommand which spawns fresh shells)
-				// For agents that requiresPromptToStart, this starts as 0 and gets set on first message
-				aiPid,
-				terminalPid: 0,
-				port: 3000 + Math.floor(Math.random() * 100),
-				isLive: false,
-				changedFiles: [],
-				fileTree: [],
-				fileExplorerExpanded: [],
-				fileExplorerScrollPos: 0,
-				fileTreeAutoRefreshInterval: 180, // Default: auto-refresh every 3 minutes
-				shellCwd: workingDir,
-				aiCommandHistory: [],
-				shellCommandHistory: [],
-				executionQueue: [],
-				activeTimeMs: 0,
-				// Tab management - start with a fresh empty tab
-				aiTabs: [initialTab],
-				activeTabId: initialTabId,
-				closedTabHistory: [],
-				// File preview tabs - start empty, unified tab order starts with initial AI tab
-				filePreviewTabs: [],
-				activeFileTabId: null,
-				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
-				unifiedClosedTabHistory: [],
-				// Nudge message - appended to every interactive user message
-				nudgeMessage,
-				// Per-agent config (path, args, env vars, model)
-				customPath,
-				customArgs,
-				customEnvVars,
-				customModel,
-				customContextWindow,
-				customProviderPath,
-				// Per-session SSH remote config (takes precedence over agent-level SSH config)
-				sessionSshRemoteConfig,
-				// Default Auto Run folder path (user can change later)
-				autoRunFolderPath: `${workingDir}/${AUTO_RUN_FOLDER_NAME}`,
-			};
-			setSessions((prev) => [...prev, newSession]);
-			setActiveSessionId(newId);
-			// Record session lifecycle for Usage Dashboard
-			window.maestro.stats.recordSessionCreated({
-				sessionId: newId,
-				agentType: agentId,
-				projectPath: workingDir,
-				createdAt: Date.now(),
-				isRemote: !!isRemoteSession,
-			});
-			// Auto-focus the input so user can start typing immediately
-			// Use a small delay to ensure the modal has closed and the UI has updated
-			setActiveFocus('main');
-			setTimeout(() => inputRef.current?.focus(), 50);
-		} catch (error) {
-			console.error('Failed to create session:', error);
-			// TODO: Show error to user
-		}
-	};
-
-	/**
-	 * Handle wizard completion - create session with Auto Run configured
-	 * Called when user clicks "I'm Ready to Go" or "Walk Me Through the Interface"
-	 */
-	const handleWizardLaunchSession = useCallback(
-		async (wantsTour: boolean) => {
-			// Get wizard state
-			const {
-				selectedAgent,
-				directoryPath,
-				agentName,
-				generatedDocuments,
-				customPath,
-				customArgs,
-				customEnvVars,
-				sessionSshRemoteConfig,
-			} = wizardState;
-
-			if (!selectedAgent || !directoryPath) {
-				console.error('Wizard launch failed: missing agent or directory');
-				throw new Error('Missing required wizard data');
-			}
-
-			// Create the session
-			const newId = generateId();
-			const sessionName = agentName || `${selectedAgent} Session`;
-
-			// Validate uniqueness before creating
-			const validation = validateNewSession(
-				sessionName,
-				directoryPath,
-				selectedAgent as ToolType,
-				sessions
-			);
-			if (!validation.valid) {
-				console.error(`Wizard session validation failed: ${validation.error}`);
-				notifyToast({
-					type: 'error',
-					title: 'Session Creation Failed',
-					message: validation.error || 'Cannot create duplicate session',
-				});
-				throw new Error(validation.error || 'Session validation failed');
-			}
-
-			// Get agent definition and capabilities
-			const agent = await window.maestro.agents.get(selectedAgent);
-			if (!agent) {
-				throw new Error(`Agent not found: ${selectedAgent}`);
-			}
-			// Don't eagerly spawn AI processes from wizard:
-			// - Batch mode agents (Claude Code, OpenCode, Codex) spawn per message in useInputProcessing
-			// - Terminal uses runCommand (fresh shells per command)
-			// aiPid stays at 0 until user sends their first message
-			const aiPid = 0;
-
-			// Check git repo status (with SSH support if configured)
-			const wizardSshRemoteId = sessionSshRemoteConfig?.remoteId || undefined;
-			const isGitRepo = await gitService.isRepo(directoryPath, wizardSshRemoteId);
-			let gitBranches: string[] | undefined;
-			let gitTags: string[] | undefined;
-			let gitRefsCacheTime: number | undefined;
-			if (isGitRepo) {
-				[gitBranches, gitTags] = await Promise.all([
-					gitService.getBranches(directoryPath, wizardSshRemoteId),
-					gitService.getTags(directoryPath, wizardSshRemoteId),
-				]);
-				gitRefsCacheTime = Date.now();
-			}
-
-			// Create initial tab
-			const initialTabId = generateId();
-			const initialTab: AITab = {
-				id: initialTabId,
-				agentSessionId: null,
-				name: null,
-				starred: false,
-				logs: [],
-				inputValue: '',
-				stagedImages: [],
-				createdAt: Date.now(),
-				state: 'idle',
-				saveToHistory: defaultSaveToHistory,
-				showThinking: defaultShowThinking,
-			};
-
-			// Build Auto Run folder path
-			const autoRunFolderPath = `${directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
-			const firstDoc = generatedDocuments[0];
-			const autoRunSelectedFile = firstDoc ? firstDoc.filename.replace(/\.md$/, '') : undefined;
-
-			// Create the session with Auto Run configured
-			const newSession: Session = {
-				id: newId,
-				name: sessionName,
-				toolType: selectedAgent as ToolType,
-				state: 'idle',
-				cwd: directoryPath,
-				fullPath: directoryPath,
-				projectRoot: directoryPath,
-				isGitRepo,
-				gitBranches,
-				gitTags,
-				gitRefsCacheTime,
-				aiLogs: [],
-				shellLogs: [
-					{
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Shell Session Ready.',
-					},
-				],
-				workLog: [],
-				contextUsage: 0,
-				inputMode: 'ai',
-				aiPid,
-				terminalPid: 0,
-				port: 3000 + Math.floor(Math.random() * 100),
-				isLive: false,
-				changedFiles: [],
-				fileTree: [],
-				fileExplorerExpanded: [],
-				fileExplorerScrollPos: 0,
-				fileTreeAutoRefreshInterval: 180,
-				shellCwd: directoryPath,
-				aiCommandHistory: [],
-				shellCommandHistory: [],
-				executionQueue: [],
-				activeTimeMs: 0,
-				aiTabs: [initialTab],
-				activeTabId: initialTabId,
-				closedTabHistory: [],
-				filePreviewTabs: [],
-				activeFileTabId: null,
-				unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
-				unifiedClosedTabHistory: [],
-				// Auto Run configuration from wizard
-				autoRunFolderPath,
-				autoRunSelectedFile,
-				// Per-session agent configuration from wizard
-				customPath,
-				customArgs,
-				customEnvVars,
-				// Per-session SSH remote config (takes precedence over agent-level SSH config)
-				sessionSshRemoteConfig,
-			};
-
-			// Add session and make it active
-			setSessions((prev) => [...prev, newSession]);
-			setActiveSessionId(newId);
-			// Record session lifecycle for Usage Dashboard
-			window.maestro.stats.recordSessionCreated({
-				sessionId: newId,
-				agentType: selectedAgent,
-				projectPath: directoryPath,
-				createdAt: Date.now(),
-				isRemote: !!sessionSshRemoteConfig?.enabled,
-			});
-
-			// Clear wizard resume state since we completed successfully
-			clearResumeState();
-
-			// Complete and close the wizard
-			completeWizard(newId);
-
-			// Switch to Auto Run tab so user sees their generated docs
-			setActiveRightTab('autorun');
-
-			// Start tour if requested
-			if (wantsTour) {
-				// Small delay to let the UI settle before starting tour
-				setTimeout(() => {
-					setTourFromWizard(true);
-					setTourOpen(true);
-				}, 300);
-			}
-
-			// Focus input
-			setActiveFocus('main');
-			setTimeout(() => inputRef.current?.focus(), 100);
-
-			// Auto-start the batch run with the first document that has tasks
-			// This is the core purpose of the onboarding wizard - get the user's first Auto Run going
-			const firstDocWithTasks = generatedDocuments.find((doc) => doc.taskCount > 0);
-			if (firstDocWithTasks && autoRunFolderPath) {
-				// Create batch config for single document run
-				const batchConfig: BatchRunConfig = {
-					documents: [
-						{
-							id: generateId(),
-							filename: firstDocWithTasks.filename.replace(/\.md$/, ''),
-							resetOnCompletion: false,
-							isDuplicate: false,
-						},
-					],
-					prompt: DEFAULT_BATCH_PROMPT,
-					loopEnabled: false,
-				};
-
-				// Small delay to ensure session state is fully propagated before starting batch
-				setTimeout(() => {
-					console.log(
-						'[Wizard] Auto-starting batch run with first document:',
-						firstDocWithTasks.filename
-					);
-					startBatchRun(newId, batchConfig, autoRunFolderPath);
-				}, 500);
-			}
-		},
-		[
-			wizardState,
-			defaultSaveToHistory,
-			setSessions,
-			setActiveSessionId,
-			clearResumeState,
-			completeWizard,
-			setActiveRightTab,
-			setTourOpen,
-			setActiveFocus,
-			startBatchRun,
-			sessions,
-		]
-	);
+	// handleWizardLaunchSession now in useWizardHandlers hook
 
 	const toggleInputMode = () => {
 		setSessions((prev) =>
@@ -3630,47 +2343,9 @@ function MaestroConsoleInner() {
 		}
 	};
 
-	// startRenamingSession now accepts a unique key (e.g., 'bookmark-id', 'group-gid-id', 'ungrouped-id')
-	// to support renaming the same session from different UI locations (bookmarks vs groups)
-	const startRenamingSession = (editKey: string) => {
-		setEditingSessionId(editKey);
-	};
+	// startRenamingSession, finishRenamingSession — provided by useSessionCrud hook
 
-	const finishRenamingSession = (sessId: string, newName: string) => {
-		setSessions((prev) => {
-			const updated = prev.map((s) => (s.id === sessId ? { ...s, name: newName } : s));
-			// Sync the session name to agent session storage for searchability
-			// Use projectRoot (not cwd) for consistent session storage access
-			const session = updated.find((s) => s.id === sessId);
-			if (session?.agentSessionId && session.projectRoot) {
-				const agentId = session.toolType || 'claude-code';
-				if (agentId === 'claude-code') {
-					window.maestro.claude
-						.updateSessionName(session.projectRoot, session.agentSessionId, newName)
-						.catch((err) =>
-							console.warn('[finishRenamingSession] Failed to sync session name:', err)
-						);
-				} else {
-					window.maestro.agentSessions
-						.setSessionName(agentId, session.projectRoot, session.agentSessionId, newName)
-						.catch((err) =>
-							console.warn('[finishRenamingSession] Failed to sync session name:', err)
-						);
-				}
-			}
-			return updated;
-		});
-		setEditingSessionId(null);
-	};
-
-	// Drag and Drop Handlers
-	const handleDragStart = (sessionId: string) => {
-		setDraggingSessionId(sessionId);
-	};
-
-	const handleDragOver = (e: React.DragEvent) => {
-		e.preventDefault();
-	};
+	// handleDragStart, handleDragOver — provided by useSessionCrud hook
 
 	// Note: processInput has been extracted to useInputProcessing hook (see line ~2128)
 
@@ -3740,13 +2415,14 @@ function MaestroConsoleInner() {
 
 			// Process the first queued item from each session
 			// Delay to ensure all refs and handlers are set up
-			setTimeout(() => {
+			const startupTimerId = setTimeout(() => {
 				sessionsWithQueuedItems.forEach((session) => {
 					const firstItem = session.executionQueue[0];
-					console.log(
-						`[App] Processing leftover queued item for session ${session.id}:`,
-						firstItem
-					);
+					console.log(`[App] Processing leftover queued item for session ${session.id}:`, {
+						id: firstItem.id,
+						tabId: firstItem.tabId,
+						queueLength: session.executionQueue.length,
+					});
 
 					// Set session to busy and remove item from queue
 					setSessions((prev) =>
@@ -3782,409 +2458,39 @@ function MaestroConsoleInner() {
 					);
 
 					// Process the item
-					processQueuedItem(session.id, firstItem);
-				});
-			}, 500); // Small delay to ensure everything is initialized
-		}
-	}, [sessionsLoaded, sessions]);
-
-	const handleInterrupt = async () => {
-		if (!activeSession) return;
-
-		const currentMode = activeSession.inputMode;
-		const activeTab = getActiveTab(activeSession);
-		const targetSessionId =
-			currentMode === 'ai'
-				? `${activeSession.id}-ai-${activeTab?.id || 'default'}`
-				: `${activeSession.id}-terminal`;
-
-		try {
-			// Cancel any pending synopsis processes for this session
-			// This prevents synopsis from running after the user clicks Stop
-			await cancelPendingSynopsis(activeSession.id);
-
-			// Send interrupt signal (Ctrl+C)
-			await window.maestro.process.interrupt(targetSessionId);
-
-			// Check if there are queued items to process after interrupt
-			const currentSession = sessionsRef.current.find((s) => s.id === activeSession.id);
-			let queuedItemToProcess: { sessionId: string; item: QueuedItem } | null = null;
-
-			if (currentSession && currentSession.executionQueue.length > 0) {
-				queuedItemToProcess = {
-					sessionId: activeSession.id,
-					item: currentSession.executionQueue[0],
-				};
-			}
-
-			// Create canceled log entry for AI mode interrupts
-			const canceledLog: LogEntry | null =
-				currentMode === 'ai'
-					? {
-							id: generateId(),
-							timestamp: Date.now(),
-							source: 'system',
-							text: 'Canceled by user',
-						}
-					: null;
-
-			// Set state to idle with full cleanup, or process next queued item
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-
-					// If there are queued items, start processing the next one
-					if (s.executionQueue.length > 0) {
-						const [nextItem, ...remainingQueue] = s.executionQueue;
-						const targetTab = s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
-
-						if (!targetTab) {
-							return {
-								...s,
-								state: 'busy' as SessionState,
-								busySource: 'ai',
-								executionQueue: remainingQueue,
-								thinkingStartTime: Date.now(),
-								currentCycleTokens: 0,
-								currentCycleBytes: 0,
-							};
-						}
-
-						// Set the interrupted tab to idle, and the target tab for queued item to busy
-						// Also add the canceled log to the interrupted tab
-						let updatedAiTabs = s.aiTabs.map((tab) => {
-							if (tab.id === targetTab.id) {
-								return {
-									...tab,
-									state: 'busy' as const,
-									thinkingStartTime: Date.now(),
-								};
-							}
-							// Set any other busy tabs to idle (they were interrupted) and add canceled log
-							// Also clear any thinking/tool logs since the process was interrupted
-							if (tab.state === 'busy') {
-								const logsWithoutThinkingOrTools = tab.logs.filter(
-									(log) => log.source !== 'thinking' && log.source !== 'tool'
-								);
-								const updatedLogs = canceledLog
-									? [...logsWithoutThinkingOrTools, canceledLog]
-									: logsWithoutThinkingOrTools;
-								return {
-									...tab,
-									state: 'idle' as const,
-									thinkingStartTime: undefined,
-									logs: updatedLogs,
-								};
-							}
-							return tab;
-						});
-
-						// For message items, add a log entry to the target tab
-						if (nextItem.type === 'message' && nextItem.text) {
-							const logEntry: LogEntry = {
-								id: generateId(),
-								timestamp: Date.now(),
-								source: 'user',
-								text: nextItem.text,
-								images: nextItem.images,
-							};
-							updatedAiTabs = updatedAiTabs.map((tab) =>
-								tab.id === targetTab.id ? { ...tab, logs: [...tab.logs, logEntry] } : tab
-							);
-						}
-
-						return {
-							...s,
-							state: 'busy' as SessionState,
-							busySource: 'ai',
-							aiTabs: updatedAiTabs,
-							executionQueue: remainingQueue,
-							thinkingStartTime: Date.now(),
-							currentCycleTokens: 0,
-							currentCycleBytes: 0,
-						};
-					}
-
-					// No queued items, just go to idle and add canceled log to the active tab
-					// Also clear any thinking/tool logs since the process was interrupted
-					const activeTabForCancel = getActiveTab(s);
-					const updatedAiTabsForIdle =
-						canceledLog && activeTabForCancel
-							? s.aiTabs.map((tab) => {
-									if (tab.id === activeTabForCancel.id) {
-										const logsWithoutThinkingOrTools = tab.logs.filter(
-											(log) => log.source !== 'thinking' && log.source !== 'tool'
-										);
-										return {
-											...tab,
-											logs: [...logsWithoutThinkingOrTools, canceledLog],
-											state: 'idle' as const,
-											thinkingStartTime: undefined,
-										};
-									}
-									return tab;
-								})
-							: s.aiTabs.map((tab) => {
-									if (tab.state === 'busy') {
-										const logsWithoutThinkingOrTools = tab.logs.filter(
-											(log) => log.source !== 'thinking' && log.source !== 'tool'
-										);
-										return {
-											...tab,
-											state: 'idle' as const,
-											thinkingStartTime: undefined,
-											logs: logsWithoutThinkingOrTools,
-										};
-									}
-									return tab;
-								});
-
-					return {
-						...s,
-						state: 'idle',
-						busySource: undefined,
-						thinkingStartTime: undefined,
-						aiTabs: updatedAiTabsForIdle,
-					};
-				})
-			);
-
-			// Process the queued item after state update
-			if (queuedItemToProcess) {
-				setTimeout(() => {
-					processQueuedItem(queuedItemToProcess!.sessionId, queuedItemToProcess!.item);
-				}, 0);
-			}
-		} catch (error) {
-			console.error('Failed to interrupt process:', error);
-
-			// If interrupt fails, offer to kill the process
-			const shouldKill = confirm(
-				'Failed to interrupt the process gracefully. Would you like to force kill it?\n\n' +
-					'Warning: This may cause data loss or leave the process in an inconsistent state.'
-			);
-
-			if (shouldKill) {
-				try {
-					await window.maestro.process.kill(targetSessionId);
-
-					const killLog: LogEntry = {
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: 'Process forcefully terminated',
-					};
-
-					// Check if there are queued items to process after kill
-					const currentSessionForKill = sessionsRef.current.find((s) => s.id === activeSession.id);
-					let queuedItemAfterKill: {
-						sessionId: string;
-						item: QueuedItem;
-					} | null = null;
-
-					if (currentSessionForKill && currentSessionForKill.executionQueue.length > 0) {
-						queuedItemAfterKill = {
-							sessionId: activeSession.id,
-							item: currentSessionForKill.executionQueue[0],
-						};
-					}
-
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== activeSession.id) return s;
-
-							// Add kill log to the appropriate place and clear thinking/tool logs
-							const updatedSession = { ...s };
-							if (currentMode === 'ai') {
-								const tab = getActiveTab(s);
-								if (tab) {
-									updatedSession.aiTabs = s.aiTabs.map((t) => {
-										if (t.id === tab.id) {
-											const logsWithoutThinkingOrTools = t.logs.filter(
-												(log) => log.source !== 'thinking' && log.source !== 'tool'
-											);
-											return {
-												...t,
-												logs: [...logsWithoutThinkingOrTools, killLog],
-											};
-										}
-										return t;
-									});
-								}
-							} else {
-								updatedSession.shellLogs = [...s.shellLogs, killLog];
-							}
-
-							// If there are queued items, start processing the next one
-							if (s.executionQueue.length > 0) {
-								const [nextItem, ...remainingQueue] = s.executionQueue;
-								const targetTab =
-									s.aiTabs.find((tab) => tab.id === nextItem.tabId) || getActiveTab(s);
-
-								if (!targetTab) {
-									return {
-										...updatedSession,
-										state: 'busy' as SessionState,
-										busySource: 'ai',
-										executionQueue: remainingQueue,
-										thinkingStartTime: Date.now(),
-										currentCycleTokens: 0,
-										currentCycleBytes: 0,
-									};
-								}
-
-								// Set tabs appropriately and clear thinking/tool logs from interrupted tabs
-								let updatedAiTabs = updatedSession.aiTabs.map((tab) => {
-									if (tab.id === targetTab.id) {
-										return {
-											...tab,
-											state: 'busy' as const,
-											thinkingStartTime: Date.now(),
-										};
-									}
-									if (tab.state === 'busy') {
-										const logsWithoutThinkingOrTools = tab.logs.filter(
-											(log) => log.source !== 'thinking' && log.source !== 'tool'
-										);
-										return {
-											...tab,
-											state: 'idle' as const,
-											thinkingStartTime: undefined,
-											logs: logsWithoutThinkingOrTools,
-										};
-									}
-									return tab;
-								});
-
-								// For message items, add a log entry to the target tab
-								if (nextItem.type === 'message' && nextItem.text) {
-									const logEntry: LogEntry = {
-										id: generateId(),
-										timestamp: Date.now(),
-										source: 'user',
-										text: nextItem.text,
-										images: nextItem.images,
-									};
-									updatedAiTabs = updatedAiTabs.map((tab) =>
-										tab.id === targetTab.id ? { ...tab, logs: [...tab.logs, logEntry] } : tab
-									);
-								}
-
-								return {
-									...updatedSession,
-									state: 'busy' as SessionState,
-									busySource: 'ai',
-									aiTabs: updatedAiTabs,
-									executionQueue: remainingQueue,
-									thinkingStartTime: Date.now(),
-									currentCycleTokens: 0,
-									currentCycleBytes: 0,
-								};
-							}
-
-							// No queued items, just go to idle and clear thinking logs
-							if (currentMode === 'ai') {
-								const tab = getActiveTab(s);
-								if (!tab)
-									return {
-										...updatedSession,
-										state: 'idle',
-										busySource: undefined,
-										thinkingStartTime: undefined,
-									};
-								return {
-									...updatedSession,
-									state: 'idle',
-									busySource: undefined,
-									thinkingStartTime: undefined,
-									aiTabs: updatedSession.aiTabs.map((t) => {
-										if (t.id === tab.id) {
-											const logsWithoutThinkingOrTools = t.logs.filter(
-												(log) => log.source !== 'thinking' && log.source !== 'tool'
-											);
-											return {
-												...t,
-												state: 'idle' as const,
-												thinkingStartTime: undefined,
-												logs: logsWithoutThinkingOrTools,
-											};
-										}
-										return t;
-									}),
-								};
-							}
-							return {
-								...updatedSession,
-								state: 'idle',
-								busySource: undefined,
-								thinkingStartTime: undefined,
-							};
-						})
-					);
-
-					// Process the queued item after state update
-					if (queuedItemAfterKill) {
-						setTimeout(() => {
-							processQueuedItem(queuedItemAfterKill!.sessionId, queuedItemAfterKill!.item);
-						}, 0);
-					}
-				} catch (killError: unknown) {
-					console.error('Failed to kill process:', killError);
-					const killErrorMessage =
-						killError instanceof Error ? killError.message : String(killError);
-					const errorLog: LogEntry = {
-						id: generateId(),
-						timestamp: Date.now(),
-						source: 'system',
-						text: `Error: Failed to terminate process - ${killErrorMessage}`,
-					};
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== activeSession.id) return s;
-							if (currentMode === 'ai') {
-								const tab = getActiveTab(s);
-								if (!tab)
-									return {
-										...s,
-										state: 'idle',
-										busySource: undefined,
-										thinkingStartTime: undefined,
-									};
+					processQueuedItem(session.id, firstItem).catch((err) => {
+						console.error(`[App] Failed to process queued item for session ${session.id}:`, err);
+						// Reset session busy state and re-queue the failed item so it isn't lost
+						setSessions((prev) =>
+							prev.map((s) => {
+								if (s.id !== session.id) return s;
 								return {
 									...s,
 									state: 'idle',
 									busySource: undefined,
 									thinkingStartTime: undefined,
-									aiTabs: s.aiTabs.map((t) => {
-										if (t.id === tab.id) {
-											// Clear thinking/tool logs even on error
-											const logsWithoutThinkingOrTools = t.logs.filter(
-												(log) => log.source !== 'thinking' && log.source !== 'tool'
-											);
-											return {
-												...t,
-												state: 'idle' as const,
-												thinkingStartTime: undefined,
-												logs: [...logsWithoutThinkingOrTools, errorLog],
-											};
-										}
-										return t;
-									}),
+									executionQueue: [firstItem, ...s.executionQueue],
+									aiTabs: s.aiTabs.map((tab) =>
+										tab.state === 'busy'
+											? { ...tab, state: 'idle' as const, thinkingStartTime: undefined }
+											: tab
+									),
 								};
-							}
-							return {
-								...s,
-								shellLogs: [...s.shellLogs, errorLog],
-								state: 'idle',
-								busySource: undefined,
-								thinkingStartTime: undefined,
-							};
-						})
-					);
-				}
-			}
+							})
+						);
+					});
+				});
+			}, 500); // Small delay to ensure everything is initialized
+			return () => clearTimeout(startupTimerId);
 		}
-	};
+	}, [sessionsLoaded, sessions]);
+
+	// handleInterrupt — provided by useInterruptHandler hook
+	const { handleInterrupt } = useInterruptHandler({
+		sessionsRef,
+		cancelPendingSynopsis,
+		processQueuedItem,
+	});
 
 	// --- FILE TREE MANAGEMENT ---
 	// Extracted hook for file tree operations (refresh, git state, filtering)
@@ -4238,38 +2544,31 @@ function MaestroConsoleInner() {
 	// Destructure group modal state for use in JSX
 	const { createGroupModalOpen, setCreateGroupModalOpen } = groupModalState;
 
-	// State to track session that should be moved to newly created group
-	const [pendingMoveToGroupSessionId, setPendingMoveToGroupSessionId] = useState<string | null>(
-		null
-	);
+	// Session CRUD operations (create, delete, rename, bookmark, drag-drop, group-move)
+	const {
+		addNewSession,
+		createNewSession,
+		deleteSession,
+		deleteWorktreeGroup,
+		startRenamingSession,
+		finishRenamingSession,
+		toggleBookmark,
+		handleDragStart,
+		handleDragOver,
+		handleCreateGroupAndMove,
+		handleGroupCreated,
+	} = useSessionCrud({
+		flushSessionPersistence,
+		setRemovedWorktreePaths,
+		showConfirmation,
+		inputRef,
+		setCreateGroupModalOpen,
+	});
 
 	// Group Modal Handlers (stable callbacks for AppGroupModals)
-	// Must be defined after groupModalState destructure since setCreateGroupModalOpen comes from there
 	const handleCloseCreateGroupModal = useCallback(() => {
 		setCreateGroupModalOpen(false);
-		setPendingMoveToGroupSessionId(null); // Clear pending move on close
 	}, [setCreateGroupModalOpen]);
-	// Handler for when a new group is created - move pending session to it
-	const handleGroupCreated = useCallback(
-		(groupId: string) => {
-			if (pendingMoveToGroupSessionId) {
-				setSessions((prev) =>
-					prev.map((s) => (s.id === pendingMoveToGroupSessionId ? { ...s, groupId } : s))
-				);
-				setPendingMoveToGroupSessionId(null);
-			}
-		},
-		[pendingMoveToGroupSessionId, setSessions]
-	);
-
-	// Handler for "Create New Group" from context menu - sets pending session and opens modal
-	const handleCreateGroupAndMove = useCallback(
-		(sessionId: string) => {
-			setPendingMoveToGroupSessionId(sessionId);
-			setCreateGroupModalOpen(true);
-		},
-		[setCreateGroupModalOpen]
-	);
 
 	const handlePRCreated = useCallback(
 		async (prDetails: PRDetails) => {
@@ -4768,120 +3067,8 @@ function MaestroConsoleInner() {
 	// NOTE: File explorer effects (flat file list, pending jump path, scroll, keyboard nav) are
 	// now handled by useFileExplorerEffects hook (Phase 2.6)
 
-	// ============================================================================
-	// MEMOIZED WIZARD HANDLERS FOR PROPS HOOKS
-	// ============================================================================
-
-	// Wizard complete handler - converts wizard tab to normal session with context
-	const handleWizardComplete = useCallback(() => {
-		if (!activeSession) return;
-		const activeTabLocal = getActiveTab(activeSession);
-		const wizardState = activeTabLocal?.wizardState;
-		if (!wizardState) return;
-
-		// Convert wizard conversation history to log entries (including images)
-		const wizardLogEntries: LogEntry[] = wizardState.conversationHistory.map((msg) => ({
-			id: `wizard-${msg.id}`,
-			timestamp: msg.timestamp,
-			source: msg.role === 'user' ? 'user' : 'ai',
-			text: msg.content,
-			images: msg.images,
-			delivered: true,
-		}));
-
-		// Create summary message with next steps
-		const generatedDocs = wizardState.generatedDocuments || [];
-		const totalTasks = generatedDocs.reduce((sum, doc) => sum + doc.taskCount, 0);
-		const docNames = generatedDocs.map((d) => d.filename).join(', ');
-
-		const summaryMessage: LogEntry = {
-			id: `wizard-summary-${Date.now()}`,
-			timestamp: Date.now(),
-			source: 'ai',
-			text:
-				`## Wizard Complete\n\n` +
-				`Created ${generatedDocs.length} document${
-					generatedDocs.length !== 1 ? 's' : ''
-				} with ${totalTasks} task${totalTasks !== 1 ? 's' : ''}:\n` +
-				`${docNames}\n\n` +
-				`**Next steps:**\n` +
-				`1. Open the **Auto Run** tab in the right panel to view your playbook\n` +
-				`2. Review and edit tasks as needed\n` +
-				`3. Click **Run** to start executing tasks automatically\n\n` +
-				`You can continue chatting to iterate on your playbook - the AI has full context of what was created.`,
-			delivered: true,
-		};
-
-		const subfolderName = wizardState.subfolderName || '';
-		const tabName = subfolderName || 'Wizard';
-		const wizardAgentSessionId = wizardState.agentSessionId;
-		const activeTabId = activeTabLocal.id;
-
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
-				const updatedTabs = s.aiTabs.map((tab) => {
-					if (tab.id !== activeTabId) return tab;
-					return {
-						...tab,
-						logs: [...tab.logs, ...wizardLogEntries, summaryMessage],
-						agentSessionId: wizardAgentSessionId || tab.agentSessionId,
-						name: tabName,
-						wizardState: undefined,
-					};
-				});
-				return { ...s, aiTabs: updatedTabs };
-			})
-		);
-
-		endInlineWizard();
-		handleAutoRunRefresh();
-		setInputValue('');
-	}, [
-		activeSession,
-		getActiveTab,
-		setSessions,
-		endInlineWizard,
-		handleAutoRunRefresh,
-		setInputValue,
-	]);
-
-	// Wizard lets go handler - generates documents for active tab
-	const handleWizardLetsGo = useCallback(() => {
-		const activeTabLocal = activeSession ? getActiveTab(activeSession) : null;
-		if (activeTabLocal) {
-			generateInlineWizardDocuments(undefined, activeTabLocal.id);
-		}
-	}, [activeSession, getActiveTab, generateInlineWizardDocuments]);
-
-	// Wizard toggle thinking handler
-	const handleToggleWizardShowThinking = useCallback(() => {
-		if (!activeSession) return;
-		const activeTabLocal = getActiveTab(activeSession);
-		if (!activeTabLocal?.wizardState) return;
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
-				return {
-					...s,
-					aiTabs: s.aiTabs.map((tab) => {
-						if (tab.id !== activeTabLocal.id) return tab;
-						if (!tab.wizardState) return tab;
-						return {
-							...tab,
-							wizardState: {
-								...tab.wizardState,
-								showWizardThinking: !tab.wizardState.showWizardThinking,
-								thinkingContent: !tab.wizardState.showWizardThinking
-									? ''
-									: tab.wizardState.thinkingContent,
-							},
-						};
-					}),
-				};
-			})
-		);
-	}, [activeSession, getActiveTab, setSessions]);
+	// Wizard handlers (handleWizardComplete, handleWizardLetsGo, handleToggleWizardShowThinking)
+	// now in useWizardHandlers hook
 
 	// ============================================================================
 	// PROPS HOOKS FOR MAJOR COMPONENTS
@@ -4915,14 +3102,8 @@ function MaestroConsoleInner() {
 		activeSession,
 		thinkingItems,
 		theme,
-		fontFamily,
 		isMobileLandscape,
-		activeFocus,
-		outputSearchOpen,
-		outputSearchQuery,
 		inputValue,
-		enterToSendAI,
-		enterToSendTerminal,
 		stagedImages,
 		commandHistoryOpen,
 		commandHistoryFilter,
@@ -4931,18 +3112,6 @@ function MaestroConsoleInner() {
 		slashCommands: allSlashCommands,
 		selectedSlashCommandIndex,
 		filePreviewLoading,
-		markdownEditMode,
-		chatRawTextMode,
-		autoScrollAiMode,
-		setAutoScrollAiMode,
-		userMessageAlignment,
-		shortcuts,
-		rightPanelOpen,
-		maxOutputLines,
-		gitDiffPreview,
-		fileTreeFilterOpen,
-		logLevel,
-		logViewerSelectedLevels,
 
 		// Tab completion state
 		tabCompletionOpen,
@@ -4958,7 +3127,6 @@ function MaestroConsoleInner() {
 		selectedAtMentionIndex,
 
 		// Batch run state (convert null to undefined for component props)
-		activeBatchRunState: activeBatchRunState ?? undefined,
 		currentSessionBatchState: currentSessionBatchState ?? undefined,
 
 		// File tree
@@ -4977,11 +3145,6 @@ function MaestroConsoleInner() {
 		// Worktree
 		isWorktreeChild: !!activeSession?.parentSessionId,
 
-		// Context management settings
-		contextWarningsEnabled: contextManagementSettings.contextWarningsEnabled,
-		contextWarningYellowThreshold: contextManagementSettings.contextWarningYellowThreshold,
-		contextWarningRedThreshold: contextManagementSettings.contextWarningRedThreshold,
-
 		// Summarization progress
 		summarizeProgress,
 		summarizeResult,
@@ -4999,24 +3162,12 @@ function MaestroConsoleInner() {
 		ghCliAvailable,
 		hasGist: activeFileTab ? !!fileGistUrls[activeFileTab.path] : false,
 
-		// Unread filter
-		showUnreadOnly,
-
-		// Accessibility
-		colorBlindMode,
-
 		// Setters
-		setLogViewerSelectedLevels,
 		setGitDiffPreview,
 		setLogViewerOpen,
 		setAgentSessionsOpen,
 		setActiveAgentSessionId,
-		setActiveFocus,
-		setOutputSearchOpen,
-		setOutputSearchQuery,
 		setInputValue,
-		setEnterToSendAI,
-		setEnterToSendTerminal,
 		setStagedImages,
 		setCommandHistoryOpen,
 		setCommandHistoryFilter,
@@ -5030,18 +3181,12 @@ function MaestroConsoleInner() {
 		setAtMentionFilter,
 		setAtMentionStartIndex,
 		setSelectedAtMentionIndex,
-		setMarkdownEditMode,
-		setChatRawTextMode,
-		setAboutModalOpen,
-		setRightPanelOpen,
 		setGitLogOpen,
 
 		// Refs
 		inputRef,
 		logsEndRef,
 		terminalOutputRef,
-		fileTreeContainerRef,
-		fileTreeFilterInputRef,
 
 		// Handlers
 		handleResumeSession,
@@ -5055,7 +3200,6 @@ function MaestroConsoleInner() {
 		getContextColor: boundGetContextColor,
 		setActiveSessionId,
 		handleStopBatchRun,
-		showConfirmation,
 		handleDeleteLog,
 		handleRemoveQueuedItem,
 		handleOpenQueueBrowser,
@@ -5151,83 +3295,21 @@ function MaestroConsoleInner() {
 		// Helper functions
 		getActiveTab,
 	});
-
 	const sessionListProps = useSessionListProps({
-		// Core state
+		// Theme (computed externally from settingsStore + themeId)
 		theme,
-		sessions,
-		groups,
-		sortedSessions,
-		activeSessionId,
-		leftSidebarOpen,
-		leftSidebarWidth,
-		activeFocus,
-		selectedSidebarIndex,
-		editingGroupId,
-		editingSessionId,
-		draggingSessionId,
-		shortcuts,
 
-		// Global Live Mode
+		// Computed values (not raw store fields)
+		sortedSessions,
 		isLiveMode,
 		webInterfaceUrl,
-
-		// Web Interface Port Settings
-		webInterfaceUseCustomPort: settings.webInterfaceUseCustomPort,
-		webInterfaceCustomPort: settings.webInterfaceCustomPort,
-
-		// Folder states
-		bookmarksCollapsed,
-		ungroupedCollapsed: settings.ungroupedCollapsed,
-
-		// Auto mode
-		activeBatchSessionIds,
-
-		// Session jump shortcuts
 		showSessionJumpNumbers,
 		visibleSessions,
 
-		// Achievement system
-		autoRunStats,
+		// Ref
+		sidebarContainerRef,
 
-		// Group Chat state
-		groupChats,
-		activeGroupChatId,
-		groupChatsExpanded,
-		groupChatState,
-		participantStates,
-		groupChatStates,
-		allGroupChatParticipantStates,
-
-		// Setters
-		setWebInterfaceUseCustomPort: settings.setWebInterfaceUseCustomPort,
-		setWebInterfaceCustomPort: settings.setWebInterfaceCustomPort,
-		setBookmarksCollapsed,
-		setUngroupedCollapsed: settings.setUngroupedCollapsed,
-		setActiveFocus,
-		setActiveSessionId,
-		setLeftSidebarOpen,
-		setLeftSidebarWidth,
-		setShortcutsHelpOpen,
-		setSettingsModalOpen,
-		setSettingsTab,
-		setAboutModalOpen,
-		setUpdateCheckModalOpen,
-		setLogViewerOpen,
-		setProcessMonitorOpen,
-		setUsageDashboardOpen,
-		setSymphonyModalOpen,
-		setDirectorNotesOpen: encoreFeatures.directorNotes ? setDirectorNotesOpen : undefined,
-		setGroups,
-		setSessions,
-		setRenameInstanceModalOpen,
-		setRenameInstanceValue,
-		setRenameInstanceSessionId,
-		setDuplicatingSessionId,
-		setGroupChatsExpanded,
-		setQuickActionOpen,
-
-		// Handlers
+		// Domain handlers
 		toggleGlobalLive,
 		restartWebServer,
 		toggleGroup,
@@ -5261,13 +3343,6 @@ function MaestroConsoleInner() {
 		handleOpenRenameGroupChatModal,
 		handleOpenDeleteGroupChatModal,
 		handleArchiveGroupChat,
-
-		// Context warning thresholds
-		contextWarningYellowThreshold: contextManagementSettings.contextWarningYellowThreshold,
-		contextWarningRedThreshold: contextManagementSettings.contextWarningRedThreshold,
-
-		// Ref
-		sidebarContainerRef,
 	});
 
 	const rightPanelProps = useRightPanelProps({
@@ -5843,8 +3918,8 @@ function MaestroConsoleInner() {
 									console.error(`Session validation failed: ${validation.error}`);
 									notifyToast({
 										type: 'error',
-										title: 'Session Creation Failed',
-										message: validation.error || 'Cannot create duplicate session',
+										title: 'Agent Creation Failed',
+										message: validation.error || 'Cannot create duplicate agent',
 									});
 									return;
 								}

@@ -38,7 +38,9 @@ export async function refreshShellPath(): Promise<string> {
 			const timeout = setTimeout(() => {
 				try {
 					child.kill();
-				} catch {}
+				} catch {
+					// Ignore kill errors — process may have already exited
+				}
 				reject(new Error('Timed out reading shell PATH'));
 			}, 2000);
 

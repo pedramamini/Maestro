@@ -313,8 +313,10 @@
 		"node": ">=22.0.0"
 	},
 	"lint-staged": {
-		"*.{ts,tsx}": [
-			"prettier --write",
+		"*": [
+			"prettier --write"
+		],
+		"*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}": [
 			"eslint --fix"
 		]
 	}

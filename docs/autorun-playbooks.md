@@ -181,12 +181,12 @@ You can dispatch an Auto Run directly into a new git worktree from the run confi
 
 ![Run in Worktree](./screenshots/autorun-worktree.png)
 
-| Option                              | Description                                                                                    |
-| ----------------------------------- | ---------------------------------------------------------------------------------------------- |
-| **Dispatch to a separate worktree** | Toggle to enable worktree isolation for this run                                               |
-| **Worktree selection**              | Create a new worktree or select an existing one                                                |
-| **Base Branch**                     | The branch to base the new worktree on (e.g., `main`)                                         |
-| **Worktree Branch Name**            | Name for the new branch — also used as the worktree directory name                             |
-| **Automatically create PR**         | When checked, Maestro opens a pull request from the worktree branch when the run completes     |
+| Option                              | Description                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Dispatch to a separate worktree** | Toggle to enable worktree isolation for this run                                           |
+| **Worktree selection**              | Create a new worktree or select an existing one                                            |
+| **Base Branch**                     | The branch to base the new worktree on (e.g., `main`)                                      |
+| **Worktree Branch Name**            | Name for the new branch — also used as the worktree directory name                         |
+| **Automatically create PR**         | When checked, Maestro opens a pull request from the worktree branch when the run completes |
 
 This is the recommended workflow for longer Auto Runs — your main branch stays untouched, all changes land on a dedicated branch, and you get a PR at the end ready for review.
