@@ -905,6 +905,7 @@ export interface LeaderboardSubmitResponse {
 // Each key is a feature ID, value indicates whether it's enabled
 export interface EncoreFeatureFlags {
 	directorNotes: boolean;
+	unifiedInbox: boolean;
 }
 
 // Director's Notes settings for synopsis generation
