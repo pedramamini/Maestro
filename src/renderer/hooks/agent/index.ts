@@ -106,3 +106,11 @@ export type { UseAgentListenersDeps } from './useAgentListeners';
 // Interrupt handler (stop running AI processes)
 export { useInterruptHandler } from './useInterruptHandler';
 export type { UseInterruptHandlerDeps, UseInterruptHandlerReturn } from './useInterruptHandler';
+
+// Queue handlers (queue browser UI operations)
+export { useQueueHandlers } from './useQueueHandlers';
+export type { UseQueueHandlersReturn } from './useQueueHandlers';
+
+// Queue processing (execution queue processing and startup recovery)
+export { useQueueProcessing } from './useQueueProcessing';
+export type { UseQueueProcessingDeps, UseQueueProcessingReturn } from './useQueueProcessing';

@@ -7,7 +7,7 @@ import { SessionList } from './components/SessionList';
 import { RightPanel, RightPanelHandle } from './components/RightPanel';
 import { slashCommands } from './slashCommands';
 import { AppModals, type PRDetails, type FlatFileItem } from './components/AppModals';
-import { DEFAULT_BATCH_PROMPT } from './components/BatchRunnerModal';
+// DEFAULT_BATCH_PROMPT moved to useSymphonyContribution hook
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainPanel, type MainPanelHandle } from './components/MainPanel';
 import { AppOverlays } from './components/AppOverlays';
@@ -18,7 +18,7 @@ import { WindowsWarningModal } from './components/WindowsWarningModal';
 import { GistPublishModal } from './components/GistPublishModal';
 import { MaestroWizard, useWizard, WizardResumeModal } from './components/Wizard';
 import { TourOverlay } from './components/Wizard/tour';
-import { CONDUCTOR_BADGES } from './constants/conductorBadges';
+// CONDUCTOR_BADGES moved to useAutoRunAchievements hook
 import { EmptyStateView } from './components/EmptyStateView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
 
@@ -42,8 +42,7 @@ const DirectorNotesModal = lazy(() =>
 	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
 );
 
-// Re-import the type for SymphonyContributionData (types don't need lazy loading)
-import type { SymphonyContributionData } from './components/SymphonyModal';
+// SymphonyContributionData type moved to useSymphonyContribution hook
 
 // Group Chat Components
 import { GroupChatPanel } from './components/GroupChatPanel';
@@ -63,7 +62,6 @@ import {
 	useNavigationHistory,
 	useSessionNavigation,
 	useSortedSessions,
-	compareNamesIgnoringEmojis,
 	useGroupManagement,
 	// Input processing
 	useInputHandlers,
@@ -111,9 +109,28 @@ import {
 	useWizardHandlers,
 	// Interrupt handler
 	useInterruptHandler,
+	// Tour actions (right panel control from tour overlay)
+	useTourActions,
+	// Queue handlers (queue browser UI operations)
+	useQueueHandlers,
+	// Queue processing (execution queue processing + startup recovery)
+	useQueueProcessing,
+	// Tab export handlers (copy context, export HTML, publish gist)
+	useTabExportHandlers,
+	// Auto Run achievements (progress tracking, peak stats)
+	useAutoRunAchievements,
+	// Auto Run document loader (list, tree, task counts, file watching)
+	useAutoRunDocumentLoader,
+	// Prompt Composer modal handlers
+	usePromptComposerHandlers,
+	// Quick Actions modal handlers (Cmd+K)
+	useQuickActionsHandlers,
+	// Session cycling (Cmd+Shift+[/])
+	useCycleSession,
 } from './hooks';
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
+import { useSymphonyContribution } from './hooks/symphony/useSymphonyContribution';
 
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
@@ -125,7 +142,7 @@ import { useGroupChatStore } from './stores/groupChatStore';
 import { useBatchStore } from './stores/batchStore';
 // All session state is read directly from useSessionStore in MaestroConsoleInner.
 import { useSessionStore, selectActiveSession } from './stores/sessionStore';
-import { useAgentStore } from './stores/agentStore';
+// useAgentStore moved to useQueueProcessing hook
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
 
@@ -134,18 +151,7 @@ import { gitService } from './services/git';
 
 // Import types and constants
 // Note: GroupChat, GroupChatState are imported from types (re-exported from shared)
-import type {
-	ToolType,
-	SessionState,
-	RightPanelTab,
-	Session,
-	AITab,
-	QueuedItem,
-	BatchRunConfig,
-	CustomAICommand,
-	ThinkingMode,
-	ThinkingItem,
-} from './types';
+import type { RightPanelTab, Session, QueuedItem, CustomAICommand, ThinkingItem } from './types';
 import { THEMES } from './constants/themes';
 import { generateId } from './utils/ids';
 import { getContextColor } from './utils/theme';
@@ -164,8 +170,8 @@ import {
 	navigateToPrevUnifiedTab,
 	hasActiveWizard,
 } from './utils/tabHelpers';
-import { validateNewSession } from './utils/sessionValidation';
-import { formatLogsForClipboard } from './utils/contextExtractor';
+// validateNewSession moved to useSymphonyContribution, useSessionCrud hooks
+// formatLogsForClipboard moved to useTabExportHandlers hook
 // getSlashCommandDescription moved to useWizardHandlers
 import { useUIStore } from './stores/uiStore';
 import { useTabStore } from './stores/tabStore';
@@ -215,7 +221,6 @@ function MaestroConsoleInner() {
 		leaderboardRegistrationOpen,
 		// Standing Ovation Overlay
 		standingOvationData,
-		setStandingOvationData,
 		// First Run Celebration
 		firstRunCelebrationData,
 		// Log Viewer
@@ -441,9 +446,7 @@ function MaestroConsoleInner() {
 		totalActiveTimeMs,
 		addTotalActiveTimeMs,
 		autoRunStats,
-		updateAutoRunProgress,
 		usageStats,
-		updateUsageStats,
 		tourCompleted: _tourCompleted,
 		setTourCompleted,
 		recordWizardStart,
@@ -505,7 +508,7 @@ function MaestroConsoleInner() {
 	const sessions = useSessionStore((s) => s.sessions);
 	const groups = useSessionStore((s) => s.groups);
 	const activeSessionId = useSessionStore((s) => s.activeSessionId);
-	const sessionsLoaded = useSessionStore((s) => s.sessionsLoaded);
+	// sessionsLoaded moved to useQueueProcessing hook
 	const activeSession = useSessionStore(selectActiveSession);
 
 	// Actions — stable references from store, never trigger re-renders
@@ -513,7 +516,6 @@ function MaestroConsoleInner() {
 		setSessions,
 		setGroups,
 		setActiveSessionId: storeSetActiveSessionId,
-		setActiveSessionIdInternal,
 		setRemovedWorktreePaths,
 	} = useMemo(() => useSessionStore.getState(), []);
 
@@ -581,7 +583,7 @@ function MaestroConsoleInner() {
 	const activeRightTab = useUIStore((s) => s.activeRightTab);
 	const activeFocus = useUIStore((s) => s.activeFocus);
 	const bookmarksCollapsed = useUIStore((s) => s.bookmarksCollapsed);
-	const groupChatsExpanded = useUIStore((s) => s.groupChatsExpanded);
+	// groupChatsExpanded moved to useCycleSession hook
 	const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 	const fileTreeFilterOpen = useFileExplorerStore((s) => s.fileTreeFilterOpen);
@@ -626,7 +628,6 @@ function MaestroConsoleInner() {
 
 	// Stable actions from groupChatStore (non-reactive)
 	const {
-		setGroupChats,
 		setActiveGroupChatId,
 		setGroupChatStagedImages,
 		setGroupChatReadOnlyMode,
@@ -723,7 +724,6 @@ function MaestroConsoleInner() {
 		setDocumentList: setAutoRunDocumentList,
 		setDocumentTree: setAutoRunDocumentTree,
 		setIsLoadingDocuments: setAutoRunIsLoadingDocuments,
-		setDocumentTaskCounts: setAutoRunDocumentTaskCounts,
 	} = useBatchStore.getState();
 
 	// ProcessMonitor navigation handlers
@@ -1426,82 +1426,13 @@ function MaestroConsoleInner() {
 	const handleFocusFileInGraph = useFileExplorerStore.getState().focusFileInGraph;
 	const handleOpenLastDocumentGraph = useFileExplorerStore.getState().openLastDocumentGraph;
 
-	const handleCopyContext = useCallback((tabId: string) => {
-		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const tab = currentSession.aiTabs.find((t) => t.id === tabId);
-		if (!tab || !tab.logs || tab.logs.length === 0) return;
-
-		const text = formatLogsForClipboard(tab.logs);
-		navigator.clipboard
-			.writeText(text)
-			.then(() => {
-				notifyToast({
-					type: 'success',
-					title: 'Context Copied',
-					message: 'Conversation copied to clipboard.',
-				});
-			})
-			.catch((err) => {
-				console.error('Failed to copy context:', err);
-				notifyToast({
-					type: 'error',
-					title: 'Copy Failed',
-					message: 'Failed to copy context to clipboard.',
-				});
-			});
-	}, []);
-
-	// Memoized handler for exporting tab as HTML
-	const handleExportHtml = useCallback(async (tabId: string) => {
-		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const tab = currentSession.aiTabs.find((t) => t.id === tabId);
-		if (!tab || !tab.logs || tab.logs.length === 0) return;
-
-		try {
-			const { downloadTabExport } = await import('./utils/tabExport');
-			await downloadTabExport(
-				tab,
-				{
-					name: currentSession.name,
-					cwd: currentSession.cwd,
-					toolType: currentSession.toolType,
-				},
-				themeRef.current
-			);
-			notifyToast({
-				type: 'success',
-				title: 'Export Complete',
-				message: 'Conversation exported as HTML.',
-			});
-		} catch (err) {
-			console.error('Failed to export tab:', err);
-			notifyToast({
-				type: 'error',
-				title: 'Export Failed',
-				message: 'Failed to export conversation as HTML.',
-			});
-		}
-	}, []);
-
-	// Memoized handler for publishing tab as GitHub Gist
-	const handlePublishTabGist = useCallback((tabId: string) => {
-		const currentSession = sessionsRef.current.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const tab = currentSession.aiTabs.find((t) => t.id === tabId);
-		if (!tab || !tab.logs || tab.logs.length === 0) return;
-
-		// Convert logs to markdown-like text format
-		const content = formatLogsForClipboard(tab.logs);
-		// Generate filename based on tab name or session ID
-		const tabName = tab.name || (tab.agentSessionId?.slice(0, 8) ?? 'conversation');
-		const filename = `${tabName.replace(/[^a-zA-Z0-9-_]/g, '_')}_context.md`;
-
-		// Set content and open the modal
-		useTabStore.getState().setTabGistContent({ filename, content });
-		setGistPublishModalOpen(true);
-	}, []);
+	// Tab export handlers (copy context, export HTML, publish gist) — extracted to useTabExportHandlers
+	const { handleCopyContext, handleExportHtml, handlePublishTabGist } = useTabExportHandlers({
+		sessionsRef,
+		activeSessionIdRef,
+		themeRef,
+		setGistPublishModalOpen,
+	});
 
 	// Memoized handler for clearing agent error (wraps handleClearAgentError with session/tab context)
 	const handleClearAgentErrorForMainPanel = useCallback(() => {
@@ -1638,78 +1569,8 @@ function MaestroConsoleInner() {
 	// Tracks total time user spends actively using Maestro (5-minute idle timeout)
 	useHandsOnTimeTracker(addTotalActiveTimeMs);
 
-	// Track elapsed time for active auto-runs and update achievement stats every minute
-	// This allows badges to be unlocked during an auto-run, not just when it completes
-	const autoRunProgressRef = useRef<{ lastUpdateTime: number }>({
-		lastUpdateTime: 0,
-	});
-
-	useEffect(() => {
-		// Only set up timer if there are active batch runs
-		if (activeBatchSessionIds.length === 0) {
-			autoRunProgressRef.current.lastUpdateTime = 0;
-			return;
-		}
-
-		// Initialize last update time on first active run
-		if (autoRunProgressRef.current.lastUpdateTime === 0) {
-			autoRunProgressRef.current.lastUpdateTime = Date.now();
-		}
-
-		// Set up interval to update progress every minute
-		const intervalId = setInterval(() => {
-			const now = Date.now();
-			const elapsedMs = now - autoRunProgressRef.current.lastUpdateTime;
-			autoRunProgressRef.current.lastUpdateTime = now;
-
-			// Multiply by number of concurrent sessions so each active Auto Run contributes its time
-			// e.g., 2 sessions running for 1 minute = 2 minutes toward cumulative achievement time
-			const deltaMs = elapsedMs * activeBatchSessionIds.length;
-
-			// Update achievement stats with the delta
-			const { newBadgeLevel } = updateAutoRunProgress(deltaMs);
-
-			// If a new badge was unlocked during the run, show standing ovation
-			if (newBadgeLevel !== null) {
-				const badge = CONDUCTOR_BADGES.find((b) => b.level === newBadgeLevel);
-				if (badge) {
-					setStandingOvationData({
-						badge,
-						isNewRecord: false, // Record is determined at completion
-						recordTimeMs: autoRunStats.longestRunMs,
-					});
-				}
-			}
-		}, 60000); // Every 60 seconds
-
-		return () => {
-			clearInterval(intervalId);
-		};
-	}, [activeBatchSessionIds.length, updateAutoRunProgress, autoRunStats.longestRunMs]);
-
-	// Track peak usage stats for achievements image
-	useEffect(() => {
-		// Count current active agents (non-terminal sessions)
-		const activeAgents = sessions.filter((s) => s.toolType !== 'terminal').length;
-
-		// Count busy sessions (currently processing)
-		const busySessions = sessions.filter((s) => s.state === 'busy').length;
-
-		// Count auto-run sessions (sessions with active batch runs)
-		const autoRunSessions = activeBatchSessionIds.length;
-
-		// Count total queue depth across all sessions
-		const totalQueueDepth = sessions.reduce((sum, s) => sum + (s.executionQueue?.length || 0), 0);
-
-		// Update usage stats (only updates if new values are higher)
-		updateUsageStats({
-			maxAgents: activeAgents,
-			maxDefinedAgents: activeAgents, // Same as active agents for now
-			maxSimultaneousAutoRuns: autoRunSessions,
-			maxSimultaneousQueries: busySessions,
-			maxQueueDepth: totalQueueDepth,
-		});
-	}, [sessions, activeBatchSessionIds, updateUsageStats]);
+	// Auto Run achievement tracking (progress intervals, peak usage stats)
+	useAutoRunAchievements({ activeBatchSessionIds });
 
 	// Handler for switching to autorun tab - shows setup modal if no folder configured
 	const handleSetActiveRightTab = useCallback(
@@ -1879,352 +1740,14 @@ function MaestroConsoleInner() {
 
 	// Navigation history tracking — provided by useSessionLifecycle hook (Phase 2H)
 
-	// Helper to count tasks in document content
-	const countTasksInContent = useCallback(
-		(content: string): { completed: number; total: number } => {
-			const completedRegex = /^[\s]*[-*]\s*\[x\]/gim;
-			const uncheckedRegex = /^[\s]*[-*]\s*\[\s\]/gim;
-			const completedMatches = content.match(completedRegex) || [];
-			const uncheckedMatches = content.match(uncheckedRegex) || [];
-			const completed = completedMatches.length;
-			const total = completed + uncheckedMatches.length;
-			return { completed, total };
-		},
-		[]
-	);
+	// Auto Run document loading (list, tree, task counts, file watching)
+	useAutoRunDocumentLoader();
 
-	// Load task counts for all documents
-	const loadTaskCounts = useCallback(
-		async (folderPath: string, documents: string[], sshRemoteId?: string) => {
-			const counts = new Map<string, { completed: number; total: number }>();
-
-			// Load content and count tasks for each document in parallel
-			await Promise.all(
-				documents.map(async (docPath) => {
-					try {
-						const result = await window.maestro.autorun.readDoc(
-							folderPath,
-							docPath + '.md',
-							sshRemoteId
-						);
-						if (result.success && result.content) {
-							const taskCount = countTasksInContent(result.content);
-							if (taskCount.total > 0) {
-								counts.set(docPath, taskCount);
-							}
-						}
-					} catch {
-						// Ignore errors for individual documents
-					}
-				})
-			);
-
-			return counts;
-		},
-		[countTasksInContent]
-	);
-
-	// Load Auto Run document list and content when session changes
-	// Always reload content from disk when switching sessions to ensure fresh data
-	useEffect(() => {
-		const loadAutoRunData = async () => {
-			if (!activeSession?.autoRunFolderPath) {
-				setAutoRunDocumentList([]);
-				setAutoRunDocumentTree([]);
-				setAutoRunDocumentTaskCounts(new Map());
-				return;
-			}
-
-			// Get SSH remote ID for remote sessions (check both runtime and config values)
-			const sshRemoteId =
-				activeSession.sshRemoteId || activeSession.sessionSshRemoteConfig?.remoteId || undefined;
-
-			// Load document list
-			setAutoRunIsLoadingDocuments(true);
-			const listResult = await window.maestro.autorun.listDocs(
-				activeSession.autoRunFolderPath,
-				sshRemoteId
-			);
-			if (listResult.success) {
-				const files = listResult.files || [];
-				setAutoRunDocumentList(files);
-				setAutoRunDocumentTree(listResult.tree || []);
-
-				// Load task counts for all documents
-				const counts = await loadTaskCounts(activeSession.autoRunFolderPath, files, sshRemoteId);
-				setAutoRunDocumentTaskCounts(counts);
-			}
-			setAutoRunIsLoadingDocuments(false);
-
-			// Always load content from disk when switching sessions
-			// This ensures we have fresh data and prevents stale content from showing
-			if (activeSession.autoRunSelectedFile) {
-				const contentResult = await window.maestro.autorun.readDoc(
-					activeSession.autoRunFolderPath,
-					activeSession.autoRunSelectedFile + '.md',
-					sshRemoteId
-				);
-				const newContent = contentResult.success ? contentResult.content || '' : '';
-				setSessions((prev) =>
-					prev.map((s) =>
-						s.id === activeSession.id
-							? {
-									...s,
-									autoRunContent: newContent,
-									autoRunContentVersion: (s.autoRunContentVersion || 0) + 1,
-								}
-							: s
-					)
-				);
-			}
-		};
-
-		loadAutoRunData();
-		// Note: Use primitive values (remoteId) not object refs (sessionSshRemoteConfig) to avoid infinite re-render loops
-	}, [
-		activeSessionId,
-		activeSession?.autoRunFolderPath,
-		activeSession?.autoRunSelectedFile,
-		activeSession?.sshRemoteId,
-		activeSession?.sessionSshRemoteConfig?.remoteId,
-		loadTaskCounts,
-	]);
-
-	// File watching for Auto Run - watch whenever a folder is configured
-	// Updates reflect immediately whether from batch runs, terminal commands, or external editors
-	// Note: For SSH remote sessions, file watching via chokidar is not available.
-	// The backend returns isRemote: true and the UI should use polling instead.
-	useEffect(() => {
-		const sessionId = activeSession?.id;
-		const folderPath = activeSession?.autoRunFolderPath;
-		const selectedFile = activeSession?.autoRunSelectedFile;
-		// Get SSH remote ID for remote sessions (check both runtime and config values)
-		const sshRemoteId =
-			activeSession?.sshRemoteId || activeSession?.sessionSshRemoteConfig?.remoteId || undefined;
-
-		// Only watch if folder is set
-		if (!folderPath || !sessionId) return;
-
-		// Start watching the folder (for remote sessions, this returns isRemote: true)
-		window.maestro.autorun.watchFolder(folderPath, sshRemoteId);
-
-		// Listen for file change events (only triggered for local sessions)
-		const unsubscribe = window.maestro.autorun.onFileChanged(async (data) => {
-			// Only respond to changes in the current folder
-			if (data.folderPath !== folderPath) return;
-
-			// Reload document list for any change (in case files added/removed)
-			const listResult = await window.maestro.autorun.listDocs(folderPath, sshRemoteId);
-			if (listResult.success) {
-				const files = listResult.files || [];
-				setAutoRunDocumentList(files);
-				setAutoRunDocumentTree(listResult.tree || []);
-
-				// Reload task counts for all documents
-				const counts = await loadTaskCounts(folderPath, files, sshRemoteId);
-				setAutoRunDocumentTaskCounts(counts);
-			}
-
-			// If we have a selected document and it matches the changed file, reload its content
-			// Update in session state (per-session, not global)
-			if (selectedFile && data.filename === selectedFile) {
-				const contentResult = await window.maestro.autorun.readDoc(
-					folderPath,
-					selectedFile + '.md',
-					sshRemoteId
-				);
-				if (contentResult.success) {
-					// Update content in the specific session that owns this folder
-					setSessions((prev) =>
-						prev.map((s) =>
-							s.id === sessionId
-								? {
-										...s,
-										autoRunContent: contentResult.content || '',
-										autoRunContentVersion: (s.autoRunContentVersion || 0) + 1,
-									}
-								: s
-						)
-					);
-				}
-			}
-		});
-
-		// Cleanup: stop watching when folder changes or unmount
-		return () => {
-			window.maestro.autorun.unwatchFolder(folderPath);
-			unsubscribe();
-		};
-		// Note: Use primitive values (remoteId) not object refs (sessionSshRemoteConfig) to avoid infinite re-render loops
-	}, [
-		activeSession?.id,
-		activeSession?.autoRunFolderPath,
-		activeSession?.autoRunSelectedFile,
-		activeSession?.sshRemoteId,
-		activeSession?.sessionSshRemoteConfig?.remoteId,
-		loadTaskCounts,
-	]);
+	// NOTE: Auto Run document loading and file watching are now handled by useAutoRunDocumentLoader hook
 
 	// --- ACTIONS ---
-	const cycleSession = (dir: 'next' | 'prev') => {
-		// Build the visual order of items as they appear in the sidebar.
-		// This matches the actual rendering order in SessionList.tsx:
-		// 1. Bookmarks section (if open) - sorted alphabetically
-		// 2. Groups (sorted alphabetically) - each with sessions sorted alphabetically
-		// 3. Ungrouped sessions - sorted alphabetically
-		// 4. Group Chats section (if expanded) - sorted alphabetically
-		//
-		// A bookmarked session visually appears in BOTH the bookmarks section AND its
-		// regular location (group or ungrouped). The same session can appear twice in
-		// the visual order. We track the current position with cyclePositionRef to
-		// allow cycling through duplicate occurrences correctly.
-
-		// Visual order item can be either a session or a group chat
-		type VisualOrderItem =
-			| { type: 'session'; id: string; name: string }
-			| { type: 'groupChat'; id: string; name: string };
-
-		const visualOrder: VisualOrderItem[] = [];
-
-		// Helper to get worktree children for a session
-		const getWorktreeChildren = (parentId: string) =>
-			sessions
-				.filter((s) => s.parentSessionId === parentId)
-				.sort((a, b) =>
-					compareNamesIgnoringEmojis(a.worktreeBranch || a.name, b.worktreeBranch || b.name)
-				);
-
-		// Helper to add session with its worktree children to visual order
-		const addSessionWithWorktrees = (session: Session) => {
-			// Skip worktree children - they're added with their parent
-			if (session.parentSessionId) return;
-
-			visualOrder.push({
-				type: 'session' as const,
-				id: session.id,
-				name: session.name,
-			});
-
-			// Add worktree children if expanded
-			if (session.worktreesExpanded !== false) {
-				const children = getWorktreeChildren(session.id);
-				visualOrder.push(
-					...children.map((s) => ({
-						type: 'session' as const,
-						id: s.id,
-						name: s.worktreeBranch || s.name,
-					}))
-				);
-			}
-		};
-
-		if (leftSidebarOpen) {
-			// Bookmarks section (if expanded and has bookmarked sessions)
-			if (!bookmarksCollapsed) {
-				const bookmarkedSessions = sessions
-					.filter((s) => s.bookmarked && !s.parentSessionId)
-					.sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
-				bookmarkedSessions.forEach(addSessionWithWorktrees);
-			}
-
-			// Groups (sorted alphabetically), with each group's sessions
-			const sortedGroups = [...groups].sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
-			for (const group of sortedGroups) {
-				if (!group.collapsed) {
-					const groupSessions = sessions
-						.filter((s) => s.groupId === group.id && !s.parentSessionId)
-						.sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
-					groupSessions.forEach(addSessionWithWorktrees);
-				}
-			}
-
-			// Ungrouped sessions (sorted alphabetically) - only if not collapsed
-			if (!settings.ungroupedCollapsed) {
-				const ungroupedSessions = sessions
-					.filter((s) => !s.groupId && !s.parentSessionId)
-					.sort((a, b) => compareNamesIgnoringEmojis(a.name, b.name));
-				ungroupedSessions.forEach(addSessionWithWorktrees);
-			}
-
-			// Group Chats section (if expanded and has group chats)
-			if (groupChatsExpanded && groupChats.length > 0) {
-				const sortedGroupChats = [...groupChats].sort((a, b) =>
-					a.name.toLowerCase().localeCompare(b.name.toLowerCase())
-				);
-				visualOrder.push(
-					...sortedGroupChats.map((gc) => ({
-						type: 'groupChat' as const,
-						id: gc.id,
-						name: gc.name,
-					}))
-				);
-			}
-		} else {
-			// Sidebar collapsed: cycle through all sessions in their sorted order
-			visualOrder.push(
-				...sortedSessions.map((s) => ({
-					type: 'session' as const,
-					id: s.id,
-					name: s.name,
-				}))
-			);
-		}
-
-		if (visualOrder.length === 0) return;
-
-		// Determine what is currently active (session or group chat)
-		const currentActiveId = activeGroupChatId || activeSessionId;
-		const currentIsGroupChat = activeGroupChatId !== null;
-
-		// Determine current position in visual order
-		// If cyclePositionRef is valid and points to our current item, use it
-		// Otherwise, find the first occurrence of our current item
-		let currentIndex = cyclePositionRef.current;
-		if (
-			currentIndex < 0 ||
-			currentIndex >= visualOrder.length ||
-			visualOrder[currentIndex].id !== currentActiveId
-		) {
-			// Position is invalid or doesn't match current item - find first occurrence
-			currentIndex = visualOrder.findIndex(
-				(item) =>
-					item.id === currentActiveId &&
-					(currentIsGroupChat ? item.type === 'groupChat' : item.type === 'session')
-			);
-		}
-
-		if (currentIndex === -1) {
-			// Current item not visible, select first visible item
-			cyclePositionRef.current = 0;
-			const firstItem = visualOrder[0];
-			if (firstItem.type === 'session') {
-				setActiveGroupChatId(null);
-				setActiveSessionIdInternal(firstItem.id);
-			} else {
-				// When switching to a group chat via cycling, use handleOpenGroupChat to load messages
-				handleOpenGroupChat(firstItem.id);
-			}
-			return;
-		}
-
-		// Move to next/prev in visual order
-		let nextIndex;
-		if (dir === 'next') {
-			nextIndex = currentIndex === visualOrder.length - 1 ? 0 : currentIndex + 1;
-		} else {
-			nextIndex = currentIndex === 0 ? visualOrder.length - 1 : currentIndex - 1;
-		}
-
-		cyclePositionRef.current = nextIndex;
-		const nextItem = visualOrder[nextIndex];
-		if (nextItem.type === 'session') {
-			setActiveGroupChatId(null);
-			setActiveSessionIdInternal(nextItem.id);
-		} else {
-			// When switching to a group chat via cycling, use handleOpenGroupChat to load messages
-			handleOpenGroupChat(nextItem.id);
-		}
-	};
+	// cycleSession — provided by useCycleSession hook
+	const { cycleSession } = useCycleSession({ sortedSessions, handleOpenGroupChat });
 
 	// showConfirmation, performDeleteSession — provided by useSessionLifecycle hook (Phase 2H)
 	// deleteSession, deleteWorktreeGroup — provided by useSessionCrud hook
@@ -2351,139 +1874,18 @@ function MaestroConsoleInner() {
 
 	// Note: handleRemoteCommand effect extracted to useRemoteHandlers hook (Phase 2K)
 
-	// Listen for tour UI actions to control right panel state
-	useEffect(() => {
-		const handleTourAction = (event: Event) => {
-			const customEvent = event as CustomEvent<{
-				type: string;
-				value?: string;
-			}>;
-			const { type, value } = customEvent.detail;
+	// Tour actions (right panel control from tour overlay) — extracted to useTourActions hook
+	useTourActions();
 
-			switch (type) {
-				case 'setRightTab':
-					if (value === 'files' || value === 'history' || value === 'autorun') {
-						setActiveRightTab(value as RightPanelTab);
-					}
-					break;
-				case 'openRightPanel':
-					setRightPanelOpen(true);
-					break;
-				case 'closeRightPanel':
-					setRightPanelOpen(false);
-					break;
-				// hamburger menu actions are handled by SessionList.tsx
-				default:
-					break;
-			}
-		};
-
-		window.addEventListener('tour:action', handleTourAction);
-		return () => window.removeEventListener('tour:action', handleTourAction);
-	}, []);
-
-	// Process a queued item - delegates to agentStore action
-	const processQueuedItem = async (sessionId: string, item: QueuedItem) => {
-		await useAgentStore.getState().processQueuedItem(sessionId, item, {
-			conductorProfile,
-			customAICommands: customAICommandsRef.current,
-			speckitCommands: speckitCommandsRef.current,
-			openspecCommands: openspecCommandsRef.current,
-		});
-	};
-
-	// Update ref for processQueuedItem so batch exit handler can use it
+	// Queue processing (execution, startup recovery) — extracted to useQueueProcessing hook
+	const { processQueuedItem } = useQueueProcessing({
+		conductorProfile,
+		customAICommandsRef,
+		speckitCommandsRef,
+		openspecCommandsRef,
+	});
+	// Bridge: keep the original processQueuedItemRef in sync
 	processQueuedItemRef.current = processQueuedItem;
-
-	// Process any queued items left over from previous session (after app restart)
-	// This ensures queued messages aren't stuck forever when app restarts
-	const processedQueuesOnStartup = useRef(false);
-	useEffect(() => {
-		// Only run once after sessions are loaded
-		if (!sessionsLoaded || processedQueuesOnStartup.current) return;
-		processedQueuesOnStartup.current = true;
-
-		// Find sessions with queued items that are idle (stuck from previous session)
-		const sessionsWithQueuedItems = sessions.filter(
-			(s) => s.state === 'idle' && s.executionQueue && s.executionQueue.length > 0
-		);
-
-		if (sessionsWithQueuedItems.length > 0) {
-			console.log(
-				`[App] Found ${sessionsWithQueuedItems.length} session(s) with leftover queued items from previous session`
-			);
-
-			// Process the first queued item from each session
-			// Delay to ensure all refs and handlers are set up
-			const startupTimerId = setTimeout(() => {
-				sessionsWithQueuedItems.forEach((session) => {
-					const firstItem = session.executionQueue[0];
-					console.log(`[App] Processing leftover queued item for session ${session.id}:`, {
-						id: firstItem.id,
-						tabId: firstItem.tabId,
-						queueLength: session.executionQueue.length,
-					});
-
-					// Set session to busy and remove item from queue
-					setSessions((prev) =>
-						prev.map((s) => {
-							if (s.id !== session.id) return s;
-
-							const [, ...remainingQueue] = s.executionQueue;
-							const targetTab =
-								s.aiTabs.find((tab) => tab.id === firstItem.tabId) || getActiveTab(s);
-
-							// Set the target tab to busy
-							const updatedAiTabs = s.aiTabs.map((tab) =>
-								tab.id === targetTab?.id
-									? {
-											...tab,
-											state: 'busy' as const,
-											thinkingStartTime: Date.now(),
-										}
-									: tab
-							);
-
-							return {
-								...s,
-								state: 'busy' as SessionState,
-								busySource: 'ai',
-								thinkingStartTime: Date.now(),
-								currentCycleTokens: 0,
-								currentCycleBytes: 0,
-								executionQueue: remainingQueue,
-								aiTabs: updatedAiTabs,
-							};
-						})
-					);
-
-					// Process the item
-					processQueuedItem(session.id, firstItem).catch((err) => {
-						console.error(`[App] Failed to process queued item for session ${session.id}:`, err);
-						// Reset session busy state and re-queue the failed item so it isn't lost
-						setSessions((prev) =>
-							prev.map((s) => {
-								if (s.id !== session.id) return s;
-								return {
-									...s,
-									state: 'idle',
-									busySource: undefined,
-									thinkingStartTime: undefined,
-									executionQueue: [firstItem, ...s.executionQueue],
-									aiTabs: s.aiTabs.map((tab) =>
-										tab.state === 'busy'
-											? { ...tab, state: 'idle' as const, thinkingStartTime: undefined }
-											: tab
-									),
-								};
-							})
-						);
-					});
-				});
-			}, 500); // Small delay to ensure everything is initialized
-			return () => clearTimeout(startupTimerId);
-		}
-	}, [sessionsLoaded, sessions]);
 
 	// handleInterrupt — provided by useInterruptHandler hook
 	const { handleInterrupt } = useInterruptHandler({
@@ -2656,246 +2058,46 @@ function MaestroConsoleInner() {
 		},
 		[handleFileClick]
 	);
-	const handlePromptComposerSubmit = useCallback(
-		(value: string) => {
-			if (activeGroupChatId) {
-				// Update group chat draft
-				setGroupChats((prev) =>
-					prev.map((c) => (c.id === activeGroupChatId ? { ...c, draftMessage: value } : c))
-				);
-			} else {
-				setInputValue(value);
-			}
-		},
-		[activeGroupChatId]
-	);
-	const handlePromptComposerSend = useCallback(
-		(value: string) => {
-			if (activeGroupChatId) {
-				// Send to group chat
-				handleSendGroupChatMessage(
-					value,
-					groupChatStagedImages.length > 0 ? groupChatStagedImages : undefined,
-					groupChatReadOnlyMode
-				);
-				setGroupChatStagedImages([]);
-				// Clear draft
-				setGroupChats((prev) =>
-					prev.map((c) => (c.id === activeGroupChatId ? { ...c, draftMessage: '' } : c))
-				);
-			} else {
-				// Set the input value and trigger send
-				setInputValue(value);
-				// Use setTimeout to ensure state updates before processing
-				setTimeout(() => processInput(value), 0);
-			}
-		},
-		[
-			activeGroupChatId,
-			groupChatStagedImages,
-			groupChatReadOnlyMode,
-			handleSendGroupChatMessage,
-			processInput,
-		]
-	);
-	const handlePromptToggleTabSaveToHistory = useCallback(() => {
-		if (!activeSession) return;
-		const activeTab = getActiveTab(activeSession);
-		if (!activeTab) return;
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
-				return {
-					...s,
-					aiTabs: s.aiTabs.map((tab) =>
-						tab.id === activeTab.id ? { ...tab, saveToHistory: !tab.saveToHistory } : tab
-					),
-				};
-			})
-		);
-	}, [activeSession, getActiveTab]);
-	const handlePromptToggleTabReadOnlyMode = useCallback(() => {
-		if (activeGroupChatId) {
-			setGroupChatReadOnlyMode((prev) => !prev);
-		} else {
-			if (!activeSession) return;
-			const activeTab = getActiveTab(activeSession);
-			if (!activeTab) return;
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-					return {
-						...s,
-						aiTabs: s.aiTabs.map((tab) =>
-							tab.id === activeTab.id ? { ...tab, readOnlyMode: !tab.readOnlyMode } : tab
-						),
-					};
-				})
-			);
-		}
-	}, [activeGroupChatId, activeSession, getActiveTab]);
-	const handlePromptToggleTabShowThinking = useCallback(() => {
-		if (!activeSession) return;
-		const activeTab = getActiveTab(activeSession);
-		if (!activeTab) return;
-		// Cycle through: off -> on -> sticky -> off
-		const cycleThinkingMode = (current: ThinkingMode | undefined): ThinkingMode => {
-			if (!current || current === 'off') return 'on';
-			if (current === 'on') return 'sticky';
-			return 'off';
-		};
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSession.id) return s;
-				return {
-					...s,
-					aiTabs: s.aiTabs.map((tab) => {
-						if (tab.id !== activeTab.id) return tab;
-						const newMode = cycleThinkingMode(tab.showThinking);
-						// When turning OFF, clear thinking logs
-						if (newMode === 'off') {
-							return {
-								...tab,
-								showThinking: 'off',
-								logs: tab.logs.filter((log) => log.source !== 'thinking'),
-							};
-						}
-						return { ...tab, showThinking: newMode };
-					}),
-				};
-			})
-		);
-	}, [activeSession, getActiveTab]);
-	const handlePromptToggleEnterToSend = useCallback(
-		() => setEnterToSendAI(!enterToSendAI),
-		[enterToSendAI]
-	);
+	// Prompt Composer modal handlers — extracted to usePromptComposerHandlers hook
+	const {
+		handlePromptComposerSubmit,
+		handlePromptComposerSend,
+		handlePromptToggleTabSaveToHistory,
+		handlePromptToggleTabReadOnlyMode,
+		handlePromptToggleTabShowThinking,
+		handlePromptToggleEnterToSend,
+	} = usePromptComposerHandlers({
+		handleSendGroupChatMessage,
+		processInput,
+		setInputValue,
+	});
 
-	// QuickActionsModal stable callbacks
-	const handleQuickActionsToggleReadOnlyMode = useCallback(() => {
-		if (activeSession?.inputMode === 'ai' && activeSession.activeTabId) {
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-					return {
-						...s,
-						aiTabs: s.aiTabs.map((tab) =>
-							tab.id === s.activeTabId ? { ...tab, readOnlyMode: !tab.readOnlyMode } : tab
-						),
-					};
-				})
-			);
-		}
-	}, [activeSession]);
-	const handleQuickActionsToggleTabShowThinking = useCallback(() => {
-		if (activeSession?.inputMode === 'ai' && activeSession.activeTabId) {
-			// Cycle through: off -> on -> sticky -> off
-			const cycleThinkingMode = (current: ThinkingMode | undefined): ThinkingMode => {
-				if (!current || current === 'off') return 'on';
-				if (current === 'on') return 'sticky';
-				return 'off';
-			};
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== activeSession.id) return s;
-					return {
-						...s,
-						aiTabs: s.aiTabs.map((tab) => {
-							if (tab.id !== s.activeTabId) return tab;
-							const newMode = cycleThinkingMode(tab.showThinking);
-							// When turning OFF, clear any thinking/tool logs
-							if (newMode === 'off') {
-								return {
-									...tab,
-									showThinking: 'off',
-									logs: tab.logs.filter((l) => l.source !== 'thinking' && l.source !== 'tool'),
-								};
-							}
-							return { ...tab, showThinking: newMode };
-						}),
-					};
-				})
-			);
-		}
-	}, [activeSession]);
-	const handleQuickActionsRefreshGitFileState = useCallback(async () => {
-		if (activeSessionId) {
-			// Refresh file tree, branches/tags, and history
-			await refreshGitFileState(activeSessionId);
-			// Also refresh git info in main panel header (branch, ahead/behind, uncommitted)
-			await mainPanelRef.current?.refreshGitInfo();
-			setSuccessFlashNotification('Files, Git, History Refreshed');
-			setTimeout(() => setSuccessFlashNotification(null), 2000);
-		}
-	}, [activeSessionId, refreshGitFileState, setSuccessFlashNotification]);
-	const handleQuickActionsDebugReleaseQueuedItem = useCallback(() => {
-		if (!activeSession || activeSession.executionQueue.length === 0) return;
-		const [nextItem, ...remainingQueue] = activeSession.executionQueue;
-		// Update state to remove item from queue
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== activeSessionId) return s;
-				return { ...s, executionQueue: remainingQueue };
-			})
-		);
-		// Process the item
-		processQueuedItem(activeSessionId, nextItem);
-	}, [activeSession, activeSessionId, processQueuedItem]);
-	const handleQuickActionsToggleMarkdownEditMode = useCallback(() => {
-		// Toggle the appropriate mode based on context:
-		// - If file tab is active: toggle file edit mode (markdownEditMode)
-		// - If no file tab: toggle chat raw text mode (chatRawTextMode)
-		if (activeSession?.activeFileTabId) {
-			setMarkdownEditMode(!markdownEditMode);
-		} else {
-			setChatRawTextMode(!chatRawTextMode);
-		}
-	}, [
-		activeSession?.activeFileTabId,
-		markdownEditMode,
-		chatRawTextMode,
-		setMarkdownEditMode,
-		setChatRawTextMode,
-	]);
-	const handleQuickActionsSummarizeAndContinue = useCallback(
-		() => handleSummarizeAndContinue(),
-		[handleSummarizeAndContinue]
-	);
-	const handleQuickActionsAutoRunResetTasks = useCallback(() => {
-		rightPanelRef.current?.openAutoRunResetTasksModal();
-	}, []);
+	// Quick Actions modal handlers — extracted to useQuickActionsHandlers hook
+	const {
+		handleQuickActionsToggleReadOnlyMode,
+		handleQuickActionsToggleTabShowThinking,
+		handleQuickActionsRefreshGitFileState,
+		handleQuickActionsDebugReleaseQueuedItem,
+		handleQuickActionsToggleMarkdownEditMode,
+		handleQuickActionsSummarizeAndContinue,
+		handleQuickActionsAutoRunResetTasks,
+	} = useQuickActionsHandlers({
+		refreshGitFileState,
+		mainPanelRef,
+		rightPanelRef,
+		handleSummarizeAndContinue,
+		processQueuedItem,
+	});
 
-	const handleRemoveQueueItem = useCallback((sessionId: string, itemId: string) => {
-		setSessions((prev) =>
-			prev.map((s) => {
-				if (s.id !== sessionId) return s;
-				return {
-					...s,
-					executionQueue: s.executionQueue.filter((item) => item.id !== itemId),
-				};
-			})
-		);
-	}, []);
-	const handleSwitchQueueSession = useCallback(
-		(sessionId: string) => {
-			setActiveSessionId(sessionId);
-		},
-		[setActiveSessionId]
-	);
-	const handleReorderQueueItems = useCallback(
-		(sessionId: string, fromIndex: number, toIndex: number) => {
-			setSessions((prev) =>
-				prev.map((s) => {
-					if (s.id !== sessionId) return s;
-					const queue = [...s.executionQueue];
-					const [removed] = queue.splice(fromIndex, 1);
-					queue.splice(toIndex, 0, removed);
-					return { ...s, executionQueue: queue };
-				})
-			);
-		},
-		[]
-	);
+	// Queue browser handlers — extracted to useQueueHandlers hook
+	const { handleRemoveQueueItem, handleSwitchQueueSession, handleReorderQueueItems } =
+		useQueueHandlers();
+
+	// Symphony contribution handler — extracted to useSymphonyContribution hook
+	const { handleStartContribution } = useSymphonyContribution({
+		startBatchRun,
+		inputRef,
+	});
 
 	// Update keyboardHandlerRef synchronously during render (before effects run)
 	// This must be placed after all handler functions and state are defined to avoid TDZ errors
@@ -3892,198 +3094,7 @@ function MaestroConsoleInner() {
 								setActiveSessionId(sessionId);
 								setSymphonyModalOpen(false);
 							}}
-							onStartContribution={async (data: SymphonyContributionData) => {
-								console.log('[Symphony] Creating session for contribution:', data);
-
-								// Get agent definition
-								const agent = await window.maestro.agents.get(data.agentType);
-								if (!agent) {
-									console.error(`Agent not found: ${data.agentType}`);
-									notifyToast({
-										type: 'error',
-										title: 'Symphony Error',
-										message: `Agent not found: ${data.agentType}`,
-									});
-									return;
-								}
-
-								// Validate uniqueness
-								const validation = validateNewSession(
-									data.sessionName,
-									data.localPath,
-									data.agentType as ToolType,
-									sessions
-								);
-								if (!validation.valid) {
-									console.error(`Session validation failed: ${validation.error}`);
-									notifyToast({
-										type: 'error',
-										title: 'Agent Creation Failed',
-										message: validation.error || 'Cannot create duplicate agent',
-									});
-									return;
-								}
-
-								const newId = generateId();
-								const initialTabId = generateId();
-
-								// Check git repo status
-								const isGitRepo = await gitService.isRepo(data.localPath);
-								let gitBranches: string[] | undefined;
-								let gitTags: string[] | undefined;
-								let gitRefsCacheTime: number | undefined;
-
-								if (isGitRepo) {
-									[gitBranches, gitTags] = await Promise.all([
-										gitService.getBranches(data.localPath),
-										gitService.getTags(data.localPath),
-									]);
-									gitRefsCacheTime = Date.now();
-								}
-
-								// Create initial tab
-								const initialTab: AITab = {
-									id: initialTabId,
-									agentSessionId: null,
-									name: null,
-									starred: false,
-									logs: [],
-									inputValue: '',
-									stagedImages: [],
-									createdAt: Date.now(),
-									state: 'idle',
-									saveToHistory: defaultSaveToHistory,
-								};
-
-								// Create session with Symphony metadata
-								const newSession: Session = {
-									id: newId,
-									name: data.sessionName,
-									toolType: data.agentType as ToolType,
-									state: 'idle',
-									cwd: data.localPath,
-									fullPath: data.localPath,
-									projectRoot: data.localPath,
-									isGitRepo,
-									gitBranches,
-									gitTags,
-									gitRefsCacheTime,
-									aiLogs: [],
-									shellLogs: [
-										{
-											id: generateId(),
-											timestamp: Date.now(),
-											source: 'system',
-											text: 'Shell Session Ready.',
-										},
-									],
-									workLog: [],
-									contextUsage: 0,
-									inputMode: 'ai',
-									aiPid: 0,
-									terminalPid: 0,
-									port: 3000 + Math.floor(Math.random() * 100),
-									isLive: false,
-									changedFiles: [],
-									fileTree: [],
-									fileExplorerExpanded: [],
-									fileExplorerScrollPos: 0,
-									fileTreeAutoRefreshInterval: 180,
-									shellCwd: data.localPath,
-									aiCommandHistory: [],
-									shellCommandHistory: [],
-									executionQueue: [],
-									activeTimeMs: 0,
-									aiTabs: [initialTab],
-									activeTabId: initialTabId,
-									closedTabHistory: [],
-									filePreviewTabs: [],
-									activeFileTabId: null,
-									unifiedTabOrder: [{ type: 'ai' as const, id: initialTabId }],
-									unifiedClosedTabHistory: [],
-									// Custom agent config
-									customPath: data.customPath,
-									customArgs: data.customArgs,
-									customEnvVars: data.customEnvVars,
-									// Auto Run setup - use autoRunPath from contribution
-									autoRunFolderPath: data.autoRunPath,
-									// Symphony metadata for tracking
-									symphonyMetadata: {
-										isSymphonySession: true,
-										contributionId: data.contributionId,
-										repoSlug: data.repo.slug,
-										issueNumber: data.issue.number,
-										issueTitle: data.issue.title,
-										documentPaths: data.issue.documentPaths.map((d) => d.path),
-										status: 'running',
-									},
-								};
-
-								setSessions((prev) => [...prev, newSession]);
-								setActiveSessionId(newId);
-								setSymphonyModalOpen(false);
-
-								// Register active contribution in Symphony persistent state
-								// This makes it show up in the Active tab of the Symphony modal
-								window.maestro.symphony
-									.registerActive({
-										contributionId: data.contributionId,
-										sessionId: newId,
-										repoSlug: data.repo.slug,
-										repoName: data.repo.name,
-										issueNumber: data.issue.number,
-										issueTitle: data.issue.title,
-										localPath: data.localPath,
-										branchName: data.branchName || '',
-										totalDocuments: data.issue.documentPaths.length,
-										agentType: data.agentType,
-										draftPrNumber: data.draftPrNumber,
-										draftPrUrl: data.draftPrUrl,
-									})
-									.catch((err: unknown) => {
-										console.error('[Symphony] Failed to register active contribution:', err);
-									});
-
-								// Track stats
-								window.maestro.stats.recordSessionCreated({
-									sessionId: newId,
-									agentType: data.agentType,
-									projectPath: data.localPath,
-									createdAt: Date.now(),
-									isRemote: false,
-								});
-
-								// Focus input
-								setActiveFocus('main');
-								setTimeout(() => inputRef.current?.focus(), 50);
-
-								// Switch to Auto Run tab so user sees the documents
-								setActiveRightTab('autorun');
-
-								// Auto-start batch run with all contribution documents
-								if (data.autoRunPath && data.issue.documentPaths.length > 0) {
-									const batchConfig: BatchRunConfig = {
-										documents: data.issue.documentPaths.map((doc) => ({
-											id: generateId(),
-											filename: doc.name.replace(/\.md$/, ''),
-											resetOnCompletion: false,
-											isDuplicate: false,
-										})),
-										prompt: DEFAULT_BATCH_PROMPT,
-										loopEnabled: false,
-									};
-
-									// Small delay to ensure session state is fully propagated
-									setTimeout(() => {
-										console.log(
-											'[Symphony] Auto-starting batch run with',
-											batchConfig.documents.length,
-											'documents'
-										);
-										startBatchRun(newId, batchConfig, data.autoRunPath!);
-									}, 500);
-								}
-							}}
+							onStartContribution={handleStartContribution}
 						/>
 					</Suspense>
 				)}
