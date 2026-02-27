@@ -1809,9 +1809,10 @@ export const TerminalOutput = memo(
 				</div>
 
 				{/* Auto-scroll toggle — positioned opposite AI response side (AI mode only) */}
-				{/* Visible when: not at bottom (dimmed, click to pin) OR pinned at bottom (accent, click to unpin) */}
+				{/* Visible when: has content AND (not at bottom (dimmed, click to pin) OR pinned at bottom (accent, click to unpin)) */}
 				{session.inputMode === 'ai' &&
 					setAutoScrollAiMode &&
+					filteredLogs.length > 0 &&
 					(!isAtBottom || isAutoScrollActive) && (
 						<button
 							onClick={() => {
