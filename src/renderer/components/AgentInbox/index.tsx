@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 import InboxListView from './InboxListView';
 import FocusModeView from './FocusModeView';
 import type { Theme, Session, Group, ThinkingMode } from '../../types';
@@ -60,7 +60,12 @@ export default function AgentInbox({
 
 	// ---- View mode state ----
 	const [viewMode, setViewMode] = useState<InboxViewMode>('list');
-	const [focusIndex, setFocusIndex] = useState(0);
+	// Identity-based focus tracking: survives items array reordering/membership changes.
+	// Prevents focus disruption when agents respond and items re-enter the filtered list.
+	const [focusId, setFocusId] = useState<{ sessionId: string; tabId: string } | null>(null);
+	// Sync ref for rapid keyboard navigation (prevents stale closure reads)
+	const focusIdRef = useRef(focusId);
+	focusIdRef.current = focusId;
 	const [selectedIndex, setSelectedIndex] = useState(0);
 
 	// ---- Filter/sort state (lifted from InboxListView for shared access) ----
@@ -103,6 +108,16 @@ export default function AgentInbox({
 			? resolveFrozenItems(frozenOrderRef.current)
 			: liveItems;
 
+	// Derive numeric index from identity at render time.
+	// If focusId's item left the array (deleted session), fall back to nearest valid index.
+	const safeFocusIndex = useMemo(() => {
+		if (!focusId || items.length === 0) return 0;
+		const idx = items.findIndex(
+			(i) => i.sessionId === focusId.sessionId && i.tabId === focusId.tabId
+		);
+		return idx >= 0 ? idx : Math.min(items.length - 1, 0);
+	}, [focusId, items]);
+
 	const handleSetFilterMode = useCallback(
 		(mode: InboxFilterMode) => {
 			setFilterMode(mode);
@@ -110,7 +125,7 @@ export default function AgentInbox({
 				// Re-snapshot: resolve new filter results immediately
 				// We need a render with the new filterMode first, so defer the snapshot
 				frozenOrderRef.current = [];
-				setFocusIndex(0);
+				setFocusId(null);
 			}
 		},
 		[viewMode]
@@ -121,29 +136,24 @@ export default function AgentInbox({
 		frozenOrderRef.current = [];
 	}, []);
 
-	// Re-snapshot after filter change empties the ref (needs liveItems from new filter)
+	// Re-snapshot after filter change empties the ref (needs liveItems from new filter).
+	// Also recover focusId when null (after filter change) to avoid permanent empty state.
 	useEffect(() => {
 		if (viewMode === 'focus' && frozenOrderRef.current.length === 0 && liveItems.length > 0) {
 			frozenOrderRef.current = liveItems.map((i) => ({
 				sessionId: i.sessionId,
 				tabId: i.tabId,
 			}));
+			// Recover focusId: after a filter change clears it, point to the first item
+			if (!focusIdRef.current && liveItems[0]) {
+				setFocusId({ sessionId: liveItems[0].sessionId, tabId: liveItems[0].tabId });
+			}
 		}
 	}, [viewMode, liveItems]);
 
-	// ---- Edge case: items shrink while in focus mode ----
-	useEffect(() => {
-		if (viewMode === 'focus' && items.length > 0 && focusIndex >= items.length) {
-			setFocusIndex(items.length - 1);
-		}
-	}, [items.length, focusIndex, viewMode]);
-
 	const handleEnterFocus = useCallback(
 		(item: InboxItem) => {
-			const idx = liveItems.findIndex(
-				(i) => i.sessionId === item.sessionId && i.tabId === item.tabId
-			);
-			setFocusIndex(idx >= 0 ? idx : 0);
+			setFocusId({ sessionId: item.sessionId, tabId: item.tabId });
 			// Freeze current order as simple identity pairs
 			frozenOrderRef.current = liveItems.map((i) => ({
 				sessionId: i.sessionId,
@@ -154,10 +164,16 @@ export default function AgentInbox({
 		[liveItems]
 	);
 
-	// ---- Navigate item wrapper ----
-	const handleNavigateItem = useCallback((idx: number) => {
-		setFocusIndex(idx);
-	}, []);
+	// ---- Navigate item wrapper (keeps numeric contract with FocusModeView) ----
+	const handleNavigateItem = useCallback(
+		(idx: number) => {
+			const target = items[idx];
+			if (target) {
+				setFocusId({ sessionId: target.sessionId, tabId: target.tabId });
+			}
+		},
+		[items]
+	);
 
 	// ---- Layer stack: viewMode-aware Escape ----
 	const handleLayerEscape = useCallback(() => {
@@ -190,7 +206,7 @@ export default function AgentInbox({
 		typeof window !== 'undefined' ? window.innerWidth * 0.92 : 1400,
 		1400
 	);
-	const dialogWidth = viewMode === 'focus' ? expandedWidth : isWide ? expandedWidth : 900;
+	const dialogWidth = viewMode === 'focus' ? expandedWidth : isWide ? expandedWidth : 1100;
 	const dialogHeight = viewMode === 'focus' ? '85vh' : undefined;
 	const dialogMaxHeight = viewMode === 'focus' ? undefined : isWide ? '90vh' : '80vh';
 
@@ -205,9 +221,22 @@ export default function AgentInbox({
 				e.preventDefault();
 				e.stopPropagation();
 				if (items.length > 1) {
-					setFocusIndex((prev) =>
-						e.key === '[' ? Math.max(prev - 1, 0) : Math.min(prev + 1, items.length - 1)
-					);
+					// Read from ref for accurate position during rapid keypresses
+					const currentId = focusIdRef.current;
+					const currentIdx = currentId
+						? items.findIndex(
+								(i) => i.sessionId === currentId.sessionId && i.tabId === currentId.tabId
+							)
+						: 0;
+					const safeIdx = currentIdx >= 0 ? currentIdx : 0;
+					const newIdx =
+						e.key === '[' ? Math.max(safeIdx - 1, 0) : Math.min(safeIdx + 1, items.length - 1);
+					const target = items[newIdx];
+					if (target) {
+						const newId = { sessionId: target.sessionId, tabId: target.tabId };
+						focusIdRef.current = newId; // Sync ref immediately for next rapid keypress
+						setFocusId(newId);
+					}
 				}
 			}
 		},
@@ -308,13 +337,13 @@ export default function AgentInbox({
 							isExpanded={isExpanded}
 							onToggleExpanded={setIsExpanded}
 						/>
-					) : items[focusIndex] ? (
+					) : items[safeFocusIndex] ? (
 						<FocusModeView
 							theme={theme}
-							item={items[focusIndex]}
+							item={items[safeFocusIndex]}
 							items={items}
 							sessions={sessions}
-							currentIndex={focusIndex}
+							currentIndex={safeFocusIndex}
 							enterToSendAI={enterToSendAI}
 							filterMode={filterMode}
 							setFilterMode={handleSetFilterMode}
