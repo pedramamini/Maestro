@@ -228,7 +228,7 @@ function FocusLogEntry({
 						<button
 							onClick={onToggleRaw}
 							aria-label={showRawMarkdown ? 'Show formatted' : 'Show plain text'}
-							className="p-1 rounded opacity-0 group-hover:opacity-50 focus:opacity-100 hover:!opacity-100 transition-opacity"
+							className="p-1 rounded opacity-0 group-hover:opacity-50 focus-visible:opacity-100 hover:!opacity-100 transition-opacity"
 							style={{ color: showRawMarkdown ? theme.colors.accent : theme.colors.textDim }}
 							title={showRawMarkdown ? 'Show formatted' : 'Show plain text'}
 						>
@@ -435,7 +435,8 @@ function FocusSidebar({
 								<div
 									key={`header-${row.groupKey}-${rowIdx}`}
 									tabIndex={0}
-									role="separator"
+									role="button"
+									aria-expanded={!collapsedGroups.has(row.groupKey)}
 									onClick={() => {
 										setCollapsedGroups((prev) => {
 											const next = new Set(prev);
@@ -987,6 +988,19 @@ export default function FocusModeView({
 				{/* Resize handle */}
 				<div
 					onMouseDown={handleResizeStart}
+					tabIndex={0}
+					role="separator"
+					aria-orientation="vertical"
+					aria-label="Resize sidebar"
+					onKeyDown={(e) => {
+						if (e.key === 'ArrowLeft') {
+							e.preventDefault();
+							setSidebarWidth((w) => Math.max(160, w - 16));
+						} else if (e.key === 'ArrowRight') {
+							e.preventDefault();
+							setSidebarWidth((w) => Math.min(400, w + 16));
+						}
+					}}
 					style={{
 						width: 4,
 						cursor: 'col-resize',
@@ -998,6 +1012,14 @@ export default function FocusModeView({
 						e.currentTarget.style.backgroundColor = `${theme.colors.accent}30`;
 					}}
 					onMouseLeave={(e) => {
+						if (!isResizingRef.current) {
+							e.currentTarget.style.backgroundColor = 'transparent';
+						}
+					}}
+					onFocus={(e) => {
+						e.currentTarget.style.backgroundColor = `${theme.colors.accent}30`;
+					}}
+					onBlur={(e) => {
 						if (!isResizingRef.current) {
 							e.currentTarget.style.backgroundColor = 'transparent';
 						}

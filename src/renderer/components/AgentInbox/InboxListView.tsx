@@ -1268,7 +1268,7 @@ export default function InboxListView({
 													item={row.item}
 													theme={theme}
 													isSelected={isRowSelected}
-													onClick={() => handleNavigate(row.item)}
+													onClick={() => setSelectedRowIndex(virtualRow.index)}
 													onDoubleClick={() => onEnterFocus(row.item)}
 												/>
 											</div>

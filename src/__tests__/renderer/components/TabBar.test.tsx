@@ -5787,7 +5787,7 @@ describe('TabBar description section', () => {
 				name: 'Tab 1',
 				agentSessionId: 'session-1',
 				description: 'My existing description',
-			} as any),
+			}),
 		];
 
 		render(
@@ -5878,7 +5878,7 @@ describe('TabBar description section', () => {
 				name: 'Tab 1',
 				agentSessionId: 'session-1',
 				description: 'Original description',
-			} as any),
+			}),
 		];
 
 		render(
