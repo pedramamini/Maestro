@@ -23,7 +23,7 @@ interface AddParticipantModalProps {
 	sessions: Session[];
 	participants: GroupChatParticipant[];
 	onClose: () => void;
-	onAddExisting: (sessionId: string, name: string, agentId: string, cwd: string) => void;
+	onAddExisting: (name: string, agentId: string, cwd: string) => void;
 	onAddFresh: (agentId: string, name: string) => void;
 }
 
@@ -74,7 +74,7 @@ export function AddParticipantModal({
 					setSelectedAgentId(available[0].id);
 				}
 			} catch (err) {
-				console.error('Failed to detect agents:', err);
+				setError('Failed to detect available agents. Please try again.');
 			} finally {
 				setIsDetecting(false);
 			}
@@ -114,7 +114,7 @@ export function AddParticipantModal({
 				if (!selectedSessionId) return;
 				const session = sessions.find((s) => s.id === selectedSessionId);
 				if (!session) return;
-				onAddExisting(session.id, session.name, session.toolType, session.cwd);
+				onAddExisting(session.name, session.toolType, session.cwd);
 			} else {
 				if (!selectedAgentId) return;
 				const tile = AGENT_TILES.find((t) => t.id === selectedAgentId);
@@ -159,10 +159,8 @@ export function AddParticipantModal({
 					<label
 						className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
 						style={{
-							borderColor:
-								mode === 'fresh' ? theme.colors.accent : theme.colors.border,
-							backgroundColor:
-								mode === 'fresh' ? `${theme.colors.accent}08` : 'transparent',
+							borderColor: mode === 'fresh' ? theme.colors.accent : theme.colors.border,
+							backgroundColor: mode === 'fresh' ? `${theme.colors.accent}08` : 'transparent',
 						}}
 					>
 						<input
@@ -175,16 +173,10 @@ export function AddParticipantModal({
 							style={{ accentColor: theme.colors.accent }}
 						/>
 						<div className="flex-1">
-							<div
-								className="text-sm font-medium"
-								style={{ color: theme.colors.textMain }}
-							>
+							<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
 								Create fresh agent
 							</div>
-							<div
-								className="text-xs mt-0.5"
-								style={{ color: theme.colors.textDim }}
-							>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
 								Clean slate with default config, no prior context
 							</div>
 						</div>
@@ -194,12 +186,8 @@ export function AddParticipantModal({
 					<label
 						className="flex items-start gap-3 p-3 rounded-lg border cursor-pointer transition-colors"
 						style={{
-							borderColor:
-								mode === 'existing' ? theme.colors.accent : theme.colors.border,
-							backgroundColor:
-								mode === 'existing'
-									? `${theme.colors.accent}08`
-									: 'transparent',
+							borderColor: mode === 'existing' ? theme.colors.accent : theme.colors.border,
+							backgroundColor: mode === 'existing' ? `${theme.colors.accent}08` : 'transparent',
 						}}
 					>
 						<input
@@ -212,16 +200,10 @@ export function AddParticipantModal({
 							style={{ accentColor: theme.colors.accent }}
 						/>
 						<div className="flex-1">
-							<div
-								className="text-sm font-medium"
-								style={{ color: theme.colors.textMain }}
-							>
+							<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
 								Use existing session
 							</div>
-							<div
-								className="text-xs mt-0.5"
-								style={{ color: theme.colors.textDim }}
-							>
+							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
 								Inherits working directory, model, and configuration
 							</div>
 						</div>
@@ -246,18 +228,12 @@ export function AddParticipantModal({
 										borderTopColor: 'transparent',
 									}}
 								/>
-								<span
-									className="text-sm"
-									style={{ color: theme.colors.textDim }}
-								>
+								<span className="text-sm" style={{ color: theme.colors.textDim }}>
 									Detecting agents...
 								</span>
 							</div>
 						) : availableTiles.length === 0 ? (
-							<div
-								className="text-sm py-2"
-								style={{ color: theme.colors.textDim }}
-							>
+							<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
 								No agents available.
 							</div>
 						) : (
@@ -297,12 +273,8 @@ export function AddParticipantModal({
 							Session
 						</label>
 						{availableSessions.length === 0 ? (
-							<div
-								className="text-sm py-2"
-								style={{ color: theme.colors.textDim }}
-							>
-								No available sessions. All sessions are either terminals or
-								already added.
+							<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+								No available sessions. All sessions are either terminals or already added.
 							</div>
 						) : (
 							<div className="relative">
@@ -318,13 +290,10 @@ export function AddParticipantModal({
 									aria-label="Select existing session"
 								>
 									{availableSessions.map((session) => {
-										const tile = AGENT_TILES.find(
-											(t) => t.id === session.toolType
-										);
+										const tile = AGENT_TILES.find((t) => t.id === session.toolType);
 										return (
 											<option key={session.id} value={session.id}>
-												{session.name} ({tile?.name || session.toolType})
-												— {session.cwd}
+												{session.name} ({tile?.name || session.toolType}) — {session.cwd}
 											</option>
 										);
 									})}

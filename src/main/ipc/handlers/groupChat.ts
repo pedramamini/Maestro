@@ -143,10 +143,16 @@ interface GenericProcessManager {
 		prompt?: string;
 		customEnvVars?: Record<string, string>;
 		contextWindow?: number;
+		promptArgs?: (prompt: string) => string[];
 		noPromptSeparator?: boolean;
+		shell?: string;
+		runInShell?: boolean;
+		sendPromptViaStdin?: boolean;
+		sendPromptViaStdinRaw?: boolean;
 	}): { pid: number; success: boolean };
 	write(sessionId: string, data: string): boolean;
 	kill(sessionId: string): boolean;
+	killByPrefix(prefix: string): number;
 	on(event: string, handler: (...args: unknown[]) => void): void;
 	off(event: string, handler: (...args: unknown[]) => void): void;
 }
@@ -251,7 +257,11 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 			// Check if a concurrent operation is in progress
 			const lockState = isChatLocked(id);
 			if (lockState.locked) {
-				throw new Error('Cannot delete group chat while ' + lockState.operation + ' is in progress. Try again after the operation completes.');
+				throw new Error(
+					'Cannot delete group chat while ' +
+						lockState.operation +
+						' is in progress. Try again after the operation completes.'
+				);
 			}
 
 			// Kill moderator and all participants first
@@ -338,7 +348,11 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 				if (moderatorChanged) {
 					const lockState = isChatLocked(id);
 					if (lockState.locked) {
-						throw new Error('Cannot change moderator while ' + lockState.operation + ' is in progress. Try again after the operation completes.');
+						throw new Error(
+							'Cannot change moderator while ' +
+								lockState.operation +
+								' is in progress. Try again after the operation completes.'
+						);
 					}
 					const processManager = getProcessManager();
 					await killModerator(id, processManager ?? undefined);
@@ -497,14 +511,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 				}
 
 				// Route through the user message router which handles logging and forwarding
-				await routeUserMessage(
-					id,
-					message,
-					processManager ?? undefined,
-					agentDetector ?? undefined,
-					readOnly,
-					images
-				);
+				await routeUserMessage(id, message, processManager, agentDetector, readOnly, images);
 
 				logger.debug(`Sent message to moderator in ${id}`, LOG_CONTEXT, {
 					messageLength: message.length,
@@ -606,10 +613,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 				}
 				const agentConfigValues = getAgentConfig?.(agentId) || {};
 
-				logger.info(
-					`Adding fresh participant ${name} (${agentId}) to ${id}`,
-					LOG_CONTEXT
-				);
+				logger.info(`Adding fresh participant ${name} (${agentId}) to ${id}`, LOG_CONTEXT);
 				const participant = await addFreshParticipant(
 					id,
 					name,
@@ -617,7 +621,7 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 					processManager,
 					cwd || os.homedir(),
 					agentDetector,
-					agentConfigValues,
+					agentConfigValues
 				);
 				logger.info(`Added fresh participant: ${name}`, LOG_CONTEXT);
 				return participant;
@@ -974,7 +978,10 @@ Respond with ONLY the summary text, no additional commentary.`;
 				state
 			);
 		} else {
-			logger.warn('mainWindow not available, cannot send participant state', LOG_CONTEXT, { groupChatId, participantName });
+			logger.warn('mainWindow not available, cannot send participant state', LOG_CONTEXT, {
+				groupChatId,
+				participantName,
+			});
 		}
 	};
 

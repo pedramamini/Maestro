@@ -1474,7 +1474,7 @@ export interface AppGroupChatModalsProps {
 	showAddParticipantModal: string | null;
 	sessions: Session[];
 	onCloseAddParticipantModal: () => void;
-	onAddExistingParticipant: (sessionId: string, name: string, agentId: string, cwd: string) => void;
+	onAddExistingParticipant: (name: string, agentId: string, cwd: string) => void;
 	onAddFreshParticipant: (agentId: string, name: string) => void;
 }
 
@@ -1597,23 +1597,22 @@ export const AppGroupChatModals = memo(function AppGroupChatModals({
 			)}
 
 			{/* --- ADD PARTICIPANT MODAL --- */}
-			{showAddParticipantModal && (() => {
-				const addParticipantGroupChat = groupChats.find(
-					(c) => c.id === showAddParticipantModal
-				);
-				return (
-					<AddParticipantModal
-						theme={theme}
-						isOpen={!!showAddParticipantModal}
-						groupChatId={showAddParticipantModal}
-						sessions={sessions}
-						participants={addParticipantGroupChat?.participants || []}
-						onClose={onCloseAddParticipantModal}
-						onAddExisting={onAddExistingParticipant}
-						onAddFresh={onAddFreshParticipant}
-					/>
-				);
-			})()}
+			{showAddParticipantModal &&
+				(() => {
+					const addParticipantGroupChat = groupChats.find((c) => c.id === showAddParticipantModal);
+					return (
+						<AddParticipantModal
+							theme={theme}
+							isOpen={!!showAddParticipantModal}
+							groupChatId={showAddParticipantModal}
+							sessions={sessions}
+							participants={addParticipantGroupChat?.participants || []}
+							onClose={onCloseAddParticipantModal}
+							onAddExisting={onAddExistingParticipant}
+							onAddFresh={onAddFreshParticipant}
+						/>
+					);
+				})()}
 		</>
 	);
 });
@@ -2144,7 +2143,7 @@ export interface AppModalsProps {
 	onOpenModeratorSession: (moderatorSessionId: string) => void;
 	showAddParticipantModal: string | null;
 	onCloseAddParticipantModal: () => void;
-	onAddExistingParticipant: (sessionId: string, name: string, agentId: string, cwd: string) => void;
+	onAddExistingParticipant: (name: string, agentId: string, cwd: string) => void;
 	onAddFreshParticipant: (agentId: string, name: string) => void;
 
 	// --- AppAgentModals props ---

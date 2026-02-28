@@ -199,8 +199,7 @@ export class ProcessManager extends EventEmitter {
 	killByPrefix(prefix: string): number {
 		let killed = 0;
 		for (const [sessionId] of this.processes) {
-			if (sessionId.startsWith(prefix)) {
-				this.kill(sessionId);
+			if (sessionId.startsWith(prefix) && this.kill(sessionId)) {
 				killed++;
 			}
 		}
