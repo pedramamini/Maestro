@@ -260,6 +260,9 @@ describe('useLiveMode', () => {
 		});
 
 		expect(returnValue).toBeNull();
+		// State should reflect server is stopped after failed restart
+		expect(result.current.isLiveMode).toBe(false);
+		expect(result.current.webInterfaceUrl).toBeNull();
 		expect(consoleSpy).toHaveBeenCalledWith(
 			'[restartWebServer] Failed to restart server:',
 			'Restart failed'
@@ -288,6 +291,9 @@ describe('useLiveMode', () => {
 		});
 
 		expect(returnValue).toBeNull();
+		// State should reflect server is stopped after exception
+		expect(result.current.isLiveMode).toBe(false);
+		expect(result.current.webInterfaceUrl).toBeNull();
 		expect(consoleSpy).toHaveBeenCalledWith('[restartWebServer] Error:', error);
 
 		consoleSpy.mockRestore();

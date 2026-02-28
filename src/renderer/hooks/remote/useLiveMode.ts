@@ -72,10 +72,16 @@ export function useLiveMode(): UseLiveModeReturn {
 				setWebInterfaceUrl(result.url);
 				return result.url;
 			} else {
+				// Server stopped but failed to restart — update state to reflect stopped server
+				setIsLiveMode(false);
+				setWebInterfaceUrl(null);
 				console.error('[restartWebServer] Failed to restart server:', result.error);
 				return null;
 			}
 		} catch (error) {
+			// stopServer may have succeeded — ensure state reflects server is down
+			setIsLiveMode(false);
+			setWebInterfaceUrl(null);
 			console.error('[restartWebServer] Error:', error);
 			return null;
 		}

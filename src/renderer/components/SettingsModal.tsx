@@ -2576,26 +2576,24 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							</div>
 
 							{/* Message Alignment */}
-							{setUserMessageAlignment && (
-								<div>
-									<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-										User Message Alignment
-									</div>
-									<ToggleButtonGroup
-										options={[
-											{ value: 'right', label: 'Right' },
-											{ value: 'left', label: 'Left' },
-										]}
-										value={userMessageAlignment ?? 'right'}
-										onChange={setUserMessageAlignment}
-										theme={theme}
-									/>
-									<p className="text-xs opacity-50 mt-2">
-										Position your messages on the left or right side of the chat. AI responses
-										appear on the opposite side.
-									</p>
+							<div>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+									User Message Alignment
 								</div>
-							)}
+								<ToggleButtonGroup
+									options={[
+										{ value: 'right', label: 'Right' },
+										{ value: 'left', label: 'Left' },
+									]}
+									value={userMessageAlignment ?? 'right'}
+									onChange={setUserMessageAlignment}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Position your messages on the left or right side of the chat. AI responses appear
+									on the opposite side.
+								</p>
+							</div>
 
 							{/* Window Chrome Settings */}
 							<div>

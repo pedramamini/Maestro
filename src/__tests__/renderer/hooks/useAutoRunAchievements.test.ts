@@ -363,8 +363,22 @@ describe('useAutoRunAchievements', () => {
 			expect(callArg.badge).toEqual(MOCK_CONDUCTOR_BADGES[0]);
 		});
 
-		it('always passes isNewRecord: false to setStandingOvationData', () => {
+		it('always passes isNewRecord: false (record determined at completion)', () => {
 			mockUpdateAutoRunProgress.mockReturnValue({ newBadgeLevel: 1, isNewRecord: false });
+
+			renderHook(() => useAutoRunAchievements({ activeBatchSessionIds: ['session-1'] }));
+
+			act(() => {
+				vi.advanceTimersByTime(60000);
+			});
+
+			const callArg = mockSetStandingOvationData.mock.calls[0][0];
+			expect(callArg.isNewRecord).toBe(false);
+		});
+
+		it('passes isNewRecord: false even when updateAutoRunProgress returns true', () => {
+			// The hook hardcodes isNewRecord: false because records are determined at batch completion
+			mockUpdateAutoRunProgress.mockReturnValue({ newBadgeLevel: 1, isNewRecord: true });
 
 			renderHook(() => useAutoRunAchievements({ activeBatchSessionIds: ['session-1'] }));
 

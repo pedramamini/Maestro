@@ -10,7 +10,7 @@
  */
 
 import { useCallback } from 'react';
-import type { Session, Theme } from '../../types';
+import type { Session, Theme, AITab } from '../../types';
 import { useTabStore } from '../../stores/tabStore';
 import { formatLogsForClipboard } from '../../utils/contextExtractor';
 import { notifyToast } from '../../stores/notificationStore';
@@ -50,13 +50,32 @@ export interface UseTabExportHandlersReturn {
 export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExportHandlersReturn {
 	const { sessionsRef, activeSessionIdRef, themeRef, setGistPublishModalOpen } = deps;
 
-	const handleCopyContext = useCallback((tabId: string) => {
+	/**
+	 * Resolve the active session and the specified tab.
+	 * Returns null if session/tab is missing or tab has no logs.
+	 */
+	const resolveSessionAndTab = (tabId: string): { session: Session; tab: AITab } | null => {
 		const currentSession = sessionsRef.current?.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
+		if (!currentSession) return null;
 		const tab = currentSession.aiTabs.find((t) => t.id === tabId);
-		if (!tab || !tab.logs || tab.logs.length === 0) return;
+		if (!tab || !tab.logs || tab.logs.length === 0) return null;
+		return { session: currentSession, tab };
+	};
 
-		const text = formatLogsForClipboard(tab.logs);
+	const handleCopyContext = useCallback((tabId: string) => {
+		const resolved = resolveSessionAndTab(tabId);
+		if (!resolved) return;
+
+		const text = formatLogsForClipboard(resolved.tab.logs);
+		if (!text.trim()) {
+			notifyToast({
+				type: 'warning',
+				title: 'Nothing to Copy',
+				message: 'No user or assistant messages to copy.',
+			});
+			return;
+		}
+
 		navigator.clipboard
 			.writeText(text)
 			.then(() => {
@@ -77,21 +96,19 @@ export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExpo
 	}, []);
 
 	const handleExportHtml = useCallback(async (tabId: string) => {
-		const currentSession = sessionsRef.current?.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const tab = currentSession.aiTabs.find((t) => t.id === tabId);
-		if (!tab || !tab.logs || tab.logs.length === 0) return;
+		const resolved = resolveSessionAndTab(tabId);
+		if (!resolved) return;
 
 		if (!themeRef.current) return;
 
 		try {
 			const { downloadTabExport } = await import('../../utils/tabExport');
 			await downloadTabExport(
-				tab,
+				resolved.tab,
 				{
-					name: currentSession.name,
-					cwd: currentSession.cwd,
-					toolType: currentSession.toolType,
+					name: resolved.session.name,
+					cwd: resolved.session.cwd,
+					toolType: resolved.session.toolType,
 				},
 				themeRef.current
 			);
@@ -111,15 +128,23 @@ export function useTabExportHandlers(deps: UseTabExportHandlersDeps): UseTabExpo
 	}, []);
 
 	const handlePublishTabGist = useCallback((tabId: string) => {
-		const currentSession = sessionsRef.current?.find((s) => s.id === activeSessionIdRef.current);
-		if (!currentSession) return;
-		const tab = currentSession.aiTabs.find((t) => t.id === tabId);
-		if (!tab || !tab.logs || tab.logs.length === 0) return;
+		const resolved = resolveSessionAndTab(tabId);
+		if (!resolved) return;
 
 		// Convert logs to markdown-like text format
-		const content = formatLogsForClipboard(tab.logs);
+		const content = formatLogsForClipboard(resolved.tab.logs);
+		if (!content.trim()) {
+			notifyToast({
+				type: 'warning',
+				title: 'Nothing to Publish',
+				message: 'No user or assistant messages to publish.',
+			});
+			return;
+		}
+
 		// Generate filename based on tab name or session ID
-		const tabName = tab.name || (tab.agentSessionId?.slice(0, 8) ?? 'conversation');
+		const tabName =
+			resolved.tab.name || (resolved.tab.agentSessionId?.slice(0, 8) ?? 'conversation');
 		const filename = `${tabName.replace(/[^a-zA-Z0-9-_]/g, '_')}_context.md`;
 
 		// Set content and open the modal
