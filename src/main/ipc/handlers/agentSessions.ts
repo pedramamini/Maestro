@@ -20,13 +20,10 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
 import { logger } from '../../utils/logger';
+import { captureException } from '../../utils/sentry';
 import { withIpcErrorLogging } from '../../utils/ipcHandler';
 import { isWebContentsAvailable } from '../../utils/safe-send';
-import {
-	getSessionStorage,
-	hasSessionStorage,
-	getAllSessionStorages,
-} from '../../agents';
+import { getSessionStorage, hasSessionStorage, getAllSessionStorages } from '../../agents';
 import { calculateClaudeCost } from '../../utils/pricing';
 import {
 	loadGlobalStatsCache,
@@ -272,7 +269,12 @@ function accumulateGeminiTokens(source: unknown): GeminiTokenAccumulator {
 export function parseGeminiSessionContent(
 	content: string,
 	sizeBytes: number,
-	persistedStats?: { inputTokens: number; outputTokens: number; cacheReadTokens: number; reasoningTokens: number }
+	persistedStats?: {
+		inputTokens: number;
+		outputTokens: number;
+		cacheReadTokens: number;
+		reasoningTokens: number;
+	}
 ): Omit<CachedSessionStats, 'fileMtimeMs'> {
 	let messageCount = 0;
 	let inputTokens = 0;
@@ -305,8 +307,9 @@ export function parseGeminiSessionContent(
 				cachedInputTokens += cached;
 			}
 		}
-	} catch {
-		// Caller handles parse errors; treat as zeroed stats
+	} catch (error) {
+		// Report corrupted session files to Sentry but keep zeroed-stats fallback
+		captureException(error, { context: 'parseGeminiSessionContent', sizeBytes });
 	}
 
 	// Fall back to persisted stats from live session if message-level extraction yielded nothing
@@ -1176,7 +1179,14 @@ export function registerAgentSessionsHandlers(deps?: AgentSessionsHandlerDepende
 					const fileStat = await fs.stat(file.filePath);
 
 					// Extract sessionId from the session JSON to look up persisted stats
-					let persistedStats: { inputTokens: number; outputTokens: number; cacheReadTokens: number; reasoningTokens: number } | undefined;
+					let persistedStats:
+						| {
+								inputTokens: number;
+								outputTokens: number;
+								cacheReadTokens: number;
+								reasoningTokens: number;
+						  }
+						| undefined;
 					const sessionIdMatch = content.match(/"sessionId"\s*:\s*"([^"]+)"/);
 					if (sessionIdMatch?.[1] && allGeminiPersistedStats[sessionIdMatch[1]]) {
 						persistedStats = allGeminiPersistedStats[sessionIdMatch[1]];

@@ -14,7 +14,10 @@ import {
 } from '../../../../main/ipc/handlers/agentSessions';
 import * as agentSessionStorage from '../../../../main/agents';
 import { GEMINI_SESSION_STATS_DEFAULTS } from '../../../../main/stores/defaults';
-import type { GeminiSessionStatsData, GeminiSessionTokenStats } from '../../../../main/stores/types';
+import type {
+	GeminiSessionStatsData,
+	GeminiSessionTokenStats,
+} from '../../../../main/stores/types';
 
 // Mock electron's ipcMain
 vi.mock('electron', () => ({
@@ -29,6 +32,14 @@ vi.mock('../../../../main/agents', () => ({
 	getSessionStorage: vi.fn(),
 	hasSessionStorage: vi.fn(),
 	getAllSessionStorages: vi.fn(),
+}));
+
+// Mock Sentry utilities
+const mockCaptureException = vi.fn();
+vi.mock('../../../../main/utils/sentry', () => ({
+	captureException: (...args: unknown[]) => mockCaptureException(...args),
+	captureMessage: vi.fn(),
+	addBreadcrumb: vi.fn(),
 }));
 
 // Mock the logger
@@ -478,16 +489,28 @@ describe('agentSessions IPC handlers', () => {
 		it('should aggregate named sessions from all storages that support getAllNamedSessions', async () => {
 			const mockGeminiStorage = {
 				agentId: 'gemini-cli',
-				getAllNamedSessions: vi.fn().mockResolvedValue([
-					{ agentSessionId: 'gem-1', projectPath: '/project', sessionName: 'Gemini Chat', starred: true },
-				]),
+				getAllNamedSessions: vi
+					.fn()
+					.mockResolvedValue([
+						{
+							agentSessionId: 'gem-1',
+							projectPath: '/project',
+							sessionName: 'Gemini Chat',
+							starred: true,
+						},
+					]),
 			};
 
 			const mockClaudeStorage = {
 				agentId: 'claude-code',
 				getAllNamedSessions: vi.fn().mockResolvedValue([
 					{ agentSessionId: 'claude-1', projectPath: '/project', sessionName: 'Claude Chat' },
-					{ agentSessionId: 'claude-2', projectPath: '/other', sessionName: 'Claude Debug', starred: false },
+					{
+						agentSessionId: 'claude-2',
+						projectPath: '/other',
+						sessionName: 'Claude Debug',
+						starred: false,
+					},
 				]),
 			};
 
@@ -496,9 +519,11 @@ describe('agentSessions IPC handlers', () => {
 				agentId: 'terminal',
 			};
 
-			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue(
-				[mockGeminiStorage, mockClaudeStorage, mockTerminalStorage] as unknown as agentSessionStorage.AgentSessionStorage[]
-			);
+			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue([
+				mockGeminiStorage,
+				mockClaudeStorage,
+				mockTerminalStorage,
+			] as unknown as agentSessionStorage.AgentSessionStorage[]);
 
 			const handler = handlers.get('agentSessions:getAllNamedSessions');
 			const result = await handler!({} as any);
@@ -536,9 +561,9 @@ describe('agentSessions IPC handlers', () => {
 				// No getAllNamedSessions method
 			};
 
-			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue(
-				[mockStorage] as unknown as agentSessionStorage.AgentSessionStorage[]
-			);
+			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue([
+				mockStorage,
+			] as unknown as agentSessionStorage.AgentSessionStorage[]);
 
 			const handler = handlers.get('agentSessions:getAllNamedSessions');
 			const result = await handler!({} as any);
@@ -554,14 +579,17 @@ describe('agentSessions IPC handlers', () => {
 
 			const mockWorkingStorage = {
 				agentId: 'gemini-cli',
-				getAllNamedSessions: vi.fn().mockResolvedValue([
-					{ agentSessionId: 'gem-1', projectPath: '/project', sessionName: 'Gemini Session' },
-				]),
+				getAllNamedSessions: vi
+					.fn()
+					.mockResolvedValue([
+						{ agentSessionId: 'gem-1', projectPath: '/project', sessionName: 'Gemini Session' },
+					]),
 			};
 
-			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue(
-				[mockFailingStorage, mockWorkingStorage] as unknown as agentSessionStorage.AgentSessionStorage[]
-			);
+			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue([
+				mockFailingStorage,
+				mockWorkingStorage,
+			] as unknown as agentSessionStorage.AgentSessionStorage[]);
 
 			const handler = handlers.get('agentSessions:getAllNamedSessions');
 			const result = await handler!({} as any);
@@ -626,12 +654,7 @@ describe('agentSessions IPC handlers', () => {
 	describe('parseGeminiSessionContent', () => {
 		it('should parse messages and return zeroed tokens when no token data in session', () => {
 			const content = JSON.stringify({
-				messages: [
-					{ type: 'user' },
-					{ type: 'gemini' },
-					{ type: 'user' },
-					{ type: 'gemini' },
-				],
+				messages: [{ type: 'user' }, { type: 'gemini' }, { type: 'user' }, { type: 'gemini' }],
 			});
 			const result = parseGeminiSessionContent(content, 1024);
 			expect(result.messages).toBe(4);
@@ -643,10 +666,7 @@ describe('agentSessions IPC handlers', () => {
 
 		it('should fall back to persistedStats when message-level tokens are 0', () => {
 			const content = JSON.stringify({
-				messages: [
-					{ type: 'user' },
-					{ type: 'gemini' },
-				],
+				messages: [{ type: 'user' }, { type: 'gemini' }],
 			});
 			const persistedStats = {
 				inputTokens: 500,
@@ -665,9 +685,7 @@ describe('agentSessions IPC handlers', () => {
 		it('should NOT fall back to persistedStats when message-level tokens are non-zero', () => {
 			// Hypothetical: if Gemini ever adds token data to messages
 			const content = JSON.stringify({
-				messages: [
-					{ type: 'user', tokens: { input: 10, output: 20 } },
-				],
+				messages: [{ type: 'user', tokens: { input: 10, output: 20 } }],
 			});
 			const persistedStats = {
 				inputTokens: 500,
@@ -694,6 +712,14 @@ describe('agentSessions IPC handlers', () => {
 			expect(result.inputTokens).toBe(300);
 			expect(result.outputTokens).toBe(600);
 			expect(result.cachedInputTokens).toBe(50);
+		});
+
+		it('should report corrupted session JSON to Sentry', () => {
+			parseGeminiSessionContent('not valid json', 256);
+			expect(mockCaptureException).toHaveBeenCalledWith(expect.any(SyntaxError), {
+				context: 'parseGeminiSessionContent',
+				sizeBytes: 256,
+			});
 		});
 
 		it('should handle missing messages array', () => {
@@ -767,8 +793,21 @@ describe('agentSessions IPC handlers', () => {
 				messages: [{ type: 'user' }, { type: 'gemini' }],
 			});
 
-			const allPersistedStats: Record<string, { inputTokens: number; outputTokens: number; cacheReadTokens: number; reasoningTokens: number }> = {
-				[uuid]: { inputTokens: 1000, outputTokens: 2000, cacheReadTokens: 300, reasoningTokens: 100 },
+			const allPersistedStats: Record<
+				string,
+				{
+					inputTokens: number;
+					outputTokens: number;
+					cacheReadTokens: number;
+					reasoningTokens: number;
+				}
+			> = {
+				[uuid]: {
+					inputTokens: 1000,
+					outputTokens: 2000,
+					cacheReadTokens: 300,
+					reasoningTokens: 100,
+				},
 				'other-uuid': { inputTokens: 50, outputTokens: 50, cacheReadTokens: 0, reasoningTokens: 0 },
 			};
 
