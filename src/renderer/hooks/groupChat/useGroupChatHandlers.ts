@@ -95,12 +95,7 @@ export interface GroupChatHandlersReturn {
 	handleCloseAddParticipantModal: () => void;
 
 	// Add participant handlers
-	handleAddExistingParticipant: (
-		sessionId: string,
-		name: string,
-		agentId: string,
-		cwd: string
-	) => Promise<void>;
+	handleAddExistingParticipant: (name: string, agentId: string, cwd: string) => Promise<void>;
 	handleAddFreshParticipant: (agentId: string, name: string) => Promise<void>;
 }
 
@@ -656,7 +651,7 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 	// =======================================================================
 
 	const handleAddExistingParticipant = useCallback(
-		async (sessionId: string, name: string, agentId: string, cwd: string) => {
+		async (name: string, agentId: string, cwd: string) => {
 			const { activeGroupChatId } = useGroupChatStore.getState();
 			const id = activeGroupChatId;
 			if (!id) return;
@@ -676,26 +671,23 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 		[]
 	);
 
-	const handleAddFreshParticipant = useCallback(
-		async (agentId: string, name: string) => {
-			const { activeGroupChatId } = useGroupChatStore.getState();
-			const id = activeGroupChatId;
-			if (!id) return;
+	const handleAddFreshParticipant = useCallback(async (agentId: string, name: string) => {
+		const { activeGroupChatId } = useGroupChatStore.getState();
+		const id = activeGroupChatId;
+		if (!id) return;
 
-			try {
-				await window.maestro.groupChat.addFreshParticipant(id, agentId, name);
-				useModalStore.getState().closeModal('addGroupChatParticipant');
-			} catch (err) {
-				notifyToast({
-					type: 'error',
-					title: 'Group Chat',
-					message: err instanceof Error ? err.message : 'Failed to add participant',
-				});
-				throw err; // Re-throw so the modal can display the error
-			}
-		},
-		[]
-	);
+		try {
+			await window.maestro.groupChat.addFreshParticipant(id, agentId, name);
+			useModalStore.getState().closeModal('addGroupChatParticipant');
+		} catch (err) {
+			notifyToast({
+				type: 'error',
+				title: 'Group Chat',
+				message: err instanceof Error ? err.message : 'Failed to add participant',
+			});
+			throw err; // Re-throw so the modal can display the error
+		}
+	}, []);
 
 	// =======================================================================
 	// Return

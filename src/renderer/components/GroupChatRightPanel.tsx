@@ -281,8 +281,10 @@ export function GroupChatRightPanel({
 				{onAddParticipant && (
 					<button
 						onClick={onAddParticipant}
-						className="flex items-center justify-center p-2 rounded hover:bg-white/5 transition-colors w-10 shrink-0"
+						className="flex items-center justify-center p-2 rounded hover:bg-white/5 transition-colors w-10 shrink-0 outline-none"
 						title="Add participant"
+						aria-label="Add participant"
+						tabIndex={0}
 					>
 						<Plus className="w-4 h-4 opacity-50" />
 					</button>
