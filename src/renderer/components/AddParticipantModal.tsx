@@ -111,12 +111,21 @@ export function AddParticipantModal({
 
 		try {
 			if (mode === 'existing') {
-				if (!selectedSessionId) return;
+				if (!selectedSessionId) {
+					setIsSubmitting(false);
+					return;
+				}
 				const session = sessions.find((s) => s.id === selectedSessionId);
-				if (!session) return;
+				if (!session) {
+					setIsSubmitting(false);
+					return;
+				}
 				onAddExisting(session.name, session.toolType, session.cwd);
 			} else {
-				if (!selectedAgentId) return;
+				if (!selectedAgentId) {
+					setIsSubmitting(false);
+					return;
+				}
 				const tile = AGENT_TILES.find((t) => t.id === selectedAgentId);
 				const name = tile?.name || selectedAgentId;
 				onAddFresh(selectedAgentId, name);
