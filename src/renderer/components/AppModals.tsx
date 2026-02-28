@@ -1712,10 +1712,19 @@ export function AppAgentModals({
 					sessionName={
 						sessions.find((s) => s.id === workspaceApprovalData.sessionId)?.name || 'Gemini CLI'
 					}
-					sshRemoteId={
-						sessions.find((s) => s.id === workspaceApprovalData.sessionId)?.sshRemoteId
+					sshRemoteId={(() => {
+						const s = sessions.find((s) => s.id === workspaceApprovalData.sessionId);
+						return (
+							s?.sshRemoteId ||
+							(s?.sessionSshRemoteConfig?.enabled
+								? s.sessionSshRemoteConfig.remoteId
+								: undefined) ||
+							undefined
+						);
+					})()}
+					onApprove={(directory) =>
+						onApproveWorkspaceDir(workspaceApprovalData.sessionId, directory)
 					}
-					onApprove={(directory) => onApproveWorkspaceDir(workspaceApprovalData.sessionId, directory)}
 					onDeny={onDenyWorkspaceDir}
 				/>
 			)}
