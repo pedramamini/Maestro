@@ -772,8 +772,17 @@ export function getModalActions() {
 			open ? openModal('directorNotes') : closeModal('directorNotes'),
 
 		// Agent Inbox Modal (Unified Inbox)
-		setAgentInboxOpen: (open: boolean) =>
-			open ? openModal('agentInbox') : closeModal('agentInbox'),
+		// Preserve persisted view state (filter/sort/expand) when closing
+		setAgentInboxOpen: (open: boolean) => {
+			if (open) {
+				openModal('agentInbox');
+			} else {
+				const currentData = useModalStore.getState().getData('agentInbox');
+				const newModals = new Map(useModalStore.getState().modals);
+				newModals.set('agentInbox', { open: false, data: currentData });
+				useModalStore.setState({ modals: newModals });
+			}
+		},
 		updateAgentInboxData: (data: Record<string, unknown>) => updateModalData('agentInbox', data),
 
 		// Lightbox refs replacement - use updateModalData instead

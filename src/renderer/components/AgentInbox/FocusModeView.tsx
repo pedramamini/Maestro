@@ -2,8 +2,6 @@ import { useMemo, useRef, useEffect, useState, useCallback } from 'react';
 import {
 	ArrowLeft,
 	X,
-	Bot,
-	User,
 	ArrowUp,
 	ExternalLink,
 	ChevronLeft,
@@ -161,24 +159,22 @@ function FocusLogEntry({
 		);
 	}
 
-	// User entry — right-aligned with User icon
+	// User entry — right-aligned, matching main chat bubble style
 	if (isUser) {
 		return (
-			<div className="flex gap-2" style={{ flexDirection: 'row-reverse' }}>
+			<div className="flex gap-4 flex-row-reverse px-6 py-2">
 				<div
-					className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
-					style={{ backgroundColor: `${theme.colors.success}20` }}
+					className="w-20 shrink-0 text-[10px] pt-2 text-right"
+					style={{ color: theme.colors.textDim, opacity: 0.6 }}
 				>
-					<User className="w-3.5 h-3.5" style={{ color: theme.colors.success }} />
+					{formatRelativeTime(log.timestamp)}
 				</div>
 				<div
-					className="flex-1 min-w-0 p-4 rounded-xl border overflow-hidden text-sm"
+					className="flex-1 min-w-0 p-4 pb-10 rounded-xl rounded-tr-none border overflow-hidden text-sm"
 					style={{
 						backgroundColor: `color-mix(in srgb, ${theme.colors.accent} 20%, ${theme.colors.bgSidebar})`,
 						borderColor: `${theme.colors.accent}40`,
 						color: theme.colors.textMain,
-						maxWidth: '85%',
-						borderLeft: `3px solid ${theme.colors.success}`,
 					}}
 				>
 					<div
@@ -191,41 +187,35 @@ function FocusLogEntry({
 					>
 						{log.text}
 					</div>
-					<div className="flex justify-end mt-2">
-						<span className="text-[10px]" style={{ color: theme.colors.textDim, opacity: 0.6 }}>
-							{formatRelativeTime(log.timestamp)}
-						</span>
-					</div>
 				</div>
 			</div>
 		);
 	}
 
-	// AI / stdout entry — left-aligned with Bot icon + markdown
+	// AI / stdout entry — left-aligned, matching main chat bubble style
 	if (isAI) {
 		const handleCopy = (text: string) => {
 			navigator.clipboard.writeText(text).catch(() => {});
 		};
 
 		return (
-			<div className="flex gap-2 group">
+			<div className="flex gap-4 group px-6 py-2">
 				<div
-					className="flex-shrink-0 w-6 h-6 rounded-full flex items-center justify-center"
-					style={{ backgroundColor: `${theme.colors.accent}20` }}
+					className="w-20 shrink-0 text-[10px] pt-2 text-left"
+					style={{ color: theme.colors.textDim, opacity: 0.6 }}
 				>
-					<Bot className="w-3.5 h-3.5" style={{ color: theme.colors.accent }} />
+					{formatRelativeTime(log.timestamp)}
 				</div>
 				<div
-					className="flex-1 min-w-0 p-4 rounded-xl border overflow-hidden text-sm"
+					className="flex-1 min-w-0 p-4 pb-10 rounded-xl rounded-tl-none border overflow-hidden text-sm relative"
 					style={{
 						backgroundColor: theme.colors.bgActivity,
 						borderColor: theme.colors.border,
 						color: theme.colors.textMain,
-						borderLeft: `3px solid ${theme.colors.accent}`,
 					}}
 				>
 					{/* Raw/rendered toggle */}
-					<div className="flex justify-end">
+					<div className="absolute top-2 right-2">
 						<button
 							onClick={onToggleRaw}
 							aria-label={showRawMarkdown ? 'Show formatted' : 'Show plain text'}
@@ -255,12 +245,6 @@ function FocusLogEntry({
 					) : (
 						<MarkdownRenderer content={log.text} theme={theme} onCopy={handleCopy} />
 					)}
-
-					<div className="flex justify-end mt-2">
-						<span className="text-[10px]" style={{ color: theme.colors.textDim, opacity: 0.6 }}>
-							{formatRelativeTime(log.timestamp)}
-						</span>
-					</div>
 				</div>
 			</div>
 		);

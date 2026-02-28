@@ -463,6 +463,9 @@ const Tab = memo(function Tab({
 
 	// Description editing handlers
 	const descriptionButtonRef = useRef<HTMLButtonElement>(null);
+	const descriptionTextareaRef = useCallback((el: HTMLTextAreaElement | null) => {
+		el?.focus();
+	}, []);
 	const skipBlurSaveRef = useRef(false);
 
 	const handleDescriptionSave = useCallback(
@@ -772,7 +775,7 @@ const Tab = memo(function Tab({
 								>
 									{isEditingDescription ? (
 										<textarea
-											ref={(el) => el?.focus()}
+											ref={descriptionTextareaRef}
 											value={descriptionDraft}
 											onChange={(e) => setDescriptionDraft(e.target.value)}
 											onKeyDown={handleDescriptionKeyDown}
