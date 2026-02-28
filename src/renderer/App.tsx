@@ -8,6 +8,7 @@ import React, {
 	lazy,
 	Suspense,
 } from 'react';
+import * as Sentry from '@sentry/electron/renderer';
 // SettingsModal is lazy-loaded for performance (large component, only loaded when settings opened)
 const SettingsModal = lazy(() =>
 	import('./components/SettingsModal').then((m) => ({ default: m.SettingsModal }))
@@ -134,7 +135,11 @@ import { useAgentListeners } from './hooks/agent/useAgentListeners';
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
 import { useNotificationStore, notifyToast } from './stores/notificationStore';
-import { useModalActions, useModalStore, type WorkspaceApprovalModalData } from './stores/modalStore';
+import {
+	useModalActions,
+	useModalStore,
+	type WorkspaceApprovalModalData,
+} from './stores/modalStore';
 import { GitStatusProvider } from './contexts/GitStatusContext';
 import { InputProvider, useInputContext } from './contexts/InputContext';
 import { useGroupChatStore } from './stores/groupChatStore';
@@ -408,13 +413,16 @@ function MaestroConsoleInner() {
 		const session = sessions.find((s) => s.id === sessionId);
 		if (session) {
 			const activeTab = session.aiTabs.find((t) => t.id === session.activeTabId);
-			const processSessionId = activeTab
-				? `${sessionId}-ai-${activeTab.id}`
-				: `${sessionId}-ai`;
+			const processSessionId = activeTab ? `${sessionId}-ai-${activeTab.id}` : `${sessionId}-ai`;
 
 			// Kill current process — next spawn will include the approved directory
-			window.maestro.process.kill(processSessionId).catch((err) => {
-				console.warn('[WorkspaceApproval] Failed to kill process:', err);
+			window.maestro.process.kill(processSessionId).catch((err: unknown) => {
+				// ESRCH / "No such process" is expected if process already exited
+				const msg = err instanceof Error ? err.message : String(err);
+				if (/ESRCH|no such process/i.test(msg)) return;
+				Sentry.captureException(err, {
+					extra: { processSessionId, context: 'WorkspaceApproval kill' },
+				});
 			});
 		}
 
