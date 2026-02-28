@@ -498,8 +498,8 @@ export async function routeUserMessage(
 								`- @${normalizeMentionName(def.name)} (${def.id}) — spawns a new instance`
 							);
 						}
-					} catch {
-						// Skip unavailable agents
+					} catch (e) {
+						logger.debug(`Skipping unavailable agent ${def.id}: ${e}`);
 					}
 				}
 				if (freshAgentTypes.length > 0) {
@@ -1343,8 +1343,8 @@ export async function spawnModeratorSynthesis(
 					`- @${normalizeMentionName(def.name)} (${def.id}) — spawns a new instance`
 				);
 			}
-		} catch {
-			// Skip unavailable agents
+		} catch (e) {
+			logger.debug(`Skipping unavailable agent ${def.id}: ${e}`);
 		}
 	}
 	if (freshAgentTypes.length > 0) {
