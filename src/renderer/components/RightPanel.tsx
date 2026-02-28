@@ -701,19 +701,34 @@ export const RightPanel = memo(
 											? `${currentSessionBatchState.completedTasksAcrossAllDocs} of ${currentSessionBatchState.totalTasksAcrossAllDocs} tasks completed`
 											: `${currentSessionBatchState.completedTasks} of ${currentSessionBatchState.totalTasks} tasks completed`}
 							</span>
-							{/* Loop iteration indicator */}
-							{currentSessionBatchState.loopEnabled && (
-								<span
-									className="text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap shrink-0"
-									style={{
-										backgroundColor: theme.colors.accent + '20',
-										color: theme.colors.accent,
-									}}
-								>
-									Loop {currentSessionBatchState.loopIteration + 1} of{' '}
-									{currentSessionBatchState.maxLoops ?? '∞'}
-								</span>
-							)}
+							<div className="flex items-center gap-2 shrink-0">
+								{/* Loop iteration indicator */}
+								{currentSessionBatchState.loopEnabled && (
+									<span
+										className="text-[10px] px-1.5 py-0.5 rounded whitespace-nowrap"
+										style={{
+											backgroundColor: theme.colors.accent + '20',
+											color: theme.colors.accent,
+										}}
+									>
+										Loop {currentSessionBatchState.loopIteration + 1} of{' '}
+										{currentSessionBatchState.maxLoops ?? '∞'}
+									</span>
+								)}
+								{/* View history link - only shown on auto-run tab */}
+								{activeRightTab === 'autorun' && (
+									<button
+										className="text-[10px] whitespace-nowrap bg-transparent border-none p-0 cursor-pointer"
+										style={{
+											color: theme.colors.textDim,
+											textDecoration: 'underline',
+										}}
+										onClick={() => setActiveRightTab('history')}
+									>
+										View history
+									</button>
+								)}
+							</div>
 						</div>
 					</div>
 				)}
