@@ -72,7 +72,9 @@ function createMockSession(overrides: Partial<Session> = {}): Session {
 	} as Session;
 }
 
-function createMockParticipant(overrides: Partial<GroupChatParticipant> = {}): GroupChatParticipant {
+function createMockParticipant(
+	overrides: Partial<GroupChatParticipant> = {}
+): GroupChatParticipant {
 	return {
 		name: 'Participant 1',
 		agentId: 'claude-code',
@@ -203,9 +205,7 @@ describe('AddParticipantModal', () => {
 				createMockSession({ id: 'session-a', name: 'Agent A', toolType: 'claude-code' }),
 				createMockSession({ id: 'session-b', name: 'Agent B', toolType: 'codex' }),
 			];
-			props.participants = [
-				createMockParticipant({ sessionId: 'session-a', name: 'Agent A' }),
-			];
+			props.participants = [createMockParticipant({ sessionId: 'session-a', name: 'Agent A' })];
 
 			render(<AddParticipantModal {...props} />);
 
@@ -237,9 +237,7 @@ describe('AddParticipantModal', () => {
 			fireEvent.click(screen.getByText('Use existing session'));
 
 			await waitFor(() => {
-				expect(
-					screen.getByText(/No available sessions/)
-				).toBeInTheDocument();
+				expect(screen.getByText(/No available sessions/)).toBeInTheDocument();
 			});
 		});
 	});
@@ -319,7 +317,9 @@ describe('AddParticipantModal', () => {
 		it('shows error message when onAddFresh throws', async () => {
 			const props = defaultProps();
 			props.onAddFresh = vi.fn(() => {
-				throw new Error('Failed to start Claude Code. Check that it\'s properly configured and accessible.');
+				throw new Error(
+					"Failed to start Claude Code. Check that it's properly configured and accessible."
+				);
 			});
 
 			render(<AddParticipantModal {...props} />);
@@ -335,9 +335,7 @@ describe('AddParticipantModal', () => {
 
 			// Error should be displayed
 			await waitFor(() => {
-				expect(
-					screen.getByText(/Failed to start Claude Code/)
-				).toBeInTheDocument();
+				expect(screen.getByText(/Failed to start Claude Code/)).toBeInTheDocument();
 			});
 		});
 
@@ -358,6 +356,40 @@ describe('AddParticipantModal', () => {
 
 			await waitFor(() => {
 				expect(screen.getByText('Failed to add participant')).toBeInTheDocument();
+			});
+		});
+	});
+
+	describe('isSubmitting reset on early returns', () => {
+		it('re-enables Add button when selected session is removed before submit', async () => {
+			const props = defaultProps();
+			props.sessions = [
+				createMockSession({ id: 'session-1', name: 'Agent A', toolType: 'claude-code' }),
+			];
+
+			const { rerender } = render(<AddParticipantModal {...props} />);
+
+			// Switch to existing mode
+			fireEvent.click(screen.getByText('Use existing session'));
+
+			await waitFor(() => {
+				expect(screen.getByLabelText('Select existing session')).toBeInTheDocument();
+			});
+
+			// session-1 is auto-selected; now remove it from the sessions array
+			const updatedProps = { ...props, sessions: [] as Session[] };
+			rerender(<AddParticipantModal {...updatedProps} />);
+
+			// The Add button should still be clickable because selectedSessionId is still set
+			const addButton = screen.getByRole('button', { name: /add/i });
+			fireEvent.click(addButton);
+
+			// onAddExisting should NOT have been called (session not found)
+			expect(props.onAddExisting).not.toHaveBeenCalled();
+
+			// Button should be re-enabled (isSubmitting reset), not stuck disabled
+			await waitFor(() => {
+				expect(addButton).not.toBeDisabled();
 			});
 		});
 	});
