@@ -156,7 +156,7 @@ export const AGENT_TARGET_NOTES: Record<ToolType, string> = {
     Gemini CLI is Google's AI coding assistant powered by Gemini models.
     It can read and edit files, run shell commands, search code, fetch web pages, and use Google Search.
     It supports MCP (Model Context Protocol) servers for extensibility.
-    It has approval modes: default, auto_edit, yolo, and plan (read-only).
+    It has approval modes: default, auto_edit, and yolo (plan mode is experimental).
     Models include gemini-2.5-pro, gemini-2.5-flash, and gemini-3 preview models.
     It supports tool calling with 15+ built-in tools.
   `,
