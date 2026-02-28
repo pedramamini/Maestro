@@ -365,8 +365,8 @@ function MaestroConsoleInner() {
 		setChatRawTextMode,
 		showHiddenFiles: _showHiddenFiles,
 		setShowHiddenFiles: _setShowHiddenFiles,
-		terminalWidth,
-		setTerminalWidth,
+		terminalWidth: _terminalWidth,
+		setTerminalWidth: _setTerminalWidth,
 		logLevel,
 		logViewerSelectedLevels,
 		setLogViewerSelectedLevels,
@@ -403,7 +403,7 @@ function MaestroConsoleInner() {
 		documentGraphLayoutType,
 
 		// Rendering settings
-		disableConfetti,
+		disableConfetti: _disableConfetti,
 
 		// File tab refresh settings
 		fileTabAutoRefreshEnabled,
