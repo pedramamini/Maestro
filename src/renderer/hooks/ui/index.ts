@@ -53,3 +53,6 @@ export type { UseAppHandlersDeps, UseAppHandlersReturn } from './useAppHandlers'
 // App initialization effects (startup, splash screen, platform checks, command loading)
 export { useAppInitialization } from './useAppInitialization';
 export type { AppInitializationReturn } from './useAppInitialization';
+
+// Tour actions listener (right panel control from tour overlay)
+export { useTourActions } from './useTourActions';

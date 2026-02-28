@@ -41,15 +41,12 @@ import {
 import { useSettings } from '../hooks';
 import type {
 	Theme,
-	ThemeColors,
 	ThemeId,
 	Shortcut,
 	ShellInfo,
-	CustomAICommand,
 	LLMProvider,
 	AgentConfig,
 	ToolType,
-	EncoreFeatureFlags,
 } from '../types';
 import { CustomThemeBuilder } from './CustomThemeBuilder';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -283,74 +280,6 @@ interface SettingsModalProps {
 	onClose: () => void;
 	theme: Theme;
 	themes: Record<string, Theme>;
-	activeThemeId: ThemeId;
-	setActiveThemeId: (id: ThemeId) => void;
-	customThemeColors: ThemeColors;
-	setCustomThemeColors: (colors: ThemeColors) => void;
-	customThemeBaseId: ThemeId;
-	setCustomThemeBaseId: (id: ThemeId) => void;
-	llmProvider: LLMProvider;
-	setLlmProvider: (provider: LLMProvider) => void;
-	modelSlug: string;
-	setModelSlug: (slug: string) => void;
-	apiKey: string;
-	setApiKey: (key: string) => void;
-	shortcuts: Record<string, Shortcut>;
-	setShortcuts: (shortcuts: Record<string, Shortcut>) => void;
-	tabShortcuts: Record<string, Shortcut>;
-	setTabShortcuts: (shortcuts: Record<string, Shortcut>) => void;
-	fontFamily: string;
-	setFontFamily: (font: string) => void;
-	fontSize: number;
-	setFontSize: (size: number) => void;
-	terminalWidth: number;
-	setTerminalWidth: (width: number) => void;
-	logLevel: string;
-	setLogLevel: (level: string) => void;
-	maxLogBuffer: number;
-	setMaxLogBuffer: (buffer: number) => void;
-	maxOutputLines: number;
-	setMaxOutputLines: (lines: number) => void;
-	defaultShell: string;
-	setDefaultShell: (shell: string) => void;
-	customShellPath: string;
-	setCustomShellPath: (path: string) => void;
-	shellArgs: string;
-	setShellArgs: (args: string) => void;
-	shellEnvVars: Record<string, string>;
-	setShellEnvVars: (vars: Record<string, string>) => void;
-	ghPath: string;
-	setGhPath: (path: string) => void;
-	enterToSendAI: boolean;
-	setEnterToSendAI: (value: boolean) => void;
-	enterToSendTerminal: boolean;
-	setEnterToSendTerminal: (value: boolean) => void;
-	defaultSaveToHistory: boolean;
-	setDefaultSaveToHistory: (value: boolean) => void;
-	defaultShowThinking: 'off' | 'on' | 'sticky';
-	setDefaultShowThinking: (value: 'off' | 'on' | 'sticky') => void;
-	osNotificationsEnabled: boolean;
-	setOsNotificationsEnabled: (value: boolean) => void;
-	audioFeedbackEnabled: boolean;
-	setAudioFeedbackEnabled: (value: boolean) => void;
-	audioFeedbackCommand: string;
-	setAudioFeedbackCommand: (value: string) => void;
-	toastDuration: number;
-	setToastDuration: (value: number) => void;
-	checkForUpdatesOnStartup: boolean;
-	setCheckForUpdatesOnStartup: (value: boolean) => void;
-	enableBetaUpdates: boolean;
-	setEnableBetaUpdates: (value: boolean) => void;
-	crashReportingEnabled: boolean;
-	setCrashReportingEnabled: (value: boolean) => void;
-	customAICommands: CustomAICommand[];
-	setCustomAICommands: (commands: CustomAICommand[]) => void;
-	autoScrollAiMode: boolean;
-	setAutoScrollAiMode: (value: boolean) => void;
-	userMessageAlignment?: 'left' | 'right';
-	setUserMessageAlignment?: (value: 'left' | 'right') => void;
-	encoreFeatures: EncoreFeatureFlags;
-	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 	initialTab?:
 		| 'general'
 		| 'display'
@@ -367,10 +296,97 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal = memo(function SettingsModal(props: SettingsModalProps) {
-	const { isOpen, onClose, theme, themes, initialTab, encoreFeatures, setEncoreFeatures } = props;
-
-	// Context management settings from useSettings hook
 	const {
+		isOpen,
+		onClose,
+		theme,
+		themes,
+		initialTab,
+		hasNoAgents,
+		onThemeImportError,
+		onThemeImportSuccess,
+	} = props;
+
+	// All settings from useSettings hook (self-sourced, Tier 1B)
+	const {
+		// Theme settings
+		activeThemeId,
+		setActiveThemeId,
+		customThemeColors,
+		setCustomThemeColors,
+		customThemeBaseId,
+		setCustomThemeBaseId,
+		// LLM settings
+		llmProvider,
+		setLlmProvider,
+		modelSlug,
+		setModelSlug,
+		apiKey,
+		setApiKey,
+		// Shortcut settings
+		shortcuts,
+		setShortcuts,
+		tabShortcuts,
+		setTabShortcuts,
+		// Display settings
+		fontFamily,
+		setFontFamily,
+		fontSize,
+		setFontSize,
+		terminalWidth,
+		setTerminalWidth,
+		logLevel,
+		setLogLevel,
+		maxLogBuffer,
+		setMaxLogBuffer,
+		maxOutputLines,
+		setMaxOutputLines,
+		// Shell settings
+		defaultShell,
+		setDefaultShell,
+		customShellPath,
+		setCustomShellPath,
+		shellArgs,
+		setShellArgs,
+		shellEnvVars,
+		setShellEnvVars,
+		ghPath,
+		setGhPath,
+		// Input settings
+		enterToSendAI,
+		setEnterToSendAI,
+		enterToSendTerminal,
+		setEnterToSendTerminal,
+		defaultSaveToHistory,
+		setDefaultSaveToHistory,
+		defaultShowThinking,
+		setDefaultShowThinking,
+		autoScrollAiMode,
+		setAutoScrollAiMode,
+		userMessageAlignment,
+		setUserMessageAlignment,
+		// Notification settings
+		osNotificationsEnabled,
+		setOsNotificationsEnabled,
+		audioFeedbackEnabled,
+		setAudioFeedbackEnabled,
+		audioFeedbackCommand,
+		setAudioFeedbackCommand,
+		toastDuration,
+		setToastDuration,
+		// Update settings
+		checkForUpdatesOnStartup,
+		setCheckForUpdatesOnStartup,
+		enableBetaUpdates,
+		setEnableBetaUpdates,
+		crashReportingEnabled,
+		setCrashReportingEnabled,
+		// AI Commands
+		customAICommands,
+		setCustomAICommands,
+		// Encore features
+		encoreFeatures,
+		setEncoreFeatures,
 		// Conductor Profile (About Me)
 		conductorProfile,
 		setConductorProfile,
@@ -858,20 +874,20 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			let response;
 			const testPrompt = 'Respond with exactly: "Connection successful"';
 
-			if (props.llmProvider === 'openrouter') {
-				if (!props.apiKey) {
+			if (llmProvider === 'openrouter') {
+				if (!apiKey) {
 					throw new Error('API key is required for OpenRouter');
 				}
 
 				response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 					method: 'POST',
 					headers: {
-						Authorization: `Bearer ${props.apiKey}`,
+						Authorization: `Bearer ${apiKey}`,
 						'Content-Type': 'application/json',
 						'HTTP-Referer': 'https://maestro.local',
 					},
 					body: JSON.stringify({
-						model: props.modelSlug || 'anthropic/claude-3.5-sonnet',
+						model: modelSlug || 'anthropic/claude-3.5-sonnet',
 						messages: [{ role: 'user', content: testPrompt }],
 						max_tokens: 50,
 					}),
@@ -891,20 +907,20 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					status: 'success',
 					message: 'Successfully connected to OpenRouter!',
 				});
-			} else if (props.llmProvider === 'anthropic') {
-				if (!props.apiKey) {
+			} else if (llmProvider === 'anthropic') {
+				if (!apiKey) {
 					throw new Error('API key is required for Anthropic');
 				}
 
 				response = await fetch('https://api.anthropic.com/v1/messages', {
 					method: 'POST',
 					headers: {
-						'x-api-key': props.apiKey,
+						'x-api-key': apiKey,
 						'anthropic-version': '2023-06-01',
 						'Content-Type': 'application/json',
 					},
 					body: JSON.stringify({
-						model: props.modelSlug || 'claude-3-5-sonnet-20241022',
+						model: modelSlug || 'claude-3-5-sonnet-20241022',
 						max_tokens: 50,
 						messages: [{ role: 'user', content: testPrompt }],
 					}),
@@ -924,14 +940,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					status: 'success',
 					message: 'Successfully connected to Anthropic!',
 				});
-			} else if (props.llmProvider === 'ollama') {
+			} else if (llmProvider === 'ollama') {
 				response = await fetch('http://localhost:11434/api/generate', {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
 					},
 					body: JSON.stringify({
-						model: props.modelSlug || 'llama3:latest',
+						model: modelSlug || 'llama3:latest',
 						prompt: testPrompt,
 						stream: false,
 					}),
@@ -1001,14 +1017,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		keys.push(mainKey);
 
 		if (isTabShortcut) {
-			props.setTabShortcuts({
-				...props.tabShortcuts,
-				[actionId]: { ...props.tabShortcuts[actionId], keys },
+			setTabShortcuts({
+				...tabShortcuts,
+				[actionId]: { ...tabShortcuts[actionId], keys },
 			});
 		} else {
-			props.setShortcuts({
-				...props.shortcuts,
-				[actionId]: { ...props.shortcuts[actionId], keys },
+			setShortcuts({
+				...shortcuts,
+				[actionId]: { ...shortcuts[actionId], keys },
 			});
 		}
 		setRecordingId(null);
@@ -1039,7 +1055,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			];
 			// Add 'custom' as the last item in the cycle
 			const allThemeIds = [...allThemes.map((t) => t.id), 'custom'];
-			const currentIndex = allThemeIds.findIndex((id: string) => id === props.activeThemeId);
+			let currentIndex = allThemeIds.findIndex((id: string) => id === activeThemeId);
+			if (currentIndex === -1) currentIndex = 0;
 
 			let newThemeId: string;
 			if (e.shiftKey) {
@@ -1051,7 +1068,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				const nextIndex = (currentIndex + 1) % allThemeIds.length;
 				newThemeId = allThemeIds[nextIndex];
 			}
-			props.setActiveThemeId(newThemeId as ThemeId);
+			setActiveThemeId(newThemeId as ThemeId);
 
 			// Scroll the newly selected theme button into view
 			setTimeout(() => {
@@ -1093,8 +1110,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<button
 								key={t.id}
 								data-theme-id={t.id}
-								onClick={() => props.setActiveThemeId(t.id)}
-								className={`p-3 rounded-lg border text-left transition-all ${props.activeThemeId === t.id ? 'ring-2' : ''}`}
+								onClick={() => setActiveThemeId(t.id)}
+								className={`p-3 rounded-lg border text-left transition-all ${activeThemeId === t.id ? 'ring-2' : ''}`}
 								style={
 									{
 										borderColor: theme.colors.border,
@@ -1108,7 +1125,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									<span className="text-sm font-bold" style={{ color: t.colors.textMain }}>
 										{t.name}
 									</span>
-									{props.activeThemeId === t.id && (
+									{activeThemeId === t.id && (
 										<Check className="w-4 h-4" style={{ color: t.colors.accent }} />
 									)}
 								</div>
@@ -1127,14 +1144,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			<div data-theme-id="custom">
 				<CustomThemeBuilder
 					theme={theme}
-					customThemeColors={props.customThemeColors}
-					setCustomThemeColors={props.setCustomThemeColors}
-					customThemeBaseId={props.customThemeBaseId}
-					setCustomThemeBaseId={props.setCustomThemeBaseId}
-					isSelected={props.activeThemeId === 'custom'}
-					onSelect={() => props.setActiveThemeId('custom')}
-					onImportError={props.onThemeImportError}
-					onImportSuccess={props.onThemeImportSuccess}
+					customThemeColors={customThemeColors}
+					setCustomThemeColors={setCustomThemeColors}
+					customThemeBaseId={customThemeBaseId}
+					setCustomThemeBaseId={setCustomThemeBaseId}
+					isSelected={activeThemeId === 'custom'}
+					onSelect={() => setActiveThemeId('custom')}
+					onImportError={onThemeImportError}
+					onImportSuccess={onThemeImportSuccess}
 				/>
 			</div>
 		</div>
@@ -1154,8 +1171,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				<div className="flex border-b" style={{ borderColor: theme.colors.border }}>
 					<button
 						onClick={() => setActiveTab('general')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'general' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'general' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="General"
 					>
 						<Settings className="w-4 h-4" />
@@ -1163,8 +1179,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('display')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Display"
 					>
 						<Monitor className="w-4 h-4" />
@@ -1173,8 +1188,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					{FEATURE_FLAGS.LLM_SETTINGS && (
 						<button
 							onClick={() => setActiveTab('llm')}
-							className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'llm' ? 'border-indigo-500' : 'border-transparent'}`}
-							tabIndex={-1}
+							className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'llm' ? 'border-indigo-500' : 'border-transparent'}`}
 							title="LLM"
 						>
 							LLM
@@ -1182,8 +1196,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					)}
 					<button
 						onClick={() => setActiveTab('shortcuts')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'shortcuts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'shortcuts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Shortcuts"
 					>
 						<Keyboard className="w-4 h-4" />
@@ -1191,8 +1204,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('theme')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'theme' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'theme' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Themes"
 					>
 						<Palette className="w-4 h-4" />
@@ -1200,8 +1212,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('notifications')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'notifications' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'notifications' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Notifications"
 					>
 						<Bell className="w-4 h-4" />
@@ -1209,8 +1220,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('aicommands')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'aicommands' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'aicommands' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="AI Commands"
 					>
 						<Cpu className="w-4 h-4" />
@@ -1218,8 +1228,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('ssh')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'ssh' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'ssh' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="SSH Hosts"
 					>
 						<Server className="w-4 h-4" />
@@ -1227,18 +1236,17 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('encore')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'encore' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'encore' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						style={{
 							color: activeTab === 'encore' ? theme.colors.textMain : theme.colors.textDim,
 						}}
-						tabIndex={-1}
 						title="Encore Features"
 					>
 						<FlaskConical className="w-4 h-4" />
 						{activeTab === 'encore' && <span>Encore Features</span>}
 					</button>
 					<div className="flex-1 flex justify-end items-center pr-4">
-						<button onClick={onClose} tabIndex={-1}>
+						<button onClick={onClose} className="cursor-pointer">
 							<X className="w-5 h-5 opacity-50 hover:opacity-100" />
 						</button>
 					</div>
@@ -1302,7 +1310,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												<button
 													key={shell.id}
 													onClick={() => {
-														props.setDefaultShell(shell.id);
+														setDefaultShell(shell.id);
 														// Auto-expand shell config when selecting an unavailable shell
 														if (!shell.available) {
 															setShellConfigExpanded(true);
@@ -1311,13 +1319,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 													onMouseEnter={handleShellInteraction}
 													onFocus={handleShellInteraction}
 													className={`w-full text-left p-3 rounded border transition-all ${
-														props.defaultShell === shell.id ? 'ring-2' : ''
+														defaultShell === shell.id ? 'ring-2' : ''
 													} hover:bg-opacity-10`}
 													style={
 														{
 															borderColor: theme.colors.border,
 															backgroundColor:
-																props.defaultShell === shell.id
+																defaultShell === shell.id
 																	? theme.colors.accentDim
 																	: theme.colors.bgMain,
 															'--tw-ring-color': theme.colors.accent,
@@ -1335,7 +1343,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 															)}
 														</div>
 														{shell.available ? (
-															props.defaultShell === shell.id ? (
+															defaultShell === shell.id ? (
 																<Check className="w-4 h-4" style={{ color: theme.colors.accent }} />
 															) : (
 																<span
@@ -1348,7 +1356,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 																	Available
 																</span>
 															)
-														) : props.defaultShell === shell.id ? (
+														) : defaultShell === shell.id ? (
 															<div className="flex items-center gap-2">
 																<span
 																	className="text-xs px-2 py-0.5 rounded"
@@ -1392,8 +1400,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 													<div className="flex items-center justify-between">
 														<div>
 															<div className="font-medium">
-																{props.defaultShell.charAt(0).toUpperCase() +
-																	props.defaultShell.slice(1)}
+																{defaultShell.charAt(0).toUpperCase() + defaultShell.slice(1)}
 															</div>
 															<div className="text-xs opacity-50 font-mono mt-1">
 																Current default
@@ -1450,15 +1457,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											<div className="flex gap-2">
 												<input
 													type="text"
-													value={props.customShellPath}
-													onChange={(e) => props.setCustomShellPath(e.target.value)}
+													value={customShellPath}
+													onChange={(e) => setCustomShellPath(e.target.value)}
 													placeholder="/path/to/shell"
 													className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 													style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 												/>
-												{props.customShellPath && (
+												{customShellPath && (
 													<button
-														onClick={() => props.setCustomShellPath('')}
+														onClick={() => setCustomShellPath('')}
 														className="px-2 py-1.5 rounded text-xs"
 														style={{
 															backgroundColor: theme.colors.bgMain,
@@ -1482,15 +1489,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											<div className="flex gap-2">
 												<input
 													type="text"
-													value={props.shellArgs}
-													onChange={(e) => props.setShellArgs(e.target.value)}
+													value={shellArgs}
+													onChange={(e) => setShellArgs(e.target.value)}
 													placeholder="--flag value"
 													className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 													style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 												/>
-												{props.shellArgs && (
+												{shellArgs && (
 													<button
-														onClick={() => props.setShellArgs('')}
+														onClick={() => setShellArgs('')}
 														className="px-2 py-1.5 rounded text-xs"
 														style={{
 															backgroundColor: theme.colors.bgMain,
@@ -1538,8 +1545,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</div>
 										</div>
 										<EnvVarsEditor
-											envVars={props.shellEnvVars}
-											setEnvVars={props.setShellEnvVars}
+											envVars={shellEnvVars}
+											setEnvVars={setShellEnvVars}
 											theme={theme}
 										/>
 									</div>
@@ -1558,8 +1565,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
 										{ value: 'error', label: 'Error', activeColor: '#ef4444' },
 									]}
-									value={props.logLevel}
-									onChange={props.setLogLevel}
+									value={logLevel}
+									onChange={setLogLevel}
 									theme={theme}
 								/>
 								<p className="text-xs opacity-50 mt-2">
@@ -1581,15 +1588,15 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									<div className="flex gap-2">
 										<input
 											type="text"
-											value={props.ghPath}
-											onChange={(e) => props.setGhPath(e.target.value)}
+											value={ghPath}
+											onChange={(e) => setGhPath(e.target.value)}
 											placeholder="/opt/homebrew/bin/gh"
 											className="flex-1 p-1.5 rounded border bg-transparent outline-none text-xs font-mono"
 											style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 										/>
-										{props.ghPath && (
+										{ghPath && (
 											<button
-												onClick={() => props.setGhPath('')}
+												onClick={() => setGhPath('')}
 												className="px-2 py-1 rounded text-xs"
 												style={{
 													backgroundColor: theme.colors.bgActivity,
@@ -1632,21 +1639,21 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									<div className="flex items-center justify-between mb-2">
 										<div className="text-sm font-medium">AI Interaction Mode</div>
 										<button
-											onClick={() => props.setEnterToSendAI(!props.enterToSendAI)}
+											onClick={() => setEnterToSendAI(!enterToSendAI)}
 											className="px-3 py-1.5 rounded text-xs font-mono transition-all"
 											style={{
-												backgroundColor: props.enterToSendAI
+												backgroundColor: enterToSendAI
 													? theme.colors.accentDim
 													: theme.colors.bgActivity,
 												color: theme.colors.textMain,
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											{formatEnterToSend(props.enterToSendAI)}
+											{formatEnterToSend(enterToSendAI)}
 										</button>
 									</div>
 									<p className="text-xs opacity-50">
-										{props.enterToSendAI
+										{enterToSendAI
 											? 'Press Enter to send. Use Shift+Enter for new line.'
 											: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 									</p>
@@ -1660,21 +1667,21 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									<div className="flex items-center justify-between mb-2">
 										<div className="text-sm font-medium">Terminal Mode</div>
 										<button
-											onClick={() => props.setEnterToSendTerminal(!props.enterToSendTerminal)}
+											onClick={() => setEnterToSendTerminal(!enterToSendTerminal)}
 											className="px-3 py-1.5 rounded text-xs font-mono transition-all"
 											style={{
-												backgroundColor: props.enterToSendTerminal
+												backgroundColor: enterToSendTerminal
 													? theme.colors.accentDim
 													: theme.colors.bgActivity,
 												color: theme.colors.textMain,
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											{formatEnterToSend(props.enterToSendTerminal)}
+											{formatEnterToSend(enterToSendTerminal)}
 										</button>
 									</div>
 									<p className="text-xs opacity-50">
-										{props.enterToSendTerminal
+										{enterToSendTerminal
 											? 'Press Enter to send. Use Shift+Enter for new line.'
 											: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 									</p>
@@ -1687,8 +1694,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Default History Toggle"
 								title='Enable "History" by default for new tabs'
 								description='When enabled, new AI tabs will have the "History" toggle on by default, saving a synopsis after each completion'
-								checked={props.defaultSaveToHistory}
-								onChange={props.setDefaultSaveToHistory}
+								checked={defaultSaveToHistory}
+								onChange={setDefaultSaveToHistory}
 								theme={theme}
 							/>
 
@@ -1706,12 +1713,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										Show AI thinking/reasoning content for new tabs
 									</div>
 									<div className="text-sm opacity-60 mb-3" style={{ color: theme.colors.textDim }}>
-										{props.defaultShowThinking === 'off' &&
-											'Thinking hidden, only final responses shown'}
-										{props.defaultShowThinking === 'on' &&
-											'Thinking streams live, clears on completion'}
-										{props.defaultShowThinking === 'sticky' &&
-											'Thinking streams live and stays visible'}
+										{defaultShowThinking === 'off' && 'Thinking hidden, only final responses shown'}
+										{defaultShowThinking === 'on' && 'Thinking streams live, clears on completion'}
+										{defaultShowThinking === 'sticky' && 'Thinking streams live and stays visible'}
 									</div>
 									<ToggleButtonGroup
 										options={[
@@ -1719,8 +1723,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											{ value: 'on' as const, label: 'On' },
 											{ value: 'sticky' as const, label: 'Sticky' },
 										]}
-										value={props.defaultShowThinking}
-										onChange={props.setDefaultShowThinking}
+										value={defaultShowThinking}
+										onChange={setDefaultShowThinking}
 										theme={theme}
 									/>
 								</div>
@@ -1743,8 +1747,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Auto-scroll AI Output"
 								title="Auto-scroll AI output"
 								description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
-								checked={props.autoScrollAiMode}
-								onChange={props.setAutoScrollAiMode}
+								checked={autoScrollAiMode}
+								onChange={setAutoScrollAiMode}
 								theme={theme}
 							/>
 
@@ -1933,8 +1937,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Updates"
 								title="Check for updates on startup"
 								description="Automatically check for new Maestro versions when the app starts"
-								checked={props.checkForUpdatesOnStartup}
-								onChange={props.setCheckForUpdatesOnStartup}
+								checked={checkForUpdatesOnStartup}
+								onChange={setCheckForUpdatesOnStartup}
 								theme={theme}
 							/>
 
@@ -1944,8 +1948,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Pre-release Channel"
 								title="Include beta and release candidate updates"
 								description="Opt-in to receive pre-release versions (e.g., v0.11.1-rc, v0.12.0-beta). These may contain experimental features and bugs."
-								checked={props.enableBetaUpdates}
-								onChange={props.setEnableBetaUpdates}
+								checked={enableBetaUpdates}
+								onChange={setEnableBetaUpdates}
 								theme={theme}
 							/>
 
@@ -1955,8 +1959,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Privacy"
 								title="Send anonymous crash reports"
 								description="Help improve Maestro by automatically sending crash reports. No personal data is collected. Changes take effect after restart."
-								checked={props.crashReportingEnabled}
-								onChange={props.setCrashReportingEnabled}
+								checked={crashReportingEnabled}
+								onChange={setCrashReportingEnabled}
 								theme={theme}
 							/>
 
@@ -2490,8 +2494,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-5">
 							{/* Font Family */}
 							<FontConfigurationPanel
-								fontFamily={props.fontFamily}
-								setFontFamily={props.setFontFamily}
+								fontFamily={fontFamily}
+								setFontFamily={setFontFamily}
 								systemFonts={systemFonts}
 								fontsLoaded={fontsLoaded}
 								fontLoading={fontLoading}
@@ -2512,8 +2516,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{ value: 16, label: 'Large' },
 										{ value: 18, label: 'X-Large' },
 									]}
-									value={props.fontSize}
-									onChange={props.setFontSize}
+									value={fontSize}
+									onChange={setFontSize}
 									theme={theme}
 								/>
 							</div>
@@ -2525,8 +2529,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								</div>
 								<ToggleButtonGroup
 									options={[80, 100, 120, 160]}
-									value={props.terminalWidth}
-									onChange={props.setTerminalWidth}
+									value={terminalWidth}
+									onChange={setTerminalWidth}
 									theme={theme}
 								/>
 							</div>
@@ -2538,8 +2542,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								</div>
 								<ToggleButtonGroup
 									options={[1000, 5000, 10000, 25000]}
-									value={props.maxLogBuffer}
-									onChange={props.setMaxLogBuffer}
+									value={maxLogBuffer}
+									onChange={setMaxLogBuffer}
 									theme={theme}
 								/>
 								<p className="text-xs opacity-50 mt-2">
@@ -2561,8 +2565,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{ value: 100 },
 										{ value: Infinity, label: 'All' },
 									]}
-									value={props.maxOutputLines}
-									onChange={props.setMaxOutputLines}
+									value={maxOutputLines}
+									onChange={setMaxOutputLines}
 									theme={theme}
 								/>
 								<p className="text-xs opacity-50 mt-2">
@@ -2572,26 +2576,24 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							</div>
 
 							{/* Message Alignment */}
-							{props.setUserMessageAlignment && (
-								<div>
-									<div className="block text-xs font-bold opacity-70 uppercase mb-2">
-										User Message Alignment
-									</div>
-									<ToggleButtonGroup
-										options={[
-											{ value: 'right', label: 'Right' },
-											{ value: 'left', label: 'Left' },
-										]}
-										value={props.userMessageAlignment ?? 'right'}
-										onChange={props.setUserMessageAlignment}
-										theme={theme}
-									/>
-									<p className="text-xs opacity-50 mt-2">
-										Position your messages on the left or right side of the chat. AI responses
-										appear on the opposite side.
-									</p>
+							<div>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+									User Message Alignment
 								</div>
-							)}
+								<ToggleButtonGroup
+									options={[
+										{ value: 'right', label: 'Right' },
+										{ value: 'left', label: 'Left' },
+									]}
+									value={userMessageAlignment ?? 'right'}
+									onChange={setUserMessageAlignment}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Position your messages on the left or right side of the chat. AI responses appear
+									on the opposite side.
+								</p>
+							</div>
 
 							{/* Window Chrome Settings */}
 							<div>
@@ -2955,8 +2957,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									LLM Provider
 								</div>
 								<select
-									value={props.llmProvider}
-									onChange={(e) => props.setLlmProvider(e.target.value as LLMProvider)}
+									value={llmProvider}
+									onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
 									className="w-full p-2 rounded border bg-transparent outline-none"
 									style={{ borderColor: theme.colors.border }}
 								>
@@ -2969,17 +2971,17 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<div>
 								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Model Slug</div>
 								<input
-									value={props.modelSlug}
-									onChange={(e) => props.setModelSlug(e.target.value)}
+									value={modelSlug}
+									onChange={(e) => setModelSlug(e.target.value)}
 									className="w-full p-2 rounded border bg-transparent outline-none"
 									style={{ borderColor: theme.colors.border }}
 									placeholder={
-										props.llmProvider === 'ollama' ? 'llama3:latest' : 'anthropic/claude-3.5-sonnet'
+										llmProvider === 'ollama' ? 'llama3:latest' : 'anthropic/claude-3.5-sonnet'
 									}
 								/>
 							</div>
 
-							{props.llmProvider !== 'ollama' && (
+							{llmProvider !== 'ollama' && (
 								<div>
 									<div className="block text-xs font-bold opacity-70 uppercase mb-2">API Key</div>
 									<div
@@ -2992,8 +2994,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										<Key className="w-4 h-4 mr-2 opacity-50" />
 										<input
 											type="password"
-											value={props.apiKey}
-											onChange={(e) => props.setApiKey(e.target.value)}
+											value={apiKey}
+											onChange={(e) => setApiKey(e.target.value)}
 											className="bg-transparent flex-1 text-sm outline-none"
 											placeholder="sk-..."
 										/>
@@ -3008,7 +3010,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<div className="pt-4 border-t" style={{ borderColor: theme.colors.border }}>
 								<button
 									onClick={testLLMConnection}
-									disabled={testingLLM || (props.llmProvider !== 'ollama' && !props.apiKey)}
+									disabled={testingLLM || (llmProvider !== 'ollama' && !apiKey)}
 									className="w-full py-3 rounded-lg font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 									style={{
 										backgroundColor: theme.colors.accent,
@@ -3045,8 +3047,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					{activeTab === 'shortcuts' &&
 						(() => {
 							const allShortcuts = [
-								...Object.values(props.shortcuts).map((sc) => ({ ...sc, isTabShortcut: false })),
-								...Object.values(props.tabShortcuts).map((sc) => ({ ...sc, isTabShortcut: true })),
+								...Object.values(shortcuts).map((sc) => ({ ...sc, isTabShortcut: false })),
+								...Object.values(tabShortcuts).map((sc) => ({ ...sc, isTabShortcut: true })),
 							];
 							const totalShortcuts = allShortcuts.length;
 							const filteredShortcuts = allShortcuts.filter((sc) =>
@@ -3098,7 +3100,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							return (
 								<div className="flex flex-col" style={{ minHeight: '450px' }}>
-									{props.hasNoAgents && (
+									{hasNoAgents && (
 										<p
 											className="text-xs mb-3 px-2 py-1.5 rounded"
 											style={{
@@ -3176,14 +3178,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 					{activeTab === 'notifications' && (
 						<NotificationsPanel
-							osNotificationsEnabled={props.osNotificationsEnabled}
-							setOsNotificationsEnabled={props.setOsNotificationsEnabled}
-							audioFeedbackEnabled={props.audioFeedbackEnabled}
-							setAudioFeedbackEnabled={props.setAudioFeedbackEnabled}
-							audioFeedbackCommand={props.audioFeedbackCommand}
-							setAudioFeedbackCommand={props.setAudioFeedbackCommand}
-							toastDuration={props.toastDuration}
-							setToastDuration={props.setToastDuration}
+							osNotificationsEnabled={osNotificationsEnabled}
+							setOsNotificationsEnabled={setOsNotificationsEnabled}
+							audioFeedbackEnabled={audioFeedbackEnabled}
+							setAudioFeedbackEnabled={setAudioFeedbackEnabled}
+							audioFeedbackCommand={audioFeedbackCommand}
+							setAudioFeedbackCommand={setAudioFeedbackCommand}
+							toastDuration={toastDuration}
+							setToastDuration={setToastDuration}
 							theme={theme}
 						/>
 					)}
@@ -3192,8 +3194,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-8">
 							<AICommandsPanel
 								theme={theme}
-								customAICommands={props.customAICommands}
-								setCustomAICommands={props.setCustomAICommands}
+								customAICommands={customAICommands}
+								setCustomAICommands={setCustomAICommands}
 							/>
 
 							{/* Divider */}

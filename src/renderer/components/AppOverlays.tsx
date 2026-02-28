@@ -14,7 +14,9 @@
 import { StandingOvationOverlay } from './StandingOvationOverlay';
 import { FirstRunCelebration } from './FirstRunCelebration';
 import { KeyboardMasteryCelebration } from './KeyboardMasteryCelebration';
-import type { Theme, Shortcut } from '../types';
+import { useModalStore, selectModalData } from '../stores/modalStore';
+import { useSettingsStore } from '../stores/settingsStore';
+import type { Theme } from '../types';
 import type { ConductorBadge } from '../constants/conductorBadges';
 
 /**
@@ -43,23 +45,16 @@ export interface AppOverlaysProps {
 	theme: Theme;
 
 	// Standing Ovation Overlay
-	standingOvationData: StandingOvationData | null;
 	cumulativeTimeMs: number;
 	onCloseStandingOvation: () => void;
 	onOpenLeaderboardRegistration: () => void;
 	isLeaderboardRegistered: boolean;
 
 	// First Run Celebration
-	firstRunCelebrationData: FirstRunCelebrationData | null;
 	onCloseFirstRun: () => void;
 
 	// Keyboard Mastery Celebration
-	pendingKeyboardMasteryLevel: number | null;
 	onCloseKeyboardMastery: () => void;
-	shortcuts: Record<string, Shortcut>;
-
-	// Rendering settings
-	disableConfetti?: boolean;
 }
 
 /**
@@ -71,18 +66,20 @@ export interface AppOverlaysProps {
  */
 export function AppOverlays({
 	theme,
-	standingOvationData,
 	cumulativeTimeMs,
 	onCloseStandingOvation,
 	onOpenLeaderboardRegistration,
 	isLeaderboardRegistered,
-	firstRunCelebrationData,
 	onCloseFirstRun,
-	pendingKeyboardMasteryLevel,
 	onCloseKeyboardMastery,
-	shortcuts,
-	disableConfetti = false,
 }: AppOverlaysProps): JSX.Element {
+	// Self-source from stores (Tier 1A)
+	const standingOvationData = useModalStore(selectModalData('standingOvation')) ?? null;
+	const firstRunCelebrationData = useModalStore(selectModalData('firstRunCelebration')) ?? null;
+	const keyboardMasteryData = useModalStore(selectModalData('keyboardMastery'));
+	const pendingKeyboardMasteryLevel = keyboardMasteryData?.level ?? null;
+	const shortcuts = useSettingsStore((s) => s.shortcuts);
+	const disableConfetti = useSettingsStore((s) => s.disableConfetti);
 	return (
 		<>
 			{/* --- FIRST RUN CELEBRATION OVERLAY --- */}

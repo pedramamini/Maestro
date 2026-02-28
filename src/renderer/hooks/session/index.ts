@@ -51,3 +51,7 @@ export type { SessionLifecycleDeps, SessionLifecycleReturn } from './useSessionL
 // Session CRUD (create, delete, rename, bookmark, drag-drop, group-move)
 export { useSessionCrud } from './useSessionCrud';
 export type { UseSessionCrudDeps, UseSessionCrudReturn } from './useSessionCrud';
+
+// Session cycling (Cmd+Shift+[/])
+export { useCycleSession } from './useCycleSession';
+export type { UseCycleSessionDeps, UseCycleSessionReturn } from './useCycleSession';

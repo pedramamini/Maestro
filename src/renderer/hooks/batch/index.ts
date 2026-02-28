@@ -134,5 +134,13 @@ export type {
 	UseInlineWizardReturn,
 } from './useInlineWizard';
 
+// Auto Run achievements tracking (progress intervals, peak stats)
+export { useAutoRunAchievements } from './useAutoRunAchievements';
+export type { UseAutoRunAchievementsDeps } from './useAutoRunAchievements';
+
+// Auto Run document loader (list, tree, task counts, file watching)
+export { useAutoRunDocumentLoader } from './useAutoRunDocumentLoader';
+export type { UseAutoRunDocumentLoaderReturn } from './useAutoRunDocumentLoader';
+
 // Re-export ExistingDocument type from existingDocsDetector for convenience
 export type { ExistingDocument } from '../../utils/existingDocsDetector';
