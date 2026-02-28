@@ -47,7 +47,10 @@ vi.mock('../../../../main/parsers/error-patterns', () => ({
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
-import { StdoutHandler, extractDeniedPath } from '../../../../main/process-manager/handlers/StdoutHandler';
+import {
+	StdoutHandler,
+	extractDeniedPath,
+} from '../../../../main/process-manager/handlers/StdoutHandler';
 import type { ManagedProcess } from '../../../../main/process-manager/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -658,15 +661,17 @@ describe('StdoutHandler', () => {
 		 * via the 'usage' event emitter.
 		 */
 
-		function createOutputParserMock(usageReturn: {
-			inputTokens: number;
-			outputTokens: number;
-			cacheReadTokens?: number;
-			cacheCreationTokens?: number;
-			costUsd?: number;
-			contextWindow?: number;
-			reasoningTokens?: number;
-		} | null) {
+		function createOutputParserMock(
+			usageReturn: {
+				inputTokens: number;
+				outputTokens: number;
+				cacheReadTokens?: number;
+				cacheCreationTokens?: number;
+				costUsd?: number;
+				contextWindow?: number;
+				reasoningTokens?: number;
+			} | null
+		) {
 			return {
 				agentId: 'claude-code',
 				parseJsonLine: vi.fn((line: string) => {
@@ -777,10 +782,10 @@ describe('StdoutHandler', () => {
 
 			expect(usageSpy).toHaveBeenCalledTimes(2);
 			const delta = usageSpy.mock.calls[1][1];
-			expect(delta.inputTokens).toBe(800);  // 1800 - 1000
-			expect(delta.outputTokens).toBe(400);  // 900 - 500
-			expect(delta.cacheReadInputTokens).toBe(150);  // 350 - 200
-			expect(delta.cacheCreationInputTokens).toBe(80);  // 180 - 100
+			expect(delta.inputTokens).toBe(800); // 1800 - 1000
+			expect(delta.outputTokens).toBe(400); // 900 - 500
+			expect(delta.cacheReadInputTokens).toBe(150); // 350 - 200
+			expect(delta.cacheCreationInputTokens).toBe(80); // 180 - 100
 
 			// Cost and contextWindow should still be passed through from the raw stats
 			expect(delta.totalCostUsd).toBe(0.09);
@@ -959,15 +964,15 @@ describe('StdoutHandler', () => {
 
 			// Turn 2: delta from turn 1
 			sendJsonLine(handler, sessionId, { type: 'message', text: 'turn 2' });
-			expect(usageSpy.mock.calls[1][1].inputTokens).toBe(700);   // 1200 - 500
-			expect(usageSpy.mock.calls[1][1].outputTokens).toBe(400);  // 600 - 200
+			expect(usageSpy.mock.calls[1][1].inputTokens).toBe(700); // 1200 - 500
+			expect(usageSpy.mock.calls[1][1].outputTokens).toBe(400); // 600 - 200
 
 			// Turn 3: delta from turn 2
 			sendJsonLine(handler, sessionId, { type: 'message', text: 'turn 3' });
-			expect(usageSpy.mock.calls[2][1].inputTokens).toBe(800);   // 2000 - 1200
-			expect(usageSpy.mock.calls[2][1].outputTokens).toBe(400);  // 1000 - 600
-			expect(usageSpy.mock.calls[2][1].cacheReadInputTokens).toBe(200);  // 500 - 300
-			expect(usageSpy.mock.calls[2][1].cacheCreationInputTokens).toBe(80);  // 200 - 120
+			expect(usageSpy.mock.calls[2][1].inputTokens).toBe(800); // 2000 - 1200
+			expect(usageSpy.mock.calls[2][1].outputTokens).toBe(400); // 1000 - 600
+			expect(usageSpy.mock.calls[2][1].cacheReadInputTokens).toBe(200); // 500 - 300
+			expect(usageSpy.mock.calls[2][1].cacheCreationInputTokens).toBe(80); // 200 - 120
 
 			expect(proc.usageIsCumulative).toBe(true);
 		});
@@ -1064,9 +1069,9 @@ describe('StdoutHandler', () => {
 
 			expect(usageSpy).toHaveBeenCalledTimes(2);
 			const delta = usageSpy.mock.calls[1][1];
-			expect(delta.inputTokens).toBe(500);       // 1000 - 500
-			expect(delta.outputTokens).toBe(200);       // 400 - 200
-			expect(delta.reasoningTokens).toBe(150);    // 250 - 100
+			expect(delta.inputTokens).toBe(500); // 1000 - 500
+			expect(delta.outputTokens).toBe(200); // 400 - 200
+			expect(delta.reasoningTokens).toBe(150); // 250 - 100
 		});
 
 		it('should detect decrease in reasoningTokens as non-monotonic', () => {
@@ -1208,8 +1213,8 @@ describe('StdoutHandler', () => {
 
 			expect(usageSpy).toHaveBeenCalledTimes(2);
 			const delta = usageSpy.mock.calls[1][1];
-			expect(delta.inputTokens).toBe(700);   // 1200 - 500
-			expect(delta.outputTokens).toBe(400);   // 600 - 200
+			expect(delta.inputTokens).toBe(700); // 1200 - 500
+			expect(delta.outputTokens).toBe(400); // 600 - 200
 
 			expect(proc.usageIsCumulative).toBe(true);
 		});
@@ -1368,10 +1373,7 @@ describe('StdoutHandler', () => {
 			});
 
 			handler.handleData(sessionId, 'This is not JSON\n');
-			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(
-				sessionId,
-				'This is not JSON'
-			);
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'This is not JSON');
 		});
 
 		it('should append to stdoutBuffer for each processed line in stream JSON mode', () => {
@@ -1502,5 +1504,46 @@ describe('extractDeniedPath', () => {
 	it('handles tilde paths', () => {
 		const result = extractDeniedPath("'~/projects/foo' not in workspace");
 		expect(result).toBe('~/projects/foo');
+	});
+
+	// Windows path patterns
+	it('extracts Windows quoted directory path', () => {
+		const result = extractDeniedPath("'C:\\Users\\dev\\project' not in workspace");
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts parent directory from Windows file path', () => {
+		const result = extractDeniedPath("'C:\\Users\\dev\\project\\main.ts' not in workspace");
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts Windows path with "is outside" pattern', () => {
+		const result = extractDeniedPath("'D:\\workspace\\data' is outside the allowed workspace");
+		expect(result).toBe('D:\\workspace\\data');
+	});
+
+	it('extracts Windows path with permission denied pattern', () => {
+		const result = extractDeniedPath("'C:\\Windows\\config.json' permission denied");
+		expect(result).toBe('C:\\Windows');
+	});
+
+	it('extracts bare Windows path without quotes', () => {
+		const result = extractDeniedPath('C:\\Users\\dev\\project not in workspace');
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts parent dir for bare Windows file path', () => {
+		const result = extractDeniedPath('C:\\Users\\dev\\project\\index.js not in workspace');
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts Windows path with forward slashes', () => {
+		const result = extractDeniedPath("'C:/Users/dev/project' not in workspace");
+		expect(result).toBe('C:/Users/dev/project');
+	});
+
+	it('extracts Windows path from generic "path" prefix', () => {
+		const result = extractDeniedPath("path 'C:\\Users\\dev\\src' not in workspace");
+		expect(result).toBe('C:\\Users\\dev\\src');
 	});
 });

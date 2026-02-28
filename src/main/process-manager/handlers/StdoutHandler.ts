@@ -5,7 +5,13 @@ import { logger } from '../../utils/logger';
 import { appendToBuffer } from '../utils/bufferUtils';
 import { aggregateModelUsage, type ModelStats } from '../../parsers/usage-aggregator';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
-import type { ManagedProcess, UsageStats, UsageTotals, AgentError, GeminiSessionStatsEvent } from '../types';
+import type {
+	ManagedProcess,
+	UsageStats,
+	UsageTotals,
+	AgentError,
+	GeminiSessionStatsEvent,
+} from '../types';
 import type { DataBufferManager } from './DataBufferManager';
 
 /**
@@ -19,8 +25,12 @@ export function extractDeniedPath(errorMsg: string): string | null {
 		/path\s+['"]([^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside)/i,
 		// '/foo/bar' not in workspace
 		/['"]([\/~][^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside|permission\s+denied)/i,
-		// /foo/bar not in workspace (bare path)
+		// 'C:\Users\...' not in workspace (Windows quoted)
+		/['"]([A-Za-z]:[\\\/][^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside|permission\s+denied)/i,
+		// /foo/bar not in workspace (bare POSIX path)
 		/(\/[^\s:'"]+)\s*(?:not\s+in\s+workspace|is\s+outside)/i,
+		// C:\Users\... not in workspace (bare Windows path)
+		/([A-Za-z]:[\\\/][^\s'"]+)\s*(?:not\s+in\s+workspace|is\s+outside)/i,
 	];
 
 	for (const pattern of patterns) {
@@ -29,9 +39,9 @@ export function extractDeniedPath(errorMsg: string): string | null {
 			const extracted = match[1];
 			// Check if it looks like a file (has a dot-extension at the end)
 			if (/\.\w+$/.test(extracted)) {
-				// Return parent directory
-				const lastSlash = extracted.lastIndexOf('/');
-				return lastSlash > 0 ? extracted.substring(0, lastSlash) : extracted;
+				// Return parent directory (handle both / and \ separators)
+				const lastSeparator = Math.max(extracted.lastIndexOf('/'), extracted.lastIndexOf('\\'));
+				return lastSeparator > 0 ? extracted.substring(0, lastSeparator) : extracted;
 			}
 			return extracted;
 		}
@@ -370,10 +380,12 @@ export class StdoutHandler {
 		if (event.type === 'tool_use' && managedProcess.toolType === 'gemini-cli' && event.toolState) {
 			const errorMsg =
 				(event.toolState as Record<string, unknown>)?.error &&
-				typeof ((event.toolState as Record<string, unknown>).error as Record<string, unknown>)?.message === 'string'
-					? ((event.toolState as Record<string, unknown>).error as Record<string, unknown>).message as string
+				typeof ((event.toolState as Record<string, unknown>).error as Record<string, unknown>)
+					?.message === 'string'
+					? (((event.toolState as Record<string, unknown>).error as Record<string, unknown>)
+							.message as string)
 					: typeof (event.toolState as Record<string, unknown>)?.error === 'string'
-						? (event.toolState as Record<string, unknown>).error as string
+						? ((event.toolState as Record<string, unknown>).error as string)
 						: null;
 
 			if (errorMsg && /path.*not.*in.*workspace|permission.*denied.*sandbox/i.test(errorMsg)) {
@@ -413,14 +425,22 @@ export class StdoutHandler {
 
 		// For Codex, flush the latest captured result when the turn completes.
 		// turn.completed is normalized as a usage event by the Codex parser.
-		if (managedProcess.toolType === 'codex' && event.type === 'usage' && !managedProcess.resultEmitted) {
+		if (
+			managedProcess.toolType === 'codex' &&
+			event.type === 'usage' &&
+			!managedProcess.resultEmitted
+		) {
 			const resultText = managedProcess.streamedText || '';
 			if (resultText) {
 				managedProcess.resultEmitted = true;
-				logger.debug('[ProcessManager] Emitting final Codex result at turn completion', 'ProcessManager', {
-					sessionId,
-					resultLength: resultText.length,
-				});
+				logger.debug(
+					'[ProcessManager] Emitting final Codex result at turn completion',
+					'ProcessManager',
+					{
+						sessionId,
+						resultLength: resultText.length,
+					}
+				);
 				this.bufferManager.emitDataBuffered(sessionId, resultText);
 			}
 		}
