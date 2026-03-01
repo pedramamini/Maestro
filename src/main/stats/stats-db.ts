@@ -833,8 +833,9 @@ export class StatsDB {
 		try {
 			await StatsDB.fsPromises.access(targetPath, fs.constants.F_OK);
 			return true;
-		} catch {
-			return false;
+		} catch (e: any) {
+			if (e.code === 'ENOENT') return false;
+			throw e;
 		}
 	}
 }

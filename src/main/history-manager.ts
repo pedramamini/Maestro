@@ -180,8 +180,9 @@ export class HistoryManager {
 		try {
 			await fsPromises.access(filePath, fs.constants.F_OK);
 			return true;
-		} catch {
-			return false;
+		} catch (e: any) {
+			if (e.code === 'ENOENT') return false;
+			throw e;
 		}
 	}
 
@@ -361,7 +362,9 @@ export class HistoryManager {
 	 */
 	async getAllEntries(limit?: number): Promise<HistoryEntry[]> {
 		const sessions = await this.listSessionsWithHistory();
-		const allEntriesArrays = await Promise.all(sessions.map((sessionId) => this.getEntries(sessionId)));
+		const allEntriesArrays = await Promise.all(
+			sessions.map((sessionId) => this.getEntries(sessionId))
+		);
 		const allEntries = allEntriesArrays.reduce<HistoryEntry[]>((acc, entries) => {
 			acc.push(...entries);
 			return acc;
@@ -379,7 +382,9 @@ export class HistoryManager {
 		options?: PaginationOptions
 	): Promise<PaginatedResult<HistoryEntry>> {
 		const sessions = await this.listSessionsWithHistory();
-		const allEntriesArrays = await Promise.all(sessions.map((sessionId) => this.getEntries(sessionId)));
+		const allEntriesArrays = await Promise.all(
+			sessions.map((sessionId) => this.getEntries(sessionId))
+		);
 		const allEntries = allEntriesArrays.reduce<HistoryEntry[]>((acc, entries) => {
 			acc.push(...entries);
 			return acc;
@@ -395,7 +400,9 @@ export class HistoryManager {
 	 */
 	async getEntriesByProjectPath(projectPath: string): Promise<HistoryEntry[]> {
 		const sessions = await this.listSessionsWithHistory();
-		const sessionEntriesList = await Promise.all(sessions.map((sessionId) => this.getEntries(sessionId)));
+		const sessionEntriesList = await Promise.all(
+			sessions.map((sessionId) => this.getEntries(sessionId))
+		);
 		const entries: HistoryEntry[] = [];
 
 		for (const sessionEntries of sessionEntriesList) {
@@ -415,7 +422,9 @@ export class HistoryManager {
 		options?: PaginationOptions
 	): Promise<PaginatedResult<HistoryEntry>> {
 		const sessions = await this.listSessionsWithHistory();
-		const sessionEntriesList = await Promise.all(sessions.map((sessionId) => this.getEntries(sessionId)));
+		const sessionEntriesList = await Promise.all(
+			sessions.map((sessionId) => this.getEntries(sessionId))
+		);
 		const entries: HistoryEntry[] = [];
 
 		for (const sessionEntries of sessionEntriesList) {
@@ -455,7 +464,10 @@ export class HistoryManager {
 					const data: HistoryFileData = JSON.parse(await fsPromises.readFile(filePath, 'utf-8'));
 					return { sessionId, filePath, data };
 				} catch (error) {
-					logger.warn(`Failed to read session ${sessionId} while updating names: ${error}`, LOG_CONTEXT);
+					logger.warn(
+						`Failed to read session ${sessionId} while updating names: ${error}`,
+						LOG_CONTEXT
+					);
 					captureException(error, { operation: 'history:updateSessionNameRead', sessionId });
 					return null;
 				}
