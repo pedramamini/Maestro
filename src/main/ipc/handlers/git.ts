@@ -608,10 +608,10 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 
 				if (pathExists) {
 					// Get the common dir to check if it's the same repo
-						const [gitCommonDirResult, mainGitDirResult] = await Promise.all([
-							execFileNoThrow('git', ['rev-parse', '--git-common-dir'], worktreePath),
-							execFileNoThrow('git', ['rev-parse', '--git-dir'], mainRepoCwd),
-						]);
+					const [gitCommonDirResult, mainGitDirResult] = await Promise.all([
+						execFileNoThrow('git', ['rev-parse', '--git-common-dir'], worktreePath),
+						execFileNoThrow('git', ['rev-parse', '--git-dir'], mainRepoCwd),
+					]);
 
 					if (gitCommonDirResult.exitCode === 0 && mainGitDirResult.exitCode === 0) {
 						const worktreeCommonDir = path.resolve(worktreePath, gitCommonDirResult.stdout.trim());
@@ -1067,9 +1067,7 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 							}
 							const toplevel = toplevelResult.stdout.trim();
 							// For SSH, compare as-is; for local, resolve to handle symlinks
-							const normalizedSubdir = sshRemote
-								? subdirPath
-								: path.resolve(subdirPath);
+							const normalizedSubdir = sshRemote ? subdirPath : path.resolve(subdirPath);
 							const normalizedToplevel = sshRemote ? toplevel : path.resolve(toplevel);
 							if (normalizedSubdir !== normalizedToplevel) {
 								return null; // Subdirectory inside a repo, not a repo/worktree root
