@@ -8200,7 +8200,6 @@ You are taking over this conversation. Based on the context above, provide a bri
 			setSessions((prev) => [...prev, newSession]);
 			setActiveSessionId(newId);
 			await assignSessionsToWindow([newId]);
-			await assignSessionsToWindow([newId]);
 			// Track session creation in global stats
 			updateGlobalStats({ totalSessions: 1 });
 			// Record session lifecycle for Usage Dashboard
