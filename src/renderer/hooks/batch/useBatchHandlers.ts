@@ -387,6 +387,14 @@ export function useBatchHandlers(deps: UseBatchHandlersDeps): UseBatchHandlersRe
 					try {
 						const result = await window.maestro.symphony.complete({
 							contributionId,
+							stats: {
+								inputTokens: info.inputTokens,
+								outputTokens: info.outputTokens,
+								estimatedCost: info.totalCostUsd,
+								timeSpentMs: info.elapsedTimeMs,
+								documentsProcessed: info.documentsProcessed,
+								tasksCompleted: info.completedTasks,
+							},
 						});
 						if (result.prUrl) {
 							notifyToast({

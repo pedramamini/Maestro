@@ -879,6 +879,10 @@ describe('useBatchHandlers', () => {
 					totalTasks: 5,
 					wasStopped: false,
 					elapsedTimeMs: 60000,
+					inputTokens: 1000,
+					outputTokens: 500,
+					totalCostUsd: 0.05,
+					documentsProcessed: 2,
 				});
 			});
 
@@ -917,6 +921,10 @@ describe('useBatchHandlers', () => {
 					totalTasks: 5,
 					wasStopped: true,
 					elapsedTimeMs: 30000,
+					inputTokens: 400,
+					outputTokens: 200,
+					totalCostUsd: 0.02,
+					documentsProcessed: 1,
 				});
 			});
 		});
@@ -953,6 +961,10 @@ describe('useBatchHandlers', () => {
 					totalTasks: 3,
 					wasStopped: false,
 					elapsedTimeMs: 10000,
+					inputTokens: 600,
+					outputTokens: 300,
+					totalCostUsd: 0.03,
+					documentsProcessed: 1,
 				});
 			});
 
@@ -990,6 +1002,10 @@ describe('useBatchHandlers', () => {
 					totalTasks: 1,
 					wasStopped: false,
 					elapsedTimeMs: 0,
+					inputTokens: 0,
+					outputTokens: 0,
+					totalCostUsd: 0,
+					documentsProcessed: 1,
 				});
 			});
 
@@ -1031,6 +1047,10 @@ describe('useBatchHandlers', () => {
 					totalTasks: 1,
 					wasStopped: false,
 					elapsedTimeMs: 5000,
+					inputTokens: 200,
+					outputTokens: 100,
+					totalCostUsd: 0.01,
+					documentsProcessed: 1,
 				});
 			});
 		});

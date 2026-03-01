@@ -269,6 +269,14 @@ export function createSymphonyApi() {
 		complete: (params: {
 			contributionId: string;
 			prBody?: string;
+			stats?: {
+				inputTokens: number;
+				outputTokens: number;
+				estimatedCost: number;
+				timeSpentMs: number;
+				documentsProcessed: number;
+				tasksCompleted: number;
+			};
 		}): Promise<CompleteContributionResponse> => ipcRenderer.invoke('symphony:complete', params),
 
 		cancel: (
