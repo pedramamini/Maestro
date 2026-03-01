@@ -90,7 +90,7 @@ let codexConfigLoadPromise: Promise<CodexConfig> | null = null;
 let codexConfigInvalidateTimer: ReturnType<typeof setTimeout> | null = null;
 let codexConfigLoadGeneration = 0;
 
-function clearCodexConfigCache(): void {
+export function clearCodexConfigCache(): void {
 	if (codexConfigInvalidateTimer) {
 		clearTimeout(codexConfigInvalidateTimer);
 		codexConfigInvalidateTimer = null;
@@ -152,7 +152,7 @@ async function readCodexConfigFromDisk(): Promise<CodexConfig> {
 	}
 }
 
-async function loadCodexConfigCached(forceRefresh = false): Promise<CodexConfig> {
+export async function loadCodexConfigCached(forceRefresh = false): Promise<CodexConfig> {
 	if (forceRefresh) {
 		clearCodexConfigCache();
 	}
@@ -183,16 +183,6 @@ async function loadCodexConfigCached(forceRefresh = false): Promise<CodexConfig>
 
 	return codexConfigLoadPromise;
 }
-
-export const __codexConfigTestUtils = {
-	resetCache: (): void => {
-		clearCodexConfigCache();
-	},
-	waitForLoad: (): Promise<void> => {
-		return codexConfigLoadPromise ? codexConfigLoadPromise.then(() => {}) : Promise.resolve();
-	},
-	getCachedConfig: (): CodexConfig | null => codexConfigCache,
-};
 
 /**
  * Raw message structure from Codex JSON output

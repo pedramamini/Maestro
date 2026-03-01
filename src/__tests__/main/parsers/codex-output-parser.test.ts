@@ -4,7 +4,8 @@ import * as os from 'os';
 import * as path from 'path';
 import {
 	CodexOutputParser,
-	__codexConfigTestUtils,
+	clearCodexConfigCache,
+	loadCodexConfigCached,
 } from '../../../main/parsers/codex-output-parser';
 import * as sentry from '../../../main/utils/sentry';
 
@@ -502,9 +503,9 @@ describe('CodexOutputParser', () => {
 			process.env.CODEX_HOME = tempDir;
 
 			try {
-				__codexConfigTestUtils.resetCache();
+				clearCodexConfigCache();
 				const _parser = new CodexOutputParser();
-				await __codexConfigTestUtils.waitForLoad();
+				await loadCodexConfigCached();
 				await new Promise((resolve) => setTimeout(resolve, 10));
 
 				// On systems where root runs tests, chmod(0o000) may not prevent reads.
@@ -524,7 +525,7 @@ describe('CodexOutputParser', () => {
 				} else {
 					process.env.CODEX_HOME = originalCodexHome;
 				}
-				__codexConfigTestUtils.resetCache();
+				clearCodexConfigCache();
 				captureSpy.mockRestore();
 			}
 		});
@@ -536,9 +537,9 @@ describe('CodexOutputParser', () => {
 			process.env.CODEX_HOME = '/nonexistent/codex/path';
 
 			try {
-				__codexConfigTestUtils.resetCache();
+				clearCodexConfigCache();
 				const parserNoConfig = new CodexOutputParser();
-				await __codexConfigTestUtils.waitForLoad();
+				await loadCodexConfigCached();
 				await new Promise((resolve) => setTimeout(resolve, 0));
 
 				// Parser should work fine with defaults
@@ -556,7 +557,7 @@ describe('CodexOutputParser', () => {
 				} else {
 					process.env.CODEX_HOME = originalCodexHome;
 				}
-				__codexConfigTestUtils.resetCache();
+				clearCodexConfigCache();
 			}
 		});
 	});
@@ -574,13 +575,10 @@ describe('CodexOutputParser', () => {
 			process.env.CODEX_HOME = tempDir;
 
 			try {
-				__codexConfigTestUtils.resetCache();
-				expect(__codexConfigTestUtils.getCachedConfig()).toBeNull();
+				clearCodexConfigCache();
 				const parserWithConfig = new CodexOutputParser();
-				await __codexConfigTestUtils.waitForLoad();
+				await loadCodexConfigCached();
 				await new Promise((resolve) => setTimeout(resolve, 0));
-				const cachedConfig = __codexConfigTestUtils.getCachedConfig();
-				expect(cachedConfig?.contextWindow).toBe(64000);
 				expect((parserWithConfig as unknown as { contextWindow: number }).contextWindow).toBe(
 					64000
 				);
@@ -603,7 +601,7 @@ describe('CodexOutputParser', () => {
 				} else {
 					process.env.CODEX_HOME = originalCodexHome;
 				}
-				__codexConfigTestUtils.resetCache();
+				clearCodexConfigCache();
 			}
 		});
 	});
