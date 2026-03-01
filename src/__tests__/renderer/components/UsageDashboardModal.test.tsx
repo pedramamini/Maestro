@@ -56,6 +56,12 @@ vi.mock('lucide-react', () => {
 	};
 });
 
+// Mock Sentry
+const mockCaptureException = vi.fn();
+vi.mock('@sentry/electron/renderer', () => ({
+	captureException: (...args: unknown[]) => mockCaptureException(...args),
+}));
+
 // Mock layer stack context
 const mockRegisterLayer = vi.fn(() => 'layer-123');
 const mockUnregisterLayer = vi.fn();
@@ -348,6 +354,27 @@ describe('UsageDashboardModal', () => {
 			await waitFor(() => {
 				expect(screen.getByText('Failed to load usage data')).toBeInTheDocument();
 				expect(screen.getByText('Retry')).toBeInTheDocument();
+			});
+		});
+
+		it('reports Auto Run session fetch errors to Sentry', async () => {
+			const fetchError = new Error('IPC channel closed');
+			mockGetAutoRunSessions.mockRejectedValue(fetchError);
+
+			render(<UsageDashboardModal isOpen={true} onClose={onClose} theme={theme} />);
+
+			// Wait for dashboard to load, then switch to Auto Run tab
+			await waitFor(() => {
+				expect(screen.getByTestId('usage-dashboard-content')).toBeInTheDocument();
+			});
+
+			const tabs = screen.getAllByRole('tab');
+			fireEvent.click(tabs[3]); // Auto Run is the 4th tab
+
+			await waitFor(() => {
+				expect(mockCaptureException).toHaveBeenCalledWith(fetchError, {
+					extra: { context: 'LongestAutoRunsTable.fetchData', timeRange: 'week' },
+				});
 			});
 		});
 	});

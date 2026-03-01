@@ -15,6 +15,7 @@
 
 import { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Trophy } from 'lucide-react';
+import * as Sentry from '@sentry/electron/renderer';
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
 
@@ -131,7 +132,9 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 			const autoRunSessions = await window.maestro.stats.getAutoRunSessions(timeRange);
 			setSessions(autoRunSessions);
 		} catch (err) {
-			console.error('Failed to fetch Auto Run sessions for table:', err);
+			Sentry.captureException(err, {
+				extra: { context: 'LongestAutoRunsTable.fetchData', timeRange },
+			});
 		} finally {
 			setLoading(false);
 		}
@@ -223,8 +226,7 @@ export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
 									key={session.id}
 									className="transition-colors"
 									style={{
-										backgroundColor:
-											index % 2 === 0 ? 'transparent' : `${theme.colors.border}10`,
+										backgroundColor: index % 2 === 0 ? 'transparent' : `${theme.colors.border}10`,
 									}}
 									onMouseEnter={(e) => {
 										e.currentTarget.style.backgroundColor = `${theme.colors.accent}10`;
