@@ -4,6 +4,7 @@ import os from 'os';
 import crypto from 'crypto';
 // Sentry is imported dynamically below to avoid module-load-time access to electron.app
 // which causes "Cannot read properties of undefined (reading 'getAppPath')" errors
+import { captureException } from './utils/sentry';
 import { ProcessManager, ProcessStateStore } from './process-manager';
 import type { ProcessSnapshot } from './process-manager';
 import { WebServer } from './web-server';
@@ -719,9 +720,12 @@ function setupProcessListeners() {
 		processManager.on('spawn', scheduleSnapshotUpdate);
 		processManager.on('exit', scheduleSnapshotUpdate);
 
-		// Clear snapshot on clean shutdown so stale data isn't used on next launch
+		// Flush any pending write, then clear snapshot on clean shutdown
 		app.on('will-quit', () => {
-			processStateStore.clear().catch(() => {});
+			processStateStore
+				.flush()
+				.then(() => processStateStore.clear())
+				.catch((err) => captureException(err, { context: 'will-quit process state cleanup' }));
 		});
 	}
 }

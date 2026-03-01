@@ -15,6 +15,12 @@ import { ipcMain, app } from 'electron';
 import * as fs from 'fs/promises';
 import * as path from 'path';
 import { logger } from '../../utils/logger';
+import type {
+	PersistedBatchRunState,
+	PersistedBatchSnapshot,
+} from '../../../shared/batch-state-types';
+
+export type { PersistedBatchRunState, PersistedBatchSnapshot };
 
 // ==========================================================================
 // Constants
@@ -37,48 +43,6 @@ const WRITE_DEBOUNCE_MS = 3000;
 const MAX_SNAPSHOT_AGE_MS = 10 * 60 * 1000;
 
 // ==========================================================================
-// Types
-// ==========================================================================
-
-/**
- * Shape of the persisted batch run state.
- * This is a subset of BatchRunState — only the fields needed for recovery.
- */
-export interface PersistedBatchRunState {
-	sessionId: string;
-	isRunning: boolean;
-	processingState: string;
-	documents: string[];
-	lockedDocuments: string[];
-	currentDocumentIndex: number;
-	currentDocTasksTotal: number;
-	currentDocTasksCompleted: number;
-	totalTasksAcrossAllDocs: number;
-	completedTasksAcrossAllDocs: number;
-	loopEnabled: boolean;
-	loopIteration: number;
-	maxLoops?: number | null;
-	folderPath: string;
-	worktreeActive: boolean;
-	worktreePath?: string;
-	worktreeBranch?: string;
-	customPrompt?: string;
-	startTime?: number;
-	cumulativeTaskTimeMs?: number;
-	accumulatedElapsedMs?: number;
-	lastActiveTimestamp?: number;
-	/** Agent session ID for resume (Claude session_id, Codex thread_id) */
-	agentSessionId?: string;
-	/** Agent type (claude-code, codex, etc.) — needed to build correct resume args */
-	agentType?: string;
-}
-
-export interface PersistedBatchSnapshot {
-	timestamp: number;
-	activeBatches: PersistedBatchRunState[];
-}
-
-// ==========================================================================
 // Module State
 // ==========================================================================
 
@@ -94,11 +58,7 @@ function getSnapshotPath(): string {
 }
 
 async function writeSnapshotToDisk(snapshot: PersistedBatchSnapshot): Promise<void> {
-	await fs.writeFile(
-		getSnapshotPath(),
-		JSON.stringify(snapshot, null, '\t'),
-		'utf-8'
-	);
+	await fs.writeFile(getSnapshotPath(), JSON.stringify(snapshot, null, '\t'), 'utf-8');
 }
 
 // ==========================================================================
@@ -163,6 +123,11 @@ export function registerBatchStateHandlers(): void {
 	 * Clear the batch state snapshot (called on clean batch completion or kill).
 	 */
 	ipcMain.handle('batch-state:clear', async () => {
+		if (writeTimer) {
+			clearTimeout(writeTimer);
+			writeTimer = null;
+		}
+		pendingSnapshot = null;
 		try {
 			await fs.unlink(getSnapshotPath());
 			logger.debug('Cleared batch state snapshot', LOG_CONTEXT);

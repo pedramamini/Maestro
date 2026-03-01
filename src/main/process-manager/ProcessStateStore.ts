@@ -2,6 +2,7 @@ import * as fs from 'fs/promises';
 import * as path from 'path';
 import { app } from 'electron';
 import { logger } from '../utils/logger';
+import { captureException } from '../utils/sentry';
 
 const LOG_CONTEXT = 'ProcessStateStore';
 const SNAPSHOT_FILENAME = 'process-state.json';
@@ -75,7 +76,11 @@ export class ProcessStateStore {
 			}
 
 			return snapshot;
-		} catch {
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException).code === 'ENOENT') {
+				return null; // No snapshot file — expected on first launch
+			}
+			captureException(err, { context: 'ProcessStateStore.loadSnapshot' });
 			return null;
 		}
 	}
@@ -90,8 +95,10 @@ export class ProcessStateStore {
 		}
 		try {
 			await fs.unlink(this.snapshotPath);
-		} catch {
-			// File may not exist
+		} catch (err) {
+			if ((err as NodeJS.ErrnoException).code !== 'ENOENT') {
+				captureException(err, { context: 'ProcessStateStore.clear' });
+			}
 		}
 	}
 
@@ -113,13 +120,10 @@ export class ProcessStateStore {
 				timestamp: Date.now(),
 				processes: this.snapshotGetter(),
 			};
-			await fs.writeFile(
-				this.snapshotPath,
-				JSON.stringify(snapshot, null, '\t'),
-				'utf-8',
-			);
+			await fs.writeFile(this.snapshotPath, JSON.stringify(snapshot, null, '\t'), 'utf-8');
 		} catch (err) {
 			logger.warn('Failed to save process state snapshot', LOG_CONTEXT, { error: String(err) });
+			captureException(err, { context: 'ProcessStateStore.writeSnapshotToDisk' });
 		}
 	}
 }

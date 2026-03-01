@@ -30,6 +30,33 @@ import { useDocumentProcessor } from './useDocumentProcessor';
 const BATCH_STATE_DEBOUNCE_MS = 200;
 
 /**
+ * Restore the agentSessionId on the active AI tab of a session.
+ * Used during batch state recovery after reload so the next spawn uses --resume.
+ */
+function restoreAgentSessionId(
+	sessionId: string,
+	agentSessionId: string | undefined,
+	session: Session
+): void {
+	if (!agentSessionId) return;
+	const activeTab =
+		session.aiTabs?.find((t) => t.id === session.activeTabId) || session.aiTabs?.[0];
+	if (!activeTab) return;
+	useSessionStore.getState().setSessions((prev) =>
+		prev.map((s) => {
+			if (s.id !== sessionId) return s;
+			return {
+				...s,
+				aiTabs: s.aiTabs.map((tab) => {
+					if (tab.id !== activeTab.id) return tab;
+					return { ...tab, agentSessionId: agentSessionId ?? null };
+				}),
+			};
+		})
+	);
+}
+
+/**
  * Persist active batch state snapshots to the main process.
  * Called after every dispatch that modifies running batch state.
  * The main process debounces writes to disk (3s) so calling this frequently is safe.
@@ -43,7 +70,8 @@ function persistBatchState(): void {
 		.map(([sessionId, state]) => {
 			// Find the active AI tab's agentSessionId for this session
 			const session = sessions.find((s) => s.id === sessionId);
-			const activeTab = session?.aiTabs?.find((t) => t.id === session.activeTabId) || session?.aiTabs?.[0];
+			const activeTab =
+				session?.aiTabs?.find((t) => t.id === session.activeTabId) || session?.aiTabs?.[0];
 			const agentSessionId = activeTab?.agentSessionId || undefined;
 			const agentType = session?.toolType || undefined;
 
@@ -299,9 +327,7 @@ export function useBatchProcessor({
 		// On COMPLETE_BATCH, clear the snapshot instead (no running batches left for this session).
 		if (action.type === 'COMPLETE_BATCH') {
 			// Check if there are any OTHER active batches still running
-			const remainingActive = Object.entries(newStates).some(
-				([, state]) => state.isRunning
-			);
+			const remainingActive = Object.entries(newStates).some(([, state]) => state.isRunning);
 			if (!remainingActive) {
 				window.maestro?.batchState?.clear();
 			} else {
@@ -408,8 +434,7 @@ export function useBatchProcessor({
 					// Check if the agent process is still running
 					const hasRunningProcess = runningProcesses.some(
 						(p) =>
-							p.sessionId === batch.sessionId ||
-							p.sessionId.startsWith(batch.sessionId + '-ai-')
+							p.sessionId === batch.sessionId || p.sessionId.startsWith(batch.sessionId + '-ai-')
 					);
 
 					// Restore the batch state into the Zustand store
@@ -472,24 +497,7 @@ export function useBatchProcessor({
 						});
 
 						// Restore agentSessionId on the active tab so next spawn uses --resume
-						if (batch.agentSessionId) {
-							const activeTab =
-								session.aiTabs?.find((t) => t.id === session.activeTabId) || session.aiTabs?.[0];
-							if (activeTab) {
-								useSessionStore.getState().setSessions((prev) =>
-									prev.map((s) => {
-										if (s.id !== batch.sessionId) return s;
-										return {
-											...s,
-											aiTabs: s.aiTabs.map((tab) => {
-												if (tab.id !== activeTab.id) return tab;
-												return { ...tab, agentSessionId: batch.agentSessionId ?? null };
-											}),
-										};
-									})
-								);
-							}
-						}
+						restoreAgentSessionId(batch.sessionId, batch.agentSessionId, session);
 					} else {
 						// Process is still running — re-acquire power management lock
 						try {
@@ -499,31 +507,12 @@ export function useBatchProcessor({
 						}
 
 						// Restore agentSessionId if available
-						if (batch.agentSessionId) {
-							const activeTab =
-								session.aiTabs?.find((t) => t.id === session.activeTabId) || session.aiTabs?.[0];
-							if (activeTab) {
-								useSessionStore.getState().setSessions((prev) =>
-									prev.map((s) => {
-										if (s.id !== batch.sessionId) return s;
-										return {
-											...s,
-											aiTabs: s.aiTabs.map((tab) => {
-												if (tab.id !== activeTab.id) return tab;
-												return { ...tab, agentSessionId: batch.agentSessionId ?? null };
-											}),
-										};
-									})
-								);
-							}
-						}
+						restoreAgentSessionId(batch.sessionId, batch.agentSessionId, session);
 
 						// Verify worktree still exists if applicable
 						if (batch.worktreeActive && batch.worktreePath) {
 							try {
-								const worktreeInfo = await window.maestro.git.worktreeInfo(
-									batch.worktreePath
-								);
+								const worktreeInfo = await window.maestro.git.worktreeInfo(batch.worktreePath);
 								if (worktreeInfo.success && !worktreeInfo.exists) {
 									// Worktree was deleted — log warning but keep batch state
 									// The processing loop will handle the missing worktree when resumed
@@ -544,10 +533,9 @@ export function useBatchProcessor({
 				// Show recovery notification
 				if (recoveredCount > 0) {
 					// Use window.maestro.notification or console since we don't have direct toast access
-					console.info(
-						`[BatchRecovery] Recovered ${recoveredCount} Auto Run(s) after reload`,
-						{ hasDeadProcesses }
-					);
+					console.info(`[BatchRecovery] Recovered ${recoveredCount} Auto Run(s) after reload`, {
+						hasDeadProcesses,
+					});
 				}
 			} catch (err) {
 				console.error('[BatchRecovery] Batch state recovery failed:', err);
@@ -1513,11 +1501,11 @@ export function useBatchProcessor({
 								}
 
 								// 'resume' — re-read document to get accurate task count before continuing
-								const { taskCount, checkedCount, content: freshContent } = await readDocAndCountTasks(
-									folderPath,
-									effectiveFilename,
-									sshRemoteId
-								);
+								const {
+									taskCount,
+									checkedCount,
+									content: freshContent,
+								} = await readDocAndCountTasks(folderPath, effectiveFilename, sshRemoteId);
 								remainingTasks = taskCount;
 								docCheckedCount = checkedCount;
 								docContent = freshContent;

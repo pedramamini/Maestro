@@ -47,7 +47,10 @@ vi.mock('fs/promises', () => mocks.mockFs);
 const mockLogger = mocks.mockLogger;
 const mockFs = mocks.mockFs;
 
-import { registerBatchStateHandlers, type PersistedBatchRunState } from '../../../../main/ipc/handlers/batch-state';
+import {
+	registerBatchStateHandlers,
+	type PersistedBatchRunState,
+} from '../../../../main/ipc/handlers/batch-state';
 
 function makeBatchState(overrides?: Partial<PersistedBatchRunState>): PersistedBatchRunState {
 	return {
@@ -70,16 +73,18 @@ function makeBatchState(overrides?: Partial<PersistedBatchRunState>): PersistedB
 }
 
 describe('Batch State Persistence IPC Handlers', () => {
-	let handlers: Map<string, Function>;
+	let handlers: Map<string, (...args: unknown[]) => unknown>;
 
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers();
 		handlers = new Map();
 
-		vi.mocked(ipcMain.handle).mockImplementation((channel: string, handler: Function) => {
-			handlers.set(channel, handler);
-		});
+		vi.mocked(ipcMain.handle).mockImplementation(
+			(channel: string, handler: (...args: unknown[]) => unknown) => {
+				handlers.set(channel, handler);
+			}
+		);
 
 		registerBatchStateHandlers();
 	});

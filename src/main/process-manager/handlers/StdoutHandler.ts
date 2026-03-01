@@ -238,13 +238,6 @@ export class StdoutHandler {
 		// Extract usage
 		const usage = outputParser.extractUsage(event);
 		if (usage) {
-			// DEBUG: Log usage extracted from parser
-			console.log('[StdoutHandler] Usage from parser (line 255 path)', {
-				sessionId,
-				toolType: managedProcess.toolType,
-				parsedUsage: usage,
-			});
-
 			const usageStats = this.buildUsageStats(managedProcess, usage);
 			// Claude Code's modelUsage reports the ACTUAL context used for each API call:
 			// - inputTokens: new input for this turn
@@ -259,12 +252,6 @@ export class StdoutHandler {
 				managedProcess.toolType === 'codex' || managedProcess.toolType === 'claude-code'
 					? normalizeUsageToDelta(managedProcess, usageStats)
 					: usageStats;
-
-			// DEBUG: Log normalized stats being emitted
-			console.log('[StdoutHandler] Emitting usage (line 255 path)', {
-				sessionId,
-				normalizedUsageStats,
-			});
 
 			this.emitter.emit('usage', sessionId, normalizedUsageStats);
 		}
@@ -308,7 +295,9 @@ export class StdoutHandler {
 			this.emitter.emit('thinking-chunk', sessionId, event.text);
 			managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
 			if (managedProcess.streamedText.length > MAX_RECONNECT_OUTPUT_BUFFER) {
-				managedProcess.streamedText = managedProcess.streamedText.slice(-MAX_RECONNECT_OUTPUT_BUFFER);
+				managedProcess.streamedText = managedProcess.streamedText.slice(
+					-MAX_RECONNECT_OUTPUT_BUFFER
+				);
 			}
 		}
 

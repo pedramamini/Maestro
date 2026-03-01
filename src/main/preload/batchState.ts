@@ -9,45 +9,12 @@
  */
 
 import { ipcRenderer } from 'electron';
+import type {
+	PersistedBatchRunState,
+	PersistedBatchSnapshot,
+} from '../../shared/batch-state-types';
 
-/**
- * Shape of a persisted batch run state entry.
- * Mirrors PersistedBatchRunState from the main process handler.
- */
-export interface PersistedBatchRunState {
-	sessionId: string;
-	isRunning: boolean;
-	processingState: string;
-	documents: string[];
-	lockedDocuments: string[];
-	currentDocumentIndex: number;
-	currentDocTasksTotal: number;
-	currentDocTasksCompleted: number;
-	totalTasksAcrossAllDocs: number;
-	completedTasksAcrossAllDocs: number;
-	loopEnabled: boolean;
-	loopIteration: number;
-	maxLoops?: number | null;
-	folderPath: string;
-	worktreeActive: boolean;
-	worktreePath?: string;
-	worktreeBranch?: string;
-	customPrompt?: string;
-	startTime?: number;
-	cumulativeTaskTimeMs?: number;
-	accumulatedElapsedMs?: number;
-	lastActiveTimestamp?: number;
-	agentSessionId?: string;
-	agentType?: string;
-}
-
-/**
- * Shape of the persisted batch snapshot
- */
-export interface PersistedBatchSnapshot {
-	timestamp: number;
-	activeBatches: PersistedBatchRunState[];
-}
+export type { PersistedBatchRunState, PersistedBatchSnapshot };
 
 /**
  * Batch State API type
@@ -67,13 +34,10 @@ export function createBatchStateApi(): BatchStateApi {
 		save: (activeBatches: PersistedBatchRunState[]): Promise<void> =>
 			ipcRenderer.invoke('batch-state:save', activeBatches),
 
-		load: (): Promise<PersistedBatchSnapshot | null> =>
-			ipcRenderer.invoke('batch-state:load'),
+		load: (): Promise<PersistedBatchSnapshot | null> => ipcRenderer.invoke('batch-state:load'),
 
-		clear: (): Promise<void> =>
-			ipcRenderer.invoke('batch-state:clear'),
+		clear: (): Promise<void> => ipcRenderer.invoke('batch-state:clear'),
 
-		flush: (): Promise<void> =>
-			ipcRenderer.invoke('batch-state:flush'),
+		flush: (): Promise<void> => ipcRenderer.invoke('batch-state:flush'),
 	};
 }

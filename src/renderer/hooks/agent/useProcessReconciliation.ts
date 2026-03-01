@@ -84,11 +84,12 @@ export function useProcessReconciliation(deps: UseProcessReconciliationDeps): vo
 						const isAlreadyBusy = session.state === 'busy';
 						if (isAlreadyBusy) return session;
 
-						const proc = procs[0]; // Primary process for this session
-
 						// Update tab-level state using extracted tab IDs
 						let updatedAiTabs = session.aiTabs;
 						const aiProcs = procs.filter((p) => p.extractedTabId);
+
+						// Prefer AI processes over terminal for busySource determination
+						const proc = aiProcs[0] || procs[0];
 						if (aiProcs.length > 0) {
 							updatedAiTabs = session.aiTabs.map((tab) => {
 								const tabProc = aiProcs.find((p) => p.extractedTabId === tab.id);
@@ -120,7 +121,7 @@ export function useProcessReconciliation(deps: UseProcessReconciliationDeps): vo
 							proc.baseId,
 							proc.extractedTabId,
 							!proc.isTerminal,
-							proc.recentOutput,
+							proc.recentOutput
 						);
 					}
 				}
@@ -131,7 +132,8 @@ export function useProcessReconciliation(deps: UseProcessReconciliationDeps): vo
 
 				const parts: string[] = [];
 				if (agentCount > 0) parts.push(`${agentCount} agent${agentCount > 1 ? 's' : ''}`);
-				if (terminalCount > 0) parts.push(`${terminalCount} terminal${terminalCount > 1 ? 's' : ''}`);
+				if (terminalCount > 0)
+					parts.push(`${terminalCount} terminal${terminalCount > 1 ? 's' : ''}`);
 
 				if (parts.length > 0) {
 					deps.addToastRef.current?.({
@@ -150,5 +152,5 @@ export function useProcessReconciliation(deps: UseProcessReconciliationDeps): vo
 		return () => {
 			cancelled = true;
 		};
-	}, []);
+	}, [deps.batchedUpdater, deps.addToastRef]);
 }
