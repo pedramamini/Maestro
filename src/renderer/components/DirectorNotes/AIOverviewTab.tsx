@@ -5,6 +5,7 @@ import { MarkdownRenderer } from '../MarkdownRenderer';
 import { SaveMarkdownModal } from '../SaveMarkdownModal';
 import { useSettings } from '../../hooks';
 import { generateTerminalProseStyles } from '../../utils/markdownConfig';
+import { safeClipboardWrite } from '../../utils/clipboard';
 
 type SynopsisStats = NonNullable<
 	Awaited<ReturnType<typeof window.maestro.directorNotes.generateSynopsis>>['stats']
@@ -28,9 +29,9 @@ export function _resetCacheForTesting() {
 	cachedSynopsis = null;
 }
 
-// Check whether a cached synopsis exists for the given lookback window
-export function hasCachedSynopsis(lookbackDays: number): boolean {
-	return cachedSynopsis !== null && cachedSynopsis.lookbackDays === lookbackDays;
+// Check whether a cached synopsis exists (any lookback window)
+export function hasCachedSynopsis(): boolean {
+	return cachedSynopsis !== null;
 }
 
 export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
@@ -75,9 +76,11 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 	// Copy synopsis markdown to clipboard
 	const copyToClipboard = useCallback(async () => {
 		if (!synopsis) return;
-		await navigator.clipboard.writeText(synopsis);
-		setCopied(true);
-		setTimeout(() => setCopied(false), 2000);
+		const ok = await safeClipboardWrite(synopsis);
+		if (ok) {
+			setCopied(true);
+			setTimeout(() => setCopied(false), 2000);
+		}
 	}, [synopsis]);
 
 	// Generate synopsis — the handler reads history files directly via file paths,
@@ -130,13 +133,14 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 		}
 	}, [lookbackDays, directorNotesSettings, onSynopsisReady]);
 
-	// On mount: use cache if available and lookback matches, otherwise generate fresh
+	// On mount: use cache if available (regardless of lookback), otherwise generate fresh
 	useEffect(() => {
 		mountedRef.current = true;
-		if (cachedSynopsis && cachedSynopsis.lookbackDays === lookbackDays) {
+		if (cachedSynopsis) {
 			setSynopsis(cachedSynopsis.content);
 			setGeneratedAt(cachedSynopsis.generatedAt);
 			setStats(cachedSynopsis.stats ?? null);
+			setLookbackDays(cachedSynopsis.lookbackDays);
 			onSynopsisReady?.();
 		} else {
 			generateSynopsis();
@@ -168,19 +172,18 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 						value={lookbackDays}
 						onChange={(e) => setLookbackDays(Number(e.target.value))}
 						className="flex-1 accent-indigo-500"
-						disabled={isGenerating}
 					/>
 				</div>
 
-				{/* Generated at timestamp */}
-				{generatedAt && !isGenerating && (
+				{/* Generated at timestamp — stays visible during regeneration */}
+				{generatedAt && (
 					<div className="flex items-center gap-1.5" style={{ color: theme.colors.textDim }}>
 						<Clock className="w-3 h-3" />
 						<span className="text-xs">{formatGeneratedAt(generatedAt)}</span>
 					</div>
 				)}
 
-				{/* Refresh button */}
+				{/* Regenerate button — only this disables during generation */}
 				<button
 					onClick={generateSynopsis}
 					disabled={isGenerating}
@@ -196,35 +199,35 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 					) : (
 						<RefreshCw className="w-3.5 h-3.5" />
 					)}
-					Refresh
+					{isGenerating ? 'Regenerating…' : 'Regenerate'}
 				</button>
 
-				{/* Save button */}
+				{/* Save button — enabled whenever we have content */}
 				<button
 					onClick={() => setShowSaveModal(true)}
-					disabled={!synopsis || isGenerating}
+					disabled={!synopsis}
 					className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors"
 					style={{
 						backgroundColor: theme.colors.bgActivity,
 						color: theme.colors.textMain,
 						border: `1px solid ${theme.colors.border}`,
-						opacity: synopsis && !isGenerating ? 1 : 0.5,
+						opacity: synopsis ? 1 : 0.5,
 					}}
 				>
 					<Save className="w-3.5 h-3.5" />
 					Save
 				</button>
 
-				{/* Copy to clipboard button */}
+				{/* Copy to clipboard button — enabled whenever we have content */}
 				<button
 					onClick={copyToClipboard}
-					disabled={!synopsis || isGenerating}
+					disabled={!synopsis}
 					className="flex items-center gap-2 px-3 py-1.5 rounded text-xs font-medium transition-colors"
 					style={{
 						backgroundColor: theme.colors.bgActivity,
 						color: copied ? theme.colors.accent : theme.colors.textMain,
 						border: `1px solid ${copied ? theme.colors.accent : theme.colors.border}`,
-						opacity: synopsis && !isGenerating ? 1 : 0.5,
+						opacity: synopsis ? 1 : 0.5,
 					}}
 				>
 					{copied ? <Check className="w-3.5 h-3.5" /> : <Copy className="w-3.5 h-3.5" />}
@@ -232,8 +235,8 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 				</button>
 			</div>
 
-			{/* Progress bar (during generation) */}
-			{isGenerating && (
+			{/* Progress bar — only during first generation (no existing content) */}
+			{isGenerating && !synopsis && (
 				<div className="shrink-0 px-4 py-2" style={{ backgroundColor: theme.colors.bgActivity }}>
 					<div className="flex items-center gap-3">
 						<div
@@ -255,8 +258,8 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 				</div>
 			)}
 
-			{/* Stats bar */}
-			{stats && !isGenerating && synopsis && (
+			{/* Stats bar — stays visible during regeneration */}
+			{stats && synopsis && (
 				<div
 					className="shrink-0 flex items-center gap-6 px-6 py-2.5 border-b"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
@@ -294,11 +297,12 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 				</div>
 			)}
 
-			{/* Content */}
+			{/* Content — old notes stay visible and scrollable during regeneration */}
 			<div className="flex-1 overflow-y-auto p-6 scrollbar-thin">
-				{error ? (
+				{/* Error banner — shown above content so old notes remain readable */}
+				{error && (
 					<div
-						className="p-4 rounded border"
+						className={`p-4 rounded border ${synopsis ? 'mb-4' : ''}`}
 						style={{
 							backgroundColor: theme.colors.error + '10',
 							borderColor: theme.colors.error + '40',
@@ -307,14 +311,14 @@ export function AIOverviewTab({ theme, onSynopsisReady }: AIOverviewTabProps) {
 					>
 						{error}
 					</div>
-				) : synopsis ? (
+				)}
+				{synopsis ? (
 					<div className="director-notes-content">
 						<style>{proseStyles}</style>
 						<MarkdownRenderer
 							content={synopsis}
 							theme={theme}
-							onCopy={(text) => navigator.clipboard.writeText(text)}
-							allowRawHtml
+							onCopy={(text) => safeClipboardWrite(text)}
 						/>
 					</div>
 				) : isGenerating ? (

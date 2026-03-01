@@ -42,14 +42,14 @@ Press `Cmd+G` / `Ctrl+G` to open the fuzzy file finder, navigate to any markdown
 
 The Document Graph is designed for keyboard-first navigation:
 
-| Action | Key |
-|--------|-----|
-| Navigate between nodes | `Arrow Keys` (spatial detection) |
-| Recenter view on node | `Enter` (for document nodes) |
-| Open external URL | `Enter` (for external link nodes) |
-| Open document in File Preview | `O` |
-| Focus search | `Cmd/Ctrl+F` |
-| Close graph or help panel | `Esc` |
+| Action                        | Key                               |
+| ----------------------------- | --------------------------------- |
+| Navigate between nodes        | `Arrow Keys` (spatial detection)  |
+| Recenter view on node         | `Enter` (for document nodes)      |
+| Open external URL             | `Enter` (for external link nodes) |
+| Open document in File Preview | `O`                               |
+| Focus search                  | `Cmd/Ctrl+F`                      |
+| Close graph or help panel     | `Esc`                             |
 
 ### Mouse Controls
 
@@ -141,13 +141,13 @@ The Document Graph is especially useful for:
 
 ## Keyboard Shortcut Summary
 
-| Action | macOS | Windows/Linux |
-|--------|-------|---------------|
-| Open from File Preview | `Cmd+Shift+G` | `Ctrl+Shift+G` |
-| Re-open last graph | Via `Cmd+K` menu | Via `Ctrl+K` menu |
-| Go to File (fuzzy finder) | `Cmd+G` | `Ctrl+G` |
-| Navigate nodes | `Arrow Keys` | `Arrow Keys` |
-| Recenter on node | `Enter` | `Enter` |
-| Open document in preview | `O` | `O` |
-| Focus search | `Cmd+F` | `Ctrl+F` |
-| Close graph | `Esc` | `Esc` |
+| Action                    | macOS            | Windows/Linux     |
+| ------------------------- | ---------------- | ----------------- |
+| Open from File Preview    | `Cmd+Shift+G`    | `Ctrl+Shift+G`    |
+| Re-open last graph        | Via `Cmd+K` menu | Via `Ctrl+K` menu |
+| Go to File (fuzzy finder) | `Cmd+G`          | `Ctrl+G`          |
+| Navigate nodes            | `Arrow Keys`     | `Arrow Keys`      |
+| Recenter on node          | `Enter`          | `Enter`           |
+| Open document in preview  | `O`              | `O`               |
+| Focus search              | `Cmd+F`          | `Ctrl+F`          |
+| Close graph               | `Esc`            | `Esc`             |

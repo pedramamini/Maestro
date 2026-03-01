@@ -12,22 +12,24 @@ Spec-Kit is a structured specification workflow from [GitHub's spec-kit project]
 
 Maestro offers two paths to structured development:
 
-| Feature | Spec-Kit | Onboarding Wizard |
-|---------|----------|-------------------|
-| **Approach** | Manual, command-driven workflow | Guided, conversational flow |
-| **Best For** | Experienced users, complex projects | New users, quick setup |
-| **Output** | Constitution, specs, tasks → Auto Run docs | Phase 1 Auto Run document |
-| **Control** | Full control at each step | Streamlined, opinionated |
-| **Learning Curve** | Moderate | Low |
-| **Storage Location** | `.specify/` directory in project root | `Auto Run Docs/Initiation/` |
+| Feature              | Spec-Kit                                   | Onboarding Wizard           |
+| -------------------- | ------------------------------------------ | --------------------------- |
+| **Approach**         | Manual, command-driven workflow            | Guided, conversational flow |
+| **Best For**         | Experienced users, complex projects        | New users, quick setup      |
+| **Output**           | Constitution, specs, tasks → Auto Run docs | Phase 1 Auto Run document   |
+| **Control**          | Full control at each step                  | Streamlined, opinionated    |
+| **Learning Curve**   | Moderate                                   | Low                         |
+| **Storage Location** | `.specify/` directory in project root      | `Auto Run Docs/Initiation/` |
 
 **Use Spec-Kit when:**
+
 - You want fine-grained control over specification phases
 - You're working on complex features requiring detailed planning
 - You prefer explicit command-driven workflows
 - You want to create reusable constitutions and specifications
 
 **Use the Wizard when:**
+
 - You're starting a new project from scratch
 - You want to get up and running quickly
 - You prefer conversational, guided experiences
@@ -72,6 +74,7 @@ Review your specification for ambiguities, missing details, and edge cases. The 
 Convert your specification into a high-level implementation plan. Includes technical context, constitution compliance checks, and multi-phase design workflow.
 
 **Creates:** Multiple artifacts in the feature directory:
+
 - `plan.md` — Implementation plan with phases and milestones
 - `research.md` — Resolved unknowns and technology decisions (Phase 0)
 - `data-model.md` — Entities, fields, and relationships (Phase 1)
@@ -83,6 +86,7 @@ Convert your specification into a high-level implementation plan. Includes techn
 Break your plan into specific, actionable tasks with dependencies clearly mapped. Tasks are organized by user story and structured in phases.
 
 **Creates:** `specs/<N>-<feature-name>/tasks.md` — A dependency-ordered task list with:
+
 - **Phase 1:** Setup (project initialization)
 - **Phase 2:** Foundational (blocking prerequisites)
 - **Phase 3+:** User stories in priority order (P1, P2, P3...)
@@ -95,6 +99,7 @@ Each task has an ID (T001, T002...), optional `[P]` marker for parallelizable ta
 **Maestro-specific command.** Converts your tasks into Auto Run documents that Maestro can execute autonomously. This bridges spec-kit's structured approach with Maestro's multi-agent capabilities.
 
 **Creates:** Markdown documents in `Auto Run Docs/` with naming pattern:
+
 ```
 Auto Run Docs/SpecKit-<feature-name>-Phase-01-[Description].md
 Auto Run Docs/SpecKit-<feature-name>-Phase-02-[Description].md
@@ -107,6 +112,7 @@ Each phase document is self-contained, includes Spec Kit context references, pre
 ### `/speckit.analyze` — Cross-Artifact Analysis
 
 Verify consistency across your constitution, specifications, and tasks. Performs a read-only analysis that catches:
+
 - **Duplications** — Near-duplicate requirements
 - **Ambiguities** — Vague adjectives lacking measurable criteria
 - **Underspecification** — Missing acceptance criteria or undefined components
@@ -117,11 +123,12 @@ Verify consistency across your constitution, specifications, and tasks. Performs
 
 ### `/speckit.checklist` — Requirements Quality Validation
 
-Generate "unit tests for requirements" — checklists that validate the *quality* of your requirements, not the implementation. Each checklist item tests whether requirements are complete, clear, consistent, and measurable.
+Generate "unit tests for requirements" — checklists that validate the _quality_ of your requirements, not the implementation. Each checklist item tests whether requirements are complete, clear, consistent, and measurable.
 
 **Creates:** `specs/<N>-<feature-name>/checklists/<domain>.md` (e.g., `ux.md`, `api.md`, `security.md`)
 
 Example items:
+
 - "Are visual hierarchy requirements defined with measurable criteria?" [Completeness]
 - "Is 'fast loading' quantified with specific timing thresholds?" [Clarity]
 - "Are error handling requirements defined for all API failure modes?" [Gap]
@@ -133,6 +140,7 @@ Example items:
 Convert your tasks directly into GitHub Issues.
 
 **Requirements:**
+
 - `gh` CLI installed and authenticated
 - GitHub MCP server tool (`github/github-mcp-server/issue_write`)
 - Remote must be a GitHub URL
@@ -142,6 +150,7 @@ Convert your tasks directly into GitHub Issues.
 ## Getting Help
 
 Run `/speckit.help` to get an overview of the workflow and tips for best results. This Maestro-specific command provides:
+
 - Command overview with recommended workflow order
 - Integration tips for Auto Run
 - Links to upstream documentation

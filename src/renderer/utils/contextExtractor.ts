@@ -456,7 +456,7 @@ export function estimateTokenCount(context: ContextSource): number {
 	// Otherwise, estimate from log content
 	let totalTokens = 0;
 
-	for (const log of context.logs) {
+	for (const log of context.logs ?? []) {
 		totalTokens += estimateTokens(log.text);
 
 		// Add overhead for images if present
@@ -494,7 +494,7 @@ export async function countContextTokens(context: ContextSource): Promise<number
 	// Count tokens for all log content
 	let totalTokens = 0;
 
-	for (const log of context.logs) {
+	for (const log of context.logs ?? []) {
 		totalTokens += await countTokens(log.text);
 
 		// Add overhead for images if present
@@ -540,7 +540,7 @@ export function findDuplicateContent(contexts: ContextSource[]): DuplicateDetect
 	for (let sourceIndex = 0; sourceIndex < contexts.length; sourceIndex++) {
 		const context = contexts[sourceIndex];
 
-		for (const log of context.logs) {
+		for (const log of context.logs ?? []) {
 			// Skip short messages - not worth deduplicating
 			if (log.text.length < MIN_DUPLICATE_LENGTH) {
 				continue;
@@ -609,7 +609,7 @@ function findPartialDuplicates(contexts: ContextSource[]): {
 	for (let sourceIndex = 0; sourceIndex < contexts.length; sourceIndex++) {
 		const context = contexts[sourceIndex];
 
-		for (const log of context.logs) {
+		for (const log of context.logs ?? []) {
 			const codeBlocks = log.text.match(codeBlockPattern) || [];
 
 			for (const block of codeBlocks) {
@@ -702,7 +702,7 @@ export function getContextSummary(contexts: ContextSource[]): {
 	let totalLogs = 0;
 
 	for (const context of contexts) {
-		totalLogs += context.logs.length;
+		totalLogs += (context.logs ?? []).length;
 		byAgent[context.agentType] = (byAgent[context.agentType] || 0) + 1;
 	}
 

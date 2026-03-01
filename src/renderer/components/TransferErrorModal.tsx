@@ -136,7 +136,7 @@ function getErrorTitle(type: TransferErrorType): string {
 		case 'context_too_large':
 			return 'Context Too Large';
 		case 'session_creation_failed':
-			return 'Session Creation Failed';
+			return 'Agent Creation Failed';
 		case 'source_not_found':
 			return 'Source Not Found';
 		case 'network_error':

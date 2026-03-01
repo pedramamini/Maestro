@@ -98,12 +98,16 @@ export interface AgentConfig {
 	noPromptSeparator?: boolean; // If true, don't add '--' before the prompt in batch mode (OpenCode doesn't support it)
 	defaultEnvVars?: Record<string, string>; // Default environment variables for this agent (merged with user customEnvVars)
 	versionArgs?: string[]; // Args to run for version detection (e.g., ['--version'])
+	readOnlyEnvOverrides?: Record<string, string>; // Env var overrides applied in read-only mode (replaces keys from defaultEnvVars)
 }
 
 /**
  * Agent definition without runtime detection state (used for static definitions)
  */
-export type AgentDefinition = Omit<AgentConfig, 'available' | 'path' | 'capabilities' | 'detectedVersion'>;
+export type AgentDefinition = Omit<
+	AgentConfig,
+	'available' | 'path' | 'capabilities' | 'detectedVersion'
+>;
 
 // ============ Agent Definitions ============
 
@@ -164,12 +168,26 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		// Agent-specific configuration options shown in UI
 		configOptions: [
 			{
+				key: 'model',
+				type: 'text',
+				label: 'Model',
+				description:
+					'Model override (e.g., gpt-5.3-codex, o3). Leave empty to use the default from ~/.codex/config.toml.',
+				default: '', // Empty = use Codex's default model from config.toml
+				argBuilder: (value: string) => {
+					if (value && value.trim()) {
+						return ['-m', value.trim()];
+					}
+					return [];
+				},
+			},
+			{
 				key: 'contextWindow',
 				type: 'number',
 				label: 'Context Window Size',
 				description:
-					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2), 128000 (GPT-4o).',
-				default: 400000, // Default for GPT-5.2 models
+					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2/5.3), 128000 (GPT-4o).',
+				default: 400000, // Default for GPT-5.2+ models
 			},
 		],
 	},
@@ -216,6 +234,11 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		defaultEnvVars: {
 			OPENCODE_CONFIG_CONTENT:
 				'{"permission":{"*":"allow","external_directory":"allow","question":"deny"},"tools":{"question":false}}',
+		},
+		// In read-only mode, strip blanket permission grants so the plan agent can't auto-approve file writes.
+		// Keep question tool disabled to prevent stdin hangs in batch mode.
+		readOnlyEnvOverrides: {
+			OPENCODE_CONFIG_CONTENT: '{"permission":{"question":"deny"},"tools":{"question":false}}',
 		},
 		// Agent-specific configuration options shown in UI
 		configOptions: [

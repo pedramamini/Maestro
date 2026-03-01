@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, memo } from 'react';
+import React, { useState, useEffect, useRef, useCallback, memo } from 'react';
 import {
 	X,
 	Key,
@@ -35,19 +35,19 @@ import {
 	User,
 	ArrowDownToLine,
 	Clapperboard,
+	HelpCircle,
+	AppWindow,
+	ExternalLink,
 } from 'lucide-react';
 import { useSettings } from '../hooks';
 import type {
 	Theme,
-	ThemeColors,
 	ThemeId,
 	Shortcut,
 	ShellInfo,
-	CustomAICommand,
 	LLMProvider,
 	AgentConfig,
 	ToolType,
-	EncoreFeatureFlags,
 } from '../types';
 import { CustomThemeBuilder } from './CustomThemeBuilder';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -56,12 +56,15 @@ import { AICommandsPanel } from './AICommandsPanel';
 import { SpecKitCommandsPanel } from './SpecKitCommandsPanel';
 import { OpenSpecCommandsPanel } from './OpenSpecCommandsPanel';
 import { formatShortcutKeys, formatMetaKey, formatEnterToSend } from '../utils/shortcutFormatter';
+import { getOpenInLabel } from '../utils/platformUtils';
 import { ToggleButtonGroup } from './ToggleButtonGroup';
 import { SettingCheckbox } from './SettingCheckbox';
 import { FontConfigurationPanel } from './FontConfigurationPanel';
 import { NotificationsPanel } from './NotificationsPanel';
 import { SshRemotesSection } from './Settings/SshRemotesSection';
 import { SshRemoteIgnoreSection } from './Settings/SshRemoteIgnoreSection';
+import { IgnorePatternsSection } from './Settings/IgnorePatternsSection';
+import { DEFAULT_LOCAL_IGNORE_PATTERNS } from '../stores/settingsStore';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
 import { AGENT_TILES } from './Wizard/screens/AgentSelectionScreen';
 
@@ -93,15 +96,50 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 		}));
 	});
 	const [nextId, setNextId] = useState(Object.keys(envVars).length);
+	const [validationErrors, setValidationErrors] = useState<Record<number, string>>({});
+
+	// Validate environment variable format
+	const validateEntry = (entry: EnvVarEntry): string | null => {
+		if (!entry.key.trim()) {
+			return null; // Empty keys are OK (will be ignored)
+		}
+		// Check for valid variable name format (alphanumeric and underscore)
+		if (!/^[A-Za-z_][A-Za-z0-9_]*$/.test(entry.key)) {
+			return `Invalid variable name: only letters, numbers, and underscores allowed and must not start with a number.`;
+		}
+		// Check if value contains special characters that might need quoting
+		if (
+			entry.value &&
+			/[&|;`$<>()]/.test(entry.value) &&
+			!entry.value.startsWith('"') &&
+			!entry.value.startsWith("'")
+		) {
+			return `Invalid value: contains disallowed special characters; quote or escape them if you intend to include them.`;
+		}
+		return null;
+	};
 
 	// Sync entries back to parent when they change (but debounced to avoid focus issues)
 	const commitChanges = (newEntries: EnvVarEntry[]) => {
 		const newEnvVars: Record<string, string> = {};
+		const errors: Record<number, string> = {};
+
+		// Collect all errors first
 		newEntries.forEach((entry) => {
-			if (entry.key.trim()) {
+			const error = validateEntry(entry);
+			if (error) {
+				errors[entry.id] = error;
+			}
+		});
+
+		// Only add valid entries to newEnvVars
+		newEntries.forEach((entry) => {
+			if (!errors[entry.id] && entry.key.trim()) {
 				newEnvVars[entry.key] = entry.value;
 			}
 		});
+
+		setValidationErrors(errors);
 		setEnvVars(newEnvVars);
 	};
 
@@ -165,39 +203,57 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 
 	return (
 		<div>
-			<label className="block text-xs opacity-60 mb-1">Environment Variables (optional)</label>
+			<div className="block text-xs opacity-60 mb-1">Environment Variables (optional)</div>
 			<div className="space-y-2">
-				{entries.map((entry) => (
-					<div key={entry.id} className="flex gap-2 items-center">
-						<input
-							type="text"
-							value={entry.key}
-							onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
-							placeholder="VARIABLE"
-							className="flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono"
-							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-						/>
-						<span className="text-xs" style={{ color: theme.colors.textDim }}>
-							=
-						</span>
-						<input
-							type="text"
-							value={entry.value}
-							onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
-							placeholder="value"
-							className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
-							style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
-						/>
-						<button
-							onClick={() => removeEntry(entry.id)}
-							className="p-2 rounded hover:bg-white/10 transition-colors"
-							title="Remove variable"
-							style={{ color: theme.colors.textDim }}
-						>
-							<Trash2 className="w-3 h-3" />
-						</button>
-					</div>
-				))}
+				{entries.map((entry) => {
+					const error = validationErrors[entry.id];
+					return (
+						<div key={entry.id}>
+							<div className="flex gap-2 items-center">
+								<input
+									type="text"
+									value={entry.key}
+									onChange={(e) => updateEntry(entry.id, 'key', e.target.value)}
+									placeholder="VARIABLE"
+									className={`flex-1 p-2 rounded border bg-transparent outline-none text-xs font-mono ${
+										entry.key.trim() &&
+										!validateEntry({ id: entry.id, key: entry.key, value: entry.value })
+											? ''
+											: ''
+									}`}
+									style={{
+										borderColor: error ? '#ef4444' : theme.colors.border,
+										color: theme.colors.textMain,
+									}}
+								/>
+								<span className="text-xs" style={{ color: theme.colors.textDim }}>
+									=
+								</span>
+								<input
+									type="text"
+									value={entry.value}
+									onChange={(e) => updateEntry(entry.id, 'value', e.target.value)}
+									placeholder="value"
+									className="flex-[2] p-2 rounded border bg-transparent outline-none text-xs font-mono"
+									style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
+								/>
+								<button
+									onClick={() => removeEntry(entry.id)}
+									className="p-2 rounded hover:bg-white/10 transition-colors"
+									title="Remove variable"
+									style={{ color: theme.colors.textDim }}
+								>
+									<Trash2 className="w-3 h-3" />
+								</button>
+							</div>
+							{error && (
+								<p className="text-xs mt-1 px-2" style={{ color: '#ef4444' }}>
+									⚠ {error}
+								</p>
+							)}
+						</div>
+					);
+				})}
 				<button
 					onClick={addEntry}
 					className="flex items-center gap-1 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
@@ -207,9 +263,16 @@ function EnvVarsEditor({ envVars, setEnvVars, theme }: EnvVarsEditorProps) {
 					Add Variable
 				</button>
 			</div>
-			<p className="text-xs opacity-50 mt-1">
-				Environment variables passed to every shell session.
-			</p>
+			<div className="mt-2 space-y-1">
+				<p className="text-xs opacity-50">
+					Environment variables passed to all terminal sessions and AI agent processes.
+				</p>
+				{Object.keys(envVars).length > 0 && (
+					<p className="text-xs opacity-60">
+						✓ Valid ({Object.keys(envVars).length} variables loaded)
+					</p>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -219,74 +282,6 @@ interface SettingsModalProps {
 	onClose: () => void;
 	theme: Theme;
 	themes: Record<string, Theme>;
-	activeThemeId: ThemeId;
-	setActiveThemeId: (id: ThemeId) => void;
-	customThemeColors: ThemeColors;
-	setCustomThemeColors: (colors: ThemeColors) => void;
-	customThemeBaseId: ThemeId;
-	setCustomThemeBaseId: (id: ThemeId) => void;
-	llmProvider: LLMProvider;
-	setLlmProvider: (provider: LLMProvider) => void;
-	modelSlug: string;
-	setModelSlug: (slug: string) => void;
-	apiKey: string;
-	setApiKey: (key: string) => void;
-	shortcuts: Record<string, Shortcut>;
-	setShortcuts: (shortcuts: Record<string, Shortcut>) => void;
-	tabShortcuts: Record<string, Shortcut>;
-	setTabShortcuts: (shortcuts: Record<string, Shortcut>) => void;
-	fontFamily: string;
-	setFontFamily: (font: string) => void;
-	fontSize: number;
-	setFontSize: (size: number) => void;
-	terminalWidth: number;
-	setTerminalWidth: (width: number) => void;
-	logLevel: string;
-	setLogLevel: (level: string) => void;
-	maxLogBuffer: number;
-	setMaxLogBuffer: (buffer: number) => void;
-	maxOutputLines: number;
-	setMaxOutputLines: (lines: number) => void;
-	defaultShell: string;
-	setDefaultShell: (shell: string) => void;
-	customShellPath: string;
-	setCustomShellPath: (path: string) => void;
-	shellArgs: string;
-	setShellArgs: (args: string) => void;
-	shellEnvVars: Record<string, string>;
-	setShellEnvVars: (vars: Record<string, string>) => void;
-	ghPath: string;
-	setGhPath: (path: string) => void;
-	enterToSendAI: boolean;
-	setEnterToSendAI: (value: boolean) => void;
-	enterToSendTerminal: boolean;
-	setEnterToSendTerminal: (value: boolean) => void;
-	defaultSaveToHistory: boolean;
-	setDefaultSaveToHistory: (value: boolean) => void;
-	defaultShowThinking: 'off' | 'on' | 'sticky';
-	setDefaultShowThinking: (value: 'off' | 'on' | 'sticky') => void;
-	osNotificationsEnabled: boolean;
-	setOsNotificationsEnabled: (value: boolean) => void;
-	audioFeedbackEnabled: boolean;
-	setAudioFeedbackEnabled: (value: boolean) => void;
-	audioFeedbackCommand: string;
-	setAudioFeedbackCommand: (value: string) => void;
-	toastDuration: number;
-	setToastDuration: (value: number) => void;
-	checkForUpdatesOnStartup: boolean;
-	setCheckForUpdatesOnStartup: (value: boolean) => void;
-	enableBetaUpdates: boolean;
-	setEnableBetaUpdates: (value: boolean) => void;
-	crashReportingEnabled: boolean;
-	setCrashReportingEnabled: (value: boolean) => void;
-	customAICommands: CustomAICommand[];
-	setCustomAICommands: (commands: CustomAICommand[]) => void;
-	autoScrollAiMode: boolean;
-	setAutoScrollAiMode: (value: boolean) => void;
-	userMessageAlignment?: 'left' | 'right';
-	setUserMessageAlignment?: (value: 'left' | 'right') => void;
-	encoreFeatures: EncoreFeatureFlags;
-	setEncoreFeatures: (value: EncoreFeatureFlags) => void;
 	initialTab?:
 		| 'general'
 		| 'display'
@@ -303,10 +298,97 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal = memo(function SettingsModal(props: SettingsModalProps) {
-	const { isOpen, onClose, theme, themes, initialTab, encoreFeatures, setEncoreFeatures } = props;
-
-	// Context management settings from useSettings hook
 	const {
+		isOpen,
+		onClose,
+		theme,
+		themes,
+		initialTab,
+		hasNoAgents,
+		onThemeImportError,
+		onThemeImportSuccess,
+	} = props;
+
+	// All settings from useSettings hook (self-sourced, Tier 1B)
+	const {
+		// Theme settings
+		activeThemeId,
+		setActiveThemeId,
+		customThemeColors,
+		setCustomThemeColors,
+		customThemeBaseId,
+		setCustomThemeBaseId,
+		// LLM settings
+		llmProvider,
+		setLlmProvider,
+		modelSlug,
+		setModelSlug,
+		apiKey,
+		setApiKey,
+		// Shortcut settings
+		shortcuts,
+		setShortcuts,
+		tabShortcuts,
+		setTabShortcuts,
+		// Display settings
+		fontFamily,
+		setFontFamily,
+		fontSize,
+		setFontSize,
+		terminalWidth,
+		setTerminalWidth,
+		logLevel,
+		setLogLevel,
+		maxLogBuffer,
+		setMaxLogBuffer,
+		maxOutputLines,
+		setMaxOutputLines,
+		// Shell settings
+		defaultShell,
+		setDefaultShell,
+		customShellPath,
+		setCustomShellPath,
+		shellArgs,
+		setShellArgs,
+		shellEnvVars,
+		setShellEnvVars,
+		ghPath,
+		setGhPath,
+		// Input settings
+		enterToSendAI,
+		setEnterToSendAI,
+		enterToSendTerminal,
+		setEnterToSendTerminal,
+		defaultSaveToHistory,
+		setDefaultSaveToHistory,
+		defaultShowThinking,
+		setDefaultShowThinking,
+		autoScrollAiMode,
+		setAutoScrollAiMode,
+		userMessageAlignment,
+		setUserMessageAlignment,
+		// Notification settings
+		osNotificationsEnabled,
+		setOsNotificationsEnabled,
+		audioFeedbackEnabled,
+		setAudioFeedbackEnabled,
+		audioFeedbackCommand,
+		setAudioFeedbackCommand,
+		toastDuration,
+		setToastDuration,
+		// Update settings
+		checkForUpdatesOnStartup,
+		setCheckForUpdatesOnStartup,
+		enableBetaUpdates,
+		setEnableBetaUpdates,
+		crashReportingEnabled,
+		setCrashReportingEnabled,
+		// AI Commands
+		customAICommands,
+		setCustomAICommands,
+		// Encore features
+		encoreFeatures,
+		setEncoreFeatures,
 		// Conductor Profile (About Me)
 		conductorProfile,
 		setConductorProfile,
@@ -330,6 +412,11 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setDisableGpuAcceleration,
 		disableConfetti,
 		setDisableConfetti,
+		// Local file indexing ignore patterns
+		localIgnorePatterns,
+		setLocalIgnorePatterns,
+		localHonorGitignore,
+		setLocalHonorGitignore,
 		// SSH Remote file indexing settings
 		sshRemoteIgnorePatterns,
 		setSshRemoteIgnorePatterns,
@@ -346,6 +433,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		setWakatimeApiKey,
 		wakatimeEnabled,
 		setWakatimeEnabled,
+		wakatimeDetailedTracking,
+		setWakatimeDetailedTracking,
+		// Window chrome settings
+		useNativeTitleBar,
+		setUseNativeTitleBar,
+		autoHideMenuBar,
+		setAutoHideMenuBar,
 	} = useSettings();
 
 	const [activeTab, setActiveTab] = useState<
@@ -418,6 +512,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 	} | null>(null);
 	const [wakatimeKeyValid, setWakatimeKeyValid] = useState<boolean | null>(null);
 	const [wakatimeKeyValidating, setWakatimeKeyValidating] = useState(false);
+	const handleWakatimeApiKeyChange = useCallback(
+		(value: string) => {
+			setWakatimeApiKey(value);
+			setWakatimeKeyValid(null);
+		},
+		[setWakatimeApiKey]
+	);
 
 	// Check WakaTime CLI availability when section renders or toggle is enabled
 	// Retries after a delay to allow auto-installer time to complete
@@ -470,11 +571,6 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			if (retryTimer) clearTimeout(retryTimer);
 		};
 	}, [isOpen, wakatimeEnabled]);
-
-	// Reset validation state when API key changes
-	useEffect(() => {
-		setWakatimeKeyValid(null);
-	}, [wakatimeApiKey]);
 
 	// Layer stack integration
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
@@ -780,20 +876,20 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			let response;
 			const testPrompt = 'Respond with exactly: "Connection successful"';
 
-			if (props.llmProvider === 'openrouter') {
-				if (!props.apiKey) {
+			if (llmProvider === 'openrouter') {
+				if (!apiKey) {
 					throw new Error('API key is required for OpenRouter');
 				}
 
 				response = await fetch('https://openrouter.ai/api/v1/chat/completions', {
 					method: 'POST',
 					headers: {
-						Authorization: `Bearer ${props.apiKey}`,
+						Authorization: `Bearer ${apiKey}`,
 						'Content-Type': 'application/json',
 						'HTTP-Referer': 'https://maestro.local',
 					},
 					body: JSON.stringify({
-						model: props.modelSlug || 'anthropic/claude-3.5-sonnet',
+						model: modelSlug || 'anthropic/claude-3.5-sonnet',
 						messages: [{ role: 'user', content: testPrompt }],
 						max_tokens: 50,
 					}),
@@ -813,20 +909,20 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					status: 'success',
 					message: 'Successfully connected to OpenRouter!',
 				});
-			} else if (props.llmProvider === 'anthropic') {
-				if (!props.apiKey) {
+			} else if (llmProvider === 'anthropic') {
+				if (!apiKey) {
 					throw new Error('API key is required for Anthropic');
 				}
 
 				response = await fetch('https://api.anthropic.com/v1/messages', {
 					method: 'POST',
 					headers: {
-						'x-api-key': props.apiKey,
+						'x-api-key': apiKey,
 						'anthropic-version': '2023-06-01',
 						'Content-Type': 'application/json',
 					},
 					body: JSON.stringify({
-						model: props.modelSlug || 'claude-3-5-sonnet-20241022',
+						model: modelSlug || 'claude-3-5-sonnet-20241022',
 						max_tokens: 50,
 						messages: [{ role: 'user', content: testPrompt }],
 					}),
@@ -846,14 +942,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					status: 'success',
 					message: 'Successfully connected to Anthropic!',
 				});
-			} else if (props.llmProvider === 'ollama') {
+			} else if (llmProvider === 'ollama') {
 				response = await fetch('http://localhost:11434/api/generate', {
 					method: 'POST',
 					headers: {
 						'Content-Type': 'application/json',
 					},
 					body: JSON.stringify({
-						model: props.modelSlug || 'llama3:latest',
+						model: modelSlug || 'llama3:latest',
 						prompt: testPrompt,
 						stream: false,
 					}),
@@ -923,14 +1019,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 		keys.push(mainKey);
 
 		if (isTabShortcut) {
-			props.setTabShortcuts({
-				...props.tabShortcuts,
-				[actionId]: { ...props.tabShortcuts[actionId], keys },
+			setTabShortcuts({
+				...tabShortcuts,
+				[actionId]: { ...tabShortcuts[actionId], keys },
 			});
 		} else {
-			props.setShortcuts({
-				...props.shortcuts,
-				[actionId]: { ...props.shortcuts[actionId], keys },
+			setShortcuts({
+				...shortcuts,
+				[actionId]: { ...shortcuts[actionId], keys },
 			});
 		}
 		setRecordingId(null);
@@ -961,7 +1057,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			];
 			// Add 'custom' as the last item in the cycle
 			const allThemeIds = [...allThemes.map((t) => t.id), 'custom'];
-			const currentIndex = allThemeIds.findIndex((id: string) => id === props.activeThemeId);
+			let currentIndex = allThemeIds.findIndex((id: string) => id === activeThemeId);
+			if (currentIndex === -1) currentIndex = 0;
 
 			let newThemeId: string;
 			if (e.shiftKey) {
@@ -973,7 +1070,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				const nextIndex = (currentIndex + 1) % allThemeIds.length;
 				newThemeId = allThemeIds[nextIndex];
 			}
-			props.setActiveThemeId(newThemeId as ThemeId);
+			setActiveThemeId(newThemeId as ThemeId);
 
 			// Scroll the newly selected theme button into view
 			setTimeout(() => {
@@ -992,6 +1089,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			className="space-y-6 outline-none"
 			tabIndex={0}
 			onKeyDown={handleThemePickerKeyDown}
+			role="group"
+			aria-label="Theme picker"
 		>
 			{['dark', 'light', 'vibe'].map((mode) => (
 				<div key={mode}>
@@ -1013,8 +1112,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<button
 								key={t.id}
 								data-theme-id={t.id}
-								onClick={() => props.setActiveThemeId(t.id)}
-								className={`p-3 rounded-lg border text-left transition-all ${props.activeThemeId === t.id ? 'ring-2' : ''}`}
+								onClick={() => setActiveThemeId(t.id)}
+								className={`p-3 rounded-lg border text-left transition-all ${activeThemeId === t.id ? 'ring-2' : ''}`}
 								style={
 									{
 										borderColor: theme.colors.border,
@@ -1028,7 +1127,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									<span className="text-sm font-bold" style={{ color: t.colors.textMain }}>
 										{t.name}
 									</span>
-									{props.activeThemeId === t.id && (
+									{activeThemeId === t.id && (
 										<Check className="w-4 h-4" style={{ color: t.colors.accent }} />
 									)}
 								</div>
@@ -1047,14 +1146,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 			<div data-theme-id="custom">
 				<CustomThemeBuilder
 					theme={theme}
-					customThemeColors={props.customThemeColors}
-					setCustomThemeColors={props.setCustomThemeColors}
-					customThemeBaseId={props.customThemeBaseId}
-					setCustomThemeBaseId={props.setCustomThemeBaseId}
-					isSelected={props.activeThemeId === 'custom'}
-					onSelect={() => props.setActiveThemeId('custom')}
-					onImportError={props.onThemeImportError}
-					onImportSuccess={props.onThemeImportSuccess}
+					customThemeColors={customThemeColors}
+					setCustomThemeColors={setCustomThemeColors}
+					customThemeBaseId={customThemeBaseId}
+					setCustomThemeBaseId={setCustomThemeBaseId}
+					isSelected={activeThemeId === 'custom'}
+					onSelect={() => setActiveThemeId('custom')}
+					onImportError={onThemeImportError}
+					onImportSuccess={onThemeImportSuccess}
 				/>
 			</div>
 		</div>
@@ -1074,8 +1173,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 				<div className="flex border-b" style={{ borderColor: theme.colors.border }}>
 					<button
 						onClick={() => setActiveTab('general')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'general' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'general' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="General"
 					>
 						<Settings className="w-4 h-4" />
@@ -1083,8 +1181,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('display')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'display' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Display"
 					>
 						<Monitor className="w-4 h-4" />
@@ -1093,8 +1190,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					{FEATURE_FLAGS.LLM_SETTINGS && (
 						<button
 							onClick={() => setActiveTab('llm')}
-							className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'llm' ? 'border-indigo-500' : 'border-transparent'}`}
-							tabIndex={-1}
+							className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'llm' ? 'border-indigo-500' : 'border-transparent'}`}
 							title="LLM"
 						>
 							LLM
@@ -1102,8 +1198,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					)}
 					<button
 						onClick={() => setActiveTab('shortcuts')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'shortcuts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'shortcuts' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Shortcuts"
 					>
 						<Keyboard className="w-4 h-4" />
@@ -1111,8 +1206,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('theme')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'theme' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'theme' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Themes"
 					>
 						<Palette className="w-4 h-4" />
@@ -1120,8 +1214,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('notifications')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'notifications' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'notifications' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="Notifications"
 					>
 						<Bell className="w-4 h-4" />
@@ -1129,8 +1222,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('aicommands')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'aicommands' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'aicommands' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="AI Commands"
 					>
 						<Cpu className="w-4 h-4" />
@@ -1138,8 +1230,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('ssh')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'ssh' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
-						tabIndex={-1}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'ssh' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						title="SSH Hosts"
 					>
 						<Server className="w-4 h-4" />
@@ -1147,18 +1238,17 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					</button>
 					<button
 						onClick={() => setActiveTab('encore')}
-						className={`px-4 py-4 text-sm font-bold border-b-2 ${activeTab === 'encore' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
+						className={`px-4 py-4 text-sm font-bold border-b-2 cursor-pointer ${activeTab === 'encore' ? 'border-indigo-500' : 'border-transparent'} flex items-center gap-2`}
 						style={{
 							color: activeTab === 'encore' ? theme.colors.textMain : theme.colors.textDim,
 						}}
-						tabIndex={-1}
 						title="Encore Features"
 					>
 						<FlaskConical className="w-4 h-4" />
 						{activeTab === 'encore' && <span>Encore Features</span>}
 					</button>
 					<div className="flex-1 flex justify-end items-center pr-4">
-						<button onClick={onClose} tabIndex={-1}>
+						<button onClick={onClose} className="cursor-pointer">
 							<X className="w-5 h-5 opacity-50 hover:opacity-100" />
 						</button>
 					</div>
@@ -1169,10 +1259,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-5">
 							{/* About Me (Conductor Profile) */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 									<User className="w-3 h-3" />
 									About Me
-								</label>
+								</div>
 								<p className="text-xs opacity-50 mb-2">
 									Tell us a little about yourself so that agents created under Maestro know how to
 									work and communicate with you. As the conductor, you orchestrate the symphony of
@@ -1205,10 +1295,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Default Shell */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-1 flex items-center gap-2">
 									<Terminal className="w-3 h-3" />
 									Default Terminal Shell
-								</label>
+								</div>
 								<p className="text-xs opacity-50 mb-2">
 									Choose which shell to use for terminal sessions. Select any shell and configure a
 									custom path if needed.
@@ -1222,7 +1312,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												<button
 													key={shell.id}
 													onClick={() => {
-														props.setDefaultShell(shell.id);
+														setDefaultShell(shell.id);
 														// Auto-expand shell config when selecting an unavailable shell
 														if (!shell.available) {
 															setShellConfigExpanded(true);
@@ -1231,13 +1321,13 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 													onMouseEnter={handleShellInteraction}
 													onFocus={handleShellInteraction}
 													className={`w-full text-left p-3 rounded border transition-all ${
-														props.defaultShell === shell.id ? 'ring-2' : ''
+														defaultShell === shell.id ? 'ring-2' : ''
 													} hover:bg-opacity-10`}
 													style={
 														{
 															borderColor: theme.colors.border,
 															backgroundColor:
-																props.defaultShell === shell.id
+																defaultShell === shell.id
 																	? theme.colors.accentDim
 																	: theme.colors.bgMain,
 															'--tw-ring-color': theme.colors.accent,
@@ -1255,7 +1345,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 															)}
 														</div>
 														{shell.available ? (
-															props.defaultShell === shell.id ? (
+															defaultShell === shell.id ? (
 																<Check className="w-4 h-4" style={{ color: theme.colors.accent }} />
 															) : (
 																<span
@@ -1268,7 +1358,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 																	Available
 																</span>
 															)
-														) : props.defaultShell === shell.id ? (
+														) : defaultShell === shell.id ? (
 															<div className="flex items-center gap-2">
 																<span
 																	className="text-xs px-2 py-0.5 rounded"
@@ -1312,8 +1402,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 													<div className="flex items-center justify-between">
 														<div>
 															<div className="font-medium">
-																{props.defaultShell.charAt(0).toUpperCase() +
-																	props.defaultShell.slice(1)}
+																{defaultShell.charAt(0).toUpperCase() + defaultShell.slice(1)}
 															</div>
 															<div className="text-xs opacity-50 font-mono mt-1">
 																Current default
@@ -1366,21 +1455,19 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										{/* Custom Shell Path */}
 										<div>
-											<label className="block text-xs opacity-60 mb-1">
-												Custom Path (optional)
-											</label>
+											<div className="block text-xs opacity-60 mb-1">Custom Path (optional)</div>
 											<div className="flex gap-2">
 												<input
 													type="text"
-													value={props.customShellPath}
-													onChange={(e) => props.setCustomShellPath(e.target.value)}
+													value={customShellPath}
+													onChange={(e) => setCustomShellPath(e.target.value)}
 													placeholder="/path/to/shell"
 													className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 													style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 												/>
-												{props.customShellPath && (
+												{customShellPath && (
 													<button
-														onClick={() => props.setCustomShellPath('')}
+														onClick={() => setCustomShellPath('')}
 														className="px-2 py-1.5 rounded text-xs"
 														style={{
 															backgroundColor: theme.colors.bgMain,
@@ -1398,21 +1485,21 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 										{/* Shell Arguments */}
 										<div>
-											<label className="block text-xs opacity-60 mb-1">
+											<div className="block text-xs opacity-60 mb-1">
 												Additional Arguments (optional)
-											</label>
+											</div>
 											<div className="flex gap-2">
 												<input
 													type="text"
-													value={props.shellArgs}
-													onChange={(e) => props.setShellArgs(e.target.value)}
+													value={shellArgs}
+													onChange={(e) => setShellArgs(e.target.value)}
 													placeholder="--flag value"
 													className="flex-1 p-2 rounded border bg-transparent outline-none text-sm font-mono"
 													style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 												/>
-												{props.shellArgs && (
+												{shellArgs && (
 													<button
-														onClick={() => props.setShellArgs('')}
+														onClick={() => setShellArgs('')}
 														className="px-2 py-1.5 rounded text-xs"
 														style={{
 															backgroundColor: theme.colors.bgMain,
@@ -1428,10 +1515,40 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											</p>
 										</div>
 
-										{/* Shell Environment Variables */}
+										{/* Global Environment Variables */}
+										<div className="flex items-start gap-2 mb-2">
+											<div className="flex-1">
+												<p className="text-xs opacity-50">
+													<strong>Global Environment Variables</strong> apply to all terminal
+													sessions and AI agent processes. Format: KEY=VALUE (one per line).
+													Variables with special characters should be quoted. Agent-specific
+													settings can override these values. Typical use cases: API keys, proxy
+													settings, custom tool paths.
+												</p>
+											</div>
+											<div
+												className="group relative flex-shrink-0 mt-0.5 outline-none"
+												tabIndex={0}
+												title="Environment variables configured here are available to all terminal sessions, all AI agent processes (Claude, OpenCode, etc.), and any spawned child processes. Agent-specific settings can override these values."
+											>
+												<HelpCircle
+													className="w-4 h-4 cursor-help"
+													style={{ color: theme.colors.textDim }}
+												/>
+												<div className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal">
+													<p className="mb-1 font-semibold">Environment variables apply to:</p>
+													<ul className="list-disc list-inside space-y-0.5">
+														<li>All terminal sessions</li>
+														<li>All AI agent processes (Claude, OpenCode, etc.)</li>
+														<li>Any spawned child processes</li>
+													</ul>
+													<p className="mt-1">Agent-specific settings can override these values.</p>
+												</div>
+											</div>
+										</div>
 										<EnvVarsEditor
-											envVars={props.shellEnvVars}
-											setEnvVars={props.setShellEnvVars}
+											envVars={shellEnvVars}
+											setEnvVars={setShellEnvVars}
 											theme={theme}
 										/>
 									</div>
@@ -1440,9 +1557,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* System Log Level */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									System Log Level
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[
 										{ value: 'debug', label: 'Debug', activeColor: '#6366f1' },
@@ -1450,8 +1567,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{ value: 'warn', label: 'Warn', activeColor: '#f59e0b' },
 										{ value: 'error', label: 'Error', activeColor: '#ef4444' },
 									]}
-									value={props.logLevel}
-									onChange={props.setLogLevel}
+									value={logLevel}
+									onChange={setLogLevel}
 									theme={theme}
 								/>
 								<p className="text-xs opacity-50 mt-2">
@@ -1461,27 +1578,27 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* GitHub CLI Path */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Terminal className="w-3 h-3" />
 									GitHub CLI (gh) Path
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 								>
-									<label className="block text-xs opacity-60 mb-1">Custom Path (optional)</label>
+									<div className="block text-xs opacity-60 mb-1">Custom Path (optional)</div>
 									<div className="flex gap-2">
 										<input
 											type="text"
-											value={props.ghPath}
-											onChange={(e) => props.setGhPath(e.target.value)}
+											value={ghPath}
+											onChange={(e) => setGhPath(e.target.value)}
 											placeholder="/opt/homebrew/bin/gh"
 											className="flex-1 p-1.5 rounded border bg-transparent outline-none text-xs font-mono"
 											style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 										/>
-										{props.ghPath && (
+										{ghPath && (
 											<button
-												onClick={() => props.setGhPath('')}
+												onClick={() => setGhPath('')}
 												className="px-2 py-1 rounded text-xs"
 												style={{
 													backgroundColor: theme.colors.bgActivity,
@@ -1507,10 +1624,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Input Behavior Settings */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Keyboard className="w-3 h-3" />
 									Input Send Behavior
-								</label>
+								</div>
 								<p className="text-xs opacity-50 mb-3">
 									Configure how to send messages in each mode. Choose between Enter or{' '}
 									{formatMetaKey()}+Enter for each input type.
@@ -1522,23 +1639,23 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 								>
 									<div className="flex items-center justify-between mb-2">
-										<label className="text-sm font-medium">AI Interaction Mode</label>
+										<div className="text-sm font-medium">AI Interaction Mode</div>
 										<button
-											onClick={() => props.setEnterToSendAI(!props.enterToSendAI)}
+											onClick={() => setEnterToSendAI(!enterToSendAI)}
 											className="px-3 py-1.5 rounded text-xs font-mono transition-all"
 											style={{
-												backgroundColor: props.enterToSendAI
+												backgroundColor: enterToSendAI
 													? theme.colors.accentDim
 													: theme.colors.bgActivity,
 												color: theme.colors.textMain,
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											{formatEnterToSend(props.enterToSendAI)}
+											{formatEnterToSend(enterToSendAI)}
 										</button>
 									</div>
 									<p className="text-xs opacity-50">
-										{props.enterToSendAI
+										{enterToSendAI
 											? 'Press Enter to send. Use Shift+Enter for new line.'
 											: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 									</p>
@@ -1550,23 +1667,23 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 								>
 									<div className="flex items-center justify-between mb-2">
-										<label className="text-sm font-medium">Terminal Mode</label>
+										<div className="text-sm font-medium">Terminal Mode</div>
 										<button
-											onClick={() => props.setEnterToSendTerminal(!props.enterToSendTerminal)}
+											onClick={() => setEnterToSendTerminal(!enterToSendTerminal)}
 											className="px-3 py-1.5 rounded text-xs font-mono transition-all"
 											style={{
-												backgroundColor: props.enterToSendTerminal
+												backgroundColor: enterToSendTerminal
 													? theme.colors.accentDim
 													: theme.colors.bgActivity,
 												color: theme.colors.textMain,
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											{formatEnterToSend(props.enterToSendTerminal)}
+											{formatEnterToSend(enterToSendTerminal)}
 										</button>
 									</div>
 									<p className="text-xs opacity-50">
-										{props.enterToSendTerminal
+										{enterToSendTerminal
 											? 'Press Enter to send. Use Shift+Enter for new line.'
 											: `Press ${formatMetaKey()}+Enter to send. Enter creates new line.`}
 									</p>
@@ -1579,10 +1696,41 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Default History Toggle"
 								title='Enable "History" by default for new tabs'
 								description='When enabled, new AI tabs will have the "History" toggle on by default, saving a synopsis after each completion'
-								checked={props.defaultSaveToHistory}
-								onChange={props.setDefaultSaveToHistory}
+								checked={defaultSaveToHistory}
+								onChange={setDefaultSaveToHistory}
 								theme={theme}
 							/>
+
+							{/* Default Thinking Toggle - Three states: Off, On, Sticky */}
+							<div>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+									<Brain className="w-3 h-3" />
+									Default Thinking Mode
+								</div>
+								<div
+									className="p-3 rounded border"
+									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
+								>
+									<div className="font-medium mb-1" style={{ color: theme.colors.textMain }}>
+										Show AI thinking/reasoning content for new tabs
+									</div>
+									<div className="text-sm opacity-60 mb-3" style={{ color: theme.colors.textDim }}>
+										{defaultShowThinking === 'off' && 'Thinking hidden, only final responses shown'}
+										{defaultShowThinking === 'on' && 'Thinking streams live, clears on completion'}
+										{defaultShowThinking === 'sticky' && 'Thinking streams live and stays visible'}
+									</div>
+									<ToggleButtonGroup
+										options={[
+											{ value: 'off' as const, label: 'Off' },
+											{ value: 'on' as const, label: 'On' },
+											{ value: 'sticky' as const, label: 'Sticky' },
+										]}
+										value={defaultShowThinking}
+										onChange={setDefaultShowThinking}
+										theme={theme}
+									/>
+								</div>
+							</div>
 
 							{/* Automatic Tab Naming */}
 							<SettingCheckbox
@@ -1601,51 +1749,17 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Auto-scroll AI Output"
 								title="Auto-scroll AI output"
 								description="Automatically scroll to the bottom when new AI output arrives. When disabled, a floating button appears for new messages."
-								checked={props.autoScrollAiMode}
-								onChange={props.setAutoScrollAiMode}
+								checked={autoScrollAiMode}
+								onChange={setAutoScrollAiMode}
 								theme={theme}
 							/>
 
-							{/* Default Thinking Toggle - Three states: Off, On, Sticky */}
-							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
-									<Brain className="w-3 h-3" />
-									Default Thinking Mode
-								</label>
-								<div
-									className="p-3 rounded border"
-									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
-								>
-									<div className="font-medium mb-1" style={{ color: theme.colors.textMain }}>
-										Show AI thinking/reasoning content for new tabs
-									</div>
-									<div className="text-sm opacity-60 mb-3" style={{ color: theme.colors.textDim }}>
-										{props.defaultShowThinking === 'off' &&
-											'Thinking hidden, only final responses shown'}
-										{props.defaultShowThinking === 'on' &&
-											'Thinking streams live, clears on completion'}
-										{props.defaultShowThinking === 'sticky' &&
-											'Thinking streams live and stays visible'}
-									</div>
-									<ToggleButtonGroup
-										options={[
-											{ value: 'off' as const, label: 'Off' },
-											{ value: 'on' as const, label: 'On' },
-											{ value: 'sticky' as const, label: 'Sticky' },
-										]}
-										value={props.defaultShowThinking}
-										onChange={props.setDefaultShowThinking}
-										theme={theme}
-									/>
-								</div>
-							</div>
-
 							{/* Sleep Prevention */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Battery className="w-3 h-3" />
 									Power
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -1712,10 +1826,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Rendering Options */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Monitor className="w-3 h-3" />
 									Rendering Options
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -1825,8 +1939,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Updates"
 								title="Check for updates on startup"
 								description="Automatically check for new Maestro versions when the app starts"
-								checked={props.checkForUpdatesOnStartup}
-								onChange={props.setCheckForUpdatesOnStartup}
+								checked={checkForUpdatesOnStartup}
+								onChange={setCheckForUpdatesOnStartup}
 								theme={theme}
 							/>
 
@@ -1836,8 +1950,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Pre-release Channel"
 								title="Include beta and release candidate updates"
 								description="Opt-in to receive pre-release versions (e.g., v0.11.1-rc, v0.12.0-beta). These may contain experimental features and bugs."
-								checked={props.enableBetaUpdates}
-								onChange={props.setEnableBetaUpdates}
+								checked={enableBetaUpdates}
+								onChange={setEnableBetaUpdates}
 								theme={theme}
 							/>
 
@@ -1847,14 +1961,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 								sectionLabel="Privacy"
 								title="Send anonymous crash reports"
 								description="Help improve Maestro by automatically sending crash reports. No personal data is collected. Changes take effect after restart."
-								checked={props.crashReportingEnabled}
-								onChange={props.setCrashReportingEnabled}
+								checked={crashReportingEnabled}
+								onChange={setCrashReportingEnabled}
 								theme={theme}
 							/>
 
 							{/* Stats Data Management */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Database className="w-3 h-3" />
 									Usage & Stats
 									<span
@@ -1866,7 +1980,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										Beta
 									</span>
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -1904,9 +2018,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Default Time Range */}
 									<div>
-										<label className="block text-xs opacity-60 mb-2">
+										<div className="block text-xs opacity-60 mb-2">
 											Default dashboard time range
-										</label>
+										</div>
 										<select
 											value={defaultStatsTimeRange}
 											onChange={(e) =>
@@ -1951,9 +2065,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Clear Old Data Dropdown */}
 									<div>
-										<label className="block text-xs opacity-60 mb-2">
-											Clear stats older than...
-										</label>
+										<div className="block text-xs opacity-60 mb-2">Clear stats older than...</div>
 										<div className="flex items-center gap-2">
 											<select
 												id="clear-stats-period"
@@ -2096,10 +2208,42 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										</p>
 									)}
 
+									{/* Detailed file tracking toggle (only shown when enabled) */}
+									{wakatimeEnabled && (
+										<div className="flex items-center justify-between">
+											<div>
+												<p className="text-sm" style={{ color: theme.colors.textMain }}>
+													Detailed file tracking
+												</p>
+												<p className="text-xs opacity-50 mt-0.5">
+													Track per-file write activity. Sends file paths (not content) to WakaTime.
+												</p>
+											</div>
+											<button
+												onClick={() => setWakatimeDetailedTracking(!wakatimeDetailedTracking)}
+												className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+												tabIndex={0}
+												style={{
+													backgroundColor: wakatimeDetailedTracking
+														? theme.colors.accent
+														: theme.colors.bgActivity,
+												}}
+												role="switch"
+												aria-checked={wakatimeDetailedTracking}
+											>
+												<span
+													className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+														wakatimeDetailedTracking ? 'translate-x-5' : 'translate-x-0.5'
+													}`}
+												/>
+											</button>
+										</div>
+									)}
+
 									{/* API Key Input (only shown when enabled) */}
 									{wakatimeEnabled && (
 										<div>
-											<label className="block text-xs opacity-60 mb-1">API Key</label>
+											<div className="block text-xs opacity-60 mb-1">API Key</div>
 											<div
 												className="flex items-center border rounded px-3 py-2"
 												style={{
@@ -2111,7 +2255,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												<input
 													type="password"
 													value={wakatimeApiKey}
-													onChange={(e) => setWakatimeApiKey(e.target.value)}
+													onChange={(e) => handleWakatimeApiKeyChange(e.target.value)}
 													onBlur={() => {
 														if (wakatimeApiKey) {
 															setWakatimeKeyValidating(true);
@@ -2138,7 +2282,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 												)}
 												{wakatimeApiKey && (
 													<button
-														onClick={() => setWakatimeApiKey('')}
+														onClick={() => handleWakatimeApiKeyChange('')}
 														className="ml-2 opacity-50 hover:opacity-100"
 														title="Clear API key"
 													>
@@ -2157,7 +2301,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Settings Storage Location */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<FolderSync className="w-3 h-3" />
 									Storage Location
 									<span
@@ -2169,7 +2313,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										Beta
 									</span>
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2180,8 +2324,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											Settings folder
 										</p>
 										<p className="text-xs opacity-60 mt-0.5">
-											Choose where Maestro stores settings, sessions, and groups. Use a synced
-											folder (iCloud Drive, Dropbox, OneDrive) to share across devices.
+											Choose where Maestro stores settings, sessions, and groups (including global
+											environment variables, agents, and configurations). Use a synced folder
+											(iCloud Drive, Dropbox, OneDrive) to share across devices.
 										</p>
 										<p className="text-xs opacity-50 mt-1 italic">
 											Note: Only run Maestro on one device at a time to avoid sync conflicts.
@@ -2190,7 +2335,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Default Location */}
 									<div>
-										<label className="block text-xs opacity-60 mb-1">Default Location</label>
+										<div className="block text-xs opacity-60 mb-1">Default Location</div>
 										<div
 											className="text-xs p-2 rounded font-mono truncate"
 											style={{ backgroundColor: theme.colors.bgActivity }}
@@ -2203,9 +2348,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									{/* Current Location (if different) */}
 									{customSyncPath && (
 										<div>
-											<label className="block text-xs opacity-60 mb-1">
-												Current Location (Custom)
-											</label>
+											<div className="block text-xs opacity-60 mb-1">Current Location (Custom)</div>
 											<div
 												className="text-xs p-2 rounded font-mono truncate flex items-center gap-2"
 												style={{
@@ -2344,6 +2487,25 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 											Restart Maestro for changes to take effect
 										</div>
 									)}
+
+									{/* Open in File Manager */}
+									<div className="flex justify-end">
+										<button
+											onClick={() => {
+												const folderPath = customSyncPath || defaultStoragePath;
+												if (folderPath) {
+													window.maestro?.shell?.openPath(folderPath);
+												}
+											}}
+											disabled={!defaultStoragePath && !customSyncPath}
+											className="flex items-center gap-1.5 text-[11px] opacity-60 hover:opacity-100 transition-opacity disabled:opacity-30"
+											style={{ color: theme.colors.textMain }}
+											title={customSyncPath || defaultStoragePath}
+										>
+											<ExternalLink className="w-3 h-3" />
+											{getOpenInLabel(window.maestro?.platform || 'darwin')}
+										</button>
+									</div>
 								</div>
 							</div>
 						</div>
@@ -2353,8 +2515,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-5">
 							{/* Font Family */}
 							<FontConfigurationPanel
-								fontFamily={props.fontFamily}
-								setFontFamily={props.setFontFamily}
+								fontFamily={fontFamily}
+								setFontFamily={setFontFamily}
 								systemFonts={systemFonts}
 								fontsLoaded={fontsLoaded}
 								fontLoading={fontLoading}
@@ -2367,9 +2529,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Font Size */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Font Size
-								</label>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Font Size</div>
 								<ToggleButtonGroup
 									options={[
 										{ value: 12, label: 'Small' },
@@ -2377,34 +2537,34 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{ value: 16, label: 'Large' },
 										{ value: 18, label: 'X-Large' },
 									]}
-									value={props.fontSize}
-									onChange={props.setFontSize}
+									value={fontSize}
+									onChange={setFontSize}
 									theme={theme}
 								/>
 							</div>
 
 							{/* Terminal Width */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									Terminal Width (Columns)
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[80, 100, 120, 160]}
-									value={props.terminalWidth}
-									onChange={props.setTerminalWidth}
+									value={terminalWidth}
+									onChange={setTerminalWidth}
 									theme={theme}
 								/>
 							</div>
 
 							{/* Max Log Buffer */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									Maximum Log Buffer
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[1000, 5000, 10000, 25000]}
-									value={props.maxLogBuffer}
-									onChange={props.setMaxLogBuffer}
+									value={maxLogBuffer}
+									onChange={setMaxLogBuffer}
 									theme={theme}
 								/>
 								<p className="text-xs opacity-50 mt-2">
@@ -2415,9 +2575,9 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Max Output Lines */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									Max Output Lines per Response
-								</label>
+								</div>
 								<ToggleButtonGroup
 									options={[
 										{ value: 15 },
@@ -2426,8 +2586,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{ value: 100 },
 										{ value: Infinity, label: 'All' },
 									]}
-									value={props.maxOutputLines}
-									onChange={props.setMaxOutputLines}
+									value={maxOutputLines}
+									onChange={setMaxOutputLines}
 									theme={theme}
 								/>
 								<p className="text-xs opacity-50 mt-2">
@@ -2437,30 +2597,111 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							</div>
 
 							{/* Message Alignment */}
-							{props.setUserMessageAlignment && (
-								<div>
-									<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-										User Message Alignment
-									</label>
-									<ToggleButtonGroup
-										options={[
-											{ value: 'right', label: 'Right' },
-											{ value: 'left', label: 'Left' },
-										]}
-										value={props.userMessageAlignment ?? 'right'}
-										onChange={props.setUserMessageAlignment}
-										theme={theme}
-									/>
-									<p className="text-xs opacity-50 mt-2">
-										Position your messages on the left or right side of the chat.
-										AI responses appear on the opposite side.
-									</p>
+							<div>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
+									User Message Alignment
 								</div>
-							)}
+								<ToggleButtonGroup
+									options={[
+										{ value: 'right', label: 'Right' },
+										{ value: 'left', label: 'Left' },
+									]}
+									value={userMessageAlignment ?? 'right'}
+									onChange={setUserMessageAlignment}
+									theme={theme}
+								/>
+								<p className="text-xs opacity-50 mt-2">
+									Position your messages on the left or right side of the chat. AI responses appear
+									on the opposite side.
+								</p>
+							</div>
+
+							{/* Window Chrome Settings */}
+							<div>
+								<label
+									className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2"
+									style={{ color: theme.colors.textDim }}
+								>
+									<AppWindow className="w-3 h-3" />
+									Window Chrome
+								</label>
+								<div
+									className="p-3 rounded border space-y-3"
+									style={{
+										borderColor: theme.colors.border,
+										backgroundColor: theme.colors.bgMain,
+									}}
+								>
+									{/* Native Title Bar */}
+									<div className="flex items-center justify-between">
+										<div>
+											<p className="text-sm" style={{ color: theme.colors.textMain }}>
+												Use native title bar
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Use the OS native title bar instead of Maestro&apos;s custom title bar.
+												Requires restart.
+											</p>
+										</div>
+										<button
+											onClick={() => setUseNativeTitleBar(!useNativeTitleBar)}
+											className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+											tabIndex={0}
+											style={{
+												backgroundColor: useNativeTitleBar
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={useNativeTitleBar}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													useNativeTitleBar ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+
+									{/* Auto-Hide Menu Bar */}
+									<div
+										className="flex items-center justify-between pt-3 border-t"
+										style={{ borderColor: theme.colors.border }}
+									>
+										<div>
+											<p className="text-sm" style={{ color: theme.colors.textMain }}>
+												Auto-hide menu bar
+											</p>
+											<p className="text-xs opacity-50 mt-0.5">
+												Hide the application menu bar. Press Alt to toggle visibility. Applies to
+												Windows and Linux. Requires restart.
+											</p>
+										</div>
+										<button
+											onClick={() => setAutoHideMenuBar(!autoHideMenuBar)}
+											className="relative w-10 h-5 rounded-full transition-colors flex-shrink-0 outline-none"
+											tabIndex={0}
+											style={{
+												backgroundColor: autoHideMenuBar
+													? theme.colors.accent
+													: theme.colors.bgActivity,
+											}}
+											role="switch"
+											aria-checked={autoHideMenuBar}
+										>
+											<span
+												className={`absolute left-0 top-0.5 w-4 h-4 rounded-full bg-white transition-transform ${
+													autoHideMenuBar ? 'translate-x-5' : 'translate-x-0.5'
+												}`}
+											/>
+										</button>
+									</div>
+								</div>
+							</div>
 
 							{/* Document Graph Settings */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<Sparkles className="w-3 h-3" />
 									Document Graph
 									<span
@@ -2472,7 +2713,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									>
 										Beta
 									</span>
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2510,9 +2751,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 									{/* Max Nodes */}
 									<div>
-										<label className="block text-xs opacity-60 mb-2">
-											Maximum nodes to display
-										</label>
+										<div className="block text-xs opacity-60 mb-2">Maximum nodes to display</div>
 										<div className="flex items-center gap-3">
 											<input
 												type="range"
@@ -2543,10 +2782,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							{/* Context Window Warnings */}
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
 									<AlertTriangle className="w-3 h-3" />
 									Context Window Warnings
-								</label>
+								</div>
 								<div
 									className="p-3 rounded border space-y-3"
 									style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
@@ -2622,7 +2861,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{/* Yellow Warning Threshold */}
 										<div>
 											<div className="flex items-center justify-between mb-2">
-												<label
+												<div
 													className="text-xs font-medium flex items-center gap-2"
 													style={{ color: theme.colors.textMain }}
 												>
@@ -2631,7 +2870,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 														style={{ backgroundColor: '#eab308' }}
 													/>
 													Yellow warning threshold
-												</label>
+												</div>
 												<span
 													className="text-xs font-mono px-2 py-0.5 rounded"
 													style={{ backgroundColor: 'rgba(234, 179, 8, 0.2)', color: '#fde047' }}
@@ -2670,7 +2909,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										{/* Red Warning Threshold */}
 										<div>
 											<div className="flex items-center justify-between mb-2">
-												<label
+												<div
 													className="text-xs font-medium flex items-center gap-2"
 													style={{ color: theme.colors.textMain }}
 												>
@@ -2679,7 +2918,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 														style={{ backgroundColor: '#ef4444' }}
 													/>
 													Red warning threshold
-												</label>
+												</div>
 												<span
 													className="text-xs font-mono px-2 py-0.5 rounded"
 													style={{ backgroundColor: 'rgba(239, 68, 68, 0.2)', color: '#fca5a5' }}
@@ -2715,18 +2954,32 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									</div>
 								</div>
 							</div>
+
+							{/* Local File Indexing Ignore Patterns */}
+							<IgnorePatternsSection
+								theme={theme}
+								title="Local Ignore Patterns"
+								description="Configure glob patterns for folders to exclude when indexing local files in the file explorer. Excluding large directories (like .git) reduces memory usage and speeds up file tree loading."
+								ignorePatterns={localIgnorePatterns}
+								onIgnorePatternsChange={setLocalIgnorePatterns}
+								defaultPatterns={DEFAULT_LOCAL_IGNORE_PATTERNS}
+								showHonorGitignore
+								honorGitignore={localHonorGitignore}
+								onHonorGitignoreChange={setLocalHonorGitignore}
+								onReset={() => setLocalHonorGitignore(true)}
+							/>
 						</div>
 					)}
 
 					{activeTab === 'llm' && FEATURE_FLAGS.LLM_SETTINGS && (
 						<div className="space-y-5">
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">
 									LLM Provider
-								</label>
+								</div>
 								<select
-									value={props.llmProvider}
-									onChange={(e) => props.setLlmProvider(e.target.value as LLMProvider)}
+									value={llmProvider}
+									onChange={(e) => setLlmProvider(e.target.value as LLMProvider)}
 									className="w-full p-2 rounded border bg-transparent outline-none"
 									style={{ borderColor: theme.colors.border }}
 								>
@@ -2737,25 +2990,21 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							</div>
 
 							<div>
-								<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-									Model Slug
-								</label>
+								<div className="block text-xs font-bold opacity-70 uppercase mb-2">Model Slug</div>
 								<input
-									value={props.modelSlug}
-									onChange={(e) => props.setModelSlug(e.target.value)}
+									value={modelSlug}
+									onChange={(e) => setModelSlug(e.target.value)}
 									className="w-full p-2 rounded border bg-transparent outline-none"
 									style={{ borderColor: theme.colors.border }}
 									placeholder={
-										props.llmProvider === 'ollama' ? 'llama3:latest' : 'anthropic/claude-3.5-sonnet'
+										llmProvider === 'ollama' ? 'llama3:latest' : 'anthropic/claude-3.5-sonnet'
 									}
 								/>
 							</div>
 
-							{props.llmProvider !== 'ollama' && (
+							{llmProvider !== 'ollama' && (
 								<div>
-									<label className="block text-xs font-bold opacity-70 uppercase mb-2">
-										API Key
-									</label>
+									<div className="block text-xs font-bold opacity-70 uppercase mb-2">API Key</div>
 									<div
 										className="flex items-center border rounded px-3 py-2"
 										style={{
@@ -2766,8 +3015,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 										<Key className="w-4 h-4 mr-2 opacity-50" />
 										<input
 											type="password"
-											value={props.apiKey}
-											onChange={(e) => props.setApiKey(e.target.value)}
+											value={apiKey}
+											onChange={(e) => setApiKey(e.target.value)}
 											className="bg-transparent flex-1 text-sm outline-none"
 											placeholder="sk-..."
 										/>
@@ -2782,7 +3031,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<div className="pt-4 border-t" style={{ borderColor: theme.colors.border }}>
 								<button
 									onClick={testLLMConnection}
-									disabled={testingLLM || (props.llmProvider !== 'ollama' && !props.apiKey)}
+									disabled={testingLLM || (llmProvider !== 'ollama' && !apiKey)}
 									className="w-full py-3 rounded-lg font-bold text-sm transition-all disabled:opacity-50 disabled:cursor-not-allowed"
 									style={{
 										backgroundColor: theme.colors.accent,
@@ -2819,8 +3068,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 					{activeTab === 'shortcuts' &&
 						(() => {
 							const allShortcuts = [
-								...Object.values(props.shortcuts).map((sc) => ({ ...sc, isTabShortcut: false })),
-								...Object.values(props.tabShortcuts).map((sc) => ({ ...sc, isTabShortcut: true })),
+								...Object.values(shortcuts).map((sc) => ({ ...sc, isTabShortcut: false })),
+								...Object.values(tabShortcuts).map((sc) => ({ ...sc, isTabShortcut: true })),
 							];
 							const totalShortcuts = allShortcuts.length;
 							const filteredShortcuts = allShortcuts.filter((sc) =>
@@ -2872,7 +3121,7 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 							return (
 								<div className="flex flex-col" style={{ minHeight: '450px' }}>
-									{props.hasNoAgents && (
+									{hasNoAgents && (
 										<p
 											className="text-xs mb-3 px-2 py-1.5 rounded"
 											style={{
@@ -2950,14 +3199,14 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 
 					{activeTab === 'notifications' && (
 						<NotificationsPanel
-							osNotificationsEnabled={props.osNotificationsEnabled}
-							setOsNotificationsEnabled={props.setOsNotificationsEnabled}
-							audioFeedbackEnabled={props.audioFeedbackEnabled}
-							setAudioFeedbackEnabled={props.setAudioFeedbackEnabled}
-							audioFeedbackCommand={props.audioFeedbackCommand}
-							setAudioFeedbackCommand={props.setAudioFeedbackCommand}
-							toastDuration={props.toastDuration}
-							setToastDuration={props.setToastDuration}
+							osNotificationsEnabled={osNotificationsEnabled}
+							setOsNotificationsEnabled={setOsNotificationsEnabled}
+							audioFeedbackEnabled={audioFeedbackEnabled}
+							setAudioFeedbackEnabled={setAudioFeedbackEnabled}
+							audioFeedbackCommand={audioFeedbackCommand}
+							setAudioFeedbackCommand={setAudioFeedbackCommand}
+							toastDuration={toastDuration}
+							setToastDuration={setToastDuration}
 							theme={theme}
 						/>
 					)}
@@ -2966,8 +3215,8 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 						<div className="space-y-8">
 							<AICommandsPanel
 								theme={theme}
-								customAICommands={props.customAICommands}
-								setCustomAICommands={props.setCustomAICommands}
+								customAICommands={customAICommands}
+								setCustomAICommands={setCustomAICommands}
 							/>
 
 							{/* Divider */}
@@ -3005,9 +3254,10 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									Encore Features
 								</h3>
 								<p className="text-xs" style={{ color: theme.colors.textDim }}>
-									Optional features that extend Maestro's capabilities. Enable the ones you want. Disabled features
-									are completely hidden from shortcuts, menus, and the command palette. Contributors building new
-									features should consider gating them here to keep the core experience focused.
+									Optional features that extend Maestro's capabilities. Enable the ones you want.
+									Disabled features are completely hidden from shortcuts, menus, and the command
+									palette. Contributors building new features should consider gating them here to
+									keep the core experience focused.
 								</p>
 							</div>
 
@@ -3015,20 +3265,48 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 							<div
 								className="rounded-lg border"
 								style={{
-									borderColor: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.border,
-									backgroundColor: encoreFeatures.directorNotes ? `${theme.colors.accent}08` : 'transparent',
+									borderColor: encoreFeatures.directorNotes
+										? theme.colors.accent
+										: theme.colors.border,
+									backgroundColor: encoreFeatures.directorNotes
+										? `${theme.colors.accent}08`
+										: 'transparent',
 								}}
 							>
 								{/* Feature Toggle Header */}
 								<button
 									className="w-full flex items-center justify-between p-4 text-left"
-									onClick={() => setEncoreFeatures({ ...encoreFeatures, directorNotes: !encoreFeatures.directorNotes })}
+									onClick={() =>
+										setEncoreFeatures({
+											...encoreFeatures,
+											directorNotes: !encoreFeatures.directorNotes,
+										})
+									}
 								>
 									<div className="flex items-center gap-3">
-										<Clapperboard className="w-5 h-5" style={{ color: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.textDim }} />
+										<Clapperboard
+											className="w-5 h-5"
+											style={{
+												color: encoreFeatures.directorNotes
+													? theme.colors.accent
+													: theme.colors.textDim,
+											}}
+										/>
 										<div>
-											<div className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
+											<div
+												className="text-sm font-bold flex items-center gap-2"
+												style={{ color: theme.colors.textMain }}
+											>
 												Director's Notes
+												<span
+													className="px-1.5 py-0.5 rounded text-[9px] font-bold uppercase"
+													style={{
+														backgroundColor: theme.colors.warning + '30',
+														color: theme.colors.warning,
+													}}
+												>
+													Beta
+												</span>
 											</div>
 											<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
 												Unified history view and AI-generated synopsis across all sessions
@@ -3037,285 +3315,351 @@ export const SettingsModal = memo(function SettingsModal(props: SettingsModalPro
 									</div>
 									<div
 										className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.directorNotes ? '' : 'opacity-50'}`}
-										style={{ backgroundColor: encoreFeatures.directorNotes ? theme.colors.accent : theme.colors.border }}
+										style={{
+											backgroundColor: encoreFeatures.directorNotes
+												? theme.colors.accent
+												: theme.colors.border,
+										}}
 									>
 										<div
 											className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
-											style={{ transform: encoreFeatures.directorNotes ? 'translateX(22px)' : 'translateX(2px)' }}
+											style={{
+												transform: encoreFeatures.directorNotes
+													? 'translateX(22px)'
+													: 'translateX(2px)',
+											}}
 										/>
 									</div>
 								</button>
 
 								{/* Director's Notes Settings (shown when enabled) */}
-								{encoreFeatures.directorNotes && (() => {
-									const dnAvailableTiles = AGENT_TILES.filter((tile) => {
-										if (!tile.supported) return false;
-										return dnDetectedAgents.some((a: AgentConfig) => a.id === tile.id);
-									});
-									const dnSelectedAgentConfig = dnDetectedAgents.find((a) => a.id === directorNotesSettings.provider);
-									const dnSelectedTile = AGENT_TILES.find((t) => t.id === directorNotesSettings.provider);
-									const dnHasCustomization = dnCustomPath || dnCustomArgs || Object.keys(dnCustomEnvVars).length > 0;
-
-									const handleDnAgentChange = (agentId: ToolType) => {
-										setDirectorNotesSettings({
-											...directorNotesSettings,
-											provider: agentId,
-											customPath: undefined,
-											customArgs: undefined,
-											customEnvVars: undefined,
+								{encoreFeatures.directorNotes &&
+									(() => {
+										const dnAvailableTiles = AGENT_TILES.filter((tile) => {
+											if (!tile.supported) return false;
+											return dnDetectedAgents.some((a: AgentConfig) => a.id === tile.id);
 										});
-										setDnCustomPath('');
-										setDnCustomArgs('');
-										setDnCustomEnvVars({});
-										setDnAgentConfig({});
-										dnAgentConfigRef.current = {};
-										if (dnIsConfigExpanded) {
-											window.maestro.agents.getConfig(agentId).then((config) => {
-												setDnAgentConfig(config || {});
-												dnAgentConfigRef.current = config || {};
+										const dnSelectedAgentConfig = dnDetectedAgents.find(
+											(a) => a.id === directorNotesSettings.provider
+										);
+										const dnSelectedTile = AGENT_TILES.find(
+											(t) => t.id === directorNotesSettings.provider
+										);
+										const dnHasCustomization =
+											dnCustomPath || dnCustomArgs || Object.keys(dnCustomEnvVars).length > 0;
+
+										const handleDnAgentChange = (agentId: ToolType) => {
+											setDirectorNotesSettings({
+												...directorNotesSettings,
+												provider: agentId,
+												customPath: undefined,
+												customArgs: undefined,
+												customEnvVars: undefined,
 											});
-											const agent = dnDetectedAgents.find((a) => a.id === agentId);
-											if (agent?.capabilities?.supportsModelSelection) {
-												setDnLoadingModels(true);
-												window.maestro.agents.getModels(agentId).then((models) => {
-													setDnAvailableModels(models);
-												}).catch(() => {}).finally(() => setDnLoadingModels(false));
-											}
-										}
-									};
-
-									const handleDnRefreshAgent = async () => {
-										setDnRefreshingAgent(true);
-										try {
-											const agents = await window.maestro.agents.detect();
-											const available = agents.filter((a: AgentConfig) => a.available && !a.hidden);
-											setDnDetectedAgents(available);
-										} finally {
-											setDnRefreshingAgent(false);
-										}
-									};
-
-									const handleDnRefreshModels = async () => {
-										if (!directorNotesSettings.provider) return;
-										setDnLoadingModels(true);
-										try {
-											const models = await window.maestro.agents.getModels(directorNotesSettings.provider, true);
-											setDnAvailableModels(models);
-										} catch (err) {
-											console.error('Failed to refresh models:', err);
-										} finally {
-											setDnLoadingModels(false);
-										}
-									};
-
-									const persistDnCustomConfig = () => {
-										setDirectorNotesSettings({
-											...directorNotesSettings,
-											customPath: dnCustomPath || undefined,
-											customArgs: dnCustomArgs || undefined,
-											customEnvVars: Object.keys(dnCustomEnvVars).length > 0 ? dnCustomEnvVars : undefined,
-										});
-									};
-
-									return (
-									<div className="px-4 pb-4 space-y-6 border-t" style={{ borderColor: theme.colors.border }}>
-										{/* Provider Selection */}
-										<div className="pt-4">
-											<label
-												className="block text-xs font-bold opacity-70 uppercase mb-2"
-												style={{ color: theme.colors.textMain }}
-											>
-												Synopsis Provider
-											</label>
-
-											{dnIsDetecting ? (
-												<div className="flex items-center gap-2 py-2">
-													<div
-														className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
-														style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
-													/>
-													<span className="text-sm" style={{ color: theme.colors.textDim }}>
-														Detecting agents...
-													</span>
-												</div>
-											) : dnAvailableTiles.length === 0 ? (
-												<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
-													No agents available. Please install Claude Code, OpenCode, Codex, or Factory Droid.
-												</div>
-											) : (
-												<div className="flex items-center gap-2">
-													<div className="relative flex-1">
-														<select
-															value={directorNotesSettings.provider}
-															onChange={(e) => handleDnAgentChange(e.target.value as ToolType)}
-															className="w-full px-3 py-2 pr-10 rounded-lg border outline-none appearance-none cursor-pointer text-sm"
-															style={{
-																backgroundColor: theme.colors.bgMain,
-																borderColor: theme.colors.border,
-																color: theme.colors.textMain,
-															}}
-															aria-label="Select synopsis provider agent"
-														>
-															{dnAvailableTiles.map((tile) => {
-																const isBeta = tile.id === 'codex' || tile.id === 'opencode' || tile.id === 'factory-droid';
-																return (
-																	<option key={tile.id} value={tile.id}>
-																		{tile.name}{isBeta ? ' (Beta)' : ''}
-																	</option>
-																);
-															})}
-														</select>
-														<ChevronDown
-															className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
-															style={{ color: theme.colors.textDim }}
-														/>
-													</div>
-
-													<button
-														onClick={() => setDnIsConfigExpanded((prev) => !prev)}
-														className="flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors hover:bg-white/5"
-														style={{
-															borderColor: dnIsConfigExpanded ? theme.colors.accent : theme.colors.border,
-															color: dnIsConfigExpanded ? theme.colors.accent : theme.colors.textDim,
-															backgroundColor: dnIsConfigExpanded ? `${theme.colors.accent}10` : 'transparent',
-														}}
-														title="Customize provider settings"
-													>
-														<Settings className="w-4 h-4" />
-														<span className="text-sm">Customize</span>
-														{dnHasCustomization && (
-															<span
-																className="w-2 h-2 rounded-full"
-																style={{ backgroundColor: theme.colors.accent }}
-															/>
-														)}
-													</button>
-												</div>
-											)}
-
-											{dnIsConfigExpanded && dnSelectedAgentConfig && dnSelectedTile && (
-												<div
-													className="mt-3 p-4 rounded-lg border"
-													style={{
-														backgroundColor: theme.colors.bgActivity,
-														borderColor: theme.colors.border,
-													}}
-												>
-													<div className="flex items-center justify-between mb-3">
-														<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
-															{dnSelectedTile.name} Configuration
-														</span>
-														{dnHasCustomization && (
-															<div className="flex items-center gap-1">
-																<Check className="w-3 h-3" style={{ color: theme.colors.success }} />
-																<span className="text-xs" style={{ color: theme.colors.success }}>
-																	Customized
-																</span>
-															</div>
-														)}
-													</div>
-													<AgentConfigPanel
-														theme={theme}
-														agent={dnSelectedAgentConfig}
-														customPath={dnCustomPath}
-														onCustomPathChange={setDnCustomPath}
-														onCustomPathBlur={persistDnCustomConfig}
-														onCustomPathClear={() => {
-															setDnCustomPath('');
-															setDirectorNotesSettings({ ...directorNotesSettings, customPath: undefined });
-														}}
-														customArgs={dnCustomArgs}
-														onCustomArgsChange={setDnCustomArgs}
-														onCustomArgsBlur={persistDnCustomConfig}
-														onCustomArgsClear={() => {
-															setDnCustomArgs('');
-															setDirectorNotesSettings({ ...directorNotesSettings, customArgs: undefined });
-														}}
-														customEnvVars={dnCustomEnvVars}
-														onEnvVarKeyChange={(oldKey, newKey, value) => {
-															const newVars = { ...dnCustomEnvVars };
-															delete newVars[oldKey];
-															newVars[newKey] = value;
-															setDnCustomEnvVars(newVars);
-														}}
-														onEnvVarValueChange={(key, value) => {
-															setDnCustomEnvVars({ ...dnCustomEnvVars, [key]: value });
-														}}
-														onEnvVarRemove={(key) => {
-															const newVars = { ...dnCustomEnvVars };
-															delete newVars[key];
-															setDnCustomEnvVars(newVars);
-														}}
-														onEnvVarAdd={() => {
-															let newKey = 'NEW_VAR';
-															let counter = 1;
-															while (dnCustomEnvVars[newKey]) {
-																newKey = `NEW_VAR_${counter}`;
-																counter++;
-															}
-															setDnCustomEnvVars({ ...dnCustomEnvVars, [newKey]: '' });
-														}}
-														onEnvVarsBlur={persistDnCustomConfig}
-														agentConfig={dnAgentConfig}
-														onConfigChange={(key, value) => {
-															const newConfig = { ...dnAgentConfig, [key]: value };
-															setDnAgentConfig(newConfig);
-															dnAgentConfigRef.current = newConfig;
-														}}
-														onConfigBlur={async () => {
-															if (directorNotesSettings.provider) {
-																await window.maestro.agents.setConfig(directorNotesSettings.provider, dnAgentConfigRef.current);
-															}
-														}}
-														availableModels={dnAvailableModels}
-														loadingModels={dnLoadingModels}
-														onRefreshModels={handleDnRefreshModels}
-														onRefreshAgent={handleDnRefreshAgent}
-														refreshingAgent={dnRefreshingAgent}
-														compact
-														showBuiltInEnvVars
-													/>
-												</div>
-											)}
-
-											<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-												The AI agent used to generate synopsis summaries
-											</p>
-										</div>
-
-										{/* Default Lookback Period */}
-										<div>
-											<label className="block text-xs font-bold mb-2" style={{ color: theme.colors.textMain }}>
-												Default Lookback Period: {directorNotesSettings.defaultLookbackDays} days
-											</label>
-											<input
-												type="range"
-												min={1}
-												max={90}
-												value={directorNotesSettings.defaultLookbackDays}
-												onChange={(e) =>
-													setDirectorNotesSettings({
-														...directorNotesSettings,
-														defaultLookbackDays: parseInt(e.target.value, 10),
-													})
+											setDnCustomPath('');
+											setDnCustomArgs('');
+											setDnCustomEnvVars({});
+											setDnAgentConfig({});
+											dnAgentConfigRef.current = {};
+											if (dnIsConfigExpanded) {
+												window.maestro.agents.getConfig(agentId).then((config) => {
+													setDnAgentConfig(config || {});
+													dnAgentConfigRef.current = config || {};
+												});
+												const agent = dnDetectedAgents.find((a) => a.id === agentId);
+												if (agent?.capabilities?.supportsModelSelection) {
+													setDnLoadingModels(true);
+													window.maestro.agents
+														.getModels(agentId)
+														.then((models) => {
+															setDnAvailableModels(models);
+														})
+														.catch(() => {})
+														.finally(() => setDnLoadingModels(false));
 												}
-												className="w-full"
-											/>
-											<div className="flex justify-between text-[10px] mt-1" style={{ color: theme.colors.textDim }}>
-												<span>1 day</span>
-												<span>7</span>
-												<span>14</span>
-												<span>30</span>
-												<span>60</span>
-												<span>90 days</span>
+											}
+										};
+
+										const handleDnRefreshAgent = async () => {
+											setDnRefreshingAgent(true);
+											try {
+												const agents = await window.maestro.agents.detect();
+												const available = agents.filter(
+													(a: AgentConfig) => a.available && !a.hidden
+												);
+												setDnDetectedAgents(available);
+											} finally {
+												setDnRefreshingAgent(false);
+											}
+										};
+
+										const handleDnRefreshModels = async () => {
+											if (!directorNotesSettings.provider) return;
+											setDnLoadingModels(true);
+											try {
+												const models = await window.maestro.agents.getModels(
+													directorNotesSettings.provider,
+													true
+												);
+												setDnAvailableModels(models);
+											} catch (err) {
+												console.error('Failed to refresh models:', err);
+											} finally {
+												setDnLoadingModels(false);
+											}
+										};
+
+										const persistDnCustomConfig = () => {
+											setDirectorNotesSettings({
+												...directorNotesSettings,
+												customPath: dnCustomPath || undefined,
+												customArgs: dnCustomArgs || undefined,
+												customEnvVars:
+													Object.keys(dnCustomEnvVars).length > 0 ? dnCustomEnvVars : undefined,
+											});
+										};
+
+										return (
+											<div
+												className="px-4 pb-4 space-y-6 border-t"
+												style={{ borderColor: theme.colors.border }}
+											>
+												{/* Provider Selection */}
+												<div className="pt-4">
+													<div
+														className="block text-xs font-bold opacity-70 uppercase mb-2"
+														style={{ color: theme.colors.textMain }}
+													>
+														Synopsis Provider
+													</div>
+
+													{dnIsDetecting ? (
+														<div className="flex items-center gap-2 py-2">
+															<div
+																className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
+																style={{
+																	borderColor: theme.colors.accent,
+																	borderTopColor: 'transparent',
+																}}
+															/>
+															<span className="text-sm" style={{ color: theme.colors.textDim }}>
+																Detecting agents...
+															</span>
+														</div>
+													) : dnAvailableTiles.length === 0 ? (
+														<div className="text-sm py-2" style={{ color: theme.colors.textDim }}>
+															No agents available. Please install Claude Code, OpenCode, Codex, or
+															Factory Droid.
+														</div>
+													) : (
+														<div className="flex items-center gap-2">
+															<div className="relative flex-1">
+																<select
+																	value={directorNotesSettings.provider}
+																	onChange={(e) => handleDnAgentChange(e.target.value as ToolType)}
+																	className="w-full px-3 py-2 pr-10 rounded-lg border outline-none appearance-none cursor-pointer text-sm"
+																	style={{
+																		backgroundColor: theme.colors.bgMain,
+																		borderColor: theme.colors.border,
+																		color: theme.colors.textMain,
+																	}}
+																	aria-label="Select synopsis provider agent"
+																>
+																	{dnAvailableTiles.map((tile) => {
+																		const isBeta =
+																			tile.id === 'codex' ||
+																			tile.id === 'opencode' ||
+																			tile.id === 'factory-droid';
+																		return (
+																			<option key={tile.id} value={tile.id}>
+																				{tile.name}
+																				{isBeta ? ' (Beta)' : ''}
+																			</option>
+																		);
+																	})}
+																</select>
+																<ChevronDown
+																	className="absolute right-3 top-1/2 -translate-y-1/2 w-4 h-4 pointer-events-none"
+																	style={{ color: theme.colors.textDim }}
+																/>
+															</div>
+
+															<button
+																onClick={() => setDnIsConfigExpanded((prev) => !prev)}
+																className="flex items-center gap-1.5 px-3 py-2 rounded-lg border transition-colors hover:bg-white/5"
+																style={{
+																	borderColor: dnIsConfigExpanded
+																		? theme.colors.accent
+																		: theme.colors.border,
+																	color: dnIsConfigExpanded
+																		? theme.colors.accent
+																		: theme.colors.textDim,
+																	backgroundColor: dnIsConfigExpanded
+																		? `${theme.colors.accent}10`
+																		: 'transparent',
+																}}
+																title="Customize provider settings"
+															>
+																<Settings className="w-4 h-4" />
+																<span className="text-sm">Customize</span>
+																{dnHasCustomization && (
+																	<span
+																		className="w-2 h-2 rounded-full"
+																		style={{ backgroundColor: theme.colors.accent }}
+																	/>
+																)}
+															</button>
+														</div>
+													)}
+
+													{dnIsConfigExpanded && dnSelectedAgentConfig && dnSelectedTile && (
+														<div
+															className="mt-3 p-4 rounded-lg border"
+															style={{
+																backgroundColor: theme.colors.bgActivity,
+																borderColor: theme.colors.border,
+															}}
+														>
+															<div className="flex items-center justify-between mb-3">
+																<span
+																	className="text-xs font-medium"
+																	style={{ color: theme.colors.textDim }}
+																>
+																	{dnSelectedTile.name} Configuration
+																</span>
+																{dnHasCustomization && (
+																	<div className="flex items-center gap-1">
+																		<Check
+																			className="w-3 h-3"
+																			style={{ color: theme.colors.success }}
+																		/>
+																		<span
+																			className="text-xs"
+																			style={{ color: theme.colors.success }}
+																		>
+																			Customized
+																		</span>
+																	</div>
+																)}
+															</div>
+															<AgentConfigPanel
+																theme={theme}
+																agent={dnSelectedAgentConfig}
+																customPath={dnCustomPath}
+																onCustomPathChange={setDnCustomPath}
+																onCustomPathBlur={persistDnCustomConfig}
+																onCustomPathClear={() => {
+																	setDnCustomPath('');
+																	setDirectorNotesSettings({
+																		...directorNotesSettings,
+																		customPath: undefined,
+																	});
+																}}
+																customArgs={dnCustomArgs}
+																onCustomArgsChange={setDnCustomArgs}
+																onCustomArgsBlur={persistDnCustomConfig}
+																onCustomArgsClear={() => {
+																	setDnCustomArgs('');
+																	setDirectorNotesSettings({
+																		...directorNotesSettings,
+																		customArgs: undefined,
+																	});
+																}}
+																customEnvVars={dnCustomEnvVars}
+																onEnvVarKeyChange={(oldKey, newKey, value) => {
+																	const newVars = { ...dnCustomEnvVars };
+																	delete newVars[oldKey];
+																	newVars[newKey] = value;
+																	setDnCustomEnvVars(newVars);
+																}}
+																onEnvVarValueChange={(key, value) => {
+																	setDnCustomEnvVars({ ...dnCustomEnvVars, [key]: value });
+																}}
+																onEnvVarRemove={(key) => {
+																	const newVars = { ...dnCustomEnvVars };
+																	delete newVars[key];
+																	setDnCustomEnvVars(newVars);
+																}}
+																onEnvVarAdd={() => {
+																	let newKey = 'NEW_VAR';
+																	let counter = 1;
+																	while (dnCustomEnvVars[newKey]) {
+																		newKey = `NEW_VAR_${counter}`;
+																		counter++;
+																	}
+																	setDnCustomEnvVars({ ...dnCustomEnvVars, [newKey]: '' });
+																}}
+																onEnvVarsBlur={persistDnCustomConfig}
+																agentConfig={dnAgentConfig}
+																onConfigChange={(key, value) => {
+																	const newConfig = { ...dnAgentConfig, [key]: value };
+																	setDnAgentConfig(newConfig);
+																	dnAgentConfigRef.current = newConfig;
+																}}
+																onConfigBlur={async () => {
+																	if (directorNotesSettings.provider) {
+																		await window.maestro.agents.setConfig(
+																			directorNotesSettings.provider,
+																			dnAgentConfigRef.current
+																		);
+																	}
+																}}
+																availableModels={dnAvailableModels}
+																loadingModels={dnLoadingModels}
+																onRefreshModels={handleDnRefreshModels}
+																onRefreshAgent={handleDnRefreshAgent}
+																refreshingAgent={dnRefreshingAgent}
+																compact
+																showBuiltInEnvVars
+															/>
+														</div>
+													)}
+
+													<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+														The AI agent used to generate synopsis summaries
+													</p>
+												</div>
+
+												{/* Default Lookback Period */}
+												<div>
+													<div
+														className="block text-xs font-bold mb-2"
+														style={{ color: theme.colors.textMain }}
+													>
+														Default Lookback Period: {directorNotesSettings.defaultLookbackDays}{' '}
+														days
+													</div>
+													<input
+														type="range"
+														min={1}
+														max={90}
+														value={directorNotesSettings.defaultLookbackDays}
+														onChange={(e) =>
+															setDirectorNotesSettings({
+																...directorNotesSettings,
+																defaultLookbackDays: parseInt(e.target.value, 10),
+															})
+														}
+														className="w-full"
+													/>
+													<div
+														className="flex justify-between text-[10px] mt-1"
+														style={{ color: theme.colors.textDim }}
+													>
+														<span>1 day</span>
+														<span>7</span>
+														<span>14</span>
+														<span>30</span>
+														<span>60</span>
+														<span>90 days</span>
+													</div>
+													<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
+														How far back to look when generating notes (can be adjusted per-report)
+													</p>
+												</div>
 											</div>
-											<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-												How far back to look when generating notes (can be adjusted per-report)
-											</p>
-										</div>
-									</div>
-									);
-								})()}
+										);
+									})()}
 							</div>
 						</div>
 					)}

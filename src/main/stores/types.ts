@@ -72,6 +72,9 @@ export interface MaestroSettings {
 	// WakaTime integration
 	wakatimeEnabled: boolean;
 	wakatimeApiKey: string;
+	wakatimeDetailedTracking: boolean;
+	// Standalone hands-on time tracker (migrated from globalStats.totalActiveTimeMs)
+	totalActiveTimeMs: number;
 	// Allow dynamic settings keys (electron-store is a key-value store
 	// with many settings not explicitly declared above)
 	[key: string]: any;

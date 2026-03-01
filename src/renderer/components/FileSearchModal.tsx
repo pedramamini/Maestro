@@ -218,6 +218,18 @@ export function FileSearchModal({
 	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
 
+	const handleSearchChange = useCallback((value: string) => {
+		setSearch(value);
+		setSelectedIndex(0);
+		setFirstVisibleIndex(0);
+	}, []);
+
+	const handleViewModeChange = useCallback((mode: ViewMode) => {
+		setViewMode(mode);
+		setSelectedIndex(0);
+		setFirstVisibleIndex(0);
+	}, []);
+
 	// Keep onClose ref up to date
 	useEffect(() => {
 		onCloseRef.current = onClose;
@@ -302,15 +314,9 @@ export function FileSearchModal({
 			.map((r) => r.file);
 	}, [allFiles, visibleFiles, search, viewMode]);
 
-	// Reset selection when search or view mode changes
-	useEffect(() => {
-		setSelectedIndex(0);
-		setFirstVisibleIndex(0);
-	}, [search, viewMode]);
-
 	const toggleViewMode = useCallback(() => {
-		setViewMode((prev) => (prev === 'visible' ? 'all' : 'visible'));
-	}, []);
+		handleViewModeChange(viewMode === 'visible' ? 'all' : 'visible');
+	}, [handleViewModeChange, viewMode]);
 
 	// Scroll selected item into view
 	useEffect(() => {
@@ -393,7 +399,7 @@ export function FileSearchModal({
 						placeholder="Search files..."
 						style={{ color: theme.colors.textMain }}
 						value={search}
-						onChange={(e) => setSearch(e.target.value)}
+						onChange={(e) => handleSearchChange(e.target.value)}
 						onKeyDown={handleKeyDown}
 					/>
 					<div className="flex items-center gap-2">
@@ -420,7 +426,7 @@ export function FileSearchModal({
 					style={{ borderColor: theme.colors.border }}
 				>
 					<button
-						onClick={() => setViewMode('visible')}
+						onClick={() => handleViewModeChange('visible')}
 						className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
 						style={{
 							backgroundColor: viewMode === 'visible' ? theme.colors.accent : theme.colors.bgMain,
@@ -430,7 +436,7 @@ export function FileSearchModal({
 						Visible Files ({fileCounts.visible})
 					</button>
 					<button
-						onClick={() => setViewMode('all')}
+						onClick={() => handleViewModeChange('all')}
 						className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
 						style={{
 							backgroundColor: viewMode === 'all' ? theme.colors.accent : theme.colors.bgMain,

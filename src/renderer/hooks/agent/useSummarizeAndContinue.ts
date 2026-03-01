@@ -21,6 +21,8 @@ import type { SummarizeProgress, SummarizeResult } from '../../types/contextMerg
 import { contextSummarizationService } from '../../services/contextSummarizer';
 import { createTabAtPosition } from '../../utils/tabHelpers';
 import { useOperationStore, selectIsAnySummarizing } from '../../stores/operationStore';
+import { useSessionStore } from '../../stores/sessionStore';
+import { notifyToast } from '../../stores/notificationStore';
 import type { SummarizeState, TabSummarizeState } from '../../stores/operationStore';
 
 // Re-export types from the canonical store location
@@ -60,6 +62,8 @@ export interface UseSummarizeAndContinueResult {
 	canSummarize: (contextUsage: number, logs?: LogEntry[]) => boolean;
 	/** Get the minimum context usage percentage required for summarization */
 	minContextUsagePercent: number;
+	/** High-level handler: validates, summarizes, updates session, shows toast (Tier 3E) */
+	handleSummarizeAndContinue: (tabId?: string) => void;
 }
 
 /**
@@ -327,6 +331,103 @@ export function useSummarizeAndContinue(session: Session | null): UseSummarizeAn
 		return contextSummarizationService.canSummarize(contextUsage, logs);
 	}, []);
 
+	/**
+	 * High-level handler: validates, runs summarization, updates session state,
+	 * shows toast notification. Extracted from App.tsx wrapper (Tier 3E).
+	 */
+	const handleSummarizeAndContinue = useCallback(
+		(tabId?: string) => {
+			if (!session || session.inputMode !== 'ai') return;
+
+			const targetTabId = tabId || session.activeTabId;
+			const targetTab = session.aiTabs.find((t) => t.id === targetTabId);
+
+			if (!targetTab || !canSummarize(session.contextUsage, targetTab.logs)) {
+				notifyToast({
+					type: 'warning',
+					title: 'Cannot Compact',
+					message: `Context too small. Need at least ${contextSummarizationService.getMinContextUsagePercent()}% usage, ~2k tokens, or 8+ messages to compact.`,
+				});
+				return;
+			}
+
+			// Store session info for toast navigation
+			const sourceSessionId = session.id;
+			const sourceSessionName = session.name;
+			const { setSessions } = useSessionStore.getState();
+
+			startSummarize(targetTabId)
+				.then((result) => {
+					if (result) {
+						// Apply only deterministic deltas to the live session (avoid stale snapshot spread)
+						setSessions((prev) =>
+							prev.map((s) => {
+								if (s.id !== sourceSessionId) return s;
+								// Insert the new tab if not already present
+								const newTab = result.updatedSession.aiTabs.find((t) => t.id === result.newTabId);
+								const hasNewTab = s.aiTabs.some((t) => t.id === result.newTabId);
+								// Find insertion point: right after the source tab
+								let updatedTabs = s.aiTabs;
+								if (newTab && !hasNewTab) {
+									const sourceIdx = s.aiTabs.findIndex((t) => t.id === targetTabId);
+									const insertIdx = sourceIdx >= 0 ? sourceIdx + 1 : s.aiTabs.length;
+									updatedTabs = [
+										...s.aiTabs.slice(0, insertIdx),
+										newTab,
+										...s.aiTabs.slice(insertIdx),
+									];
+								}
+								return {
+									...s,
+									activeTabId: result.newTabId,
+									aiTabs: updatedTabs.map((tab) =>
+										tab.id === targetTabId
+											? { ...tab, logs: [...tab.logs, result.systemLogEntry] }
+											: tab
+									),
+								};
+							})
+						);
+
+						// Show success notification with click-to-navigate
+						const reductionPercent = result.systemLogEntry.text.match(/(\d+)%/)?.[1] ?? '0';
+						notifyToast({
+							type: 'success',
+							title: 'Context Compacted',
+							message: `Reduced context by ${reductionPercent}%. Click to view the new tab.`,
+							sessionId: sourceSessionId,
+							tabId: result.newTabId,
+							project: sourceSessionName,
+						});
+
+						// Clear the summarization state for this tab
+						clearTabState(targetTabId);
+					} else {
+						// startSummarize returned null (error already set in operationStore)
+						notifyToast({
+							type: 'error',
+							title: 'Compaction Failed',
+							message: 'Failed to compact context. Check the tab for details.',
+							sessionId: sourceSessionId,
+							tabId: targetTabId,
+						});
+					}
+				})
+				.catch((err) => {
+					console.error('[handleSummarizeAndContinue] Unexpected error:', err);
+					notifyToast({
+						type: 'error',
+						title: 'Compaction Failed',
+						message: 'An unexpected error occurred during compaction.',
+						sessionId: sourceSessionId,
+						tabId: targetTabId,
+					});
+					clearTabState(targetTabId);
+				});
+		},
+		[session, canSummarize, startSummarize, clearTabState]
+	);
+
 	return {
 		// Active tab state (backwards compatibility)
 		summarizeState: activeTabState?.state || 'idle',
@@ -344,6 +445,7 @@ export function useSummarizeAndContinue(session: Session | null): UseSummarizeAn
 		clearTabState,
 		canSummarize,
 		minContextUsagePercent: contextSummarizationService.getMinContextUsagePercent(),
+		handleSummarizeAndContinue,
 	};
 }
 

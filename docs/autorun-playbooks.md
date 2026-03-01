@@ -78,6 +78,7 @@ Looking for pre-built playbooks? The [Playbook Exchange](./playbook-exchange) of
 ## Progress Tracking
 
 The runner will:
+
 - Process tasks serially from top to bottom
 - Skip documents with no unchecked tasks
 - Show progress: "Document X of Y" and "Task X of Y"
@@ -98,9 +99,9 @@ This isolation is critical for playbooks with `Reset on Completion` documents th
 
 Maestro sets environment variables that your agent hooks can use to customize behavior:
 
-| Variable | Value | Description |
-|----------|-------|-------------|
-| `MAESTRO_SESSION_RESUMED` | `1` | Set when resuming an existing session (not set for new sessions) |
+| Variable                  | Value | Description                                                      |
+| ------------------------- | ----- | ---------------------------------------------------------------- |
+| `MAESTRO_SESSION_RESUMED` | `1`   | Set when resuming an existing session (not set for new sessions) |
 
 **Example: Conditional Hook Execution**
 
@@ -117,12 +118,14 @@ This works with any agent provider (Claude Code, Codex, OpenCode) since the envi
 ## History & Tracking
 
 Each completed task is logged to the History panel with:
+
 - **AUTO** label indicating automated execution
 - **Session ID** pill (clickable to jump to that AI conversation)
 - **Summary** of what the agent accomplished
 - **Full response** viewable by clicking the entry
 
 **Keyboard navigation in History**:
+
 - `Up/Down Arrow` - Navigate entries
 - `Enter` - View full response
 - `Esc` - Close detail view and return to list
@@ -132,12 +135,14 @@ Each completed task is logged to the History panel with:
 For editing complex Auto Run documents, use the **Expanded Editor** — a fullscreen modal that provides more screen real-estate.
 
 **To open the Expanded Editor:**
+
 - Click the **expand icon** (↗️) in the top-right corner of the Auto Run panel
 - Or press `Cmd+Shift+E` (Mac) / `Ctrl+Shift+E` (Windows/Linux) to toggle
 
 ![Expanded Auto Run Editor](./screenshots/autorun-expanded.png)
 
 The Expanded Editor provides:
+
 - **Edit/Preview toggle** — Switch between editing markdown and previewing rendered output
 - **Document selector** — Switch between documents without closing the modal
 - **Run controls** — Start, stop, and monitor Auto Run progress from the expanded view
@@ -159,6 +164,7 @@ Paste images directly into your documents. Images are saved to an `images/` subf
 ## Stopping the Runner
 
 Click the **Stop** button at any time. The runner will:
+
 - Complete the current task before stopping
 - Preserve all completed work
 - Allow you to resume later by clicking Run again
@@ -168,3 +174,19 @@ Click the **Stop** button at any time. The runner will:
 Auto Run can execute in parallel across different agents without conflicts — each agent works in its own project directory, so there's no risk of clobbering each other's work.
 
 **Same project, parallel work:** To run multiple Auto Runs in the same repository simultaneously, create worktree sub-agents from the git branch menu (see [Git Worktrees](./git-worktrees)). Each worktree operates in an isolated directory with its own branch, enabling true parallel task execution on the same codebase.
+
+### Run in Worktree
+
+You can dispatch an Auto Run directly into a new git worktree from the run configuration modal. This spins up an isolated branch and directory for the entire run, keeping your main working tree clean.
+
+![Run in Worktree](./screenshots/autorun-worktree.png)
+
+| Option                              | Description                                                                                |
+| ----------------------------------- | ------------------------------------------------------------------------------------------ |
+| **Dispatch to a separate worktree** | Toggle to enable worktree isolation for this run                                           |
+| **Worktree selection**              | Create a new worktree or select an existing one                                            |
+| **Base Branch**                     | The branch to base the new worktree on (e.g., `main`)                                      |
+| **Worktree Branch Name**            | Name for the new branch — also used as the worktree directory name                         |
+| **Automatically create PR**         | When checked, Maestro opens a pull request from the worktree branch when the run completes |
+
+This is the recommended workflow for longer Auto Runs — your main branch stays untouched, all changes land on a dedicated branch, and you get a PR at the end ready for review.

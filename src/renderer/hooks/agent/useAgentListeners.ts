@@ -25,7 +25,6 @@ import type {
 	AgentError,
 	GroupChatMessage,
 	UsageStats,
-	GlobalStats,
 } from '../../types';
 import { notifyToast } from '../../stores/notificationStore';
 import type { HistoryEntryInput } from './useAgentSessionManagement';
@@ -116,8 +115,6 @@ export interface UseAgentListenersDeps {
 	pauseBatchOnErrorRef: React.RefObject<
 		((sessionId: string, error: AgentError, docIndex: number, context?: string) => void) | null
 	>;
-	/** Global stats updater */
-	updateGlobalStatsRef: React.RefObject<((stats: Partial<GlobalStats>) => void) | null>;
 	/** Right panel ref for refreshing history */
 	rightPanelRef: React.RefObject<RightPanelHandle | null>;
 	/** Process queued item callback */
@@ -1096,14 +1093,6 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				}
 			}
 			deps.batchedUpdater.updateCycleTokens(actualSessionId, usageStats.outputTokens);
-
-			deps.updateGlobalStatsRef.current?.({
-				totalInputTokens: usageStats.inputTokens,
-				totalOutputTokens: usageStats.outputTokens,
-				totalCacheReadTokens: usageStats.cacheReadInputTokens,
-				totalCacheCreationTokens: usageStats.cacheCreationInputTokens,
-				totalCostUsd: usageStats.totalCostUsd,
-			});
 		});
 
 		// ================================================================
@@ -1361,7 +1350,10 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									if (!targetTab.showThinking || targetTab.showThinking === 'off') continue;
 
 									// Codex emits reasoning as complete blocks, not streams — large content is expected
-									if (bufferedContent.length <= 500 && isLikelyConcatenatedToolNames(bufferedContent)) {
+									if (
+										bufferedContent.length <= 500 &&
+										isLikelyConcatenatedToolNames(bufferedContent)
+									) {
 										console.warn(
 											'[App] Skipping malformed thinking chunk (concatenated tool names):',
 											bufferedContent.substring(0, 100)

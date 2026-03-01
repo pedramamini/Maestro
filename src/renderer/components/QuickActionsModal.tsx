@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import type { Session, Group, Theme, Shortcut, RightPanelTab, SettingsTab } from '../types';
 import type { GroupChat } from '../../shared/group-chat-types';
@@ -7,6 +7,7 @@ import { notifyToast } from '../stores/notificationStore';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { gitService } from '../services/git';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { safeClipboardWrite } from '../utils/clipboard';
 import type { WizardStep } from './Wizard/WizardContext';
 import { useListNavigation } from '../hooks';
 import { useUIStore } from '../stores/uiStore';
@@ -122,7 +123,7 @@ interface QuickActionsModalProps {
 	setAutoScrollAiMode?: (value: boolean) => void;
 }
 
-export function QuickActionsModal(props: QuickActionsModalProps) {
+export const QuickActionsModal = memo(function QuickActionsModal(props: QuickActionsModalProps) {
 	const {
 		theme,
 		sessions,
@@ -646,6 +647,15 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 			},
 		},
 		{
+			id: 'configureEnvVars',
+			label: 'Configure Global Environment Variables',
+			action: () => {
+				setSettingsModalOpen(true);
+				setSettingsTab('general');
+				setQuickActionOpen(false);
+			},
+		},
+		{
 			id: 'shortcuts',
 			label: 'View Shortcuts',
 			shortcut: shortcuts.help,
@@ -1030,7 +1040,9 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 			? [
 					{
 						id: 'toggleAutoScroll',
-						label: autoScrollAiMode ? 'Disable Auto-Scroll AI Output' : 'Enable Auto-Scroll AI Output',
+						label: autoScrollAiMode
+							? 'Disable Auto-Scroll AI Output'
+							: 'Enable Auto-Scroll AI Output',
 						shortcut: shortcuts.toggleAutoScroll,
 						action: () => {
 							setAutoScrollAiMode(!autoScrollAiMode);
@@ -1309,7 +1321,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 				try {
 					const installationId = await window.maestro.leaderboard.getInstallationId();
 					if (installationId) {
-						await navigator.clipboard.writeText(installationId);
+						await safeClipboardWrite(installationId);
 						notifyToast({ type: 'success', title: 'Install GUID Copied', message: installationId });
 						console.log('[Debug] Installation GUID copied to clipboard:', installationId);
 					} else {
@@ -1552,4 +1564,4 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 			</div>
 		</div>
 	);
-}
+});

@@ -15,6 +15,123 @@ import { resolveSshPath } from './cliDetection';
 import { parseDataUrl, buildImagePromptPrefix } from '../process-manager/utils/imageUtils';
 
 /**
+ * Base PATH directories that are always added to the remote PATH.
+ * These cover common binary locations that don't require dynamic detection.
+ */
+const BASE_SSH_PATH_DIRS = [
+	'$HOME/.local/bin',
+	'$HOME/.opencode/bin',
+	'$HOME/bin',
+	'/usr/local/bin',
+	'/opt/homebrew/bin',
+	'$HOME/.cargo/bin',
+];
+
+/**
+ * Build a multi-line shell snippet that dynamically detects Node version manager
+ * bin paths on the remote host and prepends them to PATH.
+ *
+ * This handles nvm, fnm, volta, mise, asdf, and n installations where binaries like
+ * `codex`, `claude`, etc. may be installed via npm/npx into version-specific dirs.
+ *
+ * The snippet runs on the remote host and:
+ * 1. Checks for nvm (current symlink + all installed versions, newest first)
+ * 2. Checks for fnm (aliases/default + all installed versions)
+ * 3. Checks for volta (~/.volta/bin)
+ * 4. Checks for mise (~/.local/share/mise/shims)
+ * 5. Checks for asdf (~/.asdf/shims)
+ * 6. Checks for n (N_PREFIX/bin or /usr/local/bin)
+ *
+ * Used by buildSshCommandWithStdin() which sends a multi-line script via stdin.
+ *
+ * @returns Array of shell script lines (one statement per line)
+ */
+function buildNodeVersionManagerPathLines(): string[] {
+	// This mirrors the logic in pathUtils.ts detectNodeVersionManagerBinPaths() but
+	// runs as shell commands on the remote host rather than Node.js filesystem calls.
+	return [
+		// nvm: check for current symlink, then iterate installed versions (newest first)
+		'_nvm_dir="${NVM_DIR:-$HOME/.nvm}"',
+		'if [ -d "$_nvm_dir" ]; then',
+		'  [ -d "$_nvm_dir/current/bin" ] && PATH="$_nvm_dir/current/bin:$PATH"',
+		'  if [ -d "$_nvm_dir/versions/node" ]; then',
+		'    for _v in $(ls "$_nvm_dir/versions/node/" 2>/dev/null | sort -rV); do',
+		'      [ -d "$_nvm_dir/versions/node/$_v/bin" ] && PATH="$_nvm_dir/versions/node/$_v/bin:$PATH"',
+		'    done',
+		'  fi',
+		'fi',
+		// fnm: check aliases/default, then iterate node-versions
+		'for _fnm_dir in "$HOME/Library/Application Support/fnm" "$HOME/.local/share/fnm" "$HOME/.fnm"; do',
+		'  if [ -d "$_fnm_dir" ]; then',
+		'    [ -d "$_fnm_dir/aliases/default/bin" ] && PATH="$_fnm_dir/aliases/default/bin:$PATH"',
+		'    if [ -d "$_fnm_dir/node-versions" ]; then',
+		'      for _v in $(ls "$_fnm_dir/node-versions/" 2>/dev/null | sort -rV); do',
+		'        [ -d "$_fnm_dir/node-versions/$_v/installation/bin" ] && PATH="$_fnm_dir/node-versions/$_v/installation/bin:$PATH"',
+		'      done',
+		'    fi',
+		'    break',
+		'  fi',
+		'done',
+		// volta
+		'[ -d "$HOME/.volta/bin" ] && PATH="$HOME/.volta/bin:$PATH"',
+		// mise
+		'[ -d "$HOME/.local/share/mise/shims" ] && PATH="$HOME/.local/share/mise/shims:$PATH"',
+		// asdf
+		'[ -d "$HOME/.asdf/shims" ] && PATH="$HOME/.asdf/shims:$PATH"',
+		// n: check for N_PREFIX or default /usr/local
+		'_n_prefix="${N_PREFIX:-/usr/local}"',
+		'[ -d "$_n_prefix/n/versions" ] && [ -d "$_n_prefix/bin" ] && PATH="$_n_prefix/bin:$PATH"',
+	];
+}
+
+/**
+ * Build a compact single-line shell snippet that detects Node version manager
+ * bin paths on the remote host.
+ *
+ * This is the single-line equivalent of buildNodeVersionManagerPathLines(),
+ * designed for use with `bash -c '...'` where newlines aren't available.
+ *
+ * Used by buildSshCommand() which passes the command as a single `-c` argument.
+ *
+ * @returns A single shell string with semicolons separating statements
+ */
+function buildNodeVersionManagerPathSnippet(): string {
+	// Same logic as the multi-line version, but formatted for single-line execution.
+	// Shell control structures use semicolons: if ...; then ...; fi
+	const parts: string[] = [
+		// nvm
+		'_nvm_dir="${NVM_DIR:-$HOME/.nvm}"',
+		'if [ -d "$_nvm_dir" ]; then ' +
+			'[ -d "$_nvm_dir/current/bin" ] && PATH="$_nvm_dir/current/bin:$PATH"; ' +
+			'if [ -d "$_nvm_dir/versions/node" ]; then ' +
+			'for _v in $(ls "$_nvm_dir/versions/node/" 2>/dev/null | sort -rV); do ' +
+			'[ -d "$_nvm_dir/versions/node/$_v/bin" ] && PATH="$_nvm_dir/versions/node/$_v/bin:$PATH"; ' +
+			'done; ' +
+			'fi; ' +
+			'fi',
+		// fnm
+		'for _fnm_dir in "$HOME/Library/Application Support/fnm" "$HOME/.local/share/fnm" "$HOME/.fnm"; do ' +
+			'if [ -d "$_fnm_dir" ]; then ' +
+			'[ -d "$_fnm_dir/aliases/default/bin" ] && PATH="$_fnm_dir/aliases/default/bin:$PATH"; ' +
+			'if [ -d "$_fnm_dir/node-versions" ]; then ' +
+			'for _v in $(ls "$_fnm_dir/node-versions/" 2>/dev/null | sort -rV); do ' +
+			'[ -d "$_fnm_dir/node-versions/$_v/installation/bin" ] && PATH="$_fnm_dir/node-versions/$_v/installation/bin:$PATH"; ' +
+			'done; ' +
+			'fi; ' +
+			'break; ' +
+			'fi; ' +
+			'done',
+		// volta, mise, asdf
+		'[ -d "$HOME/.volta/bin" ] && PATH="$HOME/.volta/bin:$PATH"',
+		'[ -d "$HOME/.local/share/mise/shims" ] && PATH="$HOME/.local/share/mise/shims:$PATH"',
+		'[ -d "$HOME/.asdf/shims" ] && PATH="$HOME/.asdf/shims:$PATH"',
+		// n
+		'_n_prefix="${N_PREFIX:-/usr/local}"; [ -d "$_n_prefix/n/versions" ] && [ -d "$_n_prefix/bin" ] && PATH="$_n_prefix/bin:$PATH"',
+	];
+	return parts.join('; ');
+}
+
+/**
  * Result of building an SSH command.
  * Contains the command and arguments to pass to spawn().
  */
@@ -224,10 +341,10 @@ export async function buildSshCommandWithStdin(
 	// Build the script to send via stdin
 	const scriptLines: string[] = [];
 
-	// PATH setup - same directories as before
-	scriptLines.push(
-		'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"'
-	);
+	// PATH setup - base directories + dynamic Node version manager detection
+	scriptLines.push(`export PATH="${BASE_SSH_PATH_DIRS.join(':')}:$PATH"`);
+	// Dynamically detect Node version manager paths (nvm, fnm, volta, etc.)
+	scriptLines.push(...buildNodeVersionManagerPathLines());
 
 	// Change directory if specified
 	if (remoteOptions.cwd) {
@@ -512,8 +629,8 @@ export async function buildSshCommand(
 	// - /usr/local/bin: Homebrew on Intel Mac, manual installs
 	// - /opt/homebrew/bin: Homebrew on Apple Silicon
 	// - ~/.cargo/bin: Rust tools
-	//
-	// This approach avoids all profile sourcing issues while ensuring agent binaries are found.
+	// Plus dynamic detection of Node version managers (nvm, fnm, volta, mise, asdf, n)
+	// to find npm-installed CLIs like codex, claude, etc.
 	//
 	// CRITICAL: Use single quotes for the -c argument to prevent the remote shell (often zsh)
 	// from parsing the command content. SSH passes the command to the remote's login shell,
@@ -521,9 +638,9 @@ export async function buildSshCommand(
 	// Single quotes are parsed literally by zsh - it just passes the content to bash as-is.
 	//
 	// The inner command uses shellEscape() which handles embedded single quotes via '\'' pattern.
-	const pathSetup =
-		'export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$HOME/bin:/usr/local/bin:/opt/homebrew/bin:$HOME/.cargo/bin:$PATH"';
-	const fullBashCommand = `${pathSetup} && ${remoteCommand}`;
+	const pathSetup = `export PATH="${BASE_SSH_PATH_DIRS.join(':')}:$PATH"`;
+	const versionManagerSetup = buildNodeVersionManagerPathSnippet();
+	const fullBashCommand = `${pathSetup}; ${versionManagerSetup}; ${remoteCommand}`;
 	const wrappedCommand = `/bin/bash --norc --noprofile -c ${shellEscape(fullBashCommand)}`;
 	args.push(wrappedCommand);
 

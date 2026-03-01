@@ -712,7 +712,7 @@ describe('StandingOvationOverlay', () => {
 			expect(screen.queryByText('Copy to Clipboard')).not.toBeInTheDocument();
 		});
 
-		it('triggers copy action when clicking copy option', () => {
+		it('triggers copy action when clicking copy option', async () => {
 			render(
 				<StandingOvationOverlay
 					theme={createTheme()}
@@ -729,9 +729,14 @@ describe('StandingOvationOverlay', () => {
 
 			// Click copy - this triggers the async copy flow
 			const copyButton = screen.getByText('Copy to Clipboard');
-			fireEvent.click(copyButton);
+			await act(async () => {
+				fireEvent.click(copyButton);
+			});
 
-			// Menu should close after clicking
+			// Menu stays open briefly to show "Copied!" feedback, then auto-closes
+			await act(async () => {
+				vi.advanceTimersByTime(1000);
+			});
 			expect(screen.queryByText('Copy to Clipboard')).not.toBeInTheDocument();
 		});
 

@@ -316,11 +316,16 @@ export class StdoutHandler {
 		}
 
 		// Reset result guard on new Codex turn so multi-turn sessions can emit results
-		if (managedProcess.toolType === 'codex' && (event.raw as Record<string, unknown>)?.type === 'turn.started') {
+		if (
+			managedProcess.toolType === 'codex' &&
+			(event.raw as Record<string, unknown>)?.type === 'turn.started'
+		) {
 			managedProcess.resultEmitted = false;
 			managedProcess.codexPendingResult = undefined;
 			managedProcess.streamedText = '';
-			logger.debug('[ProcessManager] Reset result state for new Codex turn', 'ProcessManager', { sessionId });
+			logger.debug('[ProcessManager] Reset result state for new Codex turn', 'ProcessManager', {
+				sessionId,
+			});
 		}
 
 		// Codex can emit multiple agent_message results in a single turn:
@@ -333,14 +338,22 @@ export class StdoutHandler {
 
 		// For Codex, flush the latest captured result when the turn completes.
 		// turn.completed is normalized as a usage event by the Codex parser.
-		if (managedProcess.toolType === 'codex' && event.type === 'usage' && !managedProcess.resultEmitted) {
+		if (
+			managedProcess.toolType === 'codex' &&
+			event.type === 'usage' &&
+			!managedProcess.resultEmitted
+		) {
 			const resultText = managedProcess.codexPendingResult || '';
 			if (resultText) {
 				managedProcess.resultEmitted = true;
-				logger.debug('[ProcessManager] Emitting final Codex result at turn completion', 'ProcessManager', {
-					sessionId,
-					resultLength: resultText.length,
-				});
+				logger.debug(
+					'[ProcessManager] Emitting final Codex result at turn completion',
+					'ProcessManager',
+					{
+						sessionId,
+						resultLength: resultText.length,
+					}
+				);
 				this.bufferManager.emitDataBuffered(sessionId, resultText);
 			}
 		}

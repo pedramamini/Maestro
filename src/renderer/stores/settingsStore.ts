@@ -21,7 +21,6 @@ import type {
 	ThemeColors,
 	Shortcut,
 	CustomAICommand,
-	GlobalStats,
 	AutoRunStats,
 	MaestroUsageStats,
 	OnboardingStats,
@@ -38,8 +37,17 @@ import { getLevelIndex } from '../constants/keyboardMastery';
 import { commitCommandPrompt } from '../../prompts';
 
 // ============================================================================
+// Shared Type Aliases
+// ============================================================================
+
+export type DocumentGraphLayoutType = 'mindmap' | 'radial' | 'force';
+
+// ============================================================================
 // Default Constants
 // ============================================================================
+
+/** Default local ignore patterns for new installations (includes .git, node_modules, __pycache__) */
+export const DEFAULT_LOCAL_IGNORE_PATTERNS = ['.git', 'node_modules', '__pycache__'];
 
 export const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
 	autoGroomContexts: true,
@@ -50,17 +58,6 @@ export const DEFAULT_CONTEXT_MANAGEMENT_SETTINGS: ContextManagementSettings = {
 	contextWarningsEnabled: false,
 	contextWarningYellowThreshold: 75,
 	contextWarningRedThreshold: 90,
-};
-
-export const DEFAULT_GLOBAL_STATS: GlobalStats = {
-	totalSessions: 0,
-	totalMessages: 0,
-	totalInputTokens: 0,
-	totalOutputTokens: 0,
-	totalCacheReadTokens: 0,
-	totalCacheCreationTokens: 0,
-	totalCostUsd: 0,
-	totalActiveTimeMs: 0,
 };
 
 export const DEFAULT_AUTO_RUN_STATS: AutoRunStats = {
@@ -215,7 +212,7 @@ export interface SettingsStoreState {
 	shortcuts: Record<string, Shortcut>;
 	tabShortcuts: Record<string, Shortcut>;
 	customAICommands: CustomAICommand[];
-	globalStats: GlobalStats;
+	totalActiveTimeMs: number;
 	autoRunStats: AutoRunStats;
 	usageStats: MaestroUsageStats;
 	ungroupedCollapsed: boolean;
@@ -231,11 +228,14 @@ export interface SettingsStoreState {
 	documentGraphShowExternalLinks: boolean;
 	documentGraphMaxNodes: number;
 	documentGraphPreviewCharLimit: number;
+	documentGraphLayoutType: DocumentGraphLayoutType;
 	statsCollectionEnabled: boolean;
 	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
 	preventSleepEnabled: boolean;
 	disableGpuAcceleration: boolean;
 	disableConfetti: boolean;
+	localIgnorePatterns: string[];
+	localHonorGitignore: boolean;
 	sshRemoteIgnorePatterns: string[];
 	sshRemoteHonorGitignore: boolean;
 	automaticTabNamingEnabled: boolean;
@@ -247,6 +247,9 @@ export interface SettingsStoreState {
 	directorNotesSettings: DirectorNotesSettings;
 	wakatimeApiKey: string;
 	wakatimeEnabled: boolean;
+	wakatimeDetailedTracking: boolean;
+	useNativeTitleBar: boolean;
+	autoHideMenuBar: boolean;
 }
 
 export interface SettingsStoreActions {
@@ -297,10 +300,13 @@ export interface SettingsStoreActions {
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
 	setDocumentGraphMaxNodes: (value: number) => void;
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
+	setDocumentGraphLayoutType: (value: DocumentGraphLayoutType) => void;
 	setStatsCollectionEnabled: (value: boolean) => void;
 	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
 	setDisableGpuAcceleration: (value: boolean) => void;
 	setDisableConfetti: (value: boolean) => void;
+	setLocalIgnorePatterns: (value: string[]) => void;
+	setLocalHonorGitignore: (value: boolean) => void;
 	setSshRemoteIgnorePatterns: (value: string[]) => void;
 	setSshRemoteHonorGitignore: (value: boolean) => void;
 	setAutomaticTabNamingEnabled: (value: boolean) => void;
@@ -312,15 +318,18 @@ export interface SettingsStoreActions {
 	setDirectorNotesSettings: (value: DirectorNotesSettings) => void;
 	setWakatimeApiKey: (value: string) => void;
 	setWakatimeEnabled: (value: boolean) => void;
+	setWakatimeDetailedTracking: (value: boolean) => void;
+	setUseNativeTitleBar: (value: boolean) => void;
+	setAutoHideMenuBar: (value: boolean) => void;
 
 	// Async setters
 	setLogLevel: (value: string) => Promise<void>;
 	setMaxLogBuffer: (value: number) => Promise<void>;
 	setPreventSleepEnabled: (value: boolean) => Promise<void>;
 
-	// Global stats
-	setGlobalStats: (value: GlobalStats) => void;
-	updateGlobalStats: (delta: Partial<GlobalStats>) => void;
+	// Standalone active time
+	setTotalActiveTimeMs: (value: number) => void;
+	addTotalActiveTimeMs: (delta: number) => void;
 
 	// Usage stats
 	setUsageStats: (value: MaestroUsageStats) => void;
@@ -421,7 +430,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	shortcuts: DEFAULT_SHORTCUTS,
 	tabShortcuts: TAB_SHORTCUTS,
 	customAICommands: DEFAULT_AI_COMMANDS,
-	globalStats: DEFAULT_GLOBAL_STATS,
+	totalActiveTimeMs: 0,
 	autoRunStats: DEFAULT_AUTO_RUN_STATS,
 	usageStats: DEFAULT_USAGE_STATS,
 	ungroupedCollapsed: false,
@@ -437,11 +446,14 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	documentGraphShowExternalLinks: false,
 	documentGraphMaxNodes: 50,
 	documentGraphPreviewCharLimit: 100,
+	documentGraphLayoutType: 'mindmap',
 	statsCollectionEnabled: true,
 	defaultStatsTimeRange: 'week',
 	preventSleepEnabled: false,
 	disableGpuAcceleration: false,
 	disableConfetti: false,
+	localIgnorePatterns: [...DEFAULT_LOCAL_IGNORE_PATTERNS],
+	localHonorGitignore: true,
 	sshRemoteIgnorePatterns: ['.git', '*cache*'],
 	sshRemoteHonorGitignore: true,
 	automaticTabNamingEnabled: true,
@@ -453,6 +465,9 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	directorNotesSettings: DEFAULT_DIRECTOR_NOTES_SETTINGS,
 	wakatimeApiKey: '',
 	wakatimeEnabled: false,
+	wakatimeDetailedTracking: false,
+	useNativeTitleBar: false,
+	autoHideMenuBar: false,
 
 	// ============================================================================
 	// Simple Setters
@@ -696,6 +711,13 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 		window.maestro.settings.set('documentGraphPreviewCharLimit', clamped);
 	},
 
+	setDocumentGraphLayoutType: (value) => {
+		const valid: DocumentGraphLayoutType[] = ['mindmap', 'radial', 'force'];
+		const layoutType = valid.includes(value) ? value : 'mindmap';
+		set({ documentGraphLayoutType: layoutType });
+		window.maestro.settings.set('documentGraphLayoutType', layoutType);
+	},
+
 	setStatsCollectionEnabled: (value) => {
 		set({ statsCollectionEnabled: value });
 		window.maestro.settings.set('statsCollectionEnabled', value);
@@ -714,6 +736,16 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	setDisableConfetti: (value) => {
 		set({ disableConfetti: value });
 		window.maestro.settings.set('disableConfetti', value);
+	},
+
+	setLocalIgnorePatterns: (value) => {
+		set({ localIgnorePatterns: value });
+		window.maestro.settings.set('localIgnorePatterns', value);
+	},
+
+	setLocalHonorGitignore: (value) => {
+		set({ localHonorGitignore: value });
+		window.maestro.settings.set('localHonorGitignore', value);
 	},
 
 	setSshRemoteIgnorePatterns: (value) => {
@@ -771,6 +803,21 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 		window.maestro.settings.set('wakatimeEnabled', value);
 	},
 
+	setWakatimeDetailedTracking: (value) => {
+		set({ wakatimeDetailedTracking: value });
+		window.maestro.settings.set('wakatimeDetailedTracking', value);
+	},
+
+	setUseNativeTitleBar: (value) => {
+		set({ useNativeTitleBar: value });
+		window.maestro.settings.set('useNativeTitleBar', value);
+	},
+
+	setAutoHideMenuBar: (value) => {
+		set({ autoHideMenuBar: value });
+		window.maestro.settings.set('autoHideMenuBar', value);
+	},
+
 	// ============================================================================
 	// Async Setters
 	// ============================================================================
@@ -799,29 +846,19 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	},
 
 	// ============================================================================
-	// Global Stats Actions
+	// Standalone Active Time Actions
 	// ============================================================================
 
-	setGlobalStats: (value) => {
-		set({ globalStats: value });
-		window.maestro.settings.set('globalStats', value);
+	setTotalActiveTimeMs: (value) => {
+		set({ totalActiveTimeMs: value });
+		window.maestro.settings.set('totalActiveTimeMs', value);
 	},
 
-	updateGlobalStats: (delta) => {
-		const prev = get().globalStats;
-		const updated: GlobalStats = {
-			totalSessions: prev.totalSessions + (delta.totalSessions || 0),
-			totalMessages: prev.totalMessages + (delta.totalMessages || 0),
-			totalInputTokens: prev.totalInputTokens + (delta.totalInputTokens || 0),
-			totalOutputTokens: prev.totalOutputTokens + (delta.totalOutputTokens || 0),
-			totalCacheReadTokens: prev.totalCacheReadTokens + (delta.totalCacheReadTokens || 0),
-			totalCacheCreationTokens:
-				prev.totalCacheCreationTokens + (delta.totalCacheCreationTokens || 0),
-			totalCostUsd: prev.totalCostUsd + (delta.totalCostUsd || 0),
-			totalActiveTimeMs: prev.totalActiveTimeMs + (delta.totalActiveTimeMs || 0),
-		};
-		set({ globalStats: updated });
-		window.maestro.settings.set('globalStats', updated);
+	addTotalActiveTimeMs: (delta) => {
+		const prev = get().totalActiveTimeMs;
+		const updated = prev + delta;
+		set({ totalActiveTimeMs: updated });
+		window.maestro.settings.set('totalActiveTimeMs', updated);
 	},
 
 	// ============================================================================
@@ -1470,11 +1507,18 @@ export async function loadAllSettings(): Promise<void> {
 
 		// --- Stats objects (merge with defaults to pick up new fields) ---
 
-		if (allSettings['globalStats'] !== undefined) {
-			patch.globalStats = {
-				...DEFAULT_GLOBAL_STATS,
-				...(allSettings['globalStats'] as Partial<GlobalStats>),
-			};
+		// Standalone totalActiveTimeMs: migrate from legacy globalStats if needed
+		if (allSettings['totalActiveTimeMs'] !== undefined) {
+			patch.totalActiveTimeMs = allSettings['totalActiveTimeMs'] as number;
+		} else {
+			// One-time migration: copy from globalStats.totalActiveTimeMs if it exists and is > 0
+			const legacyGlobalStats = allSettings['globalStats'] as
+				| { totalActiveTimeMs?: number }
+				| undefined;
+			if (legacyGlobalStats?.totalActiveTimeMs && legacyGlobalStats.totalActiveTimeMs > 0) {
+				patch.totalActiveTimeMs = legacyGlobalStats.totalActiveTimeMs;
+				window.maestro.settings.set('totalActiveTimeMs', legacyGlobalStats.totalActiveTimeMs);
+			}
 		}
 
 		if (allSettings['autoRunStats'] !== undefined) {
@@ -1575,6 +1619,13 @@ export async function loadAllSettings(): Promise<void> {
 			}
 		}
 
+		if (allSettings['documentGraphLayoutType'] !== undefined) {
+			const lt = allSettings['documentGraphLayoutType'] as string;
+			if (['mindmap', 'radial', 'force'].includes(lt)) {
+				patch.documentGraphLayoutType = lt as DocumentGraphLayoutType;
+			}
+		}
+
 		// Stats settings (with time range validation)
 		if (allSettings['statsCollectionEnabled'] !== undefined)
 			patch.statsCollectionEnabled = allSettings['statsCollectionEnabled'] as boolean;
@@ -1599,6 +1650,17 @@ export async function loadAllSettings(): Promise<void> {
 
 		if (allSettings['disableConfetti'] !== undefined)
 			patch.disableConfetti = allSettings['disableConfetti'] as boolean;
+
+		// Local file indexing ignore patterns (with array validation)
+		if (
+			allSettings['localIgnorePatterns'] !== undefined &&
+			Array.isArray(allSettings['localIgnorePatterns'])
+		) {
+			patch.localIgnorePatterns = allSettings['localIgnorePatterns'] as string[];
+		}
+
+		if (allSettings['localHonorGitignore'] !== undefined)
+			patch.localHonorGitignore = allSettings['localHonorGitignore'] as boolean;
 
 		// SSH Remote settings (with array validation)
 		if (
@@ -1647,6 +1709,15 @@ export async function loadAllSettings(): Promise<void> {
 
 		if (allSettings['wakatimeEnabled'] !== undefined)
 			patch.wakatimeEnabled = allSettings['wakatimeEnabled'] as boolean;
+
+		if (allSettings['wakatimeDetailedTracking'] !== undefined)
+			patch.wakatimeDetailedTracking = allSettings['wakatimeDetailedTracking'] as boolean;
+
+		if (allSettings['useNativeTitleBar'] !== undefined)
+			patch.useNativeTitleBar = allSettings['useNativeTitleBar'] as boolean;
+
+		if (allSettings['autoHideMenuBar'] !== undefined)
+			patch.autoHideMenuBar = allSettings['autoHideMenuBar'] as boolean;
 
 		// Apply the entire patch in one setState call
 		patch.settingsLoaded = true;
@@ -1707,8 +1778,8 @@ export function getSettingsActions() {
 		setShortcuts: state.setShortcuts,
 		setTabShortcuts: state.setTabShortcuts,
 		setCustomAICommands: state.setCustomAICommands,
-		setGlobalStats: state.setGlobalStats,
-		updateGlobalStats: state.updateGlobalStats,
+		setTotalActiveTimeMs: state.setTotalActiveTimeMs,
+		addTotalActiveTimeMs: state.addTotalActiveTimeMs,
 		setAutoRunStats: state.setAutoRunStats,
 		recordAutoRunComplete: state.recordAutoRunComplete,
 		updateAutoRunProgress: state.updateAutoRunProgress,
@@ -1741,11 +1812,14 @@ export function getSettingsActions() {
 		setDocumentGraphShowExternalLinks: state.setDocumentGraphShowExternalLinks,
 		setDocumentGraphMaxNodes: state.setDocumentGraphMaxNodes,
 		setDocumentGraphPreviewCharLimit: state.setDocumentGraphPreviewCharLimit,
+		setDocumentGraphLayoutType: state.setDocumentGraphLayoutType,
 		setStatsCollectionEnabled: state.setStatsCollectionEnabled,
 		setDefaultStatsTimeRange: state.setDefaultStatsTimeRange,
 		setPreventSleepEnabled: state.setPreventSleepEnabled,
 		setDisableGpuAcceleration: state.setDisableGpuAcceleration,
 		setDisableConfetti: state.setDisableConfetti,
+		setLocalIgnorePatterns: state.setLocalIgnorePatterns,
+		setLocalHonorGitignore: state.setLocalHonorGitignore,
 		setSshRemoteIgnorePatterns: state.setSshRemoteIgnorePatterns,
 		setSshRemoteHonorGitignore: state.setSshRemoteHonorGitignore,
 		setAutomaticTabNamingEnabled: state.setAutomaticTabNamingEnabled,
@@ -1756,5 +1830,8 @@ export function getSettingsActions() {
 		setDirectorNotesSettings: state.setDirectorNotesSettings,
 		setWakatimeApiKey: state.setWakatimeApiKey,
 		setWakatimeEnabled: state.setWakatimeEnabled,
+		setWakatimeDetailedTracking: state.setWakatimeDetailedTracking,
+		setUseNativeTitleBar: state.setUseNativeTitleBar,
+		setAutoHideMenuBar: state.setAutoHideMenuBar,
 	};
 }

@@ -39,11 +39,11 @@ Before starting a Symphony contribution, ensure you have:
 
 ## Opening Symphony
 
-| Method | Description |
-|--------|-------------|
-| `Cmd+Shift+Y` / `Ctrl+Shift+Y` | Keyboard shortcut |
-| Quick Actions → "Maestro Symphony" | Command palette (`Cmd+K`) |
-| Hamburger Menu → "Maestro Symphony" | Menu item |
+| Method                              | Description               |
+| ----------------------------------- | ------------------------- |
+| `Cmd+Shift+Y` / `Ctrl+Shift+Y`      | Keyboard shortcut         |
+| Quick Actions → "Maestro Symphony"  | Command palette (`Cmd+K`) |
+| Hamburger Menu → "Maestro Symphony" | Menu item                 |
 
 ## Browsing Projects
 
@@ -61,6 +61,7 @@ The Projects tab shows registered open source projects in a tiled grid:
 ![Symphony Project Details](./screenshots/symphony-details.png)
 
 Select a repository to see its available GitHub issues. Each issue shows:
+
 - Issue title and number
 - Number of Auto Run documents to process
 - Document previews with a dropdown selector (use `Cmd+Shift+[` / `Cmd+Shift+]` to cycle documents)
@@ -77,6 +78,7 @@ Click **Start Symphony** on an available issue to open the agent creation dialog
 ![Create Agent Session](./screenshots/symphony-create-agent.png)
 
 Configure your contribution:
+
 - **AI Provider** — Choose Claude Code, Codex, OpenCode, etc.
 - **Session Name** — Pre-filled as "Symphony: owner/repo #123"
 - **Working Directory** — Where the repository will be cloned
@@ -98,6 +100,7 @@ View your in-progress Symphony sessions:
 ![Active Contributions](./screenshots/symphony-active.png)
 
 Each active contribution shows:
+
 - **Issue title and repository** — The GitHub issue being worked on
 - **Status badge** — Running, Paused, Creating PR, etc.
 - **Progress bar** — Documents completed vs. total
@@ -116,6 +119,7 @@ Review completed contributions with aggregate stats at a glance:
 ![Contribution History](./screenshots/symphony-history.png)
 
 The header shows your totals: PRs created, merged count, tasks completed, tokens used, and dollar value donated. Each contribution card displays:
+
 - **Issue and repository** — What you worked on
 - **Merge status** — Whether the PR was merged
 - **Completion date** — When you finished
@@ -129,26 +133,28 @@ Track your overall impact and unlock achievements:
 ![Symphony Stats](./screenshots/symphony-stats.png)
 
 **Summary cards** show your cumulative contributions:
+
 - **Tokens Donated** — Total tokens contributed with dollar value
 - **Time Contributed** — Hours spent and repositories helped
 - **Streak** — Current and best contribution streaks
 
 **Achievements** reward milestones in your Symphony journey:
 
-| Achievement | Requirement |
-|-------------|-------------|
-| **First Steps** | Complete your first Symphony contribution |
-| **Merged Melody** | Have a contribution merged |
-| **Weekly Rhythm** | Maintain a 7-day contribution streak |
-| **Harmony Seeker** | Complete 10 contributions |
-| **Ensemble Player** | Contribute to 5 different repositories |
-| **Virtuoso** | Complete 1000 tasks across all contributions |
-| **Token Millionaire** | Donate over 10 million tokens |
-| **Early Adopter** | Join Symphony in its first month |
+| Achievement           | Requirement                                  |
+| --------------------- | -------------------------------------------- |
+| **First Steps**       | Complete your first Symphony contribution    |
+| **Merged Melody**     | Have a contribution merged                   |
+| **Weekly Rhythm**     | Maintain a 7-day contribution streak         |
+| **Harmony Seeker**    | Complete 10 contributions                    |
+| **Ensemble Player**   | Contribute to 5 different repositories       |
+| **Virtuoso**          | Complete 1000 tasks across all contributions |
+| **Token Millionaire** | Donate over 10 million tokens                |
+| **Early Adopter**     | Join Symphony in its first month             |
 
 ## Session Integration
 
 Symphony sessions appear in the Left Bar like any other session:
+
 - Named "Symphony: owner/repo #123"
 - Optionally grouped under a "Symphony" group
 - Full access to AI Terminal, Command Terminal, and Auto Run controls
@@ -165,11 +171,13 @@ Repository owners create issues with the `runmaestro.ai` label:
 We need comprehensive test coverage for the authentication module.
 
 ### Auto Run Documents
+
 - `docs/symphony/auth-tests-1.md`
 - `docs/symphony/auth-tests-2.md`
 - `docs/symphony/auth-tests-3.md`
 
 ### Context
+
 The auth module is at `src/auth/index.ts`. Tests should use Jest.
 ```
 
@@ -197,37 +205,38 @@ To add your open source project to Symphony:
 3. Submit a pull request to the main Maestro repository
 
 Your project entry should include:
+
 ```json
 {
-  "slug": "owner/repo",
-  "name": "Project Name",
-  "description": "Brief description",
-  "url": "https://github.com/owner/repo",
-  "category": "ai-ml",
-  "tags": ["tag1", "tag2"],
-  "maintainer": {
-    "name": "Your Name",
-    "url": "https://github.com/yourusername"
-  },
-  "isActive": true,
-  "featured": false,
-  "addedAt": "2025-01-01"
+	"slug": "owner/repo",
+	"name": "Project Name",
+	"description": "Brief description",
+	"url": "https://github.com/owner/repo",
+	"category": "ai-ml",
+	"tags": ["tag1", "tag2"],
+	"maintainer": {
+		"name": "Your Name",
+		"url": "https://github.com/yourusername"
+	},
+	"isActive": true,
+	"featured": false,
+	"addedAt": "2025-01-01"
 }
 ```
 
 ### Available Categories
 
-| Category | Label | Emoji |
-|----------|-------|-------|
-| `ai-ml` | AI & ML | 🤖 |
-| `developer-tools` | Developer Tools | 🛠️ |
-| `infrastructure` | Infrastructure | 🏗️ |
-| `documentation` | Documentation | 📚 |
-| `web` | Web | 🌐 |
-| `mobile` | Mobile | 📱 |
-| `data` | Data | 📊 |
-| `security` | Security | 🔒 |
-| `other` | Other | 📦 |
+| Category          | Label           | Emoji |
+| ----------------- | --------------- | ----- |
+| `ai-ml`           | AI & ML         | 🤖    |
+| `developer-tools` | Developer Tools | 🛠️    |
+| `infrastructure`  | Infrastructure  | 🏗️    |
+| `documentation`   | Documentation   | 📚    |
+| `web`             | Web             | 🌐    |
+| `mobile`          | Mobile          | 📱    |
+| `data`            | Data            | 📊    |
+| `security`        | Security        | 🔒    |
+| `other`           | Other           | 📦    |
 
 Once merged, your project will appear in the Symphony Projects tab (registry cached for 2 hours, issues cached for 5 minutes).
 

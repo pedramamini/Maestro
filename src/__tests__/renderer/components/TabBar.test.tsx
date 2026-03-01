@@ -628,6 +628,74 @@ describe('TabBar', () => {
 
 			expect(screen.queryByText('1')).not.toBeInTheDocument();
 		});
+
+		it('shows shortcut hints on file tabs in unified tab order', () => {
+			const aiTab = createTab({ id: 'ai-1', name: 'AI Tab' });
+			const fileTab: FilePreviewTab = {
+				id: 'file-1',
+				path: '/path/to/test.ts',
+				name: 'test',
+				extension: '.ts',
+				content: '',
+				scrollTop: 0,
+				searchQuery: '',
+				editMode: false,
+				editContent: undefined,
+				createdAt: Date.now(),
+				lastModified: Date.now(),
+			};
+			const unifiedTabs = [
+				{ type: 'ai' as const, id: 'ai-1', data: aiTab },
+				{ type: 'file' as const, id: 'file-1', data: fileTab },
+				{ type: 'ai' as const, id: 'ai-2', data: createTab({ id: 'ai-2', name: 'AI Tab 2' }) },
+			];
+
+			render(
+				<TabBar
+					tabs={[aiTab, unifiedTabs[2].data as AITab]}
+					activeTabId="ai-1"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+					unifiedTabs={unifiedTabs}
+					activeFileTabId={null}
+					onFileTabSelect={vi.fn()}
+					onFileTabClose={vi.fn()}
+				/>
+			);
+
+			// AI tab at index 0 should show "1"
+			expect(screen.getByText('1')).toBeInTheDocument();
+			// File tab at index 1 should show "2"
+			expect(screen.getByText('2')).toBeInTheDocument();
+			// Last tab should show "0" (Cmd+0 shortcut)
+			expect(screen.getByText('0')).toBeInTheDocument();
+		});
+
+		it('shows 0 badge on last tab (Cmd+0 shortcut)', () => {
+			const tabs = Array.from({ length: 3 }, (_, i) =>
+				createTab({ id: `tab-${i}`, name: `Tab ${i + 1}` })
+			);
+
+			render(
+				<TabBar
+					tabs={tabs}
+					activeTabId="tab-0"
+					theme={mockTheme}
+					onTabSelect={mockOnTabSelect}
+					onTabClose={mockOnTabClose}
+					onNewTab={mockOnNewTab}
+				/>
+			);
+
+			// First two tabs show 1, 2
+			expect(screen.getByText('1')).toBeInTheDocument();
+			expect(screen.getByText('2')).toBeInTheDocument();
+			// Last tab shows 0 instead of 3
+			expect(screen.getByText('0')).toBeInTheDocument();
+			expect(screen.queryByText('3')).not.toBeInTheDocument();
+		});
 	});
 
 	describe('unread filter', () => {
@@ -2874,7 +2942,7 @@ describe('FileTab overlay menu', () => {
 		expect(screen.getByText('Copy File Path')).toBeInTheDocument();
 		expect(screen.getByText('Copy File Name')).toBeInTheDocument();
 		expect(screen.getByText('Open in Default App')).toBeInTheDocument();
-		expect(screen.getByText('Reveal in Finder')).toBeInTheDocument();
+		expect(screen.getByText(/Reveal in (Finder|Explorer|File Manager)/)).toBeInTheDocument();
 
 		vi.useRealTimers();
 	});
@@ -2907,7 +2975,7 @@ describe('FileTab overlay menu', () => {
 		// Should show file-specific actions (these are unique to file tabs)
 		expect(screen.getByText('Copy File Path')).toBeInTheDocument();
 		expect(screen.getByText('Open in Default App')).toBeInTheDocument();
-		expect(screen.getByText('Reveal in Finder')).toBeInTheDocument();
+		expect(screen.getByText(/Reveal in (Finder|Explorer|File Manager)/)).toBeInTheDocument();
 
 		vi.useRealTimers();
 	});
@@ -2993,14 +3061,14 @@ describe('FileTab overlay menu', () => {
 		vi.useRealTimers();
 	});
 
-	it('calls openExternal when clicking Open in Default App', async () => {
+	it('calls openPath when clicking Open in Default App', async () => {
 		vi.useFakeTimers();
-		const mockOpenExternal = vi.fn().mockResolvedValue(undefined);
+		const mockOpenPath = vi.fn().mockResolvedValue(undefined);
 		window.maestro = {
 			...window.maestro,
 			shell: {
 				...window.maestro.shell,
-				openExternal: mockOpenExternal,
+				openPath: mockOpenPath,
 			},
 		} as typeof window.maestro;
 
@@ -3031,12 +3099,12 @@ describe('FileTab overlay menu', () => {
 			fireEvent.click(openButton);
 		});
 
-		expect(mockOpenExternal).toHaveBeenCalledWith('file:///path/to/document.md');
+		expect(mockOpenPath).toHaveBeenCalledWith('/path/to/document.md');
 
 		vi.useRealTimers();
 	});
 
-	it('calls showItemInFolder when clicking Reveal in Finder', async () => {
+	it('calls showItemInFolder when clicking Reveal in Finder/Explorer', async () => {
 		vi.useFakeTimers();
 		const mockShowItemInFolder = vi.fn().mockResolvedValue(undefined);
 		window.maestro = {
@@ -3069,7 +3137,7 @@ describe('FileTab overlay menu', () => {
 			vi.advanceTimersByTime(450);
 		});
 
-		const revealButton = screen.getByText('Reveal in Finder');
+		const revealButton = screen.getByText(/Reveal in (Finder|Explorer|File Manager)/);
 		await act(async () => {
 			fireEvent.click(revealButton);
 		});
@@ -4813,8 +4881,8 @@ describe('Extension badge styling across themes', () => {
 
 		const badge = screen.getByText('XYZ');
 		expect(badge).toBeInTheDocument();
-		// Uses theme border color for unknown extensions
-		expect(badge).toHaveStyle({ backgroundColor: darkTheme.colors.border });
+		// Unknown extensions use accent-derived color for visibility
+		expect(badge).toHaveStyle({ backgroundColor: 'rgba(189, 147, 249, 0.3)' });
 	});
 
 	it('renders consistent tab name truncation for file tabs (max-w-[120px])', () => {
@@ -5268,8 +5336,8 @@ describe('File tab extension badge colorblind mode', () => {
 
 		const badge = screen.getByText('XYZ');
 		expect(badge).toBeInTheDocument();
-		// Falls back to theme border color for unknown extensions
-		expect(badge).toHaveStyle({ backgroundColor: darkTheme.colors.border });
+		// Colorblind mode also uses accent-derived fallback for unknown extensions
+		expect(badge).toHaveStyle({ backgroundColor: 'rgba(189, 147, 249, 0.3)' });
 	});
 });
 

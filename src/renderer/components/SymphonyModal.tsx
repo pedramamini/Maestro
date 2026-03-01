@@ -212,14 +212,17 @@ function RepositoryTile({
 	theme,
 	isSelected,
 	onSelect,
+	issueCount,
 }: {
 	repo: RegisteredRepository;
 	theme: Theme;
 	isSelected: boolean;
 	onSelect: () => void;
+	issueCount: number | null;
 }) {
 	const tileRef = useRef<HTMLButtonElement>(null);
 	const categoryInfo = SYMPHONY_CATEGORIES[repo.category] ?? { label: repo.category, emoji: '📦' };
+	const hasNoIssues = issueCount !== null && issueCount === 0;
 
 	useEffect(() => {
 		if (isSelected && tileRef.current) {
@@ -235,6 +238,7 @@ function RepositoryTile({
 			style={{
 				backgroundColor: theme.colors.bgActivity,
 				borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+				opacity: hasNoIssues ? 0.45 : 1,
 				...(isSelected && { boxShadow: `0 0 0 2px ${theme.colors.accent}` }),
 			}}
 		>
@@ -274,10 +278,21 @@ function RepositoryTile({
 				style={{ color: theme.colors.textDim }}
 			>
 				<span>{repo.maintainer.name}</span>
-				<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
-					<Hash className="w-3 h-3" />
-					View Issues
-				</span>
+				{issueCount === null ? (
+					<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
+						<Hash className="w-3 h-3" />
+						View Issues
+					</span>
+				) : issueCount > 0 ? (
+					<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
+						<Hash className="w-3 h-3" />
+						View {issueCount} {issueCount === 1 ? 'Issue' : 'Issues'}
+					</span>
+				) : (
+					<span className="flex items-center gap-1" style={{ color: theme.colors.textDim }}>
+						No Issues
+					</span>
+				)}
 			</div>
 		</button>
 	);
@@ -303,15 +318,17 @@ function IssueCard({
 	);
 	const isAvailable = issue.status === 'available' && !isBlocked;
 	const isClaimed = issue.status === 'in_progress';
+	const isSelectable = isAvailable || isBlocked;
 
 	return (
 		<div
 			role="button"
-			tabIndex={isAvailable ? 0 : -1}
-			onClick={isAvailable ? onSelect : undefined}
+			tabIndex={isSelectable ? 0 : -1}
+			onClick={isSelectable ? onSelect : undefined}
 			onKeyDown={
-				isAvailable
+				isSelectable
 					? (e) => {
+							if (e.target !== e.currentTarget) return;
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
 								onSelect();
@@ -319,8 +336,12 @@ function IssueCard({
 						}
 					: undefined
 			}
-			className={`w-full p-3 rounded-lg border text-left transition-all ${
-				!isAvailable ? 'opacity-60' : 'hover:bg-white/5 cursor-pointer'
+			className={`w-full p-3 rounded-lg border text-left transition-all outline-none focus-visible:ring-2 ${
+				isBlocked
+					? 'opacity-75 hover:bg-white/5 cursor-pointer'
+					: !isAvailable
+						? 'opacity-60'
+						: 'hover:bg-white/5 cursor-pointer'
 			} ${isSelected ? 'ring-2' : ''}`}
 			style={{
 				backgroundColor: isSelected ? theme.colors.bgActivity : theme.colors.bgMain,
@@ -380,7 +401,6 @@ function IssueCard({
 						className="flex items-center gap-1 cursor-pointer hover:underline"
 						style={{ color: theme.colors.accent, pointerEvents: 'auto' }}
 						onClick={(e) => {
-							e.preventDefault();
 							e.stopPropagation();
 							window.maestro.shell.openExternal(issue.claimedByPr!.url);
 						}}
@@ -395,8 +415,8 @@ function IssueCard({
 
 			{issue.documentPaths.length > 0 && (
 				<div className="mt-2 text-xs" style={{ color: theme.colors.textDim }}>
-					{issue.documentPaths.slice(0, 2).map((doc, i) => (
-						<div key={i} className="truncate">
+					{issue.documentPaths.slice(0, 2).map((doc) => (
+						<div key={doc.path} className="truncate">
 							• {doc.name}
 						</div>
 					))}
@@ -564,19 +584,14 @@ function RepositoryDetailView({
 						<span>{categoryInfo.emoji}</span>
 						<span>{categoryInfo.label}</span>
 					</span>
-					<a
-						href={repo.url}
-						target="_blank"
-						rel="noopener noreferrer"
+					<button
+						type="button"
 						className="p-1.5 rounded hover:bg-white/10 transition-colors"
 						title="View repository on GitHub"
-						onClick={(e) => {
-							e.preventDefault();
-							handleOpenExternal(repo.url);
-						}}
+						onClick={() => handleOpenExternal(repo.url)}
 					>
 						<ExternalLink className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-					</a>
+					</button>
 				</div>
 			</div>
 
@@ -607,20 +622,15 @@ function RepositoryDetailView({
 							Maintainer
 						</h4>
 						{repo.maintainer.url ? (
-							<a
-								href={repo.maintainer.url}
-								target="_blank"
-								rel="noopener noreferrer"
+							<button
+								type="button"
 								className="text-sm hover:underline inline-flex items-center gap-1"
 								style={{ color: theme.colors.accent }}
-								onClick={(e) => {
-									e.preventDefault();
-									handleOpenExternal(repo.maintainer.url!);
-								}}
+								onClick={() => handleOpenExternal(repo.maintainer.url!)}
 							>
 								{repo.maintainer.name}
 								<ExternalLink className="w-3 h-3" />
-							</a>
+							</button>
 						) : (
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
 								{repo.maintainer.name}
@@ -654,9 +664,9 @@ function RepositoryDetailView({
 
 					{isLoadingIssues ? (
 						<div className="space-y-2">
-							{[1, 2, 3].map((i) => (
+							{['issue-skeleton-1', 'issue-skeleton-2', 'issue-skeleton-3'].map((skeletonId) => (
 								<div
-									key={i}
+									key={skeletonId}
 									className="h-20 rounded animate-pulse"
 									style={{ backgroundColor: theme.colors.bgMain }}
 								/>
@@ -769,21 +779,16 @@ function RepositoryDetailView({
 											{selectedIssue.title}
 										</h3>
 									</div>
-									<a
-										href={selectedIssue.htmlUrl}
-										target="_blank"
-										rel="noopener noreferrer"
+									<button
+										type="button"
 										className="text-xs hover:underline flex items-center gap-1"
 										style={{ color: theme.colors.accent }}
-										onClick={(e) => {
-											e.preventDefault();
-											handleOpenExternal(selectedIssue.htmlUrl);
-										}}
+										onClick={() => handleOpenExternal(selectedIssue.htmlUrl)}
 										title="View issue on GitHub"
 									>
 										View Issue
 										<ExternalLink className="w-3 h-3" />
-									</a>
+									</button>
 								</div>
 								<div
 									className="flex items-center gap-2 text-xs"
@@ -792,19 +797,6 @@ function RepositoryDetailView({
 									<FileText className="w-3 h-3" />
 									<span>{selectedIssue.documentPaths.length} Auto Run documents to process</span>
 								</div>
-								{isIssueBlocked(selectedIssue) && (
-									<div
-										className="mt-2 px-2 py-1.5 rounded text-xs flex items-center gap-2"
-										style={{
-											backgroundColor: `${STATUS_COLORS.cancelled}15`,
-											color: STATUS_COLORS.cancelled,
-										}}
-									>
-										<Lock className="w-3 h-3 shrink-0" />
-										This issue is blocked by a dependency. The maintainer will remove the blocking
-										label when prerequisites are met.
-									</div>
-								)}
 							</div>
 
 							{/* Document selector dropdown */}
@@ -925,18 +917,29 @@ function RepositoryDetailView({
 			</div>
 
 			{/* Footer */}
-			{selectedIssue && selectedIssue.status === 'available' && !isIssueBlocked(selectedIssue) && (
+			{selectedIssue && selectedIssue.status === 'available' && (
 				<div
 					className="shrink-0 px-4 py-3 border-t flex items-center justify-between"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
 				>
 					<div className="flex items-center gap-2 text-sm" style={{ color: theme.colors.textDim }}>
-						<GitBranch className="w-4 h-4" />
-						<span>Will clone repo, create draft PR, and run all documents</span>
+						{isIssueBlocked(selectedIssue) ? (
+							<>
+								<Lock className="w-4 h-4" />
+								<span>
+									Blocked by a dependency — the maintainer will unblock when prerequisites are met
+								</span>
+							</>
+						) : (
+							<>
+								<GitBranch className="w-4 h-4" />
+								<span>Will clone repo, create draft PR, and run all documents</span>
+							</>
+						)}
 					</div>
 					<button
-						onClick={onStartContribution}
-						disabled={isStarting}
+						onClick={isIssueBlocked(selectedIssue) ? undefined : onStartContribution}
+						disabled={isStarting || isIssueBlocked(selectedIssue)}
 						className="px-4 py-2 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 						style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 					>
@@ -1047,21 +1050,16 @@ function ActiveContributionCard({
 			</div>
 
 			{contribution.draftPrUrl ? (
-				<a
-					href={contribution.draftPrUrl}
-					target="_blank"
-					rel="noopener noreferrer"
+				<button
+					type="button"
 					className="flex items-center gap-1 text-xs mb-2 hover:underline"
 					style={{ color: theme.colors.accent }}
-					onClick={(e) => {
-						e.preventDefault();
-						handleOpenExternal(contribution.draftPrUrl!);
-					}}
+					onClick={() => handleOpenExternal(contribution.draftPrUrl!)}
 				>
 					<GitPullRequest className="w-3 h-3" />
 					Draft PR #{contribution.draftPrNumber}
 					<ExternalLink className="w-3 h-3" />
-				</a>
+				</button>
 			) : (
 				<div
 					className="flex items-center gap-1 text-xs mb-2"
@@ -1332,6 +1330,8 @@ export function SymphonyModal({
 		activeContributions,
 		completedContributions,
 		finalizeContribution,
+		issueCounts,
+		isLoadingIssueCounts,
 	} = useSymphony();
 
 	const {
@@ -1373,10 +1373,21 @@ export function SymphonyModal({
 	showHelpRef.current = showHelp;
 	showDetailViewRef.current = showDetailView;
 
-	// Reset on filter change
-	useEffect(() => {
-		setSelectedTileIndex(0);
-	}, [filteredRepositories.length, selectedCategory, searchQuery]);
+	const handleCategoryChange = useCallback(
+		(category: string) => {
+			setSelectedCategory(category);
+			setSelectedTileIndex(0);
+		},
+		[setSelectedCategory]
+	);
+
+	const handleSearchChange = useCallback(
+		(value: string) => {
+			setSearchQuery(value);
+			setSelectedTileIndex(0);
+		},
+		[setSearchQuery]
+	);
 
 	// Back navigation
 	const handleBack = useCallback(() => {
@@ -1901,7 +1912,7 @@ export function SymphonyModal({
 													ref={searchInputRef}
 													type="text"
 													value={searchQuery}
-													onChange={(e) => setSearchQuery(e.target.value)}
+													onChange={(e) => handleSearchChange(e.target.value)}
 													placeholder="Search repositories..."
 													className="w-full pl-9 pr-3 py-2 rounded border outline-none text-sm focus:ring-1"
 													style={{
@@ -1914,7 +1925,7 @@ export function SymphonyModal({
 
 											<div className="flex items-center gap-1 flex-wrap">
 												<button
-													onClick={() => setSelectedCategory('all')}
+													onClick={() => handleCategoryChange('all')}
 													className={`px-3 py-1.5 rounded text-sm transition-colors ${selectedCategory === 'all' ? 'font-semibold' : ''}`}
 													style={{
 														backgroundColor:
@@ -1936,7 +1947,7 @@ export function SymphonyModal({
 													return (
 														<button
 															key={cat}
-															onClick={() => setSelectedCategory(cat)}
+															onClick={() => handleCategoryChange(cat)}
 															className={`px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1 ${
 																selectedCategory === cat ? 'font-semibold' : ''
 															}`}
@@ -1971,8 +1982,15 @@ export function SymphonyModal({
 									>
 										{isLoading ? (
 											<div className="grid grid-cols-3 gap-4">
-												{[1, 2, 3, 4, 5, 6].map((i) => (
-													<RepositoryTileSkeleton key={i} theme={theme} />
+												{[
+													'repo-skeleton-1',
+													'repo-skeleton-2',
+													'repo-skeleton-3',
+													'repo-skeleton-4',
+													'repo-skeleton-5',
+													'repo-skeleton-6',
+												].map((skeletonId) => (
+													<RepositoryTileSkeleton key={skeletonId} theme={theme} />
 												))}
 											</div>
 										) : error ? (
@@ -2017,6 +2035,7 @@ export function SymphonyModal({
 														theme={theme}
 														isSelected={index === selectedTileIndex}
 														onSelect={() => handleSelectRepo(repo)}
+														issueCount={issueCounts?.[repo.slug] ?? null}
 													/>
 												))}
 											</div>
@@ -2028,8 +2047,9 @@ export function SymphonyModal({
 										className="px-4 py-2 border-t flex items-center justify-between text-xs"
 										style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 									>
-										<span>
+										<span className="flex items-center gap-1">
 											{filteredRepositories.length} repositories • Contribute to open source with AI
+											{isLoadingIssueCounts && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
 										</span>
 										<span>{`↑↓←→ navigate • Enter select • / search • ${formatShortcutKeys(['Meta', 'Shift'])}[] tabs`}</span>
 									</div>
@@ -2338,10 +2358,13 @@ export function SymphonyModal({
 			{showBuildWarning &&
 				createPortal(
 					<div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 10001 }}>
-						<div
+						<button
+							type="button"
 							className="absolute inset-0"
 							style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+							tabIndex={-1}
 							onClick={() => setShowBuildWarning(false)}
+							aria-label="Close pre-flight check dialog"
 						/>
 						<div
 							className="relative rounded-lg border shadow-2xl p-6 max-w-md mx-4"
@@ -2397,11 +2420,9 @@ export function SymphonyModal({
 											>
 												Install it from{' '}
 												<a
-													href="#"
-													onClick={(e) => {
-														e.preventDefault();
-														window.maestro.shell.openExternal('https://cli.github.com/');
-													}}
+													href="https://cli.github.com/"
+													target="_blank"
+													rel="noopener noreferrer"
 													className="underline"
 													style={{ color: theme.colors.accent }}
 												>

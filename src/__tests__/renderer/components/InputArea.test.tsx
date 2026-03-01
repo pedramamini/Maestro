@@ -59,9 +59,9 @@ vi.mock('../../../renderer/hooks/agent/useAgentCapabilities', () => ({
 
 // Mock child components to isolate InputArea testing
 vi.mock('../../../renderer/components/ThinkingStatusPill', () => ({
-	ThinkingStatusPill: vi.fn(({ thinkingSessions, onSessionClick }) =>
-		// Only render when there are thinking sessions (matches real component behavior)
-		thinkingSessions && thinkingSessions.length > 0 ? (
+	ThinkingStatusPill: vi.fn(({ thinkingItems, onSessionClick }) =>
+		// Only render when there are thinking items (matches real component behavior)
+		thinkingItems && thinkingItems.length > 0 ? (
 			<div data-testid="thinking-status-pill">ThinkingStatusPill</div>
 		) : null
 	),
@@ -399,9 +399,9 @@ describe('InputArea', () => {
 			expect(toggle).toHaveTextContent('History');
 		});
 
-		it('renders ThinkingStatusPill when sessions are thinking', () => {
-			// ThinkingStatusPill only renders when there are thinking sessions (state: 'busy', busySource: 'ai')
-			// PERF: InputArea now expects pre-filtered thinkingSessions prop
+		it('renders ThinkingStatusPill when items are thinking', () => {
+			// ThinkingStatusPill only renders when there are thinking items
+			// PERF: InputArea now expects pre-filtered thinkingItems prop
 			const thinkingSession = createMockSession({
 				inputMode: 'ai',
 				state: 'busy',
@@ -409,7 +409,7 @@ describe('InputArea', () => {
 			});
 			const props = createDefaultProps({
 				session: thinkingSession,
-				thinkingSessions: [thinkingSession],
+				thinkingItems: [{ session: thinkingSession, tab: null }],
 			});
 			render(<InputArea {...props} />);
 
@@ -1172,9 +1172,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const items = screen
-				.getAllByText(/ls -la|cd src|main/)
-				.map((el) => el.closest('div[class*="cursor-pointer"]'));
+			const items = screen.getAllByText(/ls -la|cd src|main/).map((el) => el.closest('button'));
 
 			// The second item (index 1) should have the ring class indicating selection
 			expect(items[1]).toHaveClass('ring-1');
@@ -1197,7 +1195,7 @@ describe('InputArea', () => {
 			});
 			render(<InputArea {...props} />);
 
-			const secondItem = screen.getByText('cd src').closest('div[class*="cursor-pointer"]');
+			const secondItem = screen.getByText('cd src').closest('button');
 			fireEvent.mouseEnter(secondItem!);
 
 			expect(setSelectedTabCompletionIndex).toHaveBeenCalledWith(1);

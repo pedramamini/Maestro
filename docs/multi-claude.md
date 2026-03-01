@@ -78,13 +78,13 @@ ln -s ../.claude/projects     $CONFIG_DIR/projects
 
 ### What's Shared vs. Account-Specific
 
-| Resource | Shared? | Notes |
-|----------|---------|-------|
-| `projects/` (sessions) | Shared | Enables cross-account session resume |
-| `settings.json`, `plugins/`, `commands/`, `plans/` | Shared | Configure once, use everywhere |
-| `CLAUDE.md` | Shared | Global instructions apply to all accounts |
-| `.claude.json` | Per-account | OAuth tokens and account identity |
-| `history.jsonl` | Per-account | Recent session list differs per account |
+| Resource                                           | Shared?     | Notes                                     |
+| -------------------------------------------------- | ----------- | ----------------------------------------- |
+| `projects/` (sessions)                             | Shared      | Enables cross-account session resume      |
+| `settings.json`, `plugins/`, `commands/`, `plans/` | Shared      | Configure once, use everywhere            |
+| `CLAUDE.md`                                        | Shared      | Global instructions apply to all accounts |
+| `.claude.json`                                     | Per-account | OAuth tokens and account identity         |
+| `history.jsonl`                                    | Per-account | Recent session list differs per account   |
 
 ## Configuring Agents in Maestro
 
@@ -112,10 +112,10 @@ Once your config directories exist, point each Maestro agent at the right one us
 
 Create one agent per account and name them clearly:
 
-| Agent Name | `CLAUDE_CONFIG_DIR` |
-|------------|---------------------|
+| Agent Name        | `CLAUDE_CONFIG_DIR`           |
+| ----------------- | ----------------------------- |
 | Claude (Personal) | `/Users/you/.claude-personal` |
-| Claude (Work) | `/Users/you/.claude-work` |
+| Claude (Work)     | `/Users/you/.claude-work`     |
 
 This way you can see at a glance which account's quota you're using. When one account hits its limit, switch to the other.
 

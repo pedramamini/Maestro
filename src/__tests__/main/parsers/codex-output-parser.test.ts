@@ -217,6 +217,58 @@ describe('CodexOutputParser', () => {
 				expect(event?.type).toBe('error');
 				expect(event?.text).toBe('Connection failed');
 			});
+
+			it('should parse error messages with object error field', () => {
+				const line = JSON.stringify({
+					type: 'error',
+					error: { message: 'Model not found', type: 'invalid_request_error' },
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('Model not found');
+			});
+		});
+
+		describe('turn.failed events', () => {
+			it('should parse turn.failed with nested error message', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+					error: {
+						message:
+							'stream disconnected before completion: The model gpt-5.3-codex does not exist or you do not have access to it.',
+					},
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toContain('gpt-5.3-codex does not exist');
+			});
+
+			it('should parse turn.failed with string error', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+					error: 'API connection lost',
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('API connection lost');
+			});
+
+			it('should parse turn.failed with no error details', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('Turn failed');
+			});
 		});
 
 		it('should handle invalid JSON as text', () => {
@@ -369,14 +421,16 @@ describe('CodexOutputParser', () => {
 				const p = new CodexOutputParser();
 
 				// First: exec_command_begin to register tool name
-				p.parseJsonLine(JSON.stringify({
-					id: '0',
-					msg: {
-						type: 'exec_command_begin',
-						call_id: 'call_test1',
-						command: ['cat', 'file.txt'],
-					},
-				}));
+				p.parseJsonLine(
+					JSON.stringify({
+						id: '0',
+						msg: {
+							type: 'exec_command_begin',
+							call_id: 'call_test1',
+							command: ['cat', 'file.txt'],
+						},
+					})
+				);
 
 				// Then: exec_command_end with matching call_id
 				const line = JSON.stringify({
@@ -541,26 +595,30 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 
 			// begin with call_id
-			const beginEvent = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: {
-					type: 'exec_command_begin',
-					call_id: 'call_001',
-					command: ['git', 'status'],
-				},
-			}));
+			const beginEvent = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: {
+						type: 'exec_command_begin',
+						call_id: 'call_001',
+						command: ['git', 'status'],
+					},
+				})
+			);
 			expect(beginEvent?.toolName).toBe('git');
 
 			// end with same call_id
-			const endEvent = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: {
-					type: 'exec_command_end',
-					call_id: 'call_001',
-					stdout: 'On branch main',
-					exit_code: 0,
-				},
-			}));
+			const endEvent = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: {
+						type: 'exec_command_end',
+						call_id: 'call_001',
+						stdout: 'On branch main',
+						exit_code: 0,
+					},
+				})
+			);
 			expect(endEvent?.toolName).toBe('git');
 		});
 
@@ -568,46 +626,65 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 
 			// begin two commands
-			p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_begin', call_id: 'call_A', command: ['ls'] },
-			}));
-			p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_begin', call_id: 'call_B', command: ['cat', 'file.txt'] },
-			}));
+			p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_begin', call_id: 'call_A', command: ['ls'] },
+				})
+			);
+			p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_begin', call_id: 'call_B', command: ['cat', 'file.txt'] },
+				})
+			);
 
 			// end in reverse order
-			const endB = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_end', call_id: 'call_B', stdout: 'contents', exit_code: 0 },
-			}));
+			const endB = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_end', call_id: 'call_B', stdout: 'contents', exit_code: 0 },
+				})
+			);
 			expect(endB?.toolName).toBe('cat');
 
-			const endA = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_end', call_id: 'call_A', stdout: 'file1\nfile2', exit_code: 0 },
-			}));
+			const endA = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: {
+						type: 'exec_command_end',
+						call_id: 'call_A',
+						stdout: 'file1\nfile2',
+						exit_code: 0,
+					},
+				})
+			);
 			expect(endA?.toolName).toBe('ls');
 		});
 
 		it('should clean up call_id after exec_command_end', () => {
 			const p = new CodexOutputParser();
 
-			p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_begin', call_id: 'call_C', command: ['echo'] },
-			}));
-			p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_end', call_id: 'call_C', stdout: 'hi', exit_code: 0 },
-			}));
+			p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_begin', call_id: 'call_C', command: ['echo'] },
+				})
+			);
+			p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_end', call_id: 'call_C', stdout: 'hi', exit_code: 0 },
+				})
+			);
 
 			// Another end with same call_id should have no tool name
-			const orphan = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_end', call_id: 'call_C', stdout: 'orphan', exit_code: 0 },
-			}));
+			const orphan = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_end', call_id: 'call_C', stdout: 'orphan', exit_code: 0 },
+				})
+			);
 			expect(orphan?.toolName).toBeUndefined();
 		});
 	});
@@ -836,6 +913,77 @@ describe('CodexOutputParser', () => {
 		});
 	});
 
+	describe('tool name carryover', () => {
+		it('should carry tool name from tool_call to subsequent tool_result', () => {
+			const p = new CodexOutputParser();
+			// First: tool_call with tool name
+			const callLine = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_call', tool: 'shell', args: { command: ['ls'] } },
+			});
+			p.parseJsonLine(callLine);
+
+			// Then: tool_result without tool name
+			const resultLine = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: 'file1.txt\nfile2.txt' },
+			});
+			const event = p.parseJsonLine(resultLine);
+			expect(event?.toolName).toBe('shell');
+			expect(event?.toolState?.status).toBe('completed');
+		});
+
+		it('should reset lastToolName after tool_result consumption', () => {
+			const p = new CodexOutputParser();
+			// tool_call → tool_result (consumes name) → another tool_result (no name)
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_call', tool: 'shell', args: {} },
+				})
+			);
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'ok' },
+				})
+			);
+			const orphan = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'orphan' },
+				})
+			);
+			expect(orphan?.toolName).toBeUndefined();
+		});
+	});
+
+	describe('tool output truncation', () => {
+		it('should truncate tool output exceeding 10000 chars', () => {
+			const p = new CodexOutputParser();
+			const longOutput = 'x'.repeat(15000);
+			const line = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: longOutput },
+			});
+			const event = p.parseJsonLine(line);
+			expect(event?.toolState?.output).toContain('... [output truncated, 15000 chars total]');
+			// The truncated output should start with 10000 'x' chars
+			expect(event?.toolState?.output?.startsWith('x'.repeat(10000))).toBe(true);
+		});
+
+		it('should not truncate tool output within limit', () => {
+			const p = new CodexOutputParser();
+			const shortOutput = 'x'.repeat(5000);
+			const line = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: shortOutput },
+			});
+			const event = p.parseJsonLine(line);
+			expect(event?.toolState?.output).toBe(shortOutput);
+		});
+	});
+
 	describe('detectErrorFromLine', () => {
 		it('should return null for empty lines', () => {
 			expect(parser.detectErrorFromLine('')).toBeNull();
@@ -874,6 +1022,33 @@ describe('CodexOutputParser', () => {
 			expect(error?.type).toBe('token_exhaustion');
 		});
 
+		it('should detect errors from turn.failed JSON with object error', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: {
+					message:
+						'stream disconnected before completion: The model gpt-5.3-codex does not exist or you do not have access to it.',
+				},
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.type).toBe('unknown');
+			expect(error?.agentId).toBe('codex');
+			expect(error?.recoverable).toBe(true);
+			expect(error?.parsedJson).toBeDefined();
+		});
+
+		it('should detect errors from turn.failed JSON with string error', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: 'rate limit exceeded',
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.type).toBe('rate_limited');
+			expect(error?.agentId).toBe('codex');
+		});
+
 		it('should NOT detect errors from plain text (only JSON)', () => {
 			expect(parser.detectErrorFromLine('invalid api key')).toBeNull();
 			expect(parser.detectErrorFromLine('rate limit exceeded')).toBeNull();
@@ -882,6 +1057,12 @@ describe('CodexOutputParser', () => {
 
 		it('should return null for non-error lines', () => {
 			expect(parser.detectErrorFromLine('normal output')).toBeNull();
+		});
+
+		it('should include parsedJson on matched pattern errors', () => {
+			const line = JSON.stringify({ type: 'error', error: 'rate limit exceeded' });
+			const error = parser.detectErrorFromLine(line);
+			expect(error?.parsedJson).toBeDefined();
 		});
 	});
 
@@ -925,35 +1106,45 @@ describe('CodexOutputParser', () => {
 		it('should carry tool name from tool_call to subsequent tool_result', () => {
 			const p = new CodexOutputParser();
 
-			const callEvent = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_call', tool: 'shell', args: { command: ['ls'] } },
-			}));
+			const callEvent = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_call', tool: 'shell', args: { command: ['ls'] } },
+				})
+			);
 			expect(callEvent?.toolName).toBe('shell');
 
-			const resultEvent = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: 'file1.txt\nfile2.txt' },
-			}));
+			const resultEvent = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'file1.txt\nfile2.txt' },
+				})
+			);
 			expect(resultEvent?.toolName).toBe('shell');
 		});
 
 		it('should reset tool name after tool_result so it does not leak to next pair', () => {
 			const p = new CodexOutputParser();
 
-			p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_call', tool: 'shell', args: {} },
-			}));
-			p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: 'ok' },
-			}));
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_call', tool: 'shell', args: {} },
+				})
+			);
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'ok' },
+				})
+			);
 
-			const orphanResult = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: 'orphan' },
-			}));
+			const orphanResult = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'orphan' },
+				})
+			);
 			expect(orphanResult?.toolName).toBeUndefined();
 		});
 	});
@@ -965,10 +1156,12 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 			const largeOutput = 'x'.repeat(15000);
 
-			const event = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: largeOutput },
-			}));
+			const event = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: largeOutput },
+				})
+			);
 
 			const output = (event?.toolState as { output: string }).output;
 			expect(output.length).toBeLessThan(15000);
@@ -980,10 +1173,12 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 			const normalOutput = 'y'.repeat(9999);
 
-			const event = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: normalOutput },
-			}));
+			const event = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: normalOutput },
+				})
+			);
 
 			const output = (event?.toolState as { output: string }).output;
 			expect(output).toBe(normalOutput);
@@ -993,10 +1188,12 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 			const byteArray = Array(15000).fill(65);
 
-			const event = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: byteArray },
-			}));
+			const event = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: byteArray },
+				})
+			);
 
 			const output = (event?.toolState as { output: string }).output;
 			expect(output).toContain('... [output truncated, 15000 chars total]');
@@ -1006,15 +1203,17 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 			const largeOutput = 'z'.repeat(15000);
 
-			const event = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: {
-					type: 'exec_command_end',
-					call_id: 'call_trunc',
-					stdout: largeOutput,
-					exit_code: 0,
-				},
-			}));
+			const event = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: {
+						type: 'exec_command_end',
+						call_id: 'call_trunc',
+						stdout: largeOutput,
+						exit_code: 0,
+					},
+				})
+			);
 
 			const output = (event?.toolState as { output: string }).output;
 			expect(output.length).toBeLessThan(15000);
@@ -1029,18 +1228,22 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 
 			// Set up tool name carryover
-			p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_call', tool: 'shell', args: {} },
-			}));
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_call', tool: 'shell', args: {} },
+				})
+			);
 
 			// Refresh should clear it
 			p.refreshConfig();
 
-			const result = p.parseJsonLine(JSON.stringify({
-				type: 'item.completed',
-				item: { type: 'tool_result', output: 'test' },
-			}));
+			const result = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'test' },
+				})
+			);
 			expect(result?.toolName).toBeUndefined();
 		});
 
@@ -1048,18 +1251,22 @@ describe('CodexOutputParser', () => {
 			const p = new CodexOutputParser();
 
 			// Set up call_id tracking
-			p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_begin', call_id: 'call_reset', command: ['echo'] },
-			}));
+			p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_begin', call_id: 'call_reset', command: ['echo'] },
+				})
+			);
 
 			// Refresh should clear it
 			p.refreshConfig();
 
-			const result = p.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'exec_command_end', call_id: 'call_reset', stdout: 'hi', exit_code: 0 },
-			}));
+			const result = p.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'exec_command_end', call_id: 'call_reset', stdout: 'hi', exit_code: 0 },
+				})
+			);
 			expect(result?.toolName).toBeUndefined();
 		});
 	});
@@ -1068,39 +1275,49 @@ describe('CodexOutputParser', () => {
 
 	describe('format detection', () => {
 		it('should correctly route old-format messages (top-level type)', () => {
-			const event = parser.parseJsonLine(JSON.stringify({
-				type: 'turn.started',
-			}));
+			const event = parser.parseJsonLine(
+				JSON.stringify({
+					type: 'turn.started',
+				})
+			);
 			expect(event?.type).toBe('system');
 		});
 
 		it('should correctly route new-format messages (msg envelope)', () => {
-			const event = parser.parseJsonLine(JSON.stringify({
-				id: '0',
-				msg: { type: 'agent_reasoning', text: 'test' },
-			}));
+			const event = parser.parseJsonLine(
+				JSON.stringify({
+					id: '0',
+					msg: { type: 'agent_reasoning', text: 'test' },
+				})
+			);
 			expect(event?.type).toBe('text');
 		});
 
 		it('should correctly route config lines (no envelope, has model)', () => {
-			const event = parser.parseJsonLine(JSON.stringify({
-				model: 'gpt-5-codex',
-				sandbox: 'read-only',
-			}));
+			const event = parser.parseJsonLine(
+				JSON.stringify({
+					model: 'gpt-5-codex',
+					sandbox: 'read-only',
+				})
+			);
 			expect(event?.type).toBe('system');
 		});
 
 		it('should correctly route prompt echo lines (no envelope, has prompt)', () => {
-			const event = parser.parseJsonLine(JSON.stringify({
-				prompt: 'hello world',
-			}));
+			const event = parser.parseJsonLine(
+				JSON.stringify({
+					prompt: 'hello world',
+				})
+			);
 			expect(event?.type).toBe('system');
 		});
 
 		it('should handle completely unknown JSON as system event', () => {
-			const event = parser.parseJsonLine(JSON.stringify({
-				someRandomField: true,
-			}));
+			const event = parser.parseJsonLine(
+				JSON.stringify({
+					someRandomField: true,
+				})
+			);
 			expect(event?.type).toBe('system');
 		});
 	});

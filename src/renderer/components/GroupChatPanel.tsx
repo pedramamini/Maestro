@@ -11,6 +11,7 @@ import type {
 	GroupChat,
 	GroupChatMessage,
 	GroupChatState,
+	Group,
 	Shortcut,
 	Session,
 	QueuedItem,
@@ -29,13 +30,13 @@ interface GroupChatPanelProps {
 	/** True if one or more participants don't have cost data (makes total incomplete) */
 	costIncomplete?: boolean;
 	onSendMessage: (content: string, images?: string[], readOnly?: boolean) => void;
-	onClose: () => void;
 	onRename: () => void;
 	onShowInfo: () => void;
 	rightPanelOpen: boolean;
 	onToggleRightPanel: () => void;
 	shortcuts: Record<string, Shortcut>;
 	sessions: Session[];
+	groups?: Group[];
 	onDraftChange?: (draft: string) => void;
 	onOpenPromptComposer?: () => void;
 	// Lifted state for sync with PromptComposer
@@ -79,13 +80,13 @@ export function GroupChatPanel({
 	totalCost,
 	costIncomplete,
 	onSendMessage,
-	onClose,
 	onRename,
 	onShowInfo,
 	rightPanelOpen,
 	onToggleRightPanel,
 	shortcuts,
 	sessions,
+	groups,
 	onDraftChange,
 	onOpenPromptComposer,
 	stagedImages,
@@ -116,7 +117,6 @@ export function GroupChatPanel({
 				participantCount={groupChat.participants.length}
 				totalCost={totalCost}
 				costIncomplete={costIncomplete}
-				onClose={onClose}
 				onRename={onRename}
 				onShowInfo={onShowInfo}
 				rightPanelOpen={rightPanelOpen}
@@ -142,6 +142,7 @@ export function GroupChatPanel({
 				onSend={onSendMessage}
 				participants={groupChat.participants}
 				sessions={sessions}
+				groups={groups}
 				groupChatId={groupChat.id}
 				draftMessage={groupChat.draftMessage}
 				onDraftChange={onDraftChange}

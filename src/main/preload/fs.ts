@@ -16,6 +16,7 @@ import { ipcRenderer } from 'electron';
 export interface DirectoryEntry {
 	name: string;
 	isDirectory: boolean;
+	isFile: boolean;
 	path: string;
 }
 
@@ -66,13 +67,17 @@ export function createFsApi() {
 		/**
 		 * Read file contents
 		 */
-		readFile: (filePath: string, sshRemoteId?: string): Promise<string> =>
+		readFile: (filePath: string, sshRemoteId?: string): Promise<string | null> =>
 			ipcRenderer.invoke('fs:readFile', filePath, sshRemoteId),
 
 		/**
 		 * Write file contents
 		 */
-		writeFile: (filePath: string, content: string, sshRemoteId?: string): Promise<{ success: boolean }> =>
+		writeFile: (
+			filePath: string,
+			content: string,
+			sshRemoteId?: string
+		): Promise<{ success: boolean }> =>
 			ipcRenderer.invoke('fs:writeFile', filePath, content, sshRemoteId),
 
 		/**

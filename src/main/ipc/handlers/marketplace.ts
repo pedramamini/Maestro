@@ -344,15 +344,32 @@ function resolveTildePath(pathStr: string): string {
 }
 
 /**
+ * Validate that a resolved path stays within the expected base directory.
+ * Prevents path traversal attacks via crafted filenames like "../../etc/passwd".
+ */
+function validateSafePath(basePath: string, requestedFile: string): string {
+	const realBase = path.resolve(basePath);
+	const resolved = path.resolve(basePath, requestedFile);
+	if (!resolved.startsWith(realBase + path.sep) && resolved !== realBase) {
+		throw new MarketplaceFetchError(`Path traversal blocked: ${requestedFile}`);
+	}
+	return resolved;
+}
+
+/**
  * Fetch a document from GitHub or local filesystem.
  * If playbookPath is a local filesystem path, reads from disk.
  * Otherwise, fetches from GitHub.
  */
 async function fetchDocument(playbookPath: string, filename: string): Promise<string> {
+	if (filename.includes('..')) {
+		throw new MarketplaceFetchError('Invalid filename');
+	}
+
 	// Check if this is a local path
 	if (isLocalPath(playbookPath)) {
 		const resolvedPath = resolveTildePath(playbookPath);
-		const docPath = path.join(resolvedPath, `${filename}.md`);
+		const docPath = validateSafePath(resolvedPath, `${filename}.md`);
 		logger.debug(`Reading local document: ${docPath}`, LOG_CONTEXT);
 
 		try {
@@ -402,10 +419,14 @@ async function fetchDocument(playbookPath: string, filename: string): Promise<st
  * Returns the raw content as a Buffer for binary-safe handling.
  */
 async function fetchAsset(playbookPath: string, assetFilename: string): Promise<Buffer> {
+	if (assetFilename.includes('..')) {
+		throw new MarketplaceFetchError('Invalid filename');
+	}
+
 	// Check if this is a local path
 	if (isLocalPath(playbookPath)) {
 		const resolvedPath = resolveTildePath(playbookPath);
-		const assetPath = path.join(resolvedPath, 'assets', assetFilename);
+		const assetPath = validateSafePath(resolvedPath, path.join('assets', assetFilename));
 		logger.debug(`Reading local asset: ${assetPath}`, LOG_CONTEXT);
 
 		try {
@@ -458,7 +479,7 @@ async function fetchReadme(playbookPath: string): Promise<string | null> {
 	// Check if this is a local path
 	if (isLocalPath(playbookPath)) {
 		const resolvedPath = resolveTildePath(playbookPath);
-		const readmePath = path.join(resolvedPath, 'README.md');
+		const readmePath = validateSafePath(resolvedPath, 'README.md');
 		logger.debug(`Reading local README: ${readmePath}`, LOG_CONTEXT);
 
 		try {

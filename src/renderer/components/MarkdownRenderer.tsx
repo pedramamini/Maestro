@@ -2,6 +2,7 @@ import React, { memo, useMemo, useState, useEffect } from 'react';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import rehypeRaw from 'rehype-raw';
+import DOMPurify from 'dompurify';
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter';
 import { vscDarkPlus } from 'react-syntax-highlighter/dist/esm/styles/prism';
 import { Clipboard, Loader2, ImageOff } from 'lucide-react';
@@ -224,7 +225,7 @@ interface MarkdownRendererProps {
 	projectRoot?: string;
 	/** Callback when a file link is clicked */
 	onFileClick?: (path: string) => void;
-	/** Allow raw HTML passthrough via rehype-raw (may break GFM table rendering) */
+	/** Allow raw HTML passthrough via rehype-raw (sanitized with DOMPurify for XSS protection) */
 	allowRawHtml?: boolean;
 	/** SSH remote ID for remote file operations */
 	sshRemoteId?: string;
@@ -278,6 +279,15 @@ export const MarkdownRenderer = memo(
 			return plugins;
 		}, [fileTree, fileTreeIndices, cwd, projectRoot]);
 
+		// Defense-in-depth: sanitize raw HTML with DOMPurify before markdown parsing
+		// to strip script tags, event handlers, and other XSS vectors
+		const sanitizedContent = useMemo(() => {
+			if (allowRawHtml) {
+				return DOMPurify.sanitize(content);
+			}
+			return content;
+		}, [content, allowRawHtml]);
+
 		return (
 			<div
 				className={`prose prose-sm max-w-none text-sm ${className}`}
@@ -305,14 +315,19 @@ export const MarkdownRenderer = memo(
 										if (isMaestroFile && filePath && onFileClick) {
 											onFileClick(filePath);
 										} else if (href) {
-											// Only open http/https/file URLs directly; convert git SSH URLs first
-											if (/^https?:\/\//.test(href) || /^file:\/\//.test(href)) {
+											// Open http/https URLs via openExternal; file:// URLs via openPath
+											if (/^file:\/\//.test(href)) {
+												window.maestro.shell.openPath(href.replace(/^file:\/\//, ''));
+											} else if (/^https?:\/\//.test(href)) {
 												window.maestro.shell.openExternal(href);
 											} else {
 												// Attempt to convert non-standard URLs (e.g. git@host:user/repo)
 												try {
 													const converted = href.startsWith('git@')
-														? href.replace(/^git@/, 'https://').replace(/:([^/])/, '/$1').replace(/\.git$/, '')
+														? href
+																.replace(/^git@/, 'https://')
+																.replace(/:([^/])/, '/$1')
+																.replace(/\.git$/, '')
 														: href;
 													if (/^https?:\/\//.test(converted)) {
 														window.maestro.shell.openExternal(converted);
@@ -421,9 +436,15 @@ export const MarkdownRenderer = memo(
 								}}
 							/>
 						),
+						// Strip event handler attributes (e.g. onToggle) that rehype-raw may
+						// pass through as strings from AI-generated HTML, which React rejects.
+						// Fixes MAESTRO-8Q
+						details: ({ node: _node, onToggle: _onToggle, ...props }: any) => (
+							<details {...props} />
+						),
 					}}
 				>
-					{content}
+					{sanitizedContent}
 				</ReactMarkdown>
 			</div>
 		);

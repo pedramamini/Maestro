@@ -39,14 +39,16 @@ import { useGitBranch, useGitDetail, useGitFileStatus } from '../contexts/GitSta
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { calculateContextDisplay } from '../utils/contextUsage';
 import { useAgentCapabilities, useHoverTooltip } from '../hooks';
+import { safeClipboardWrite } from '../utils/clipboard';
+import { useUIStore } from '../stores/uiStore';
+import { useSettingsStore } from '../stores/settingsStore';
 import type {
 	Session,
 	Theme,
-	Shortcut,
-	FocusArea,
 	BatchRunState,
 	UnifiedTab,
 	FilePreviewTab,
+	ThinkingItem,
 } from '../types';
 
 interface SlashCommand {
@@ -70,18 +72,12 @@ interface MainPanelProps {
 	agentSessionsOpen: boolean;
 	activeAgentSessionId: string | null;
 	activeSession: Session | null;
-	// PERF: Receive pre-filtered thinkingSessions instead of full sessions array.
+	// PERF: Receive pre-filtered thinkingItems instead of full sessions array.
 	// This prevents cascade re-renders when unrelated session updates occur.
-	thinkingSessions: Session[];
+	thinkingItems: ThinkingItem[];
 	theme: Theme;
-	fontFamily: string;
 	isMobileLandscape?: boolean;
-	activeFocus: FocusArea;
-	outputSearchOpen: boolean;
-	outputSearchQuery: string;
 	inputValue: string;
-	enterToSendAI: boolean;
-	enterToSendTerminal: boolean;
 	stagedImages: string[];
 	commandHistoryOpen: boolean;
 	commandHistoryFilter: string;
@@ -106,19 +102,6 @@ interface MainPanelProps {
 	}>;
 	selectedAtMentionIndex?: number;
 	filePreviewLoading?: { name: string; path: string } | null;
-	markdownEditMode: boolean; // FilePreview: whether editing file content
-	chatRawTextMode: boolean; // TerminalOutput: whether to show raw text in AI responses
-	autoScrollAiMode: boolean; // Whether to auto-scroll in AI mode
-	setAutoScrollAiMode: (value: boolean) => void; // Toggle auto-scroll in AI mode
-	userMessageAlignment: 'left' | 'right'; // User message bubble alignment
-	shortcuts: Record<string, Shortcut>;
-	rightPanelOpen: boolean;
-	maxOutputLines: number;
-	gitDiffPreview: string | null;
-	fileTreeFilterOpen: boolean;
-	logLevel?: string; // Current log level setting for LogViewer
-	logViewerSelectedLevels: string[]; // Persisted filter selections for LogViewer
-	setLogViewerSelectedLevels: (levels: string[]) => void;
 
 	// Setters
 	setGitDiffPreview: (preview: string | null) => void;
@@ -133,12 +116,7 @@ interface MainPanelProps {
 		usageStats?: import('../types').UsageStats
 	) => void;
 	onNewAgentSession: () => void;
-	setActiveFocus: (focus: FocusArea) => void;
-	setOutputSearchOpen: (open: boolean) => void;
-	setOutputSearchQuery: (query: string) => void;
 	setInputValue: (value: string) => void;
-	setEnterToSendAI: (value: boolean) => void;
-	setEnterToSendTerminal: (value: boolean) => void;
 	setStagedImages: React.Dispatch<React.SetStateAction<string[]>>;
 	setLightboxImage: (
 		image: string | null,
@@ -159,18 +137,12 @@ interface MainPanelProps {
 	setAtMentionFilter?: (filter: string) => void;
 	setAtMentionStartIndex?: (index: number) => void;
 	setSelectedAtMentionIndex?: (index: number) => void;
-	setMarkdownEditMode: (mode: boolean) => void;
-	setChatRawTextMode: (mode: boolean) => void;
-	setAboutModalOpen: (open: boolean) => void;
-	setRightPanelOpen: (open: boolean) => void;
 	setGitLogOpen: (open: boolean) => void;
 
 	// Refs
 	inputRef: React.RefObject<HTMLTextAreaElement>;
 	logsEndRef: React.RefObject<HTMLDivElement>;
 	terminalOutputRef: React.RefObject<HTMLDivElement>;
-	fileTreeContainerRef: React.RefObject<HTMLDivElement>;
-	fileTreeFilterInputRef: React.RefObject<HTMLInputElement>;
 
 	// Functions
 	toggleInputMode: () => void;
@@ -186,10 +158,8 @@ interface MainPanelProps {
 	onOpenQueueBrowser?: () => void;
 
 	// Auto mode props
-	batchRunState?: BatchRunState; // For display (may be from any session with active batch)
 	currentSessionBatchState?: BatchRunState | null; // For current session only (input highlighting)
 	onStopBatchRun?: (sessionId?: string) => void;
-	showConfirmation?: (message: string, onConfirm: () => void) => void;
 
 	// Tab management for AI sessions
 	onTabSelect?: (tabId: string) => void;
@@ -207,9 +177,6 @@ interface MainPanelProps {
 	onToggleTabReadOnlyMode?: () => void;
 	onToggleTabSaveToHistory?: () => void;
 	onToggleTabShowThinking?: () => void;
-	showUnreadOnly?: boolean;
-	/** Whether colorblind-friendly colors should be used for extension badges */
-	colorBlindMode?: boolean;
 	onToggleUnreadFilter?: () => void;
 	onOpenTabSearch?: () => void;
 	// Bulk tab close operations
@@ -299,11 +266,6 @@ interface MainPanelProps {
 	onExportHtml?: (tabId: string) => void;
 	onPublishTabGist?: (tabId: string) => void;
 
-	// Context warning sash settings (Phase 6)
-	contextWarningsEnabled?: boolean;
-	contextWarningYellowThreshold?: number;
-	contextWarningRedThreshold?: number;
-
 	// Summarization progress props (non-blocking, per-tab)
 	summarizeProgress?: import('../types/contextMerge').SummarizeProgress | null;
 	summarizeResult?: import('../types/contextMerge').SummarizeResult | null;
@@ -362,14 +324,9 @@ export const MainPanel = React.memo(
 			agentSessionsOpen,
 			activeAgentSessionId,
 			activeSession,
-			thinkingSessions,
+			thinkingItems,
 			theme,
-			activeFocus,
-			outputSearchOpen,
-			outputSearchQuery,
 			inputValue,
-			enterToSendAI,
-			enterToSendTerminal,
 			stagedImages,
 			commandHistoryOpen,
 			commandHistoryFilter,
@@ -394,26 +351,13 @@ export const MainPanel = React.memo(
 			setAtMentionStartIndex,
 			setSelectedAtMentionIndex,
 			filePreviewLoading,
-			markdownEditMode: _markdownEditMode,
-			chatRawTextMode,
-			shortcuts,
-			rightPanelOpen,
-			maxOutputLines,
-			gitDiffPreview: _gitDiffPreview,
-			fileTreeFilterOpen: _fileTreeFilterOpen,
-			logLevel,
 			setGitDiffPreview,
 			setLogViewerOpen,
 			setAgentSessionsOpen,
 			setActiveAgentSessionId,
 			onResumeAgentSession,
 			onNewAgentSession,
-			setActiveFocus,
-			setOutputSearchOpen,
-			setOutputSearchQuery,
 			setInputValue,
-			setEnterToSendAI,
-			setEnterToSendTerminal,
 			setStagedImages,
 			setLightboxImage,
 			setCommandHistoryOpen,
@@ -421,16 +365,10 @@ export const MainPanel = React.memo(
 			setCommandHistorySelectedIndex,
 			setSlashCommandOpen,
 			setSelectedSlashCommandIndex,
-			setMarkdownEditMode: _setMarkdownEditMode,
-			setChatRawTextMode,
-			setAboutModalOpen: _setAboutModalOpen,
-			setRightPanelOpen,
 			setGitLogOpen,
 			inputRef,
 			logsEndRef,
 			terminalOutputRef,
-			fileTreeContainerRef: _fileTreeContainerRef,
-			fileTreeFilterInputRef: _fileTreeFilterInputRef,
 			toggleInputMode,
 			processInput,
 			handleInterrupt,
@@ -439,10 +377,8 @@ export const MainPanel = React.memo(
 			handleDrop,
 			getContextColor,
 			setActiveSessionId,
-			batchRunState: _batchRunState,
 			currentSessionBatchState,
 			onStopBatchRun,
-			showConfirmation: _showConfirmation,
 			onRemoveQueuedItem,
 			onOpenQueueBrowser,
 			isMobileLandscape = false,
@@ -455,10 +391,6 @@ export const MainPanel = React.memo(
 			onSendToAgent,
 			onCopyContext,
 			onExportHtml,
-			// Context warning sash settings (Phase 6)
-			contextWarningsEnabled = false,
-			contextWarningYellowThreshold = 60,
-			contextWarningRedThreshold = 80,
 			// Summarization progress props
 			summarizeProgress,
 			summarizeResult,
@@ -477,6 +409,33 @@ export const MainPanel = React.memo(
 			onExitWizard,
 		} = props;
 
+		// Phase 3C: Direct store subscriptions (migrated from props)
+		const fontFamily = useSettingsStore((s) => s.fontFamily);
+		const enterToSendAI = useSettingsStore((s) => s.enterToSendAI);
+		const enterToSendTerminal = useSettingsStore((s) => s.enterToSendTerminal);
+		const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
+		const autoScrollAiMode = useSettingsStore((s) => s.autoScrollAiMode);
+		const userMessageAlignment = useSettingsStore((s) => s.userMessageAlignment);
+		const shortcuts = useSettingsStore((s) => s.shortcuts);
+		const maxOutputLines = useSettingsStore((s) => s.maxOutputLines);
+		const logLevel = useSettingsStore((s) => s.logLevel);
+		const logViewerSelectedLevels = useSettingsStore((s) => s.logViewerSelectedLevels);
+		const colorBlindMode = useSettingsStore((s) => s.colorBlindMode);
+		const contextWarningsEnabled = useSettingsStore(
+			(s) => s.contextManagementSettings.contextWarningsEnabled ?? false
+		);
+		const contextWarningYellowThreshold = useSettingsStore(
+			(s) => s.contextManagementSettings.contextWarningYellowThreshold ?? 60
+		);
+		const contextWarningRedThreshold = useSettingsStore(
+			(s) => s.contextManagementSettings.contextWarningRedThreshold ?? 80
+		);
+		const activeFocus = useUIStore((s) => s.activeFocus);
+		const outputSearchOpen = useUIStore((s) => s.outputSearchOpen);
+		const outputSearchQuery = useUIStore((s) => s.outputSearchQuery);
+		const rightPanelOpen = useUIStore((s) => s.rightPanelOpen);
+		const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
+
 		// isCurrentSessionAutoMode: THIS session has active batch run (for all UI indicators)
 		const isCurrentSessionAutoMode = currentSessionBatchState?.isRunning || false;
 		const isCurrentSessionStopping = currentSessionBatchState?.isStopping || false;
@@ -484,8 +443,6 @@ export const MainPanel = React.memo(
 		// Hover tooltip state using reusable hook
 		const gitTooltip = useHoverTooltip(150);
 		const contextTooltip = useHoverTooltip(150);
-		// Panel width for responsive hiding of widgets
-		const [panelWidth, setPanelWidth] = useState(Infinity); // Start with Infinity so widgets show by default
 		const headerRef = useRef<HTMLDivElement>(null);
 		const filePreviewContainerRef = useRef<HTMLDivElement>(null);
 		const filePreviewRef = useRef<FilePreviewHandle>(null);
@@ -501,8 +458,6 @@ export const MainPanel = React.memo(
 			onUnifiedTabReorder,
 			onTabStar,
 			onTabMarkUnread,
-			showUnreadOnly,
-			colorBlindMode,
 			onToggleUnreadFilter,
 			onOpenTabSearch,
 			onCloseAllTabs,
@@ -624,73 +579,6 @@ export const MainPanel = React.memo(
 			activeSession?.contextUsage,
 		]);
 
-		// PERF: Track panel width for responsive widget hiding with threshold-based updates
-		// Only update state when width crosses a meaningful threshold (20px) to prevent
-		// unnecessary re-renders during window resize animations
-		useEffect(() => {
-			const header = headerRef.current;
-			if (!header) return;
-
-			// Get initial width immediately, but only if it's a reasonable value
-			// (protects against measuring during layout/animation when width might be 0)
-			const initialWidth = header.offsetWidth;
-			let lastSetWidth = 0;
-			if (initialWidth > 100) {
-				setPanelWidth(initialWidth);
-				lastSetWidth = initialWidth;
-			}
-
-			// Threshold for triggering state updates - prevents flicker during resize
-			const WIDTH_THRESHOLD = 20;
-			let rafId: number | null = null;
-			let pendingWidth: number | null = null;
-
-			const resizeObserver = new ResizeObserver((entries) => {
-				for (const entry of entries) {
-					// Only accept reasonable width values (protects against mid-animation measurements)
-					if (entry.contentRect.width > 100) {
-						pendingWidth = entry.contentRect.width;
-					}
-				}
-				// Use requestAnimationFrame to batch updates, but only if change exceeds threshold
-				if (rafId === null && pendingWidth !== null) {
-					rafId = requestAnimationFrame(() => {
-						if (pendingWidth !== null && Math.abs(pendingWidth - lastSetWidth) >= WIDTH_THRESHOLD) {
-							setPanelWidth(pendingWidth);
-							lastSetWidth = pendingWidth;
-						}
-						pendingWidth = null;
-						rafId = null;
-					});
-				}
-			});
-
-			resizeObserver.observe(header);
-			return () => {
-				resizeObserver.disconnect();
-				if (rafId !== null) {
-					cancelAnimationFrame(rafId);
-				}
-			};
-		}, []);
-
-		// Responsive breakpoints for hiding/simplifying widgets (progressive reduction as space shrinks)
-		// When AUTO mode is active, the center button takes ~120px, so we shift thresholds higher
-		// At widest: full display with "CONTEXT WINDOW" label and wide gauge (w-24)
-		// Below 700px: "CONTEXT" label + narrow gauge (w-16) together
-		// Below 550px: compact git widget (file count only)
-		// Below 500px: git branch shows icon only (no text)
-		// Below 400px: hide UUID pill
-		// Below 350px: hide cost widget
-		// Below 300px: hide session name (shown in menu bar anyway)
-		const autoModeOffset = isCurrentSessionAutoMode ? 150 : 0; // Extra space needed when AUTO button is visible
-		const showSessionName = panelWidth > 300 + autoModeOffset;
-		const showCostWidget = panelWidth > 350 + autoModeOffset;
-		const showUuidPill = panelWidth > 400 + autoModeOffset;
-		const useIconOnlyGitBranch = panelWidth < 500 + autoModeOffset;
-		const useCompactGitWidget = panelWidth < 550 + autoModeOffset;
-		const useCompactContext = panelWidth < 700 + autoModeOffset; // Both label and gauge shrink together
-
 		// Git status from focused contexts (reduces cascade re-renders)
 		// Branch info: branch name, remote, ahead/behind - rarely changes
 		const { getBranchInfo } = useGitBranch();
@@ -701,16 +589,27 @@ export const MainPanel = React.memo(
 
 		// Derive gitInfo format from focused context data for backward compatibility
 		const branchInfo = activeSession ? getBranchInfo(activeSession.id) : undefined;
-		const gitInfo =
-			branchInfo && activeSession?.isGitRepo
-				? {
-						branch: branchInfo.branch || '',
-						remote: branchInfo.remote || '',
-						behind: branchInfo.behind,
-						ahead: branchInfo.ahead,
-						uncommittedChanges: getFileCount(activeSession.id),
-					}
-				: null;
+		const fileCount = activeSession ? getFileCount(activeSession.id) : 0;
+		const gitInfo = useMemo(
+			() =>
+				branchInfo && activeSession?.isGitRepo
+					? {
+							branch: branchInfo.branch || '',
+							remote: branchInfo.remote || '',
+							behind: branchInfo.behind,
+							ahead: branchInfo.ahead,
+							uncommittedChanges: fileCount,
+						}
+					: null,
+			[
+				branchInfo?.branch,
+				branchInfo?.remote,
+				branchInfo?.behind,
+				branchInfo?.ahead,
+				activeSession?.isGitRepo,
+				fileCount,
+			]
+		);
 
 		// Copy notification state (centered flash notice)
 		const [copyNotification, setCopyNotification] = useState<string | null>(null);
@@ -740,9 +639,9 @@ export const MainPanel = React.memo(
 		const handleInputFocus = useCallback(() => {
 			if (activeSession) {
 				setActiveSessionId(activeSession.id);
-				setActiveFocus('main');
+				useUIStore.getState().setActiveFocus('main');
 			}
-		}, [activeSession, setActiveSessionId, setActiveFocus]);
+		}, [activeSession, setActiveSessionId]);
 
 		// Memoized session click handler for InputArea's ThinkingStatusPill
 		// Avoids creating new function reference on every render
@@ -873,13 +772,11 @@ export const MainPanel = React.memo(
 
 		// Copy to clipboard handler with flash notification
 		const copyToClipboard = async (text: string, message?: string) => {
-			try {
-				await navigator.clipboard.writeText(text);
+			const ok = await safeClipboardWrite(text);
+			if (ok) {
 				// Show centered flash notification
 				setCopyNotification(message || 'Copied to Clipboard');
 				setTimeout(() => setCopyNotification(null), 2000);
-			} catch (err) {
-				console.error('Failed to copy to clipboard:', err);
 			}
 		};
 
@@ -894,8 +791,8 @@ export const MainPanel = React.memo(
 						theme={theme}
 						onClose={() => setLogViewerOpen(false)}
 						logLevel={logLevel}
-						savedSelectedLevels={props.logViewerSelectedLevels}
-						onSelectedLevelsChange={props.setLogViewerSelectedLevels}
+						savedSelectedLevels={logViewerSelectedLevels}
+						onSelectedLevelsChange={useSettingsStore.getState().setLogViewerSelectedLevels}
 						onShortcutUsed={props.onShortcutUsed}
 					/>
 				</div>
@@ -937,6 +834,8 @@ export const MainPanel = React.memo(
 			);
 		}
 
+		// File preview eligibility checked inline below
+
 		// Show normal session view
 		return (
 			<>
@@ -949,25 +848,25 @@ export const MainPanel = React.memo(
 								'--tw-ring-color': theme.colors.accent,
 							} as React.CSSProperties
 						}
-						onClick={() => setActiveFocus('main')}
+						onClick={() => useUIStore.getState().setActiveFocus('main')}
 					>
 						{/* Top Bar (hidden in mobile landscape for focused reading) */}
 						{!isMobileLandscape && (
 							<div
 								ref={headerRef}
-								className="h-16 border-b flex items-center justify-between px-6 shrink-0"
+								className={`header-container h-16 border-b flex items-center justify-between px-6 shrink-0 relative z-20 ${isCurrentSessionAutoMode ? 'header-auto-mode' : ''}`}
 								style={{
 									borderColor: theme.colors.border,
 									backgroundColor: theme.colors.bgSidebar,
 								}}
 								data-tour="header-controls"
 							>
-								<div className="flex items-center gap-4 min-w-0">
-									<div className="flex items-center gap-2 text-sm font-medium min-w-0">
-										{/* Session name - hidden at narrow widths (also shown in menu bar) */}
-										{showSessionName && (
-											<span className="shrink-0 truncate">{activeSession.name}</span>
-										)}
+								<div className="flex items-center gap-4 min-w-0 overflow-hidden">
+									<div className="flex items-center gap-2 text-sm font-medium min-w-0 overflow-hidden">
+										{/* Session name - hidden at narrow widths via CSS container query */}
+										<span className="header-session-name truncate max-w-[150px]">
+											{activeSession.name}
+										</span>
 										<div
 											className="relative shrink-0"
 											onMouseEnter={
@@ -1016,10 +915,10 @@ export const MainPanel = React.memo(
 													{activeSession.isGitRepo ? (
 														<>
 															<GitBranch className="w-3 h-3 shrink-0" />
-															{/* Hide branch name text at narrow widths, show on hover via title */}
-															{!useIconOnlyGitBranch && (
-																<span className="truncate">{gitInfo?.branch || 'GIT'}</span>
-															)}
+															{/* Hide branch name text at narrow widths via CSS container query */}
+															<span className="header-git-branch-text truncate">
+																{gitInfo?.branch || 'GIT'}
+															</span>
 														</>
 													) : (
 														'LOCAL'
@@ -1211,14 +1110,13 @@ export const MainPanel = React.memo(
 										</div>
 									</div>
 
-									{/* Git Status Widget */}
+									{/* Git Status Widget - compact mode handled via CSS container queries */}
 									<GitStatusWidget
 										sessionId={activeSession.id}
 										isGitRepo={activeSession.isGitRepo}
 										theme={theme}
 										onViewDiff={handleViewGitDiff}
 										onViewLog={() => setGitLogOpen?.(true)}
-										compact={useCompactGitWidget}
 									/>
 								</div>
 
@@ -1231,7 +1129,7 @@ export const MainPanel = React.memo(
 											onStopBatchRun?.(activeSession.id);
 										}}
 										disabled={isCurrentSessionStopping}
-										className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all ${isCurrentSessionStopping ? 'cursor-not-allowed' : 'hover:opacity-90 cursor-pointer'}`}
+										className={`flex items-center gap-1.5 px-3.5 py-1.5 rounded-lg font-bold text-xs transition-all shrink-0 ${isCurrentSessionStopping ? 'cursor-not-allowed' : 'hover:opacity-90 cursor-pointer'}`}
 										style={{
 											backgroundColor: isCurrentSessionStopping
 												? theme.colors.warning
@@ -1271,15 +1169,14 @@ export const MainPanel = React.memo(
 								)}
 
 								<div className="flex items-center gap-3 justify-end shrink-0">
-									{/* Session UUID Pill - click to copy full UUID, left-most of session stats, hidden at narrow widths */}
+									{/* Session UUID Pill - click to copy full UUID, hidden at narrow widths via CSS container query */}
 									{/* Hide when file preview tab is focused - session stats are only relevant for AI tabs */}
-									{showUuidPill &&
-										activeSession.inputMode === 'ai' &&
+									{activeSession.inputMode === 'ai' &&
 										!activeFileTabId &&
 										activeTab?.agentSessionId &&
 										hasCapability('supportsSessionId') && (
 											<button
-												className="text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border transition-colors hover:opacity-80"
+												className="header-uuid-pill text-[10px] font-mono font-bold px-2 py-0.5 rounded-full border transition-colors hover:opacity-80"
 												style={{
 													backgroundColor: theme.colors.accent + '20',
 													color: theme.colors.accent,
@@ -1302,14 +1199,13 @@ export const MainPanel = React.memo(
 											</button>
 										)}
 
-									{/* Cost Tracker - styled as pill (hidden when panel is narrow or agent doesn't support cost tracking) - shows active tab's cost */}
+									{/* Cost Tracker - styled as pill, hidden at narrow widths via CSS container query */}
 									{/* Hide when file preview tab is focused - cost tracking is only relevant for AI tabs */}
-									{showCostWidget &&
-										activeSession.inputMode === 'ai' &&
+									{activeSession.inputMode === 'ai' &&
 										!activeFileTabId &&
 										(activeTab?.agentSessionId || activeTab?.usageStats) &&
 										hasCapability('supportsCostTracking') && (
-											<span className="text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-green-500/30 text-green-500 bg-green-500/10">
+											<span className="header-cost-widget text-xs font-mono font-bold px-2 py-0.5 rounded-full border border-green-500/30 text-green-500 bg-green-500/10">
 												${(activeTab?.usageStats?.totalCostUsd ?? 0).toFixed(2)}
 											</span>
 										)}
@@ -1322,18 +1218,26 @@ export const MainPanel = React.memo(
 										hasCapability('supportsUsageStats') &&
 										activeTabContextWindow > 0 && (
 											<div
-												className="flex flex-col items-end mr-2 relative cursor-pointer"
+												className="header-context-widget flex flex-col items-end mr-2 relative cursor-pointer"
 												{...contextTooltip.triggerHandlers}
 											>
+												{/* Full label shown at wide widths, compact label shown at narrow widths via CSS */}
 												<span
-													className="text-[10px] font-bold uppercase"
+													className="header-context-label-full text-[10px] font-bold uppercase"
 													style={{ color: theme.colors.textDim }}
 												>
-													{useCompactContext ? 'Context' : 'Context Window'}
+													Context Window
 												</span>
-												{/* Gauge width: w-24 (96px) normally, w-16 (64px) when compact - both change together */}
+												<span
+													className="header-context-label-compact text-[10px] font-bold uppercase hidden"
+													style={{ color: theme.colors.textDim }}
+													aria-hidden="true"
+												>
+													Context
+												</span>
+												{/* Gauge width controlled via CSS container query */}
 												<div
-													className={`${useCompactContext ? 'w-16' : 'w-24'} h-1.5 rounded-full mt-1 overflow-hidden`}
+													className="header-context-gauge w-24 h-1.5 rounded-full mt-1 overflow-hidden"
 													style={{ backgroundColor: theme.colors.border }}
 												>
 													<div
@@ -1537,7 +1441,7 @@ export const MainPanel = React.memo(
 
 									{!rightPanelOpen && (
 										<button
-											onClick={() => setRightPanelOpen(true)}
+											onClick={() => useUIStore.getState().setRightPanelOpen(true)}
 											className="p-2 rounded hover:bg-white/5"
 											title={`Show right panel (${formatShortcutKeys(shortcuts.toggleRightPanel.keys)})`}
 										>
@@ -1632,10 +1536,10 @@ export const MainPanel = React.memo(
 							</div>
 						)}
 
-						{/* Show loading state for file tabs (SSH remote file loading) */}
 						{/* Content area: Show FilePreview when file tab is active, otherwise show terminal output */}
 						{/* Skip rendering when loading remote file - loading state takes over entire main area */}
-						{(filePreviewLoading && !activeFileTabId) || activeFileTab?.isLoading ? (
+						{activeSession.inputMode === 'ai' &&
+						((filePreviewLoading && !activeFileTabId) || activeFileTab?.isLoading) ? (
 							<div
 								className="flex-1 flex items-center justify-center"
 								style={{ backgroundColor: theme.colors.bgMain }}
@@ -1658,7 +1562,10 @@ export const MainPanel = React.memo(
 									</div>
 								</div>
 							</div>
-						) : activeFileTabId && activeFileTab && memoizedFilePreviewFile ? (
+						) : activeSession.inputMode === 'ai' &&
+						  activeFileTabId &&
+						  activeFileTab &&
+						  memoizedFilePreviewFile ? (
 							// New file tab system - FilePreview rendered as tab content (no close button, tab handles closing)
 							// Note: All props are memoized to prevent unnecessary re-renders that cause image flickering
 							<div
@@ -1758,6 +1665,7 @@ export const MainPanel = React.memo(
 												activeTab.wizardState.isGeneratingDocs ||
 												(activeTab.wizardState.generatedDocuments?.length ?? 0) > 0
 											}
+											setLightboxImage={setLightboxImage}
 										/>
 									) : (
 										<TerminalOutput
@@ -1765,13 +1673,13 @@ export const MainPanel = React.memo(
 											ref={terminalOutputRef}
 											session={activeSession}
 											theme={theme}
-											fontFamily={props.fontFamily}
+											fontFamily={fontFamily}
 											activeFocus={activeFocus}
 											outputSearchOpen={outputSearchOpen}
 											outputSearchQuery={outputSearchQuery}
-											setOutputSearchOpen={setOutputSearchOpen}
-											setOutputSearchQuery={setOutputSearchQuery}
-											setActiveFocus={setActiveFocus}
+											setOutputSearchOpen={useUIStore.getState().setOutputSearchOpen}
+											setOutputSearchQuery={useUIStore.getState().setOutputSearchQuery}
+											setActiveFocus={useUIStore.getState().setActiveFocus}
 											setLightboxImage={setLightboxImage}
 											inputRef={inputRef}
 											logsEndRef={logsEndRef}
@@ -1787,7 +1695,7 @@ export const MainPanel = React.memo(
 													: activeSession.terminalScrollTop
 											}
 											markdownEditMode={chatRawTextMode}
-											setMarkdownEditMode={setChatRawTextMode}
+											setMarkdownEditMode={useSettingsStore.getState().setChatRawTextMode}
 											onReplayMessage={props.onReplayMessage}
 											fileTree={props.fileTree}
 											cwd={
@@ -1803,9 +1711,9 @@ export const MainPanel = React.memo(
 													? () => props.refreshFileTree?.(activeSession.id)
 													: undefined
 											}
-											autoScrollAiMode={props.autoScrollAiMode}
-											setAutoScrollAiMode={props.setAutoScrollAiMode}
-											userMessageAlignment={props.userMessageAlignment}
+											autoScrollAiMode={autoScrollAiMode}
+											setAutoScrollAiMode={useSettingsStore.getState().setAutoScrollAiMode}
+											userMessageAlignment={userMessageAlignment}
 											onOpenInTab={props.onOpenSavedFileInTab}
 										/>
 									)}
@@ -1824,8 +1732,8 @@ export const MainPanel = React.memo(
 											}
 											setEnterToSend={
 												activeSession.inputMode === 'terminal'
-													? setEnterToSendTerminal
-													: setEnterToSendAI
+													? useSettingsStore.getState().setEnterToSendTerminal
+													: useSettingsStore.getState().setEnterToSendAI
 											}
 											stagedImages={stagedImages}
 											setStagedImages={setStagedImages}
@@ -1867,7 +1775,7 @@ export const MainPanel = React.memo(
 											onInputFocus={handleInputFocus}
 											onInputBlur={props.onInputBlur}
 											isAutoModeActive={isCurrentSessionAutoMode}
-											thinkingSessions={thinkingSessions}
+											thinkingItems={thinkingItems}
 											onSessionClick={handleSessionClick}
 											autoRunState={currentSessionBatchState || undefined}
 											onStopAutoRun={() => onStopBatchRun?.(activeSession.id)}

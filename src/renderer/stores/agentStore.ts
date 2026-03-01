@@ -224,9 +224,9 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 
 		get().clearAgentError(sessionId);
 
-		// Switch to terminal mode for re-auth
+		// Switch to terminal mode for re-auth (clear activeFileTabId to prevent orphaned file preview)
 		useSessionStore.getState().setActiveSessionId(sessionId);
-		updateSession(sessionId, (s) => ({ ...s, inputMode: 'terminal' }));
+		updateSession(sessionId, (s) => ({ ...s, inputMode: 'terminal', activeFileTabId: null }));
 	},
 
 	processQueuedItem: async (sessionId, item, deps) => {

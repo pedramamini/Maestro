@@ -20,7 +20,11 @@
  * positioning in the flex layout and must remain in App.tsx.
  */
 
-import React, { lazy, Suspense } from 'react';
+import React, { lazy, Suspense, memo, useMemo } from 'react';
+import { useShallow } from 'zustand/react/shallow';
+import { useSessionStore } from '../stores/sessionStore';
+import { useGroupChatStore } from '../stores/groupChatStore';
+import { useModalStore } from '../stores/modalStore';
 import type {
 	Theme,
 	Session,
@@ -173,7 +177,7 @@ export interface AppInfoModalsProps {
  * NOTE: LogViewer is intentionally excluded - it's a content replacement component
  * that needs to be positioned in the flex layout, not an overlay modal.
  */
-export function AppInfoModals({
+export const AppInfoModals = memo(function AppInfoModals({
 	theme,
 	// Shortcuts Help Modal
 	shortcutsHelpOpen,
@@ -269,7 +273,7 @@ export function AppInfoModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP CONFIRM MODALS - Confirmation modals
@@ -305,7 +309,7 @@ export interface AppConfirmModalsProps {
  * - ConfirmModal: General-purpose confirmation dialog
  * - QuitConfirmModal: Quit app confirmation with busy agent warnings
  */
-export function AppConfirmModals({
+export const AppConfirmModals = memo(function AppConfirmModals({
 	theme,
 	sessions,
 	// Confirm Modal
@@ -365,7 +369,7 @@ export function AppConfirmModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP SESSION MODALS - Session management modals
@@ -409,12 +413,18 @@ export interface AppSessionModalsProps {
 	onSaveEditAgent: (
 		sessionId: string,
 		name: string,
+		toolType?: ToolType,
 		nudgeMessage?: string,
 		customPath?: string,
 		customArgs?: string,
 		customEnvVars?: Record<string, string>,
 		customModel?: string,
-		customContextWindow?: number
+		customContextWindow?: number,
+		sessionSshRemoteConfig?: {
+			enabled: boolean;
+			remoteId: string | null;
+			workingDirOverride?: string;
+		}
 	) => void;
 	editAgentSession: Session | null;
 
@@ -444,7 +454,7 @@ export interface AppSessionModalsProps {
  * - RenameSessionModal: Rename an agent session
  * - RenameTabModal: Rename a conversation tab
  */
-export function AppSessionModals({
+export const AppSessionModals = memo(function AppSessionModals({
 	theme,
 	sessions,
 	activeSessionId,
@@ -478,24 +488,28 @@ export function AppSessionModals({
 	return (
 		<>
 			{/* --- NEW INSTANCE MODAL --- */}
-			<NewInstanceModal
-				isOpen={newInstanceModalOpen}
-				onClose={onCloseNewInstanceModal}
-				onCreate={onCreateSession}
-				theme={theme}
-				existingSessions={existingSessions}
-				sourceSession={sourceSession}
-			/>
+			{newInstanceModalOpen && (
+				<NewInstanceModal
+					isOpen={newInstanceModalOpen}
+					onClose={onCloseNewInstanceModal}
+					onCreate={onCreateSession}
+					theme={theme}
+					existingSessions={existingSessions}
+					sourceSession={sourceSession}
+				/>
+			)}
 
 			{/* --- EDIT AGENT MODAL --- */}
-			<EditAgentModal
-				isOpen={editAgentModalOpen}
-				onClose={onCloseEditAgentModal}
-				onSave={onSaveEditAgent}
-				theme={theme}
-				session={editAgentSession}
-				existingSessions={existingSessions}
-			/>
+			{editAgentModalOpen && (
+				<EditAgentModal
+					isOpen={editAgentModalOpen}
+					onClose={onCloseEditAgentModal}
+					onSave={onSaveEditAgent}
+					theme={theme}
+					session={editAgentSession}
+					existingSessions={existingSessions}
+				/>
+			)}
 
 			{/* --- RENAME SESSION MODAL --- */}
 			{renameSessionModalOpen && (
@@ -524,7 +538,7 @@ export function AppSessionModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP GROUP MODALS - Group management modals
@@ -560,7 +574,7 @@ export interface AppGroupModalsProps {
  * - CreateGroupModal: Create a new session group
  * - RenameGroupModal: Rename an existing group
  */
-export function AppGroupModals({
+export const AppGroupModals = memo(function AppGroupModals({
 	theme,
 	groups,
 	setGroups,
@@ -606,7 +620,7 @@ export function AppGroupModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP WORKTREE MODALS - Worktree/PR management modals
@@ -655,7 +669,7 @@ export interface AppWorktreeModalsProps {
  * - CreatePRModal: Create a pull request from a worktree branch
  * - DeleteWorktreeModal: Remove a worktree session (optionally delete on disk)
  */
-export function AppWorktreeModals({
+export const AppWorktreeModals = memo(function AppWorktreeModals({
 	theme,
 	activeSession,
 	// WorktreeConfigModal
@@ -735,7 +749,7 @@ export function AppWorktreeModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP UTILITY MODALS - Utility and workflow modals
@@ -878,7 +892,7 @@ export interface AppUtilityModalsProps {
 	// BatchRunnerModal
 	batchRunnerModalOpen: boolean;
 	onCloseBatchRunner: () => void;
-	onStartBatchRun: (config: BatchRunConfig) => void;
+	onStartBatchRun: (config: BatchRunConfig) => void | Promise<void>;
 	onSaveBatchPrompt: (prompt: string) => void;
 	showConfirmation: (message: string, onConfirm: () => void) => void;
 	autoRunDocumentList: string[];
@@ -961,7 +975,7 @@ export interface AppUtilityModalsProps {
  * - GitDiffViewer: View git diffs
  * - GitLogViewer: View git log
  */
-export function AppUtilityModals({
+export const AppUtilityModals = memo(function AppUtilityModals({
 	theme,
 	sessions,
 	setSessions,
@@ -1327,43 +1341,47 @@ export function AppUtilityModals({
 			)}
 
 			{/* --- PROMPT COMPOSER MODAL --- */}
-			<PromptComposerModal
-				isOpen={promptComposerOpen}
-				onClose={onClosePromptComposer}
-				theme={theme}
-				initialValue={promptComposerInitialValue}
-				onSubmit={onPromptComposerSubmit}
-				onSend={onPromptComposerSend}
-				sessionName={promptComposerSessionName}
-				stagedImages={promptComposerStagedImages}
-				setStagedImages={setPromptComposerStagedImages}
-				onImageAttachBlocked={onPromptImageAttachBlocked}
-				onOpenLightbox={onPromptOpenLightbox}
-				tabSaveToHistory={promptTabSaveToHistory}
-				onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
-				tabReadOnlyMode={promptTabReadOnlyMode}
-				onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
-				tabShowThinking={promptTabShowThinking}
-				onToggleTabShowThinking={onPromptToggleTabShowThinking}
-				supportsThinking={promptSupportsThinking}
-				enterToSend={promptEnterToSend}
-				onToggleEnterToSend={onPromptToggleEnterToSend}
-			/>
+			{promptComposerOpen && (
+				<PromptComposerModal
+					isOpen={promptComposerOpen}
+					onClose={onClosePromptComposer}
+					theme={theme}
+					initialValue={promptComposerInitialValue}
+					onSubmit={onPromptComposerSubmit}
+					onSend={onPromptComposerSend}
+					sessionName={promptComposerSessionName}
+					stagedImages={promptComposerStagedImages}
+					setStagedImages={setPromptComposerStagedImages}
+					onImageAttachBlocked={onPromptImageAttachBlocked}
+					onOpenLightbox={onPromptOpenLightbox}
+					tabSaveToHistory={promptTabSaveToHistory}
+					onToggleTabSaveToHistory={onPromptToggleTabSaveToHistory}
+					tabReadOnlyMode={promptTabReadOnlyMode}
+					onToggleTabReadOnlyMode={onPromptToggleTabReadOnlyMode}
+					tabShowThinking={promptTabShowThinking}
+					onToggleTabShowThinking={onPromptToggleTabShowThinking}
+					supportsThinking={promptSupportsThinking}
+					enterToSend={promptEnterToSend}
+					onToggleEnterToSend={onPromptToggleEnterToSend}
+				/>
+			)}
 
 			{/* --- EXECUTION QUEUE BROWSER --- */}
-			<ExecutionQueueBrowser
-				isOpen={queueBrowserOpen}
-				onClose={onCloseQueueBrowser}
-				sessions={sessions}
-				activeSessionId={activeSessionId}
-				theme={theme}
-				onRemoveItem={onRemoveQueueItem}
-				onSwitchSession={onSwitchQueueSession}
-				onReorderItems={onReorderQueueItems}
-			/>
+			{queueBrowserOpen && (
+				<ExecutionQueueBrowser
+					isOpen={queueBrowserOpen}
+					onClose={onCloseQueueBrowser}
+					sessions={sessions}
+					activeSessionId={activeSessionId}
+					theme={theme}
+					onRemoveItem={onRemoveQueueItem}
+					onSwitchSession={onSwitchQueueSession}
+					onReorderItems={onReorderQueueItems}
+				/>
+			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP GROUP CHAT MODALS - Group Chat management modals
@@ -1423,7 +1441,7 @@ export interface AppGroupChatModalsProps {
  * - EditGroupChatModal: Edit group chat settings (name, moderator)
  * - GroupChatInfoOverlay: View group chat info and statistics
  */
-export function AppGroupChatModals({
+export const AppGroupChatModals = memo(function AppGroupChatModals({
 	theme,
 	groupChats,
 	// NewGroupChatModal
@@ -1524,7 +1542,7 @@ export function AppGroupChatModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // APP AGENT MODALS - Agent error and context transfer modals
@@ -1608,7 +1626,7 @@ export interface AppAgentModalsProps {
  * - TransferProgressModal: Show progress during cross-agent context transfer
  * - SendToAgentModal: Send session context to another Maestro session
  */
-export function AppAgentModals({
+export const AppAgentModals = memo(function AppAgentModals({
 	theme,
 	sessions,
 	activeSession,
@@ -1737,7 +1755,7 @@ export function AppAgentModals({
 			)}
 		</>
 	);
-}
+});
 
 // ============================================================================
 // UNIFIED APP MODALS - Single component combining all modal groups
@@ -1749,24 +1767,15 @@ export function AppAgentModals({
  * usage in App.tsx.
  */
 export interface AppModalsProps {
-	// Common props
+	// Common props (sessions/groups/groupChats/modal booleans self-sourced from stores — Tier 1B)
 	theme: Theme;
-	sessions: Session[];
-	setSessions: React.Dispatch<React.SetStateAction<Session[]>>;
-	activeSessionId: string;
-	activeSession: Session | null;
-	groups: Group[];
-	setGroups: React.Dispatch<React.SetStateAction<Group[]>>;
-	groupChats: GroupChat[];
 	shortcuts: Record<string, Shortcut>;
 	tabShortcuts: Record<string, Shortcut>;
 
 	// --- AppInfoModals props ---
-	shortcutsHelpOpen: boolean;
 	onCloseShortcutsHelp: () => void;
 	hasNoAgents: boolean;
 	keyboardMasteryStats: KeyboardMasteryStats;
-	aboutModalOpen: boolean;
 	onCloseAboutModal: () => void;
 	autoRunStats: AutoRunStats;
 	usageStats?: MaestroUsageStats | null;
@@ -1775,13 +1784,10 @@ export interface AppModalsProps {
 	onOpenLeaderboardRegistration: () => void;
 	isLeaderboardRegistered: boolean;
 	// leaderboardRegistration is provided via AppAgentModals props below
-	updateCheckModalOpen: boolean;
 	onCloseUpdateCheckModal: () => void;
-	processMonitorOpen: boolean;
 	onCloseProcessMonitor: () => void;
 	onNavigateToSession: (sessionId: string, tabId?: string) => void;
 	onNavigateToGroupChat: (groupChatId: string) => void;
-	usageDashboardOpen: boolean;
 	onCloseUsageDashboard: () => void;
 	/** Default time range for the Usage Dashboard from settings */
 	defaultStatsTimeRange?: 'day' | 'week' | 'month' | 'year' | 'all';
@@ -1789,20 +1795,17 @@ export interface AppModalsProps {
 	colorBlindMode?: boolean;
 
 	// --- AppConfirmModals props ---
-	confirmModalOpen: boolean;
 	confirmModalMessage: string;
 	confirmModalOnConfirm: (() => void) | null;
 	confirmModalTitle?: string;
 	confirmModalDestructive?: boolean;
 	onCloseConfirmModal: () => void;
-	quitConfirmModalOpen: boolean;
 	onConfirmQuit: () => void;
 	onCancelQuit: () => void;
 	/** Session IDs with active auto-runs (batch processing) */
 	activeBatchSessionIds?: string[];
 
 	// --- AppSessionModals props ---
-	newInstanceModalOpen: boolean;
 	onCloseNewInstanceModal: () => void;
 	onCreateSession: (
 		agentId: string,
@@ -1823,26 +1826,29 @@ export interface AppModalsProps {
 	) => void;
 	existingSessions: Session[];
 	duplicatingSessionId?: string | null; // Session ID to duplicate from
-	editAgentModalOpen: boolean;
 	onCloseEditAgentModal: () => void;
 	onSaveEditAgent: (
 		sessionId: string,
 		name: string,
+		toolType?: ToolType,
 		nudgeMessage?: string,
 		customPath?: string,
 		customArgs?: string,
 		customEnvVars?: Record<string, string>,
 		customModel?: string,
-		customContextWindow?: number
+		customContextWindow?: number,
+		sessionSshRemoteConfig?: {
+			enabled: boolean;
+			remoteId: string | null;
+			workingDirOverride?: string;
+		}
 	) => void;
 	editAgentSession: Session | null;
-	renameSessionModalOpen: boolean;
 	renameSessionValue: string;
 	setRenameSessionValue: (value: string) => void;
 	onCloseRenameSessionModal: () => void;
 	renameSessionTargetId: string | null;
 	onAfterRename?: () => void;
-	renameTabModalOpen: boolean;
 	renameTabId: string | null;
 	renameTabInitialName: string;
 	onCloseRenameTabModal: () => void;
@@ -1852,7 +1858,6 @@ export interface AppModalsProps {
 	createGroupModalOpen: boolean;
 	onCloseCreateGroupModal: () => void;
 	onGroupCreated?: (groupId: string) => void;
-	renameGroupModalOpen: boolean;
 	renameGroupId: string | null;
 	renameGroupValue: string;
 	setRenameGroupValue: (value: string) => void;
@@ -1861,27 +1866,22 @@ export interface AppModalsProps {
 	onCloseRenameGroupModal: () => void;
 
 	// --- AppWorktreeModals props ---
-	worktreeConfigModalOpen: boolean;
 	onCloseWorktreeConfigModal: () => void;
 	onSaveWorktreeConfig: (config: { basePath: string; watchEnabled: boolean }) => void;
 	onCreateWorktreeFromConfig: (branchName: string, basePath: string) => void;
 	onDisableWorktreeConfig: () => void;
-	createWorktreeModalOpen: boolean;
 	createWorktreeSession: Session | null;
 	onCloseCreateWorktreeModal: () => void;
 	onCreateWorktree: (branchName: string) => Promise<void>;
-	createPRModalOpen: boolean;
 	createPRSession: Session | null;
 	onCloseCreatePRModal: () => void;
 	onPRCreated: (prDetails: PRDetails) => void;
-	deleteWorktreeModalOpen: boolean;
 	deleteWorktreeSession: Session | null;
 	onCloseDeleteWorktreeModal: () => void;
 	onConfirmDeleteWorktree: () => void;
 	onConfirmAndDeleteWorktreeOnDisk: () => Promise<void>;
 
 	// --- AppUtilityModals props ---
-	quickActionOpen: boolean;
 	quickActionInitialMode: 'main' | 'move-to-group';
 	setQuickActionOpen: (open: boolean) => void;
 	setActiveSessionId: (id: string) => void;
@@ -1936,7 +1936,6 @@ export interface AppModalsProps {
 	onOpenGroupChat: (id: string) => void;
 	onCloseGroupChat: () => void;
 	onDeleteGroupChat: (id: string) => void;
-	activeGroupChatId: string | null;
 	hasActiveSessionCapability: (
 		capability:
 			| 'supportsSessionStorage'
@@ -1969,14 +1968,11 @@ export interface AppModalsProps {
 	gitDiffPreview: string | null;
 	gitViewerCwd: string;
 	onCloseGitDiff: () => void;
-	gitLogOpen: boolean;
 	onCloseGitLog: () => void;
-	autoRunSetupModalOpen: boolean;
 	onCloseAutoRunSetup: () => void;
 	onAutoRunFolderSelected: (folderPath: string) => void;
-	batchRunnerModalOpen: boolean;
 	onCloseBatchRunner: () => void;
-	onStartBatchRun: (config: BatchRunConfig) => void;
+	onStartBatchRun: (config: BatchRunConfig) => void | Promise<void>;
 	onSaveBatchPrompt: (prompt: string) => void;
 	showConfirmation: (message: string, onConfirm: () => void) => void;
 	autoRunDocumentList: string[];
@@ -1996,7 +1992,6 @@ export interface AppModalsProps {
 	// Auto-scroll
 	autoScrollAiMode?: boolean;
 	setAutoScrollAiMode?: (value: boolean) => void;
-	tabSwitcherOpen: boolean;
 	onCloseTabSwitcher: () => void;
 	onTabSelect: (tabId: string) => void;
 	onFileTabSelect?: (tabId: string) => void;
@@ -2006,12 +2001,10 @@ export interface AppModalsProps {
 		sessionName: string,
 		starred?: boolean
 	) => void;
-	fuzzyFileSearchOpen: boolean;
 	filteredFileTree: FileNode[];
 	fileExplorerExpanded?: string[];
 	onCloseFileSearch: () => void;
 	onFileSearchSelect: (file: FlatFileItem) => void;
-	promptComposerOpen: boolean;
 	onClosePromptComposer: () => void;
 	promptComposerInitialValue: string;
 	onPromptComposerSubmit: (value: string) => void;
@@ -2034,14 +2027,12 @@ export interface AppModalsProps {
 	promptSupportsThinking: boolean;
 	promptEnterToSend: boolean;
 	onPromptToggleEnterToSend: () => void;
-	queueBrowserOpen: boolean;
 	onCloseQueueBrowser: () => void;
 	onRemoveQueueItem: (sessionId: string, itemId: string) => void;
 	onSwitchQueueSession: (sessionId: string) => void;
 	onReorderQueueItems: (sessionId: string, fromIndex: number, toIndex: number) => void;
 
 	// --- AppGroupChatModals props ---
-	showNewGroupChatModal: boolean;
 	onCloseNewGroupChatModal: () => void;
 	onCreateGroupChat: (
 		name: string,
@@ -2062,13 +2053,11 @@ export interface AppModalsProps {
 		moderatorAgentId: string,
 		moderatorConfig?: ModeratorConfig
 	) => void;
-	showGroupChatInfo: boolean;
 	groupChatMessages: GroupChatMessage[];
 	onCloseGroupChatInfo: () => void;
 	onOpenModeratorSession: (moderatorSessionId: string) => void;
 
 	// --- AppAgentModals props ---
-	leaderboardRegistrationOpen: boolean;
 	onCloseLeaderboardRegistration: () => void;
 	leaderboardRegistration: LeaderboardRegistration | null;
 	onSaveLeaderboardRegistration: (registration: LeaderboardRegistration) => void;
@@ -2086,7 +2075,6 @@ export interface AppModalsProps {
 	groupChatError: GroupChatErrorInfo | null;
 	groupChatRecoveryActions: RecoveryAction[];
 	onClearGroupChatError: () => void;
-	mergeSessionModalOpen: boolean;
 	onCloseMergeSession: () => void;
 	onMerge: (
 		targetSessionId: string,
@@ -2099,7 +2087,6 @@ export interface AppModalsProps {
 	transferTargetAgent: ToolType | null;
 	onCancelTransfer: () => void;
 	onCompleteTransfer: () => void;
-	sendToAgentModalOpen: boolean;
 	onCloseSendToAgent: () => void;
 	onSendToAgent: (targetSessionId: string, options: SendToAgentOptions) => Promise<MergeResult>;
 }
@@ -2117,25 +2104,94 @@ export interface AppModalsProps {
  * - AppGroupChatModals: Group Chat modals
  * - AppAgentModals: Agent error and transfer modals
  */
-export function AppModals(props: AppModalsProps) {
+export const AppModals = memo(function AppModals(props: AppModalsProps) {
+	// Self-source data from stores (Tier 1B)
+	const sessions = useSessionStore((s) => s.sessions);
+	const activeSessionId = useSessionStore((s) => s.activeSessionId);
+	const groups = useSessionStore((s) => s.groups);
+	const setSessions = useSessionStore((s) => s.setSessions);
+	const setGroups = useSessionStore((s) => s.setGroups);
+	const activeSession = useMemo(
+		() => sessions.find((s) => s.id === activeSessionId) ?? null,
+		[sessions, activeSessionId]
+	);
+	const groupChats = useGroupChatStore((s) => s.groupChats);
+	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
+
+	// Self-source modal boolean states from modalStore (Tier 1B)
+	const {
+		shortcutsHelpOpen,
+		aboutModalOpen,
+		updateCheckModalOpen,
+		processMonitorOpen,
+		usageDashboardOpen,
+		confirmModalOpen,
+		quitConfirmModalOpen,
+		newInstanceModalOpen,
+		editAgentModalOpen,
+		renameSessionModalOpen,
+		renameTabModalOpen,
+		renameGroupModalOpen,
+		worktreeConfigModalOpen,
+		createWorktreeModalOpen,
+		createPRModalOpen,
+		deleteWorktreeModalOpen,
+		quickActionOpen,
+		tabSwitcherOpen,
+		fuzzyFileSearchOpen,
+		promptComposerOpen,
+		queueBrowserOpen,
+		autoRunSetupModalOpen,
+		batchRunnerModalOpen,
+		gitLogOpen,
+		showNewGroupChatModal,
+		showGroupChatInfo,
+		leaderboardRegistrationOpen,
+		mergeSessionModalOpen,
+		sendToAgentModalOpen,
+	} = useModalStore(
+		useShallow((s) => ({
+			shortcutsHelpOpen: s.modals.get('shortcutsHelp')?.open ?? false,
+			aboutModalOpen: s.modals.get('about')?.open ?? false,
+			updateCheckModalOpen: s.modals.get('updateCheck')?.open ?? false,
+			processMonitorOpen: s.modals.get('processMonitor')?.open ?? false,
+			usageDashboardOpen: s.modals.get('usageDashboard')?.open ?? false,
+			confirmModalOpen: s.modals.get('confirm')?.open ?? false,
+			quitConfirmModalOpen: s.modals.get('quitConfirm')?.open ?? false,
+			newInstanceModalOpen: s.modals.get('newInstance')?.open ?? false,
+			editAgentModalOpen: s.modals.get('editAgent')?.open ?? false,
+			renameSessionModalOpen: s.modals.get('renameInstance')?.open ?? false,
+			renameTabModalOpen: s.modals.get('renameTab')?.open ?? false,
+			renameGroupModalOpen: s.modals.get('renameGroup')?.open ?? false,
+			worktreeConfigModalOpen: s.modals.get('worktreeConfig')?.open ?? false,
+			createWorktreeModalOpen: s.modals.get('createWorktree')?.open ?? false,
+			createPRModalOpen: s.modals.get('createPR')?.open ?? false,
+			deleteWorktreeModalOpen: s.modals.get('deleteWorktree')?.open ?? false,
+			quickActionOpen: s.modals.get('quickAction')?.open ?? false,
+			tabSwitcherOpen: s.modals.get('tabSwitcher')?.open ?? false,
+			fuzzyFileSearchOpen: s.modals.get('fuzzyFileSearch')?.open ?? false,
+			promptComposerOpen: s.modals.get('promptComposer')?.open ?? false,
+			queueBrowserOpen: s.modals.get('queueBrowser')?.open ?? false,
+			autoRunSetupModalOpen: s.modals.get('autoRunSetup')?.open ?? false,
+			batchRunnerModalOpen: s.modals.get('batchRunner')?.open ?? false,
+			gitLogOpen: s.modals.get('gitLog')?.open ?? false,
+			showNewGroupChatModal: s.modals.get('newGroupChat')?.open ?? false,
+			showGroupChatInfo: s.modals.get('groupChatInfo')?.open ?? false,
+			leaderboardRegistrationOpen: s.modals.get('leaderboard')?.open ?? false,
+			mergeSessionModalOpen: s.modals.get('mergeSession')?.open ?? false,
+			sendToAgentModalOpen: s.modals.get('sendToAgent')?.open ?? false,
+		}))
+	);
+
 	const {
 		// Common props
 		theme,
-		sessions,
-		setSessions,
-		activeSessionId,
-		activeSession,
-		groups,
-		setGroups,
-		groupChats,
 		shortcuts,
 		tabShortcuts,
 		// Info modals
-		shortcutsHelpOpen,
 		onCloseShortcutsHelp,
 		hasNoAgents,
 		keyboardMasteryStats,
-		aboutModalOpen,
 		onCloseAboutModal,
 		autoRunStats,
 		usageStats,
@@ -2143,44 +2199,35 @@ export function AppModals(props: AppModalsProps) {
 		onOpenLeaderboardRegistration,
 		isLeaderboardRegistered,
 		// leaderboardRegistration is destructured below in Agent modals section
-		updateCheckModalOpen,
 		onCloseUpdateCheckModal,
-		processMonitorOpen,
 		onCloseProcessMonitor,
 		onNavigateToSession,
 		onNavigateToGroupChat,
-		usageDashboardOpen,
 		onCloseUsageDashboard,
 		defaultStatsTimeRange,
 		colorBlindMode,
 		// Confirm modals
-		confirmModalOpen,
 		confirmModalMessage,
 		confirmModalOnConfirm,
 		confirmModalTitle,
 		confirmModalDestructive,
 		onCloseConfirmModal,
-		quitConfirmModalOpen,
 		onConfirmQuit,
 		onCancelQuit,
 		activeBatchSessionIds,
 		// Session modals
-		newInstanceModalOpen,
 		onCloseNewInstanceModal,
 		onCreateSession,
 		existingSessions,
 		duplicatingSessionId,
-		editAgentModalOpen,
 		onCloseEditAgentModal,
 		onSaveEditAgent,
 		editAgentSession,
-		renameSessionModalOpen,
 		renameSessionValue,
 		setRenameSessionValue,
 		onCloseRenameSessionModal,
 		renameSessionTargetId,
 		onAfterRename,
-		renameTabModalOpen,
 		renameTabId,
 		renameTabInitialName,
 		onCloseRenameTabModal,
@@ -2189,7 +2236,6 @@ export function AppModals(props: AppModalsProps) {
 		createGroupModalOpen,
 		onCloseCreateGroupModal,
 		onGroupCreated,
-		renameGroupModalOpen,
 		renameGroupId,
 		renameGroupValue,
 		setRenameGroupValue,
@@ -2197,26 +2243,21 @@ export function AppModals(props: AppModalsProps) {
 		setRenameGroupEmoji,
 		onCloseRenameGroupModal,
 		// Worktree modals
-		worktreeConfigModalOpen,
 		onCloseWorktreeConfigModal,
 		onSaveWorktreeConfig,
 		onCreateWorktreeFromConfig,
 		onDisableWorktreeConfig,
-		createWorktreeModalOpen,
 		createWorktreeSession,
 		onCloseCreateWorktreeModal,
 		onCreateWorktree,
-		createPRModalOpen,
 		createPRSession,
 		onCloseCreatePRModal,
 		onPRCreated,
-		deleteWorktreeModalOpen,
 		deleteWorktreeSession,
 		onCloseDeleteWorktreeModal,
 		onConfirmDeleteWorktree,
 		onConfirmAndDeleteWorktreeOnDisk,
 		// Utility modals
-		quickActionOpen,
 		quickActionInitialMode,
 		setQuickActionOpen,
 		setActiveSessionId,
@@ -2271,7 +2312,6 @@ export function AppModals(props: AppModalsProps) {
 		onOpenGroupChat,
 		onCloseGroupChat,
 		onDeleteGroupChat,
-		activeGroupChatId,
 		hasActiveSessionCapability,
 		onOpenMergeSession,
 		onOpenSendToAgent,
@@ -2298,12 +2338,9 @@ export function AppModals(props: AppModalsProps) {
 		gitDiffPreview,
 		gitViewerCwd,
 		onCloseGitDiff,
-		gitLogOpen,
 		onCloseGitLog,
-		autoRunSetupModalOpen,
 		onCloseAutoRunSetup,
 		onAutoRunFolderSelected,
-		batchRunnerModalOpen,
 		onCloseBatchRunner,
 		onStartBatchRun,
 		onSaveBatchPrompt,
@@ -2320,16 +2357,14 @@ export function AppModals(props: AppModalsProps) {
 		// Auto-scroll
 		autoScrollAiMode,
 		setAutoScrollAiMode,
-		tabSwitcherOpen,
 		onCloseTabSwitcher,
 		onTabSelect,
+		onFileTabSelect,
 		onNamedSessionSelect,
-		fuzzyFileSearchOpen,
 		filteredFileTree,
 		fileExplorerExpanded,
 		onCloseFileSearch,
 		onFileSearchSelect,
-		promptComposerOpen,
 		onClosePromptComposer,
 		promptComposerInitialValue,
 		onPromptComposerSubmit,
@@ -2348,13 +2383,11 @@ export function AppModals(props: AppModalsProps) {
 		promptSupportsThinking,
 		promptEnterToSend,
 		onPromptToggleEnterToSend,
-		queueBrowserOpen,
 		onCloseQueueBrowser,
 		onRemoveQueueItem,
 		onSwitchQueueSession,
 		onReorderQueueItems,
 		// Group Chat modals
-		showNewGroupChatModal,
 		onCloseNewGroupChatModal,
 		onCreateGroupChat,
 		showDeleteGroupChatModal,
@@ -2366,12 +2399,10 @@ export function AppModals(props: AppModalsProps) {
 		showEditGroupChatModal,
 		onCloseEditGroupChatModal,
 		onUpdateGroupChat,
-		showGroupChatInfo,
 		groupChatMessages,
 		onCloseGroupChatInfo,
 		onOpenModeratorSession,
 		// Agent modals
-		leaderboardRegistrationOpen,
 		onCloseLeaderboardRegistration,
 		leaderboardRegistration,
 		onSaveLeaderboardRegistration,
@@ -2383,7 +2414,6 @@ export function AppModals(props: AppModalsProps) {
 		groupChatError,
 		groupChatRecoveryActions,
 		onClearGroupChatError,
-		mergeSessionModalOpen,
 		onCloseMergeSession,
 		onMerge,
 		transferState,
@@ -2392,10 +2422,14 @@ export function AppModals(props: AppModalsProps) {
 		transferTargetAgent,
 		onCancelTransfer,
 		onCompleteTransfer,
-		sendToAgentModalOpen,
 		onCloseSendToAgent,
 		onSendToAgent,
 	} = props;
+
+	const sourceSession = useMemo(
+		() => (duplicatingSessionId ? sessions.find((s) => s.id === duplicatingSessionId) : undefined),
+		[duplicatingSessionId, sessions]
+	);
 
 	return (
 		<>
@@ -2457,9 +2491,7 @@ export function AppModals(props: AppModalsProps) {
 				onCloseNewInstanceModal={onCloseNewInstanceModal}
 				onCreateSession={onCreateSession}
 				existingSessions={existingSessions}
-				sourceSession={
-					duplicatingSessionId ? sessions.find((s) => s.id === duplicatingSessionId) : undefined
-				}
+				sourceSession={sourceSession}
 				editAgentModalOpen={editAgentModalOpen}
 				onCloseEditAgentModal={onCloseEditAgentModal}
 				onSaveEditAgent={onSaveEditAgent}
@@ -2632,6 +2664,7 @@ export function AppModals(props: AppModalsProps) {
 				tabSwitcherOpen={tabSwitcherOpen}
 				onCloseTabSwitcher={onCloseTabSwitcher}
 				onTabSelect={onTabSelect}
+				onFileTabSelect={onFileTabSelect}
 				onNamedSessionSelect={onNamedSessionSelect}
 				colorBlindMode={colorBlindMode}
 				fuzzyFileSearchOpen={fuzzyFileSearchOpen}
@@ -2723,4 +2756,4 @@ export function AppModals(props: AppModalsProps) {
 			/>
 		</>
 	);
-}
+});

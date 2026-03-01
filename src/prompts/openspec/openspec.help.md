@@ -14,13 +14,13 @@ Unlike spec-kit (which focuses on creating feature specifications), OpenSpec spe
 
 ## Key Differences from Spec-Kit
 
-| Aspect | Spec-Kit | OpenSpec |
-|--------|----------|----------|
-| Focus | Feature specification | Change management |
-| Output | Feature specs, plans, tasks | Proposals, spec deltas |
-| Workflow | Constitution → Specify → Plan | Proposal → Apply → Archive |
-| Artifact | `specs/[feature]/` | `openspec/changes/[id]/` |
-| When to use | New features | Modifying existing features |
+| Aspect      | Spec-Kit                      | OpenSpec                    |
+| ----------- | ----------------------------- | --------------------------- |
+| Focus       | Feature specification         | Change management           |
+| Output      | Feature specs, plans, tasks   | Proposals, spec deltas      |
+| Workflow    | Constitution → Specify → Plan | Proposal → Apply → Archive  |
+| Artifact    | `specs/[feature]/`            | `openspec/changes/[id]/`    |
+| When to use | New features                  | Modifying existing features |
 
 **Use spec-kit for**: New features, greenfield development, establishing project foundations
 
@@ -51,27 +51,35 @@ openspec/
 ## Core Commands
 
 ### `/openspec.proposal` - Create Change Proposal
+
 Start here when modifying existing functionality. This command helps you:
+
 - Review existing specs and active changes
 - Choose a unique change-id (kebab-case, verb-led like `add-`, `update-`, `remove-`)
 - Scaffold `proposal.md`, `tasks.md`, and spec deltas
 - Validate your proposal before sharing
 
 ### `/openspec.apply` - Implement Changes
+
 Use after your proposal is approved. This command guides you through:
+
 - Reading the proposal and design documents
 - Following the tasks checklist sequentially
 - Marking tasks complete as you work
 - Ensuring all items are finished before deployment
 
 ### `/openspec.archive` - Archive Completed Changes
+
 Use after deployment to finalize the change:
+
 - Move change directory to archive with date prefix
 - Update main specs if capabilities changed
 - Validate the archived change passes all checks
 
 ### `/openspec.implement` - Execute with Maestro Auto Run
+
 **Maestro-specific command.** Converts your OpenSpec tasks into Auto Run documents:
+
 - Read proposal and tasks from a specified change
 - Convert to Auto Run document format with checkboxes
 - Support worktree mode for parallel execution
@@ -83,15 +91,19 @@ When modifying existing specs, OpenSpec uses operation headers:
 
 ```markdown
 ## ADDED Requirements
+
 New standalone capabilities
 
 ## MODIFIED Requirements
+
 Changed behavior of existing requirements
 
 ## REMOVED Requirements
+
 Deprecated features (include Reason and Migration)
 
 ## RENAMED Requirements
+
 Name-only changes (no behavior change)
 ```
 
@@ -99,6 +111,7 @@ Each requirement needs at least one scenario:
 
 ```markdown
 #### Scenario: User login success
+
 - **WHEN** valid credentials provided
 - **THEN** return JWT token
 ```
@@ -144,4 +157,4 @@ OpenSpec works seamlessly with Maestro's Auto Run feature:
 
 ---
 
-*This help command is a Maestro-specific addition to the OpenSpec workflow.*
+_This help command is a Maestro-specific addition to the OpenSpec workflow._

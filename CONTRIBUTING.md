@@ -30,7 +30,7 @@ See [Performance Guidelines](#performance-guidelines) for specific practices.
 - [Performance Guidelines](#performance-guidelines)
 - [Debugging Guide](#debugging-guide)
 - [Commit Messages](#commit-messages)
-- [Pull Request Process](#pull-request-process) (includes [CodeRabbit automated review](#automated-code-review-coderabbit))
+- [Pull Request Process](#pull-request-process) (includes [automated code review](#automated-code-review))
 - [Building for Release](#building-for-release)
 - [Documentation](#documentation)
 
@@ -120,13 +120,14 @@ npm run package:linux  # Package for Linux
 
 By default, `npm run dev` uses an isolated data directory (`~/Library/Application Support/maestro-dev/`) separate from production. This allows you to run both dev and production instances simultaneously—useful when using the production Maestro to work on the dev instance.
 
-| Command | Data Directory | Can Run Alongside Production? |
-|---------|---------------|-------------------------------|
-| `npm run dev` | `maestro-dev/` | ✅ Yes |
+| Command                 | Data Directory          | Can Run Alongside Production?  |
+| ----------------------- | ----------------------- | ------------------------------ |
+| `npm run dev`           | `maestro-dev/`          | ✅ Yes                         |
 | `npm run dev:prod-data` | `maestro/` (production) | ❌ No - close production first |
-| `npm run dev:demo` | `/tmp/maestro-demo/` | ✅ Yes |
+| `npm run dev:demo`      | `/tmp/maestro-demo/`    | ✅ Yes                         |
 
 **When to use each:**
+
 - **`npm run dev`** — Default for most development. Start fresh or use dev-specific test data.
 - **`npm run dev:prod-data`** — Test with your real sessions and settings. Must close production app first to avoid database lock conflicts.
 - **`npm run dev:demo`** — Screenshots, demos, or testing with completely fresh state.
@@ -190,6 +191,7 @@ Watch mode keeps Jest running and automatically re-runs tests when you save chan
 - Provides instant feedback during development
 
 **Interactive options in watch mode:**
+
 - `a` - Run all tests
 - `f` - Run only failing tests
 - `p` - Filter by filename pattern
@@ -216,6 +218,7 @@ src/__tests__/
 This project uses [Husky](https://typicode.github.io/husky/) and [lint-staged](https://github.com/lint-staged/lint-staged) to automatically format and lint staged files before each commit.
 
 **How it works:**
+
 1. When you run `git commit`, Husky triggers the pre-commit hook
 2. lint-staged runs Prettier and ESLint only on your staged files
 3. If there are unfixable errors, the commit is blocked
@@ -224,16 +227,19 @@ This project uses [Husky](https://typicode.github.io/husky/) and [lint-staged](h
 **Setup is automatic** — hooks are installed when you run `npm install` (via the `prepare` script).
 
 **Bypassing hooks (emergency only):**
+
 ```bash
 git commit --no-verify -m "emergency fix"
 ```
 
 **Running lint-staged manually:**
+
 ```bash
 npx lint-staged
 ```
 
 **Troubleshooting:**
+
 - **Hooks not running** — Check if `.husky/pre-commit` has executable permissions: `chmod +x .husky/pre-commit`
 - **Wrong tool version** — Ensure `npx` is using local `node_modules`: delete `node_modules` and run `npm install`
 - **Hook fails in CI/Docker** — The `prepare` script uses `husky || true` to gracefully skip in environments without `.git`
@@ -251,6 +257,7 @@ npm run lint:eslint -- --fix  # Auto-fix ESLint issues where possible
 ### TypeScript Linting
 
 The TypeScript linter checks all three build configurations:
+
 - `tsconfig.lint.json` - Renderer, web, and shared code
 - `tsconfig.main.json` - Main process code
 - `tsconfig.cli.json` - CLI tooling
@@ -258,17 +265,20 @@ The TypeScript linter checks all three build configurations:
 ### ESLint
 
 ESLint is configured with TypeScript and React plugins (`eslint.config.mjs`):
+
 - `react-hooks/rules-of-hooks` - Enforces React hooks rules
 - `react-hooks/exhaustive-deps` - Enforces correct hook dependencies
 - `@typescript-eslint/no-unused-vars` - Warns about unused variables
 - `prefer-const` - Suggests const for never-reassigned variables
 
 **When to run manual linting:**
+
 - Pre-commit hooks handle staged files automatically
 - Run full lint after significant refactors: `npm run lint && npm run lint:eslint`
 - When CI fails with type errors
 
 **Common lint issues:**
+
 - Unused imports or variables
 - Type mismatches in function calls
 - Missing required properties on interfaces
@@ -302,6 +312,7 @@ ESLint is configured with TypeScript and React plugins (`eslint.config.mjs`):
 ### Adding Keyboard Shortcuts
 
 1. Add definition in `src/renderer/constants/shortcuts.ts`:
+
    ```typescript
    myShortcut: { id: 'myShortcut', label: 'My Action', keys: ['Meta', 'k'] },
    ```
@@ -320,19 +331,22 @@ ESLint is configured with TypeScript and React plugins (`eslint.config.mjs`):
 ### Adding a New Setting
 
 1. Add state in `useSettings.ts`:
+
    ```typescript
    const [mySetting, setMySettingState] = useState(defaultValue);
    ```
 
 2. Create wrapper function:
+
    ```typescript
    const setMySetting = (value) => {
-     setMySettingState(value);
-     window.maestro.settings.set('mySetting', value);
+   	setMySettingState(value);
+   	window.maestro.settings.set('mySetting', value);
    };
    ```
 
 3. Load in useEffect:
+
    ```typescript
    const saved = await window.maestro.settings.get('mySetting');
    if (saved !== undefined) setMySettingState(saved);
@@ -407,14 +421,16 @@ Then add the ID to `ThemeId` type in `src/shared/theme-types.ts` and to the `isV
 ### Adding an IPC Handler
 
 1. Add handler in `src/main/index.ts`:
+
    ```typescript
    ipcMain.handle('myNamespace:myAction', async (_, arg1, arg2) => {
-     // Implementation
-     return result;
+   	// Implementation
+   	return result;
    });
    ```
 
 2. Expose in `src/main/preload.ts`:
+
    ```typescript
    myNamespace: {
      myAction: (arg1, arg2) => ipcRenderer.invoke('myNamespace:myAction', arg1, arg2),
@@ -445,8 +461,8 @@ Encore Features are managed through a single settings object:
 ```typescript
 // src/renderer/types/index.ts
 export interface EncoreFeatureFlags {
-  directorNotes: boolean;
-  // Add new features here
+	directorNotes: boolean;
+	// Add new features here
 }
 ```
 
@@ -455,18 +471,20 @@ The flags live in `useSettings.ts` and persist via `window.maestro.settings`. Th
 ### Adding a New Encore Feature
 
 1. **Add the flag** to `EncoreFeatureFlags` in `src/renderer/types/index.ts`:
+
    ```typescript
    export interface EncoreFeatureFlags {
-     directorNotes: boolean;
-     myFeature: boolean;  // Add here
+   	directorNotes: boolean;
+   	myFeature: boolean; // Add here
    }
    ```
 
 2. **Set the default** in `useSettings.ts` — always default to `false`:
+
    ```typescript
    const DEFAULT_ENCORE_FEATURES: EncoreFeatureFlags = {
-     directorNotes: false,
-     myFeature: false,
+   	directorNotes: false,
+   	myFeature: false,
    };
    ```
 
@@ -482,8 +500,8 @@ The flags live in `useSettings.ts` and persist via `window.maestro.settings`. Th
 
 ### Existing Encore Features
 
-| Feature | Flag | Description |
-|---------|------|-------------|
+| Feature          | Flag            | Description                                   |
+| ---------------- | --------------- | --------------------------------------------- |
 | Director's Notes | `directorNotes` | AI-generated synopsis of work across sessions |
 
 ## Adding a New AI Agent
@@ -494,18 +512,18 @@ Maestro supports multiple AI coding agents. Each agent has different capabilitie
 
 Before implementing, investigate the agent's CLI to determine which capabilities it supports:
 
-| Capability | Question to Answer | Example |
-|------------|-------------------|---------|
-| **Session Resume** | Can the provider resume a previous conversation? | `--resume <id>`, `--session <id>` |
-| **Read-Only Mode** | Is there a plan/analysis-only mode? | `--permission-mode plan`, `--agent plan` |
-| **JSON Output** | Does it emit structured JSON? | `--output-format json`, `--format json` |
-| **Session ID** | Does output include a session identifier? | `session_id`, `sessionID` in JSON |
-| **Image Input** | Can you send images to the agent? | `--input-format stream-json`, `-f image.png` |
-| **Slash Commands** | Are there discoverable commands? | Emitted in init message |
-| **Session Storage** | Does the provider persist sessions to disk? | `~/.agent/sessions/` |
-| **Cost Tracking** | Is it API-based with costs? | Cloud API vs local model |
-| **Usage Stats** | Does it report token counts? | `tokens`, `usage` in output |
-| **Batch Mode** | Does it run per-message or persistently? | `--print` vs interactive |
+| Capability          | Question to Answer                               | Example                                      |
+| ------------------- | ------------------------------------------------ | -------------------------------------------- |
+| **Session Resume**  | Can the provider resume a previous conversation? | `--resume <id>`, `--session <id>`            |
+| **Read-Only Mode**  | Is there a plan/analysis-only mode?              | `--permission-mode plan`, `--agent plan`     |
+| **JSON Output**     | Does it emit structured JSON?                    | `--output-format json`, `--format json`      |
+| **Session ID**      | Does output include a session identifier?        | `session_id`, `sessionID` in JSON            |
+| **Image Input**     | Can you send images to the agent?                | `--input-format stream-json`, `-f image.png` |
+| **Slash Commands**  | Are there discoverable commands?                 | Emitted in init message                      |
+| **Session Storage** | Does the provider persist sessions to disk?      | `~/.agent/sessions/`                         |
+| **Cost Tracking**   | Is it API-based with costs?                      | Cloud API vs local model                     |
+| **Usage Stats**     | Does it report token counts?                     | `tokens`, `usage` in output                  |
+| **Batch Mode**      | Does it run per-message or persistently?         | `--print` vs interactive                     |
 
 ### Implementation Steps
 
@@ -549,15 +567,15 @@ In `src/main/agent-output-parser.ts`, add a parser for the agent's JSON format:
 
 ```typescript
 class MyAgentOutputParser implements AgentOutputParser {
-  parseJsonLine(line: string): ParsedEvent {
-    const msg = JSON.parse(line);
-    return {
-      type: msg.type,
-      sessionId: msg.session_id,  // Agent-specific field name
-      text: msg.content,          // Agent-specific field name
-      tokens: msg.usage,          // Agent-specific field name
-    };
-  }
+	parseJsonLine(line: string): ParsedEvent {
+		const msg = JSON.parse(line);
+		return {
+			type: msg.type,
+			sessionId: msg.session_id, // Agent-specific field name
+			text: msg.content, // Agent-specific field name
+			tokens: msg.usage, // Agent-specific field name
+		};
+	}
 }
 ```
 
@@ -579,13 +597,13 @@ If the agent persists sessions to disk:
 
 ```typescript
 class MyAgentSessionStorage implements AgentSessionStorage {
-  async listSessions(projectPath: string): Promise<AgentSession[]> {
-    // Read from agent's session directory
-  }
+	async listSessions(projectPath: string): Promise<AgentSession[]> {
+		// Read from agent's session directory
+	}
 
-  async readSession(projectPath: string, sessionId: string): Promise<Message[]> {
-    // Parse session file format
-  }
+	async readSession(projectPath: string, sessionId: string): Promise<Message[]> {
+		// Parse session file format
+	}
 }
 ```
 
@@ -613,26 +631,26 @@ npm run dev
 
 Based on capabilities, these UI features are automatically enabled/disabled:
 
-| Feature | Required Capability | Component |
-|---------|-------------------|-----------|
-| Read-only toggle | `supportsReadOnlyMode` | InputArea |
-| Image attachment | `supportsImageInput` | InputArea |
-| Session browser | `supportsSessionStorage` | RightPanel |
-| Resume button | `supportsResume` | AgentSessionsBrowser |
-| Cost widget | `supportsCostTracking` | MainPanel |
-| Token display | `supportsUsageStats` | MainPanel, TabBar |
-| Session ID pill | `supportsSessionId` | MainPanel |
-| Slash autocomplete | `supportsSlashCommands` | InputArea |
+| Feature            | Required Capability      | Component            |
+| ------------------ | ------------------------ | -------------------- |
+| Read-only toggle   | `supportsReadOnlyMode`   | InputArea            |
+| Image attachment   | `supportsImageInput`     | InputArea            |
+| Session browser    | `supportsSessionStorage` | RightPanel           |
+| Resume button      | `supportsResume`         | AgentSessionsBrowser |
+| Cost widget        | `supportsCostTracking`   | MainPanel            |
+| Token display      | `supportsUsageStats`     | MainPanel, TabBar    |
+| Session ID pill    | `supportsSessionId`      | MainPanel            |
+| Slash autocomplete | `supportsSlashCommands`  | InputArea            |
 
 ### Supported Agents Reference
 
-| Agent | Resume | Read-Only | JSON | Images | Sessions | Cost | Status |
-|-------|--------|-----------|------|--------|----------|------|--------|
-| Claude Code | ✅ `--resume` | ✅ `--permission-mode plan` | ✅ | ✅ | ✅ `~/.claude/` | ✅ | ✅ Complete |
-| Codex | ✅ `exec resume` | ✅ `--sandbox read-only` | ✅ | ✅ | ✅ `~/.codex/` | ❌ (tokens only) | ✅ Complete |
-| OpenCode | ✅ `--session` | ✅ `--agent plan` | ✅ | ✅ | ✅ `~/.local/share/opencode/` | ✅ | ✅ Complete |
-| Factory Droid | ✅ `-s, --session-id` | ✅ (default mode) | ✅ | ✅ | ✅ `~/.factory/` | ❌ (tokens only) | ✅ Complete |
-| Gemini CLI | TBD | TBD | TBD | TBD | TBD | ✅ | 📋 Planned |
+| Agent         | Resume                | Read-Only                   | JSON | Images | Sessions                      | Cost             | Status      |
+| ------------- | --------------------- | --------------------------- | ---- | ------ | ----------------------------- | ---------------- | ----------- |
+| Claude Code   | ✅ `--resume`         | ✅ `--permission-mode plan` | ✅   | ✅     | ✅ `~/.claude/`               | ✅               | ✅ Complete |
+| Codex         | ✅ `exec resume`      | ✅ `--sandbox read-only`    | ✅   | ✅     | ✅ `~/.codex/`                | ❌ (tokens only) | ✅ Complete |
+| OpenCode      | ✅ `--session`        | ✅ `--agent plan`           | ✅   | ✅     | ✅ `~/.local/share/opencode/` | ✅               | ✅ Complete |
+| Factory Droid | ✅ `-s, --session-id` | ✅ (default mode)           | ✅   | ✅     | ✅ `~/.factory/`              | ❌ (tokens only) | ✅ Complete |
+| Gemini CLI    | TBD                   | TBD                         | TBD  | TBD    | TBD                           | ✅               | 📋 Planned  |
 
 For detailed implementation guide, see [AGENT_SUPPORT.md](AGENT_SUPPORT.md).
 
@@ -673,16 +691,16 @@ Maestro prioritizes a snappy interface and minimal battery consumption. Follow t
 
 ```typescript
 // Bad: O(n) lookup in every iteration
-agents.filter(a => {
-  const group = groups.find(g => g.id === a.groupId); // O(n) per agent
-  return group && !group.collapsed;
+agents.filter((a) => {
+	const group = groups.find((g) => g.id === a.groupId); // O(n) per agent
+	return group && !group.collapsed;
 });
 
 // Good: O(1) lookup with memoized Map
-const groupsById = useMemo(() => new Map(groups.map(g => [g.id, g])), [groups]);
-agents.filter(a => {
-  const group = groupsById.get(a.groupId); // O(1)
-  return group && !group.collapsed;
+const groupsById = useMemo(() => new Map(groups.map((g) => [g.id, g])), [groups]);
+agents.filter((a) => {
+	const group = groupsById.get(a.groupId); // O(1)
+	return group && !group.collapsed;
 });
 ```
 
@@ -726,10 +744,12 @@ npx react-devtools
 Then run `npm run dev` — the app auto-connects (connection script in `src/renderer/index.html`).
 
 **Tabs:**
+
 - **Components** — Inspect React component tree, props, state, hooks
 - **Profiler** — Record and analyze render performance, identify unnecessary re-renders
 
 **Profiler workflow:**
+
 1. Click the record button (blue circle)
 2. Interact with the app (navigate, type, scroll)
 3. Stop recording
@@ -739,6 +759,7 @@ Then run `npm run dev` — the app auto-connects (connection script in `src/rend
    - Why a component rendered (props/state/hooks changed)
 
 **Chrome DevTools Performance tab** (`Cmd+Option+I` → Performance):
+
 1. Record during the slow operation
 2. Look for long tasks (>50ms) blocking the main thread
 3. Identify expensive JavaScript execution or layout thrashing
@@ -802,41 +823,52 @@ Example: `feat: add context usage visualization`
 
 ## Pull Request Process
 
-### Automated Code Review (CodeRabbit)
+### Automated Code Review
 
-All PRs are automatically reviewed by [CodeRabbit](https://coderabbit.ai), an AI-powered code review tool. When you open or update a PR, CodeRabbit will:
+PRs are automatically reviewed by two AI-powered tools:
+
+**[CodeRabbit](https://coderabbit.ai)** — Line-level code review. When you open or update a PR, CodeRabbit will:
 
 - Post a **PR summary** with a walkthrough of changes
 - Leave **inline review comments** on potential issues
 - Provide a **sequence diagram** for complex changes
 
-**Interacting with CodeRabbit:**
+| Command                       | Effect                                          |
+| ----------------------------- | ----------------------------------------------- |
+| `@coderabbitai review`        | Trigger a full review (useful for existing PRs) |
+| `@coderabbitai summary`       | Regenerate the PR summary                       |
+| `@coderabbitai resolve`       | Resolve all CodeRabbit review comments          |
+| `@coderabbitai configuration` | Show current repo settings                      |
 
-| Command | Effect |
-|---------|--------|
-| `@coderabbitai review` | Trigger a full review (useful for existing PRs) |
-| `@coderabbitai summary` | Regenerate the PR summary |
-| `@coderabbitai resolve` | Resolve all CodeRabbit review comments |
-| `@coderabbitai configuration` | Show current repo settings |
+You can reply to any CodeRabbit comment to ask follow-up questions — it responds conversationally.
 
-You can also reply to any CodeRabbit comment to ask follow-up questions or request clarification — it responds conversationally.
+**[Greptile](https://greptile.com)** — Codebase-aware review with deeper architectural context. Greptile indexes the full repo and reviews PRs with understanding of how changes relate to the broader codebase.
+
+| Command     | Effect                                                        |
+| ----------- | ------------------------------------------------------------- |
+| `@greptile` | Ask Greptile a question or request a review in any PR comment |
+
+Reply to Greptile comments the same way you would CodeRabbit.
 
 ### Before Opening a PR
 
 All PRs must pass these checks before review:
 
 1. **Linting passes** — Run both TypeScript and ESLint checks:
+
    ```bash
    npm run lint           # TypeScript type checking
    npm run lint:eslint    # ESLint code quality
    ```
 
 2. **Tests pass** — Run the full test suite:
+
    ```bash
    npm test
    ```
 
 3. **Manual testing** — Test affected features in the running app:
+
    ```bash
    npm run dev
    ```
@@ -884,6 +916,7 @@ npm run refresh-openspec
 ```
 
 These scripts fetch the latest prompts from their respective repositories:
+
 - **Spec-Kit**: [github/spec-kit](https://github.com/github/spec-kit) → `src/prompts/speckit/`
 - **OpenSpec**: [Fission-AI/OpenSpec](https://github.com/Fission-AI/OpenSpec) → `src/prompts/openspec/`
 
@@ -894,6 +927,7 @@ Review any changes with `git diff` before committing.
 ### 1. Prepare Icons
 
 Place icons in `build/` directory:
+
 - `icon.icns` - macOS (512x512 or 1024x1024)
 - `icon.ico` - Windows (256x256)
 - `icon.png` - Linux (512x512)
@@ -901,9 +935,10 @@ Place icons in `build/` directory:
 ### 2. Update Version
 
 Update in `package.json`:
+
 ```json
 {
-  "version": "0.1.0"
+	"version": "0.1.0"
 }
 ```
 
@@ -950,17 +985,18 @@ docs/
 
 Pages are organized by topic in `docs.json` under `navigation.dropdowns`:
 
-| Group | Pages | Purpose |
-|-------|-------|---------|
-| **Overview** | index, about/overview, features, screenshots | Introduction and feature highlights |
-| **Getting Started** | installation, getting-started | Onboarding new users |
-| **Usage** | general-usage, history, context-management, autorun-playbooks, git-worktrees, group-chat, remote-access, slash-commands, speckit-commands, configuration | Feature documentation |
-| **Providers & CLI** | provider-notes, cli | Provider configuration and command line docs |
-| **Reference** | achievements, keyboard-shortcuts, troubleshooting | Quick reference guides |
+| Group               | Pages                                                                                                                                                    | Purpose                                      |
+| ------------------- | -------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **Overview**        | index, about/overview, features, screenshots                                                                                                             | Introduction and feature highlights          |
+| **Getting Started** | installation, getting-started                                                                                                                            | Onboarding new users                         |
+| **Usage**           | general-usage, history, context-management, autorun-playbooks, git-worktrees, group-chat, remote-access, slash-commands, speckit-commands, configuration | Feature documentation                        |
+| **Providers & CLI** | provider-notes, cli                                                                                                                                      | Provider configuration and command line docs |
+| **Reference**       | achievements, keyboard-shortcuts, troubleshooting                                                                                                        | Quick reference guides                       |
 
 ### Adding a New Documentation Page
 
 1. **Create the markdown file** in `docs/`:
+
    ```markdown
    ---
    title: My Feature
@@ -972,13 +1008,11 @@ Pages are organized by topic in `docs.json` under `navigation.dropdowns`:
    ```
 
 2. **Add to navigation** in `docs/docs.json`:
+
    ```json
    {
-     "group": "Usage",
-     "pages": [
-       "existing-page",
-       "my-feature"
-     ]
+   	"group": "Usage",
+   	"pages": ["existing-page", "my-feature"]
    }
    ```
 
@@ -991,11 +1025,11 @@ Pages are organized by topic in `docs.json` under `navigation.dropdowns`:
 
 Every documentation page needs YAML frontmatter:
 
-| Field | Required | Description |
-|-------|----------|-------------|
-| `title` | Yes | Page title (appears in navigation and browser tab) |
-| `description` | Yes | Brief description for SEO and page previews |
-| `icon` | No | [Mintlify icon](https://mintlify.com/docs/content/components/icons) for navigation |
+| Field         | Required | Description                                                                        |
+| ------------- | -------- | ---------------------------------------------------------------------------------- |
+| `title`       | Yes      | Page title (appears in navigation and browser tab)                                 |
+| `description` | Yes      | Brief description for SEO and page previews                                        |
+| `icon`        | No       | [Mintlify icon](https://mintlify.com/docs/content/components/icons) for navigation |
 
 ### Screenshots
 
@@ -1004,11 +1038,13 @@ All screenshots are stored in `docs/screenshots/` and referenced with relative p
 **Adding a new screenshot:**
 
 1. **Capture the screenshot** using Maestro's demo mode for clean, consistent visuals:
+
    ```bash
    rm -rf /tmp/maestro-demo && npm run dev:demo
    ```
 
 2. **Save as PNG** in `docs/screenshots/` with a descriptive kebab-case name:
+
    ```
    docs/screenshots/my-feature-overview.png
    docs/screenshots/my-feature-settings.png
@@ -1020,6 +1056,7 @@ All screenshots are stored in `docs/screenshots/` and referenced with relative p
    ```
 
 **Screenshot guidelines:**
+
 - Use **PNG format** for UI screenshots (better quality for text)
 - Capture at **standard resolution** (avoid Retina 2x for smaller file sizes, or use 2x for crisp details)
 - Use a **consistent theme** (Pedurple is used in most existing screenshots)
@@ -1030,12 +1067,12 @@ All screenshots are stored in `docs/screenshots/` and referenced with relative p
 
 Static assets like logos and icons live in `docs/assets/`:
 
-| File | Usage |
-|------|-------|
-| `icon.png` | Main logo (used in light and dark mode) |
-| `icon.ico` | Favicon |
-| `made-with-maestro.svg` | Badge for README |
-| `maestro-app-icon.png` | High-res app icon |
+| File                    | Usage                                   |
+| ----------------------- | --------------------------------------- |
+| `icon.png`              | Main logo (used in light and dark mode) |
+| `icon.ico`              | Favicon                                 |
+| `made-with-maestro.svg` | Badge for README                        |
+| `maestro-app-icon.png`  | High-res app icon                       |
 
 Reference assets with `/assets/` paths in `docs.json` configuration.
 
@@ -1058,6 +1095,7 @@ This is a helpful tip.
 ```
 
 **Embed videos:**
+
 ```markdown
 <iframe width="560" height="315"
   src="https://www.youtube.com/embed/VIDEO_ID"
@@ -1088,17 +1126,18 @@ Maestro provides a hosted MCP (Model Context Protocol) server that allows AI app
 **Server URL:** `https://docs.runmaestro.ai/mcp`
 
 **Available Tools:**
+
 - `SearchMaestro` - Search the Maestro knowledge base for documentation, code examples, and guides
 
 To connect from Claude Desktop or Claude Code, add to your MCP configuration:
 
 ```json
 {
-  "mcpServers": {
-    "maestro": {
-      "url": "https://docs.runmaestro.ai/mcp"
-    }
-  }
+	"mcpServers": {
+		"maestro": {
+			"url": "https://docs.runmaestro.ai/mcp"
+		}
+	}
 }
 ```
 

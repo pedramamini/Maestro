@@ -9,6 +9,7 @@ import { Modal, ModalFooter } from './ui/Modal';
 import { AgentConfigPanel } from './shared/AgentConfigPanel';
 import { SshRemoteSelector } from './shared/SshRemoteSelector';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { safeClipboardWrite } from '../utils/clipboard';
 
 // Maximum character length for nudge message
 const NUDGE_MESSAGE_MAX_LENGTH = 1000;
@@ -56,6 +57,7 @@ interface EditAgentModalProps {
 	onSave: (
 		sessionId: string,
 		name: string,
+		toolType?: ToolType,
 		nudgeMessage?: string,
 		customPath?: string,
 		customArgs?: string,
@@ -133,6 +135,11 @@ export function NewInstanceModal({
 		return path;
 	};
 
+	const handleWorkingDirChange = React.useCallback((value: string) => {
+		setWorkingDir(value);
+		setDirectoryWarningAcknowledged(false);
+	}, []);
+
 	// Validate session uniqueness
 	const validation = useMemo(() => {
 		const name = instanceName.trim();
@@ -142,11 +149,6 @@ export function NewInstanceModal({
 		}
 		return validateNewSession(name, expandedDir, selectedAgent as ToolType, existingSessions);
 	}, [instanceName, workingDir, selectedAgent, existingSessions, homeDir]);
-
-	// Reset warning acknowledgment when directory changes
-	useEffect(() => {
-		setDirectoryWarningAcknowledged(false);
-	}, [workingDir]);
 
 	// Check if SSH remote is enabled for the selected agent or pending config
 	// When no agent is selected, check the _pending_ config (user may select SSH before choosing agent)
@@ -329,7 +331,7 @@ export function NewInstanceModal({
 
 			// Pre-fill form fields AFTER agents are loaded (ensures no race condition)
 			if (source) {
-				setWorkingDir(source.cwd);
+				handleWorkingDirChange(source.cwd);
 				setInstanceName(`${source.name} (Copy)`);
 				setNudgeMessage(source.nudgeMessage || '');
 
@@ -369,9 +371,9 @@ export function NewInstanceModal({
 	const handleSelectFolder = React.useCallback(async () => {
 		const folder = await window.maestro.dialog.selectFolder();
 		if (folder) {
-			setWorkingDir(folder);
+			handleWorkingDirChange(folder);
 		}
-	}, []);
+	}, [handleWorkingDirChange]);
 
 	const handleRefreshAgent = React.useCallback(async (agentId: string) => {
 		setRefreshingAgent(agentId);
@@ -470,7 +472,7 @@ export function NewInstanceModal({
 
 		// Reset
 		setInstanceName('');
-		setWorkingDir('');
+		handleWorkingDirChange('');
 		setNudgeMessage('');
 		// Reset per-agent config for selected agent
 		setCustomAgentPaths((prev) => ({ ...prev, [selectedAgent]: '' }));
@@ -494,6 +496,7 @@ export function NewInstanceModal({
 		onCreate,
 		onClose,
 		expandTilde,
+		handleWorkingDirChange,
 		existingSessions,
 	]);
 
@@ -652,7 +655,7 @@ export function NewInstanceModal({
 	if (!isOpen) return null;
 
 	return (
-		<div onKeyDown={handleKeyDown}>
+		<div onKeyDown={handleKeyDown} role="group" aria-label="Create new agent dialog">
 			<Modal
 				theme={theme}
 				title="Create New Agent"
@@ -686,12 +689,12 @@ export function NewInstanceModal({
 
 					{/* Agent Selection */}
 					<div>
-						<label
+						<div
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
 							Agent Provider
-						</label>
+						</div>
 						{loading ? (
 							<div className="text-sm opacity-50">Loading agents...</div>
 						) : sshConnectionError ? (
@@ -724,6 +727,32 @@ export function NewInstanceModal({
 									const isExpanded = expandedAgent === agent.id;
 									const isSelected = selectedAgent === agent.id;
 
+									const handleAgentHeaderActivate = () => {
+										if (isSupported) {
+											// Toggle expansion
+											const nowExpanded = !isExpanded;
+											setExpandedAgent(nowExpanded ? agent.id : null);
+											// Always select when clicking a supported agent (even if not available)
+											// User can configure a custom path to make it usable
+											setSelectedAgent(agent.id);
+											// Transfer pending SSH config to the newly selected agent if it doesn't have one
+											setAgentSshRemoteConfigs((prev) => {
+												const pendingConfig = prev['_pending_'];
+												if (pendingConfig && !prev[agent.id]) {
+													return {
+														...prev,
+														[agent.id]: pendingConfig,
+													};
+												}
+												return prev;
+											});
+											// Load models when expanding an agent that supports model selection
+											if (nowExpanded && agent.capabilities?.supportsModelSelection) {
+												loadModelsForAgent(agent.id);
+											}
+										}
+									};
+
 									return (
 										<div
 											key={agent.id}
@@ -740,29 +769,11 @@ export function NewInstanceModal({
 										>
 											{/* Collapsed header row */}
 											<div
-												onClick={() => {
-													if (isSupported) {
-														// Toggle expansion
-														const nowExpanded = !isExpanded;
-														setExpandedAgent(nowExpanded ? agent.id : null);
-														// Always select when clicking a supported agent (even if not available)
-														// User can configure a custom path to make it usable
-														setSelectedAgent(agent.id);
-														// Transfer pending SSH config to the newly selected agent if it doesn't have one
-														setAgentSshRemoteConfigs((prev) => {
-															const pendingConfig = prev['_pending_'];
-															if (pendingConfig && !prev[agent.id]) {
-																return {
-																	...prev,
-																	[agent.id]: pendingConfig,
-																};
-															}
-															return prev;
-														});
-														// Load models when expanding an agent that supports model selection
-														if (nowExpanded && agent.capabilities?.supportsModelSelection) {
-															loadModelsForAgent(agent.id);
-														}
+												onClick={handleAgentHeaderActivate}
+												onKeyDown={(e) => {
+													if (e.key === 'Enter' || e.key === ' ') {
+														e.preventDefault();
+														handleAgentHeaderActivate();
 													}
 												}}
 												className={`w-full text-left px-3 py-2 flex items-center justify-between ${
@@ -1013,8 +1024,8 @@ export function NewInstanceModal({
 										<span className="opacity-50">PATH:</span>
 									</div>
 									<div className="pl-2 break-all text-[10px]">
-										{debugInfo.envPath.split(':').map((p, i) => (
-											<div key={i}>{p}</div>
+										{debugInfo.envPath.split(':').map((p) => (
+											<div key={`${debugInfo.platform}-${p}`}>{p}</div>
 										))}
 									</div>
 								</div>
@@ -1034,7 +1045,7 @@ export function NewInstanceModal({
 						theme={theme}
 						label="Working Directory"
 						value={workingDir}
-						onChange={setWorkingDir}
+						onChange={handleWorkingDirChange}
 						placeholder={
 							isSshEnabled
 								? `Enter remote path${sshRemoteHost ? ` on ${sshRemoteHost}` : ''} (e.g., /home/user/project)`
@@ -1151,12 +1162,12 @@ export function NewInstanceModal({
 
 					{/* Nudge Message */}
 					<div>
-						<label
+						<div
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
 							Nudge Message <span className="font-normal opacity-50">(optional)</span>
-						</label>
+						</div>
 						<textarea
 							value={nudgeMessage}
 							onChange={(e) => setNudgeMessage(e.target.value.slice(0, NUDGE_MESSAGE_MAX_LENGTH))}
@@ -1211,6 +1222,10 @@ export function EditAgentModal({
 	const [_customModel, setCustomModel] = useState('');
 	const [refreshingAgent, setRefreshingAgent] = useState(false);
 	const [copiedId, setCopiedId] = useState(false);
+	// Provider change state
+	const [selectedToolType, setSelectedToolType] = useState<ToolType>(
+		session?.toolType ?? 'claude-code'
+	);
 	// SSH Remote configuration
 	const [sshRemotes, setSshRemotes] = useState<SshRemoteConfig[]>([]);
 	const [sshRemoteConfig, setSshRemoteConfig] = useState<AgentSshRemoteConfig | undefined>(
@@ -1229,40 +1244,51 @@ export function EditAgentModal({
 	// Copy session ID to clipboard
 	const handleCopySessionId = useCallback(async () => {
 		if (!session) return;
-		try {
-			await navigator.clipboard.writeText(session.id);
+		const ok = await safeClipboardWrite(session.id);
+		if (ok) {
 			setCopiedId(true);
 			setTimeout(() => setCopiedId(false), 2000);
-		} catch (err) {
-			console.error('Failed to copy session ID:', err);
 		}
 	}, [session]);
 
-	// Load agent info, config, custom settings, and models when modal opens
+	// Track whether provider has been changed from the original
+	const providerChanged = session ? selectedToolType !== session.toolType : false;
+
+	// Load agent info, config, custom settings, and models when modal opens or provider changes
 	useEffect(() => {
 		if (isOpen && session) {
+			const activeToolType = selectedToolType;
+			const isProviderSwitch = activeToolType !== session.toolType;
+
 			// Load agent definition to get configOptions
 			window.maestro.agents.detect().then((agents: AgentConfig[]) => {
-				const foundAgent = agents.find((a) => a.id === session.toolType);
+				const foundAgent = agents.find((a) => a.id === activeToolType);
 				setAgent(foundAgent || null);
 
 				// Load models if agent supports model selection
 				if (foundAgent?.capabilities?.supportsModelSelection) {
 					setLoadingModels(true);
 					window.maestro.agents
-						.getModels(session.toolType)
+						.getModels(activeToolType)
 						.then((models) => setAvailableModels(models))
 						.catch((err) => console.error('Failed to load models:', err))
 						.finally(() => setLoadingModels(false));
+				} else {
+					setAvailableModels([]);
 				}
 			});
 			// Load agent config for defaults, but use session-level overrides when available
 			// Both model and contextWindow are now per-session
-			window.maestro.agents.getConfig(session.toolType).then((globalConfig) => {
-				// Use session-level values if set, otherwise use global defaults
-				const modelValue = session.customModel ?? globalConfig.model ?? '';
-				const contextWindowValue = session.customContextWindow ?? globalConfig.contextWindow;
-				setAgentConfig({ ...globalConfig, model: modelValue, contextWindow: contextWindowValue });
+			window.maestro.agents.getConfig(activeToolType).then((globalConfig) => {
+				if (isProviderSwitch) {
+					// When provider changed, use global defaults for the new provider
+					setAgentConfig(globalConfig);
+				} else {
+					// Use session-level values if set, otherwise use global defaults
+					const modelValue = session.customModel ?? globalConfig.model ?? '';
+					const contextWindowValue = session.customContextWindow ?? globalConfig.contextWindow;
+					setAgentConfig({ ...globalConfig, model: modelValue, contextWindow: contextWindowValue });
+				}
 			});
 
 			// Load SSH remote config from session (per-session, not global)
@@ -1287,19 +1313,27 @@ export function EditAgentModal({
 				.catch((err) => console.error('Failed to load SSH remotes:', err));
 
 			// Load per-session config (stored on the session/agent instance)
-			// No provider-level fallback - each agent has its own config
-			setCustomPath(session.customPath ?? '');
-			setCustomArgs(session.customArgs ?? '');
-			setCustomEnvVars(session.customEnvVars ?? {});
-			setCustomModel(session.customModel ?? '');
+			// When provider changed, clear provider-specific overrides
+			if (isProviderSwitch) {
+				setCustomPath('');
+				setCustomArgs('');
+				setCustomEnvVars({});
+				setCustomModel('');
+			} else {
+				setCustomPath(session.customPath ?? '');
+				setCustomArgs(session.customArgs ?? '');
+				setCustomEnvVars(session.customEnvVars ?? {});
+				setCustomModel(session.customModel ?? '');
+			}
 		}
-	}, [isOpen, session]);
+	}, [isOpen, session, selectedToolType]);
 
 	// Populate form when session changes or modal opens
 	useEffect(() => {
 		if (isOpen && session) {
 			setInstanceName(session.name);
 			setNudgeMessage(session.nudgeMessage || '');
+			setSelectedToolType(session.toolType);
 		}
 	}, [isOpen, session]);
 
@@ -1417,6 +1451,7 @@ export function EditAgentModal({
 		onSave(
 			session.id,
 			name,
+			providerChanged ? selectedToolType : undefined,
 			nudgeMessage.trim() || undefined,
 			customPath.trim() || undefined,
 			customArgs.trim() || undefined,
@@ -1435,6 +1470,8 @@ export function EditAgentModal({
 		customEnvVars,
 		agentConfig,
 		sshRemoteConfig,
+		selectedToolType,
+		providerChanged,
 		onSave,
 		onClose,
 		existingSessions,
@@ -1442,32 +1479,31 @@ export function EditAgentModal({
 
 	// Refresh available models
 	const refreshModels = useCallback(async () => {
-		if (!session || !agent?.capabilities?.supportsModelSelection) return;
+		if (!agent?.capabilities?.supportsModelSelection) return;
 		setLoadingModels(true);
 		try {
-			const models = await window.maestro.agents.getModels(session.toolType, true);
+			const models = await window.maestro.agents.getModels(selectedToolType, true);
 			setAvailableModels(models);
 		} catch (err) {
 			console.error('Failed to refresh models:', err);
 		} finally {
 			setLoadingModels(false);
 		}
-	}, [session, agent]);
+	}, [selectedToolType, agent]);
 
 	// Refresh agent detection
 	const handleRefreshAgent = useCallback(async () => {
-		if (!session) return;
 		setRefreshingAgent(true);
 		try {
-			const result = await window.maestro.agents.refresh(session.toolType);
-			const foundAgent = result.agents.find((a: AgentConfig) => a.id === session.toolType);
+			const result = await window.maestro.agents.refresh(selectedToolType);
+			const foundAgent = result.agents.find((a: AgentConfig) => a.id === selectedToolType);
 			setAgent(foundAgent || null);
 		} catch (error) {
 			console.error('Failed to refresh agent:', error);
 		} finally {
 			setRefreshingAgent(false);
 		}
-	}, [session]);
+	}, [selectedToolType]);
 
 	// Check if form is valid for submission
 	const isFormValid = useMemo(() => {
@@ -1501,10 +1537,10 @@ export function EditAgentModal({
 		opencode: 'OpenCode',
 		'factory-droid': 'Factory Droid',
 	};
-	const agentName = agentNameMap[session.toolType] || session.toolType;
+	const agentName = agentNameMap[selectedToolType] || selectedToolType;
 
 	return (
-		<div onKeyDown={handleKeyDown}>
+		<div onKeyDown={handleKeyDown} role="group" aria-label="Edit agent dialog">
 			<Modal
 				theme={theme}
 				title={`Edit Agent: ${session.name}`}
@@ -1573,45 +1609,56 @@ export function EditAgentModal({
 						heightClass="p-2"
 					/>
 
-					{/* Agent Provider (read-only) */}
+					{/* Agent Provider */}
 					<div>
-						<label
+						<div
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
 							Agent Provider
-						</label>
-						<div
-							className="p-2 rounded border text-sm"
+						</div>
+						<select
+							value={selectedToolType}
+							onChange={(e) => setSelectedToolType(e.target.value as ToolType)}
+							className="w-full p-2 rounded border bg-transparent outline-none text-sm"
 							style={{
 								borderColor: theme.colors.border,
-								color: theme.colors.textDim,
-								backgroundColor: theme.colors.bgActivity,
+								color: theme.colors.textMain,
+								backgroundColor: theme.colors.bgMain,
 							}}
 						>
-							{agentName}
-						{agent?.detectedVersion && (
-							<span
-								className="ml-2 text-xs font-normal"
-								style={{ color: theme.colors.textDim, opacity: 0.7 }}
+							{SUPPORTED_AGENTS.map((agentId) => (
+								<option key={agentId} value={agentId}>
+									{agentNameMap[agentId] || agentId}
+								</option>
+							))}
+						</select>
+						{providerChanged && (
+							<div
+								className="mt-2 p-2 rounded border text-xs flex items-start gap-2"
+								style={{
+									borderColor: theme.colors.warning + '60',
+									backgroundColor: theme.colors.warning + '10',
+									color: theme.colors.warning,
+								}}
 							>
-								v{agent.detectedVersion}
-							</span>
+								<AlertTriangle className="w-3.5 h-3.5 mt-0.5 shrink-0" />
+								<span>
+									Changing the provider will clear your session list (tabs). Your history panel data
+									will persist.
+								</span>
+							</div>
 						)}
-						</div>
-						<p className="mt-1 text-xs" style={{ color: theme.colors.textDim }}>
-							Provider cannot be changed after creation.
-						</p>
 					</div>
 
 					{/* Working Directory (read-only) */}
 					<div>
-						<label
+						<div
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
 							Working Directory
-						</label>
+						</div>
 						<div
 							className="p-2 rounded border font-mono text-sm overflow-hidden text-ellipsis"
 							style={{
@@ -1661,12 +1708,12 @@ export function EditAgentModal({
 
 					{/* Nudge Message */}
 					<div>
-						<label
+						<div
 							className="block text-xs font-bold opacity-70 uppercase mb-2"
 							style={{ color: theme.colors.textMain }}
 						>
 							Nudge Message <span className="font-normal opacity-50">(optional)</span>
-						</label>
+						</div>
 						<textarea
 							value={nudgeMessage}
 							onChange={(e) => setNudgeMessage(e.target.value.slice(0, NUDGE_MESSAGE_MAX_LENGTH))}
@@ -1689,12 +1736,12 @@ export function EditAgentModal({
 					{/* Per-session config (path, args, env vars) saved on modal save, not on blur */}
 					{agent && (
 						<div>
-							<label
+							<div
 								className="block text-xs font-bold opacity-70 uppercase mb-2"
 								style={{ color: theme.colors.textMain }}
 							>
 								{agentName} Settings
-							</label>
+							</div>
 							<AgentConfigPanel
 								theme={theme}
 								agent={agent}
@@ -1750,7 +1797,7 @@ export function EditAgentModal({
 										...otherConfig
 									} = agentConfig;
 									if (Object.keys(otherConfig).length > 0) {
-										window.maestro.agents.setConfig(session.toolType, otherConfig);
+										window.maestro.agents.setConfig(selectedToolType, otherConfig);
 									}
 								}}
 								availableModels={availableModels}

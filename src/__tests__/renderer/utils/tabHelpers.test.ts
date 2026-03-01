@@ -50,6 +50,9 @@ import {
 	createMergedSession,
 	hasActiveWizard,
 	extractQuickTabName,
+	buildUnifiedTabs,
+	ensureInUnifiedTabOrder,
+	getRepairedUnifiedTabOrder,
 } from '../../../renderer/utils/tabHelpers';
 import type { LogEntry } from '../../../renderer/types';
 import type {
@@ -1447,6 +1450,26 @@ describe('tabHelpers', () => {
 			expect(result!.id).toBe('only-tab');
 			expect(result!.session).toBe(session); // Same session since already active
 		});
+
+		it('skips orphaned AI entries to find last valid tab', () => {
+			const aiTab = createMockTab({ id: 'ai-1' });
+			const session = createMockSession({
+				aiTabs: [aiTab],
+				activeTabId: 'ai-1',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'ai', id: 'orphaned-ai' }, // No matching AI tab
+				],
+			});
+
+			const result = navigateToLastUnifiedTab(session);
+
+			// Should skip orphaned entry and return ai-1 (already active)
+			expect(result).not.toBeNull();
+			expect(result!.type).toBe('ai');
+			expect(result!.id).toBe('ai-1');
+		});
 	});
 
 	describe('createMergedSession', () => {
@@ -1992,6 +2015,35 @@ describe('tabHelpers', () => {
 			expect(result!.tabId).toBe('file-existing');
 			expect(result!.session.filePreviewTabs).toHaveLength(1); // No new tab created
 			expect(result!.session.activeFileTabId).toBe('file-existing');
+			// Verify tab is ensured in unifiedTabOrder
+			expect(result!.session.unifiedTabOrder).toContainEqual({ type: 'file', id: 'file-existing' });
+		});
+
+		it('repairs unifiedTabOrder when file duplicate is orphaned', () => {
+			const existingFileTab = createMockFileTab({ id: 'file-existing', path: '/test/same.ts' });
+			const closedFileTab = createMockFileTab({ id: 'file-closed', path: '/test/same.ts' });
+			const closedEntry = {
+				type: 'file' as const,
+				tab: closedFileTab,
+				unifiedIndex: 1,
+				closedAt: Date.now(),
+			};
+			// Simulate orphaned tab: in filePreviewTabs but NOT in unifiedTabOrder
+			const session = createMockSession({
+				aiTabs: [createMockTab({ id: 'ai-1' })],
+				activeTabId: 'ai-1',
+				filePreviewTabs: [existingFileTab],
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai', id: 'ai-1' }], // file tab missing!
+				unifiedClosedTabHistory: [closedEntry],
+			});
+
+			const result = reopenUnifiedClosedTab(session);
+
+			expect(result).not.toBeNull();
+			expect(result!.wasDuplicate).toBe(true);
+			// The fix should have added the tab to unifiedTabOrder
+			expect(result!.session.unifiedTabOrder).toContainEqual({ type: 'file', id: 'file-existing' });
 		});
 
 		it('switches to existing AI tab when duplicate found', () => {
@@ -2017,6 +2069,33 @@ describe('tabHelpers', () => {
 			expect(result!.wasDuplicate).toBe(true);
 			expect(result!.tabId).toBe('ai-existing');
 			expect(result!.session.aiTabs).toHaveLength(1); // No new tab created
+			// Verify tab is ensured in unifiedTabOrder
+			expect(result!.session.unifiedTabOrder).toContainEqual({ type: 'ai', id: 'ai-existing' });
+		});
+
+		it('repairs unifiedTabOrder when AI duplicate is orphaned', () => {
+			const existingAiTab = createMockTab({ id: 'ai-existing', agentSessionId: 'session-same' });
+			const closedAiTab = createMockTab({ id: 'ai-closed', agentSessionId: 'session-same' });
+			const closedEntry = {
+				type: 'ai' as const,
+				tab: closedAiTab,
+				unifiedIndex: 0,
+				closedAt: Date.now(),
+			};
+			// Simulate orphaned tab: in aiTabs but NOT in unifiedTabOrder
+			const session = createMockSession({
+				aiTabs: [existingAiTab],
+				activeTabId: 'ai-existing',
+				unifiedTabOrder: [], // orphaned!
+				unifiedClosedTabHistory: [closedEntry],
+			});
+
+			const result = reopenUnifiedClosedTab(session);
+
+			expect(result).not.toBeNull();
+			expect(result!.wasDuplicate).toBe(true);
+			// The fix should have added the tab to unifiedTabOrder
+			expect(result!.session.unifiedTabOrder).toContainEqual({ type: 'ai', id: 'ai-existing' });
 		});
 
 		it('falls back to legacy closedTabHistory when unified is empty', () => {
@@ -2197,6 +2276,75 @@ describe('tabHelpers', () => {
 			expect(result!.type).toBe('ai');
 			expect(result!.id).toBe('tab-1');
 		});
+
+		it('skips orphaned AI entries in unifiedTabOrder', () => {
+			const tab1 = createMockTab({ id: 'ai-1' });
+			const tab2 = createMockTab({ id: 'ai-2' });
+			const fileTab = createMockFileTab({ id: 'file-1' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				filePreviewTabs: [fileTab],
+				activeTabId: 'ai-2',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'ai', id: 'ai-2' },
+					{ type: 'ai', id: 'orphaned-ai' }, // No matching AI tab
+					{ type: 'file', id: 'file-1' },
+				],
+			});
+
+			const result = navigateToNextUnifiedTab(session);
+
+			// Should skip orphaned entry and navigate to file-1
+			expect(result!.type).toBe('file');
+			expect(result!.id).toBe('file-1');
+			expect(result!.session.activeFileTabId).toBe('file-1');
+		});
+
+		it('skips orphaned file entries in unifiedTabOrder', () => {
+			const tab1 = createMockTab({ id: 'ai-1' });
+			const tab2 = createMockTab({ id: 'ai-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				filePreviewTabs: [],
+				activeTabId: 'ai-1',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'file', id: 'orphaned-file' }, // No matching file tab
+					{ type: 'ai', id: 'ai-2' },
+				],
+			});
+
+			const result = navigateToNextUnifiedTab(session);
+
+			// Should skip orphaned file entry and navigate to ai-2
+			expect(result!.type).toBe('ai');
+			expect(result!.id).toBe('ai-2');
+		});
+
+		it('skips orphaned entries in showUnreadOnly mode', () => {
+			const readTab = createMockTab({ id: 'read-tab', hasUnread: false, inputValue: '' });
+			const unreadTab = createMockTab({ id: 'unread-tab', hasUnread: true });
+			const session = createMockSession({
+				aiTabs: [readTab, unreadTab],
+				filePreviewTabs: [],
+				activeTabId: 'read-tab',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'read-tab' },
+					{ type: 'file', id: 'orphaned-file' }, // No matching file tab
+					{ type: 'ai', id: 'unread-tab' },
+				],
+			});
+
+			const result = navigateToNextUnifiedTab(session, true);
+
+			// Should skip orphaned file and read AI tab, navigate to unread tab
+			expect(result!.type).toBe('ai');
+			expect(result!.id).toBe('unread-tab');
+		});
 	});
 
 	describe('navigateToPrevUnifiedTab', () => {
@@ -2355,6 +2503,53 @@ describe('tabHelpers', () => {
 			expect(result!.id).toBe('tab-2');
 		});
 
+		it('skips orphaned AI entries in unifiedTabOrder', () => {
+			const tab1 = createMockTab({ id: 'ai-1' });
+			const tab2 = createMockTab({ id: 'ai-2' });
+			const fileTab = createMockFileTab({ id: 'file-1' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				filePreviewTabs: [fileTab],
+				activeTabId: 'ai-1',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'file', id: 'file-1' },
+					{ type: 'ai', id: 'orphaned-ai' }, // No matching AI tab
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'ai', id: 'ai-2' },
+				],
+			});
+
+			const result = navigateToPrevUnifiedTab(session);
+
+			// Should skip orphaned entry and navigate to file-1
+			expect(result!.type).toBe('file');
+			expect(result!.id).toBe('file-1');
+			expect(result!.session.activeFileTabId).toBe('file-1');
+		});
+
+		it('skips orphaned file entries in unifiedTabOrder', () => {
+			const tab1 = createMockTab({ id: 'ai-1' });
+			const tab2 = createMockTab({ id: 'ai-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				filePreviewTabs: [],
+				activeTabId: 'ai-2',
+				activeFileTabId: null,
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'file', id: 'orphaned-file' }, // No matching file tab
+					{ type: 'ai', id: 'ai-2' },
+				],
+			});
+
+			const result = navigateToPrevUnifiedTab(session);
+
+			// Should skip orphaned file entry and navigate to ai-1
+			expect(result!.type).toBe('ai');
+			expect(result!.id).toBe('ai-1');
+		});
+
 		it('cycles through mixed AI and file tabs correctly', () => {
 			const aiTab1 = createMockTab({ id: 'ai-1' });
 			const fileTab = createMockFileTab({ id: 'file-1' });
@@ -2447,6 +2642,301 @@ describe('tabHelpers', () => {
 			expect(extractQuickTabName('https://github.com/org/repo/issues/789?q=is%3Aopen')).toBe(
 				'Issue #789'
 			);
+		});
+	});
+
+	describe('buildUnifiedTabs', () => {
+		it('returns tabs in unifiedTabOrder sequence', () => {
+			const aiTab = createMockTab({ id: 'ai-1' });
+			const fileTab = createMockFileTab({ id: 'file-1' });
+			const session = createMockSession({
+				aiTabs: [aiTab],
+				filePreviewTabs: [fileTab],
+				unifiedTabOrder: [
+					{ type: 'file', id: 'file-1' },
+					{ type: 'ai', id: 'ai-1' },
+				],
+			});
+
+			const result = buildUnifiedTabs(session);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].type).toBe('file');
+			expect(result[0].id).toBe('file-1');
+			expect(result[1].type).toBe('ai');
+			expect(result[1].id).toBe('ai-1');
+		});
+
+		it('appends orphaned AI tabs not in unifiedTabOrder', () => {
+			const aiTab1 = createMockTab({ id: 'ai-1' });
+			const aiTab2 = createMockTab({ id: 'ai-orphaned' });
+			const session = createMockSession({
+				aiTabs: [aiTab1, aiTab2],
+				unifiedTabOrder: [{ type: 'ai', id: 'ai-1' }], // ai-orphaned missing
+			});
+
+			const result = buildUnifiedTabs(session);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].id).toBe('ai-1');
+			expect(result[1].id).toBe('ai-orphaned');
+			expect(result[1].type).toBe('ai');
+		});
+
+		it('appends orphaned file tabs not in unifiedTabOrder', () => {
+			const aiTab = createMockTab({ id: 'ai-1' });
+			const fileTab = createMockFileTab({ id: 'file-orphaned' });
+			const session = createMockSession({
+				aiTabs: [aiTab],
+				filePreviewTabs: [fileTab],
+				unifiedTabOrder: [{ type: 'ai', id: 'ai-1' }], // file-orphaned missing
+			});
+
+			const result = buildUnifiedTabs(session);
+
+			expect(result).toHaveLength(2);
+			expect(result[0].id).toBe('ai-1');
+			expect(result[1].id).toBe('file-orphaned');
+			expect(result[1].type).toBe('file');
+		});
+
+		it('skips unifiedTabOrder refs with no matching tab data', () => {
+			const aiTab = createMockTab({ id: 'ai-1' });
+			const session = createMockSession({
+				aiTabs: [aiTab],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'ai-1' },
+					{ type: 'ai', id: 'ai-deleted' }, // no matching tab
+				],
+			});
+
+			const result = buildUnifiedTabs(session);
+
+			expect(result).toHaveLength(1);
+			expect(result[0].id).toBe('ai-1');
+		});
+
+		it('returns empty array for empty session', () => {
+			const session = createMockSession({
+				aiTabs: [],
+				filePreviewTabs: [],
+				unifiedTabOrder: [],
+			});
+
+			expect(buildUnifiedTabs(session)).toHaveLength(0);
+		});
+	});
+
+	describe('ensureInUnifiedTabOrder', () => {
+		it('returns same array if tab already present', () => {
+			const order = [
+				{ type: 'ai' as const, id: 'ai-1' },
+				{ type: 'file' as const, id: 'file-1' },
+			];
+
+			const result = ensureInUnifiedTabOrder(order, 'ai', 'ai-1');
+
+			expect(result).toBe(order); // Same reference - no mutation
+		});
+
+		it('appends tab if not present', () => {
+			const order = [{ type: 'ai' as const, id: 'ai-1' }];
+
+			const result = ensureInUnifiedTabOrder(order, 'file', 'file-new');
+
+			expect(result).toHaveLength(2);
+			expect(result[1]).toEqual({ type: 'file', id: 'file-new' });
+			expect(result).not.toBe(order); // New array
+		});
+
+		it('distinguishes between ai and file types with same id', () => {
+			const order = [{ type: 'ai' as const, id: 'same-id' }];
+
+			// Looking for 'file' type with 'same-id' - should NOT match
+			const result = ensureInUnifiedTabOrder(order, 'file', 'same-id');
+
+			expect(result).toHaveLength(2);
+			expect(result[1]).toEqual({ type: 'file', id: 'same-id' });
+		});
+
+		it('works with empty array', () => {
+			const result = ensureInUnifiedTabOrder([], 'ai', 'ai-1');
+
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual({ type: 'ai', id: 'ai-1' });
+		});
+	});
+
+	describe('getRepairedUnifiedTabOrder', () => {
+		it('returns original order when no orphans exist', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toBe(session.unifiedTabOrder); // Same reference
+		});
+
+		it('appends orphaned AI tabs not in unifiedTabOrder', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const orphan = createMockTab({ id: 'orphan-tab' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2, orphan],
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(3);
+			expect(result[2]).toEqual({ type: 'ai', id: 'orphan-tab' });
+		});
+
+		it('appends orphaned file tabs not in unifiedTabOrder', () => {
+			const aiTab = createMockTab({ id: 'ai-1' });
+			const fileTab = createMockFileTab({ id: 'file-1' });
+			const session = createMockSession({
+				aiTabs: [aiTab],
+				filePreviewTabs: [fileTab],
+				unifiedTabOrder: [{ type: 'ai', id: 'ai-1' }],
+			});
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(2);
+			expect(result[1]).toEqual({ type: 'file', id: 'file-1' });
+		});
+
+		it('handles undefined unifiedTabOrder', () => {
+			const tab = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({ aiTabs: [tab] });
+			(session as any).unifiedTabOrder = undefined;
+
+			const result = getRepairedUnifiedTabOrder(session);
+			expect(result).toHaveLength(1);
+			expect(result[0]).toEqual({ type: 'ai', id: 'tab-1' });
+		});
+	});
+
+	describe('navigation with orphaned tabs', () => {
+		it('navigateToNextUnifiedTab reaches orphaned tabs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const tab2 = createMockTab({ id: 'tab-2' });
+			const orphan = createMockTab({ id: 'orphan-tab' });
+			const session = createMockSession({
+				aiTabs: [tab1, tab2, orphan],
+				activeTabId: 'tab-2',
+				activeFileTabId: null,
+				// orphan-tab is in aiTabs but NOT in unifiedTabOrder
+				unifiedTabOrder: [
+					{ type: 'ai', id: 'tab-1' },
+					{ type: 'ai', id: 'tab-2' },
+				],
+			});
+
+			const result = navigateToNextUnifiedTab(session);
+			// Should navigate to orphan-tab (appended by repair), NOT wrap to tab-1
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe('orphan-tab');
+			expect(result!.session.activeTabId).toBe('orphan-tab');
+			// Repair should be persisted in the session
+			expect(result!.session.unifiedTabOrder).toHaveLength(3);
+		});
+
+		it('navigateToPrevUnifiedTab reaches orphaned tabs', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const orphan = createMockTab({ id: 'orphan-tab' });
+			const session = createMockSession({
+				aiTabs: [tab1, orphan],
+				activeTabId: 'tab-1',
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai', id: 'tab-1' }],
+			});
+
+			const result = navigateToPrevUnifiedTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe('orphan-tab');
+			expect(result!.session.unifiedTabOrder).toHaveLength(2);
+		});
+
+		it('navigateToUnifiedTabByIndex navigates to orphaned tab position', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const orphan = createMockTab({ id: 'orphan-tab' });
+			const session = createMockSession({
+				aiTabs: [tab1, orphan],
+				activeTabId: 'tab-1',
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai', id: 'tab-1' }],
+			});
+
+			// Index 1 is the orphaned tab (appended by repair)
+			const result = navigateToUnifiedTabByIndex(session, 1);
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe('orphan-tab');
+			expect(result!.session.unifiedTabOrder).toHaveLength(2);
+		});
+
+		it('navigateToLastUnifiedTab reaches orphaned last tab', () => {
+			const tab1 = createMockTab({ id: 'tab-1' });
+			const orphan = createMockTab({ id: 'orphan-tab' });
+			const session = createMockSession({
+				aiTabs: [tab1, orphan],
+				activeTabId: 'tab-1',
+				activeFileTabId: null,
+				unifiedTabOrder: [{ type: 'ai', id: 'tab-1' }],
+			});
+
+			const result = navigateToLastUnifiedTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.id).toBe('orphan-tab');
+		});
+	});
+
+	describe('reopenClosedTab unifiedTabOrder fix', () => {
+		it('adds restored tab to unifiedTabOrder', () => {
+			const closedTab = createMockTab({ id: 'closed-1', agentSessionId: null });
+			const remainingTab = createMockTab({ id: 'remaining-1' });
+			const session = createMockSession({
+				aiTabs: [remainingTab],
+				activeTabId: 'remaining-1',
+				closedTabHistory: [{ tab: closedTab, index: 0 }],
+				unifiedTabOrder: [{ type: 'ai', id: 'remaining-1' }],
+			});
+
+			const result = reopenClosedTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.session.unifiedTabOrder).toHaveLength(2);
+			expect(result!.session.unifiedTabOrder[1]).toEqual({
+				type: 'ai',
+				id: 'mock-generated-id',
+			});
+		});
+
+		it('adds duplicate tab to unifiedTabOrder when switching', () => {
+			const existingTab = createMockTab({ id: 'existing-1', agentSessionId: 'session-abc' });
+			const closedTab = createMockTab({ id: 'closed-1', agentSessionId: 'session-abc' });
+			const session = createMockSession({
+				aiTabs: [existingTab],
+				activeTabId: 'existing-1',
+				closedTabHistory: [{ tab: closedTab, index: 0 }],
+				unifiedTabOrder: [], // Deliberately empty to test repair
+			});
+
+			const result = reopenClosedTab(session);
+			expect(result).not.toBeNull();
+			expect(result!.wasDuplicate).toBe(true);
+			expect(result!.session.unifiedTabOrder).toHaveLength(1);
+			expect(result!.session.unifiedTabOrder[0]).toEqual({
+				type: 'ai',
+				id: 'existing-1',
+			});
 		});
 	});
 });

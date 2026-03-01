@@ -34,6 +34,7 @@ The **File Explorer** (Right Panel → Files tab) lets you browse project files.
 ![File viewer](./screenshots/file-viewer.png)
 
 **File Preview features:**
+
 - **Syntax highlighting** for code files
 - **Markdown rendering** with toggle between raw/preview (`Cmd+E` / `Ctrl+E`)
 - **Image viewing** for common image formats
@@ -53,10 +54,12 @@ Files can be edited directly in the preview. Press `Cmd+S` / `Ctrl+S` to save ch
 Share files directly as GitHub Gists from the File Preview:
 
 **Prerequisites:**
+
 - [GitHub CLI](https://cli.github.com/) (`gh`) must be installed
 - You must be authenticated (`gh auth login`)
 
 **To publish a file:**
+
 1. Open a file in File Preview
 2. Click the **Share icon** (↗) in the header toolbar, or
 3. Use `Cmd+K` / `Ctrl+K` → "Publish Document as GitHub Gist"
@@ -70,6 +73,7 @@ Share files directly as GitHub Gists from the File Preview:
 The confirmation modal focuses "Publish Secret" by default, so you can press `Enter` to quickly publish. Press `Esc` to cancel.
 
 **After publishing:**
+
 - The gist URL is automatically copied to your clipboard
 - A toast notification appears with a link to open the gist in your browser
 
@@ -80,6 +84,7 @@ The share button only appears when viewing files (not in edit mode) and when Git
 ### @ File Mentions
 
 Reference files in your AI prompts using `@` mentions:
+
 1. Type `@` followed by a filename
 2. Select from the autocomplete dropdown
 3. The file path is inserted, giving the AI context about that file
@@ -89,12 +94,14 @@ Reference files in your AI prompts using `@` mentions:
 For complex prompts that need more editing space, use the **Prompt Composer** — a fullscreen editing modal.
 
 **To open the Prompt Composer:**
+
 - Press `Cmd+Shift+P` / `Ctrl+Shift+P`, or
 - Click the **pencil icon** (✏️) in the bottom-left corner of the AI input box
 
 ![Prompt Composer Button](./screenshots/prompt-composer-button.png)
 
 The Prompt Composer provides:
+
 - **Full-screen editing space** for complex, multi-paragraph prompts
 - **Character and token count** displayed in the footer
 - **All input controls** — History toggle, Read-only mode, Thinking toggle, and send shortcut indicator
@@ -110,11 +117,11 @@ The AI input box includes three toggle buttons that control session behavior:
 
 ![Input Toggles](./screenshots/input-toggles.png)
 
-| Toggle | Shortcut | Description |
-|--------|----------|-------------|
-| **History** | `Cmd+S` / `Ctrl+S` | Save a synopsis of each completion to the [History panel](./history) |
-| **Read-only** | `Cmd+R` / `Ctrl+R` | Enable plan/read-only mode — AI can read but not modify files |
-| **Thinking** | `Cmd+Shift+K` / `Ctrl+Shift+K` | Show streaming thinking/reasoning as the AI works |
+| Toggle        | Shortcut                       | Description                                                          |
+| ------------- | ------------------------------ | -------------------------------------------------------------------- |
+| **History**   | `Cmd+S` / `Ctrl+S`             | Save a synopsis of each completion to the [History panel](./history) |
+| **Read-only** | `Cmd+R` / `Ctrl+R`             | Enable plan/read-only mode — AI can read but not modify files        |
+| **Thinking**  | `Cmd+Shift+K` / `Ctrl+Shift+K` | Show streaming thinking/reasoning as the AI works                    |
 
 **Per-tab persistence:** Each toggle state is saved per tab. If you enable Thinking on one tab, it stays enabled for that tab even when you switch away and back.
 
@@ -124,19 +131,19 @@ Set the default state for new tabs in **Settings** (`Cmd+,` / `Ctrl+,`) → **Ge
 
 ![Input Toggle Defaults](./screenshots/input-toggles-defaults.png)
 
-| Setting | Description |
-|---------|-------------|
-| **Enable "History" by default** | New tabs save synopses to History automatically |
+| Setting                          | Description                                         |
+| -------------------------------- | --------------------------------------------------- |
+| **Enable "History" by default**  | New tabs save synopses to History automatically     |
 | **Enable "Thinking" by default** | New tabs show thinking/reasoning content by default |
 
 ### Send Key Configuration
 
 Configure how messages are sent in each mode:
 
-| Mode | Options | Description |
-|------|---------|-------------|
+| Mode                    | Options                | Description                                         |
+| ----------------------- | ---------------------- | --------------------------------------------------- |
 | **AI Interaction Mode** | `Enter` or `Cmd+Enter` | Choose your preferred send key for AI conversations |
-| **Terminal Mode** | `Enter` or `Cmd+Enter` | Choose your preferred send key for shell commands |
+| **Terminal Mode**       | `Enter` or `Cmd+Enter` | Choose your preferred send key for shell commands   |
 
 - When set to `Cmd+Enter` / `Ctrl+Enter`, pressing `Enter` alone creates a new line (for multi-line input)
 - When set to `Enter`, use `Shift+Enter` for new lines
@@ -148,10 +155,12 @@ Configure how messages are sent in each mode:
 When working with image attachments, use the **Image Carousel** to view, manage, and remove images.
 
 **To open the Image Carousel:**
+
 - Press `Cmd+Y` / `Ctrl+Y`, or
 - Click the image icon in the input box when images are attached
 
 **Carousel controls:**
+
 - **Arrow keys** — Navigate between images
 - **Delete** or **Backspace** — Remove the currently selected image
 - **Click the X** — Remove an image by clicking its remove button
@@ -168,6 +177,7 @@ Filter and search through AI output to find specific content or hide noise.
 The global filter applies to all AI output in the current session.
 
 **To open the global filter:**
+
 - Click the filter icon in the output toolbar
 - The filter bar appears at the top of the output area
 
@@ -177,19 +187,19 @@ Each AI response has its own local filter. Hover over a response to reveal the f
 
 ### Filter Modes
 
-| Mode | Icon | Description |
-|------|------|-------------|
+| Mode        | Icon       | Description                        |
+| ----------- | ---------- | ---------------------------------- |
 | **Include** | ➕ (green) | Show only lines matching the query |
-| **Exclude** | ➖ (red) | Hide lines matching the query |
+| **Exclude** | ➖ (red)   | Hide lines matching the query      |
 
 Click the mode icon to toggle between Include and Exclude.
 
 ### Text vs Regex Matching
 
-| Mode | Indicator | Description |
-|------|-----------|-------------|
-| **Plain text** | `Aa` | Case-insensitive substring matching |
-| **Regex** | `.*` | Regular expression pattern matching |
+| Mode           | Indicator | Description                         |
+| -------------- | --------- | ----------------------------------- |
+| **Plain text** | `Aa`      | Case-insensitive substring matching |
+| **Regex**      | `.*`      | Regular expression pattern matching |
 
 Click the indicator to toggle between plain text and regex mode.
 
@@ -202,22 +212,26 @@ Click the indicator to toggle between plain text and regex mode.
 ### Placeholders
 
 The placeholder text updates to reflect the current mode:
+
 - "Include by keyword" / "Exclude by keyword" for plain text
 - "Include by RegEx" / "Exclude by RegEx" for regex mode
 
 ### Use Cases
 
 **Finding specific content:**
+
 - Set to **Include** mode with plain text
 - Type a keyword like "error" or "function"
 - Only matching lines are shown
 
 **Hiding verbose output:**
+
 - Set to **Exclude** mode with plain text
 - Type patterns like "debug" or "verbose"
 - Matching lines are hidden from view
 
 **Complex pattern matching:**
+
 - Enable **Regex** mode
 - Use patterns like `\berror\b` for word boundaries
 - Or `^\s*#` to match comment lines
@@ -235,12 +249,14 @@ Agents are the core of Maestro — each agent represents an AI coding assistant 
 ### Creating Agents
 
 **To create a new agent:**
+
 1. Press `Cmd+N` / `Ctrl+N`, or click the **+** button in the left panel
 2. Select an available AI provider (Claude Code, Codex, or OpenCode)
 3. Choose a working directory for the agent
 4. Optionally name the agent and configure advanced options
 
 **Advanced configuration options:**
+
 - **Nudge Message** — An initial prompt sent when the agent starts
 - **Custom Path** — Override the default executable path
 - **Custom Arguments** — Additional command-line arguments
@@ -266,6 +282,7 @@ The left panel (sidebar) contains your agent list, groups, and navigation contro
 ### Filtering and Search
 
 Press `Cmd+F` / `Ctrl+F` while the sidebar is focused to open the session filter. The filter:
+
 - Searches agent names and AI tab names
 - Automatically expands groups containing matches
 - Shows matching bookmarked agents
@@ -274,6 +291,7 @@ Press `Cmd+F` / `Ctrl+F` while the sidebar is focused to open the session filter
 ### Bookmarks
 
 Pin important agents to the top of the list:
+
 - Right-click an agent → **Add Bookmark**
 - Or use the context menu to toggle bookmark status
 
@@ -284,20 +302,24 @@ Bookmarked agents appear in a collapsible "Bookmarks" section at the top of the 
 Organize agents into groups for better project management:
 
 **Creating groups:**
+
 - `Cmd+K` / `Ctrl+K` → "Create Group"
 - Groups have a name and emoji for visual identification
 
 **Moving agents to groups:**
+
 - Right-click an agent → **Move to Group** → Select target group
 - Or drag-and-drop agents between groups
 
 **Collapsing/Expanding:**
+
 - Click the group header to collapse or expand
 - Groups remember their collapsed state
 
 ### Drag and Drop
 
 Rearrange agents by dragging them:
+
 - Drag agents between groups
 - Drag to reorder within a group
 - Drag to the "Ungrouped" section to remove from a group
@@ -305,6 +327,7 @@ Rearrange agents by dragging them:
 ### Context Menu
 
 Right-click any agent for quick actions:
+
 - **Rename** — Change the agent's display name
 - **Edit Agent...** — Open configuration modal
 - **Add/Remove Bookmark** — Toggle bookmark status
@@ -320,6 +343,7 @@ Drag the right edge of the sidebar to resize it. The width is persisted across s
 ### Collapsed Mode
 
 Click the sidebar toggle (`Opt+Cmd+Left` / `Alt+Ctrl+Left`) to collapse the sidebar to icon-only mode. In collapsed mode:
+
 - Agents show as icons with status indicators
 - Hover for agent name tooltip
 - Click to select an agent
@@ -333,6 +357,7 @@ Each agent session can have multiple tabs, allowing you to work on different tas
 When you send your first message to a new tab, Maestro automatically generates a descriptive name based on your request. This helps you identify tabs at a glance without manual renaming.
 
 **How it works:**
+
 1. When you start a new conversation in a tab, your first message is analyzed
 2. An AI generates a concise, relevant name (2-5 words)
 3. The tab name updates automatically once the name is generated
@@ -347,6 +372,7 @@ When you send your first message to a new tab, Maestro automatically generates a
 | "Refactor the database queries" | Database Query Refactor |
 
 **Configuring automatic tab naming:**
+
 - Go to **Settings** (`Cmd+,` / `Ctrl+,`) → **General**
 - Toggle **Automatic Tab Naming** on or off
 - Default: Enabled
@@ -358,6 +384,7 @@ Automatic tab naming uses the same AI agent as your session, including SSH remot
 ### Manual Tab Renaming
 
 You can always rename tabs manually:
+
 - Right-click a tab → **Rename Tab**
 - Or double-click the tab name to edit it directly
 - Manual names take precedence over automatic naming

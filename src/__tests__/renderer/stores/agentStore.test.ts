@@ -835,6 +835,23 @@ describe('agentStore', () => {
 			expect(updated.aiTabs[0].name).toBe('My Work');
 			expect(updated.aiTabs[0].inputValue).toBe('pending input');
 		});
+
+		it('clears activeFileTabId to prevent orphaned file preview', () => {
+			const session = createMockSession({
+				id: 'session-1',
+				state: 'error',
+				inputMode: 'ai',
+				activeFileTabId: 'file-tab-1',
+			});
+
+			useSessionStore.getState().setSessions([session]);
+
+			useAgentStore.getState().authenticateAfterError('session-1');
+
+			const updated = useSessionStore.getState().sessions[0];
+			expect(updated.inputMode).toBe('terminal');
+			expect(updated.activeFileTabId).toBeNull();
+		});
 	});
 
 	describe('killAgent', () => {

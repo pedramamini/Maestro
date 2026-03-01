@@ -25,6 +25,7 @@ Maestro maintains detailed system logs that help diagnose issues. Access them vi
 - **Menu:** Click the hamburger menu (☰) in the Left Panel → "System Logs"
 
 The **System Log Viewer** shows:
+
 - Timestamped log entries with severity levels (debug, info, warn, error, toast, autorun)
 - Filterable by log level via clickable level pills and searchable text (`Cmd+F` / `Ctrl+F`)
 - Real-time updates as new logs are generated
@@ -41,6 +42,7 @@ Monitor all running processes spawned by Maestro:
 - **Menu:** Click the hamburger menu (☰) in the Left Panel → "Process Monitor"
 
 The **Process Monitor** displays a hierarchical tree view:
+
 - **Groups** — Session groups containing their member sessions
 - **Sessions** — Each session shows its AI agent and terminal processes
 - **Process details** — PID, runtime, working directory, Claude session ID (for AI processes)
@@ -60,6 +62,7 @@ The **Process Monitor** displays a hierarchical tree view:
 | Wizard Gen | Playbook document generation process |
 
 **Features:**
+
 - Click a process row to view detailed information (command, arguments, session ID)
 - Double-click or press `Enter` to navigate to the session/tab
 - `K` or `Delete` to kill a selected process
@@ -72,16 +75,17 @@ This is useful when an agent becomes unresponsive or you need to diagnose proces
 
 When an AI agent encounters an error, Maestro displays a modal with clear recovery options. Common error types include:
 
-| Error Type | Description | Recovery Options |
-|------------|-------------|------------------|
-| **Authentication Required** | API key expired or invalid | Re-authenticate, check API key settings |
-| **Context Limit Reached** | Conversation exceeded token limit | Start new session, compact context |
-| **Rate Limit Exceeded** | Too many API requests | Wait and retry, reduce request frequency |
-| **Connection Error** | Network connectivity issue | Check internet, retry connection |
-| **Agent Error** | Agent process crashed unexpectedly | Restart agent, start new session |
-| **Permission Denied** | File or operation access denied | Check permissions, run with appropriate access |
+| Error Type                  | Description                        | Recovery Options                               |
+| --------------------------- | ---------------------------------- | ---------------------------------------------- |
+| **Authentication Required** | API key expired or invalid         | Re-authenticate, check API key settings        |
+| **Context Limit Reached**   | Conversation exceeded token limit  | Start new session, compact context             |
+| **Rate Limit Exceeded**     | Too many API requests              | Wait and retry, reduce request frequency       |
+| **Connection Error**        | Network connectivity issue         | Check internet, retry connection               |
+| **Agent Error**             | Agent process crashed unexpectedly | Restart agent, start new session               |
+| **Permission Denied**       | File or operation access denied    | Check permissions, run with appropriate access |
 
 Each error modal shows:
+
 - Error type and description
 - Agent and session context
 - Timestamp of when the error occurred
@@ -93,6 +97,7 @@ Each error modal shows:
 If you encounter deep-seated issues that are difficult to diagnose, Maestro can generate a **Debug Package** — a compressed bundle of diagnostic information that you can safely share when reporting bugs.
 
 **To create a Debug Package:**
+
 1. Press `Cmd+K` (Mac) or `Ctrl+K` (Windows/Linux) to open Quick Actions
 2. Search for "Create Debug Package"
 3. Choose a save location for the `.zip` file
@@ -104,27 +109,27 @@ The debug package collects metadata and configuration — never your conversatio
 
 **Always included:**
 
-| File | Contents |
-|------|----------|
-| `system-info.json` | OS, CPU, memory, Electron/Node versions, app uptime |
-| `settings.json` | App preferences with sensitive values redacted |
-| `agents.json` | Agent configurations, availability, and capability flags |
-| `external-tools.json` | Shell, git, GitHub CLI, and cloudflared availability |
+| File                       | Contents                                                  |
+| -------------------------- | --------------------------------------------------------- |
+| `system-info.json`         | OS, CPU, memory, Electron/Node versions, app uptime       |
+| `settings.json`            | App preferences with sensitive values redacted            |
+| `agents.json`              | Agent configurations, availability, and capability flags  |
+| `external-tools.json`      | Shell, git, GitHub CLI, and cloudflared availability      |
 | `windows-diagnostics.json` | Windows-specific diagnostics (minimal on other platforms) |
-| `groups.json` | Session group configurations |
-| `processes.json` | Active process information |
-| `web-server.json` | Web server and Cloudflare tunnel status |
-| `storage-info.json` | Storage paths and sizes |
+| `groups.json`              | Session group configurations                              |
+| `processes.json`           | Active process information                                |
+| `web-server.json`          | Web server and Cloudflare tunnel status                   |
+| `storage-info.json`        | Storage paths and sizes                                   |
 
 **Optional (toggleable in UI):**
 
-| File | Contents |
-|------|----------|
-| `sessions.json` | Session metadata (names, states, tab counts — no conversations) |
-| `logs.json` | Recent system log entries |
-| `errors.json` | Current error states and recent error events |
-| `group-chats.json` | Group chat metadata (participant lists, routing — no messages) |
-| `batch-state.json` | Auto Run state and document queue |
+| File               | Contents                                                        |
+| ------------------ | --------------------------------------------------------------- |
+| `sessions.json`    | Session metadata (names, states, tab counts — no conversations) |
+| `logs.json`        | Recent system log entries                                       |
+| `errors.json`      | Current error states and recent error events                    |
+| `group-chats.json` | Group chat metadata (participant lists, routing — no messages)  |
+| `batch-state.json` | Auto Run state and document queue                               |
 
 ### Privacy Protections
 
@@ -140,6 +145,7 @@ The debug package is designed to be **safe to share publicly**:
 - **Custom agent arguments** — Only `[SET]` or `[NOT SET]` shown, not actual values
 
 **Example path sanitization:**
+
 - Before: `/Users/johndoe/Projects/MyApp`
 - After: `~/Projects/MyApp`
 
@@ -154,6 +160,7 @@ If you're running Maestro through WSL2, most issues stem from using Windows-moun
 The Vite dev server or Electron cannot bind to ports when running from `/mnt/...` paths.
 
 **Solution:** Move your project to the native Linux filesystem:
+
 ```bash
 mv /mnt/c/projects/maestro ~/maestro
 cd ~/maestro
@@ -172,6 +179,7 @@ The Electron sandbox cannot operate correctly on Windows-mounted filesystems.
 Cross-filesystem operations between WSL and Windows are unreliable for npm's file operations.
 
 **Solution:** Clone and install from the Linux filesystem:
+
 ```bash
 cd ~
 git clone https://github.com/RunMaestro/Maestro.git
@@ -184,6 +192,7 @@ npm install
 The Windows temp directory may be inaccessible from WSL.
 
 **Solution:** Override the temp directory:
+
 ```bash
 TMPDIR=/tmp npm run rebuild
 ```
@@ -193,6 +202,7 @@ TMPDIR=/tmp npm run rebuild
 NTFS and Linux inode handling are incompatible, causing git metadata issues.
 
 **Solution:** If you see "missing index" or spurious `.git/index.lock` errors:
+
 ```bash
 rm -f .git/index.lock
 git checkout -f

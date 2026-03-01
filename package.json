@@ -1,318 +1,323 @@
 {
-  "name": "maestro",
-  "version": "0.15.0",
-  "description": "Maestro hones fractured attention into focused intent.",
-  "main": "dist/main/index.js",
-  "author": {
-    "name": "Pedram Amini",
-    "email": "pedram@runmaestro.ai"
-  },
-  "license": "AGPL 3.0",
-  "repository": {
-    "type": "git",
-    "url": "https://github.com/RunMaestro/Maestro.git"
-  },
-  "bin": {
-    "maestro-cli": "./dist/cli/maestro-cli.js"
-  },
-  "scripts": {
-    "dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
-    "dev:prod-data": "USE_PROD_DATA=1 concurrently \"npm run dev:main:prod-data\" \"npm run dev:renderer\"",
-    "dev:demo": "MAESTRO_DEMO_DIR=/tmp/maestro-demo npm run dev",
-    "dev:main": "npm run build:prompts && tsc -p tsconfig.main.json && npm run build:preload && NODE_ENV=development electron .",
-    "dev:main:prod-data": "npm run build:prompts && tsc -p tsconfig.main.json && npm run build:preload && NODE_ENV=development USE_PROD_DATA=1 electron .",
-    "dev:renderer": "vite",
-    "dev:web": "vite --config vite.config.web.mts",
-    "dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
-    "build": "npm run build:prompts && npm run build:main && npm run build:preload && npm run build:renderer && npm run build:web && npm run build:cli",
-    "build:prompts": "node scripts/generate-prompts.mjs",
-    "build:main": "tsc -p tsconfig.main.json",
-    "build:preload": "node scripts/build-preload.mjs",
-    "build:cli": "node scripts/build-cli.mjs",
-    "build:renderer": "vite build",
-    "build:web": "vite build --config vite.config.web.mts",
-    "package": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --mac --win --linux",
-    "package:mac": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --mac",
-    "package:win": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --win",
-    "package:linux": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --linux",
-    "start": "electron .",
-    "clean": "rm -rf dist release node_modules/.vite",
-    "prepare": "echo 'No prepare script'",
-    "postinstall": "electron-rebuild -f -w node-pty,better-sqlite3",
-    "lint": "tsc -p tsconfig.lint.json && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.cli.json --noEmit",
-    "lint:eslint": "eslint src/",
-    "format": "prettier --write \"src/**/*.{ts,tsx}\"",
-    "format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
-    "test": "vitest run",
-    "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage",
-    "test:e2e": "npm run build:main && npm run build:renderer && playwright test",
-    "test:e2e:ui": "npm run build:main && npm run build:renderer && playwright test --ui",
-    "test:e2e:headed": "npm run build:main && npm run build:renderer && playwright test --headed",
-    "test:integration": "vitest run --config vitest.integration.config.ts",
-    "test:integration:watch": "vitest --config vitest.integration.config.ts",
-    "test:performance": "vitest run --config vitest.performance.config.mts",
-    "refresh-speckit": "node scripts/refresh-speckit.mjs",
-    "refresh-openspec": "node scripts/refresh-openspec.mjs"
-  },
-  "build": {
-    "npmRebuild": false,
-    "appId": "com.maestro.app",
-    "productName": "Maestro",
-    "publish": {
-      "provider": "github",
-      "owner": "RunMaestro",
-      "repo": "Maestro"
-    },
-    "directories": {
-      "output": "release",
-      "buildResources": "build"
-    },
-    "files": [
-      "dist/**/*",
-      "package.json"
-    ],
-    "asarUnpack": [
-      "node_modules/node-pty/**/*",
-      "node_modules/better-sqlite3/**/*"
-    ],
-    "mac": {
-      "category": "public.app-category.developer-tools",
-      "hardenedRuntime": true,
-      "gatekeeperAssess": false,
-      "notarize": false,
-      "entitlements": "build/entitlements.mac.plist",
-      "entitlementsInherit": "build/entitlements.mac.plist",
-      "target": [
-        {
-          "target": "dmg",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        },
-        {
-          "target": "zip",
-          "arch": [
-            "x64",
-            "arm64"
-          ]
-        }
-      ],
-      "artifactName": "${name}-${version}-${arch}-mac.${ext}",
-      "icon": "build/icon.icns",
-      "extraResources": [
-        {
-          "from": "dist/cli/maestro-cli.js",
-          "to": "maestro-cli.js"
-        },
-        {
-          "from": "src/prompts/speckit",
-          "to": "prompts/speckit"
-        },
-        {
-          "from": "src/prompts/openspec",
-          "to": "prompts/openspec"
-        }
-      ]
-    },
-    "afterSign": "scripts/notarize.js",
-    "win": {
-      "target": [
-        {
-          "target": "nsis",
-          "arch": [
-            "x64"
-          ]
-        },
-        {
-          "target": "portable",
-          "arch": [
-            "x64"
-          ]
-        }
-      ],
-      "icon": "build/icon.ico",
-      "extraResources": [
-        {
-          "from": "dist/cli/maestro-cli.js",
-          "to": "maestro-cli.js"
-        },
-        {
-          "from": "src/prompts/speckit",
-          "to": "prompts/speckit"
-        },
-        {
-          "from": "src/prompts/openspec",
-          "to": "prompts/openspec"
-        }
-      ]
-    },
-    "linux": {
-      "target": [
-        "AppImage",
-        "deb",
-        "rpm"
-      ],
-      "artifactName": "${name}-${version}-${arch}.${ext}",
-      "category": "Development",
-      "icon": "build/icon.png",
-      "extraResources": [
-        {
-          "from": "dist/cli/maestro-cli.js",
-          "to": "maestro-cli.js"
-        },
-        {
-          "from": "src/prompts/speckit",
-          "to": "prompts/speckit"
-        },
-        {
-          "from": "src/prompts/openspec",
-          "to": "prompts/openspec"
-        }
-      ]
-    },
-    "deb": {
-      "depends": [
-        "libgtk-3-0",
-        "libnotify4",
-        "libnss3",
-        "libxss1",
-        "libxtst6",
-        "xdg-utils",
-        "libatspi2.0-0",
-        "libuuid1",
-        "libdrm2",
-        "libgbm1",
-        "libasound2"
-      ]
-    },
-    "rpm": {
-      "depends": [
-        "gtk3",
-        "libnotify",
-        "nss",
-        "libXScrnSaver",
-        "(libXtst or libXtst6)",
-        "xdg-utils",
-        "at-spi2-core",
-        "(libuuid or libuuid1)",
-        "libdrm",
-        "mesa-libgbm",
-        "alsa-lib"
-      ]
-    },
-    "nsis": {
-      "oneClick": false,
-      "allowToChangeInstallationDirectory": true,
-      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
-    },
-    "portable": {
-      "artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
-    }
-  },
-  "dependencies": {
-    "@dagrejs/dagre": "^1.1.8",
-    "@emoji-mart/data": "^1.2.1",
-    "@emoji-mart/react": "^1.1.1",
-    "@fastify/cors": "^8.5.0",
-    "@fastify/rate-limit": "^9.1.0",
-    "@fastify/static": "^7.0.4",
-    "@fastify/websocket": "^9.0.0",
-    "@sentry/electron": "^7.5.0",
-    "@tanstack/react-virtual": "^3.13.13",
-    "@types/d3-force": "^3.0.10",
-    "@types/dompurify": "^3.0.5",
-    "adm-zip": "^0.5.16",
-    "ansi-to-html": "^0.7.2",
-    "archiver": "^7.0.1",
-    "better-sqlite3": "^12.5.0",
-    "canvas-confetti": "^1.9.4",
-    "chokidar": "^3.6.0",
-    "commander": "^14.0.2",
-    "d3-force": "^3.0.0",
-    "date-fns": "^4.1.0",
-    "diff": "^8.0.2",
-    "dompurify": "^3.3.0",
-    "electron-store": "^8.1.0",
-    "electron-updater": "^6.6.2",
-    "fastify": "^4.25.2",
-    "js-tiktoken": "^1.0.21",
-    "marked": "^17.0.1",
-    "mermaid": "^11.12.1",
-    "node-pty": "^1.1.0",
-    "qrcode": "^1.5.4",
-    "qrcode.react": "^4.2.0",
-    "react-diff-view": "^3.3.2",
-    "react-markdown": "^10.1.0",
-    "react-syntax-highlighter": "^16.1.0",
-    "reactflow": "^11.11.4",
-    "recharts": "^3.6.0",
-    "rehype-raw": "^7.0.0",
-    "rehype-slug": "^6.0.0",
-    "remark-frontmatter": "^5.0.0",
-    "remark-gfm": "^4.0.1",
-    "ws": "^8.16.0",
-    "zustand": "^5.0.11"
-  },
-  "devDependencies": {
-    "@electron/notarize": "^3.1.1",
-    "@eslint/js": "^9.39.2",
-    "@playwright/test": "^1.57.0",
-    "@testing-library/jest-dom": "^6.9.1",
-    "@testing-library/react": "^16.3.0",
-    "@types/adm-zip": "^0.5.7",
-    "@types/archiver": "^7.0.0",
-    "@types/better-sqlite3": "^7.6.13",
-    "@types/canvas-confetti": "^1.9.0",
-    "@types/electron-devtools-installer": "^2.2.5",
-    "@types/node": "^20.10.6",
-    "@types/qrcode": "^1.5.6",
-    "@types/react": "^18.2.47",
-    "@types/react-dom": "^18.2.18",
-    "@types/react-syntax-highlighter": "^15.5.13",
-    "@types/ws": "^8.5.10",
-    "@typescript-eslint/eslint-plugin": "^8.50.1",
-    "@typescript-eslint/parser": "^8.50.1",
-    "@vitejs/plugin-react": "^4.2.1",
-    "@vitest/coverage-v8": "^4.0.15",
-    "@welldone-software/why-did-you-render": "^8.0.3",
-    "autoprefixer": "^10.4.16",
-    "baseline-browser-mapping": "^2.9.17",
-    "canvas": "^3.2.0",
-    "concurrently": "^8.2.2",
-    "electron": "^28.3.3",
-    "electron-builder": "^24.9.1",
-    "electron-devtools-installer": "^4.0.0",
-    "electron-playwright-helpers": "^2.0.1",
-    "electron-rebuild": "^3.2.9",
-    "esbuild": "^0.24.2",
-    "eslint": "^9.39.2",
-    "eslint-config-prettier": "^10.1.8",
-    "eslint-plugin-react": "^7.37.5",
-    "eslint-plugin-react-hooks": "^7.0.1",
-    "globals": "^16.5.0",
-    "jsdom": "^27.2.0",
-    "lucide-react": "^0.303.0",
-    "playwright": "^1.57.0",
-    "postcss": "^8.4.33",
-    "prettier": "^3.8.0",
-    "react": "^18.2.0",
-    "react-dom": "^18.2.0",
-    "tailwindcss": "^3.4.1",
-    "typescript": "^5.3.3",
-    "typescript-eslint": "^8.50.1",
-    "vite": "^5.0.11",
-    "vite-plugin-electron": "^0.28.2",
-    "vitest": "^4.0.15"
-  },
-  "engines": {
-    "node": ">=22.0.0"
-  },
-  "lint-staged": {
-    "*.{ts,tsx}": [
-      "prettier --write",
-      "eslint --fix"
-    ]
-  }
+	"name": "maestro",
+	"version": "0.15.0",
+	"description": "Maestro hones fractured attention into focused intent.",
+	"main": "dist/main/index.js",
+	"author": {
+		"name": "Pedram Amini",
+		"email": "pedram@runmaestro.ai"
+	},
+	"license": "AGPL 3.0",
+	"repository": {
+		"type": "git",
+		"url": "https://github.com/RunMaestro/Maestro.git"
+	},
+	"bin": {
+		"maestro-cli": "./dist/cli/maestro-cli.js"
+	},
+	"scripts": {
+		"dev": "concurrently \"npm run dev:main\" \"npm run dev:renderer\"",
+		"dev:prod-data": "USE_PROD_DATA=1 concurrently \"npm run dev:main:prod-data\" \"npm run dev:renderer\"",
+		"dev:demo": "MAESTRO_DEMO_DIR=/tmp/maestro-demo npm run dev",
+		"dev:main": "npm run build:prompts && tsc -p tsconfig.main.json && npm run build:preload && NODE_ENV=development electron .",
+		"dev:main:prod-data": "npm run build:prompts && tsc -p tsconfig.main.json && npm run build:preload && NODE_ENV=development USE_PROD_DATA=1 electron .",
+		"dev:renderer": "vite",
+		"dev:web": "vite --config vite.config.web.mts",
+		"dev:win": "powershell -NoProfile -ExecutionPolicy Bypass -File ./scripts/start-dev.ps1",
+		"build": "npm run build:prompts && npm run build:main && npm run build:preload && npm run build:renderer && npm run build:web && npm run build:cli",
+		"build:prompts": "node scripts/generate-prompts.mjs",
+		"build:main": "tsc -p tsconfig.main.json",
+		"build:preload": "node scripts/build-preload.mjs",
+		"build:cli": "node scripts/build-cli.mjs",
+		"build:renderer": "vite build",
+		"build:web": "vite build --config vite.config.web.mts",
+		"package": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --mac --win --linux",
+		"package:mac": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --mac",
+		"package:win": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --win",
+		"package:linux": "node scripts/set-version.mjs npm run build && node scripts/set-version.mjs electron-builder --linux",
+		"start": "electron .",
+		"clean": "rm -rf dist release node_modules/.vite",
+		"prepare": "husky || true",
+		"postinstall": "electron-rebuild -f -w node-pty,better-sqlite3",
+		"lint": "tsc -p tsconfig.lint.json && tsc -p tsconfig.main.json --noEmit && tsc -p tsconfig.cli.json --noEmit",
+		"lint:eslint": "eslint src/",
+		"format": "prettier --write \"src/**/*.{ts,tsx}\"",
+		"format:all": "prettier --write .",
+		"format:check": "prettier --check \"src/**/*.{ts,tsx}\"",
+		"format:check:all": "prettier --check .",
+		"test": "vitest run",
+		"test:watch": "vitest",
+		"test:coverage": "vitest run --coverage",
+		"test:e2e": "npm run build:main && npm run build:renderer && playwright test",
+		"test:e2e:ui": "npm run build:main && npm run build:renderer && playwright test --ui",
+		"test:e2e:headed": "npm run build:main && npm run build:renderer && playwright test --headed",
+		"test:integration": "vitest run --config vitest.integration.config.ts",
+		"test:integration:watch": "vitest --config vitest.integration.config.ts",
+		"test:performance": "vitest run --config vitest.performance.config.mts",
+		"refresh-speckit": "node scripts/refresh-speckit.mjs",
+		"refresh-openspec": "node scripts/refresh-openspec.mjs"
+	},
+	"build": {
+		"npmRebuild": false,
+		"appId": "com.maestro.app",
+		"productName": "Maestro",
+		"publish": {
+			"provider": "github",
+			"owner": "RunMaestro",
+			"repo": "Maestro"
+		},
+		"directories": {
+			"output": "release",
+			"buildResources": "build"
+		},
+		"files": [
+			"dist/**/*",
+			"package.json"
+		],
+		"asarUnpack": [
+			"node_modules/node-pty/**/*",
+			"node_modules/better-sqlite3/**/*"
+		],
+		"mac": {
+			"category": "public.app-category.developer-tools",
+			"hardenedRuntime": true,
+			"gatekeeperAssess": false,
+			"notarize": false,
+			"entitlements": "build/entitlements.mac.plist",
+			"entitlementsInherit": "build/entitlements.mac.plist",
+			"target": [
+				{
+					"target": "dmg",
+					"arch": [
+						"x64",
+						"arm64"
+					]
+				},
+				{
+					"target": "zip",
+					"arch": [
+						"x64",
+						"arm64"
+					]
+				}
+			],
+			"artifactName": "${name}-${version}-${arch}-mac.${ext}",
+			"icon": "build/icon.icns",
+			"extraResources": [
+				{
+					"from": "dist/cli/maestro-cli.js",
+					"to": "maestro-cli.js"
+				},
+				{
+					"from": "src/prompts/speckit",
+					"to": "prompts/speckit"
+				},
+				{
+					"from": "src/prompts/openspec",
+					"to": "prompts/openspec"
+				}
+			]
+		},
+		"afterSign": "scripts/notarize.js",
+		"win": {
+			"target": [
+				{
+					"target": "nsis",
+					"arch": [
+						"x64"
+					]
+				},
+				{
+					"target": "portable",
+					"arch": [
+						"x64"
+					]
+				}
+			],
+			"icon": "build/icon.ico",
+			"extraResources": [
+				{
+					"from": "dist/cli/maestro-cli.js",
+					"to": "maestro-cli.js"
+				},
+				{
+					"from": "src/prompts/speckit",
+					"to": "prompts/speckit"
+				},
+				{
+					"from": "src/prompts/openspec",
+					"to": "prompts/openspec"
+				}
+			]
+		},
+		"linux": {
+			"target": [
+				"AppImage",
+				"deb",
+				"rpm"
+			],
+			"artifactName": "${name}-${version}-${arch}.${ext}",
+			"category": "Development",
+			"icon": "build/icon.png",
+			"extraResources": [
+				{
+					"from": "dist/cli/maestro-cli.js",
+					"to": "maestro-cli.js"
+				},
+				{
+					"from": "src/prompts/speckit",
+					"to": "prompts/speckit"
+				},
+				{
+					"from": "src/prompts/openspec",
+					"to": "prompts/openspec"
+				}
+			]
+		},
+		"deb": {
+			"depends": [
+				"libgtk-3-0",
+				"libnotify4",
+				"libnss3",
+				"libxss1",
+				"libxtst6",
+				"xdg-utils",
+				"libatspi2.0-0",
+				"libuuid1",
+				"libdrm2",
+				"libgbm1",
+				"libasound2"
+			]
+		},
+		"rpm": {
+			"depends": [
+				"gtk3",
+				"libnotify",
+				"nss",
+				"libXScrnSaver",
+				"(libXtst or libXtst6)",
+				"xdg-utils",
+				"at-spi2-core",
+				"(libuuid or libuuid1)",
+				"libdrm",
+				"mesa-libgbm",
+				"alsa-lib"
+			]
+		},
+		"nsis": {
+			"oneClick": false,
+			"allowToChangeInstallationDirectory": true,
+			"artifactName": "${productName}-Setup-${version}-${arch}.${ext}"
+		},
+		"portable": {
+			"artifactName": "${productName}-Portable-${version}-${arch}.${ext}"
+		}
+	},
+	"dependencies": {
+		"@dagrejs/dagre": "^1.1.8",
+		"@emoji-mart/data": "^1.2.1",
+		"@emoji-mart/react": "^1.1.1",
+		"@fastify/cors": "^8.5.0",
+		"@fastify/rate-limit": "^9.1.0",
+		"@fastify/static": "^7.0.4",
+		"@fastify/websocket": "^9.0.0",
+		"@sentry/electron": "^7.5.0",
+		"@tanstack/react-virtual": "^3.13.13",
+		"@types/d3-force": "^3.0.10",
+		"@types/dompurify": "^3.0.5",
+		"adm-zip": "^0.5.16",
+		"ansi-to-html": "^0.7.2",
+		"archiver": "^7.0.1",
+		"better-sqlite3": "^12.5.0",
+		"canvas-confetti": "^1.9.4",
+		"chokidar": "^3.6.0",
+		"commander": "^14.0.2",
+		"d3-force": "^3.0.0",
+		"date-fns": "^4.1.0",
+		"diff": "^8.0.2",
+		"dompurify": "^3.3.0",
+		"electron-store": "^8.1.0",
+		"electron-updater": "^6.6.2",
+		"fastify": "^4.25.2",
+		"js-tiktoken": "^1.0.21",
+		"marked": "^17.0.1",
+		"mermaid": "^11.12.1",
+		"node-pty": "^1.1.0",
+		"qrcode": "^1.5.4",
+		"qrcode.react": "^4.2.0",
+		"react-diff-view": "^3.3.2",
+		"react-markdown": "^10.1.0",
+		"react-syntax-highlighter": "^16.1.0",
+		"reactflow": "^11.11.4",
+		"recharts": "^3.6.0",
+		"rehype-raw": "^7.0.0",
+		"rehype-slug": "^6.0.0",
+		"remark-frontmatter": "^5.0.0",
+		"remark-gfm": "^4.0.1",
+		"ws": "^8.16.0",
+		"zustand": "^5.0.11"
+	},
+	"devDependencies": {
+		"@electron/notarize": "^3.1.1",
+		"@eslint/js": "^9.39.2",
+		"@playwright/test": "^1.57.0",
+		"@testing-library/jest-dom": "^6.9.1",
+		"@testing-library/react": "^16.3.0",
+		"@types/adm-zip": "^0.5.7",
+		"@types/archiver": "^7.0.0",
+		"@types/better-sqlite3": "^7.6.13",
+		"@types/canvas-confetti": "^1.9.0",
+		"@types/electron-devtools-installer": "^2.2.5",
+		"@types/node": "^20.10.6",
+		"@types/qrcode": "^1.5.6",
+		"@types/react": "^18.2.47",
+		"@types/react-dom": "^18.2.18",
+		"@types/react-syntax-highlighter": "^15.5.13",
+		"@types/ws": "^8.5.10",
+		"@typescript-eslint/eslint-plugin": "^8.50.1",
+		"@typescript-eslint/parser": "^8.50.1",
+		"@vitejs/plugin-react": "^4.2.1",
+		"@vitest/coverage-v8": "^4.0.15",
+		"@welldone-software/why-did-you-render": "^8.0.3",
+		"autoprefixer": "^10.4.16",
+		"baseline-browser-mapping": "^2.9.17",
+		"canvas": "^3.2.0",
+		"concurrently": "^8.2.2",
+		"electron": "^28.3.3",
+		"electron-builder": "^24.9.1",
+		"electron-devtools-installer": "^4.0.0",
+		"electron-playwright-helpers": "^2.0.1",
+		"electron-rebuild": "^3.2.9",
+		"esbuild": "^0.24.2",
+		"eslint": "^9.39.2",
+		"eslint-config-prettier": "^10.1.8",
+		"eslint-plugin-react": "^7.37.5",
+		"eslint-plugin-react-hooks": "^7.0.1",
+		"globals": "^16.5.0",
+		"husky": "^9.1.7",
+		"jsdom": "^27.2.0",
+		"lucide-react": "^0.303.0",
+		"playwright": "^1.57.0",
+		"postcss": "^8.4.33",
+		"prettier": "^3.8.0",
+		"react": "^18.2.0",
+		"react-dom": "^18.2.0",
+		"tailwindcss": "^3.4.1",
+		"typescript": "^5.3.3",
+		"typescript-eslint": "^8.50.1",
+		"vite": "^5.0.11",
+		"vite-plugin-electron": "^0.28.2",
+		"vitest": "^4.0.15"
+	},
+	"engines": {
+		"node": ">=22.0.0"
+	},
+	"lint-staged": {
+		"*": [
+			"prettier --write --ignore-unknown"
+		],
+		"*.{js,cjs,mjs,jsx,ts,tsx,mts,cts}": [
+			"eslint --fix"
+		]
+	}
 }

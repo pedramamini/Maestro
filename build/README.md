@@ -7,11 +7,13 @@ Place your application icons in this directory:
 - **icon.png** - Linux app icon (512x512)
 
 You can generate these from a single source PNG using tools like:
+
 - https://www.electronforge.io/guides/create-and-add-icons
 - https://icon.kitchen/
 - ImageMagick
 
 Example using ImageMagick:
+
 ```bash
 # Generate macOS icon
 png2icns icon.icns icon.png

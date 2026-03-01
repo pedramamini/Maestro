@@ -39,6 +39,9 @@ export { useHoverTooltip } from './useHoverTooltip';
 export { useThemeStyles } from './useThemeStyles';
 export type { UseThemeStylesDeps, UseThemeStylesReturn, ThemeColors } from './useThemeStyles';
 
+// Context menu viewport positioning
+export { useContextMenuPosition } from './useContextMenuPosition';
+
 // Resizable panel drag behavior
 export { useResizablePanel } from './useResizablePanel';
 export type { UseResizablePanelOptions, UseResizablePanelReturn } from './useResizablePanel';
@@ -46,3 +49,10 @@ export type { UseResizablePanelOptions, UseResizablePanelReturn } from './useRes
 // App-level handlers (drag, file, folder operations)
 export { useAppHandlers } from './useAppHandlers';
 export type { UseAppHandlersDeps, UseAppHandlersReturn } from './useAppHandlers';
+
+// App initialization effects (startup, splash screen, platform checks, command loading)
+export { useAppInitialization } from './useAppInitialization';
+export type { AppInitializationReturn } from './useAppInitialization';
+
+// Tour actions listener (right panel control from tour overlay)
+export { useTourActions } from './useTourActions';

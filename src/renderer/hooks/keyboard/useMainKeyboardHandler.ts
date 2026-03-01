@@ -87,8 +87,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				// Allow Tab for accessibility navigation within modals
 				if (e.key === 'Tab') return;
 
+				// Handle both bracket and brace characters: on macOS, Shift+[ produces { and Shift+] produces }
 				const isCycleShortcut =
-					(e.metaKey || e.ctrlKey) && e.shiftKey && (e.key === '[' || e.key === ']');
+					(e.metaKey || e.ctrlKey) &&
+					e.shiftKey &&
+					(e.key === '[' || e.key === ']' || e.key === '{' || e.key === '}');
 				// Allow sidebar toggle shortcuts (Alt+Cmd+Arrow) even when modals are open
 				const isLayoutShortcut =
 					e.altKey && (e.metaKey || e.ctrlKey) && (e.key === 'ArrowLeft' || e.key === 'ArrowRight');
@@ -110,7 +113,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				const isSystemUtilShortcut =
 					e.altKey &&
 					(e.metaKey || e.ctrlKey) &&
-					(codeKeyLower === 'l' || codeKeyLower === 'p' || codeKeyLower === 'u' || codeKeyLower === 's');
+					(codeKeyLower === 'l' ||
+						codeKeyLower === 'p' ||
+						codeKeyLower === 'u' ||
+						codeKeyLower === 's');
 				// Allow session jump shortcuts (Alt+Cmd+NUMBER) even when modals are open
 				// NOTE: Must use e.code for Alt key combos on macOS because e.key produces special characters
 				const isSessionJumpShortcut =
@@ -234,10 +240,12 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				}
 			} else if (ctx.isShortcut(e, 'cyclePrev')) {
 				// Cycle to previous Maestro session (global shortcut)
+				e.preventDefault();
 				ctx.cycleSession('prev');
 				trackShortcut('cyclePrev');
 			} else if (ctx.isShortcut(e, 'cycleNext')) {
 				// Cycle to next Maestro session (global shortcut)
+				e.preventDefault();
 				ctx.cycleSession('next');
 				trackShortcut('cycleNext');
 			} else if (ctx.isShortcut(e, 'navBack')) {
@@ -671,25 +679,27 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				// Cycles through both AI tabs and file preview tabs
 				if (ctx.isTabShortcut(e, 'nextTab')) {
 					e.preventDefault();
-					const result = ctx.navigateToNextUnifiedTab(ctx.activeSession, ctx.showUnreadOnly);
-					if (result) {
-						ctx.setSessions((prev: Session[]) =>
-							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
-						);
-						trackShortcut('nextTab');
-					}
+					ctx.setSessions((prev: Session[]) => {
+						const current = prev.find((s: Session) => s.id === ctx.activeSessionId);
+						if (!current) return prev;
+						const result = ctx.navigateToNextUnifiedTab(current, ctx.showUnreadOnly);
+						if (!result) return prev;
+						return prev.map((s: Session) => (s.id === current.id ? result.session : s));
+					});
+					trackShortcut('nextTab');
 				}
 				// Cmd+Shift+[ - Navigate to previous tab in unified tab order
 				// Cycles through both AI tabs and file preview tabs
 				if (ctx.isTabShortcut(e, 'prevTab')) {
 					e.preventDefault();
-					const result = ctx.navigateToPrevUnifiedTab(ctx.activeSession, ctx.showUnreadOnly);
-					if (result) {
-						ctx.setSessions((prev: Session[]) =>
-							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
-						);
-						trackShortcut('prevTab');
-					}
+					ctx.setSessions((prev: Session[]) => {
+						const current = prev.find((s: Session) => s.id === ctx.activeSessionId);
+						if (!current) return prev;
+						const result = ctx.navigateToPrevUnifiedTab(current, ctx.showUnreadOnly);
+						if (!result) return prev;
+						return prev.map((s: Session) => (s.id === current.id ? result.session : s));
+					});
+					trackShortcut('prevTab');
 				}
 				// Cmd+1 through Cmd+9: Jump to specific tab by index in unified tab order
 				// Works with both AI tabs and file preview tabs
@@ -698,26 +708,28 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					for (let i = 1; i <= 9; i++) {
 						if (ctx.isTabShortcut(e, `goToTab${i}`)) {
 							e.preventDefault();
-							const result = ctx.navigateToUnifiedTabByIndex(ctx.activeSession, i - 1);
-							if (result) {
-								ctx.setSessions((prev: Session[]) =>
-									prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
-								);
-								trackShortcut(`goToTab${i}`);
-							}
+							ctx.setSessions((prev: Session[]) => {
+								const current = prev.find((s: Session) => s.id === ctx.activeSessionId);
+								if (!current) return prev;
+								const result = ctx.navigateToUnifiedTabByIndex(current, i - 1);
+								if (!result) return prev;
+								return prev.map((s: Session) => (s.id === current.id ? result.session : s));
+							});
+							trackShortcut(`goToTab${i}`);
 							break;
 						}
 					}
 					// Cmd+0: Jump to last tab in unified tab order
 					if (ctx.isTabShortcut(e, 'goToLastTab')) {
 						e.preventDefault();
-						const result = ctx.navigateToLastUnifiedTab(ctx.activeSession);
-						if (result) {
-							ctx.setSessions((prev: Session[]) =>
-								prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
-							);
-							trackShortcut('goToLastTab');
-						}
+						ctx.setSessions((prev: Session[]) => {
+							const current = prev.find((s: Session) => s.id === ctx.activeSessionId);
+							if (!current) return prev;
+							const result = ctx.navigateToLastUnifiedTab(current);
+							if (!result) return prev;
+							return prev.map((s: Session) => (s.id === current.id ? result.session : s));
+						});
+						trackShortcut('goToLastTab');
 					}
 				}
 			}
@@ -745,10 +757,15 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 	}, []); // Empty dependencies - handler reads from ref
 
 	// Track Opt+Cmd modifier keys to show session jump number badges
+	// Uses ref to read current state without adding it to deps (avoids re-registering
+	// listeners every time the modifier state toggles)
+	const showSessionJumpNumbersRef = useRef(false);
+	showSessionJumpNumbersRef.current = showSessionJumpNumbers;
+
 	useEffect(() => {
 		const handleKeyDown = (e: KeyboardEvent) => {
 			// Show number badges when Opt+Cmd is held (but no number pressed yet)
-			if (e.altKey && (e.metaKey || e.ctrlKey) && !showSessionJumpNumbers) {
+			if (e.altKey && (e.metaKey || e.ctrlKey) && !showSessionJumpNumbersRef.current) {
 				setShowSessionJumpNumbers(true);
 			}
 		};
@@ -773,7 +790,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			window.removeEventListener('keyup', handleKeyUp);
 			window.removeEventListener('blur', handleBlur);
 		};
-	}, [showSessionJumpNumbers]);
+	}, []); // Empty deps - reads state via ref
 
 	return {
 		keyboardHandlerRef,

@@ -8,21 +8,21 @@ You will receive a list of session history file paths below. Each file is a JSON
 
 ```json
 {
-  "version": 1,
-  "sessionId": "...",
-  "projectPath": "/path/to/project",
-  "entries": [
-    {
-      "id": "unique-id",
-      "type": "AUTO | USER",
-      "timestamp": 1234567890000,
-      "summary": "Brief description of work",
-      "fullResponse": "Full agent output (may be long)",
-      "success": true,
-      "sessionName": "Display name",
-      "elapsedTimeMs": 12345
-    }
-  ]
+	"version": 1,
+	"sessionId": "...",
+	"projectPath": "/path/to/project",
+	"entries": [
+		{
+			"id": "unique-id",
+			"type": "AUTO | USER",
+			"timestamp": 1234567890000,
+			"summary": "Brief description of work",
+			"fullResponse": "Full agent output (may be long)",
+			"success": true,
+			"sessionName": "Display name",
+			"elapsedTimeMs": 12345
+		}
+	]
 }
 ```
 
@@ -39,25 +39,32 @@ You will receive a list of session history file paths below. Each file is a JSON
 Generate a markdown synopsis with the following sections:
 
 ### Accomplishments
+
 Summarize what has been completed, grouped by project/agent when patterns emerge. Order by activity volume (most active first). Include:
+
 - Key features implemented
 - Bugs fixed
 - Refactoring completed
 - Documentation written
 
 ### Challenges
+
 Identify recurring problems, failed tasks, and blockers, grouped by project/agent (same grouping as Accomplishments). Include:
+
 - Failed automated tasks (look for success: false)
 - Patterns in error types
 - Areas with repeated attempts
 
 ### Next Steps
+
 Based on incomplete work and patterns observed, suggest next steps grouped by project/agent (same grouping as Accomplishments). Include:
+
 - Unfinished tasks that should be continued
 - Areas that need attention based on failure patterns
 - Logical follow-ups to completed work
 
 ## Guidelines
+
 - Be concise but comprehensive
 - Use bullet points for readability
 - Include specific details when available (file names, feature names)
@@ -66,6 +73,7 @@ Based on incomplete work and patterns observed, suggest next steps grouped by pr
 - The lookback period and stats are displayed separately in the UI — do not repeat them in the synopsis
 
 ## CRITICAL: Output Format Rules
+
 - Your response must start IMMEDIATELY with `### Accomplishments` — no text before it
 - Do NOT include ANY thinking, reasoning, or analysis preamble before the synopsis
 - Do NOT narrate your process (e.g., "Let me identify the qualifying entries...", "Now I can generate...", "I see X agents with Y entries...")

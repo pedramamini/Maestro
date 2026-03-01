@@ -199,7 +199,7 @@ export function useAppHandlers(deps: UseAppHandlersDeps): UseAppHandlersReturn {
 					useModalStore.getState().openModal('confirm', {
 						message: `Open "${node.name}" in external application?`,
 						onConfirm: async () => {
-							await window.maestro.shell.openExternal(`file://${fullPath}`);
+							await window.maestro.shell.openPath(fullPath);
 						},
 					});
 					return;

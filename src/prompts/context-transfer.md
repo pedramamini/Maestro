@@ -22,6 +22,7 @@ You are preparing a conversation context for transfer from {{sourceAgent}} to {{
 ## Guidelines
 
 ### What to Preserve
+
 - All code changes and implementations
 - Important decisions and their rationale
 - File paths and modifications
@@ -34,6 +35,7 @@ You are preparing a conversation context for transfer from {{sourceAgent}} to {{
 - Git branch and repository information
 
 ### What to Remove
+
 - Agent-specific slash commands (e.g., /clear, /compact, /cost)
 - Agent-specific tool names and invocations
 - References to the source agent's capabilities or limitations
@@ -42,6 +44,7 @@ You are preparing a conversation context for transfer from {{sourceAgent}} to {{
 - Redundant session metadata
 
 ### What to Convert
+
 - Agent-specific terminology to generic equivalents
 - Tool-specific syntax to descriptive prose
 - Agent-branded references to neutral alternatives
@@ -51,27 +54,35 @@ You are preparing a conversation context for transfer from {{sourceAgent}} to {{
 Provide a clean context that any AI coding assistant can understand. Structure it as:
 
 ## Project Context
+
 Brief description of the project and current working directory.
 
 ## Summary
+
 A 2-3 sentence overview of what has been accomplished so far.
 
 ## Key Decisions
+
 - Decision 1: Brief description and rationale
 - Decision 2: Brief description and rationale
-(Only include if decisions were made)
+  (Only include if decisions were made)
 
 ## Code Changes
+
 List files modified with brief descriptions:
+
 - `path/to/file.ts` - What was changed and why
-(Only include if code was modified)
+  (Only include if code was modified)
 
 ## Current State
+
 What is the current state of the work? What's working, what's not?
 
 ## Next Steps
+
 Any discussed or implied next steps to continue the work.
 (Only include if next steps were discussed)
 
 ## Important Context
+
 Any critical information the new agent needs to know to continue effectively.

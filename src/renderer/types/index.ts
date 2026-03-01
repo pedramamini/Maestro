@@ -19,6 +19,7 @@ export type {
 	PlaybookDocumentEntry,
 	Playbook,
 	ThinkingMode,
+	WorktreeRunTarget,
 } from '../../shared/types';
 
 // Re-export Symphony types for session metadata
@@ -29,6 +30,7 @@ import type { SymphonySessionMetadata } from '../../shared/symphony-types';
 // Import for extension in this file
 import type {
 	WorktreeConfig as BaseWorktreeConfig,
+	WorktreeRunTarget,
 	BatchDocumentEntry,
 	UsageStats,
 	ToolType,
@@ -72,6 +74,8 @@ export interface WizardMessage {
 	confidence?: number;
 	/** Parsed ready flag from assistant responses */
 	ready?: boolean;
+	/** Base64-encoded image data URLs attached to this message */
+	images?: string[];
 }
 
 /**
@@ -272,6 +276,7 @@ export interface BatchRunConfig {
 	loopEnabled: boolean; // Loop back to first doc when done
 	maxLoops?: number | null; // Max loop iterations (null/undefined = infinite)
 	worktree?: WorktreeConfig; // Optional worktree configuration
+	worktreeTarget?: WorktreeRunTarget; // Optional target for dispatching to a worktree agent
 }
 
 // Import BatchProcessingState for state machine integration
@@ -332,18 +337,6 @@ export interface BatchRunState {
 	errorPaused?: boolean; // True if batch is paused waiting for error resolution
 	errorDocumentIndex?: number; // Which document had the error (for skip functionality)
 	errorTaskDescription?: string; // Description of the task that failed (for UI display)
-}
-
-// Persistent global statistics (survives app restarts)
-export interface GlobalStats {
-	totalSessions: number;
-	totalMessages: number;
-	totalInputTokens: number;
-	totalOutputTokens: number;
-	totalCacheReadTokens: number;
-	totalCacheCreationTokens: number;
-	totalCostUsd: number;
-	totalActiveTimeMs: number;
 }
 
 // Badge unlock record for history tracking
@@ -432,6 +425,13 @@ export interface AITab {
 	autoSendOnActivate?: boolean; // When true, automatically send inputValue when tab becomes active
 	wizardState?: SessionWizardState; // Per-tab inline wizard state for /wizard command
 	isGeneratingName?: boolean; // True while automatic tab naming is in progress
+}
+
+// A single "thinking item" — one busy tab within a session.
+// Used by ThinkingStatusPill to show all active work across all agents.
+export interface ThinkingItem {
+	session: Session;
+	tab: AITab | null; // null for legacy sessions without tab-level tracking
 }
 
 // Closed tab entry for undo functionality (Cmd+Shift+T)
@@ -691,6 +691,7 @@ export interface Session {
 	customModel?: string; // Custom model ID (overrides agent-level)
 	customProviderPath?: string; // Custom provider path (overrides agent-level)
 	customContextWindow?: number; // Custom context window size (overrides agent-level)
+	documentGraphLayout?: 'mindmap' | 'radial' | 'force'; // Document Graph layout algorithm preference (overrides global default)
 	// Per-session SSH remote configuration (overrides agent-level SSH config)
 	// When set, this session uses the specified SSH remote; when not set, runs locally
 	sessionSshRemoteConfig?: {
@@ -791,6 +792,7 @@ export interface ProcessConfig {
 export interface DirectoryEntry {
 	name: string;
 	isDirectory: boolean;
+	isFile: boolean;
 	path: string;
 }
 

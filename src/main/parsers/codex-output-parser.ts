@@ -25,6 +25,7 @@
 
 import type { ToolType, AgentError } from '../../shared/types';
 import type { AgentOutputParser, ParsedEvent } from './agent-output-parser';
+import { captureException } from '../utils/sentry';
 import { getErrorPatterns, matchErrorPattern } from './error-patterns';
 import * as fs from 'fs';
 import * as path from 'path';
@@ -58,9 +59,14 @@ const MODEL_CONTEXT_WINDOWS: Record<string, number> = {
 	// GPT-5 family (Codex default)
 	'gpt-5': 200000,
 	'gpt-5.1': 200000,
+	'gpt-5.1-codex': 200000,
 	'gpt-5.1-codex-max': 200000,
 	'gpt-5.2': 400000,
+	'gpt-5.2-codex': 400000,
 	'gpt-5.2-codex-max': 400000,
+	'gpt-5.3': 400000,
+	'gpt-5.3-codex': 400000,
+	'gpt-5.3-codex-max': 400000,
 	// Default fallback (Codex defaults to GPT-5.2)
 	default: 400000,
 };
@@ -124,11 +130,17 @@ function readCodexConfig(): { model?: string; contextWindow?: number } {
  * Raw message structure from old Codex JSON output (item-envelope format)
  */
 interface CodexOldMessage {
-	type?: 'thread.started' | 'turn.started' | 'item.completed' | 'turn.completed' | 'error';
+	type?:
+		| 'thread.started'
+		| 'turn.started'
+		| 'item.completed'
+		| 'turn.completed'
+		| 'turn.failed'
+		| 'error';
 	thread_id?: string;
 	item?: CodexItem;
 	usage?: CodexOldUsage;
-	error?: string;
+	error?: string | { message?: string; type?: string };
 }
 
 interface CodexItem {
@@ -252,6 +264,16 @@ interface CodexConfigLine {
 // ─── PARSER IMPLEMENTATION ──────────────────────────────────────────
 
 /**
+ * Extract a human-readable error message from Codex's polymorphic error field.
+ * Codex sends errors as either a plain string or { message?, type? } object.
+ */
+function extractErrorText(error: CodexOldMessage['error'], fallback = 'Unknown error'): string {
+	if (typeof error === 'object' && error?.message) return error.message;
+	if (typeof error === 'string') return error;
+	return fallback;
+}
+
+/**
  * Codex CLI Output Parser Implementation
  *
  * Transforms Codex's JSON format into normalized ParsedEvents.
@@ -327,7 +349,11 @@ export class CodexOutputParser implements AgentOutputParser {
 	 */
 	private routeMessage(parsed: Record<string, unknown>): ParsedEvent {
 		// New format detection: presence of `msg` field with `type` inside
-		if (parsed.msg && typeof parsed.msg === 'object' && (parsed.msg as Record<string, unknown>).type) {
+		if (
+			parsed.msg &&
+			typeof parsed.msg === 'object' &&
+			(parsed.msg as Record<string, unknown>).type
+		) {
 			return this.transformNewFormat(parsed as unknown as CodexNewEnvelope);
 		}
 
@@ -422,7 +448,10 @@ export class CodexOutputParser implements AgentOutputParser {
 	/**
 	 * Transform exec_command_begin → tool_use (running)
 	 */
-	private transformExecCommandBegin(msg: CodexNewExecCommandBegin, envelope: CodexNewEnvelope): ParsedEvent {
+	private transformExecCommandBegin(
+		msg: CodexNewExecCommandBegin,
+		envelope: CodexNewEnvelope
+	): ParsedEvent {
 		// Extract tool name from command array or parsed_cmd
 		let toolName: string | undefined;
 		if (msg.command && msg.command.length > 0) {
@@ -453,7 +482,10 @@ export class CodexOutputParser implements AgentOutputParser {
 	/**
 	 * Transform exec_command_end → tool_use (completed)
 	 */
-	private transformExecCommandEnd(msg: CodexNewExecCommandEnd, envelope: CodexNewEnvelope): ParsedEvent {
+	private transformExecCommandEnd(
+		msg: CodexNewExecCommandEnd,
+		envelope: CodexNewEnvelope
+	): ParsedEvent {
 		// Retrieve and clean up tool name by call_id
 		let toolName: string | undefined;
 		if (msg.call_id) {
@@ -573,11 +605,21 @@ export class CodexOutputParser implements AgentOutputParser {
 			return event;
 		}
 
+		// Handle turn.failed (API errors, model not found, stream disconnections)
+		// Format: {"type":"turn.failed","error":{"message":"stream disconnected before completion: ..."}}
+		if (msg.type === 'turn.failed') {
+			return {
+				type: 'error',
+				text: extractErrorText(msg.error, 'Turn failed'),
+				raw: msg,
+			};
+		}
+
 		// Handle error messages
 		if (msg.type === 'error' || msg.error) {
 			return {
 				type: 'error',
-				text: msg.error || 'Unknown error',
+				text: extractErrorText(msg.error),
 				raw: msg,
 			};
 		}
@@ -665,8 +707,10 @@ export class CodexOutputParser implements AgentOutputParser {
 	private truncateToolOutput(output: string): string {
 		if (output.length > CodexOutputParser.MAX_TOOL_OUTPUT_LENGTH) {
 			const originalLength = output.length;
-			return output.substring(0, CodexOutputParser.MAX_TOOL_OUTPUT_LENGTH) +
-				`\n... [output truncated, ${originalLength} chars total]`;
+			return (
+				output.substring(0, CodexOutputParser.MAX_TOOL_OUTPUT_LENGTH) +
+				`\n... [output truncated, ${originalLength} chars total]`
+			);
 		}
 		return output;
 	}
@@ -675,18 +719,26 @@ export class CodexOutputParser implements AgentOutputParser {
 	 * Decode tool output which may be a string or byte array (old format only)
 	 */
 	private decodeToolOutput(output: string | number[] | undefined): string {
+		let decoded: string;
+
 		if (output === undefined) {
 			return '';
 		}
 
-		let decoded: string;
-
 		if (typeof output === 'string') {
 			decoded = output;
 		} else if (Array.isArray(output)) {
+			// Byte array - decode to string
+			// Note: Using Buffer.from instead of String.fromCharCode(...output) to avoid
+			// stack overflow on large arrays (spread operator has argument limit ~10K)
 			try {
 				decoded = Buffer.from(output).toString('utf-8');
-			} catch {
+			} catch (err) {
+				captureException(err, {
+					operation: 'codexParser:decodeToolOutput',
+					outputType: typeof output,
+					outputLength: output.length,
+				});
 				decoded = output.toString();
 			}
 		} else {
@@ -764,13 +816,15 @@ export class CodexOutputParser implements AgentOutputParser {
 		}
 
 		let errorText: string | null = null;
+		let parsedJson: unknown = null;
 		try {
 			const parsed = JSON.parse(line);
-			// Old format: { type: 'error', error: '...' }
-			if (parsed.type === 'error' && parsed.error) {
-				errorText = parsed.error;
-			} else if (parsed.error) {
-				errorText = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
+			// Check for error type messages
+			// Codex uses type: 'error' for some errors and type: 'turn.failed' for others
+			if (parsed.type === 'error' || parsed.type === 'turn.failed' || parsed.error) {
+				parsedJson = parsed;
+				errorText = extractErrorText(parsed.error);
+				if (errorText === 'Unknown error') errorText = null; // No useful info to match
 			}
 			// New format: check inside msg envelope
 			if (!errorText && parsed.msg && typeof parsed.msg === 'object') {
@@ -800,6 +854,21 @@ export class CodexOutputParser implements AgentOutputParser {
 				raw: {
 					errorLine: line,
 				},
+				parsedJson,
+			};
+		}
+
+		// Structured error event that didn't match a known pattern —
+		// still report it rather than silently dropping
+		if (parsedJson) {
+			return {
+				type: 'unknown',
+				message: errorText,
+				recoverable: true,
+				agentId: this.agentId,
+				timestamp: Date.now(),
+				raw: { errorLine: line },
+				parsedJson,
 			};
 		}
 

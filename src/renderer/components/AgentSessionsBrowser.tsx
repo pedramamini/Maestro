@@ -184,6 +184,11 @@ export function AgentSessionsBrowser({
 
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
 
+	const handleSearchChange = useCallback((value: string) => {
+		setSearch(value);
+		setSelectedIndex(0);
+	}, []);
+
 	// Reset to list view on mount - ensures we always start with list view when opening
 	useEffect(() => {
 		clearViewingSession();
@@ -541,11 +546,6 @@ export function AgentSessionsBrowser({
 		};
 	}, [aggregateStats]);
 
-	// Reset selected index when search changes
-	useEffect(() => {
-		setSelectedIndex(0);
-	}, [search]);
-
 	// Keyboard navigation
 	const handleKeyDown = (e: React.KeyboardEvent) => {
 		if (viewingSession) {
@@ -772,7 +772,6 @@ export function AgentSessionsBrowser({
 												borderColor: theme.colors.accent,
 												backgroundColor: theme.colors.bgActivity,
 											}}
-											autoFocus
 										/>
 									</div>
 								) : viewingSession.sessionName ? (
@@ -1092,6 +1091,8 @@ export function AgentSessionsBrowser({
 						onScroll={handleMessagesScroll}
 						onKeyDown={handleKeyDown}
 						tabIndex={0}
+						role="region"
+						aria-label="Session messages"
 					>
 						{/* Load more indicator */}
 						{hasMoreMessages && (
@@ -1269,7 +1270,7 @@ export function AgentSessionsBrowser({
 										setTimeout(() => inputRef.current?.focus(), 50);
 									} else {
 										// Switching to graph - clear search
-										setSearch('');
+										handleSearchChange('');
 									}
 								}}
 								className="p-1.5 rounded hover:bg-white/10 transition-colors shrink-0"
@@ -1298,13 +1299,13 @@ export function AgentSessionsBrowser({
 											placeholder={`Search ${searchMode === 'title' ? 'titles' : searchMode === 'user' ? 'your messages' : searchMode === 'assistant' ? 'AI responses' : 'all content'}...`}
 											style={{ color: theme.colors.textMain }}
 											value={search}
-											onChange={(e) => setSearch(e.target.value)}
+											onChange={(e) => handleSearchChange(e.target.value)}
 											onKeyDown={(e) => {
 												if (e.key === 'Escape') {
 													e.preventDefault();
 													e.stopPropagation();
 													setShowSearchPanel(false);
-													setSearch('');
+													handleSearchChange('');
 												} else {
 													handleKeyDown(e);
 												}
@@ -1318,7 +1319,7 @@ export function AgentSessionsBrowser({
 										)}
 										{search && !isSearching && (
 											<button
-												onClick={() => setSearch('')}
+												onClick={() => handleSearchChange('')}
 												className="p-0.5 rounded hover:bg-white/10"
 												style={{ color: theme.colors.textDim }}
 											>

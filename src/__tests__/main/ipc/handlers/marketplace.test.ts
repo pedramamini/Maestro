@@ -1602,6 +1602,136 @@ describe('marketplace IPC handlers', () => {
 		});
 	});
 
+	describe('path traversal protection', () => {
+		it('should resolve a normal local document filename correctly', async () => {
+			// Setup a local playbook with a normal filename
+			const localPlaybook = {
+				id: 'local-safe-path',
+				title: 'Safe Path Playbook',
+				description: 'Test',
+				category: 'Custom',
+				author: 'Test',
+				lastUpdated: '2024-01-20',
+				path: '/Users/test/playbooks/safe',
+				documents: [{ filename: 'phase-1', resetOnCompletion: false }],
+				loopEnabled: false,
+				maxLoops: null,
+				prompt: null,
+			};
+
+			const localManifest: MarketplaceManifest = {
+				lastUpdated: '2024-01-20',
+				playbooks: [localPlaybook],
+			};
+
+			const validCache: MarketplaceCache = {
+				fetchedAt: Date.now(),
+				manifest: sampleManifest,
+			};
+
+			vi.mocked(fs.readFile)
+				.mockResolvedValueOnce(JSON.stringify(validCache))
+				.mockResolvedValueOnce(JSON.stringify(localManifest))
+				.mockResolvedValueOnce('# Phase 1 Content') // The document read
+				.mockRejectedValueOnce({ code: 'ENOENT' }); // No existing playbooks
+			vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+			vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+			const handler = handlers.get('marketplace:importPlaybook');
+			const result = await handler!(
+				{} as any,
+				'local-safe-path',
+				'Safe Import',
+				'/autorun/folder',
+				'session-123'
+			);
+
+			expect(result.success).toBe(true);
+			expect(result.importedDocs).toEqual(['phase-1']);
+			// Document should have been read from the correct path
+			expect(fs.readFile).toHaveBeenCalledWith(
+				path.resolve('/Users/test/playbooks/safe', 'phase-1.md'),
+				'utf-8'
+			);
+		});
+
+		it('should reject document filename containing ../', async () => {
+			const handler = handlers.get('marketplace:getDocument');
+			const result = await handler!({} as any, '/Users/test/playbooks/safe', '../../../etc/passwd');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('Invalid filename');
+		});
+
+		it('should reject document filename with absolute path', async () => {
+			const handler = handlers.get('marketplace:getDocument');
+			const result = await handler!({} as any, '/Users/test/playbooks/safe', '/etc/passwd');
+
+			// path.resolve('/Users/test/playbooks/safe', '/etc/passwd.md') resolves to /etc/passwd.md
+			// which is outside the base, so validateSafePath blocks it
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('Path traversal blocked');
+		});
+
+		it('should reject asset filename containing ../../', async () => {
+			// Create a local playbook with an asset that has traversal
+			const localPlaybook = {
+				id: 'local-traversal-asset',
+				title: 'Traversal Asset Playbook',
+				description: 'Test',
+				category: 'Custom',
+				author: 'Test',
+				lastUpdated: '2024-01-20',
+				path: '/Users/test/playbooks/safe',
+				documents: [{ filename: 'doc', resetOnCompletion: false }],
+				loopEnabled: false,
+				maxLoops: null,
+				prompt: null,
+				assets: ['../../etc/shadow'],
+			};
+
+			const localManifest: MarketplaceManifest = {
+				lastUpdated: '2024-01-20',
+				playbooks: [localPlaybook],
+			};
+
+			const validCache: MarketplaceCache = {
+				fetchedAt: Date.now(),
+				manifest: sampleManifest,
+			};
+
+			vi.mocked(fs.readFile)
+				.mockResolvedValueOnce(JSON.stringify(validCache))
+				.mockResolvedValueOnce(JSON.stringify(localManifest))
+				.mockResolvedValueOnce('# Doc content') // Document read
+				.mockRejectedValueOnce({ code: 'ENOENT' }); // No existing playbooks
+			vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+			vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+			const handler = handlers.get('marketplace:importPlaybook');
+			const result = await handler!(
+				{} as any,
+				'local-traversal-asset',
+				'Traversal Test',
+				'/autorun/folder',
+				'session-123'
+			);
+
+			// The import should succeed overall but skip the bad asset
+			// because the asset fetch throws and the loop continues
+			expect(result.success).toBe(true);
+			expect(result.importedAssets).toEqual([]);
+		});
+
+		it('should reject document filename with embedded .. segments', async () => {
+			const handler = handlers.get('marketplace:getDocument');
+			const result = await handler!({} as any, '/Users/test/playbooks/safe', 'subdir/../../secret');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toContain('Invalid filename');
+		});
+	});
+
 	describe('cache TTL validation', () => {
 		it('should correctly identify cache as valid within TTL', async () => {
 			const testCases = [

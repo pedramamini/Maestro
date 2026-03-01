@@ -16,6 +16,7 @@ Maestro includes a built-in web server for mobile remote control:
 The mobile web interface provides a comprehensive remote control experience:
 
 ### Core Features
+
 - Real-time session monitoring and command input
 - Device color scheme preference support (light/dark mode)
 - Connection status indicator with automatic reconnection (30-second countdown timer)
@@ -23,11 +24,13 @@ The mobile web interface provides a comprehensive remote control experience:
 - Multi-tab support with tab bar and tab search modal
 
 ### Gestures and Navigation
+
 - Swipe gestures (left/right/up/down) for common actions
 - Pull-to-refresh functionality
 - Long-press menu for mode switching (AI ↔ Terminal)
 
 ### Input Features
+
 - Recent command chips for quick access
 - Slash command autocomplete
 - Command history drawer
@@ -69,6 +72,7 @@ However, if you need a **fixed port** (e.g., for firewall rules, reverse proxies
 4. The server restarts automatically on the new port
 
 **Use cases for custom ports:**
+
 - Punching a hole through a firewall or NAT
 - Configuring a reverse proxy (nginx, Caddy)
 - Setting up persistent SSH tunnels
@@ -78,27 +82,31 @@ However, if you need a **fixed port** (e.g., for firewall rules, reverse proxies
 **Security Trade-off**: Using a custom port removes one layer of security-by-obscurity. The randomized port and auto-generated auth token in the URL work together to protect access. With a custom port, you're relying solely on the auth token for security.
 
 **Recommendations when using custom ports:**
+
 - Use Cloudflare tunnel for remote access instead of exposing ports directly
 - Ensure your network firewall is properly configured
 - Consider additional authentication at the network level
-</Warning>
+  </Warning>
 
 ## Connection Handling
 
 The mobile interface includes robust connection management:
 
 ### Automatic Reconnection
+
 - When disconnected, a 30-second countdown timer displays before automatic reconnection
 - Manual **Retry** button available for immediate reconnection
 - Reconnection attempts counter shows progress (e.g., "Attempt 3 of 10")
 
 ### Offline Mode
+
 - Commands typed while offline are queued (up to 50 commands)
 - Queued commands are persisted to localStorage and survive page reloads
 - Commands automatically send when connection is restored
 - An **Offline Queue Banner** shows the number of pending commands
 
 ### Connection Status Indicator
+
 - Displays as a dismissible banner when connection is lost
 - Shows different states: **Connecting**, **Authenticating**, **Disconnected**, **No internet**
 - Expandable error details for troubleshooting

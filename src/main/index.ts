@@ -1,4 +1,4 @@
-import { app, BrowserWindow, powerMonitor } from 'electron';
+import { app, BrowserWindow, Menu, powerMonitor } from 'electron';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
@@ -151,7 +151,8 @@ if (isDevelopment && !DEMO_MODE && !process.env.USE_PROD_DATA) {
 const { syncPath, bootstrapStore } = initializeStores({ productionDataPath });
 
 // Get early settings before Sentry init (for crash reporting and GPU acceleration)
-const { crashReportingEnabled, disableGpuAcceleration } = getEarlySettings(syncPath);
+const { crashReportingEnabled, disableGpuAcceleration, useNativeTitleBar, autoHideMenuBar } =
+	getEarlySettings(syncPath);
 
 // Disable GPU hardware acceleration if user has opted out or in WSL environment
 // Must be called before app.ready event
@@ -263,6 +264,8 @@ const windowManager = createWindowManager({
 	preloadPath: path.join(__dirname, 'preload.js'),
 	rendererPath: path.join(__dirname, '../renderer/index.html'),
 	devServerUrl: devServerUrl,
+	useNativeTitleBar,
+	autoHideMenuBar,
 });
 
 // Create web server factory with dependency injection (Phase 2 refactoring)
@@ -369,6 +372,25 @@ app.whenReady().then(async () => {
 	// Set up process event listeners
 	logger.debug('Setting up process event listeners', 'Startup');
 	setupProcessListeners();
+
+	// Set custom application menu to prevent macOS from injecting native
+	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
+	// menu items into the default Window menu. Without this, those keyboard
+	// events are intercepted at the NSMenu level and never reach the renderer.
+	if (process.platform === 'darwin') {
+		const template: Electron.MenuItemConstructorOptions[] = [
+			{ role: 'appMenu' },
+			{ role: 'editMenu' },
+			{
+				label: 'Window',
+				submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }],
+			},
+		];
+		Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+	} else {
+		// On Windows/Linux, hide the menu bar entirely (Maestro uses its own UI)
+		Menu.setApplicationMenu(null);
+	}
 
 	// Create main window
 	logger.info('Creating main window', 'Startup');

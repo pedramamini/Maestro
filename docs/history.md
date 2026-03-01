@@ -12,14 +12,15 @@ The History panel provides a timestamped log of all agent activity — both auto
 
 History entries are categorized by source:
 
-| Type | Label | Description |
-|------|-------|-------------|
+| Type     | Label   | Description                                  |
+| -------- | ------- | -------------------------------------------- |
 | **AUTO** | 🤖 AUTO | Entries created by Auto Run task completions |
-| **USER** | 👤 USER | Entries created manually by the user |
+| **USER** | 👤 USER | Entries created manually by the user         |
 
 ### Auto Entries
 
 Auto entries are created automatically when Auto Run completes a task. Each entry includes:
+
 - **Summary** of what the agent accomplished
 - **Session ID** (clickable to jump to that conversation)
 - **Duration** and **cost** of the task
@@ -42,6 +43,7 @@ User entries are created in three ways:
 ### By Type
 
 Use the **AUTO** and **USER** filter buttons at the top of the History panel to show or hide each entry type:
+
 - Click **AUTO** to toggle Auto Run entries
 - Click **USER** to toggle user-created entries
 - Both can be active simultaneously
@@ -49,6 +51,7 @@ Use the **AUTO** and **USER** filter buttons at the top of the History panel to 
 ### By Keyword
 
 Press `Cmd+F` / `Ctrl+F` to open the search box, or click in the filter area to type. The search matches against:
+
 - Entry summaries
 - Session names and IDs
 - Full response content
@@ -56,6 +59,7 @@ Press `Cmd+F` / `Ctrl+F` to open the search box, or click in the filter area to 
 ### By Time Range
 
 The **Graph View** at the top shows activity distribution over time. **Right-click the graph** to change the time range:
+
 - 24 hours
 - 72 hours
 - 1 week
@@ -74,6 +78,7 @@ Click any history entry to open the **Detail View**:
 ![History Detail View](./screenshots/history-2.png)
 
 The detail view shows:
+
 - **Full entry header** with type badge, session ID, timestamp, and validation status
 - **Context usage** — tokens consumed and context window percentage
 - **Token breakdown** — input tokens, output tokens
@@ -94,6 +99,7 @@ The **Validated** flag helps you track which Auto Run tasks have been human-revi
 ![Toggling Validated Status](./screenshots/history-3.png)
 
 **To mark an entry as validated:**
+
 1. Open the entry detail view
 2. Click the **VALIDATED** toggle in the header
 
@@ -102,6 +108,7 @@ The **Validated** flag helps you track which Auto Run tasks have been human-revi
 Validated entries show a **checkmark icon** (✓✓) in the list view, making it easy to see at a glance which tasks have been reviewed.
 
 **Workflow tip:** After an Auto Run session completes, use the History panel to review each task:
+
 1. Open the first AUTO entry
 2. Click **RESUME** to jump to the session and verify the work
 3. If satisfied, toggle **VALIDATED**
@@ -113,6 +120,7 @@ This ensures human oversight of automated work while maintaining the full contex
 ## Resuming Sessions
 
 Every history entry with a Session ID has a **RESUME** button. Clicking it:
+
 1. Opens the AI Terminal for that agent
 2. Loads the exact session where the work was done
 3. Positions you to continue the conversation
@@ -123,23 +131,24 @@ This is especially powerful for Auto Run tasks — you can pick up exactly where
 
 ### List View
 
-| Key | Action |
-|-----|--------|
-| `↑` / `↓` | Navigate between entries |
-| `Enter` | Open detail view for selected entry |
-| `Cmd+F` / `Ctrl+F` | Open search filter |
-| `Esc` | Clear selection or close search |
+| Key                | Action                              |
+| ------------------ | ----------------------------------- |
+| `↑` / `↓`          | Navigate between entries            |
+| `Enter`            | Open detail view for selected entry |
+| `Cmd+F` / `Ctrl+F` | Open search filter                  |
+| `Esc`              | Clear selection or close search     |
 
 ### Detail View
 
-| Key | Action |
-|-----|--------|
-| `←` / `→` | Navigate to previous/next entry |
-| `Esc` | Close detail view, return to list |
+| Key       | Action                            |
+| --------- | --------------------------------- |
+| `←` / `→` | Navigate to previous/next entry   |
+| `Esc`     | Close detail view, return to list |
 
 ## Storage
 
 History is stored per-session in JSON files within the `history/` subdirectory of your Maestro data folder:
+
 - **macOS**: `~/Library/Application Support/maestro/history/<sessionId>.json`
 - **Windows**: `%APPDATA%/maestro/history/<sessionId>.json`
 - **Linux**: `~/.config/maestro/history/<sessionId>.json`

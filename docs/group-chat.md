@@ -74,6 +74,7 @@ Group Chat works seamlessly with [SSH Remote Execution](./ssh-remote-execution).
 ![Group Chat with Remote Agents](./screenshots/group-chat-over-ssh.png)
 
 **Supported configurations:**
+
 - Local moderator with remote participants
 - Remote moderator with local participants
 - Any mix of local and remote agents
@@ -82,6 +83,7 @@ Group Chat works seamlessly with [SSH Remote Execution](./ssh-remote-execution).
 Remote agents are identified by the **REMOTE** pill in the participant list. Each agent works in their own environment — the moderator coordinates across machines transparently.
 
 **Use cases for remote Group Chat:**
+
 - Compare implementations across development and production environments
 - Get perspectives from agents with access to different servers
 - Coordinate changes that span multiple machines
@@ -100,11 +102,11 @@ Remote agents are identified by the **REMOTE** pill in the participant list. Eac
 
 Right-click on a group chat in the sidebar to access the context menu:
 
-| Action | Description |
-|--------|-------------|
-| **Edit** | Change the moderator agent or customize its settings (CLI args, path, environment variables) |
-| **Rename** | Change the group chat name |
-| **Delete** | Remove the group chat and its conversation history |
+| Action     | Description                                                                                  |
+| ---------- | -------------------------------------------------------------------------------------------- |
+| **Edit**   | Change the moderator agent or customize its settings (CLI args, path, environment variables) |
+| **Rename** | Change the group chat name                                                                   |
+| **Delete** | Remove the group chat and its conversation history                                           |
 
 ## Input Features
 

@@ -390,6 +390,109 @@ describe('fileExplorer utils', () => {
 
 			expect(window.maestro.fs.readDir).toHaveBeenCalledWith('/project', undefined);
 		});
+
+		it('uses localIgnorePatterns when provided for local scans', async () => {
+			vi.mocked(window.maestro.fs.readDir)
+				.mockResolvedValueOnce([
+					{ name: '.git', isFile: false, isDirectory: true },
+					{ name: 'node_modules', isFile: false, isDirectory: true },
+					{ name: 'src', isFile: false, isDirectory: true },
+					{ name: 'README.md', isFile: true, isDirectory: false },
+				])
+				.mockResolvedValue([]);
+
+			// Pass localIgnorePatterns that includes .git and node_modules
+			const result = await loadFileTree('/project', 10, 0, undefined, undefined, {
+				ignorePatterns: ['.git', 'node_modules'],
+			});
+
+			expect(result).toHaveLength(2);
+			expect(result.find((n) => n.name === '.git')).toBeUndefined();
+			expect(result.find((n) => n.name === 'node_modules')).toBeUndefined();
+			expect(result.find((n) => n.name === 'src')).toBeDefined();
+			expect(result.find((n) => n.name === 'README.md')).toBeDefined();
+		});
+
+		it('falls back to default ignore patterns when localOptions is undefined', async () => {
+			vi.mocked(window.maestro.fs.readDir)
+				.mockResolvedValueOnce([
+					{ name: '.git', isFile: false, isDirectory: true },
+					{ name: 'node_modules', isFile: false, isDirectory: true },
+					{ name: '__pycache__', isFile: false, isDirectory: true },
+					{ name: 'src', isFile: false, isDirectory: true },
+				])
+				.mockResolvedValue([]);
+
+			// No localOptions — should use defaults (node_modules, __pycache__)
+			const result = await loadFileTree('/project');
+
+			// .git should be included (not in defaults), node_modules and __pycache__ excluded
+			expect(result).toHaveLength(2);
+			expect(result.find((n) => n.name === '.git')).toBeDefined();
+			expect(result.find((n) => n.name === 'src')).toBeDefined();
+			expect(result.find((n) => n.name === 'node_modules')).toBeUndefined();
+			expect(result.find((n) => n.name === '__pycache__')).toBeUndefined();
+		});
+
+		it('does not apply localOptions to SSH contexts', async () => {
+			vi.mocked(window.maestro.fs.readDir)
+				.mockResolvedValueOnce([
+					{ name: '.git', isFile: false, isDirectory: true },
+					{ name: 'src', isFile: false, isDirectory: true },
+				])
+				.mockResolvedValue([]);
+
+			// SSH context with its own ignore patterns
+			const sshContext = {
+				sshRemoteId: 'remote-1',
+				ignorePatterns: ['build'],
+			};
+			const result = await loadFileTree('/project', 10, 0, sshContext, undefined, {
+				ignorePatterns: ['.git'],
+			});
+
+			// .git should NOT be ignored — SSH uses its own ignorePatterns, not localOptions
+			expect(result).toHaveLength(2);
+			expect(result.find((n) => n.name === '.git')).toBeDefined();
+			expect(result.find((n) => n.name === 'src')).toBeDefined();
+		});
+
+		it('deduplicates entries returned by readDir', async () => {
+			vi.mocked(window.maestro.fs.readDir).mockResolvedValueOnce([
+				{ name: 'src', isFile: false, isDirectory: true, path: '/project/src' },
+				{ name: 'README.md', isFile: true, isDirectory: false, path: '/project/README.md' },
+				{ name: 'src', isFile: false, isDirectory: true, path: '/project/src' }, // duplicate
+				{ name: 'README.md', isFile: true, isDirectory: false, path: '/project/README.md' }, // duplicate
+			]);
+			vi.mocked(window.maestro.fs.readDir).mockResolvedValue([]); // Empty children
+
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const result = await loadFileTree('/project');
+			consoleSpy.mockRestore();
+
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe('src');
+			expect(result[1].name).toBe('README.md');
+		});
+
+		it('deduplicates entries in nested directories', async () => {
+			vi.mocked(window.maestro.fs.readDir)
+				.mockResolvedValueOnce([
+					{ name: 'docs', isFile: false, isDirectory: true, path: '/project/docs' },
+				])
+				.mockResolvedValueOnce([
+					{ name: 'guide.md', isFile: true, isDirectory: false, path: '/project/docs/guide.md' },
+					{ name: 'guide.md', isFile: true, isDirectory: false, path: '/project/docs/guide.md' }, // duplicate child
+				]);
+
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const result = await loadFileTree('/project');
+			consoleSpy.mockRestore();
+
+			expect(result).toHaveLength(1);
+			expect(result[0].children).toHaveLength(1);
+			expect(result[0].children![0].name).toBe('guide.md');
+		});
 	});
 
 	// ============================================================================

@@ -13,12 +13,12 @@ vi.mock('lucide-react', () => ({
 	ChevronLeft: () => <span data-testid="chevron-left">ChevronLeft</span>,
 	ChevronRight: () => <span data-testid="chevron-right">ChevronRight</span>,
 	Clipboard: () => <span data-testid="clipboard-icon">Clipboard</span>,
+	Copy: () => <span data-testid="copy-icon">Copy</span>,
 	Loader2: () => <span data-testid="loader-icon">Loader2</span>,
 	Image: () => <span data-testid="image-icon">Image</span>,
 	Globe: () => <span data-testid="globe-icon">Globe</span>,
 	Save: () => <span data-testid="save-icon">Save</span>,
 	Edit: () => <span data-testid="edit-icon">Edit</span>,
-	FolderOpen: () => <span data-testid="folder-open-icon">FolderOpen</span>,
 	AlertTriangle: () => <span data-testid="alert-icon">AlertTriangle</span>,
 	Share2: () => <span data-testid="share-icon">Share2</span>,
 	GitGraph: () => <span data-testid="gitgraph-icon">GitGraph</span>,
@@ -288,7 +288,7 @@ describe('FilePreview', () => {
 			expect(screen.getByTestId('external-link-icon')).toBeInTheDocument();
 		});
 
-		it('calls shell.openExternal with file:// URL when clicked', () => {
+		it('calls shell.openPath with file path when clicked', () => {
 			render(
 				<FilePreview
 					{...defaultProps}
@@ -299,7 +299,7 @@ describe('FilePreview', () => {
 			const button = screen.getByTitle('Open in Default App');
 			fireEvent.click(button);
 
-			expect(window.maestro?.shell?.openExternal).toHaveBeenCalledWith('file:///test/readme.md');
+			expect(window.maestro?.shell?.openPath).toHaveBeenCalledWith('/test/readme.md');
 		});
 
 		it('hides Open in Default App button for SSH remote sessions', () => {
@@ -645,7 +645,7 @@ describe('FilePreview', () => {
 			);
 
 			expect(screen.getByText(/Large file preview truncated/)).toBeInTheDocument();
-			expect(screen.getByText(/Use an external editor for the full file/)).toBeInTheDocument();
+			expect(screen.getByText('Load full file')).toBeInTheDocument();
 		});
 
 		it('does not show truncation banner for small files', () => {
@@ -687,6 +687,26 @@ describe('FilePreview', () => {
 			const highlighter = screen.getByTestId('syntax-highlighter');
 			// Content should be truncated to 100KB (LARGE_FILE_PREVIEW_LIMIT)
 			expect(highlighter.textContent?.length).toBe(100 * 1024);
+		});
+
+		it('loads full file content when "Load full file" button is clicked', () => {
+			const largeContent = 'y'.repeat(200 * 1024); // 200KB
+			render(
+				<FilePreview
+					{...defaultProps}
+					file={{ name: 'large.ts', content: largeContent, path: '/test/large.ts' }}
+				/>
+			);
+
+			// Initially truncated
+			expect(screen.getByTestId('syntax-highlighter').textContent?.length).toBe(100 * 1024);
+
+			// Click load full file button
+			fireEvent.click(screen.getByText('Load full file'));
+
+			// Banner should disappear and full content should be shown
+			expect(screen.queryByText(/Large file preview truncated/)).not.toBeInTheDocument();
+			expect(screen.getByTestId('syntax-highlighter').textContent?.length).toBe(200 * 1024);
 		});
 
 		it('skips token counting for files larger than 1MB', async () => {

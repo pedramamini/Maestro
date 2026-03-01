@@ -89,10 +89,8 @@ export class ExitHandler {
 				if (event && outputParser.isResultMessage(event) && !managedProcess.resultEmitted) {
 					managedProcess.resultEmitted = true;
 					// For Codex, prefer codexPendingResult over streamedText (which contains reasoning)
-					const resultText = event.text
-						|| managedProcess.codexPendingResult
-						|| managedProcess.streamedText
-						|| '';
+					const resultText =
+						event.text || managedProcess.codexPendingResult || managedProcess.streamedText || '';
 					if (resultText) {
 						this.bufferManager.emitDataBuffered(sessionId, resultText);
 					}
@@ -109,15 +107,20 @@ export class ExitHandler {
 		// to streamedText, which contains reasoning — emitting reasoning as a result is misleading.
 		// For other agents: streamedText is the correct fallback (it accumulates actual output).
 		if (isStreamJsonMode && !managedProcess.resultEmitted) {
-			const fallbackText = managedProcess.toolType === 'codex'
-				? managedProcess.codexPendingResult
-				: managedProcess.streamedText;
+			const fallbackText =
+				managedProcess.toolType === 'codex'
+					? managedProcess.codexPendingResult
+					: managedProcess.streamedText;
 			if (fallbackText) {
 				managedProcess.resultEmitted = true;
-				logger.debug('[ProcessManager] Emitting streamed text at exit (no result event)', 'ProcessManager', {
-					sessionId,
-					streamedTextLength: fallbackText.length,
-				});
+				logger.debug(
+					'[ProcessManager] Emitting streamed text at exit (no result event)',
+					'ProcessManager',
+					{
+						sessionId,
+						streamedTextLength: fallbackText.length,
+					}
+				);
 				this.bufferManager.emitDataBuffered(sessionId, fallbackText);
 			}
 		}
@@ -192,13 +195,17 @@ export class ExitHandler {
 				this.emitter.emit('agent-error', sessionId, agentError);
 			} else if (code !== 0) {
 				// Log SSH failures even if no pattern matched, to help debug
-				logger.warn('[ProcessManager] SSH command failed without matching error pattern', 'ProcessManager', {
-					sessionId,
-					exitCode: code,
-					sshRemoteId: managedProcess.sshRemoteId,
-					stdoutPreview: stdoutToCheck.substring(0, 500),
-					stderrPreview: stderrToCheck.substring(0, 500),
-				});
+				logger.warn(
+					'[ProcessManager] SSH command failed without matching error pattern',
+					'ProcessManager',
+					{
+						sessionId,
+						exitCode: code,
+						sshRemoteId: managedProcess.sshRemoteId,
+						stdoutPreview: stdoutToCheck.substring(0, 500),
+						stderrPreview: stderrToCheck.substring(0, 500),
+					}
+				);
 			}
 		}
 

@@ -128,6 +128,7 @@ export interface GroupChat {
 	participants: GroupChatParticipant[];
 	logPath: string;
 	imagesDir: string;
+	archived?: boolean;
 }
 
 /**
@@ -143,6 +144,7 @@ export type GroupChatUpdate = Partial<
 		| 'moderatorConfig'
 		| 'participants'
 		| 'updatedAt'
+		| 'archived'
 	>
 >;
 
@@ -331,16 +333,19 @@ export async function listGroupChats(): Promise<GroupChat[]> {
 export function deleteGroupChat(id: string): Promise<void> {
 	return enqueueWrite(id, async () => {
 		const chatDir = getGroupChatDir(id);
-		const maxRetries = 3;
+		const maxRetries = 5;
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
-				await fs.rm(chatDir, { recursive: true, force: true });
+				await fs.rm(chatDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
 				return;
 			} catch (err) {
 				const code = (err as NodeJS.ErrnoException).code;
-				if ((code === 'EPERM' || code === 'EBUSY') && attempt < maxRetries) {
-					// Wait before retrying - file locks from OneDrive/antivirus may release
-					await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+				if (
+					(code === 'EPERM' || code === 'EBUSY' || code === 'ENOTEMPTY') &&
+					attempt < maxRetries
+				) {
+					// Exponential backoff — file locks from OneDrive/antivirus may need time to release
+					await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
 					continue;
 				}
 				throw err;

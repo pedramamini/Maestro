@@ -16,6 +16,7 @@ icon: sparkles
 - 💻 **[Command Line Interface](./cli)** - Full CLI (`maestro-cli`) for headless operation. List agents/groups, run playbooks from cron jobs or CI/CD pipelines, with human-readable or JSONL output for scripting.
 - 🚀 **Multi-Agent Management** - Run unlimited agents in parallel. Each agent has its own workspace, conversation history, and isolated context.
 - 📬 **Message Queueing** - Queue messages while AI is busy; they're sent automatically when the agent becomes ready. Never lose a thought.
+- 🔐 **[Global Environment Variables](./configuration#global-environment-variables)** - Configure environment variables once in Settings and they apply to all agent processes and terminal sessions. Perfect for API keys, proxy settings, and tool paths.
 
 ## Core Features
 
@@ -31,9 +32,10 @@ icon: sparkles
 - 🏷️ **[Automatic Tab Naming](./general-usage#automatic-tab-naming)** - Tabs are automatically named based on your first message. No more "New Session" clutter — each tab gets a descriptive, relevant name.
 - 🔔 **Custom Notifications** - Execute any command when agents complete tasks, perfect for audio alerts, logging, or integration with your notification stack.
 - 🎨 **[Beautiful Themes](https://github.com/RunMaestro/Maestro/blob/main/THEMES.md)** - 17 built-in themes across dark (Dracula, Monokai, Nord, Tokyo Night, Catppuccin Mocha, Gruvbox Dark), light (GitHub, Solarized, One Light, Gruvbox Light, Catppuccin Latte, Ayu Light), and vibe (Pedurple, Maestro's Choice, Dre Synth, InQuest) categories, plus a fully customizable theme builder.
+- ⏱️ **[WakaTime Integration](./configuration#wakatime-integration)** - Automatic time tracking via WakaTime with optional per-file write activity tracking across all supported agents.
 - 💰 **Cost Tracking** - Real-time token usage and cost tracking per session and globally.
 - 📊 **[Usage Dashboard](./usage-dashboard)** - Comprehensive analytics for tracking AI usage patterns. View aggregated statistics, compare agent performance, analyze activity heatmaps, and export data to CSV. Access via `Opt+Cmd+U` / `Alt+Ctrl+U`.
-- 🎬 **[Director's Notes](./director-notes)** - Bird's-eye view of all agent activity in a unified timeline. Aggregate history from every agent, search and filter entries, and generate AI-powered synopses of recent work. Access via `Cmd+Shift+O` / `Ctrl+Shift+O`. *(Encore Feature — enable in Settings > Encore Features)*
+- 🎬 **[Director's Notes](./director-notes)** - Bird's-eye view of all agent activity in a unified timeline. Aggregate history from every agent, search and filter entries, and generate AI-powered synopses of recent work. Access via `Cmd+Shift+O` / `Ctrl+Shift+O`. _(Encore Feature — enable in Settings > Encore Features)_
 - 🏆 **[Achievements](./achievements)** - Level up from Apprentice to Titan of the Baton based on cumulative Auto Run time. 11 conductor-themed ranks to unlock.
 
 > **Note**: Maestro currently supports Claude Code, Codex (OpenAI), OpenCode, and Factory Droid as fully-integrated providers. Support for additional providers (Gemini CLI, Qwen3 Coder) is planned for future releases based on community demand.

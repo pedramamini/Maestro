@@ -228,6 +228,7 @@ const mockMaestro = {
 		onExit: vi.fn().mockReturnValue(() => {}),
 	},
 	git: {
+		branch: vi.fn().mockResolvedValue({ stdout: 'main' }),
 		status: vi.fn().mockResolvedValue({ files: [], branch: 'main', stdout: '' }),
 		diff: vi.fn().mockResolvedValue(''),
 		isRepo: vi.fn().mockResolvedValue(true),
@@ -245,6 +246,7 @@ const mockMaestro = {
 		commitCount: vi.fn().mockResolvedValue({ count: 0, error: null }),
 		show: vi.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
 		getRemoteUrl: vi.fn().mockResolvedValue(null),
+		scanWorktreeDirectory: vi.fn().mockResolvedValue({ gitSubdirs: [] }),
 		info: vi.fn().mockResolvedValue({
 			branch: 'main',
 			remote: '',
@@ -435,6 +437,7 @@ const mockMaestro = {
 	},
 	shell: {
 		openExternal: vi.fn().mockResolvedValue(undefined),
+		openPath: vi.fn().mockResolvedValue(undefined),
 		trashItem: vi.fn().mockResolvedValue(undefined),
 		showItemInFolder: vi.fn().mockResolvedValue(undefined),
 	},
@@ -535,6 +538,8 @@ const mockMaestro = {
 		checkCli: vi.fn().mockResolvedValue({ available: false }),
 		validateApiKey: vi.fn().mockResolvedValue({ valid: false }),
 	},
+	// Synchronous platform string (replaces async os.getPlatform IPC)
+	platform: 'darwin',
 };
 
 // Only mock window.maestro if window exists (jsdom environment)

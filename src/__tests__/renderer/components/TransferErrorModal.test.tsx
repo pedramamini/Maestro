@@ -188,7 +188,7 @@ describe('TransferErrorModal', () => {
 				<TransferErrorModal {...defaultProps} error={createTestError('session_creation_failed')} />
 			);
 
-			expect(screen.getByText('Session Creation Failed')).toBeInTheDocument();
+			expect(screen.getByText('Agent Creation Failed')).toBeInTheDocument();
 		});
 
 		it('shows correct title for network_error', () => {

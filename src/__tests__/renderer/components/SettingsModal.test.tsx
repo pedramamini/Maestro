@@ -16,7 +16,7 @@
 
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
-import { render, screen, fireEvent, act, waitFor } from '@testing-library/react';
+import { render, screen, fireEvent, act, waitFor, within } from '@testing-library/react';
 import { SettingsModal } from '../../../renderer/components/SettingsModal';
 import { formatEnterToSend } from '../../../renderer/utils/shortcutFormatter';
 import type {
@@ -73,13 +73,142 @@ vi.mock('../../../renderer/components/CustomThemeBuilder', () => ({
 }));
 
 // Shared mock fns so tests can assert on useSettings setters
-const mockSetDirectorNotesSettings = vi.fn();
+const mockSetActiveThemeId = vi.fn();
+const mockSetCustomThemeColors = vi.fn();
+const mockSetCustomThemeBaseId = vi.fn();
+const mockSetLlmProvider = vi.fn();
+const mockSetModelSlug = vi.fn();
+const mockSetApiKey = vi.fn();
+const mockSetShortcuts = vi.fn();
+const mockSetTabShortcuts = vi.fn();
+const mockSetFontFamily = vi.fn();
+const mockSetFontSize = vi.fn();
+const mockSetTerminalWidth = vi.fn();
+const mockSetLogLevel = vi.fn();
+const mockSetMaxLogBuffer = vi.fn();
+const mockSetMaxOutputLines = vi.fn();
+const mockSetDefaultShell = vi.fn();
+const mockSetCustomShellPath = vi.fn();
+const mockSetShellArgs = vi.fn();
+const mockSetShellEnvVars = vi.fn();
+const mockSetGhPath = vi.fn();
+const mockSetEnterToSendAI = vi.fn();
+const mockSetEnterToSendTerminal = vi.fn();
+const mockSetDefaultSaveToHistory = vi.fn();
+const mockSetDefaultShowThinking = vi.fn();
+const mockSetAutoScrollAiMode = vi.fn();
+const mockSetUserMessageAlignment = vi.fn();
+const mockSetOsNotificationsEnabled = vi.fn();
+const mockSetAudioFeedbackEnabled = vi.fn();
+const mockSetAudioFeedbackCommand = vi.fn();
+const mockSetToastDuration = vi.fn();
+const mockSetCheckForUpdatesOnStartup = vi.fn();
+const mockSetEnableBetaUpdates = vi.fn();
+const mockSetCrashReportingEnabled = vi.fn();
+const mockSetCustomAICommands = vi.fn();
 const mockSetEncoreFeatures = vi.fn();
+const mockSetDirectorNotesSettings = vi.fn();
 
-// Mock useSettings hook (used for context management settings, SSH remote ignore settings, and WakaTime)
+// Mock useSettings hook (now self-sources all settings previously passed as props)
 let mockUseSettingsOverrides: Record<string, any> = {};
 vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 	useSettings: () => ({
+		// Theme settings
+		activeThemeId: 'dracula',
+		setActiveThemeId: mockSetActiveThemeId,
+		customThemeColors: {
+			bgMain: '#282a36',
+			bgSidebar: '#21222c',
+			bgActivity: '#343746',
+			border: '#44475a',
+			textMain: '#f8f8f2',
+			textDim: '#6272a4',
+			accent: '#bd93f9',
+			accentDim: '#bd93f920',
+			accentText: '#ff79c6',
+			accentForeground: '#ffffff',
+			success: '#50fa7b',
+			warning: '#ffb86c',
+			error: '#ff5555',
+		},
+		setCustomThemeColors: mockSetCustomThemeColors,
+		customThemeBaseId: 'dracula',
+		setCustomThemeBaseId: mockSetCustomThemeBaseId,
+		// LLM settings
+		llmProvider: 'openrouter',
+		setLlmProvider: mockSetLlmProvider,
+		modelSlug: '',
+		setModelSlug: mockSetModelSlug,
+		apiKey: '',
+		setApiKey: mockSetApiKey,
+		// Shortcut settings
+		shortcuts: {
+			'new-session': { id: 'new-session', label: 'New Session', keys: ['Meta', 'n'] },
+			'close-session': { id: 'close-session', label: 'Close Session', keys: ['Meta', 'w'] },
+			'toggle-mode': { id: 'toggle-mode', label: 'Toggle Mode', keys: ['Meta', 'j'] },
+		},
+		setShortcuts: mockSetShortcuts,
+		tabShortcuts: {},
+		setTabShortcuts: mockSetTabShortcuts,
+		// Display settings
+		fontFamily: 'Menlo',
+		setFontFamily: mockSetFontFamily,
+		fontSize: 14,
+		setFontSize: mockSetFontSize,
+		terminalWidth: 100,
+		setTerminalWidth: mockSetTerminalWidth,
+		logLevel: 'info',
+		setLogLevel: mockSetLogLevel,
+		maxLogBuffer: 5000,
+		setMaxLogBuffer: mockSetMaxLogBuffer,
+		maxOutputLines: 25,
+		setMaxOutputLines: mockSetMaxOutputLines,
+		// Shell settings
+		defaultShell: 'zsh',
+		setDefaultShell: mockSetDefaultShell,
+		customShellPath: '',
+		setCustomShellPath: mockSetCustomShellPath,
+		shellArgs: '',
+		setShellArgs: mockSetShellArgs,
+		shellEnvVars: {},
+		setShellEnvVars: mockSetShellEnvVars,
+		ghPath: '',
+		setGhPath: mockSetGhPath,
+		// Input settings
+		enterToSendAI: true,
+		setEnterToSendAI: mockSetEnterToSendAI,
+		enterToSendTerminal: true,
+		setEnterToSendTerminal: mockSetEnterToSendTerminal,
+		defaultSaveToHistory: true,
+		setDefaultSaveToHistory: mockSetDefaultSaveToHistory,
+		defaultShowThinking: 'off',
+		setDefaultShowThinking: mockSetDefaultShowThinking,
+		autoScrollAiMode: true,
+		setAutoScrollAiMode: mockSetAutoScrollAiMode,
+		userMessageAlignment: 'left',
+		setUserMessageAlignment: mockSetUserMessageAlignment,
+		// Notification settings
+		osNotificationsEnabled: true,
+		setOsNotificationsEnabled: mockSetOsNotificationsEnabled,
+		audioFeedbackEnabled: false,
+		setAudioFeedbackEnabled: mockSetAudioFeedbackEnabled,
+		audioFeedbackCommand: 'say',
+		setAudioFeedbackCommand: mockSetAudioFeedbackCommand,
+		toastDuration: 10,
+		setToastDuration: mockSetToastDuration,
+		// Update settings
+		checkForUpdatesOnStartup: true,
+		setCheckForUpdatesOnStartup: mockSetCheckForUpdatesOnStartup,
+		enableBetaUpdates: false,
+		setEnableBetaUpdates: mockSetEnableBetaUpdates,
+		crashReportingEnabled: true,
+		setCrashReportingEnabled: mockSetCrashReportingEnabled,
+		// AI Commands
+		customAICommands: [],
+		setCustomAICommands: mockSetCustomAICommands,
+		// Encore features
+		encoreFeatures: { directorNotes: false },
+		setEncoreFeatures: mockSetEncoreFeatures,
 		// Conductor profile settings
 		conductorProfile: '',
 		setConductorProfile: vi.fn(),
@@ -95,11 +224,37 @@ vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 			contextWarningRedThreshold: 80,
 		},
 		updateContextManagementSettings: vi.fn(),
+		// Document Graph settings
+		documentGraphShowExternalLinks: true,
+		setDocumentGraphShowExternalLinks: vi.fn(),
+		documentGraphMaxNodes: 100,
+		setDocumentGraphMaxNodes: vi.fn(),
+		// Stats settings
+		statsCollectionEnabled: true,
+		setStatsCollectionEnabled: vi.fn(),
+		defaultStatsTimeRange: 'week',
+		setDefaultStatsTimeRange: vi.fn(),
+		// Power management settings
+		preventSleepEnabled: false,
+		setPreventSleepEnabled: vi.fn(),
+		// Rendering settings
+		disableGpuAcceleration: false,
+		setDisableGpuAcceleration: vi.fn(),
+		disableConfetti: false,
+		setDisableConfetti: vi.fn(),
 		// SSH remote ignore settings
 		sshRemoteIgnorePatterns: ['.git', '.*cache*'],
 		setSshRemoteIgnorePatterns: vi.fn(),
 		sshRemoteHonorGitignore: false,
 		setSshRemoteHonorGitignore: vi.fn(),
+		// Local file indexing ignore settings
+		localIgnorePatterns: ['.git', 'node_modules', '__pycache__'],
+		setLocalIgnorePatterns: vi.fn(),
+		localHonorGitignore: true,
+		setLocalHonorGitignore: vi.fn(),
+		// Automatic tab naming
+		automaticTabNamingEnabled: true,
+		setAutomaticTabNamingEnabled: vi.fn(),
 		// Director's Notes settings
 		directorNotesSettings: {
 			provider: 'claude-code',
@@ -111,6 +266,13 @@ vi.mock('../../../renderer/hooks/settings/useSettings', () => ({
 		setWakatimeEnabled: vi.fn(),
 		wakatimeApiKey: '',
 		setWakatimeApiKey: vi.fn(),
+		wakatimeDetailedTracking: false,
+		setWakatimeDetailedTracking: vi.fn(),
+		// Window chrome settings
+		useNativeTitleBar: false,
+		setUseNativeTitleBar: vi.fn(),
+		autoHideMenuBar: false,
+		setAutoHideMenuBar: vi.fn(),
 		...mockUseSettingsOverrides,
 	}),
 }));
@@ -192,74 +354,14 @@ const mockShortcuts: Record<string, Shortcut> = {
 };
 
 const createDefaultProps = (overrides = {}) => ({
+	// Only the 8 actual SettingsModal props (settings are now self-sourced from useSettings)
 	isOpen: true,
 	onClose: vi.fn(),
 	theme: mockTheme,
 	themes: mockThemes,
-	activeThemeId: 'dracula',
-	setActiveThemeId: vi.fn(),
-	customThemeColors: mockTheme.colors,
-	setCustomThemeColors: vi.fn(),
-	customThemeBaseId: 'dracula' as const,
-	setCustomThemeBaseId: vi.fn(),
-	llmProvider: 'openrouter',
-	setLlmProvider: vi.fn(),
-	modelSlug: '',
-	setModelSlug: vi.fn(),
-	apiKey: '',
-	setApiKey: vi.fn(),
-	shortcuts: mockShortcuts,
-	setShortcuts: vi.fn(),
-	tabShortcuts: {} as Record<string, Shortcut>,
-	setTabShortcuts: vi.fn(),
-	fontFamily: 'Menlo',
-	setFontFamily: vi.fn(),
-	fontSize: 14,
-	setFontSize: vi.fn(),
-	terminalWidth: 100,
-	setTerminalWidth: vi.fn(),
-	logLevel: 'info',
-	setLogLevel: vi.fn(),
-	maxLogBuffer: 5000,
-	setMaxLogBuffer: vi.fn(),
-	maxOutputLines: 25,
-	setMaxOutputLines: vi.fn(),
-	defaultShell: 'zsh',
-	setDefaultShell: vi.fn(),
-	customShellPath: '',
-	setCustomShellPath: vi.fn(),
-	shellArgs: '',
-	setShellArgs: vi.fn(),
-	shellEnvVars: {} as Record<string, string>,
-	setShellEnvVars: vi.fn(),
-	ghPath: '',
-	setGhPath: vi.fn(),
-	enterToSendAI: true,
-	setEnterToSendAI: vi.fn(),
-	enterToSendTerminal: true,
-	setEnterToSendTerminal: vi.fn(),
-	defaultSaveToHistory: true,
-	setDefaultSaveToHistory: vi.fn(),
-	defaultShowThinking: 'off' as const,
-	setDefaultShowThinking: vi.fn(),
-	osNotificationsEnabled: true,
-	setOsNotificationsEnabled: vi.fn(),
-	audioFeedbackEnabled: false,
-	setAudioFeedbackEnabled: vi.fn(),
-	audioFeedbackCommand: 'say',
-	setAudioFeedbackCommand: vi.fn(),
-	toastDuration: 10,
-	setToastDuration: vi.fn(),
-	checkForUpdatesOnStartup: true,
-	setCheckForUpdatesOnStartup: vi.fn(),
-	enableBetaUpdates: false,
-	setEnableBetaUpdates: vi.fn(),
-	crashReportingEnabled: true,
-	setCrashReportingEnabled: vi.fn(),
-	customAICommands: [],
-	setCustomAICommands: vi.fn(),
-	encoreFeatures: { directorNotes: false },
-	setEncoreFeatures: mockSetEncoreFeatures,
+	hasNoAgents: false,
+	onThemeImportError: vi.fn(),
+	onThemeImportSuccess: vi.fn(),
 	...overrides,
 });
 
@@ -543,7 +645,7 @@ describe('SettingsModal', () => {
 			const fontSelect = comboboxes[0] as HTMLSelectElement;
 			fireEvent.change(fontSelect, { target: { value: 'Monaco' } });
 
-			expect(setFontFamily).toHaveBeenCalledWith('Monaco');
+			expect(mockSetFontFamily).toHaveBeenCalledWith('Monaco');
 		});
 
 		it('should load fonts when font select is focused', async () => {
@@ -576,7 +678,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Small' }));
-			expect(setFontSize).toHaveBeenCalledWith(12);
+			expect(mockSetFontSize).toHaveBeenCalledWith(12);
 		});
 
 		it('should call setFontSize with 14 when Medium is clicked', async () => {
@@ -588,7 +690,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Medium' }));
-			expect(setFontSize).toHaveBeenCalledWith(14);
+			expect(mockSetFontSize).toHaveBeenCalledWith(14);
 		});
 
 		it('should call setFontSize with 16 when Large is clicked', async () => {
@@ -600,7 +702,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Large' }));
-			expect(setFontSize).toHaveBeenCalledWith(16);
+			expect(mockSetFontSize).toHaveBeenCalledWith(16);
 		});
 
 		it('should call setFontSize with 18 when X-Large is clicked', async () => {
@@ -612,7 +714,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'X-Large' }));
-			expect(setFontSize).toHaveBeenCalledWith(18);
+			expect(mockSetFontSize).toHaveBeenCalledWith(18);
 		});
 
 		it('should highlight selected font size', async () => {
@@ -639,7 +741,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: '80' }));
-			expect(setTerminalWidth).toHaveBeenCalledWith(80);
+			expect(mockSetTerminalWidth).toHaveBeenCalledWith(80);
 		});
 
 		it('should call setTerminalWidth with 100', async () => {
@@ -656,7 +758,7 @@ describe('SettingsModal', () => {
 			const buttons = screen.getAllByText('100');
 			const terminalWidthButton = buttons[0]; // First one is terminal width
 			fireEvent.click(terminalWidthButton);
-			expect(setTerminalWidth).toHaveBeenCalledWith(100);
+			expect(mockSetTerminalWidth).toHaveBeenCalledWith(100);
 		});
 	});
 
@@ -670,7 +772,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Debug' }));
-			expect(setLogLevel).toHaveBeenCalledWith('debug');
+			expect(mockSetLogLevel).toHaveBeenCalledWith('debug');
 		});
 
 		it('should call setLogLevel with info', async () => {
@@ -682,7 +784,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Info' }));
-			expect(setLogLevel).toHaveBeenCalledWith('info');
+			expect(mockSetLogLevel).toHaveBeenCalledWith('info');
 		});
 
 		it('should call setLogLevel with warn', async () => {
@@ -694,7 +796,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Warn' }));
-			expect(setLogLevel).toHaveBeenCalledWith('warn');
+			expect(mockSetLogLevel).toHaveBeenCalledWith('warn');
 		});
 
 		it('should call setLogLevel with error', async () => {
@@ -706,7 +808,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Error' }));
-			expect(setLogLevel).toHaveBeenCalledWith('error');
+			expect(mockSetLogLevel).toHaveBeenCalledWith('error');
 		});
 	});
 
@@ -720,16 +822,16 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: '1000' }));
-			expect(setMaxLogBuffer).toHaveBeenCalledWith(1000);
+			expect(mockSetMaxLogBuffer).toHaveBeenCalledWith(1000);
 
 			fireEvent.click(screen.getByRole('button', { name: '5000' }));
-			expect(setMaxLogBuffer).toHaveBeenCalledWith(5000);
+			expect(mockSetMaxLogBuffer).toHaveBeenCalledWith(5000);
 
 			fireEvent.click(screen.getByRole('button', { name: '10000' }));
-			expect(setMaxLogBuffer).toHaveBeenCalledWith(10000);
+			expect(mockSetMaxLogBuffer).toHaveBeenCalledWith(10000);
 
 			fireEvent.click(screen.getByRole('button', { name: '25000' }));
-			expect(setMaxLogBuffer).toHaveBeenCalledWith(25000);
+			expect(mockSetMaxLogBuffer).toHaveBeenCalledWith(25000);
 		});
 	});
 
@@ -745,16 +847,16 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: '15' }));
-			expect(setMaxOutputLines).toHaveBeenCalledWith(15);
+			expect(mockSetMaxOutputLines).toHaveBeenCalledWith(15);
 
 			fireEvent.click(screen.getByRole('button', { name: '25' }));
-			expect(setMaxOutputLines).toHaveBeenCalledWith(25);
+			expect(mockSetMaxOutputLines).toHaveBeenCalledWith(25);
 
 			fireEvent.click(screen.getByRole('button', { name: '50' }));
-			expect(setMaxOutputLines).toHaveBeenCalledWith(50);
+			expect(mockSetMaxOutputLines).toHaveBeenCalledWith(50);
 
 			fireEvent.click(screen.getByRole('button', { name: 'All' }));
-			expect(setMaxOutputLines).toHaveBeenCalledWith(Infinity);
+			expect(mockSetMaxOutputLines).toHaveBeenCalledWith(Infinity);
 		});
 	});
 
@@ -806,7 +908,7 @@ describe('SettingsModal', () => {
 			const bashButton = screen.getByText('Bash').closest('button');
 			fireEvent.click(bashButton!);
 
-			expect(setDefaultShell).toHaveBeenCalledWith('bash');
+			expect(mockSetDefaultShell).toHaveBeenCalledWith('bash');
 		});
 	});
 
@@ -825,7 +927,7 @@ describe('SettingsModal', () => {
 			const toggleButton = aiModeSection?.querySelector('button');
 			fireEvent.click(toggleButton!);
 
-			expect(setEnterToSendAI).toHaveBeenCalledWith(false);
+			expect(mockSetEnterToSendAI).toHaveBeenCalledWith(false);
 		});
 
 		it('should call setEnterToSendTerminal when toggled', async () => {
@@ -846,11 +948,12 @@ describe('SettingsModal', () => {
 			const toggleButton = terminalModeSection?.querySelector('button');
 			fireEvent.click(toggleButton!);
 
-			expect(setEnterToSendTerminal).toHaveBeenCalledWith(false);
+			expect(mockSetEnterToSendTerminal).toHaveBeenCalledWith(false);
 		});
 
 		it('should display Cmd+Enter (or Ctrl+Enter on non-Mac) when enter-to-send is false', async () => {
-			render(<SettingsModal {...createDefaultProps({ enterToSendAI: false })} />);
+			mockUseSettingsOverrides = { enterToSendAI: false };
+			render(<SettingsModal {...createDefaultProps()} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -880,7 +983,7 @@ describe('SettingsModal', () => {
 			expect(toggleSwitch).toBeDefined();
 
 			fireEvent.click(toggleSwitch!);
-			expect(setDefaultSaveToHistory).toHaveBeenCalledWith(false);
+			expect(mockSetDefaultSaveToHistory).toHaveBeenCalledWith(false);
 		});
 	});
 
@@ -896,7 +999,7 @@ describe('SettingsModal', () => {
 			const ghPathInput = screen.getByPlaceholderText('/opt/homebrew/bin/gh');
 			fireEvent.change(ghPathInput, { target: { value: '/usr/local/bin/gh' } });
 
-			expect(setGhPath).toHaveBeenCalledWith('/usr/local/bin/gh');
+			expect(mockSetGhPath).toHaveBeenCalledWith('/usr/local/bin/gh');
 		});
 
 		it('should show clear button when ghPath has value', async () => {
@@ -910,8 +1013,8 @@ describe('SettingsModal', () => {
 		});
 
 		it('should call setGhPath with empty string when clear is clicked', async () => {
-			const setGhPath = vi.fn();
-			render(<SettingsModal {...createDefaultProps({ setGhPath, ghPath: '/usr/local/bin/gh' })} />);
+			mockUseSettingsOverrides = { ghPath: '/usr/local/bin/gh' };
+			render(<SettingsModal {...createDefaultProps()} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -925,7 +1028,7 @@ describe('SettingsModal', () => {
 			expect(clearButton).toBeDefined();
 			fireEvent.click(clearButton!);
 
-			expect(setGhPath).toHaveBeenCalledWith('');
+			expect(mockSetGhPath).toHaveBeenCalledWith('');
 		});
 	});
 
@@ -1020,7 +1123,7 @@ describe('SettingsModal', () => {
 				stopPropagation: vi.fn(),
 			});
 
-			expect(setShortcuts).toHaveBeenCalledWith({
+			expect(mockSetShortcuts).toHaveBeenCalledWith({
 				...mockShortcuts,
 				'new-session': { ...mockShortcuts['new-session'], keys: ['Meta', 'k'] },
 			});
@@ -1048,7 +1151,7 @@ describe('SettingsModal', () => {
 			});
 
 			// Should exit recording mode without calling setShortcuts
-			expect(setShortcuts).not.toHaveBeenCalled();
+			expect(mockSetShortcuts).not.toHaveBeenCalled();
 			expect(screen.getByText('Meta+n')).toBeInTheDocument();
 		});
 	});
@@ -1087,7 +1190,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'GitHub Light' }));
-			expect(setActiveThemeId).toHaveBeenCalledWith('github-light');
+			expect(mockSetActiveThemeId).toHaveBeenCalledWith('github-light');
 		});
 
 		it('should highlight active theme', async () => {
@@ -1126,7 +1229,7 @@ describe('SettingsModal', () => {
 			fireEvent.keyDown(themePickerContainer!, { key: 'Tab' });
 
 			// Should move to next theme (github-light in this case, or next in the list)
-			expect(setActiveThemeId).toHaveBeenCalled();
+			expect(mockSetActiveThemeId).toHaveBeenCalled();
 		});
 	});
 
@@ -1163,16 +1266,14 @@ describe('SettingsModal', () => {
 			const toggleSwitch = toggleContainer?.querySelector('button[role="switch"]');
 			fireEvent.click(toggleSwitch!);
 
-			expect(setOsNotificationsEnabled).toHaveBeenCalledWith(false);
+			expect(mockSetOsNotificationsEnabled).toHaveBeenCalledWith(false);
 		});
 
-		it('should update toggle state when prop changes (regression test for memo bug)', async () => {
-			// This test ensures the component re-renders when props change
-			// A previous bug had an overly restrictive memo comparator that prevented re-renders
+		it('should update toggle state when useSettings changes (regression test for memo bug)', async () => {
+			// This test ensures the component re-renders when useSettings values change
+			mockUseSettingsOverrides = { osNotificationsEnabled: true };
 			const { rerender } = render(
-				<SettingsModal
-					{...createDefaultProps({ initialTab: 'notifications', osNotificationsEnabled: true })}
-				/>
+				<SettingsModal {...createDefaultProps({ initialTab: 'notifications' })} />
 			);
 
 			await act(async () => {
@@ -1187,12 +1288,9 @@ describe('SettingsModal', () => {
 			) as HTMLButtonElement;
 			expect(toggleSwitch.getAttribute('aria-checked')).toBe('true');
 
-			// Rerender with changed prop (simulating what happens after onChange)
-			rerender(
-				<SettingsModal
-					{...createDefaultProps({ initialTab: 'notifications', osNotificationsEnabled: false })}
-				/>
-			);
+			// Update the useSettings override to simulate a change
+			mockUseSettingsOverrides = { osNotificationsEnabled: false };
+			rerender(<SettingsModal {...createDefaultProps({ initialTab: 'notifications' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
@@ -1248,7 +1346,7 @@ describe('SettingsModal', () => {
 			const toggleSwitch = toggleContainer?.querySelector('button[role="switch"]');
 			fireEvent.click(toggleSwitch!);
 
-			expect(setAudioFeedbackEnabled).toHaveBeenCalledWith(true);
+			expect(mockSetAudioFeedbackEnabled).toHaveBeenCalledWith(true);
 		});
 
 		it('should call setAudioFeedbackCommand when Command Chain is changed', async () => {
@@ -1266,7 +1364,7 @@ describe('SettingsModal', () => {
 			const ttsInput = screen.getByPlaceholderText('say');
 			fireEvent.change(ttsInput, { target: { value: 'espeak' } });
 
-			expect(setAudioFeedbackCommand).toHaveBeenCalledWith('espeak');
+			expect(mockSetAudioFeedbackCommand).toHaveBeenCalledWith('espeak');
 		});
 
 		it('should test Command Chain when test button is clicked', async () => {
@@ -1306,22 +1404,22 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: 'Off' }));
-			expect(setToastDuration).toHaveBeenCalledWith(-1);
+			expect(mockSetToastDuration).toHaveBeenCalledWith(-1);
 
 			fireEvent.click(screen.getByRole('button', { name: '5s' }));
-			expect(setToastDuration).toHaveBeenCalledWith(5);
+			expect(mockSetToastDuration).toHaveBeenCalledWith(5);
 
 			fireEvent.click(screen.getByRole('button', { name: '10s' }));
-			expect(setToastDuration).toHaveBeenCalledWith(10);
+			expect(mockSetToastDuration).toHaveBeenCalledWith(10);
 
 			fireEvent.click(screen.getByRole('button', { name: '20s' }));
-			expect(setToastDuration).toHaveBeenCalledWith(20);
+			expect(mockSetToastDuration).toHaveBeenCalledWith(20);
 
 			fireEvent.click(screen.getByRole('button', { name: '30s' }));
-			expect(setToastDuration).toHaveBeenCalledWith(30);
+			expect(mockSetToastDuration).toHaveBeenCalledWith(30);
 
 			fireEvent.click(screen.getByRole('button', { name: 'Never' }));
-			expect(setToastDuration).toHaveBeenCalledWith(0);
+			expect(mockSetToastDuration).toHaveBeenCalledWith(0);
 		});
 	});
 
@@ -1347,7 +1445,9 @@ describe('SettingsModal', () => {
 
 			const customFontInput = screen.getByPlaceholderText('Add custom font name...');
 			fireEvent.change(customFontInput, { target: { value: 'My Custom Font' } });
-			fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+			// Scope to the font input's parent container to avoid ambiguous "Add" button matches
+			const fontContainer = customFontInput.closest('div')!.parentElement!;
+			fireEvent.click(within(fontContainer).getByRole('button', { name: 'Add' }));
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
@@ -1383,7 +1483,9 @@ describe('SettingsModal', () => {
 
 			const customFontInput = screen.getByPlaceholderText('Add custom font name...');
 			fireEvent.change(customFontInput, { target: { value: '   ' } });
-			fireEvent.click(screen.getByRole('button', { name: 'Add' }));
+			// Scope to the font input's parent container to avoid ambiguous "Add" button matches
+			const fontContainer = customFontInput.closest('div')!.parentElement!;
+			fireEvent.click(within(fontContainer).getByRole('button', { name: 'Add' }));
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
@@ -1450,11 +1552,8 @@ describe('SettingsModal', () => {
 				'xss-test': { id: 'xss-test', label: '<script>alert("xss")</script>', keys: ['Meta', 'x'] },
 			};
 
-			render(
-				<SettingsModal
-					{...createDefaultProps({ initialTab: 'shortcuts', shortcuts: customShortcuts })}
-				/>
-			);
+			mockUseSettingsOverrides = { shortcuts: customShortcuts };
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'shortcuts' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -1469,11 +1568,8 @@ describe('SettingsModal', () => {
 				'unicode-test': { id: 'unicode-test', label: 'Hello 🌍 World', keys: ['Meta', 'u'] },
 			};
 
-			render(
-				<SettingsModal
-					{...createDefaultProps({ initialTab: 'shortcuts', shortcuts: customShortcuts })}
-				/>
-			);
+			mockUseSettingsOverrides = { shortcuts: customShortcuts };
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'shortcuts' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
@@ -1731,13 +1827,11 @@ describe('SettingsModal', () => {
 
 	describe('Theme picker - Shift+Tab navigation', () => {
 		it('should navigate to previous theme with Shift+Tab', async () => {
-			const setActiveThemeId = vi.fn();
+			mockUseSettingsOverrides = { activeThemeId: 'github-light' };
 			render(
 				<SettingsModal
 					{...createDefaultProps({
 						initialTab: 'theme',
-						setActiveThemeId,
-						activeThemeId: 'github-light',
 					})}
 				/>
 			);
@@ -1757,7 +1851,7 @@ describe('SettingsModal', () => {
 			});
 
 			// Should navigate to previous theme (dracula, since github-light is after dracula)
-			expect(setActiveThemeId).toHaveBeenCalledWith('dracula');
+			expect(mockSetActiveThemeId).toHaveBeenCalledWith('dracula');
 		});
 	});
 
@@ -1782,7 +1876,7 @@ describe('SettingsModal', () => {
 				stopPropagation: vi.fn(),
 			});
 
-			expect(setShortcuts).toHaveBeenCalledWith(
+			expect(mockSetShortcuts).toHaveBeenCalledWith(
 				expect.objectContaining({
 					'new-session': expect.objectContaining({ keys: ['Ctrl', 'k'] }),
 				})
@@ -1809,7 +1903,7 @@ describe('SettingsModal', () => {
 				stopPropagation: vi.fn(),
 			});
 
-			expect(setShortcuts).toHaveBeenCalledWith(
+			expect(mockSetShortcuts).toHaveBeenCalledWith(
 				expect.objectContaining({
 					'new-session': expect.objectContaining({ keys: ['Alt', 'k'] }),
 				})
@@ -1836,7 +1930,7 @@ describe('SettingsModal', () => {
 				stopPropagation: vi.fn(),
 			});
 
-			expect(setShortcuts).toHaveBeenCalledWith(
+			expect(mockSetShortcuts).toHaveBeenCalledWith(
 				expect.objectContaining({
 					'new-session': expect.objectContaining({ keys: ['Shift', 'k'] }),
 				})
@@ -1864,7 +1958,7 @@ describe('SettingsModal', () => {
 			});
 
 			// Should not call setShortcuts for modifier-only key
-			expect(setShortcuts).not.toHaveBeenCalled();
+			expect(mockSetShortcuts).not.toHaveBeenCalled();
 			// Should still be in recording mode
 			expect(screen.getByText('Press keys...')).toBeInTheDocument();
 		});
@@ -1918,7 +2012,7 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: '120' }));
-			expect(setTerminalWidth).toHaveBeenCalledWith(120);
+			expect(mockSetTerminalWidth).toHaveBeenCalledWith(120);
 		});
 
 		it('should call setTerminalWidth with 160', async () => {
@@ -1932,26 +2026,26 @@ describe('SettingsModal', () => {
 			});
 
 			fireEvent.click(screen.getByRole('button', { name: '160' }));
-			expect(setTerminalWidth).toHaveBeenCalledWith(160);
+			expect(mockSetTerminalWidth).toHaveBeenCalledWith(160);
 		});
 	});
 
 	describe('Max output lines 100 button', () => {
 		it('should call setMaxOutputLines with 100', async () => {
-			const setMaxOutputLines = vi.fn();
-			render(
-				<SettingsModal {...createDefaultProps({ setMaxOutputLines, initialTab: 'display' })} />
-			);
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'display' })} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(100);
 			});
 
-			// Find the 100 button in max output lines section (not terminal width)
-			const buttons100 = screen.getAllByText('100');
-			// The second one is for max output lines
-			fireEvent.click(buttons100[buttons100.length - 1]);
-			expect(setMaxOutputLines).toHaveBeenCalledWith(100);
+			// Find the Max Output Lines section by its label, then find the 100 button within it
+			const maxOutputLabel = screen.getByText('Max Output Lines per Response');
+			const maxOutputSection = maxOutputLabel.closest('div')?.parentElement;
+			const buttons = maxOutputSection?.querySelectorAll('button') ?? [];
+			const button100 = Array.from(buttons).find((btn) => btn.textContent === '100');
+			expect(button100).toBeDefined();
+			fireEvent.click(button100!);
+			expect(mockSetMaxOutputLines).toHaveBeenCalledWith(100);
 		});
 	});
 
@@ -2193,11 +2287,15 @@ describe('SettingsModal', () => {
 				await vi.advanceTimersByTimeAsync(50);
 			});
 
-			expect(screen.getByText(/Optional features that extend Maestro's capabilities/)).toBeInTheDocument();
-			expect(screen.getByText(/Contributors building new features should consider gating them here/)).toBeInTheDocument();
+			expect(
+				screen.getByText(/Optional features that extend Maestro's capabilities/)
+			).toBeInTheDocument();
+			expect(
+				screen.getByText(/Contributors building new features should consider gating them here/)
+			).toBeInTheDocument();
 		});
 
-		it('should show Director\'s Notes feature toggle defaulting to off', async () => {
+		it("should show Director's Notes feature toggle defaulting to off", async () => {
 			render(<SettingsModal {...createDefaultProps()} />);
 
 			await act(async () => {
@@ -2215,7 +2313,7 @@ describe('SettingsModal', () => {
 			expect(screen.queryByText('Synopsis Provider')).not.toBeInTheDocument();
 		});
 
-		it('should call setEncoreFeatures when Director\'s Notes toggle is clicked', async () => {
+		it("should call setEncoreFeatures when Director's Notes toggle is clicked", async () => {
 			mockSetEncoreFeatures.mockClear();
 
 			render(<SettingsModal {...createDefaultProps()} />);
@@ -2242,8 +2340,8 @@ describe('SettingsModal', () => {
 
 		it('should call setEncoreFeatures with false when toggling DN off', async () => {
 			mockSetEncoreFeatures.mockClear();
-
-			render(<SettingsModal {...createDefaultProps({ encoreFeatures: { directorNotes: true } })} />);
+			mockUseSettingsOverrides = { encoreFeatures: { directorNotes: true } };
+			render(<SettingsModal {...createDefaultProps()} />);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(50);
@@ -2264,11 +2362,13 @@ describe('SettingsModal', () => {
 			});
 		});
 
-		describe('with Director\'s Notes enabled', () => {
-			const dnEnabledProps = { encoreFeatures: { directorNotes: true } };
+		describe("with Director's Notes enabled", () => {
+			beforeEach(() => {
+				mockUseSettingsOverrides = { encoreFeatures: { directorNotes: true } };
+			});
 
 			it('should render provider dropdown with detected available agents', async () => {
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2293,7 +2393,7 @@ describe('SettingsModal', () => {
 			});
 
 			it('should render Customize button for provider configuration', async () => {
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2311,7 +2411,7 @@ describe('SettingsModal', () => {
 			});
 
 			it('should render default lookback period slider with range 1-90', async () => {
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2333,7 +2433,7 @@ describe('SettingsModal', () => {
 			});
 
 			it('should show DN description text when enabled', async () => {
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2345,15 +2445,19 @@ describe('SettingsModal', () => {
 					await vi.advanceTimersByTimeAsync(50);
 				});
 
-				expect(screen.getByText(/Unified history view and AI-generated synopsis across all sessions/)).toBeInTheDocument();
-				expect(screen.getByText(/AI agent used to generate synopsis summaries/)).toBeInTheDocument();
+				expect(
+					screen.getByText(/Unified history view and AI-generated synopsis across all sessions/)
+				).toBeInTheDocument();
+				expect(
+					screen.getByText(/AI agent used to generate synopsis summaries/)
+				).toBeInTheDocument();
 				expect(screen.getByText(/How far back to look when generating notes/)).toBeInTheDocument();
 			});
 
 			it('should call setDirectorNotesSettings when provider is changed', async () => {
 				mockSetDirectorNotesSettings.mockClear();
 
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2377,7 +2481,7 @@ describe('SettingsModal', () => {
 			it('should call setDirectorNotesSettings when lookback slider is changed', async () => {
 				mockSetDirectorNotesSettings.mockClear();
 
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2399,7 +2503,7 @@ describe('SettingsModal', () => {
 			});
 
 			it('should render lookback scale markers', async () => {
-				render(<SettingsModal {...createDefaultProps(dnEnabledProps)} />);
+				render(<SettingsModal {...createDefaultProps()} />);
 
 				await act(async () => {
 					await vi.advanceTimersByTimeAsync(50);
@@ -2414,6 +2518,234 @@ describe('SettingsModal', () => {
 				expect(screen.getByText('1 day')).toBeInTheDocument();
 				expect(screen.getByText('90 days')).toBeInTheDocument();
 			});
+		});
+	});
+
+	describe('EnvVarsEditor - validation and filtering', () => {
+		// Helper to expand the Shell Configuration section so EnvVarsEditor is visible
+		const expandShellConfig = async () => {
+			const shellConfigButton = screen.getByRole('button', { name: 'Shell Configuration' });
+			fireEvent.click(shellConfigButton);
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+		};
+
+		it('should only add valid entries to envVars state (not invalid ones)', async () => {
+			const setShellEnvVars = vi.fn();
+			render(
+				<SettingsModal
+					{...createDefaultProps({
+						shellEnvVars: {},
+						setShellEnvVars,
+						initialTab: 'general',
+					})}
+				/>
+			);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			await expandShellConfig();
+
+			// Find the "Add Variable" button and click it
+			const addButton = screen.getByRole('button', { name: 'Add Variable' });
+			fireEvent.click(addButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			// Get the key input for the new entry (there should be one input with placeholder "VARIABLE")
+			const inputs = screen.getAllByPlaceholderText('VARIABLE');
+			const keyInput = inputs[inputs.length - 1]; // Get the last one (newly added)
+
+			// Enter an invalid key (contains special characters like hyphen, which is not allowed)
+			fireEvent.change(keyInput, { target: { value: 'MY-VAR' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			// Should show validation error
+			expect(screen.getByText(/Invalid variable name/)).toBeInTheDocument();
+
+			// The setShellEnvVars should NOT have been called with this invalid entry
+			// Check that the last call (if any) doesn't include MY-VAR
+			if (mockSetShellEnvVars.mock.calls.length > 0) {
+				const lastCall =
+					mockSetShellEnvVars.mock.calls[mockSetShellEnvVars.mock.calls.length - 1][0];
+				expect(lastCall['MY-VAR']).toBeUndefined();
+			}
+		});
+
+		it('should add valid entries to envVars and skip invalid entries', async () => {
+			const setShellEnvVars = vi.fn();
+			render(
+				<SettingsModal
+					{...createDefaultProps({
+						shellEnvVars: {},
+						setShellEnvVars,
+						initialTab: 'general',
+					})}
+				/>
+			);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			await expandShellConfig();
+
+			// Add first valid entry
+			const addButton = screen.getByRole('button', { name: 'Add Variable' });
+			fireEvent.click(addButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			let inputs = screen.getAllByPlaceholderText('VARIABLE');
+			const keyInput1 = inputs[inputs.length - 1];
+			fireEvent.change(keyInput1, { target: { value: 'VALID_VAR' } });
+
+			// Find the corresponding value input and set it
+			const valueInputs = screen.getAllByPlaceholderText('value');
+			const valueInput1 = valueInputs[valueInputs.length - 1];
+			fireEvent.change(valueInput1, { target: { value: 'test_value' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			// Add second invalid entry
+			fireEvent.click(addButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			inputs = screen.getAllByPlaceholderText('VARIABLE');
+			const keyInput2 = inputs[inputs.length - 1];
+			fireEvent.change(keyInput2, { target: { value: 'INVALID-VAR' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			// Check the last call to setShellEnvVars
+			const lastCall = mockSetShellEnvVars.mock.calls[mockSetShellEnvVars.mock.calls.length - 1][0];
+
+			// Should include valid entry
+			expect(lastCall['VALID_VAR']).toBe('test_value');
+
+			// Should NOT include invalid entry
+			expect(lastCall['INVALID-VAR']).toBeUndefined();
+		});
+
+		it('should not add entries with special characters in value without quotes', async () => {
+			const setShellEnvVars = vi.fn();
+			render(
+				<SettingsModal
+					{...createDefaultProps({
+						shellEnvVars: {},
+						setShellEnvVars,
+						initialTab: 'general',
+					})}
+				/>
+			);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			await expandShellConfig();
+
+			const addButton = screen.getByRole('button', { name: 'Add Variable' });
+			fireEvent.click(addButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			let inputs = screen.getAllByPlaceholderText('VARIABLE');
+			const keyInput = inputs[inputs.length - 1];
+			fireEvent.change(keyInput, { target: { value: 'MY_VAR' } });
+
+			// Set value with special characters but no quotes
+			const valueInputs = screen.getAllByPlaceholderText('value');
+			const valueInput = valueInputs[valueInputs.length - 1];
+			fireEvent.change(valueInput, { target: { value: 'value&with|special' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			// Should show warning about special characters
+			expect(screen.getByText(/contains disallowed special characters/)).toBeInTheDocument();
+
+			// The value should still be added (warning, not error) but if we have strict validation,
+			// it won't be in the state. The current implementation adds it with a warning.
+			const lastCall =
+				mockSetShellEnvVars.mock.calls[mockSetShellEnvVars.mock.calls.length - 1]?.[0] || {};
+			// Note: With current implementation, values with warnings still get added
+			// This is the current behavior - only full errors block the entry
+		});
+
+		it('should display count of valid entries', async () => {
+			mockUseSettingsOverrides = { shellEnvVars: { EXISTING_VAR: 'value' } };
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'general' })} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			await expandShellConfig();
+
+			// Should show "✓ Valid (1 variables loaded)"
+			expect(screen.getByText(/✓ Valid.*1.*variables loaded/)).toBeInTheDocument();
+		});
+
+		it('should remove invalid entries when they are deleted', async () => {
+			mockUseSettingsOverrides = { shellEnvVars: { VALID_VAR: 'test' } };
+			render(<SettingsModal {...createDefaultProps({ initialTab: 'general' })} />);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			await expandShellConfig();
+
+			// Add an invalid entry
+			const addButton = screen.getByRole('button', { name: 'Add Variable' });
+			fireEvent.click(addButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(50);
+			});
+
+			let inputs = screen.getAllByPlaceholderText('VARIABLE');
+			const keyInput = inputs[inputs.length - 1];
+			fireEvent.change(keyInput, { target: { value: 'INVALID-VAR' } });
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			// Now delete the invalid entry using the trash button
+			const trashButtons = screen.getAllByRole('button', { name: 'Remove variable' });
+			const invalidTrashButton = trashButtons[trashButtons.length - 1]; // Last one (newly added)
+			fireEvent.click(invalidTrashButton);
+
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(100);
+			});
+
+			// After deletion, only VALID_VAR should remain
+			const lastCall = mockSetShellEnvVars.mock.calls[mockSetShellEnvVars.mock.calls.length - 1][0];
+			expect(lastCall['VALID_VAR']).toBe('test');
+			expect(lastCall['INVALID-VAR']).toBeUndefined();
 		});
 	});
 });

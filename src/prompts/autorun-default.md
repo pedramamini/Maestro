@@ -28,6 +28,7 @@ The synopsis is displayed in the History panel and must describe the actual work
 When creating documentation, research notes, reports, or any knowledge artifacts (not source code), use **structured Markdown** by default:
 
 ### YAML Front Matter
+
 ```yaml
 ---
 type: research | note | report | analysis | reference
@@ -36,15 +37,18 @@ created: YYYY-MM-DD
 tags:
   - relevant-tag
 related:
-  - "[[Other-Document]]"
+  - '[[Other-Document]]'
 ---
 ```
 
 ### Wiki-Link Cross-References
+
 Use `[[Document-Name]]` syntax to connect related documents. This enables graph exploration in Maestro's DocGraph viewer and tools like Obsidian.
 
 ### Folder Organization
+
 Organize artifacts in logical folders by entity type or domain:
+
 ```
 docs/
 ├── research/
@@ -63,40 +67,40 @@ docs/
 ## Instructions
 
 1. Project Orientation
-    Begin by reviewing CLAUDE.md (when available) in this folder to understand the project's structure, conventions, and workflow expectations.
+   Begin by reviewing CLAUDE.md (when available) in this folder to understand the project's structure, conventions, and workflow expectations.
 
 2. Task Selection
-    Process the FIRST unchecked task (- [ ]) from top to bottom. Note that there may be relevant images associated with the task. If there are, analyze them, and include in your final synopsis back how many images you analyzed in preparation for solving the task.
+   Process the FIRST unchecked task (- [ ]) from top to bottom. Note that there may be relevant images associated with the task. If there are, analyze them, and include in your final synopsis back how many images you analyzed in preparation for solving the task.
 
-    IMPORTANT: You will only work on this single task. If the task description contains multiple steps or subtasks (e.g., bullet points, numbered lists, or semicolon-separated items), treat them as one cohesive unit—they were intentionally grouped by the document author to share context. Complete all parts before marking done. Do not move on to the next major checkbox item.
+   IMPORTANT: You will only work on this single task. If the task description contains multiple steps or subtasks (e.g., bullet points, numbered lists, or semicolon-separated items), treat them as one cohesive unit—they were intentionally grouped by the document author to share context. Complete all parts before marking done. Do not move on to the next major checkbox item.
 
 3. Task Evaluation
-    - Fully understand the task and inspect the relevant code.
-    - Identify all subtasks within the current checkbox item.
-    - There will be future runs to take care of other checkbox items.
+   - Fully understand the task and inspect the relevant code.
+   - Identify all subtasks within the current checkbox item.
+   - There will be future runs to take care of other checkbox items.
 
 4. Task Implementation
-    - **Before creating new code**, search for existing implementations, utilities, helpers, or patterns in the codebase that can be reused or extended. Avoid duplicating functionality that already exists.
-    - Implement the task according to the project's established style, architecture, and coding norms.
-    - Ensure that test cases are created, and that they pass.
-    - Ensure you haven't broken any existing test cases.
+   - **Before creating new code**, search for existing implementations, utilities, helpers, or patterns in the codebase that can be reused or extended. Avoid duplicating functionality that already exists.
+   - Implement the task according to the project's established style, architecture, and coding norms.
+   - Ensure that test cases are created, and that they pass.
+   - Ensure you haven't broken any existing test cases.
 
 5. Completion + Reporting
-    - Mark the task as completed by changing "- [ ]" to "- [x]".
-    - Begin your response with the specific synopsis (see "Response Format Requirement" above).
-    - Follow with any relevant details about:
-      - Implementation approach or key decisions made
-      - Why the task was intentionally skipped (if applicable)
-      - If implementation failed, explain the failure and do NOT check off the item.
+   - Mark the task as completed by changing "- [ ]" to "- [x]".
+   - Begin your response with the specific synopsis (see "Response Format Requirement" above).
+   - Follow with any relevant details about:
+     - Implementation approach or key decisions made
+     - Why the task was intentionally skipped (if applicable)
+     - If implementation failed, explain the failure and do NOT check off the item.
 
 6. Version Control
-    For any code or documentation changes, if we're in a Github repo:
-    - Commit using a descriptive message prefixed with "MAESTRO: ".
-    - Push to GitHub.
-    - Update CLAUDE.md, README.md, or any other top-level documentation if appropriate.
+   For any code or documentation changes, if we're in a Github repo:
+   - Commit using a descriptive message prefixed with "MAESTRO: ".
+   - Push to GitHub.
+   - Update CLAUDE.md, README.md, or any other top-level documentation if appropriate.
 
 7. Exit Immediately
-    After completing (or skipping) your task, EXIT. Do not proceed to additional tasks—another agent instance will handle them. If there are no remaining open tasks, exit immediately and state that there is nothing left to do.
+   After completing (or skipping) your task, EXIT. Do not proceed to additional tasks—another agent instance will handle them. If there are no remaining open tasks, exit immediately and state that there is nothing left to do.
 
 ---
 

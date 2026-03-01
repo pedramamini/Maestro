@@ -129,7 +129,8 @@ export function QuitConfirmModal({
 						className="text-sm leading-relaxed"
 						style={{ color: theme.colors.textMain }}
 					>
-						{busyAgentCount} {agentText} currently {hasAutoRun ? 'active' : 'thinking'}. Quitting now will interrupt their work.
+						{busyAgentCount} {agentText} currently {hasAutoRun ? 'active' : 'thinking'}. Quitting
+						now will interrupt their work.
 					</p>
 
 					{/* List of busy agents */}
@@ -146,7 +147,7 @@ export function QuitConfirmModal({
 						<div className="flex flex-wrap gap-2">
 							{displayNames.map((name, index) => (
 								<span
-									key={index}
+									key={`${name}-${index}`}
 									className="inline-flex items-center gap-1.5 px-2 py-1 rounded text-xs font-medium"
 									style={{
 										backgroundColor: `${theme.colors.warning}15`,

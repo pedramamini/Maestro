@@ -217,19 +217,29 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 						const idleMs = Date.now() - lastActivityTime;
 						if (idleMs > ACTIVITY_TIMEOUT_MS) {
 							clearInterval(activityCheckInterval);
-							window.maestro.logger.log('warn', 'Auto Run task killed due to inactivity', 'AgentExecution', {
-								targetSessionId,
-								idleMs,
-								agentType: session.toolType,
-							});
+							window.maestro.logger.log(
+								'warn',
+								'Auto Run task killed due to inactivity',
+								'AgentExecution',
+								{
+									targetSessionId,
+									idleMs,
+									agentType: session.toolType,
+								}
+							);
 							// Kill the hung process — onExit listener will fire and resolve the promise
 							window.maestro.process.kill(targetSessionId).catch((err) => {
-								window.maestro.logger.log('error', 'Failed to kill hung Auto Run process', 'AgentExecution', {
-									targetSessionId,
-									agentType: session.toolType,
-									idleMs,
-									error: String(err),
-								});
+								window.maestro.logger.log(
+									'error',
+									'Failed to kill hung Auto Run process',
+									'AgentExecution',
+									{
+										targetSessionId,
+										agentType: session.toolType,
+										idleMs,
+										error: String(err),
+									}
+								);
 							});
 						}
 					}, 30_000); // Check every 30 seconds
@@ -680,7 +690,11 @@ export function useAgentExecution(deps: UseAgentExecutionDeps): UseAgentExecutio
 				console.log('[cancelPendingSynopsis] Killed synopsis session:', synopsisSessionId);
 			} catch (error) {
 				// Process may have already exited
-				console.warn('[cancelPendingSynopsis] Failed to kill synopsis session:', synopsisSessionId, error);
+				console.warn(
+					'[cancelPendingSynopsis] Failed to kill synopsis session:',
+					synopsisSessionId,
+					error
+				);
 			}
 		});
 

@@ -207,17 +207,47 @@ export function sanitizeFilename(filename: string): string {
 }
 
 /**
- * Generate the base folder name for wizard output.
- * Uses date-based naming: "Wizard-YYYY-MM-DD"
+ * Sanitize a project name for use in a folder name.
+ * Converts to PascalCase-with-hyphens, strips non-alphanumeric characters,
+ * and truncates to a reasonable length.
  *
- * @returns A date-based folder name
+ * @param name - Raw project name
+ * @returns Sanitized name suitable for folder naming
  */
-export function generateWizardFolderBaseName(): string {
+function sanitizeFolderName(name: string): string {
+	return name
+		.replace(/[^a-zA-Z0-9\s-]/g, '')
+		.trim()
+		.split(/[\s-]+/)
+		.filter(Boolean)
+		.map((word) => word.charAt(0).toUpperCase() + word.slice(1))
+		.join('-')
+		.slice(0, 60);
+}
+
+/**
+ * Generate the base folder name for wizard output.
+ * Uses date-first naming: "YYYY-MM-DD-Feature-Name" to match the
+ * convention used by other Auto Run document folders.
+ *
+ * @param projectName - Optional project/feature name to include
+ * @returns A date-prefixed folder name
+ */
+export function generateWizardFolderBaseName(projectName?: string): string {
 	const now = new Date();
 	const year = now.getFullYear();
 	const month = String(now.getMonth() + 1).padStart(2, '0');
 	const day = String(now.getDate()).padStart(2, '0');
-	return `Wizard-${year}-${month}-${day}`;
+	const datePrefix = `${year}-${month}-${day}`;
+
+	if (projectName) {
+		const sanitized = sanitizeFolderName(projectName);
+		if (sanitized) {
+			return `${datePrefix}-${sanitized}`;
+		}
+	}
+
+	return `${datePrefix}-Wizard`;
 }
 
 /**
@@ -688,8 +718,8 @@ export async function generateInlineDocuments(
 	callbacks?.onStart?.();
 	callbacks?.onProgress?.('Preparing to generate your Playbook...');
 
-	// Create a date-based subfolder name: "Wizard-YYYY-MM-DD" (with -1, -2, etc. if needed)
-	const baseFolderName = generateWizardFolderBaseName();
+	// Create a date-prefixed subfolder name: "YYYY-MM-DD-Feature-Name" (with -2, -3, etc. if needed)
+	const baseFolderName = generateWizardFolderBaseName(projectName);
 	const sshRemoteId = config.sessionSshRemoteConfig?.enabled
 		? config.sessionSshRemoteConfig.remoteId
 		: undefined;

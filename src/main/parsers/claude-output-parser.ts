@@ -86,7 +86,10 @@ export class ClaudeOutputParser implements AgentOutputParser {
 
 			// DEBUG: Log raw message if it contains usage data
 			if (msg.modelUsage || msg.usage || msg.total_cost_usd !== undefined) {
-				console.log('[ClaudeOutputParser] Raw message with usage data:', JSON.stringify(msg, null, 2));
+				console.log(
+					'[ClaudeOutputParser] Raw message with usage data:',
+					JSON.stringify(msg, null, 2)
+				);
 			}
 
 			return this.transformMessage(msg);
@@ -337,19 +340,23 @@ export class ClaudeOutputParser implements AgentOutputParser {
 		// Only detect errors from structured JSON error events
 		// Do NOT pattern match on arbitrary text - it causes false positives
 		let errorText: string | null = null;
+		let parsedJson: unknown = null;
 		try {
 			const parsed = JSON.parse(line);
 			// Check for error type messages
 			// Claude Code uses type: 'error' for some errors and type: 'turn.failed' for others
 			if (parsed.type === 'error' && parsed.message) {
+				parsedJson = parsed;
 				errorText = parsed.message;
 			} else if (
 				(parsed.type === 'turn.failed' || parsed.type === 'turn_failed') &&
 				parsed.error?.message
 			) {
 				// Handle turn.failed/turn_failed format: {"type":"turn.failed","error":{"message":"..."}}
+				parsedJson = parsed;
 				errorText = parsed.error.message;
 			} else if (parsed.error) {
+				parsedJson = parsed;
 				errorText = typeof parsed.error === 'string' ? parsed.error : JSON.stringify(parsed.error);
 			}
 			// If no error field in JSON, this is normal output - don't check it
@@ -378,6 +385,21 @@ export class ClaudeOutputParser implements AgentOutputParser {
 				raw: {
 					errorLine: line,
 				},
+				parsedJson,
+			};
+		}
+
+		// Structured error event that didn't match a known pattern —
+		// still report it rather than silently dropping
+		if (parsedJson) {
+			return {
+				type: 'unknown',
+				message: errorText,
+				recoverable: true,
+				agentId: this.agentId,
+				timestamp: Date.now(),
+				raw: { errorLine: line },
+				parsedJson,
 			};
 		}
 

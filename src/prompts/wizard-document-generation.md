@@ -16,6 +16,7 @@ Do NOT write, create, or modify files anywhere else.
 
 **READ ACCESS (Unrestricted):**
 You may READ files from anywhere to inform your planning:
+
 - Read any file in: `{{DIRECTORY_PATH}}`
 - Examine project structure, code, and configuration
 
@@ -67,6 +68,7 @@ Each task checkbox (`- [ ]`) starts a **fresh AI context**. The entire document 
 ### What Makes a Good Task
 
 Each task should be:
+
 - **Self-contained**: Everything needed to complete the work is in one place
 - **Context-appropriate**: All items in a task belong in the same mental context
 - **Actionable**: Clear what needs to be done
@@ -77,12 +79,14 @@ Each task should be:
 ### Grouping Rules
 
 **DO group together:**
+
 - Multiple file creations that serve the same purpose
 - All fixes/changes within a single file
 - Related configuration (ESLint + Prettier + tsconfig)
 - Simple model + service + route for one small feature
 
 **DO NOT group together:**
+
 - Writing code and writing tests (separate contexts)
 - Writing tests and running tests (separate contexts)
 - Unrelated features, even if both are "simple"
@@ -146,9 +150,11 @@ If one item in a group is significantly more complex, give it its own task:
 
 ```markdown
 # Instead of cramming everything together:
+
 - [ ] Create user system (BAD - mixed complexity)
 
 # Separate by complexity:
+
 - [ ] Create User model and basic CRUD service:
   - User.ts entity with id, email, passwordHash, createdAt
   - UserRepository.ts with findById, findByEmail, create, update, delete
@@ -186,6 +192,7 @@ When tasks produce documentation, research, notes, reports, or any knowledge art
 Unless the user specifies otherwise, tasks that create non-code artifacts should specify:
 
 1. **YAML Front Matter** - Metadata header for filtering and querying:
+
    ```yaml
    ---
    type: research | note | report | analysis | reference
@@ -195,7 +202,7 @@ Unless the user specifies otherwise, tasks that create non-code artifacts should
      - relevant-tag
      - another-tag
    related:
-     - "[[Other-Document]]"
+     - '[[Other-Document]]'
    ---
    ```
 
@@ -240,6 +247,7 @@ When a task involves research, documentation, or knowledge capture, include outp
 ### When to Apply This Pattern
 
 Apply structured markdown output for:
+
 - Research findings and competitive analysis
 - Architecture decision records (ADRs)
 - Technical specifications and designs
@@ -248,6 +256,7 @@ Apply structured markdown output for:
 - Any knowledge that should be explorable as a graph
 
 Do NOT apply for:
+
 - Source code files (use standard conventions)
 - Config files (JSON, YAML, etc.)
 - Generated assets (images, binaries)
@@ -260,6 +269,7 @@ Do NOT apply for:
 Use your Write tool to save each phase document immediately after you finish writing it. This way, files appear in real-time for the user.
 
 File naming convention:
+
 - `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Phase-01-[Description].md`
 - `{{DIRECTORY_PATH}}/{{AUTO_RUN_FOLDER_NAME}}/Phase-02-[Description].md`
 - Continue the pattern for additional phases...

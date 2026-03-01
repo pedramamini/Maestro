@@ -38,6 +38,7 @@ import {
 	navigateToPrevUnifiedTab as navigateToPrevHelper,
 	navigateToUnifiedTabByIndex as navigateToIndexHelper,
 	navigateToLastUnifiedTab as navigateToLastHelper,
+	buildUnifiedTabs,
 	type CreateTabOptions,
 	type CreateTabResult,
 	type CloseTabOptions,
@@ -502,41 +503,7 @@ export const selectUnifiedTabs = (
 ): UnifiedTab[] => {
 	const session = selectActiveSession(state);
 	if (!session) return [];
-
-	const { aiTabs, filePreviewTabs, unifiedTabOrder } = session;
-
-	// Build lookup maps for O(1) access
-	const aiTabMap = new Map(aiTabs.map((t) => [t.id, t]));
-	const fileTabMap = new Map(filePreviewTabs.map((t) => [t.id, t]));
-
-	const result: UnifiedTab[] = [];
-
-	// Follow unified order for tabs that have entries
-	for (const ref of unifiedTabOrder) {
-		if (ref.type === 'ai') {
-			const tab = aiTabMap.get(ref.id);
-			if (tab) {
-				result.push({ type: 'ai', id: ref.id, data: tab });
-				aiTabMap.delete(ref.id);
-			}
-		} else {
-			const tab = fileTabMap.get(ref.id);
-			if (tab) {
-				result.push({ type: 'file', id: ref.id, data: tab });
-				fileTabMap.delete(ref.id);
-			}
-		}
-	}
-
-	// Append any tabs not in unified order (fallback for data integrity)
-	for (const [id, tab] of aiTabMap) {
-		result.push({ type: 'ai', id, data: tab });
-	}
-	for (const [id, tab] of fileTabMap) {
-		result.push({ type: 'file', id, data: tab });
-	}
-
-	return result;
+	return buildUnifiedTabs(session);
 };
 
 /**
