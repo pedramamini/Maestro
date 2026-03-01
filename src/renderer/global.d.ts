@@ -2529,7 +2529,18 @@ interface MaestroAPI {
 			draftPrNumber?: number;
 			draftPrUrl?: string;
 		}) => Promise<{ success: boolean; updated?: boolean; error?: string }>;
-		complete: (params: { contributionId: string; prBody?: string }) => Promise<{
+		complete: (params: {
+			contributionId: string;
+			prBody?: string;
+			stats?: {
+				inputTokens: number;
+				outputTokens: number;
+				estimatedCost: number;
+				timeSpentMs: number;
+				documentsProcessed: number;
+				tasksCompleted: number;
+			};
+		}) => Promise<{
 			success: boolean;
 			prUrl?: string;
 			prNumber?: number;

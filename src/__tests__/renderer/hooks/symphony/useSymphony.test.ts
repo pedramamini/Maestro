@@ -1132,9 +1132,15 @@ describe('useSymphony', () => {
 				await result.current.finalizeContribution('contrib_active_123');
 			});
 
-			expect(window.maestro.symphony.complete).toHaveBeenCalledWith({
-				contributionId: 'contrib_active_123',
-			});
+			expect(window.maestro.symphony.complete).toHaveBeenCalledWith(
+				expect.objectContaining({
+					contributionId: 'contrib_active_123',
+					stats: expect.objectContaining({
+						inputTokens: expect.any(Number),
+						outputTokens: expect.any(Number),
+					}),
+				})
+			);
 		});
 
 		it('should refetch state on success', async () => {

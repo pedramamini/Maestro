@@ -209,6 +209,14 @@ export function useContribution(contributionId: string | null): UseContributionR
 
 		const result = await window.maestro.symphony.complete({
 			contributionId,
+			stats: {
+				inputTokens: contribution.tokenUsage.inputTokens,
+				outputTokens: contribution.tokenUsage.outputTokens,
+				estimatedCost: contribution.tokenUsage.estimatedCost,
+				timeSpentMs: contribution.timeSpent,
+				documentsProcessed: contribution.progress.completedDocuments,
+				tasksCompleted: contribution.progress.completedTasks,
+			},
 		});
 
 		if (result.prUrl) {

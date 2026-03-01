@@ -425,6 +425,14 @@ export function useSymphony(): UseSymphonyReturn {
 				// 3. Convert draft PR to ready for review
 				const result = await window.maestro.symphony.complete({
 					contributionId,
+					stats: {
+						inputTokens: contribution.tokenUsage.inputTokens,
+						outputTokens: contribution.tokenUsage.outputTokens,
+						estimatedCost: contribution.tokenUsage.estimatedCost,
+						timeSpentMs: contribution.timeSpent,
+						documentsProcessed: contribution.progress.completedDocuments,
+						tasksCompleted: contribution.progress.completedTasks,
+					},
 				});
 
 				if (result.prUrl) {

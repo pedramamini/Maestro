@@ -41,6 +41,14 @@ export interface BatchCompleteInfo {
 	totalTasks: number;
 	wasStopped: boolean;
 	elapsedTimeMs: number;
+	/** Total input tokens consumed across all tasks */
+	inputTokens: number;
+	/** Total output tokens consumed across all tasks */
+	outputTokens: number;
+	/** Total estimated cost in USD across all tasks */
+	totalCostUsd: number;
+	/** Number of documents processed */
+	documentsProcessed: number;
 }
 
 export interface PRResultInfo {
@@ -1136,6 +1144,33 @@ export function useBatchProcessor({
 								totalCost += usageStats.totalCostUsd || 0;
 							}
 
+							// Update Symphony contribution with real-time progress
+							if (session.symphonyMetadata?.isSymphonySession) {
+								window.maestro.symphony
+									.updateStatus({
+										contributionId: session.symphonyMetadata.contributionId,
+										progress: {
+											totalDocuments: documents.length,
+											completedDocuments: docIndex,
+											totalTasks: initialTotalTasks,
+											completedTasks: totalCompletedTasks,
+											currentDocument: docEntry.filename,
+										},
+										tokenUsage: {
+											inputTokens: totalInputTokens,
+											outputTokens: totalOutputTokens,
+											estimatedCost: totalCost,
+										},
+										timeSpent: timeTracking.getElapsedTime(sessionId),
+									})
+									.catch((err: unknown) => {
+										console.warn(
+											'[BatchProcessor] Failed to update Symphony progress:',
+											err
+										);
+									});
+							}
+
 							// Track non-reset document completions for loop exit logic
 							// (This tracking is intentionally a no-op for now - kept for future loop mode enhancements)
 							void (!docEntry.resetOnCompletion ? tasksCompletedThisRun : 0);
@@ -1722,6 +1757,10 @@ export function useBatchProcessor({
 					totalTasks: initialTotalTasks,
 					wasStopped,
 					elapsedTimeMs: totalElapsedMs,
+					inputTokens: totalInputTokens,
+					outputTokens: totalOutputTokens,
+					totalCostUsd: totalCost,
+					documentsProcessed: documents.length,
 				});
 			}
 
