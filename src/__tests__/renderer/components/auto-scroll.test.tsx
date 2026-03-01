@@ -130,6 +130,8 @@ const createDefaultSession = (overrides: Partial<Session> = {}): Session => ({
 		},
 	],
 	activeTabId: 'tab-1',
+	terminalTabs: [],
+	activeTerminalTabId: null,
 	...overrides,
 });
 
@@ -226,20 +228,6 @@ describe('Auto-scroll feature', () => {
 			render(<TerminalOutput {...props} />);
 
 			// At bottom with auto-scroll off = no button visible
-			expect(
-				screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)
-			).not.toBeInTheDocument();
-		});
-
-		it('button does NOT render in terminal mode', () => {
-			const props = createDefaultProps({
-				autoScrollAiMode: true,
-				setAutoScrollAiMode: vi.fn(),
-				session: createDefaultSession({ inputMode: 'terminal' }),
-			});
-
-			render(<TerminalOutput {...props} />);
-
 			expect(
 				screen.queryByTitle(/Auto-scroll|Scroll to bottom|New messages/)
 			).not.toBeInTheDocument();

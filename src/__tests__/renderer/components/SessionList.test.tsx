@@ -174,6 +174,8 @@ const createMockSession = (overrides: Partial<Session> = {}): Session => ({
 	messageQueue: [],
 	contextUsage: 30,
 	activeTimeMs: 60000,
+	terminalTabs: [],
+	activeTerminalTabId: null,
 	...overrides,
 });
 
