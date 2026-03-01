@@ -3038,7 +3038,6 @@ function MaestroConsoleInner() {
 										return anyParticipantMissingCost || moderatorMissingCost;
 									})()}
 									onSendMessage={handleSendGroupChatMessage}
-									onClose={handleCloseGroupChat}
 									onRename={() =>
 										activeGroupChatId && handleOpenRenameGroupChatModal(activeGroupChatId)
 									}

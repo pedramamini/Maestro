@@ -30,7 +30,6 @@ interface GroupChatPanelProps {
 	/** True if one or more participants don't have cost data (makes total incomplete) */
 	costIncomplete?: boolean;
 	onSendMessage: (content: string, images?: string[], readOnly?: boolean) => void;
-	onClose: () => void;
 	onRename: () => void;
 	onShowInfo: () => void;
 	rightPanelOpen: boolean;
@@ -81,7 +80,6 @@ export function GroupChatPanel({
 	totalCost,
 	costIncomplete,
 	onSendMessage,
-	onClose,
 	onRename,
 	onShowInfo,
 	rightPanelOpen,
@@ -119,7 +117,6 @@ export function GroupChatPanel({
 				participantCount={groupChat.participants.length}
 				totalCost={totalCost}
 				costIncomplete={costIncomplete}
-				onClose={onClose}
 				onRename={onRename}
 				onShowInfo={onShowInfo}
 				rightPanelOpen={rightPanelOpen}
