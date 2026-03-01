@@ -55,6 +55,17 @@ const truncateStr = (v: unknown, max: number): string | null => {
 	return s.length > max ? s.substring(0, max) + '\u2026' : s;
 };
 
+/** Summarize TodoWrite todos array — shows in-progress task and progress count */
+const summarizeTodos = (v: unknown): string | null => {
+	if (!Array.isArray(v) || v.length === 0) return null;
+	const todos = v as Array<{ content?: string; status?: string; activeForm?: string }>;
+	const completed = todos.filter((t) => t.status === 'completed').length;
+	const inProgress = todos.find((t) => t.status === 'in_progress');
+	const label = inProgress?.activeForm || inProgress?.content || todos[0]?.content;
+	if (!label) return `${todos.length} tasks`;
+	return `${label} (${completed}/${todos.length})`;
+};
+
 // ============================================================================
 // LogItem - Memoized component for individual log entries
 // ============================================================================
@@ -539,6 +550,7 @@ const LogItemComponent = memo(
 									safeStr(toolInput.description) || // Task tool
 									safeStr(toolInput.prompt) || // Task tool fallback
 									safeStr(toolInput.task_id) || // TaskOutput tool
+									summarizeTodos(toolInput.todos) || // TodoWrite tool
 									// Codex-specific tool arg patterns
 									safeStr(toolInput.path) || // Codex file operations
 									safeStr(toolInput.cmd) || // Codex shell commands

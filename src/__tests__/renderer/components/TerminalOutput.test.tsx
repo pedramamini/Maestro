@@ -1782,6 +1782,124 @@ describe('TerminalOutput', () => {
 		});
 	});
 
+	describe('tool log detail extraction', () => {
+		it('renders TodoWrite tool with task summary from todos array', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					text: 'TodoWrite',
+					source: 'tool',
+					metadata: {
+						toolState: {
+							status: 'completed',
+							input: {
+								todos: [
+									{ content: 'Fix lint issues', status: 'completed', activeForm: 'Fixing lint issues' },
+									{ content: 'Run tests', status: 'in_progress', activeForm: 'Running tests' },
+									{ content: 'Build project', status: 'pending', activeForm: 'Building project' },
+								],
+							},
+						},
+					},
+				}),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			expect(screen.getByText('TodoWrite')).toBeInTheDocument();
+			// Should show activeForm of in_progress task with progress count
+			expect(screen.getByText('Running tests (1/3)')).toBeInTheDocument();
+		});
+
+		it('renders TodoWrite with first task when none in progress', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					text: 'TodoWrite',
+					source: 'tool',
+					metadata: {
+						toolState: {
+							status: 'completed',
+							input: {
+								todos: [
+									{ content: 'Fix lint issues', status: 'completed', activeForm: 'Fixing lint issues' },
+									{ content: 'Run tests', status: 'completed', activeForm: 'Running tests' },
+								],
+							},
+						},
+					},
+				}),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			// No in_progress task, falls back to first task's content
+			expect(screen.getByText('Fix lint issues (2/2)')).toBeInTheDocument();
+		});
+
+		it('renders Bash tool with command detail', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					text: 'Bash',
+					source: 'tool',
+					metadata: {
+						toolState: {
+							status: 'running',
+							input: { command: 'npm run test' },
+						},
+					},
+				}),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			expect(screen.getByText('Bash')).toBeInTheDocument();
+			expect(screen.getByText('npm run test')).toBeInTheDocument();
+		});
+
+		it('renders tool with no extractable detail gracefully', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					text: 'SomeUnknownTool',
+					source: 'tool',
+					metadata: {
+						toolState: {
+							status: 'running',
+							input: { someWeirdField: true },
+						},
+					},
+				}),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			const props = createDefaultProps({ session });
+			render(<TerminalOutput {...props} />);
+
+			// Tool name should still render even with no detail
+			expect(screen.getByText('SomeUnknownTool')).toBeInTheDocument();
+		});
+	});
+
 	describe('local filter functionality', () => {
 		it('shows filter button for terminal output entries', () => {
 			const logs: LogEntry[] = [createLogEntry({ text: 'Terminal output', source: 'stdout' })];
