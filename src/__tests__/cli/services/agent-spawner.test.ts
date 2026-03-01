@@ -45,19 +45,30 @@ vi.mock('child_process', async (importOriginal) => {
 	};
 });
 
+// Create module-level mock functions for fs.promises operations that persist across vi.resetModules()
+const mockFsStat = vi.fn();
+const mockFsAccess = vi.fn();
+
 // Mock fs module
 vi.mock('fs', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('fs')>();
+	const fsConstants = actual.constants ??
+		actual.default?.constants ?? {
+			F_OK: 0,
+			R_OK: 4,
+			W_OK: 2,
+			X_OK: 1,
+		};
 	return {
 		...actual,
+		default: actual,
+		constants: fsConstants,
 		readFileSync: vi.fn(),
 		writeFileSync: vi.fn(),
 		promises: {
-			stat: vi.fn(),
-			access: vi.fn(),
-		},
-		constants: {
-			X_OK: 1,
+			...actual.promises,
+			stat: (...args: unknown[]) => mockFsStat(...args),
+			access: (...args: unknown[]) => mockFsAccess(...args),
 		},
 	};
 });
@@ -502,11 +513,11 @@ Some text with [x] in it that's not a checkbox
 			// Mock custom path from settings
 			mockGetAgentCustomPath.mockReturnValue('/custom/path/to/claude');
 
-			// Mock file exists and is executable
-			vi.mocked(fs.promises.stat).mockResolvedValue({
+			// Configure module-level fs mocks (survive vi.resetModules())
+			mockFsStat.mockResolvedValue({
 				isFile: () => true,
 			} as fs.Stats);
-			vi.mocked(fs.promises.access).mockResolvedValue(undefined);
+			mockFsAccess.mockResolvedValue(undefined);
 
 			// Re-import to get fresh module without cached path
 			const { detectClaude: freshDetectClaude } =
@@ -524,7 +535,7 @@ Some text with [x] in it that's not a checkbox
 			mockGetAgentCustomPath.mockReturnValue('/invalid/path/to/claude');
 
 			// Mock file does not exist
-			vi.mocked(fs.promises.stat).mockRejectedValue(new Error('ENOENT'));
+			mockFsStat.mockRejectedValue(new Error('ENOENT'));
 
 			// Mock which command finding claude
 			mockSpawn.mockReturnValue(mockChild);
@@ -594,10 +605,12 @@ Some text with [x] in it that's not a checkbox
 		it('should return cached result on subsequent calls', async () => {
 			// First call - setup
 			mockGetAgentCustomPath.mockReturnValue('/custom/path/to/claude');
-			vi.mocked(fs.promises.stat).mockResolvedValue({
+
+			// Configure module-level fs mocks (survive vi.resetModules())
+			mockFsStat.mockResolvedValue({
 				isFile: () => true,
 			} as fs.Stats);
-			vi.mocked(fs.promises.access).mockResolvedValue(undefined);
+			mockFsAccess.mockResolvedValue(undefined);
 
 			vi.resetModules();
 			const { detectClaude: freshDetectClaude } =
@@ -607,7 +620,7 @@ Some text with [x] in it that's not a checkbox
 			expect(result1.available).toBe(true);
 
 			// Clear the mock to verify caching
-			vi.mocked(fs.promises.stat).mockClear();
+			mockFsStat.mockClear();
 
 			// Second call - should use cache
 			const result2 = await freshDetectClaude();
@@ -622,7 +635,7 @@ Some text with [x] in it that's not a checkbox
 			mockGetAgentCustomPath.mockReturnValue('/path/to/directory');
 
 			// Mock stat returning directory
-			vi.mocked(fs.promises.stat).mockResolvedValue({
+			mockFsStat.mockResolvedValue({
 				isFile: () => false,
 			} as fs.Stats);
 
@@ -652,10 +665,10 @@ Some text with [x] in it that's not a checkbox
 			mockGetAgentCustomPath.mockReturnValue('/path/to/claude');
 
 			// Mock file exists but is not executable
-			vi.mocked(fs.promises.stat).mockResolvedValue({
+			mockFsStat.mockResolvedValue({
 				isFile: () => true,
 			} as fs.Stats);
-			vi.mocked(fs.promises.access).mockRejectedValue(new Error('EACCES'));
+			mockFsAccess.mockRejectedValue(new Error('EACCES'));
 
 			// Mock which not finding claude
 			mockSpawn.mockReturnValue(mockChild);
@@ -1273,7 +1286,7 @@ Some text with [x] in it that's not a checkbox
 			Object.defineProperty(process, 'platform', { value: 'win32', configurable: true });
 
 			mockGetAgentCustomPath.mockReturnValue('C:\\Program Files\\claude\\claude.exe');
-			vi.mocked(fs.promises.stat).mockResolvedValue({
+			mockFsStat.mockResolvedValue({
 				isFile: () => true,
 			} as fs.Stats);
 			// Don't mock access - it shouldn't be called on Windows
@@ -1286,7 +1299,7 @@ Some text with [x] in it that's not a checkbox
 
 			// On Windows, just checking if it's a file is enough
 			expect(result.available).toBe(true);
-			expect(fs.promises.access).not.toHaveBeenCalled();
+			expect(mockFsAccess).not.toHaveBeenCalled();
 
 			Object.defineProperty(process, 'platform', { value: originalPlatform, configurable: true });
 		});

@@ -47,6 +47,15 @@ export async function saveImageToTempFile(dataUrl: string, index: number): Promi
 }
 
 /**
+ * Build a prompt prefix string listing attached image file paths.
+ * Returns an empty string if no paths are provided.
+ */
+export function buildImagePromptPrefix(imagePaths: string[]): string {
+	if (imagePaths.length === 0) return '';
+	return `[Attached images: ${imagePaths.join(', ')}]\n\n`;
+}
+
+/**
  * Clean up temp image files asynchronously.
  * Fire-and-forget to avoid blocking the main thread.
  */
