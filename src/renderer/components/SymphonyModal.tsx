@@ -797,7 +797,7 @@ function RepositoryDetailView({
 									<FileText className="w-3 h-3" />
 									<span>{selectedIssue.documentPaths.length} Auto Run documents to process</span>
 								</div>
-														</div>
+							</div>
 
 							{/* Document selector dropdown */}
 							<div
