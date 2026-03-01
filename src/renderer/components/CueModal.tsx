@@ -7,6 +7,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useCue } from '../hooks/useCue';
 import type { CueSessionStatus, CueRunResult } from '../hooks/useCue';
 import { CueYamlEditor } from './CueYamlEditor';
+import { CueHelpModal } from './CueHelpModal';
 
 interface CueModalProps {
 	theme: Theme;
@@ -288,6 +289,9 @@ export function CueModal({ theme, onClose }: CueModalProps) {
 		};
 	}, [registerLayer, unregisterLayer]);
 
+	// Help modal state
+	const [showHelp, setShowHelp] = useState(false);
+
 	// YAML editor state
 	const [yamlEditorSession, setYamlEditorSession] = useState<CueSessionStatus | null>(null);
 
@@ -362,6 +366,7 @@ export function CueModal({ theme, onClose }: CueModalProps) {
 
 								{/* Help button */}
 								<button
+									onClick={() => setShowHelp(true)}
 									className="p-1.5 rounded-md hover:bg-white/10 transition-colors"
 									title="Help"
 									style={{ color: theme.colors.textDim }}
@@ -458,6 +463,7 @@ export function CueModal({ theme, onClose }: CueModalProps) {
 					theme={theme}
 				/>
 			)}
+			{showHelp && <CueHelpModal theme={theme} onClose={() => setShowHelp(false)} />}
 		</>
 	);
 }
