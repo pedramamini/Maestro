@@ -1007,9 +1007,12 @@ const SessionTooltipContent = memo(function SessionTooltipContent({
 				{session.state} • {session.toolType}
 				{session.sessionSshRemoteConfig?.enabled ? ' (SSH)' : ''}
 			</div>
-			{session.accountName && (
+			{(session.accountName || session.accountId) && (
 				<div className="text-[10px] mb-2" style={{ color: theme.colors.textDim }}>
-					Account: <span style={{ color: theme.colors.accent }}>{session.accountName}</span>
+					Account:{' '}
+					<span style={{ color: theme.colors.accent }}>
+						{session.accountName || session.accountId}
+					</span>
 				</div>
 			)}
 
@@ -1714,7 +1717,9 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
-					accountUsagePercent={session.accountId ? accountUsageMetrics[session.accountId]?.usagePercent : undefined}
+					accountUsagePercent={
+						session.accountId ? accountUsageMetrics[session.accountId]?.usagePercent : undefined
+					}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -1777,7 +1782,11 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
-										accountUsagePercent={child.accountId ? accountUsageMetrics[child.accountId]?.usagePercent : undefined}
+										accountUsagePercent={
+											child.accountId
+												? accountUsageMetrics[child.accountId]?.usagePercent
+												: undefined
+										}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}
@@ -3149,7 +3158,9 @@ function SessionListInner(props: SessionListProps) {
 							? () => onCreateGroupAndMove(contextMenuSession.id)
 							: createNewGroup
 					}
-					onSwitchProvider={onSwitchProvider ? () => onSwitchProvider(contextMenuSession.id) : undefined}
+					onSwitchProvider={
+						onSwitchProvider ? () => onSwitchProvider(contextMenuSession.id) : undefined
+					}
 					onUnarchive={onUnarchive ? () => onUnarchive(contextMenuSession.id) : undefined}
 				/>
 			)}
