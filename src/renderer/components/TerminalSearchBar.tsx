@@ -27,8 +27,10 @@ export const TerminalSearchBar = memo(function TerminalSearchBar({
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+	const onSearchRef = useRef(onSearch);
+	onSearchRef.current = onSearch;
 
-	// Auto-focus input when opened
+	// Auto-focus input when opened; clear search state in terminal engine when closed
 	useEffect(() => {
 		if (isOpen) {
 			const timer = setTimeout(() => {
@@ -36,9 +38,10 @@ export const TerminalSearchBar = memo(function TerminalSearchBar({
 			}, 0);
 			return () => clearTimeout(timer);
 		} else {
-			// Reset query when closed
+			// Reset local state and clear any active search highlight in the terminal engine
 			setQuery('');
 			setHasResults(true);
+			onSearchRef.current('');
 		}
 	}, [isOpen]);
 
@@ -65,12 +68,14 @@ export const TerminalSearchBar = memo(function TerminalSearchBar({
 			const found = onSearch(value);
 			setHasResults(found);
 		} else {
+			// Clear search highlight in terminal engine when query is emptied
+			onSearch('');
 			setHasResults(true);
 		}
 	};
 
 	const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-		if (e.key === 'Enter') {
+		if (e.key === 'Enter' && query) {
 			e.preventDefault();
 			if (e.shiftKey) {
 				const found = onSearchPrevious();
@@ -125,6 +130,8 @@ export const TerminalSearchBar = memo(function TerminalSearchBar({
 				</span>
 			)}
 			<button
+				type="button"
+				aria-label="Previous match"
 				onClick={handlePrevious}
 				disabled={!query}
 				title="Previous match (Shift+Enter)"
@@ -134,6 +141,8 @@ export const TerminalSearchBar = memo(function TerminalSearchBar({
 				<ChevronUp size={14} />
 			</button>
 			<button
+				type="button"
+				aria-label="Next match"
 				onClick={handleNext}
 				disabled={!query}
 				title="Next match (Enter)"
@@ -143,6 +152,8 @@ export const TerminalSearchBar = memo(function TerminalSearchBar({
 				<ChevronDown size={14} />
 			</button>
 			<button
+				type="button"
+				aria-label="Close search"
 				onClick={onClose}
 				title="Close (Escape)"
 				className="p-0.5 rounded opacity-70 hover:opacity-100"

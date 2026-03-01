@@ -286,7 +286,7 @@ export function updateTerminalTabState(
 		...session,
 		terminalTabs: terminalTabs.map((tab) =>
 			tab.id === tabId
-				? { ...tab, state, ...(exitCode !== undefined ? { exitCode } : {}) }
+				? { ...tab, state, exitCode }
 				: tab
 		),
 	};

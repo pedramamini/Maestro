@@ -1,4 +1,4 @@
-import { memo, forwardRef, useImperativeHandle, useRef, useEffect, useCallback } from 'react';
+import { memo, forwardRef, useImperativeHandle, useRef, useEffect, useCallback, useState } from 'react';
 import { AlertCircle } from 'lucide-react';
 import { XTerminal, XTerminalHandle } from './XTerminal';
 import { TerminalSearchBar } from './TerminalSearchBar';
@@ -58,6 +58,10 @@ export const TerminalView = memo(
 		const terminalRefs = useRef<Map<string, XTerminalHandle>>(new Map());
 		// Track previous tab states to detect transitions (for exit message)
 		const prevTabStatesRef = useRef<Map<string, TerminalTab['state']>>(new Map());
+		// In-flight spawn guard: set of tabIds currently waiting for a PTY PID
+		const spawnInFlightRef = useRef<Set<string>>(new Set());
+		// Track which tabs have already had the loading message written to avoid duplicates
+		const loadingWrittenRef = useRef<Set<string>>(new Set());
 
 		const activeTab = getActiveTerminalTab(session);
 
@@ -94,8 +98,12 @@ export const TerminalView = memo(
 		// Shared spawn function — used both on mount and for retry
 		const spawnPtyForTab = useCallback(
 			(tab: TerminalTab) => {
-				const terminalSessionId = getTerminalSessionId(session.id, tab.id);
 				const tabId = tab.id;
+				// Guard: skip if a spawn is already in flight for this tab
+				if (spawnInFlightRef.current.has(tabId)) return;
+				spawnInFlightRef.current.add(tabId);
+
+				const terminalSessionId = getTerminalSessionId(session.id, tabId);
 
 				window.maestro.process
 					.spawnTerminalTab({
@@ -104,6 +112,7 @@ export const TerminalView = memo(
 						shell: defaultShell || undefined,
 						shellArgs,
 						shellEnvVars,
+						sessionSshRemoteConfig: session.sessionSshRemoteConfig,
 					})
 					.then((result) => {
 						if (result.success) {
@@ -114,9 +123,12 @@ export const TerminalView = memo(
 					})
 					.catch(() => {
 						onTabStateChange(tabId, 'exited', 1);
+					})
+					.finally(() => {
+						spawnInFlightRef.current.delete(tabId);
 					});
 			},
-			[session.id, session.cwd, defaultShell, shellArgs, shellEnvVars]
+			[session.id, session.cwd, session.sessionSshRemoteConfig, defaultShell, shellArgs, shellEnvVars, onTabPidChange, onTabStateChange]
 		);
 
 		// Spawn PTY when active tab changes and has no PID yet
@@ -125,7 +137,7 @@ export const TerminalView = memo(
 				return;
 			}
 			spawnPtyForTab(activeTab);
-		}, [activeTab?.id]);
+		}, [activeTab?.id, spawnPtyForTab]);
 
 		// Focus the active terminal when the active tab changes
 		useEffect(() => {
@@ -260,14 +272,16 @@ export const TerminalView = memo(
 										ref={(handle) => {
 											if (handle) {
 												terminalRefs.current.set(tab.id, handle);
-												// Write loading indicator when terminal mounts with no PTY yet
-												if (tab.pid === 0 && tab.state === 'idle') {
+												// Write loading indicator once per idle cycle — guard prevents duplicate writes on re-renders
+												if (tab.pid === 0 && tab.state === 'idle' && !loadingWrittenRef.current.has(tab.id)) {
+													loadingWrittenRef.current.add(tab.id);
 													setTimeout(() => {
 														handle.write('\x1b[2mStarting terminal...\x1b[0m');
 													}, 0);
 												}
 											} else {
 												terminalRefs.current.delete(tab.id);
+												loadingWrittenRef.current.delete(tab.id);
 											}
 										}}
 										sessionId={terminalSessionId}
