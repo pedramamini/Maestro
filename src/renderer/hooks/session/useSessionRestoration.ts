@@ -288,10 +288,25 @@ export function useSessionRestoration(): SessionRestorationReturn {
 					...correctedSession,
 					terminalTabs: [defaultTerminalTab],
 					activeTerminalTabId: null,
-					unifiedTabOrder: [
-						...(correctedSession.unifiedTabOrder || []),
-						{ type: 'terminal' as const, id: defaultTerminalTab.id },
-					],
+					// When unifiedTabOrder already exists, append the new terminal tab.
+					// When it's undefined (legacy session), build the full order from all
+					// existing tabs so no tab type is lost.
+					unifiedTabOrder: correctedSession.unifiedTabOrder
+						? [
+								...correctedSession.unifiedTabOrder,
+								{ type: 'terminal' as const, id: defaultTerminalTab.id },
+							]
+						: [
+								...correctedSession.aiTabs.map((tab) => ({
+									type: 'ai' as const,
+									id: tab.id,
+								})),
+								...(correctedSession.filePreviewTabs || []).map((tab) => ({
+									type: 'file' as const,
+									id: tab.id,
+								})),
+								{ type: 'terminal' as const, id: defaultTerminalTab.id },
+							],
 				};
 			}
 

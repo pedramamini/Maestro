@@ -482,7 +482,7 @@ describe('useSessionCrud', () => {
 			expect(useUIStore.getState().activeFocus).toBe('main');
 		});
 
-		it('creates unified tab order with initial tab', async () => {
+		it('creates unified tab order with initial AI and terminal tabs', async () => {
 			const deps = createDeps();
 			const { result } = renderHook(() => useSessionCrud(deps));
 
@@ -495,9 +495,14 @@ describe('useSessionCrud', () => {
 			});
 
 			const session = useSessionStore.getState().sessions[0];
-			expect(session.unifiedTabOrder).toHaveLength(1);
-			expect(session.unifiedTabOrder[0].type).toBe('ai');
-			expect(session.unifiedTabOrder[0].id).toBe(session.activeTabId);
+			// New sessions include both an AI tab and a default terminal tab
+			expect(session.unifiedTabOrder).toHaveLength(2);
+			const aiRef = session.unifiedTabOrder.find((r) => r.type === 'ai');
+			const termRef = session.unifiedTabOrder.find((r) => r.type === 'terminal');
+			expect(aiRef).toBeDefined();
+			expect(aiRef!.id).toBe(session.activeTabId);
+			expect(termRef).toBeDefined();
+			expect(termRef!.id).toBe(session.terminalTabs[0].id);
 		});
 	});
 
