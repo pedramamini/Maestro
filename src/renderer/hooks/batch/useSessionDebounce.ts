@@ -86,8 +86,6 @@ export function useSessionDebounce<T>(
 	// Cleanup effect: clear all timers synchronously on unmount
 	useEffect(() => {
 		return () => {
-			// DEBUG: Log unmount
-			console.log('[useSessionDebounce] UNMOUNTING - clearing all timers and pending updates');
 			isMountedRef.current = false;
 
 			// Clear all timers synchronously
@@ -110,13 +108,6 @@ export function useSessionDebounce<T>(
 	 */
 	const scheduleUpdate = useCallback(
 		(sessionId: string, updater: (prev: T) => T, immediate: boolean = false) => {
-			// DEBUG: Log schedule attempt
-			console.log('[useSessionDebounce:scheduleUpdate]', {
-				sessionId,
-				immediate,
-				hasPending: !!pendingUpdatesRef.current[sessionId],
-			});
-
 			// For immediate updates (start/stop/error), bypass debouncing
 			if (immediate) {
 				// Clear any pending timer for this session
@@ -145,22 +136,9 @@ export function useSessionDebounce<T>(
 			}
 
 			debounceTimerRefs.current[sessionId] = setTimeout(() => {
-				// DEBUG: Log when timer fires
-				const hasUpdater = !!pendingUpdatesRef.current[sessionId];
-				const mounted = isMountedRef.current;
-				console.log('[useSessionDebounce:timer] Timer fired', { sessionId, hasUpdater, mounted });
-
 				const composedUpdater = pendingUpdatesRef.current[sessionId];
 				if (composedUpdater && isMountedRef.current) {
-					console.log('[useSessionDebounce:timer] Calling onUpdate');
 					onUpdate(sessionId, composedUpdater);
-				} else {
-					console.log(
-						'[useSessionDebounce:timer] Skipping onUpdate - composedUpdater:',
-						!!composedUpdater,
-						'isMounted:',
-						isMountedRef.current
-					);
 				}
 				delete pendingUpdatesRef.current[sessionId];
 				delete debounceTimerRefs.current[sessionId];
@@ -185,16 +163,6 @@ export function useSessionDebounce<T>(
 	 */
 	const flushUpdate = useCallback(
 		(sessionId: string) => {
-			// DEBUG: Log flush attempt
-			const hasTimer = !!debounceTimerRefs.current[sessionId];
-			const hasPending = !!pendingUpdatesRef.current[sessionId];
-			console.log('[useSessionDebounce:flushUpdate]', {
-				sessionId,
-				hasTimer,
-				hasPending,
-				isMounted: isMountedRef.current,
-			});
-
 			// Clear the timer
 			if (debounceTimerRefs.current[sessionId]) {
 				clearTimeout(debounceTimerRefs.current[sessionId]);
@@ -204,7 +172,6 @@ export function useSessionDebounce<T>(
 			// Apply the pending update if any
 			const composedUpdater = pendingUpdatesRef.current[sessionId];
 			if (composedUpdater && isMountedRef.current) {
-				console.log('[useSessionDebounce:flushUpdate] Applying pending update');
 				onUpdate(sessionId, composedUpdater);
 			}
 			delete pendingUpdatesRef.current[sessionId];

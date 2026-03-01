@@ -197,10 +197,14 @@ function isWslEnvironment(): boolean {
 export function getEarlySettings(syncPath: string): {
 	crashReportingEnabled: boolean;
 	disableGpuAcceleration: boolean;
+	useNativeTitleBar: boolean;
+	autoHideMenuBar: boolean;
 } {
 	const earlyStore = new Store<{
 		crashReportingEnabled: boolean;
 		disableGpuAcceleration: boolean;
+		useNativeTitleBar: boolean;
+		autoHideMenuBar: boolean;
 	}>({
 		name: 'maestro-settings',
 		cwd: syncPath,
@@ -217,6 +221,8 @@ export function getEarlySettings(syncPath: string): {
 	return {
 		crashReportingEnabled: earlyStore.get('crashReportingEnabled', true),
 		disableGpuAcceleration: explicitGpuSetting ?? defaultDisableGpu,
+		useNativeTitleBar: earlyStore.get('useNativeTitleBar', false),
+		autoHideMenuBar: earlyStore.get('autoHideMenuBar', false),
 	};
 }
 

@@ -21,43 +21,43 @@ RunMaestro/Maestro/
 
 ```json
 {
-  "schemaVersion": "1.0",
-  "lastUpdated": "2025-01-01T00:00:00Z",
-  "repositories": [
-    {
-      "slug": "owner/repo-name",
-      "name": "Human Readable Name",
-      "description": "Short description of the project",
-      "url": "https://github.com/owner/repo-name",
-      "category": "developer-tools",
-      "tags": ["cli", "productivity"],
-      "maintainer": {
-        "name": "Name",
-        "url": "https://..."
-      },
-      "isActive": true,
-      "featured": false,
-      "addedAt": "2025-01-01"
-    }
-  ]
+	"schemaVersion": "1.0",
+	"lastUpdated": "2025-01-01T00:00:00Z",
+	"repositories": [
+		{
+			"slug": "owner/repo-name",
+			"name": "Human Readable Name",
+			"description": "Short description of the project",
+			"url": "https://github.com/owner/repo-name",
+			"category": "developer-tools",
+			"tags": ["cli", "productivity"],
+			"maintainer": {
+				"name": "Name",
+				"url": "https://..."
+			},
+			"isActive": true,
+			"featured": false,
+			"addedAt": "2025-01-01"
+		}
+	]
 }
 ```
 
 ### Field Reference
 
-| Field | Type | Required | Description |
-|-------|------|----------|-------------|
-| `slug` | string | Yes | Repository identifier in `owner/repo` format |
-| `name` | string | Yes | Human-readable project name |
-| `description` | string | Yes | Short description (max 200 chars) |
-| `url` | string | Yes | Full GitHub repository URL |
-| `category` | string | Yes | Primary category (see Categories below) |
-| `tags` | string[] | No | Optional tags for search/filtering |
-| `maintainer.name` | string | Yes | Maintainer or organization name |
-| `maintainer.url` | string | No | Optional link to maintainer profile |
-| `isActive` | boolean | Yes | Whether repo is accepting contributions |
-| `featured` | boolean | No | Show in featured section (default: false) |
-| `addedAt` | string | Yes | ISO 8601 date when registered |
+| Field             | Type     | Required | Description                                  |
+| ----------------- | -------- | -------- | -------------------------------------------- |
+| `slug`            | string   | Yes      | Repository identifier in `owner/repo` format |
+| `name`            | string   | Yes      | Human-readable project name                  |
+| `description`     | string   | Yes      | Short description (max 200 chars)            |
+| `url`             | string   | Yes      | Full GitHub repository URL                   |
+| `category`        | string   | Yes      | Primary category (see Categories below)      |
+| `tags`            | string[] | No       | Optional tags for search/filtering           |
+| `maintainer.name` | string   | Yes      | Maintainer or organization name              |
+| `maintainer.url`  | string   | No       | Optional link to maintainer profile          |
+| `isActive`        | boolean  | Yes      | Whether repo is accepting contributions      |
+| `featured`        | boolean  | No       | Show in featured section (default: false)    |
+| `addedAt`         | string   | Yes      | ISO 8601 date when registered                |
 
 ## How It Works
 
@@ -71,17 +71,17 @@ RunMaestro/Maestro/
 
 ## Categories
 
-| ID | Label | Use Case |
-|----|-------|----------|
-| `ai-ml` | AI & ML | AI/ML tools and libraries |
-| `developer-tools` | Developer Tools | Developer productivity tools |
-| `infrastructure` | Infrastructure | DevOps, cloud, infrastructure |
-| `documentation` | Documentation | Documentation projects |
-| `web` | Web | Web frameworks and libraries |
-| `mobile` | Mobile | Mobile development |
-| `data` | Data | Data processing, databases |
-| `security` | Security | Security tools |
-| `other` | Other | Miscellaneous projects |
+| ID                | Label           | Use Case                      |
+| ----------------- | --------------- | ----------------------------- |
+| `ai-ml`           | AI & ML         | AI/ML tools and libraries     |
+| `developer-tools` | Developer Tools | Developer productivity tools  |
+| `infrastructure`  | Infrastructure  | DevOps, cloud, infrastructure |
+| `documentation`   | Documentation   | Documentation projects        |
+| `web`             | Web             | Web frameworks and libraries  |
+| `mobile`          | Mobile          | Mobile development            |
+| `data`            | Data            | Data processing, databases    |
+| `security`        | Security        | Security tools                |
+| `other`           | Other           | Miscellaneous projects        |
 
 ## Registering a Repository
 
@@ -101,19 +101,19 @@ Before registering, ensure your repository:
 
 ```json
 {
-  "slug": "your-org/your-repo",
-  "name": "Your Project Name",
-  "description": "Brief description of your project",
-  "url": "https://github.com/your-org/your-repo",
-  "category": "developer-tools",
-  "tags": ["typescript", "cli"],
-  "maintainer": {
-    "name": "Your Name",
-    "url": "https://github.com/your-username"
-  },
-  "isActive": true,
-  "featured": false,
-  "addedAt": "2025-01-15"
+	"slug": "your-org/your-repo",
+	"name": "Your Project Name",
+	"description": "Brief description of your project",
+	"url": "https://github.com/your-org/your-repo",
+	"category": "developer-tools",
+	"tags": ["typescript", "cli"],
+	"maintainer": {
+		"name": "Your Name",
+		"url": "https://github.com/your-username"
+	},
+	"isActive": true,
+	"featured": false,
+	"addedAt": "2025-01-15"
 }
 ```
 

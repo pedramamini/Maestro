@@ -24,7 +24,9 @@ import {
 import type { AITab, Theme, FilePreviewTab, UnifiedTab } from '../types';
 import { hasDraft } from '../utils/tabHelpers';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
-import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
+import { getExtensionColor } from '../utils/extensionColors';
+import { getRevealLabel } from '../utils/platformUtils';
+import { safeClipboardWrite } from '../utils/clipboard';
 
 interface TabBarProps {
 	tabs: AITab[];
@@ -308,7 +310,7 @@ const Tab = memo(function Tab({
 		(e: React.MouseEvent) => {
 			e.stopPropagation();
 			if (tab.agentSessionId) {
-				navigator.clipboard.writeText(tab.agentSessionId);
+				safeClipboardWrite(tab.agentSessionId);
 				setShowCopied(true);
 				setTimeout(() => setShowCopied(false), 1500);
 			}
@@ -962,90 +964,8 @@ interface FileTabProps {
 	tabIndex?: number;
 	/** Whether colorblind-friendly colors should be used for extension badges */
 	colorBlindMode?: boolean;
-}
-
-/**
- * Get color for file extension badge.
- * Returns a muted color based on file type for visual differentiation.
- * Colors are adapted for both light and dark themes for good contrast.
- * When colorBlindMode is enabled, uses Wong's colorblind-safe palette.
- */
-function getExtensionColor(
-	extension: string,
-	theme: Theme,
-	colorBlindMode?: boolean
-): { bg: string; text: string } {
-	const isLightTheme = theme.mode === 'light';
-
-	// Use colorblind-safe colors when enabled
-	if (colorBlindMode) {
-		const colorBlindColors = getColorBlindExtensionColor(extension, isLightTheme);
-		if (colorBlindColors) {
-			return colorBlindColors;
-		}
-		// Fall through to default for unknown extensions
-		return { bg: theme.colors.border, text: theme.colors.textDim };
-	}
-
-	// Standard color scheme
-	const ext = extension.toLowerCase();
-
-	// TypeScript/JavaScript - blue tones
-	if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(37, 99, 235, 0.15)', text: 'rgba(29, 78, 216, 0.9)' }
-			: { bg: 'rgba(59, 130, 246, 0.3)', text: 'rgba(147, 197, 253, 0.9)' };
-	}
-	// Markdown/Docs - green tones
-	if (['.md', '.mdx', '.txt', '.rst'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(22, 163, 74, 0.15)', text: 'rgba(21, 128, 61, 0.9)' }
-			: { bg: 'rgba(34, 197, 94, 0.3)', text: 'rgba(134, 239, 172, 0.9)' };
-	}
-	// JSON/Config - yellow/amber tones
-	if (['.json', '.yaml', '.yml', '.toml', '.ini', '.env'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(217, 119, 6, 0.15)', text: 'rgba(180, 83, 9, 0.9)' }
-			: { bg: 'rgba(234, 179, 8, 0.3)', text: 'rgba(253, 224, 71, 0.9)' };
-	}
-	// CSS/Styles - purple tones
-	if (['.css', '.scss', '.sass', '.less', '.styl'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(147, 51, 234, 0.15)', text: 'rgba(126, 34, 206, 0.9)' }
-			: { bg: 'rgba(168, 85, 247, 0.3)', text: 'rgba(216, 180, 254, 0.9)' };
-	}
-	// HTML/Templates - orange tones
-	if (['.html', '.htm', '.xml', '.svg'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(234, 88, 12, 0.15)', text: 'rgba(194, 65, 12, 0.9)' }
-			: { bg: 'rgba(249, 115, 22, 0.3)', text: 'rgba(253, 186, 116, 0.9)' };
-	}
-	// Python - teal/cyan tones
-	if (['.py', '.pyw', '.pyi'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(13, 148, 136, 0.15)', text: 'rgba(15, 118, 110, 0.9)' }
-			: { bg: 'rgba(20, 184, 166, 0.3)', text: 'rgba(94, 234, 212, 0.9)' };
-	}
-	// Rust - rust/orange-red tones
-	if (['.rs'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(185, 28, 28, 0.15)', text: 'rgba(153, 27, 27, 0.9)' }
-			: { bg: 'rgba(239, 68, 68, 0.3)', text: 'rgba(252, 165, 165, 0.9)' };
-	}
-	// Go - cyan tones
-	if (['.go'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(8, 145, 178, 0.15)', text: 'rgba(14, 116, 144, 0.9)' }
-			: { bg: 'rgba(6, 182, 212, 0.3)', text: 'rgba(103, 232, 249, 0.9)' };
-	}
-	// Shell scripts - gray/slate tones
-	if (['.sh', '.bash', '.zsh', '.fish'].includes(ext)) {
-		return isLightTheme
-			? { bg: 'rgba(71, 85, 105, 0.15)', text: 'rgba(51, 65, 85, 0.9)' }
-			: { bg: 'rgba(100, 116, 139, 0.3)', text: 'rgba(203, 213, 225, 0.9)' };
-	}
-	// Default - use theme's dim colors
-	return { bg: theme.colors.border, text: theme.colors.textDim };
+	/** Shortcut hint badge number (1-9 for Cmd+1-9, 0 for Cmd+0/last tab) */
+	shortcutHint?: number | null;
 }
 
 /**
@@ -1081,6 +1001,7 @@ const FileTab = memo(function FileTab({
 	totalTabs,
 	tabIndex,
 	colorBlindMode,
+	shortcutHint,
 }: FileTabProps) {
 	const [isHovered, setIsHovered] = useState(false);
 	const [overlayOpen, setOverlayOpen] = useState(false);
@@ -1158,7 +1079,7 @@ const FileTab = memo(function FileTab({
 	const handleCopyFilePath = useCallback(
 		(e: React.MouseEvent) => {
 			e.stopPropagation();
-			navigator.clipboard.writeText(tab.path);
+			safeClipboardWrite(tab.path);
 			setShowCopied('path');
 			setTimeout(() => setShowCopied(null), 1500);
 		},
@@ -1170,7 +1091,7 @@ const FileTab = memo(function FileTab({
 			e.stopPropagation();
 			// Copy filename with extension
 			const fullName = tab.name + tab.extension;
-			navigator.clipboard.writeText(fullName);
+			safeClipboardWrite(fullName);
 			setShowCopied('name');
 			setTimeout(() => setShowCopied(null), 1500);
 		},
@@ -1180,7 +1101,7 @@ const FileTab = memo(function FileTab({
 	const handleOpenInDefaultApp = useCallback(
 		(e: React.MouseEvent) => {
 			e.stopPropagation();
-			window.maestro?.shell?.openExternal(`file://${tab.path}`);
+			window.maestro?.shell?.openPath(tab.path);
 			setOverlayOpen(false);
 		},
 		[tab.path]
@@ -1348,6 +1269,19 @@ const FileTab = memo(function FileTab({
 				</span>
 			)}
 
+			{/* Shortcut hint badge - shows tab number for Cmd+1-9 or Cmd+0 navigation */}
+			{shortcutHint !== null && shortcutHint !== undefined && (
+				<span
+					className="w-4 h-4 flex items-center justify-center rounded text-[10px] font-medium shrink-0 opacity-50"
+					style={{
+						backgroundColor: theme.colors.border,
+						color: theme.colors.textMain,
+					}}
+				>
+					{shortcutHint}
+				</span>
+			)}
+
 			{/* Tab name - filename without extension */}
 			<span
 				className={`text-xs font-medium ${isActive ? 'whitespace-nowrap' : 'truncate max-w-[120px]'}`}
@@ -1452,14 +1386,14 @@ const FileTab = memo(function FileTab({
 									Open in Default App
 								</button>
 
-								{/* Reveal in Finder */}
+								{/* Reveal in Finder / Explorer */}
 								<button
 									onClick={handleRevealInFinder}
 									className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
 									style={{ color: theme.colors.textMain }}
 								>
 									<FolderOpen className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-									Reveal in Finder
+									{getRevealLabel(window.maestro.platform)}
 								</button>
 
 								{/* Tab Move Actions Section - divider and move options */}
@@ -1931,7 +1865,11 @@ function TabBarInner({
 						color: showUnreadOnly ? theme.colors.accent : theme.colors.textDim,
 						opacity: showUnreadOnly ? 1 : 0.5,
 					}}
-					title={showUnreadOnly ? `Showing unread only (${formatShortcutKeys(['Meta', 'u'])})` : `Filter unread tabs (${formatShortcutKeys(['Meta', 'u'])})`}
+					title={
+						showUnreadOnly
+							? `Showing unread only (${formatShortcutKeys(['Meta', 'u'])})`
+							: `Filter unread tabs (${formatShortcutKeys(['Meta', 'u'])})`
+					}
 				>
 					<Mail className="w-4 h-4" />
 					{/* Notification dot */}
@@ -1974,14 +1912,24 @@ function TabBarInner({
 							: false;
 
 						// Get original index in the FULL unified list (not filtered)
-						const originalIndex = unifiedTabs!.findIndex((ut) => ut.id === unifiedTab.id);
+						const allTabs = unifiedTabs ?? [];
+						const originalIndex = allTabs.findIndex((ut) => ut.id === unifiedTab.id);
 
 						// Show separator between inactive tabs
 						const showSeparator = index > 0 && !isActive && !isPrevActive;
 
 						// Position info for move actions
 						const isFirstTab = originalIndex === 0;
-						const isLastTab = originalIndex === unifiedTabs!.length - 1;
+						const isLastTab = originalIndex === allTabs.length - 1;
+
+						// Shortcut hint: 1-9 for first 9 tabs, 0 for last tab (Cmd+0)
+						const shortcutHint = !showUnreadOnly
+							? isLastTab
+								? 0
+								: originalIndex < 9
+									? originalIndex + 1
+									: null
+							: null;
 
 						if (unifiedTab.type === 'ai') {
 							const tab = unifiedTab.data;
@@ -2034,14 +1982,14 @@ function TabBarInner({
 										onMoveToLast={!isLastTab && onUnifiedTabReorder ? handleMoveToLast : undefined}
 										isFirstTab={isFirstTab}
 										isLastTab={isLastTab}
-										shortcutHint={!showUnreadOnly && originalIndex < 9 ? originalIndex + 1 : null}
+										shortcutHint={shortcutHint}
 										hasDraft={hasDraft(tab)}
 										registerRef={(el) => registerTabRef(tab.id, el)}
 										onCloseAllTabs={onCloseAllTabs}
 										onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
 										onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
 										onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
-										totalTabs={unifiedTabs!.length}
+										totalTabs={allTabs.length}
 										tabIndex={originalIndex}
 									/>
 								</React.Fragment>
@@ -2079,9 +2027,10 @@ function TabBarInner({
 										onCloseOtherTabs={onCloseOtherTabs ? handleTabCloseOther : undefined}
 										onCloseTabsLeft={onCloseTabsLeft ? handleTabCloseLeft : undefined}
 										onCloseTabsRight={onCloseTabsRight ? handleTabCloseRight : undefined}
-										totalTabs={unifiedTabs!.length}
+										totalTabs={allTabs.length}
 										tabIndex={originalIndex}
 										colorBlindMode={colorBlindMode}
+										shortcutHint={shortcutHint}
 									/>
 								</React.Fragment>
 							);
@@ -2148,7 +2097,15 @@ function TabBarInner({
 									onMoveToLast={!isLastTab && onTabReorder ? handleMoveToLast : undefined}
 									isFirstTab={isFirstTab}
 									isLastTab={isLastTab}
-									shortcutHint={!showUnreadOnly && originalIndex < 9 ? originalIndex + 1 : null}
+									shortcutHint={
+										!showUnreadOnly
+											? isLastTab
+												? 0
+												: originalIndex < 9
+													? originalIndex + 1
+													: null
+											: null
+									}
 									hasDraft={hasDraft(tab)}
 									registerRef={(el) => registerTabRef(tab.id, el)}
 									onCloseAllTabs={onCloseAllTabs}

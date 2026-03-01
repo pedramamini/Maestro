@@ -40,6 +40,7 @@ import {
 	Github,
 	Terminal,
 	Lock,
+	Star,
 } from 'lucide-react';
 import type { Theme, Session } from '../types';
 import type {
@@ -194,6 +195,15 @@ function RepositoryTileSkeleton({ theme }: { theme: Theme }) {
 }
 
 // ============================================================================
+// Helpers
+// ============================================================================
+
+const compactNumber = new Intl.NumberFormat('en', {
+	notation: 'compact',
+	maximumFractionDigits: 1,
+});
+
+// ============================================================================
 // Repository Tile
 // ============================================================================
 
@@ -202,14 +212,17 @@ function RepositoryTile({
 	theme,
 	isSelected,
 	onSelect,
+	issueCount,
 }: {
 	repo: RegisteredRepository;
 	theme: Theme;
 	isSelected: boolean;
 	onSelect: () => void;
+	issueCount: number | null;
 }) {
 	const tileRef = useRef<HTMLButtonElement>(null);
 	const categoryInfo = SYMPHONY_CATEGORIES[repo.category] ?? { label: repo.category, emoji: '📦' };
+	const hasNoIssues = issueCount !== null && issueCount === 0;
 
 	useEffect(() => {
 		if (isSelected && tileRef.current) {
@@ -225,6 +238,7 @@ function RepositoryTile({
 			style={{
 				backgroundColor: theme.colors.bgActivity,
 				borderColor: isSelected ? theme.colors.accent : theme.colors.border,
+				opacity: hasNoIssues ? 0.45 : 1,
 				...(isSelected && { boxShadow: `0 0 0 2px ${theme.colors.accent}` }),
 			}}
 		>
@@ -236,6 +250,15 @@ function RepositoryTile({
 					<span>{categoryInfo.emoji}</span>
 					<span>{categoryInfo.label}</span>
 				</span>
+				{repo.stars != null && (
+					<span
+						className="flex items-center gap-1 text-xs tabular-nums"
+						style={{ color: theme.colors.textDim }}
+					>
+						<Star className="w-3 h-3" style={{ fill: 'currentColor' }} />
+						{compactNumber.format(repo.stars)}
+					</span>
+				)}
 			</div>
 
 			<h3
@@ -255,10 +278,21 @@ function RepositoryTile({
 				style={{ color: theme.colors.textDim }}
 			>
 				<span>{repo.maintainer.name}</span>
-				<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
-					<Hash className="w-3 h-3" />
-					View Issues
-				</span>
+				{issueCount === null ? (
+					<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
+						<Hash className="w-3 h-3" />
+						View Issues
+					</span>
+				) : issueCount > 0 ? (
+					<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
+						<Hash className="w-3 h-3" />
+						View {issueCount} {issueCount === 1 ? 'Issue' : 'Issues'}
+					</span>
+				) : (
+					<span className="flex items-center gap-1" style={{ color: theme.colors.textDim }}>
+						No Issues
+					</span>
+				)}
 			</div>
 		</button>
 	);
@@ -284,15 +318,17 @@ function IssueCard({
 	);
 	const isAvailable = issue.status === 'available' && !isBlocked;
 	const isClaimed = issue.status === 'in_progress';
+	const isSelectable = isAvailable || isBlocked;
 
 	return (
 		<div
 			role="button"
-			tabIndex={isAvailable ? 0 : -1}
-			onClick={isAvailable ? onSelect : undefined}
+			tabIndex={isSelectable ? 0 : -1}
+			onClick={isSelectable ? onSelect : undefined}
 			onKeyDown={
-				isAvailable
+				isSelectable
 					? (e) => {
+							if (e.target !== e.currentTarget) return;
 							if (e.key === 'Enter' || e.key === ' ') {
 								e.preventDefault();
 								onSelect();
@@ -300,8 +336,12 @@ function IssueCard({
 						}
 					: undefined
 			}
-			className={`w-full p-3 rounded-lg border text-left transition-all ${
-				!isAvailable ? 'opacity-60' : 'hover:bg-white/5 cursor-pointer'
+			className={`w-full p-3 rounded-lg border text-left transition-all outline-none focus-visible:ring-2 ${
+				isBlocked
+					? 'opacity-75 hover:bg-white/5 cursor-pointer'
+					: !isAvailable
+						? 'opacity-60'
+						: 'hover:bg-white/5 cursor-pointer'
 			} ${isSelected ? 'ring-2' : ''}`}
 			style={{
 				backgroundColor: isSelected ? theme.colors.bgActivity : theme.colors.bgMain,
@@ -335,7 +375,10 @@ function IssueCard({
 					{isClaimed && (
 						<span
 							className="px-1.5 py-0.5 rounded text-xs flex items-center gap-1"
-							style={{ backgroundColor: `${STATUS_COLORS.running}20`, color: STATUS_COLORS.running }}
+							style={{
+								backgroundColor: `${STATUS_COLORS.running}20`,
+								color: STATUS_COLORS.running,
+							}}
 						>
 							<GitPullRequest className="w-3 h-3" />
 							Claimed
@@ -358,7 +401,6 @@ function IssueCard({
 						className="flex items-center gap-1 cursor-pointer hover:underline"
 						style={{ color: theme.colors.accent, pointerEvents: 'auto' }}
 						onClick={(e) => {
-							e.preventDefault();
 							e.stopPropagation();
 							window.maestro.shell.openExternal(issue.claimedByPr!.url);
 						}}
@@ -373,8 +415,8 @@ function IssueCard({
 
 			{issue.documentPaths.length > 0 && (
 				<div className="mt-2 text-xs" style={{ color: theme.colors.textDim }}>
-					{issue.documentPaths.slice(0, 2).map((doc, i) => (
-						<div key={i} className="truncate">
+					{issue.documentPaths.slice(0, 2).map((doc) => (
+						<div key={doc.path} className="truncate">
 							• {doc.name}
 						</div>
 					))}
@@ -542,19 +584,14 @@ function RepositoryDetailView({
 						<span>{categoryInfo.emoji}</span>
 						<span>{categoryInfo.label}</span>
 					</span>
-					<a
-						href={repo.url}
-						target="_blank"
-						rel="noopener noreferrer"
+					<button
+						type="button"
 						className="p-1.5 rounded hover:bg-white/10 transition-colors"
 						title="View repository on GitHub"
-						onClick={(e) => {
-							e.preventDefault();
-							handleOpenExternal(repo.url);
-						}}
+						onClick={() => handleOpenExternal(repo.url)}
 					>
 						<ExternalLink className="w-5 h-5" style={{ color: theme.colors.textDim }} />
-					</a>
+					</button>
 				</div>
 			</div>
 
@@ -585,20 +622,15 @@ function RepositoryDetailView({
 							Maintainer
 						</h4>
 						{repo.maintainer.url ? (
-							<a
-								href={repo.maintainer.url}
-								target="_blank"
-								rel="noopener noreferrer"
+							<button
+								type="button"
 								className="text-sm hover:underline inline-flex items-center gap-1"
 								style={{ color: theme.colors.accent }}
-								onClick={(e) => {
-									e.preventDefault();
-									handleOpenExternal(repo.maintainer.url!);
-								}}
+								onClick={() => handleOpenExternal(repo.maintainer.url!)}
 							>
 								{repo.maintainer.name}
 								<ExternalLink className="w-3 h-3" />
-							</a>
+							</button>
 						) : (
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
 								{repo.maintainer.name}
@@ -632,9 +664,9 @@ function RepositoryDetailView({
 
 					{isLoadingIssues ? (
 						<div className="space-y-2">
-							{[1, 2, 3].map((i) => (
+							{['issue-skeleton-1', 'issue-skeleton-2', 'issue-skeleton-3'].map((skeletonId) => (
 								<div
-									key={i}
+									key={skeletonId}
 									className="h-20 rounded animate-pulse"
 									style={{ backgroundColor: theme.colors.bgMain }}
 								/>
@@ -747,21 +779,16 @@ function RepositoryDetailView({
 											{selectedIssue.title}
 										</h3>
 									</div>
-									<a
-										href={selectedIssue.htmlUrl}
-										target="_blank"
-										rel="noopener noreferrer"
+									<button
+										type="button"
 										className="text-xs hover:underline flex items-center gap-1"
 										style={{ color: theme.colors.accent }}
-										onClick={(e) => {
-											e.preventDefault();
-											handleOpenExternal(selectedIssue.htmlUrl);
-										}}
+										onClick={() => handleOpenExternal(selectedIssue.htmlUrl)}
 										title="View issue on GitHub"
 									>
 										View Issue
 										<ExternalLink className="w-3 h-3" />
-									</a>
+									</button>
 								</div>
 								<div
 									className="flex items-center gap-2 text-xs"
@@ -770,18 +797,6 @@ function RepositoryDetailView({
 									<FileText className="w-3 h-3" />
 									<span>{selectedIssue.documentPaths.length} Auto Run documents to process</span>
 								</div>
-								{isIssueBlocked(selectedIssue) && (
-									<div
-										className="mt-2 px-2 py-1.5 rounded text-xs flex items-center gap-2"
-										style={{
-											backgroundColor: `${STATUS_COLORS.cancelled}15`,
-											color: STATUS_COLORS.cancelled,
-										}}
-									>
-										<Lock className="w-3 h-3 shrink-0" />
-										This issue is blocked by a dependency. The maintainer will remove the blocking label when prerequisites are met.
-									</div>
-								)}
 							</div>
 
 							{/* Document selector dropdown */}
@@ -875,7 +890,10 @@ function RepositoryDetailView({
 							<div className="text-center">
 								{!isLoadingIssues && issues.length === 0 ? (
 									<>
-										<CheckCircle className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.textDim }} />
+										<CheckCircle
+											className="w-12 h-12 mx-auto mb-3"
+											style={{ color: theme.colors.textDim }}
+										/>
 										<p className="text-sm" style={{ color: theme.colors.textMain }}>
 											No outstanding work for this project
 										</p>
@@ -885,7 +903,10 @@ function RepositoryDetailView({
 									</>
 								) : (
 									<>
-										<Music className="w-12 h-12 mx-auto mb-3" style={{ color: theme.colors.textDim }} />
+										<Music
+											className="w-12 h-12 mx-auto mb-3"
+											style={{ color: theme.colors.textDim }}
+										/>
 										<p style={{ color: theme.colors.textDim }}>Select an issue to see details</p>
 									</>
 								)}
@@ -896,18 +917,27 @@ function RepositoryDetailView({
 			</div>
 
 			{/* Footer */}
-			{selectedIssue && selectedIssue.status === 'available' && !isIssueBlocked(selectedIssue) && (
+			{selectedIssue && selectedIssue.status === 'available' && (
 				<div
 					className="shrink-0 px-4 py-3 border-t flex items-center justify-between"
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgActivity }}
 				>
 					<div className="flex items-center gap-2 text-sm" style={{ color: theme.colors.textDim }}>
-						<GitBranch className="w-4 h-4" />
-						<span>Will clone repo, create draft PR, and run all documents</span>
+						{isIssueBlocked(selectedIssue) ? (
+							<>
+								<Lock className="w-4 h-4" />
+								<span>Blocked by a dependency — the maintainer will unblock when prerequisites are met</span>
+							</>
+						) : (
+							<>
+								<GitBranch className="w-4 h-4" />
+								<span>Will clone repo, create draft PR, and run all documents</span>
+							</>
+						)}
 					</div>
 					<button
-						onClick={onStartContribution}
-						disabled={isStarting}
+						onClick={isIssueBlocked(selectedIssue) ? undefined : onStartContribution}
+						disabled={isStarting || isIssueBlocked(selectedIssue)}
 						className="px-4 py-2 rounded font-semibold text-sm transition-colors disabled:opacity-50 disabled:cursor-not-allowed flex items-center gap-2"
 						style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 					>
@@ -1018,21 +1048,16 @@ function ActiveContributionCard({
 			</div>
 
 			{contribution.draftPrUrl ? (
-				<a
-					href={contribution.draftPrUrl}
-					target="_blank"
-					rel="noopener noreferrer"
+				<button
+					type="button"
 					className="flex items-center gap-1 text-xs mb-2 hover:underline"
 					style={{ color: theme.colors.accent }}
-					onClick={(e) => {
-						e.preventDefault();
-						handleOpenExternal(contribution.draftPrUrl!);
-					}}
+					onClick={() => handleOpenExternal(contribution.draftPrUrl!)}
 				>
 					<GitPullRequest className="w-3 h-3" />
 					Draft PR #{contribution.draftPrNumber}
 					<ExternalLink className="w-3 h-3" />
-				</a>
+				</button>
 			) : (
 				<div
 					className="flex items-center gap-1 text-xs mb-2"
@@ -1303,6 +1328,8 @@ export function SymphonyModal({
 		activeContributions,
 		completedContributions,
 		finalizeContribution,
+		issueCounts,
+		isLoadingIssueCounts,
 	} = useSymphony();
 
 	const {
@@ -1326,6 +1353,11 @@ export function SymphonyModal({
 	const [isStarting, setIsStarting] = useState(false);
 	const [showAgentDialog, setShowAgentDialog] = useState(false);
 	const [showBuildWarning, setShowBuildWarning] = useState(false);
+	const [ghCliStatus, setGhCliStatus] = useState<{
+		installed: boolean;
+		authenticated: boolean;
+	} | null>(null);
+	const [isCheckingGh, setIsCheckingGh] = useState(false);
 	const [showHelp, setShowHelp] = useState(false);
 	const [isCheckingPRStatuses, setIsCheckingPRStatuses] = useState(false);
 	const [prStatusMessage, setPrStatusMessage] = useState<string | null>(null);
@@ -1339,10 +1371,21 @@ export function SymphonyModal({
 	showHelpRef.current = showHelp;
 	showDetailViewRef.current = showDetailView;
 
-	// Reset on filter change
-	useEffect(() => {
-		setSelectedTileIndex(0);
-	}, [filteredRepositories.length, selectedCategory, searchQuery]);
+	const handleCategoryChange = useCallback(
+		(category: string) => {
+			setSelectedCategory(category);
+			setSelectedTileIndex(0);
+		},
+		[setSelectedCategory]
+	);
+
+	const handleSearchChange = useCallback(
+		(value: string) => {
+			setSearchQuery(value);
+			setSelectedTileIndex(0);
+		},
+		[setSearchQuery]
+	);
 
 	// Back navigation
 	const handleBack = useCallback(() => {
@@ -1438,10 +1481,17 @@ export function SymphonyModal({
 		[selectedRepo]
 	);
 
-	// Start contribution - show build warning first, then open agent creation dialog
+	// Start contribution - check gh CLI and show build warning
 	const handleStartContribution = useCallback(() => {
 		if (!selectedRepo || !selectedIssue) return;
+		setGhCliStatus(null);
+		setIsCheckingGh(true);
 		setShowBuildWarning(true);
+		window.maestro.git
+			.checkGhCli()
+			.then((status) => setGhCliStatus(status))
+			.catch(() => setGhCliStatus({ installed: false, authenticated: false }))
+			.finally(() => setIsCheckingGh(false));
 	}, [selectedRepo, selectedIssue]);
 
 	const handleBuildWarningConfirm = useCallback(() => {
@@ -1505,25 +1555,22 @@ export function SymphonyModal({
 	);
 
 	// Sync individual contribution status with GitHub
-	const handleSyncContribution = useCallback(
-		async (contributionId: string) => {
-			setSyncingContributionId(contributionId);
-			try {
-				const result = await window.maestro.symphony.syncContribution(contributionId);
-				if (result.message) {
-					setPrStatusMessage(result.message);
-					setTimeout(() => setPrStatusMessage(null), 5000);
-				}
-			} catch (err) {
-				console.error('Failed to sync contribution:', err);
-				setPrStatusMessage('Sync failed');
+	const handleSyncContribution = useCallback(async (contributionId: string) => {
+		setSyncingContributionId(contributionId);
+		try {
+			const result = await window.maestro.symphony.syncContribution(contributionId);
+			if (result.message) {
+				setPrStatusMessage(result.message);
 				setTimeout(() => setPrStatusMessage(null), 5000);
-			} finally {
-				setSyncingContributionId(null);
 			}
-		},
-		[]
-	);
+		} catch (err) {
+			console.error('Failed to sync contribution:', err);
+			setPrStatusMessage('Sync failed');
+			setTimeout(() => setPrStatusMessage(null), 5000);
+		} finally {
+			setSyncingContributionId(null);
+		}
+	}, []);
 
 	// Check PR statuses (merged/closed) and update history
 	const handleCheckPRStatuses = useCallback(async () => {
@@ -1863,7 +1910,7 @@ export function SymphonyModal({
 													ref={searchInputRef}
 													type="text"
 													value={searchQuery}
-													onChange={(e) => setSearchQuery(e.target.value)}
+													onChange={(e) => handleSearchChange(e.target.value)}
 													placeholder="Search repositories..."
 													className="w-full pl-9 pr-3 py-2 rounded border outline-none text-sm focus:ring-1"
 													style={{
@@ -1876,7 +1923,7 @@ export function SymphonyModal({
 
 											<div className="flex items-center gap-1 flex-wrap">
 												<button
-													onClick={() => setSelectedCategory('all')}
+													onClick={() => handleCategoryChange('all')}
 													className={`px-3 py-1.5 rounded text-sm transition-colors ${selectedCategory === 'all' ? 'font-semibold' : ''}`}
 													style={{
 														backgroundColor:
@@ -1898,7 +1945,7 @@ export function SymphonyModal({
 													return (
 														<button
 															key={cat}
-															onClick={() => setSelectedCategory(cat)}
+															onClick={() => handleCategoryChange(cat)}
 															className={`px-3 py-1.5 rounded text-sm transition-colors flex items-center gap-1 ${
 																selectedCategory === cat ? 'font-semibold' : ''
 															}`}
@@ -1933,8 +1980,15 @@ export function SymphonyModal({
 									>
 										{isLoading ? (
 											<div className="grid grid-cols-3 gap-4">
-												{[1, 2, 3, 4, 5, 6].map((i) => (
-													<RepositoryTileSkeleton key={i} theme={theme} />
+												{[
+													'repo-skeleton-1',
+													'repo-skeleton-2',
+													'repo-skeleton-3',
+													'repo-skeleton-4',
+													'repo-skeleton-5',
+													'repo-skeleton-6',
+												].map((skeletonId) => (
+													<RepositoryTileSkeleton key={skeletonId} theme={theme} />
 												))}
 											</div>
 										) : error ? (
@@ -1979,6 +2033,7 @@ export function SymphonyModal({
 														theme={theme}
 														isSelected={index === selectedTileIndex}
 														onSelect={() => handleSelectRepo(repo)}
+														issueCount={issueCounts?.[repo.slug] ?? null}
 													/>
 												))}
 											</div>
@@ -1990,8 +2045,11 @@ export function SymphonyModal({
 										className="px-4 py-2 border-t flex items-center justify-between text-xs"
 										style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 									>
-										<span>
+										<span className="flex items-center gap-1">
 											{filteredRepositories.length} repositories • Contribute to open source with AI
+											{isLoadingIssueCounts && (
+												<Loader2 className="w-3 h-3 animate-spin ml-1" />
+											)}
 										</span>
 										<span>{`↑↓←→ navigate • Enter select • / search • ${formatShortcutKeys(['Meta', 'Shift'])}[] tabs`}</span>
 									</div>
@@ -2059,21 +2117,15 @@ export function SymphonyModal({
 										) : (
 											<div className="grid grid-cols-2 gap-4">
 												{activeContributions.map((contribution) => {
-													const session = sessions.find(
-														(s) => s.id === contribution.sessionId
-													);
+													const session = sessions.find((s) => s.id === contribution.sessionId);
 													return (
 														<ActiveContributionCard
 															key={contribution.id}
 															contribution={contribution}
 															theme={theme}
 															onFinalize={() => handleFinalize(contribution.id)}
-															onSync={() =>
-																handleSyncContribution(contribution.id)
-															}
-															isSyncing={
-																syncingContributionId === contribution.id
-															}
+															onSync={() => handleSyncContribution(contribution.id)}
+															isSyncing={syncingContributionId === contribution.id}
 															sessionName={session?.name ?? null}
 															onNavigateToSession={() => {
 																if (session) {
@@ -2302,17 +2354,17 @@ export function SymphonyModal({
 	return (
 		<>
 			{createPortal(modalContent, document.body)}
-			{/* Build Tools Warning Dialog */}
+			{/* Pre-flight Check Dialog */}
 			{showBuildWarning &&
 				createPortal(
-					<div
-						className="fixed inset-0 flex items-center justify-center"
-						style={{ zIndex: 10001 }}
-					>
-						<div
+					<div className="fixed inset-0 flex items-center justify-center" style={{ zIndex: 10001 }}>
+						<button
+							type="button"
 							className="absolute inset-0"
 							style={{ backgroundColor: 'rgba(0,0,0,0.6)' }}
+							tabIndex={-1}
 							onClick={() => setShowBuildWarning(false)}
+							aria-label="Close pre-flight check dialog"
 						/>
 						<div
 							className="relative rounded-lg border shadow-2xl p-6 max-w-md mx-4"
@@ -2321,54 +2373,216 @@ export function SymphonyModal({
 								borderColor: theme.colors.border,
 							}}
 						>
-							<div className="flex items-start gap-3 mb-4">
-								<AlertCircle
-									className="w-6 h-6 shrink-0 mt-0.5"
-									style={{ color: STATUS_COLORS.paused }}
-								/>
-								<div>
-									<h3
-										className="font-semibold text-base mb-2"
-										style={{ color: theme.colors.textMain }}
-									>
-										Build Tools Required
-									</h3>
-									<p
-										className="text-sm leading-relaxed"
+							{isCheckingGh ? (
+								<div className="flex items-center gap-3 py-4">
+									<Loader2
+										className="w-5 h-5 animate-spin"
 										style={{ color: theme.colors.textDim }}
-									>
-										Symphony will clone this repository and run Auto Run documents that may compile code, run tests, and make changes. Before proceeding, make sure you have the project's build tools and dependencies installed on your machine (e.g., Node.js, Python, Rust toolchain, etc.).
-									</p>
-									<p
-										className="text-sm leading-relaxed mt-2"
-										style={{ color: theme.colors.textDim }}
-									>
-										Consider cloning the project first and verifying you can build it successfully. Without the right toolchain, the contribution is likely to fail.
-									</p>
+									/>
+									<span className="text-sm" style={{ color: theme.colors.textDim }}>
+										Checking prerequisites…
+									</span>
 								</div>
-							</div>
-							<div className="flex justify-end gap-2 mt-4">
-								<button
-									onClick={() => setShowBuildWarning(false)}
-									className="px-4 py-2 rounded text-sm transition-colors hover:bg-white/10"
-									style={{
-										color: theme.colors.textDim,
-										border: `1px solid ${theme.colors.border}`,
-									}}
-								>
-									Cancel
-								</button>
-								<button
-									onClick={handleBuildWarningConfirm}
-									className="px-4 py-2 rounded font-semibold text-sm transition-colors"
-									style={{
-										backgroundColor: theme.colors.accent,
-										color: theme.colors.accentForeground,
-									}}
-								>
-									I Have the Build Tools
-								</button>
-							</div>
+							) : ghCliStatus && !ghCliStatus.installed ? (
+								<>
+									<div className="flex items-start gap-3 mb-4">
+										<AlertCircle
+											className="w-6 h-6 shrink-0 mt-0.5"
+											style={{ color: STATUS_COLORS.failed }}
+										/>
+										<div>
+											<h3
+												className="font-semibold text-base mb-2"
+												style={{ color: theme.colors.textMain }}
+											>
+												GitHub CLI Required
+											</h3>
+											<p
+												className="text-sm leading-relaxed"
+												style={{ color: theme.colors.textDim }}
+											>
+												Symphony requires the GitHub CLI (
+												<code
+													className="px-1 py-0.5 rounded text-xs"
+													style={{
+														backgroundColor: `${theme.colors.border}80`,
+														color: theme.colors.textMain,
+													}}
+												>
+													gh
+												</code>
+												) to create draft PRs and manage contributions. It is not currently
+												installed on your system.
+											</p>
+											<p
+												className="text-sm leading-relaxed mt-2"
+												style={{ color: theme.colors.textDim }}
+											>
+												Install it from{' '}
+												<a
+													href="https://cli.github.com/"
+													target="_blank"
+													rel="noopener noreferrer"
+													className="underline"
+													style={{ color: theme.colors.accent }}
+												>
+													cli.github.com
+												</a>{' '}
+												and run{' '}
+												<code
+													className="px-1 py-0.5 rounded text-xs"
+													style={{
+														backgroundColor: `${theme.colors.border}80`,
+														color: theme.colors.textMain,
+													}}
+												>
+													gh auth login
+												</code>{' '}
+												to authenticate.
+											</p>
+										</div>
+									</div>
+									<div className="flex justify-end mt-4">
+										<button
+											onClick={() => setShowBuildWarning(false)}
+											className="px-4 py-2 rounded text-sm transition-colors hover:bg-white/10"
+											style={{
+												color: theme.colors.textDim,
+												border: `1px solid ${theme.colors.border}`,
+											}}
+										>
+											Close
+										</button>
+									</div>
+								</>
+							) : ghCliStatus && !ghCliStatus.authenticated ? (
+								<>
+									<div className="flex items-start gap-3 mb-4">
+										<AlertCircle
+											className="w-6 h-6 shrink-0 mt-0.5"
+											style={{ color: STATUS_COLORS.failed }}
+										/>
+										<div>
+											<h3
+												className="font-semibold text-base mb-2"
+												style={{ color: theme.colors.textMain }}
+											>
+												GitHub CLI Not Authenticated
+											</h3>
+											<p
+												className="text-sm leading-relaxed"
+												style={{ color: theme.colors.textDim }}
+											>
+												The GitHub CLI (
+												<code
+													className="px-1 py-0.5 rounded text-xs"
+													style={{
+														backgroundColor: `${theme.colors.border}80`,
+														color: theme.colors.textMain,
+													}}
+												>
+													gh
+												</code>
+												) is installed but not authenticated. Symphony needs GitHub access to create
+												draft PRs and manage contributions.
+											</p>
+											<p
+												className="text-sm leading-relaxed mt-2"
+												style={{ color: theme.colors.textDim }}
+											>
+												Run{' '}
+												<code
+													className="px-1 py-0.5 rounded text-xs"
+													style={{
+														backgroundColor: `${theme.colors.border}80`,
+														color: theme.colors.textMain,
+													}}
+												>
+													gh auth login
+												</code>{' '}
+												in your terminal to authenticate.
+											</p>
+										</div>
+									</div>
+									<div className="flex justify-end mt-4">
+										<button
+											onClick={() => setShowBuildWarning(false)}
+											className="px-4 py-2 rounded text-sm transition-colors hover:bg-white/10"
+											style={{
+												color: theme.colors.textDim,
+												border: `1px solid ${theme.colors.border}`,
+											}}
+										>
+											Close
+										</button>
+									</div>
+								</>
+							) : (
+								<>
+									<div className="flex items-start gap-3 mb-1">
+										<CheckCircle
+											className="w-5 h-5 shrink-0 mt-0.5"
+											style={{ color: STATUS_COLORS.running }}
+										/>
+										<span className="text-sm" style={{ color: STATUS_COLORS.running }}>
+											GitHub CLI authenticated
+										</span>
+									</div>
+									<div className="flex items-start gap-3 mb-4 mt-3">
+										<AlertCircle
+											className="w-6 h-6 shrink-0 mt-0.5"
+											style={{ color: STATUS_COLORS.paused }}
+										/>
+										<div>
+											<h3
+												className="font-semibold text-base mb-2"
+												style={{ color: theme.colors.textMain }}
+											>
+												Build Tools Required
+											</h3>
+											<p
+												className="text-sm leading-relaxed"
+												style={{ color: theme.colors.textDim }}
+											>
+												Symphony will clone this repository and run Auto Run documents that may
+												compile code, run tests, and make changes. Before proceeding, make sure you
+												have the project's build tools and dependencies installed on your machine
+												(e.g., Node.js, Python, Rust toolchain, etc.).
+											</p>
+											<p
+												className="text-sm leading-relaxed mt-2"
+												style={{ color: theme.colors.textDim }}
+											>
+												Consider cloning the project first and verifying you can build it
+												successfully. Without the right toolchain, the contribution is likely to
+												fail.
+											</p>
+										</div>
+									</div>
+									<div className="flex justify-end gap-2 mt-4">
+										<button
+											onClick={() => setShowBuildWarning(false)}
+											className="px-4 py-2 rounded text-sm transition-colors hover:bg-white/10"
+											style={{
+												color: theme.colors.textDim,
+												border: `1px solid ${theme.colors.border}`,
+											}}
+										>
+											Cancel
+										</button>
+										<button
+											onClick={handleBuildWarningConfirm}
+											className="px-4 py-2 rounded font-semibold text-sm transition-colors"
+											style={{
+												backgroundColor: theme.colors.accent,
+												color: theme.colors.accentForeground,
+											}}
+										>
+											I Have the Build Tools
+										</button>
+									</div>
+								</>
+							)}
 						</div>
 					</div>,
 					document.body

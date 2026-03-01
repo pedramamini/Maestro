@@ -212,6 +212,8 @@ describe('stores/utils', () => {
 			expect(result).toEqual({
 				crashReportingEnabled: true,
 				disableGpuAcceleration: false,
+				useNativeTitleBar: false,
+				autoHideMenuBar: false,
 			});
 		});
 
@@ -233,6 +235,8 @@ describe('stores/utils', () => {
 			expect(result).toEqual({
 				crashReportingEnabled: true,
 				disableGpuAcceleration: true,
+				useNativeTitleBar: false,
+				autoHideMenuBar: false,
 			});
 		});
 
@@ -252,6 +256,8 @@ describe('stores/utils', () => {
 			expect(result).toEqual({
 				crashReportingEnabled: true,
 				disableGpuAcceleration: false,
+				useNativeTitleBar: false,
+				autoHideMenuBar: false,
 			});
 		});
 	});

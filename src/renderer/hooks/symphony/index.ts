@@ -11,3 +11,10 @@ export { useContributorStats } from './useContributorStats';
 export type { UseSymphonyReturn } from './useSymphony';
 export type { UseContributionReturn } from './useContribution';
 export type { UseContributorStatsReturn, Achievement } from './useContributorStats';
+
+// Symphony contribution handler (session creation + batch start)
+export { useSymphonyContribution } from './useSymphonyContribution';
+export type {
+	UseSymphonyContributionDeps,
+	UseSymphonyContributionReturn,
+} from './useSymphonyContribution';

@@ -48,6 +48,8 @@ export interface InlineWizardMessage {
 	confidence?: number;
 	/** Parsed ready flag from assistant responses */
 	ready?: boolean;
+	/** Base64-encoded image data URLs attached to this message */
+	images?: string[];
 }
 
 import type { ThinkingMode } from '../../types';
@@ -244,9 +246,14 @@ export interface UseInlineWizardReturn {
 	/**
 	 * Send a message to the wizard conversation.
 	 * @param content - Message content
+	 * @param images - Optional base64-encoded image data URLs to attach
 	 * @param callbacks - Optional callbacks for streaming progress
 	 */
-	sendMessage: (content: string, callbacks?: ConversationCallbacks) => Promise<void>;
+	sendMessage: (
+		content: string,
+		images?: string[],
+		callbacks?: ConversationCallbacks
+	) => Promise<void>;
 	/**
 	 * Set the confidence level.
 	 * @param value - Confidence value (0-100)
@@ -747,7 +754,11 @@ export function useInlineWizard(): UseInlineWizardReturn {
 	 * Uses the current tab ID to determine which wizard to send to.
 	 */
 	const sendMessage = useCallback(
-		async (content: string, callbacks?: ConversationCallbacks): Promise<void> => {
+		async (
+			content: string,
+			images?: string[],
+			callbacks?: ConversationCallbacks
+		): Promise<void> => {
 			// Only allow wizard for agents that support structured output
 			const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
 
@@ -764,12 +775,13 @@ export function useInlineWizard(): UseInlineWizardReturn {
 				return;
 			}
 
-			// Create user message
+			// Create user message (with images if provided)
 			const userMessage: InlineWizardMessage = {
 				id: generateMessageId(),
 				role: 'user',
 				content,
 				timestamp: Date.now(),
+				...(images && images.length > 0 ? { images } : {}),
 			};
 
 			// Add user message to history, track it for retry, and set waiting state
@@ -1143,8 +1155,8 @@ export function useInlineWizard(): UseInlineWizardReturn {
 				error: null,
 			}));
 
-			// Re-send the message
-			await sendMessage(lastContent, callbacks);
+			// Re-send the message (images not retained on retry)
+			await sendMessage(lastContent, undefined, callbacks);
 		},
 		[currentTabId, setTabState, sendMessage]
 	);

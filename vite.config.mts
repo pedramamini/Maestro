@@ -22,7 +22,19 @@ function getCommitHash(): string {
 const disableHmr = process.env.DISABLE_HMR === '1';
 
 export default defineConfig(({ mode }) => ({
-	plugins: [react({ fastRefresh: !disableHmr })],
+	plugins: [
+		react({ fastRefresh: !disableHmr }),
+		// In dev mode, relax CSP to allow Vite's inline HMR/React Refresh scripts
+		mode === 'development' && {
+			name: 'dev-csp-relaxation',
+			transformIndexHtml(html: string) {
+				return html.replace(
+					"script-src 'self'",
+					"script-src 'self' 'unsafe-inline' http://localhost:*"
+				);
+			},
+		},
+	].filter(Boolean),
 	root: path.join(__dirname, 'src/renderer'),
 	base: './',
 	define: {

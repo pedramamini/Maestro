@@ -44,7 +44,10 @@ function enqueueWrite<T>(chatId: string, fn: () => Promise<T>): Promise<T> {
 	const prev = writeQueues.get(chatId) ?? Promise.resolve();
 	const next = prev.then(fn, fn); // run fn regardless of prior success/failure
 	// Store the void version so the queue keeps its shape
-	const settled = next.then(() => {}, () => {});
+	const settled = next.then(
+		() => {},
+		() => {}
+	);
 	writeQueues.set(chatId, settled);
 	// Clean up the queue entry once this write settles — if nothing new was
 	// enqueued in the meantime the Map entry is just a resolved promise.
@@ -125,6 +128,7 @@ export interface GroupChat {
 	participants: GroupChatParticipant[];
 	logPath: string;
 	imagesDir: string;
+	archived?: boolean;
 }
 
 /**
@@ -140,6 +144,7 @@ export type GroupChatUpdate = Partial<
 		| 'moderatorConfig'
 		| 'participants'
 		| 'updatedAt'
+		| 'archived'
 	>
 >;
 
@@ -328,16 +333,19 @@ export async function listGroupChats(): Promise<GroupChat[]> {
 export function deleteGroupChat(id: string): Promise<void> {
 	return enqueueWrite(id, async () => {
 		const chatDir = getGroupChatDir(id);
-		const maxRetries = 3;
+		const maxRetries = 5;
 		for (let attempt = 0; attempt <= maxRetries; attempt++) {
 			try {
-				await fs.rm(chatDir, { recursive: true, force: true });
+				await fs.rm(chatDir, { recursive: true, force: true, maxRetries: 3, retryDelay: 200 });
 				return;
 			} catch (err) {
 				const code = (err as NodeJS.ErrnoException).code;
-				if ((code === 'EPERM' || code === 'EBUSY') && attempt < maxRetries) {
-					// Wait before retrying - file locks from OneDrive/antivirus may release
-					await new Promise((resolve) => setTimeout(resolve, 500 * (attempt + 1)));
+				if (
+					(code === 'EPERM' || code === 'EBUSY' || code === 'ENOTEMPTY') &&
+					attempt < maxRetries
+				) {
+					// Exponential backoff — file locks from OneDrive/antivirus may need time to release
+					await new Promise((resolve) => setTimeout(resolve, 1000 * Math.pow(2, attempt)));
 					continue;
 				}
 				throw err;
@@ -416,10 +424,7 @@ export function addParticipantToChat(
  * @param participantName - The name of the participant to remove
  * @returns The updated GroupChat object
  */
-export function removeParticipantFromChat(
-	id: string,
-	participantName: string
-): Promise<GroupChat> {
+export function removeParticipantFromChat(id: string, participantName: string): Promise<GroupChat> {
 	return enqueueWrite(id, async () => {
 		const chat = await loadGroupChat(id);
 		if (!chat) {

@@ -27,6 +27,32 @@ export interface AttachmentsHandlerDependencies {
 }
 
 /**
+ * Sanitize a sessionId to prevent path traversal attacks.
+ * Strips directory separators and '..' components, then verifies the
+ * resolved path stays within the expected attachments base directory.
+ */
+function sanitizeSessionId(sessionId: string, baseDir: string): string {
+	if (
+		!sessionId ||
+		sessionId.includes('/') ||
+		sessionId.includes('\\') ||
+		sessionId.includes('..')
+	) {
+		throw new Error(`Invalid session ID: ${sessionId}`);
+	}
+	const safe = path.basename(sessionId);
+	if (!safe || safe === '.' || safe === '..') {
+		throw new Error(`Invalid session ID: ${sessionId}`);
+	}
+	// Belt-and-suspenders: verify resolved path is inside the base directory
+	const resolved = path.resolve(baseDir, safe);
+	if (!resolved.startsWith(baseDir + path.sep) && resolved !== baseDir) {
+		throw new Error(`Invalid session ID: path escapes attachments directory`);
+	}
+	return safe;
+}
+
+/**
  * Register all attachments-related IPC handlers.
  */
 export function registerAttachmentsHandlers(deps: AttachmentsHandlerDependencies): void {
@@ -38,7 +64,9 @@ export function registerAttachmentsHandlers(deps: AttachmentsHandlerDependencies
 		async (_event, sessionId: string, base64Data: string, filename: string) => {
 			try {
 				const userDataPath = app.getPath('userData');
-				const attachmentsDir = path.join(userDataPath, 'attachments', sessionId);
+				const attachmentsBase = path.join(userDataPath, 'attachments');
+				const safeSessionId = sanitizeSessionId(sessionId, attachmentsBase);
+				const attachmentsDir = path.join(attachmentsBase, safeSessionId);
 
 				// Ensure the attachments directory exists
 				await fs.mkdir(attachmentsDir, { recursive: true });
@@ -83,9 +111,11 @@ export function registerAttachmentsHandlers(deps: AttachmentsHandlerDependencies
 	ipcMain.handle('attachments:load', async (_event, sessionId: string, filename: string) => {
 		try {
 			const userDataPath = app.getPath('userData');
+			const attachmentsBase = path.join(userDataPath, 'attachments');
+			const safeSessionId = sanitizeSessionId(sessionId, attachmentsBase);
 			// Sanitize filename to prevent path traversal attacks
 			const safeFilename = path.basename(filename);
-			const filePath = path.join(userDataPath, 'attachments', sessionId, safeFilename);
+			const filePath = path.join(attachmentsBase, safeSessionId, safeFilename);
 
 			const buffer = await fs.readFile(filePath);
 			const base64 = buffer.toString('base64');
@@ -118,9 +148,11 @@ export function registerAttachmentsHandlers(deps: AttachmentsHandlerDependencies
 	ipcMain.handle('attachments:delete', async (_event, sessionId: string, filename: string) => {
 		try {
 			const userDataPath = app.getPath('userData');
+			const attachmentsBase = path.join(userDataPath, 'attachments');
+			const safeSessionId = sanitizeSessionId(sessionId, attachmentsBase);
 			// Sanitize filename to prevent path traversal attacks
 			const safeFilename = path.basename(filename);
-			const filePath = path.join(userDataPath, 'attachments', sessionId, safeFilename);
+			const filePath = path.join(attachmentsBase, safeSessionId, safeFilename);
 
 			await fs.unlink(filePath);
 			logger.info(`Deleted attachment: ${filePath}`, 'Attachments', { sessionId, filename });
@@ -135,7 +167,9 @@ export function registerAttachmentsHandlers(deps: AttachmentsHandlerDependencies
 	ipcMain.handle('attachments:list', async (_event, sessionId: string) => {
 		try {
 			const userDataPath = app.getPath('userData');
-			const attachmentsDir = path.join(userDataPath, 'attachments', sessionId);
+			const attachmentsBase = path.join(userDataPath, 'attachments');
+			const safeSessionId = sanitizeSessionId(sessionId, attachmentsBase);
+			const attachmentsDir = path.join(attachmentsBase, safeSessionId);
 
 			try {
 				const files = await fs.readdir(attachmentsDir);
@@ -160,7 +194,9 @@ export function registerAttachmentsHandlers(deps: AttachmentsHandlerDependencies
 	// Get the attachments directory path for a session
 	ipcMain.handle('attachments:getPath', async (_event, sessionId: string) => {
 		const userDataPath = app.getPath('userData');
-		const attachmentsDir = path.join(userDataPath, 'attachments', sessionId);
+		const attachmentsBase = path.join(userDataPath, 'attachments');
+		const safeSessionId = sanitizeSessionId(sessionId, attachmentsBase);
+		const attachmentsDir = path.join(attachmentsBase, safeSessionId);
 		return { success: true, path: attachmentsDir };
 	});
 }

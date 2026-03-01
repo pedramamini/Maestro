@@ -15,14 +15,17 @@ The Usage Dashboard only tracks activity from within Maestro. It does not includ
 ## Opening the Dashboard
 
 **Keyboard shortcut:**
+
 - macOS: `Opt+Cmd+U`
 - Windows/Linux: `Alt+Ctrl+U`
 
 **From the menu:**
+
 1. Click the hamburger menu (☰) in the top-left corner
 2. Select **Usage Dashboard**
 
 **From Quick Actions:**
+
 - Press `Cmd+K` / `Ctrl+K` and search for "Usage Dashboard"
 
 ## Dashboard Tabs
@@ -34,6 +37,7 @@ The dashboard is organized into four tabs, each providing different insights int
 The Overview tab gives you a high-level summary of your AI usage:
 
 **Summary Cards:**
+
 - **Sessions** — Total number of registered sessions
 - **Total Queries** — Number of messages sent to AI agents
 - **Total Time** — Cumulative time spent waiting for AI responses
@@ -46,6 +50,7 @@ A horizontal bar chart showing usage distribution across your AI agents. See at 
 
 **Source Distribution:**
 A donut chart breaking down your queries by source:
+
 - **Interactive** — Manual queries from AI Terminal conversations
 - **Auto Run** — Automated queries from playbook execution
 
@@ -68,12 +73,14 @@ A line chart showing how your query durations vary over time. Useful for spottin
 The Agents tab provides detailed per-agent analytics:
 
 **Session Statistics:**
+
 - **Total Sessions** — Count of registered sessions
 - **By Agent** — Breakdown by agent type (Claude Code, Codex, etc.) with color-coded indicators
 - **Git Repos vs Folders** — How many sessions are Git repositories versus plain directories
 - **Remote vs Local** — Sessions running on remote SSH hosts versus local machine
 
 **Agent Comparison:**
+
 - Full agent comparison chart showing query counts and time spent per agent
 - Side-by-side visual comparison of your agent usage patterns
 
@@ -90,6 +97,7 @@ The Activity tab shows your usage patterns over time:
 The Auto Run tab focuses specifically on automated playbook execution:
 
 **Metric Cards:**
+
 - **Total Sessions** — Number of Auto Run sessions
 - **Tasks Done** — Total tasks completed (with attempted count)
 - **Avg Tasks/Session** — Average tasks completed per Auto Run session
@@ -104,26 +112,26 @@ A mini bar chart showing task completions by date (last 14 days). Hover over bar
 
 Use the time range dropdown in the top-right corner to filter all dashboard data:
 
-| Range | Description |
-|-------|-------------|
-| **Today** | Current day only |
-| **This Week** | Current week (default) |
-| **This Month** | Current calendar month |
-| **This Year** | Current calendar year |
-| **All Time** | Everything since you started using Maestro |
+| Range          | Description                                |
+| -------------- | ------------------------------------------ |
+| **Today**      | Current day only                           |
+| **This Week**  | Current week (default)                     |
+| **This Month** | Current calendar month                     |
+| **This Year**  | Current calendar year                      |
+| **All Time**   | Everything since you started using Maestro |
 
 The selected time range applies to all tabs and charts. Your preferred time range is saved and restored between sessions.
 
 ## Keyboard Navigation
 
-| Shortcut | Action |
-|----------|--------|
-| `Cmd+Shift+[` / `Ctrl+Shift+[` | Previous tab |
-| `Cmd+Shift+]` / `Ctrl+Shift+]` | Next tab |
-| `Arrow Up/Down` | Navigate between chart sections |
-| `Home` | Jump to first section |
-| `End` | Jump to last section |
-| `Esc` | Close dashboard |
+| Shortcut                       | Action                          |
+| ------------------------------ | ------------------------------- |
+| `Cmd+Shift+[` / `Ctrl+Shift+[` | Previous tab                    |
+| `Cmd+Shift+]` / `Ctrl+Shift+]` | Next tab                        |
+| `Arrow Up/Down`                | Navigate between chart sections |
+| `Home`                         | Jump to first section           |
+| `End`                          | Jump to last section            |
+| `Esc`                          | Close dashboard                 |
 
 ## Exporting Data
 

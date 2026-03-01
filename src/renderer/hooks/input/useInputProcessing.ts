@@ -8,6 +8,7 @@ import type {
 	BatchRunState,
 } from '../../types';
 import { getActiveTab, extractQuickTabName } from '../../utils/tabHelpers';
+import { getStdinFlags } from '../../utils/spawnHelpers';
 import { generateId } from '../../utils/ids';
 import { substituteTemplateVariables } from '../../utils/templateVariables';
 import { gitService } from '../../services/git';
@@ -65,7 +66,7 @@ export interface UseInputProcessingDeps {
 	/** Handler for the /wizard built-in command (starts the inline wizard for Auto Run documents) */
 	onWizardCommand?: (args: string) => void;
 	/** Handler for sending messages to the wizard (when wizard is active) */
-	onWizardSendMessage?: (content: string) => Promise<void>;
+	onWizardSendMessage?: (content: string, images?: string[]) => Promise<void>;
 	/** Whether the wizard is currently active for the active tab */
 	isWizardActive?: boolean;
 	/** Handler for the /skills built-in command (lists Claude Code skills) */
@@ -349,14 +350,17 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 					return;
 				}
 
+				// Capture staged images before clearing
+				const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
+
 				// Clear input
 				setInputValue('');
 				setStagedImages([]);
 				syncAiInputToSession('');
 				if (inputRef.current) inputRef.current.style.height = 'auto';
 
-				// Send to wizard
-				onWizardSendMessage(effectiveInputValue).catch((error) => {
+				// Send to wizard (with images if any were staged)
+				onWizardSendMessage(effectiveInputValue, imagesToSend).catch((error) => {
 					console.error('[processInput] Wizard message failed:', error);
 				});
 				return;
@@ -735,18 +739,28 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 									if (s.id !== activeSessionId) return s;
 									const tab = s.aiTabs.find((t) => t.id === activeTabForNaming.id);
 									if (!tab || tab.name !== null) {
-										window.maestro.logger.log('info', 'Auto tab naming skipped (tab already named)', 'TabNaming', {
-											tabId: activeTabForNaming.id,
-											generatedName,
-											existingName: tab?.name,
-										});
+										window.maestro.logger.log(
+											'info',
+											'Auto tab naming skipped (tab already named)',
+											'TabNaming',
+											{
+												tabId: activeTabForNaming.id,
+												generatedName,
+												existingName: tab?.name,
+											}
+										);
 										return s;
 									}
-									window.maestro.logger.log('info', `Auto tab named: "${generatedName}"`, 'TabNaming', {
-										tabId: activeTabForNaming.id,
-										sessionId: activeSessionId,
-										generatedName,
-									});
+									window.maestro.logger.log(
+										'info',
+										`Auto tab named: "${generatedName}"`,
+										'TabNaming',
+										{
+											tabId: activeTabForNaming.id,
+											sessionId: activeSessionId,
+											generatedName,
+										}
+									);
 									return {
 										...s,
 										aiTabs: s.aiTabs.map((t) =>
@@ -938,7 +952,8 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							// Get history file path for task recall
 							// Skip for SSH sessions — the local path is unreachable from the remote host
 							let historyFilePath: string | undefined;
-							const isSSH = freshSession.sshRemoteId || freshSession.sessionSshRemoteConfig?.enabled;
+							const isSSH =
+								freshSession.sshRemoteId || freshSession.sessionSshRemoteConfig?.enabled;
 							if (!isSSH) {
 								try {
 									historyFilePath =
@@ -969,15 +984,11 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 							effectivePrompt = `${substitutedSystemPrompt}\n\n---\n\n# User Request\n\n${effectivePrompt}`;
 						}
 
-						// On Windows, use stdin to bypass cmd.exe ~8KB command line length limit
-						// and avoid shell escaping issues with special characters like "-"
-						const isWindows = navigator.platform.toLowerCase().includes('win');
-						// Use agent capabilities to determine stdin mode
-						// Agents that support --input-format stream-json use sendPromptViaStdin (JSON format)
-						// Agents that don't support stream-json use sendPromptViaStdinRaw (raw text)
-						const supportsStreamJson = agent.capabilities?.supportsStreamJsonInput ?? false;
-						const sendPromptViaStdin = isWindows && supportsStreamJson;
-						const sendPromptViaStdinRaw = isWindows && !supportsStreamJson;
+						const { sendPromptViaStdin, sendPromptViaStdinRaw } = getStdinFlags({
+							isSshSession:
+								!!freshSession.sshRemoteId || !!freshSession.sessionSshRemoteConfig?.enabled,
+							supportsStreamJsonInput: agent.capabilities?.supportsStreamJsonInput ?? false,
+						});
 
 						// Spawn agent with generic config - the main process will use agent-specific
 						// argument builders (resumeArgs, readOnlyArgs, etc.) to construct the final args

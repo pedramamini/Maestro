@@ -162,6 +162,16 @@ vi.mock('../../../renderer/utils/theme', () => ({
 		if (type === 'deleted') return <span data-testid="deleted-icon">-</span>;
 		return <span data-testid="file-icon">📄</span>;
 	},
+	getExplorerFileIcon: (name: string, _theme: Theme, type?: string) => {
+		if (type === 'added') return <span data-testid="added-icon">+</span>;
+		if (type === 'modified') return <span data-testid="modified-icon">~</span>;
+		if (type === 'deleted') return <span data-testid="deleted-icon">-</span>;
+		void name;
+		return <span data-testid="file-icon">📄</span>;
+	},
+	getExplorerFolderIcon: (_name: string, _isExpanded: boolean, _theme: Theme) => (
+		<span data-testid="folder-icon">📁</span>
+	),
 }));
 
 // Mock MODAL_PRIORITIES
@@ -769,11 +779,16 @@ describe('FileExplorerPanel', () => {
 
 		it('skips auto-refresh when previous call is still in flight', async () => {
 			let resolveRefresh: () => void;
-			const slowRefresh = vi.fn(() => new Promise<void>((resolve) => {
-				resolveRefresh = resolve;
-			}));
+			const slowRefresh = vi.fn(
+				() =>
+					new Promise<void>((resolve) => {
+						resolveRefresh = resolve;
+					})
+			);
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 1 });
-			render(<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={slowRefresh} />);
+			render(
+				<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={slowRefresh} />
+			);
 
 			// First interval fires, refresh starts but doesn't resolve
 			await act(async () => {
@@ -804,14 +819,19 @@ describe('FileExplorerPanel', () => {
 			const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 			const failingRefresh = vi.fn().mockRejectedValue(new Error('network failure'));
 			const session = createMockSession({ fileTreeAutoRefreshInterval: 5 });
-			render(<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={failingRefresh} />);
+			render(
+				<FileExplorerPanel {...defaultProps} session={session} refreshFileTree={failingRefresh} />
+			);
 
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(5000);
 			});
 
 			expect(failingRefresh).toHaveBeenCalledTimes(1);
-			expect(errorSpy).toHaveBeenCalledWith('[FileExplorer] Auto-refresh failed:', expect.any(Error));
+			expect(errorSpy).toHaveBeenCalledWith(
+				'[FileExplorer] Auto-refresh failed:',
+				expect.any(Error)
+			);
 
 			// Spin timeout should still clear, allowing the next refresh to fire
 			await act(async () => {
@@ -905,11 +925,12 @@ describe('FileExplorerPanel', () => {
 			const session = createMockSession({ fileExplorerExpanded: ['src'] });
 			const { container } = render(<FileExplorerPanel {...defaultProps} session={session} />);
 			// Virtualized tree uses paddingLeft for indentation
-			// index.ts is at depth 1, so paddingLeft should be 8 + 1*16 = 24px
+			// index.ts is a file at depth 1, so paddingLeft = 8 + max(0, 1-1)*16 = 8px
+			// (files use depth-1 to align icons with parent folder icons)
 			const nestedItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
 				el.textContent?.includes('index.ts')
 			);
-			expect(nestedItem).toHaveStyle({ paddingLeft: '24px' });
+			expect(nestedItem).toHaveStyle({ paddingLeft: '8px' });
 		});
 
 		it('displays file name with truncate class', () => {
@@ -1548,7 +1569,7 @@ describe('FileExplorerPanel', () => {
 			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
 
 			expect(screen.getByText('Copy Path')).toBeInTheDocument();
-			expect(screen.getByText('Reveal in Finder')).toBeInTheDocument();
+			expect(screen.getByText(/Reveal in (Finder|Explorer|File Manager)/)).toBeInTheDocument();
 		});
 
 		it('updates selection to right-clicked item when opening context menu', () => {
@@ -1705,7 +1726,7 @@ describe('FileExplorerPanel', () => {
 			const mockFs = {
 				countItems: vi.fn().mockResolvedValue({ fileCount: 0, folderCount: 0 }),
 			};
-			(window as any).maestro = { fs: mockFs };
+			(window as any).maestro = { platform: 'darwin', fs: mockFs };
 
 			const { container } = render(<FileExplorerPanel {...defaultProps} />);
 			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
@@ -1765,9 +1786,41 @@ describe('FileExplorerPanel', () => {
 			expect(screen.queryByText('Open in Default App')).not.toBeInTheDocument();
 		});
 
-		it('calls shell.openExternal with full file path when Open in Default App is clicked', () => {
-			const mockShell = { openExternal: vi.fn().mockResolvedValue(undefined) };
-			(window as any).maestro = { shell: mockShell };
+		it('calls shell.showItemInFolder with full path when Reveal in Finder is clicked', () => {
+			const mockShell = { showItemInFolder: vi.fn().mockResolvedValue(undefined) };
+			(window as any).maestro = { platform: 'darwin', shell: mockShell };
+
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('package.json')
+			);
+			fireEvent.contextMenu(fileItem!, { clientX: 100, clientY: 200 });
+
+			const revealButton = screen.getByText('Reveal in Finder');
+			fireEvent.click(revealButton);
+
+			expect(mockShell.showItemInFolder).toHaveBeenCalledWith('/Users/test/project/package.json');
+		});
+
+		it('calls shell.showItemInFolder with folder path when Reveal in Finder is clicked on folder', () => {
+			const mockShell = { showItemInFolder: vi.fn().mockResolvedValue(undefined) };
+			(window as any).maestro = { platform: 'darwin', shell: mockShell };
+
+			const { container } = render(<FileExplorerPanel {...defaultProps} />);
+			const folderItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
+				el.textContent?.includes('src')
+			);
+			fireEvent.contextMenu(folderItem!, { clientX: 100, clientY: 200 });
+
+			const revealButton = screen.getByText('Reveal in Finder');
+			fireEvent.click(revealButton);
+
+			expect(mockShell.showItemInFolder).toHaveBeenCalledWith('/Users/test/project/src');
+		});
+
+		it('calls shell.openPath with full file path when Open in Default App is clicked', () => {
+			const mockShell = { openPath: vi.fn().mockResolvedValue(undefined) };
+			(window as any).maestro = { platform: 'darwin', shell: mockShell };
 
 			const { container } = render(<FileExplorerPanel {...defaultProps} />);
 			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
@@ -1778,7 +1831,7 @@ describe('FileExplorerPanel', () => {
 			const openButton = screen.getByText('Open in Default App');
 			fireEvent.click(openButton);
 
-			expect(mockShell.openExternal).toHaveBeenCalledWith('file:///Users/test/project/package.json');
+			expect(mockShell.openPath).toHaveBeenCalledWith('/Users/test/project/package.json');
 		});
 
 		it('does not show Open in Default App option for SSH sessions', () => {
@@ -1812,7 +1865,7 @@ describe('FileExplorerPanel', () => {
 			const mockFs = {
 				countItems: vi.fn().mockResolvedValue({ fileCount: 5, folderCount: 2 }),
 			};
-			(window as any).maestro = { fs: mockFs };
+			(window as any).maestro = { platform: 'darwin', fs: mockFs };
 
 			const { container } = render(<FileExplorerPanel {...defaultProps} />);
 			const folderItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>
@@ -1835,7 +1888,7 @@ describe('FileExplorerPanel', () => {
 			const mockFs = {
 				countItems: vi.fn().mockResolvedValue({ fileCount: 0, folderCount: 0 }),
 			};
-			(window as any).maestro = { fs: mockFs };
+			(window as any).maestro = { platform: 'darwin', fs: mockFs };
 
 			const { container } = render(<FileExplorerPanel {...defaultProps} />);
 			const fileItem = Array.from(container.querySelectorAll('[data-file-index]')).find((el) =>

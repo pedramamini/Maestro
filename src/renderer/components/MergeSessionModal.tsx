@@ -389,15 +389,26 @@ export function MergeSessionModal({
 		enableNumberHotkeys: false,
 	});
 
+	const handleViewModeChange = useCallback(
+		(mode: ViewMode) => {
+			setViewMode(mode);
+			setSelectedIndex(0);
+		},
+		[setSelectedIndex]
+	);
+
+	const handleSearchChange = useCallback(
+		(value: string) => {
+			setSearchQuery(value);
+			setSelectedIndex(0);
+		},
+		[setSelectedIndex]
+	);
+
 	// Scroll selected item into view
 	useEffect(() => {
 		selectedItemRef.current?.scrollIntoView({ block: 'nearest' });
 	}, [selectedIndex]);
-
-	// Reset selection when filter changes
-	useEffect(() => {
-		setSelectedIndex(0);
-	}, [searchQuery, viewMode, setSelectedIndex]);
 
 	// Announce search results to screen readers
 	useEffect(() => {
@@ -469,7 +480,7 @@ export function MergeSessionModal({
 				e.preventDefault();
 				const modes: ViewMode[] = ['paste', 'search'];
 				const currentIndex = modes.indexOf(viewMode);
-				setViewMode(modes[(currentIndex + 1) % modes.length]);
+				handleViewModeChange(modes[(currentIndex + 1) % modes.length]);
 				return;
 			}
 
@@ -478,13 +489,13 @@ export function MergeSessionModal({
 				e.preventDefault();
 				const modes: ViewMode[] = ['paste', 'search'];
 				const currentIndex = modes.indexOf(viewMode);
-				setViewMode(modes[(currentIndex - 1 + modes.length) % modes.length]);
+				handleViewModeChange(modes[(currentIndex - 1 + modes.length) % modes.length]);
 				return;
 			}
 
 			// Cmd+V to switch to paste mode
 			if ((e.metaKey || e.ctrlKey) && e.key === 'v') {
-				setViewMode('paste');
+				handleViewModeChange('paste');
 				return;
 			}
 
@@ -539,6 +550,7 @@ export function MergeSessionModal({
 			pastedIdMatch,
 			handleMerge,
 			handleSelectItem,
+			handleViewModeChange,
 			listKeyDown,
 		]
 	);
@@ -585,7 +597,6 @@ export function MergeSessionModal({
 					borderColor: theme.colors.border,
 					maxHeight: 'calc(100vh - 128px)',
 				}}
-				onClick={(e) => e.stopPropagation()}
 			>
 				{/* Header */}
 				<div
@@ -636,10 +647,11 @@ export function MergeSessionModal({
 					].map(({ mode, label, icon: Icon }) => (
 						<button
 							key={mode}
+							id={`merge-tab-${mode}`}
 							role="tab"
 							aria-selected={viewMode === mode}
 							aria-controls={`merge-tabpanel-${mode}`}
-							onClick={() => setViewMode(mode)}
+							onClick={() => handleViewModeChange(mode)}
 							className="px-3 py-1.5 rounded-md text-xs font-medium flex items-center gap-1.5 transition-colors"
 							style={{
 								backgroundColor: viewMode === mode ? theme.colors.accent : 'transparent',
@@ -770,7 +782,7 @@ export function MergeSessionModal({
 										type="text"
 										placeholder="Search open tabs across all agents..."
 										value={searchQuery}
-										onChange={(e) => setSearchQuery(e.target.value)}
+										onChange={(e) => handleSearchChange(e.target.value)}
 										aria-controls="session-list"
 										className="w-full pl-9 pr-3 py-2 rounded-lg border text-sm outline-none"
 										style={{

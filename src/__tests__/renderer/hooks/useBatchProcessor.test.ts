@@ -23,6 +23,12 @@ import type {
 import { countUnfinishedTasks, uncheckAllTasks, useBatchProcessor } from '../../../renderer/hooks';
 import { useBatchStore } from '../../../renderer/stores/batchStore';
 
+// Mock notifyToast so we can verify toast notifications
+const mockNotifyToast = vi.fn();
+vi.mock('../../../renderer/stores/notificationStore', () => ({
+	notifyToast: (...args: unknown[]) => mockNotifyToast(...args),
+}));
+
 // ============================================================================
 // Tests for countUnfinishedTasks
 // ============================================================================
@@ -2990,11 +2996,14 @@ describe('useBatchProcessor hook', () => {
 			mockReadDoc.mockImplementation(async () => {
 				readCount++;
 				// Initial reads: 3 tasks unchecked
-				if (readCount <= 2) return { success: true, content: '- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3' };
+				if (readCount <= 2)
+					return { success: true, content: '- [ ] Task 1\n- [ ] Task 2\n- [ ] Task 3' };
 				// After first resume: 1 done, 2 remaining
-				if (readCount <= 4) return { success: true, content: '- [x] Task 1\n- [ ] Task 2\n- [ ] Task 3' };
+				if (readCount <= 4)
+					return { success: true, content: '- [x] Task 1\n- [ ] Task 2\n- [ ] Task 3' };
 				// After second resume: 2 done, 1 remaining
-				if (readCount <= 6) return { success: true, content: '- [x] Task 1\n- [x] Task 2\n- [ ] Task 3' };
+				if (readCount <= 6)
+					return { success: true, content: '- [x] Task 1\n- [x] Task 2\n- [ ] Task 3' };
 				// Final: all done
 				return { success: true, content: '- [x] Task 1\n- [x] Task 2\n- [x] Task 3' };
 			});
@@ -3086,7 +3095,9 @@ describe('useBatchProcessor hook', () => {
 			await waitFor(() =>
 				expect(result.current.getBatchState('test-session-id').errorPaused).toBe(true)
 			);
-			expect(result.current.getBatchState('test-session-id').error?.message).toBe('Rate limit hit again');
+			expect(result.current.getBatchState('test-session-id').error?.message).toBe(
+				'Rate limit hit again'
+			);
 
 			// Resume second error
 			act(() => {
@@ -5388,6 +5399,590 @@ describe('useBatchProcessor hook', () => {
 				'tasks.md',
 				undefined // No sshRemoteId for local sessions
 			);
+		});
+	});
+
+	describe('worktree-dispatched PR creation', () => {
+		it('should create PR when worktreeTarget is set with createPROnCompletion', async () => {
+			// Create a worktree agent session with a parent
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				name: 'Parent Agent',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'worktree-session-id',
+				name: 'Worktree Agent',
+				cwd: '/main/repo/worktrees/feature-branch',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'feature-branch',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			// Mock task processing: first call returns unchecked, subsequent calls return checked
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			// Mock PR creation success
+			mockCreatePR.mockResolvedValue({
+				success: true,
+				prUrl: 'https://github.com/test/repo/pull/42',
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'worktree-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'feature-branch',
+							baseBranch: 'main',
+							createPROnCompletion: true,
+						},
+						worktree: {
+							enabled: true,
+							path: '/main/repo/worktrees/feature-branch',
+							branchName: 'feature-branch',
+							createPROnCompletion: true,
+							prTargetBranch: 'main',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// Should have called createPR with parent session's cwd as mainRepoCwd
+			expect(mockCreatePR).toHaveBeenCalledWith(
+				'/main/repo/worktrees/feature-branch', // worktreePath (session.cwd for worktree agent)
+				'main', // prTargetBranch
+				expect.any(String), // PR title
+				expect.any(String), // PR body
+				undefined // ghPath
+			);
+
+			// Verify onPRResult callback was called
+			expect(mockOnPRResult).toHaveBeenCalledWith(
+				expect.objectContaining({
+					sessionId: 'worktree-session-id',
+					success: true,
+					prUrl: 'https://github.com/test/repo/pull/42',
+				})
+			);
+		});
+
+		it('should resolve mainRepoCwd from parent session for worktree-dispatched runs', async () => {
+			// Parent session has a different cwd from the worktree agent
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				name: 'Parent Agent',
+				cwd: '/projects/main-repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-session-id',
+				name: 'WT Agent',
+				cwd: '/projects/main-repo/worktrees/my-feature',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'my-feature',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			mockGetDefaultBranch.mockResolvedValue({ success: true, branch: 'main' });
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'existing-closed',
+							worktreePath: '/projects/main-repo/worktrees/my-feature',
+							createPROnCompletion: true,
+						},
+						worktree: {
+							enabled: true,
+							path: '/projects/main-repo/worktrees/my-feature',
+							branchName: 'my-feature',
+							createPROnCompletion: true,
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// The createPR call's first arg is worktreePath, second is the base branch
+			// mainRepoCwd should be the parent's cwd, not the worktree agent's cwd
+			expect(mockCreatePR).toHaveBeenCalled();
+			const createPRCallArgs = mockCreatePR.mock.calls[0];
+			// The worktreeManager.createPR gets an options object, but it's the
+			// internal createPR mock on window.maestro.git. The worktreeManager wrapper
+			// passes worktreePath as the first arg to git.createPR
+			expect(createPRCallArgs[0]).toBe('/projects/main-repo/worktrees/my-feature');
+		});
+
+		it('should not create PR when worktreeTarget is set but createPROnCompletion is false', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-session-id',
+				cwd: '/main/repo/worktrees/feat',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'feat',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'feat',
+							baseBranch: 'main',
+							createPROnCompletion: false,
+						},
+						// No worktree.createPROnCompletion, so PR creation should not fire
+					},
+					'/test/folder'
+				);
+			});
+
+			// createPR should NOT have been called
+			expect(mockCreatePR).not.toHaveBeenCalled();
+		});
+
+		it('should use worktreeBranch from session when available', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-id',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-id',
+				cwd: '/main/repo/worktrees/my-branch',
+				parentSessionId: 'parent-id',
+				worktreeBranch: 'my-branch-from-session',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'config-branch-name',
+							baseBranch: 'main',
+							createPROnCompletion: true,
+						},
+						worktree: {
+							enabled: true,
+							path: '/main/repo/worktrees/my-branch',
+							branchName: 'config-branch-name',
+							createPROnCompletion: true,
+							prTargetBranch: 'main',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// PR should have been created (worktreeActive was overridden to true)
+			expect(mockCreatePR).toHaveBeenCalled();
+		});
+
+		it('should skip setupWorktree when worktreeTarget is set (worktree already created)', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-session-id',
+				cwd: '/main/repo/worktrees/auto-run-branch',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'auto-run-branch',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'auto-run-branch',
+							baseBranch: 'main',
+							createPROnCompletion: false,
+						},
+						worktree: {
+							enabled: true,
+							path: '/main/repo/worktrees/auto-run-branch',
+							branchName: 'auto-run-branch',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// setupWorktree (git.worktreeSetup) should NOT be called when worktreeTarget is set,
+			// because useAutoRunHandlers already created the worktree. Calling it again would fail
+			// since the session's CWD is already a worktree (git-common-dir != git-dir).
+			expect(mockWorktreeSetup).not.toHaveBeenCalled();
+		});
+
+		it('should fire "Auto Run Started" toast notification when batch starts with worktreeTarget', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				name: 'Parent Agent',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-session-id',
+				name: 'WT Agent',
+				cwd: '/main/repo/worktrees/feature',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'feature',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task 1\n- [ ] Task 2' };
+				return { success: true, content: '- [x] Task 1\n- [x] Task 2' };
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'feature',
+							baseBranch: 'main',
+							createPROnCompletion: false,
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// Verify "Auto Run Started" toast was fired
+			expect(mockNotifyToast).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'info',
+					title: 'Auto Run Started',
+					sessionId: 'wt-session-id',
+				})
+			);
+
+			// Verify the message includes task and document counts
+			const toastCall = mockNotifyToast.mock.calls.find(
+				(call: unknown[]) => (call[0] as { title?: string })?.title === 'Auto Run Started'
+			);
+			expect(toastCall).toBeDefined();
+			expect((toastCall![0] as { message: string }).message).toMatch(/\d+ tasks? across \d+ documents?/);
+		});
+
+		it('should add history entry with PR URL on successful PR creation', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-session-id',
+				name: 'WT Agent',
+				cwd: '/main/repo/worktrees/pr-branch',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'pr-branch',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			mockCreatePR.mockResolvedValue({
+				success: true,
+				prUrl: 'https://github.com/test/repo/pull/99',
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'pr-branch',
+							baseBranch: 'main',
+							createPROnCompletion: true,
+						},
+						worktree: {
+							enabled: true,
+							path: '/main/repo/worktrees/pr-branch',
+							branchName: 'pr-branch',
+							createPROnCompletion: true,
+							prTargetBranch: 'main',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// Verify onAddHistoryEntry was called with PR URL in summary
+			expect(mockOnAddHistoryEntry).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'AUTO',
+					summary: expect.stringContaining('https://github.com/test/repo/pull/99'),
+					sessionId: 'wt-session-id',
+					success: true,
+				})
+			);
+
+			// Verify the full response contains PR details
+			const prHistoryCall = mockOnAddHistoryEntry.mock.calls.find(
+				(call: unknown[]) => {
+					const entry = call[0] as { summary?: string };
+					return entry.summary?.includes('PR created');
+				}
+			);
+			expect(prHistoryCall).toBeDefined();
+			const prEntry = prHistoryCall![0] as { fullResponse: string };
+			expect(prEntry.fullResponse).toContain('Pull Request Created');
+			expect(prEntry.fullResponse).toContain('pr-branch');
+			expect(prEntry.fullResponse).toContain('https://github.com/test/repo/pull/99');
+		});
+
+		it('should add history entry with error on failed PR creation', async () => {
+			const parentSession = createMockSession({
+				id: 'parent-session-id',
+				cwd: '/main/repo',
+			});
+			const worktreeSession = createMockSession({
+				id: 'wt-session-id',
+				name: 'WT Agent',
+				cwd: '/main/repo/worktrees/fail-branch',
+				parentSessionId: 'parent-session-id',
+				worktreeBranch: 'fail-branch',
+			});
+			const sessions = [parentSession, worktreeSession];
+			const groups = [createMockGroup()];
+
+			let callCount = 0;
+			mockReadDoc.mockImplementation(async () => {
+				callCount++;
+				if (callCount <= 3) return { success: true, content: '- [ ] Task' };
+				return { success: true, content: '- [x] Task' };
+			});
+
+			mockCreatePR.mockResolvedValue({
+				success: false,
+				error: 'gh: not authenticated',
+			});
+
+			const { result } = renderHook(() =>
+				useBatchProcessor({
+					sessions,
+					groups,
+					onUpdateSession: mockOnUpdateSession,
+					onSpawnAgent: mockOnSpawnAgent,
+					onAddHistoryEntry: mockOnAddHistoryEntry,
+					onComplete: mockOnComplete,
+					onPRResult: mockOnPRResult,
+				})
+			);
+
+			await act(async () => {
+				await result.current.startBatchRun(
+					'wt-session-id',
+					{
+						documents: [{ filename: 'tasks', resetOnCompletion: false }],
+						prompt: 'Test',
+						loopEnabled: false,
+						worktreeTarget: {
+							mode: 'create-new',
+							newBranchName: 'fail-branch',
+							baseBranch: 'main',
+							createPROnCompletion: true,
+						},
+						worktree: {
+							enabled: true,
+							path: '/main/repo/worktrees/fail-branch',
+							branchName: 'fail-branch',
+							createPROnCompletion: true,
+							prTargetBranch: 'main',
+						},
+					},
+					'/test/folder'
+				);
+			});
+
+			// Verify onAddHistoryEntry was called with error info
+			expect(mockOnAddHistoryEntry).toHaveBeenCalledWith(
+				expect.objectContaining({
+					type: 'AUTO',
+					summary: expect.stringContaining('PR creation failed'),
+					sessionId: 'wt-session-id',
+					success: false,
+				})
+			);
+
+			// Verify error details in full response
+			const prHistoryCall = mockOnAddHistoryEntry.mock.calls.find(
+				(call: unknown[]) => {
+					const entry = call[0] as { summary?: string };
+					return entry.summary?.includes('PR creation failed');
+				}
+			);
+			expect(prHistoryCall).toBeDefined();
+			const prEntry = prHistoryCall![0] as { fullResponse: string };
+			expect(prEntry.fullResponse).toContain('Pull Request Creation Failed');
+			expect(prEntry.fullResponse).toContain('gh: not authenticated');
 		});
 	});
 });

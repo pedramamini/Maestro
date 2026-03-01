@@ -1,8 +1,17 @@
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import React from 'react';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import type { Theme, Session, Shortcut, FocusArea, BatchRunState } from '../../../renderer/types';
+import type {
+	Theme,
+	Session,
+	Shortcut,
+	FocusArea,
+	BatchRunState,
+	ThinkingItem,
+} from '../../../renderer/types';
 import { gitService } from '../../../renderer/services/git';
+import { useUIStore } from '../../../renderer/stores/uiStore';
+import { useSettingsStore } from '../../../renderer/stores/settingsStore';
 import {
 	clearCapabilitiesCache,
 	setCapabilitiesCache,
@@ -236,7 +245,6 @@ vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	useGitFileStatus: () => ({
 		getFileCount: (sessionId: string) => mockGitStatusData[sessionId]?.fileCount ?? 0,
 		hasChanges: (sessionId: string) => (mockGitStatusData[sessionId]?.fileCount ?? 0) > 0,
-		isLoading: false,
 	}),
 	useGitBranch: () => ({
 		getBranchInfo: (sessionId: string) => {
@@ -330,16 +338,10 @@ describe('MainPanel', () => {
 		agentSessionsOpen: false,
 		activeAgentSessionId: null,
 		activeSession: createSession(),
-		thinkingSessions: [] as Session[],
+		thinkingItems: [] as ThinkingItem[],
 		theme,
-		fontFamily: 'monospace',
 		isMobileLandscape: false,
-		activeFocus: 'main' as FocusArea,
-		outputSearchOpen: false,
-		outputSearchQuery: '',
 		inputValue: '',
-		enterToSendAI: true,
-		enterToSendTerminal: false,
 		stagedImages: [],
 		commandHistoryOpen: false,
 		commandHistoryFilter: '',
@@ -350,15 +352,6 @@ describe('MainPanel', () => {
 		// File tab system (replaced previewFile)
 		activeFileTabId: null as string | null,
 		activeFileTab: null as import('../../../renderer/types').FilePreviewTab | null,
-		markdownEditMode: false,
-		chatRawTextMode: false,
-		shortcuts: defaultShortcuts,
-		rightPanelOpen: true,
-		maxOutputLines: 1000,
-		gitDiffPreview: null,
-		fileTreeFilterOpen: false,
-		logViewerSelectedLevels: ['info', 'warn', 'error'],
-		setLogViewerSelectedLevels: vi.fn(),
 
 		// Setters
 		setGitDiffPreview: vi.fn(),
@@ -367,12 +360,7 @@ describe('MainPanel', () => {
 		setActiveAgentSessionId: vi.fn(),
 		onResumeAgentSession: vi.fn(),
 		onNewAgentSession: vi.fn(),
-		setActiveFocus: vi.fn(),
-		setOutputSearchOpen: vi.fn(),
-		setOutputSearchQuery: vi.fn(),
 		setInputValue: vi.fn(),
-		setEnterToSendAI: vi.fn(),
-		setEnterToSendTerminal: vi.fn(),
 		setStagedImages: vi.fn(),
 		setLightboxImage: vi.fn(),
 		setCommandHistoryOpen: vi.fn(),
@@ -388,18 +376,12 @@ describe('MainPanel', () => {
 		onFileTabEditContentChange: vi.fn(),
 		onFileTabScrollPositionChange: vi.fn(),
 		onFileTabSearchQueryChange: vi.fn(),
-		setMarkdownEditMode: vi.fn(),
-		setChatRawTextMode: vi.fn(),
-		setAboutModalOpen: vi.fn(),
-		setRightPanelOpen: vi.fn(),
 		setGitLogOpen: vi.fn(),
 
 		// Refs
 		inputRef: React.createRef<HTMLTextAreaElement>(),
 		logsEndRef: React.createRef<HTMLDivElement>(),
 		terminalOutputRef: React.createRef<HTMLDivElement>(),
-		fileTreeContainerRef: React.createRef<HTMLDivElement>(),
-		fileTreeFilterInputRef: React.createRef<HTMLInputElement>(),
 
 		// Functions
 		toggleInputMode: vi.fn(),
@@ -420,6 +402,32 @@ describe('MainPanel', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		vi.useFakeTimers({ shouldAdvanceTime: true });
+
+		// Reset Zustand stores to initial state (Phase 3C: MainPanel reads from stores)
+		useUIStore.setState({
+			activeFocus: 'main',
+			rightPanelOpen: true,
+			outputSearchOpen: false,
+			outputSearchQuery: '',
+			showUnreadOnly: false,
+		});
+		useSettingsStore.setState({
+			fontFamily: 'monospace',
+			enterToSendAI: true,
+			enterToSendTerminal: false,
+			chatRawTextMode: false,
+			autoScrollAiMode: false,
+			userMessageAlignment: 'right',
+			maxOutputLines: 1000,
+			logLevel: 'info',
+			logViewerSelectedLevels: ['info', 'warn', 'error'],
+			colorBlindMode: false,
+			contextManagementSettings: {
+				contextWarningsEnabled: false,
+				contextWarningYellowThreshold: 60,
+				contextWarningRedThreshold: 80,
+			},
+		});
 
 		// Clear capabilities cache and pre-populate with Claude Code capabilities (default test agent)
 		clearCapabilitiesCache();
@@ -634,26 +642,26 @@ describe('MainPanel', () => {
 
 	describe('Right panel toggle', () => {
 		it('should show toggle button when rightPanelOpen is false', () => {
-			render(<MainPanel {...defaultProps} rightPanelOpen={false} />);
+			useUIStore.setState({ rightPanelOpen: false });
+			render(<MainPanel {...defaultProps} />);
 
 			expect(screen.getByTitle(/Show right panel/)).toBeInTheDocument();
 		});
 
 		it('should hide toggle button when rightPanelOpen is true', () => {
-			render(<MainPanel {...defaultProps} rightPanelOpen={true} />);
+			useUIStore.setState({ rightPanelOpen: true });
+			render(<MainPanel {...defaultProps} />);
 
 			expect(screen.queryByTitle(/Show right panel/)).not.toBeInTheDocument();
 		});
 
 		it('should call setRightPanelOpen when toggle button is clicked', () => {
-			const setRightPanelOpen = vi.fn();
-			render(
-				<MainPanel {...defaultProps} rightPanelOpen={false} setRightPanelOpen={setRightPanelOpen} />
-			);
+			useUIStore.setState({ rightPanelOpen: false });
+			render(<MainPanel {...defaultProps} />);
 
 			fireEvent.click(screen.getByTitle(/Show right panel/));
 
-			expect(setRightPanelOpen).toHaveBeenCalledWith(true);
+			expect(useUIStore.getState().rightPanelOpen).toBe(true);
 		});
 	});
 
@@ -1003,7 +1011,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			expect(screen.getByText(/^Context( Window)?$/)).toBeInTheDocument();
+			expect(screen.getAllByText(/^Context( Window)?$/)[0]).toBeInTheDocument();
 		});
 
 		it('should not display context window in terminal mode', () => {
@@ -1011,8 +1019,8 @@ describe('MainPanel', () => {
 
 			render(<MainPanel {...defaultProps} activeSession={session} />);
 
-			// Label shows "Context" or "Context Window" depending on panel width
-			expect(screen.queryByText(/^Context( Window)?$/)).not.toBeInTheDocument();
+			// Target the full "Context Window" label (compact "Context" label is also rendered but hidden via CSS)
+			expect(screen.queryByText('Context Window')).not.toBeInTheDocument();
 		});
 
 		it('should not display context window widget when agent does not support usage stats', () => {
@@ -1733,7 +1741,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText(/^Context( Window)?$/);
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			fireEvent.mouseEnter(contextWidget.parentElement!);
 
 			await waitFor(() => {
@@ -1745,7 +1753,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText(/^Context( Window)?$/);
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			fireEvent.mouseEnter(contextWidget.parentElement!);
 
 			await waitFor(() => {
@@ -1767,7 +1775,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText(/^Context( Window)?$/);
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			const contextContainer = contextWidget.parentElement!;
 
 			// Hover to open
@@ -1810,7 +1818,7 @@ describe('MainPanel', () => {
 			render(<MainPanel {...defaultProps} activeSession={session} />);
 
 			// Label shows "Context" or "Context Window" depending on panel width
-			const contextWidget = screen.getByText(/^Context( Window)?$/);
+			const contextWidget = screen.getAllByText(/^Context( Window)?$/)[0];
 			fireEvent.mouseEnter(contextWidget.parentElement!);
 
 			await waitFor(() => {
@@ -1829,20 +1837,15 @@ describe('MainPanel', () => {
 	describe('Input handling', () => {
 		it('should call setActiveSessionId and setActiveFocus when input is focused', () => {
 			const setActiveSessionId = vi.fn();
-			const setActiveFocus = vi.fn();
+			// Set activeFocus to something other than 'main' so we can detect the change
+			useUIStore.setState({ activeFocus: 'sidebar' });
 
-			render(
-				<MainPanel
-					{...defaultProps}
-					setActiveSessionId={setActiveSessionId}
-					setActiveFocus={setActiveFocus}
-				/>
-			);
+			render(<MainPanel {...defaultProps} setActiveSessionId={setActiveSessionId} />);
 
 			fireEvent.focus(screen.getByTestId('input-field'));
 
 			expect(setActiveSessionId).toHaveBeenCalledWith('session-1');
-			expect(setActiveFocus).toHaveBeenCalledWith('main');
+			expect(useUIStore.getState().activeFocus).toBe('main');
 		});
 
 		it('should hide input area in mobile landscape mode', () => {
@@ -1981,31 +1984,31 @@ describe('MainPanel', () => {
 
 	describe('Focus ring', () => {
 		it('should show focus ring when activeFocus is main', () => {
-			const { container } = render(<MainPanel {...defaultProps} activeFocus="main" />);
+			useUIStore.setState({ activeFocus: 'main' });
+			const { container } = render(<MainPanel {...defaultProps} />);
 
 			const mainPanel = container.querySelector('.ring-1');
 			expect(mainPanel).toBeInTheDocument();
 		});
 
 		it('should not show focus ring when activeFocus is not main', () => {
-			const { container } = render(<MainPanel {...defaultProps} activeFocus="sidebar" />);
+			useUIStore.setState({ activeFocus: 'sidebar' });
+			const { container } = render(<MainPanel {...defaultProps} />);
 
 			const mainPanel = container.querySelector('.ring-1');
 			expect(mainPanel).not.toBeInTheDocument();
 		});
 
 		it('should call setActiveFocus when main panel is clicked', () => {
-			const setActiveFocus = vi.fn();
+			useUIStore.setState({ activeFocus: 'sidebar' });
 
-			const { container } = render(
-				<MainPanel {...defaultProps} setActiveFocus={setActiveFocus} activeFocus="sidebar" />
-			);
+			const { container } = render(<MainPanel {...defaultProps} />);
 
 			// Click on the main panel area
 			const mainArea = container.querySelector('[style*="backgroundColor"]');
 			if (mainArea) {
 				fireEvent.click(mainArea);
-				expect(setActiveFocus).toHaveBeenCalledWith('main');
+				expect(useUIStore.getState().activeFocus).toBe('main');
 			}
 		});
 	});
@@ -2382,7 +2385,6 @@ describe('MainPanel', () => {
 		});
 
 		it('should handle clipboard.writeText failure gracefully', async () => {
-			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
 			const writeText = vi.fn().mockRejectedValue(new Error('Clipboard error'));
 			Object.assign(navigator, { clipboard: { writeText } });
 
@@ -2404,11 +2406,10 @@ describe('MainPanel', () => {
 
 			fireEvent.click(screen.getByText('ABC12345'));
 
-			await waitFor(() => {
-				expect(consoleError).toHaveBeenCalled();
-			});
-
-			consoleError.mockRestore();
+			// safeClipboardWrite swallows the error and returns false,
+			// so no copy notification should appear
+			await act(async () => {});
+			expect(screen.queryByText('Copied to Clipboard')).not.toBeInTheDocument();
 		});
 
 		it('should handle gitDiff with no content gracefully', async () => {

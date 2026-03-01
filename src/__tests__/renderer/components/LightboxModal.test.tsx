@@ -449,7 +449,9 @@ describe('LightboxModal', () => {
 			);
 
 			// Click copy button
-			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 			fireEvent.click(copyButton);
 
 			await waitFor(() => {
@@ -518,7 +520,9 @@ describe('LightboxModal', () => {
 			// Initially shows copy icon
 			expect(screen.getByTestId('copy-icon')).toBeInTheDocument();
 
-			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 			fireEvent.click(copyButton);
 
 			await waitFor(() => {
@@ -541,7 +545,9 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 
 			// Trigger copy and immediately resolve the promise chain
 			await act(async () => {
@@ -576,14 +582,15 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 			fireEvent.click(copyButton);
 
 			expect(onClose).not.toHaveBeenCalled();
 		});
 
 		it('handles copy error gracefully', async () => {
-			const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 			mockClipboardWrite.mockRejectedValue(new Error('Clipboard error'));
 
 			const onClose = vi.fn();
@@ -598,20 +605,16 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 			fireEvent.click(copyButton);
 
+			// safeClipboardWriteBlob swallows the error and returns false,
+			// so the copy-success indicator should NOT appear
 			await waitFor(() => {
-				expect(consoleSpy).toHaveBeenCalledWith(
-					'Failed to copy image to clipboard:',
-					expect.any(Error)
-				);
+				expect(screen.getByTestId('copy-icon')).toBeInTheDocument();
 			});
-
-			// Should still show copy icon (not check)
-			expect(screen.getByTestId('copy-icon')).toBeInTheDocument();
-
-			consoleSpy.mockRestore();
 		});
 	});
 
@@ -820,7 +823,9 @@ describe('LightboxModal', () => {
 				/>
 			);
 
-			const copyButton = screen.getByTitle(`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`);
+			const copyButton = screen.getByTitle(
+				`Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
+			);
 			expect(copyButton).toHaveClass('bg-white/10');
 			expect(copyButton).toHaveClass('hover:bg-white/20');
 			expect(copyButton).toHaveClass('rounded-full');

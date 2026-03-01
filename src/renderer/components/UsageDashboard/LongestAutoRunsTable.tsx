@@ -13,10 +13,11 @@
  * - Project (last path segment)
  */
 
-import { useState, useEffect, useMemo, useCallback } from 'react';
+import { memo, useState, useEffect, useMemo, useCallback } from 'react';
 import { Trophy } from 'lucide-react';
 import type { Theme } from '../../types';
 import type { StatsTimeRange } from '../../hooks/stats/useStats';
+import { captureException } from '../../utils/sentry';
 
 /**
  * Auto Run session data shape from the API
@@ -118,7 +119,10 @@ function formatTime(timestamp: number): string {
 	});
 }
 
-export function LongestAutoRunsTable({ timeRange, theme }: LongestAutoRunsTableProps) {
+export const LongestAutoRunsTable = memo(function LongestAutoRunsTable({
+	timeRange,
+	theme,
+}: LongestAutoRunsTableProps) {
 	const [sessions, setSessions] = useState<AutoRunSession[]>([]);
 	const [loading, setLoading] = useState(true);
 
@@ -128,7 +132,7 @@ export function LongestAutoRunsTable({ timeRange, theme }: LongestAutoRunsTableP
 			const autoRunSessions = await window.maestro.stats.getAutoRunSessions(timeRange);
 			setSessions(autoRunSessions);
 		} catch (err) {
-			console.error('Failed to fetch Auto Run sessions for table:', err);
+			captureException(err);
 		} finally {
 			setLoading(false);
 		}
@@ -220,8 +224,7 @@ export function LongestAutoRunsTable({ timeRange, theme }: LongestAutoRunsTableP
 									key={session.id}
 									className="transition-colors"
 									style={{
-										backgroundColor:
-											index % 2 === 0 ? 'transparent' : `${theme.colors.border}10`,
+										backgroundColor: index % 2 === 0 ? 'transparent' : `${theme.colors.border}10`,
 									}}
 									onMouseEnter={(e) => {
 										e.currentTarget.style.backgroundColor = `${theme.colors.accent}10`;
@@ -289,6 +292,6 @@ export function LongestAutoRunsTable({ timeRange, theme }: LongestAutoRunsTableP
 			</div>
 		</div>
 	);
-}
+});
 
 export default LongestAutoRunsTable;

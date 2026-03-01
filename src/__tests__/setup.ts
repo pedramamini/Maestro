@@ -87,10 +87,22 @@ vi.mock('lucide-react', () => {
 // so tests are deterministic regardless of where they run. Individual test files can override
 // this with their own vi.mock() if they need custom behavior.
 const SHORTCUT_KEY_MAP: Record<string, string> = {
-	Meta: 'Ctrl', Alt: 'Alt', Shift: 'Shift', Control: 'Ctrl', Ctrl: 'Ctrl',
-	ArrowUp: '↑', ArrowDown: '↓', ArrowLeft: '←', ArrowRight: '→',
-	Backspace: 'Backspace', Delete: 'Delete', Enter: 'Enter', Return: 'Enter',
-	Escape: 'Esc', Tab: 'Tab', Space: 'Space',
+	Meta: 'Ctrl',
+	Alt: 'Alt',
+	Shift: 'Shift',
+	Control: 'Ctrl',
+	Ctrl: 'Ctrl',
+	ArrowUp: '↑',
+	ArrowDown: '↓',
+	ArrowLeft: '←',
+	ArrowRight: '→',
+	Backspace: 'Backspace',
+	Delete: 'Delete',
+	Enter: 'Enter',
+	Return: 'Enter',
+	Escape: 'Esc',
+	Tab: 'Tab',
+	Space: 'Space',
 };
 const mockFormatKey = (key: string): string => {
 	if (SHORTCUT_KEY_MAP[key]) return SHORTCUT_KEY_MAP[key];
@@ -104,7 +116,7 @@ vi.mock('../renderer/utils/shortcutFormatter', () => ({
 		return keys.map(mockFormatKey).join(sep);
 	}),
 	formatMetaKey: vi.fn(() => 'Ctrl'),
-	formatEnterToSend: vi.fn((enterToSend: boolean) => enterToSend ? 'Enter' : 'Ctrl + Enter'),
+	formatEnterToSend: vi.fn((enterToSend: boolean) => (enterToSend ? 'Enter' : 'Ctrl + Enter')),
 	formatEnterToSendTooltip: vi.fn((enterToSend: boolean) =>
 		enterToSend ? 'Switch to Ctrl+Enter to send' : 'Switch to Enter to send'
 	),
@@ -216,6 +228,7 @@ const mockMaestro = {
 		onExit: vi.fn().mockReturnValue(() => {}),
 	},
 	git: {
+		branch: vi.fn().mockResolvedValue({ stdout: 'main' }),
 		status: vi.fn().mockResolvedValue({ files: [], branch: 'main', stdout: '' }),
 		diff: vi.fn().mockResolvedValue(''),
 		isRepo: vi.fn().mockResolvedValue(true),
@@ -233,6 +246,7 @@ const mockMaestro = {
 		commitCount: vi.fn().mockResolvedValue({ count: 0, error: null }),
 		show: vi.fn().mockResolvedValue({ stdout: '', stderr: '', exitCode: 0 }),
 		getRemoteUrl: vi.fn().mockResolvedValue(null),
+		scanWorktreeDirectory: vi.fn().mockResolvedValue({ gitSubdirs: [] }),
 		info: vi.fn().mockResolvedValue({
 			branch: 'main',
 			remote: '',
@@ -423,6 +437,7 @@ const mockMaestro = {
 	},
 	shell: {
 		openExternal: vi.fn().mockResolvedValue(undefined),
+		openPath: vi.fn().mockResolvedValue(undefined),
 		trashItem: vi.fn().mockResolvedValue(undefined),
 		showItemInFolder: vi.fn().mockResolvedValue(undefined),
 	},
@@ -519,6 +534,12 @@ const mockMaestro = {
 		cancelQuit: vi.fn(),
 		onSystemResume: vi.fn().mockReturnValue(() => {}),
 	},
+	wakatime: {
+		checkCli: vi.fn().mockResolvedValue({ available: false }),
+		validateApiKey: vi.fn().mockResolvedValue({ valid: false }),
+	},
+	// Synchronous platform string (replaces async os.getPlatform IPC)
+	platform: 'darwin',
 };
 
 // Only mock window.maestro if window exists (jsdom environment)

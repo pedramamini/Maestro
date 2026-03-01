@@ -32,10 +32,13 @@ import {
 	findNodeInTree,
 	countNodesInTree,
 } from '../utils/fileExplorer';
-import { getFileIcon } from '../utils/theme';
+import { getExplorerFileIcon, getExplorerFolderIcon } from '../utils/theme';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useClickOutside } from '../hooks/ui/useClickOutside';
+import { useContextMenuPosition } from '../hooks/ui/useContextMenuPosition';
+import { getRevealLabel } from '../utils/platformUtils';
+import { safeClipboardWrite } from '../utils/clipboard';
 import { Modal, ModalFooter } from './ui/Modal';
 import { FormInput } from './ui/FormInput';
 
@@ -417,6 +420,11 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		path: string;
 	} | null>(null);
 	const contextMenuRef = useRef<HTMLDivElement>(null);
+	const contextMenuPos = useContextMenuPosition(
+		contextMenuRef,
+		contextMenu?.x ?? 0,
+		contextMenu?.y ?? 0
+	);
 
 	// Rename modal state
 	const [renameModal, setRenameModal] = useState<{
@@ -605,7 +613,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 	const handleCopyPath = useCallback(() => {
 		if (contextMenu) {
 			const absolutePath = `${session.fullPath}/${contextMenu.path}`;
-			navigator.clipboard.writeText(absolutePath);
+			safeClipboardWrite(absolutePath);
 		}
 		setContextMenu(null);
 	}, [contextMenu, session.fullPath]);
@@ -613,7 +621,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 	const handleOpenInDefaultApp = useCallback(() => {
 		if (contextMenu) {
 			const absolutePath = `${session.fullPath}/${contextMenu.path}`;
-			window.maestro?.shell?.openExternal(`file://${absolutePath}`);
+			window.maestro?.shell?.openPath(absolutePath);
 		}
 		setContextMenu(null);
 	}, [contextMenu, session.fullPath]);
@@ -621,10 +629,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 	const handleOpenInExplorer = useCallback(() => {
 		if (contextMenu) {
 			const absolutePath = `${session.fullPath}/${contextMenu.path}`;
-			// Extract the directory path to reveal in file manager
-			const isFolder = contextMenu.node.type === 'folder';
-			const pathToOpen = isFolder ? absolutePath : absolutePath.split('/').slice(0, -1).join('/');
-			window.maestro?.shell?.openExternal(`file://${pathToOpen}`);
+			window.maestro?.shell?.showItemInFolder(absolutePath);
 		}
 		setContextMenu(null);
 	}, [contextMenu, session.fullPath]);
@@ -870,11 +875,28 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		const expandedSet = new Set(session.fileExplorerExpanded || []);
 		const isFiltering = fileTreeFilter.length > 0;
 		const result: FlattenedNode[] = [];
+		const seenPaths = new Set<string>();
 		let globalIndex = 0;
 
 		const flatten = (nodes: FileNode[], currentPath = '', depth = 0) => {
+			// Guard: deduplicate sibling nodes by name within the same parent
+			const seenNames = new Set<string>();
 			for (const node of nodes) {
+				if (seenNames.has(node.name)) {
+					console.warn('[FileExplorer] Duplicate sibling skipped:', currentPath, node.name);
+					continue;
+				}
+				seenNames.add(node.name);
+
 				const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+
+				// Guard: skip duplicate paths to prevent React key collisions
+				if (seenPaths.has(fullPath)) {
+					console.warn('[FileExplorer] Duplicate path skipped:', fullPath);
+					continue;
+				}
+				seenPaths.add(fullPath);
+
 				result.push({ node, path: fullPath, depth, globalIndex });
 				globalIndex++;
 
@@ -949,14 +971,14 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					style={{
 						height: `${virtualRow.size}px`,
 						transform: `translateY(${virtualRow.start}px)`,
-						paddingLeft: `${8 + depth * 16}px`,
+						paddingLeft: `${8 + (isFolder ? depth : Math.max(0, depth - 1)) * 16}px`,
 						color: change ? theme.colors.textMain : theme.colors.textDim,
 						borderLeftColor: isKeyboardSelected ? theme.colors.accent : 'transparent',
 						backgroundColor: isKeyboardSelected
 							? theme.colors.bgActivity
 							: isSelected
 								? 'rgba(255,255,255,0.1)'
-								: 'transparent',
+								: undefined,
 					}}
 					onMouseDown={(e) => {
 						// Prevent focus from leaving the filter input when filtering
@@ -983,18 +1005,19 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 					onContextMenu={(e) => handleContextMenu(e, node, fullPath, globalIndex)}
 				>
 					{indentGuides}
-					{isFolder &&
-						(isExpanded ? (
+					{isFolder ? (
+						isExpanded ? (
 							<ChevronDown className="w-3 h-3 flex-shrink-0" />
 						) : (
 							<ChevronRight className="w-3 h-3 flex-shrink-0" />
-						))}
+						)
+					) : (
+						<span className="w-3 h-3 flex-shrink-0" />
+					)}
 					<span className="flex-shrink-0">
-						{isFolder ? (
-							<Folder className="w-3.5 h-3.5" style={{ color: theme.colors.accent }} />
-						) : (
-							getFileIcon(change?.type, theme)
-						)}
+						{isFolder
+							? getExplorerFolderIcon(node.name, isExpanded, theme)
+							: getExplorerFileIcon(node.name, theme, change?.type)}
 					</span>
 					<span
 						className={`truncate min-w-0 flex-1 ${change ? 'font-medium' : ''}`}
@@ -1096,7 +1119,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 								: session.projectRoot
 						}
 						onDoubleClick={() => {
-							navigator.clipboard.writeText(session.projectRoot);
+							safeClipboardWrite(session.projectRoot);
 							onShowFlash?.('Path copied to clipboard');
 						}}
 					>
@@ -1384,9 +1407,9 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 							backgroundColor: theme.colors.bgSidebar,
 							borderColor: theme.colors.border,
 							minWidth: '180px',
-							// Position menu, adjusting if it would go off-screen
-							top: Math.min(contextMenu.y, window.innerHeight - 200),
-							left: Math.min(contextMenu.x, window.innerWidth - 200),
+							top: contextMenuPos.top,
+							left: contextMenuPos.left,
+							opacity: contextMenuPos.ready ? 1 : 0,
 						}}
 					>
 						<div className="p-1">
@@ -1444,14 +1467,14 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 								<span>Copy Path</span>
 							</button>
 
-							{/* Reveal in Finder option */}
+							{/* Reveal in Finder / Explorer option */}
 							<button
 								onClick={handleOpenInExplorer}
 								className="w-full flex items-center gap-2 px-2 py-1.5 rounded text-xs hover:bg-white/10 transition-colors"
 								style={{ color: theme.colors.textMain }}
 							>
 								<ExternalLink className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
-								<span>Reveal in Finder</span>
+								<span>{getRevealLabel(window.maestro.platform)}</span>
 							</button>
 
 							{/* Divider before destructive actions */}

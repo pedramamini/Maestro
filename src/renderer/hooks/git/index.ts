@@ -20,3 +20,10 @@ export type {
 	UseFileTreeManagementReturn,
 	RightPanelHandle,
 } from './useFileTreeManagement';
+
+// File explorer effects & keyboard navigation (Phase 2.6)
+export { useFileExplorerEffects } from './useFileExplorerEffects';
+export type {
+	UseFileExplorerEffectsDeps,
+	UseFileExplorerEffectsReturn,
+} from './useFileExplorerEffects';

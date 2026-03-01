@@ -24,6 +24,8 @@ import {
 	SYMPHONY_REGISTRY_URL,
 	REGISTRY_CACHE_TTL_MS,
 	ISSUES_CACHE_TTL_MS,
+	STARS_CACHE_TTL_MS,
+	ISSUE_COUNTS_CACHE_TTL_MS,
 	SYMPHONY_STATE_PATH,
 	SYMPHONY_CACHE_PATH,
 	SYMPHONY_REPOS_DIR,
@@ -44,6 +46,7 @@ import type {
 	ContributionStatus,
 	GetRegistryResponse,
 	GetIssuesResponse,
+	GetIssueCountsResponse,
 	StartContributionResponse,
 	CompleteContributionResponse,
 	IssueStatus,
@@ -412,6 +415,39 @@ async function fetchRegistry(): Promise<SymphonyRegistry> {
 }
 
 /**
+ * Fetch GitHub star counts for multiple repositories.
+ * Uses concurrent requests with a concurrency limit to stay within rate limits.
+ */
+async function fetchStarCounts(repoSlugs: string[]): Promise<Record<string, number>> {
+	const CONCURRENCY = 5;
+	const counts: Record<string, number> = {};
+
+	for (let i = 0; i < repoSlugs.length; i += CONCURRENCY) {
+		const batch = repoSlugs.slice(i, i + CONCURRENCY);
+		const results = await Promise.allSettled(
+			batch.map(async (slug) => {
+				const response = await fetch(`${GITHUB_API_BASE}/repos/${slug}`, {
+					headers: {
+						Accept: 'application/vnd.github.v3+json',
+						'User-Agent': 'Maestro-Symphony',
+					},
+				});
+				if (!response.ok) return { slug, stars: 0 };
+				const data = (await response.json()) as { stargazers_count?: number };
+				return { slug, stars: data.stargazers_count ?? 0 };
+			})
+		);
+		for (const result of results) {
+			if (result.status === 'fulfilled') {
+				counts[result.value.slug] = result.value.stars;
+			}
+		}
+	}
+
+	return counts;
+}
+
+/**
  * Fetch GitHub issues with runmaestro.ai label for a repository.
  */
 async function fetchIssues(repoSlug: string): Promise<SymphonyIssue[]> {
@@ -473,6 +509,54 @@ async function fetchIssues(repoSlug: string): Promise<SymphonyIssue[]> {
 			error
 		);
 	}
+}
+
+/**
+ * Fetch issue counts for all repos in a single GitHub Search API call.
+ * Uses the search/issues endpoint with multiple repo: qualifiers (OR'd together).
+ * Returns a map of slug -> open issue count with the runmaestro.ai label.
+ */
+async function fetchIssueCounts(repoSlugs: string[]): Promise<Record<string, number>> {
+	if (repoSlugs.length === 0) return {};
+
+	logger.info(`Fetching issue counts for ${repoSlugs.length} repos via Search API`, LOG_CONTEXT);
+
+	// Build query: label:runmaestro.ai state:open repo:A repo:B repo:C ...
+	const repoQualifiers = repoSlugs.map((s) => `repo:${s}`).join('+');
+	const query = `label:${encodeURIComponent(SYMPHONY_ISSUE_LABEL)}+state:open+${repoQualifiers}`;
+	const url = `${GITHUB_API_BASE}/search/issues?q=${query}&per_page=100`;
+
+	const response = await fetch(url, {
+		headers: {
+			Accept: 'application/vnd.github.v3+json',
+			'User-Agent': 'Maestro-Symphony',
+		},
+	});
+
+	if (!response.ok) {
+		throw new SymphonyError(`Search API failed: ${response.status}`, 'github_api');
+	}
+
+	const data = (await response.json()) as {
+		total_count: number;
+		items: Array<{ repository_url: string }>;
+	};
+
+	// Initialize all slugs to 0, then count from results
+	const counts: Record<string, number> = {};
+	for (const slug of repoSlugs) {
+		counts[slug] = 0;
+	}
+	for (const item of data.items) {
+		// repository_url looks like https://api.github.com/repos/RunMaestro/Maestro
+		const slug = item.repository_url.replace(`${GITHUB_API_BASE}/repos/`, '');
+		if (slug in counts) {
+			counts[slug]++;
+		}
+	}
+
+	logger.info(`Issue counts fetched: ${JSON.stringify(counts)}`, LOG_CONTEXT);
+	return counts;
 }
 
 /**
@@ -929,6 +1013,65 @@ export function registerSymphonyHandlers({
 	// ─────────────────────────────────────────────────────────────────────────
 
 	/**
+	 * Enrich registry repositories with star counts.
+	 * Uses a 24-hour cache; fetches fresh counts only when cache is expired.
+	 */
+	async function enrichWithStars(
+		registry: SymphonyRegistry,
+		cache: SymphonyCache | null,
+		forceRefresh: boolean
+	): Promise<SymphonyRegistry> {
+		const slugs = registry.repositories.filter((r) => r.isActive).map((r) => r.slug);
+		if (slugs.length === 0) return registry;
+
+		// Use cached star counts if valid
+		if (!forceRefresh && cache?.stars && isCacheValid(cache.stars.fetchedAt, STARS_CACHE_TTL_MS)) {
+			return {
+				...registry,
+				repositories: registry.repositories.map((r) => ({
+					...r,
+					stars: cache.stars!.data[r.slug],
+				})),
+			};
+		}
+
+		// Fetch fresh star counts (non-critical — fall back to stale cache or undefined)
+		try {
+			const counts = await fetchStarCounts(slugs);
+
+			// Persist to cache
+			const updatedCache: SymphonyCache = {
+				...cache,
+				issues: cache?.issues ?? {},
+				stars: { data: counts, fetchedAt: Date.now() },
+			};
+			await writeCache(app, updatedCache);
+
+			return {
+				...registry,
+				repositories: registry.repositories.map((r) => ({
+					...r,
+					stars: counts[r.slug],
+				})),
+			};
+		} catch (error) {
+			logger.warn('Failed to fetch star counts', LOG_CONTEXT, { error });
+
+			// Fall back to stale cache if available
+			if (cache?.stars) {
+				return {
+					...registry,
+					repositories: registry.repositories.map((r) => ({
+						...r,
+						stars: cache.stars!.data[r.slug],
+					})),
+				};
+			}
+			return registry;
+		}
+	}
+
+	/**
 	 * Get the symphony registry (with caching).
 	 */
 	ipcMain.handle(
@@ -944,8 +1087,9 @@ export function registerSymphonyHandlers({
 					cache?.registry &&
 					isCacheValid(cache.registry.fetchedAt, REGISTRY_CACHE_TTL_MS)
 				) {
+					const enriched = await enrichWithStars(cache.registry.data, cache, false);
 					return {
-						registry: cache.registry.data,
+						registry: enriched,
 						fromCache: true,
 						cacheAge: Date.now() - cache.registry.fetchedAt,
 					};
@@ -954,12 +1098,14 @@ export function registerSymphonyHandlers({
 				// Fetch fresh data
 				try {
 					const registry = await fetchRegistry();
+					const enriched = await enrichWithStars(registry, cache, !!forceRefresh);
 
-					// Update cache
+					// Update cache (enriched registry includes stars on repo objects,
+					// but the canonical star data lives in cache.stars)
 					const newCache: SymphonyCache = {
-						...cache,
+						...(await readCache(app)), // Re-read to get stars written by enrichWithStars
 						registry: {
-							data: registry,
+							data: registry, // Store unenriched registry (stars are in cache.stars)
 							fetchedAt: Date.now(),
 						},
 						issues: cache?.issues ?? {},
@@ -967,7 +1113,7 @@ export function registerSymphonyHandlers({
 					await writeCache(app, newCache);
 
 					return {
-						registry,
+						registry: enriched,
 						fromCache: false,
 					};
 				} catch (error) {
@@ -980,8 +1126,9 @@ export function registerSymphonyHandlers({
 							`Using expired cache as fallback (age: ${Math.round(cacheAge / 1000)}s)`,
 							LOG_CONTEXT
 						);
+						const enriched = await enrichWithStars(cache.registry.data, cache, false);
 						return {
-							registry: cache.registry.data,
+							registry: enriched,
 							fromCache: true,
 							cacheAge,
 						};
@@ -1060,6 +1207,73 @@ export function registerSymphonyHandlers({
 					}
 
 					// No cache available - re-throw to show error to user
+					throw error;
+				}
+			}
+		)
+	);
+
+	/**
+	 * Get issue counts for all active repos via GitHub Search API (single call).
+	 */
+	ipcMain.handle(
+		'symphony:getIssueCounts',
+		createIpcHandler(
+			handlerOpts('getIssueCounts'),
+			async (
+				repoSlugs: string[],
+				forceRefresh?: boolean
+			): Promise<Omit<GetIssueCountsResponse, 'success'>> => {
+				const cache = await readCache(app);
+
+				// Check cache
+				if (
+					!forceRefresh &&
+					cache?.issueCounts &&
+					isCacheValid(cache.issueCounts.fetchedAt, ISSUE_COUNTS_CACHE_TTL_MS)
+				) {
+					return {
+						counts: cache.issueCounts.data,
+						fromCache: true,
+						cacheAge: Date.now() - cache.issueCounts.fetchedAt,
+					};
+				}
+
+				// Fetch fresh via Search API
+				try {
+					const counts = await fetchIssueCounts(repoSlugs);
+
+					// Update cache
+					const newCache: SymphonyCache = {
+						...cache,
+						registry: cache?.registry,
+						issues: cache?.issues ?? {},
+						issueCounts: {
+							data: counts,
+							fetchedAt: Date.now(),
+						},
+					};
+					await writeCache(app, newCache);
+
+					return {
+						counts,
+						fromCache: false,
+					};
+				} catch (error) {
+					logger.warn('Failed to fetch issue counts from GitHub Search API', LOG_CONTEXT, {
+						error,
+					});
+
+					// Fallback to expired cache if available
+					if (cache?.issueCounts?.data) {
+						const cacheAge = Date.now() - cache.issueCounts.fetchedAt;
+						return {
+							counts: cache.issueCounts.data,
+							fromCache: true,
+							cacheAge,
+						};
+					}
+
 					throw error;
 				}
 			}
@@ -1264,7 +1478,9 @@ export function registerSymphonyHandlers({
 				const prTitle = `[WIP] Symphony: ${issueTitle} (#${issueNumber})`;
 				const prBody = `## Maestro Symphony Contribution
 
-Working on #${issueNumber} via [Maestro Symphony](https://runmaestro.ai).
+Closes #${issueNumber}
+
+Contributed via [Maestro Symphony](https://runmaestro.ai).
 
 **Status:** In Progress
 **Started:** ${new Date().toISOString()}
@@ -2410,7 +2626,9 @@ This PR will be updated automatically when the Auto Run completes.`;
 						const prTitle = `[WIP] Symphony: ${issueTitle} (#${issueNumber})`;
 						const prBody = `## Maestro Symphony Contribution
 
-Working on #${issueNumber} via [Maestro Symphony](https://runmaestro.ai).
+Closes #${issueNumber}
+
+Contributed via [Maestro Symphony](https://runmaestro.ai).
 
 **Status:** In Progress
 **Started:** ${new Date().toISOString()}
@@ -2425,9 +2643,7 @@ This PR will be updated automatically when the Auto Run completes.`;
 							draftPrUrl = prResult.prUrl;
 
 							// Update metadata with PR info
-							const metaContent = JSON.parse(
-								await fs.readFile(metadataPath, 'utf-8')
-							);
+							const metaContent = JSON.parse(await fs.readFile(metadataPath, 'utf-8'));
 							metaContent.prCreated = true;
 							metaContent.draftPrNumber = draftPrNumber;
 							metaContent.draftPrUrl = draftPrUrl;
@@ -2583,7 +2799,9 @@ This PR will be updated automatically when the Auto Run completes.`;
 				const prTitle = `[WIP] Symphony: ${issueTitle} (#${issueNumber})`;
 				const prBody = `## Maestro Symphony Contribution
 
-Working on #${issueNumber} via [Maestro Symphony](https://runmaestro.ai).
+Closes #${issueNumber}
+
+Contributed via [Maestro Symphony](https://runmaestro.ai).
 
 **Status:** In Progress
 **Started:** ${new Date().toISOString()}
@@ -2737,7 +2955,9 @@ This PR will be updated automatically when the Auto Run completes.`;
 
 				// Validate required fields
 				if (!repoSlug || !repoName || !issueNumber || !prNumber || !prUrl) {
-					return { error: 'Missing required fields: repoSlug, repoName, issueNumber, prNumber, prUrl' };
+					return {
+						error: 'Missing required fields: repoSlug, repoName, issueNumber, prNumber, prUrl',
+					};
 				}
 
 				const state = await readState(app);
@@ -2747,7 +2967,9 @@ This PR will be updated automatically when the Auto Run completes.`;
 					(c) => c.repoSlug === repoSlug && c.prNumber === prNumber
 				);
 				if (existingContribution) {
-					return { error: `PR #${prNumber} is already credited (contribution: ${existingContribution.id})` };
+					return {
+						error: `PR #${prNumber} is already credited (contribution: ${existingContribution.id})`,
+					};
 				}
 
 				const now = new Date().toISOString();

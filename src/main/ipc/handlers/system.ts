@@ -190,17 +190,44 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 	});
 
 	// Shell operations - open external URLs
+	const ALLOWED_PROTOCOLS = ['http:', 'https:', 'mailto:'];
 	ipcMain.handle('shell:openExternal', async (_event, url: string) => {
 		// Validate URL before opening - Fixes MAESTRO-1S
 		if (!url || typeof url !== 'string') {
 			throw new Error('Invalid URL: URL must be a non-empty string');
 		}
+		let parsed: URL;
 		try {
-			new URL(url);
+			parsed = new URL(url);
 		} catch {
 			throw new Error(`Invalid URL: ${url}`);
 		}
-		await shell.openExternal(url);
+		// Redirect file:// URLs to shell.openPath instead of rejecting — Fixes MAESTRO-9M
+		if (parsed.protocol === 'file:') {
+			const filePath = decodeURIComponent(parsed.pathname);
+			if (!fsSync.existsSync(filePath)) {
+				throw new Error(`Path does not exist: ${filePath}`);
+			}
+			const errorMessage = await shell.openPath(filePath);
+			if (errorMessage) {
+				throw new Error(errorMessage);
+			}
+			return;
+		}
+		if (!ALLOWED_PROTOCOLS.includes(parsed.protocol)) {
+			throw new Error(`Protocol not allowed: ${parsed.protocol}`);
+		}
+		try {
+			await shell.openExternal(url);
+		} catch (err) {
+			const message = err instanceof Error ? err.message : String(err);
+			if (message.includes('Launch Services') || message.includes('No application')) {
+				// Fixes MAESTRO-3Q: macOS has no handler for this URL scheme/file type.
+				logger.warn(`No application found to open "${url}"`, 'Shell', { error: message });
+				return;
+			}
+			throw err;
+		}
 	});
 
 	// Shell operations - move item to system trash
@@ -227,6 +254,21 @@ export function registerSystemHandlers(deps: SystemHandlerDependencies): void {
 			throw new Error(`Path does not exist: ${absolutePath}`);
 		}
 		shell.showItemInFolder(absolutePath);
+	});
+
+	// Shell operations - open file/folder in default application
+	ipcMain.handle('shell:openPath', async (_event, itemPath: string) => {
+		if (!itemPath || typeof itemPath !== 'string') {
+			throw new Error('Invalid path: path must be a non-empty string');
+		}
+		const absolutePath = path.resolve(itemPath);
+		if (!fsSync.existsSync(absolutePath)) {
+			throw new Error(`Path does not exist: ${absolutePath}`);
+		}
+		const errorMessage = await shell.openPath(absolutePath);
+		if (errorMessage) {
+			throw new Error(errorMessage);
+		}
 	});
 
 	// ============ Tunnel Handlers (Cloudflare) ============

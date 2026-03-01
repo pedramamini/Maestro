@@ -36,8 +36,6 @@ export interface GitFileStatusContextValue {
 	getFileCount: (sessionId: string) => number;
 	/** Check if a session has uncommitted changes */
 	hasChanges: (sessionId: string) => boolean;
-	/** Whether data is currently being fetched */
-	isLoading: boolean;
 }
 
 /**
@@ -143,9 +141,8 @@ export function GitStatusProvider({
 		() => ({
 			getFileCount: (sessionId: string) => gitStatusMap.get(sessionId)?.fileCount ?? 0,
 			hasChanges: (sessionId: string) => (gitStatusMap.get(sessionId)?.fileCount ?? 0) > 0,
-			isLoading,
 		}),
-		[gitStatusMap, isLoading]
+		[gitStatusMap]
 	);
 
 	// ============================================================================

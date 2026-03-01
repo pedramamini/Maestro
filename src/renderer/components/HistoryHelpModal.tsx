@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import {
 	History,
 	Play,
@@ -19,7 +20,10 @@ interface HistoryHelpModalProps {
 	onClose: () => void;
 }
 
-export function HistoryHelpModal({ theme, onClose }: HistoryHelpModalProps) {
+export const HistoryHelpModal = memo(function HistoryHelpModal({
+	theme,
+	onClose,
+}: HistoryHelpModalProps) {
 	return (
 		<Modal
 			theme={theme}
@@ -295,12 +299,12 @@ export function HistoryHelpModal({ theme, onClose }: HistoryHelpModalProps) {
 						</p>
 						<p>
 							<strong style={{ color: theme.colors.warning }}>Note:</strong> Cross-session memory is
-							not available for SSH remote sessions, as the history file is stored locally and cannot
-							be accessed by agents running on remote hosts.
+							not available for SSH remote sessions, as the history file is stored locally and
+							cannot be accessed by agents running on remote hosts.
 						</p>
 					</div>
 				</section>
 			</div>
 		</Modal>
 	);
-}
+});

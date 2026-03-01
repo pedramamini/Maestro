@@ -47,6 +47,8 @@ export interface MarketplaceModalProps {
 	onImportComplete: (folderName: string) => void;
 }
 
+const LOADING_TILE_IDS = ['tile-1', 'tile-2', 'tile-3', 'tile-4', 'tile-5', 'tile-6'];
+
 interface PlaybookTileProps {
 	playbook: MarketplacePlaybook;
 	theme: Theme;
@@ -413,20 +415,15 @@ function PlaybookDetailView({
 							Author
 						</h4>
 						{playbook.authorLink ? (
-							<a
-								href={playbook.authorLink}
-								target="_blank"
-								rel="noopener noreferrer"
-								className="text-sm hover:underline inline-flex items-center gap-1"
+							<button
+								onClick={() => window.maestro.shell.openExternal(playbook.authorLink!)}
+								tabIndex={0}
+								className="text-sm hover:underline inline-flex items-center gap-1 outline-none"
 								style={{ color: theme.colors.accent }}
-								onClick={(e) => {
-									e.preventDefault();
-									window.maestro.shell.openExternal(playbook.authorLink!);
-								}}
 							>
 								{playbook.author}
 								<ExternalLink className="w-3 h-3" />
-							</a>
+							</button>
 						) : (
 							<p className="text-sm" style={{ color: theme.colors.textMain }}>
 								{playbook.author}
@@ -649,11 +646,16 @@ function PlaybookDetailView({
 				<div className="flex items-center gap-3">
 					{/* Target folder input */}
 					<div className="flex-1">
-						<label className="block text-xs mb-1" style={{ color: theme.colors.textDim }}>
+						<label
+							htmlFor="marketplace-target-folder"
+							className="block text-xs mb-1"
+							style={{ color: theme.colors.textDim }}
+						>
 							Import to folder (relative to Auto Run folder or absolute path)
 						</label>
 						<div className="flex items-center gap-2">
 							<input
+								id="marketplace-target-folder"
 								type="text"
 								value={targetFolderName}
 								onChange={(e) => onTargetFolderChange(e.target.value)}
@@ -775,10 +777,21 @@ export function MarketplaceModal({
 	const [showHelp, setShowHelp] = useState(false);
 	const helpButtonRef = useRef<HTMLButtonElement>(null);
 
-	// Reset selection when filtered playbooks change
-	useEffect(() => {
-		setSelectedTileIndex(0);
-	}, [filteredPlaybooks.length, selectedCategory, searchQuery]);
+	const handleCategoryChange = useCallback(
+		(category: string) => {
+			setSelectedCategory(category);
+			setSelectedTileIndex(0);
+		},
+		[setSelectedCategory]
+	);
+
+	const handleSearchChange = useCallback(
+		(value: string) => {
+			setSearchQuery(value);
+			setSelectedTileIndex(0);
+		},
+		[setSearchQuery]
+	);
 
 	// Calculate grid columns based on container width (default to 3)
 	const gridColumns = 3;
@@ -977,11 +990,11 @@ export function MarketplaceModal({
 						if (e.key === '[') {
 							const currentIndex = categories.indexOf(selectedCategory);
 							const newIndex = Math.max(0, currentIndex - 1);
-							setSelectedCategory(categories[newIndex]);
+							handleCategoryChange(categories[newIndex]);
 						} else {
 							const currentIndex = categories.indexOf(selectedCategory);
 							const newIndex = Math.min(categories.length - 1, currentIndex + 1);
-							setSelectedCategory(categories[newIndex]);
+							handleCategoryChange(categories[newIndex]);
 						}
 					}
 				}
@@ -996,11 +1009,11 @@ export function MarketplaceModal({
 		isOpen,
 		categories,
 		selectedCategory,
-		setSelectedCategory,
 		showDetailView,
 		selectedPlaybook,
 		selectedDocFilename,
 		handleSelectDocument,
+		handleCategoryChange,
 	]);
 
 	// Arrow key navigation for tiles (list view only)
@@ -1249,7 +1262,7 @@ export function MarketplaceModal({
 								return (
 									<button
 										key={category}
-										onClick={() => setSelectedCategory(category)}
+										onClick={() => handleCategoryChange(category)}
 										className={`px-3 py-1.5 rounded text-sm whitespace-nowrap transition-colors ${
 											selectedCategory === category ? 'font-semibold' : ''
 										}`}
@@ -1283,7 +1296,7 @@ export function MarketplaceModal({
 									ref={searchInputRef}
 									type="text"
 									value={searchQuery}
-									onChange={(e) => setSearchQuery(e.target.value)}
+									onChange={(e) => handleSearchChange(e.target.value)}
 									onKeyDown={(e) => {
 										if (e.key === 'Escape') {
 											e.preventDefault();
@@ -1313,8 +1326,8 @@ export function MarketplaceModal({
 							{isLoading ? (
 								// Loading skeleton tiles
 								<div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-									{[...Array(6)].map((_, i) => (
-										<PlaybookTileSkeleton key={i} theme={theme} />
+									{LOADING_TILE_IDS.map((tileId) => (
+										<PlaybookTileSkeleton key={tileId} theme={theme} />
 									))}
 								</div>
 							) : error ? (

@@ -408,5 +408,117 @@ describe('filesystem handlers', () => {
 
 			expect(result).toBeNull();
 		});
+
+		it('should return null for non-image content-type', async () => {
+			const mockArrayBuffer = new ArrayBuffer(8);
+			const mockResponse = {
+				ok: true,
+				arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+				headers: { get: () => 'text/html' },
+			};
+			global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+			const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+			const result = await handler!({}, 'https://example.com/page.html');
+
+			expect(result).toBeNull();
+		});
+
+		describe('SSRF protection', () => {
+			it('should block file:// protocol', async () => {
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+				const result = await handler!({}, 'file:///etc/passwd');
+
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block ftp:// protocol', async () => {
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+				const result = await handler!({}, 'ftp://internal-server/data');
+
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block localhost requests', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://localhost:8080/secret');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block 127.0.0.1 requests', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://127.0.0.1:9222/json');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block AWS metadata endpoint', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://169.254.169.254/latest/meta-data/');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block private RFC1918 ranges (10.x.x.x)', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://10.0.0.1/internal');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block private RFC1918 ranges (172.16.x.x)', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://172.16.0.1/internal');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block private RFC1918 ranges (192.168.x.x)', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://192.168.1.1/internal');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should block 0.0.0.0', async () => {
+				global.fetch = vi.fn();
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+
+				const result = await handler!({}, 'http://0.0.0.0:3000/');
+				expect(result).toBeNull();
+				expect(global.fetch).not.toHaveBeenCalled();
+			});
+
+			it('should allow legitimate external HTTPS image URLs', async () => {
+				const mockArrayBuffer = new ArrayBuffer(8);
+				const mockResponse = {
+					ok: true,
+					arrayBuffer: () => Promise.resolve(mockArrayBuffer),
+					headers: { get: () => 'image/png' },
+				};
+				global.fetch = vi.fn().mockResolvedValue(mockResponse);
+
+				const handler = registeredHandlers.get('fs:fetchImageAsBase64');
+				const result = await handler!({}, 'https://cdn.example.com/image.png');
+
+				expect(global.fetch).toHaveBeenCalledWith('https://cdn.example.com/image.png');
+				expect(result).toMatch(/^data:image\/png;base64,/);
+			});
+		});
 	});
 });

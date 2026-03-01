@@ -9,7 +9,7 @@ import { getContextColor } from '../utils/theme';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { formatTokensCompact, formatRelativeTime, formatCost } from '../utils/formatters';
 import { calculateContextDisplay } from '../utils/contextUsage';
-import { getColorBlindExtensionColor } from '../constants/colorblindPalettes';
+import { getExtensionColor } from '../utils/extensionColors';
 
 /** Named session from the store (not currently open) */
 interface NamedSession {
@@ -111,49 +111,6 @@ function getUuidPill(agentSessionId: string | undefined | null): string | null {
  * When colorBlindMode is enabled, uses Wong's colorblind-safe palette.
  * (Synchronized with TabBar.tsx for consistency)
  */
-function getExtensionColor(
-	extension: string,
-	theme: Theme,
-	colorBlindMode?: boolean
-): { bg: string; text: string } {
-	const isLightTheme = theme.mode === 'light';
-
-	// Use colorblind-safe colors when enabled
-	if (colorBlindMode) {
-		const colorBlindColors = getColorBlindExtensionColor(extension, isLightTheme);
-		if (colorBlindColors) {
-			return colorBlindColors;
-		}
-		// Fall through to default for unknown extensions
-		return { bg: theme.colors.border, text: theme.colors.textDim };
-	}
-
-	// Standard color scheme (dark theme only for backward compatibility)
-	const ext = extension.toLowerCase();
-	// TypeScript/JavaScript - blue tones
-	if (['.ts', '.tsx', '.js', '.jsx', '.mjs', '.cjs'].includes(ext)) {
-		return { bg: 'rgba(59, 130, 246, 0.3)', text: 'rgba(147, 197, 253, 0.9)' };
-	}
-	// Markdown/Docs - green tones
-	if (['.md', '.mdx', '.txt', '.rst'].includes(ext)) {
-		return { bg: 'rgba(34, 197, 94, 0.3)', text: 'rgba(134, 239, 172, 0.9)' };
-	}
-	// JSON/Config - yellow tones
-	if (['.json', '.yaml', '.yml', '.toml', '.ini', '.env'].includes(ext)) {
-		return { bg: 'rgba(234, 179, 8, 0.3)', text: 'rgba(253, 224, 71, 0.9)' };
-	}
-	// CSS/Styles - purple tones
-	if (['.css', '.scss', '.sass', '.less', '.styl'].includes(ext)) {
-		return { bg: 'rgba(168, 85, 247, 0.3)', text: 'rgba(216, 180, 254, 0.9)' };
-	}
-	// HTML/Templates - orange tones
-	if (['.html', '.htm', '.xml', '.svg'].includes(ext)) {
-		return { bg: 'rgba(249, 115, 22, 0.3)', text: 'rgba(253, 186, 116, 0.9)' };
-	}
-	// Default - use theme's dim colors
-	return { bg: theme.colors.border, text: theme.colors.textDim };
-}
-
 /**
  * Circular progress gauge component
  */
@@ -211,6 +168,8 @@ function ContextGauge({
 
 type ViewMode = 'open' | 'all-named' | 'starred';
 
+const EMPTY_FILE_TABS: FilePreviewTab[] = [];
+
 /**
  * Tab Switcher Modal - Quick navigation between AI and file tabs with fuzzy search.
  * Shows context window consumption, cost, custom name, and UUID pill for AI tabs.
@@ -220,7 +179,7 @@ type ViewMode = 'open' | 'all-named' | 'starred';
 export function TabSwitcherModal({
 	theme,
 	tabs,
-	fileTabs = [],
+	fileTabs = EMPTY_FILE_TABS,
 	activeTabId,
 	activeFileTabId,
 	projectRoot,
@@ -242,6 +201,18 @@ export function TabSwitcherModal({
 	const scrollContainerRef = useRef<HTMLDivElement>(null);
 	const layerIdRef = useRef<string>();
 	const onCloseRef = useRef(onClose);
+
+	const handleSearchChange = useCallback((value: string) => {
+		setSearch(value);
+		setSelectedIndex(0);
+		setFirstVisibleIndex(0);
+	}, []);
+
+	const handleViewModeChange = useCallback((mode: ViewMode) => {
+		setViewMode(mode);
+		setSelectedIndex(0);
+		setFirstVisibleIndex(0);
+	}, []);
 
 	// Keep onClose ref up to date
 	useEffect(() => {
@@ -530,13 +501,9 @@ export function TabSwitcherModal({
 		selectedItemRef.current?.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
 	}, [selectedIndex]);
 
-	// Reset selection and scroll tracking when search or mode changes
-	useEffect(() => {
+	const toggleViewMode = useCallback((reverse = false) => {
 		setSelectedIndex(0);
 		setFirstVisibleIndex(0);
-	}, [search, viewMode, setSelectedIndex]);
-
-	const toggleViewMode = useCallback((reverse = false) => {
 		setViewMode((prev) => {
 			if (reverse) {
 				if (prev === 'open') return 'starred';
@@ -595,7 +562,7 @@ export function TabSwitcherModal({
 						}
 						style={{ color: theme.colors.textMain }}
 						value={search}
-						onChange={(e) => setSearch(e.target.value)}
+						onChange={(e) => handleSearchChange(e.target.value)}
 						onKeyDown={handleKeyDown}
 					/>
 					<div className="flex items-center gap-2">
@@ -622,7 +589,7 @@ export function TabSwitcherModal({
 					style={{ borderColor: theme.colors.border }}
 				>
 					<button
-						onClick={() => setViewMode('open')}
+						onClick={() => handleViewModeChange('open')}
 						className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
 						style={{
 							backgroundColor: viewMode === 'open' ? theme.colors.accent : theme.colors.bgMain,
@@ -632,7 +599,7 @@ export function TabSwitcherModal({
 						Open Tabs ({tabs.length + fileTabs.length})
 					</button>
 					<button
-						onClick={() => setViewMode('all-named')}
+						onClick={() => handleViewModeChange('all-named')}
 						className="px-3 py-1 rounded-full text-xs font-medium transition-colors"
 						style={{
 							backgroundColor: viewMode === 'all-named' ? theme.colors.accent : theme.colors.bgMain,
@@ -653,7 +620,7 @@ export function TabSwitcherModal({
 						)
 					</button>
 					<button
-						onClick={() => setViewMode('starred')}
+						onClick={() => handleViewModeChange('starred')}
 						className="px-3 py-1 rounded-full text-xs font-medium transition-colors flex items-center gap-1"
 						style={{
 							backgroundColor: viewMode === 'starred' ? theme.colors.accent : theme.colors.bgMain,
@@ -829,10 +796,7 @@ export function TabSwitcherModal({
 												style={{ backgroundColor: theme.colors.success }}
 											/>
 										) : (
-											<FileText
-												className="w-3.5 h-3.5"
-												style={{ color: theme.colors.textDim }}
-											/>
+											<FileText className="w-3.5 h-3.5" style={{ color: theme.colors.textDim }} />
 										)}
 									</div>
 
@@ -844,12 +808,8 @@ export function TabSwitcherModal({
 											<span
 												className="text-[9px] px-1 py-0.5 rounded font-semibold uppercase flex-shrink-0"
 												style={{
-													backgroundColor: isSelected
-														? 'rgba(255,255,255,0.2)'
-														: extColors.bg,
-													color: isSelected
-														? theme.colors.accentForeground
-														: extColors.text,
+													backgroundColor: isSelected ? 'rgba(255,255,255,0.2)' : extColors.bg,
+													color: isSelected ? theme.colors.accentForeground : extColors.text,
 												}}
 											>
 												{tab.extension.replace(/^\./, '').toUpperCase()}

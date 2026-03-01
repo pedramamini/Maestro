@@ -13,7 +13,7 @@ import { StdoutHandler } from '../handlers/StdoutHandler';
 import { StderrHandler } from '../handlers/StderrHandler';
 import { ExitHandler } from '../handlers/ExitHandler';
 import { buildChildProcessEnv } from '../utils/envBuilder';
-import { saveImageToTempFile } from '../utils/imageUtils';
+import { saveImageToTempFile, buildImagePromptPrefix } from '../utils/imageUtils';
 import { buildStreamJsonMessage } from '../utils/streamJsonBuilder';
 import { escapeArgsForShell, isPowerShellShell } from '../utils/shellEscape';
 
@@ -63,6 +63,7 @@ export class ChildProcessSpawner {
 			promptArgs,
 			contextWindow,
 			customEnvVars,
+			shellEnvVars,
 			noPromptSeparator,
 			sendPromptViaStdin,
 			sendPromptViaStdinRaw,
@@ -92,6 +93,8 @@ export class ChildProcessSpawner {
 		// Track whether the prompt was added to CLI args (used later to decide stdin behavior)
 		let finalArgs: string[];
 		let tempImageFiles: string[] = [];
+		// effectivePrompt may be modified (e.g., image path prefix prepended for resume mode)
+		let effectivePrompt = prompt;
 		let promptAddedToArgs = false;
 
 		if (hasImages && prompt && capabilities.supportsStreamJsonInput) {
@@ -112,27 +115,58 @@ export class ChildProcessSpawner {
 				const tempPath = saveImageToTempFile(images[i], i);
 				if (tempPath) {
 					tempImageFiles.push(tempPath);
+				}
+			}
+
+			const isResumeWithPromptEmbed =
+				capabilities.imageResumeMode === 'prompt-embed' && args.some((a) => a === 'resume');
+
+			if (isResumeWithPromptEmbed) {
+				// Resume mode: embed file paths in prompt text, don't use -i flag
+				const imagePrefix = buildImagePromptPrefix(tempImageFiles);
+				effectivePrompt = imagePrefix + prompt;
+				if (!promptViaStdin) {
+					if (promptArgs) {
+						finalArgs = [...finalArgs, ...promptArgs(effectivePrompt)];
+					} else if (noPromptSeparator) {
+						finalArgs = [...finalArgs, effectivePrompt];
+					} else {
+						finalArgs = [...finalArgs, '--', effectivePrompt];
+					}
+					promptAddedToArgs = true;
+				}
+				logger.debug(
+					'[ProcessManager] Resume mode: embedded image paths in prompt',
+					'ProcessManager',
+					{
+						sessionId,
+						imageCount: images.length,
+						tempFiles: tempImageFiles,
+						promptViaStdin,
+					}
+				);
+			} else {
+				// Initial spawn: use -i flag as before
+				for (const tempPath of tempImageFiles) {
 					finalArgs = [...finalArgs, ...imageArgs(tempPath)];
 				}
-			}
-			// Add the prompt using promptArgs if available, otherwise as positional arg
-			// SKIP this when prompt is sent via stdin to avoid shell escaping issues
-			if (!promptViaStdin) {
-				if (promptArgs) {
-					finalArgs = [...finalArgs, ...promptArgs(prompt)];
-				} else if (noPromptSeparator) {
-					finalArgs = [...finalArgs, prompt];
-				} else {
-					finalArgs = [...finalArgs, '--', prompt];
+				if (!promptViaStdin) {
+					if (promptArgs) {
+						finalArgs = [...finalArgs, ...promptArgs(prompt)];
+					} else if (noPromptSeparator) {
+						finalArgs = [...finalArgs, prompt];
+					} else {
+						finalArgs = [...finalArgs, '--', prompt];
+					}
+					promptAddedToArgs = true;
 				}
-				promptAddedToArgs = true;
+				logger.debug('[ProcessManager] Using file-based image args', 'ProcessManager', {
+					sessionId,
+					imageCount: images.length,
+					tempFiles: tempImageFiles,
+					promptViaStdin,
+				});
 			}
-			logger.debug('[ProcessManager] Using file-based image args', 'ProcessManager', {
-				sessionId,
-				imageCount: images.length,
-				tempFiles: tempImageFiles,
-				promptViaStdin,
-			});
 		} else if (prompt && !promptViaStdin) {
 			// Regular batch mode - prompt as CLI arg
 			// SKIP this when prompt is sent via stdin to avoid shell escaping issues
@@ -175,7 +209,19 @@ export class ChildProcessSpawner {
 		try {
 			// Build environment
 			const isResuming = finalArgs.includes('--resume') || finalArgs.includes('--session');
-			const env = buildChildProcessEnv(customEnvVars, isResuming);
+			const env = buildChildProcessEnv(customEnvVars, isResuming, shellEnvVars);
+
+			// Log environment variable application for troubleshooting
+			if (shellEnvVars && Object.keys(shellEnvVars).length > 0) {
+				const globalVarKeys = Object.keys(shellEnvVars);
+				logger.debug('[ProcessManager] Applying global environment variables', 'ProcessManager', {
+					sessionId: config.sessionId,
+					globalVarCount: globalVarKeys.length,
+					globalVarKeys: globalVarKeys.slice(0, 10), // First 10 keys for visibility
+					hasCustomVars: !!(customEnvVars && Object.keys(customEnvVars).length > 0),
+					customVarCount: customEnvVars ? Object.keys(customEnvVars).length : 0,
+				});
+			}
 
 			logger.debug('[ProcessManager] About to spawn child process', 'ProcessManager', {
 				command,
@@ -383,18 +429,6 @@ export class ChildProcessSpawner {
 				});
 				childProcess.stdout.on('data', (data: Buffer | string) => {
 					const output = data.toString();
-
-					// Debug: Log all stdout data for group chat sessions
-					if (sessionId.includes('group-chat-')) {
-						console.log(
-							`[GroupChat:Debug:ProcessManager] STDOUT received for session ${sessionId}`
-						);
-						console.log(`[GroupChat:Debug:ProcessManager] Raw output length: ${output.length}`);
-						console.log(
-							`[GroupChat:Debug:ProcessManager] Raw output preview: "${output.substring(0, 500)}${output.length > 500 ? '...' : ''}"`
-						);
-					}
-
 					this.stdoutHandler.handleData(sessionId, output);
 				});
 			} else {
@@ -417,18 +451,6 @@ export class ChildProcessSpawner {
 				});
 				childProcess.stderr.on('data', (data: Buffer | string) => {
 					const stderrData = data.toString();
-
-					// Debug: Log all stderr data for group chat sessions
-					if (sessionId.includes('group-chat-')) {
-						console.log(
-							`[GroupChat:Debug:ProcessManager] STDERR received for session ${sessionId}`
-						);
-						console.log(`[GroupChat:Debug:ProcessManager] Stderr length: ${stderrData.length}`);
-						console.log(
-							`[GroupChat:Debug:ProcessManager] Stderr preview: "${stderrData.substring(0, 500)}${stderrData.length > 500 ? '...' : ''}"`
-						);
-					}
-
 					this.stderrHandler.handleData(sessionId, stderrData);
 				});
 			}
@@ -456,23 +478,23 @@ export class ChildProcessSpawner {
 				});
 				childProcess.stdin?.write(config.sshStdinScript);
 				childProcess.stdin?.end();
-			} else if (config.sendPromptViaStdinRaw && prompt) {
+			} else if (config.sendPromptViaStdinRaw && effectivePrompt) {
 				// Raw stdin mode: send prompt as literal text (non-stream-json agents on Windows)
 				// Note: When sending via stdin, PowerShell treats the input as literal text,
 				// NOT as code to parse. No escaping is needed for special characters.
 				logger.debug('[ProcessManager] Sending raw prompt via stdin', 'ProcessManager', {
 					sessionId,
-					promptLength: prompt.length,
+					promptLength: effectivePrompt.length,
 				});
-				childProcess.stdin?.write(prompt);
+				childProcess.stdin?.write(effectivePrompt);
 				childProcess.stdin?.end();
-			} else if (isStreamJsonMode && prompt && !promptAddedToArgs) {
+			} else if (isStreamJsonMode && effectivePrompt && !promptAddedToArgs) {
 				// Stream-json mode: send the message via stdin as JSON.
 				// Only write when prompt was NOT already added to CLI args.
 				// Without this guard, agents like Codex (whose --json flag sets isStreamJsonMode
 				// for output parsing) would receive the prompt both as a CLI arg and as stream-json
 				// stdin, causing unexpected behavior.
-				const streamJsonMessage = buildStreamJsonMessage(prompt, images || []);
+				const streamJsonMessage = buildStreamJsonMessage(effectivePrompt, images || []);
 				logger.debug('[ProcessManager] Sending stream-json message via stdin', 'ProcessManager', {
 					sessionId,
 					messageLength: streamJsonMessage.length,

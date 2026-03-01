@@ -170,6 +170,36 @@ describe('buildAgentArgs', () => {
 		expect(result).toEqual(['--print']);
 	});
 
+	it('deduplicates Codex bypass flag when batch and yolo args both include it', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'],
+			yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--json'],
+			prompt: 'fix bug',
+			yoloMode: true,
+		});
+		expect(result).toEqual([
+			'--json',
+			'--dangerously-bypass-approvals-and-sandbox',
+			'--skip-git-repo-check',
+		]);
+	});
+
+	it('does not deduplicate positional args when deduplicating flags', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox'],
+			yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['input-a', 'input-a'],
+			prompt: 'fix bug',
+			yoloMode: true,
+		});
+		expect(result).toEqual(['input-a', 'input-a', '--dangerously-bypass-approvals-and-sandbox']);
+	});
+
 	// -- resumeArgs --
 	it('adds resumeArgs when agentSessionId provided', () => {
 		const agent = makeAgent({
@@ -372,12 +402,7 @@ describe('applyAgentConfigOverrides', () => {
 		const result = applyAgentConfigOverrides(agent, [], {
 			sessionCustomArgs: '--flag "arg with spaces" \'another arg\' plain',
 		});
-		expect(result.args).toEqual([
-			'--flag',
-			'arg with spaces',
-			'another arg',
-			'plain',
-		]);
+		expect(result.args).toEqual(['--flag', 'arg with spaces', 'another arg', 'plain']);
 		expect(result.customArgsSource).toBe('session');
 	});
 
@@ -519,11 +544,7 @@ describe('getContextWindowValue', () => {
 			],
 		});
 
-		const result = getContextWindowValue(
-			agent,
-			{ contextWindow: 50000 },
-			200000
-		);
+		const result = getContextWindowValue(agent, { contextWindow: 50000 }, 200000);
 		expect(result).toBe(200000);
 	});
 
@@ -608,11 +629,7 @@ describe('getContextWindowValue', () => {
 			],
 		});
 
-		const result = getContextWindowValue(
-			agent,
-			{ contextWindow: 50000 },
-			undefined
-		);
+		const result = getContextWindowValue(agent, { contextWindow: 50000 }, undefined);
 		expect(result).toBe(50000);
 	});
 });

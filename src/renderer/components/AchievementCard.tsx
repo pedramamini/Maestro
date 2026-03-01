@@ -26,6 +26,7 @@ import {
 import { MaestroSilhouette } from './MaestroSilhouette';
 import { formatTokensCompact } from '../utils/formatters';
 import maestroWandIcon from '../assets/icon-wand.png';
+import { safeClipboardWriteBlob } from '../utils/clipboard';
 
 /**
  * Circular progress ring with 11 segments that fill as badges are unlocked
@@ -929,15 +930,19 @@ export function AchievementCard({
 	const copyToClipboard = useCallback(async () => {
 		try {
 			const canvas = await generateShareImage();
-			canvas.toBlob(async (blob) => {
-				if (blob) {
-					await navigator.clipboard.write([new ClipboardItem({ 'image/png': blob })]);
+			const blob = await new Promise<Blob | null>((resolve) => {
+				canvas.toBlob((b) => resolve(b), 'image/png');
+			});
+			if (blob) {
+				const ok = await safeClipboardWriteBlob([new ClipboardItem({ 'image/png': blob })]);
+				if (ok) {
 					setCopySuccess(true);
 					setTimeout(() => setCopySuccess(false), 2000);
 				}
-			}, 'image/png');
+			}
 		} catch (error) {
-			console.error('Failed to copy to clipboard:', error);
+			// Canvas/image generation errors — not clipboard
+			console.error('Failed to generate share image:', error);
 		}
 	}, [generateShareImage]);
 
@@ -991,9 +996,9 @@ export function AchievementCard({
 							}}
 						>
 							<button
-								onClick={() => {
-									copyToClipboard();
-									setShareMenuOpen(false);
+								onClick={async () => {
+									await copyToClipboard();
+									setTimeout(() => setShareMenuOpen(false), 1000);
 								}}
 								className="w-full flex items-center gap-2 px-3 py-2 rounded text-sm whitespace-nowrap hover:bg-white/10 transition-colors"
 							>

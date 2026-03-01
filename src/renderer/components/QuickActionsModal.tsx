@@ -1,12 +1,13 @@
-import React, { useState, useEffect, useRef, useCallback } from 'react';
+import React, { memo, useState, useEffect, useRef, useCallback } from 'react';
 import { Search } from 'lucide-react';
 import type { Session, Group, Theme, Shortcut, RightPanelTab, SettingsTab } from '../types';
 import type { GroupChat } from '../../shared/group-chat-types';
 import { useLayerStack } from '../contexts/LayerStackContext';
-import { useToast } from '../contexts/ToastContext';
+import { notifyToast } from '../stores/notificationStore';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { gitService } from '../services/git';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { safeClipboardWrite } from '../utils/clipboard';
 import type { WizardStep } from './Wizard/WizardContext';
 import { useListNavigation } from '../hooks';
 import { useUIStore } from '../stores/uiStore';
@@ -117,9 +118,12 @@ interface QuickActionsModalProps {
 	onOpenSymphony?: () => void;
 	// Director's Notes
 	onOpenDirectorNotes?: () => void;
+	// Auto-scroll
+	autoScrollAiMode?: boolean;
+	setAutoScrollAiMode?: (value: boolean) => void;
 }
 
-export function QuickActionsModal(props: QuickActionsModalProps) {
+export const QuickActionsModal = memo(function QuickActionsModal(props: QuickActionsModalProps) {
 	const {
 		theme,
 		sessions,
@@ -201,6 +205,8 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 		onOpenLastDocumentGraph,
 		onOpenSymphony,
 		onOpenDirectorNotes,
+		autoScrollAiMode,
+		setAutoScrollAiMode,
 	} = props;
 
 	// UI store actions for search commands (avoid threading more props through 3-layer chain)
@@ -222,7 +228,6 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 	const modalRef = useRef<HTMLDivElement>(null);
 
 	const { registerLayer, unregisterLayer, updateLayerHandler } = useLayerStack();
-	const { addToast } = useToast();
 	const activeSession = sessions.find((s) => s.id === activeSessionId);
 
 	// Register layer on mount (handler will be updated by separate effect)
@@ -642,6 +647,15 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 			},
 		},
 		{
+			id: 'configureEnvVars',
+			label: 'Configure Global Environment Variables',
+			action: () => {
+				setSettingsModalOpen(true);
+				setSettingsTab('general');
+				setQuickActionOpen(false);
+			},
+		},
+		{
 			id: 'shortcuts',
 			label: 'View Shortcuts',
 			shortcut: shortcuts.help,
@@ -800,7 +814,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 								if (browserUrl) {
 									await window.maestro.shell.openExternal(browserUrl);
 								} else {
-									addToast({
+									notifyToast({
 										type: 'error',
 										title: 'No Remote URL',
 										message: 'Could not find a remote URL for this repository',
@@ -808,7 +822,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 								}
 							} catch (error) {
 								console.error('Failed to open repository in browser:', error);
-								addToast({
+								notifyToast({
 									type: 'error',
 									title: 'Error',
 									message:
@@ -915,18 +929,22 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 					setDebugPackageModalOpen(true);
 				} else {
 					// Fallback to direct API call if modal not available
-					addToast({ type: 'info', title: 'Debug Package', message: 'Creating debug package...' });
+					notifyToast({
+						type: 'info',
+						title: 'Debug Package',
+						message: 'Creating debug package...',
+					});
 					window.maestro.debug
 						.createPackage()
 						.then((result) => {
 							if (result.success && result.path) {
-								addToast({
+								notifyToast({
 									type: 'success',
 									title: 'Debug Package Created',
 									message: `Saved to ${result.path}`,
 								});
 							} else if (result.error !== 'Cancelled by user') {
-								addToast({
+								notifyToast({
 									type: 'error',
 									title: 'Debug Package Failed',
 									message: result.error || 'Unknown error',
@@ -934,7 +952,7 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 							}
 						})
 						.catch((error) => {
-							addToast({
+							notifyToast({
 								type: 'error',
 								title: 'Debug Package Failed',
 								message: error instanceof Error ? error.message : 'Unknown error',
@@ -1012,6 +1030,22 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 						subtext: 'View unified history and AI synopsis across all sessions',
 						action: () => {
 							onOpenDirectorNotes();
+							setQuickActionOpen(false);
+						},
+					},
+				]
+			: []),
+		// Auto-scroll toggle
+		...(setAutoScrollAiMode
+			? [
+					{
+						id: 'toggleAutoScroll',
+						label: autoScrollAiMode
+							? 'Disable Auto-Scroll AI Output'
+							: 'Enable Auto-Scroll AI Output',
+						shortcut: shortcuts.toggleAutoScroll,
+						action: () => {
+							setAutoScrollAiMode(!autoScrollAiMode);
 							setQuickActionOpen(false);
 						},
 					},
@@ -1287,15 +1321,19 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 				try {
 					const installationId = await window.maestro.leaderboard.getInstallationId();
 					if (installationId) {
-						await navigator.clipboard.writeText(installationId);
-						addToast({ type: 'success', title: 'Install GUID Copied', message: installationId });
+						await safeClipboardWrite(installationId);
+						notifyToast({ type: 'success', title: 'Install GUID Copied', message: installationId });
 						console.log('[Debug] Installation GUID copied to clipboard:', installationId);
 					} else {
-						addToast({ type: 'error', title: 'Error', message: 'No installation GUID found' });
+						notifyToast({ type: 'error', title: 'Error', message: 'No installation GUID found' });
 						console.warn('[Debug] No installation GUID found');
 					}
 				} catch (err) {
-					addToast({ type: 'error', title: 'Error', message: 'Failed to copy installation GUID' });
+					notifyToast({
+						type: 'error',
+						title: 'Error',
+						message: 'Failed to copy installation GUID',
+					});
 					console.error('[Debug] Failed to copy installation GUID:', err);
 				}
 				setQuickActionOpen(false);
@@ -1526,4 +1564,4 @@ export function QuickActionsModal(props: QuickActionsModalProps) {
 			</div>
 		</div>
 	);
-}
+});

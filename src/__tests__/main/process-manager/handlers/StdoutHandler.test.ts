@@ -384,6 +384,67 @@ describe('StdoutHandler', () => {
 		});
 	});
 
+	describe('codex multi-message turn handling', () => {
+		it('should emit only the final Codex result at turn completion', () => {
+			const parser = {
+				agentId: 'codex',
+				parseJsonLine: vi.fn((line: string) => {
+					const parsed = JSON.parse(line);
+					if (parsed.type === 'agent') {
+						return { type: 'result', text: parsed.text };
+					}
+					if (parsed.type === 'done') {
+						return {
+							type: 'usage',
+							usage: {
+								inputTokens: 100,
+								outputTokens: 50,
+								cacheReadTokens: 0,
+								cacheCreationTokens: 0,
+								contextWindow: 400000,
+							},
+						};
+					}
+					return { type: 'system' };
+				}),
+				extractUsage: vi.fn((event: any) => event.usage || null),
+				extractSessionId: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				isResultMessage: vi.fn((event: any) => event.type === 'result' && !!event.text),
+				detectErrorFromLine: vi.fn(() => null),
+			};
+
+			const { handler, bufferManager, sessionId, proc } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'codex',
+				outputParser: parser as any,
+			});
+
+			sendJsonLine(handler, sessionId, {
+				type: 'agent',
+				text: "I'm checking the project directory now.",
+			});
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+			expect(proc.resultEmitted).toBe(false);
+
+			sendJsonLine(handler, sessionId, {
+				type: 'agent',
+				text: '{"confidence":55,"ready":false,"message":"README.md"}',
+			});
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+			expect(proc.resultEmitted).toBe(false);
+
+			sendJsonLine(handler, sessionId, { type: 'done' });
+
+			expect(proc.resultEmitted).toBe(true);
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledTimes(1);
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(
+				sessionId,
+				'{"confidence":55,"ready":false,"message":"README.md"}'
+			);
+		});
+	});
+
 	// ── normalizeUsageToDelta (tested via outputParser path) ───────────────
 
 	describe('normalizeUsageToDelta (via outputParser stream-JSON path)', () => {
@@ -395,15 +456,17 @@ describe('StdoutHandler', () => {
 		 * via the 'usage' event emitter.
 		 */
 
-		function createOutputParserMock(usageReturn: {
-			inputTokens: number;
-			outputTokens: number;
-			cacheReadTokens?: number;
-			cacheCreationTokens?: number;
-			costUsd?: number;
-			contextWindow?: number;
-			reasoningTokens?: number;
-		} | null) {
+		function createOutputParserMock(
+			usageReturn: {
+				inputTokens: number;
+				outputTokens: number;
+				cacheReadTokens?: number;
+				cacheCreationTokens?: number;
+				costUsd?: number;
+				contextWindow?: number;
+				reasoningTokens?: number;
+			} | null
+		) {
 			return {
 				agentId: 'claude-code',
 				parseJsonLine: vi.fn((line: string) => {
@@ -514,10 +577,10 @@ describe('StdoutHandler', () => {
 
 			expect(usageSpy).toHaveBeenCalledTimes(2);
 			const delta = usageSpy.mock.calls[1][1];
-			expect(delta.inputTokens).toBe(800);  // 1800 - 1000
-			expect(delta.outputTokens).toBe(400);  // 900 - 500
-			expect(delta.cacheReadInputTokens).toBe(150);  // 350 - 200
-			expect(delta.cacheCreationInputTokens).toBe(80);  // 180 - 100
+			expect(delta.inputTokens).toBe(800); // 1800 - 1000
+			expect(delta.outputTokens).toBe(400); // 900 - 500
+			expect(delta.cacheReadInputTokens).toBe(150); // 350 - 200
+			expect(delta.cacheCreationInputTokens).toBe(80); // 180 - 100
 
 			// Cost and contextWindow should still be passed through from the raw stats
 			expect(delta.totalCostUsd).toBe(0.09);
@@ -696,15 +759,15 @@ describe('StdoutHandler', () => {
 
 			// Turn 2: delta from turn 1
 			sendJsonLine(handler, sessionId, { type: 'message', text: 'turn 2' });
-			expect(usageSpy.mock.calls[1][1].inputTokens).toBe(700);   // 1200 - 500
-			expect(usageSpy.mock.calls[1][1].outputTokens).toBe(400);  // 600 - 200
+			expect(usageSpy.mock.calls[1][1].inputTokens).toBe(700); // 1200 - 500
+			expect(usageSpy.mock.calls[1][1].outputTokens).toBe(400); // 600 - 200
 
 			// Turn 3: delta from turn 2
 			sendJsonLine(handler, sessionId, { type: 'message', text: 'turn 3' });
-			expect(usageSpy.mock.calls[2][1].inputTokens).toBe(800);   // 2000 - 1200
-			expect(usageSpy.mock.calls[2][1].outputTokens).toBe(400);  // 1000 - 600
-			expect(usageSpy.mock.calls[2][1].cacheReadInputTokens).toBe(200);  // 500 - 300
-			expect(usageSpy.mock.calls[2][1].cacheCreationInputTokens).toBe(80);  // 200 - 120
+			expect(usageSpy.mock.calls[2][1].inputTokens).toBe(800); // 2000 - 1200
+			expect(usageSpy.mock.calls[2][1].outputTokens).toBe(400); // 1000 - 600
+			expect(usageSpy.mock.calls[2][1].cacheReadInputTokens).toBe(200); // 500 - 300
+			expect(usageSpy.mock.calls[2][1].cacheCreationInputTokens).toBe(80); // 200 - 120
 
 			expect(proc.usageIsCumulative).toBe(true);
 		});
@@ -801,9 +864,9 @@ describe('StdoutHandler', () => {
 
 			expect(usageSpy).toHaveBeenCalledTimes(2);
 			const delta = usageSpy.mock.calls[1][1];
-			expect(delta.inputTokens).toBe(500);       // 1000 - 500
-			expect(delta.outputTokens).toBe(200);       // 400 - 200
-			expect(delta.reasoningTokens).toBe(150);    // 250 - 100
+			expect(delta.inputTokens).toBe(500); // 1000 - 500
+			expect(delta.outputTokens).toBe(200); // 400 - 200
+			expect(delta.reasoningTokens).toBe(150); // 250 - 100
 		});
 
 		it('should detect decrease in reasoningTokens as non-monotonic', () => {
@@ -945,8 +1008,8 @@ describe('StdoutHandler', () => {
 
 			expect(usageSpy).toHaveBeenCalledTimes(2);
 			const delta = usageSpy.mock.calls[1][1];
-			expect(delta.inputTokens).toBe(700);   // 1200 - 500
-			expect(delta.outputTokens).toBe(400);   // 600 - 200
+			expect(delta.inputTokens).toBe(700); // 1200 - 500
+			expect(delta.outputTokens).toBe(400); // 600 - 200
 
 			expect(proc.usageIsCumulative).toBe(true);
 		});
@@ -1105,10 +1168,7 @@ describe('StdoutHandler', () => {
 			});
 
 			handler.handleData(sessionId, 'This is not JSON\n');
-			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(
-				sessionId,
-				'This is not JSON'
-			);
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'This is not JSON');
 		});
 
 		it('should append to stdoutBuffer for each processed line in stream JSON mode', () => {

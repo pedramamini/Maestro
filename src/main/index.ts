@@ -1,4 +1,4 @@
-import { app, BrowserWindow, powerMonitor } from 'electron';
+import { app, BrowserWindow, Menu, powerMonitor } from 'electron';
 import path from 'path';
 import os from 'os';
 import crypto from 'crypto';
@@ -52,6 +52,7 @@ import {
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
+	registerWakatimeHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -110,6 +111,8 @@ import {
 } from './app-lifecycle';
 // Phase 3 refactoring - process listeners
 import { setupProcessListeners as setupProcessListenersModule } from './process-listeners';
+import { setupWakaTimeListener } from './process-listeners/wakatime-listener';
+import { WakaTimeManager } from './wakatime-manager';
 
 // ============================================================================
 // Data Directory Configuration (MUST happen before any Store initialization)
@@ -146,7 +149,8 @@ if (isDevelopment && !DEMO_MODE && !process.env.USE_PROD_DATA) {
 const { syncPath, bootstrapStore } = initializeStores({ productionDataPath });
 
 // Get early settings before Sentry init (for crash reporting and GPU acceleration)
-const { crashReportingEnabled, disableGpuAcceleration } = getEarlySettings(syncPath);
+const { crashReportingEnabled, disableGpuAcceleration, useNativeTitleBar, autoHideMenuBar } =
+	getEarlySettings(syncPath);
 
 // Disable GPU hardware acceleration if user has opted out or in WSL environment
 // Must be called before app.ready event
@@ -165,6 +169,21 @@ if (!installationId) {
 	store.set('installationId', installationId);
 	logger.info('Generated new installation ID', 'Startup', { installationId });
 }
+
+// Initialize WakaTime heartbeat manager
+const wakatimeManager = new WakaTimeManager(store);
+
+// Auto-install WakaTime CLI on startup if enabled
+if (store.get('wakatimeEnabled', false)) {
+	wakatimeManager.ensureCliInstalled();
+}
+
+// Auto-install WakaTime CLI when user enables the feature
+store.onDidChange('wakatimeEnabled', (newValue) => {
+	if (newValue === true) {
+		wakatimeManager.ensureCliInstalled();
+	}
+});
 
 // Initialize Sentry for crash reporting (dynamic import to avoid module-load-time errors)
 // Only enable in production - skip during development to avoid noise from hot-reload artifacts
@@ -243,6 +262,8 @@ const windowManager = createWindowManager({
 	preloadPath: path.join(__dirname, 'preload.js'),
 	rendererPath: path.join(__dirname, '../renderer/index.html'),
 	devServerUrl: devServerUrl,
+	useNativeTitleBar,
+	autoHideMenuBar,
 });
 
 // Create web server factory with dependency injection (Phase 2 refactoring)
@@ -349,6 +370,25 @@ app.whenReady().then(async () => {
 	// Set up process event listeners
 	logger.debug('Setting up process event listeners', 'Startup');
 	setupProcessListeners();
+
+	// Set custom application menu to prevent macOS from injecting native
+	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
+	// menu items into the default Window menu. Without this, those keyboard
+	// events are intercepted at the NSMenu level and never reach the renderer.
+	if (process.platform === 'darwin') {
+		const template: Electron.MenuItemConstructorOptions[] = [
+			{ role: 'appMenu' },
+			{ role: 'editMenu' },
+			{
+				label: 'Window',
+				submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }],
+			},
+		];
+		Menu.setApplicationMenu(Menu.buildFromTemplate(template));
+	} else {
+		// On Windows/Linux, hide the menu bar entirely (Maestro uses its own UI)
+		Menu.setApplicationMenu(null);
+	}
 
 	// Create main window
 	logger.info('Creating main window', 'Startup');
@@ -639,6 +679,9 @@ function setupIpcHandlers() {
 		agentConfigsStore,
 		settingsStore: store,
 	});
+
+	// Register WakaTime handlers (CLI check, API key validation)
+	registerWakatimeHandlers(wakatimeManager);
 }
 
 // Handle process output streaming (set up after initialization)
@@ -693,5 +736,8 @@ function setupProcessListeners() {
 			},
 			logger,
 		});
+
+		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
+		setupWakaTimeListener(processManager, wakatimeManager, store);
 	}
 }

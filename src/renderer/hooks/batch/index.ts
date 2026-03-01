@@ -71,6 +71,11 @@ export type {
 
 // Main batch processor hook
 export { useBatchProcessor } from './useBatchProcessor';
+export type { BatchCompleteInfo, PRResultInfo } from './useBatchProcessor';
+
+// Batch handler orchestration (Phase 2I)
+export { useBatchHandlers } from './useBatchHandlers';
+export type { UseBatchHandlersDeps, UseBatchHandlersReturn } from './useBatchHandlers';
 
 // Auto Run event handlers
 export { useAutoRunHandlers } from './useAutoRunHandlers';
@@ -128,6 +133,14 @@ export type {
 	InlineWizardState,
 	UseInlineWizardReturn,
 } from './useInlineWizard';
+
+// Auto Run achievements tracking (progress intervals, peak stats)
+export { useAutoRunAchievements } from './useAutoRunAchievements';
+export type { UseAutoRunAchievementsDeps } from './useAutoRunAchievements';
+
+// Auto Run document loader (list, tree, task counts, file watching)
+export { useAutoRunDocumentLoader } from './useAutoRunDocumentLoader';
+export type { UseAutoRunDocumentLoaderReturn } from './useAutoRunDocumentLoader';
 
 // Re-export ExistingDocument type from existingDocsDetector for convenience
 export type { ExistingDocument } from '../../utils/existingDocsDetector';

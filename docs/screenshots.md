@@ -7,11 +7,13 @@ icon: palette
 Maestro ships with 18 carefully crafted themes across three categories, plus a Custom theme builder. Screenshots below show each theme in action.
 
 ## Available Themes
+
 For a screenshot example of every option, see [THEMES.md](https://github.com/RunMaestro/Maestro/blob/main/THEMES.md) on GitHub. You can also flip through the available themes at [RunMaestro.ai](https://runmaestro.ai).
 
 ![Themes](./screenshots/themes.png)
 
 ### Dark Themes
+
 - **Dracula** — Classic purple-accented dark theme
 - **Monokai** — Vibrant syntax highlighting on dark background
 - **Nord** — Cool, bluish Arctic-inspired palette
@@ -20,6 +22,7 @@ For a screenshot example of every option, see [THEMES.md](https://github.com/Run
 - **Gruvbox Dark** — Retro groove with warm earth tones
 
 ### Light Themes
+
 - **GitHub** — GitHub's clean light mode
 - **Solarized** — Precision colors for readability
 - **One Light** — Atom's light theme with magenta accents
@@ -28,13 +31,16 @@ For a screenshot example of every option, see [THEMES.md](https://github.com/Run
 - **Ayu Light** — Bright, modern light theme
 
 ### Vibe Themes
+
 Custom themes with unique personality:
+
 - **Pedurple** — Deep purple aesthetic (shown in most screenshots)
 - **Maestro's Choice** — Golden accents on midnight blue
 - **Dre Synth** — Cyberpunk cyan and magenta
 - **InQuest** — Minimal black with crimson accents
 
 ### Custom Theme
+
 Build your own theme using the Custom Theme Builder with import/export support.
 
 ## Changing Themes

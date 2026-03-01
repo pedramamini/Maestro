@@ -215,6 +215,58 @@ describe('CodexOutputParser', () => {
 				expect(event?.type).toBe('error');
 				expect(event?.text).toBe('Connection failed');
 			});
+
+			it('should parse error messages with object error field', () => {
+				const line = JSON.stringify({
+					type: 'error',
+					error: { message: 'Model not found', type: 'invalid_request_error' },
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('Model not found');
+			});
+		});
+
+		describe('turn.failed events', () => {
+			it('should parse turn.failed with nested error message', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+					error: {
+						message:
+							'stream disconnected before completion: The model gpt-5.3-codex does not exist or you do not have access to it.',
+					},
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toContain('gpt-5.3-codex does not exist');
+			});
+
+			it('should parse turn.failed with string error', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+					error: 'API connection lost',
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('API connection lost');
+			});
+
+			it('should parse turn.failed with no error details', () => {
+				const line = JSON.stringify({
+					type: 'turn.failed',
+				});
+
+				const event = parser.parseJsonLine(line);
+				expect(event).not.toBeNull();
+				expect(event?.type).toBe('error');
+				expect(event?.text).toBe('Turn failed');
+			});
 		});
 
 		it('should handle invalid JSON as text', () => {
@@ -404,6 +456,77 @@ describe('CodexOutputParser', () => {
 		});
 	});
 
+	describe('tool name carryover', () => {
+		it('should carry tool name from tool_call to subsequent tool_result', () => {
+			const p = new CodexOutputParser();
+			// First: tool_call with tool name
+			const callLine = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_call', tool: 'shell', args: { command: ['ls'] } },
+			});
+			p.parseJsonLine(callLine);
+
+			// Then: tool_result without tool name
+			const resultLine = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: 'file1.txt\nfile2.txt' },
+			});
+			const event = p.parseJsonLine(resultLine);
+			expect(event?.toolName).toBe('shell');
+			expect(event?.toolState?.status).toBe('completed');
+		});
+
+		it('should reset lastToolName after tool_result consumption', () => {
+			const p = new CodexOutputParser();
+			// tool_call → tool_result (consumes name) → another tool_result (no name)
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_call', tool: 'shell', args: {} },
+				})
+			);
+			p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'ok' },
+				})
+			);
+			const orphan = p.parseJsonLine(
+				JSON.stringify({
+					type: 'item.completed',
+					item: { type: 'tool_result', output: 'orphan' },
+				})
+			);
+			expect(orphan?.toolName).toBeUndefined();
+		});
+	});
+
+	describe('tool output truncation', () => {
+		it('should truncate tool output exceeding 10000 chars', () => {
+			const p = new CodexOutputParser();
+			const longOutput = 'x'.repeat(15000);
+			const line = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: longOutput },
+			});
+			const event = p.parseJsonLine(line);
+			expect(event?.toolState?.output).toContain('... [output truncated, 15000 chars total]');
+			// The truncated output should start with 10000 'x' chars
+			expect(event?.toolState?.output?.startsWith('x'.repeat(10000))).toBe(true);
+		});
+
+		it('should not truncate tool output within limit', () => {
+			const p = new CodexOutputParser();
+			const shortOutput = 'x'.repeat(5000);
+			const line = JSON.stringify({
+				type: 'item.completed',
+				item: { type: 'tool_result', output: shortOutput },
+			});
+			const event = p.parseJsonLine(line);
+			expect(event?.toolState?.output).toBe(shortOutput);
+		});
+	});
+
 	describe('detectErrorFromLine', () => {
 		it('should return null for empty lines', () => {
 			expect(parser.detectErrorFromLine('')).toBeNull();
@@ -432,6 +555,33 @@ describe('CodexOutputParser', () => {
 			expect(error?.type).toBe('token_exhaustion');
 		});
 
+		it('should detect errors from turn.failed JSON with object error', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: {
+					message:
+						'stream disconnected before completion: The model gpt-5.3-codex does not exist or you do not have access to it.',
+				},
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.type).toBe('unknown');
+			expect(error?.agentId).toBe('codex');
+			expect(error?.recoverable).toBe(true);
+			expect(error?.parsedJson).toBeDefined();
+		});
+
+		it('should detect errors from turn.failed JSON with string error', () => {
+			const line = JSON.stringify({
+				type: 'turn.failed',
+				error: 'rate limit exceeded',
+			});
+			const error = parser.detectErrorFromLine(line);
+			expect(error).not.toBeNull();
+			expect(error?.type).toBe('rate_limited');
+			expect(error?.agentId).toBe('codex');
+		});
+
 		it('should NOT detect errors from plain text (only JSON)', () => {
 			// Plain text errors should come through stderr or exit codes, not stdout
 			expect(parser.detectErrorFromLine('invalid api key')).toBeNull();
@@ -441,6 +591,12 @@ describe('CodexOutputParser', () => {
 
 		it('should return null for non-error lines', () => {
 			expect(parser.detectErrorFromLine('normal output')).toBeNull();
+		});
+
+		it('should include parsedJson on matched pattern errors', () => {
+			const line = JSON.stringify({ type: 'error', error: 'rate limit exceeded' });
+			const error = parser.detectErrorFromLine(line);
+			expect(error?.parsedJson).toBeDefined();
 		});
 	});
 

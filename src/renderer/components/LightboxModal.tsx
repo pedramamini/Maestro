@@ -5,6 +5,7 @@ import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { ConfirmModal } from './ConfirmModal';
 import type { Theme } from '../types';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { safeClipboardWriteBlob } from '../utils/clipboard';
 
 interface LightboxModalProps {
 	image: string;
@@ -41,15 +42,18 @@ export function LightboxModal({
 			const blob = await response.blob();
 
 			// Write to clipboard
-			await navigator.clipboard.write([
+			const ok = await safeClipboardWriteBlob([
 				new ClipboardItem({
 					[blob.type]: blob,
 				}),
 			]);
 
-			setCopied(true);
-			setTimeout(() => setCopied(false), 2000);
+			if (ok) {
+				setCopied(true);
+				setTimeout(() => setCopied(false), 2000);
+			}
 		} catch (err) {
+			// Fetch/blob conversion errors — not clipboard
 			console.error('Failed to copy image to clipboard:', err);
 		}
 	};
@@ -194,7 +198,9 @@ export function LightboxModal({
 			)}
 			<img
 				src={image}
+				alt="Expanded image preview"
 				className="max-w-[90%] max-h-[90%] rounded shadow-2xl"
+				onMouseDown={(e) => e.stopPropagation()}
 				onClick={(e) => e.stopPropagation()}
 			/>
 

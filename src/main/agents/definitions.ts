@@ -96,6 +96,7 @@ export interface AgentConfig {
 	promptArgs?: (prompt: string) => string[]; // Function to build prompt args (e.g., ['-p', prompt] for OpenCode)
 	noPromptSeparator?: boolean; // If true, don't add '--' before the prompt in batch mode (OpenCode doesn't support it)
 	defaultEnvVars?: Record<string, string>; // Default environment variables for this agent (merged with user customEnvVars)
+	readOnlyEnvOverrides?: Record<string, string>; // Env var overrides applied in read-only mode (replaces keys from defaultEnvVars)
 }
 
 /**
@@ -156,15 +157,30 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'], // Full access mode
 		workingDirArgs: (dir: string) => ['-C', dir], // Set working directory
 		imageArgs: (imagePath: string) => ['-i', imagePath], // Image attachment: codex exec -i /path/to/image.png
+		modelArgs: (modelId: string) => ['-m', modelId], // Model selection: codex exec -m gpt-5.3-codex
 		// Agent-specific configuration options shown in UI
 		configOptions: [
+			{
+				key: 'model',
+				type: 'text',
+				label: 'Model',
+				description:
+					'Model override (e.g., gpt-5.3-codex, o3). Leave empty to use the default from ~/.codex/config.toml.',
+				default: '', // Empty = use Codex's default model from config.toml
+				argBuilder: (value: string) => {
+					if (value && value.trim()) {
+						return ['-m', value.trim()];
+					}
+					return [];
+				},
+			},
 			{
 				key: 'contextWindow',
 				type: 'number',
 				label: 'Context Window Size',
 				description:
-					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2), 128000 (GPT-4o).',
-				default: 400000, // Default for GPT-5.2 models
+					'Maximum context window size in tokens. Required for context usage display. Common values: 400000 (GPT-5.2/5.3), 128000 (GPT-4o).',
+				default: 400000, // Default for GPT-5.2+ models
 			},
 		],
 	},
@@ -208,6 +224,11 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		defaultEnvVars: {
 			OPENCODE_CONFIG_CONTENT:
 				'{"permission":{"*":"allow","external_directory":"allow","question":"deny"},"tools":{"question":false}}',
+		},
+		// In read-only mode, strip blanket permission grants so the plan agent can't auto-approve file writes.
+		// Keep question tool disabled to prevent stdin hangs in batch mode.
+		readOnlyEnvOverrides: {
+			OPENCODE_CONFIG_CONTENT: '{"permission":{"question":"deny"},"tools":{"question":false}}',
 		},
 		// Agent-specific configuration options shown in UI
 		configOptions: [

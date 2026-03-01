@@ -1146,7 +1146,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 			{hasExistingAgents && (
 				<div className="flex justify-center">
 					<div
-						className="flex items-start gap-2.5 px-4 py-3 rounded-lg max-w-lg text-xs"
+						className="flex items-start gap-2.5 px-4 py-3 rounded-lg max-w-3xl w-full text-xs"
 						style={{
 							backgroundColor: theme.colors.accent + '15',
 							border: `1px solid ${theme.colors.accent}30`,

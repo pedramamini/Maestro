@@ -7,18 +7,13 @@
  */
 import { memo, useState, useEffect } from 'react';
 import { GitBranch } from 'lucide-react';
-import type { Session, Theme, AITab, BatchRunState } from '../types';
+import type { Session, Theme, AITab, BatchRunState, ThinkingItem } from '../types';
 import { formatTokensCompact } from '../utils/formatters';
 
-// Helper to get the write-mode (busy) tab from a session
-function getWriteModeTab(session: Session): AITab | undefined {
-	return session.aiTabs?.find((tab) => tab.state === 'busy');
-}
-
 interface ThinkingStatusPillProps {
-	/** Pre-filtered array of sessions that are currently thinking (state === 'busy' && busySource === 'ai').
+	/** Pre-filtered flat list of (session, tab) pairs — one entry per busy tab across all agents.
 	 * PERF: Caller should memoize this to avoid O(n) filter on every render. */
-	thinkingSessions: Session[];
+	thinkingItems: ThinkingItem[];
 	theme: Theme;
 	onSessionClick?: (sessionId: string, tabId?: string) => void;
 	namedSessions?: Record<string, string>; // Claude session ID -> custom name
@@ -70,14 +65,15 @@ const ElapsedTimeDisplay = memo(
 
 ElapsedTimeDisplay.displayName = 'ElapsedTimeDisplay';
 
-// Helper to get display name for a session (used in thinking dropdown)
+// Helper to get display name for a thinking item (used in pill and dropdown)
 // Priority: 1. namedSessions lookup, 2. tab name, 3. UUID octet
-function getSessionDisplayName(session: Session, namedSessions?: Record<string, string>): string {
-	// Get the write-mode (busy) tab for this session
-	const writeModeTab = getWriteModeTab(session);
-
+function getItemDisplayName(
+	session: Session,
+	tab: AITab | null,
+	namedSessions?: Record<string, string>
+): string {
 	// Use tab's agentSessionId if available, fallback to session's (legacy)
-	const agentSessionId = writeModeTab?.agentSessionId || session.agentSessionId;
+	const agentSessionId = tab?.agentSessionId || session.agentSessionId;
 
 	// Priority 1: Named session from namedSessions lookup
 	if (agentSessionId) {
@@ -86,8 +82,8 @@ function getSessionDisplayName(session: Session, namedSessions?: Record<string, 
 	}
 
 	// Priority 2: Tab name if available
-	if (writeModeTab?.name) {
-		return writeModeTab.name;
+	if (tab?.name) {
+		return tab.name;
 	}
 
 	// Priority 3: UUID octet (first 8 chars uppercase)
@@ -101,27 +97,28 @@ function getSessionDisplayName(session: Session, namedSessions?: Record<string, 
 
 // formatTokensCompact imported from ../utils/formatters
 
-// Single session row for the expanded dropdown (Thinking Pill dropdown)
-const SessionRow = memo(
+// Single row in the expanded dropdown — represents one (session, tab) thinking item
+const ThinkingItemRow = memo(
 	({
-		session,
+		item,
 		theme,
 		namedSessions,
 		onSessionClick,
 	}: {
-		session: Session;
+		item: ThinkingItem;
 		theme: Theme;
 		namedSessions?: Record<string, string>;
 		onSessionClick?: (sessionId: string, tabId?: string) => void;
 	}) => {
-		const tabDisplayName = getSessionDisplayName(session, namedSessions);
+		const { session, tab } = item;
+		const tabDisplayName = getItemDisplayName(session, tab, namedSessions);
 		const maestroName = session.name; // The name from the left sidebar
 		const tokens = session.currentCycleTokens || 0;
-		const busyTab = getWriteModeTab(session);
+		const thinkingStartTime = tab?.thinkingStartTime || session.thinkingStartTime;
 
 		return (
 			<button
-				onClick={() => onSessionClick?.(session.id, busyTab?.id)}
+				onClick={() => onSessionClick?.(session.id, tab?.id)}
 				className="flex items-center justify-between gap-3 w-full px-3 py-2 text-left hover:bg-white/5 transition-colors"
 				style={{ color: theme.colors.textMain }}
 			>
@@ -145,11 +142,8 @@ const SessionRow = memo(
 					style={{ color: theme.colors.textDim }}
 				>
 					{tokens > 0 && <span>{formatTokensCompact(tokens)}</span>}
-					{session.thinkingStartTime && (
-						<ElapsedTimeDisplay
-							startTime={session.thinkingStartTime}
-							textColor={theme.colors.textDim}
-						/>
+					{thinkingStartTime && (
+						<ElapsedTimeDisplay startTime={thinkingStartTime} textColor={theme.colors.textDim} />
 					)}
 				</div>
 			</button>
@@ -157,7 +151,7 @@ const SessionRow = memo(
 	}
 );
 
-SessionRow.displayName = 'SessionRow';
+ThinkingItemRow.displayName = 'ThinkingItemRow';
 
 /**
  * AutoRunPill - Shows when AutoRun is active
@@ -282,13 +276,14 @@ AutoRunPill.displayName = 'AutoRunPill';
 
 /**
  * ThinkingStatusPill Inner Component
- * Shows the primary thinking session with an expandable list when multiple sessions are thinking.
+ * Shows the primary thinking item with an expandable list when multiple tabs are thinking.
+ * Each "thinking item" is a (session, tab) pair — one entry per busy tab across all agents.
  * Features: pulsing indicator, session name, bytes/tokens, elapsed time, Claude session UUID.
  *
  * When AutoRun is active for the active session, shows AutoRunPill instead.
  */
 function ThinkingStatusPillInner({
-	thinkingSessions,
+	thinkingItems,
 	theme,
 	onSessionClick,
 	namedSessions,
@@ -304,34 +299,33 @@ function ThinkingStatusPillInner({
 		return <AutoRunPill theme={theme} autoRunState={autoRunState} onStop={onStopAutoRun} />;
 	}
 
-	// thinkingSessions is pre-filtered by caller (PERF optimization)
-	if (thinkingSessions.length === 0) {
+	// thinkingItems is pre-filtered by caller (PERF optimization)
+	if (thinkingItems.length === 0) {
 		return null;
 	}
 
-	// Primary session: prioritize the active session if it's thinking,
-	// otherwise fall back to first thinking session.
+	// Primary item: prioritize an item from the active session,
+	// otherwise fall back to first thinking item.
 	// This ensures Stop button stops the session the user is currently viewing.
-	const activeThinkingSession = thinkingSessions.find((s) => s.id === activeSessionId);
-	const primarySession = activeThinkingSession || thinkingSessions[0];
-	const additionalSessions = thinkingSessions.filter((s) => s.id !== primarySession.id);
-	const hasMultiple = additionalSessions.length > 0;
+	const activeItem = thinkingItems.find((item) => item.session.id === activeSessionId);
+	const primaryItem = activeItem || thinkingItems[0];
+	const additionalItems = thinkingItems.filter((item) => item !== primaryItem);
+	const hasMultiple = additionalItems.length > 0;
+
+	const { session: primarySession, tab: primaryTab } = primaryItem;
 
 	// Get tokens for current thinking cycle only (not cumulative context)
 	const primaryTokens = primarySession.currentCycleTokens || 0;
 
-	// Get display components - show more on larger screens
+	// Get display components
 	const maestroSessionName = primarySession.name;
 
-	// Get the write-mode tab to display its info (for tabified sessions)
-	const writeModeTab = getWriteModeTab(primarySession);
-
 	// Use tab's agentSessionId if available, fallback to session's (legacy)
-	const agentSessionId = writeModeTab?.agentSessionId || primarySession.agentSessionId;
+	const agentSessionId = primaryTab?.agentSessionId || primarySession.agentSessionId;
 
 	// Priority: 1. namedSessions lookup, 2. tab's name, 3. UUID octet
 	const customName = agentSessionId ? namedSessions?.[agentSessionId] : undefined;
-	const tabName = writeModeTab?.name;
+	const tabName = primaryTab?.name;
 
 	// Display name for the tab slot (to the left of Stop button):
 	// prefer namedSessions, then tab name, then UUID octet (NOT session name - that's already shown)
@@ -397,8 +391,8 @@ function ThinkingStatusPillInner({
 					</div>
 				)}
 
-				{/* Elapsed time - prefer write-mode tab's time for accurate parallel tracking */}
-				{(writeModeTab?.thinkingStartTime || primarySession.thinkingStartTime) && (
+				{/* Elapsed time - prefer tab's time for accurate parallel tracking */}
+				{(primaryTab?.thinkingStartTime || primarySession.thinkingStartTime) && (
 					<>
 						<div className="w-px h-4 shrink-0" style={{ backgroundColor: theme.colors.border }} />
 						<div
@@ -407,7 +401,7 @@ function ThinkingStatusPillInner({
 						>
 							<span>Elapsed:</span>
 							<ElapsedTimeDisplay
-								startTime={writeModeTab?.thinkingStartTime || primarySession.thinkingStartTime!}
+								startTime={primaryTab?.thinkingStartTime || primarySession.thinkingStartTime!}
 								textColor={theme.colors.textMain}
 							/>
 						</div>
@@ -419,7 +413,7 @@ function ThinkingStatusPillInner({
 					<>
 						<div className="w-px h-4 shrink-0" style={{ backgroundColor: theme.colors.border }} />
 						<button
-							onClick={() => onSessionClick?.(primarySession.id, writeModeTab?.id)}
+							onClick={() => onSessionClick?.(primarySession.id, primaryTab?.id)}
 							className="text-xs font-mono hover:underline cursor-pointer"
 							style={{ color: theme.colors.accent }}
 							title={agentSessionId ? `Claude Session: ${agentSessionId}` : 'Claude Session'}
@@ -429,7 +423,7 @@ function ThinkingStatusPillInner({
 					</>
 				)}
 
-				{/* Additional sessions indicator dot */}
+				{/* Additional thinking items indicator */}
 				{hasMultiple && (
 					<div
 						className="relative"
@@ -442,10 +436,10 @@ function ThinkingStatusPillInner({
 								backgroundColor: theme.colors.warning + '40',
 								border: `1px solid ${theme.colors.warning}60`,
 							}}
-							title={`+${additionalSessions.length} more thinking`}
+							title={`+${additionalItems.length} more thinking`}
 						>
 							<span className="text-[10px] font-bold" style={{ color: theme.colors.warning }}>
-								+{additionalSessions.length}
+								+{additionalItems.length}
 							</span>
 						</div>
 
@@ -468,10 +462,10 @@ function ThinkingStatusPillInner({
 									>
 										All Thinking Sessions
 									</div>
-									{thinkingSessions.map((session) => (
-										<SessionRow
-											key={session.id}
-											session={session}
+									{thinkingItems.map((item) => (
+										<ThinkingItemRow
+											key={`${item.session.id}-${item.tab?.id ?? 'legacy'}`}
+											item={item}
 											theme={theme}
 											namedSessions={namedSessions}
 											onSessionClick={onSessionClick}
@@ -511,7 +505,7 @@ function ThinkingStatusPillInner({
 }
 
 // Memoized export
-// PERF: thinkingSessions is pre-filtered by caller, so comparator is O(n) on thinking sessions only,
+// PERF: thinkingItems is pre-filtered by caller, so comparator is O(n) on thinking items only,
 // not O(n) on ALL sessions. This avoids the expensive filter on every keystroke.
 export const ThinkingStatusPill = memo(ThinkingStatusPillInner, (prevProps, nextProps) => {
 	// Check autoRunState changes first (highest priority)
@@ -529,53 +523,49 @@ export const ThinkingStatusPill = memo(ThinkingStatusPillInner, (prevProps, next
 		) {
 			return false;
 		}
-		// Don't need to check thinking sessions when AutoRun is active
+		// Don't need to check thinking items when AutoRun is active
 		return prevProps.theme === nextProps.theme;
 	}
 
-	// Check if activeSessionId changed - this affects which session shows as primary
+	// Check if activeSessionId changed - this affects which item shows as primary
 	if (prevProps.activeSessionId !== nextProps.activeSessionId) return false;
 
-	// thinkingSessions is pre-filtered by caller - just compare directly
-	const prevThinking = prevProps.thinkingSessions;
-	const nextThinking = nextProps.thinkingSessions;
+	// thinkingItems is pre-filtered by caller - just compare directly
+	const prevItems = prevProps.thinkingItems;
+	const nextItems = nextProps.thinkingItems;
 
-	if (prevThinking.length !== nextThinking.length) return false;
+	if (prevItems.length !== nextItems.length) return false;
 
-	// Compare each thinking session's relevant properties
-	for (let i = 0; i < prevThinking.length; i++) {
-		const prev = prevThinking[i];
-		const next = nextThinking[i];
+	// Compare each thinking item's relevant properties
+	for (let i = 0; i < prevItems.length; i++) {
+		const prev = prevItems[i];
+		const next = nextItems[i];
+		// Compare session-level properties
 		if (
-			prev.id !== next.id ||
-			prev.name !== next.name ||
-			prev.agentSessionId !== next.agentSessionId ||
-			prev.state !== next.state ||
-			prev.thinkingStartTime !== next.thinkingStartTime ||
-			prev.currentCycleTokens !== next.currentCycleTokens
+			prev.session.id !== next.session.id ||
+			prev.session.name !== next.session.name ||
+			prev.session.agentSessionId !== next.session.agentSessionId ||
+			prev.session.state !== next.session.state ||
+			prev.session.thinkingStartTime !== next.session.thinkingStartTime ||
+			prev.session.currentCycleTokens !== next.session.currentCycleTokens
 		) {
 			return false;
 		}
-
-		// Also check write-mode tab's name, agentSessionId, and thinkingStartTime (for tabified sessions)
-		const prevWriteTab = getWriteModeTab(prev);
-		const nextWriteTab = getWriteModeTab(next);
+		// Compare tab-level properties
 		if (
-			prevWriteTab?.id !== nextWriteTab?.id ||
-			prevWriteTab?.name !== nextWriteTab?.name ||
-			prevWriteTab?.agentSessionId !== nextWriteTab?.agentSessionId ||
-			prevWriteTab?.thinkingStartTime !== nextWriteTab?.thinkingStartTime
+			prev.tab?.id !== next.tab?.id ||
+			prev.tab?.name !== next.tab?.name ||
+			prev.tab?.agentSessionId !== next.tab?.agentSessionId ||
+			prev.tab?.thinkingStartTime !== next.tab?.thinkingStartTime
 		) {
 			return false;
 		}
 	}
 
-	// Check if namedSessions changed for any thinking session
+	// Check if namedSessions changed for any thinking item
 	if (prevProps.namedSessions !== nextProps.namedSessions) {
-		for (const session of nextThinking) {
-			// Check both session's and write-mode tab's agentSessionId
-			const writeTab = getWriteModeTab(session);
-			const claudeId = writeTab?.agentSessionId || session.agentSessionId;
+		for (const item of nextItems) {
+			const claudeId = item.tab?.agentSessionId || item.session.agentSessionId;
 			if (claudeId) {
 				const prevName = prevProps.namedSessions?.[claudeId];
 				const nextName = nextProps.namedSessions?.[claudeId];

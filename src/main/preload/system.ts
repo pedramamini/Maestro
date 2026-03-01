@@ -71,6 +71,7 @@ export function createShellsApi() {
 export function createShellApi() {
 	return {
 		openExternal: (url: string) => ipcRenderer.invoke('shell:openExternal', url),
+		openPath: (itemPath: string) => ipcRenderer.invoke('shell:openPath', itemPath),
 		trashItem: (itemPath: string) => ipcRenderer.invoke('shell:trashItem', itemPath),
 		showItemInFolder: (itemPath: string) => ipcRenderer.invoke('shell:showItemInFolder', itemPath),
 	};

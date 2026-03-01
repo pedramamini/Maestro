@@ -1,7 +1,10 @@
 import React from 'react';
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { render, screen, fireEvent, waitFor, act } from '@testing-library/react';
-import { AIOverviewTab, _resetCacheForTesting } from '../../../../renderer/components/DirectorNotes/AIOverviewTab';
+import {
+	AIOverviewTab,
+	_resetCacheForTesting,
+} from '../../../../renderer/components/DirectorNotes/AIOverviewTab';
 import type { Theme } from '../../../../renderer/types';
 
 // Mock useSettings hook
@@ -25,7 +28,9 @@ vi.mock('../../../../renderer/components/MarkdownRenderer', () => ({
 vi.mock('../../../../renderer/components/SaveMarkdownModal', () => ({
 	SaveMarkdownModal: ({ onClose }: { onClose: () => void }) => (
 		<div data-testid="save-markdown-modal">
-			<button onClick={onClose} data-testid="save-modal-close">Close</button>
+			<button onClick={onClose} data-testid="save-modal-close">
+				Close
+			</button>
 		</div>
 	),
 }));
@@ -104,7 +109,7 @@ describe('AIOverviewTab', () => {
 	it('shows empty message when no history files found', async () => {
 		mockGenerateSynopsis.mockResolvedValue({
 			success: true,
-			synopsis: '# Director\'s Notes\n\nNo history files found.',
+			synopsis: "# Director's Notes\n\nNo history files found.",
 		});
 
 		render(<AIOverviewTab theme={mockTheme} />);
@@ -126,10 +131,12 @@ describe('AIOverviewTab', () => {
 			expect(screen.getByTestId('markdown-renderer')).toBeInTheDocument();
 		});
 
-		expect(mockGenerateSynopsis).toHaveBeenCalledWith(expect.objectContaining({
-			lookbackDays: 7,
-			provider: 'claude-code',
-		}));
+		expect(mockGenerateSynopsis).toHaveBeenCalledWith(
+			expect.objectContaining({
+				lookbackDays: 7,
+				provider: 'claude-code',
+			})
+		);
 	});
 
 	it('calls onSynopsisReady when synopsis is generated', async () => {
@@ -181,11 +188,11 @@ describe('AIOverviewTab', () => {
 		expect(slider).toHaveValue('7');
 	});
 
-	it('renders Refresh button', async () => {
+	it('renders Regenerate button', async () => {
 		render(<AIOverviewTab theme={mockTheme} />);
 
 		await waitFor(() => {
-			expect(screen.getByText('Refresh')).toBeInTheDocument();
+			expect(screen.getByText('Regenerate')).toBeInTheDocument();
 		});
 	});
 
@@ -197,7 +204,7 @@ describe('AIOverviewTab', () => {
 		});
 	});
 
-	it('refreshes synopsis when Refresh button is clicked', async () => {
+	it('refreshes synopsis when Regenerate button is clicked', async () => {
 		mockGenerateSynopsis.mockResolvedValue({
 			success: true,
 			synopsis: '# Synopsis',
@@ -214,7 +221,7 @@ describe('AIOverviewTab', () => {
 
 		// Click refresh
 		await act(async () => {
-			fireEvent.click(screen.getByText('Refresh'));
+			fireEvent.click(screen.getByText('Regenerate'));
 		});
 
 		await waitFor(() => {
@@ -281,12 +288,16 @@ describe('AIOverviewTab', () => {
 
 	it('does not update state after unmount but caches result', async () => {
 		let resolveGeneration!: (value: any) => void;
-		mockGenerateSynopsis.mockReturnValue(new Promise((resolve) => {
-			resolveGeneration = resolve;
-		}));
+		mockGenerateSynopsis.mockReturnValue(
+			new Promise((resolve) => {
+				resolveGeneration = resolve;
+			})
+		);
 
 		const onSynopsisReady = vi.fn();
-		const { unmount } = render(<AIOverviewTab theme={mockTheme} onSynopsisReady={onSynopsisReady} />);
+		const { unmount } = render(
+			<AIOverviewTab theme={mockTheme} onSynopsisReady={onSynopsisReady} />
+		);
 
 		// Wait for generation to start
 		await waitFor(() => {
@@ -309,8 +320,9 @@ describe('AIOverviewTab', () => {
 		expect(onSynopsisReady).not.toHaveBeenCalled();
 
 		// But the module-level cache should still be populated for next open
-		const { hasCachedSynopsis } = await import('../../../../renderer/components/DirectorNotes/AIOverviewTab');
-		expect(hasCachedSynopsis(7)).toBe(true);
+		const { hasCachedSynopsis } =
+			await import('../../../../renderer/components/DirectorNotes/AIOverviewTab');
+		expect(hasCachedSynopsis()).toBe(true);
 	});
 
 	it('closes save modal when close button is clicked', async () => {
@@ -333,5 +345,4 @@ describe('AIOverviewTab', () => {
 		fireEvent.click(screen.getByTestId('save-modal-close'));
 		expect(screen.queryByTestId('save-markdown-modal')).not.toBeInTheDocument();
 	});
-
 });

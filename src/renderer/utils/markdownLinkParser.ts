@@ -243,7 +243,7 @@ function calculatePathProximity(candidatePath: string, currentFilePath: string):
 		}
 	}
 
-	return (currentSegments.length - commonLength) + (candidateSegments.length - commonLength);
+	return currentSegments.length - commonLength + (candidateSegments.length - commonLength);
 }
 
 /**
@@ -260,7 +260,7 @@ function findFileByName(
 	reference: string,
 	currentFilePath: string,
 	filenameIndex: Map<string, string[]>,
-	allFilesSet: Set<string>,
+	allFilesSet: Set<string>
 ): string | null {
 	// Try exact path match first
 	if (allFilesSet.has(reference)) return reference;
@@ -360,7 +360,11 @@ function resolveRelativePath(linkPath: string, currentFilePath: string): string 
  * @param options - Optional settings for file-tree-aware link resolution
  * @returns Parsed links and metadata (empty arrays/object if parsing fails)
  */
-export function parseMarkdownLinks(content: string, filePath: string, options?: ParseMarkdownLinksOptions): ParsedMarkdownLinks {
+export function parseMarkdownLinks(
+	content: string,
+	filePath: string,
+	options?: ParseMarkdownLinksOptions
+): ParsedMarkdownLinks {
 	// Return empty result for null/undefined/non-string content
 	if (content === null || content === undefined || typeof content !== 'string') {
 		return {
@@ -452,7 +456,13 @@ export function parseMarkdownLinks(content: string, filePath: string, options?: 
 
 				// Fallback: if relative resolution produced a path not in the file tree,
 				// try filename-based lookup (matches remarkFileLinks behavior)
-				if (resolved && resolved.endsWith('.md') && filenameIndex && allFilesSet && !allFilesSet.has(resolved)) {
+				if (
+					resolved &&
+					resolved.endsWith('.md') &&
+					filenameIndex &&
+					allFilesSet &&
+					!allFilesSet.has(resolved)
+				) {
 					const fallback = findFileByName(linkUrl, filePath, filenameIndex, allFilesSet);
 					if (fallback) {
 						resolved = fallback;

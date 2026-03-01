@@ -226,4 +226,70 @@ describe('attachments handlers', () => {
 			expect(result.path).toContain('session-123');
 		});
 	});
+
+	describe('sessionId path traversal protection', () => {
+		it('should reject sessionId with path traversal in save', async () => {
+			const handler = registeredHandlers.get('attachments:save');
+			const result = await handler!(
+				{},
+				'../../../../../../../tmp',
+				'data:image/png;base64,abc',
+				'evil.png'
+			);
+
+			expect(result.success).toBe(false);
+			expect(fs.writeFile).not.toHaveBeenCalled();
+		});
+
+		it('should reject sessionId with directory separators in save', async () => {
+			const handler = registeredHandlers.get('attachments:save');
+			const result = await handler!(
+				{},
+				'../../etc/passwd',
+				'data:image/png;base64,abc',
+				'evil.png'
+			);
+
+			expect(result.success).toBe(false);
+			expect(fs.writeFile).not.toHaveBeenCalled();
+		});
+
+		it('should reject path traversal in load', async () => {
+			const handler = registeredHandlers.get('attachments:load');
+			const result = await handler!({}, '../../../tmp', 'image.png');
+
+			expect(result.success).toBe(false);
+			expect(fs.readFile).not.toHaveBeenCalled();
+		});
+
+		it('should reject path traversal in delete', async () => {
+			const handler = registeredHandlers.get('attachments:delete');
+			const result = await handler!({}, '../../../tmp', 'image.png');
+
+			expect(result.success).toBe(false);
+			expect(fs.unlink).not.toHaveBeenCalled();
+		});
+
+		it('should reject path traversal in list', async () => {
+			const handler = registeredHandlers.get('attachments:list');
+			const result = await handler!({}, '../../../tmp');
+
+			expect(result.success).toBe(false);
+		});
+
+		it('should allow valid UUID-style sessionId', async () => {
+			vi.mocked(fs.mkdir).mockResolvedValue(undefined);
+			vi.mocked(fs.writeFile).mockResolvedValue(undefined);
+
+			const handler = registeredHandlers.get('attachments:save');
+			const result = await handler!(
+				{},
+				'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+				'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==',
+				'test.png'
+			);
+
+			expect(result.success).toBe(true);
+		});
+	});
 });

@@ -25,9 +25,8 @@ import type {
 	AgentError,
 	GroupChatMessage,
 	UsageStats,
-	GlobalStats,
 } from '../../types';
-import type { Toast } from '../../contexts/ToastContext';
+import { notifyToast } from '../../stores/notificationStore';
 import type { HistoryEntryInput } from './useAgentSessionManagement';
 import { useSessionStore } from '../../stores/sessionStore';
 import { useModalStore } from '../../stores/modalStore';
@@ -80,8 +79,6 @@ export interface UseAgentListenersDeps {
 
 	// --- Callback refs (populated after hook call, read in useEffect) ---
 
-	/** Toast notification callback */
-	addToastRef: React.RefObject<((toast: Omit<Toast, 'id' | 'timestamp'>) => void) | null>;
 	/** History entry callback (from useAgentSessionManagement) */
 	addHistoryEntryRef: React.RefObject<((entry: HistoryEntryInput) => Promise<void>) | null>;
 	/** Background synopsis spawner (from useAgentExecution) */
@@ -118,8 +115,6 @@ export interface UseAgentListenersDeps {
 	pauseBatchOnErrorRef: React.RefObject<
 		((sessionId: string, error: AgentError, docIndex: number, context?: string) => void) | null
 	>;
-	/** Global stats updater */
-	updateGlobalStatsRef: React.RefObject<((stats: Partial<GlobalStats>) => void) | null>;
 	/** Right panel ref for refreshing history */
 	rightPanelRef: React.RefObject<RightPanelHandle | null>;
 	/** Process queued item callback */
@@ -784,7 +779,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							(!tabIdFromSession || currentActiveSession.activeTabId === tabIdFromSession);
 
 						if (!isViewingCompletedTab) {
-							deps.addToastRef.current?.({
+							notifyToast({
 								type: 'success',
 								title: toastData!.title,
 								message: toastData!.summary,
@@ -870,7 +865,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									})
 								);
 
-								deps.addToastRef.current?.({
+								notifyToast({
 									type: 'info',
 									title: 'Synopsis',
 									message: parsed.shortSummary,
@@ -1098,14 +1093,6 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				}
 			}
 			deps.batchedUpdater.updateCycleTokens(actualSessionId, usageStats.outputTokens);
-
-			deps.updateGlobalStatsRef.current?.({
-				totalInputTokens: usageStats.inputTokens,
-				totalOutputTokens: usageStats.outputTokens,
-				totalCacheReadTokens: usageStats.cacheReadInputTokens,
-				totalCacheCreationTokens: usageStats.cacheCreationInputTokens,
-				totalCostUsd: usageStats.totalCostUsd,
-			});
 		});
 
 		// ================================================================
@@ -1297,15 +1284,13 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							});
 						}
 
-						if (deps.addToastRef.current) {
-							const errorTitle = getErrorTitleForType(agentError.type);
-							deps.addToastRef.current({
-								type: 'error',
-								title: `Auto Run: ${errorTitle}`,
-								message: agentError.message,
-								sessionId: actualSessionId,
-							});
-						}
+						const errorTitle = getErrorTitleForType(agentError.type);
+						notifyToast({
+							type: 'error',
+							title: `Auto Run: ${errorTitle}`,
+							message: agentError.message,
+							sessionId: actualSessionId,
+						});
 					}
 				}
 

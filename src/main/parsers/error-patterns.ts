@@ -940,7 +940,10 @@ export function matchErrorPattern(
 					typeof pattern.message === 'function' ? pattern.message(match) : pattern.message;
 
 				// Log detailed info for SSH shell parse errors to help debug
-				if (pattern.pattern.source.includes('parse error') || pattern.pattern.source.includes('syntax error')) {
+				if (
+					pattern.pattern.source.includes('parse error') ||
+					pattern.pattern.source.includes('syntax error')
+				) {
 					logger.info('[ErrorPatterns] Shell parse error detected', 'error-patterns', {
 						errorType,
 						patternSource: pattern.pattern.source,

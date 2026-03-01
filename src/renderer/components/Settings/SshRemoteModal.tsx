@@ -230,10 +230,10 @@ export function SshRemoteModal({
 		);
 	});
 
-	// Reset highlight index when filter changes
-	useEffect(() => {
+	const handleSshConfigFilterChange = useCallback((value: string) => {
+		setSshConfigFilter(value);
 		setSshConfigHighlightIndex(0);
-	}, [sshConfigFilter]);
+	}, []);
 
 	// Handle keyboard navigation in dropdown
 	const handleDropdownKeyDown = (e: React.KeyboardEvent) => {
@@ -569,12 +569,15 @@ export function SshRemoteModal({
 							</button>
 							{showSshConfigDropdown && (
 								<div
-									className="absolute top-full left-0 right-0 mt-1 rounded border shadow-lg z-10"
+									className="absolute top-full left-0 right-0 mt-1 rounded border shadow-lg z-10 outline-none"
 									style={{
 										backgroundColor: theme.colors.bgMain,
 										borderColor: theme.colors.border,
 									}}
 									onKeyDown={handleDropdownKeyDown}
+									role="listbox"
+									aria-label="SSH config hosts"
+									tabIndex={0}
 								>
 									{/* Filter input */}
 									<div className="p-2 border-b" style={{ borderColor: theme.colors.border }}>
@@ -582,7 +585,7 @@ export function SshRemoteModal({
 											ref={filterInputRef}
 											type="text"
 											value={sshConfigFilter}
-											onChange={(e) => setSshConfigFilter(e.target.value)}
+											onChange={(e) => handleSshConfigFilterChange(e.target.value)}
 											onKeyDown={handleDropdownKeyDown}
 											placeholder="Type to filter..."
 											className="w-full px-2 py-1 rounded text-sm bg-transparent outline-none"
@@ -719,12 +722,12 @@ export function SshRemoteModal({
 				{/* Environment Variables */}
 				<div>
 					<div className="flex items-center justify-between mb-2">
-						<label
+						<div
 							className="text-xs font-bold opacity-70 uppercase"
 							style={{ color: theme.colors.textMain }}
 						>
 							Environment Variables (optional)
-						</label>
+						</div>
 						<button
 							type="button"
 							onClick={addEnvVar}

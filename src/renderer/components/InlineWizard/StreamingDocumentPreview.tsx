@@ -95,19 +95,30 @@ export function StreamingDocumentPreview({
 }: StreamingDocumentPreviewProps): JSX.Element {
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [viewMode, setViewMode] = useState<ViewMode>('raw');
-	const [userScrolled, setUserScrolled] = useState(false);
+	const userScrolledRef = useRef(false);
+	const lastFilenameRef = useRef(filename ?? '');
+	const [, setScrollRenderTick] = useState(0);
+
+	useMemo(() => {
+		if (lastFilenameRef.current !== (filename ?? '')) {
+			lastFilenameRef.current = filename ?? '';
+			userScrolledRef.current = false;
+		}
+	}, [filename]);
+
+	const updateUserScrolled = (next: boolean) => {
+		if (userScrolledRef.current !== next) {
+			userScrolledRef.current = next;
+			setScrollRenderTick((tick) => tick + 1);
+		}
+	};
 
 	// Auto-scroll to bottom as content streams (unless user has scrolled up)
 	useEffect(() => {
-		if (containerRef.current && !userScrolled) {
+		if (containerRef.current && !userScrolledRef.current) {
 			containerRef.current.scrollTop = containerRef.current.scrollHeight;
 		}
-	}, [content, userScrolled]);
-
-	// Reset user scroll when content resets (new document)
-	useEffect(() => {
-		setUserScrolled(false);
-	}, [filename]);
+	}, [content, filename]);
 
 	// Handle scroll to detect if user has manually scrolled
 	const handleScroll = () => {
@@ -117,67 +128,64 @@ export function StreamingDocumentPreview({
 		const isNearBottom = scrollHeight - scrollTop - clientHeight < 50;
 
 		// If user scrolls up, stop auto-scroll. If they scroll back to bottom, resume.
-		setUserScrolled(!isNearBottom);
+		updateUserScrolled(!isNearBottom);
 	};
 
 	// Clean content for markdown preview
 	const cleanedContent = useMemo(() => cleanIncompleteMarkdown(content), [content]);
 
 	// Determine if markdown preview is safe
-	const canPreviewMarkdown = useMemo(() => isMarkdownPreviewable(content), [content]);
+	const canPreviewMarkdown = isMarkdownPreviewable(content);
 
 	// Prose styles for markdown preview - scoped to .streaming-preview
-	const proseStyles = useMemo(
-		() => `
-    .streaming-preview .prose h1 { color: ${theme.colors.textMain}; font-size: 1.75em; font-weight: bold; margin: 0.5em 0; }
-    .streaming-preview .prose h2 { color: ${theme.colors.textMain}; font-size: 1.4em; font-weight: bold; margin: 0.5em 0; }
-    .streaming-preview .prose h3 { color: ${theme.colors.textMain}; font-size: 1.15em; font-weight: bold; margin: 0.5em 0; }
-    .streaming-preview .prose p { color: ${theme.colors.textMain}; margin: 0.4em 0; }
-    .streaming-preview .prose ul, .streaming-preview .prose ol { color: ${theme.colors.textMain}; margin: 0.4em 0; padding-left: 1.5em; }
-    .streaming-preview .prose ul { list-style-type: disc; }
-    .streaming-preview .prose li { margin: 0.2em 0; display: list-item; }
-    .streaming-preview .prose code { background-color: ${theme.colors.bgActivity}; color: ${theme.colors.textMain}; padding: 0.15em 0.3em; border-radius: 3px; font-size: 0.85em; }
-    .streaming-preview .prose pre { background-color: ${theme.colors.bgActivity}; color: ${theme.colors.textMain}; padding: 0.75em; border-radius: 6px; overflow-x: auto; margin: 0.5em 0; }
-    .streaming-preview .prose pre code { background: none; padding: 0; }
-    .streaming-preview .prose blockquote { border-left: 3px solid ${theme.colors.border}; padding-left: 0.75em; margin: 0.4em 0; color: ${theme.colors.textDim}; }
-    .streaming-preview .prose a { color: ${theme.colors.accent}; text-decoration: underline; }
-    .streaming-preview .prose strong { font-weight: bold; }
-    .streaming-preview .prose em { font-style: italic; }
-    .streaming-preview .prose input[type="checkbox"] {
-      appearance: none;
-      -webkit-appearance: none;
-      width: 14px;
-      height: 14px;
-      border: 2px solid ${theme.colors.accent};
-      border-radius: 3px;
-      background-color: transparent;
-      cursor: default;
-      vertical-align: middle;
-      margin-right: 6px;
-      position: relative;
-    }
-    .streaming-preview .prose input[type="checkbox"]:checked {
-      background-color: ${theme.colors.accent};
-      border-color: ${theme.colors.accent};
-    }
-    .streaming-preview .prose input[type="checkbox"]:checked::after {
-      content: '';
-      position: absolute;
-      left: 3px;
-      top: 0px;
-      width: 4px;
-      height: 8px;
-      border: solid ${theme.colors.bgMain};
-      border-width: 0 2px 2px 0;
-      transform: rotate(45deg);
-    }
-    .streaming-preview .prose li:has(> input[type="checkbox"]) {
-      list-style-type: none;
-      margin-left: -1.5em;
-    }
-  `,
-		[theme]
-	);
+	const proseStyles = `
+	.streaming-preview .prose h1 { color: ${theme.colors.textMain}; font-size: 1.75em; font-weight: bold; margin: 0.5em 0; }
+	.streaming-preview .prose h2 { color: ${theme.colors.textMain}; font-size: 1.4em; font-weight: bold; margin: 0.5em 0; }
+	.streaming-preview .prose h3 { color: ${theme.colors.textMain}; font-size: 1.15em; font-weight: bold; margin: 0.5em 0; }
+	.streaming-preview .prose p { color: ${theme.colors.textMain}; margin: 0.4em 0; }
+	.streaming-preview .prose ul, .streaming-preview .prose ol { color: ${theme.colors.textMain}; margin: 0.4em 0; padding-left: 1.5em; }
+	.streaming-preview .prose ul { list-style-type: disc; }
+	.streaming-preview .prose li { margin: 0.2em 0; display: list-item; }
+	.streaming-preview .prose code { background-color: ${theme.colors.bgActivity}; color: ${theme.colors.textMain}; padding: 0.15em 0.3em; border-radius: 3px; font-size: 0.85em; }
+	.streaming-preview .prose pre { background-color: ${theme.colors.bgActivity}; color: ${theme.colors.textMain}; padding: 0.75em; border-radius: 6px; overflow-x: auto; margin: 0.5em 0; }
+	.streaming-preview .prose pre code { background: none; padding: 0; }
+	.streaming-preview .prose blockquote { border-left: 3px solid ${theme.colors.border}; padding-left: 0.75em; margin: 0.4em 0; color: ${theme.colors.textDim}; }
+	.streaming-preview .prose a { color: ${theme.colors.accent}; text-decoration: underline; }
+	.streaming-preview .prose strong { font-weight: bold; }
+	.streaming-preview .prose em { font-style: italic; }
+	.streaming-preview .prose input[type="checkbox"] {
+	appearance: none;
+	-webkit-appearance: none;
+	width: 14px;
+	height: 14px;
+	border: 2px solid ${theme.colors.accent};
+	border-radius: 3px;
+	background-color: transparent;
+	cursor: default;
+	vertical-align: middle;
+	margin-right: 6px;
+	position: relative;
+	}
+	.streaming-preview .prose input[type="checkbox"]:checked {
+	background-color: ${theme.colors.accent};
+	border-color: ${theme.colors.accent};
+	}
+	.streaming-preview .prose input[type="checkbox"]:checked::after {
+	content: '';
+	position: absolute;
+	left: 3px;
+	top: 0px;
+	width: 4px;
+	height: 8px;
+	border: solid ${theme.colors.bgMain};
+	border-width: 0 2px 2px 0;
+	transform: rotate(45deg);
+	}
+	.streaming-preview .prose li:has(> input[type="checkbox"]) {
+	list-style-type: none;
+	margin-left: -1.5em;
+	}
+	`;
 
 	// Markdown components for rendering
 	const markdownComponents = useMemo(
@@ -208,28 +216,31 @@ export function StreamingDocumentPreview({
 					</code>
 				);
 			},
-			a: ({ href, children }: any) => (
-				<a
-					href={href}
-					onClick={(e) => {
-						e.preventDefault();
-						if (href) window.maestro.shell.openExternal(href);
-					}}
-					style={{
-						color: theme.colors.accent,
-						textDecoration: 'underline',
-						cursor: 'pointer',
-					}}
-				>
-					{children}
-				</a>
-			),
+			a: ({ href, children }: any) =>
+				href ? (
+					<a
+						href={href}
+						target="_blank"
+						rel="noopener noreferrer"
+						style={{
+							color: theme.colors.accent,
+							textDecoration: 'underline',
+							cursor: 'pointer',
+						}}
+					>
+						{children}
+					</a>
+				) : (
+					<span style={{ color: theme.colors.accent, textDecoration: 'underline' }}>
+						{children}
+					</span>
+				),
 		}),
 		[theme]
 	);
 
 	return (
-		<div className="flex flex-col h-full streaming-preview">
+		<div className="relative flex flex-col h-full streaming-preview">
 			{/* Header with filename, progress, and view toggle */}
 			<div
 				className="flex items-center justify-between px-4 py-2 border-b"
@@ -339,11 +350,11 @@ export function StreamingDocumentPreview({
 			</div>
 
 			{/* User scroll indicator */}
-			{userScrolled && (
+			{userScrolledRef.current && (
 				<div className="absolute bottom-4 left-1/2 transform -translate-x-1/2">
 					<button
 						onClick={() => {
-							setUserScrolled(false);
+							updateUserScrolled(false);
 							if (containerRef.current) {
 								containerRef.current.scrollTop = containerRef.current.scrollHeight;
 							}
