@@ -36,6 +36,7 @@ import {
 	Server,
 	Music,
 	Command,
+	Zap,
 } from 'lucide-react';
 import { QRCodeSVG } from 'qrcode.react';
 import type { Session, Group, Theme } from '../types';
@@ -445,6 +446,7 @@ function HamburgerMenuContent({
 }: HamburgerMenuContentProps) {
 	const shortcuts = useSettingsStore((s) => s.shortcuts);
 	const directorNotesEnabled = useSettingsStore((s) => s.encoreFeatures.directorNotes);
+	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const {
 		setShortcutsHelpOpen,
 		setSettingsModalOpen,
@@ -454,6 +456,7 @@ function HamburgerMenuContent({
 		setUsageDashboardOpen,
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
+		setCueModalOpen,
 		setUpdateCheckModalOpen,
 		setAboutModalOpen,
 		setQuickActionOpen,
@@ -715,6 +718,33 @@ function HamburgerMenuContent({
 							style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
 						>
 							{formatShortcutKeys(shortcuts.directorNotes.keys)}
+						</span>
+					)}
+				</button>
+			)}
+			{maestroCueEnabled && (
+				<button
+					onClick={() => {
+						setCueModalOpen(true);
+						setMenuOpen(false);
+					}}
+					className="w-full flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-white/10 transition-colors text-left"
+				>
+					<Zap className="w-5 h-5" style={{ color: '#06b6d4' }} />
+					<div className="flex-1">
+						<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+							Maestro Cue
+						</div>
+						<div className="text-xs" style={{ color: theme.colors.textDim }}>
+							Event-driven automation
+						</div>
+					</div>
+					{shortcuts.maestroCue && (
+						<span
+							className="text-xs font-mono px-1.5 py-0.5 rounded"
+							style={{ backgroundColor: theme.colors.bgActivity, color: theme.colors.textDim }}
+						>
+							{formatShortcutKeys(shortcuts.maestroCue.keys)}
 						</span>
 					)}
 				</button>
@@ -1105,6 +1135,7 @@ function SessionListInner(props: SessionListProps) {
 	const contextWarningRedThreshold = useSettingsStore(
 		(s) => s.contextManagementSettings.contextWarningRedThreshold
 	);
+	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
@@ -1190,6 +1221,43 @@ function SessionListInner(props: SessionListProps) {
 		() => sessions.some((s) => s.state === 'busy') || activeBatchSessionIds.length > 0,
 		[sessions, activeBatchSessionIds]
 	);
+
+	// Cue session status map: sessionId → subscriptionCount (only active when Encore Feature enabled)
+	const [cueSessionMap, setCueSessionMap] = useState<Map<string, number>>(new Map());
+	useEffect(() => {
+		if (!maestroCueEnabled) {
+			setCueSessionMap(new Map());
+			return;
+		}
+
+		let mounted = true;
+
+		const fetchCueStatus = async () => {
+			try {
+				const statuses = await window.maestro.cue.getStatus();
+				if (!mounted) return;
+				const map = new Map<string, number>();
+				for (const s of statuses) {
+					if (s.subscriptionCount > 0) {
+						map.set(s.sessionId, s.subscriptionCount);
+					}
+				}
+				setCueSessionMap(map);
+			} catch {
+				// Cue engine may not be initialized yet
+			}
+		};
+
+		fetchCueStatus();
+		const unsubscribe = window.maestro.cue.onActivityUpdate(() => {
+			fetchCueStatus();
+		});
+
+		return () => {
+			mounted = false;
+			unsubscribe();
+		};
+	}, [maestroCueEnabled]);
 
 	const [sessionFilter, setSessionFilter] = useState('');
 	const { onResizeStart: onSidebarResizeStart, transitionClass: sidebarTransitionClass } =
@@ -1553,6 +1621,7 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
+					cueSubscriptionCount={cueSessionMap.get(session.id)}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -1615,6 +1684,7 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
+										cueSubscriptionCount={cueSessionMap.get(child.id)}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}

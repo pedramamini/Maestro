@@ -136,7 +136,7 @@ interface UsageStats {
 	reasoningTokens?: number; // Separate reasoning tokens (Codex o3/o4-mini)
 }
 
-type HistoryEntryType = 'AUTO' | 'USER';
+type HistoryEntryType = 'AUTO' | 'USER' | 'CUE';
 
 /**
  * Result type for reading session messages from agent storage.
@@ -2620,7 +2620,7 @@ interface MaestroAPI {
 	directorNotes: {
 		getUnifiedHistory: (options: {
 			lookbackDays: number;
-			filter?: 'AUTO' | 'USER' | null;
+			filter?: 'AUTO' | 'USER' | 'CUE' | null;
 			limit?: number;
 			offset?: number;
 		}) => Promise<{
@@ -2677,6 +2677,98 @@ interface MaestroAPI {
 			};
 			error?: string;
 		}>;
+	};
+
+	// Cue API (event-driven automation)
+	cue: {
+		getStatus: () => Promise<
+			Array<{
+				sessionId: string;
+				sessionName: string;
+				toolType: string;
+				projectRoot: string;
+				enabled: boolean;
+				subscriptionCount: number;
+				activeRuns: number;
+				lastTriggered?: string;
+				nextTrigger?: string;
+			}>
+		>;
+		getActiveRuns: () => Promise<
+			Array<{
+				runId: string;
+				sessionId: string;
+				sessionName: string;
+				subscriptionName: string;
+				event: {
+					id: string;
+					type: 'time.interval' | 'file.changed' | 'agent.completed';
+					timestamp: string;
+					triggerName: string;
+					payload: Record<string, unknown>;
+				};
+				status: 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
+				stdout: string;
+				stderr: string;
+				exitCode: number | null;
+				durationMs: number;
+				startedAt: string;
+				endedAt: string;
+			}>
+		>;
+		getActivityLog: (limit?: number) => Promise<
+			Array<{
+				runId: string;
+				sessionId: string;
+				sessionName: string;
+				subscriptionName: string;
+				event: {
+					id: string;
+					type: 'time.interval' | 'file.changed' | 'agent.completed';
+					timestamp: string;
+					triggerName: string;
+					payload: Record<string, unknown>;
+				};
+				status: 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
+				stdout: string;
+				stderr: string;
+				exitCode: number | null;
+				durationMs: number;
+				startedAt: string;
+				endedAt: string;
+			}>
+		>;
+		enable: () => Promise<void>;
+		disable: () => Promise<void>;
+		stopRun: (runId: string) => Promise<boolean>;
+		stopAll: () => Promise<void>;
+		getQueueStatus: () => Promise<Record<string, number>>;
+		refreshSession: (sessionId: string, projectRoot: string) => Promise<void>;
+		readYaml: (projectRoot: string) => Promise<string | null>;
+		writeYaml: (projectRoot: string, content: string) => Promise<void>;
+		validateYaml: (content: string) => Promise<{ valid: boolean; errors: string[] }>;
+		onActivityUpdate: (
+			callback: (data: {
+				runId: string;
+				sessionId: string;
+				sessionName: string;
+				subscriptionName: string;
+				event: {
+					id: string;
+					type: 'time.interval' | 'file.changed' | 'agent.completed';
+					timestamp: string;
+					triggerName: string;
+					payload: Record<string, unknown>;
+				};
+				status: 'running' | 'completed' | 'failed' | 'timeout' | 'stopped';
+				stdout: string;
+				stderr: string;
+				exitCode: number | null;
+				durationMs: number;
+				startedAt: string;
+				endedAt: string;
+			}) => void
+		) => () => void;
 	};
 
 	// WakaTime API (CLI check, API key validation)

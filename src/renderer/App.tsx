@@ -41,6 +41,7 @@ const DocumentGraphView = lazy(() =>
 const DirectorNotesModal = lazy(() =>
 	import('./components/DirectorNotes').then((m) => ({ default: m.DirectorNotesModal }))
 );
+const CueModal = lazy(() => import('./components/CueModal').then((m) => ({ default: m.CueModal })));
 
 // SymphonyContributionData type moved to useSymphonyContribution hook
 
@@ -135,6 +136,7 @@ import {
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
 import { useSymphonyContribution } from './hooks/symphony/useSymphonyContribution';
+import { useCueAutoDiscovery } from './hooks/useCueAutoDiscovery';
 
 // Import contexts
 import { useLayerStack } from './contexts/LayerStackContext';
@@ -326,6 +328,9 @@ function MaestroConsoleInner() {
 		// Director's Notes Modal
 		directorNotesOpen,
 		setDirectorNotesOpen,
+		// Maestro Cue Modal
+		cueModalOpen,
+		setCueModalOpen,
 	} = useModalActions();
 
 	// --- MOBILE LANDSCAPE MODE (reading-only view) ---
@@ -747,6 +752,9 @@ function MaestroConsoleInner() {
 
 	// --- SESSION RESTORATION (extracted hook, Phase 2E) ---
 	const { initialLoadComplete } = useSessionRestoration();
+
+	// --- CUE AUTO-DISCOVERY (gated by Encore Feature) ---
+	useCueAutoDiscovery(sessions, encoreFeatures);
 
 	// --- TAB HANDLERS (extracted hook) ---
 	const {
@@ -1961,6 +1969,7 @@ function MaestroConsoleInner() {
 		setMarketplaceModalOpen,
 		setSymphonyModalOpen,
 		setDirectorNotesOpen,
+		setCueModalOpen,
 		encoreFeatures,
 		setShowNewGroupChatModal,
 		deleteGroupChatWithConfirmation,
@@ -2632,6 +2641,7 @@ function MaestroConsoleInner() {
 					onOpenDirectorNotes={
 						encoreFeatures.directorNotes ? () => setDirectorNotesOpen(true) : undefined
 					}
+					onOpenMaestroCue={encoreFeatures.maestroCue ? () => setCueModalOpen(true) : undefined}
 					autoScrollAiMode={autoScrollAiMode}
 					setAutoScrollAiMode={setAutoScrollAiMode}
 					onCloseTabSwitcher={handleCloseTabSwitcher}
@@ -2819,6 +2829,13 @@ function MaestroConsoleInner() {
 								handleFileClick({ name: path.split('/').pop() || path, type: 'file' }, path)
 							}
 						/>
+					</Suspense>
+				)}
+
+				{/* --- MAESTRO CUE MODAL (lazy-loaded, Encore Feature) --- */}
+				{encoreFeatures.maestroCue && cueModalOpen && (
+					<Suspense fallback={null}>
+						<CueModal theme={theme} onClose={() => setCueModalOpen(false)} />
 					</Suspense>
 				)}
 
