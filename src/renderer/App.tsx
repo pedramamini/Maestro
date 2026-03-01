@@ -2470,6 +2470,7 @@ function MaestroConsoleInner() {
 					usageStats={usageStats}
 					handsOnTimeMs={totalActiveTimeMs}
 					onOpenLeaderboardRegistration={handleOpenLeaderboardRegistrationFromAbout}
+					onSwitchToSession={setActiveSessionId}
 					isLeaderboardRegistered={isLeaderboardRegistered}
 					onCloseUpdateCheckModal={handleCloseUpdateCheckModal}
 					onCloseProcessMonitor={handleCloseProcessMonitor}

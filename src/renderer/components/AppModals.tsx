@@ -135,6 +135,7 @@ export interface AppInfoModalsProps {
 	onCloseAboutModal: () => void;
 	autoRunStats: AutoRunStats;
 	usageStats?: MaestroUsageStats | null;
+	onSwitchToSession: (sessionId: string) => void;
 	/** Global hands-on time in milliseconds (from settings) */
 	handsOnTimeMs: number;
 	onOpenLeaderboardRegistration: () => void;
@@ -190,6 +191,7 @@ export const AppInfoModals = memo(function AppInfoModals({
 	onCloseAboutModal,
 	autoRunStats,
 	usageStats,
+	onSwitchToSession,
 	handsOnTimeMs,
 	onOpenLeaderboardRegistration,
 	isLeaderboardRegistered,
@@ -231,7 +233,9 @@ export const AppInfoModals = memo(function AppInfoModals({
 					theme={theme}
 					autoRunStats={autoRunStats}
 					usageStats={usageStats}
+					sessions={sessions}
 					handsOnTimeMs={handsOnTimeMs}
+					onSwitchToSession={onSwitchToSession}
 					onClose={onCloseAboutModal}
 					onOpenLeaderboardRegistration={onOpenLeaderboardRegistration}
 					isLeaderboardRegistered={isLeaderboardRegistered}
@@ -1786,6 +1790,7 @@ export interface AppModalsProps {
 	keyboardMasteryStats: KeyboardMasteryStats;
 	onCloseAboutModal: () => void;
 	autoRunStats: AutoRunStats;
+	onSwitchToSession: (sessionId: string) => void;
 	usageStats?: MaestroUsageStats | null;
 	/** Global hands-on time in milliseconds (from settings) */
 	handsOnTimeMs: number;
@@ -2204,6 +2209,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		keyboardMasteryStats,
 		onCloseAboutModal,
 		autoRunStats,
+		onSwitchToSession,
 		usageStats,
 		handsOnTimeMs,
 		onOpenLeaderboardRegistration,
@@ -2457,6 +2463,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				onCloseAboutModal={onCloseAboutModal}
 				autoRunStats={autoRunStats}
 				usageStats={usageStats}
+				onSwitchToSession={onSwitchToSession}
 				handsOnTimeMs={handsOnTimeMs}
 				onOpenLeaderboardRegistration={onOpenLeaderboardRegistration}
 				isLeaderboardRegistered={isLeaderboardRegistered}
