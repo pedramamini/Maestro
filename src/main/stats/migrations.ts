@@ -25,6 +25,7 @@ import {
 	CREATE_SESSION_LIFECYCLE_SQL,
 	CREATE_SESSION_LIFECYCLE_INDEXES_SQL,
 	CREATE_COMPOUND_INDEXES_SQL,
+	CREATE_AGENT_TIME_INDEX_SQL,
 	runStatements,
 } from './schema';
 import { LOG_CONTEXT } from './utils';
@@ -59,6 +60,11 @@ export function getMigrations(): Migration[] {
 			version: 4,
 			description: 'Add compound indexes on query_events for dashboard query performance',
 			up: (db) => migrateV4(db),
+		},
+		{
+			version: 5,
+			description: 'Add agent-first time index for filtered dashboard query performance',
+			up: (db) => migrateV5(db),
 		},
 	];
 }
@@ -246,4 +252,13 @@ function migrateV4(db: Database.Database): void {
 	runStatements(db, CREATE_COMPOUND_INDEXES_SQL);
 
 	logger.debug('Added compound indexes on query_events', LOG_CONTEXT);
+}
+
+/**
+ * Migration v5: Add agent-first time index for agent-filtered time-range queries
+ */
+function migrateV5(db: Database.Database): void {
+	db.prepare(CREATE_AGENT_TIME_INDEX_SQL).run();
+
+	logger.debug('Added agent-time compound index on query_events', LOG_CONTEXT);
 }

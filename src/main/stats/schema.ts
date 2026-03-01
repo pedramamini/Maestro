@@ -137,6 +137,10 @@ export const CREATE_COMPOUND_INDEXES_SQL = `
   CREATE INDEX IF NOT EXISTS idx_query_time_source ON query_events(start_time, source)
 `;
 
+export const CREATE_AGENT_TIME_INDEX_SQL = `
+  CREATE INDEX IF NOT EXISTS idx_query_agent_time ON query_events(agent_type, start_time)
+`;
+
 // ============================================================================
 // Utilities
 // ============================================================================
