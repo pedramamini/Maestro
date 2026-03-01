@@ -29,7 +29,14 @@ vi.mock('../../../renderer/contexts/LayerStackContext', () => ({
 vi.mock('../../../renderer/constants/modalPriorities', () => ({
 	MODAL_PRIORITIES: {
 		CUE_MODAL: 460,
+		CUE_YAML_EDITOR: 463,
 	},
+}));
+
+// Mock CueYamlEditor
+vi.mock('../../../renderer/components/CueYamlEditor', () => ({
+	CueYamlEditor: ({ isOpen, onClose }: { isOpen: boolean; onClose: () => void }) =>
+		isOpen ? <div data-testid="cue-yaml-editor">YAML Editor Mock</div> : null,
 }));
 
 // Mock useCue hook
@@ -82,6 +89,7 @@ const mockSession = {
 	sessionId: 'sess-1',
 	sessionName: 'Test Session',
 	toolType: 'claude-code',
+	projectRoot: '/test/project',
 	enabled: true,
 	subscriptionCount: 3,
 	activeRuns: 1,

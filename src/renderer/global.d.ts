@@ -2686,6 +2686,7 @@ interface MaestroAPI {
 				sessionId: string;
 				sessionName: string;
 				toolType: string;
+				projectRoot: string;
 				enabled: boolean;
 				subscriptionCount: number;
 				activeRuns: number;

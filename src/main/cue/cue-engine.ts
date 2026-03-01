@@ -112,6 +112,7 @@ export class CueEngine {
 				sessionId,
 				sessionName: session.name,
 				toolType: session.toolType,
+				projectRoot: session.projectRoot,
 				enabled: true,
 				subscriptionCount: state.config.subscriptions.filter((s) => s.enabled !== false).length,
 				activeRuns: activeRunCount,
