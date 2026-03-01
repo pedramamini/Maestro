@@ -18,6 +18,7 @@
  */
 
 import { useCallback, useRef } from 'react';
+import * as Sentry from '@sentry/electron/renderer';
 import type { Session, LogEntry, ToolType } from '../../types';
 import type { GroomingProgress, MergeRequest } from '../../types/contextMerge';
 import type { TransferState, TransferLastRequest } from '../../stores/operationStore';
@@ -234,16 +235,26 @@ export function useProviderSwitch(): UseProviderSwitchResult {
 				}
 
 				// Verify target agent is available
+				let agentStatus;
 				try {
-					const agentStatus = await window.maestro.agents.get(targetProvider);
-					if (!agentStatus?.available) {
-						throw new Error(
-							`${getAgentDisplayName(targetProvider)} is not available. Please install and configure it first.`
-						);
-					}
+					agentStatus = await window.maestro.agents.get(targetProvider);
 				} catch (agentCheckError) {
-					// If we can't check, log warning but continue
-					console.warn('Could not verify agent availability:', agentCheckError);
+					Sentry.captureException(agentCheckError, {
+						extra: {
+							operation: 'agent-availability-check',
+							targetProvider,
+							sourceAgent: sourceSession.toolType,
+						},
+					});
+					throw new Error(
+						`Failed to verify ${getAgentDisplayName(targetProvider)} availability. Please try again.`
+					);
+				}
+
+				if (!agentStatus?.available) {
+					throw new Error(
+						`${getAgentDisplayName(targetProvider)} is not available. Please install and configure it first.`
+					);
 				}
 
 				if (cancelledRef.current) {
