@@ -23,6 +23,7 @@ import {
 	type SendToAgentOptions,
 } from './components/AppModals';
 import { DEFAULT_BATCH_PROMPT } from './components/BatchRunnerModal';
+import * as Sentry from '@sentry/electron/renderer';
 import { ErrorBoundary } from './components/ErrorBoundary';
 import { MainPanel, type MainPanelHandle } from './components/MainPanel';
 import { AppOverlays } from './components/AppOverlays';
@@ -1257,49 +1258,65 @@ function MaestroConsoleInner() {
 
 					// Reconcile account assignments after session restore (ACCT-MUX-13)
 					// This validates accounts still exist and updates customEnvVars accordingly
-					if (useSettingsStore.getState().encoreFeatures.virtuosos) try {
-						const activeIds = restoredSessions.map(s => s.id);
-						const reconciliation = await window.maestro.accounts.reconcileSessions(activeIds);
-						if (reconciliation.success && reconciliation.corrections.length > 0) {
-							setSessions(prev => prev.map(session => {
-								const correction = reconciliation.corrections.find(c => c.sessionId === session.id);
-								if (!correction) return session;
+					if (useSettingsStore.getState().encoreFeatures.virtuosos)
+						try {
+							const activeIds = restoredSessions.map((s) => s.id);
+							const reconciliation = await window.maestro.accounts.reconcileSessions(activeIds);
+							if (reconciliation.success && reconciliation.corrections.length > 0) {
+								setSessions((prev) =>
+									prev.map((session) => {
+										const correction = reconciliation.corrections.find(
+											(c) => c.sessionId === session.id
+										);
+										if (!correction) return session;
 
-								if (correction.status === 'removed') {
-									// Account was removed — clear session's account fields and CLAUDE_CONFIG_DIR
-									const cleanedEnvVars = { ...session.customEnvVars };
-									delete cleanedEnvVars.CLAUDE_CONFIG_DIR;
-									return {
-										...session,
-										accountId: undefined,
-										accountName: undefined,
-										customEnvVars: Object.keys(cleanedEnvVars).length > 0 ? cleanedEnvVars : undefined,
-									};
-								} else if (correction.configDir && session.accountId) {
-									// Account exists — ensure CLAUDE_CONFIG_DIR is current
-									return {
-										...session,
-										accountId: correction.accountId ?? undefined,
-										accountName: correction.accountName ?? undefined,
-										customEnvVars: {
-											...session.customEnvVars,
-											CLAUDE_CONFIG_DIR: correction.configDir,
-										},
-									};
-								}
-								return session;
-							}));
-						}
-						// Re-register assignments for sessions that have accountId but were
-						// created before the assign() call was added to session creation
-						for (const session of restoredSessions) {
-							if (session.accountId && session.toolType === 'claude-code') {
-								window.maestro.accounts.assign(session.id, session.accountId).catch(() => {});
+										if (correction.status === 'removed') {
+											// Account was removed — clear session's account fields and CLAUDE_CONFIG_DIR
+											const cleanedEnvVars = { ...session.customEnvVars };
+											delete cleanedEnvVars.CLAUDE_CONFIG_DIR;
+											return {
+												...session,
+												accountId: undefined,
+												accountName: undefined,
+												customEnvVars:
+													Object.keys(cleanedEnvVars).length > 0 ? cleanedEnvVars : undefined,
+											};
+										} else if (correction.configDir && session.accountId) {
+											// Account exists — ensure CLAUDE_CONFIG_DIR is current
+											return {
+												...session,
+												accountId: correction.accountId ?? undefined,
+												accountName: correction.accountName ?? undefined,
+												customEnvVars: {
+													...session.customEnvVars,
+													CLAUDE_CONFIG_DIR: correction.configDir,
+												},
+											};
+										}
+										return session;
+									})
+								);
 							}
+							// Re-register assignments for sessions that have accountId but were
+							// created before the assign() call was added to session creation
+							for (const session of restoredSessions) {
+								if (session.accountId && session.toolType === 'claude-code') {
+									window.maestro.accounts.assign(session.id, session.accountId).catch((err) => {
+										Sentry.captureException(err, {
+											extra: {
+												operation: 'account:reconcileAssign',
+												sessionId: session.id,
+												accountId: session.accountId,
+											},
+										});
+									});
+								}
+							}
+						} catch (reconcileError) {
+							Sentry.captureException(reconcileError, {
+								extra: { operation: 'account:reconciliation' },
+							});
 						}
-					} catch (reconcileError) {
-						console.error('[App] Account reconciliation failed:', reconcileError);
-					}
 
 					// For remote (SSH) sessions, fetch git info in background to avoid blocking
 					// startup on SSH connection timeouts. This runs after UI is shown.
@@ -1652,9 +1669,10 @@ function MaestroConsoleInner() {
 			notifyToast({
 				type: 'success',
 				title: 'Virtuoso Recovered',
-				message: data.recoveredCount === 1
-					? 'Virtuoso is available again'
-					: `${data.recoveredCount} virtuosos are available again`,
+				message:
+					data.recoveredCount === 1
+						? 'Virtuoso is available again'
+						: `${data.recoveredCount} virtuosos are available again`,
 				duration: 8_000,
 			});
 
@@ -1727,7 +1745,7 @@ function MaestroConsoleInner() {
 		if (!encoreFeatures.virtuosos) return;
 		const unsubAssigned = window.maestro.accounts.onAssigned((data) => {
 			setSessions((prev) =>
-				prev.map(s => {
+				prev.map((s) => {
 					if (!data.sessionId.startsWith(s.id)) return s;
 					return { ...s, accountId: data.accountId, accountName: data.accountName };
 				})
@@ -1740,18 +1758,27 @@ function MaestroConsoleInner() {
 	useEffect(() => {
 		if (!encoreFeatures.virtuosos) return;
 		const unsubRespawn = window.maestro.accounts.onSwitchRespawn(async (data) => {
-			const { sessionId: switchSessionId, toAccountId, toAccountName, configDir, lastPrompt, reason } = data;
+			const {
+				sessionId: switchSessionId,
+				toAccountId,
+				toAccountName,
+				configDir,
+				lastPrompt,
+				reason,
+			} = data;
 
 			// Find the session that needs respawning (match by base session ID)
-			const session = sessionsRef.current.find(s => switchSessionId.startsWith(s.id));
+			const session = sessionsRef.current.find((s) => switchSessionId.startsWith(s.id));
 			if (!session) {
-				console.error('[AccountSwitch] Session not found for respawn:', switchSessionId);
+				Sentry.captureException(new Error('[AccountSwitch] Session not found for respawn'), {
+					extra: { operation: 'account:switchRespawn', switchSessionId },
+				});
 				return;
 			}
 
 			// Update session with new account info and CLAUDE_CONFIG_DIR
 			setSessions((prev) =>
-				prev.map(s => {
+				prev.map((s) => {
 					if (s.id !== session.id) return s;
 					return {
 						...s,
@@ -1769,7 +1796,13 @@ function MaestroConsoleInner() {
 				// Get agent config for respawn
 				const agent = await window.maestro.agents.get(session.toolType);
 				if (!agent) {
-					console.error('[AccountSwitch] Agent not found for respawn:', session.toolType);
+					Sentry.captureException(new Error('[AccountSwitch] Agent not found for respawn'), {
+						extra: {
+							operation: 'account:switchRespawn',
+							toolType: session.toolType,
+							sessionId: session.id,
+						},
+					});
 					return;
 				}
 
@@ -1816,7 +1849,9 @@ function MaestroConsoleInner() {
 					duration: 5_000,
 				});
 			} catch (error) {
-				console.error('[AccountSwitch] Failed to respawn agent:', error);
+				Sentry.captureException(error, {
+					extra: { operation: 'account:switchRespawn', sessionId: session.id, toAccountId },
+				});
 				notifyToast({
 					type: 'error',
 					title: 'Account Switch Failed',
@@ -1847,7 +1882,14 @@ function MaestroConsoleInner() {
 					automatic: true,
 				});
 			} catch (error) {
-				console.error('[AccountSwitch] Auto-switch execution failed:', error);
+				Sentry.captureException(error, {
+					extra: {
+						operation: 'account:autoSwitchExecution',
+						switchSessionId,
+						fromAccountId,
+						toAccountId,
+					},
+				});
 			}
 		});
 
@@ -1895,7 +1937,7 @@ function MaestroConsoleInner() {
 
 		const cleanup = window.maestro.providers.onFailoverSuggest(async (suggestion) => {
 			// Find the session
-			const session = sessionsRef.current.find(s => s.id === suggestion.sessionId);
+			const session = sessionsRef.current.find((s) => s.id === suggestion.sessionId);
 			if (!session) return;
 
 			// Load provider switch config from settings
@@ -4893,7 +4935,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 				remoteId: string | null;
 				workingDirOverride?: string;
 			},
-			accountId?: string,
+			accountId?: string
 		) => {
 			// Update session fields immediately
 			setSessions((prev) =>
@@ -4916,34 +4958,56 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 			// Handle account change: resolve name immediately, then trigger switch/assign
 			if (accountId) {
-				const currentSession = sessionsRef.current.find(s => s.id === sessionId);
+				const currentSession = sessionsRef.current.find((s) => s.id === sessionId);
 				const fromAccountId = currentSession?.accountId;
 
 				// Resolve account name and update session right away
-				window.maestro.accounts.list().then((accounts: any[]) => {
-					const account = accounts.find((a: any) => a.id === accountId);
-					if (account) {
-						setSessions((prev) =>
-							prev.map((s) => {
-								if (s.id !== sessionId) return s;
-								return { ...s, accountId, accountName: account.name };
-							})
-						);
-					}
-				}).catch(() => {});
+				window.maestro.accounts
+					.list()
+					.then((accounts: any[]) => {
+						const account = accounts.find((a: any) => a.id === accountId);
+						if (account) {
+							setSessions((prev) =>
+								prev.map((s) => {
+									if (s.id !== sessionId) return s;
+									return { ...s, accountId, accountName: account.name };
+								})
+							);
+						}
+					})
+					.catch((err) => {
+						Sentry.captureException(err, {
+							extra: { operation: 'account:resolveNameOnSwitch', sessionId, accountId },
+						});
+					});
 
 				if (fromAccountId && fromAccountId !== accountId) {
 					// Full switch: kills running process, reassigns, respawns with new CLAUDE_CONFIG_DIR
-					window.maestro.accounts.executeSwitch({
-						sessionId,
-						fromAccountId,
-						toAccountId: accountId,
-						reason: 'manual',
-						automatic: false,
-					}).catch((err: any) => console.error('Failed to execute account switch:', err));
+					window.maestro.accounts
+						.executeSwitch({
+							sessionId,
+							fromAccountId,
+							toAccountId: accountId,
+							reason: 'manual',
+							automatic: false,
+						})
+						.catch((err) => {
+							Sentry.captureException(err, {
+								extra: {
+									operation: 'account:executeSwitch',
+									sessionId,
+									fromAccountId,
+									toAccountId: accountId,
+								},
+							});
+						});
 				} else {
 					// First assignment or same account — just update registry
-					window.maestro.accounts.assign(sessionId, accountId).catch(() => {});
+					window.maestro.accounts.assign(sessionId, accountId).catch((err) => {
+						Sentry.captureException(err, {
+							extra: { operation: 'account:assign', sessionId, accountId },
+						});
+					});
 				}
 			}
 		},
@@ -4952,87 +5016,100 @@ You are taking over this conversation. Based on the context above, provide a bri
 
 	// Provider Switch handlers
 	const handleSwitchProvider = useCallback((sessionId: string) => {
-		const session = sessionsRef.current.find(s => s.id === sessionId);
+		const session = sessionsRef.current.find((s) => s.id === sessionId);
 		if (session && session.toolType !== 'terminal') {
 			setSwitchProviderSession(session);
 		}
 	}, []);
 
-	const handleConfirmProviderSwitch = useCallback(async (request: {
-		targetProvider: ToolType;
-		groomContext: boolean;
-		archiveSource: boolean;
-		mergeBackInto?: Session;
-	}) => {
-		if (!switchProviderSession) return;
+	const handleConfirmProviderSwitch = useCallback(
+		async (request: {
+			targetProvider: ToolType;
+			groomContext: boolean;
+			archiveSource: boolean;
+			mergeBackInto?: Session;
+		}) => {
+			if (!switchProviderSession) return;
 
-		const activeTab = getActiveTab(switchProviderSession);
-		if (!activeTab) return;
+			const activeTab = getActiveTab(switchProviderSession);
+			if (!activeTab) return;
 
-		const result = await switchProvider({
-			sourceSession: switchProviderSession,
-			sourceTabId: activeTab.id,
-			targetProvider: request.targetProvider,
-			groomContext: request.groomContext,
-			archiveSource: request.archiveSource,
-			mergeBackInto: request.mergeBackInto,
-		});
-
-		if (result.success && result.newSession) {
-			if (result.mergedBack && request.mergeBackInto) {
-				// Merge-back: replace the archived session with the reactivated one
-				setSessions(prev => prev.map(s =>
-					s.id === request.mergeBackInto!.id ? result.newSession! : s
-				));
-			} else {
-				// Always-new: add the new session to state
-				setSessions(prev => [...prev, result.newSession!]);
-			}
-
-			// Mark source as archived if requested
-			if (request.archiveSource) {
-				setSessions(prev => prev.map(s =>
-					s.id === switchProviderSession.id
-						? {
-							...s,
-							archivedByMigration: true,
-							migratedToSessionId: result.newSessionId,
-						}
-						: s
-				));
-			}
-
-			// Clear provider error tracking for source session
-			window.maestro.providers.clearSessionErrors(switchProviderSession.id).catch(() => {});
-
-			// Navigate to the new/reactivated session
-			setActiveSessionId(result.newSessionId!);
-
-			// Show success toast
-			const action = result.mergedBack ? 'Merged back to' : 'Switched to';
-			notifyToast({
-				type: 'success',
-				title: 'Provider Switched',
-				message: `${action} ${getAgentDisplayName(request.targetProvider)}`,
-				duration: 5_000,
+			const result = await switchProvider({
+				sourceSession: switchProviderSession,
+				sourceTabId: activeTab.id,
+				targetProvider: request.targetProvider,
+				groomContext: request.groomContext,
+				archiveSource: request.archiveSource,
+				mergeBackInto: request.mergeBackInto,
 			});
-		}
 
-		// Close the modal
-		setSwitchProviderSession(null);
-	}, [switchProviderSession, switchProvider, setActiveSessionId]);
+			if (result.success && result.newSession) {
+				if (result.mergedBack && request.mergeBackInto) {
+					// Merge-back: replace the archived session with the reactivated one
+					setSessions((prev) =>
+						prev.map((s) => (s.id === request.mergeBackInto!.id ? result.newSession! : s))
+					);
+				} else {
+					// Always-new: add the new session to state
+					setSessions((prev) => [...prev, result.newSession!]);
+				}
+
+				// Mark source as archived if requested
+				if (request.archiveSource) {
+					setSessions((prev) =>
+						prev.map((s) =>
+							s.id === switchProviderSession.id
+								? {
+										...s,
+										archivedByMigration: true,
+										migratedToSessionId: result.newSessionId,
+									}
+								: s
+						)
+					);
+				}
+
+				// Clear provider error tracking for source session
+				window.maestro.providers.clearSessionErrors(switchProviderSession.id).catch((err) => {
+					Sentry.captureException(err, {
+						extra: {
+							operation: 'provider:clearSessionErrors',
+							sessionId: switchProviderSession.id,
+						},
+					});
+				});
+
+				// Navigate to the new/reactivated session
+				setActiveSessionId(result.newSessionId!);
+
+				// Show success toast
+				const action = result.mergedBack ? 'Merged back to' : 'Switched to';
+				notifyToast({
+					type: 'success',
+					title: 'Provider Switched',
+					message: `${action} ${getAgentDisplayName(request.targetProvider)}`,
+					duration: 5_000,
+				});
+			}
+
+			// Close the modal
+			setSwitchProviderSession(null);
+		},
+		[switchProviderSession, switchProvider, setActiveSessionId]
+	);
 
 	// Unarchive handlers
 	const handleUnarchive = useCallback((sessionId: string) => {
-		const session = sessionsRef.current.find(s => s.id === sessionId);
+		const session = sessionsRef.current.find((s) => s.id === sessionId);
 		if (!session || !session.archivedByMigration) return;
 
 		// Check for conflict: another non-archived session with the same name AND toolType
 		const conflicting = sessionsRef.current.find(
-			s => s.id !== sessionId
-				&& s.toolType === session.toolType
-				&& s.name === session.name
-				&& !s.archivedByMigration
+			(s) =>
+				s.id !== sessionId &&
+				s.toolType === session.toolType &&
+				s.name === session.name &&
+				!s.archivedByMigration
 		);
 
 		if (conflicting) {
@@ -5042,11 +5119,13 @@ You are taking over this conversation. Based on the context above, provide a bri
 			});
 		} else {
 			// No conflict — directly unarchive
-			setSessions(prev => prev.map(s =>
-				s.id === sessionId
-					? { ...s, archivedByMigration: false, migratedToSessionId: undefined }
-					: s
-			));
+			setSessions((prev) =>
+				prev.map((s) =>
+					s.id === sessionId
+						? { ...s, archivedByMigration: false, migratedToSessionId: undefined }
+						: s
+				)
+			);
 			notifyToast({
 				type: 'success',
 				title: 'Agent Unarchived',
@@ -5060,15 +5139,17 @@ You are taking over this conversation. Based on the context above, provide a bri
 		if (!unarchiveConflictState) return;
 		const { archivedSession, conflictingSession } = unarchiveConflictState;
 
-		setSessions(prev => prev.map(s => {
-			if (s.id === archivedSession.id) {
-				return { ...s, archivedByMigration: false, migratedToSessionId: undefined };
-			}
-			if (s.id === conflictingSession.id) {
-				return { ...s, archivedByMigration: true };
-			}
-			return s;
-		}));
+		setSessions((prev) =>
+			prev.map((s) => {
+				if (s.id === archivedSession.id) {
+					return { ...s, archivedByMigration: false, migratedToSessionId: undefined };
+				}
+				if (s.id === conflictingSession.id) {
+					return { ...s, archivedByMigration: true };
+				}
+				return s;
+			})
+		);
 
 		notifyToast({
 			type: 'success',
@@ -5084,17 +5165,25 @@ You are taking over this conversation. Based on the context above, provide a bri
 		if (!unarchiveConflictState) return;
 		const { archivedSession, conflictingSession } = unarchiveConflictState;
 
-		setSessions(prev => prev
-			.filter(s => s.id !== conflictingSession.id)
-			.map(s =>
-				s.id === archivedSession.id
-					? { ...s, archivedByMigration: false, migratedToSessionId: undefined }
-					: s
-			)
+		setSessions((prev) =>
+			prev
+				.filter((s) => s.id !== conflictingSession.id)
+				.map((s) =>
+					s.id === archivedSession.id
+						? { ...s, archivedByMigration: false, migratedToSessionId: undefined }
+						: s
+				)
 		);
 
 		// Kill process for deleted session if running
-		window.maestro.process.kill(conflictingSession.id).catch(() => {});
+		window.maestro.process.kill(conflictingSession.id).catch((err) => {
+			Sentry.captureException(err, {
+				extra: {
+					operation: 'account:killConflictingOnUnarchive',
+					sessionId: conflictingSession.id,
+				},
+			});
+		});
 
 		notifyToast({
 			type: 'success',
@@ -5893,12 +5982,23 @@ You are taking over this conversation. Based on the context above, provide a bri
 			// Pre-assign account for Claude Code sessions if accounts are configured
 			if (encoreFeatures.virtuosos && newSession.toolType === 'claude-code') {
 				try {
-					const defaultAccount = await window.maestro.accounts.getDefault() as { id: string; name: string } | null;
+					const defaultAccount = (await window.maestro.accounts.getDefault()) as {
+						id: string;
+						name: string;
+					} | null;
 					if (defaultAccount) {
 						newSession.accountId = defaultAccount.id;
 						newSession.accountName = defaultAccount.name;
 						// Register assignment with main process so usage listener tracks this session
-						window.maestro.accounts.assign(newId, defaultAccount.id).catch(() => {});
+						window.maestro.accounts.assign(newId, defaultAccount.id).catch((err) => {
+							Sentry.captureException(err, {
+								extra: {
+									operation: 'account:assignOnCreate',
+									sessionId: newId,
+									accountId: defaultAccount.id,
+								},
+							});
+						});
 					}
 				} catch {
 					// Accounts not configured or unavailable — proceed without assignment
@@ -9103,7 +9203,11 @@ You are taking over this conversation. Based on the context above, provide a bri
 					onCloseEditAgentModal={handleCloseEditAgentModal}
 					onSaveEditAgent={handleSaveEditAgent}
 					editAgentSession={editAgentSession}
-					onSwitchProviderFromEdit={encoreFeatures.virtuosos && editAgentSession ? () => handleSwitchProvider(editAgentSession.id) : undefined}
+					onSwitchProviderFromEdit={
+						encoreFeatures.virtuosos && editAgentSession
+							? () => handleSwitchProvider(editAgentSession.id)
+							: undefined
+					}
 					renameSessionModalOpen={renameInstanceModalOpen}
 					renameSessionValue={renameInstanceValue}
 					setRenameSessionValue={setRenameInstanceValue}
