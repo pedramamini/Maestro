@@ -875,11 +875,28 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 		const expandedSet = new Set(session.fileExplorerExpanded || []);
 		const isFiltering = fileTreeFilter.length > 0;
 		const result: FlattenedNode[] = [];
+		const seenPaths = new Set<string>();
 		let globalIndex = 0;
 
 		const flatten = (nodes: FileNode[], currentPath = '', depth = 0) => {
+			// Guard: deduplicate sibling nodes by name within the same parent
+			const seenNames = new Set<string>();
 			for (const node of nodes) {
+				if (seenNames.has(node.name)) {
+					console.warn('[FileExplorer] Duplicate sibling skipped:', currentPath, node.name);
+					continue;
+				}
+				seenNames.add(node.name);
+
 				const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
+
+				// Guard: skip duplicate paths to prevent React key collisions
+				if (seenPaths.has(fullPath)) {
+					console.warn('[FileExplorer] Duplicate path skipped:', fullPath);
+					continue;
+				}
+				seenPaths.add(fullPath);
+
 				result.push({ node, path: fullPath, depth, globalIndex });
 				globalIndex++;
 

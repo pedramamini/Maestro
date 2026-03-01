@@ -728,13 +728,12 @@ describe('RightPanel', () => {
 			const props = createDefaultProps({ currentSessionBatchState });
 			render(<RightPanel {...props} />);
 
-			// There are two indicators with the same text - one in the header and one at the bottom
+			// There may be multiple elements matching the text (header + bottom wrapper)
 			// Text is split across multiple elements, so use a function matcher
-			expect(
-				screen.getByText((content, element) => {
-					return element?.textContent === 'Loop 3 of 5';
-				})
-			).toBeInTheDocument();
+			const matches = screen.getAllByText((_content, element) => {
+				return element?.tagName === 'SPAN' && element?.textContent === 'Loop 3 of 5';
+			});
+			expect(matches.length).toBeGreaterThan(0);
 		});
 
 		it('should show infinity symbol when maxLoops is undefined', () => {
@@ -959,6 +958,54 @@ describe('RightPanel', () => {
 
 			fireEvent.click(screen.getByText('Auto Run Paused'));
 			expect(setActiveRightTab).toHaveBeenCalledWith('autorun');
+		});
+
+		it('should show "View history" link when on autorun tab during batch run', () => {
+			useUIStore.setState({ activeRightTab: 'autorun' });
+			const setActiveRightTab = vi.fn();
+			const currentSessionBatchState: BatchRunState = {
+				isRunning: true,
+				isStopping: false,
+				documents: ['doc1'],
+				currentDocumentIndex: 0,
+				totalTasks: 10,
+				completedTasks: 5,
+				currentDocTasksTotal: 10,
+				currentDocTasksCompleted: 5,
+				totalTasksAcrossAllDocs: 10,
+				completedTasksAcrossAllDocs: 5,
+				loopEnabled: false,
+				loopIteration: 0,
+			};
+			const props = createDefaultProps({ currentSessionBatchState, setActiveRightTab });
+			render(<RightPanel {...props} />);
+
+			const link = screen.getByText('View history');
+			expect(link).toBeInTheDocument();
+			fireEvent.click(link);
+			expect(setActiveRightTab).toHaveBeenCalledWith('history');
+		});
+
+		it('should not show "View history" link when on history tab during batch run', () => {
+			useUIStore.setState({ activeRightTab: 'history' });
+			const currentSessionBatchState: BatchRunState = {
+				isRunning: true,
+				isStopping: false,
+				documents: ['doc1'],
+				currentDocumentIndex: 0,
+				totalTasks: 10,
+				completedTasks: 5,
+				currentDocTasksTotal: 10,
+				currentDocTasksCompleted: 5,
+				totalTasksAcrossAllDocs: 10,
+				completedTasksAcrossAllDocs: 5,
+				loopEnabled: false,
+				loopIteration: 0,
+			};
+			const props = createDefaultProps({ currentSessionBatchState });
+			render(<RightPanel {...props} />);
+
+			expect(screen.queryByText('View history')).not.toBeInTheDocument();
 		});
 	});
 

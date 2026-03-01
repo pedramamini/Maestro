@@ -364,6 +364,10 @@ function MaestroConsoleInner() {
 		setMarkdownEditMode,
 		chatRawTextMode,
 		setChatRawTextMode,
+		showHiddenFiles: _showHiddenFiles,
+		setShowHiddenFiles: _setShowHiddenFiles,
+		terminalWidth: _terminalWidth,
+		setTerminalWidth: _setTerminalWidth,
 		logLevel,
 		logViewerSelectedLevels,
 		setLogViewerSelectedLevels,
@@ -397,6 +401,12 @@ function MaestroConsoleInner() {
 		documentGraphShowExternalLinks,
 		documentGraphMaxNodes,
 		documentGraphPreviewCharLimit,
+		documentGraphLayoutType,
+
+		// Rendering settings
+		disableConfetti: _disableConfetti,
+
+		// File tab refresh settings
 		fileTabAutoRefreshEnabled,
 		useNativeTitleBar,
 		autoScrollAiMode,
@@ -493,6 +503,7 @@ function MaestroConsoleInner() {
 	const bookmarksCollapsed = useUIStore((s) => s.bookmarksCollapsed);
 	// groupChatsExpanded moved to useCycleSession hook
 	const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
+	const _selectedFileIndex = useFileExplorerStore((s) => s.selectedFileIndex);
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
 	const fileTreeFilterOpen = useFileExplorerStore((s) => s.fileTreeFilterOpen);
 	const editingGroupId = useUIStore((s) => s.editingGroupId);
@@ -516,7 +527,8 @@ function MaestroConsoleInner() {
 		setSelectedSidebarIndex,
 	} = useUIStore.getState();
 
-	const { setFileTreeFilterOpen } = useFileExplorerStore.getState();
+	const { setSelectedFileIndex: _setSelectedFileIndex, setFileTreeFilter: _setFileTreeFilter, setFileTreeFilterOpen } =
+		useFileExplorerStore.getState();
 
 	// --- GROUP CHAT STATE (now in groupChatStore) ---
 
@@ -627,6 +639,8 @@ function MaestroConsoleInner() {
 	// Content is per-session in session.autoRunContent
 	const autoRunDocumentList = useBatchStore((s) => s.documentList);
 	const autoRunDocumentTree = useBatchStore((s) => s.documentTree);
+	const _autoRunIsLoadingDocuments = useBatchStore((s) => s.isLoadingDocuments);
+	const _autoRunDocumentTaskCounts = useBatchStore((s) => s.documentTaskCounts);
 	const {
 		setDocumentList: setAutoRunDocumentList,
 		setDocumentTree: setAutoRunDocumentTree,
@@ -1762,8 +1776,16 @@ function MaestroConsoleInner() {
 		},
 		[activeSession]
 	);
-	// File tab selection from TabSwitcher - reuse the proper handler which includes auto-refresh
-	const handleUtilityFileTabSelect = handleSelectFileTab;
+	const handleUtilityFileTabSelect = useCallback(
+		(tabId: string) => {
+			if (!activeSession) return;
+			// Set activeFileTabId, keep activeTabId as-is (for when returning to AI tabs)
+			setSessions((prev) =>
+				prev.map((s) => (s.id === activeSession.id ? { ...s, activeFileTabId: tabId } : s))
+			);
+		},
+		[activeSession]
+	);
 	const handleNamedSessionSelect = useCallback(
 		(agentSessionId: string, _projectPath: string, sessionName: string, starred?: boolean) => {
 			// Open a closed named session as a new tab - use handleResumeSession to properly load messages
@@ -2899,6 +2921,21 @@ function MaestroConsoleInner() {
 							defaultMaxNodes={documentGraphMaxNodes}
 							defaultPreviewCharLimit={documentGraphPreviewCharLimit}
 							onPreviewCharLimitChange={settings.setDocumentGraphPreviewCharLimit}
+							defaultLayoutType={activeSession?.documentGraphLayout ?? documentGraphLayoutType}
+							onLayoutTypeChange={(type) => {
+								// Persist to the active session for per-agent recall
+								if (activeSession) {
+									setSessions((prev) =>
+										prev.map((s) =>
+											s.id === activeSession.id
+												? { ...s, documentGraphLayout: type }
+												: s
+										)
+									);
+								}
+								// Also update the global default for new agents
+								settings.setDocumentGraphLayoutType(type);
+							}}
 							// Note: sshRemoteId is only set after AI agent spawns. For terminal-only SSH sessions,
 							// use sessionSshRemoteConfig.remoteId as fallback (see CLAUDE.md SSH Remote Sessions)
 							sshRemoteId={
@@ -3002,7 +3039,6 @@ function MaestroConsoleInner() {
 										return anyParticipantMissingCost || moderatorMissingCost;
 									})()}
 									onSendMessage={handleSendGroupChatMessage}
-									onClose={handleCloseGroupChat}
 									onRename={() =>
 										activeGroupChatId && handleOpenRenameGroupChatModal(activeGroupChatId)
 									}

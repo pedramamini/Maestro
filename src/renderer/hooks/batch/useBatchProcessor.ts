@@ -21,6 +21,8 @@ import { countUnfinishedTasks, uncheckAllTasks } from './batchUtils';
 import { useSessionDebounce } from './useSessionDebounce';
 import { DEFAULT_BATCH_STATE, type BatchAction } from './batchReducer';
 import { useBatchStore, selectHasAnyActiveBatch } from '../../stores/batchStore';
+import { useSessionStore } from '../../stores/sessionStore';
+import { notifyToast } from '../../stores/notificationStore';
 import { useTimeTracking } from './useTimeTracking';
 import { useWorktreeManager } from './useWorktreeManager';
 import { useDocumentProcessor } from './useDocumentProcessor';
@@ -606,8 +608,11 @@ export function useBatchProcessor({
 				worktreeEnabled: config.worktree?.enabled,
 			});
 
-			// Use sessionsRef to get latest sessions (handles case where session was just created)
-			const session = sessionsRef.current.find((s) => s.id === sessionId);
+			// Use sessionsRef first, then fall back to Zustand store for sessions just created
+			// (sessionsRef updates on React re-render, but Zustand store updates synchronously)
+			const session =
+				sessionsRef.current.find((s) => s.id === sessionId) ||
+				useSessionStore.getState().sessions.find((s) => s.id === sessionId);
 			if (!session) {
 				const worktreeInfo = config.worktreeTarget
 					? ` (worktree mode: ${config.worktreeTarget.mode}, path: ${
@@ -653,31 +658,45 @@ export function useBatchProcessor({
 			stopRequestedRefs.current[sessionId] = false;
 			delete errorResolutionRefs.current[sessionId];
 
-			// Set up worktree if enabled using extracted hook
-			// Inject sshRemoteId from session into worktree config for remote worktree operations
+			// Set up worktree if enabled using extracted hook.
 			// Note: sshRemoteId is only set after AI agent spawns. For terminal-only SSH sessions,
 			// we must fall back to sessionSshRemoteConfig.remoteId. See CLAUDE.md "SSH Remote Sessions".
 			const sshRemoteId =
 				session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
-			const worktreeWithSsh = worktree ? { ...worktree, sshRemoteId } : undefined;
-			const worktreeResult = await worktreeManager.setupWorktree(session.cwd, worktreeWithSsh);
-			if (!worktreeResult.success) {
-				window.maestro.logger.log('error', 'Worktree setup failed', 'BatchProcessor', {
-					sessionId,
-					error: worktreeResult.error,
-				});
-				return;
-			}
 
-			const { effectiveCwd } = worktreeResult;
-			let { worktreeActive, worktreePath, worktreeBranch } = worktreeResult;
+			let effectiveCwd: string;
+			let worktreeActive: boolean;
+			let worktreePath: string | undefined;
+			let worktreeBranch: string | undefined;
 
-			// When dispatching to a worktree agent via "Run in Worktree", the agent is already
-			// in the worktree directory. Mark worktree as active so PR creation fires on completion.
 			if (config.worktreeTarget) {
+				// Worktree dispatch was already handled by useAutoRunHandlers
+				// (spawnWorktreeAgentAndDispatch created the worktree and session).
+				// Skip setupWorktree — calling it again would fail because the session's
+				// CWD is already a worktree, not the main repo, causing a
+				// "belongs to a different repository" false positive.
+				effectiveCwd = session.cwd;
 				worktreeActive = true;
 				worktreePath = session.cwd;
 				worktreeBranch = session.worktreeBranch || config.worktree?.branchName;
+			} else {
+				// Normal path: set up worktree from scratch if config.worktree is enabled
+				const worktreeWithSsh = worktree ? { ...worktree, sshRemoteId } : undefined;
+				const worktreeResult = await worktreeManager.setupWorktree(
+					session.cwd,
+					worktreeWithSsh
+				);
+				if (!worktreeResult.success) {
+					window.maestro.logger.log('error', 'Worktree setup failed', 'BatchProcessor', {
+						sessionId,
+						error: worktreeResult.error,
+					});
+					return;
+				}
+				effectiveCwd = worktreeResult.effectiveCwd;
+				worktreeActive = worktreeResult.worktreeActive;
+				worktreePath = worktreeResult.worktreePath;
+				worktreeBranch = worktreeResult.worktreeBranch;
 			}
 
 			// Get git branch for template variable substitution
@@ -771,6 +790,15 @@ export function useBatchProcessor({
 				totalTasks: initialTotalTasks,
 				loopEnabled,
 				maxLoops: maxLoops ?? 'unlimited',
+			});
+
+			// Notify user that Auto Run has started
+			notifyToast({
+				type: 'info',
+				title: 'Auto Run Started',
+				message: `${initialTotalTasks} ${initialTotalTasks === 1 ? 'task' : 'tasks'} across ${documents.length} ${documents.length === 1 ? 'document' : 'documents'}`,
+				project: session.name,
+				sessionId,
 			});
 
 			// Add initial history entry when using worktree
@@ -1524,6 +1552,21 @@ export function useBatchProcessor({
 						error: prResult.error,
 					});
 				}
+
+				// Record PR result in history so it's visible in the worktree agent's history panel
+				onAddHistoryEntry({
+					type: 'AUTO',
+					timestamp: Date.now(),
+					summary: prResult.success
+						? `PR created: ${prResult.prUrl}`
+						: `PR creation failed: ${prResult.error || 'Unknown error'}`,
+					fullResponse: prResult.success
+						? `**Pull Request Created**\n\n- **URL:** ${prResult.prUrl}\n- **Branch:** \`${worktreeBranch}\`\n- **Target:** \`${prResult.targetBranch || 'unknown'}\`\n- **Tasks Completed:** ${totalCompletedTasks}`
+						: `**Pull Request Creation Failed**\n\n- **Error:** ${prResult.error || 'Unknown error'}\n- **Branch:** \`${worktreeBranch}\`\n- **Target:** \`${prResult.targetBranch || 'unknown'}\``,
+					projectPath: worktreePath,
+					sessionId,
+					success: prResult.success,
+				});
 			}
 
 			// Add final Auto Run summary entry

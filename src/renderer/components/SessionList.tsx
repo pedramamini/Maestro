@@ -1118,7 +1118,15 @@ function SessionListInner(props: SessionListProps) {
 	const setLeftSidebarOpen = useUIStore.getState().setLeftSidebarOpen;
 	const setBookmarksCollapsed = useUIStore.getState().setBookmarksCollapsed;
 	const setGroupChatsExpanded = useUIStore.getState().setGroupChatsExpanded;
-	const setActiveSessionId = useSessionStore.getState().setActiveSessionId;
+	const setActiveSessionIdRaw = useSessionStore.getState().setActiveSessionId;
+	const setActiveGroupChatId = useGroupChatStore.getState().setActiveGroupChatId;
+	const setActiveSessionId = useCallback(
+		(id: string) => {
+			setActiveGroupChatId(null);
+			setActiveSessionIdRaw(id);
+		},
+		[setActiveSessionIdRaw, setActiveGroupChatId]
+	);
 	const setSessions = useSessionStore.getState().setSessions;
 	const setGroups = useSessionStore.getState().setGroups;
 	const setWebInterfaceUseCustomPort = useSettingsStore.getState().setWebInterfaceUseCustomPort;

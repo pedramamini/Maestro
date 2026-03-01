@@ -59,6 +59,8 @@ export interface PRCreationResult {
 	prUrl?: string;
 	/** Error message if creation failed */
 	error?: string;
+	/** The resolved target branch (user-specified or auto-detected) */
+	targetBranch?: string;
 }
 
 /**
@@ -392,12 +394,14 @@ export function useWorktreeManager(): UseWorktreeManagerReturn {
 					return {
 						success: true,
 						prUrl: prResult.prUrl,
+						targetBranch: baseBranch,
 					};
 				} else {
 					console.warn('[WorktreeManager] PR creation failed:', prResult.error);
 					return {
 						success: false,
 						error: prResult.error,
+						targetBranch: baseBranch,
 					};
 				}
 			} catch (error) {
