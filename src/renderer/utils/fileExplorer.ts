@@ -339,7 +339,17 @@ async function loadFileTreeRecursive(
 			});
 		}
 
+		// Track seen names to deduplicate entries (guards against edge cases
+		// where the OS or IPC layer returns the same entry more than once).
+		const seen = new Set<string>();
+
 		for (const entry of entries) {
+			if (seen.has(entry.name)) {
+				console.warn('[loadFileTree] readDir returned duplicate entry:', entry.name, 'in', dirPath);
+				continue;
+			}
+			seen.add(entry.name);
+
 			// Skip entries that match ignore patterns
 			if (shouldIgnore(entry.name, state.ignorePatterns)) {
 				continue;

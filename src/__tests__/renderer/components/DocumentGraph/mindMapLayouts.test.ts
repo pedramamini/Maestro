@@ -271,8 +271,9 @@ describe('mindMapLayouts', () => {
 			);
 			const children = result.nodes.filter((n) => n.id !== 'center');
 			const sides = new Set(children.map((n) => n.side));
-			// Should have at least one node on each side
-			expect(sides.has('left') || sides.has('right')).toBe(true);
+			// Should have nodes on both sides
+			expect(sides.has('left')).toBe(true);
+			expect(sides.has('right')).toBe(true);
 		});
 
 		it('respects maxDepth filtering', () => {

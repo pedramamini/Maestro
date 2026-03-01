@@ -456,6 +456,43 @@ describe('fileExplorer utils', () => {
 			expect(result.find((n) => n.name === '.git')).toBeDefined();
 			expect(result.find((n) => n.name === 'src')).toBeDefined();
 		});
+
+		it('deduplicates entries returned by readDir', async () => {
+			vi.mocked(window.maestro.fs.readDir).mockResolvedValueOnce([
+				{ name: 'src', isFile: false, isDirectory: true, path: '/project/src' },
+				{ name: 'README.md', isFile: true, isDirectory: false, path: '/project/README.md' },
+				{ name: 'src', isFile: false, isDirectory: true, path: '/project/src' }, // duplicate
+				{ name: 'README.md', isFile: true, isDirectory: false, path: '/project/README.md' }, // duplicate
+			]);
+			vi.mocked(window.maestro.fs.readDir).mockResolvedValue([]); // Empty children
+
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const result = await loadFileTree('/project');
+			consoleSpy.mockRestore();
+
+			expect(result).toHaveLength(2);
+			expect(result[0].name).toBe('src');
+			expect(result[1].name).toBe('README.md');
+		});
+
+		it('deduplicates entries in nested directories', async () => {
+			vi.mocked(window.maestro.fs.readDir)
+				.mockResolvedValueOnce([
+					{ name: 'docs', isFile: false, isDirectory: true, path: '/project/docs' },
+				])
+				.mockResolvedValueOnce([
+					{ name: 'guide.md', isFile: true, isDirectory: false, path: '/project/docs/guide.md' },
+					{ name: 'guide.md', isFile: true, isDirectory: false, path: '/project/docs/guide.md' }, // duplicate child
+				]);
+
+			const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+			const result = await loadFileTree('/project');
+			consoleSpy.mockRestore();
+
+			expect(result).toHaveLength(1);
+			expect(result[0].children).toHaveLength(1);
+			expect(result[0].children![0].name).toBe('guide.md');
+		});
 	});
 
 	// ============================================================================

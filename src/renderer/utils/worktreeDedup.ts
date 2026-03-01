@@ -14,6 +14,7 @@ function normalizePath(p: string): string {
 }
 
 const recentlyCreatedPaths = new Set<string>();
+const cleanupTimers = new Map<string, ReturnType<typeof setTimeout>>();
 
 /**
  * Mark a worktree path as recently created. The file watcher will skip
@@ -22,14 +23,32 @@ const recentlyCreatedPaths = new Set<string>();
 export function markWorktreePathAsRecentlyCreated(path: string, ttlMs = 10000): void {
 	const normalized = normalizePath(path);
 	recentlyCreatedPaths.add(normalized);
-	setTimeout(() => recentlyCreatedPaths.delete(normalized), ttlMs);
+
+	// Reset any existing timer so re-marking extends the TTL
+	const existingTimer = cleanupTimers.get(normalized);
+	if (existingTimer) {
+		clearTimeout(existingTimer);
+	}
+
+	const timer = setTimeout(() => {
+		recentlyCreatedPaths.delete(normalized);
+		cleanupTimers.delete(normalized);
+	}, ttlMs);
+	cleanupTimers.set(normalized, timer);
 }
 
 /**
  * Remove a path from the recently-created set (e.g., on creation failure).
  */
 export function clearRecentlyCreatedWorktreePath(path: string): void {
-	recentlyCreatedPaths.delete(normalizePath(path));
+	const normalized = normalizePath(path);
+	recentlyCreatedPaths.delete(normalized);
+
+	const timer = cleanupTimers.get(normalized);
+	if (timer) {
+		clearTimeout(timer);
+		cleanupTimers.delete(normalized);
+	}
 }
 
 /**

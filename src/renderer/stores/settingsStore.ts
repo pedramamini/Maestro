@@ -37,6 +37,12 @@ import { getLevelIndex } from '../constants/keyboardMastery';
 import { commitCommandPrompt } from '../../prompts';
 
 // ============================================================================
+// Shared Type Aliases
+// ============================================================================
+
+export type DocumentGraphLayoutType = 'mindmap' | 'radial' | 'force';
+
+// ============================================================================
 // Default Constants
 // ============================================================================
 
@@ -222,7 +228,7 @@ export interface SettingsStoreState {
 	documentGraphShowExternalLinks: boolean;
 	documentGraphMaxNodes: number;
 	documentGraphPreviewCharLimit: number;
-	documentGraphLayoutType: 'mindmap' | 'radial' | 'force';
+	documentGraphLayoutType: DocumentGraphLayoutType;
 	statsCollectionEnabled: boolean;
 	defaultStatsTimeRange: 'day' | 'week' | 'month' | 'year' | 'all';
 	preventSleepEnabled: boolean;
@@ -294,7 +300,7 @@ export interface SettingsStoreActions {
 	setDocumentGraphShowExternalLinks: (value: boolean) => void;
 	setDocumentGraphMaxNodes: (value: number) => void;
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
-	setDocumentGraphLayoutType: (value: 'mindmap' | 'radial' | 'force') => void;
+	setDocumentGraphLayoutType: (value: DocumentGraphLayoutType) => void;
 	setStatsCollectionEnabled: (value: boolean) => void;
 	setDefaultStatsTimeRange: (value: 'day' | 'week' | 'month' | 'year' | 'all') => void;
 	setDisableGpuAcceleration: (value: boolean) => void;
@@ -706,7 +712,7 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 	},
 
 	setDocumentGraphLayoutType: (value) => {
-		const valid: Array<'mindmap' | 'radial' | 'force'> = ['mindmap', 'radial', 'force'];
+		const valid: DocumentGraphLayoutType[] = ['mindmap', 'radial', 'force'];
 		const layoutType = valid.includes(value) ? value : 'mindmap';
 		set({ documentGraphLayoutType: layoutType });
 		window.maestro.settings.set('documentGraphLayoutType', layoutType);
@@ -1616,7 +1622,7 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['documentGraphLayoutType'] !== undefined) {
 			const lt = allSettings['documentGraphLayoutType'] as string;
 			if (['mindmap', 'radial', 'force'].includes(lt)) {
-				patch.documentGraphLayoutType = lt as 'mindmap' | 'radial' | 'force';
+				patch.documentGraphLayoutType = lt as DocumentGraphLayoutType;
 			}
 		}
 

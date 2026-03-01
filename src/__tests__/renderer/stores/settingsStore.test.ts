@@ -516,9 +516,13 @@ describe('settingsStore', () => {
 				);
 			});
 
-			it('setDocumentGraphLayoutType rejects invalid values', () => {
+			it('setDocumentGraphLayoutType rejects invalid values and persists fallback', () => {
 				useSettingsStore.getState().setDocumentGraphLayoutType('invalid' as any);
 				expect(useSettingsStore.getState().documentGraphLayoutType).toBe('mindmap');
+				expect(window.maestro.settings.set).toHaveBeenCalledWith(
+					'documentGraphLayoutType',
+					'mindmap'
+				);
 			});
 		});
 

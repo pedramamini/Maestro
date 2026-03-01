@@ -699,15 +699,14 @@ describe('FilePreview', () => {
 			);
 
 			// Initially truncated
-			const highlighter = screen.getByTestId('syntax-highlighter');
-			expect(highlighter.textContent?.length).toBe(100 * 1024);
+			expect(screen.getByTestId('syntax-highlighter').textContent?.length).toBe(100 * 1024);
 
 			// Click load full file button
 			fireEvent.click(screen.getByText('Load full file'));
 
 			// Banner should disappear and full content should be shown
 			expect(screen.queryByText(/Large file preview truncated/)).not.toBeInTheDocument();
-			expect(highlighter.textContent?.length).toBe(200 * 1024);
+			expect(screen.getByTestId('syntax-highlighter').textContent?.length).toBe(200 * 1024);
 		});
 
 		it('skips token counting for files larger than 1MB', async () => {

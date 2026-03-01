@@ -1561,8 +1561,8 @@ export function useBatchProcessor({
 						? `PR created: ${prResult.prUrl}`
 						: `PR creation failed: ${prResult.error || 'Unknown error'}`,
 					fullResponse: prResult.success
-						? `**Pull Request Created**\n\n- **URL:** ${prResult.prUrl}\n- **Branch:** \`${worktreeBranch}\`\n- **Target:** \`${worktree.prTargetBranch || 'main'}\`\n- **Tasks Completed:** ${totalCompletedTasks}`
-						: `**Pull Request Creation Failed**\n\n- **Error:** ${prResult.error || 'Unknown error'}\n- **Branch:** \`${worktreeBranch}\`\n- **Target:** \`${worktree.prTargetBranch || 'main'}\``,
+						? `**Pull Request Created**\n\n- **URL:** ${prResult.prUrl}\n- **Branch:** \`${worktreeBranch}\`\n- **Target:** \`${prResult.targetBranch || 'unknown'}\`\n- **Tasks Completed:** ${totalCompletedTasks}`
+						: `**Pull Request Creation Failed**\n\n- **Error:** ${prResult.error || 'Unknown error'}\n- **Branch:** \`${worktreeBranch}\`\n- **Target:** \`${prResult.targetBranch || 'unknown'}\``,
 					projectPath: worktreePath,
 					sessionId,
 					success: prResult.success,

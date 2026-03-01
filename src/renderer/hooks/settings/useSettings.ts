@@ -32,6 +32,7 @@ import {
 	loadAllSettings,
 	selectIsLeaderboardRegistered,
 } from '../../stores/settingsStore';
+import type { DocumentGraphLayoutType } from '../../stores/settingsStore';
 
 export interface UseSettingsReturn {
 	// Loading state
@@ -235,8 +236,8 @@ export interface UseSettingsReturn {
 	setDocumentGraphMaxNodes: (value: number) => void;
 	documentGraphPreviewCharLimit: number;
 	setDocumentGraphPreviewCharLimit: (value: number) => void;
-	documentGraphLayoutType: 'mindmap' | 'radial' | 'force';
-	setDocumentGraphLayoutType: (value: 'mindmap' | 'radial' | 'force') => void;
+	documentGraphLayoutType: DocumentGraphLayoutType;
+	setDocumentGraphLayoutType: (value: DocumentGraphLayoutType) => void;
 
 	// Stats settings
 	statsCollectionEnabled: boolean;

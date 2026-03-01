@@ -88,4 +88,39 @@ describe('worktreeDedup', () => {
 		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/a')).toBe(false);
 		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/b')).toBe(true);
 	});
+
+	it('re-marking a path resets the TTL timer', () => {
+		markWorktreePathAsRecentlyCreated('/projects/worktrees/remark', 10000);
+
+		// Advance 8s (within original TTL)
+		vi.advanceTimersByTime(8000);
+		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/remark')).toBe(true);
+
+		// Re-mark — should reset the 10s TTL
+		markWorktreePathAsRecentlyCreated('/projects/worktrees/remark', 10000);
+
+		// Advance another 8s (16s total, past original TTL but within re-marked TTL)
+		vi.advanceTimersByTime(8000);
+		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/remark')).toBe(true);
+
+		// Advance past re-marked TTL
+		vi.advanceTimersByTime(2001);
+		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/remark')).toBe(false);
+	});
+
+	it('clearRecentlyCreatedWorktreePath cancels pending timer', () => {
+		markWorktreePathAsRecentlyCreated('/projects/worktrees/clear-timer', 10000);
+		clearRecentlyCreatedWorktreePath('/projects/worktrees/clear-timer');
+
+		// Re-mark with a short TTL
+		markWorktreePathAsRecentlyCreated('/projects/worktrees/clear-timer', 5000);
+
+		// Advance past original TTL but within new TTL — should still be present
+		// (old timer was cleared, only new 5s timer exists)
+		vi.advanceTimersByTime(4999);
+		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/clear-timer')).toBe(true);
+
+		vi.advanceTimersByTime(1);
+		expect(isRecentlyCreatedWorktreePath('/projects/worktrees/clear-timer')).toBe(false);
+	});
 });

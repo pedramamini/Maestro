@@ -167,7 +167,13 @@ export function registerFilesystemHandlers(): void {
 				const content = await fs.readFile(filePath, 'utf-8');
 				return content;
 			}
-		} catch (error) {
+		} catch (error: any) {
+			// Return null for missing files instead of throwing.
+			// Prevents noisy Electron IPC error logging when callers
+			// expect files that may not exist (e.g., .gitignore).
+			if (error?.code === 'ENOENT') {
+				return null;
+			}
 			throw new Error(`Failed to read file: ${error}`);
 		}
 	});

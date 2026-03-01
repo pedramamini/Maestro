@@ -791,6 +791,7 @@ export interface ProcessConfig {
 export interface DirectoryEntry {
 	name: string;
 	isDirectory: boolean;
+	isFile: boolean;
 	path: string;
 }
 
