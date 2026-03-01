@@ -697,15 +697,15 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 						});
 						// For SSH terminal tabs we spawn ssh interactively so xterm.js can interact
 						const sshArgs = [
-							sshResult.config.user
-								? `${sshResult.config.user}@${sshResult.config.host}`
+							sshResult.config.username
+								? `${sshResult.config.username}@${sshResult.config.host}`
 								: sshResult.config.host,
 						];
 						if (sshResult.config.port && sshResult.config.port !== 22) {
 							sshArgs.unshift('-p', String(sshResult.config.port));
 						}
-						if (sshResult.config.keyPath) {
-							sshArgs.unshift('-i', sshResult.config.keyPath);
+						if (sshResult.config.privateKeyPath) {
+							sshArgs.unshift('-i', sshResult.config.privateKeyPath);
 						}
 						return processManager.spawn({
 							sessionId: config.sessionId,
