@@ -221,7 +221,12 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		// - "question": false in tools block (original approach)
 		// The question tool waits for stdin input which hangs batch mode
 		// Users can override by setting customEnvVars in agent config
+		//
+		// OPENCODE_CLI_RUN_MODE: Signals to plugins (e.g., oh-my-opencode) that OpenCode is
+		// running in headless/batch mode. Without this, plugins may override permission settings
+		// and re-enable the question tool, causing Auto Run to hang indefinitely. See #338.
 		defaultEnvVars: {
+			OPENCODE_CLI_RUN_MODE: 'true',
 			OPENCODE_CONFIG_CONTENT:
 				'{"permission":{"*":"allow","external_directory":"allow","question":"deny"},"tools":{"question":false}}',
 		},
