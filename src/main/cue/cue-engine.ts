@@ -65,6 +65,7 @@ export class CueEngine {
 	private activityLog: CueRunResult[] = [];
 	private fanInTrackers = new Map<string, Map<string, FanInSourceCompletion>>();
 	private fanInTimers = new Map<string, ReturnType<typeof setTimeout>>();
+	private pendingYamlWatchers = new Map<string, () => void>();
 	private deps: CueEngineDeps;
 
 	constructor(deps: CueEngineDeps) {
@@ -89,17 +90,53 @@ export class CueEngine {
 			this.teardownSession(sessionId);
 		}
 		this.sessions.clear();
+
+		// Clean up pending yaml watchers (watching for config re-creation after deletion)
+		for (const [, cleanup] of this.pendingYamlWatchers) {
+			cleanup();
+		}
+		this.pendingYamlWatchers.clear();
+
 		this.deps.onLog('cue', '[CUE] Engine stopped');
 	}
 
 	/** Re-read the YAML for a specific session, tearing down old subscriptions */
 	refreshSession(sessionId: string, projectRoot: string): void {
+		const hadSession = this.sessions.has(sessionId);
 		this.teardownSession(sessionId);
 		this.sessions.delete(sessionId);
 
+		// Clean up any pending yaml watcher for this session
+		const pendingWatcher = this.pendingYamlWatchers.get(sessionId);
+		if (pendingWatcher) {
+			pendingWatcher();
+			this.pendingYamlWatchers.delete(sessionId);
+		}
+
 		const session = this.deps.getSessions().find((s) => s.id === sessionId);
-		if (session) {
-			this.initSession({ ...session, projectRoot });
+		if (!session) return;
+
+		this.initSession({ ...session, projectRoot });
+
+		const newState = this.sessions.get(sessionId);
+		if (newState) {
+			// Config was successfully reloaded
+			const activeCount = newState.config.subscriptions.filter((s) => s.enabled !== false).length;
+			this.deps.onLog(
+				'cue',
+				`[CUE] Config reloaded for "${session.name}" (${activeCount} subscriptions)`,
+				{ type: 'configReloaded', sessionId }
+			);
+		} else if (hadSession) {
+			// Config was removed — keep watching for re-creation
+			const yamlWatcher = watchCueYaml(projectRoot, () => {
+				this.refreshSession(sessionId, projectRoot);
+			});
+			this.pendingYamlWatchers.set(sessionId, yamlWatcher);
+			this.deps.onLog('cue', `[CUE] Config removed for "${session.name}"`, {
+				type: 'configRemoved',
+				sessionId,
+			});
 		}
 	}
 
@@ -107,6 +144,13 @@ export class CueEngine {
 	removeSession(sessionId: string): void {
 		this.teardownSession(sessionId);
 		this.sessions.delete(sessionId);
+
+		const pendingWatcher = this.pendingYamlWatchers.get(sessionId);
+		if (pendingWatcher) {
+			pendingWatcher();
+			this.pendingYamlWatchers.delete(sessionId);
+		}
+
 		this.deps.onLog('cue', `[CUE] Session removed: ${sessionId}`);
 	}
 
@@ -477,9 +521,8 @@ export class CueEngine {
 			nextTriggers: new Map(),
 		};
 
-		// Watch the YAML file for changes
+		// Watch the YAML file for changes (hot reload)
 		state.yamlWatcher = watchCueYaml(session.projectRoot, () => {
-			this.deps.onLog('cue', `[CUE] Config changed for session "${session.name}", refreshing`);
 			this.refreshSession(session.id, session.projectRoot);
 		});
 

@@ -518,6 +518,294 @@ describe('CueEngine', () => {
 		});
 	});
 
+	describe('YAML hot reload', () => {
+		it('logs "Config reloaded" with subscription count when config changes', () => {
+			const config1 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'old-sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			const config2 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'new-sub-1',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 10,
+					},
+					{
+						name: 'new-sub-2',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test2',
+						interval_minutes: 15,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValueOnce(config1).mockReturnValue(config2);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.refreshSession('session-1', '/projects/test');
+
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'cue',
+				expect.stringContaining('Config reloaded for "Test Session" (2 subscriptions)'),
+				expect.objectContaining({ type: 'configReloaded', sessionId: 'session-1' })
+			);
+		});
+
+		it('passes data to onLog for IPC push on config reload', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.refreshSession('session-1', '/projects/test');
+
+			// Verify data parameter is passed (triggers cue:activityUpdate in main process)
+			const reloadCall = (deps.onLog as ReturnType<typeof vi.fn>).mock.calls.find(
+				(call: unknown[]) => typeof call[1] === 'string' && call[1].includes('Config reloaded')
+			);
+			expect(reloadCall).toBeDefined();
+			expect(reloadCall![2]).toEqual(
+				expect.objectContaining({ type: 'configReloaded', sessionId: 'session-1' })
+			);
+
+			engine.stop();
+		});
+
+		it('logs "Config removed" when YAML file is deleted', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			// First call returns config (initial load), second returns null (file deleted)
+			mockLoadCueConfig.mockReturnValueOnce(config).mockReturnValue(null);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.refreshSession('session-1', '/projects/test');
+
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'cue',
+				expect.stringContaining('Config removed for "Test Session"'),
+				expect.objectContaining({ type: 'configRemoved', sessionId: 'session-1' })
+			);
+			expect(engine.getStatus()).toHaveLength(0);
+		});
+
+		it('sets up a pending yaml watcher after config deletion for re-creation', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValueOnce(config).mockReturnValue(null);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const initialWatchCalls = mockWatchCueYaml.mock.calls.length;
+			engine.refreshSession('session-1', '/projects/test');
+
+			// A new yaml watcher should be created for watching re-creation
+			expect(mockWatchCueYaml.mock.calls.length).toBe(initialWatchCalls + 1);
+		});
+
+		it('recovers when config file is re-created after deletion', () => {
+			const config1 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'original',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			const config2 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'recreated',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test2',
+						interval_minutes: 10,
+					},
+				],
+			});
+			// First: initial config, second: null (deleted), third: new config (re-created)
+			mockLoadCueConfig
+				.mockReturnValueOnce(config1)
+				.mockReturnValueOnce(null)
+				.mockReturnValue(config2);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Delete config
+			engine.refreshSession('session-1', '/projects/test');
+			expect(engine.getStatus()).toHaveLength(0);
+
+			// Capture the pending yaml watcher callback
+			const lastWatchCall = mockWatchCueYaml.mock.calls[mockWatchCueYaml.mock.calls.length - 1];
+			const pendingOnChange = lastWatchCall[1] as () => void;
+
+			// Simulate file re-creation by invoking the watcher callback
+			pendingOnChange();
+
+			// Session should be re-initialized with the new config
+			const status = engine.getStatus();
+			expect(status).toHaveLength(1);
+			expect(status[0].subscriptionCount).toBe(1);
+		});
+
+		it('cleans up pending yaml watchers on engine stop', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			const pendingCleanup = vi.fn();
+			mockLoadCueConfig.mockReturnValueOnce(config).mockReturnValue(null);
+			mockWatchCueYaml.mockReturnValueOnce(yamlWatcherCleanup).mockReturnValue(pendingCleanup);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Delete config — creates pending yaml watcher
+			engine.refreshSession('session-1', '/projects/test');
+
+			// Stop engine — should clean up pending watcher
+			engine.stop();
+			expect(pendingCleanup).toHaveBeenCalled();
+		});
+
+		it('cleans up pending yaml watchers on removeSession', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			const pendingCleanup = vi.fn();
+			mockLoadCueConfig.mockReturnValueOnce(config).mockReturnValue(null);
+			mockWatchCueYaml.mockReturnValueOnce(yamlWatcherCleanup).mockReturnValue(pendingCleanup);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Delete config — creates pending yaml watcher
+			engine.refreshSession('session-1', '/projects/test');
+
+			// Remove session — should clean up pending watcher
+			engine.removeSession('session-1');
+			expect(pendingCleanup).toHaveBeenCalled();
+		});
+
+		it('triggers refresh via yaml watcher callback on file change', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'sub',
+						event: 'time.interval',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 5,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Capture the yaml watcher callback
+			const watchCall = mockWatchCueYaml.mock.calls[0];
+			const onChange = watchCall[1] as () => void;
+
+			vi.clearAllMocks();
+			mockLoadCueConfig.mockReturnValue(config);
+			mockWatchCueYaml.mockReturnValue(vi.fn());
+
+			// Simulate file change by invoking the watcher callback
+			onChange();
+
+			// refreshSession should have been called (loadCueConfig invoked for re-init)
+			expect(mockLoadCueConfig).toHaveBeenCalledWith('/projects/test');
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'cue',
+				expect.stringContaining('Config reloaded'),
+				expect.any(Object)
+			);
+		});
+
+		it('does not log "Config removed" when session never had config', () => {
+			mockLoadCueConfig.mockReturnValue(null);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			// Session never had a config, so refreshSession with null should not log "Config removed"
+			engine.refreshSession('session-1', '/projects/test');
+
+			const removedCall = (deps.onLog as ReturnType<typeof vi.fn>).mock.calls.find(
+				(call: unknown[]) => typeof call[1] === 'string' && call[1].includes('Config removed')
+			);
+			expect(removedCall).toBeUndefined();
+		});
+	});
+
 	describe('activity log', () => {
 		it('records completed runs', async () => {
 			const config = createMockConfig({
