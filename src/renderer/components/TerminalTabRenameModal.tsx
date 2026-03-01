@@ -1,4 +1,4 @@
-import React, { memo, useRef, useState } from 'react';
+import React, { memo, useRef, useState, useEffect } from 'react';
 import type { Theme } from '../types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { Modal, ModalFooter } from './ui/Modal';
@@ -21,6 +21,13 @@ export const TerminalTabRenameModal = memo(function TerminalTabRenameModal(
 	const { theme, isOpen, currentName, defaultName, onSave, onClose } = props;
 	const inputRef = useRef<HTMLInputElement>(null);
 	const [value, setValue] = useState(currentName ?? '');
+
+	// Sync input value when modal reopens for a different tab
+	useEffect(() => {
+		if (isOpen) {
+			setValue(currentName ?? '');
+		}
+	}, [isOpen, currentName]);
 
 	if (!isOpen) return null;
 

@@ -84,9 +84,13 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 
 			// CRITICAL: When in terminal mode, let xterm.js handle Ctrl+[A-Z] control sequences.
 			// These include Ctrl+C (SIGINT), Ctrl+D (EOF), Ctrl+Z (suspend), Ctrl+\ (quit), etc.
-			// Only intercept Meta (Cmd) key combos from terminal mode — those are Maestro shortcuts.
-			// Exception: Ctrl+Shift+` always creates a new terminal tab regardless of mode.
+			// On macOS, Ctrl is used for terminal control sequences; Cmd (Meta) is for Maestro shortcuts.
+			// On Windows/Linux, Ctrl doubles as the modifier for Maestro shortcuts (Ctrl+F, Ctrl+W, etc.)
+			// so we only bypass for macOS to avoid breaking cross-platform app shortcuts.
+			// Exception: Ctrl+Shift+` always creates a new terminal tab regardless of mode/platform.
+			const isMac = navigator.platform.toUpperCase().includes('MAC');
 			if (
+				isMac &&
 				ctx.activeSession?.inputMode === 'terminal' &&
 				e.ctrlKey &&
 				!e.metaKey &&
@@ -843,10 +847,13 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				);
 
 				// Cmd+W: Close the active terminal tab (only if more than one exists)
-				if (ctx.isTabShortcut(e, 'closeTab') && terminalTabs.length > 1 && activeTerminalTabId) {
+				// Always preventDefault to prevent native window-close when only one tab remains
+				if (ctx.isTabShortcut(e, 'closeTab')) {
 					e.preventDefault();
-					ctx.handleCloseTerminalTab(activeTerminalTabId);
-					trackShortcut('closeTab');
+					if (terminalTabs.length > 1 && activeTerminalTabId) {
+						ctx.handleCloseTerminalTab(activeTerminalTabId);
+						trackShortcut('closeTab');
+					}
 				}
 
 				// Cmd+Shift+] — Navigate to next terminal tab

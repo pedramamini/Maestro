@@ -104,12 +104,21 @@ const prepareSessionForPersistence = (session: Session): Session => {
 		exitCode: undefined,
 	}));
 
+	// Validate activeTerminalTabId against the cleaned terminal tabs list
+	const activeTerminalTabExists = cleanedTerminalTabs.some(
+		(tab) => tab.id === session.activeTerminalTabId
+	);
+	const newActiveTerminalTabId = activeTerminalTabExists
+		? session.activeTerminalTabId
+		: cleanedTerminalTabs[0]?.id ?? null;
+
 	return {
 		...sessionWithoutRuntimeFields,
 		aiTabs: truncatedTabs,
 		activeTabId: newActiveTabId,
 		// Reset terminal tab runtime state
 		terminalTabs: cleanedTerminalTabs,
+		activeTerminalTabId: newActiveTerminalTabId,
 		// Reset runtime-only session state - processes don't survive app restart
 		state: 'idle',
 		busySource: undefined,

@@ -1782,15 +1782,29 @@ const TerminalTabItem = memo(function TerminalTabItem({
 		<div
 			ref={setTabRef}
 			data-tab-id={tab.id}
+			tabIndex={0}
+			role="tab"
+			aria-selected={isActive}
 			className={`
         relative flex items-center gap-1.5 px-3 py-1.5 cursor-pointer
-        transition-all duration-150 select-none shrink-0
+        transition-all duration-150 select-none shrink-0 outline-none
         ${isDragging ? 'opacity-50' : ''}
         ${isDragOver ? 'ring-2 ring-inset' : ''}
       `}
 			style={tabStyle}
 			title={tab.cwd ? `${tab.shellType} — ${tab.cwd}` : tab.shellType}
 			onClick={handleTabSelect}
+			onFocus={handleMouseEnter}
+			onBlur={() => {
+				handleMouseLeave();
+				setOverlayOpen(false);
+			}}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					handleTabSelect();
+				}
+			}}
 			onDoubleClick={handleDoubleClick}
 			onMouseDown={handleMouseDown}
 			onMouseEnter={handleMouseEnter}
@@ -2056,8 +2070,11 @@ function TabBarInner({
 		requestAnimationFrame(() => {
 			requestAnimationFrame(() => {
 				const container = tabBarRef.current;
-				// When a file tab is active, scroll to it; otherwise scroll to the active AI tab
-				const targetTabId = activeFileTabId || activeTabId;
+				// Scroll to the currently active tab across AI/file/terminal modes
+				const targetTabId =
+					inputMode === 'terminal'
+						? activeTerminalTabId || activeTabId
+						: activeFileTabId || activeTabId;
 				const tabElement = container?.querySelector(
 					`[data-tab-id="${targetTabId}"]`
 				) as HTMLElement | null;
@@ -2083,7 +2100,7 @@ function TabBarInner({
 				}
 			});
 		});
-	}, [activeTabId, activeFileTabId, activeTabName, showUnreadOnly]);
+	}, [activeTabId, activeFileTabId, activeTerminalTabId, inputMode, activeTabName, showUnreadOnly]);
 
 	// Can always close tabs - closing the last one creates a fresh new tab
 	const canClose = true;
@@ -2108,10 +2125,10 @@ function TabBarInner({
 			if (ut.type === 'file') {
 				return ut.id === activeFileTabId;
 			}
-			// Terminal tabs: only show if active
-			return ut.id === activeTerminalTabId;
+			// Terminal tabs: only show if active in terminal mode
+			return inputMode === 'terminal' && ut.id === activeTerminalTabId;
 		});
-	}, [unifiedTabs, showUnreadOnly, activeTabId, activeFileTabId, activeTerminalTabId]);
+	}, [unifiedTabs, showUnreadOnly, activeTabId, activeFileTabId, activeTerminalTabId, inputMode]);
 
 	const handleDragStart = useCallback((tabId: string, e: React.DragEvent) => {
 		e.dataTransfer.effectAllowed = 'move';
