@@ -27,6 +27,7 @@ import { getErrorPatterns, matchErrorPattern } from './error-patterns';
 import { constants as fsConstants, promises as fs } from 'fs';
 import * as path from 'path';
 import * as os from 'os';
+import { captureException } from '../utils/sentry';
 
 /**
  * Known OpenAI model context window sizes (in tokens)
@@ -142,8 +143,11 @@ async function readCodexConfigFromDisk(): Promise<CodexConfig> {
 		}
 
 		return result;
-	} catch {
-		// Config file doesn't exist or can't be read - use defaults
+	} catch (e: unknown) {
+		const code = (e as NodeJS.ErrnoException)?.code;
+		if (code === 'ENOENT') return {};
+		// Unexpected error reading config — report to Sentry, fall back to defaults
+		void captureException(e, { context: 'codex-config-read', configPath });
 		return {};
 	}
 }
@@ -159,7 +163,10 @@ async function loadCodexConfigCached(forceRefresh = false): Promise<CodexConfig>
 
 	if (!codexConfigLoadPromise || forceRefresh) {
 		const generation = ++codexConfigLoadGeneration;
-		const loader = readCodexConfigFromDisk().catch(() => ({}));
+		const loader = readCodexConfigFromDisk().catch((e: unknown) => {
+			void captureException(e, { context: 'codex-config-load' });
+			return {};
+		});
 		codexConfigLoadPromise = loader
 			.then((config) => {
 				if (generation === codexConfigLoadGeneration) {
@@ -247,7 +254,9 @@ export class CodexOutputParser implements AgentOutputParser {
 			.then((config) => {
 				this.applyCodexConfig(config);
 			})
-			.catch(() => {});
+			.catch((e: unknown) => {
+				void captureException(e, { context: 'codex-config-apply' });
+			});
 	}
 
 	private applyCodexConfig(config: CodexConfig | null): void {
