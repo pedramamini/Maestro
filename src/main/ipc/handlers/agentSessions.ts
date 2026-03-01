@@ -22,11 +22,7 @@ import fs from 'fs/promises';
 import { logger } from '../../utils/logger';
 import { withIpcErrorLogging } from '../../utils/ipcHandler';
 import { isWebContentsAvailable } from '../../utils/safe-send';
-import {
-	getSessionStorage,
-	hasSessionStorage,
-	getAllSessionStorages,
-} from '../../agents';
+import { getSessionStorage, hasSessionStorage, getAllSessionStorages } from '../../agents';
 import { calculateClaudeCost } from '../../utils/pricing';
 import {
 	loadGlobalStatsCache,
@@ -119,7 +115,8 @@ interface SessionDiscoveryCacheEntry {
 	expiresAt: number;
 }
 
-const sessionDiscoveryCache: Partial<Record<SessionDiscoveryProvider, SessionDiscoveryCacheEntry>> = {};
+const sessionDiscoveryCache: Partial<Record<SessionDiscoveryProvider, SessionDiscoveryCacheEntry>> =
+	{};
 
 function getCachedSessionFiles(provider: SessionDiscoveryProvider): SessionFileInfo[] | null {
 	const cached = sessionDiscoveryCache[provider];
@@ -134,6 +131,16 @@ function setCachedSessionFiles(provider: SessionDiscoveryProvider, files: Sessio
 		files,
 		expiresAt: Date.now() + SESSION_DISCOVERY_CACHE_TTL_MS,
 	};
+}
+
+/**
+ * Check if an error is an expected filesystem error during session discovery.
+ * Expected: ENOENT (not found), ENOTDIR (not a directory), EACCES (permission denied).
+ * Unexpected errors (EIO, EPERM, etc.) should bubble up to Sentry.
+ */
+export function isExpectedFsError(e: unknown): boolean {
+	const code = (e as NodeJS.ErrnoException)?.code;
+	return code === 'ENOENT' || code === 'ENOTDIR' || code === 'EACCES';
 }
 
 /**
@@ -240,9 +247,12 @@ async function discoverClaudeSessionFiles(): Promise<SessionFileInfo[]> {
 
 	try {
 		await fs.access(claudeProjectsDir);
-	} catch {
-		setCachedSessionFiles('claude-code', files);
-		return files;
+	} catch (e: unknown) {
+		if (isExpectedFsError(e)) {
+			setCachedSessionFiles('claude-code', files);
+			return files;
+		}
+		throw e;
 	}
 
 	const projectDirs = await fs.readdir(claudeProjectsDir);
@@ -253,15 +263,17 @@ async function discoverClaudeSessionFiles(): Promise<SessionFileInfo[]> {
 		try {
 			const stat = await fs.stat(projectPath);
 			if (!stat.isDirectory()) return collected;
-		} catch {
-			return collected;
+		} catch (e: unknown) {
+			if (isExpectedFsError(e)) return collected;
+			throw e;
 		}
 
 		let dirFiles: string[];
 		try {
 			dirFiles = await fs.readdir(projectPath);
-		} catch {
-			return collected;
+		} catch (e: unknown) {
+			if (isExpectedFsError(e)) return collected;
+			throw e;
 		}
 
 		for (const filename of dirFiles) {
@@ -273,8 +285,8 @@ async function discoverClaudeSessionFiles(): Promise<SessionFileInfo[]> {
 				if (fileStat.size === 0) continue;
 				const sessionKey = `${projectDir}/${filename.replace('.jsonl', '')}`;
 				collected.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
-			} catch {
-				// Skip files we can't stat
+			} catch (e: unknown) {
+				if (!isExpectedFsError(e)) throw e;
 			}
 		}
 
@@ -283,7 +295,9 @@ async function discoverClaudeSessionFiles(): Promise<SessionFileInfo[]> {
 
 	for (let i = 0; i < projectDirs.length; i += CLAUDE_SCAN_BATCH_SIZE) {
 		const batch = projectDirs.slice(i, i + CLAUDE_SCAN_BATCH_SIZE);
-		const batchResults = await Promise.all(batch.map((projectDir) => processProjectDir(projectDir)));
+		const batchResults = await Promise.all(
+			batch.map((projectDir) => processProjectDir(projectDir))
+		);
 		for (const batchFiles of batchResults) {
 			files.push(...batchFiles);
 		}
@@ -308,9 +322,12 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 
 	try {
 		await fs.access(codexSessionsDir);
-	} catch {
-		setCachedSessionFiles('codex', files);
-		return files;
+	} catch (e: unknown) {
+		if (isExpectedFsError(e)) {
+			setCachedSessionFiles('codex', files);
+			return files;
+		}
+		throw e;
 	}
 
 	interface DayDirectoryInfo {
@@ -327,15 +344,17 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 		try {
 			const yearStat = await fs.stat(yearDir);
 			if (!yearStat.isDirectory()) continue;
-		} catch {
-			continue;
+		} catch (e: unknown) {
+			if (isExpectedFsError(e)) continue;
+			throw e;
 		}
 
 		let months: string[];
 		try {
 			months = await fs.readdir(yearDir);
-		} catch {
-			continue;
+		} catch (e: unknown) {
+			if (isExpectedFsError(e)) continue;
+			throw e;
 		}
 
 		for (const month of months) {
@@ -345,15 +364,17 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 			try {
 				const monthStat = await fs.stat(monthDir);
 				if (!monthStat.isDirectory()) continue;
-			} catch {
-				continue;
+			} catch (e: unknown) {
+				if (isExpectedFsError(e)) continue;
+				throw e;
 			}
 
 			let days: string[];
 			try {
 				days = await fs.readdir(monthDir);
-			} catch {
-				continue;
+			} catch (e: unknown) {
+				if (isExpectedFsError(e)) continue;
+				throw e;
 			}
 
 			for (const day of days) {
@@ -364,20 +385,25 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 		}
 	}
 
-	const processDayDir = async ({ dayDir, prefix }: DayDirectoryInfo): Promise<SessionFileInfo[]> => {
+	const processDayDir = async ({
+		dayDir,
+		prefix,
+	}: DayDirectoryInfo): Promise<SessionFileInfo[]> => {
 		const collected: SessionFileInfo[] = [];
 		try {
 			const dayStat = await fs.stat(dayDir);
 			if (!dayStat.isDirectory()) return collected;
-		} catch {
-			return collected;
+		} catch (e: unknown) {
+			if (isExpectedFsError(e)) return collected;
+			throw e;
 		}
 
 		let dirFiles: string[];
 		try {
 			dirFiles = await fs.readdir(dayDir);
-		} catch {
-			return collected;
+		} catch (e: unknown) {
+			if (isExpectedFsError(e)) return collected;
+			throw e;
 		}
 
 		for (const file of dirFiles) {
@@ -390,8 +416,8 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 				if (fileStat.size === 0) continue;
 				const sessionKey = `${prefix}/${file.replace('.jsonl', '')}`;
 				collected.push({ filePath, sessionKey, mtimeMs: fileStat.mtimeMs });
-			} catch {
-				// Skip files we can't stat
+			} catch (e: unknown) {
+				if (!isExpectedFsError(e)) throw e;
 			}
 		}
 

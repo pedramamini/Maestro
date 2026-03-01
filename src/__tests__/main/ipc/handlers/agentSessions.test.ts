@@ -7,7 +7,10 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain } from 'electron';
-import { registerAgentSessionsHandlers } from '../../../../main/ipc/handlers/agentSessions';
+import {
+	registerAgentSessionsHandlers,
+	isExpectedFsError,
+} from '../../../../main/ipc/handlers/agentSessions';
 import * as agentSessionStorage from '../../../../main/agents';
 
 // Mock electron's ipcMain
@@ -465,5 +468,40 @@ describe('agentSessions IPC handlers', () => {
 
 			expect(result).toEqual(['claude-code', 'opencode']);
 		});
+	});
+});
+
+describe('isExpectedFsError', () => {
+	it('should return true for ENOENT errors', () => {
+		const error = Object.assign(new Error('not found'), { code: 'ENOENT' });
+		expect(isExpectedFsError(error)).toBe(true);
+	});
+
+	it('should return true for ENOTDIR errors', () => {
+		const error = Object.assign(new Error('not a directory'), { code: 'ENOTDIR' });
+		expect(isExpectedFsError(error)).toBe(true);
+	});
+
+	it('should return true for EACCES errors', () => {
+		const error = Object.assign(new Error('permission denied'), { code: 'EACCES' });
+		expect(isExpectedFsError(error)).toBe(true);
+	});
+
+	it('should return false for unexpected error codes', () => {
+		const eio = Object.assign(new Error('I/O error'), { code: 'EIO' });
+		expect(isExpectedFsError(eio)).toBe(false);
+
+		const eperm = Object.assign(new Error('operation not permitted'), { code: 'EPERM' });
+		expect(isExpectedFsError(eperm)).toBe(false);
+	});
+
+	it('should return false for errors without a code', () => {
+		expect(isExpectedFsError(new Error('generic error'))).toBe(false);
+	});
+
+	it('should return false for non-error values', () => {
+		expect(isExpectedFsError(null)).toBe(false);
+		expect(isExpectedFsError(undefined)).toBe(false);
+		expect(isExpectedFsError('string error')).toBe(false);
 	});
 });
