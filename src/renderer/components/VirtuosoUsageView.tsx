@@ -26,12 +26,13 @@ import { AccountTrendChart } from './UsageDashboard/AccountTrendChart';
 import { AccountRateMetrics } from './UsageDashboard/AccountRateMetrics';
 
 interface ThrottleEvent {
+	id: string;
 	timestamp: number;
 	accountId: string;
+	sessionId: string | null;
 	accountName?: string;
 	reason: string;
-	totalTokens: number;
-	recoveryAction?: string;
+	tokensAtThrottle: number;
 }
 
 interface VirtuosoUsageViewProps {
@@ -303,9 +304,7 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 											</div>
 											<div>
 												Queries:{' '}
-												<span style={{ color: theme.colors.textMain }}>
-													{usage.queryCount}
-												</span>
+												<span style={{ color: theme.colors.textMain }}>{usage.queryCount}</span>
 											</div>
 											<div>
 												Burn:{' '}
@@ -316,9 +315,10 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 													<span
 														className="ml-1"
 														style={{
-															color: usage.rateMetrics.trend === 'up'
-																? theme.colors.warning
-																: theme.colors.success,
+															color:
+																usage.rateMetrics.trend === 'up'
+																	? theme.colors.warning
+																	: theme.colors.success,
 														}}
 													>
 														{usage.rateMetrics.trend === 'up' ? '\u2197' : '\u2198'}
@@ -343,16 +343,21 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 
 										{/* 7-day sparkline */}
 										{usage && (
-											<div className="mt-2 pt-1.5 border-t" style={{ borderColor: theme.colors.border + '40' }}>
-												<AccountTrendChart accountId={account.id} theme={theme} defaultRange="7d" compact={true} />
+											<div
+												className="mt-2 pt-1.5 border-t"
+												style={{ borderColor: theme.colors.border + '40' }}
+											>
+												<AccountTrendChart
+													accountId={account.id}
+													theme={theme}
+													defaultRange="7d"
+													compact={true}
+												/>
 											</div>
 										)}
 									</>
 								) : (
-									<p
-										className="text-[11px] italic"
-										style={{ color: theme.colors.textDim }}
-									>
+									<p className="text-[11px] italic" style={{ color: theme.colors.textDim }}>
 										No usage data for current window
 									</p>
 								)}
@@ -388,10 +393,7 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 									}}
 								>
 									<div className="flex items-center justify-between mb-2">
-										<span
-											className="font-medium"
-											style={{ color: theme.colors.textMain }}
-										>
+										<span className="font-medium" style={{ color: theme.colors.textMain }}>
 											{account.name || account.email}
 										</span>
 										<span
@@ -475,8 +477,8 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 									<AlertTriangle className="w-3.5 h-3.5 flex-shrink-0" />
 									<span>
 										At current rates, {exhaustingSoon.length} account
-										{exhaustingSoon.length !== 1 ? 's' : ''} will reach limit
-										within {formatTimeRemaining(soonestMs)}
+										{exhaustingSoon.length !== 1 ? 's' : ''} will reach limit within{' '}
+										{formatTimeRemaining(soonestMs)}
 									</span>
 								</div>
 							);
@@ -541,9 +543,7 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 						<div key={account.id}>
 							<button
 								onClick={() =>
-									setExpandedAccountId(
-										expandedAccountId === account.id ? null : account.id
-									)
+									setExpandedAccountId(expandedAccountId === account.id ? null : account.id)
 								}
 								className="w-full flex items-center gap-2 py-2 px-2 rounded-lg text-xs text-left transition-colors"
 								style={{ color: theme.colors.textMain }}
@@ -559,16 +559,11 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 								) : (
 									<ChevronRight className="w-3 h-3 flex-shrink-0" />
 								)}
-								<span className="font-medium">
-									{account.name || account.email}
-								</span>
+								<span className="font-medium">{account.name || account.email}</span>
 							</button>
 							{expandedAccountId === account.id && (
 								<div className="ml-5 mb-3">
-									<AccountUsageHistory
-										accountId={account.id}
-										theme={theme}
-									/>
+									<AccountUsageHistory accountId={account.id} theme={theme} />
 								</div>
 							)}
 						</div>
@@ -586,10 +581,7 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 					Recent Throttle Events
 				</h3>
 				{throttleEvents.length === 0 ? (
-					<p
-						className="text-xs py-4 text-center"
-						style={{ color: theme.colors.textDim }}
-					>
+					<p className="text-xs py-4 text-center" style={{ color: theme.colors.textDim }}>
 						No throttle events recorded
 					</p>
 				) : (
@@ -600,23 +592,15 @@ export function VirtuosoUsageView({ theme, sessions }: VirtuosoUsageViewProps) {
 								className="flex items-center gap-3 text-xs py-1.5 border-b"
 								style={{ borderColor: theme.colors.border }}
 							>
-								<span
-									className="tabular-nums"
-									style={{ color: theme.colors.textDim }}
-								>
+								<span className="tabular-nums" style={{ color: theme.colors.textDim }}>
 									{new Date(event.timestamp).toLocaleString()}
 								</span>
 								<span style={{ color: theme.colors.textMain }}>
 									{event.accountName || event.accountId}
 								</span>
 								<span style={{ color: theme.colors.warning }}>
-									{formatTokenCount(event.totalTokens)} tokens
+									{formatTokenCount(event.tokensAtThrottle)} tokens
 								</span>
-								{event.recoveryAction && (
-									<span style={{ color: theme.colors.success }}>
-										&rarr; {event.recoveryAction}
-									</span>
-								)}
 							</div>
 						))}
 					</div>
@@ -635,10 +619,7 @@ function getSeverityColor(usagePercent: number | null | undefined, theme: Theme)
 	return theme.colors.success;
 }
 
-function getStatusColor(
-	status: string,
-	theme: Theme
-): { bg: string; fg: string } {
+function getStatusColor(status: string, theme: Theme): { bg: string; fg: string } {
 	const styles: Record<string, { bg: string; fg: string }> = {
 		active: { bg: theme.colors.success + '20', fg: theme.colors.success },
 		throttled: { bg: theme.colors.warning + '20', fg: theme.colors.warning },
