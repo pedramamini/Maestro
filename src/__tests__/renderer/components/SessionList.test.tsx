@@ -24,7 +24,9 @@ vi.mock('qrcode.react', () => ({
 
 // Mock lucide-react icons
 vi.mock('lucide-react', () => ({
-	Wand2: ({ className }: { className?: string }) => <span data-testid="icon-wand" className={className} />,
+	Wand2: ({ className }: { className?: string }) => (
+		<span data-testid="icon-wand" className={className} />
+	),
 	Plus: () => <span data-testid="icon-plus" />,
 	Settings: () => <span data-testid="icon-settings" />,
 	ChevronRight: () => <span data-testid="icon-chevron-right" />,
@@ -71,6 +73,21 @@ vi.mock('../../../renderer/services/git', () => ({
 	},
 }));
 
+// Mock WindowContext to avoid Provider requirement
+vi.mock('../../../renderer/contexts/WindowContext', () => ({
+	useWindowContext: () => ({
+		windowId: 'primary',
+		windowNumber: 1,
+		isMainWindow: true,
+		sessionIds: [] as string[],
+		activeSessionId: null as string | null,
+		openSession: vi.fn(),
+		closeTab: vi.fn(),
+		moveSessionToNewWindow: vi.fn(),
+		assignSessionsToWindow: vi.fn(),
+	}),
+}));
+
 // Mock GitStatusContext to avoid Provider requirement
 vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	useGitStatus: () => ({
@@ -94,12 +111,18 @@ vi.mock('../../../renderer/contexts/GitStatusContext', () => ({
 	}),
 }));
 
-// Add tunnel mock to window.maestro
+// Add tunnel and windows mock to window.maestro
 beforeEach(() => {
 	(window.maestro as Record<string, unknown>).tunnel = {
 		isCloudflaredInstalled: vi.fn().mockResolvedValue(true),
 		start: vi.fn().mockResolvedValue({ success: true, url: 'https://tunnel.example.com' }),
 		stop: vi.fn().mockResolvedValue(undefined),
+	};
+	(window.maestro as Record<string, unknown>).windows = {
+		list: vi.fn().mockResolvedValue([]),
+		create: vi.fn().mockResolvedValue('window-new'),
+		close: vi.fn().mockResolvedValue(undefined),
+		focusWindow: vi.fn().mockResolvedValue(undefined),
 	};
 });
 
@@ -1108,7 +1131,7 @@ describe('SessionList', () => {
 			expect(menuContainer?.style.maxHeight).toBe('calc(100vh - 90px)');
 		});
 
-		it('shows Director\'s Notes menu item in hamburger menu', () => {
+		it("shows Director's Notes menu item in hamburger menu", () => {
 			const props = createDefaultProps({ leftSidebarOpen: true });
 			render(<SessionList {...props} />);
 
@@ -1118,7 +1141,7 @@ describe('SessionList', () => {
 			expect(screen.getByText('Unified history & AI synopsis')).toBeInTheDocument();
 		});
 
-		it('opens Director\'s Notes modal from menu', () => {
+		it("opens Director's Notes modal from menu", () => {
 			const setDirectorNotesOpen = vi.fn();
 			const props = createDefaultProps({ leftSidebarOpen: true, setDirectorNotesOpen });
 			render(<SessionList {...props} />);
