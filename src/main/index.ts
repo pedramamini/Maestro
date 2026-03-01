@@ -7,6 +7,7 @@ import crypto from 'crypto';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
+import { CueEngine } from './cue/cue-engine';
 import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { powerManager } from './power-manager';
@@ -52,6 +53,7 @@ import {
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
+	registerCueHandlers,
 	registerWakatimeHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
@@ -242,6 +244,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let cueEngine: CueEngine | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -326,6 +329,46 @@ app.whenReady().then(async () => {
 		logger.info(`Loaded custom agent paths: ${JSON.stringify(customPaths)}`, 'Startup');
 	}
 
+	// Initialize Cue Engine for event-driven automation
+	cueEngine = new CueEngine({
+		getSessions: () => {
+			const stored = sessionsStore.get('sessions', []);
+			return stored.map((s: any) => ({
+				id: s.id,
+				name: s.name,
+				toolType: s.toolType,
+				cwd: s.cwd || s.fullPath || os.homedir(),
+				projectRoot: s.cwd || s.fullPath || os.homedir(),
+			}));
+		},
+		onCueRun: async (sessionId, _prompt, event) => {
+			// Stub for Phase 03 executor integration — returns a placeholder result.
+			// The actual executor (cue-executor.ts) is wired in a future phase.
+			logger.info(`[CUE] Run triggered for session ${sessionId}: ${event.triggerName}`, 'Cue');
+			return {
+				runId: event.id,
+				sessionId,
+				sessionName: '',
+				subscriptionName: event.triggerName,
+				event,
+				status: 'completed' as const,
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 0,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			};
+		},
+		onLog: (_level, message, data) => {
+			logger.cue(message, 'Cue', data);
+			// Push activity updates to renderer
+			if (mainWindow && isWebContentsAvailable(mainWindow) && data) {
+				mainWindow.webContents.send('cue:activityUpdate', data);
+			}
+		},
+	});
+
 	logger.info('Core services initialized', 'Startup');
 
 	// Initialize history manager (handles migration from legacy format if needed)
@@ -370,6 +413,13 @@ app.whenReady().then(async () => {
 	// Set up process event listeners
 	logger.debug('Setting up process event listeners', 'Startup');
 	setupProcessListeners();
+
+	// Start Cue engine if the Encore Feature flag is enabled
+	const encoreFeatures = store.get('encoreFeatures', {}) as Record<string, boolean>;
+	if (encoreFeatures.maestroCue && cueEngine) {
+		logger.info('Maestro Cue Encore Feature enabled — starting Cue engine', 'Startup');
+		cueEngine.start();
+	}
 
 	// Set custom application menu to prevent macOS from injecting native
 	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
@@ -435,7 +485,13 @@ const quitHandler = createQuitHandler({
 	getActiveGroomingSessionCount,
 	cleanupAllGroomingSessions,
 	closeStatsDB,
-	stopCliWatcher: () => cliWatcher.stop(),
+	stopCliWatcher: () => {
+		cliWatcher.stop();
+		// Stop Cue engine on app quit
+		if (cueEngine?.isEnabled()) {
+			cueEngine.stop();
+		}
+	},
 });
 quitHandler.setup();
 
@@ -481,6 +537,11 @@ function setupIpcHandlers() {
 	registerDirectorNotesHandlers({
 		getProcessManager: () => processManager,
 		getAgentDetector: () => agentDetector,
+	});
+
+	// Cue - event-driven automation engine
+	registerCueHandlers({
+		getCueEngine: () => cueEngine,
 	});
 
 	// Agent management operations - extracted to src/main/ipc/handlers/agents.ts
