@@ -1,4 +1,4 @@
-import React, {
+import {
 	createContext,
 	useCallback,
 	useContext,
@@ -97,10 +97,7 @@ export function WindowProvider({ children, initialWindowId }: WindowProviderProp
 			if (!currentWindowId) {
 				return;
 			}
-			if (
-				event.fromWindowId !== currentWindowId &&
-				event.toWindowId !== currentWindowId
-			) {
+			if (event.fromWindowId !== currentWindowId && event.toWindowId !== currentWindowId) {
 				return;
 			}
 			hydrateState();
@@ -178,7 +175,7 @@ export function WindowProvider({ children, initialWindowId }: WindowProviderProp
 			const nextSessionIds = prev.sessionIds.filter((id) => id !== sessionId);
 			const nextActiveSessionId =
 				prev.activeSessionId === sessionId
-					? nextSessionIds[nextSessionIds.length - 1] ?? null
+					? (nextSessionIds[nextSessionIds.length - 1] ?? null)
 					: prev.activeSessionId;
 
 			return {
@@ -211,7 +208,7 @@ export function WindowProvider({ children, initialWindowId }: WindowProviderProp
 					const nextSessionIds = prev.sessionIds.filter((id) => id !== sessionId);
 					const nextActiveSessionId =
 						prev.activeSessionId === sessionId
-							? nextSessionIds[nextSessionIds.length - 1] ?? null
+							? (nextSessionIds[nextSessionIds.length - 1] ?? null)
 							: prev.activeSessionId;
 
 					return {
@@ -308,8 +305,7 @@ export function WindowProvider({ children, initialWindowId }: WindowProviderProp
 	);
 
 	useEffect(() => {
-		const resolvedBase =
-			typeof windowNumber === 'number' ? `Maestro [${windowNumber}]` : 'Maestro';
+		const resolvedBase = typeof windowNumber === 'number' ? `Maestro [${windowNumber}]` : 'Maestro';
 		document.title = `${resolvedBase}${WINDOW_TITLE_SUFFIX}`;
 	}, [windowNumber]);
 

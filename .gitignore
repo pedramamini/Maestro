@@ -54,3 +54,4 @@ yarn-error.log*
 .vscode/
 .VSCodeCounter
 .qodo
+.ai-audit/

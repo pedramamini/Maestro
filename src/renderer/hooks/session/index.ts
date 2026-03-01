@@ -39,7 +39,7 @@ export type { UseActivityTrackerReturn } from './useActivityTracker';
 
 // Global hands-on time tracking (persists to settings)
 export { useHandsOnTimeTracker } from './useHandsOnTimeTracker';
-export type { UseHandsOnTimeTrackerReturn } from './useHandsOnTimeTracker';
+// useHandsOnTimeTracker returns void (no return type export needed)
 
 // Window-aware session assignments
 export { useSessionWindowAssignments } from './useSessionWindowAssignments';

@@ -1,6 +1,5 @@
 import { useEffect, useMemo, useState } from 'react';
 import type { Session } from '../../types';
-import type { WindowInfo } from '../../../shared/types/window';
 import { orderWindowsForDisplay } from '../../utils/windowOrdering';
 
 export interface SessionWindowAssignment {
@@ -17,7 +16,11 @@ function windowAssignmentsEqual(
 	}
 	for (const [sessionId, assignment] of a) {
 		const other = b.get(sessionId);
-		if (!other || other.windowId !== assignment.windowId || other.windowNumber !== assignment.windowNumber) {
+		if (
+			!other ||
+			other.windowId !== assignment.windowId ||
+			other.windowNumber !== assignment.windowNumber
+		) {
 			return false;
 		}
 	}
@@ -33,7 +36,10 @@ export function useSessionWindowAssignments(
 	windowSessionIds: string[]
 ): Map<string, SessionWindowAssignment> {
 	const [assignments, setAssignments] = useState<Map<string, SessionWindowAssignment>>(new Map());
-	const sessionIdSignature = useMemo(() => sessions.map((session) => session.id).join('|'), [sessions]);
+	const sessionIdSignature = useMemo(
+		() => sessions.map((session) => session.id).join('|'),
+		[sessions]
+	);
 	const windowSessionSignature = useMemo(() => windowSessionIds.join('|'), [windowSessionIds]);
 
 	useEffect(() => {
@@ -55,7 +61,9 @@ export function useSessionWindowAssignments(
 						});
 					});
 				});
-				setAssignments((prev) => (windowAssignmentsEqual(prev, nextAssignments) ? prev : nextAssignments));
+				setAssignments((prev) =>
+					windowAssignmentsEqual(prev, nextAssignments) ? prev : nextAssignments
+				);
 			} catch (error) {
 				console.error('[useSessionWindowAssignments] Failed to load window assignments', error);
 			}

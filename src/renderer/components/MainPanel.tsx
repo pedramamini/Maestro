@@ -478,7 +478,6 @@ export const MainPanel = React.memo(
 
 		// isCurrentSessionAutoMode: THIS session has active batch run (for all UI indicators)
 		const isCurrentSessionAutoMode = currentSessionBatchState?.isRunning || false;
-		const isCurrentSessionStopping = currentSessionBatchState?.isStopping || false;
 		const windowAutoRunState = batchRunState;
 		const windowAutoRunSessionId = batchRunSessionId ?? null;
 		const isWindowAutoModeActive = windowAutoRunState?.isRunning || false;
@@ -1274,14 +1273,11 @@ export const MainPanel = React.memo(
 										{/* Hide progress count when stopping - spinner is sufficient */}
 										{windowAutoRunState && !isWindowAutoModeStopping && (
 											<span className="text-[10px] opacity-80">
-												{windowAutoRunState.completedTasks}/
-												{windowAutoRunState.totalTasks}
+												{windowAutoRunState.completedTasks}/{windowAutoRunState.totalTasks}
 											</span>
 										)}
 										{windowAutoRunState?.worktreeActive && (
-											<span
-												title={`Worktree: ${windowAutoRunState.worktreeBranch || 'active'}`}
-											>
+											<span title={`Worktree: ${windowAutoRunState.worktreeBranch || 'active'}`}>
 												<GitBranch className="w-3.5 h-3.5 ml-0.5" />
 											</span>
 										)}
@@ -1573,7 +1569,7 @@ export const MainPanel = React.memo(
 							onTabSelect &&
 							onTabClose &&
 							onNewTab && (
-									<TabBar
+								<TabBar
 									tabs={activeSession.aiTabs}
 									activeTabId={activeSession.activeTabId}
 									theme={theme}

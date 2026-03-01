@@ -135,7 +135,7 @@ import { useGroupChatStore } from './stores/groupChatStore';
 import type { GroupChatMessagesHandle } from './components/GroupChatMessages';
 import { useBatchStore } from './stores/batchStore';
 // All session state is read directly from useSessionStore in MaestroConsoleInner.
-import { useSessionStore, selectActiveSession } from './stores/sessionStore';
+import { useSessionStore } from './stores/sessionStore';
 import { useAgentStore } from './stores/agentStore';
 import { InlineWizardProvider, useInlineWizardContext } from './contexts/InlineWizardContext';
 import { ToastContainer } from './components/Toast';
@@ -166,7 +166,6 @@ import type {
 	BatchRunConfig,
 	AgentError,
 	BatchRunState,
-	GroupChatMessage,
 	GroupChat,
 	SpecKitCommand,
 	OpenSpecCommand,
@@ -201,11 +200,7 @@ import type { FileNode } from './types/fileTree';
 import { substituteTemplateVariables } from './utils/templateVariables';
 import { validateNewSession, getProviderDisplayName } from './utils/sessionValidation';
 import { getNextWindowSessionCycle } from './utils/windowSessionOrdering';
-import {
-	estimateContextUsage,
-	estimateAccumulatedGrowth,
-	DEFAULT_CONTEXT_WINDOWS,
-} from './utils/contextUsage';
+// Context usage utilities (used by hooks, not directly in App)
 import { formatLogsForClipboard } from './utils/contextExtractor';
 import { getSlashCommandDescription } from './constants/app';
 import { useUIStore } from './stores/uiStore';
@@ -625,7 +620,12 @@ function MaestroConsoleInner() {
 			);
 		}
 
-		return resolveSession(windowActiveSessionId) ?? resolveSession(activeSessionId) ?? sessions[0] ?? null;
+		return (
+			resolveSession(windowActiveSessionId) ??
+			resolveSession(activeSessionId) ??
+			sessions[0] ??
+			null
+		);
 	}, [sessions, windowSessionIdSet, windowActiveSessionId, activeSessionId]);
 
 	activeSessionId = activeSession?.id ?? activeSessionId;
@@ -1243,7 +1243,10 @@ function MaestroConsoleInner() {
 
 			// Migration: default autoRunFolderPath for sessions that don't have one
 			if (!session.autoRunFolderPath && session.projectRoot) {
-				session = { ...session, autoRunFolderPath: `${session.projectRoot}/${AUTO_RUN_FOLDER_NAME}` };
+				session = {
+					...session,
+					autoRunFolderPath: `${session.projectRoot}/${AUTO_RUN_FOLDER_NAME}`,
+				};
 			}
 
 			// Migration: ensure fileTreeAutoRefreshInterval is set (default 180s for legacy sessions)
@@ -7151,9 +7154,7 @@ You are taking over this conversation. Based on the context above, provide a bri
 					moderatorConfig,
 					initiatorId
 				);
-				setGroupChats((prev) =>
-					isGroupChatVisibleInWindow(chat) ? [chat, ...prev] : prev
-				);
+				setGroupChats((prev) => (isGroupChatVisibleInWindow(chat) ? [chat, ...prev] : prev));
 				setShowNewGroupChatModal(false);
 				handleOpenGroupChat(chat.id);
 			} catch (err) {
@@ -7382,13 +7383,18 @@ You are taking over this conversation. Based on the context above, provide a bri
 					const tab = s.aiTabs.find((t) => t.id === renameTabId);
 					const oldName = tab?.name;
 
-					window.maestro.logger.log('info', `Tab renamed: "${oldName || '(auto)'}" → "${newName || '(cleared)'}"`, 'TabNaming', {
-						tabId: renameTabId,
-						sessionId: activeSession.id,
-						agentSessionId: tab?.agentSessionId,
-						oldName,
-						newName: newName || null,
-					});
+					window.maestro.logger.log(
+						'info',
+						`Tab renamed: "${oldName || '(auto)'}" → "${newName || '(cleared)'}"`,
+						'TabNaming',
+						{
+							tabId: renameTabId,
+							sessionId: activeSession.id,
+							agentSessionId: tab?.agentSessionId,
+							oldName,
+							newName: newName || null,
+						}
+					);
 
 					if (tab?.agentSessionId) {
 						// Persist name to agent session metadata (async, fire and forget)
@@ -7398,37 +7404,57 @@ You are taking over this conversation. Based on the context above, provide a bri
 							window.maestro.claude
 								.updateSessionName(s.projectRoot, tab.agentSessionId, newName || '')
 								.catch((err) => {
-									window.maestro.logger.log('error', 'Failed to persist tab name to Claude session storage', 'TabNaming', {
-										tabId: renameTabId,
-										agentSessionId: tab.agentSessionId,
-										error: String(err),
-									});
+									window.maestro.logger.log(
+										'error',
+										'Failed to persist tab name to Claude session storage',
+										'TabNaming',
+										{
+											tabId: renameTabId,
+											agentSessionId: tab.agentSessionId,
+											error: String(err),
+										}
+									);
 								});
 						} else {
 							window.maestro.agentSessions
 								.setSessionName(agentId, s.projectRoot, tab.agentSessionId, newName || null)
 								.catch((err) => {
-									window.maestro.logger.log('error', 'Failed to persist tab name to agent session storage', 'TabNaming', {
-										tabId: renameTabId,
-										agentSessionId: tab.agentSessionId,
-										agentType: agentId,
-										error: String(err),
-									});
+									window.maestro.logger.log(
+										'error',
+										'Failed to persist tab name to agent session storage',
+										'TabNaming',
+										{
+											tabId: renameTabId,
+											agentSessionId: tab.agentSessionId,
+											agentType: agentId,
+											error: String(err),
+										}
+									);
 								});
 						}
 						// Also update past history entries with this agentSessionId
 						window.maestro.history
 							.updateSessionName(tab.agentSessionId, newName || '')
 							.catch((err) => {
-								window.maestro.logger.log('warn', 'Failed to update history session names', 'TabNaming', {
-									agentSessionId: tab.agentSessionId,
-									error: String(err),
-								});
+								window.maestro.logger.log(
+									'warn',
+									'Failed to update history session names',
+									'TabNaming',
+									{
+										agentSessionId: tab.agentSessionId,
+										error: String(err),
+									}
+								);
 							});
 					} else {
-						window.maestro.logger.log('info', 'Tab renamed (no agentSessionId, skipping persistence)', 'TabNaming', {
-							tabId: renameTabId,
-						});
+						window.maestro.logger.log(
+							'info',
+							'Tab renamed (no agentSessionId, skipping persistence)',
+							'TabNaming',
+							{
+								tabId: renameTabId,
+							}
+						);
 					}
 					return {
 						...s,
@@ -8171,10 +8197,10 @@ You are taking over this conversation. Based on the context above, provide a bri
 				// Default Auto Run folder path (user can change later)
 				autoRunFolderPath: `${workingDir}/${AUTO_RUN_FOLDER_NAME}`,
 			};
-				setSessions((prev) => [...prev, newSession]);
-				setActiveSessionId(newId);
-				await assignSessionsToWindow([newId]);
-				await assignSessionsToWindow([newId]);
+			setSessions((prev) => [...prev, newSession]);
+			setActiveSessionId(newId);
+			await assignSessionsToWindow([newId]);
+			await assignSessionsToWindow([newId]);
 			// Track session creation in global stats
 			updateGlobalStats({ totalSessions: 1 });
 			// Record session lifecycle for Usage Dashboard
