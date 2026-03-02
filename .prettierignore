@@ -3,3 +3,4 @@ release/
 node_modules/
 coverage/
 *.min.js
+.gitignore
