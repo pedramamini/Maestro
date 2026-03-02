@@ -177,10 +177,11 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 						// modelId intentionally omitted — applyAgentConfigOverrides is the single source of model injection
 					});
 
-					// Apply config overrides from store (other overrides such as customArgs/env)
+					// Apply config overrides from store (customArgs/env only).
+					// Do NOT pass sessionCustomModel here so modelSource reflects the true origin
+					// (agent-config or default). resolvedModelId is applied explicitly below.
 					const configResolution = applyAgentConfigOverrides(agent, finalArgs, {
 						agentConfigValues,
-						sessionCustomModel: resolvedModelId,
 					});
 					finalArgs = configResolution.args;
 
@@ -191,7 +192,7 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 						agentType: config.agentType,
 						modelSource: configResolution.modelSource,
 						agentConfigModel: agentConfigValues?.model,
-						finalArgsPreview: finalArgs.slice(0, 40),
+						resolvedModelId,
 					});
 
 					// Canonicalize model flags: strip all existing --model/-m tokens before the
@@ -341,12 +342,9 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 									agentType: config.agentType,
 									agentConfigModel: agentConfigValues?.model,
 									resolvedModelId,
-									finalArgsPreview: finalArgs.slice(0, 40),
-									promptPreview: fullPrompt
-										? `${String(fullPrompt).slice(0, 200)}${String(fullPrompt).length > 200 ? '...' : ''}`
-										: undefined,
-									rawOutputPreview: `${String(output).slice(0, 200)}${String(output).length > 200 ? '...' : ''}`,
-									rawOutputLength: String(output).length,
+									finalArgsCount: finalArgs.length,
+									promptLength: String(fullPrompt).length,
+									outputLength: String(output).length,
 								});
 								// Detect obviously generic outputs to surface in logs
 								const genericRegex =
@@ -384,10 +382,9 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 						// (kept in console.debug for diagnosis only)
 						safeDebug('[TabNaming] About to spawn with final args', {
 							sessionId,
-							command,
-							cwd,
+							agentType: config.agentType,
 							hasSshStdinScript: !!sshStdinScript,
-							finalArgsDetail: finalArgs.map((a) => ({ value: a, type: typeof a })),
+							finalArgsCount: finalArgs.length,
 						});
 
 						processManager.spawn({
