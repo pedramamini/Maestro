@@ -307,17 +307,17 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 					}
 
 					// Final safety sanitization: ensure args are all plain strings
-					try {
-						const nonStringItems = finalArgs.filter((a) => typeof a !== 'string');
-						if (nonStringItems.length > 0) {
+					const nonStringItems = finalArgs.filter((a) => typeof a !== 'string');
+					if (nonStringItems.length > 0) {
+						finalArgs = finalArgs.filter((a) => typeof a === 'string');
+						try {
 							safeDebug('[TabNaming] Removing non-string args before spawn', {
 								sessionId,
 								removed: nonStringItems.map((i) => ({ typeof: typeof i, preview: String(i) })),
 							});
-							finalArgs = finalArgs.filter((a) => typeof a === 'string');
+						} catch {
+							// swallow logging errors
 						}
-					} catch (err) {
-						// swallow safety log errors
 					}
 
 					// Create a promise that resolves when we get the tab name
@@ -373,15 +373,16 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 								const genericRegex =
 									/^("|')?\s*(coding task|task tab name|task tab|coding task tab|task name)\b/i;
 								if (genericRegex.test(String(output))) {
-									console.warn(
+									logger.warn(
 										'[TabNaming] Agent returned a generic tab name candidate; consider adjusting prompt or model',
+										LOG_CONTEXT,
 										{
 											sessionId,
 											detected: String(output).trim().slice(0, 80),
 										}
 									);
 								}
-							} catch (err) {
+							} catch {
 								// swallow logging errors
 							}
 
@@ -401,19 +402,15 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 						// Spawn the process
 						// When using SSH with stdin, pass the flag so ChildProcessSpawner
 						// sends the prompt via stdin instead of command line args
-						try {
-							// Debug: log full finalArgs array and types just before spawn
-							// (kept in console.debug for diagnosis only)
-							safeDebug('[TabNaming] About to spawn with final args', {
-								sessionId,
-								command,
-								cwd,
-								sendPromptViaStdin: shouldSendPromptViaStdin,
-								finalArgsDetail: finalArgs.map((a) => ({ value: a, type: typeof a })),
-							});
-						} catch (err) {
-							// ignore logging failures
-						}
+						// Debug: log full finalArgs array and types just before spawn
+						// (kept in console.debug for diagnosis only)
+						safeDebug('[TabNaming] About to spawn with final args', {
+							sessionId,
+							command,
+							cwd,
+							sendPromptViaStdin: shouldSendPromptViaStdin,
+							finalArgsDetail: finalArgs.map((a) => ({ value: a, type: typeof a })),
+						});
 
 						processManager.spawn({
 							sessionId,
