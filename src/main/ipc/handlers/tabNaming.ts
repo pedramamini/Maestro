@@ -236,8 +236,8 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 							filteredPrefix.push(...modelArgTokens);
 							safeDebug('[TabNaming] Injected canonical model flag for spawn', {
 								sessionId,
-								model: sanitized,
-								tokens: modelArgTokens,
+								modelLength: sanitized.length,
+								tokenCount: modelArgTokens.length,
 							});
 						}
 					}
@@ -290,14 +290,10 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 					const nonStringItems = finalArgs.filter((a) => typeof a !== 'string');
 					if (nonStringItems.length > 0) {
 						finalArgs = finalArgs.filter((a) => typeof a === 'string');
-						try {
-							safeDebug('[TabNaming] Removing non-string args before spawn', {
-								sessionId,
-								removed: nonStringItems.map((i) => ({ typeof: typeof i, preview: String(i) })),
-							});
-						} catch {
-							// swallow logging errors
-						}
+						safeDebug('[TabNaming] Removing non-string args before spawn', {
+							sessionId,
+							removedCount: nonStringItems.length,
+						});
 					}
 
 					// Create a promise that resolves when we get the tab name
@@ -355,7 +351,7 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 										LOG_CONTEXT,
 										{
 											sessionId,
-											detected: String(output).trim().slice(0, 80),
+											outputLength: String(output).length,
 										}
 									);
 								}
