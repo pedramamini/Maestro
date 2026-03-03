@@ -283,12 +283,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				);
 				if (activeTab?.wizardState?.isActive) return;
 				e.preventDefault();
-				if (ctx.activeSessionId) {
-					// Cmd+J always opens a new terminal tab (analogous to Cmd+T for AI tabs).
-					// handleOpenTerminalTab creates the tab and sets inputMode:'terminal' automatically.
-					ctx.handleOpenTerminalTab();
-					setTimeout(() => ctx.mainPanelRef?.current?.focusActiveTerminal(), 100);
-				}
+				ctx.toggleInputMode();
+				// Auto-focus the input so user can start typing immediately
+				ctx.setActiveFocus('main');
+				setTimeout(() => ctx.inputRef.current?.focus(), 50);
 				trackShortcut('toggleMode');
 			} else if (ctx.isShortcut(e, 'quickAction')) {
 				e.preventDefault();
