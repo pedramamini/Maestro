@@ -224,6 +224,75 @@ describe('useAgentSessionManagement', () => {
 		const [updatedSession] = updateFn([activeSession]);
 
 		expect(updatedSession.activeTabId).toBe('tab-existing');
+		expect(updatedSession.activeFileTabId).toBeNull();
+		expect(updatedSession.inputMode).toBe('ai');
+	});
+
+	it('clears activeFileTabId when resuming an existing tab from file preview', async () => {
+		const existingTab = createMockTab({ id: 'tab-existing', agentSessionId: 'agent-123' });
+		const activeSession = createMockSession({
+			aiTabs: [createMockTab({ id: 'tab-1' }), existingTab],
+			activeTabId: 'tab-1',
+			activeFileTabId: 'file-tab-1',
+			projectRoot: '/test/project',
+		});
+		const setSessions = vi.fn();
+
+		const { result } = renderHook(() =>
+			useAgentSessionManagement({
+				activeSession,
+				setSessions,
+				setActiveAgentSessionId: vi.fn(),
+				setAgentSessionsOpen: vi.fn(),
+				rightPanelRef: createRightPanelRef(),
+				defaultSaveToHistory: true,
+			})
+		);
+
+		await act(async () => {
+			await result.current.handleResumeSession('agent-123');
+		});
+
+		const updateFn = setSessions.mock.calls[0][0];
+		const [updatedSession] = updateFn([activeSession]);
+
+		expect(updatedSession.activeTabId).toBe('tab-existing');
+		expect(updatedSession.activeFileTabId).toBeNull();
+		expect(updatedSession.inputMode).toBe('ai');
+	});
+
+	it('clears activeFileTabId when resuming a new agent session from file preview', async () => {
+		const activeSession = createMockSession({
+			activeFileTabId: 'file-tab-1',
+			projectRoot: '/test/project',
+		});
+		const setSessions = vi.fn();
+
+		window.maestro.agentSessions.read = vi.fn().mockResolvedValue({
+			messages: [{ type: 'user', content: 'Hello', timestamp: '2024-01-01T00:00:00.000Z', uuid: 'msg-1' }],
+			total: 1,
+			hasMore: false,
+		});
+
+		const { result } = renderHook(() =>
+			useAgentSessionManagement({
+				activeSession,
+				setSessions,
+				setActiveAgentSessionId: vi.fn(),
+				setAgentSessionsOpen: vi.fn(),
+				rightPanelRef: createRightPanelRef(),
+				defaultSaveToHistory: true,
+			})
+		);
+
+		await act(async () => {
+			await result.current.handleResumeSession('agent-new');
+		});
+
+		const updateFn = setSessions.mock.calls[0][0];
+		const [updatedSession] = updateFn([activeSession]);
+
+		expect(updatedSession.activeFileTabId).toBeNull();
 		expect(updatedSession.inputMode).toBe('ai');
 	});
 
@@ -299,6 +368,7 @@ describe('useAgentSessionManagement', () => {
 				text: 'Hi there',
 			},
 		]);
+		expect(updatedSession.activeFileTabId).toBeNull();
 		expect(updatedSession.inputMode).toBe('ai');
 	});
 

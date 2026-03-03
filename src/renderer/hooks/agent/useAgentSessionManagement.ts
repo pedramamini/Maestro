@@ -177,7 +177,7 @@ export function useAgentSessionManagement(
 				// Switch to the existing tab instead of creating a duplicate
 				setSessions((prev) =>
 					prev.map((s) =>
-						s.id === activeSession.id ? { ...s, activeTabId: existingTab.id, inputMode: 'ai' } : s
+						s.id === activeSession.id ? { ...s, activeTabId: existingTab.id, activeFileTabId: null, inputMode: 'ai' } : s
 					)
 				);
 				setActiveAgentSessionId(agentSessionId);
@@ -277,7 +277,7 @@ export function useAgentSessionManagement(
 						});
 						if (!result) return s;
 
-						return { ...result.session, inputMode: 'ai' };
+						return { ...result.session, activeFileTabId: null, inputMode: 'ai' };
 					})
 				);
 				setActiveAgentSessionId(agentSessionId);
