@@ -82,7 +82,9 @@ function isNumericValue(value: string): boolean {
 	const trimmed = value.trim();
 	if (trimmed === '') return false;
 	// Match: optional currency/sign prefix, digits with optional commas, optional decimal, optional suffix
-	return /^[($\-]*[\d,]+(\.\d+)?[%)]*$/.test(trimmed);
+	return /^(?:-?\$?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?%?|\(\$?(?:\d+|\d{1,3}(?:,\d{3})+)(?:\.\d+)?\)%?)$/.test(
+		trimmed
+	);
 }
 
 /**
@@ -149,8 +151,8 @@ function highlightMatches(text: string, query: string, accentColor: string): Rea
 	// Use running character offset as key to guarantee uniqueness across
 	// identical substrings appearing at different positions.
 	let offset = 0;
-	return parts.map((part) => {
-		const key = offset;
+	return parts.map((part, index) => {
+		const key = `${offset}-${index}`;
 		offset += part.length;
 		return regex.test(part) ? (
 			<mark
