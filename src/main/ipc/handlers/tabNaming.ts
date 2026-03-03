@@ -213,11 +213,17 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 								continue; // drop explicit --model=value
 							}
 							if (a === '--model') {
-								i++; // drop flag + value
+								// Only consume the next token as a value if it exists and looks like a value (not a flag)
+								if (i + 1 < prefix.length && typeof prefix[i + 1] === 'string' && !String(prefix[i + 1]).startsWith('-')) {
+									i++;
+								}
 								continue;
 							}
-							if (a === '-m' && i + 1 < prefix.length) {
-								i++; // drop short form + value
+							if (a === '-m') {
+								// Only consume the next token as a value if it exists and looks like a value (not a flag)
+								if (i + 1 < prefix.length && typeof prefix[i + 1] === 'string' && !String(prefix[i + 1]).startsWith('-')) {
+									i++;
+								}
 								continue;
 							}
 						}
@@ -228,18 +234,15 @@ export function registerTabNamingHandlers(deps: TabNamingHandlerDependencies): v
 					// agent-config > agent-default precedence. Use agent.modelArgs() when available
 					// so each agent gets its own flag style.
 					if (resolvedModelId) {
-						const sanitized = resolvedModelId.replace(/\/+$/, '').trim();
-						if (sanitized) {
-							const modelArgTokens = agent.modelArgs
-								? agent.modelArgs(sanitized)
-								: [`--model=${sanitized}`];
-							filteredPrefix.push(...modelArgTokens);
-							safeDebug('[TabNaming] Injected canonical model flag for spawn', {
-								sessionId,
-								modelLength: sanitized.length,
-								tokenCount: modelArgTokens.length,
-							});
-						}
+						const modelArgTokens = agent.modelArgs
+							? agent.modelArgs(resolvedModelId)
+							: [`--model=${resolvedModelId}`];
+						filteredPrefix.push(...modelArgTokens);
+						safeDebug('[TabNaming] Injected canonical model flag for spawn', {
+							sessionId,
+							modelLength: resolvedModelId.length,
+							tokenCount: modelArgTokens.length,
+						});
 					}
 
 					finalArgs = [...filteredPrefix, ...suffix];
