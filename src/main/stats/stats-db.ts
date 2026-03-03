@@ -10,7 +10,15 @@
 
 import Database from 'better-sqlite3';
 import * as path from 'path';
-import { copyFileSync, existsSync, mkdirSync, promises as fsp, readdirSync, statSync, unlinkSync } from 'fs';
+import {
+	copyFileSync,
+	existsSync,
+	mkdirSync,
+	promises as fsp,
+	readdirSync,
+	statSync,
+	unlinkSync,
+} from 'fs';
 import { app } from 'electron';
 import { logger } from '../utils/logger';
 import type {

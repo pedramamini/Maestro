@@ -369,20 +369,20 @@ async function discoverCodexSessionFiles(): Promise<SessionFileInfo[]> {
 						sessionFiles.map(async (file) => {
 							const filePath = path.join(entry.dayDir, file);
 							try {
-							const fileStat = await fs.stat(filePath);
-							// Skip 0-byte sessions (created but abandoned before any content was written)
-							if (fileStat.size === 0) return null;
-							const sessionKey = `${entry.sessionKeyPrefix}/${file.replace('.jsonl', '')}`;
-							return {
-								filePath,
-								sessionKey,
-								mtimeMs: fileStat.mtimeMs,
-								sizeBytes: fileStat.size,
-							};
-						} catch {
-							return null;
-						}
-					})
+								const fileStat = await fs.stat(filePath);
+								// Skip 0-byte sessions (created but abandoned before any content was written)
+								if (fileStat.size === 0) return null;
+								const sessionKey = `${entry.sessionKeyPrefix}/${file.replace('.jsonl', '')}`;
+								return {
+									filePath,
+									sessionKey,
+									mtimeMs: fileStat.mtimeMs,
+									sizeBytes: fileStat.size,
+								};
+							} catch {
+								return null;
+							}
+						})
 					);
 
 					return daySessionEntries.filter((item): item is SessionFileInfo => item !== null);
