@@ -481,7 +481,9 @@ describe('useMainKeyboardHandler', () => {
 				isShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'toggleMode',
 				activeSessionId: 'test-session',
 				activeSession: mockActiveSession,
-				handleOpenTerminalTab: mockHandleOpenTerminalTab,
+				toggleInputMode: mockToggleInputMode,
+				setActiveFocus: vi.fn(),
+				inputRef: { current: { focus: vi.fn() } },
 			});
 
 			act(() => {
@@ -843,7 +845,9 @@ describe('useMainKeyboardHandler', () => {
 					inputMode: 'ai',
 				},
 				activeSessionId: 'session-1',
-				handleOpenTerminalTab: mockHandleOpenTerminalTab,
+				toggleInputMode: mockToggleInputMode,
+				setActiveFocus: vi.fn(),
+				inputRef: { current: { focus: vi.fn() } },
 			});
 
 			act(() => {
@@ -880,7 +884,9 @@ describe('useMainKeyboardHandler', () => {
 					inputMode: 'ai',
 				},
 				activeSessionId: 'session-1',
-				handleOpenTerminalTab: mockHandleOpenTerminalTab,
+				toggleInputMode: mockToggleInputMode,
+				setActiveFocus: vi.fn(),
+				inputRef: { current: { focus: vi.fn() } },
 			});
 
 			act(() => {
