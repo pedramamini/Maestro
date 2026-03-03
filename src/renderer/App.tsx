@@ -850,6 +850,7 @@ function MaestroConsoleInner() {
 	// --- MODAL HANDLERS (open/close, error recovery, lightbox, celebrations) ---
 	const {
 		errorSession,
+		effectiveAgentError,
 		recoveryActions,
 		handleCloseGitDiff,
 		handleCloseGitLog,
@@ -2739,6 +2740,7 @@ function MaestroConsoleInner() {
 					onLeaderboardOptOut={handleLeaderboardOptOut}
 					onSyncAutoRunStats={handleSyncAutoRunStats}
 					errorSession={errorSession}
+					effectiveAgentError={effectiveAgentError}
 					recoveryActions={recoveryActions}
 					onDismissAgentError={handleCloseAgentErrorModal}
 					groupChatError={groupChatError}

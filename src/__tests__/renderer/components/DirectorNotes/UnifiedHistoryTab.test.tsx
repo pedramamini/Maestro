@@ -4,6 +4,18 @@ import { render, screen, fireEvent, waitFor, act } from '@testing-library/react'
 import { UnifiedHistoryTab } from '../../../../renderer/components/DirectorNotes/UnifiedHistoryTab';
 import type { Theme } from '../../../../renderer/types';
 
+// Mock useSettings hook (mutable so individual tests can override)
+const mockDirNotesSettings = vi.hoisted(() => ({
+	provider: 'claude-code' as const,
+	defaultLookbackDays: 7,
+}));
+
+vi.mock('../../../../renderer/hooks/settings/useSettings', () => ({
+	useSettings: () => ({
+		directorNotesSettings: mockDirNotesSettings,
+	}),
+}));
+
 // Mock useListNavigation
 const mockHandleKeyDown = vi.fn();
 const mockSetSelectedIndex = vi.fn();
@@ -125,6 +137,16 @@ vi.mock('../../../../renderer/components/History', () => ({
 	),
 	ESTIMATED_ROW_HEIGHT: 80,
 	ESTIMATED_ROW_HEIGHT_SIMPLE: 60,
+	LOOKBACK_OPTIONS: [
+		{ label: '24 hours', hours: 24, bucketCount: 24 },
+		{ label: '72 hours', hours: 72, bucketCount: 24 },
+		{ label: '1 week', hours: 168, bucketCount: 28 },
+		{ label: '2 weeks', hours: 336, bucketCount: 28 },
+		{ label: '1 month', hours: 720, bucketCount: 30 },
+		{ label: '6 months', hours: 4320, bucketCount: 24 },
+		{ label: '1 year', hours: 8760, bucketCount: 24 },
+		{ label: 'All time', hours: null, bucketCount: 24 },
+	],
 }));
 
 const mockTheme: Theme = {
@@ -200,6 +222,7 @@ const createPaginatedResponse = (entries: any[], hasMore = false, total?: number
 });
 
 beforeEach(() => {
+	mockDirNotesSettings.defaultLookbackDays = 7;
 	(window as any).maestro = {
 		directorNotes: {
 			getUnifiedHistory: mockGetUnifiedHistory,
@@ -226,7 +249,21 @@ describe('UnifiedHistoryTab', () => {
 			expect(screen.getByText('Loading history...')).toBeInTheDocument();
 		});
 
-		it('fetches unified history on mount with all-time lookback and pagination', async () => {
+		it('fetches unified history on mount using default lookback from settings', async () => {
+			render(<UnifiedHistoryTab theme={mockTheme} />);
+
+			await waitFor(() => {
+				expect(mockGetUnifiedHistory).toHaveBeenCalledWith({
+					lookbackDays: 7,
+					filter: null,
+					limit: 100,
+					offset: 0,
+				});
+			});
+		});
+
+		it('fetches all-time history when defaultLookbackDays is 0', async () => {
+			mockDirNotesSettings.defaultLookbackDays = 0;
 			render(<UnifiedHistoryTab theme={mockTheme} />);
 
 			await waitFor(() => {
@@ -237,6 +274,7 @@ describe('UnifiedHistoryTab', () => {
 					offset: 0,
 				});
 			});
+			expect(screen.getByTestId('activity-lookback-hours')).toHaveTextContent('null');
 		});
 
 		it('shows empty state when no entries found', async () => {
@@ -244,7 +282,8 @@ describe('UnifiedHistoryTab', () => {
 			render(<UnifiedHistoryTab theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(screen.getByText(/No history entries found across any agents/)).toBeInTheDocument();
+				// With defaultLookbackDays=7, lookbackHours=168 (not null), so time-range message shown
+				expect(screen.getByText(/No history entries in this time range/)).toBeInTheDocument();
 			});
 		});
 
@@ -303,7 +342,7 @@ describe('UnifiedHistoryTab', () => {
 			render(<UnifiedHistoryTab theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(screen.getByText(/No history entries found across any agents/)).toBeInTheDocument();
+				expect(screen.getByText(/No history entries in this time range/)).toBeInTheDocument();
 			});
 			expect(screen.queryByTestId('history-stats-bar')).not.toBeInTheDocument();
 		});
@@ -375,11 +414,12 @@ describe('UnifiedHistoryTab', () => {
 			});
 		});
 
-		it('passes null lookbackHours (all time) to activity graph by default', async () => {
+		it('passes default lookback from settings to activity graph', async () => {
 			render(<UnifiedHistoryTab theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('activity-lookback-hours')).toHaveTextContent('null');
+				// 7 days → 168 hours (1 week)
+				expect(screen.getByTestId('activity-lookback-hours')).toHaveTextContent('168');
 			});
 		});
 
@@ -388,7 +428,7 @@ describe('UnifiedHistoryTab', () => {
 
 			await waitFor(() => {
 				expect(mockGetUnifiedHistory).toHaveBeenCalledWith(
-					expect.objectContaining({ lookbackDays: 0 })
+					expect.objectContaining({ lookbackDays: 7 })
 				);
 			});
 
@@ -397,14 +437,14 @@ describe('UnifiedHistoryTab', () => {
 				createPaginatedResponse(createMockEntries().slice(0, 1))
 			);
 
-			// Change lookback to 1 week (168 hours = 7 days)
+			// Change lookback to "All Time" (null hours = 0 days) — different from initial 168h
 			await act(async () => {
-				fireEvent.click(screen.getByTestId('lookback-change-168'));
+				fireEvent.click(screen.getByTestId('lookback-change-null'));
 			});
 
 			await waitFor(() => {
 				expect(mockGetUnifiedHistory).toHaveBeenCalledWith(
-					expect.objectContaining({ lookbackDays: 7, offset: 0 })
+					expect.objectContaining({ lookbackDays: 0, offset: 0 })
 				);
 			});
 		});
@@ -413,7 +453,8 @@ describe('UnifiedHistoryTab', () => {
 			render(<UnifiedHistoryTab theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('activity-lookback-hours')).toHaveTextContent('null');
+				// Default: 7 days → 168 hours
+				expect(screen.getByTestId('activity-lookback-hours')).toHaveTextContent('168');
 			});
 
 			mockGetUnifiedHistory.mockResolvedValue(
@@ -675,7 +716,7 @@ describe('UnifiedHistoryTab', () => {
 			render(<UnifiedHistoryTab theme={mockTheme} />);
 
 			await waitFor(() => {
-				expect(screen.getByText(/No history entries found across any agents/)).toBeInTheDocument();
+				expect(screen.getByText(/No history entries in this time range/)).toBeInTheDocument();
 			});
 		});
 	});

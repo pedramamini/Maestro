@@ -666,6 +666,77 @@ describe('useModalHandlers', () => {
 			expect(useModalStore.getState().isOpen('agentError')).toBe(false);
 		});
 
+		it('handleShowAgentErrorModal opens modal with historical error when passed an AgentError', () => {
+			const tab = createMockAITab({ id: 'tab-1', agentSessionId: 'as-1' });
+			const session = createMockSession({
+				id: 'session-1',
+				activeTabId: 'tab-1',
+				aiTabs: [tab],
+			});
+			useSessionStore.setState({ sessions: [session], activeSessionId: 'session-1' });
+
+			const historicalError = {
+				message: 'historical error from chat log',
+				type: 'agent_crashed' as const,
+				recoverable: false,
+				agentId: 'claude-code',
+				timestamp: Date.now(),
+				parsedJson: { detail: 'some parsed data' },
+			};
+
+			const { result } = renderHook(() =>
+				useModalHandlers(createInputRef(), createTerminalOutputRef())
+			);
+			act(() => {
+				result.current.handleShowAgentErrorModal(historicalError);
+			});
+
+			expect(useModalStore.getState().isOpen('agentError')).toBe(true);
+			expect(useModalStore.getState().getData('agentError')).toEqual({
+				sessionId: 'session-1',
+				historicalError,
+			});
+		});
+
+		it('effectiveAgentError prefers historical error over live error when both present', () => {
+			const liveError = {
+				message: 'live session error',
+				type: 'agent_crashed' as const,
+				recoverable: true,
+				agentId: 'claude-code',
+				timestamp: Date.now(),
+			};
+			const historicalError = {
+				message: 'historical error from chat log',
+				type: 'agent_crashed' as const,
+				recoverable: false,
+				agentId: 'claude-code',
+				timestamp: Date.now() - 60000,
+				parsedJson: { detail: 'old crash' },
+			};
+
+			const tab = createMockAITab({ id: 'tab-1', agentSessionId: 'as-1', agentError: liveError });
+			const session = createMockSession({
+				id: 'session-1',
+				activeTabId: 'tab-1',
+				aiTabs: [tab],
+			});
+			useSessionStore.setState({ sessions: [session], activeSessionId: 'session-1' });
+
+			// Open the modal with a historical error (simulates clicking Details on a chat log entry)
+			const { result } = renderHook(() =>
+				useModalHandlers(createInputRef(), createTerminalOutputRef())
+			);
+			act(() => {
+				result.current.handleShowAgentErrorModal(historicalError);
+			});
+
+			// Historical error should win over the live one
+			expect(result.current.effectiveAgentError).toEqual(historicalError);
+			// Recovery actions should be empty for historical errors
+			expect(result.current.recoveryActions).toEqual([]);
+		});
+
 		it('handleClearAgentError clears error on agent store and closes modal', () => {
 			const mockClearAgentError = vi.fn();
 			vi.spyOn(useAgentStore, 'getState').mockReturnValue({
