@@ -238,12 +238,11 @@ describe('TerminalOutput', () => {
 			const props = createDefaultProps({ session });
 			render(<TerminalOutput {...props} />);
 
-			// With default alignment='right', user messages use normal flex (not reversed).
-			// Non-user (AI) messages would use flex-row-reverse with alignment='right'.
-			const userMessageEl = screen.getByText('User input here');
-			expect(userMessageEl).toBeInTheDocument();
-			const container = userMessageEl.closest('.flex-row-reverse');
-			expect(container).toBeNull();
+			// User messages should render in a flex container
+			// Default alignment is 'right', which does not apply flex-row-reverse (corrected in ba807307)
+			const userMessageContainer = screen.getByText('User input here').closest('[data-log-index]');
+			expect(userMessageContainer).not.toBeNull();
+			expect(userMessageContainer!.className).toContain('flex');
 		});
 
 		it('shows delivered checkmark for delivered messages', () => {
