@@ -147,6 +147,7 @@ export function SessionContextMenu({
 			}}
 		>
 			<button
+				type="button"
 				onClick={() => {
 					onRename();
 					onDismiss();
@@ -159,6 +160,7 @@ export function SessionContextMenu({
 			</button>
 
 			<button
+				type="button"
 				onClick={() => {
 					onEdit();
 					onDismiss();
@@ -171,6 +173,7 @@ export function SessionContextMenu({
 			</button>
 
 			<button
+				type="button"
 				onClick={() => {
 					onDuplicate();
 					onDismiss();
@@ -184,6 +187,7 @@ export function SessionContextMenu({
 
 			{!session.parentSessionId && (
 				<button
+					type="button"
 					onClick={() => {
 						onToggleBookmark();
 						onDismiss();
@@ -216,6 +220,7 @@ export function SessionContextMenu({
 					}}
 				>
 					<button
+						type="button"
 						className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex items-center justify-between"
 						style={{ color: theme.colors.textMain }}
 					>
@@ -240,6 +245,7 @@ export function SessionContextMenu({
 							}}
 						>
 							<button
+								type="button"
 								onClick={() => {
 									onMoveToGroup('');
 									onDismiss();
@@ -259,6 +265,7 @@ export function SessionContextMenu({
 
 							{groups.map((group) => (
 								<button
+									type="button"
 									key={group.id}
 									onClick={() => {
 										onMoveToGroup(group.id);
@@ -282,6 +289,7 @@ export function SessionContextMenu({
 
 							{onCreateGroup && (
 								<button
+									type="button"
 									onClick={() => {
 										onCreateGroup();
 										onDismiss();
@@ -303,6 +311,7 @@ export function SessionContextMenu({
 					<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
 					{onQuickCreateWorktree && session.worktreeConfig && (
 						<button
+							type="button"
 							onClick={() => {
 								onQuickCreateWorktree();
 								onDismiss();
@@ -316,6 +325,7 @@ export function SessionContextMenu({
 					)}
 					{onConfigureWorktrees && (
 						<button
+							type="button"
 							onClick={() => {
 								onConfigureWorktrees();
 								onDismiss();
@@ -335,6 +345,7 @@ export function SessionContextMenu({
 					<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
 					{onCreatePR && (
 						<button
+							type="button"
 							onClick={() => {
 								onCreatePR();
 								onDismiss();
@@ -348,6 +359,7 @@ export function SessionContextMenu({
 					)}
 					{onDeleteWorktree && (
 						<button
+							type="button"
 							onClick={() => {
 								onDeleteWorktree();
 								onDismiss();
@@ -366,6 +378,7 @@ export function SessionContextMenu({
 				<>
 					<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
 					<button
+						type="button"
 						onClick={() => {
 							onDelete();
 							onDismiss();

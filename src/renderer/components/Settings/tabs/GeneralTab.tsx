@@ -538,13 +538,18 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 							<div
 								className="group relative flex-shrink-0 mt-0.5 outline-none"
 								tabIndex={0}
+								aria-describedby="env-vars-help-tooltip"
 								title="Environment variables configured here are available to all terminal sessions, all AI agent processes (Claude, OpenCode, etc.), and any spawned child processes. Agent-specific settings can override these values."
 							>
 								<HelpCircle
 									className="w-4 h-4 cursor-help"
 									style={{ color: theme.colors.textDim }}
 								/>
-								<div className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal">
+								<div
+									id="env-vars-help-tooltip"
+									role="tooltip"
+									className="absolute hidden group-hover:block group-focus-visible:block bg-black/80 text-white text-xs rounded p-2 z-50 w-60 -right-2 top-5 whitespace-normal"
+								>
 									<p className="mb-1 font-semibold">Environment variables apply to:</p>
 									<ul className="list-disc list-inside space-y-0.5">
 										<li>All terminal sessions</li>
@@ -1350,31 +1355,35 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					<div className="flex items-center gap-2 flex-wrap">
 						<button
 							onClick={async () => {
-								const folder = await window.maestro.sync.selectSyncFolder();
-								if (folder) {
-									setSyncMigrating(true);
-									setSyncError(null);
-									setSyncMigratedCount(null);
-									try {
-										const result = await window.maestro.sync.setCustomPath(folder);
-										if (result.success) {
-											setCustomSyncPath(folder);
-											setCurrentStoragePath(folder);
-											setSyncRestartRequired(true);
-											if (result.migrated !== undefined) {
-												setSyncMigratedCount(result.migrated);
+								try {
+									const folder = await window.maestro.sync.selectSyncFolder();
+									if (folder) {
+										setSyncMigrating(true);
+										setSyncError(null);
+										setSyncMigratedCount(null);
+										try {
+											const result = await window.maestro.sync.setCustomPath(folder);
+											if (result.success) {
+												setCustomSyncPath(folder);
+												setCurrentStoragePath(folder);
+												setSyncRestartRequired(true);
+												if (result.migrated !== undefined) {
+													setSyncMigratedCount(result.migrated);
+												}
+											} else {
+												setSyncError(result.error || 'Failed to change storage location');
 											}
-										} else {
-											setSyncError(result.error || 'Failed to change storage location');
+											if (result.errors && result.errors.length > 0) {
+												setSyncError(result.errors.join(', '));
+											}
+										} catch (error) {
+											setSyncError(error instanceof Error ? error.message : String(error));
+										} finally {
+											setSyncMigrating(false);
 										}
-										if (result.errors && result.errors.length > 0) {
-											setSyncError(result.errors.join(', '));
-										}
-									} catch (error) {
-										setSyncError(error instanceof Error ? error.message : String(error));
-									} finally {
-										setSyncMigrating(false);
 									}
+								} catch (error) {
+									setSyncError(error instanceof Error ? error.message : String(error));
 								}
 							}}
 							disabled={syncMigrating}
@@ -1410,6 +1419,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 										} else {
 											setSyncError(result.error || 'Failed to reset storage location');
 										}
+									} catch (error) {
+										setSyncError(error instanceof Error ? error.message : String(error));
 									} finally {
 										setSyncMigrating(false);
 									}
