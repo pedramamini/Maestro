@@ -386,22 +386,39 @@ function parseDocumentPaths(body: string): DocumentReference[] {
  * Fetch a single symphony registry from a URL.
  * Returns null on failure instead of throwing (isolated error handling per URL).
  */
+/**
+ * Redact a URL for safe logging — strips credentials, query params, and fragments.
+ */
+function redactUrlForLog(rawUrl: string): string {
+	try {
+		const parsed = new URL(rawUrl);
+		parsed.username = '';
+		parsed.password = '';
+		parsed.search = '';
+		parsed.hash = '';
+		return parsed.toString();
+	} catch {
+		return '[invalid-url]';
+	}
+}
+
 async function fetchSingleRegistry(url: string): Promise<SymphonyRegistry | null> {
+	const safeUrl = redactUrlForLog(url);
 	try {
 		const response = await fetch(url);
 		if (!response.ok) {
-			logger.warn(`Failed to fetch registry from ${url}: ${response.status}`, LOG_CONTEXT);
+			logger.warn(`Failed to fetch registry from ${safeUrl}: ${response.status}`, LOG_CONTEXT);
 			return null;
 		}
 		const data = (await response.json()) as SymphonyRegistry;
 		if (!data.repositories || !Array.isArray(data.repositories)) {
-			logger.warn(`Invalid registry structure from ${url}`, LOG_CONTEXT);
+			logger.warn(`Invalid registry structure from ${safeUrl}`, LOG_CONTEXT);
 			return null;
 		}
-		logger.info(`Fetched ${data.repositories.length} repos from ${url}`, LOG_CONTEXT);
+		logger.info(`Fetched ${data.repositories.length} repos from ${safeUrl}`, LOG_CONTEXT);
 		return data;
 	} catch (error) {
-		logger.warn(`Network error fetching registry from ${url}: ${error instanceof Error ? error.message : String(error)}`, LOG_CONTEXT);
+		logger.warn(`Network error fetching registry from ${safeUrl}: ${error instanceof Error ? error.message : String(error)}`, LOG_CONTEXT);
 		return null;
 	}
 }
@@ -1128,9 +1145,20 @@ export function registerSymphonyHandlers({
 			async (forceRefresh?: boolean): Promise<Omit<GetRegistryResponse, 'success'>> => {
 				const cache = await readCache(app);
 
+				// Runtime-validate custom URLs from settings
+				const rawCustomUrls = settingsStore.get('symphonyRegistryUrls');
+				const customUrls = Array.isArray(rawCustomUrls)
+					? rawCustomUrls.filter((u): u is string => typeof u === 'string' && u.trim().length > 0)
+					: [];
+
+				// Skip cache when custom sources are configured — cache doesn't track
+				// which source URLs produced it, so URL changes would serve stale data.
+				const hasCustomSources = customUrls.length > 0;
+
 				// Check cache validity
 				if (
 					!forceRefresh &&
+					!hasCustomSources &&
 					cache?.registry &&
 					isCacheValid(cache.registry.fetchedAt, REGISTRY_CACHE_TTL_MS)
 				) {
@@ -1144,7 +1172,6 @@ export function registerSymphonyHandlers({
 
 				// Fetch fresh data from all configured registries
 				try {
-					const customUrls = (settingsStore.get('symphonyRegistryUrls') as string[] | undefined) ?? [];
 					const registry = await fetchRegistries(customUrls);
 					const enriched = await enrichWithStars(registry, cache, !!forceRefresh);
 

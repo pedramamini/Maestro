@@ -33,31 +33,46 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 	const [newRegistryUrl, setNewRegistryUrl] = useState('');
 	const [registryUrlError, setRegistryUrlError] = useState<string | null>(null);
 
+	const canonicalizeUrl = (raw: string): string => {
+		const u = new URL(raw.trim());
+		u.hash = '';
+		return u.href;
+	};
+
 	const handleAddRegistryUrl = () => {
 		const trimmed = newRegistryUrl.trim();
 		if (!trimmed) {
 			setRegistryUrlError('URL cannot be empty');
 			return;
 		}
+		let canonical: string;
 		try {
 			const parsed = new URL(trimmed);
 			if (parsed.protocol !== 'https:' && parsed.protocol !== 'http:') {
 				setRegistryUrlError('URL must use HTTP or HTTPS');
 				return;
 			}
+			canonical = canonicalizeUrl(trimmed);
 		} catch {
 			setRegistryUrlError('Invalid URL format');
 			return;
 		}
-		if (trimmed === SYMPHONY_REGISTRY_URL) {
-			setRegistryUrlError('This is the default registry URL');
-			return;
-		}
-		if (symphonyRegistryUrls.includes(trimmed)) {
+		try {
+			if (canonical === canonicalizeUrl(SYMPHONY_REGISTRY_URL)) {
+				setRegistryUrlError('This is the default registry URL');
+				return;
+			}
+		} catch { /* default URL should always parse */ }
+		const existing = new Set(
+			symphonyRegistryUrls.map((u) => {
+				try { return canonicalizeUrl(u); } catch { return u.trim(); }
+			})
+		);
+		if (existing.has(canonical)) {
 			setRegistryUrlError('URL already added');
 			return;
 		}
-		setSymphonyRegistryUrls([...symphonyRegistryUrls, trimmed]);
+		setSymphonyRegistryUrls([...symphonyRegistryUrls, canonical]);
 		setNewRegistryUrl('');
 		setRegistryUrlError(null);
 	};

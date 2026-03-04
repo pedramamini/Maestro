@@ -1707,8 +1707,11 @@ export async function loadAllSettings(): Promise<void> {
 		}
 
 		// Symphony registry URLs (additional user-configured registries)
-		if (allSettings['symphonyRegistryUrls'] !== undefined)
-			patch.symphonyRegistryUrls = allSettings['symphonyRegistryUrls'] as string[];
+		if (Array.isArray(allSettings['symphonyRegistryUrls'])) {
+			patch.symphonyRegistryUrls = (allSettings['symphonyRegistryUrls'] as unknown[])
+				.filter((v): v is string => typeof v === 'string' && v.trim().length > 0)
+				.map((v) => v.trim());
+		}
 
 		// Director's Notes settings (merge with defaults to preserve new fields)
 		if (allSettings['directorNotesSettings'] !== undefined) {
@@ -1841,6 +1844,7 @@ export function getSettingsActions() {
 		setSuppressWindowsWarning: state.setSuppressWindowsWarning,
 		setAutoScrollAiMode: state.setAutoScrollAiMode,
 		setEncoreFeatures: state.setEncoreFeatures,
+		setSymphonyRegistryUrls: state.setSymphonyRegistryUrls,
 		setDirectorNotesSettings: state.setDirectorNotesSettings,
 		setWakatimeApiKey: state.setWakatimeApiKey,
 		setWakatimeEnabled: state.setWakatimeEnabled,

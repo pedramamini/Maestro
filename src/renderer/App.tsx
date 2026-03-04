@@ -415,6 +415,15 @@ function MaestroConsoleInner() {
 		encoreFeatures,
 	} = settings;
 
+	// Reset modal-open flags when their Encore Feature toggle is disabled
+	useEffect(() => {
+		if (!encoreFeatures.symphony) setSymphonyModalOpen(false);
+	}, [encoreFeatures.symphony, setSymphonyModalOpen]);
+
+	useEffect(() => {
+		if (!encoreFeatures.usageStats) setUsageDashboardOpen(false);
+	}, [encoreFeatures.usageStats, setUsageDashboardOpen]);
+
 	// --- KEYBOARD SHORTCUT HELPERS ---
 	const { isShortcut, isTabShortcut } = useKeyboardShortcutHelpers({
 		shortcuts,
