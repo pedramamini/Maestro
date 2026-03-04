@@ -109,14 +109,13 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 		const pendingEntriesRef = useRef<UnifiedHistoryEntry[]>([]);
 		const rafIdRef = useRef<number | null>(null);
 
-		// Build session name map for enriching streamed entries with agentName
-		const sessionNameMap = useSessionStore((s) => {
-			const map = new Map<string, string>();
-			for (const sess of s.sessions) {
-				map.set(sess.id, sess.name);
-			}
-			return map;
-		});
+		// Stable ref for session names — avoids making the streaming effect depend on session state
+		const sessionsRef = useRef(useSessionStore.getState().sessions);
+		useEffect(() => {
+			return useSessionStore.subscribe((s) => {
+				sessionsRef.current = s.sessions;
+			});
+		}, []);
 
 		useEffect(() => {
 			const flushPending = () => {
@@ -125,42 +124,54 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 				if (batch.length === 0) return;
 				pendingEntriesRef.current = [];
 
+				// Dedupe within the batch itself
+				const seen = new Set<string>();
+				const uniqueBatch: UnifiedHistoryEntry[] = [];
+				for (const entry of batch) {
+					if (!seen.has(entry.id)) {
+						seen.add(entry.id);
+						uniqueBatch.push(entry);
+					}
+				}
+
 				setEntries((prev) => {
 					const existingIds = new Set(prev.map((e) => e.id));
-					const newEntries = batch.filter((e) => !existingIds.has(e.id));
+					const newEntries = uniqueBatch.filter((e) => !existingIds.has(e.id));
 					if (newEntries.length === 0) return prev;
+
+					// Update total count to match actual additions
+					setTotalEntries((t) => t + newEntries.length);
+
+					// Incrementally update stats counters from deduplicated entries
+					setHistoryStats((prevStats) => {
+						if (!prevStats) return prevStats;
+						let newAuto = 0;
+						let newUser = 0;
+						for (const entry of newEntries) {
+							if (entry.type === 'AUTO') newAuto++;
+							else if (entry.type === 'USER') newUser++;
+						}
+						return {
+							...prevStats,
+							autoCount: prevStats.autoCount + newAuto,
+							userCount: prevStats.userCount + newUser,
+							totalCount: prevStats.totalCount + newAuto + newUser,
+						};
+					});
+
 					const merged = [...newEntries, ...prev];
 					merged.sort((a, b) => b.timestamp - a.timestamp);
 					return merged;
 				});
-
-				setTotalEntries((prev) => prev + batch.length);
 
 				// Update graph entries for ActivityGraph
 				setGraphEntries((prev) => {
 					const existingIds = new Set(prev.map((e) => e.id));
-					const newEntries = batch.filter((e) => !existingIds.has(e.id));
+					const newEntries = uniqueBatch.filter((e) => !existingIds.has(e.id));
 					if (newEntries.length === 0) return prev;
 					const merged = [...newEntries, ...prev];
 					merged.sort((a, b) => b.timestamp - a.timestamp);
 					return merged;
-				});
-
-				// Incrementally update stats counters
-				setHistoryStats((prev) => {
-					if (!prev) return prev;
-					let newAuto = 0;
-					let newUser = 0;
-					for (const entry of batch) {
-						if (entry.type === 'AUTO') newAuto++;
-						else if (entry.type === 'USER') newUser++;
-					}
-					return {
-						...prev,
-						autoCount: prev.autoCount + newAuto,
-						userCount: prev.userCount + newUser,
-						totalCount: prev.totalCount + newAuto + newUser,
-					};
 				});
 			};
 
@@ -175,7 +186,7 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 					const enriched = {
 						...rawEntry,
 						sourceSessionId,
-						agentName: sessionNameMap.get(sourceSessionId),
+						agentName: sessionsRef.current.find((s) => s.id === sourceSessionId)?.name,
 					} as UnifiedHistoryEntry;
 
 					pendingEntriesRef.current.push(enriched);
@@ -192,8 +203,9 @@ export const UnifiedHistoryTab = forwardRef<TabFocusHandle, UnifiedHistoryTabPro
 				if (rafIdRef.current !== null) {
 					cancelAnimationFrame(rafIdRef.current);
 				}
+				pendingEntriesRef.current = [];
 			};
-		}, [lookbackHours, sessionNameMap]);
+		}, [lookbackHours]);
 
 		useImperativeHandle(
 			ref,

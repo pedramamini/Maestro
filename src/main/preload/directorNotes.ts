@@ -7,7 +7,7 @@
  */
 
 import { ipcRenderer } from 'electron';
-import type { ToolType } from '../../shared/types';
+import type { ToolType, HistoryEntry } from '../../shared/types';
 
 /** Aggregate stats returned alongside unified history */
 export interface UnifiedHistoryStats {
@@ -112,9 +112,9 @@ export function createDirectorNotesApi() {
 		 * Returns a cleanup function to unsubscribe.
 		 */
 		onHistoryEntryAdded: (
-			callback: (entry: UnifiedHistoryEntry, sourceSessionId: string) => void
+			callback: (entry: HistoryEntry, sourceSessionId: string) => void
 		): (() => void) => {
-			const handler = (_event: unknown, entry: UnifiedHistoryEntry, sessionId: string) => {
+			const handler = (_event: unknown, entry: HistoryEntry, sessionId: string) => {
 				callback(entry, sessionId);
 			};
 			ipcRenderer.on('history:entryAdded', handler);
