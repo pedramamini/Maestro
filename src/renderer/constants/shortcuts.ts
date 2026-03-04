@@ -139,6 +139,11 @@ export const FIXED_SHORTCUTS: Record<string, Shortcut> = {
 		label: 'Decrease Font Size',
 		keys: ['Meta', '-'],
 	},
+	fontSizeReset: {
+		id: 'fontSizeReset',
+		label: 'Reset Font Size',
+		keys: ['Meta', '0'],
+	},
 };
 
 // Tab navigation shortcuts (AI mode only)
