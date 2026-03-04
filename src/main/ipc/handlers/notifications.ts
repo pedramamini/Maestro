@@ -15,6 +15,7 @@ import { spawn, type ChildProcess } from 'child_process';
 import { logger } from '../../utils/logger';
 import { isWebContentsAvailable } from '../../utils/safe-send';
 import { parseDeepLink, dispatchDeepLink } from '../../deep-links';
+import { buildSessionDeepLink } from '../../../shared/deep-link-urls';
 
 // ==========================================================================
 // Constants
@@ -361,9 +362,7 @@ export function registerNotificationsHandlers(deps?: NotificationsHandlerDepende
 
 					// Wire click handler for navigation if session context is provided
 					if (sessionId && deps?.getMainWindow) {
-						const deepLinkUrl = tabId
-							? `maestro://session/${encodeURIComponent(sessionId)}/tab/${encodeURIComponent(tabId)}`
-							: `maestro://session/${encodeURIComponent(sessionId)}`;
+						const deepLinkUrl = buildSessionDeepLink(sessionId, tabId);
 
 						notification.on('click', () => {
 							const parsed = parseDeepLink(deepLinkUrl);
