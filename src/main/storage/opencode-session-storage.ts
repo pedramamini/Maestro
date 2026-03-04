@@ -37,6 +37,7 @@ import type {
 	SessionMessage,
 } from '../agents';
 import type { ToolType, SshRemoteConfig } from '../../shared/types';
+import { isWindows } from '../../shared/platformDetection';
 
 const LOG_CONTEXT = '[OpenCodeSessionStorage]';
 
@@ -46,7 +47,7 @@ const LOG_CONTEXT = '[OpenCodeSessionStorage]';
  * - Windows: %APPDATA%\opencode\storage
  */
 function getOpenCodeStorageDir(): string {
-	if (process.platform === 'win32') {
+	if (isWindows()) {
 		const appData = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
 		return path.join(appData, 'opencode', 'storage');
 	}

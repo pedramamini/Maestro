@@ -15,6 +15,7 @@
 import * as os from 'os';
 import * as path from 'path';
 import * as fs from 'fs';
+import { isWindows } from './platformDetection';
 
 /**
  * Expand tilde (~) to home directory in paths.
@@ -179,7 +180,7 @@ export function compareVersions(a: string, b: string): number {
  * ```
  */
 export function detectNodeVersionManagerBinPaths(): string[] {
-	if (process.platform === 'win32') {
+	if (isWindows()) {
 		return []; // Windows has different version manager paths handled elsewhere
 	}
 
@@ -299,7 +300,6 @@ export function detectNodeVersionManagerBinPaths(): string[] {
  * ```
  */
 export function buildExpandedPath(customPaths?: string[]): string {
-	const isWindows = process.platform === 'win32';
 	const delimiter = path.delimiter;
 	const home = os.homedir();
 
@@ -310,7 +310,7 @@ export function buildExpandedPath(customPaths?: string[]): string {
 	// Platform-specific additional paths
 	let additionalPaths: string[];
 
-	if (isWindows) {
+	if (isWindows()) {
 		const appData = process.env.APPDATA || path.join(home, 'AppData', 'Roaming');
 		const localAppData = process.env.LOCALAPPDATA || path.join(home, 'AppData', 'Local');
 		const programFiles = process.env.ProgramFiles || 'C:\\Program Files';

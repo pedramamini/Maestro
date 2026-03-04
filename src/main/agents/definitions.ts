@@ -6,6 +6,7 @@
  */
 
 import type { AgentCapabilities } from './capabilities';
+import { isWindows } from '../../shared/platformDetection';
 
 // ============ Configuration Types ============
 
@@ -115,8 +116,8 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		id: 'terminal',
 		name: 'Terminal',
 		// Use platform-appropriate default shell
-		binaryName: process.platform === 'win32' ? 'powershell.exe' : 'bash',
-		command: process.platform === 'win32' ? 'powershell.exe' : 'bash',
+		binaryName: isWindows() ? 'powershell.exe' : 'bash',
+		command: isWindows() ? 'powershell.exe' : 'bash',
 		args: [],
 		requiresPty: true,
 		hidden: true, // Internal agent, not shown in UI

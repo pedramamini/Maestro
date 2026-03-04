@@ -8,6 +8,7 @@ import { logger } from '../../utils/logger';
 import type { CommandResult } from '../types';
 import { buildUnixBasePath } from '../utils/envBuilder';
 import { resolveShellPath, buildWrappedCommand } from '../utils/pathResolver';
+import { isWindows } from '../../../shared/platformDetection';
 
 /**
  * Runs single commands locally and captures stdout/stderr cleanly.
@@ -27,8 +28,7 @@ export class LocalCommandRunner {
 		shellEnvVars?: Record<string, string>
 	): Promise<CommandResult> {
 		return new Promise((resolve) => {
-			const isWindows = process.platform === 'win32';
-			const defaultShell = isWindows ? 'powershell.exe' : 'bash';
+			const defaultShell = isWindows() ? 'powershell.exe' : 'bash';
 			const shellToUse = shell || defaultShell;
 
 			logger.debug('[ProcessManager] runCommand()', 'ProcessManager', {
@@ -37,7 +37,7 @@ export class LocalCommandRunner {
 				cwd,
 				shell: shellToUse,
 				hasEnvVars: !!shellEnvVars,
-				isWindows,
+				isWindows: isWindows(),
 			});
 
 			// Build the command with shell config sourcing
@@ -52,7 +52,7 @@ export class LocalCommandRunner {
 			// Build environment for command execution
 			let env: NodeJS.ProcessEnv;
 
-			if (isWindows) {
+			if (isWindows()) {
 				// Windows: Inherit full parent environment
 				env = {
 					...process.env,
