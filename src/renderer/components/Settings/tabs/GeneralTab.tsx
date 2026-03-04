@@ -96,6 +96,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 		setEnableBetaUpdates,
 		crashReportingEnabled,
 		setCrashReportingEnabled,
+		// Encore features
+		encoreFeatures,
 		// Stats
 		statsCollectionEnabled,
 		setStatsCollectionEnabled,
@@ -964,6 +966,8 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 				theme={theme}
 			/>
 
+			{/* Stats Data Management (gated by Encore Features) */}
+			{encoreFeatures.usageStats && (<>
 			{/* Stats Data Management */}
 			<div>
 				<div className="block text-xs font-bold opacity-70 uppercase mb-2 flex items-center gap-2">
@@ -1286,6 +1290,7 @@ export function GeneralTab({ theme, isOpen }: GeneralTabProps) {
 					)}
 				</div>
 			</div>
+			</>)}
 
 			{/* Settings Storage Location */}
 			<div>
