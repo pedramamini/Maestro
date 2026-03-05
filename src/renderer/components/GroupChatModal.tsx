@@ -77,7 +77,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 		ac.setCustomPath(groupChat.moderatorConfig?.customPath || '');
 		ac.setCustomArgs(groupChat.moderatorConfig?.customArgs || '');
 		ac.setCustomEnvVars(groupChat.moderatorConfig?.customEnvVars || {});
-	}, [mode, isOpen, groupChat]);  
+	}, [mode, isOpen, groupChat]);
 
 	// Focus name input when agents detected
 	useEffect(() => {
@@ -100,7 +100,7 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 		} else {
 			ac.setSelectedAgent(ac.detectedAgents[0].id);
 		}
-	}, [mode, ac.isDetecting, ac.detectedAgents, ac.selectedAgent]);  
+	}, [mode, ac.isDetecting, ac.detectedAgents, ac.selectedAgent]);
 
 	// Reset local state when modal closes
 	useEffect(() => {
@@ -117,7 +117,8 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 			ac.customPath ||
 			ac.customArgs ||
 			Object.keys(ac.customEnvVars).length > 0 ||
-			customModelValue;
+			customModelValue ||
+			ac.sshRemoteConfig;
 		if (!hasConfig) return undefined;
 
 		return {
@@ -125,8 +126,9 @@ export function GroupChatModal(props: GroupChatModalProps): JSX.Element | null {
 			customArgs: ac.customArgs || undefined,
 			customEnvVars: Object.keys(ac.customEnvVars).length > 0 ? ac.customEnvVars : undefined,
 			customModel: customModelValue || undefined,
+			sshRemoteConfig: ac.sshRemoteConfig || undefined,
 		};
-	}, [mode, ac.customPath, ac.customArgs, ac.customEnvVars, ac.agentConfig]);
+	}, [mode, ac.customPath, ac.customArgs, ac.customEnvVars, ac.agentConfig, ac.sshRemoteConfig]);
 
 	const handleSubmit = useCallback(() => {
 		if (!name.trim() || !ac.selectedAgent) return;

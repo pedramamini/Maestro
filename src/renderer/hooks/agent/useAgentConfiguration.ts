@@ -115,6 +115,8 @@ export function useAgentConfiguration(
 	const [selectedAgent, setSelectedAgent] = useState<string | null>(
 		initialValues?.selectedAgent ?? null
 	);
+	const selectedAgentRef = useRef(selectedAgent);
+	selectedAgentRef.current = selectedAgent;
 
 	// Config expansion
 	const [isConfigExpanded, setIsConfigExpanded] = useState(false);
@@ -171,7 +173,7 @@ export function useAgentConfiguration(
 			setDetectedAgents(filtered);
 
 			// Auto-select first available agent if none selected
-			if (autoSelect && !selectedAgent && filtered.length > 0) {
+			if (autoSelect && !selectedAgentRef.current && filtered.length > 0) {
 				setSelectedAgent(filtered[0].id);
 			}
 		} catch (error) {
@@ -179,7 +181,7 @@ export function useAgentConfiguration(
 		} finally {
 			setIsDetecting(false);
 		}
-	}, [agentFilter, autoSelect, selectedAgent]);
+	}, [agentFilter, autoSelect]);
 
 	// Load agent config
 	const loadAgentConfig = useCallback(
@@ -280,14 +282,14 @@ export function useAgentConfiguration(
 				}
 			})();
 		}
-	}, [enabled]);  
+	}, [enabled, detectAgents, resetState, shouldLoadSshRemotes]);
 
 	// Load config when expanding
 	useEffect(() => {
 		if (isConfigExpanded && selectedAgent) {
 			loadAgentConfig(selectedAgent);
 		}
-	}, [isConfigExpanded, selectedAgent]);  
+	}, [isConfigExpanded, selectedAgent, loadAgentConfig]);
 
 	const hasCustomization = !!customPath || !!customArgs || Object.keys(customEnvVars).length > 0;
 

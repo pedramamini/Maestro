@@ -143,9 +143,15 @@ export function AgentCreationDialog({
 		}
 	}, [isOpen, repo, issue]);
 
-	// Auto-select first compatible agent when detection completes
+	// Auto-select first compatible agent when detection completes,
+	// and clear stale selection if the selected agent is no longer available
 	useEffect(() => {
-		if (!ac.isDetecting && ac.detectedAgents.length > 0 && !selectedAgent) {
+		if (ac.isDetecting) return;
+		if (ac.detectedAgents.length === 0) {
+			setSelectedAgent(null);
+			return;
+		}
+		if (!selectedAgent || !ac.detectedAgents.some((a) => a.id === selectedAgent)) {
 			setSelectedAgent(ac.detectedAgents[0].id);
 		}
 	}, [ac.isDetecting, ac.detectedAgents, selectedAgent]);
