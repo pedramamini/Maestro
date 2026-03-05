@@ -8,6 +8,8 @@ import crypto from 'crypto';
 import { ProcessManager } from './process-manager';
 import { WebServer } from './web-server';
 import { AgentDetector } from './agents';
+import { CueEngine } from './cue/cue-engine';
+import type { ToolType } from '../shared/types';
 import { logger } from './utils/logger';
 import { tunnelManager } from './tunnel-manager';
 import { powerManager } from './power-manager';
@@ -53,6 +55,7 @@ import {
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
 	registerDirectorNotesHandlers,
+	registerCueHandlers,
 	registerWakatimeHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
@@ -243,6 +246,7 @@ let mainWindow: BrowserWindow | null = null;
 let processManager: ProcessManager | null = null;
 let webServer: WebServer | null = null;
 let agentDetector: AgentDetector | null = null;
+let cueEngine: CueEngine | null = null;
 
 // Create safeSend with dependency injection (Phase 2 refactoring)
 const safeSend = createSafeSend(() => mainWindow);
@@ -327,6 +331,92 @@ app.whenReady().then(async () => {
 		logger.info(`Loaded custom agent paths: ${JSON.stringify(customPaths)}`, 'Startup');
 	}
 
+	// Initialize Cue Engine for event-driven automation
+	cueEngine = new CueEngine({
+		getSessions: () => {
+			const stored = sessionsStore.get('sessions', []);
+			return stored.map((s: any) => ({
+				id: s.id,
+				name: s.name,
+				toolType: s.toolType,
+				cwd: s.cwd || s.fullPath || os.homedir(),
+				projectRoot: s.cwd || s.fullPath || os.homedir(),
+			}));
+		},
+		onCueRun: async (sessionId, prompt, event) => {
+			const session = sessionsStore.get('sessions', []).find((s: any) => s.id === sessionId);
+			if (!session) {
+				logger.error(`[CUE] Session not found: ${sessionId}`, 'Cue');
+				return {
+					runId: event.id,
+					sessionId,
+					sessionName: '',
+					subscriptionName: event.triggerName,
+					event,
+					status: 'failed' as const,
+					stdout: '',
+					stderr: 'Session not found',
+					exitCode: null,
+					durationMs: 0,
+					startedAt: new Date().toISOString(),
+					endedAt: new Date().toISOString(),
+				};
+			}
+
+			const { executeCuePrompt } = await import('./cue/cue-executor');
+			const agentConfigs = agentConfigsStore.get('configs', {}) as Record<string, any>;
+			const sessionConfig = agentConfigs[session.toolType] || {};
+			const projectRoot = session.cwd || session.fullPath || os.homedir();
+			const toolType = session.toolType as ToolType;
+			return await executeCuePrompt({
+				runId: event.id,
+				session: {
+					id: session.id,
+					name: session.name,
+					toolType,
+					cwd: projectRoot,
+					projectRoot,
+				},
+				subscription: { name: event.triggerName, event: event.type, enabled: true, prompt },
+				event,
+				promptPath: prompt,
+				toolType,
+				projectRoot,
+				templateContext: {
+					session: {
+						id: session.id,
+						name: session.name,
+						toolType: session.toolType as string,
+						cwd: projectRoot,
+						projectRoot,
+					},
+				},
+				timeoutMs: 30 * 60 * 1000, // 30 minute default; engine handles timeout_minutes config
+				sshRemoteConfig: session.sshRemoteConfig,
+				customPath: sessionConfig.customPath,
+				customArgs: sessionConfig.customArgs,
+				customEnvVars: sessionConfig.customEnvVars,
+				customModel: sessionConfig.customModel,
+				onLog: (level, message) => {
+					if (level === 'error') {
+						logger.error(message, 'Cue');
+					} else {
+						logger.cue(message, 'Cue');
+					}
+				},
+				sshStore: createSshRemoteStoreAdapter(store),
+				agentConfigValues: sessionConfig,
+			});
+		},
+		onLog: (_level, message, data) => {
+			logger.cue(message, 'Cue', data);
+			// Push activity updates to renderer
+			if (mainWindow && isWebContentsAvailable(mainWindow) && data) {
+				mainWindow.webContents.send('cue:activityUpdate', data);
+			}
+		},
+	});
+
 	logger.info('Core services initialized', 'Startup');
 
 	// Initialize history manager (handles migration from legacy format if needed)
@@ -371,6 +461,13 @@ app.whenReady().then(async () => {
 	// Set up process event listeners
 	logger.debug('Setting up process event listeners', 'Startup');
 	setupProcessListeners();
+
+	// Start Cue engine if the Encore Feature flag is enabled
+	const encoreFeatures = store.get('encoreFeatures', {}) as Record<string, boolean>;
+	if (encoreFeatures.maestroCue && cueEngine) {
+		logger.info('Maestro Cue Encore Feature enabled — starting Cue engine', 'Startup');
+		cueEngine.start();
+	}
 
 	// Set custom application menu to prevent macOS from injecting native
 	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
@@ -436,7 +533,13 @@ const quitHandler = createQuitHandler({
 	getActiveGroomingSessionCount,
 	cleanupAllGroomingSessions,
 	closeStatsDB,
-	stopCliWatcher: () => cliWatcher.stop(),
+	stopCliWatcher: () => {
+		cliWatcher.stop();
+		// Stop Cue engine on app quit
+		if (cueEngine?.isEnabled()) {
+			cueEngine.stop();
+		}
+	},
 });
 quitHandler.setup();
 
@@ -482,6 +585,11 @@ function setupIpcHandlers() {
 	registerDirectorNotesHandlers({
 		getProcessManager: () => processManager,
 		getAgentDetector: () => agentDetector,
+	});
+
+	// Cue - event-driven automation engine
+	registerCueHandlers({
+		getCueEngine: () => cueEngine,
 	});
 
 	// Agent management operations - extracted to src/main/ipc/handlers/agents.ts
@@ -736,6 +844,11 @@ function setupProcessListeners() {
 				REGEX_SYNOPSIS_SESSION,
 			},
 			logger,
+			getCueEngine: () => cueEngine,
+			isCueEnabled: () => {
+				const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
+				return !!ef.maestroCue;
+			},
 		});
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)

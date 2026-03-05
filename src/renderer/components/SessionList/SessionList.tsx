@@ -124,6 +124,7 @@ function SessionListInner(props: SessionListProps) {
 	const contextWarningRedThreshold = useSettingsStore(
 		(s) => s.contextManagementSettings.contextWarningRedThreshold
 	);
+	const maestroCueEnabled = useSettingsStore((s) => s.encoreFeatures.maestroCue);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);
@@ -364,6 +365,39 @@ function SessionListInner(props: SessionListProps) {
 	// when only branch data changes (we only need file counts here)
 	const { getFileCount } = useGitFileStatus();
 
+	// Cue subscription counts per session (only when Maestro Cue is enabled)
+	const [cueSessionMap, setCueSessionMap] = useState<Map<string, number>>(new Map());
+	useEffect(() => {
+		if (!maestroCueEnabled) {
+			setCueSessionMap(new Map());
+			return;
+		}
+		let cancelled = false;
+		const fetchCueStatus = async () => {
+			try {
+				const statuses = await window.maestro.cue.getStatus();
+				if (cancelled) return;
+				const map = new Map<string, number>();
+				for (const s of statuses) {
+					if (s.enabled && s.subscriptionCount > 0) {
+						map.set(s.sessionId, s.subscriptionCount);
+					}
+				}
+				setCueSessionMap(map);
+			} catch {
+				// Cue API may not be available
+			}
+		};
+		fetchCueStatus();
+		const unsubscribe = window.maestro.cue.onActivityUpdate(() => fetchCueStatus());
+		const interval = setInterval(fetchCueStatus, 30_000);
+		return () => {
+			cancelled = true;
+			unsubscribe();
+			clearInterval(interval);
+		};
+	}, [maestroCueEnabled]);
+
 	const {
 		sortedWorktreeChildrenByParentId,
 		sortedSessionIndexById,
@@ -463,6 +497,7 @@ function SessionListInner(props: SessionListProps) {
 					gitFileCount={getFileCount(session.id)}
 					isInBatch={activeBatchSessionIds.includes(session.id)}
 					jumpNumber={getSessionJumpNumber(session.id)}
+					cueSubscriptionCount={cueSessionMap.get(session.id)}
 					onSelect={selectHandlers.get(session.id)!}
 					onDragStart={dragStartHandlers.get(session.id)!}
 					onDragOver={handleDragOver}
@@ -525,6 +560,7 @@ function SessionListInner(props: SessionListProps) {
 										gitFileCount={getFileCount(child.id)}
 										isInBatch={activeBatchSessionIds.includes(child.id)}
 										jumpNumber={getSessionJumpNumber(child.id)}
+										cueSubscriptionCount={cueSessionMap.get(child.id)}
 										onSelect={selectHandlers.get(child.id)!}
 										onDragStart={dragStartHandlers.get(child.id)!}
 										onContextMenu={contextMenuHandlers.get(child.id)!}
