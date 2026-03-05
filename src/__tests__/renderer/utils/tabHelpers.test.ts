@@ -659,6 +659,20 @@ describe('tabHelpers', () => {
 			expect(result!.session.activeFileTabId).toBeNull();
 			expect(result!.session.activeTabId).toBe('tab-1');
 		});
+
+		it('switches inputMode to ai when selecting an AI tab from terminal mode', () => {
+			const tab = createMockTab({ id: 'tab-1' });
+			const session = createMockSession({
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+				inputMode: 'terminal',
+			});
+
+			const result = setActiveTab(session, 'tab-1');
+
+			expect(result!.session).not.toBe(session);
+			expect(result!.session.inputMode).toBe('ai');
+		});
 	});
 
 	describe('getWriteModeTab', () => {

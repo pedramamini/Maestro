@@ -301,10 +301,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				);
 				if (activeTab?.wizardState?.isActive) return;
 				e.preventDefault();
-				const wasAiMode = ctx.activeSession?.inputMode === 'ai';
-				ctx.toggleInputMode();
-				// When switching to terminal mode, focus the active terminal after the DOM updates
-				if (wasAiMode) {
+				if (ctx.activeSessionId) {
+					// Cmd+J always opens a new terminal tab (analogous to Cmd+T for AI tabs).
+					// handleOpenTerminalTab creates the tab and sets inputMode:'terminal' automatically.
+					ctx.handleOpenTerminalTab();
 					setTimeout(() => ctx.mainPanelRef?.current?.focusActiveTerminal(), 100);
 				} else {
 					// Auto-focus the input so user can start typing immediately
@@ -519,11 +519,8 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 			if (e.ctrlKey && e.shiftKey && !e.metaKey && !e.altKey && e.code === 'Backquote') {
 				e.preventDefault();
 				if (ctx.activeSessionId) {
+					// handleOpenTerminalTab creates the tab and sets inputMode:'terminal' automatically
 					ctx.handleOpenTerminalTab();
-					// Switch to terminal mode if currently in AI mode so the new tab is visible
-					if (ctx.activeSession?.inputMode === 'ai') {
-						ctx.toggleInputMode();
-					}
 					trackShortcut('newTerminalTab');
 				}
 			}

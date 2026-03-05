@@ -234,6 +234,23 @@ export const XTerminal = forwardRef<XTerminalHandle, XTerminalProps>(function XT
 				console.warn('[XTerminal] WebGL addon import failed, using canvas renderer:', err);
 			});
 
+		// Allow Maestro's Meta-key (Cmd on macOS) and Ctrl+Shift shortcuts to bubble to
+		// the window-level handler in useMainKeyboardHandler.  Without this, xterm captures
+		// the keydown event on its internal textarea/canvas and stopPropagation prevents
+		// shortcuts like Cmd+K (clear terminal), Cmd+J (new terminal tab), Cmd+W (close tab),
+		// Cmd+[ / Cmd+] (navigate tabs), etc. from reaching the app-level handler.
+		// Returning false from this handler tells xterm to NOT handle the key itself,
+		// so the browser's normal event propagation continues to the window listener.
+		term.attachCustomKeyEventHandler((e: KeyboardEvent) => {
+			// Let Ctrl+Shift+` through for new-terminal-tab shortcut
+			if (e.ctrlKey && e.shiftKey && e.code === 'Backquote') return false;
+			// Let all Meta (Cmd) key combos through so app shortcuts work
+			if (e.metaKey) return false;
+			// Let Ctrl+Shift combos through (cross-platform app shortcuts)
+			if (e.ctrlKey && e.shiftKey) return false;
+			return true;
+		});
+
 		term.open(containerRef.current);
 		fitAddon.fit();
 

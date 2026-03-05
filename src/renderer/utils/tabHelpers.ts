@@ -1012,22 +1012,24 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 		return null;
 	}
 
-	// If already active and no file tab is selected, return current state (no mutation needed)
-	if (session.activeTabId === tabId && session.activeFileTabId === null) {
+	// If already active, no file tab is selected, and already in AI mode, return current state
+	if (session.activeTabId === tabId && session.activeFileTabId === null && session.inputMode === 'ai') {
 		return {
 			tab: targetTab,
 			session,
 		};
 	}
 
-	// When selecting an AI tab, deselect any active file preview tab
-	// This ensures only one tab type (AI or file) is active at a time
+	// When selecting an AI tab, deselect any active file preview tab and switch to AI mode.
+	// This ensures only one tab type (AI or file) is active at a time, and switching
+	// from terminal mode back to AI mode works by clicking any AI tab.
 	return {
 		tab: targetTab,
 		session: {
 			...session,
 			activeTabId: tabId,
 			activeFileTabId: null,
+			inputMode: 'ai' as const,
 		},
 	};
 }
