@@ -174,13 +174,25 @@ export const getDroidCommand = () => getAgentCommand('factory-droid');
 async function spawnClaudeAgent(
 	cwd: string,
 	prompt: string,
-	agentSessionId?: string
+	agentSessionId?: string,
+	readOnlyMode?: boolean
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
 		const env = buildExpandedEnv();
 
-		// Build args: base args + session handling + prompt
+		// Build args: base args + session handling + read-only + prompt
 		const args = [...CLAUDE_ARGS];
+
+		// Apply read-only mode args from centralized agent definitions
+		if (readOnlyMode) {
+			const def = getAgentDefinition('claude-code');
+			if (def?.readOnlyArgs) {
+				args.push(...def.readOnlyArgs);
+			}
+			if (def?.readOnlyEnvOverrides) {
+				Object.assign(env, def.readOnlyEnvOverrides);
+			}
+		}
 
 		if (agentSessionId) {
 			// Resume an existing session (e.g., for synopsis generation)
@@ -342,7 +354,8 @@ async function spawnJsonLineAgent(
 	toolType: ToolType,
 	cwd: string,
 	prompt: string,
-	agentSessionId?: string
+	agentSessionId?: string,
+	readOnlyMode?: boolean
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
 		const env = buildExpandedEnv();
@@ -457,16 +470,30 @@ async function spawnJsonLineAgent(
 }
 
 /**
+ * Options for spawning an agent via CLI
+ */
+export interface SpawnAgentOptions {
+	/** Resume an existing agent session */
+	agentSessionId?: string;
+	/** Run in read-only/plan mode (uses centralized agent definitions for provider-specific flags) */
+	readOnlyMode?: boolean;
+}
+
+/**
  * Spawn an agent with a prompt and return the result
  */
 export async function spawnAgent(
 	toolType: ToolType,
 	cwd: string,
 	prompt: string,
-	agentSessionId?: string
+	agentSessionId?: string,
+	options?: SpawnAgentOptions
 ): Promise<AgentResult> {
+	const readOnly = options?.readOnlyMode;
+
+
 	if (toolType === 'claude-code') {
-		return spawnClaudeAgent(cwd, prompt, agentSessionId);
+		return spawnClaudeAgent(cwd, prompt, agentSessionId, readOnly);
 	}
 
 	if (hasCapability(toolType, 'usesJsonLineOutput')) {
