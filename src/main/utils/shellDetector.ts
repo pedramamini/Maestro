@@ -1,5 +1,5 @@
 import { execFileNoThrow } from './execFile';
-import { isWindows } from '../../shared/platformDetection';
+import { isWindows, getWhichCommand } from '../../shared/platformDetection';
 
 export interface ShellInfo {
 	id: string;
@@ -70,7 +70,7 @@ async function detectShell(shellId: string, shellName: string): Promise<ShellInf
 		}
 
 		// Use 'which' on Unix-like systems, 'where' on Windows
-		const command = isWindows() ? 'where' : 'which';
+		const command = getWhichCommand();
 		const result = await execFileNoThrow(command, [executableName]);
 
 		if (result.exitCode === 0 && result.stdout.trim()) {

@@ -21,7 +21,7 @@ import { getShellPath } from '../runtime/getShellPath';
 import { execFileNoThrow } from '../utils/execFile';
 import { logger } from '../utils/logger';
 import { expandTilde, detectNodeVersionManagerBinPaths } from '../../shared/pathUtils';
-import { isWindows } from '../../shared/platformDetection';
+import { isWindows, getWhichCommand } from '../../shared/platformDetection';
 
 const LOG_CONTEXT = 'PathProber';
 
@@ -497,7 +497,7 @@ export async function checkBinaryExists(binaryName: string): Promise<BinaryDetec
 
 	try {
 		// Use 'which' on Unix-like systems, 'where' on Windows
-		const command = isWindows() ? 'where' : 'which';
+		const command = getWhichCommand();
 
 		// Use expanded PATH to find binaries in common installation locations.
 		// Prefer shell-provided PATH entries when available (they should be
