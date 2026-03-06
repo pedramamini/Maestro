@@ -290,11 +290,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				}				trackShortcut('toggleMode');
 			} else if (ctx.isShortcut(e, 'quickAction')) {
 				e.preventDefault();
-				// In terminal mode, Cmd+K clears the active terminal instead of opening Quick Actions
-				if (ctx.activeSession?.inputMode === 'terminal') {
-					ctx.mainPanelRef?.current?.clearActiveTerminal();
-					trackShortcut('clearTerminal');
-				} else if (ctx.sessions.length > 0) {
+				if (ctx.sessions.length > 0) {
 					// Only open quick actions if there are agents
 					ctx.setQuickActionInitialMode('main');
 					ctx.setQuickActionOpen(true);
@@ -799,7 +795,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					trackShortcut('closeTab');
 				}
 
-				// Cmd+T in terminal mode: create a new AI tab (same behavior as in AI mode)
+				// Cmd+T in terminal mode: create a new AI tab and switch to AI mode
 				if (ctx.isTabShortcut(e, 'newTab') && ctx.activeSession) {
 					e.preventDefault();
 					const result = ctx.createTab(ctx.activeSession, {
@@ -808,7 +804,11 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 					});
 					if (result) {
 						ctx.setSessions((prev: Session[]) =>
-							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
+							prev.map((s: Session) =>
+								s.id === ctx.activeSession!.id
+									? { ...result.session, inputMode: 'ai' as const }
+									: s
+							)
 						);
 						ctx.setActiveFocus('main');
 						setTimeout(() => ctx.inputRef.current?.focus(), FOCUS_AFTER_RENDER_DELAY_MS);
