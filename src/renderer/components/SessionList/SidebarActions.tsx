@@ -92,7 +92,7 @@ export const SidebarActions = memo(function SidebarActions({
 				<Bot className="w-4 h-4" />
 				{hasUnreadAgents && (
 					<div
-						className="absolute top-1 right-1 w-2 h-2 rounded-full"
+						className="absolute -top-0.5 -right-0.5 w-2 h-2 rounded-full"
 						style={{ backgroundColor: theme.colors.accent }}
 					/>
 				)}
