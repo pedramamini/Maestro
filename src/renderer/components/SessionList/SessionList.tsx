@@ -90,6 +90,9 @@ interface SessionListProps {
 	// Tour props
 	startTour?: () => void;
 
+	// Maestro Cue
+	onConfigureCue?: (session: Session) => void;
+
 	// Group Chat handlers
 	onOpenGroupChat?: (id: string) => void;
 	onNewGroupChat?: () => void;
@@ -192,6 +195,7 @@ function SessionListInner(props: SessionListProps) {
 		onQuickCreateWorktree,
 		onOpenWorktreeConfig,
 		onDeleteWorktree,
+		onConfigureCue,
 		showSessionJumpNumbers = false,
 		visibleSessions = [],
 		openWizard,
@@ -1280,6 +1284,11 @@ function SessionListInner(props: SessionListProps) {
 						onCreateGroupAndMove
 							? () => onCreateGroupAndMove(contextMenuSession.id)
 							: createNewGroup
+					}
+					onConfigureCue={
+						onConfigureCue && maestroCueEnabled
+							? () => onConfigureCue(contextMenuSession)
+							: undefined
 					}
 				/>
 			)}
