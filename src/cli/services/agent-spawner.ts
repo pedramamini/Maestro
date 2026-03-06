@@ -171,7 +171,6 @@ export async function detectClaude(
 	}
 	if (customPathOverride) {
 		if (await isExecutable(customPathOverride)) {
-			cachedClaudePath = { path: customPathOverride, source: 'settings' };
 			return { available: true, path: customPathOverride, source: 'settings' };
 		}
 		console.error(
@@ -228,7 +227,6 @@ export async function detectCodex(
 	}
 	if (customPathOverride) {
 		if (await isExecutable(customPathOverride)) {
-			cachedCodexPath = { path: customPathOverride, source: 'settings' };
 			return { available: true, path: customPathOverride, source: 'settings' };
 		}
 		console.error(
@@ -280,15 +278,7 @@ export async function detectOpenCode(
 		return { available: true, source: 'settings' };
 	}
 	if (customPathOverride) {
-		if (cachedOpenCodePath?.path === customPathOverride) {
-			return {
-				available: true,
-				path: cachedOpenCodePath.path,
-				source: cachedOpenCodePath.source,
-			};
-		}
 		if (await isExecutable(customPathOverride)) {
-			cachedOpenCodePath = { path: customPathOverride, source: 'settings' };
 			return { available: true, path: customPathOverride, source: 'settings' };
 		}
 		console.error(
@@ -340,15 +330,7 @@ export async function detectDroid(
 		return { available: true, source: 'settings' };
 	}
 	if (customPathOverride) {
-		if (cachedDroidPath?.path === customPathOverride) {
-			return {
-				available: true,
-				path: cachedDroidPath.path,
-				source: cachedDroidPath.source,
-			};
-		}
 		if (await isExecutable(customPathOverride)) {
-			cachedDroidPath = { path: customPathOverride, source: 'settings' };
 			return { available: true, path: customPathOverride, source: 'settings' };
 		}
 		console.error(
@@ -868,6 +850,7 @@ async function spawnCodexAgent(
 	let spawnEnv = env;
 
 	if (overrides?.sshRemoteConfig) {
+		spawnCommand = agentDef?.binaryName ?? getCodexCommand();
 		const sshWrapped = await wrapSpawnWithSsh(
 			{
 				command: spawnCommand,

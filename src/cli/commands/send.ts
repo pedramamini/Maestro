@@ -8,6 +8,7 @@ import {
 	detectOpenCode,
 	detectDroid,
 	type AgentResult,
+	type AgentSpawnOverrides,
 } from '../services/agent-spawner';
 import { resolveAgentId, getSessionById } from '../services/storage';
 import { estimateContextUsage } from '../../main/parsers/usage-aggregator';
@@ -143,26 +144,30 @@ export async function send(
 		}
 	}
 
-	const hasOverrides =
-		agent.customPath !== undefined ||
-		agent.customArgs !== undefined ||
-		agent.customEnvVars !== undefined ||
-		agent.customModel !== undefined ||
-		agent.sshRemoteConfig !== undefined;
-	const overrides = hasOverrides
-		? {
-				customPath: agent.customPath,
-				customArgs: agent.customArgs,
-				customEnvVars: agent.customEnvVars,
-				customModel: agent.customModel,
-				sshRemoteConfig: agent.sshRemoteConfig,
-			}
-		: undefined;
+	const overrides: AgentSpawnOverrides | undefined = (() => {
+		const next: AgentSpawnOverrides = {};
+
+		if (agent.customPath !== undefined) {
+			next.customPath = agent.customPath;
+		}
+		if (agent.customArgs !== undefined) {
+			next.customArgs = agent.customArgs;
+		}
+		if (agent.customEnvVars !== undefined) {
+			next.customEnvVars = agent.customEnvVars;
+		}
+		if (agent.customModel !== undefined) {
+			next.customModel = agent.customModel;
+		}
+		if (agent.sshRemoteConfig !== undefined) {
+			next.sshRemoteConfig = agent.sshRemoteConfig;
+		}
+
+		return Object.keys(next).length === 0 ? undefined : next;
+	})();
 
 	// Spawn agent — spawnAgent handles --resume vs --session-id internally
-	const result = overrides
-		? await spawnAgent(agent.toolType, agent.cwd, message, options.session, overrides)
-		: await spawnAgent(agent.toolType, agent.cwd, message, options.session);
+	const result = await spawnAgent(agent.toolType, agent.cwd, message, options.session, overrides);
 	const response = buildResponse(agentId, agent.name, result, agent.toolType);
 
 	console.log(JSON.stringify(response, null, 2));
