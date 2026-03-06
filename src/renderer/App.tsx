@@ -2888,7 +2888,11 @@ function MaestroConsoleInner() {
 				{/* --- MAESTRO CUE MODAL (lazy-loaded, Encore Feature) --- */}
 				{encoreFeatures.maestroCue && cueModalOpen && (
 					<Suspense fallback={null}>
-						<CueModal theme={theme} onClose={() => setCueModalOpen(false)} />
+						<CueModal
+							theme={theme}
+							onClose={() => setCueModalOpen(false)}
+							cueShortcutKeys={shortcuts.maestroCue?.keys}
+						/>
 					</Suspense>
 				)}
 
