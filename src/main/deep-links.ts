@@ -16,6 +16,7 @@
  *                  cold start delivers via process.argv
  */
 
+import path from 'path';
 import { app, BrowserWindow } from 'electron';
 import { logger } from './utils/logger';
 import { isWebContentsAvailable } from './utils/safe-send';
@@ -57,7 +58,11 @@ export function parseDeepLink(url: string): ParsedDeepLink | null {
 
 		if (resource === 'session' && id) {
 			if (sub === 'tab' && subId) {
-				return { action: 'session', sessionId: decodeURIComponent(id), tabId: decodeURIComponent(subId) };
+				return {
+					action: 'session',
+					sessionId: decodeURIComponent(id),
+					tabId: decodeURIComponent(subId),
+				};
 			}
 			return { action: 'session', sessionId: decodeURIComponent(id) };
 		}
@@ -131,8 +136,15 @@ export function setupDeepLinkHandling(getMainWindow: () => BrowserWindow | null)
 	} else {
 		// In dev, register only if explicitly opted in
 		if (process.env.REGISTER_DEEP_LINKS_IN_DEV === '1') {
-			app.setAsDefaultProtocolClient(PROTOCOL);
-			logger.info('Registered protocol client in dev mode (REGISTER_DEEP_LINKS_IN_DEV=1)', 'DeepLink');
+			// In dev mode, the bare Electron binary is used. We must pass the app
+			// entry point as an argument so macOS launches Maestro, not the default
+			// Electron splash screen.
+			const appPath = path.resolve(process.argv[1]);
+			app.setAsDefaultProtocolClient(PROTOCOL, process.execPath, [appPath]);
+			logger.info(
+				`Registered protocol client in dev mode (REGISTER_DEEP_LINKS_IN_DEV=1, entry=${appPath})`,
+				'DeepLink'
+			);
 		} else {
 			logger.debug('Skipping protocol registration in dev mode', 'DeepLink');
 		}
@@ -150,7 +162,9 @@ export function setupDeepLinkHandling(getMainWindow: () => BrowserWindow | null)
 
 	// Handle second-instance event (Windows/Linux: new instance launched with deep link URL)
 	app.on('second-instance', (_event, argv) => {
-		const deepLinkUrl = argv.find((arg) => arg.startsWith(`${PROTOCOL}://`) || arg.startsWith(`${PROTOCOL}:`));
+		const deepLinkUrl = argv.find(
+			(arg) => arg.startsWith(`${PROTOCOL}://`) || arg.startsWith(`${PROTOCOL}:`)
+		);
 		if (deepLinkUrl) {
 			processDeepLink(deepLinkUrl, getMainWindow);
 		} else {
@@ -170,7 +184,9 @@ export function setupDeepLinkHandling(getMainWindow: () => BrowserWindow | null)
 	});
 
 	// Check process.argv for cold-start deep link (Windows/Linux: app launched with URL as arg)
-	const deepLinkArg = process.argv.find((arg) => arg.startsWith(`${PROTOCOL}://`) || arg.startsWith(`${PROTOCOL}:`));
+	const deepLinkArg = process.argv.find(
+		(arg) => arg.startsWith(`${PROTOCOL}://`) || arg.startsWith(`${PROTOCOL}:`)
+	);
 	if (deepLinkArg) {
 		pendingDeepLinkUrl = deepLinkArg;
 		logger.info('Found deep link in process argv (cold start)', 'DeepLink', { url: deepLinkArg });
