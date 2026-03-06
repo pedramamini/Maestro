@@ -1690,4 +1690,46 @@ describe('QuickActionsModal', () => {
 			expect(screen.queryByText('Create Worktree')).not.toBeInTheDocument();
 		});
 	});
+
+	describe('Configure Maestro Cue action', () => {
+		it('shows Configure Maestro Cue command with agent name when onConfigureCue is provided', () => {
+			const onConfigureCue = vi.fn();
+			const props = createDefaultProps({ onConfigureCue });
+			render(<QuickActionsModal {...props} />);
+
+			expect(screen.getByText('Configure Maestro Cue: Test Session')).toBeInTheDocument();
+			expect(screen.getByText('Open YAML editor for event-driven automation')).toBeInTheDocument();
+		});
+
+		it('handles Configure Maestro Cue action - calls onConfigureCue with active session and closes modal', () => {
+			const onConfigureCue = vi.fn();
+			const props = createDefaultProps({ onConfigureCue });
+			render(<QuickActionsModal {...props} />);
+
+			fireEvent.click(screen.getByText('Configure Maestro Cue: Test Session'));
+
+			expect(onConfigureCue).toHaveBeenCalledWith(
+				expect.objectContaining({ id: 'session-1', name: 'Test Session' })
+			);
+			expect(props.setQuickActionOpen).toHaveBeenCalledWith(false);
+		});
+
+		it('does not show Configure Maestro Cue when onConfigureCue is not provided', () => {
+			const props = createDefaultProps();
+			render(<QuickActionsModal {...props} />);
+
+			expect(screen.queryByText(/Configure Maestro Cue/)).not.toBeInTheDocument();
+		});
+
+		it('Configure Maestro Cue appears when searching for "cue"', () => {
+			const onConfigureCue = vi.fn();
+			const props = createDefaultProps({ onConfigureCue });
+			render(<QuickActionsModal {...props} />);
+
+			const input = screen.getByPlaceholderText('Type a command or jump to agent...');
+			fireEvent.change(input, { target: { value: 'cue' } });
+
+			expect(screen.getByText('Configure Maestro Cue: Test Session')).toBeInTheDocument();
+		});
+	});
 });
