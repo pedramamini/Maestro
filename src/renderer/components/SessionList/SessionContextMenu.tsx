@@ -203,21 +203,6 @@ export function SessionContextMenu({
 				</button>
 			)}
 
-			{onConfigureCue && (
-				<button
-					type="button"
-					onClick={() => {
-						onConfigureCue();
-						onDismiss();
-					}}
-					className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2"
-					style={{ color: '#06b6d4' }}
-				>
-					<Zap className="w-3.5 h-3.5" />
-					Configure Maestro Cue
-				</button>
-			)}
-
 			{!session.parentSessionId && (
 				<div
 					ref={moveToGroupRef}
@@ -355,6 +340,26 @@ export function SessionContextMenu({
 							Configure Worktrees
 						</button>
 					)}
+				</>
+			)}
+
+			{onConfigureCue && (
+				<>
+					{!showWorktreeParentSection && (
+						<div className="my-1 border-t" style={{ borderColor: theme.colors.border }} />
+					)}
+					<button
+						type="button"
+						onClick={() => {
+							onConfigureCue();
+							onDismiss();
+						}}
+						className="w-full text-left px-3 py-1.5 text-xs hover:bg-white/5 transition-colors flex items-center gap-2"
+						style={{ color: '#06b6d4' }}
+					>
+						<Zap className="w-3.5 h-3.5" />
+						Configure Maestro Cue
+					</button>
 				</>
 			)}
 
