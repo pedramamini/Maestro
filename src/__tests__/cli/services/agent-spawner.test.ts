@@ -680,6 +680,102 @@ Some text with [x] in it that's not a checkbox
 		});
 	});
 
+	describe('detectOpenCode', () => {
+		beforeEach(() => {
+			vi.resetModules();
+		});
+
+		it('should detect OpenCode via PATH detection', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectOpenCode: freshDetectOpenCode } =
+				await import('../../../cli/services/agent-spawner');
+
+			const resultPromise = freshDetectOpenCode();
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockStdout.emit('data', Buffer.from('/usr/local/bin/opencode\n'));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+
+			expect(result.available).toBe(true);
+			expect(result.path).toBe('/usr/local/bin/opencode');
+			expect(result.source).toBe('path');
+		});
+
+		it('should preserve cached source when override matches cached path', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectOpenCode: freshDetectOpenCode } =
+				await import('../../../cli/services/agent-spawner');
+
+			const resultPromise = freshDetectOpenCode();
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockStdout.emit('data', Buffer.from('/usr/local/bin/opencode\n'));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 0);
+
+			const result1 = await resultPromise;
+			expect(result1.source).toBe('path');
+
+			const result2 = await freshDetectOpenCode('/usr/local/bin/opencode');
+			expect(result2.source).toBe('path');
+		});
+	});
+
+	describe('detectDroid', () => {
+		beforeEach(() => {
+			vi.resetModules();
+		});
+
+		it('should detect Factory Droid via PATH detection', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectDroid: freshDetectDroid } =
+				await import('../../../cli/services/agent-spawner');
+
+			const resultPromise = freshDetectDroid();
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockStdout.emit('data', Buffer.from('/usr/local/bin/droid\n'));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+
+			expect(result.available).toBe(true);
+			expect(result.path).toBe('/usr/local/bin/droid');
+			expect(result.source).toBe('path');
+		});
+
+		it('should preserve cached source when override matches cached path', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectDroid: freshDetectDroid } =
+				await import('../../../cli/services/agent-spawner');
+
+			const resultPromise = freshDetectDroid();
+
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockStdout.emit('data', Buffer.from('/usr/local/bin/droid\n'));
+			await new Promise((resolve) => setTimeout(resolve, 0));
+			mockChild.emit('close', 0);
+
+			const result1 = await resultPromise;
+			expect(result1.source).toBe('path');
+
+			const result2 = await freshDetectDroid('/usr/local/bin/droid');
+			expect(result2.source).toBe('path');
+		});
+	});
+
 	describe('spawnAgent', () => {
 		beforeEach(() => {
 			mockSpawn.mockReturnValue(mockChild);

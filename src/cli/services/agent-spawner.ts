@@ -254,6 +254,13 @@ export async function detectOpenCode(customPathOverride?: string): Promise<{
 	source?: 'settings' | 'path';
 }> {
 	if (customPathOverride) {
+		if (cachedOpenCodePath?.path === customPathOverride) {
+			return {
+				available: true,
+				path: cachedOpenCodePath.path,
+				source: cachedOpenCodePath.source,
+			};
+		}
 		if (await isExecutable(customPathOverride)) {
 			cachedOpenCodePath = { path: customPathOverride, source: 'settings' };
 			return { available: true, path: customPathOverride, source: 'settings' };
@@ -301,6 +308,13 @@ export async function detectDroid(customPathOverride?: string): Promise<{
 	source?: 'settings' | 'path';
 }> {
 	if (customPathOverride) {
+		if (cachedDroidPath?.path === customPathOverride) {
+			return {
+				available: true,
+				path: cachedDroidPath.path,
+				source: cachedDroidPath.source,
+			};
+		}
 		if (await isExecutable(customPathOverride)) {
 			cachedDroidPath = { path: customPathOverride, source: 'settings' };
 			return { available: true, path: customPathOverride, source: 'settings' };
@@ -897,6 +911,7 @@ export async function spawnAgent(
 	agentSessionId?: string,
 	overrides?: AgentSpawnOverrides
 ): Promise<AgentResult> {
+	// Claude + Codex have bespoke spawners; OpenCode + Factory Droid share the streaming JSON path.
 	if (toolType === 'codex') {
 		return spawnCodexAgent(cwd, prompt, agentSessionId, overrides);
 	}

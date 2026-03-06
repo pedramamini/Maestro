@@ -77,7 +77,7 @@ On failure, `success` is `false` and an `error` field is included:
 
 Error codes: `AGENT_NOT_FOUND`, `AGENT_UNSUPPORTED`, `CLAUDE_NOT_FOUND`, `CODEX_NOT_FOUND`, `OPENCODE_NOT_FOUND`, `DROID_NOT_FOUND`.
 
-Supported agent types: `claude-code`, `codex`, `opencode`, `factory-droid`.
+Supported agent types: `claude-code`, `codex`, `opencode`, `factory-droid`. The `send` command supports all four.
 
 ### Listing Sessions
 
