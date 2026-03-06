@@ -72,7 +72,16 @@
 					{
 						"group": "Encore Features",
 						"icon": "flask",
-						"pages": ["encore-features", "director-notes", "usage-dashboard", "symphony"]
+						"pages": [
+							"encore-features",
+							"director-notes",
+							"usage-dashboard",
+							"symphony",
+							"maestro-cue",
+							"maestro-cue-configuration",
+							"maestro-cue-events",
+							"maestro-cue-advanced"
+						]
 					},
 					{
 						"group": "Providers & CLI",
