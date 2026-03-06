@@ -737,8 +737,7 @@ Some text with [x] in it that's not a checkbox
 			mockGetAgentCustomPath.mockReturnValue(undefined);
 			mockSpawn.mockReturnValue(mockChild);
 
-			const { detectDroid: freshDetectDroid } =
-				await import('../../../cli/services/agent-spawner');
+			const { detectDroid: freshDetectDroid } = await import('../../../cli/services/agent-spawner');
 
 			const resultPromise = freshDetectDroid();
 
@@ -758,8 +757,7 @@ Some text with [x] in it that's not a checkbox
 			mockGetAgentCustomPath.mockReturnValue(undefined);
 			mockSpawn.mockReturnValue(mockChild);
 
-			const { detectDroid: freshDetectDroid } =
-				await import('../../../cli/services/agent-spawner');
+			const { detectDroid: freshDetectDroid } = await import('../../../cli/services/agent-spawner');
 
 			const resultPromise = freshDetectDroid();
 
