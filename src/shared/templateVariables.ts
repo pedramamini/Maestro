@@ -59,8 +59,13 @@ import { buildSessionDeepLink, buildGroupDeepLink } from './deep-link-urls';
  *   {{CUE_FILE_NAME}}      - Changed file name
  *   {{CUE_FILE_DIR}}       - Changed file directory
  *   {{CUE_FILE_EXT}}       - Changed file extension
+ *   {{CUE_FILE_CHANGE_TYPE}} - Change type: add, change, or unlink (file.changed events)
  *   {{CUE_SOURCE_SESSION}} - Source session name (agent.completed events)
  *   {{CUE_SOURCE_OUTPUT}}  - Source session output (agent.completed events)
+ *   {{CUE_SOURCE_STATUS}}  - Source run status: completed, failed, timeout (agent.completed events)
+ *   {{CUE_SOURCE_EXIT_CODE}} - Source process exit code (agent.completed events)
+ *   {{CUE_SOURCE_DURATION}} - Source run duration in ms (agent.completed events)
+ *   {{CUE_SOURCE_TRIGGERED_BY}} - Subscription that triggered the source (agent.completed events)
  *
  *   {{CUE_TASK_FILE}}        - File path with pending tasks (task.pending events)
  *   {{CUE_TASK_FILE_NAME}}   - File name with pending tasks (task.pending events)
@@ -124,8 +129,13 @@ export interface TemplateContext {
 		fileName?: string;
 		fileDir?: string;
 		fileExt?: string;
+		fileChangeType?: string;
 		sourceSession?: string;
 		sourceOutput?: string;
+		sourceStatus?: string;
+		sourceExitCode?: string;
+		sourceDuration?: string;
+		sourceTriggeredBy?: string;
 		// Task pending fields (task.pending)
 		taskFile?: string;
 		taskFileName?: string;
@@ -195,13 +205,38 @@ export const TEMPLATE_VARIABLES = [
 		cueOnly: true,
 	},
 	{ variable: '{{CUE_TASK_LIST}}', description: 'Formatted list of pending tasks', cueOnly: true },
+	{
+		variable: '{{CUE_FILE_CHANGE_TYPE}}',
+		description: 'Change type (add/change/unlink)',
+		cueOnly: true,
+	},
 	{ variable: '{{CUE_FILE_DIR}}', description: 'Changed file directory', cueOnly: true },
 	{ variable: '{{CUE_FILE_EXT}}', description: 'Changed file extension', cueOnly: true },
 	{ variable: '{{CUE_FILE_NAME}}', description: 'Changed file name', cueOnly: true },
 	{ variable: '{{CUE_FILE_PATH}}', description: 'Changed file path', cueOnly: true },
 	{ variable: '{{CUE_RUN_ID}}', description: 'Cue run UUID', cueOnly: true },
+	{
+		variable: '{{CUE_SOURCE_DURATION}}',
+		description: 'Source run duration (ms)',
+		cueOnly: true,
+	},
+	{
+		variable: '{{CUE_SOURCE_EXIT_CODE}}',
+		description: 'Source process exit code',
+		cueOnly: true,
+	},
 	{ variable: '{{CUE_SOURCE_OUTPUT}}', description: 'Source session output', cueOnly: true },
 	{ variable: '{{CUE_SOURCE_SESSION}}', description: 'Source session name', cueOnly: true },
+	{
+		variable: '{{CUE_SOURCE_STATUS}}',
+		description: 'Source run status (completed/failed/timeout)',
+		cueOnly: true,
+	},
+	{
+		variable: '{{CUE_SOURCE_TRIGGERED_BY}}',
+		description: 'Subscription that triggered the source',
+		cueOnly: true,
+	},
 	{ variable: '{{CUE_TRIGGER_NAME}}', description: 'Cue trigger name', cueOnly: true },
 	{ variable: '{{CWD}}', description: 'Working directory' },
 	{ variable: '{{DATE}}', description: 'Date (YYYY-MM-DD)' },
@@ -320,8 +355,13 @@ export function substituteTemplateVariables(template: string, context: TemplateC
 		CUE_FILE_NAME: context.cue?.fileName || '',
 		CUE_FILE_DIR: context.cue?.fileDir || '',
 		CUE_FILE_EXT: context.cue?.fileExt || '',
+		CUE_FILE_CHANGE_TYPE: context.cue?.fileChangeType || '',
 		CUE_SOURCE_SESSION: context.cue?.sourceSession || '',
 		CUE_SOURCE_OUTPUT: context.cue?.sourceOutput || '',
+		CUE_SOURCE_STATUS: context.cue?.sourceStatus || '',
+		CUE_SOURCE_EXIT_CODE: context.cue?.sourceExitCode || '',
+		CUE_SOURCE_DURATION: context.cue?.sourceDuration || '',
+		CUE_SOURCE_TRIGGERED_BY: context.cue?.sourceTriggeredBy || '',
 
 		// Cue task variables
 		CUE_TASK_FILE: context.cue?.taskFile || '',

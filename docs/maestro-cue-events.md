@@ -71,14 +71,15 @@ subscriptions:
 
 **Payload fields:**
 
-| Variable            | Description                       | Example               |
-| ------------------- | --------------------------------- | --------------------- |
-| `{{CUE_FILE_PATH}}` | Absolute path to the changed file | `/project/src/app.ts` |
-| `{{CUE_FILE_NAME}}` | Filename only                     | `app.ts`              |
-| `{{CUE_FILE_DIR}}`  | Directory containing the file     | `/project/src`        |
-| `{{CUE_FILE_EXT}}`  | File extension (with dot)         | `.ts`                 |
+| Variable                   | Description                       | Example                   |
+| -------------------------- | --------------------------------- | ------------------------- |
+| `{{CUE_FILE_PATH}}`        | Absolute path to the changed file | `/project/src/app.ts`     |
+| `{{CUE_FILE_NAME}}`        | Filename only                     | `app.ts`                  |
+| `{{CUE_FILE_DIR}}`         | Directory containing the file     | `/project/src`            |
+| `{{CUE_FILE_EXT}}`         | File extension (with dot)         | `.ts`                     |
+| `{{CUE_FILE_CHANGE_TYPE}}` | Change type                       | `add`, `change`, `unlink` |
 
-The event payload also includes `changeType` (`add`, `change`, or `unlink`) which can be used in [filters](./maestro-cue-advanced#filtering).
+The `changeType` field is also available in [filters](./maestro-cue-advanced#filtering).
 
 ---
 
@@ -130,19 +131,16 @@ subscriptions:
 
 **Payload fields:**
 
-| Variable                 | Description                                     | Example           |
-| ------------------------ | ----------------------------------------------- | ----------------- |
-| `{{CUE_SOURCE_SESSION}}` | Name of the completing agent(s)                 | `builder`         |
-| `{{CUE_SOURCE_OUTPUT}}`  | Truncated stdout from the source (max 5K chars) | `Build succeeded` |
+| Variable                      | Description                                            | Example           |
+| ----------------------------- | ------------------------------------------------------ | ----------------- |
+| `{{CUE_SOURCE_SESSION}}`      | Name of the completing agent(s)                        | `builder`         |
+| `{{CUE_SOURCE_OUTPUT}}`       | Truncated stdout from the source (max 5K chars)        | `Build succeeded` |
+| `{{CUE_SOURCE_STATUS}}`       | Run status (`completed`, `failed`, `timeout`)          | `completed`       |
+| `{{CUE_SOURCE_EXIT_CODE}}`    | Process exit code                                      | `0`               |
+| `{{CUE_SOURCE_DURATION}}`     | Run duration in milliseconds                           | `15000`           |
+| `{{CUE_SOURCE_TRIGGERED_BY}}` | Name of the subscription that triggered the source run | `lint-on-save`    |
 
-The event payload also includes these fields which can be used in [filters](./maestro-cue-advanced#filtering):
-
-| Payload Field | Description                                            | Example        |
-| ------------- | ------------------------------------------------------ | -------------- |
-| `status`      | Run status (`completed`, `failed`, `timeout`)          | `completed`    |
-| `exitCode`    | Process exit code                                      | `0`            |
-| `durationMs`  | Run duration in milliseconds                           | `15000`        |
-| `triggeredBy` | Name of the subscription that triggered the source run | `lint-on-save` |
+These fields are also available in [filters](./maestro-cue-advanced#filtering).
 
 The `triggeredBy` field is particularly useful when a source agent has multiple Cue subscriptions but you only want to chain from a specific one. See [Selective Chaining](./maestro-cue-examples#selective-chaining-with-triggeredby) for a complete example.
 
