@@ -31,6 +31,8 @@ interface TerminalViewProps {
 	onTabPidChange: (tabId: string, pid: number) => void;
 	searchOpen?: boolean;
 	onSearchClose?: () => void;
+	/** Whether the terminal panel is currently visible (inputMode === 'terminal'). Used to trigger repaint when returning from AI mode. */
+	isVisible?: boolean;
 }
 
 // ============================================================================
@@ -51,6 +53,7 @@ export const TerminalView = memo(
 			onTabPidChange,
 			searchOpen,
 			onSearchClose,
+			isVisible,
 		},
 		ref
 	) {
@@ -154,6 +157,21 @@ export const TerminalView = memo(
 				return () => clearTimeout(timer);
 			}
 		}, [activeTab?.id]);
+
+		// Repaint + focus when the terminal panel becomes visible again (e.g. returning from AI mode).
+		// activeTab?.id doesn't change in this case, so the effect above won't fire — we need an
+		// explicit refresh here. The display:none → display:flex transition can wipe the WebGL/canvas
+		// framebuffer, so we must tell xterm.js to redraw from its internal buffer.
+		useEffect(() => {
+			if (isVisible && activeTab) {
+				const timer = setTimeout(() => {
+					const handle = terminalRefs.current.get(activeTab.id);
+					handle?.refresh();
+					handle?.focus();
+				}, 50);
+				return () => clearTimeout(timer);
+			}
+		}, [isVisible]); // eslint-disable-line react-hooks/exhaustive-deps
 
 		// Close search when the active terminal tab changes.
 		// Intentionally depends only on activeTab?.id — we want to close search when
