@@ -151,6 +151,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 
 				// Collect all entries within time range (unfiltered by type for stats)
 				const allEntries: UnifiedHistoryEntry[] = [];
+				const agentsWithEntries = new Set<string>(); // track agents that have qualifying entries
 				const uniqueAgentSessions = new Set<string>(); // track unique provider sessions
 				let autoCount = 0;
 				let userCount = 0;
@@ -163,6 +164,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 						if (cutoffTime > 0 && entry.timestamp < cutoffTime) continue;
 
 						// Track stats from all entries (before type filter)
+						agentsWithEntries.add(sessionId);
 						if (entry.type === 'AUTO') autoCount++;
 						else if (entry.type === 'USER') userCount++;
 						if (entry.agentSessionId) uniqueAgentSessions.add(entry.agentSessionId);
@@ -186,7 +188,7 @@ export function registerDirectorNotesHandlers(deps: DirectorNotesHandlerDependen
 
 				// Build stats from unfiltered data
 				const stats: UnifiedHistoryStats = {
-					agentCount: sessionIds.length,
+					agentCount: agentsWithEntries.size,
 					sessionCount: uniqueAgentSessions.size,
 					autoCount,
 					userCount,
