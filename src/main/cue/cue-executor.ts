@@ -122,8 +122,13 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 		fileName: String(event.payload.filename ?? ''),
 		fileDir: String(event.payload.directory ?? ''),
 		fileExt: String(event.payload.extension ?? ''),
+		fileChangeType: String(event.payload.changeType ?? ''),
 		sourceSession: String(event.payload.sourceSession ?? ''),
 		sourceOutput: String(event.payload.sourceOutput ?? ''),
+		sourceStatus: String(event.payload.status ?? ''),
+		sourceExitCode: String(event.payload.exitCode ?? ''),
+		sourceDuration: String(event.payload.durationMs ?? ''),
+		sourceTriggeredBy: String(event.payload.triggeredBy ?? ''),
 	};
 
 	// Populate task.pending-specific template context

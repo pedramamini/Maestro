@@ -784,6 +784,47 @@ describe('substituteTemplateVariables', () => {
 		});
 	});
 
+	describe('Cue Variables', () => {
+		it('should replace file change type variable', () => {
+			const context = createTestContext({
+				cue: {
+					eventType: 'file.changed',
+					fileChangeType: 'add',
+				},
+			});
+			const result = substituteTemplateVariables('Type: {{CUE_FILE_CHANGE_TYPE}}', context);
+			expect(result).toBe('Type: add');
+		});
+
+		it('should replace agent.completed source metadata variables', () => {
+			const context = createTestContext({
+				cue: {
+					eventType: 'agent.completed',
+					sourceSession: 'builder',
+					sourceOutput: 'Build succeeded',
+					sourceStatus: 'completed',
+					sourceExitCode: '0',
+					sourceDuration: '15000',
+					sourceTriggeredBy: 'lint-on-save',
+				},
+			});
+			const result = substituteTemplateVariables(
+				'{{CUE_SOURCE_STATUS}} exit={{CUE_SOURCE_EXIT_CODE}} dur={{CUE_SOURCE_DURATION}} by={{CUE_SOURCE_TRIGGERED_BY}}',
+				context
+			);
+			expect(result).toBe('completed exit=0 dur=15000 by=lint-on-save');
+		});
+
+		it('should default missing cue variables to empty string', () => {
+			const context = createTestContext({ cue: {} });
+			const result = substituteTemplateVariables(
+				'[{{CUE_FILE_CHANGE_TYPE}}][{{CUE_SOURCE_STATUS}}][{{CUE_SOURCE_EXIT_CODE}}][{{CUE_SOURCE_DURATION}}][{{CUE_SOURCE_TRIGGERED_BY}}]',
+				context
+			);
+			expect(result).toBe('[][][][][]');
+		});
+	});
+
 	describe('Real-world Template Examples', () => {
 		it('should substitute an Auto Run prompt template', () => {
 			const context = createTestContext({

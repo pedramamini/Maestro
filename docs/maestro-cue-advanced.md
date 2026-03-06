@@ -251,12 +251,13 @@ All prompts support `{{VARIABLE}}` syntax. Variables are replaced with event pay
 
 ### File Variables (`file.changed`, `task.pending`)
 
-| Variable            | Description          |
-| ------------------- | -------------------- |
-| `{{CUE_FILE_PATH}}` | Absolute file path   |
-| `{{CUE_FILE_NAME}}` | Filename only        |
-| `{{CUE_FILE_DIR}}`  | Directory path       |
-| `{{CUE_FILE_EXT}}`  | Extension (with dot) |
+| Variable                   | Description                            |
+| -------------------------- | -------------------------------------- |
+| `{{CUE_FILE_PATH}}`        | Absolute file path                     |
+| `{{CUE_FILE_NAME}}`        | Filename only                          |
+| `{{CUE_FILE_DIR}}`         | Directory path                         |
+| `{{CUE_FILE_EXT}}`         | Extension (with dot)                   |
+| `{{CUE_FILE_CHANGE_TYPE}}` | Change type: `add`, `change`, `unlink` |
 
 ### Task Variables (`task.pending`)
 
@@ -271,10 +272,14 @@ All prompts support `{{VARIABLE}}` syntax. Variables are replaced with event pay
 
 ### Agent Variables (`agent.completed`)
 
-| Variable                 | Description                           |
-| ------------------------ | ------------------------------------- |
-| `{{CUE_SOURCE_SESSION}}` | Source agent name(s)                  |
-| `{{CUE_SOURCE_OUTPUT}}`  | Source agent output (truncated to 5K) |
+| Variable                      | Description                                   |
+| ----------------------------- | --------------------------------------------- |
+| `{{CUE_SOURCE_SESSION}}`      | Source agent name(s)                          |
+| `{{CUE_SOURCE_OUTPUT}}`       | Source agent output (truncated to 5K)         |
+| `{{CUE_SOURCE_STATUS}}`       | Run status (`completed`, `failed`, `timeout`) |
+| `{{CUE_SOURCE_EXIT_CODE}}`    | Process exit code                             |
+| `{{CUE_SOURCE_DURATION}}`     | Run duration in milliseconds                  |
+| `{{CUE_SOURCE_TRIGGERED_BY}}` | Subscription that triggered the source run    |
 
 ### GitHub Variables (`github.pull_request`, `github.issue`)
 

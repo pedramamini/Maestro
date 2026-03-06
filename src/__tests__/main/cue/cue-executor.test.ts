@@ -320,8 +320,13 @@ describe('cue-executor', () => {
 				fileName: 'app.ts',
 				fileDir: '/projects/test/src',
 				fileExt: '.ts',
+				fileChangeType: '',
 				sourceSession: '',
 				sourceOutput: '',
+				sourceStatus: '',
+				sourceExitCode: '',
+				sourceDuration: '',
+				sourceTriggeredBy: '',
 			});
 
 			// Verify substituteTemplateVariables was called
@@ -759,6 +764,30 @@ describe('cue-executor', () => {
 			await resultPromise;
 		});
 
+		it('should populate file.changed changeType in template context', async () => {
+			const event = createMockEvent({
+				type: 'file.changed',
+				payload: {
+					path: '/projects/test/new-file.ts',
+					filename: 'new-file.ts',
+					directory: '/projects/test',
+					extension: '.ts',
+					changeType: 'add',
+				},
+			});
+
+			const templateContext = createMockTemplateContext();
+			const config = createExecutionConfig({ event, templateContext });
+
+			const resultPromise = executeCuePrompt(config);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(templateContext.cue?.fileChangeType).toBe('add');
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
 		it('should populate agent.completed event context correctly', async () => {
 			const event = createMockEvent({
 				type: 'agent.completed',
@@ -766,6 +795,10 @@ describe('cue-executor', () => {
 				payload: {
 					sourceSession: 'builder-session',
 					sourceOutput: 'Build completed successfully',
+					status: 'completed',
+					exitCode: 0,
+					durationMs: 15000,
+					triggeredBy: 'lint-on-save',
 				},
 			});
 
@@ -777,6 +810,10 @@ describe('cue-executor', () => {
 
 			expect(templateContext.cue?.sourceSession).toBe('builder-session');
 			expect(templateContext.cue?.sourceOutput).toBe('Build completed successfully');
+			expect(templateContext.cue?.sourceStatus).toBe('completed');
+			expect(templateContext.cue?.sourceExitCode).toBe('0');
+			expect(templateContext.cue?.sourceDuration).toBe('15000');
+			expect(templateContext.cue?.sourceTriggeredBy).toBe('lint-on-save');
 
 			mockChild.emit('close', 0);
 			await resultPromise;
