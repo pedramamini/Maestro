@@ -465,8 +465,10 @@ export const HistoryPanel = React.memo(
 			<div className="flex flex-col h-full">
 				{/* Filter Pills + Activity Graph + Help Button */}
 				<div className="flex flex-col gap-2 mb-4 pt-2">
-					<div className="flex items-start gap-3">
-						{/* Left-justified filter pills */}
+					<div
+						className={`flex items-start gap-3${visibleTypes.length > 2 ? ' justify-center' : ''}`}
+					>
+						{/* Filter pills — centered when graph is on its own row */}
 						<HistoryFilterToggle
 							activeFilters={activeFilters}
 							onToggleFilter={toggleFilter}
