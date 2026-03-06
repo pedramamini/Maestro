@@ -718,8 +718,8 @@ export const RightPanel = memo(
 										{currentSessionBatchState.maxLoops ?? '∞'}
 									</span>
 								)}
-								{/* View history link - only shown on auto-run tab */}
-								{activeRightTab === 'autorun' && (
+								{/* View history link - shown on all tabs except history */}
+								{activeRightTab !== 'history' && (
 									<button
 										className="text-[10px] whitespace-nowrap bg-transparent border-none p-0 cursor-pointer"
 										style={{
