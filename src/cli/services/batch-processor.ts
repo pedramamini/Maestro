@@ -2,7 +2,13 @@
 // Executes playbooks and yields JSONL events
 
 import { execFileSync } from 'child_process';
-import type { Playbook, SessionInfo, UsageStats, HistoryEntry, AgentSshRemoteConfig } from '../../shared/types';
+import type {
+	Playbook,
+	SessionInfo,
+	UsageStats,
+	HistoryEntry,
+	AgentSshRemoteConfig,
+} from '../../shared/types';
 import type { JsonlEvent } from '../output/jsonl';
 import {
 	spawnAgent,

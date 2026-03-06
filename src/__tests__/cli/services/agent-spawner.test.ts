@@ -843,7 +843,7 @@ Some text with [x] in it that's not a checkbox
 		});
 	});
 
-		describe('spawnAgent', () => {
+	describe('spawnAgent', () => {
 		beforeEach(() => {
 			mockSpawn.mockReturnValue(mockChild);
 		});

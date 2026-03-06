@@ -96,9 +96,7 @@ export async function send(
 	}
 
 	const ssh =
-		agent.sshRemoteConfig && agent.sshRemoteConfig.enabled
-			? agent.sshRemoteConfig
-			: undefined;
+		agent.sshRemoteConfig && agent.sshRemoteConfig.enabled ? agent.sshRemoteConfig : undefined;
 
 	// Validate agent type is supported for CLI spawning
 	const supportedTypes: ToolType[] = ['claude-code', 'codex', 'opencode', 'factory-droid'];
