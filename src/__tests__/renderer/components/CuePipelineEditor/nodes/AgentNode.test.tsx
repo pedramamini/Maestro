@@ -47,10 +47,23 @@ describe('AgentNode', () => {
 	it('should not clip badge overflow (overflow: visible on root)', () => {
 		const { container } = renderAgentNode({ pipelineCount: 3 });
 
-		// Find the agent node root div (200px wide, position: relative)
-		const rootDiv = container.querySelector('div[style*="width: 200px"]') as HTMLElement;
+		// Find the agent node root div (220px wide, position: relative)
+		const rootDiv = container.querySelector('div[style*="width: 220px"]') as HTMLElement;
 		expect(rootDiv).not.toBeNull();
 		expect(rootDiv.style.overflow).toBe('visible');
+	});
+
+	it('should render a drag handle with the drag-handle class', () => {
+		const { container } = renderAgentNode();
+		const dragHandle = container.querySelector('.drag-handle');
+		expect(dragHandle).not.toBeNull();
+	});
+
+	it('should render a gear icon for configuration', () => {
+		const { container } = renderAgentNode();
+		// Gear icon area has title="Configure"
+		const gearButton = container.querySelector('[title="Configure"]');
+		expect(gearButton).not.toBeNull();
 	});
 
 	it('should show pipeline count badge when pipelineCount > 1', () => {

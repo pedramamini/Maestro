@@ -118,7 +118,8 @@ function getTriggerConfigSummary(data: TriggerNodeData): string {
 
 function convertToReactFlowNodes(
 	pipelines: CuePipelineState['pipelines'],
-	selectedPipelineId: string | null
+	selectedPipelineId: string | null,
+	onConfigureNode?: (compositeId: string) => void
 ): Node[] {
 	const nodes: Node[] = [];
 	const agentPipelineMap = new Map<string, string[]>();
@@ -173,16 +174,19 @@ function convertToReactFlowNodes(
 				if (!isActive) continue;
 
 				const triggerData = pNode.data as TriggerNodeData;
+				const compositeId = `${pipeline.id}:${pNode.id}`;
 				const nodeData: TriggerNodeDataProps = {
 					eventType: triggerData.eventType,
 					label: triggerData.label,
 					configSummary: getTriggerConfigSummary(triggerData),
+					onConfigure: onConfigureNode ? () => onConfigureNode(compositeId) : undefined,
 				};
 				nodes.push({
-					id: `${pipeline.id}:${pNode.id}`,
+					id: compositeId,
 					type: 'trigger',
 					position: pNode.position,
 					data: nodeData,
+					dragHandle: '.drag-handle',
 				});
 			} else {
 				const agentData = pNode.data as AgentNodeData;
@@ -195,6 +199,7 @@ function convertToReactFlowNodes(
 				}
 
 				const pipelineColors = agentPipelineMap.get(agentData.sessionId) ?? [pipeline.color];
+				const compositeId = `${pipeline.id}:${pNode.id}`;
 				const nodeData: AgentNodeDataProps = {
 					sessionId: agentData.sessionId,
 					sessionName: agentData.sessionName,
@@ -203,12 +208,14 @@ function convertToReactFlowNodes(
 					pipelineColor: pipeline.color,
 					pipelineCount: agentPipelineCount.get(agentData.sessionId) ?? 1,
 					pipelineColors,
+					onConfigure: onConfigureNode ? () => onConfigureNode(compositeId) : undefined,
 				};
 				nodes.push({
-					id: `${pipeline.id}:${pNode.id}`,
+					id: compositeId,
 					type: 'agent',
 					position: pNode.position,
 					data: nodeData,
+					dragHandle: '.drag-handle',
 					style: !isActive ? { opacity: 0.4 } : undefined,
 				});
 			}
@@ -595,9 +602,19 @@ function CuePipelineEditorInner({
 		return ids;
 	}, [activeRunsProp, pipelineState.pipelines]);
 
+	const handleConfigureNode = useCallback((compositeId: string) => {
+		setSelectedNodeId(compositeId);
+		setSelectedEdgeId(null);
+	}, []);
+
 	const nodes = useMemo(
-		() => convertToReactFlowNodes(pipelineState.pipelines, pipelineState.selectedPipelineId),
-		[pipelineState.pipelines, pipelineState.selectedPipelineId]
+		() =>
+			convertToReactFlowNodes(
+				pipelineState.pipelines,
+				pipelineState.selectedPipelineId,
+				handleConfigureNode
+			),
+		[pipelineState.pipelines, pipelineState.selectedPipelineId, handleConfigureNode]
 	);
 
 	const edges = useMemo(
