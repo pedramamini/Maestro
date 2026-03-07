@@ -22,6 +22,9 @@ import { CueHelpContent } from './CueHelpModal';
 // import { CueGraphView } from './CueGraphView';
 import { CuePipelineEditor } from './CuePipelineEditor';
 import { useSessionStore } from '../stores/sessionStore';
+import type { CuePipeline } from '../../shared/cue-pipeline-types';
+import { getPipelineColorForAgent } from './CuePipelineEditor/pipelineColors';
+import { graphSessionsToPipelines } from './CuePipelineEditor/utils/yamlToPipeline';
 
 type CueModalTab = 'dashboard' | 'pipeline';
 
@@ -79,16 +82,50 @@ function StatusDot({ status }: { status: 'active' | 'paused' | 'none' }) {
 	return <span className="inline-block w-2 h-2 rounded-full" style={{ backgroundColor: color }} />;
 }
 
+function PipelineDot({ color, name }: { color: string; name: string }) {
+	return (
+		<span
+			className="inline-block w-2.5 h-2.5 rounded-full flex-shrink-0"
+			style={{ backgroundColor: color }}
+			title={name}
+		/>
+	);
+}
+
+/** Maps subscription names to pipeline info by checking name prefixes. */
+function buildSubscriptionPipelineMap(
+	pipelines: CuePipeline[]
+): Map<string, { name: string; color: string }> {
+	const map = new Map<string, { name: string; color: string }>();
+	for (const pipeline of pipelines) {
+		// Pipeline subscriptions are named: pipelineName, pipelineName-chain-N
+		map.set(pipeline.name, { name: pipeline.name, color: pipeline.color });
+	}
+	return map;
+}
+
+/** Looks up the pipeline for a subscription name by matching the base name prefix. */
+function getPipelineForSubscription(
+	subscriptionName: string,
+	pipelineMap: Map<string, { name: string; color: string }>
+): { name: string; color: string } | null {
+	// Strip -chain-N suffix to get base pipeline name
+	const baseName = subscriptionName.replace(/-chain-\d+$/, '').replace(/-fanin$/, '');
+	return pipelineMap.get(baseName) ?? null;
+}
+
 function SessionsTable({
 	sessions,
 	theme,
 	onViewInPipeline,
 	queueStatus,
+	pipelines,
 }: {
 	sessions: CueSessionStatus[];
 	theme: Theme;
 	onViewInPipeline: (session: CueSessionStatus) => void;
 	queueStatus: Record<string, number>;
+	pipelines: CuePipeline[];
 }) {
 	if (sessions.length === 0) {
 		return (
@@ -107,6 +144,7 @@ function SessionsTable({
 				>
 					<th className="pb-2 font-medium">Session</th>
 					<th className="pb-2 font-medium">Agent</th>
+					<th className="pb-2 font-medium">Pipelines</th>
 					<th className="pb-2 font-medium">Status</th>
 					<th className="pb-2 font-medium text-right">Last Triggered</th>
 					<th className="pb-2 font-medium text-right">Subs</th>
@@ -128,6 +166,24 @@ function SessionsTable({
 							</td>
 							<td className="py-2" style={{ color: theme.colors.textDim }}>
 								{s.toolType}
+							</td>
+							<td className="py-2">
+								{(() => {
+									const colors = getPipelineColorForAgent(s.sessionId, pipelines);
+									if (colors.length === 0) {
+										return <span style={{ color: theme.colors.textDim }}>—</span>;
+									}
+									const pipelineNames = pipelines
+										.filter((p) => colors.includes(p.color))
+										.map((p) => p.name);
+									return (
+										<span className="flex items-center gap-1">
+											{colors.map((color, i) => (
+												<PipelineDot key={color} color={color} name={pipelineNames[i] ?? ''} />
+											))}
+										</span>
+									);
+								})()}
 							</td>
 							<td className="py-2">
 								<span className="flex items-center gap-1.5">
@@ -170,11 +226,13 @@ function ActiveRunsList({
 	theme,
 	onStopRun,
 	onStopAll,
+	subscriptionPipelineMap,
 }: {
 	runs: CueRunResult[];
 	theme: Theme;
 	onStopRun: (runId: string) => void;
 	onStopAll: () => void;
+	subscriptionPipelineMap: Map<string, { name: string; color: string }>;
 }) {
 	if (runs.length === 0) {
 		return (
@@ -211,11 +269,16 @@ function ActiveRunsList({
 					>
 						<Square className="w-3.5 h-3.5" style={{ color: '#ef4444' }} />
 					</button>
-					<div className="flex-1 min-w-0">
+					<div className="flex-1 min-w-0 flex items-center gap-1.5">
+						{(() => {
+							const pInfo = getPipelineForSubscription(
+								run.subscriptionName,
+								subscriptionPipelineMap
+							);
+							return pInfo ? <PipelineDot color={pInfo.color} name={pInfo.name} /> : null;
+						})()}
 						<span style={{ color: theme.colors.textMain }}>{run.sessionName}</span>
-						<span className="mx-1.5" style={{ color: theme.colors.textDim }}>
-							—
-						</span>
+						<span style={{ color: theme.colors.textDim }}>—</span>
 						<span style={{ color: CUE_TEAL }}>"{run.subscriptionName}"</span>
 					</div>
 					<span className="text-xs font-mono flex-shrink-0" style={{ color: theme.colors.textDim }}>
@@ -227,7 +290,15 @@ function ActiveRunsList({
 	);
 }
 
-function ActivityLog({ log, theme }: { log: CueRunResult[]; theme: Theme }) {
+function ActivityLog({
+	log,
+	theme,
+	subscriptionPipelineMap,
+}: {
+	log: CueRunResult[];
+	theme: Theme;
+	subscriptionPipelineMap: Map<string, { name: string; color: string }>;
+}) {
 	const [visibleCount, setVisibleCount] = useState(100);
 
 	if (log.length === 0) {
@@ -265,7 +336,17 @@ function ActivityLog({ log, theme }: { log: CueRunResult[]; theme: Theme }) {
 						<span className="flex-shrink-0 font-mono" style={{ color: theme.colors.textDim }}>
 							{new Date(entry.startedAt).toLocaleTimeString()}
 						</span>
-						<Zap className="w-3 h-3 flex-shrink-0" style={{ color: CUE_TEAL }} />
+						{(() => {
+							const pInfo = getPipelineForSubscription(
+								entry.subscriptionName,
+								subscriptionPipelineMap
+							);
+							return pInfo ? (
+								<PipelineDot color={pInfo.color} name={pInfo.name} />
+							) : (
+								<Zap className="w-3 h-3 flex-shrink-0" style={{ color: CUE_TEAL }} />
+							);
+						})()}
 						<span className="flex-1 min-w-0 truncate">
 							<span style={{ color: theme.colors.textMain }}>"{entry.subscriptionName}"</span>
 							{isReconciled && (
@@ -382,9 +463,8 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	// Tab state
 	const [activeTab, setActiveTab] = useState<CueModalTab>('pipeline');
 
-	// Fetch graph data when Pipeline Editor tab is active
+	// Fetch graph data on mount and when tab changes (needed for both dashboard and pipeline tabs)
 	useEffect(() => {
-		if (activeTab !== 'pipeline') return;
 		let cancelled = false;
 		window.maestro.cue
 			.getGraphData()
@@ -396,6 +476,18 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 			cancelled = true;
 		};
 	}, [activeTab]);
+
+	// Compute pipelines from graph sessions for dashboard pipeline info
+	const dashboardPipelines = useMemo(() => {
+		if (graphSessions.length === 0) return [];
+		return graphSessionsToPipelines(graphSessions, sessionInfoList);
+	}, [graphSessions, sessionInfoList]);
+
+	// Build subscription-to-pipeline lookup map
+	const subscriptionPipelineMap = useMemo(
+		() => buildSubscriptionPipelineMap(dashboardPipelines),
+		[dashboardPipelines]
+	);
 
 	// Help modal state
 	const [showHelp, setShowHelp] = useState(false);
@@ -579,6 +671,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 												theme={theme}
 												onViewInPipeline={handleViewInPipeline}
 												queueStatus={queueStatus}
+												pipelines={dashboardPipelines}
 											/>
 										</div>
 
@@ -622,6 +715,7 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 													theme={theme}
 													onStopRun={stopRun}
 													onStopAll={stopAll}
+													subscriptionPipelineMap={subscriptionPipelineMap}
 												/>
 											)}
 										</div>
@@ -638,7 +732,11 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 												className="max-h-64 overflow-y-auto rounded-md px-3 py-2"
 												style={{ backgroundColor: theme.colors.bgActivity }}
 											>
-												<ActivityLog log={activityLog} theme={theme} />
+												<ActivityLog
+													log={activityLog}
+													theme={theme}
+													subscriptionPipelineMap={subscriptionPipelineMap}
+												/>
 											</div>
 										</div>
 									</>
