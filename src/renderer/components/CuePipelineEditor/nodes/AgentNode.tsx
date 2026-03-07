@@ -1,6 +1,6 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { MessageSquare } from 'lucide-react';
+import { MessageSquare, GripVertical, Settings } from 'lucide-react';
 
 export interface AgentNodeDataProps {
 	sessionId: string;
@@ -10,6 +10,7 @@ export interface AgentNodeDataProps {
 	pipelineColor: string;
 	pipelineCount: number;
 	pipelineColors: string[];
+	onConfigure?: () => void;
 }
 
 export const AgentNode = memo(function AgentNode({
@@ -21,7 +22,7 @@ export const AgentNode = memo(function AgentNode({
 	return (
 		<div
 			style={{
-				width: 200,
+				width: 220,
 				height: 80,
 				borderRadius: 8,
 				backgroundColor: '#1e1e2e',
@@ -30,19 +31,32 @@ export const AgentNode = memo(function AgentNode({
 				display: 'flex',
 				flexDirection: 'row',
 				overflow: 'visible',
-				cursor: 'pointer',
+				cursor: 'default',
 				transition: 'border-color 0.15s, box-shadow 0.15s',
 				position: 'relative',
 			}}
 		>
-			{/* Left accent bar */}
+			{/* Drag handle */}
 			<div
+				className="drag-handle"
 				style={{
-					width: 4,
-					backgroundColor: accentColor,
+					width: 20,
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					cursor: 'grab',
+					color: '#555',
 					flexShrink: 0,
+					backgroundColor: accentColor,
+					borderRadius: '6px 0 0 6px',
+					transition: 'color 0.15s',
 				}}
-			/>
+				onMouseEnter={(e) => (e.currentTarget.style.color = '#ccc')}
+				onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+				title="Drag to move"
+			>
+				<GripVertical size={14} />
+			</div>
 
 			{/* Content */}
 			<div
@@ -51,9 +65,8 @@ export const AgentNode = memo(function AgentNode({
 					display: 'flex',
 					flexDirection: 'column',
 					justifyContent: 'center',
-					padding: '8px 12px',
+					padding: '8px 10px',
 					overflow: 'hidden',
-					borderRadius: '0 6px 6px 0',
 				}}
 			>
 				<div style={{ display: 'flex', alignItems: 'center', gap: 6 }}>
@@ -106,6 +119,30 @@ export const AgentNode = memo(function AgentNode({
 						))}
 					</div>
 				)}
+			</div>
+
+			{/* Gear icon */}
+			<div
+				onClick={(e) => {
+					e.stopPropagation();
+					data.onConfigure?.();
+				}}
+				style={{
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					cursor: 'pointer',
+					color: selected ? accentColor : '#555',
+					flexShrink: 0,
+					padding: '0 8px',
+					borderRadius: '0 6px 6px 0',
+					transition: 'color 0.15s',
+				}}
+				onMouseEnter={(e) => (e.currentTarget.style.color = accentColor)}
+				onMouseLeave={(e) => (e.currentTarget.style.color = selected ? accentColor : '#555')}
+				title="Configure"
+			>
+				<Settings size={14} />
 			</div>
 
 			{/* Pipeline count badge */}
