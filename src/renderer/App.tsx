@@ -808,6 +808,7 @@ function MaestroConsoleInner() {
 		handleOpenModeratorSession,
 		handleJumpToGroupChatMessage,
 		handleGroupChatRightTabChange,
+		handleStopAll,
 		handleSendGroupChatMessage,
 		handleGroupChatDraftChange,
 		handleRemoveGroupChatQueueItem,
@@ -3039,6 +3040,7 @@ function MaestroConsoleInner() {
 										return anyParticipantMissingCost || moderatorMissingCost;
 									})()}
 									onSendMessage={handleSendGroupChatMessage}
+									onStopAll={handleStopAll}
 									onRename={() =>
 										activeGroupChatId && handleOpenRenameGroupChatModal(activeGroupChatId)
 									}

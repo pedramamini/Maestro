@@ -465,6 +465,32 @@ export function registerGroupChatHandlers(deps: GroupChatHandlerDependencies): v
 		})
 	);
 
+	// Stop all activity in a group chat (moderator + all participants)
+	ipcMain.handle(
+		'groupChat:stopAll',
+		withIpcErrorLogging(handlerOpts('stopAll'), async (id: string): Promise<void> => {
+			const processManager = getProcessManager();
+			logger.info(`Stopping all activity in group chat: ${id}`, LOG_CONTEXT);
+
+			// Kill moderator and all participant sessions
+			await killModerator(id, processManager ?? undefined);
+			await clearAllParticipantSessions(id, processManager ?? undefined);
+
+			// Load participants to emit idle states for each
+			const chat = await loadGroupChat(id);
+			if (chat) {
+				for (const participant of chat.participants) {
+					groupChatEmitters.emitParticipantState?.(id, participant.name, 'idle');
+				}
+			}
+
+			// Emit idle state for the group chat
+			groupChatEmitters.emitStateChange?.(id, 'idle');
+
+			logger.info(`Stopped all activity in group chat: ${id}`, LOG_CONTEXT);
+		})
+	);
+
 	// Get the moderator session ID (for checking if active)
 	ipcMain.handle(
 		'groupChat:getModeratorSessionId',

@@ -108,6 +108,8 @@ export function createGroupChatApi() {
 
 		stopModerator: (id: string) => ipcRenderer.invoke('groupChat:stopModerator', id),
 
+		stopAll: (id: string) => ipcRenderer.invoke('groupChat:stopAll', id),
+
 		getModeratorSessionId: (id: string) =>
 			ipcRenderer.invoke('groupChat:getModeratorSessionId', id),
 

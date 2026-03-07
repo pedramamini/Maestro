@@ -1747,6 +1747,7 @@ interface MaestroAPI {
 			readOnly?: boolean
 		) => Promise<void>;
 		stopModerator: (id: string) => Promise<void>;
+		stopAll: (id: string) => Promise<void>;
 		getModeratorSessionId: (id: string) => Promise<string | null>;
 		// Participants
 		addParticipant: (

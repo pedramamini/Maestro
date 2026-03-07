@@ -68,6 +68,9 @@ export interface GroupChatHandlersReturn {
 	// Right panel
 	handleGroupChatRightTabChange: (tab: GroupChatRightTab) => void;
 
+	// Stop All
+	handleStopAll: () => Promise<void>;
+
 	// Messages & queue
 	handleSendGroupChatMessage: (
 		content: string,
@@ -581,6 +584,12 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 		[]
 	);
 
+	const handleStopAll = useCallback(async () => {
+		const { activeGroupChatId } = useGroupChatStore.getState();
+		if (!activeGroupChatId) return;
+		await window.maestro.groupChat.stopAll(activeGroupChatId);
+	}, []);
+
 	const handleGroupChatDraftChange = useCallback((draft: string) => {
 		const { activeGroupChatId, setGroupChats } = useGroupChatStore.getState();
 		if (!activeGroupChatId) return;
@@ -697,6 +706,9 @@ export function useGroupChatHandlers(): GroupChatHandlersReturn {
 
 		// Right panel
 		handleGroupChatRightTabChange,
+
+		// Stop All
+		handleStopAll,
 
 		// Messages & queue
 		handleSendGroupChatMessage,
