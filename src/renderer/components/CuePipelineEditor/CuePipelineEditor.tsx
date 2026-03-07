@@ -33,13 +33,14 @@ import type {
 	AgentNodeData,
 	CueEventType,
 } from '../../../shared/cue-pipeline-types';
-import { getNextPipelineColor } from '../../../shared/cue-pipeline-types';
 import { TriggerNode, type TriggerNodeDataProps } from './nodes/TriggerNode';
 import { AgentNode, type AgentNodeDataProps } from './nodes/AgentNode';
 import { edgeTypes } from './edges/PipelineEdge';
 import type { PipelineEdgeData } from './edges/PipelineEdge';
 import { TriggerDrawer } from './drawers/TriggerDrawer';
 import { AgentDrawer } from './drawers/AgentDrawer';
+import { PipelineSelector } from './PipelineSelector';
+import { getNextPipelineColor } from './pipelineColors';
 
 interface CueGraphSession {
 	sessionId: string;
@@ -136,11 +137,27 @@ function convertToReactFlowNodes(
 		}
 	}
 
+	// Track which agent sessionIds are in the selected pipeline (for shared agent dimming)
+	const selectedPipelineAgentIds = new Set<string>();
+	if (selectedPipelineId) {
+		const selectedPipeline = pipelines.find((p) => p.id === selectedPipelineId);
+		if (selectedPipeline) {
+			for (const pNode of selectedPipeline.nodes) {
+				if (pNode.type === 'agent') {
+					selectedPipelineAgentIds.add((pNode.data as AgentNodeData).sessionId);
+				}
+			}
+		}
+	}
+
 	for (const pipeline of pipelines) {
-		if (selectedPipelineId !== null && pipeline.id !== selectedPipelineId) continue;
+		const isActive = selectedPipelineId === null || pipeline.id === selectedPipelineId;
 
 		for (const pNode of pipeline.nodes) {
 			if (pNode.type === 'trigger') {
+				// Triggers from non-selected pipelines are hidden
+				if (!isActive) continue;
+
 				const triggerData = pNode.data as TriggerNodeData;
 				const nodeData: TriggerNodeDataProps = {
 					eventType: triggerData.eventType,
@@ -155,6 +172,14 @@ function convertToReactFlowNodes(
 				});
 			} else {
 				const agentData = pNode.data as AgentNodeData;
+				const isShared = (agentPipelineCount.get(agentData.sessionId) ?? 1) > 1;
+
+				// Non-selected pipeline: hide non-shared agents, dim shared ones
+				if (!isActive) {
+					if (!isShared) continue;
+					if (!selectedPipelineAgentIds.has(agentData.sessionId)) continue;
+				}
+
 				const pipelineColors = agentPipelineMap.get(agentData.sessionId) ?? [pipeline.color];
 				const nodeData: AgentNodeDataProps = {
 					sessionId: agentData.sessionId,
@@ -170,6 +195,7 @@ function convertToReactFlowNodes(
 					type: 'agent',
 					position: pNode.position,
 					data: nodeData,
+					style: !isActive ? { opacity: 0.4 } : undefined,
 				});
 			}
 		}
@@ -222,6 +248,63 @@ function CuePipelineEditorInner({ sessions, theme }: CuePipelineEditorProps) {
 
 	const [triggerDrawerOpen, setTriggerDrawerOpen] = useState(false);
 	const [agentDrawerOpen, setAgentDrawerOpen] = useState(false);
+
+	const createPipeline = useCallback(() => {
+		setPipelineState((prev) => {
+			const newPipeline: CuePipeline = {
+				id: `pipeline-${Date.now()}`,
+				name: `Pipeline ${prev.pipelines.length + 1}`,
+				color: getNextPipelineColor(prev.pipelines),
+				nodes: [],
+				edges: [],
+			};
+			return {
+				pipelines: [...prev.pipelines, newPipeline],
+				selectedPipelineId: newPipeline.id,
+			};
+		});
+	}, []);
+
+	const deletePipeline = useCallback((id: string) => {
+		setPipelineState((prev) => {
+			const pipeline = prev.pipelines.find((p) => p.id === id);
+			if (!pipeline) return prev;
+
+			// Check if nodes are shared with other pipelines
+			const otherPipelines = prev.pipelines.filter((p) => p.id !== id);
+			const otherNodeIds = new Set<string>();
+			for (const p of otherPipelines) {
+				for (const n of p.nodes) {
+					if (n.type === 'agent') {
+						otherNodeIds.add((n.data as AgentNodeData).sessionId);
+					}
+				}
+			}
+
+			const hasNodes = pipeline.nodes.length > 0;
+			if (hasNodes && !window.confirm(`Delete pipeline "${pipeline.name}" and its nodes?`)) {
+				return prev;
+			}
+
+			const newSelectedId = prev.selectedPipelineId === id ? null : prev.selectedPipelineId;
+
+			return {
+				pipelines: otherPipelines,
+				selectedPipelineId: newSelectedId,
+			};
+		});
+	}, []);
+
+	const renamePipeline = useCallback((id: string, name: string) => {
+		setPipelineState((prev) => ({
+			...prev,
+			pipelines: prev.pipelines.map((p) => (p.id === id ? { ...p, name } : p)),
+		}));
+	}, []);
+
+	const selectPipeline = useCallback((id: string | null) => {
+		setPipelineState((prev) => ({ ...prev, selectedPipelineId: id }));
+	}, []);
 
 	const nodes = useMemo(
 		() => convertToReactFlowNodes(pipelineState.pipelines, pipelineState.selectedPipelineId),
@@ -444,9 +527,16 @@ function CuePipelineEditorInner({ sessions, theme }: CuePipelineEditorProps) {
 						<Zap size={12} />
 						Triggers
 					</button>
-					<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
-						Pipelines
-					</span>
+				</div>
+				<div className="flex items-center gap-2">
+					<PipelineSelector
+						pipelines={pipelineState.pipelines}
+						selectedPipelineId={pipelineState.selectedPipelineId}
+						onSelect={selectPipeline}
+						onCreatePipeline={createPipeline}
+						onDeletePipeline={deletePipeline}
+						onRenamePipeline={renamePipeline}
+					/>
 				</div>
 				<div className="flex items-center gap-2">
 					<button
