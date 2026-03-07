@@ -14,6 +14,7 @@ import { cleanPlaybooks } from './commands/clean-playbooks';
 import { send } from './commands/send';
 import { listSessions } from './commands/list-sessions';
 import { openFile } from './commands/open-file';
+import { refreshFiles } from './commands/refresh-files';
 
 // Read version from package.json at runtime
 function getVersion(): string {
@@ -117,5 +118,12 @@ program
 	.description('Open a file as a preview tab in the Maestro desktop app')
 	.option('-s, --session <id>', 'Target session (defaults to active)')
 	.action(openFile);
+
+// Refresh files command - refresh the file tree in the Maestro desktop app
+program
+	.command('refresh-files')
+	.description('Refresh the file tree in the Maestro desktop app')
+	.option('-s, --session <id>', 'Target session (defaults to active)')
+	.action(refreshFiles);
 
 program.parse();
