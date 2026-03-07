@@ -16,7 +16,7 @@ vi.mock('../../../renderer/services/wizardIntentParser', () => ({
 vi.mock('../../../renderer/utils/existingDocsDetector', () => ({
 	hasExistingAutoRunDocs: vi.fn(),
 	getExistingAutoRunDocs: vi.fn(),
-	getAutoRunFolderPath: vi.fn((projectPath: string) => `${projectPath}/Auto Run Docs`),
+	getAutoRunFolderPath: vi.fn((projectPath: string) => `${projectPath}/.maestro/playbooks`),
 }));
 
 // Mock inlineWizardConversation service
