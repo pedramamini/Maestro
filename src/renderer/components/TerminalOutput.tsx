@@ -5,7 +5,6 @@ import {
 	Trash2,
 	Copy,
 	Check,
-	ArrowDown,
 	Eye,
 	FileText,
 	RotateCcw,
@@ -1037,7 +1036,6 @@ export const TerminalOutput = memo(
 			onShowErrorDetails,
 			onFileSaved,
 			autoScrollAiMode,
-			setAutoScrollAiMode,
 			userMessageAlignment = 'right',
 			onOpenInTab,
 		} = props;
@@ -1090,8 +1088,6 @@ export const TerminalOutput = memo(
 
 		// New message indicator state
 		const [isAtBottom, setIsAtBottom] = useState(true);
-		const [hasNewMessages, setHasNewMessages] = useState(false);
-		const [newMessageCount, setNewMessageCount] = useState(0);
 		const lastLogCountRef = useRef(0);
 		// Track previous isAtBottom to detect changes for callback
 		const prevIsAtBottomRef = useRef(true);
@@ -1359,8 +1355,6 @@ export const TerminalOutput = memo(
 
 			// Clear new message indicator when user scrolls to bottom
 			if (atBottom) {
-				setHasNewMessages(false);
-				setNewMessageCount(0);
 				// Resume auto-scroll when user scrolls back to bottom
 				setAutoScrollPaused(false);
 				// Save read state for current tab
@@ -1404,8 +1398,6 @@ export const TerminalOutput = memo(
 		// Restore read state when switching tabs
 		useEffect(() => {
 			if (!activeTabId) {
-				setHasNewMessages(false);
-				setNewMessageCount(0);
 				setIsAtBottom(true);
 				lastLogCountRef.current = filteredLogs.length;
 				return;
@@ -1419,19 +1411,13 @@ export const TerminalOutput = memo(
 				// Tab was visited before - check for new messages since last read
 				const unreadCount = currentCount - savedReadCount;
 				if (unreadCount > 0) {
-					setHasNewMessages(true);
-					setNewMessageCount(unreadCount);
 					setIsAtBottom(false);
 				} else {
-					setHasNewMessages(false);
-					setNewMessageCount(0);
 					setIsAtBottom(true);
 				}
 			} else {
 				// First visit to this tab - mark all as read
 				tabReadStateRef.current.set(activeTabId, currentCount);
-				setHasNewMessages(false);
-				setNewMessageCount(0);
 				setIsAtBottom(true);
 			}
 
@@ -1455,10 +1441,7 @@ export const TerminalOutput = memo(
 				}
 
 				if (!actuallyAtBottom) {
-					const newCount = currentCount - lastLogCountRef.current;
-					setHasNewMessages(true);
-					setNewMessageCount((prev) => prev + newCount);
-					// Also update isAtBottom state to match reality
+					// Update isAtBottom state to match reality
 					setIsAtBottom(false);
 				} else {
 					// At bottom, update read state
@@ -1590,7 +1573,6 @@ export const TerminalOutput = memo(
 			[theme]
 		);
 
-		const isAutoScrollActive = autoScrollAiMode && !autoScrollPaused;
 
 		return (
 			<div
@@ -1757,63 +1739,7 @@ export const TerminalOutput = memo(
 				</div>
 
 				{/* Auto-scroll toggle — positioned opposite AI response side (AI mode only) */}
-				{/* Visible when: has content AND (not at bottom (dimmed, click to pin) OR pinned at bottom (accent, click to unpin)) */}
-				{setAutoScrollAiMode &&
-					filteredLogs.length > 0 &&
-					(!isAtBottom || isAutoScrollActive) && (
-						<button
-							onClick={() => {
-								if (isAutoScrollActive && isAtBottom) {
-									// Currently pinned at bottom — unpin
-									setAutoScrollAiMode(false);
-								} else {
-									// Not pinned — jump to bottom and pin
-									setAutoScrollPaused(false);
-									setAutoScrollAiMode(true);
-									setHasNewMessages(false);
-									setNewMessageCount(0);
-									if (scrollContainerRef.current) {
-										scrollContainerRef.current.scrollTo({
-											top: scrollContainerRef.current.scrollHeight,
-											behavior: 'smooth',
-										});
-									}
-								}
-							}}
-							className={`absolute bottom-4 ${userMessageAlignment === 'right' ? 'left-6' : 'right-6'} flex items-center gap-2 px-3 py-2 rounded-full shadow-lg transition-all hover:scale-105 z-20 outline-none`}
-							style={{
-								backgroundColor: isAutoScrollActive
-									? theme.colors.accent
-									: hasNewMessages
-										? theme.colors.accent
-										: theme.colors.bgSidebar,
-								color: isAutoScrollActive
-									? theme.colors.accentForeground
-									: hasNewMessages
-										? theme.colors.accentForeground
-										: theme.colors.textDim,
-								border: `1px solid ${isAutoScrollActive || hasNewMessages ? 'transparent' : theme.colors.border}`,
-								animation:
-									hasNewMessages && !isAutoScrollActive
-										? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-										: undefined,
-							}}
-							title={
-								isAutoScrollActive
-									? 'Auto-scroll ON (click to unpin)'
-									: hasNewMessages
-										? 'New messages (click to pin to bottom)'
-										: 'Scroll to bottom (click to pin)'
-							}
-						>
-							<ArrowDown className="w-4 h-4" />
-							{newMessageCount > 0 && !isAutoScrollActive && (
-								<span className="text-xs font-bold">
-									{newMessageCount > 99 ? '99+' : newMessageCount}
-								</span>
-							)}
-						</button>
-					)}
+
 
 				{/* Copied to Clipboard Notification */}
 				{showCopiedNotification && (
