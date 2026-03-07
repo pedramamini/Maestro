@@ -1,12 +1,22 @@
 import { memo } from 'react';
 import { Handle, Position, type NodeProps } from 'reactflow';
-import { Clock, FileText, GitPullRequest, GitBranch, CheckSquare, Zap } from 'lucide-react';
+import {
+	Clock,
+	FileText,
+	GitPullRequest,
+	GitBranch,
+	CheckSquare,
+	Zap,
+	GripVertical,
+	Settings,
+} from 'lucide-react';
 import type { CueEventType } from '../../../../shared/cue-pipeline-types';
 
 export interface TriggerNodeDataProps {
 	eventType: CueEventType;
 	label: string;
 	configSummary: string;
+	onConfigure?: () => void;
 }
 
 const EVENT_COLORS: Record<CueEventType, string> = {
@@ -37,58 +47,113 @@ export const TriggerNode = memo(function TriggerNode({
 	return (
 		<div
 			style={{
-				width: 180,
+				width: 200,
 				height: 60,
 				borderRadius: 9999,
 				backgroundColor: `${color}18`,
 				border: `2px solid ${selected ? color : `${color}60`}`,
 				boxShadow: selected ? `0 0 12px ${color}40` : undefined,
 				display: 'flex',
-				flexDirection: 'column',
+				flexDirection: 'row',
 				alignItems: 'center',
-				justifyContent: 'center',
-				padding: '0 16px',
-				cursor: 'pointer',
+				padding: '0 6px',
+				cursor: 'default',
 				transition: 'border-color 0.15s, box-shadow 0.15s',
 			}}
 		>
+			{/* Drag handle */}
 			<div
+				className="drag-handle"
 				style={{
 					display: 'flex',
 					alignItems: 'center',
-					gap: 6,
+					justifyContent: 'center',
+					cursor: 'grab',
+					color: `${color}80`,
+					flexShrink: 0,
+					padding: '4px 2px',
+					borderRadius: 4,
+				}}
+				title="Drag to move"
+			>
+				<GripVertical size={14} />
+			</div>
+
+			{/* Content */}
+			<div
+				style={{
+					flex: 1,
+					display: 'flex',
+					flexDirection: 'column',
+					alignItems: 'center',
+					justifyContent: 'center',
+					overflow: 'hidden',
+					padding: '0 4px',
 				}}
 			>
-				<Icon size={14} style={{ color, flexShrink: 0 }} />
-				<span
+				<div
 					style={{
-						color,
-						fontSize: 12,
-						fontWeight: 600,
-						whiteSpace: 'nowrap',
-						overflow: 'hidden',
-						textOverflow: 'ellipsis',
-						maxWidth: 130,
+						display: 'flex',
+						alignItems: 'center',
+						gap: 6,
 					}}
 				>
-					{data.label}
-				</span>
+					<Icon size={14} style={{ color, flexShrink: 0 }} />
+					<span
+						style={{
+							color,
+							fontSize: 12,
+							fontWeight: 600,
+							whiteSpace: 'nowrap',
+							overflow: 'hidden',
+							textOverflow: 'ellipsis',
+							maxWidth: 110,
+						}}
+					>
+						{data.label}
+					</span>
+				</div>
+				{data.configSummary && (
+					<span
+						style={{
+							color: '#9ca3af',
+							fontSize: 10,
+							marginTop: 2,
+							whiteSpace: 'nowrap',
+							overflow: 'hidden',
+							textOverflow: 'ellipsis',
+							maxWidth: 130,
+						}}
+					>
+						{data.configSummary}
+					</span>
+				)}
 			</div>
-			{data.configSummary && (
-				<span
-					style={{
-						color: '#9ca3af',
-						fontSize: 10,
-						marginTop: 2,
-						whiteSpace: 'nowrap',
-						overflow: 'hidden',
-						textOverflow: 'ellipsis',
-						maxWidth: 150,
-					}}
-				>
-					{data.configSummary}
-				</span>
-			)}
+
+			{/* Gear icon */}
+			<div
+				onClick={(e) => {
+					e.stopPropagation();
+					data.onConfigure?.();
+				}}
+				style={{
+					display: 'flex',
+					alignItems: 'center',
+					justifyContent: 'center',
+					cursor: 'pointer',
+					color: selected ? color : `${color}60`,
+					flexShrink: 0,
+					padding: '4px 2px',
+					borderRadius: 4,
+					transition: 'color 0.15s',
+				}}
+				onMouseEnter={(e) => (e.currentTarget.style.color = color)}
+				onMouseLeave={(e) => (e.currentTarget.style.color = selected ? color : `${color}60`)}
+				title="Configure"
+			>
+				<Settings size={14} />
+			</div>
+
 			<Handle
 				type="source"
 				position={Position.Right}
