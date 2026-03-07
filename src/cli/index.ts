@@ -16,6 +16,7 @@ import { listSessions } from './commands/list-sessions';
 import { openFile } from './commands/open-file';
 import { refreshFiles } from './commands/refresh-files';
 import { refreshAutoRun } from './commands/refresh-auto-run';
+import { status } from './commands/status';
 
 // Read version from package.json at runtime
 function getVersion(): string {
@@ -134,5 +135,11 @@ program
 	.description('Refresh Auto Run documents in the Maestro desktop app')
 	.option('-s, --session <id>', 'Target session (defaults to active)')
 	.action(refreshAutoRun);
+
+// Status command - check if Maestro desktop app is running and reachable
+program
+	.command('status')
+	.description('Check if the Maestro desktop app is running and reachable')
+	.action(status);
 
 program.parse();
