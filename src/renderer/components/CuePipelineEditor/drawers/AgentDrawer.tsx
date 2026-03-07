@@ -1,5 +1,6 @@
 import { memo, useState, useMemo } from 'react';
 import { Bot, Search, X } from 'lucide-react';
+import type { Theme } from '../../../types';
 
 export interface AgentSessionInfo {
 	id: string;
@@ -12,6 +13,7 @@ export interface AgentDrawerProps {
 	onClose: () => void;
 	sessions: AgentSessionInfo[];
 	onCanvasSessionIds?: Set<string>;
+	theme: Theme;
 }
 
 function handleDragStart(e: React.DragEvent, session: AgentSessionInfo) {
@@ -32,6 +34,7 @@ export const AgentDrawer = memo(function AgentDrawer({
 	onClose,
 	sessions,
 	onCanvasSessionIds,
+	theme,
 }: AgentDrawerProps) {
 	const [search, setSearch] = useState('');
 
@@ -63,8 +66,8 @@ export const AgentDrawer = memo(function AgentDrawer({
 				bottom: 0,
 				width: 240,
 				zIndex: 20,
-				backgroundColor: '#1e1e2e',
-				borderLeft: '1px solid #333',
+				backgroundColor: theme.colors.bgMain,
+				borderLeft: `1px solid ${theme.colors.border}`,
 				transform: isOpen ? 'translateX(0)' : 'translateX(100%)',
 				transition: 'transform 200ms ease',
 				display: 'flex',
@@ -79,11 +82,11 @@ export const AgentDrawer = memo(function AgentDrawer({
 					alignItems: 'center',
 					justifyContent: 'space-between',
 					padding: '10px 12px',
-					borderBottom: '1px solid #333',
+					borderBottom: `1px solid ${theme.colors.border}`,
 					flexShrink: 0,
 				}}
 			>
-				<span style={{ color: '#e4e4e7', fontSize: 13, fontWeight: 600 }}>Agents</span>
+				<span style={{ color: theme.colors.textMain, fontSize: 13, fontWeight: 600 }}>Agents</span>
 				<button
 					onClick={onClose}
 					style={{
@@ -93,7 +96,7 @@ export const AgentDrawer = memo(function AgentDrawer({
 						padding: 2,
 						display: 'flex',
 						alignItems: 'center',
-						color: '#9ca3af',
+						color: theme.colors.textDim,
 					}}
 				>
 					<X size={14} />
@@ -107,13 +110,13 @@ export const AgentDrawer = memo(function AgentDrawer({
 						display: 'flex',
 						alignItems: 'center',
 						gap: 6,
-						backgroundColor: '#252535',
+						backgroundColor: theme.colors.bgActivity,
 						borderRadius: 6,
 						padding: '4px 8px',
-						border: '1px solid #333',
+						border: `1px solid ${theme.colors.border}`,
 					}}
 				>
-					<Search size={12} style={{ color: '#6b7280', flexShrink: 0 }} />
+					<Search size={12} style={{ color: theme.colors.textDim, flexShrink: 0 }} />
 					<input
 						type="text"
 						value={search}
@@ -124,7 +127,7 @@ export const AgentDrawer = memo(function AgentDrawer({
 							background: 'none',
 							border: 'none',
 							outline: 'none',
-							color: '#e4e4e7',
+							color: theme.colors.textMain,
 							fontSize: 12,
 						}}
 					/>
@@ -138,7 +141,7 @@ export const AgentDrawer = memo(function AgentDrawer({
 						{grouped.size > 1 && (
 							<div
 								style={{
-									color: '#6b7280',
+									color: theme.colors.textDim,
 									fontSize: 10,
 									fontWeight: 600,
 									textTransform: 'uppercase',
@@ -163,7 +166,7 @@ export const AgentDrawer = memo(function AgentDrawer({
 										padding: '8px 10px',
 										marginBottom: 4,
 										borderRadius: 6,
-										backgroundColor: '#252535',
+										backgroundColor: theme.colors.bgActivity,
 										cursor: 'grab',
 										transition: 'filter 0.15s',
 									}}
@@ -174,11 +177,11 @@ export const AgentDrawer = memo(function AgentDrawer({
 										(e.currentTarget as HTMLElement).style.filter = 'brightness(1)';
 									}}
 								>
-									<Bot size={14} style={{ color: '#9ca3af', flexShrink: 0 }} />
+									<Bot size={14} style={{ color: theme.colors.textDim, flexShrink: 0 }} />
 									<div style={{ flex: 1, minWidth: 0 }}>
 										<div
 											style={{
-												color: '#e4e4e7',
+												color: theme.colors.textMain,
 												fontSize: 12,
 												fontWeight: 500,
 												whiteSpace: 'nowrap',
@@ -188,7 +191,9 @@ export const AgentDrawer = memo(function AgentDrawer({
 										>
 											{session.name}
 										</div>
-										<div style={{ color: '#6b7280', fontSize: 10 }}>{session.toolType}</div>
+										<div style={{ color: theme.colors.textDim, fontSize: 10 }}>
+											{session.toolType}
+										</div>
 									</div>
 									{isOnCanvas && (
 										<div
@@ -210,7 +215,7 @@ export const AgentDrawer = memo(function AgentDrawer({
 				{filtered.length === 0 && (
 					<div
 						style={{
-							color: '#6b7280',
+							color: theme.colors.textDim,
 							fontSize: 12,
 							textAlign: 'center',
 							padding: '20px 0',

@@ -369,72 +369,67 @@ function CuePipelineEditorInner({
 		};
 	}, []);
 
+	// Track whether we've applied saved layout positions yet
+	const hasRestoredLayoutRef = useRef(false);
+
 	// Load pipelines from saved layout (positions) merged with live graph data
 	useEffect(() => {
+		if (!graphSessions || graphSessions.length === 0) return;
+
 		const loadLayout = async () => {
+			const livePipelines = graphSessionsToPipelines(graphSessions, sessions);
+			if (livePipelines.length === 0) return;
+
 			let savedLayout: PipelineLayoutState | null = null;
-			try {
-				savedLayout = (await window.maestro.cue.loadPipelineLayout()) as PipelineLayoutState | null;
-			} catch {
-				// No saved layout
+			if (!hasRestoredLayoutRef.current) {
+				try {
+					savedLayout =
+						(await window.maestro.cue.loadPipelineLayout()) as PipelineLayoutState | null;
+				} catch {
+					// No saved layout
+				}
 			}
 
-			if (graphSessions && graphSessions.length > 0) {
-				const livePipelines = graphSessionsToPipelines(graphSessions, sessions);
-
-				if (savedLayout && savedLayout.pipelines && livePipelines.length > 0) {
-					// Merge: live data takes precedence for node existence, saved provides positions
-					const savedPositions = new Map<string, { x: number; y: number }>();
-					for (const sp of savedLayout.pipelines) {
-						for (const node of sp.nodes) {
-							savedPositions.set(`${sp.id}:${node.id}`, node.position);
-						}
+			if (savedLayout && savedLayout.pipelines) {
+				// Merge: live data takes precedence for node existence, saved provides positions
+				const savedPositions = new Map<string, { x: number; y: number }>();
+				for (const sp of savedLayout.pipelines) {
+					for (const node of sp.nodes) {
+						savedPositions.set(`${sp.id}:${node.id}`, node.position);
 					}
-
-					const mergedPipelines = livePipelines.map((pipeline) => ({
-						...pipeline,
-						nodes: pipeline.nodes.map((node) => {
-							const savedPos = savedPositions.get(`${pipeline.id}:${node.id}`);
-							return savedPos ? { ...node, position: savedPos } : node;
-						}),
-					}));
-
-					setPipelineState({
-						pipelines: mergedPipelines,
-						selectedPipelineId: savedLayout.selectedPipelineId ?? mergedPipelines[0]?.id ?? null,
-					});
-					savedStateRef.current = JSON.stringify(mergedPipelines);
-
-					// Restore viewport if available
-					if (savedLayout.viewport) {
-						setTimeout(() => {
-							reactFlowInstance.setViewport(savedLayout!.viewport!);
-						}, 100);
-					}
-				} else if (livePipelines.length > 0) {
-					setPipelineState({ pipelines: livePipelines, selectedPipelineId: livePipelines[0].id });
-					savedStateRef.current = JSON.stringify(livePipelines);
 				}
-			} else if (savedLayout && savedLayout.pipelines && savedLayout.pipelines.length > 0) {
-				// No live data but we have saved layout
-				setPipelineState({
-					pipelines: savedLayout.pipelines,
-					selectedPipelineId: savedLayout.selectedPipelineId,
-				});
-				savedStateRef.current = JSON.stringify(savedLayout.pipelines);
 
-				if (savedLayout.viewport) {
+				const mergedPipelines = livePipelines.map((pipeline) => ({
+					...pipeline,
+					nodes: pipeline.nodes.map((node) => {
+						const savedPos = savedPositions.get(`${pipeline.id}:${node.id}`);
+						return savedPos ? { ...node, position: savedPos } : node;
+					}),
+				}));
+
+				setPipelineState({
+					pipelines: mergedPipelines,
+					selectedPipelineId: savedLayout.selectedPipelineId ?? mergedPipelines[0]?.id ?? null,
+				});
+				savedStateRef.current = JSON.stringify(mergedPipelines);
+
+				// Restore viewport if available
+				if (savedLayout.viewport && !hasRestoredLayoutRef.current) {
 					setTimeout(() => {
 						reactFlowInstance.setViewport(savedLayout!.viewport!);
 					}, 100);
 				}
+			} else {
+				setPipelineState({ pipelines: livePipelines, selectedPipelineId: livePipelines[0].id });
+				savedStateRef.current = JSON.stringify(livePipelines);
 			}
+
+			hasRestoredLayoutRef.current = true;
 			setIsDirty(false);
 		};
 
 		loadLayout();
-		// Only run on mount
-	}, []);
+	}, [graphSessions, sessions]);
 
 	// Track dirty state when pipelines change
 	useEffect(() => {
@@ -1252,7 +1247,11 @@ function CuePipelineEditorInner({
 			{/* Canvas area with drawers */}
 			<div className="flex-1 relative overflow-hidden">
 				{/* Trigger drawer (left) */}
-				<TriggerDrawer isOpen={triggerDrawerOpen} onClose={() => setTriggerDrawerOpen(false)} />
+				<TriggerDrawer
+					isOpen={triggerDrawerOpen}
+					onClose={() => setTriggerDrawerOpen(false)}
+					theme={theme}
+				/>
 
 				{/* Empty state overlay */}
 				{nodes.length === 0 && (
@@ -1346,6 +1345,7 @@ function CuePipelineEditorInner({
 					onClose={() => setAgentDrawerOpen(false)}
 					sessions={sessions}
 					onCanvasSessionIds={onCanvasSessionIds}
+					theme={theme}
 				/>
 
 				{/* Config panels */}
