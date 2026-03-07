@@ -1635,6 +1635,10 @@ const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 						)}
 
 						{/* Content area: Show FilePreview when file tab is active, otherwise show terminal output */}
+						{/* Content wrapper: always-rendered relative container so terminal overlay covers
+						     only the content area. Terminal sessions are mounted here regardless of whether
+						     file preview, AI output, or terminal is active. */}
+						<div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
 						{/* Skip rendering when loading remote file - loading state takes over entire main area */}
 						{activeSession.inputMode === 'ai' &&
 						((filePreviewLoading && !activeFileTabId) || activeFileTab?.isLoading) ? (
@@ -1812,45 +1816,7 @@ const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 										/>
 									)}
 
-									{/* TerminalView is kept alive for every session that has terminal tabs so that
-									     switching between sessions (or to AI mode) does not destroy the xterm.js
-									     scrollback buffer. visibility:hidden (not display:none) keeps the canvas
-									     at non-zero dimensions so the WebGL context is never lost or cleared. */}
-									{mountedTerminalSessionIds.map((sessionId) => {
-										const isCurrentSession = sessionId === activeSession.id;
-										const session = isCurrentSession
-											? activeSession
-											: mountedTerminalSessionsRef.current.get(sessionId);
-										if (!session) return null;
-										const isTerminalVisible = isCurrentSession && session.inputMode === 'terminal';
-										return (
-											<div
-												key={sessionId}
-												className="absolute inset-0 flex flex-col"
-												style={{
-													visibility: isTerminalVisible ? 'visible' : 'hidden',
-													pointerEvents: isTerminalVisible ? 'auto' : 'none',
-												}}
-											>
-												<TerminalView
-													ref={(handle) => {
-														if (handle) terminalViewRefs.current.set(sessionId, handle);
-														else terminalViewRefs.current.delete(sessionId);
-													}}
-													session={session}
-													theme={theme}
-													fontFamily={fontFamily}
-													fontSize={fontSize}
-													defaultShell={defaultShell}
-													onTabStateChange={createTabStateChangeHandler(sessionId)}
-													onTabPidChange={createTabPidChangeHandler(sessionId)}
-													searchOpen={isCurrentSession ? terminalSearchOpen : false}
-													onSearchClose={isCurrentSession ? () => setTerminalSearchOpen(false) : undefined}
-													isVisible={isTerminalVisible}
-												/>
-											</div>
-										);
-									})}
+
 								</div>
 
 								{/* Input Area (hidden in mobile landscape, during wizard doc generation, and in terminal mode — xterm.js handles its own input) */}
@@ -1951,6 +1917,46 @@ const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 								)}
 							</>
 						)}
+						{/* TerminalView is kept alive for every session that has terminal tabs so that
+						     switching between sessions (or to AI mode) does not destroy the xterm.js
+						     scrollback buffer. visibility:hidden (not display:none) keeps the canvas
+						     at non-zero dimensions so the WebGL context is never lost or cleared. */}
+						{mountedTerminalSessionIds.map((sessionId) => {
+							const isCurrentSession = sessionId === activeSession.id;
+							const session = isCurrentSession
+								? activeSession
+								: mountedTerminalSessionsRef.current.get(sessionId);
+							if (!session) return null;
+							const isTerminalVisible = isCurrentSession && session.inputMode === 'terminal';
+							return (
+								<div
+									key={sessionId}
+									className="absolute inset-0 flex flex-col"
+									style={{
+										visibility: isTerminalVisible ? 'visible' : 'hidden',
+										pointerEvents: isTerminalVisible ? 'auto' : 'none',
+									}}
+								>
+									<TerminalView
+										ref={(handle) => {
+											if (handle) terminalViewRefs.current.set(sessionId, handle);
+											else terminalViewRefs.current.delete(sessionId);
+										}}
+										session={session}
+										theme={theme}
+										fontFamily={fontFamily}
+										fontSize={fontSize}
+										defaultShell={defaultShell}
+										onTabStateChange={createTabStateChangeHandler(sessionId)}
+										onTabPidChange={createTabPidChangeHandler(sessionId)}
+										searchOpen={isCurrentSession ? terminalSearchOpen : false}
+										onSearchClose={isCurrentSession ? () => setTerminalSearchOpen(false) : undefined}
+										isVisible={isTerminalVisible}
+									/>
+								</div>
+							);
+						})}
+						</div>
 					</div>
 				</ErrorBoundary>
 
