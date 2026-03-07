@@ -6,10 +6,12 @@ import type { NodeProps } from 'reactflow';
 import type { AgentNodeDataProps } from '../../../../../renderer/components/CuePipelineEditor/nodes/AgentNode';
 
 const defaultData: AgentNodeDataProps = {
+	compositeId: 'pipeline-1:agent-1',
 	sessionId: 'sess-1',
 	sessionName: 'Test Agent',
 	toolType: 'claude-code',
 	hasPrompt: false,
+	hasOutgoingEdge: false,
 	pipelineColor: '#06b6d4',
 	pipelineCount: 1,
 	pipelineColors: ['#06b6d4'],

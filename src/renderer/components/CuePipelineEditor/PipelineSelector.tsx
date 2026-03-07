@@ -6,7 +6,7 @@
  */
 
 import { useState, useRef, useCallback } from 'react';
-import { ChevronDown, Plus, X, Check, Layers } from 'lucide-react';
+import { ChevronDown, Plus, X, Check, Layers, Pencil } from 'lucide-react';
 import type { CuePipeline } from '../../../shared/cue-pipeline-types';
 import { useClickOutside } from '../../hooks/ui/useClickOutside';
 import { PIPELINE_COLORS } from './pipelineColors';
@@ -18,6 +18,7 @@ export interface PipelineSelectorProps {
 	onCreatePipeline: () => void;
 	onDeletePipeline: (id: string) => void;
 	onRenamePipeline: (id: string, name: string) => void;
+	onChangePipelineColor?: (id: string, color: string) => void;
 	textColor?: string;
 	borderColor?: string;
 }
@@ -29,12 +30,14 @@ export function PipelineSelector({
 	onCreatePipeline,
 	onDeletePipeline,
 	onRenamePipeline,
+	onChangePipelineColor,
 	textColor = 'rgba(255,255,255,0.9)',
 	borderColor = 'rgba(255,255,255,0.12)',
 }: PipelineSelectorProps) {
 	const [isOpen, setIsOpen] = useState(false);
 	const [renamingId, setRenamingId] = useState<string | null>(null);
 	const [renameValue, setRenameValue] = useState('');
+	const [colorPickerId, setColorPickerId] = useState<string | null>(null);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 	const buttonRef = useRef<HTMLButtonElement>(null);
 
@@ -51,6 +54,7 @@ export function PipelineSelector({
 	const handleToggle = useCallback(() => {
 		setIsOpen((v) => !v);
 		setRenamingId(null);
+		setColorPickerId(null);
 	}, []);
 
 	const handleSelect = useCallback(
@@ -134,7 +138,7 @@ export function PipelineSelector({
 			{isOpen && (
 				<div
 					ref={dropdownRef}
-					className="absolute top-full left-0 mt-1 rounded-md shadow-lg overflow-hidden"
+					className="absolute top-full left-0 mt-1 rounded-md shadow-lg"
 					style={{
 						backgroundColor: '#1e1e2e',
 						border: '1px solid rgba(255,255,255,0.12)',
@@ -174,82 +178,169 @@ export function PipelineSelector({
 
 					{/* Pipeline list */}
 					{pipelines.map((pipeline) => (
-						<div
-							key={pipeline.id}
-							className="flex items-center gap-2 w-full px-3 py-2 text-xs"
-							style={{
-								color: 'rgba(255,255,255,0.9)',
-								cursor: 'pointer',
-							}}
-							onClick={() => {
-								if (renamingId !== pipeline.id) {
-									handleSelect(pipeline.id);
-								}
-							}}
-							onDoubleClick={(e) => {
-								e.stopPropagation();
-								handleStartRename(pipeline);
-							}}
-							onMouseEnter={(e) => {
-								e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)';
-							}}
-							onMouseLeave={(e) => {
-								e.currentTarget.style.backgroundColor = 'transparent';
-							}}
-						>
-							<span
+						<div key={pipeline.id}>
+							<div
+								className="flex items-center gap-2 w-full px-3 py-2 text-xs"
 								style={{
-									width: 8,
-									height: 8,
-									borderRadius: '50%',
-									backgroundColor: pipeline.color,
-									flexShrink: 0,
-								}}
-							/>
-							{renamingId === pipeline.id ? (
-								<input
-									autoFocus
-									value={renameValue}
-									onChange={(e) => setRenameValue(e.target.value)}
-									onBlur={handleFinishRename}
-									onKeyDown={handleRenameKeyDown}
-									onClick={(e) => e.stopPropagation()}
-									className="flex-1 text-xs rounded px-1"
-									style={{
-										backgroundColor: 'rgba(255,255,255,0.1)',
-										border: '1px solid rgba(255,255,255,0.2)',
-										color: 'rgba(255,255,255,0.9)',
-										outline: 'none',
-									}}
-								/>
-							) : (
-								<span className="flex-1 truncate">{pipeline.name}</span>
-							)}
-							{selectedPipelineId === pipeline.id && renamingId !== pipeline.id && (
-								<Check size={12} style={{ color: 'rgba(255,255,255,0.5)' }} />
-							)}
-							<button
-								onClick={(e) => handleDelete(e, pipeline.id)}
-								className="flex items-center justify-center rounded"
-								style={{
-									width: 16,
-									height: 16,
-									backgroundColor: 'transparent',
-									border: 'none',
-									color: 'rgba(255,255,255,0.3)',
+									color: 'rgba(255,255,255,0.9)',
 									cursor: 'pointer',
-									flexShrink: 0,
-									transition: 'color 0.15s',
+								}}
+								onClick={() => {
+									if (renamingId !== pipeline.id) {
+										handleSelect(pipeline.id);
+									}
+								}}
+								onDoubleClick={(e) => {
+									e.stopPropagation();
+									handleStartRename(pipeline);
 								}}
 								onMouseEnter={(e) => {
-									e.currentTarget.style.color = '#ef4444';
+									e.currentTarget.style.backgroundColor = 'rgba(255,255,255,0.06)';
 								}}
 								onMouseLeave={(e) => {
-									e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+									e.currentTarget.style.backgroundColor = 'transparent';
 								}}
 							>
-								<X size={10} />
-							</button>
+								<span
+									style={{
+										width: 10,
+										height: 10,
+										borderRadius: '50%',
+										backgroundColor: pipeline.color,
+										flexShrink: 0,
+										cursor: onChangePipelineColor ? 'pointer' : 'default',
+										border:
+											colorPickerId === pipeline.id
+												? '2px solid rgba(255,255,255,0.8)'
+												: '2px solid transparent',
+										transition: 'border-color 0.15s',
+									}}
+									onClick={(e) => {
+										e.stopPropagation();
+										if (onChangePipelineColor) {
+											setColorPickerId((prev) => (prev === pipeline.id ? null : pipeline.id));
+										}
+									}}
+									title="Change color"
+								/>
+								{renamingId === pipeline.id ? (
+									<input
+										autoFocus
+										value={renameValue}
+										onChange={(e) => setRenameValue(e.target.value)}
+										onBlur={handleFinishRename}
+										onKeyDown={handleRenameKeyDown}
+										onClick={(e) => e.stopPropagation()}
+										className="flex-1 text-xs rounded px-1"
+										style={{
+											backgroundColor: 'rgba(255,255,255,0.1)',
+											border: '1px solid rgba(255,255,255,0.2)',
+											color: 'rgba(255,255,255,0.9)',
+											outline: 'none',
+										}}
+									/>
+								) : (
+									<span className="flex-1 truncate">{pipeline.name}</span>
+								)}
+								{selectedPipelineId === pipeline.id && renamingId !== pipeline.id && (
+									<Check size={12} style={{ color: 'rgba(255,255,255,0.5)' }} />
+								)}
+								{renamingId !== pipeline.id && (
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											handleStartRename(pipeline);
+										}}
+										className="flex items-center justify-center rounded"
+										style={{
+											width: 16,
+											height: 16,
+											backgroundColor: 'transparent',
+											border: 'none',
+											color: 'rgba(255,255,255,0.3)',
+											cursor: 'pointer',
+											flexShrink: 0,
+											transition: 'color 0.15s',
+										}}
+										onMouseEnter={(e) => {
+											e.currentTarget.style.color = 'rgba(255,255,255,0.8)';
+										}}
+										onMouseLeave={(e) => {
+											e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+										}}
+										title="Rename pipeline"
+									>
+										<Pencil size={10} />
+									</button>
+								)}
+								<button
+									onClick={(e) => handleDelete(e, pipeline.id)}
+									className="flex items-center justify-center rounded"
+									style={{
+										width: 16,
+										height: 16,
+										backgroundColor: 'transparent',
+										border: 'none',
+										color: 'rgba(255,255,255,0.3)',
+										cursor: 'pointer',
+										flexShrink: 0,
+										transition: 'color 0.15s',
+									}}
+									onMouseEnter={(e) => {
+										e.currentTarget.style.color = '#ef4444';
+									}}
+									onMouseLeave={(e) => {
+										e.currentTarget.style.color = 'rgba(255,255,255,0.3)';
+									}}
+								>
+									<X size={10} />
+								</button>
+							</div>
+							{/* Color picker palette */}
+							{colorPickerId === pipeline.id && onChangePipelineColor && (
+								<div
+									onClick={(e) => e.stopPropagation()}
+									style={{
+										display: 'grid',
+										gridTemplateColumns: 'repeat(6, 1fr)',
+										gap: 4,
+										padding: '8px 10px',
+										backgroundColor: '#16162a',
+										borderTop: '1px solid rgba(255,255,255,0.08)',
+										zIndex: 10,
+									}}
+								>
+									{PIPELINE_COLORS.map((c) => (
+										<button
+											key={c}
+											onClick={() => {
+												onChangePipelineColor(pipeline.id, c);
+												setColorPickerId(null);
+											}}
+											style={{
+												width: 20,
+												height: 20,
+												borderRadius: '50%',
+												backgroundColor: c,
+												border:
+													c === pipeline.color
+														? '2px solid rgba(255,255,255,0.9)'
+														: '2px solid transparent',
+												cursor: 'pointer',
+												transition: 'transform 0.1s, border-color 0.15s',
+												padding: 0,
+											}}
+											onMouseEnter={(e) => {
+												e.currentTarget.style.transform = 'scale(1.2)';
+											}}
+											onMouseLeave={(e) => {
+												e.currentTarget.style.transform = 'scale(1)';
+											}}
+											title={c}
+										/>
+									))}
+								</div>
+							)}
 						</div>
 					))}
 

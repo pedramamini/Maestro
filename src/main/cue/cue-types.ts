@@ -25,6 +25,7 @@ export interface CueSubscription {
 	event: CueEventType;
 	enabled: boolean;
 	prompt: string;
+	output_prompt?: string;
 	interval_minutes?: number;
 	watch?: string;
 	source_session?: string | string[];

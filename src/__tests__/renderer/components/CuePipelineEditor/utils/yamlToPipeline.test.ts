@@ -56,10 +56,10 @@ describe('subscriptionsToPipelines', () => {
 			config: { interval_minutes: 10 },
 		});
 
-		// Agent should have the prompt
+		// Agent should have the input prompt
 		expect(agents[0].data).toMatchObject({
 			sessionName: 'worker',
-			prompt: 'Do the work',
+			inputPrompt: 'Do the work',
 		});
 
 		// Should have one edge connecting them

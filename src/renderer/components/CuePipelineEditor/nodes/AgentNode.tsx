@@ -3,14 +3,16 @@ import { Handle, Position, type NodeProps } from 'reactflow';
 import { MessageSquare, GripVertical, Settings } from 'lucide-react';
 
 export interface AgentNodeDataProps {
+	compositeId: string;
 	sessionId: string;
 	sessionName: string;
 	toolType: string;
 	hasPrompt: boolean;
+	hasOutgoingEdge: boolean;
 	pipelineColor: string;
 	pipelineCount: number;
 	pipelineColors: string[];
-	onConfigure?: () => void;
+	onConfigure?: (compositeId: string) => void;
 }
 
 export const AgentNode = memo(function AgentNode({
@@ -31,7 +33,7 @@ export const AgentNode = memo(function AgentNode({
 				display: 'flex',
 				flexDirection: 'row',
 				overflow: 'visible',
-				cursor: 'grab',
+				cursor: 'default',
 				transition: 'border-color 0.15s, box-shadow 0.15s',
 				position: 'relative',
 			}}
@@ -40,7 +42,7 @@ export const AgentNode = memo(function AgentNode({
 			<div
 				className="drag-handle"
 				style={{
-					width: 20,
+					width: 32,
 					display: 'flex',
 					alignItems: 'center',
 					justifyContent: 'center',
@@ -49,13 +51,19 @@ export const AgentNode = memo(function AgentNode({
 					flexShrink: 0,
 					backgroundColor: accentColor,
 					borderRadius: '6px 0 0 6px',
-					transition: 'color 0.15s',
+					transition: 'color 0.15s, filter 0.15s',
 				}}
-				onMouseEnter={(e) => (e.currentTarget.style.color = '#ccc')}
-				onMouseLeave={(e) => (e.currentTarget.style.color = '#555')}
+				onMouseEnter={(e) => {
+					e.currentTarget.style.color = '#fff';
+					e.currentTarget.style.filter = 'brightness(1.3)';
+				}}
+				onMouseLeave={(e) => {
+					e.currentTarget.style.color = '#555';
+					e.currentTarget.style.filter = 'brightness(1)';
+				}}
 				title="Drag to move"
 			>
-				<GripVertical size={14} />
+				<GripVertical size={16} />
 			</div>
 
 			{/* Content */}
@@ -125,7 +133,7 @@ export const AgentNode = memo(function AgentNode({
 			<div
 				onClick={(e) => {
 					e.stopPropagation();
-					data.onConfigure?.();
+					data.onConfigure?.(data.compositeId);
 				}}
 				style={{
 					display: 'flex',
@@ -135,7 +143,7 @@ export const AgentNode = memo(function AgentNode({
 					color: selected ? accentColor : '#555',
 					flexShrink: 0,
 					padding: '0 6px',
-					marginRight: 4,
+					marginRight: 14,
 					borderRadius: 4,
 					transition: 'color 0.15s',
 				}}

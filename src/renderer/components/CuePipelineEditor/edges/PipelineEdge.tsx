@@ -3,6 +3,16 @@ import { getBezierPath, BaseEdge, EdgeLabelRenderer, type EdgeProps } from 'reac
 import { MessageCircle, FileText } from 'lucide-react';
 import type { EdgeMode } from '../../../../shared/cue-pipeline-types';
 
+// Inject the pipeline dash animation once into the document head
+let pipelineDashInjected = false;
+function ensurePipelineDashStyle() {
+	if (pipelineDashInjected) return;
+	pipelineDashInjected = true;
+	const style = document.createElement('style');
+	style.textContent = `@keyframes pipeline-dash { to { stroke-dashoffset: -9; } }`;
+	document.head.appendChild(style);
+}
+
 export interface PipelineEdgeData {
 	pipelineColor: string;
 	mode: EdgeMode;
@@ -22,6 +32,7 @@ export const PipelineEdge = memo(function PipelineEdge({
 	selected,
 	markerEnd,
 }: EdgeProps<PipelineEdgeData>) {
+	ensurePipelineDashStyle();
 	const color = data?.pipelineColor ?? '#06b6d4';
 	const mode = data?.mode ?? 'pass';
 	const isActive = data?.isActivePipeline !== false;
@@ -80,13 +91,6 @@ export const PipelineEdge = memo(function PipelineEdge({
 					</div>
 				</EdgeLabelRenderer>
 			)}
-
-			{/* CSS animation for autorun dash */}
-			<style>{`
-				@keyframes pipeline-dash {
-					to { stroke-dashoffset: -9; }
-				}
-			`}</style>
 		</>
 	);
 });

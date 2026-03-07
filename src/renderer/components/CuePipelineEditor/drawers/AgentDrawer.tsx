@@ -58,19 +58,35 @@ export const AgentDrawer = memo(function AgentDrawer({
 		return map;
 	}, [groups]);
 
-	// Group by user-defined groups (matching left panel), ungrouped last
+	// Group by user-defined groups, alphabetize groups (ungrouped last), alphabetize agents within each group
 	const grouped = useMemo(() => {
-		const result = new Map<string, { label: string; sessions: AgentSessionInfo[] }>();
+		const result = new Map<
+			string,
+			{ label: string; sortName: string; sessions: AgentSessionInfo[] }
+		>();
 		for (const s of filtered) {
 			const key = s.groupId ?? '__ungrouped__';
 			if (!result.has(key)) {
 				const g = s.groupId ? groupMap.get(s.groupId) : undefined;
 				const label = g ? `${g.emoji} ${g.name}` : 'Ungrouped';
-				result.set(key, { label, sessions: [] });
+				const sortName = g ? g.name : 'Ungrouped';
+				result.set(key, { label, sortName, sessions: [] });
 			}
 			result.get(key)!.sessions.push(s);
 		}
-		return result;
+		// Sort agents within each group alphabetically by name
+		for (const entry of result.values()) {
+			entry.sessions.sort((a, b) => a.name.localeCompare(b.name));
+		}
+		// Sort groups alphabetically by name (ignoring emoji), with ungrouped last
+		const sorted = new Map(
+			Array.from(result.entries()).sort(([keyA, a], [keyB, b]) => {
+				if (keyA === '__ungrouped__') return 1;
+				if (keyB === '__ungrouped__') return -1;
+				return a.sortName.localeCompare(b.sortName);
+			})
+		);
+		return sorted;
 	}, [filtered, groupMap]);
 
 	return (

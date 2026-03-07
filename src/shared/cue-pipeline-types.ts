@@ -59,7 +59,8 @@ export interface AgentNodeData {
 	sessionId: string;
 	sessionName: string;
 	toolType: string;
-	prompt?: string;
+	inputPrompt?: string;
+	outputPrompt?: string;
 }
 
 export type PipelineNodeType = 'trigger' | 'agent';

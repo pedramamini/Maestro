@@ -15,8 +15,6 @@ import ReactFlow, {
 	ReactFlowProvider,
 	MarkerType,
 	useReactFlow,
-	applyNodeChanges,
-	applyEdgeChanges,
 	type Node,
 	type Edge,
 	type OnNodesChange,
@@ -182,16 +180,18 @@ function convertToReactFlowNodes(
 				const triggerData = pNode.data as TriggerNodeData;
 				const compositeId = `${pipeline.id}:${pNode.id}`;
 				const nodeData: TriggerNodeDataProps = {
+					compositeId,
 					eventType: triggerData.eventType,
 					label: triggerData.label,
 					configSummary: getTriggerConfigSummary(triggerData),
-					onConfigure: onConfigureNode ? () => onConfigureNode(compositeId) : undefined,
+					onConfigure: onConfigureNode,
 				};
 				nodes.push({
 					id: compositeId,
 					type: 'trigger',
 					position: pNode.position,
 					data: nodeData,
+					dragHandle: '.drag-handle',
 				});
 			} else {
 				const agentData = pNode.data as AgentNodeData;
@@ -205,21 +205,25 @@ function convertToReactFlowNodes(
 
 				const pipelineColors = agentPipelineMap.get(agentData.sessionId) ?? [pipeline.color];
 				const compositeId = `${pipeline.id}:${pNode.id}`;
+				const hasOutgoingEdge = pipeline.edges.some((e) => e.source === pNode.id);
 				const nodeData: AgentNodeDataProps = {
+					compositeId,
 					sessionId: agentData.sessionId,
 					sessionName: agentData.sessionName,
 					toolType: agentData.toolType,
-					hasPrompt: !!agentData.prompt,
+					hasPrompt: !!(agentData.inputPrompt || agentData.outputPrompt),
+					hasOutgoingEdge,
 					pipelineColor: pipeline.color,
 					pipelineCount: agentPipelineCount.get(agentData.sessionId) ?? 1,
 					pipelineColors,
-					onConfigure: onConfigureNode ? () => onConfigureNode(compositeId) : undefined,
+					onConfigure: onConfigureNode,
 				};
 				nodes.push({
 					id: compositeId,
 					type: 'agent',
 					position: pNode.position,
 					data: nodeData,
+					dragHandle: '.drag-handle',
 					style: !isActive ? { opacity: 0.4 } : undefined,
 				});
 			}
@@ -362,21 +366,26 @@ function CuePipelineEditorInner({
 	const [cueSettings, setCueSettings] = useState<CueSettings>({ ...DEFAULT_CUE_SETTINGS });
 	const [showSettings, setShowSettings] = useState(false);
 
+	// Keep a ref to current pipeline state for layout persistence (avoids unstable callback)
+	const pipelineStateRef = useRef(pipelineState);
+	pipelineStateRef.current = pipelineState;
+
 	// Debounced layout persistence (positions + viewport)
 	const persistLayout = useCallback(() => {
 		if (layoutSaveTimerRef.current) clearTimeout(layoutSaveTimerRef.current);
 		layoutSaveTimerRef.current = setTimeout(() => {
 			const viewport = reactFlowInstance.getViewport();
+			const state = pipelineStateRef.current;
 			const layout: PipelineLayoutState = {
-				pipelines: pipelineState.pipelines,
-				selectedPipelineId: pipelineState.selectedPipelineId,
+				pipelines: state.pipelines,
+				selectedPipelineId: state.selectedPipelineId,
 				viewport,
 			};
 			window.maestro.cue
 				.savePipelineLayout(layout as unknown as Record<string, unknown>)
 				.catch(() => {});
 		}, 500);
-	}, [pipelineState, reactFlowInstance]);
+	}, [reactFlowInstance]);
 
 	// Clean up debounce timer on unmount
 	useEffect(() => {
@@ -609,6 +618,13 @@ function CuePipelineEditorInner({
 		setPipelineState((prev) => ({ ...prev, selectedPipelineId: id }));
 	}, []);
 
+	const changePipelineColor = useCallback((id: string, color: string) => {
+		setPipelineState((prev) => ({
+			...prev,
+			pipelines: prev.pipelines.map((p) => (p.id === id ? { ...p, color } : p)),
+		}));
+	}, []);
+
 	// Determine which pipelines have active runs
 	const runningPipelineIds = useMemo(() => {
 		const ids = new Set<string>();
@@ -664,16 +680,31 @@ function CuePipelineEditorInner({
 	}, [pipelineState.pipelines]);
 
 	// Resolve selected node/edge from pipeline state using the composite IDs
-	const { selectedNode, selectedNodePipelineId } = useMemo(() => {
-		if (!selectedNodeId) return { selectedNode: null, selectedNodePipelineId: null };
+	const { selectedNode, selectedNodePipelineId, selectedNodeHasOutgoingEdge } = useMemo(() => {
+		if (!selectedNodeId)
+			return {
+				selectedNode: null,
+				selectedNodePipelineId: null,
+				selectedNodeHasOutgoingEdge: false,
+			};
 		// selectedNodeId is composite: "pipelineId:nodeId"
 		const sepIdx = selectedNodeId.indexOf(':');
-		if (sepIdx === -1) return { selectedNode: null, selectedNodePipelineId: null };
+		if (sepIdx === -1)
+			return {
+				selectedNode: null,
+				selectedNodePipelineId: null,
+				selectedNodeHasOutgoingEdge: false,
+			};
 		const pipelineId = selectedNodeId.substring(0, sepIdx);
 		const nodeId = selectedNodeId.substring(sepIdx + 1);
 		const pipeline = pipelineState.pipelines.find((p) => p.id === pipelineId);
 		const node = pipeline?.nodes.find((n) => n.id === nodeId);
-		return { selectedNode: node ?? null, selectedNodePipelineId: node ? pipelineId : null };
+		const hasOutgoing = pipeline?.edges.some((e) => e.source === nodeId) ?? false;
+		return {
+			selectedNode: node ?? null,
+			selectedNodePipelineId: node ? pipelineId : null,
+			selectedNodeHasOutgoingEdge: hasOutgoing,
+		};
 	}, [selectedNodeId, pipelineState.pipelines]);
 
 	const { selectedEdge, selectedEdgePipelineId, selectedEdgePipelineColor } = useMemo(() => {
@@ -925,74 +956,79 @@ function CuePipelineEditorInner({
 
 	const onNodesChange: OnNodesChange = useCallback(
 		(changes) => {
-			// Apply position/selection changes from React Flow back to pipeline state
-			const updatedRFNodes = applyNodeChanges(changes, nodes);
-			const hasPositionChange = changes.some((c) => c.type === 'position' && c.dragging === false);
-			setPipelineState((prev) => {
-				const newPipelines = prev.pipelines.map((pipeline) => ({
-					...pipeline,
-					nodes: pipeline.nodes.map((pNode) => {
-						const rfNode = updatedRFNodes.find((n) => n.id === `${pipeline.id}:${pNode.id}`);
-						if (rfNode) {
-							return { ...pNode, position: rfNode.position };
-						}
-						return pNode;
-					}),
-				}));
-				return { ...prev, pipelines: newPipelines };
-			});
+			// Extract position updates directly from changes to avoid depending on derived `nodes`
+			const positionUpdates = new Map<string, { x: number; y: number }>();
+			let hasPositionChange = false;
+			for (const change of changes) {
+				if (change.type === 'position' && change.position) {
+					positionUpdates.set(change.id, change.position);
+					if (!change.dragging) {
+						hasPositionChange = true;
+					}
+				}
+			}
+
+			if (positionUpdates.size > 0) {
+				setPipelineState((prev) => {
+					const newPipelines = prev.pipelines.map((pipeline) => ({
+						...pipeline,
+						nodes: pipeline.nodes.map((pNode) => {
+							const newPos = positionUpdates.get(`${pipeline.id}:${pNode.id}`);
+							if (newPos) {
+								return { ...pNode, position: newPos };
+							}
+							return pNode;
+						}),
+					}));
+					return { ...prev, pipelines: newPipelines };
+				});
+			}
+
 			// Debounce-save layout when a drag ends
 			if (hasPositionChange) {
 				persistLayout();
 			}
 		},
-		[nodes, persistLayout]
+		[persistLayout]
 	);
 
-	const onEdgesChange: OnEdgesChange = useCallback(
-		(changes) => {
-			applyEdgeChanges(changes, edges);
-		},
-		[edges]
-	);
+	// Edge changes (selection, removal) — no-op since we manage edges via pipelineState
+	const onEdgesChange: OnEdgesChange = useCallback(() => {}, []);
 
-	const onConnect = useCallback(
-		(connection: Connection) => {
-			if (!connection.source || !connection.target) return;
+	const onConnect = useCallback((connection: Connection) => {
+		if (!connection.source || !connection.target) return;
 
-			// Validate: trigger nodes (source-only) should not be targets
-			const sourceNode = nodes.find((n) => n.id === connection.source);
-			const targetNode = nodes.find((n) => n.id === connection.target);
-			if (!sourceNode || !targetNode) return;
-			if (targetNode.type === 'trigger') return; // Can't connect into a trigger
+		const sourcePipelineId = connection.source.split(':')[0];
+		const targetPipelineId = connection.target.split(':')[0];
+		if (sourcePipelineId !== targetPipelineId) return; // Cross-pipeline connections not supported
 
-			setPipelineState((prev) => {
-				// Find the pipeline that contains the source node
-				const sourcePipelineId = connection.source!.split(':')[0];
-				const targetPipelineId = connection.target!.split(':')[0];
-				if (sourcePipelineId !== targetPipelineId) return prev; // Cross-pipeline connections not supported
+		const sourceNodeId = connection.source.split(':').slice(1).join(':');
+		const targetNodeId = connection.target.split(':').slice(1).join(':');
 
-				const newPipelines = prev.pipelines.map((pipeline) => {
-					if (pipeline.id !== sourcePipelineId) return pipeline;
+		setPipelineState((prev) => {
+			const pipeline = prev.pipelines.find((p) => p.id === sourcePipelineId);
+			if (!pipeline) return prev;
 
-					const sourceNodeId = connection.source!.split(':').slice(1).join(':');
-					const targetNodeId = connection.target!.split(':').slice(1).join(':');
+			// Validate: can't connect into a trigger
+			const targetNode = pipeline.nodes.find((n) => n.id === targetNodeId);
+			if (!targetNode || targetNode.type === 'trigger') return prev;
 
-					const newEdge = {
-						id: `edge-${Date.now()}`,
-						source: sourceNodeId,
-						target: targetNodeId,
-						mode: 'pass' as const,
-					};
+			const newEdge = {
+				id: `edge-${Date.now()}`,
+				source: sourceNodeId,
+				target: targetNodeId,
+				mode: 'pass' as const,
+			};
 
-					return { ...pipeline, edges: [...pipeline.edges, newEdge] };
-				});
-
-				return { ...prev, pipelines: newPipelines };
-			});
-		},
-		[nodes]
-	);
+			return {
+				...prev,
+				pipelines: prev.pipelines.map((p) => {
+					if (p.id !== sourcePipelineId) return p;
+					return { ...p, edges: [...p.edges, newEdge] };
+				}),
+			};
+		});
+	}, []);
 
 	// Connection validation: prevent invalid edges
 	const isValidConnection = useCallback(
@@ -1024,12 +1060,14 @@ function CuePipelineEditorInner({
 
 	const onDragOver = useCallback((event: React.DragEvent) => {
 		event.preventDefault();
+		event.stopPropagation();
 		event.dataTransfer.dropEffect = 'move';
 	}, []);
 
 	const onDrop = useCallback(
 		(event: React.DragEvent) => {
 			event.preventDefault();
+			event.stopPropagation();
 
 			const raw = event.dataTransfer.getData('application/cue-pipeline');
 			if (!raw) return;
@@ -1170,6 +1208,7 @@ function CuePipelineEditorInner({
 						onCreatePipeline={createPipeline}
 						onDeletePipeline={deletePipeline}
 						onRenamePipeline={renamePipeline}
+						onChangePipelineColor={changePipelineColor}
 						textColor={theme.colors.textMain}
 						borderColor={theme.colors.border}
 					/>
@@ -1495,6 +1534,7 @@ function CuePipelineEditorInner({
 					<NodeConfigPanel
 						selectedNode={selectedNode}
 						pipelines={pipelineState.pipelines}
+						hasOutgoingEdge={selectedNodeHasOutgoingEdge}
 						onUpdateNode={onUpdateNode}
 						onDeleteNode={onDeleteNode}
 						onSwitchToAgent={onSwitchToSession}

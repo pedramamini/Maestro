@@ -120,7 +120,8 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 			// Single target
 			const agent = agentTargets[0];
 			const agentData = agent.data as AgentNodeData;
-			sub.prompt = agentData.prompt ?? '';
+			sub.prompt = agentData.inputPrompt ?? '';
+			if (agentData.outputPrompt) sub.output_prompt = agentData.outputPrompt;
 			// The target session is implicit (the session this YAML belongs to)
 			// but we can note it for clarity
 			subscriptions.push(sub);
@@ -132,7 +133,7 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 		} else {
 			// Fan-out: multiple targets from trigger
 			sub.fan_out = agentTargets.map((a) => (a.data as AgentNodeData).sessionName);
-			sub.prompt = (agentTargets[0].data as AgentNodeData).prompt ?? '';
+			sub.prompt = (agentTargets[0].data as AgentNodeData).inputPrompt ?? '';
 			subscriptions.push(sub);
 
 			for (const agent of agentTargets) {
@@ -189,7 +190,8 @@ function buildChain(
 			name: subName,
 			event: 'agent.completed',
 			enabled: true,
-			prompt: targetData.prompt ?? '',
+			prompt: targetData.inputPrompt ?? '',
+			output_prompt: targetData.outputPrompt || undefined,
 		};
 
 		if (incomingAgentEdges.length > 1) {
@@ -251,11 +253,14 @@ export function pipelinesToYaml(pipelines: CuePipeline[], settings?: Partial<Cue
 					record.prompt = sub.prompt;
 				} else {
 					record.prompt = sub.prompt;
-					// Add comment about saving to file
 					comments.push(
 						`# NOTE: Prompt for "${sub.name}" is ${sub.prompt.length} chars - consider saving to prompts/${sub.name}.md`
 					);
 				}
+			}
+
+			if (sub.output_prompt) {
+				record.output_prompt = sub.output_prompt;
 			}
 
 			allSubscriptions.push(record);

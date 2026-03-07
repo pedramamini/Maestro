@@ -27,6 +27,7 @@ const defaultProps = {
 	onCreatePipeline: vi.fn(),
 	onDeletePipeline: vi.fn(),
 	onRenamePipeline: vi.fn(),
+	onChangePipelineColor: vi.fn(),
 };
 
 describe('PipelineSelector', () => {
@@ -114,6 +115,41 @@ describe('PipelineSelector', () => {
 		expect(onRenamePipeline).not.toHaveBeenCalled();
 		// Should be back to showing text, not input
 		expect(screen.getByText('Deploy Pipeline')).toBeInTheDocument();
+	});
+
+	it('should enter rename mode when pencil icon is clicked', () => {
+		const onRenamePipeline = vi.fn();
+		render(<PipelineSelector {...defaultProps} onRenamePipeline={onRenamePipeline} />);
+
+		fireEvent.click(screen.getByRole('button', { name: /All Pipelines/i }));
+
+		const pencilButtons = screen.getAllByTitle('Rename pipeline');
+		expect(pencilButtons.length).toBeGreaterThan(0);
+
+		fireEvent.click(pencilButtons[0]);
+
+		const input = screen.getByDisplayValue('Deploy Pipeline');
+		expect(input).toBeInTheDocument();
+	});
+
+	it('should show color picker when color dot is clicked', () => {
+		const onChangePipelineColor = vi.fn();
+		render(<PipelineSelector {...defaultProps} onChangePipelineColor={onChangePipelineColor} />);
+
+		fireEvent.click(screen.getByRole('button', { name: /All Pipelines/i }));
+
+		// Click the first color dot (has title "Change color")
+		const colorDots = screen.getAllByTitle('Change color');
+		expect(colorDots.length).toBeGreaterThan(0);
+		fireEvent.click(colorDots[0]);
+
+		// Color palette should appear with 12 swatches
+		const swatches = screen.getAllByTitle(/^#/);
+		expect(swatches.length).toBe(12);
+
+		// Click a swatch
+		fireEvent.click(swatches[2]); // yellow #eab308
+		expect(onChangePipelineColor).toHaveBeenCalledWith('p1', '#eab308');
 	});
 
 	it('should apply custom textColor and borderColor', () => {

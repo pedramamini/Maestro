@@ -5,7 +5,7 @@
  * All changes update immediately (debounced for text inputs).
  */
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import {
 	Trash2,
 	Clock,
@@ -28,6 +28,7 @@ import { useDebouncedCallback } from '../../../hooks/utils';
 interface NodeConfigPanelProps {
 	selectedNode: PipelineNode | null;
 	pipelines: CuePipeline[];
+	hasOutgoingEdge?: boolean;
 	onUpdateNode: (nodeId: string, data: Partial<TriggerNodeData | AgentNodeData>) => void;
 	onDeleteNode: (nodeId: string) => void;
 	onSwitchToAgent?: (sessionId: string) => void;
@@ -217,33 +218,55 @@ function TriggerConfig({
 function AgentConfig({
 	node,
 	pipelines,
+	hasOutgoingEdge,
 	onUpdateNode,
 	onSwitchToAgent,
 }: {
 	node: PipelineNode;
 	pipelines: CuePipeline[];
+	hasOutgoingEdge?: boolean;
 	onUpdateNode: NodeConfigPanelProps['onUpdateNode'];
 	onSwitchToAgent?: (sessionId: string) => void;
 }) {
 	const data = node.data as AgentNodeData;
-	const [localPrompt, setLocalPrompt] = useState(data.prompt ?? '');
-	const promptRef = useRef<HTMLTextAreaElement>(null);
+	const [localInputPrompt, setLocalInputPrompt] = useState(data.inputPrompt ?? '');
+	const [localOutputPrompt, setLocalOutputPrompt] = useState(data.outputPrompt ?? '');
 
 	useEffect(() => {
-		setLocalPrompt(data.prompt ?? '');
-	}, [data.prompt]);
+		setLocalInputPrompt(data.inputPrompt ?? '');
+	}, [data.inputPrompt]);
 
-	const { debouncedCallback: debouncedUpdate } = useDebouncedCallback((...args: unknown[]) => {
-		const prompt = args[0] as string;
-		onUpdateNode(node.id, { prompt } as Partial<AgentNodeData>);
+	useEffect(() => {
+		setLocalOutputPrompt(data.outputPrompt ?? '');
+	}, [data.outputPrompt]);
+
+	const { debouncedCallback: debouncedUpdateInput } = useDebouncedCallback((...args: unknown[]) => {
+		const inputPrompt = args[0] as string;
+		onUpdateNode(node.id, { inputPrompt } as Partial<AgentNodeData>);
 	}, 300);
 
-	const handlePromptChange = useCallback(
-		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
-			setLocalPrompt(e.target.value);
-			debouncedUpdate(e.target.value);
+	const { debouncedCallback: debouncedUpdateOutput } = useDebouncedCallback(
+		(...args: unknown[]) => {
+			const outputPrompt = args[0] as string;
+			onUpdateNode(node.id, { outputPrompt } as Partial<AgentNodeData>);
 		},
-		[debouncedUpdate]
+		300
+	);
+
+	const handleInputPromptChange = useCallback(
+		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+			setLocalInputPrompt(e.target.value);
+			debouncedUpdateInput(e.target.value);
+		},
+		[debouncedUpdateInput]
+	);
+
+	const handleOutputPromptChange = useCallback(
+		(e: React.ChangeEvent<HTMLTextAreaElement>) => {
+			setLocalOutputPrompt(e.target.value);
+			debouncedUpdateOutput(e.target.value);
+		},
+		[debouncedUpdateOutput]
 	);
 
 	// Find which pipelines contain this agent
@@ -253,79 +276,121 @@ function AgentConfig({
 		)
 	);
 
+	const outputDisabled = !hasOutgoingEdge;
+
 	return (
 		<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
-			<label style={labelStyle}>
-				System Prompt Extension
-				<textarea
-					ref={promptRef}
-					value={localPrompt}
-					onChange={handlePromptChange}
-					rows={4}
-					placeholder="Optional prompt appended when this agent receives data from the pipeline..."
-					style={{
-						...inputStyle,
-						resize: 'vertical',
-						fontFamily: 'inherit',
-						lineHeight: 1.4,
-					}}
-				/>
-			</label>
-			<div style={{ color: '#6b7280', fontSize: 10, textAlign: 'right' }}>
-				{localPrompt.length} characters
-			</div>
-
-			{agentPipelines.length > 0 && (
-				<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6, marginTop: 4 }}>
-					{agentPipelines.map((p) => (
-						<span
-							key={p.id}
+			<div style={{ display: 'flex', gap: 12, flex: 1 }}>
+				{/* Input Prompt */}
+				<div style={{ flex: 1, display: 'flex', flexDirection: 'column' }}>
+					<label style={labelStyle}>
+						Input Prompt
+						<textarea
+							value={localInputPrompt}
+							onChange={handleInputPromptChange}
+							rows={3}
+							placeholder="Prompt sent when this agent receives data from the pipeline..."
 							style={{
-								display: 'inline-flex',
-								alignItems: 'center',
-								gap: 4,
-								fontSize: 11,
-								color: '#9ca3af',
+								...inputStyle,
+								resize: 'vertical',
+								fontFamily: 'inherit',
+								lineHeight: 1.4,
 							}}
-						>
-							<span
-								style={{
-									width: 8,
-									height: 8,
-									borderRadius: '50%',
-									backgroundColor: p.color,
-									display: 'inline-block',
-								}}
-							/>
-							{p.name}
-						</span>
-					))}
+						/>
+					</label>
+					<div style={{ color: '#6b7280', fontSize: 10, textAlign: 'right' }}>
+						{localInputPrompt.length} chars
+					</div>
 				</div>
-			)}
 
-			{onSwitchToAgent && (
-				<button
-					onClick={() => onSwitchToAgent(data.sessionId)}
+				{/* Output Prompt */}
+				<div
 					style={{
-						display: 'inline-flex',
-						alignItems: 'center',
-						gap: 4,
-						padding: '4px 10px',
-						fontSize: 11,
-						fontWeight: 500,
-						color: '#06b6d4',
-						backgroundColor: 'transparent',
-						border: '1px solid #06b6d440',
-						borderRadius: 4,
-						cursor: 'pointer',
-						alignSelf: 'flex-start',
-						marginTop: 4,
+						flex: 1,
+						display: 'flex',
+						flexDirection: 'column',
+						opacity: outputDisabled ? 0.35 : 1,
+						transition: 'opacity 0.15s',
 					}}
 				>
-					<ExternalLink size={11} />
-					Switch to Agent
-				</button>
-			)}
+					<label style={labelStyle}>
+						Output Prompt
+						<textarea
+							value={localOutputPrompt}
+							onChange={handleOutputPromptChange}
+							rows={3}
+							disabled={outputDisabled}
+							placeholder={
+								outputDisabled
+									? 'Connect an outgoing edge to enable...'
+									: 'Prompt executed after task completion to pass data to next agent...'
+							}
+							style={{
+								...inputStyle,
+								resize: 'vertical',
+								fontFamily: 'inherit',
+								lineHeight: 1.4,
+								cursor: outputDisabled ? 'not-allowed' : undefined,
+							}}
+						/>
+					</label>
+					<div style={{ color: '#6b7280', fontSize: 10, textAlign: 'right' }}>
+						{localOutputPrompt.length} chars
+					</div>
+				</div>
+			</div>
+
+			<div style={{ display: 'flex', alignItems: 'center', gap: 8, flexWrap: 'wrap' }}>
+				{agentPipelines.length > 0 && (
+					<div style={{ display: 'flex', flexWrap: 'wrap', gap: 6 }}>
+						{agentPipelines.map((p) => (
+							<span
+								key={p.id}
+								style={{
+									display: 'inline-flex',
+									alignItems: 'center',
+									gap: 4,
+									fontSize: 11,
+									color: '#9ca3af',
+								}}
+							>
+								<span
+									style={{
+										width: 8,
+										height: 8,
+										borderRadius: '50%',
+										backgroundColor: p.color,
+										display: 'inline-block',
+									}}
+								/>
+								{p.name}
+							</span>
+						))}
+					</div>
+				)}
+
+				{onSwitchToAgent && (
+					<button
+						onClick={() => onSwitchToAgent(data.sessionId)}
+						style={{
+							display: 'inline-flex',
+							alignItems: 'center',
+							gap: 4,
+							padding: '4px 10px',
+							fontSize: 11,
+							fontWeight: 500,
+							color: '#06b6d4',
+							backgroundColor: 'transparent',
+							border: '1px solid #06b6d440',
+							borderRadius: 4,
+							cursor: 'pointer',
+						}}
+					>
+						<ExternalLink size={11} />
+						Switch to Agent
+					</button>
+				)}
+			</div>
 		</div>
 	);
 }
@@ -333,6 +398,7 @@ function AgentConfig({
 export function NodeConfigPanel({
 	selectedNode,
 	pipelines,
+	hasOutgoingEdge,
 	onUpdateNode,
 	onDeleteNode,
 	onSwitchToAgent,
@@ -451,6 +517,7 @@ export function NodeConfigPanel({
 					<AgentConfig
 						node={selectedNode}
 						pipelines={pipelines}
+						hasOutgoingEdge={hasOutgoingEdge}
 						onUpdateNode={onUpdateNode}
 						onSwitchToAgent={onSwitchToAgent}
 					/>

@@ -13,10 +13,11 @@ import {
 import type { CueEventType } from '../../../../shared/cue-pipeline-types';
 
 export interface TriggerNodeDataProps {
+	compositeId: string;
 	eventType: CueEventType;
 	label: string;
 	configSummary: string;
-	onConfigure?: () => void;
+	onConfigure?: (compositeId: string) => void;
 }
 
 const EVENT_COLORS: Record<CueEventType, string> = {
@@ -47,7 +48,7 @@ export const TriggerNode = memo(function TriggerNode({
 	return (
 		<div
 			style={{
-				width: 200,
+				width: 220,
 				height: 60,
 				borderRadius: 9999,
 				backgroundColor: `${color}18`,
@@ -55,9 +56,9 @@ export const TriggerNode = memo(function TriggerNode({
 				boxShadow: selected ? `0 0 12px ${color}40` : undefined,
 				display: 'flex',
 				flexDirection: 'row',
-				alignItems: 'center',
-				padding: '0 6px',
-				cursor: 'grab',
+				alignItems: 'stretch',
+				overflow: 'hidden',
+				cursor: 'default',
 				transition: 'border-color 0.15s, box-shadow 0.15s',
 			}}
 		>
@@ -65,18 +66,28 @@ export const TriggerNode = memo(function TriggerNode({
 			<div
 				className="drag-handle"
 				style={{
+					width: 32,
 					display: 'flex',
 					alignItems: 'center',
 					justifyContent: 'center',
 					cursor: 'grab',
-					color: `${color}80`,
+					color: '#555',
 					flexShrink: 0,
-					padding: '4px 6px',
-					borderRadius: 4,
+					backgroundColor: color,
+					borderRadius: '9999px 0 0 9999px',
+					transition: 'color 0.15s, filter 0.15s',
+				}}
+				onMouseEnter={(e) => {
+					e.currentTarget.style.color = '#fff';
+					e.currentTarget.style.filter = 'brightness(1.3)';
+				}}
+				onMouseLeave={(e) => {
+					e.currentTarget.style.color = '#555';
+					e.currentTarget.style.filter = 'brightness(1)';
 				}}
 				title="Drag to move"
 			>
-				<GripVertical size={14} />
+				<GripVertical size={16} />
 			</div>
 
 			{/* Content */}
@@ -134,7 +145,7 @@ export const TriggerNode = memo(function TriggerNode({
 			<div
 				onClick={(e) => {
 					e.stopPropagation();
-					data.onConfigure?.();
+					data.onConfigure?.(data.compositeId);
 				}}
 				style={{
 					display: 'flex',
@@ -144,7 +155,7 @@ export const TriggerNode = memo(function TriggerNode({
 					color: selected ? color : `${color}60`,
 					flexShrink: 0,
 					padding: '4px 4px',
-					marginRight: 6,
+					marginRight: 14,
 					borderRadius: 4,
 					transition: 'color 0.15s',
 				}}

@@ -27,6 +27,7 @@ interface GraphSessionInput {
 		event: string;
 		enabled: boolean;
 		prompt?: string;
+		output_prompt?: string;
 		interval_minutes?: number;
 		watch?: string;
 		source_session?: string | string[];
@@ -243,9 +244,12 @@ export function subscriptionsToPipelines(
 						sessionColumn.set(sessionName, 1);
 						sessionRow.set(sessionName, i);
 
-						// Set prompt on first fan-out target if present
+						// Set prompts on first fan-out target if present
 						if (i === 0 && sub.prompt) {
-							(agentNode.data as AgentNodeData).prompt = sub.prompt;
+							(agentNode.data as AgentNodeData).inputPrompt = sub.prompt;
+						}
+						if (i === 0 && sub.output_prompt) {
+							(agentNode.data as AgentNodeData).outputPrompt = sub.output_prompt;
 						}
 
 						edges.push({
@@ -272,7 +276,10 @@ export function subscriptionsToPipelines(
 						sessionRow.set(targetSessionName, triggerCount - 1);
 
 						if (sub.prompt) {
-							(agentNode.data as AgentNodeData).prompt = sub.prompt;
+							(agentNode.data as AgentNodeData).inputPrompt = sub.prompt;
+						}
+						if (sub.output_prompt) {
+							(agentNode.data as AgentNodeData).outputPrompt = sub.output_prompt;
 						}
 
 						edges.push({
@@ -313,7 +320,10 @@ export function subscriptionsToPipelines(
 				sessionRow.set(targetSessionName, existingRows);
 
 				if (sub.prompt) {
-					(targetNode.data as AgentNodeData).prompt = sub.prompt;
+					(targetNode.data as AgentNodeData).inputPrompt = sub.prompt;
+				}
+				if (sub.output_prompt) {
+					(targetNode.data as AgentNodeData).outputPrompt = sub.output_prompt;
 				}
 
 				// Create edges from source(s) to target

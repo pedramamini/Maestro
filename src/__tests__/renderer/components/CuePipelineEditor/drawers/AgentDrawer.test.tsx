@@ -119,6 +119,43 @@ describe('AgentDrawer', () => {
 		expect(screen.getByText('🚀 Ops')).toBeInTheDocument();
 	});
 
+	it('should alphabetize groups and agents within groups', () => {
+		const groups = [
+			{ id: 'grp-z', name: 'Zeta', emoji: '⚡' },
+			{ id: 'grp-a', name: 'Alpha', emoji: '🅰️' },
+		];
+		const sessions = [
+			{ id: 's1', name: 'Charlie', toolType: 'claude-code', groupId: 'grp-a' },
+			{ id: 's2', name: 'Alice', toolType: 'claude-code', groupId: 'grp-a' },
+			{ id: 's3', name: 'Bravo', toolType: 'codex', groupId: 'grp-z' },
+			{ id: 's4', name: 'Delta', toolType: 'codex', groupId: 'grp-z' },
+			{ id: 's5', name: 'Echo', toolType: 'codex' }, // ungrouped
+		];
+
+		const { container } = render(
+			<AgentDrawer
+				isOpen={true}
+				onClose={() => {}}
+				sessions={sessions}
+				groups={groups}
+				theme={mockTheme}
+			/>
+		);
+
+		// Verify group order: Alpha before Zeta, Ungrouped last
+		const groupHeaders = container.querySelectorAll('[style*="text-transform: uppercase"]');
+		const headerTexts = Array.from(groupHeaders).map((el) => el.textContent);
+		expect(headerTexts).toEqual(['🅰️ Alpha', '⚡ Zeta', 'Ungrouped']);
+
+		// Verify agent order within each group by checking DOM order
+		// Each draggable row: <div draggable> > <svg(Bot)> > <div(flex)> > <div(name)> + <div(toolType)>
+		// The name is in the first div child with fontWeight:500
+		const agentNames = Array.from(container.querySelectorAll('[draggable="true"]')).map(
+			(el) => el.querySelector('[style*="font-weight: 500"]')?.textContent
+		);
+		expect(agentNames).toEqual(['Alice', 'Charlie', 'Bravo', 'Delta', 'Echo']);
+	});
+
 	it('should use theme colors for styling', () => {
 		render(
 			<AgentDrawer isOpen={true} onClose={() => {}} sessions={mockSessions} theme={mockTheme} />
