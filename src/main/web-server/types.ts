@@ -263,7 +263,7 @@ export type SwitchModeCallback = (sessionId: string, mode: 'ai' | 'terminal') =>
  * This forwards to the renderer which handles state updates and broadcasts.
  * Optional tabId to also switch to a specific tab within the session.
  */
-export type SelectSessionCallback = (sessionId: string, tabId?: string) => Promise<boolean>;
+export type SelectSessionCallback = (sessionId: string, tabId?: string, focus?: boolean) => Promise<boolean>;
 
 /**
  * Tab operation callbacks for multi-tab support.
