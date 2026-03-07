@@ -922,6 +922,8 @@ function SessionListInner(props: SessionListProps) {
 					{/* GROUPS */}
 					{sortedGroups.map((group) => {
 						const groupSessions = sortedGroupSessionsById.get(group.id) || [];
+						// Hide empty groups when filtering by unread agents
+						if (showUnreadAgentsOnly && groupSessions.length === 0) return null;
 						return (
 							<div key={group.id} className="mb-1">
 								<div
@@ -1060,21 +1062,23 @@ function SessionListInner(props: SessionListProps) {
 									renderSessionWithWorktrees(session, 'flat', { keyPrefix: 'flat' })
 								)}
 							</div>
-							<div className="mt-4 px-3">
-								<button
-									onClick={createNewGroup}
-									className="w-full px-2 py-1.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center justify-center gap-1"
-									style={{
-										backgroundColor: theme.colors.accent + '20',
-										color: theme.colors.accent,
-										border: `1px solid ${theme.colors.accent}40`,
-									}}
-									title="Create new group"
-								>
-									<Plus className="w-3 h-3" />
-									<span>New Group</span>
-								</button>
-							</div>
+							{!showUnreadAgentsOnly && (
+								<div className="mt-4 px-3">
+									<button
+										onClick={createNewGroup}
+										className="w-full px-2 py-1.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center justify-center gap-1"
+										style={{
+											backgroundColor: theme.colors.accent + '20',
+											color: theme.colors.accent,
+											border: `1px solid ${theme.colors.accent}40`,
+										}}
+										title="Create new group"
+									>
+										<Plus className="w-3 h-3" />
+										<span>New Group</span>
+									</button>
+								</div>
+							)}
 						</>
 					) : groups.length > 0 && ungroupedSessions.length > 0 ? (
 						/* UNGROUPED FOLDER - Groups exist and there are ungrouped agents */
@@ -1097,22 +1101,24 @@ function SessionListInner(props: SessionListProps) {
 									<Folder className="w-3.5 h-3.5" />
 									<span>Ungrouped Agents</span>
 								</div>
-								<button
-									onClick={(e) => {
-										e.stopPropagation();
-										createNewGroup();
-									}}
-									className="px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
-									style={{
-										backgroundColor: theme.colors.accent + '20',
-										color: theme.colors.accent,
-										border: `1px solid ${theme.colors.accent}40`,
-									}}
-									title="Create new group"
-								>
-									<Plus className="w-3 h-3" />
-									<span>New Group</span>
-								</button>
+								{!showUnreadAgentsOnly && (
+									<button
+										onClick={(e) => {
+											e.stopPropagation();
+											createNewGroup();
+										}}
+										className="px-2 py-0.5 rounded-full text-[10px] font-medium hover:opacity-80 transition-opacity flex items-center gap-1"
+										style={{
+											backgroundColor: theme.colors.accent + '20',
+											color: theme.colors.accent,
+											border: `1px solid ${theme.colors.accent}40`,
+										}}
+										title="Create new group"
+									>
+										<Plus className="w-3 h-3" />
+										<span>New Group</span>
+									</button>
+								)}
 							</div>
 
 							{!ungroupedCollapsed ? (
@@ -1148,7 +1154,7 @@ function SessionListInner(props: SessionListProps) {
 								</div>
 							)}
 						</div>
-					) : groups.length > 0 ? (
+					) : groups.length > 0 && !showUnreadAgentsOnly ? (
 						/* NO UNGROUPED AGENTS - Show drop zone for ungrouping + New Group button */
 						<div className="mt-4 px-3" onDragOver={handleDragOver} onDrop={handleDropOnUngrouped}>
 							{/* Drop zone indicator when dragging */}
