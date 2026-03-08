@@ -718,4 +718,419 @@ describe('GeminiSessionStorage', () => {
 			expect(sessions[0].origin).toBeUndefined();
 		});
 	});
+
+	describe('searchSessions', () => {
+		function mockMultipleSessionFiles(sessionsMap: Record<string, string>) {
+			const filenames = Object.keys(sessionsMap);
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				for (const [filename, content] of Object.entries(sessionsMap)) {
+					if (filePath.endsWith(filename)) {
+						return Promise.resolve(content);
+					}
+				}
+				return Promise.reject(new Error('ENOENT'));
+			});
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue(filenames);
+			(fs.stat as ReturnType<typeof vi.fn>).mockResolvedValue({
+				size: 1000,
+				mtimeMs: Date.now(),
+				isDirectory: () => true,
+			});
+		}
+
+		it('should return empty array for empty query', async () => {
+			const results = await storage.searchSessions('/test/project', '  ', 'all');
+			expect(results).toEqual([]);
+		});
+
+		it('should return empty array when no history dir exists', async () => {
+			(fs.access as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ENOENT'));
+			(fs.readdir as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ENOENT'));
+
+			const results = await storage.searchSessions('/test/project', 'hello', 'all');
+			expect(results).toEqual([]);
+		});
+
+		it('should find sessions by user message content', async () => {
+			mockMultipleSessionFiles({
+				'session-100-sess-a.json': buildSessionJson(
+					[
+						{ type: 'user', content: 'Hello world' },
+						{ type: 'gemini', content: 'Hi there!' },
+					],
+					'sess-a'
+				),
+				'session-200-sess-b.json': buildSessionJson(
+					[
+						{ type: 'user', content: 'Goodbye' },
+						{ type: 'gemini', content: 'Bye!' },
+					],
+					'sess-b'
+				),
+			});
+
+			const results = await storage.searchSessions('/test/project', 'Hello', 'user');
+			expect(results).toHaveLength(1);
+			expect(results[0].sessionId).toBe('sess-a');
+			expect(results[0].matchType).toBe('user');
+			expect(results[0].matchCount).toBe(1);
+		});
+
+		it('should find sessions by assistant message content', async () => {
+			mockMultipleSessionFiles({
+				'session-100-sess-a.json': buildSessionJson(
+					[
+						{ type: 'user', content: 'Question' },
+						{ type: 'gemini', content: 'The answer is 42' },
+					],
+					'sess-a'
+				),
+			});
+
+			const results = await storage.searchSessions('/test/project', 'answer', 'assistant');
+			expect(results).toHaveLength(1);
+			expect(results[0].matchType).toBe('assistant');
+		});
+
+		it('should find sessions by title (summary)', async () => {
+			const content = JSON.stringify({
+				sessionId: 'sess-a',
+				messages: [
+					{ type: 'user', content: 'Do something' },
+					{ type: 'gemini', content: 'Done' },
+				],
+				summary: 'Debugging the auth module',
+				startTime: '2026-01-01T00:00:00.000Z',
+				lastUpdated: '2026-01-01T01:00:00.000Z',
+			});
+
+			mockMultipleSessionFiles({
+				'session-100-sess-a.json': content,
+			});
+
+			const results = await storage.searchSessions('/test/project', 'auth module', 'title');
+			expect(results).toHaveLength(1);
+			expect(results[0].matchType).toBe('title');
+		});
+
+		it('should search all modes and prioritize title > user > assistant', async () => {
+			const content = JSON.stringify({
+				sessionId: 'sess-a',
+				messages: [
+					{ type: 'user', content: 'keyword in user' },
+					{ type: 'gemini', content: 'keyword in assistant' },
+				],
+				summary: 'keyword in title',
+				startTime: '2026-01-01T00:00:00.000Z',
+				lastUpdated: '2026-01-01T01:00:00.000Z',
+			});
+
+			mockMultipleSessionFiles({
+				'session-100-sess-a.json': content,
+			});
+
+			const results = await storage.searchSessions('/test/project', 'keyword', 'all');
+			expect(results).toHaveLength(1);
+			// Title match takes priority in 'all' mode
+			expect(results[0].matchType).toBe('title');
+		});
+
+		it('should return no results when query does not match', async () => {
+			mockMultipleSessionFiles({
+				'session-100-sess-a.json': buildSessionJson(
+					[
+						{ type: 'user', content: 'Hello' },
+						{ type: 'gemini', content: 'Hi!' },
+					],
+					'sess-a'
+				),
+			});
+
+			const results = await storage.searchSessions('/test/project', 'nonexistent', 'all');
+			expect(results).toEqual([]);
+		});
+
+		it('should skip empty session files', async () => {
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				return Promise.resolve(
+					buildSessionJson(
+						[
+							{ type: 'user', content: 'findme' },
+							{ type: 'gemini', content: 'ok' },
+						],
+						'sess-a'
+					)
+				);
+			});
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue([
+				'session-100-sess-a.json',
+				'session-200-sess-empty.json',
+			]);
+			(fs.stat as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.includes('sess-empty')) {
+					return Promise.resolve({ size: 0, mtimeMs: Date.now(), isDirectory: () => true });
+				}
+				return Promise.resolve({ size: 1000, mtimeMs: Date.now(), isDirectory: () => true });
+			});
+
+			const results = await storage.searchSessions('/test/project', 'findme', 'all');
+			expect(results).toHaveLength(1);
+			expect(results[0].sessionId).toBe('sess-a');
+		});
+
+		it('should not call listSessions or findSessionFile (no double-read)', async () => {
+			mockMultipleSessionFiles({
+				'session-100-sess-a.json': buildSessionJson(
+					[
+						{ type: 'user', content: 'test' },
+						{ type: 'gemini', content: 'ok' },
+					],
+					'sess-a'
+				),
+			});
+
+			await storage.searchSessions('/test/project', 'test', 'all');
+
+			// readdir should be called exactly once (for findSessionFiles),
+			// NOT twice (which would happen if listSessions was called + findSessionFile for each)
+			const readdirCalls = (fs.readdir as ReturnType<typeof vi.fn>).mock.calls.filter(
+				(call: unknown[]) => !(call[0] as string).endsWith('.gemini/history')
+			);
+			// Only the session dir readdir, not base history dir scan
+			expect(readdirCalls.length).toBeLessThanOrEqual(1);
+		});
+	});
+
+	describe('listSessionsPaginated', () => {
+		function mockPaginatedFiles(count: number) {
+			const filenames = Array.from(
+				{ length: count },
+				(_, i) => `session-${String(i).padStart(3, '0')}-sess-${i}.json`
+			);
+
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue(filenames);
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				// Extract session ID from the file path
+				const match = filePath.match(/sess-(\d+)\.json$/);
+				const idx = match ? parseInt(match[1], 10) : 0;
+				return Promise.resolve(
+					buildSessionJson(
+						[
+							{ type: 'user', content: `Message ${idx}` },
+							{ type: 'gemini', content: `Response ${idx}` },
+						],
+						`sess-${idx}`
+					)
+				);
+			});
+			// Each file gets a different mtime for sorting (higher index = newer)
+			(fs.stat as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				const match = (filePath as string).match(/sess-(\d+)\.json$/);
+				const idx = match ? parseInt(match[1], 10) : 0;
+				return Promise.resolve({
+					size: 1000,
+					mtimeMs: 1000000 + idx * 1000,
+					mtime: new Date(1000000 + idx * 1000),
+					isDirectory: () => true,
+				});
+			});
+		}
+
+		it('should return first page of sessions', async () => {
+			mockPaginatedFiles(5);
+
+			const result = await storage.listSessionsPaginated('/test/project', { limit: 3 });
+
+			expect(result.sessions).toHaveLength(3);
+			expect(result.totalCount).toBe(5);
+			expect(result.hasMore).toBe(true);
+			expect(result.nextCursor).toBeDefined();
+		});
+
+		it('should return all sessions when limit exceeds count', async () => {
+			mockPaginatedFiles(3);
+
+			const result = await storage.listSessionsPaginated('/test/project', { limit: 10 });
+
+			expect(result.sessions).toHaveLength(3);
+			expect(result.totalCount).toBe(3);
+			expect(result.hasMore).toBe(false);
+			expect(result.nextCursor).toBeNull();
+		});
+
+		it('should paginate from cursor position', async () => {
+			mockPaginatedFiles(5);
+
+			// First page
+			const page1 = await storage.listSessionsPaginated('/test/project', { limit: 2 });
+			expect(page1.sessions).toHaveLength(2);
+			expect(page1.hasMore).toBe(true);
+
+			// Second page using cursor
+			const page2 = await storage.listSessionsPaginated('/test/project', {
+				limit: 2,
+				cursor: page1.nextCursor!,
+			});
+			expect(page2.sessions).toHaveLength(2);
+			expect(page2.hasMore).toBe(true);
+
+			// Third page
+			const page3 = await storage.listSessionsPaginated('/test/project', {
+				limit: 2,
+				cursor: page2.nextCursor!,
+			});
+			expect(page3.sessions).toHaveLength(1);
+			expect(page3.hasMore).toBe(false);
+
+			// No duplicates across pages
+			const allIds = [
+				...page1.sessions.map((s) => s.sessionId),
+				...page2.sessions.map((s) => s.sessionId),
+				...page3.sessions.map((s) => s.sessionId),
+			];
+			expect(new Set(allIds).size).toBe(5);
+		});
+
+		it('should return empty result when no history dir exists', async () => {
+			(fs.access as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ENOENT'));
+			(fs.readdir as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('ENOENT'));
+
+			const result = await storage.listSessionsPaginated('/test/project');
+
+			expect(result.sessions).toEqual([]);
+			expect(result.totalCount).toBe(0);
+			expect(result.hasMore).toBe(false);
+		});
+
+		it('should sort by mtime descending (newest first)', async () => {
+			mockPaginatedFiles(3);
+
+			const result = await storage.listSessionsPaginated('/test/project', { limit: 10 });
+
+			// Higher index = newer mtime, so should come first
+			expect(result.sessions[0].sessionId).toBe('sess-2');
+			expect(result.sessions[1].sessionId).toBe('sess-1');
+			expect(result.sessions[2].sessionId).toBe('sess-0');
+		});
+
+		it('should only parse files in page range (not all files)', async () => {
+			mockPaginatedFiles(10);
+
+			await storage.listSessionsPaginated('/test/project', { limit: 3 });
+
+			// readFile should be called for .project_root + only 3 session files (not all 10)
+			const readFileCalls = (fs.readFile as ReturnType<typeof vi.fn>).mock.calls;
+			const sessionReadCalls = readFileCalls.filter(
+				(call: unknown[]) =>
+					(call[0] as string).includes('sess-') && (call[0] as string).endsWith('.json')
+			);
+			expect(sessionReadCalls.length).toBe(3);
+		});
+
+		it('should skip empty files', async () => {
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue([
+				'session-100-sess-a.json',
+				'session-200-sess-empty.json',
+			]);
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				return Promise.resolve(
+					buildSessionJson(
+						[
+							{ type: 'user', content: 'Hello' },
+							{ type: 'gemini', content: 'Hi' },
+						],
+						'sess-a'
+					)
+				);
+			});
+			(fs.stat as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if ((filePath as string).includes('sess-empty')) {
+					return Promise.resolve({ size: 0, mtimeMs: Date.now(), isDirectory: () => true });
+				}
+				return Promise.resolve({ size: 1000, mtimeMs: Date.now(), isDirectory: () => true });
+			});
+
+			const result = await storage.listSessionsPaginated('/test/project');
+			expect(result.sessions).toHaveLength(1);
+			expect(result.totalCount).toBe(1);
+		});
+	});
+
+	describe('getHistoryDir caching', () => {
+		it('should cache getHistoryDir results and return cached value on second call', async () => {
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				return Promise.resolve(buildSessionJson([], 'test'));
+			});
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue([]);
+			(fs.stat as ReturnType<typeof vi.fn>).mockResolvedValue({
+				size: 0,
+				mtimeMs: Date.now(),
+				isDirectory: () => true,
+			});
+
+			// First call — triggers filesystem access
+			await storage.listSessions('/test/project');
+			const accessCallCount1 = (fs.access as ReturnType<typeof vi.fn>).mock.calls.length;
+
+			// Second call — should use cache (no new fs.access calls for getHistoryDir)
+			await storage.listSessions('/test/project');
+			const accessCallCount2 = (fs.access as ReturnType<typeof vi.fn>).mock.calls.length;
+
+			// Second call should NOT add new access calls for directory resolution
+			expect(accessCallCount2).toBe(accessCallCount1);
+		});
+	});
+
+	describe('bounded concurrency in listSessions', () => {
+		it('should process multiple session files concurrently', async () => {
+			const filenames = Array.from({ length: 5 }, (_, i) => `session-${i}-sess-${i}.json`);
+
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue(filenames);
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				return Promise.resolve(
+					buildSessionJson(
+						[
+							{ type: 'user', content: 'Hello' },
+							{ type: 'gemini', content: 'Hi!' },
+						],
+						'test'
+					)
+				);
+			});
+			(fs.stat as ReturnType<typeof vi.fn>).mockResolvedValue({
+				size: 1000,
+				mtimeMs: Date.now(),
+				isDirectory: () => true,
+			});
+
+			const sessions = await storage.listSessions('/test/project');
+
+			// All 5 files should be processed
+			expect(sessions).toHaveLength(5);
+		});
+	});
 });

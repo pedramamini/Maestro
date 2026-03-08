@@ -168,9 +168,32 @@ function formatToolCallSummaries(toolCalls: GeminiToolCall[]): string {
  *
  * Provides access to Gemini CLI's local session storage at ~/.gemini/history/
  */
+/**
+ * Concurrency-limited Promise.all — runs at most `limit` tasks in parallel.
+ */
+async function pMap<T, R>(items: T[], fn: (item: T) => Promise<R>, limit: number): Promise<R[]> {
+	const results: R[] = new Array(items.length);
+	let nextIndex = 0;
+
+	async function worker(): Promise<void> {
+		while (nextIndex < items.length) {
+			const i = nextIndex++;
+			results[i] = await fn(items[i]);
+		}
+	}
+
+	const workers = Array.from({ length: Math.min(limit, items.length) }, () => worker());
+	await Promise.all(workers);
+	return results;
+}
+
+const CONCURRENCY = 8;
+const HISTORY_DIR_CACHE_TTL_MS = 30_000;
+
 export class GeminiSessionStorage implements AgentSessionStorage {
 	readonly agentId: ToolType = 'gemini-cli' as ToolType;
 	private originsStore?: Store<AgentSessionOriginsData>;
+	private historyDirCache = new Map<string, { dir: string | null; expiresAt: number }>();
 
 	constructor(originsStore?: Store<AgentSessionOriginsData>) {
 		this.originsStore = originsStore;
@@ -190,8 +213,27 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 	/**
 	 * Get the history directory for a specific project.
 	 * First checks basename match, then falls back to scanning .project_root files.
+	 * Results are cached with a 30s TTL to avoid repeated filesystem scans.
 	 */
 	private async getHistoryDir(projectPath: string): Promise<string | null> {
+		const cacheKey = path.resolve(projectPath);
+		const cached = this.historyDirCache.get(cacheKey);
+		if (cached && cached.expiresAt > Date.now()) {
+			return cached.dir;
+		}
+
+		const result = await this.resolveHistoryDir(projectPath);
+		this.historyDirCache.set(cacheKey, {
+			dir: result,
+			expiresAt: Date.now() + HISTORY_DIR_CACHE_TTL_MS,
+		});
+		return result;
+	}
+
+	/**
+	 * Resolve the history directory for a project (uncached).
+	 */
+	private async resolveHistoryDir(projectPath: string): Promise<string | null> {
 		const baseDir = this.getBaseHistoryDir();
 		const basename = path.basename(projectPath);
 		const directPath = path.join(baseDir, basename);
@@ -341,28 +383,34 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 			return [];
 		}
 
-		const sessions: AgentSessionInfo[] = [];
+		// Parse all session files with bounded concurrency
+		const resolvedProject = path.resolve(projectPath);
+		const parsed = await pMap(
+			sessionFiles,
+			async ({ filePath, filename }) => {
+				try {
+					const fileStat = await fs.stat(filePath);
+					if (fileStat.size === 0) return null;
 
-		for (const { filePath, filename } of sessionFiles) {
-			try {
-				const fileStat = await fs.stat(filePath);
-				if (fileStat.size === 0) continue;
+					const sessionId = extractSessionIdFromFilename(filename) || filename.replace('.json', '');
+					const session = await this.parseSessionFile(filePath, sessionId, {
+						size: fileStat.size,
+						mtimeMs: fileStat.mtimeMs,
+					});
 
-				const sessionId = extractSessionIdFromFilename(filename) || filename.replace('.json', '');
-				const session = await this.parseSessionFile(filePath, sessionId, {
-					size: fileStat.size,
-					mtimeMs: fileStat.mtimeMs,
-				});
-
-				if (session) {
-					session.projectPath = path.resolve(projectPath);
-					sessions.push(session);
+					if (session) {
+						session.projectPath = resolvedProject;
+					}
+					return session;
+				} catch (error) {
+					logger.error(`Error stating Gemini session file: ${filename}`, LOG_CONTEXT, error);
+					captureException(error, { operation: 'geminiStorage:statSessionFile', filename });
+					return null;
 				}
-			} catch (error) {
-				logger.error(`Error stating Gemini session file: ${filename}`, LOG_CONTEXT, error);
-				captureException(error, { operation: 'geminiStorage:statSessionFile', filename });
-			}
-		}
+			},
+			CONCURRENCY
+		);
+		const sessions = parsed.filter((s): s is AgentSessionInfo => s !== null);
 
 		// Enrich with origin metadata (names, stars) from the origins store
 		if (this.originsStore) {
@@ -393,25 +441,90 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 	async listSessionsPaginated(
 		projectPath: string,
 		options?: SessionListOptions,
-		sshConfig?: SshRemoteConfig
+		_sshConfig?: SshRemoteConfig
 	): Promise<PaginatedSessionsResult> {
-		const allSessions = await this.listSessions(projectPath, sshConfig);
 		const { cursor, limit = 100 } = options || {};
 
+		const historyDir = await this.getHistoryDir(projectPath);
+		if (!historyDir) {
+			return { sessions: [], hasMore: false, totalCount: 0, nextCursor: null };
+		}
+
+		const sessionFiles = await this.findSessionFiles(historyDir);
+		if (sessionFiles.length === 0) {
+			return { sessions: [], hasMore: false, totalCount: 0, nextCursor: null };
+		}
+
+		// Stat files for mtime sorting (cheap — no JSON parse)
+		const filesWithStats = await pMap(
+			sessionFiles,
+			async ({ filePath, filename }) => {
+				try {
+					const stat = await fs.stat(filePath);
+					return { filePath, filename, mtimeMs: stat.mtimeMs, size: stat.size };
+				} catch {
+					return null;
+				}
+			},
+			CONCURRENCY
+		);
+
+		const validFiles = filesWithStats
+			.filter((f): f is NonNullable<typeof f> => f !== null && f.size > 0)
+			.sort((a, b) => b.mtimeMs - a.mtimeMs); // newest first
+
+		const totalCount = validFiles.length;
+
+		// Find start index based on cursor (cursor is a session ID)
 		let startIndex = 0;
 		if (cursor) {
-			const cursorIndex = allSessions.findIndex((s) => s.sessionId === cursor);
+			const cursorIndex = validFiles.findIndex((f) => {
+				const sid = extractSessionIdFromFilename(f.filename);
+				return sid === cursor;
+			});
 			startIndex = cursorIndex >= 0 ? cursorIndex + 1 : 0;
 		}
 
-		const pageSessions = allSessions.slice(startIndex, startIndex + limit);
-		const hasMore = startIndex + limit < allSessions.length;
-		const nextCursor = hasMore ? pageSessions[pageSessions.length - 1]?.sessionId : null;
+		// Only parse files in the requested page range
+		const pageFiles = validFiles.slice(startIndex, startIndex + limit);
+
+		const pageSessions = await pMap(
+			pageFiles,
+			async ({ filePath, filename, mtimeMs, size }) => {
+				const sessionId = extractSessionIdFromFilename(filename) || filename.replace('.json', '');
+				const session = await this.parseSessionFile(filePath, sessionId, { size, mtimeMs });
+				if (session) {
+					session.projectPath = path.resolve(projectPath);
+				}
+				return session;
+			},
+			CONCURRENCY
+		);
+
+		const sessions = pageSessions.filter((s): s is AgentSessionInfo => s !== null);
+
+		// Enrich with origin metadata
+		if (this.originsStore) {
+			const resolvedPath = path.resolve(projectPath);
+			const allOrigins = this.originsStore.get('origins', {});
+			const projectOrigins = allOrigins['gemini-cli']?.[resolvedPath] || {};
+			for (const session of sessions) {
+				const meta = projectOrigins[session.sessionId];
+				if (meta) {
+					if (meta.sessionName) session.sessionName = meta.sessionName;
+					if (meta.starred) session.starred = meta.starred;
+					if (meta.origin) session.origin = meta.origin;
+				}
+			}
+		}
+
+		const hasMore = startIndex + limit < totalCount;
+		const nextCursor = hasMore ? sessions[sessions.length - 1]?.sessionId : null;
 
 		return {
-			sessions: pageSessions,
+			sessions,
 			hasMore,
-			totalCount: allSessions.length,
+			totalCount,
 			nextCursor,
 		};
 	}
@@ -486,117 +599,134 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 		projectPath: string,
 		query: string,
 		searchMode: SessionSearchMode,
-		sshConfig?: SshRemoteConfig
+		_sshConfig?: SshRemoteConfig
 	): Promise<SessionSearchResult[]> {
 		const trimmedQuery = query.trim();
 		if (!trimmedQuery) {
 			return [];
 		}
 
-		const sessions = await this.listSessions(projectPath, sshConfig);
+		// Read directory once — no listSessions()+findSessionFile() double-read
+		const historyDir = await this.getHistoryDir(projectPath);
+		if (!historyDir) return [];
+
+		const sessionFiles = await this.findSessionFiles(historyDir);
+		if (sessionFiles.length === 0) return [];
+
 		const searchLower = trimmedQuery.toLowerCase();
 		const results: SessionSearchResult[] = [];
 
-		for (const session of sessions) {
-			const sessionFilePath = await this.findSessionFile(projectPath, session.sessionId);
-			if (!sessionFilePath) continue;
+		// Process files with bounded concurrency
+		await pMap(
+			sessionFiles,
+			async ({ filePath, filename }) => {
+				try {
+					const fileStat = await fs.stat(filePath);
+					if (fileStat.size === 0) return;
 
-			try {
-				const content = await fs.readFile(sessionFilePath, 'utf-8');
-				const sessionData = JSON.parse(content) as GeminiSessionFile;
+					const content = await fs.readFile(filePath, 'utf-8');
+					const sessionData = JSON.parse(content) as GeminiSessionFile;
 
-				const sessionTitleSource =
-					sessionData.summary?.trim() || getFirstUserMessageText(sessionData.messages) || '';
-				const titleMatch = sessionTitleSource
-					? sessionTitleSource.toLowerCase().includes(searchLower)
-					: false;
-				const titlePreview = titleMatch ? sessionTitleSource.slice(0, 200) : '';
-				let userMatches = 0;
-				let assistantMatches = 0;
-				let messagePreview = '';
+					const sessionId =
+						sessionData.sessionId ||
+						extractSessionIdFromFilename(filename) ||
+						filename.replace('.json', '');
 
-				for (const msg of sessionData.messages || []) {
-					if (!isConversationMessage(msg)) continue;
-					const textContent = getDisplayText(msg);
-					if (!textContent) continue;
+					const sessionTitleSource =
+						sessionData.summary?.trim() || getFirstUserMessageText(sessionData.messages) || '';
+					const titleMatch = sessionTitleSource
+						? sessionTitleSource.toLowerCase().includes(searchLower)
+						: false;
+					const titlePreview = titleMatch ? sessionTitleSource.slice(0, 200) : '';
+					let userMatches = 0;
+					let assistantMatches = 0;
+					let messagePreview = '';
 
-					const textLower = textContent.toLowerCase();
-					if (!textLower.includes(searchLower)) continue;
+					for (const msg of sessionData.messages || []) {
+						if (!isConversationMessage(msg)) continue;
+						const textContent = getDisplayText(msg);
+						if (!textContent) continue;
 
-					if (!messagePreview) {
-						messagePreview = textContent.slice(0, 200);
+						const textLower = textContent.toLowerCase();
+						if (!textLower.includes(searchLower)) continue;
+
+						if (!messagePreview) {
+							messagePreview = textContent.slice(0, 200);
+						}
+
+						if (msg.type === 'user') {
+							userMatches++;
+						} else {
+							assistantMatches++;
+						}
 					}
 
-					if (msg.type === 'user') {
-						userMatches++;
-					} else {
-						assistantMatches++;
-					}
-				}
+					let matchType: 'title' | 'user' | 'assistant' = 'title';
+					let matchCount = 0;
+					let matchPreview = '';
 
-				let matchType: 'title' | 'user' | 'assistant' = 'title';
-				let matchCount = 0;
-				let matchPreview = '';
-
-				switch (searchMode) {
-					case 'title':
-						if (!titleMatch) continue;
-						matchType = 'title';
-						matchCount = 1;
-						matchPreview = titlePreview || messagePreview;
-						break;
-					case 'user':
-						if (userMatches === 0) continue;
-						matchType = 'user';
-						matchCount = userMatches;
-						matchPreview = messagePreview || titlePreview;
-						break;
-					case 'assistant':
-						if (assistantMatches === 0) continue;
-						matchType = 'assistant';
-						matchCount = assistantMatches;
-						matchPreview = messagePreview || titlePreview;
-						break;
-					case 'all':
-					default:
-						if (titleMatch) {
+					switch (searchMode) {
+						case 'title':
+							if (!titleMatch) return;
 							matchType = 'title';
 							matchCount = 1;
 							matchPreview = titlePreview || messagePreview;
-						} else if (userMatches > 0) {
+							break;
+						case 'user':
+							if (userMatches === 0) return;
 							matchType = 'user';
 							matchCount = userMatches;
 							matchPreview = messagePreview || titlePreview;
-						} else if (assistantMatches > 0) {
+							break;
+						case 'assistant':
+							if (assistantMatches === 0) return;
 							matchType = 'assistant';
 							matchCount = assistantMatches;
 							matchPreview = messagePreview || titlePreview;
-						} else {
-							continue;
-						}
-				}
+							break;
+						case 'all':
+						default:
+							if (titleMatch) {
+								matchType = 'title';
+								matchCount = 1;
+								matchPreview = titlePreview || messagePreview;
+							} else if (userMatches > 0) {
+								matchType = 'user';
+								matchCount = userMatches;
+								matchPreview = messagePreview || titlePreview;
+							} else if (assistantMatches > 0) {
+								matchType = 'assistant';
+								matchCount = assistantMatches;
+								matchPreview = messagePreview || titlePreview;
+							} else {
+								return;
+							}
+					}
 
-				if (!matchPreview) {
-					matchPreview = titlePreview || messagePreview || sessionTitleSource.slice(0, 200);
-				}
+					if (!matchPreview) {
+						matchPreview = titlePreview || messagePreview || sessionTitleSource.slice(0, 200);
+					}
 
-				if (!matchPreview) {
-					matchPreview = trimmedQuery.slice(0, 200);
-				}
+					if (!matchPreview) {
+						matchPreview = trimmedQuery.slice(0, 200);
+					}
 
-				results.push({
-					sessionId: session.sessionId,
-					matchType,
-					matchPreview,
-					matchCount,
-				});
-			} catch (error) {
-				captureException(error, {
-					operation: 'geminiStorage:searchSessions',
-					sessionId: session.sessionId,
-				});
-			}
-		}
+					results.push({
+						sessionId,
+						matchType,
+						matchPreview,
+						matchCount,
+					});
+				} catch (error) {
+					const sessionId = extractSessionIdFromFilename(filename) || filename.replace('.json', '');
+					captureException(error, {
+						operation: 'geminiStorage:searchSessions',
+						sessionId,
+					});
+				}
+			},
+			CONCURRENCY
+		);
 
 		return results;
 	}
@@ -787,6 +917,7 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 	/**
 	 * Get all named sessions across all projects.
 	 * Used by the aggregated named sessions view (agentSessions:getAllNamedSessions).
+	 * Batches filesystem access by project path to avoid redundant getHistoryDir/findSessionFiles calls.
 	 */
 	async getAllNamedSessions(): Promise<
 		Array<{
@@ -812,27 +943,54 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 		}> = [];
 
 		for (const [projectPath, sessions] of Object.entries(geminiOrigins)) {
+			// Collect named sessions for this project first
+			const namedEntries: Array<{
+				sessionId: string;
+				info: { sessionName: string; starred?: boolean };
+			}> = [];
 			for (const [sessionId, info] of Object.entries(sessions)) {
 				if (typeof info === 'object' && info.sessionName) {
-					let lastActivityAt: number | undefined;
-					try {
-						const sessionFilePath = await this.findSessionFile(projectPath, sessionId);
-						if (sessionFilePath) {
-							const stats = await fs.stat(sessionFilePath);
-							lastActivityAt = stats.mtime.getTime();
-						}
-					} catch {
-						// Session file doesn't exist or is inaccessible — still include the entry
-					}
-
-					namedSessions.push({
-						agentSessionId: sessionId,
-						projectPath,
-						sessionName: info.sessionName,
-						starred: info.starred,
-						lastActivityAt,
+					namedEntries.push({
+						sessionId,
+						info: info as { sessionName: string; starred?: boolean },
 					});
 				}
+			}
+			if (namedEntries.length === 0) continue;
+
+			// Resolve history dir and session files once per project
+			const historyDir = await this.getHistoryDir(projectPath);
+			let sessionFileMap: Map<string, string> | null = null;
+			if (historyDir) {
+				const files = await this.findSessionFiles(historyDir);
+				sessionFileMap = new Map<string, string>();
+				for (const { filePath, filename } of files) {
+					const fileSessionId = extractSessionIdFromFilename(filename);
+					if (fileSessionId) {
+						sessionFileMap.set(fileSessionId, filePath);
+					}
+				}
+			}
+
+			for (const { sessionId, info } of namedEntries) {
+				let lastActivityAt: number | undefined;
+				const filePath = sessionFileMap?.get(sessionId);
+				if (filePath) {
+					try {
+						const stats = await fs.stat(filePath);
+						lastActivityAt = stats.mtime.getTime();
+					} catch {
+						// File inaccessible — still include the entry
+					}
+				}
+
+				namedSessions.push({
+					agentSessionId: sessionId,
+					projectPath,
+					sessionName: info.sessionName,
+					starred: info.starred,
+					lastActivityAt,
+				});
 			}
 		}
 
