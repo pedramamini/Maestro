@@ -98,6 +98,27 @@ class Logger extends EventEmitter {
 				fs.mkdirSync(logsDir, { recursive: true });
 			}
 
+			// Migrate legacy maestro-debug.log if it exists
+			try {
+				const legacyPath = path.join(logsDir, 'maestro-debug.log');
+				if (fs.existsSync(legacyPath)) {
+					const stat = fs.statSync(legacyPath);
+					const mtime = stat.mtime;
+					const year = mtime.getFullYear();
+					const month = String(mtime.getMonth() + 1).padStart(2, '0');
+					const day = String(mtime.getDate()).padStart(2, '0');
+					const mtimeDate = `${year}-${month}-${day}`;
+					const targetPath = path.join(logsDir, `maestro-debug-${mtimeDate}.log`);
+
+					if (!fs.existsSync(targetPath)) {
+						fs.renameSync(legacyPath, targetPath);
+						console.log(`[Logger] Migrated legacy log file to maestro-debug-${mtimeDate}.log`);
+					}
+				}
+			} catch (migrationError) {
+				console.error('[Logger] Failed to migrate legacy log file:', migrationError);
+			}
+
 			// Open log file in append mode
 			this.logFileStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
 			this.fileLogEnabled = true;

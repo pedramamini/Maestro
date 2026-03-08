@@ -793,6 +793,126 @@ describe('Logger', () => {
 		});
 	});
 
+	describe('Legacy Log Migration', () => {
+		it('should migrate legacy maestro-debug.log on enableFileLogging', async () => {
+			const fs = await import('fs');
+			const path = await import('path');
+			const os = await import('os');
+
+			const platform = process.platform;
+			let appDataDir: string;
+			if (platform === 'win32') {
+				appDataDir = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+			} else if (platform === 'darwin') {
+				appDataDir = path.join(os.homedir(), 'Library', 'Application Support');
+			} else {
+				appDataDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+			}
+			const logsDir = path.join(appDataDir, 'Maestro', 'logs');
+
+			if (!fs.existsSync(logsDir)) {
+				fs.mkdirSync(logsDir, { recursive: true });
+			}
+
+			// Create a legacy log file
+			const legacyPath = path.join(logsDir, 'maestro-debug.log');
+			fs.writeFileSync(legacyPath, 'legacy log content');
+
+			// Use a past date for mtime so target won't collide with today's log
+			const pastDate = new Date(2023, 5, 15); // June 15, 2023
+			fs.utimesSync(legacyPath, pastDate, pastDate);
+
+			const expectedTarget = path.join(logsDir, 'maestro-debug-2023-06-15.log');
+
+			// Make sure target doesn't exist yet
+			try { fs.unlinkSync(expectedTarget); } catch { /* ignore */ }
+
+			try {
+				logger.enableFileLogging();
+
+				// Legacy file should be gone (renamed)
+				expect(fs.existsSync(legacyPath)).toBe(false);
+
+				// Target dated file should exist
+				expect(fs.existsSync(expectedTarget)).toBe(true);
+
+				// Console should log the migration
+				expect(consoleLogSpy).toHaveBeenCalledWith(
+					expect.stringContaining('[Logger] Migrated legacy log file to maestro-debug-2023-06-15.log')
+				);
+
+				logger.disableFileLogging();
+			} finally {
+				// Cleanup
+				for (const f of [legacyPath, expectedTarget]) {
+					try {
+						if (fs.existsSync(f)) fs.unlinkSync(f);
+					} catch {
+						// ignore
+					}
+				}
+			}
+		});
+
+		it('should skip migration if target dated file already exists', async () => {
+			const fs = await import('fs');
+			const path = await import('path');
+			const os = await import('os');
+
+			const platform = process.platform;
+			let appDataDir: string;
+			if (platform === 'win32') {
+				appDataDir = process.env.APPDATA || path.join(os.homedir(), 'AppData', 'Roaming');
+			} else if (platform === 'darwin') {
+				appDataDir = path.join(os.homedir(), 'Library', 'Application Support');
+			} else {
+				appDataDir = process.env.XDG_CONFIG_HOME || path.join(os.homedir(), '.config');
+			}
+			const logsDir = path.join(appDataDir, 'Maestro', 'logs');
+
+			if (!fs.existsSync(logsDir)) {
+				fs.mkdirSync(logsDir, { recursive: true });
+			}
+
+			// Create a legacy log file with a past mtime
+			const legacyPath = path.join(logsDir, 'maestro-debug.log');
+			fs.writeFileSync(legacyPath, 'legacy log content');
+			const pastDate = new Date(2023, 5, 15); // June 15, 2023
+			fs.utimesSync(legacyPath, pastDate, pastDate);
+
+			const targetPath = path.join(logsDir, 'maestro-debug-2023-06-15.log');
+
+			// Pre-create the target file
+			fs.writeFileSync(targetPath, 'existing dated content');
+
+			try {
+				logger.enableFileLogging();
+
+				// Legacy file should still exist (rename was skipped)
+				expect(fs.existsSync(legacyPath)).toBe(true);
+
+				// Target file should still have original content
+				expect(fs.readFileSync(targetPath, 'utf-8')).toBe('existing dated content');
+
+				logger.disableFileLogging();
+			} finally {
+				for (const f of [legacyPath, targetPath]) {
+					try {
+						if (fs.existsSync(f)) fs.unlinkSync(f);
+					} catch {
+						// ignore
+					}
+				}
+			}
+		});
+
+		it('should not fail if no legacy log file exists', async () => {
+			// Just enable and disable - should not throw
+			logger.enableFileLogging();
+			logger.disableFileLogging();
+		});
+	});
+
 	describe('Log Cleanup (cleanOldLogs)', () => {
 		it('should delete log files older than 7 days during rotation', async () => {
 			const fs = await import('fs');
