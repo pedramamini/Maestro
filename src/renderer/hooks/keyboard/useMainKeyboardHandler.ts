@@ -516,6 +516,19 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.toggleShowUnreadAgentsOnly();
 				trackShortcut('filterUnreadAgents');
+			} else if (ctx.isShortcut(e, 'jumpToTerminal')) {
+				e.preventDefault();
+				if (ctx.activeSession && !ctx.activeGroupChatId) {
+					const result = ctx.navigateToClosestTerminalTab(ctx.activeSession);
+					if (result) {
+						ctx.setSessions((prev: Session[]) =>
+							prev.map((s: Session) => (s.id === ctx.activeSession!.id ? result.session : s))
+						);
+						// Focus the terminal after switching
+						setTimeout(() => ctx.mainPanelRef?.current?.focusActiveTerminal(), 100);
+						trackShortcut('jumpToTerminal');
+					}
+				}
 			}
 
 			// Ctrl+Shift+` — Create a new terminal tab (works regardless of inputMode)

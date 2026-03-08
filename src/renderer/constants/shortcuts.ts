@@ -88,6 +88,11 @@ export const DEFAULT_SHORTCUTS: Record<string, Shortcut> = {
 		label: 'Filter Unread Agents',
 		keys: ['Meta', 'Shift', 'u'],
 	},
+	jumpToTerminal: {
+		id: 'jumpToTerminal',
+		label: 'Jump to Terminal Tab',
+		keys: ['Alt', 'j'],
+	},
 };
 
 // Non-editable shortcuts (displayed in help but not configurable)
