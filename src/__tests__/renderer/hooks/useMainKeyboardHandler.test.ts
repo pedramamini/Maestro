@@ -1882,4 +1882,97 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockToggle).toHaveBeenCalled();
 		});
 	});
+
+	describe('jumpToTerminal shortcut', () => {
+		it('should navigate to closest terminal tab on Alt+J', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+			const mockSetSessions = vi.fn();
+			const mockSession = { id: 'test-session', name: 'Test', inputMode: 'ai' as const };
+			const mockResult = {
+				type: 'terminal',
+				id: 'term-1',
+				session: { ...mockSession, inputMode: 'terminal' as const },
+			};
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				isShortcut: (_e: KeyboardEvent, id: string) => id === 'jumpToTerminal',
+				activeSessionId: 'test-session',
+				activeSession: mockSession,
+				activeGroupChatId: null,
+				navigateToClosestTerminalTab: vi.fn().mockReturnValue(mockResult),
+				setSessions: mockSetSessions,
+				mainPanelRef: { current: { focusActiveTerminal: vi.fn() } },
+				recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'j',
+						altKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockSetSessions).toHaveBeenCalled();
+		});
+
+		it('should not navigate when no terminal tabs exist', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+			const mockSetSessions = vi.fn();
+			const mockSession = { id: 'test-session', name: 'Test', inputMode: 'ai' as const };
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				isShortcut: (_e: KeyboardEvent, id: string) => id === 'jumpToTerminal',
+				activeSessionId: 'test-session',
+				activeSession: mockSession,
+				activeGroupChatId: null,
+				navigateToClosestTerminalTab: vi.fn().mockReturnValue(null),
+				setSessions: mockSetSessions,
+				mainPanelRef: { current: { focusActiveTerminal: vi.fn() } },
+				recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'j',
+						altKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockSetSessions).not.toHaveBeenCalled();
+		});
+
+		it('should not navigate in group chat mode', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+			const mockNavigate = vi.fn().mockReturnValue({ type: 'terminal', id: 'term-1', session: {} });
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				isShortcut: (_e: KeyboardEvent, id: string) => id === 'jumpToTerminal',
+				activeSessionId: 'test-session',
+				activeSession: { id: 'test-session', name: 'Test', inputMode: 'ai' },
+				activeGroupChatId: 'group-1',
+				navigateToClosestTerminalTab: mockNavigate,
+				setSessions: vi.fn(),
+				mainPanelRef: { current: { focusActiveTerminal: vi.fn() } },
+				recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'j',
+						altKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockNavigate).not.toHaveBeenCalled();
+		});
+	});
 });

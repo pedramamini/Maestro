@@ -179,6 +179,7 @@ import {
 	navigateToLastUnifiedTab,
 	navigateToNextUnifiedTab,
 	navigateToPrevUnifiedTab,
+	navigateToClosestTerminalTab,
 	hasActiveWizard,
 } from './utils/tabHelpers';
 // validateNewSession moved to useSymphonyContribution, useSessionCrud hooks
@@ -817,11 +818,8 @@ function MaestroConsoleInner() {
 	} = useTabHandlers();
 
 	// --- TERMINAL TAB HANDLERS ---
-	const {
-		handleOpenTerminalTab,
-		handleSelectTerminalTab,
-		handleCloseTerminalTab,
-	} = useTerminalTabHandlers();
+	const { handleOpenTerminalTab, handleSelectTerminalTab, handleCloseTerminalTab } =
+		useTerminalTabHandlers();
 
 	// Opens the rename modal for a terminal tab (1-arg wrapper for useMainPanelProps)
 	const handleRequestTerminalTabRename = useCallback(
@@ -1849,7 +1847,13 @@ function MaestroConsoleInner() {
 			setSessions((prev) =>
 				prev.map((s) =>
 					s.id === activeSession.id
-						? { ...s, activeTabId: tabId, activeFileTabId: null, activeTerminalTabId: null, inputMode: 'ai' }
+						? {
+								...s,
+								activeTabId: tabId,
+								activeFileTabId: null,
+								activeTerminalTabId: null,
+								inputMode: 'ai',
+							}
 						: s
 				)
 			);
@@ -2022,6 +2026,7 @@ function MaestroConsoleInner() {
 		navigateToLastUnifiedTab,
 		navigateToNextUnifiedTab,
 		navigateToPrevUnifiedTab,
+		navigateToClosestTerminalTab,
 		setFileTreeFilterOpen,
 		isShortcut,
 		isTabShortcut,

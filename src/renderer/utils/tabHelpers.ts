@@ -1065,7 +1065,11 @@ export function setActiveTab(session: Session, tabId: string): SetActiveTabResul
 	}
 
 	// If already active, no file tab is selected, and already in AI mode, return current state
-	if (session.activeTabId === tabId && session.activeFileTabId === null && session.inputMode === 'ai') {
+	if (
+		session.activeTabId === tabId &&
+		session.activeFileTabId === null &&
+		session.inputMode === 'ai'
+	) {
 		return {
 			tab: targetTab,
 			session,
@@ -1401,7 +1405,11 @@ export function navigateToUnifiedTabByIndex(
 		if (!aiTab) return null;
 
 		// If already active and in AI mode, return current state (with repair if needed)
-		if (session.activeTabId === targetTabRef.id && session.activeFileTabId === null && session.inputMode === 'ai') {
+		if (
+			session.activeTabId === targetTabRef.id &&
+			session.activeFileTabId === null &&
+			session.inputMode === 'ai'
+		) {
 			return {
 				type: 'ai',
 				id: targetTabRef.id,
@@ -1671,6 +1679,51 @@ export function navigateToPrevUnifiedTab(
 		if (result) return result;
 	}
 	return null;
+}
+
+/**
+ * Navigate to the closest terminal tab in the unified tab order.
+ * Searches outward from the current position, alternating right then left.
+ * If no current tab is found, returns the first terminal tab.
+ *
+ * @param session - The Maestro session
+ * @returns Object with the tab type, id, and updated session, or null if no terminal tabs exist
+ */
+export function navigateToClosestTerminalTab(session: Session): NavigateToUnifiedTabResult | null {
+	const effectiveOrder = getRepairedUnifiedTabOrder(session);
+	if (!session || effectiveOrder.length === 0) return null;
+
+	// Find all terminal tab indices
+	const terminalIndices: number[] = [];
+	for (let i = 0; i < effectiveOrder.length; i++) {
+		if (effectiveOrder[i].type === 'terminal') {
+			terminalIndices.push(i);
+		}
+	}
+	if (terminalIndices.length === 0) return null;
+
+	// If already on a terminal tab, stay on it
+	const currentIndex = getCurrentUnifiedTabIndex(session, effectiveOrder);
+	if (currentIndex >= 0 && effectiveOrder[currentIndex]?.type === 'terminal') {
+		return navigateToUnifiedTabByIndex(session, currentIndex);
+	}
+
+	// Find closest terminal tab by distance from current position
+	if (currentIndex >= 0) {
+		let closest = terminalIndices[0];
+		let minDist = Math.abs(currentIndex - closest);
+		for (let i = 1; i < terminalIndices.length; i++) {
+			const dist = Math.abs(currentIndex - terminalIndices[i]);
+			if (dist < minDist) {
+				minDist = dist;
+				closest = terminalIndices[i];
+			}
+		}
+		return navigateToUnifiedTabByIndex(session, closest);
+	}
+
+	// Fallback: navigate to first terminal tab
+	return navigateToUnifiedTabByIndex(session, terminalIndices[0]);
 }
 
 /**
