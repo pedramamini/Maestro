@@ -11,6 +11,7 @@ import { SshRemoteSelector } from './shared/SshRemoteSelector';
 import { formatShortcutKeys } from '../utils/shortcutFormatter';
 import { safeClipboardWrite } from '../utils/clipboard';
 import { isBetaAgent, getAgentDisplayName } from '../../shared/agentMetadata';
+import { buildMaestroUrl } from '../utils/buildMaestroUrl';
 
 // Maximum character length for nudge message
 const NUDGE_MESSAGE_MAX_LENGTH = 1000;
@@ -1007,7 +1008,9 @@ export function NewInstanceModal({
 								style={{ color: theme.colors.accent }}
 								onClick={() =>
 									window.maestro.shell.openExternal(
-										'https://docs.runmaestro.ai/autorun-playbooks#environment-variables'
+										buildMaestroUrl(
+											'https://docs.runmaestro.ai/autorun-playbooks#environment-variables'
+										)
 									)
 								}
 							>
