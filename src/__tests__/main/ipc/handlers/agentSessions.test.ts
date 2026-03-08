@@ -489,16 +489,14 @@ describe('agentSessions IPC handlers', () => {
 		it('should aggregate named sessions from all storages that support getAllNamedSessions', async () => {
 			const mockGeminiStorage = {
 				agentId: 'gemini-cli',
-				getAllNamedSessions: vi
-					.fn()
-					.mockResolvedValue([
-						{
-							agentSessionId: 'gem-1',
-							projectPath: '/project',
-							sessionName: 'Gemini Chat',
-							starred: true,
-						},
-					]),
+				getAllNamedSessions: vi.fn().mockResolvedValue([
+					{
+						agentSessionId: 'gem-1',
+						projectPath: '/project',
+						sessionName: 'Gemini Chat',
+						starred: true,
+					},
+				]),
 			};
 
 			const mockClaudeStorage = {
@@ -738,6 +736,15 @@ describe('agentSessions IPC handlers', () => {
 			expect(result.inputTokens).toBe(0);
 			expect(result.outputTokens).toBe(0);
 			expect(result.cachedInputTokens).toBe(0);
+		});
+
+		it('should sum mixed input and prompt token fields on the same object', () => {
+			const content = JSON.stringify({
+				messages: [{ type: 'user', tokens: { input: 10, prompt: 5, output: 3 } }],
+			});
+			const result = parseGeminiSessionContent(content, 256);
+			expect(result.inputTokens).toBe(15);
+			expect(result.outputTokens).toBe(3);
 		});
 	});
 

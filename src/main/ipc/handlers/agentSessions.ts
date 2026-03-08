@@ -237,12 +237,13 @@ function accumulateGeminiTokens(source: unknown): GeminiTokenAccumulator {
 		return { input: 0, output: 0, cached: 0 };
 	}
 	const obj = source as Record<string, unknown>;
-	const input =
-		asNumber(obj.input) ||
-		asNumber(obj.prompt) ||
-		asNumber(obj.promptTokens) ||
-		asNumber(obj.inputTokens) ||
-		asNumber(obj.input_tokens);
+	// Sum input + prompt groups: Gemini may report both on the same object
+	// (e.g. {input: 10, prompt: 5}) representing different token categories.
+	// Within each group, aliases are mutually exclusive (use || fallback).
+	const inputDirect =
+		asNumber(obj.input) || asNumber(obj.inputTokens) || asNumber(obj.input_tokens);
+	const promptDirect = asNumber(obj.prompt) || asNumber(obj.promptTokens);
+	const input = inputDirect + promptDirect;
 	const output =
 		asNumber(obj.output) ||
 		asNumber(obj.completion) ||
