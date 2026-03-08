@@ -655,7 +655,11 @@ function setupIpcHandlers() {
 	// This provides the new window.maestro.agentSessions.* API
 	// Pass the shared claudeSessionOriginsStore so session names/stars are consistent
 	initializeSessionStorages({ claudeSessionOriginsStore, agentSessionOriginsStore });
-	registerAgentSessionsHandlers({ getMainWindow: () => mainWindow, agentSessionOriginsStore, geminiSessionStatsStore });
+	registerAgentSessionsHandlers({
+		getMainWindow: () => mainWindow,
+		agentSessionOriginsStore,
+		geminiSessionStatsStore,
+	});
 
 	// Helper to get agent config values (custom args/env vars, model, etc.)
 	const getAgentConfigForAgent = (agentId: string): Record<string, any> => {
@@ -813,59 +817,70 @@ function setupIpcHandlers() {
 // Phase 3 refactoring - delegates to extracted process-listeners module
 function setupProcessListeners() {
 	if (processManager) {
-		setupProcessListenersModule(processManager, {
-			getProcessManager: () => processManager,
-			getWebServer: () => webServer,
-			getAgentDetector: () => agentDetector,
-			safeSend,
-			powerManager,
-			groupChatEmitters,
-			groupChatRouter: {
-				routeModeratorResponse,
-				routeAgentResponse,
-				markParticipantResponded,
-				spawnModeratorSynthesis,
-				getGroupChatReadOnlyState,
-				respawnParticipantWithRecovery,
+		const geminiStatsHandle = setupProcessListenersModule(
+			processManager,
+			{
+				getProcessManager: () => processManager,
+				getWebServer: () => webServer,
+				getAgentDetector: () => agentDetector,
+				safeSend,
+				powerManager,
+				groupChatEmitters,
+				groupChatRouter: {
+					routeModeratorResponse,
+					routeAgentResponse,
+					markParticipantResponded,
+					spawnModeratorSynthesis,
+					getGroupChatReadOnlyState,
+					respawnParticipantWithRecovery,
+				},
+				groupChatStorage: {
+					loadGroupChat,
+					updateGroupChat,
+					updateParticipant,
+				},
+				sessionRecovery: {
+					needsSessionRecovery,
+					initiateSessionRecovery,
+				},
+				outputBuffer: {
+					appendToGroupChatBuffer,
+					getGroupChatBufferedOutput,
+					clearGroupChatBuffer,
+				},
+				outputParser: {
+					extractTextFromStreamJson,
+					parseParticipantSessionId,
+				},
+				usageAggregator: {
+					calculateContextTokens,
+				},
+				getStatsDB,
+				debugLog,
+				patterns: {
+					REGEX_MODERATOR_SESSION,
+					REGEX_MODERATOR_SESSION_TIMESTAMP,
+					REGEX_AI_SUFFIX,
+					REGEX_AI_TAB_ID,
+					REGEX_BATCH_SESSION,
+					REGEX_SYNOPSIS_SESSION,
+				},
+				logger,
+				getCueEngine: () => cueEngine,
+				isCueEnabled: () => {
+					const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
+					return !!ef.maestroCue;
+				},
 			},
-			groupChatStorage: {
-				loadGroupChat,
-				updateGroupChat,
-				updateParticipant,
-			},
-			sessionRecovery: {
-				needsSessionRecovery,
-				initiateSessionRecovery,
-			},
-			outputBuffer: {
-				appendToGroupChatBuffer,
-				getGroupChatBufferedOutput,
-				clearGroupChatBuffer,
-			},
-			outputParser: {
-				extractTextFromStreamJson,
-				parseParticipantSessionId,
-			},
-			usageAggregator: {
-				calculateContextTokens,
-			},
-			getStatsDB,
-			debugLog,
-			patterns: {
-				REGEX_MODERATOR_SESSION,
-				REGEX_MODERATOR_SESSION_TIMESTAMP,
-				REGEX_AI_SUFFIX,
-				REGEX_AI_TAB_ID,
-				REGEX_BATCH_SESSION,
-				REGEX_SYNOPSIS_SESSION,
-			},
-			logger,
-			getCueEngine: () => cueEngine,
-			isCueEnabled: () => {
-				const ef = store.get('encoreFeatures', {}) as Record<string, boolean>;
-				return !!ef.maestroCue;
-			},
-		}, geminiSessionStatsStore);
+			geminiSessionStatsStore
+		);
+
+		// Register shutdown hook for gemini stats flush
+		if (geminiStatsHandle) {
+			app.on('before-quit', () => {
+				geminiStatsHandle.flushAll();
+			});
+		}
 
 		// WakaTime heartbeat listener (query-complete → heartbeat, exit → cleanup)
 		setupWakaTimeListener(processManager, wakatimeManager, store);
