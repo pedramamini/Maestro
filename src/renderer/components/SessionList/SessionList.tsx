@@ -873,8 +873,8 @@ function SessionListInner(props: SessionListProps) {
 						</div>
 					)}
 
-					{/* BOOKMARKS SECTION - only show if there are bookmarked sessions */}
-					{bookmarkedSessions.length > 0 && (
+					{/* BOOKMARKS SECTION - hidden when filtering by unread agents */}
+					{bookmarkedSessions.length > 0 && !showUnreadAgentsOnly && (
 						<div className="mb-1">
 							<button
 								type="button"
@@ -961,7 +961,7 @@ function SessionListInner(props: SessionListProps) {
 										className="flex items-center gap-2 text-xs font-bold uppercase tracking-wider flex-1"
 										style={{ color: theme.colors.textDim }}
 									>
-										{group.collapsed ? (
+										{group.collapsed && !showUnreadAgentsOnly ? (
 											<ChevronRight className="w-3 h-3" />
 										) : (
 											<ChevronDown className="w-3 h-3" />
@@ -1027,7 +1027,7 @@ function SessionListInner(props: SessionListProps) {
 									)}
 								</div>
 
-								{!group.collapsed ? (
+								{!group.collapsed || showUnreadAgentsOnly ? (
 									<div
 										className="flex flex-col border-l ml-4"
 										style={{ borderColor: theme.colors.border }}
