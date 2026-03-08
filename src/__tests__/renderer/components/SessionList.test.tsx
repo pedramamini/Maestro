@@ -310,6 +310,16 @@ describe('SessionList', () => {
 			expect(screen.getByText('MAESTRO')).toBeInTheDocument();
 		});
 
+		it('branding header has z-20 to stack menu above sidebar content', () => {
+			useUIStore.setState({ leftSidebarOpen: true });
+			const props = createDefaultProps({});
+			render(<SessionList {...props} />);
+
+			const header = screen.getByText('MAESTRO').closest('.border-b');
+			expect(header).toHaveClass('z-20');
+			expect(header).toHaveClass('relative');
+		});
+
 		it('renders collapsed sidebar mode', () => {
 			useUIStore.setState({ leftSidebarOpen: false });
 			const props = createDefaultProps({});
