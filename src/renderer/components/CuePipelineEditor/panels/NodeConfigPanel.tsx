@@ -35,7 +35,8 @@ interface NodeConfigPanelProps {
 }
 
 const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
-	'time.interval': Clock,
+	'time.heartbeat': Clock,
+	'time.scheduled': Clock,
 	'file.changed': FileText,
 	'agent.completed': Zap,
 	'github.pull_request': GitPullRequest,
@@ -44,7 +45,8 @@ const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
 };
 
 const EVENT_LABELS: Record<CueEventType, string> = {
-	'time.interval': 'Scheduled Timer',
+	'time.heartbeat': 'Heartbeat Timer',
+	'time.scheduled': 'Scheduled',
 	'file.changed': 'File Change',
 	'agent.completed': 'Agent Completed',
 	'github.pull_request': 'Pull Request',
@@ -117,7 +119,7 @@ function TriggerConfig({
 	);
 
 	switch (data.eventType) {
-		case 'time.interval':
+		case 'time.heartbeat':
 			return (
 				<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
 					<label style={labelStyle}>
@@ -130,6 +132,65 @@ function TriggerConfig({
 							placeholder="30"
 							style={inputStyle}
 						/>
+					</label>
+				</div>
+			);
+		case 'time.scheduled':
+			return (
+				<div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+					<label style={labelStyle}>
+						Times (HH:MM, comma-separated)
+						<input
+							type="text"
+							value={(localConfig.schedule_times ?? []).join(', ')}
+							onChange={(e) => {
+								const times = e.target.value
+									.split(',')
+									.map((t) => t.trim())
+									.filter(Boolean);
+								const updated = { ...localConfig, schedule_times: times };
+								setLocalConfig(updated);
+								debouncedUpdate(updated);
+							}}
+							placeholder="09:00, 17:00"
+							style={inputStyle}
+						/>
+					</label>
+					<label style={labelStyle}>
+						Days (leave empty for every day)
+						<div style={{ display: 'flex', gap: 4, flexWrap: 'wrap', marginTop: 4 }}>
+							{['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'].map((day) => {
+								const days = localConfig.schedule_days ?? [];
+								const isActive = days.includes(day);
+								return (
+									<button
+										key={day}
+										type="button"
+										onClick={() => {
+											const newDays = isActive
+												? days.filter((d: string) => d !== day)
+												: [...days, day];
+											const updated = { ...localConfig, schedule_days: newDays };
+											setLocalConfig(updated);
+											debouncedUpdate(updated);
+										}}
+										style={{
+											...inputStyle,
+											width: 'auto',
+											padding: '2px 8px',
+											cursor: 'pointer',
+											fontSize: 11,
+											textTransform: 'capitalize',
+											backgroundColor: isActive ? '#8b5cf6' : '#2a2a3e',
+											color: isActive ? '#fff' : '#9ca3af',
+											border: `1px solid ${isActive ? '#8b5cf6' : '#444'}`,
+										}}
+									>
+										{day}
+									</button>
+								);
+							})}
+						</div>
 					</label>
 				</div>
 			);

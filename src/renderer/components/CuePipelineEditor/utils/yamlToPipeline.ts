@@ -29,6 +29,8 @@ interface GraphSessionInput {
 		prompt?: string;
 		output_prompt?: string;
 		interval_minutes?: number;
+		schedule_times?: string[];
+		schedule_days?: string[];
 		watch?: string;
 		source_session?: string | string[];
 		fan_out?: string[];
@@ -99,8 +101,12 @@ function extractTriggerConfig(sub: CueSubscription): TriggerNodeData['config'] {
 	const config: TriggerNodeData['config'] = {};
 
 	switch (sub.event as CueEventType) {
-		case 'time.interval':
+		case 'time.heartbeat':
 			if (sub.interval_minutes != null) config.interval_minutes = sub.interval_minutes;
+			break;
+		case 'time.scheduled':
+			if (sub.schedule_times != null) config.schedule_times = sub.schedule_times;
+			if (sub.schedule_days != null) config.schedule_days = sub.schedule_days as string[];
 			break;
 		case 'file.changed':
 			if (sub.watch != null) config.watch = sub.watch;
@@ -124,7 +130,9 @@ function extractTriggerConfig(sub: CueSubscription): TriggerNodeData['config'] {
  */
 function triggerLabel(eventType: CueEventType): string {
 	switch (eventType) {
-		case 'time.interval':
+		case 'time.heartbeat':
+			return 'Heartbeat';
+		case 'time.scheduled':
 			return 'Scheduled';
 		case 'file.changed':
 			return 'File Change';

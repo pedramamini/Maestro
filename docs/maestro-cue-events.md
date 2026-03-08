@@ -1,12 +1,12 @@
 ---
 title: Cue Event Types
-description: Detailed reference for all six Maestro Cue event types with configuration, payloads, and examples.
+description: Detailed reference for all seven Maestro Cue event types with configuration, payloads, and examples.
 icon: calendar-check
 ---
 
-Cue supports six event types. Each type watches for a different kind of activity and produces a payload that can be injected into prompts via [template variables](./maestro-cue-advanced#template-variables).
+Cue supports seven event types. Each type watches for a different kind of activity and produces a payload that can be injected into prompts via [template variables](./maestro-cue-advanced#template-variables).
 
-## time.interval
+## time.heartbeat
 
 Fires on a periodic timer. The subscription triggers immediately when the engine starts, then repeats at the configured interval.
 
@@ -27,7 +27,7 @@ Fires on a periodic timer. The subscription triggers immediately when the engine
 ```yaml
 subscriptions:
   - name: hourly-summary
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 60
     prompt: |
       Generate a summary of git activity in the last hour.
@@ -35,6 +35,73 @@ subscriptions:
 ```
 
 **Payload fields:** None specific to this event type. Use common variables like `{{CUE_TRIGGER_NAME}}` and `{{CUE_EVENT_TIMESTAMP}}`.
+
+---
+
+## time.scheduled
+
+Fires at specific times and days of the week — a cron-like trigger for precise scheduling.
+
+**Required fields:**
+
+| Field            | Type     | Description                                      |
+| ---------------- | -------- | ------------------------------------------------ |
+| `schedule_times` | string[] | Array of times in `HH:MM` format (24-hour clock) |
+
+**Optional fields:**
+
+| Field           | Type     | Default   | Description                                                              |
+| --------------- | -------- | --------- | ------------------------------------------------------------------------ |
+| `schedule_days` | string[] | every day | Days of the week to run: `mon`, `tue`, `wed`, `thu`, `fri`, `sat`, `sun` |
+
+**Behavior:**
+
+- Checks every 60 seconds if the current time matches any `schedule_times` entry
+- If `schedule_days` is set, the current day must also match
+- Does **not** fire immediately on engine start (unlike `time.heartbeat`)
+- Multiple times per day are supported — add multiple entries to `schedule_times`
+
+**Example — weekday standup:**
+
+```yaml
+subscriptions:
+  - name: morning-standup
+    event: time.scheduled
+    schedule_times:
+      - '09:00'
+    schedule_days:
+      - mon
+      - tue
+      - wed
+      - thu
+      - fri
+    prompt: |
+      Generate a standup report:
+      1. Run `git log --oneline --since="yesterday"` to find recent changes
+      2. Check for any failing tests
+      3. Summarize what was accomplished and what's next
+```
+
+**Example — multiple times daily:**
+
+```yaml
+subscriptions:
+  - name: status-check
+    event: time.scheduled
+    schedule_times:
+      - '09:00'
+      - '13:00'
+      - '17:00'
+    prompt: |
+      Run a quick health check on all services.
+```
+
+**Payload fields:**
+
+| Field          | Description                           | Example |
+| -------------- | ------------------------------------- | ------- |
+| `matched_time` | The scheduled time that matched       | `09:00` |
+| `matched_day`  | The day of the week when it triggered | `mon`   |
 
 ---
 

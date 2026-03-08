@@ -4,7 +4,7 @@
  * Tests cover:
  * - Engine lifecycle (start, stop, isEnabled)
  * - Session initialization from YAML configs
- * - Timer-based subscriptions (time.interval)
+ * - Timer-based subscriptions (time.heartbeat)
  * - File watcher subscriptions (file.changed)
  * - Agent completion subscriptions (agent.completed)
  * - Fan-in tracking for multi-source agent.completed
@@ -181,7 +181,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 10,
@@ -207,13 +207,13 @@ describe('CueEngine', () => {
 		});
 	});
 
-	describe('time.interval subscriptions', () => {
+	describe('time.heartbeat subscriptions', () => {
 		it('fires immediately on setup', async () => {
 			const config = createMockConfig({
 				subscriptions: [
 					{
 						name: 'periodic',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'Run check',
 						interval_minutes: 5,
@@ -229,7 +229,7 @@ describe('CueEngine', () => {
 			expect(deps.onCueRun).toHaveBeenCalledWith(
 				'session-1',
 				'Run check',
-				expect.objectContaining({ type: 'time.interval', triggerName: 'periodic' })
+				expect.objectContaining({ type: 'time.heartbeat', triggerName: 'periodic' })
 			);
 		});
 
@@ -238,7 +238,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'periodic',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'Run check',
 						interval_minutes: 5,
@@ -270,7 +270,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'disabled',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: false,
 						prompt: 'noop',
 						interval_minutes: 5,
@@ -291,7 +291,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'periodic',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -481,7 +481,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -503,7 +503,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'old',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -514,14 +514,14 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'new-1',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 10,
 					},
 					{
 						name: 'new-2',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test2',
 						interval_minutes: 15,
@@ -547,7 +547,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'old-sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -558,14 +558,14 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'new-sub-1',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 10,
 					},
 					{
 						name: 'new-sub-2',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test2',
 						interval_minutes: 15,
@@ -592,7 +592,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -624,7 +624,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -653,7 +653,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -677,7 +677,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'original',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -688,7 +688,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'recreated',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test2',
 						interval_minutes: 10,
@@ -726,7 +726,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -753,7 +753,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -780,7 +780,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'sub',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -835,7 +835,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'periodic',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 60,
@@ -860,7 +860,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'periodic',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -898,7 +898,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 60,
@@ -1124,14 +1124,14 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
 					},
 					{
 						name: 'disabled',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: false,
 						prompt: 'noop',
 						interval_minutes: 5,
@@ -1158,7 +1158,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -1184,7 +1184,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -1238,7 +1238,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'do work',
 						output_prompt: 'format results',
@@ -1291,7 +1291,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'do work',
 						output_prompt: 'format results',
@@ -1343,7 +1343,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'do work',
 						output_prompt: 'format results',
@@ -1373,7 +1373,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'do work',
 						interval_minutes: 60,
@@ -1400,7 +1400,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -1425,7 +1425,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,
@@ -1449,7 +1449,7 @@ describe('CueEngine', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 5,

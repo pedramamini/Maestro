@@ -58,7 +58,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'every-15m',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'check status',
 					interval_minutes: 15,
@@ -79,7 +79,7 @@ describe('reconcileMissedTimeEvents', () => {
 		// Should fire exactly one catch-up event (not 4)
 		expect(dispatched).toHaveLength(1);
 		expect(dispatched[0].sessionId).toBe('session-1');
-		expect(dispatched[0].event.type).toBe('time.interval');
+		expect(dispatched[0].event.type).toBe('time.heartbeat');
 		expect(dispatched[0].event.triggerName).toBe('every-15m');
 		expect(dispatched[0].event.payload.reconciled).toBe(true);
 		expect(dispatched[0].event.payload.missedCount).toBe(4);
@@ -91,7 +91,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'every-2h',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'long check',
 					interval_minutes: 120,
@@ -170,7 +170,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'disabled-timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: false,
 					prompt: 'disabled',
 					interval_minutes: 5,
@@ -196,14 +196,14 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'fast-timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'fast check',
 					interval_minutes: 10,
 				},
 				{
 					name: 'slow-timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'slow check',
 					interval_minutes: 60,
@@ -222,7 +222,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'another-timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'another check',
 					interval_minutes: 30,
@@ -242,7 +242,7 @@ describe('reconcileMissedTimeEvents', () => {
 
 		// fast-timer: 90/10 = 9 missed → 1 catch-up
 		// slow-timer: 90/60 = 1 missed → 1 catch-up
-		// file-watcher: skipped (not time.interval)
+		// file-watcher: skipped (not time.heartbeat)
 		// another-timer: 90/30 = 3 missed → 1 catch-up
 		expect(dispatched).toHaveLength(3);
 
@@ -263,7 +263,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'check',
 					interval_minutes: 5,
@@ -290,7 +290,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'check',
 					interval_minutes: 5,
@@ -317,7 +317,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'check',
 					interval_minutes: 5,
@@ -344,7 +344,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'my-timer',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'check',
 					interval_minutes: 10,
@@ -371,7 +371,7 @@ describe('reconcileMissedTimeEvents', () => {
 			config: createConfig([
 				{
 					name: 'zero-interval',
-					event: 'time.interval',
+					event: 'time.heartbeat',
 					enabled: true,
 					prompt: 'check',
 					interval_minutes: 0,

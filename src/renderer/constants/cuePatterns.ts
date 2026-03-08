@@ -8,16 +8,37 @@ export interface CuePattern {
 
 export const CUE_PATTERNS: CuePattern[] = [
 	{
-		id: 'scheduled-task',
-		name: 'Scheduled Task',
-		description: 'Single agent on a timer',
+		id: 'heartbeat-task',
+		name: 'Heartbeat',
+		description: 'Single agent on a recurring timer',
 		explanation:
-			'Runs a prompt on a fixed interval (e.g. every 60 minutes). Great for periodic maintenance, status checks, or recurring reports. Adjust interval_minutes and point prompt to your markdown file.',
+			'Runs a prompt on a fixed interval (e.g. every 60 minutes). Fires immediately on start, then repeats. Great for periodic maintenance, status checks, or recurring reports. Adjust interval_minutes and point prompt to your markdown file.',
 		yaml: `subscriptions:
-  - name: "Scheduled Task"
-    event: time.interval
+  - name: "Heartbeat Task"
+    event: time.heartbeat
     interval_minutes: 60
     prompt: prompts/scheduled-task.md
+    enabled: true
+`,
+	},
+	{
+		id: 'scheduled-times',
+		name: 'Scheduled',
+		description: 'Run at specific times and days',
+		explanation:
+			'Fires at exact clock times on specific days of the week. Unlike heartbeat (every N minutes), scheduled triggers use schedule_times for HH:MM times and optional schedule_days to limit to certain days. Perfect for morning standups, end-of-day reports, or weekly maintenance.',
+		yaml: `subscriptions:
+  - name: "Morning Standup"
+    event: time.scheduled
+    schedule_times:
+      - "09:00"
+    schedule_days:
+      - mon
+      - tue
+      - wed
+      - thu
+      - fri
+    prompt: prompts/standup.md
     enabled: true
 `,
 	},
@@ -58,7 +79,7 @@ export const CUE_PATTERNS: CuePattern[] = [
 		yaml: `# Orchestrator session: fans out research, then synthesizes
 subscriptions:
   - name: "Fan-out Research"
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 1440  # Daily
     prompt: prompts/research-question.md
     fan_out:
@@ -86,7 +107,7 @@ subscriptions:
 		yaml: `# Session A config:
 subscriptions:
   - name: "Step 1"
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 120
     prompt: prompts/step-1.md
     enabled: true
@@ -115,7 +136,7 @@ subscriptions:
 		yaml: `# Moderator session: kicks off debate, synthesizes at end
 subscriptions:
   - name: "Start Debate"
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 1440
     prompt: prompts/debate-topic.md
     fan_out:

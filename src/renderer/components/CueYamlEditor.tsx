@@ -21,7 +21,7 @@ const YAML_TEMPLATE = `# .maestro/cue.yaml
 #     enabled: true
 #
 #   - name: "hourly security audit"
-#     event: time.interval
+#     event: time.heartbeat
 #     interval_minutes: 60
 #     prompt: prompts/security-audit.md
 #     enabled: true
@@ -60,7 +60,7 @@ const YAML_TEMPLATE = `# .maestro/cue.yaml
 
 const AI_SYSTEM_PROMPT = `You are configuring maestro-cue.yaml for the user. Be terse. Plain text only — no markdown, no code fences, no bullet lists, no formatting.
 
-Event types: time.interval (interval_minutes), file.changed (watch glob), agent.completed (source_session, optional fan_out), github.pull_request (poll_minutes, optional repo), github.issue (poll_minutes, optional repo), task.pending (watch glob, poll_minutes).
+Event types: time.heartbeat (interval_minutes), time.scheduled (schedule_times array, optional schedule_days), file.changed (watch glob), agent.completed (source_session, optional fan_out), github.pull_request (poll_minutes, optional repo), github.issue (poll_minutes, optional repo), task.pending (watch glob, poll_minutes).
 
 Optional filter block on any subscription: AND'd conditions on payload fields. Operators: exact string, "!value" negation, ">N"/"<N" numeric, glob patterns, boolean.
 
@@ -78,7 +78,7 @@ settings:
   max_concurrent: 1
   queue_size: 10
 
-Multi-agent patterns: Scheduled Task (time.interval), File Enrichment (file.changed), Research Swarm (fan_out + fan-in), Sequential Chain (agent.completed chain), Debate (fan_out to opposing + fan-in to moderator), PR Review (github.pull_request), Issue Triage (github.issue), Task Queue (task.pending).
+Multi-agent patterns: Heartbeat (time.heartbeat), Scheduled (time.scheduled), File Enrichment (file.changed), Research Swarm (fan_out + fan-in), Sequential Chain (agent.completed chain), Debate (fan_out to opposing + fan-in to moderator), PR Review (github.pull_request), Issue Triage (github.issue), Task Queue (task.pending).
 
 Edit the file directly using your tools. After editing, summarize what you changed in 1-2 short sentences. If you need clarification, ask briefly.`;
 

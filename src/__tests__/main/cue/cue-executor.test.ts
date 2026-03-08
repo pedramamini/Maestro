@@ -881,7 +881,7 @@ describe('cue-executor', () => {
 				sessionId: 'session-1',
 				sessionName: 'Test Session',
 				subscriptionName: 'Periodic check',
-				event: createMockEvent({ type: 'time.interval' }),
+				event: createMockEvent({ type: 'time.heartbeat' }),
 				status: 'failed',
 				stdout: '',
 				stderr: 'Error occurred',
@@ -894,7 +894,7 @@ describe('cue-executor', () => {
 			const entry = recordCueHistoryEntry(result, createMockSession());
 
 			expect(entry.success).toBe(false);
-			expect(entry.summary).toBe('[CUE] "Periodic check" (time.interval)');
+			expect(entry.summary).toBe('[CUE] "Periodic check" (time.heartbeat)');
 		});
 
 		it('should truncate long stdout in fullResponse', () => {
@@ -974,7 +974,7 @@ describe('cue-executor', () => {
 				sessionName: 'Test Session',
 				subscriptionName: 'Timer check',
 				event: createMockEvent({
-					type: 'time.interval',
+					type: 'time.heartbeat',
 					payload: { interval_minutes: 5 },
 				}),
 				status: 'completed',

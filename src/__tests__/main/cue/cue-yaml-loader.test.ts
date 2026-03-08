@@ -56,7 +56,7 @@ describe('cue-yaml-loader', () => {
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: canonical-sub
-    event: time.interval
+    event: time.heartbeat
     prompt: From canonical
     interval_minutes: 5
 `);
@@ -74,7 +74,7 @@ subscriptions:
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: legacy-sub
-    event: time.interval
+    event: time.heartbeat
     prompt: From legacy
     interval_minutes: 5
 `);
@@ -89,7 +89,7 @@ subscriptions:
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: daily-check
-    event: time.interval
+    event: time.heartbeat
     enabled: true
     prompt: Check all tests
     interval_minutes: 60
@@ -107,7 +107,7 @@ settings:
 			expect(result).not.toBeNull();
 			expect(result!.subscriptions).toHaveLength(2);
 			expect(result!.subscriptions[0].name).toBe('daily-check');
-			expect(result!.subscriptions[0].event).toBe('time.interval');
+			expect(result!.subscriptions[0].event).toBe('time.heartbeat');
 			expect(result!.subscriptions[0].interval_minutes).toBe(60);
 			expect(result!.subscriptions[1].name).toBe('watch-src');
 			expect(result!.subscriptions[1].watch).toBe('src/**/*.ts');
@@ -120,7 +120,7 @@ settings:
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: test-sub
-    event: time.interval
+    event: time.heartbeat
     prompt: Do stuff
     interval_minutes: 5
 `);
@@ -138,7 +138,7 @@ subscriptions:
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: test-sub
-    event: time.interval
+    event: time.heartbeat
     prompt: Do stuff
     interval_minutes: 10
 `);
@@ -152,7 +152,7 @@ subscriptions:
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: disabled-sub
-    event: time.interval
+    event: time.heartbeat
     enabled: false
     prompt: Do stuff
     interval_minutes: 10
@@ -187,7 +187,7 @@ subscriptions:
 				return `
 subscriptions:
   - name: test-sub
-    event: time.interval
+    event: time.heartbeat
     prompt_file: .maestro/prompts/worker-pipeline.md
     interval_minutes: 5
 `;
@@ -204,7 +204,7 @@ subscriptions:
 			mockReadFileSync.mockReturnValue(`
 subscriptions:
   - name: test-sub
-    event: time.interval
+    event: time.heartbeat
     prompt: Inline prompt text
     prompt_file: .maestro/prompts/should-be-ignored.md
     interval_minutes: 5
@@ -298,7 +298,7 @@ subscriptions:
 		it('returns valid for a correct config', () => {
 			const result = validateCueConfig({
 				subscriptions: [
-					{ name: 'test', event: 'time.interval', prompt: 'Do it', interval_minutes: 5 },
+					{ name: 'test', event: 'time.heartbeat', prompt: 'Do it', interval_minutes: 5 },
 				],
 				settings: { timeout_minutes: 30, timeout_on_fail: 'break' },
 			});
@@ -320,15 +320,15 @@ subscriptions:
 
 		it('requires name on subscriptions', () => {
 			const result = validateCueConfig({
-				subscriptions: [{ event: 'time.interval', prompt: 'Test', interval_minutes: 5 }],
+				subscriptions: [{ event: 'time.heartbeat', prompt: 'Test', interval_minutes: 5 }],
 			});
 			expect(result.valid).toBe(false);
 			expect(result.errors).toEqual(expect.arrayContaining([expect.stringContaining('"name"')]));
 		});
 
-		it('requires interval_minutes for time.interval', () => {
+		it('requires interval_minutes for time.heartbeat', () => {
 			const result = validateCueConfig({
-				subscriptions: [{ name: 'test', event: 'time.interval', prompt: 'Do it' }],
+				subscriptions: [{ name: 'test', event: 'time.heartbeat', prompt: 'Do it' }],
 			});
 			expect(result.valid).toBe(false);
 			expect(result.errors).toEqual(
@@ -359,7 +359,7 @@ subscriptions:
 				subscriptions: [
 					{
 						name: 'test',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						prompt_file: '.maestro/prompts/test.md',
 						interval_minutes: 5,
 					},
@@ -370,7 +370,7 @@ subscriptions:
 
 		it('rejects subscription with neither prompt nor prompt_file', () => {
 			const result = validateCueConfig({
-				subscriptions: [{ name: 'test', event: 'time.interval', interval_minutes: 5 }],
+				subscriptions: [{ name: 'test', event: 'time.heartbeat', interval_minutes: 5 }],
 			});
 			expect(result.valid).toBe(false);
 			expect(result.errors).toEqual(
@@ -476,7 +476,7 @@ subscriptions:
 
 		it('requires prompt to be a non-empty string', () => {
 			const result = validateCueConfig({
-				subscriptions: [{ name: 'test', event: 'time.interval', interval_minutes: 5 }],
+				subscriptions: [{ name: 'test', event: 'time.heartbeat', interval_minutes: 5 }],
 			});
 			expect(result.valid).toBe(false);
 			expect(result.errors).toEqual(expect.arrayContaining([expect.stringContaining('"prompt"')]));

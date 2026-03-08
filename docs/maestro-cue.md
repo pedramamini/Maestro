@@ -17,7 +17,7 @@ Maestro Cue is an **Encore Feature** — it's disabled by default. Enable it in 
 A few examples of what you can automate with Cue:
 
 - **Run linting whenever TypeScript files change** — watch `src/**/*.ts` and prompt an agent to lint on every save
-- **Generate a daily standup summary** — fire every 60 minutes to scan recent git activity and draft a report
+- **Generate a morning standup** — schedule at 9:00 AM on weekdays to scan recent git activity and draft a report
 - **Chain agents together** — when your build agent finishes, automatically trigger a test agent, then a deploy agent
 - **Triage new GitHub PRs** — poll for new pull requests and prompt an agent to review the diff
 - **Track TODO progress** — scan markdown files for unchecked tasks and prompt an agent to work on the next one
@@ -103,16 +103,17 @@ Cue is configured via a `.maestro/cue.yaml` file placed inside the `.maestro/` d
 
 ## Event Types
 
-Cue supports six event types that trigger subscriptions:
+Cue supports seven event types that trigger subscriptions:
 
-| Event Type            | Trigger                            | Key Fields             |
-| --------------------- | ---------------------------------- | ---------------------- |
-| `time.interval`       | Periodic timer                     | `interval_minutes`     |
-| `file.changed`        | File created, modified, or deleted | `watch` (glob pattern) |
-| `agent.completed`     | Another agent finishes a task      | `source_session`       |
-| `task.pending`        | Unchecked markdown tasks found     | `watch` (glob pattern) |
-| `github.pull_request` | New PR opened on GitHub            | `repo` (optional)      |
-| `github.issue`        | New issue opened on GitHub         | `repo` (optional)      |
+| Event Type            | Trigger                             | Key Fields                        |
+| --------------------- | ----------------------------------- | --------------------------------- |
+| `time.heartbeat`      | Periodic timer ("every N minutes")  | `interval_minutes`                |
+| `time.scheduled`      | Specific times and days of the week | `schedule_times`, `schedule_days` |
+| `file.changed`        | File created, modified, or deleted  | `watch` (glob pattern)            |
+| `agent.completed`     | Another agent finishes a task       | `source_session`                  |
+| `task.pending`        | Unchecked markdown tasks found      | `watch` (glob pattern)            |
+| `github.pull_request` | New PR opened on GitHub             | `repo` (optional)                 |
+| `github.issue`        | New issue opened on GitHub          | `repo` (optional)                 |
 
 See [Event Types](./maestro-cue-events) for detailed documentation and examples for each type.
 
@@ -168,7 +169,7 @@ Filter by CUE entries in the History panel or in Director's Notes (when both Enc
 
 ## Tips
 
-- **Start simple** — Begin with a single `file.changed` or `time.interval` subscription before building complex chains
+- **Start simple** — Begin with a single `file.changed` or `time.heartbeat` subscription before building complex chains
 - **Use the YAML editor** — The inline editor validates your config in real-time, catching errors before they reach the engine
 - **Check the Activity Log** — If a subscription isn't firing, the activity log shows failures with error details
 - **Prompt files vs inline** — For complex prompts, point the `prompt` field at a `.md` file instead of inlining YAML

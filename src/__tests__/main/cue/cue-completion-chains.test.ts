@@ -216,7 +216,7 @@ describe('CueEngine completion chains', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'do work',
 						interval_minutes: 60,
@@ -250,7 +250,7 @@ describe('CueEngine completion chains', () => {
 			expect(deps.onCueRun).toHaveBeenCalledWith(
 				'session-1',
 				'do work',
-				expect.objectContaining({ type: 'time.interval' })
+				expect.objectContaining({ type: 'time.heartbeat' })
 			);
 			expect(deps.onCueRun).toHaveBeenCalledWith(
 				'session-2',

@@ -242,7 +242,7 @@ describe('CueYamlEditor', () => {
 
 	describe('YAML loading', () => {
 		it('should load existing YAML from projectRoot on mount', async () => {
-			const existingYaml = 'subscriptions:\n  - name: "test"\n    event: time.interval';
+			const existingYaml = 'subscriptions:\n  - name: "test"\n    event: time.heartbeat';
 			mockReadYaml.mockResolvedValue(existingYaml);
 
 			render(<CueYamlEditor {...defaultProps} />);
@@ -728,7 +728,7 @@ describe('CueYamlEditor', () => {
 				expect(screen.getByTestId('pattern-presets')).toBeInTheDocument();
 			});
 
-			expect(screen.getByTestId('pattern-scheduled-task')).toBeInTheDocument();
+			expect(screen.getByTestId('pattern-heartbeat-task')).toBeInTheDocument();
 			expect(screen.getByTestId('pattern-file-enrichment')).toBeInTheDocument();
 			expect(screen.getByTestId('pattern-reactive')).toBeInTheDocument();
 			expect(screen.getByTestId('pattern-research-swarm')).toBeInTheDocument();
@@ -748,10 +748,10 @@ describe('CueYamlEditor', () => {
 			render(<CueYamlEditor {...defaultProps} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('pattern-scheduled-task')).toBeInTheDocument();
+				expect(screen.getByTestId('pattern-heartbeat-task')).toBeInTheDocument();
 			});
 
-			fireEvent.click(screen.getByTestId('pattern-scheduled-task'));
+			fireEvent.click(screen.getByTestId('pattern-heartbeat-task'));
 
 			// Preview overlay should show the explanation and copy button
 			expect(screen.getByText(/Runs a prompt on a fixed interval/)).toBeInTheDocument();
@@ -767,7 +767,7 @@ describe('CueYamlEditor', () => {
 				expect(screen.getByTestId('yaml-editor')).toBeInTheDocument();
 			});
 
-			fireEvent.click(screen.getByTestId('pattern-scheduled-task'));
+			fireEvent.click(screen.getByTestId('pattern-heartbeat-task'));
 
 			// Editor should still have original content
 			const editor = screen.getByTestId('yaml-editor') as HTMLTextAreaElement;
@@ -783,14 +783,14 @@ describe('CueYamlEditor', () => {
 			render(<CueYamlEditor {...defaultProps} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('pattern-scheduled-task')).toBeInTheDocument();
+				expect(screen.getByTestId('pattern-heartbeat-task')).toBeInTheDocument();
 			});
 
-			fireEvent.click(screen.getByTestId('pattern-scheduled-task'));
+			fireEvent.click(screen.getByTestId('pattern-heartbeat-task'));
 			fireEvent.click(screen.getByText('Copy to Clipboard'));
 
 			await waitFor(() => {
-				expect(mockWriteText).toHaveBeenCalledWith(expect.stringContaining('time.interval'));
+				expect(mockWriteText).toHaveBeenCalledWith(expect.stringContaining('time.heartbeat'));
 			});
 
 			expect(screen.getByText('Copied')).toBeInTheDocument();
@@ -800,10 +800,10 @@ describe('CueYamlEditor', () => {
 			render(<CueYamlEditor {...defaultProps} />);
 
 			await waitFor(() => {
-				expect(screen.getByTestId('pattern-scheduled-task')).toBeInTheDocument();
+				expect(screen.getByTestId('pattern-heartbeat-task')).toBeInTheDocument();
 			});
 
-			fireEvent.click(screen.getByTestId('pattern-scheduled-task'));
+			fireEvent.click(screen.getByTestId('pattern-heartbeat-task'));
 			expect(screen.getByText('Copy to Clipboard')).toBeInTheDocument();
 			expect(screen.getByTestId('cue-pattern-preview')).toBeInTheDocument();
 

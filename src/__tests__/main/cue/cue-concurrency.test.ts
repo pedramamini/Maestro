@@ -113,7 +113,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 60,
@@ -145,7 +145,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -189,7 +189,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -237,7 +237,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -298,7 +298,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -352,7 +352,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -415,7 +415,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -449,7 +449,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -483,7 +483,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -518,7 +518,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -566,7 +566,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,
@@ -604,7 +604,7 @@ describe('CueEngine Concurrency Control', () => {
 				subscriptions: [
 					{
 						name: 'timer',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'test',
 						interval_minutes: 1,

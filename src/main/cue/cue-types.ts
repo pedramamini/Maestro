@@ -2,7 +2,8 @@
  * Core type definitions for the Maestro Cue event-driven automation system.
  *
  * Cue triggers agent prompts in response to events:
- * - time.interval: periodic timer-based triggers
+ * - time.heartbeat: periodic timer-based triggers ("run every X minutes")
+ * - time.scheduled: cron-like triggers (specific times and days of week)
  * - file.changed: file system change triggers
  * - agent.completed: triggers when another agent finishes
  * - github.pull_request: triggers when new PRs are detected via GitHub CLI polling
@@ -10,9 +11,24 @@
  * - task.pending: triggers when unchecked markdown tasks (- [ ]) are found in watched files
  */
 
+/** Days of the week for scheduled triggers */
+export type CueScheduleDay = 'mon' | 'tue' | 'wed' | 'thu' | 'fri' | 'sat' | 'sun';
+
+/** All valid schedule day values */
+export const CUE_SCHEDULE_DAYS: CueScheduleDay[] = [
+	'mon',
+	'tue',
+	'wed',
+	'thu',
+	'fri',
+	'sat',
+	'sun',
+];
+
 /** Event types that can trigger a Cue subscription */
 export type CueEventType =
-	| 'time.interval'
+	| 'time.heartbeat'
+	| 'time.scheduled'
 	| 'file.changed'
 	| 'agent.completed'
 	| 'github.pull_request'
@@ -29,6 +45,8 @@ export interface CueSubscription {
 	output_prompt?: string;
 	output_prompt_file?: string;
 	interval_minutes?: number;
+	schedule_times?: string[];
+	schedule_days?: CueScheduleDay[];
 	watch?: string;
 	source_session?: string | string[];
 	fan_out?: string[];

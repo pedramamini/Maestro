@@ -70,7 +70,7 @@ function createMockConfig(overrides: Partial<CueConfig> = {}): CueConfig {
 		subscriptions: [
 			{
 				name: 'timer-sub',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'check status',
 				interval_minutes: 15,

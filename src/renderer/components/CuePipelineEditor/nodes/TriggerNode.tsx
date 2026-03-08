@@ -21,7 +21,8 @@ export interface TriggerNodeDataProps {
 }
 
 const EVENT_COLORS: Record<CueEventType, string> = {
-	'time.interval': '#f59e0b',
+	'time.heartbeat': '#f59e0b',
+	'time.scheduled': '#8b5cf6',
 	'file.changed': '#3b82f6',
 	'agent.completed': '#22c55e',
 	'github.pull_request': '#a855f7',
@@ -30,7 +31,8 @@ const EVENT_COLORS: Record<CueEventType, string> = {
 };
 
 const EVENT_ICONS: Record<CueEventType, typeof Clock> = {
-	'time.interval': Clock,
+	'time.heartbeat': Clock,
+	'time.scheduled': Clock,
 	'file.changed': FileText,
 	'agent.completed': Zap,
 	'github.pull_request': GitPullRequest,

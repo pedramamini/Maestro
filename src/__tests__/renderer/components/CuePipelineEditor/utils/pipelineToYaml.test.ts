@@ -37,7 +37,7 @@ describe('pipelineToYamlSubscriptions', () => {
 					type: 'trigger',
 					position: { x: 0, y: 0 },
 					data: {
-						eventType: 'time.interval',
+						eventType: 'time.heartbeat',
 						label: 'Scheduled',
 						config: { interval_minutes: 5 },
 					},
@@ -55,7 +55,7 @@ describe('pipelineToYamlSubscriptions', () => {
 					type: 'trigger',
 					position: { x: 0, y: 0 },
 					data: {
-						eventType: 'time.interval',
+						eventType: 'time.heartbeat',
 						label: 'Scheduled',
 						config: { interval_minutes: 10 },
 					},
@@ -78,7 +78,7 @@ describe('pipelineToYamlSubscriptions', () => {
 		const subs = pipelineToYamlSubscriptions(pipeline);
 		expect(subs).toHaveLength(1);
 		expect(subs[0].name).toBe('test-pipeline');
-		expect(subs[0].event).toBe('time.interval');
+		expect(subs[0].event).toBe('time.heartbeat');
 		expect(subs[0].interval_minutes).toBe(10);
 		expect(subs[0].prompt).toBe('Do the work');
 	});
@@ -147,7 +147,7 @@ describe('pipelineToYamlSubscriptions', () => {
 					type: 'trigger',
 					position: { x: 0, y: 0 },
 					data: {
-						eventType: 'time.interval',
+						eventType: 'time.heartbeat',
 						label: 'Scheduled',
 						config: { interval_minutes: 30 },
 					},
@@ -195,7 +195,7 @@ describe('pipelineToYamlSubscriptions', () => {
 					type: 'trigger',
 					position: { x: 0, y: 0 },
 					data: {
-						eventType: 'time.interval',
+						eventType: 'time.heartbeat',
 						label: 'Scheduled',
 						config: { interval_minutes: 5 },
 					},
@@ -329,7 +329,7 @@ describe('pipelinesToYaml', () => {
 					type: 'trigger',
 					position: { x: 0, y: 0 },
 					data: {
-						eventType: 'time.interval',
+						eventType: 'time.heartbeat',
 						label: 'Scheduled',
 						config: { interval_minutes: 15 },
 					},
@@ -353,7 +353,7 @@ describe('pipelinesToYaml', () => {
 		expect(yamlStr).toContain('# Pipeline: test-pipeline (color: #06b6d4)');
 		expect(yamlStr).toContain('subscriptions:');
 		expect(yamlStr).toContain('name: test-pipeline');
-		expect(yamlStr).toContain('event: time.interval');
+		expect(yamlStr).toContain('event: time.heartbeat');
 		expect(yamlStr).toContain('interval_minutes: 15');
 		expect(yamlStr).toContain('prompt_file: .maestro/prompts/worker-test-pipeline.md');
 		expect(yamlStr).not.toContain('prompt: Do stuff');
@@ -369,7 +369,7 @@ describe('pipelinesToYaml', () => {
 					id: 't1',
 					type: 'trigger',
 					position: { x: 0, y: 0 },
-					data: { eventType: 'time.interval', label: 'Timer', config: { interval_minutes: 5 } },
+					data: { eventType: 'time.heartbeat', label: 'Timer', config: { interval_minutes: 5 } },
 				},
 				{
 					id: 'a1',
@@ -397,7 +397,7 @@ describe('pipelinesToYaml', () => {
 					id: 't1',
 					type: 'trigger',
 					position: { x: 0, y: 0 },
-					data: { eventType: 'time.interval', label: 'Timer', config: { interval_minutes: 5 } },
+					data: { eventType: 'time.heartbeat', label: 'Timer', config: { interval_minutes: 5 } },
 				},
 				{
 					id: 'a1',
@@ -436,7 +436,7 @@ describe('pipelinesToYaml', () => {
 					id: 't1',
 					type: 'trigger',
 					position: { x: 0, y: 0 },
-					data: { eventType: 'time.interval', label: 'Timer', config: { interval_minutes: 5 } },
+					data: { eventType: 'time.heartbeat', label: 'Timer', config: { interval_minutes: 5 } },
 				},
 				{
 					id: 'a1',
@@ -498,7 +498,7 @@ describe('pipelinesToYaml', () => {
 					id: 't1',
 					type: 'trigger',
 					position: { x: 0, y: 0 },
-					data: { eventType: 'time.interval', label: 'Timer', config: { interval_minutes: 5 } },
+					data: { eventType: 'time.heartbeat', label: 'Timer', config: { interval_minutes: 5 } },
 				},
 				{
 					id: 'a1',
@@ -569,7 +569,7 @@ describe('pipelinesToYaml', () => {
 					id: 't1',
 					type: 'trigger',
 					position: { x: 0, y: 0 },
-					data: { eventType: 'time.interval', label: 'Timer', config: { interval_minutes: 5 } },
+					data: { eventType: 'time.heartbeat', label: 'Timer', config: { interval_minutes: 5 } },
 				},
 				{
 					id: 'a1',

@@ -355,7 +355,7 @@ settings:
 
 Cue handles system sleep gracefully:
 
-- **`time.interval`** subscriptions reconcile missed intervals on wake. If your machine sleeps through three intervals, Cue fires one catch-up event (not three).
+- **`time.heartbeat`** subscriptions reconcile missed intervals on wake. If your machine sleeps through three intervals, Cue fires one catch-up event (not three).
 - **File watchers** (`file.changed`, `task.pending`) resume monitoring on wake. Changes that occurred during sleep may trigger events depending on the OS file system notification behavior.
 - **GitHub pollers** resume polling on wake. Any PRs/issues created during sleep are detected on the next poll.
 
