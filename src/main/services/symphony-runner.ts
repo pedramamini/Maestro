@@ -251,10 +251,19 @@ export async function startContribution(options: SymphonyRunnerOptions): Promise
 		}
 
 		// 2.5. Fork setup — detect if user needs a fork for push access
+		logger.info('Checking fork requirements', LOG_CONTEXT, { repoSlug });
 		const forkResult = await ensureForkSetup(localPath, repoSlug);
 		if (forkResult.error) {
 			await cleanupLocalRepo(localPath);
 			return { success: false, error: `Fork setup failed: ${forkResult.error}` };
+		}
+		if (forkResult.isFork) {
+			logger.info('Using fork for contribution', LOG_CONTEXT, {
+				forkSlug: forkResult.forkSlug,
+				upstreamSlug: repoSlug,
+			});
+		} else {
+			logger.info('User has push access, no fork needed', LOG_CONTEXT, { repoSlug });
 		}
 
 		// 2.6. Configure git user for commits
@@ -277,6 +286,13 @@ export async function startContribution(options: SymphonyRunnerOptions): Promise
 		const forkOwner = forkResult.isFork && forkResult.forkSlug
 			? forkResult.forkSlug.split('/')[0]
 			: undefined;
+		if (forkResult.isFork) {
+			logger.info('Creating cross-fork draft PR', LOG_CONTEXT, {
+				upstreamSlug: repoSlug,
+				forkSlug: forkResult.forkSlug,
+				branchName,
+			});
+		}
 		const prResult = await createDraftPR(
 			localPath,
 			issueNumber,

@@ -821,11 +821,16 @@ async function createDraftPR(
  */
 async function markPRReady(
 	repoPath: string,
-	prNumber: number
+	prNumber: number,
+	upstreamSlug?: string
 ): Promise<{ success: boolean; error?: string }> {
+	const args = ['pr', 'ready', String(prNumber)];
+	if (upstreamSlug) {
+		args.push('--repo', upstreamSlug);
+	}
 	const result = await execFileNoThrow(
 		'gh',
-		['pr', 'ready', String(prNumber)],
+		args,
 		repoPath,
 		getExpandedEnv()
 	);
@@ -913,7 +918,8 @@ async function postPRComment(
 		timeSpentMs: number;
 		documentsProcessed: number;
 		tasksCompleted: number;
-	}
+	},
+	upstreamSlug?: string
 ): Promise<{ success: boolean; error?: string }> {
 	// Format time spent
 	const hours = Math.floor(stats.timeSpentMs / 3600000);
@@ -948,9 +954,13 @@ This pull request was created using [Maestro Symphony](https://runmaestro.ai/sym
 ---
 *Powered by [Maestro](https://runmaestro.ai) • [Learn about Symphony](https://docs.runmaestro.ai/symphony)*`;
 
+	const commentArgs = ['pr', 'comment', String(prNumber), '--body', commentBody];
+	if (upstreamSlug) {
+		commentArgs.push('--repo', upstreamSlug);
+	}
 	const result = await execFileNoThrow(
 		'gh',
-		['pr', 'comment', String(prNumber), '--body', commentBody],
+		commentArgs,
 		repoPath,
 		getExpandedEnv()
 	);
@@ -1500,10 +1510,19 @@ export function registerSymphonyHandlers({
 				}
 
 				// Set up fork if user doesn't have push access
+				logger.info('Checking fork requirements', LOG_CONTEXT, { repoSlug });
 				const forkResult = await ensureForkSetup(localPath, repoSlug);
 				if (forkResult.error) {
 					await fs.rm(localPath, { recursive: true, force: true }).catch(() => {});
 					return { error: `Fork setup failed: ${forkResult.error}` };
+				}
+				if (forkResult.isFork) {
+					logger.info('Using fork for contribution', LOG_CONTEXT, {
+						forkSlug: forkResult.forkSlug,
+						upstreamSlug: repoSlug,
+					});
+				} else {
+					logger.info('User has push access, no fork needed', LOG_CONTEXT, { repoSlug });
 				}
 
 				// Create draft PR to claim the issue
@@ -1522,6 +1541,13 @@ Contributed via [Maestro Symphony](https://runmaestro.ai).
 This PR will be updated automatically when the Auto Run completes.`;
 
 				const forkOwner = forkResult.isFork ? forkResult.forkSlug?.split('/')[0] : undefined;
+				if (forkResult.isFork) {
+					logger.info('Creating cross-fork draft PR', LOG_CONTEXT, {
+						upstreamSlug: repoSlug,
+						forkSlug: forkResult.forkSlug,
+						branchName,
+					});
+				}
 				const prResult = await createDraftPR(
 					localPath,
 					baseBranch,
@@ -1770,8 +1796,12 @@ This PR will be updated automatically when the Auto Run completes.`;
 				contribution.status = 'completing';
 				await writeState(app, state);
 
-				// Mark PR as ready
-				const readyResult = await markPRReady(contribution.localPath, contribution.draftPrNumber);
+				// Mark PR as ready (use upstreamSlug for fork contributions)
+				const readyResult = await markPRReady(
+					contribution.localPath,
+					contribution.draftPrNumber,
+					contribution.isFork ? contribution.upstreamSlug : undefined
+				);
 				if (!readyResult.success) {
 					contribution.status = 'failed';
 					contribution.error = readyResult.error;
@@ -1792,7 +1822,8 @@ This PR will be updated automatically when the Auto Run completes.`;
 				const commentResult = await postPRComment(
 					contribution.localPath,
 					contribution.draftPrNumber,
-					commentStats
+					commentStats,
+					contribution.isFork ? contribution.upstreamSlug : undefined
 				);
 
 				if (!commentResult.success) {
@@ -2039,6 +2070,9 @@ This PR will be updated automatically when the Auto Run completes.`;
 								prCreated?: boolean;
 								draftPrNumber?: number;
 								draftPrUrl?: string;
+								isFork?: boolean;
+								forkSlug?: string;
+								upstreamSlug?: string;
 							};
 							if (metadata.prCreated && metadata.draftPrNumber) {
 								// Sync PR info from metadata to state
@@ -2049,6 +2083,12 @@ This PR will be updated automatically when the Auto Run completes.`;
 									contributionId: contribution.id,
 									draftPrNumber: metadata.draftPrNumber,
 								});
+							}
+							// Sync fork info from metadata to state
+							if (metadata.isFork && !contribution.isFork) {
+								contribution.isFork = metadata.isFork;
+								contribution.forkSlug = metadata.forkSlug;
+								contribution.upstreamSlug = metadata.upstreamSlug;
 							}
 						} catch {
 							// Metadata file might not exist - that's okay
@@ -2219,6 +2259,9 @@ This PR will be updated automatically when the Auto Run completes.`;
 								prCreated?: boolean;
 								draftPrNumber?: number;
 								draftPrUrl?: string;
+								isFork?: boolean;
+								forkSlug?: string;
+								upstreamSlug?: string;
 							};
 							if (metadata.prCreated && metadata.draftPrNumber) {
 								contribution.draftPrNumber = metadata.draftPrNumber;
@@ -2229,6 +2272,12 @@ This PR will be updated automatically when the Auto Run completes.`;
 									contributionId,
 									draftPrNumber: metadata.draftPrNumber,
 								});
+							}
+							// Sync fork info from metadata to state
+							if (metadata.isFork && !contribution.isFork) {
+								contribution.isFork = metadata.isFork;
+								contribution.forkSlug = metadata.forkSlug;
+								contribution.upstreamSlug = metadata.upstreamSlug;
 							}
 						} catch {
 							// Metadata file might not exist - that's okay, we'll try to create PR
@@ -2557,9 +2606,18 @@ This PR will be updated automatically when the Auto Run completes.`;
 					}
 
 					// 1b. Set up fork if user doesn't have push access
+					logger.info('Checking fork requirements', LOG_CONTEXT, { repoSlug });
 					const forkResult = await ensureForkSetup(localPath, repoSlug);
 					if (forkResult.error) {
 						return { success: false, error: `Fork setup failed: ${forkResult.error}` };
+					}
+					if (forkResult.isFork) {
+						logger.info('Using fork for contribution', LOG_CONTEXT, {
+							forkSlug: forkResult.forkSlug,
+							upstreamSlug: repoSlug,
+						});
+					} else {
+						logger.info('User has push access, no fork needed', LOG_CONTEXT, { repoSlug });
 					}
 
 					// 2. Set up Auto Run documents directory
@@ -2694,6 +2752,13 @@ Contributed via [Maestro Symphony](https://runmaestro.ai).
 This PR will be updated automatically when the Auto Run completes.`;
 
 						const forkOwner = forkResult.isFork ? forkResult.forkSlug?.split('/')[0] : undefined;
+						if (forkResult.isFork) {
+							logger.info('Creating cross-fork draft PR', LOG_CONTEXT, {
+								upstreamSlug: repoSlug,
+								forkSlug: forkResult.forkSlug,
+								branchName,
+							});
+						}
 						const prResult = await createDraftPR(
 							localPath,
 							baseBranch,
@@ -2879,6 +2944,13 @@ This PR will be updated automatically when the Auto Run completes.`;
 
 				// Create draft PR (this also pushes the branch)
 				const metaForkOwner = metadata.isFork ? metadata.forkSlug?.split('/')[0] : undefined;
+				if (metadata.isFork) {
+					logger.info('Creating cross-fork draft PR', LOG_CONTEXT, {
+						upstreamSlug: metadata.upstreamSlug,
+						forkSlug: metadata.forkSlug,
+						branchName: metadata.branchName,
+					});
+				}
 				const prResult = await createDraftPR(
 					localPath,
 					baseBranch,
