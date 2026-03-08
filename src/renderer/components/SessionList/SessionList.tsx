@@ -680,7 +680,7 @@ function SessionListInner(props: SessionListProps) {
 
 			{/* Branding Header */}
 			<div
-				className="p-4 border-b flex items-center justify-between h-16 shrink-0"
+				className="p-4 border-b flex items-center justify-between h-16 shrink-0 relative z-20"
 				style={{ borderColor: theme.colors.border }}
 			>
 				{leftSidebarOpen ? (
