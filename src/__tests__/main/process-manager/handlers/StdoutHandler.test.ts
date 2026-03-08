@@ -410,11 +410,30 @@ describe('StdoutHandler', () => {
 					}
 					return { type: 'system' };
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'agent') {
+						return { type: 'result', text: parsed.text };
+					}
+					if (parsed.type === 'done') {
+						return {
+							type: 'usage',
+							usage: {
+								inputTokens: 100,
+								outputTokens: 50,
+								cacheReadTokens: 0,
+								cacheCreationTokens: 0,
+								contextWindow: 400000,
+							},
+						};
+					}
+					return { type: 'system' };
+				}),
 				extractUsage: vi.fn((event: any) => event.usage || null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result' && !!event.text),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 
 			const { handler, bufferManager, sessionId, proc } = createTestContext({
@@ -469,11 +488,22 @@ describe('StdoutHandler', () => {
 						return null;
 					}
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'message' && parsed.role === 'assistant') {
+						return {
+							type: 'text' as const,
+							text: parsed.content,
+							isPartial: parsed.delta === true,
+						};
+					}
+					return null;
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn(() => false),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 		}
 
@@ -549,11 +579,25 @@ describe('StdoutHandler', () => {
 						return null;
 					}
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'result') {
+						return { type: 'result' as const, text: '' }; // empty text on result
+					}
+					if (parsed.type === 'message' && parsed.role === 'assistant') {
+						return {
+							type: 'text' as const,
+							text: parsed.content,
+							isPartial: parsed.delta === true,
+						};
+					}
+					return null;
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result'),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 
 			const { handler, emitter, bufferManager, sessionId, proc } = createTestContext({
@@ -608,11 +652,22 @@ describe('StdoutHandler', () => {
 						return null;
 					}
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'assistant' && parsed.content) {
+						return {
+							type: 'text' as const,
+							text: parsed.content,
+							isPartial: parsed.partial === true,
+						};
+					}
+					return null;
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn(() => false),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 
 			const { handler, emitter, bufferManager, sessionId, proc } = createTestContext({
@@ -686,11 +741,19 @@ describe('StdoutHandler', () => {
 						return null;
 					}
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					return {
+						type: parsed.type || 'message',
+						text: parsed.text,
+						isPartial: false,
+					};
+				}),
 				extractUsage: vi.fn(() => usageReturn),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn(() => false),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 		}
 
@@ -1455,11 +1518,27 @@ describe('StdoutHandler', () => {
 					}
 					return { type: 'system' };
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'step_start') {
+						return { type: 'init', sessionId: parsed.sessionID };
+					}
+					if (parsed.type === 'text') {
+						return { type: 'result', text: parsed.part?.text, sessionId: parsed.sessionID };
+					}
+					if (parsed.type === 'tool_use') {
+						return { type: 'tool_use', toolName: parsed.part?.tool, sessionId: parsed.sessionID };
+					}
+					if (parsed.type === 'step_finish') {
+						return { type: 'system', sessionId: parsed.sessionID };
+					}
+					return { type: 'system' };
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn((event: any) => event.sessionId || null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result'),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 		}
 
@@ -1560,11 +1639,17 @@ describe('StdoutHandler', () => {
 					if (parsed.type === 'text') return { type: 'result', text: parsed.text };
 					return { type: 'system' };
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'step_start') return { type: 'init', sessionId: 'x' };
+					if (parsed.type === 'text') return { type: 'result', text: parsed.text };
+					return { type: 'system' };
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result'),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 
 			const { handler, proc, sessionId } = createTestContext({
@@ -1605,11 +1690,15 @@ function createMinimalOutputParser(usageReturn: {
 				return null;
 			}
 		}),
+		parseJsonObject: vi.fn((parsed: any) => {
+			return { type: parsed.type || 'message', text: parsed.text, isPartial: false };
+		}),
 		extractUsage: vi.fn(() => usageReturn),
 		extractSessionId: vi.fn(() => null),
 		extractSlashCommands: vi.fn(() => null),
 		isResultMessage: vi.fn(() => false),
 		detectErrorFromLine: vi.fn(() => null),
+		detectErrorFromParsed: vi.fn(() => null),
 	};
 }
 
@@ -1725,5 +1814,103 @@ describe('extractDeniedPath', () => {
 			'/home/user/project'
 		);
 		expect(result).toBeNull(); // resolves to / which is a system path
+	});
+});
+
+// ── Performance: single JSON.parse per NDJSON line ──────────────────────
+
+describe('StdoutHandler — single JSON parse per line', () => {
+	it('parses JSON exactly once per NDJSON line (output parser path)', () => {
+		// Instrument JSON.parse to count calls
+		const originalParse = JSON.parse;
+		let parseCount = 0;
+		const countingParse = vi.fn((...args: Parameters<typeof JSON.parse>) => {
+			parseCount++;
+			return originalParse.apply(JSON, args);
+		});
+		JSON.parse = countingParse;
+
+		try {
+			const mockParser = {
+				agentId: 'gemini-cli',
+				parseJsonLine: vi.fn(() => ({
+					type: 'text' as const,
+					text: 'hello',
+					isPartial: true,
+					raw: {},
+				})),
+				parseJsonObject: vi.fn((parsed: unknown) => ({
+					type: 'text' as const,
+					text: 'hello',
+					isPartial: true,
+					raw: parsed,
+				})),
+				isResultMessage: vi.fn(() => false),
+				extractSessionId: vi.fn(() => null),
+				extractUsage: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
+				detectErrorFromExit: vi.fn(() => null),
+			};
+
+			const { handler, sessionId } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'gemini-cli' as any,
+				outputParser: mockParser as any,
+			});
+
+			// Send a valid JSON line
+			const jsonLine = JSON.stringify({
+				type: 'message',
+				role: 'assistant',
+				content: 'hi',
+				delta: true,
+			});
+			parseCount = 0; // reset after the stringify parse above
+
+			handler.handleData(sessionId, jsonLine + '\n');
+
+			// Should parse exactly once (in processLine), not 3× as before
+			expect(parseCount).toBe(1);
+
+			// parseJsonObject should be called with pre-parsed object (not parseJsonLine)
+			expect(mockParser.parseJsonObject).toHaveBeenCalledTimes(1);
+			expect(mockParser.parseJsonLine).not.toHaveBeenCalled();
+
+			// detectErrorFromParsed should be called (not detectErrorFromLine)
+			expect(mockParser.detectErrorFromParsed).toHaveBeenCalledTimes(1);
+			expect(mockParser.detectErrorFromLine).not.toHaveBeenCalled();
+		} finally {
+			JSON.parse = originalParse;
+		}
+	});
+
+	it('falls back to detectErrorFromLine for non-JSON lines', () => {
+		const mockParser = {
+			agentId: 'claude-code',
+			parseJsonLine: vi.fn(() => null),
+			parseJsonObject: vi.fn(() => null),
+			isResultMessage: vi.fn(() => false),
+			extractSessionId: vi.fn(() => null),
+			extractUsage: vi.fn(() => null),
+			extractSlashCommands: vi.fn(() => null),
+			detectErrorFromLine: vi.fn(() => null),
+			detectErrorFromParsed: vi.fn(() => null),
+			detectErrorFromExit: vi.fn(() => null),
+		};
+
+		const { handler, sessionId } = createTestContext({
+			isStreamJsonMode: true,
+			toolType: 'claude-code' as any,
+			outputParser: mockParser as any,
+		});
+
+		// Send a non-JSON line (e.g., stderr with embedded JSON)
+		handler.handleData(sessionId, 'Error streaming: 400 {"type":"error"}\n');
+
+		// Should fall back to line-based detection since JSON.parse fails
+		expect(mockParser.detectErrorFromLine).toHaveBeenCalledTimes(1);
+		expect(mockParser.detectErrorFromParsed).not.toHaveBeenCalled();
 	});
 });

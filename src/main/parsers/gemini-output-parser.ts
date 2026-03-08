@@ -75,17 +75,20 @@ interface GeminiResultStats {
 	duration_ms?: number;
 	tool_calls?: number;
 	thoughts_tokens?: number;
-	models?: Record<string, {
-		tokens?: {
-			input?: number;
-			prompt?: number;
-			candidates?: number;
-			total?: number;
-			cached?: number;
-			thoughts?: number;
-			tool?: number;
-		};
-	}>;
+	models?: Record<
+		string,
+		{
+			tokens?: {
+				input?: number;
+				prompt?: number;
+				candidates?: number;
+				total?: number;
+				cached?: number;
+				thoughts?: number;
+				tool?: number;
+			};
+		}
+	>;
 }
 
 interface GeminiResultEvent {
@@ -117,8 +120,16 @@ type GeminiEvent =
 export class GeminiOutputParser implements AgentOutputParser {
 	readonly agentId: ToolType = 'gemini-cli' as ToolType;
 
+	/** Cached error patterns — resolved once at construction instead of per-line */
+	private readonly cachedErrorPatterns: ReturnType<typeof getErrorPatterns>;
+
+	constructor() {
+		this.cachedErrorPatterns = getErrorPatterns(this.agentId);
+	}
+
 	/**
-	 * Parse a single JSON line from Gemini stream-json output
+	 * Parse a single JSON line from Gemini stream-json output.
+	 * Delegates to parseJsonObject after JSON.parse.
 	 */
 	parseJsonLine(line: string): ParsedEvent | null {
 		const trimmed = line.trim();
@@ -126,12 +137,23 @@ export class GeminiOutputParser implements AgentOutputParser {
 			return null;
 		}
 
-		let event: GeminiEvent;
 		try {
-			event = JSON.parse(trimmed);
+			return this.parseJsonObject(JSON.parse(trimmed));
 		} catch {
 			return null;
 		}
+	}
+
+	/**
+	 * Parse a pre-parsed JSON object into a normalized event.
+	 * Core logic extracted from parseJsonLine to avoid redundant JSON.parse calls.
+	 */
+	parseJsonObject(parsed: unknown): ParsedEvent | null {
+		if (!parsed || typeof parsed !== 'object') {
+			return null;
+		}
+
+		const event = parsed as GeminiEvent;
 
 		if (!event.type) {
 			return null;
@@ -183,9 +205,10 @@ export class GeminiOutputParser implements AgentOutputParser {
 						output: event.output,
 						error: event.error,
 					},
-					text: event.status === 'error'
-						? `Tool error: ${event.error?.message || 'Unknown tool error'}`
-						: undefined,
+					text:
+						event.status === 'error'
+							? `Tool error: ${event.error?.message || 'Unknown tool error'}`
+							: undefined,
 					raw: event,
 				};
 
@@ -263,32 +286,53 @@ export class GeminiOutputParser implements AgentOutputParser {
 	}
 
 	/**
-	 * Detect an error from a line of agent output
+	 * Detect an error from a line of agent output.
+	 * Delegates to detectErrorFromParsed after JSON.parse.
 	 */
 	detectErrorFromLine(line: string): AgentError | null {
 		if (!line.trim()) {
 			return null;
 		}
 
-		// Only check structured JSON error events to avoid false positives
-		let errorText: string | null = null;
 		try {
-			const parsed = JSON.parse(line);
-			if (parsed.type === 'error' && parsed.message) {
-				errorText = parsed.message;
-			} else if (parsed.type === 'result' && parsed.status === 'error' && parsed.error?.message) {
-				errorText = parsed.error.message;
+			const error = this.detectErrorFromParsed(JSON.parse(line));
+			if (error) {
+				error.raw = { ...(error.raw as Record<string, unknown>), errorLine: line };
 			}
+			return error;
 		} catch {
 			// Not JSON — skip
+			return null;
+		}
+	}
+
+	/**
+	 * Detect an error from a pre-parsed JSON object.
+	 * Core logic extracted from detectErrorFromLine to avoid redundant JSON.parse calls.
+	 * Uses cached error patterns for efficiency.
+	 */
+	detectErrorFromParsed(parsed: unknown): AgentError | null {
+		if (!parsed || typeof parsed !== 'object') {
+			return null;
+		}
+
+		const obj = parsed as Record<string, unknown>;
+		let errorText: string | null = null;
+
+		if (obj.type === 'error' && typeof obj.message === 'string') {
+			errorText = obj.message;
+		} else if (obj.type === 'result' && obj.status === 'error') {
+			const error = obj.error as { message?: string } | undefined;
+			if (error?.message) {
+				errorText = error.message;
+			}
 		}
 
 		if (!errorText) {
 			return null;
 		}
 
-		const patterns = getErrorPatterns(this.agentId);
-		const match = matchErrorPattern(patterns, errorText);
+		const match = matchErrorPattern(this.cachedErrorPatterns, errorText);
 
 		if (match) {
 			return {
@@ -297,7 +341,7 @@ export class GeminiOutputParser implements AgentOutputParser {
 				recoverable: match.recoverable,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { errorLine: line },
+				raw: { parsedJson: parsed },
 			};
 		}
 
