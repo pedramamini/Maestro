@@ -240,9 +240,9 @@ export const TerminalView = memo(
 			for (const tab of terminalTabs) {
 				const prev = prevTabStatesRef.current.get(tab.id);
 				if (prev !== undefined && prev !== 'exited' && tab.state === 'exited') {
-					// Brief delay so the user sees the exit before the tab disappears
 					const tabId = tab.id;
-					setTimeout(() => closeTerminalTab(tabId), 300);
+					// Close on next tick to avoid mutating state mid-render
+					setTimeout(() => closeTerminalTab(tabId), 0);
 				}
 				prevTabStatesRef.current.set(tab.id, tab.state);
 			}
