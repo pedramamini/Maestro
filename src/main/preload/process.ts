@@ -474,14 +474,12 @@ export function createProcessApi() {
 			const handler = (_: unknown, sessionId: string, config: any, responseChannel: string) => {
 				try {
 					// callback may return a promise even though typed as void
-					Promise.resolve(callback(sessionId, config, responseChannel)).catch(
-						(error) => {
-							ipcRenderer.send(responseChannel, {
-								success: false,
-								error: error instanceof Error ? error.message : String(error),
-							});
-						}
-					);
+					Promise.resolve(callback(sessionId, config, responseChannel)).catch((error) => {
+						ipcRenderer.send(responseChannel, {
+							success: false,
+							error: error instanceof Error ? error.message : String(error),
+						});
+					});
 				} catch (error) {
 					ipcRenderer.send(responseChannel, {
 						success: false,
