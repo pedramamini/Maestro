@@ -194,9 +194,31 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 	readonly agentId: ToolType = 'gemini-cli' as ToolType;
 	private originsStore?: Store<AgentSessionOriginsData>;
 	private historyDirCache = new Map<string, { dir: string | null; expiresAt: number }>();
+	private writeQueues = new Map<string, Promise<void>>();
 
 	constructor(originsStore?: Store<AgentSessionOriginsData>) {
 		this.originsStore = originsStore;
+	}
+
+	/**
+	 * Serialize file writes by path. Concurrent callers targeting the same file
+	 * are queued so reads always see the latest committed state.
+	 * Automatically cleans up the queue entry once it settles.
+	 */
+	private enqueueFileWrite<T>(filePath: string, fn: () => Promise<T>): Promise<T> {
+		const prev = this.writeQueues.get(filePath) ?? Promise.resolve();
+		const next = prev.then(fn, fn);
+		const settled = next.then(
+			() => {},
+			() => {}
+		);
+		this.writeQueues.set(filePath, settled);
+		settled.then(() => {
+			if (this.writeQueues.get(filePath) === settled) {
+				this.writeQueues.delete(filePath);
+			}
+		});
+		return next;
 	}
 
 	get displayName(): string {
@@ -758,124 +780,138 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 			return { success: false, error: 'Session file not found' };
 		}
 
-		try {
-			const content = await fs.readFile(sessionFilePath, 'utf-8');
-			const session = JSON.parse(content) as GeminiSessionFile;
-			const messages = session.messages || [];
-
-			// Find the target user message by array index (UUID is the stringified index)
-			let userMessageIndex = -1;
-			const parsedIndex = parseInt(userMessageUuid, 10);
-			if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < messages.length) {
-				if (messages[parsedIndex].type === 'user') {
-					userMessageIndex = parsedIndex;
-				}
-			}
-
-			// Fallback: content match
-			if (userMessageIndex === -1 && fallbackContent) {
-				const normalizedFallback = fallbackContent.trim();
-				for (let i = messages.length - 1; i >= 0; i--) {
-					if (messages[i].type !== 'user') continue;
-					const textContent = getDisplayText(messages[i]);
-					if (textContent.trim() === normalizedFallback) {
-						userMessageIndex = i;
-						logger.info('Found Gemini message by content match', LOG_CONTEXT, {
-							sessionId,
-							index: i,
-						});
-						break;
-					}
-				}
-			}
-
-			if (userMessageIndex === -1) {
-				logger.warn('User message not found for deletion in Gemini session', LOG_CONTEXT, {
-					sessionId,
-					userMessageUuid,
-					hasFallback: !!fallbackContent,
-				});
-				return { success: false, error: 'Message not found' };
-			}
-
-			// Scan forward from userMessageIndex+1 to find the paired gemini response.
-			// Track scanEndIndex through the scan to include intermediate messages
-			// (info/error/warning) in the deletion range, preventing orphans.
-			let pairedResponseIndex = -1;
-			let scanEndIndex = userMessageIndex + 1;
-			for (let i = userMessageIndex + 1; i < messages.length; i++) {
-				if (messages[i].type === 'gemini') {
-					pairedResponseIndex = i;
-					scanEndIndex = i + 1;
-					break;
-				}
-				if (messages[i].type === 'user') {
-					// Hit the next user message without finding a gemini response.
-					// scanEndIndex already covers intermediates up to this point.
-					break;
-				}
-				// Intermediate message (info/error/warning) — include in deletion range
-				scanEndIndex = i + 1;
-			}
-
-			// If we found a gemini response, also scan past it for trailing intermediates
-			// (e.g., tool completion info) that belong to this exchange
-			if (pairedResponseIndex !== -1) {
-				for (let i = pairedResponseIndex + 1; i < messages.length; i++) {
-					if (messages[i].type === 'user' || messages[i].type === 'gemini') {
-						break;
-					}
-					// Trailing intermediate — include in deletion range
-					scanEndIndex = i + 1;
-				}
-			}
-
-			const endIndex = scanEndIndex;
-			const removedCount = endIndex - userMessageIndex;
-
-			// Create backup before modifying
-			const backupPath = `${sessionFilePath}.bak`;
-			await fs.writeFile(backupPath, content, 'utf-8');
-
+		return this.enqueueFileWrite(sessionFilePath, async () => {
 			try {
-				// Splice out the messages
-				session.messages = [...messages.slice(0, userMessageIndex), ...messages.slice(endIndex)];
-				session.lastUpdated = new Date().toISOString();
+				const content = await fs.readFile(sessionFilePath, 'utf-8');
+				const session = JSON.parse(content) as GeminiSessionFile;
+				const messages = session.messages || [];
 
-				await fs.writeFile(sessionFilePath, JSON.stringify(session, null, 2), 'utf-8');
-
-				// Clean up backup on success
-				fs.unlink(backupPath).catch(() => {});
-
-				logger.info('Deleted message pair from Gemini session', LOG_CONTEXT, {
-					sessionId,
-					userMessageUuid,
-					linesRemoved: removedCount,
-				});
-
-				return { success: true, linesRemoved: removedCount };
-			} catch (writeError) {
-				// Restore from backup on write failure
-				try {
-					await fs.copyFile(backupPath, sessionFilePath);
-				} catch {
-					// Best effort restore
+				// Find the target user message by array index (UUID is the stringified index)
+				let userMessageIndex = -1;
+				const parsedIndex = parseInt(userMessageUuid, 10);
+				if (!isNaN(parsedIndex) && parsedIndex >= 0 && parsedIndex < messages.length) {
+					if (messages[parsedIndex].type === 'user') {
+						userMessageIndex = parsedIndex;
+					}
 				}
-				logger.error('Failed to write Gemini session file after deletion', LOG_CONTEXT, writeError);
-				captureException(writeError, {
-					operation: 'geminiStorage:deleteMessagePair:write',
+
+				// Fallback: content match
+				if (userMessageIndex === -1 && fallbackContent) {
+					const normalizedFallback = fallbackContent.trim();
+					for (let i = messages.length - 1; i >= 0; i--) {
+						if (messages[i].type !== 'user') continue;
+						const textContent = getDisplayText(messages[i]);
+						if (textContent.trim() === normalizedFallback) {
+							userMessageIndex = i;
+							logger.info('Found Gemini message by content match', LOG_CONTEXT, {
+								sessionId,
+								index: i,
+							});
+							break;
+						}
+					}
+				}
+
+				if (userMessageIndex === -1) {
+					logger.warn('User message not found for deletion in Gemini session', LOG_CONTEXT, {
+						sessionId,
+						userMessageUuid,
+						hasFallback: !!fallbackContent,
+					});
+					return { success: false, error: 'Message not found' };
+				}
+
+				// Scan forward from userMessageIndex+1 to find the paired gemini response.
+				// Track scanEndIndex through the scan to include intermediate messages
+				// (info/error/warning) in the deletion range, preventing orphans.
+				let pairedResponseIndex = -1;
+				let scanEndIndex = userMessageIndex + 1;
+				for (let i = userMessageIndex + 1; i < messages.length; i++) {
+					if (messages[i].type === 'gemini') {
+						pairedResponseIndex = i;
+						scanEndIndex = i + 1;
+						break;
+					}
+					if (messages[i].type === 'user') {
+						// Hit the next user message without finding a gemini response.
+						// scanEndIndex already covers intermediates up to this point.
+						break;
+					}
+					// Intermediate message (info/error/warning) — include in deletion range
+					scanEndIndex = i + 1;
+				}
+
+				// If we found a gemini response, also scan past it for trailing intermediates
+				// (e.g., tool completion info) that belong to this exchange
+				if (pairedResponseIndex !== -1) {
+					for (let i = pairedResponseIndex + 1; i < messages.length; i++) {
+						if (messages[i].type === 'user' || messages[i].type === 'gemini') {
+							break;
+						}
+						// Trailing intermediate — include in deletion range
+						scanEndIndex = i + 1;
+					}
+				}
+
+				const endIndex = scanEndIndex;
+				const removedCount = endIndex - userMessageIndex;
+
+				// Create backup before modifying
+				const backupPath = `${sessionFilePath}.bak`;
+				await fs.writeFile(backupPath, content, 'utf-8');
+
+				try {
+					// Splice out the messages
+					session.messages = [...messages.slice(0, userMessageIndex), ...messages.slice(endIndex)];
+					session.lastUpdated = new Date().toISOString();
+
+					// Atomic write: temp file + rename prevents partial/corrupt reads
+					const tmpPath = `${sessionFilePath}.tmp`;
+					await fs.writeFile(tmpPath, JSON.stringify(session, null, 2), 'utf-8');
+					await fs.rename(tmpPath, sessionFilePath);
+
+					// Clean up backup on success
+					fs.unlink(backupPath).catch(() => {});
+
+					logger.info('Deleted message pair from Gemini session', LOG_CONTEXT, {
+						sessionId,
+						userMessageUuid,
+						linesRemoved: removedCount,
+					});
+
+					return { success: true, linesRemoved: removedCount };
+				} catch (writeError) {
+					// Restore from backup on write failure
+					try {
+						await fs.copyFile(backupPath, sessionFilePath);
+					} catch {
+						// Best effort restore
+					}
+					// Clean up orphaned temp file
+					fs.unlink(`${sessionFilePath}.tmp`).catch(() => {});
+					logger.error(
+						'Failed to write Gemini session file after deletion',
+						LOG_CONTEXT,
+						writeError
+					);
+					captureException(writeError, {
+						operation: 'geminiStorage:deleteMessagePair:write',
+						sessionId,
+					});
+					return { success: false, error: 'Failed to write session file' };
+				}
+			} catch (error) {
+				logger.error('Error deleting message pair from Gemini session', LOG_CONTEXT, {
+					sessionId,
+					error,
+				});
+				captureException(error, {
+					operation: 'geminiStorage:deleteMessagePair',
 					sessionId,
 				});
-				return { success: false, error: 'Failed to write session file' };
+				return { success: false, error: String(error) };
 			}
-		} catch (error) {
-			logger.error('Error deleting message pair from Gemini session', LOG_CONTEXT, {
-				sessionId,
-				error,
-			});
-			captureException(error, { operation: 'geminiStorage:deleteMessagePair', sessionId });
-			return { success: false, error: String(error) };
-		}
+		});
 	}
 
 	/**

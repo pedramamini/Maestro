@@ -35,6 +35,7 @@ vi.mock('fs/promises', () => ({
 		readdir: vi.fn(),
 		readFile: vi.fn(),
 		writeFile: vi.fn(),
+		rename: vi.fn(),
 		stat: vi.fn(),
 		unlink: vi.fn(),
 		copyFile: vi.fn(),
@@ -96,6 +97,7 @@ describe('GeminiSessionStorage', () => {
 			isDirectory: () => true,
 		});
 		(fs.writeFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+		(fs.rename as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 		(fs.unlink as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 		(fs.copyFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 	}
@@ -319,6 +321,14 @@ describe('GeminiSessionStorage', () => {
 			expect(backupCall).toBeDefined();
 			expect(backupCall![1]).toBe(sessionContent);
 
+			// Verify atomic write: content written to .tmp, then renamed
+			const tmpCall = writeCalls.find((call: unknown[]) => (call[0] as string).endsWith('.tmp'));
+			expect(tmpCall).toBeDefined();
+			expect(fs.rename).toHaveBeenCalledWith(
+				expect.stringContaining('.tmp'),
+				expect.stringContaining('session-123-test-session-id.json')
+			);
+
 			// Verify backup cleanup was attempted
 			expect(fs.unlink).toHaveBeenCalled();
 		});
@@ -477,6 +487,145 @@ describe('GeminiSessionStorage', () => {
 			expect(new Date(writtenSession.lastUpdated).getTime()).toBeGreaterThan(
 				new Date('2026-01-01T01:00:00.000Z').getTime()
 			);
+		});
+
+		it('should serialize concurrent deletes on the same session file', async () => {
+			const messages = [
+				{ type: 'user', content: 'First' },
+				{ type: 'gemini', content: 'Response 1' },
+				{ type: 'user', content: 'Second' },
+				{ type: 'gemini', content: 'Response 2' },
+			];
+
+			// Track the file content state so the second delete sees the first's changes
+			let currentContent = buildSessionJson(messages);
+			const operationOrder: string[] = [];
+			let firstWriteResolve: (() => void) | null = null;
+
+			(fs.access as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.readdir as ReturnType<typeof vi.fn>).mockResolvedValue([
+				'session-123-test-session-id.json',
+			]);
+			(fs.stat as ReturnType<typeof vi.fn>).mockResolvedValue({
+				size: 1000,
+				mtimeMs: Date.now(),
+				isDirectory: () => true,
+			});
+			(fs.readFile as ReturnType<typeof vi.fn>).mockImplementation((filePath: string) => {
+				if (filePath.endsWith('.project_root')) {
+					return Promise.resolve('/test/project');
+				}
+				return Promise.resolve(currentContent);
+			});
+			(fs.unlink as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+			(fs.copyFile as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+
+			let tmpWriteCount = 0;
+			(fs.writeFile as ReturnType<typeof vi.fn>).mockImplementation(async (_filePath: string) => {
+				if ((_filePath as string).endsWith('.tmp')) {
+					tmpWriteCount++;
+					const n = tmpWriteCount;
+					operationOrder.push(`write-start-${n}`);
+					if (n === 1) {
+						// First atomic write blocks to prove serialization
+						await new Promise<void>((r) => {
+							firstWriteResolve = r;
+						});
+					}
+					operationOrder.push(`write-end-${n}`);
+				}
+			});
+			(fs.rename as ReturnType<typeof vi.fn>).mockImplementation(async (tmpPath: string) => {
+				// Simulate atomic rename: update currentContent from the .tmp write
+				const tmpWriteCall = (fs.writeFile as ReturnType<typeof vi.fn>).mock.calls.find(
+					(call: unknown[]) => call[0] === tmpPath
+				);
+				if (tmpWriteCall) {
+					currentContent = tmpWriteCall[1] as string;
+				}
+			});
+
+			// Launch two concurrent deletes
+			const p1 = storage.deleteMessagePair('/test/project', 'test-session-id', '0');
+			// Give p1 time to start and block on its write
+			await new Promise((r) => setTimeout(r, 50));
+			const p2 = storage.deleteMessagePair('/test/project', 'test-session-id', '0');
+
+			// Release the first write
+			await new Promise((r) => setTimeout(r, 10));
+			firstWriteResolve!();
+
+			const [result1, result2] = await Promise.all([p1, p2]);
+
+			// First delete succeeds: removes "First" + "Response 1"
+			expect(result1.success).toBe(true);
+			expect(result1.linesRemoved).toBe(2);
+
+			// Second delete runs after first completes and sees updated file.
+			// Index 0 is now "Second" (after first delete removed "First"+"Response 1")
+			expect(result2.success).toBe(true);
+			expect(result2.linesRemoved).toBe(2);
+
+			// Verify serialization: second write started after first write ended
+			const writeEnd1 = operationOrder.indexOf('write-end-1');
+			const writeStart2 = operationOrder.indexOf('write-start-2');
+			expect(writeEnd1).toBeGreaterThanOrEqual(0);
+			expect(writeStart2).toBeGreaterThanOrEqual(0);
+			expect(writeEnd1).toBeLessThan(writeStart2);
+		});
+
+		it('should use atomic write-then-rename for session file updates', async () => {
+			const messages = [
+				{ type: 'user', content: 'Hello' },
+				{ type: 'gemini', content: 'Response' },
+			];
+			const sessionContent = buildSessionJson(messages);
+			mockFindSessionFile(sessionContent);
+
+			await storage.deleteMessagePair('/test/project', 'test-session-id', '0');
+
+			// Verify write went to .tmp file
+			const writeCalls = (fs.writeFile as ReturnType<typeof vi.fn>).mock.calls;
+			const tmpWrite = writeCalls.find((call: unknown[]) => (call[0] as string).endsWith('.tmp'));
+			expect(tmpWrite).toBeDefined();
+
+			// Verify rename was called from .tmp to .json
+			const renameCalls = (fs.rename as ReturnType<typeof vi.fn>).mock.calls;
+			expect(renameCalls).toHaveLength(1);
+			expect(renameCalls[0][0]).toMatch(/\.tmp$/);
+			expect(renameCalls[0][1]).toMatch(/\.json$/);
+
+			// Verify NO direct write to the session .json file (only .bak and .tmp)
+			const directWrites = writeCalls.filter(
+				(call: unknown[]) =>
+					(call[0] as string).endsWith('.json') && !(call[0] as string).endsWith('.bak')
+			);
+			expect(directWrites).toHaveLength(0);
+		});
+
+		it('should clean up orphaned temp file on write failure', async () => {
+			const messages = [
+				{ type: 'user', content: 'Hello' },
+				{ type: 'gemini', content: 'Response' },
+			];
+			const sessionContent = buildSessionJson(messages);
+			mockFindSessionFile(sessionContent);
+
+			// Make rename fail (simulates atomic write failure)
+			(fs.rename as ReturnType<typeof vi.fn>).mockRejectedValue(new Error('rename failed'));
+
+			const result = await storage.deleteMessagePair('/test/project', 'test-session-id', '0');
+
+			expect(result.success).toBe(false);
+			expect(result.error).toBe('Failed to write session file');
+
+			// Verify backup restore was attempted
+			expect(fs.copyFile).toHaveBeenCalled();
+
+			// Verify orphaned .tmp cleanup was attempted
+			const unlinkCalls = (fs.unlink as ReturnType<typeof vi.fn>).mock.calls;
+			const tmpUnlink = unlinkCalls.find((call: unknown[]) => (call[0] as string).endsWith('.tmp'));
+			expect(tmpUnlink).toBeDefined();
 		});
 	});
 
