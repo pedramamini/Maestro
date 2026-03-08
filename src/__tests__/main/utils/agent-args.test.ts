@@ -4,13 +4,22 @@
  * Covers buildAgentArgs, applyAgentConfigOverrides, and getContextWindowValue.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	buildAgentArgs,
 	applyAgentConfigOverrides,
 	getContextWindowValue,
 } from '../../../main/utils/agent-args';
 import type { AgentConfig } from '../../../main/agents';
+
+vi.mock('../../../main/utils/logger', () => ({
+	logger: {
+		info: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn(),
+		debug: vi.fn(),
+	},
+}));
 
 /**
  * Helper to create a minimal AgentConfig for testing.
@@ -248,7 +257,6 @@ describe('buildAgentArgs', () => {
 		expect(result).toEqual([
 			'run',
 			'--print',
-			'--skip-git',
 			'--format',
 			'json',
 			'-C',
@@ -319,7 +327,7 @@ describe('buildAgentArgs', () => {
 		});
 		expect(logger.warn).toHaveBeenCalledWith(
 			expect.stringContaining('read-only mode requested but no CLI-level enforcement'),
-			'AgentArgs',
+			'[AgentArgs]',
 			{ agentId: 'test-agent' }
 		);
 	});
