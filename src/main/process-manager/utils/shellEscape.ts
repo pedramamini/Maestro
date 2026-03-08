@@ -15,8 +15,14 @@
 /**
  * Characters that require quoting in cmd.exe.
  * Based on cmd.exe special characters: https://ss64.com/nt/syntax-esc.html
+ *
+ * Includes: space, &, |, ;, <, >, ^, %, !, (, ), ", \n, \r, #, ?, *, `, $
+ * - ; is a separator in FOR loops and PATH
+ * - ` and $ are not cmd.exe metacharacters but are included defensively
+ *   (they are PowerShell metacharacters and quoting them prevents issues
+ *   if the command is later re-interpreted by PowerShell)
  */
-const CMD_SPECIAL_CHARS = /[ &|<>^%!()"\n\r#?*]/;
+const CMD_SPECIAL_CHARS = /[ &|;<>^%!()"\n\r#?*`$]/;
 
 /**
  * Characters that require quoting in PowerShell.
@@ -30,7 +36,16 @@ const POWERSHELL_SPECIAL_CHARS = /[ &|<>^%!()"\n\r#?*`$@{}[\]';,]/;
  * Strategy:
  * 1. If the argument contains special characters or is long, wrap in double quotes
  * 2. Escape existing double quotes by doubling them
- * 3. Escape carets (^) as they're the escape character in cmd.exe
+ * 3. Escape carets (^) — the cmd.exe escape character
+ * 4. Escape percent signs (%) by doubling — prevents environment variable expansion
+ *    in `cmd /c` context (e.g., %PATH% would expand without this)
+ *
+ * Note on delayed expansion (!VAR!): When delayed expansion is enabled (cmd /v),
+ * exclamation marks inside double quotes can trigger variable expansion. This is
+ * not escapable inside double quotes without closing/reopening quotes. Since
+ * Node.js spawn({shell:true}) does NOT enable delayed expansion by default,
+ * this is safe for standard usage. If delayed expansion is enabled externally
+ * (via registry or /v flag), consider sending the argument via stdin instead.
  *
  * @param arg - The argument to escape
  * @returns The escaped argument safe for cmd.exe
@@ -41,8 +56,11 @@ export function escapeCmdArg(arg: string): string {
 		return arg;
 	}
 
-	// Escape double quotes by doubling them, and carets by doubling
-	const escaped = arg.replace(/"/g, '""').replace(/\^/g, '^^');
+	// Order matters: escape ^ first (it's the escape character), then others
+	const escaped = arg
+		.replace(/\^/g, '^^') // Escape carets (must be first — ^ is the escape char)
+		.replace(/"/g, '""') // Escape double quotes by doubling
+		.replace(/%/g, '%%'); // Escape percent signs (prevent env var expansion in cmd /c)
 
 	// Wrap in double quotes
 	return `"${escaped}"`;
@@ -118,6 +136,33 @@ export function escapeArgsForShell(args: string[], shell?: string): string[] {
 		return escapePowerShellArgs(args);
 	}
 	return escapeCmdArgs(args);
+}
+
+/**
+ * Check if a command can be spawned with `shell: false` on Windows.
+ *
+ * Returns true when the command is a fully-resolved path to a native executable
+ * (.exe), which can be launched directly by the OS without shell interpretation.
+ * This avoids all shell metacharacter risks entirely.
+ *
+ * Returns false for:
+ * - .cmd/.bat files (require shell/cmd.exe to interpret)
+ * - Bare basenames without path separators (need shell for PATH lookup)
+ * - Extensionless files (may be scripts needing shell interpretation)
+ *
+ * Note: npm-installed CLIs (including Gemini CLI) typically install as .cmd
+ * wrapper scripts on Windows, so they cannot use shell: false.
+ *
+ * @param command - The command path to check
+ * @returns True if spawn({shell: false}) is safe for this command
+ */
+export function canRunWithoutShell(command: string): boolean {
+	const path = require('path');
+	const ext = path.extname(command).toLowerCase();
+	const hasPath = /\\|\//.test(command);
+
+	// Must have a directory path (not just a basename) and be a native .exe
+	return hasPath && ext === '.exe';
 }
 
 /**
