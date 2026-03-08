@@ -1349,6 +1349,45 @@ Review the agent responses above. Either:
 		groupChatEmitters.emitStateChange?.(groupChatId, 'moderator-thinking');
 		console.log(`[GroupChat:Debug] Emitted state change: moderator-thinking`);
 
+		// Prepare spawn config with SSH wrapping support
+		let spawnCommand = command;
+		let spawnArgs = finalArgs;
+		let spawnCwdResolved = synthCwd;
+		let spawnPrompt: string | undefined = synthesisPrompt;
+		let spawnEnvVars =
+			configResolution.effectiveCustomEnvVars ?? getCustomEnvVarsCallback?.(chat.moderatorAgentId);
+
+		// Apply SSH wrapping if configured (matching moderator spawn in routeUserMessage)
+		if (sshStore && chat.moderatorConfig?.sshRemoteConfig) {
+			console.log(`[GroupChat:Debug] Applying SSH wrapping for synthesis moderator...`);
+			const sshWrapped = await wrapSpawnWithSsh(
+				{
+					command,
+					args: finalArgs,
+					cwd: synthCwd,
+					prompt: synthesisPrompt,
+					customEnvVars:
+						configResolution.effectiveCustomEnvVars ??
+						getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+					promptArgs: agent.promptArgs,
+					noPromptSeparator: agent.noPromptSeparator,
+					agentBinaryName: agent.binaryName,
+				},
+				chat.moderatorConfig.sshRemoteConfig,
+				sshStore
+			);
+			spawnCommand = sshWrapped.command;
+			spawnArgs = sshWrapped.args;
+			spawnCwdResolved = sshWrapped.cwd;
+			spawnPrompt = sshWrapped.prompt;
+			spawnEnvVars = sshWrapped.customEnvVars;
+			if (sshWrapped.sshRemoteUsed) {
+				console.log(
+					`[GroupChat:Debug] SSH remote used for synthesis: ${sshWrapped.sshRemoteUsed.name}`
+				);
+			}
+		}
+
 		// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
 		const winConfig = getWindowsSpawnConfig(
 			chat.moderatorAgentId,
@@ -1361,15 +1400,13 @@ Review the agent responses above. Either:
 		const spawnResult = processManager.spawn({
 			sessionId,
 			toolType: chat.moderatorAgentId,
-			cwd: synthCwd,
-			command,
-			args: finalArgs,
+			cwd: spawnCwdResolved,
+			command: spawnCommand,
+			args: spawnArgs,
 			readOnlyMode: true,
-			prompt: synthesisPrompt,
+			prompt: spawnPrompt,
 			contextWindow: getContextWindowValue(agent, agentConfigValues),
-			customEnvVars:
-				configResolution.effectiveCustomEnvVars ??
-				getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+			customEnvVars: spawnEnvVars,
 			promptArgs: agent.promptArgs,
 			noPromptSeparator: agent.noPromptSeparator,
 			shell: winConfig.shell,
