@@ -54,6 +54,61 @@ subscriptions:
 
 ---
 
+## Scheduled Automation
+
+Run prompts at specific times and days using `time.scheduled`. Unlike `time.heartbeat` (which fires every N minutes), scheduled triggers fire at exact clock times.
+
+**Agent needed:** `ops`
+
+```yaml
+subscriptions:
+  # Morning standup report on weekdays
+  - name: morning-standup
+    event: time.scheduled
+    schedule_times:
+      - '09:00'
+    schedule_days:
+      - mon
+      - tue
+      - wed
+      - thu
+      - fri
+    prompt: |
+      Generate a standup report:
+      1. Run `git log --oneline --since="yesterday"` for recent changes
+      2. Check for any open PRs needing review
+      3. Summarize what was done and what's next
+
+  # End-of-day summary at 5 PM on weekdays
+  - name: eod-summary
+    event: time.scheduled
+    schedule_times:
+      - '17:00'
+    schedule_days:
+      - mon
+      - tue
+      - wed
+      - thu
+      - fri
+    prompt: |
+      Generate an end-of-day summary with today's commits and open items.
+
+  # Weekend maintenance at midnight Saturday
+  - name: weekend-maintenance
+    event: time.scheduled
+    schedule_times:
+      - '00:00'
+    schedule_days:
+      - sat
+    prompt: |
+      Run maintenance tasks:
+      1. Clean up old build artifacts
+      2. Update dependencies with `npm outdated`
+      3. Generate a dependency report
+```
+
+---
+
 ## Selective Chaining with triggeredBy
 
 When an agent has multiple subscriptions but only one should chain to another agent, use the `triggeredBy` filter. This field contains the subscription name that triggered the completing run.
@@ -66,7 +121,7 @@ The `worker` agent's `.maestro/cue.yaml`:
 subscriptions:
   # This one should NOT trigger the reviewer
   - name: routine-cleanup
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 60
     prompt: Run `npm run clean` and remove stale build artifacts.
 
@@ -377,7 +432,7 @@ The `reporter` agent's `.maestro/cue.yaml`:
 ```yaml
 subscriptions:
   - name: hourly-git-report
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 60
     prompt: |
       Generate a report of git activity in the last hour.

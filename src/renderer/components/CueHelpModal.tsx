@@ -69,7 +69,7 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 						<br />
 						{'  '}- name: "My First Cue"
 						<br />
-						{'    '}event: time.interval
+						{'    '}event: time.heartbeat
 						<br />
 						{'    '}interval_minutes: 30
 						<br />
@@ -89,12 +89,12 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 				<div className="text-sm space-y-3 pl-7" style={{ color: theme.colors.textDim }}>
 					<div>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Interval</strong>{' '}
+							<strong style={{ color: theme.colors.textMain }}>Heartbeat</strong>{' '}
 							<code
 								className="px-1 rounded text-xs"
 								style={{ backgroundColor: theme.colors.bgActivity }}
 							>
-								time.interval
+								time.heartbeat
 							</code>
 						</p>
 						<p className="mt-1">
@@ -106,6 +106,34 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 								interval_minutes
 							</code>{' '}
 							to control frequency.
+						</p>
+					</div>
+					<div>
+						<p>
+							<strong style={{ color: theme.colors.textMain }}>Scheduled</strong>{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								time.scheduled
+							</code>
+						</p>
+						<p className="mt-1">
+							Runs at specific times and days of the week. Set{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								schedule_times
+							</code>{' '}
+							to an array of HH:MM times. Optionally set{' '}
+							<code
+								className="px-1 rounded text-xs"
+								style={{ backgroundColor: theme.colors.bgActivity }}
+							>
+								schedule_days
+							</code>{' '}
+							to limit to specific days (mon, tue, wed, thu, fri, sat, sun).
 						</p>
 					</div>
 					<div>
@@ -281,7 +309,7 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 							<br />
 							- name: "Periodic Check"
 							<br />
-							{'  '}event: time.interval
+							{'  '}event: time.heartbeat
 							<br />
 							{'  '}interval_minutes: 15
 						</div>
@@ -450,8 +478,8 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 					>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_EVENT_TYPE}}'}</code> — Event
-							type (time.interval, file.changed, agent.completed, github.pull_request, github.issue,
-							task.pending)
+							type (time.heartbeat, time.scheduled, file.changed, agent.completed,
+							github.pull_request, github.issue, task.pending)
 						</div>
 						<div>
 							<code style={{ color: theme.colors.accent }}>{'{{CUE_EVENT_TIMESTAMP}}'}</code> —
@@ -653,8 +681,8 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 
 					<div>
 						<p>
-							<strong style={{ color: theme.colors.textMain }}>Scheduled Task</strong> &mdash;
-							Single agent running on a timer.
+							<strong style={{ color: theme.colors.textMain }}>Heartbeat</strong> &mdash; Single
+							agent running on a recurring timer (every N minutes).
 						</p>
 						<div
 							className="font-mono text-xs p-2 rounded border mt-1"
@@ -663,7 +691,23 @@ export function CueHelpContent({ theme, cueShortcutKeys }: CueHelpContentProps) 
 								borderColor: theme.colors.border,
 							}}
 						>
-							[Timer] &rarr; [Agent]
+							[Heartbeat] &rarr; [Agent]
+						</div>
+					</div>
+
+					<div>
+						<p>
+							<strong style={{ color: theme.colors.textMain }}>Scheduled</strong> &mdash; Single
+							agent at specific times and days of the week.
+						</p>
+						<div
+							className="font-mono text-xs p-2 rounded border mt-1"
+							style={{
+								backgroundColor: theme.colors.bgActivity,
+								borderColor: theme.colors.border,
+							}}
+						>
+							[Schedule] &rarr; [Agent]
 						</div>
 					</div>
 

@@ -277,7 +277,7 @@ describe('Cue IPC Handlers', () => {
 
 	describe('cue:writeYaml', () => {
 		it('should write content to the correct file path', async () => {
-			const content = 'subscriptions:\n  - name: test\n    event: time.interval';
+			const content = 'subscriptions:\n  - name: test\n    event: time.heartbeat';
 			vi.mocked(fs.existsSync).mockReturnValue(true); // .maestro dir exists
 
 			const handler = registerAndGetHandler('cue:writeYaml');

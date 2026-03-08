@@ -481,6 +481,10 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.rightPanelRef?.current?.toggleAutoRunExpanded();
 				trackShortcut('toggleAutoRunExpanded');
+			} else if (ctx.isShortcut(e, 'filterUnreadAgents')) {
+				e.preventDefault();
+				ctx.toggleShowUnreadAgentsOnly();
+				trackShortcut('filterUnreadAgents');
 			}
 
 			// Ctrl+Shift+` — Create a new terminal tab (works regardless of inputMode)

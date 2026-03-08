@@ -21,7 +21,7 @@ function makePipeline(overrides: Partial<CuePipeline> = {}): CuePipeline {
 				type: 'trigger',
 				position: { x: 0, y: 0 },
 				data: {
-					eventType: 'time.interval',
+					eventType: 'time.heartbeat',
 					label: 'Timer',
 					config: { interval_minutes: 5 },
 				},
@@ -91,7 +91,7 @@ describe('mergePipelinesWithSavedLayout', () => {
 							type: 'trigger',
 							position: { x: 100, y: 200 },
 							data: {
-								eventType: 'time.interval',
+								eventType: 'time.heartbeat',
 								label: 'Timer',
 								config: { interval_minutes: 5 },
 							},

@@ -84,7 +84,8 @@ const TRIGGER_NODE_HEIGHT = 44;
 const NODE_BORDER_RADIUS = 10;
 
 const EVENT_COLORS: Record<string, string> = {
-	'time.interval': '#f59e0b',
+	'time.heartbeat': '#f59e0b',
+	'time.scheduled': '#8b5cf6',
 	'file.changed': '#3b82f6',
 	'agent.completed': '#22c55e',
 	'github.pull_request': '#a855f7',
@@ -93,7 +94,8 @@ const EVENT_COLORS: Record<string, string> = {
 };
 
 const EVENT_LABELS: Record<string, string> = {
-	'time.interval': 'Timer',
+	'time.heartbeat': 'Heartbeat',
+	'time.scheduled': 'Scheduled',
 	'file.changed': 'File Watch',
 	'agent.completed': 'Agent Done',
 	'github.pull_request': 'GitHub PR',
@@ -281,8 +283,8 @@ function getTriggerDetail(sub: {
 	poll_minutes?: number;
 }): string {
 	switch (sub.event) {
-		case 'time.interval':
-			return sub.interval_minutes ? `${sub.interval_minutes}m` : 'interval';
+		case 'time.heartbeat':
+			return sub.interval_minutes ? `${sub.interval_minutes}m` : 'heartbeat';
 		case 'file.changed':
 			return sub.watch ?? '**/*';
 		case 'github.pull_request':

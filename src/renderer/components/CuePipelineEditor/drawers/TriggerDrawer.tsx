@@ -28,11 +28,18 @@ interface TriggerItem {
 
 const TRIGGER_ITEMS: TriggerItem[] = [
 	{
-		eventType: 'time.interval',
-		label: 'Scheduled',
-		description: 'Run on a timer',
+		eventType: 'time.heartbeat',
+		label: 'Heartbeat',
+		description: 'Run every N minutes',
 		icon: Clock,
 		color: '#f59e0b',
+	},
+	{
+		eventType: 'time.scheduled',
+		label: 'Scheduled',
+		description: 'Run at specific times & days',
+		icon: Clock,
+		color: '#8b5cf6',
 	},
 	{
 		eventType: 'file.changed',

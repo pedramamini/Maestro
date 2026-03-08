@@ -12,7 +12,9 @@ import {
 	type CueConfig,
 	type CueSubscription,
 	type CueSettings,
+	type CueScheduleDay,
 	DEFAULT_CUE_SETTINGS,
+	CUE_SCHEDULE_DAYS,
 } from './cue-types';
 import { CUE_CONFIG_PATH, LEGACY_CUE_CONFIG_PATH } from '../../shared/maestro-paths';
 
@@ -109,6 +111,19 @@ export function loadCueConfig(projectRoot: string): CueConfig | null {
 					output_prompt_file: outputPromptFile,
 					interval_minutes:
 						typeof sub.interval_minutes === 'number' ? sub.interval_minutes : undefined,
+					schedule_times:
+						Array.isArray(sub.schedule_times) &&
+						sub.schedule_times.every((s: unknown) => typeof s === 'string')
+							? (sub.schedule_times as string[])
+							: undefined,
+					schedule_days:
+						Array.isArray(sub.schedule_days) &&
+						sub.schedule_days.every(
+							(s: unknown) =>
+								typeof s === 'string' && CUE_SCHEDULE_DAYS.includes(s as CueScheduleDay)
+						)
+							? (sub.schedule_days as CueScheduleDay[])
+							: undefined,
 					watch: typeof sub.watch === 'string' ? sub.watch : undefined,
 					source_session:
 						typeof sub.source_session === 'string'
@@ -231,11 +246,39 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 			}
 
 			const event = sub.event as string;
-			if (event === 'time.interval') {
+			if (event === 'time.heartbeat') {
 				if (typeof sub.interval_minutes !== 'number' || sub.interval_minutes <= 0) {
 					errors.push(
-						`${prefix}: "interval_minutes" is required and must be a positive number for time.interval events`
+						`${prefix}: "interval_minutes" is required and must be a positive number for time.heartbeat events`
 					);
+				}
+			} else if (event === 'time.scheduled') {
+				if (!Array.isArray(sub.schedule_times) || sub.schedule_times.length === 0) {
+					errors.push(
+						`${prefix}: "schedule_times" is required and must be a non-empty array of time strings (e.g. ["09:00", "17:00"]) for time.scheduled events`
+					);
+				} else {
+					const timeRegex = /^\d{2}:\d{2}$/;
+					for (const t of sub.schedule_times as string[]) {
+						if (typeof t !== 'string' || !timeRegex.test(t)) {
+							errors.push(`${prefix}: schedule_times value "${t}" must be in HH:MM format`);
+						}
+					}
+				}
+				if (sub.schedule_days !== undefined) {
+					if (!Array.isArray(sub.schedule_days)) {
+						errors.push(
+							`${prefix}: "schedule_days" must be an array of day names (mon, tue, wed, thu, fri, sat, sun)`
+						);
+					} else {
+						for (const d of sub.schedule_days as string[]) {
+							if (!CUE_SCHEDULE_DAYS.includes(d as CueScheduleDay)) {
+								errors.push(
+									`${prefix}: schedule_days value "${d}" must be one of: ${CUE_SCHEDULE_DAYS.join(', ')}`
+								);
+							}
+						}
+					}
 				}
 			} else if (event === 'file.changed') {
 				if (!sub.watch || typeof sub.watch !== 'string') {

@@ -8,7 +8,8 @@
 
 /** Event types that can trigger a Cue subscription (mirrored from cue-types.ts for renderer access) */
 export type CueEventType =
-	| 'time.interval'
+	| 'time.heartbeat'
+	| 'time.scheduled'
 	| 'file.changed'
 	| 'agent.completed'
 	| 'github.pull_request'
@@ -48,6 +49,8 @@ export interface TriggerNodeData {
 	label: string;
 	config: {
 		interval_minutes?: number;
+		schedule_times?: string[];
+		schedule_days?: string[];
 		watch?: string;
 		repo?: string;
 		poll_minutes?: number;

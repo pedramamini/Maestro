@@ -30,7 +30,9 @@ subscriptions:
     prompt: string # Required. Prompt text or path to a .md file
 
     # Event-specific fields
-    interval_minutes: number # Required for time.interval
+    interval_minutes: number # Required for time.heartbeat
+    schedule_times: list # Required for time.scheduled (HH:MM strings)
+    schedule_days: list # Optional for time.scheduled (mon, tue, wed, thu, fri, sat, sun)
     watch: string # Required for file.changed, task.pending (glob pattern)
     source_session: string | list # Required for agent.completed
     fan_out: list # Optional. Target session names for fan-out
@@ -55,7 +57,7 @@ Each subscription is a trigger-prompt pairing. When the trigger fires, Cue sends
 | Field    | Type   | Description                                                            |
 | -------- | ------ | ---------------------------------------------------------------------- |
 | `name`   | string | Unique identifier. Used in logs, history, and as a reference in chains |
-| `event`  | string | One of the six [event types](./maestro-cue-events)                     |
+| `event`  | string | One of the seven [event types](./maestro-cue-events)                   |
 | `prompt` | string | The prompt to send, either inline text or a path to a `.md` file       |
 
 ### Optional Fields
@@ -63,7 +65,9 @@ Each subscription is a trigger-prompt pairing. When the trigger fires, Cue sends
 | Field              | Type            | Default | Description                                                             |
 | ------------------ | --------------- | ------- | ----------------------------------------------------------------------- |
 | `enabled`          | boolean         | `true`  | Set to `false` to pause a subscription without removing it              |
-| `interval_minutes` | number          | —       | Timer interval. Required for `time.interval`                            |
+| `interval_minutes` | number          | —       | Timer interval. Required for `time.heartbeat`                           |
+| `schedule_times`   | list of strings | —       | Times in `HH:MM` format. Required for `time.scheduled`                  |
+| `schedule_days`    | list of strings | —       | Days of week (`mon`–`sun`). Optional for `time.scheduled`               |
 | `watch`            | string (glob)   | —       | File glob pattern. Required for `file.changed`, `task.pending`          |
 | `source_session`   | string or list  | —       | Source agent name(s). Required for `agent.completed`                    |
 | `fan_out`          | list of strings | —       | Target agent names to fan out to                                        |
@@ -97,7 +101,7 @@ Set `enabled: false` to pause a subscription without deleting it:
 ```yaml
 subscriptions:
   - name: nightly-report
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 1440
     enabled: false # Paused — won't fire until re-enabled
     prompt: Generate a daily summary report.
@@ -163,9 +167,10 @@ The engine validates your YAML on every load. Common validation errors:
 | Error                                   | Fix                                                          |
 | --------------------------------------- | ------------------------------------------------------------ |
 | `"name" is required`                    | Every subscription needs a unique `name` field               |
-| `"event" is required`                   | Specify one of the six event types                           |
+| `"event" is required`                   | Specify one of the seven event types                         |
 | `"prompt" is required`                  | Provide inline text or a file path                           |
-| `"interval_minutes" is required`        | `time.interval` events must specify a positive interval      |
+| `"interval_minutes" is required`        | `time.heartbeat` events must specify a positive interval     |
+| `"schedule_times" is required`          | `time.scheduled` events must have at least one `HH:MM` time  |
 | `"watch" is required`                   | `file.changed` and `task.pending` events need a glob pattern |
 | `"source_session" is required`          | `agent.completed` events need the name of the source agent   |
 | `"max_concurrent" must be between 1-10` | Keep concurrent runs within the allowed range                |
@@ -192,11 +197,25 @@ subscriptions:
 
   # Run tests every 30 minutes
   - name: periodic-tests
-    event: time.interval
+    event: time.heartbeat
     interval_minutes: 30
     prompt: |
       Run the test suite with `npm test`.
       If any tests fail, investigate and fix them.
+
+  # Morning standup on weekdays
+  - name: morning-standup
+    event: time.scheduled
+    schedule_times:
+      - '09:00'
+    schedule_days:
+      - mon
+      - tue
+      - wed
+      - thu
+      - fri
+    prompt: |
+      Generate a standup report from recent git activity.
 
   # Review new PRs automatically
   - name: pr-review

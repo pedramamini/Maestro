@@ -1854,4 +1854,32 @@ describe('useMainKeyboardHandler', () => {
 			expect(mockSetCueModalOpen).not.toHaveBeenCalled();
 		});
 	});
+
+	describe('filterUnreadAgents shortcut', () => {
+		it('should toggle unread agents filter on Cmd+Shift+U', () => {
+			const { result } = renderHook(() => useMainKeyboardHandler());
+			const mockToggle = vi.fn();
+
+			result.current.keyboardHandlerRef.current = createMockContext({
+				isShortcut: (_e: KeyboardEvent, id: string) => id === 'filterUnreadAgents',
+				toggleShowUnreadAgentsOnly: mockToggle,
+				activeSessionId: 'test-session',
+				activeSession: { id: 'test-session', name: 'Test', inputMode: 'ai' },
+				recordShortcutUsage: vi.fn().mockReturnValue({ newLevel: null }),
+			});
+
+			act(() => {
+				window.dispatchEvent(
+					new KeyboardEvent('keydown', {
+						key: 'u',
+						metaKey: true,
+						shiftKey: true,
+						bubbles: true,
+					})
+				);
+			});
+
+			expect(mockToggle).toHaveBeenCalled();
+		});
+	});
 });

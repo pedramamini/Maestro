@@ -28,6 +28,7 @@ describe('TriggerDrawer', () => {
 	it('should render all trigger types when open', () => {
 		render(<TriggerDrawer isOpen={true} onClose={() => {}} theme={mockTheme} />);
 
+		expect(screen.getByText('Heartbeat')).toBeInTheDocument();
 		expect(screen.getByText('Scheduled')).toBeInTheDocument();
 		expect(screen.getByText('File Change')).toBeInTheDocument();
 		expect(screen.getByText('Agent Done')).toBeInTheDocument();
@@ -39,7 +40,8 @@ describe('TriggerDrawer', () => {
 	it('should render descriptions for each trigger', () => {
 		render(<TriggerDrawer isOpen={true} onClose={() => {}} theme={mockTheme} />);
 
-		expect(screen.getByText('Run on a timer')).toBeInTheDocument();
+		expect(screen.getByText('Run every N minutes')).toBeInTheDocument();
+		expect(screen.getByText('Run at specific times & days')).toBeInTheDocument();
 		expect(screen.getByText('Watch for file modifications')).toBeInTheDocument();
 		expect(screen.getByText('After an agent finishes')).toBeInTheDocument();
 	});
@@ -51,7 +53,7 @@ describe('TriggerDrawer', () => {
 		fireEvent.change(input, { target: { value: 'file' } });
 
 		expect(screen.getByText('File Change')).toBeInTheDocument();
-		expect(screen.queryByText('Scheduled')).not.toBeInTheDocument();
+		expect(screen.queryByText('Heartbeat')).not.toBeInTheDocument();
 		expect(screen.queryByText('Pull Request')).not.toBeInTheDocument();
 	});
 
@@ -63,16 +65,16 @@ describe('TriggerDrawer', () => {
 
 		expect(screen.getByText('Pull Request')).toBeInTheDocument();
 		expect(screen.getByText('Issue')).toBeInTheDocument();
-		expect(screen.queryByText('Scheduled')).not.toBeInTheDocument();
+		expect(screen.queryByText('Heartbeat')).not.toBeInTheDocument();
 	});
 
 	it('should filter triggers by description', () => {
 		render(<TriggerDrawer isOpen={true} onClose={() => {}} theme={mockTheme} />);
 
 		const input = screen.getByPlaceholderText('Filter triggers...');
-		fireEvent.change(input, { target: { value: 'timer' } });
+		fireEvent.change(input, { target: { value: 'minutes' } });
 
-		expect(screen.getByText('Scheduled')).toBeInTheDocument();
+		expect(screen.getByText('Heartbeat')).toBeInTheDocument();
 		expect(screen.queryByText('File Change')).not.toBeInTheDocument();
 	});
 
@@ -113,7 +115,7 @@ describe('TriggerDrawer', () => {
 	it('should make trigger items draggable', () => {
 		render(<TriggerDrawer isOpen={true} onClose={() => {}} theme={mockTheme} />);
 
-		const scheduled = screen.getByText('Scheduled').closest('[draggable]');
-		expect(scheduled).toHaveAttribute('draggable', 'true');
+		const heartbeat = screen.getByText('Heartbeat').closest('[draggable]');
+		expect(heartbeat).toHaveAttribute('draggable', 'true');
 	});
 });

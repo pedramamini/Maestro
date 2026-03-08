@@ -2,7 +2,8 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 
 /** Event types that can trigger a Cue subscription */
 type CueEventType =
-	| 'time.interval'
+	| 'time.heartbeat'
+	| 'time.scheduled'
 	| 'file.changed'
 	| 'agent.completed'
 	| 'github.pull_request'

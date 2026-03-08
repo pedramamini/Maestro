@@ -150,7 +150,7 @@ describe('cue-db lifecycle', () => {
 		expect(() =>
 			recordCueEvent({
 				id: 'test-1',
-				type: 'time.interval',
+				type: 'time.heartbeat',
 				triggerName: 'test',
 				sessionId: 'session-1',
 				subscriptionName: 'test-sub',
@@ -177,7 +177,7 @@ describe('cue-db event journal', () => {
 	it('should record an event with correct parameters', () => {
 		recordCueEvent({
 			id: 'evt-1',
-			type: 'time.interval',
+			type: 'time.heartbeat',
 			triggerName: 'my-trigger',
 			sessionId: 'session-1',
 			subscriptionName: 'periodic-check',
@@ -190,7 +190,7 @@ describe('cue-db event journal', () => {
 		expect(runCalls.length).toBeGreaterThan(0);
 		const lastRun = runCalls[runCalls.length - 1];
 		expect(lastRun[0]).toBe('evt-1'); // id
-		expect(lastRun[1]).toBe('time.interval'); // type
+		expect(lastRun[1]).toBe('time.heartbeat'); // type
 		expect(lastRun[2]).toBe('my-trigger'); // trigger_name
 		expect(lastRun[3]).toBe('session-1'); // session_id
 		expect(lastRun[4]).toBe('periodic-check'); // subscription_name
@@ -203,7 +203,7 @@ describe('cue-db event journal', () => {
 		const payload = JSON.stringify({ reconciled: true, missedCount: 3 });
 		recordCueEvent({
 			id: 'evt-2',
-			type: 'time.interval',
+			type: 'time.heartbeat',
 			triggerName: 'cron-trigger',
 			sessionId: 'session-2',
 			subscriptionName: 'cron-sub',

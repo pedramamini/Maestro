@@ -72,13 +72,13 @@ describe('CueHelpContent', () => {
 		});
 
 		it('should render all event types', () => {
-			expect(screen.getByText('Interval')).toBeInTheDocument();
+			expect(screen.getAllByText('Heartbeat').length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText('File Watch')).toBeInTheDocument();
 			expect(screen.getByText('Agent Completed')).toBeInTheDocument();
 		});
 
 		it('should render event type codes', () => {
-			expect(screen.getByText('time.interval')).toBeInTheDocument();
+			expect(screen.getByText('time.heartbeat')).toBeInTheDocument();
 			expect(screen.getByText('file.changed')).toBeInTheDocument();
 			expect(screen.getByText('agent.completed')).toBeInTheDocument();
 		});
@@ -131,7 +131,8 @@ describe('CueHelpContent', () => {
 		});
 
 		it('should render all coordination pattern names', () => {
-			expect(screen.getByText('Scheduled Task')).toBeInTheDocument();
+			expect(screen.getAllByText('Heartbeat').length).toBeGreaterThanOrEqual(1);
+			expect(screen.getAllByText('Scheduled').length).toBeGreaterThanOrEqual(1);
 			expect(screen.getByText('File Enrichment')).toBeInTheDocument();
 			expect(screen.getByText('Research Swarm')).toBeInTheDocument();
 			expect(screen.getByText('Sequential Chain')).toBeInTheDocument();

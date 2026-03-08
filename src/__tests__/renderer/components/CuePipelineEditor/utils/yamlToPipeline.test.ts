@@ -32,7 +32,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'my-pipeline',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Do the work',
 				interval_minutes: 10,
@@ -52,7 +52,7 @@ describe('subscriptionsToPipelines', () => {
 
 		// Trigger should have correct event type and config
 		expect(triggers[0].data).toMatchObject({
-			eventType: 'time.interval',
+			eventType: 'time.heartbeat',
 			config: { interval_minutes: 10 },
 		});
 
@@ -109,7 +109,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'fanout-test',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Task A',
 				interval_minutes: 30,
@@ -141,7 +141,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'fanin-test',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Start',
 				interval_minutes: 5,
@@ -220,7 +220,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'pipeline-a',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Task A',
 				interval_minutes: 5,
@@ -245,14 +245,14 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'p1',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'A',
 				interval_minutes: 5,
 			},
 			{
 				name: 'p2',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'B',
 				interval_minutes: 10,
@@ -268,7 +268,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'layout-test',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Build',
 				interval_minutes: 5,
@@ -301,7 +301,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'dedup-test',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Start',
 				interval_minutes: 5,
@@ -332,7 +332,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'agent-id-test',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Do work',
 				interval_minutes: 10,
@@ -385,7 +385,7 @@ describe('subscriptionsToPipelines', () => {
 		const subs: CueSubscription[] = [
 			{
 				name: 'mode-test',
-				event: 'time.interval',
+				event: 'time.heartbeat',
 				enabled: true,
 				prompt: 'Go',
 				interval_minutes: 5,
@@ -410,7 +410,7 @@ describe('graphSessionsToPipelines', () => {
 				subscriptions: [
 					{
 						name: 'graph-test',
-						event: 'time.interval',
+						event: 'time.heartbeat',
 						enabled: true,
 						prompt: 'Do work',
 						interval_minutes: 15,
@@ -427,7 +427,7 @@ describe('graphSessionsToPipelines', () => {
 		const triggers = pipelines[0].nodes.filter((n) => n.type === 'trigger');
 		expect(triggers).toHaveLength(1);
 		expect(triggers[0].data).toMatchObject({
-			eventType: 'time.interval',
+			eventType: 'time.heartbeat',
 			config: { interval_minutes: 15 },
 		});
 	});

@@ -40,6 +40,44 @@ const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
 const SLEEP_THRESHOLD_MS = 120_000; // 2 minutes
 const EVENT_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
 
+const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
+
+/**
+ * Calculates the next occurrence of a scheduled time.
+ * Returns a timestamp in ms, or null if inputs are invalid.
+ */
+export function calculateNextScheduledTime(times: string[], days?: string[]): number | null {
+	if (times.length === 0) return null;
+
+	const now = new Date();
+	const candidates: number[] = [];
+
+	// Check up to 7 days ahead to find the next match
+	for (let dayOffset = 0; dayOffset < 7; dayOffset++) {
+		const candidate = new Date(now);
+		candidate.setDate(candidate.getDate() + dayOffset);
+		const dayName = DAY_NAMES[candidate.getDay()];
+
+		if (days && days.length > 0 && !days.includes(dayName)) continue;
+
+		for (const time of times) {
+			const [hourStr, minStr] = time.split(':');
+			const hour = parseInt(hourStr, 10);
+			const min = parseInt(minStr, 10);
+			if (isNaN(hour) || isNaN(min)) continue;
+
+			const target = new Date(candidate);
+			target.setHours(hour, min, 0, 0);
+
+			if (target.getTime() > now.getTime()) {
+				candidates.push(target.getTime());
+			}
+		}
+	}
+
+	return candidates.length > 0 ? Math.min(...candidates) : null;
+}
+
 /** Dependencies injected into the CueEngine */
 export interface CueEngineDeps {
 	getSessions: () => SessionInfo[];
@@ -711,8 +749,10 @@ export class CueEngine {
 			// Skip subscriptions bound to a different agent
 			if (sub.agent_id && sub.agent_id !== session.id) continue;
 
-			if (sub.event === 'time.interval' && sub.interval_minutes) {
-				this.setupTimerSubscription(session, state, sub);
+			if (sub.event === 'time.heartbeat' && sub.interval_minutes) {
+				this.setupHeartbeatSubscription(session, state, sub);
+			} else if (sub.event === 'time.scheduled' && sub.schedule_times?.length) {
+				this.setupScheduledSubscription(session, state, sub);
 			} else if (sub.event === 'file.changed' && sub.watch) {
 				this.setupFileWatcherSubscription(session, state, sub);
 			} else if (sub.event === 'task.pending' && sub.watch) {
@@ -730,7 +770,7 @@ export class CueEngine {
 		);
 	}
 
-	private setupTimerSubscription(
+	private setupHeartbeatSubscription(
 		session: SessionInfo,
 		state: SessionState,
 		sub: {
@@ -748,7 +788,7 @@ export class CueEngine {
 		// Fire immediately on first setup
 		const immediateEvent: CueEvent = {
 			id: crypto.randomUUID(),
-			type: 'time.interval',
+			type: 'time.heartbeat',
 			timestamp: new Date().toISOString(),
 			triggerName: sub.name,
 			payload: { interval_minutes: sub.interval_minutes },
@@ -756,7 +796,7 @@ export class CueEngine {
 
 		// Check payload filter (even for timer events)
 		if (!sub.filter || matchesFilter(immediateEvent.payload, sub.filter)) {
-			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.interval, initial)`);
+			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.heartbeat, initial)`);
 			this.executeCueRun(
 				session.id,
 				sub.prompt_file ?? sub.prompt,
@@ -777,7 +817,7 @@ export class CueEngine {
 
 			const event: CueEvent = {
 				id: crypto.randomUUID(),
-				type: 'time.interval',
+				type: 'time.heartbeat',
 				timestamp: new Date().toISOString(),
 				triggerName: sub.name,
 				payload: { interval_minutes: sub.interval_minutes },
@@ -792,7 +832,7 @@ export class CueEngine {
 				return;
 			}
 
-			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.interval)`);
+			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.heartbeat)`);
 			state.lastTriggered = event.timestamp;
 			state.nextTriggers.set(sub.name, Date.now() + intervalMs);
 			this.executeCueRun(
@@ -806,6 +846,85 @@ export class CueEngine {
 
 		state.nextTriggers.set(sub.name, Date.now() + intervalMs);
 		state.timers.push(timer);
+	}
+
+	private setupScheduledSubscription(
+		session: SessionInfo,
+		state: SessionState,
+		sub: {
+			name: string;
+			prompt: string;
+			prompt_file?: string;
+			output_prompt?: string;
+			schedule_times?: string[];
+			schedule_days?: string[];
+			filter?: Record<string, string | number | boolean>;
+		}
+	): void {
+		const times = sub.schedule_times ?? [];
+		if (times.length === 0) return;
+
+		const checkAndFire = () => {
+			if (!this.enabled) return;
+
+			const now = new Date();
+			const dayNames = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'];
+			const currentDay = dayNames[now.getDay()];
+			const currentTime = `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+
+			// Check day filter (if specified, current day must match)
+			if (sub.schedule_days && sub.schedule_days.length > 0) {
+				if (!sub.schedule_days.includes(currentDay)) {
+					return;
+				}
+			}
+
+			// Check if current time matches any scheduled time
+			if (!times.includes(currentTime)) {
+				return;
+			}
+
+			const event: CueEvent = {
+				id: crypto.randomUUID(),
+				type: 'time.scheduled',
+				timestamp: now.toISOString(),
+				triggerName: sub.name,
+				payload: {
+					schedule_times: sub.schedule_times,
+					schedule_days: sub.schedule_days,
+					matched_time: currentTime,
+					matched_day: currentDay,
+				},
+			};
+
+			if (sub.filter && !matchesFilter(event.payload, sub.filter)) {
+				this.deps.onLog(
+					'cue',
+					`[CUE] "${sub.name}" filter not matched (${describeFilter(sub.filter)})`
+				);
+				return;
+			}
+
+			this.deps.onLog('cue', `[CUE] "${sub.name}" triggered (time.scheduled, ${currentTime})`);
+			state.lastTriggered = event.timestamp;
+			this.executeCueRun(
+				session.id,
+				sub.prompt_file ?? sub.prompt,
+				event,
+				sub.name,
+				sub.output_prompt
+			);
+		};
+
+		// Check every 60 seconds to catch scheduled times
+		const timer = setInterval(checkAndFire, 60_000);
+		state.timers.push(timer);
+
+		// Calculate and track the next trigger time
+		const nextMs = calculateNextScheduledTime(times, sub.schedule_days);
+		if (nextMs != null) {
+			state.nextTriggers.set(sub.name, nextMs);
+		}
 	}
 
 	private setupFileWatcherSubscription(

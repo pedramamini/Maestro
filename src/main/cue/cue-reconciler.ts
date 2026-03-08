@@ -1,5 +1,5 @@
 /**
- * Cue Time Event Reconciler — catches up on missed time.interval events after sleep/wake.
+ * Cue Time Event Reconciler — catches up on missed time.heartbeat events after sleep/wake.
  *
  * When the CueEngine detects a heartbeat gap (laptop sleep), this module calculates
  * which interval subscriptions missed their scheduled runs and fires exactly one
@@ -26,9 +26,9 @@ export interface ReconcileConfig {
 }
 
 /**
- * Reconcile missed time.interval events during a sleep gap.
+ * Reconcile missed time.heartbeat events during a sleep gap.
  *
- * For each enabled time.interval subscription, calculates how many intervals
+ * For each enabled time.heartbeat subscription, calculates how many intervals
  * were missed and fires exactly one catch-up event with metadata indicating
  * how many intervals were skipped.
  */
@@ -40,8 +40,8 @@ export function reconcileMissedTimeEvents(config: ReconcileConfig): void {
 
 	for (const [sessionId, sessionInfo] of sessions) {
 		for (const sub of sessionInfo.config.subscriptions) {
-			// Only reconcile time.interval subscriptions that are enabled
-			if (sub.event !== 'time.interval' || sub.enabled === false) continue;
+			// Only reconcile time.heartbeat subscriptions that are enabled
+			if (sub.event !== 'time.heartbeat' || sub.enabled === false) continue;
 			if (!sub.interval_minutes || sub.interval_minutes <= 0) continue;
 
 			const intervalMs = sub.interval_minutes * 60_000;
@@ -56,7 +56,7 @@ export function reconcileMissedTimeEvents(config: ReconcileConfig): void {
 
 			const event: CueEvent = {
 				id: crypto.randomUUID(),
-				type: 'time.interval',
+				type: 'time.heartbeat',
 				timestamp: new Date().toISOString(),
 				triggerName: sub.name,
 				payload: {

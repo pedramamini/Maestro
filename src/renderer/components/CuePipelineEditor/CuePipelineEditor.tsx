@@ -95,7 +95,8 @@ const nodeTypes = {
 };
 
 const DEFAULT_TRIGGER_LABELS: Record<CueEventType, string> = {
-	'time.interval': 'Scheduled',
+	'time.heartbeat': 'Heartbeat',
+	'time.scheduled': 'Scheduled',
 	'file.changed': 'File Change',
 	'agent.completed': 'Agent Done',
 	'github.pull_request': 'Pull Request',
@@ -106,8 +107,16 @@ const DEFAULT_TRIGGER_LABELS: Record<CueEventType, string> = {
 function getTriggerConfigSummary(data: TriggerNodeData): string {
 	const { eventType, config } = data;
 	switch (eventType) {
-		case 'time.interval':
-			return config.interval_minutes ? `every ${config.interval_minutes}min` : 'interval';
+		case 'time.heartbeat':
+			return config.interval_minutes ? `every ${config.interval_minutes}min` : 'heartbeat';
+		case 'time.scheduled': {
+			const times = config.schedule_times ?? [];
+			const days = config.schedule_days ?? [];
+			if (times.length === 0) return 'scheduled';
+			const timeStr = times.length <= 2 ? times.join(', ') : `${times.length} times`;
+			const dayStr = days.length > 0 && days.length < 7 ? ` (${days.join(', ')})` : '';
+			return `${timeStr}${dayStr}`;
+		}
 		case 'file.changed':
 			return config.watch ?? '**/*';
 		case 'github.pull_request':
@@ -1439,7 +1448,8 @@ function CuePipelineEditorInner({
 								const data = node.data as TriggerNodeDataProps;
 								// Use event type color palette
 								const eventColors: Record<string, string> = {
-									'time.interval': '#f59e0b',
+									'time.heartbeat': '#f59e0b',
+									'time.scheduled': '#8b5cf6',
 									'file.changed': '#3b82f6',
 									'agent.completed': '#22c55e',
 									'github.pull_request': '#a855f7',

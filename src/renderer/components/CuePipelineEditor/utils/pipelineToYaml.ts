@@ -99,9 +99,17 @@ export function pipelineToYamlSubscriptions(pipeline: CuePipeline): CueSubscript
 
 		// Map trigger config fields
 		switch (triggerData.eventType) {
-			case 'time.interval':
+			case 'time.heartbeat':
 				if (triggerData.config.interval_minutes) {
 					sub.interval_minutes = triggerData.config.interval_minutes;
+				}
+				break;
+			case 'time.scheduled':
+				if (triggerData.config.schedule_times?.length) {
+					sub.schedule_times = triggerData.config.schedule_times;
+				}
+				if (triggerData.config.schedule_days?.length) {
+					sub.schedule_days = triggerData.config.schedule_days as CueSubscription['schedule_days'];
 				}
 				break;
 			case 'file.changed':
@@ -253,6 +261,8 @@ export function pipelinesToYaml(
 			if (agentId) record.agent_id = agentId;
 
 			if (sub.interval_minutes != null) record.interval_minutes = sub.interval_minutes;
+			if (sub.schedule_times != null) record.schedule_times = sub.schedule_times;
+			if (sub.schedule_days != null) record.schedule_days = sub.schedule_days;
 			if (sub.watch != null) record.watch = sub.watch;
 			if (sub.repo != null) record.repo = sub.repo;
 			if (sub.poll_minutes != null) record.poll_minutes = sub.poll_minutes;

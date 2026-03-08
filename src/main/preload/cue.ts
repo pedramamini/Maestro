@@ -13,7 +13,8 @@ import { ipcRenderer } from 'electron';
 
 /** Event types that can trigger a Cue subscription */
 export type CueEventType =
-	| 'time.interval'
+	| 'time.heartbeat'
+	| 'time.scheduled'
 	| 'file.changed'
 	| 'agent.completed'
 	| 'github.pull_request'

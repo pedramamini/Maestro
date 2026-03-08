@@ -51,7 +51,7 @@ import { buildSessionDeepLink, buildGroupDeepLink } from './deep-link-urls';
  *   {{CONTEXT_USAGE}}     - Current context window usage percentage
  *
  * Cue Variables (Cue automation only):
- *   {{CUE_EVENT_TYPE}}      - Cue event type (time.interval, file.changed, agent.completed)
+ *   {{CUE_EVENT_TYPE}}      - Cue event type (time.heartbeat, time.scheduled, file.changed, agent.completed)
  *   {{CUE_EVENT_TIMESTAMP}} - Cue event timestamp
  *   {{CUE_TRIGGER_NAME}}   - Cue trigger/subscription name
  *   {{CUE_RUN_ID}}         - Cue run UUID
