@@ -282,9 +282,9 @@ describe('TerminalView — auto-close on shell exit', () => {
 			rerender(<TerminalView {...defaultProps} session={exitedSession} isVisible={true} />);
 		});
 
-		// Advance past the 300ms auto-close delay
+		// Advance past the setTimeout(0) auto-close
 		act(() => {
-			vi.advanceTimersByTime(350);
+			vi.advanceTimersByTime(1);
 		});
 
 		expect(mockCloseTerminalTab).toHaveBeenCalledWith('tab-1');
