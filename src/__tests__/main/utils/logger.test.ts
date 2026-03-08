@@ -794,6 +794,10 @@ describe('Logger', () => {
 	});
 
 	describe('Legacy Log Migration', () => {
+		beforeEach(() => {
+			logger.disableFileLogging();
+		});
+
 		it('should migrate legacy maestro-debug.log on enableFileLogging', async () => {
 			const fs = await import('fs');
 			const path = await import('path');
@@ -865,7 +869,7 @@ describe('Logger', () => {
 			}
 		});
 
-		it('should skip migration if target dated file already exists', async () => {
+		it('should delete legacy file if target dated file already exists', async () => {
 			const fs = await import('fs');
 			const path = await import('path');
 			const os = await import('os');
@@ -903,10 +907,10 @@ describe('Logger', () => {
 			try {
 				logger.enableFileLogging();
 
-				// Legacy file should still exist (rename was skipped)
-				expect(fs.existsSync(legacyPath)).toBe(true);
+				// Legacy file should be deleted to prevent orphans
+				expect(fs.existsSync(legacyPath)).toBe(false);
 
-				// Target file should still have original content
+				// Target file should still have original content (not overwritten)
 				expect(fs.readFileSync(targetPath, 'utf-8')).toBe('existing dated content');
 
 				logger.disableFileLogging();
@@ -929,6 +933,11 @@ describe('Logger', () => {
 	});
 
 	describe('Enable/Disable File Logging Integration', () => {
+		beforeEach(() => {
+			// Ensure logger starts disabled so enable path is actually tested
+			logger.disableFileLogging();
+		});
+
 		it('should set currentLogDate and logFilePath when enabling file logging', async () => {
 			const now = new Date();
 			const year = now.getFullYear();
@@ -983,40 +992,13 @@ describe('Logger', () => {
 				}
 			}
 		});
-
-		it('should start rotation timer on enableFileLogging and clear on disable', async () => {
-			const setIntervalSpy = vi.spyOn(globalThis, 'setInterval');
-			const clearIntervalSpy = vi.spyOn(globalThis, 'clearInterval');
-
-			logger.enableFileLogging();
-
-			// setInterval should have been called with 10 minute interval
-			expect(setIntervalSpy).toHaveBeenCalledWith(expect.any(Function), 10 * 60 * 1000);
-
-			logger.disableFileLogging();
-
-			// clearInterval should have been called
-			expect(clearIntervalSpy).toHaveBeenCalled();
-		});
-
-		it('should call unref on the rotation timer', async () => {
-			const unrefSpy = vi.fn();
-			const originalSetInterval = globalThis.setInterval;
-			vi.spyOn(globalThis, 'setInterval').mockImplementation((...args) => {
-				const timer = originalSetInterval(...args);
-				timer.unref = unrefSpy;
-				return timer;
-			});
-
-			logger.enableFileLogging();
-
-			expect(unrefSpy).toHaveBeenCalled();
-
-			logger.disableFileLogging();
-		});
 	});
 
 	describe('Log Cleanup (cleanOldLogs)', () => {
+		beforeEach(() => {
+			logger.disableFileLogging();
+		});
+
 		it('should delete log files older than 7 days during rotation', async () => {
 			const fs = await import('fs');
 			const path = await import('path');

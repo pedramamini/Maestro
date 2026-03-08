@@ -68,7 +68,6 @@ class Logger extends EventEmitter {
 	private logFilePath: string;
 	private logFileStream: fs.WriteStream | null = null;
 	private currentLogDate: string = '';
-	private rotationTimer: ReturnType<typeof setInterval> | null = null;
 
 	private levelPriority = LOG_LEVEL_PRIORITY;
 
@@ -117,6 +116,10 @@ class Logger extends EventEmitter {
 					if (!fs.existsSync(targetPath)) {
 						fs.renameSync(legacyPath, targetPath);
 						console.log(`[Logger] Migrated legacy log file to maestro-debug-${mtimeDate}.log`);
+					} else {
+						// Target dated file already exists; remove the legacy file to prevent orphans
+						fs.unlinkSync(legacyPath);
+						console.log(`[Logger] Removed legacy log file (dated file already exists)`);
 					}
 				}
 			} catch (migrationError) {
@@ -134,10 +137,6 @@ class Logger extends EventEmitter {
 			// Clean up old log files
 			this.cleanOldLogs();
 
-			// Start rotation timer (check every 10 minutes)
-			this.rotationTimer = setInterval(() => this.rotateIfNeeded(), 10 * 60 * 1000);
-			this.rotationTimer.unref();
-
 			console.log(`[Logger] File logging enabled: ${this.logFilePath}`);
 		} catch (error) {
 			console.error(`[Logger] Failed to enable file logging:`, error);
@@ -149,11 +148,6 @@ class Logger extends EventEmitter {
 	 */
 	disableFileLogging(): void {
 		if (!this.fileLogEnabled) return;
-
-		if (this.rotationTimer) {
-			clearInterval(this.rotationTimer);
-			this.rotationTimer = null;
-		}
 
 		if (this.logFileStream) {
 			this.logFileStream.end();
@@ -177,9 +171,8 @@ class Logger extends EventEmitter {
 				this.logFileStream = null;
 			}
 
-			// Update to today's log file
-			this.logFilePath = getLogFilePath();
-			this.currentLogDate = todayDate;
+			// Stage today's log file, but don't advance state until the new stream exists
+			const nextLogFilePath = getLogFilePath();
 
 			// Ensure the logs directory exists
 			const logsDir = getLogsDir();
@@ -188,9 +181,11 @@ class Logger extends EventEmitter {
 			}
 
 			// Open new log file in append mode
-			this.logFileStream = fs.createWriteStream(this.logFilePath, { flags: 'a' });
+			this.logFileStream = fs.createWriteStream(nextLogFilePath, { flags: 'a' });
+			this.logFilePath = nextLogFilePath;
+			this.currentLogDate = todayDate;
 
-			// Write startup marker
+			// Write rotation marker
 			const startupMsg = `\n${'='.repeat(80)}\n[${new Date().toISOString()}] Maestro log rotated - new log file\nPlatform: ${process.platform}, Node: ${process.version}\nLog file: ${this.logFilePath}\n${'='.repeat(80)}\n`;
 			this.logFileStream.write(startupMsg);
 
@@ -198,6 +193,9 @@ class Logger extends EventEmitter {
 			this.cleanOldLogs();
 		} catch (error) {
 			console.error('[Logger] Failed to rotate log file:', error);
+			// Disable file logging so callers know logs are no longer being written to disk
+			this.fileLogEnabled = false;
+			this.logFileStream = null;
 		}
 	}
 
@@ -211,19 +209,18 @@ class Logger extends EventEmitter {
 			const files = fs.readdirSync(logsDir);
 			const logFilePattern = /^maestro-debug-(\d{4}-\d{2}-\d{2})\.log$/;
 			const now = new Date();
-			const todayMs = new Date(now.getFullYear(), now.getMonth(), now.getDate()).getTime();
+			// Use UTC calendar-day arithmetic to avoid DST edge cases
+			const todayDay = Date.UTC(now.getFullYear(), now.getMonth(), now.getDate()) / 86_400_000;
 
 			for (const file of files) {
 				const match = file.match(logFilePattern);
 				if (!match) continue;
 
 				const [yearStr, monthStr, dayStr] = match[1].split('-');
-				const fileDate = new Date(
-					parseInt(yearStr, 10),
-					parseInt(monthStr, 10) - 1,
-					parseInt(dayStr, 10)
-				);
-				const ageInDays = Math.floor((todayMs - fileDate.getTime()) / (1000 * 60 * 60 * 24));
+				const fileDay =
+					Date.UTC(parseInt(yearStr, 10), parseInt(monthStr, 10) - 1, parseInt(dayStr, 10)) /
+					86_400_000;
+				const ageInDays = todayDay - fileDay;
 
 				if (ageInDays > 7) {
 					try {
