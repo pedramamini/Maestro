@@ -331,7 +331,6 @@ export class FactoryDroidOutputParser implements AgentOutputParser {
 				recoverable: match.recoverable,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson: parsed },
 				parsedJson: parsed,
 			};
 		}
@@ -342,7 +341,6 @@ export class FactoryDroidOutputParser implements AgentOutputParser {
 			recoverable: true,
 			agentId: this.agentId,
 			timestamp: Date.now(),
-			raw: { parsedJson: parsed },
 			parsedJson: parsed,
 		};
 	}

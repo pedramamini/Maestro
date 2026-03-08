@@ -420,7 +420,6 @@ export class ClaudeOutputParser implements AgentOutputParser {
 				recoverable: match.recoverable,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson },
 				parsedJson,
 			};
 		}
@@ -434,7 +433,6 @@ export class ClaudeOutputParser implements AgentOutputParser {
 				recoverable: true,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson },
 				parsedJson,
 			};
 		}

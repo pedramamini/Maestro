@@ -554,7 +554,6 @@ export class CodexOutputParser implements AgentOutputParser {
 				recoverable: match.recoverable,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson },
 				parsedJson,
 			};
 		}
@@ -566,7 +565,6 @@ export class CodexOutputParser implements AgentOutputParser {
 				recoverable: true,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson },
 				parsedJson,
 			};
 		}

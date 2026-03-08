@@ -380,7 +380,6 @@ export class OpenCodeOutputParser implements AgentOutputParser {
 				recoverable: match.recoverable,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson },
 				parsedJson,
 			};
 		}
@@ -392,7 +391,6 @@ export class OpenCodeOutputParser implements AgentOutputParser {
 				recoverable: true,
 				agentId: this.agentId,
 				timestamp: Date.now(),
-				raw: { parsedJson },
 				parsedJson,
 			};
 		}
