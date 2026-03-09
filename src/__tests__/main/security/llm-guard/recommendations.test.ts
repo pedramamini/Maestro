@@ -416,7 +416,9 @@ describe('recommendations', () => {
 			// High only should have fewer recommendations
 			expect(highOnly.length).toBeLessThanOrEqual(mediumAndHigh.length);
 			// All high-only recommendations should be high severity
-			highOnly.forEach((r) => expect(r.severity).toBe('high'));
+			highOnly.forEach((r) => {
+				expect(r.severity).toBe('high');
+			});
 		});
 
 		it('filters by category', async () => {
@@ -439,7 +441,9 @@ describe('recommendations', () => {
 				{ categories: ['secret_detection'] }
 			);
 
-			secretsOnly.forEach((r) => expect(r.category).toBe('secret_detection'));
+			secretsOnly.forEach((r) => {
+				expect(r.category).toBe('secret_detection');
+			});
 		});
 
 		it('excludes dismissed recommendations', async () => {

@@ -15,7 +15,14 @@ import { ipcRenderer } from 'electron';
 export interface SecurityEventData {
 	sessionId: string;
 	tabId?: string;
-	eventType: 'input_scan' | 'output_scan' | 'blocked' | 'warning' | 'scan_start' | 'scan_complete';
+	eventType:
+		| 'input_scan'
+		| 'output_scan'
+		| 'blocked'
+		| 'warning'
+		| 'scan_start'
+		| 'scan_complete'
+		| 'inter_agent_scan';
 	findingTypes: string[];
 	findingCount: number;
 	action: 'none' | 'sanitized' | 'blocked' | 'warned';
@@ -43,7 +50,14 @@ export interface SecurityEvent {
 	timestamp: number;
 	sessionId: string;
 	tabId?: string;
-	eventType: 'input_scan' | 'output_scan' | 'blocked' | 'warning' | 'scan_start' | 'scan_complete';
+	eventType:
+		| 'input_scan'
+		| 'output_scan'
+		| 'blocked'
+		| 'warning'
+		| 'scan_start'
+		| 'scan_complete'
+		| 'inter_agent_scan';
 	findings: Array<{
 		type: string;
 		value: string;
@@ -263,7 +277,7 @@ export function createSecurityApi() {
 		 * Get events filtered by type
 		 */
 		getEventsByType: (
-			eventType: 'input_scan' | 'output_scan' | 'blocked' | 'warning',
+			eventType: 'input_scan' | 'output_scan' | 'blocked' | 'warning' | 'inter_agent_scan',
 			limit?: number
 		): Promise<SecurityEvent[]> =>
 			ipcRenderer.invoke('security:events:getByType', eventType, limit),

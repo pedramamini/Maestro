@@ -2761,6 +2761,7 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				promptSupportsThinking={promptSupportsThinking}
 				promptEnterToSend={promptEnterToSend}
 				onPromptToggleEnterToSend={onPromptToggleEnterToSend}
+				promptLlmGuardEnabled={promptLlmGuardEnabled}
 				queueBrowserOpen={queueBrowserOpen}
 				onCloseQueueBrowser={onCloseQueueBrowser}
 				onRemoveQueueItem={onRemoveQueueItem}
