@@ -94,7 +94,8 @@ const buildOriginalSegments = (content: string, findings: Finding[]): TextSegmen
 
 	for (const finding of sortedFindings) {
 		// Only process findings with replacements (i.e., actually sanitized)
-		if (!finding.replacement) continue;
+		// Use explicit undefined check to allow empty-string replacements (deletions)
+		if (finding.replacement === undefined) continue;
 
 		// Add normal text before this finding
 		if (finding.start > currentPos) {
@@ -133,7 +134,9 @@ const buildSanitizedSegments = (content: string, findings: Finding[]): TextSegme
 	// For sanitized content, we need to find the replacement text positions
 	// Since replacements may be different lengths, we need to track offset adjustments
 
-	const sortedFindings = sortFindingsByPosition(findings).filter((f) => f.replacement);
+	const sortedFindings = sortFindingsByPosition(findings).filter(
+		(f) => f.replacement !== undefined
+	);
 
 	if (sortedFindings.length === 0) {
 		return [{ type: 'normal', text: content }];
@@ -146,7 +149,8 @@ const buildSanitizedSegments = (content: string, findings: Finding[]): TextSegme
 	let offset = 0;
 
 	for (const finding of sortedFindings) {
-		if (!finding.replacement) continue;
+		// Use explicit undefined check to allow empty-string replacements (deletions)
+		if (finding.replacement === undefined) continue;
 
 		const originalLength = finding.end - finding.start;
 		const replacementLength = finding.replacement.length;
@@ -198,7 +202,9 @@ const buildInlineSegments = (
 	sanitizedContent: string,
 	findings: Finding[]
 ): InlineSegment[] => {
-	const sortedFindings = sortFindingsByPosition(findings).filter((f) => f.replacement);
+	const sortedFindings = sortFindingsByPosition(findings).filter(
+		(f) => f.replacement !== undefined
+	);
 
 	if (sortedFindings.length === 0) {
 		return [{ type: 'normal', text: originalContent }];
@@ -208,7 +214,8 @@ const buildInlineSegments = (
 	let currentPos = 0;
 
 	for (const finding of sortedFindings) {
-		if (!finding.replacement) continue;
+		// Use explicit undefined check to allow empty-string replacements (deletions)
+		if (finding.replacement === undefined) continue;
 
 		// Add normal text before this finding
 		if (finding.start > currentPos) {
@@ -267,7 +274,7 @@ const FindingsOnlyDiff = memo(function FindingsOnlyDiff({
 }) {
 	const [copiedAll, setCopiedAll] = useState(false);
 
-	const sanitizedFindings = findings.filter((f) => f.replacement);
+	const sanitizedFindings = findings.filter((f) => f.replacement !== undefined);
 
 	const handleCopyAll = useCallback(async () => {
 		const summary = sanitizedFindings
@@ -500,13 +507,13 @@ export const SanitizedContentDiff = memo(function SanitizedContentDiff({
 	const uniqueTypes = useMemo(() => {
 		const types = new Set<string>();
 		findings.forEach((f) => {
-			if (f.replacement) types.add(f.type);
+			if (f.replacement !== undefined) types.add(f.type);
 		});
 		return Array.from(types);
 	}, [findings]);
 
 	// No changes to show
-	if (findings.filter((f) => f.replacement).length === 0) {
+	if (findings.filter((f) => f.replacement !== undefined).length === 0) {
 		return (
 			<div
 				className="p-4 rounded border text-center"
@@ -558,8 +565,8 @@ export const SanitizedContentDiff = memo(function SanitizedContentDiff({
 						Content Changes
 					</span>
 					<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-						({findings.filter((f) => f.replacement).length} change
-						{findings.filter((f) => f.replacement).length !== 1 ? 's' : ''})
+						({findings.filter((f) => f.replacement !== undefined).length} change
+						{findings.filter((f) => f.replacement !== undefined).length !== 1 ? 's' : ''})
 					</span>
 				</div>
 

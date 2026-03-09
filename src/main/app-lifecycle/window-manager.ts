@@ -126,17 +126,26 @@ export function createWindowManager(deps: WindowManagerDependencies): WindowMana
 
 			// Configure spell-checker with system locale
 			// Uses system locale to respect user's language preference (en_US vs en_GB, etc.)
+			// Filter against availableSpellCheckerLanguages to avoid errors from unsupported locales
 			const systemLocale = app.getLocale();
-			const spellCheckLanguages = [systemLocale];
-			// Add fallback to generic English if not already included
-			if (!systemLocale.startsWith('en')) {
-				spellCheckLanguages.push('en-US');
-			}
-			mainWindow.webContents.session.setSpellCheckerLanguages(spellCheckLanguages);
-			logger.info(
-				`Spell-checker configured with languages: ${spellCheckLanguages.join(', ')}`,
-				'Window'
+			const available = new Set(mainWindow.webContents.session.availableSpellCheckerLanguages);
+			const candidates = [systemLocale, systemLocale.split('-')[0], 'en-US'];
+			const spellCheckLanguages = candidates.filter(
+				(lang, index) => !!lang && available.has(lang) && candidates.indexOf(lang) === index
 			);
+
+			if (spellCheckLanguages.length > 0) {
+				mainWindow.webContents.session.setSpellCheckerLanguages(spellCheckLanguages);
+				logger.info(
+					`Spell-checker configured with languages: ${spellCheckLanguages.join(', ')}`,
+					'Window'
+				);
+			} else {
+				logger.warn(
+					`No supported spell-check dictionary found for locale ${systemLocale}`,
+					'Window'
+				);
+			}
 
 			// Handle context menu for spell-check suggestions
 			mainWindow.webContents.on('context-menu', (_event, params) => {

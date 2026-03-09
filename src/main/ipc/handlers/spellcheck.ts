@@ -65,7 +65,9 @@ export function registerSpellCheckHandlers(): void {
 			// Note: The actual spell-check suggestions are provided by Electron's native
 			// context menu when right-clicking on a misspelled word in a textarea with spellcheck="true"
 
-			logger.debug(`Spell-check suggestions requested for: ${word}`, LOG_CONTEXT);
+			logger.debug('Spell-check suggestions requested', LOG_CONTEXT, {
+				length: word.length,
+			});
 
 			// Return empty - native spell-check handles this via context menu
 			return [];
@@ -78,7 +80,9 @@ export function registerSpellCheckHandlers(): void {
 		withIpcErrorLogging(handlerOpts('addWord'), async (word: string) => {
 			const ses = session.defaultSession;
 			ses.addWordToSpellCheckerDictionary(word);
-			logger.info(`Added word to spell-checker dictionary: ${word}`, LOG_CONTEXT);
+			logger.info('Added word to spell-checker dictionary', LOG_CONTEXT, {
+				length: word.length,
+			});
 		})
 	);
 

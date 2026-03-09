@@ -214,30 +214,44 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 							action = 'sanitized';
 						}
 
-						logSecurityEvent({
+						// Determine event type based on result
+						const eventType = guardResult.blocked
+							? 'blocked'
+							: guardResult.warned
+								? 'warning'
+								: 'input_scan';
+
+						void logSecurityEvent({
 							sessionId: config.sessionId,
 							tabId: config.tabId,
-							eventType: guardResult.blocked ? 'blocked' : 'input_scan',
+							eventType,
 							findings: guardResult.findings,
 							action,
 							originalLength: config.prompt!.length,
 							sanitizedLength: guardResult.sanitizedPrompt.length,
-						}).then((event) => {
-							// Emit simplified event to renderer for real-time UI updates
-							const mainWindow = getMainWindow();
-							if (isWebContentsAvailable(mainWindow)) {
-								mainWindow.webContents.send('security:event', {
-									sessionId: event.sessionId,
-									tabId: event.tabId,
-									eventType: event.eventType,
-									findingTypes: event.findings.map((f) => f.type),
-									findingCount: event.findings.length,
-									action: event.action,
-									originalLength: event.originalLength,
-									sanitizedLength: event.sanitizedLength,
+						})
+							.then((event) => {
+								// Emit simplified event to renderer for real-time UI updates
+								const mainWindow = getMainWindow();
+								if (isWebContentsAvailable(mainWindow)) {
+									mainWindow.webContents.send('security:event', {
+										sessionId: event.sessionId,
+										tabId: event.tabId,
+										eventType: event.eventType,
+										findingTypes: event.findings.map((f) => f.type),
+										findingCount: event.findings.length,
+										action: event.action,
+										originalLength: event.originalLength,
+										sanitizedLength: event.sanitizedLength,
+									});
+								}
+							})
+							.catch((error) => {
+								logger.error('Failed to log security event', LOG_CONTEXT, {
+									error,
+									sessionId: config.sessionId,
 								});
-							}
-						});
+							});
 					}
 
 					if (guardResult.blocked) {
