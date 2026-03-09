@@ -9,6 +9,7 @@ export { ClaudeSessionStorage, ClaudeSessionOriginsData } from './claude-session
 export { OpenCodeSessionStorage } from './opencode-session-storage';
 export { CodexSessionStorage } from './codex-session-storage';
 export { FactoryDroidSessionStorage } from './factory-droid-session-storage';
+export { GeminiSessionStorage } from './gemini-session-storage';
 
 import Store from 'electron-store';
 import { registerSessionStorage } from '../agents';
@@ -16,6 +17,8 @@ import { ClaudeSessionStorage, ClaudeSessionOriginsData } from './claude-session
 import { OpenCodeSessionStorage } from './opencode-session-storage';
 import { CodexSessionStorage } from './codex-session-storage';
 import { FactoryDroidSessionStorage } from './factory-droid-session-storage';
+import { GeminiSessionStorage } from './gemini-session-storage';
+import type { AgentSessionOriginsData } from '../stores/types';
 
 /**
  * Options for initializing session storages
@@ -23,6 +26,8 @@ import { FactoryDroidSessionStorage } from './factory-droid-session-storage';
 export interface InitializeSessionStoragesOptions {
 	/** The shared store for Claude session origins (names, starred status, etc.) */
 	claudeSessionOriginsStore?: Store<ClaudeSessionOriginsData>;
+	/** The shared store for generic agent session origins (Gemini, Codex, etc.) */
+	agentSessionOriginsStore?: Store<AgentSessionOriginsData>;
 }
 
 /**
@@ -36,4 +41,5 @@ export function initializeSessionStorages(options?: InitializeSessionStoragesOpt
 	registerSessionStorage(new OpenCodeSessionStorage());
 	registerSessionStorage(new CodexSessionStorage());
 	registerSessionStorage(new FactoryDroidSessionStorage());
+	registerSessionStorage(new GeminiSessionStorage(options?.agentSessionOriginsStore));
 }

@@ -726,6 +726,9 @@ export interface Session {
 		workingDirOverride?: string; // Override remote working directory
 	};
 
+	/** Additional workspace directories approved for Gemini CLI sandbox. Each directory is passed as --include-directories on spawn. */
+	approvedWorkspaceDirs?: string[];
+
 	// SSH connection status - runtime only, not persisted
 	// Set when background SSH operations fail (e.g., git info fetch on startup)
 	sshConnectionFailed?: boolean;
@@ -778,6 +781,7 @@ export interface AgentConfig {
 	hidden?: boolean; // If true, agent is hidden from UI (internal use only)
 	configOptions?: AgentConfigOption[]; // Agent-specific configuration options
 	yoloModeArgs?: string[]; // Args for YOLO/full-access mode (e.g., ['--dangerously-skip-permissions'])
+	readOnlyCliEnforced?: boolean; // Whether the agent's CLI enforces read-only mode (false = prompt-only enforcement)
 	capabilities?: AgentCapabilities; // Agent capabilities (added at runtime)
 }
 

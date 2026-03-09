@@ -16,6 +16,7 @@ export const DEFAULT_CONTEXT_WINDOWS: Record<ToolType, number> = {
 	codex: 200000, // OpenAI o3/o4-mini context window
 	opencode: 128000, // OpenCode (depends on model, 128k is conservative default)
 	'factory-droid': 200000, // Factory Droid (varies by model, defaults to Claude Opus)
+	'gemini-cli': 1048576, // Gemini CLI (Gemini 2.5 Pro 1M token context)
 	terminal: 0, // Terminal has no context window
 };
 
@@ -24,7 +25,7 @@ export const DEFAULT_CONTEXT_WINDOWS: Record<ToolType, number> = {
  * OpenAI models (Codex, o3, o4-mini) have a single context window that includes
  * both input and output tokens, unlike Claude which has separate limits.
  */
-const COMBINED_CONTEXT_AGENTS: Set<ToolType> = new Set(['codex']);
+const COMBINED_CONTEXT_AGENTS: Set<ToolType> = new Set(['codex', 'gemini-cli']);
 
 /** Minimum growth percentage per accumulated turn */
 const MIN_GROWTH_PERCENT = 1;

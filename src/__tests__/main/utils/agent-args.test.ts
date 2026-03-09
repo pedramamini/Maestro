@@ -4,13 +4,24 @@
  * Covers buildAgentArgs, applyAgentConfigOverrides, and getContextWindowValue.
  */
 
-import { describe, it, expect } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
 import {
 	buildAgentArgs,
 	applyAgentConfigOverrides,
 	getContextWindowValue,
 } from '../../../main/utils/agent-args';
 import type { AgentConfig } from '../../../main/agents';
+
+vi.mock('../../../main/utils/logger', () => ({
+	logger: {
+		debug: vi.fn(),
+		info: vi.fn(),
+		warn: vi.fn(),
+		error: vi.fn(),
+		toast: vi.fn(),
+		autorun: vi.fn(),
+	},
+}));
 
 /**
  * Helper to create a minimal AgentConfig for testing.
@@ -220,6 +231,49 @@ describe('buildAgentArgs', () => {
 		expect(result).toEqual(['--print']);
 	});
 
+	it('skips resumeArgs when agentSessionId contains invalid characters', async () => {
+		const { logger } = await import('../../../main/utils/logger');
+		vi.mocked(logger.warn).mockClear();
+
+		const agent = makeAgent({
+			resumeArgs: (sid: string) => ['--resume', sid],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--print'],
+			agentSessionId: 'sess; rm -rf /',
+		});
+		expect(result).toEqual(['--print']);
+		expect(logger.warn).toHaveBeenCalledWith(
+			'Invalid agentSessionId format, skipping resume args',
+			'AgentArgs',
+			{ agentSessionId: 'sess; rm -rf /' }
+		);
+	});
+
+	it('allows valid session IDs with dots, colons, and hyphens', () => {
+		const agent = makeAgent({
+			resumeArgs: (sid: string) => ['--resume', sid],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--print'],
+			agentSessionId: 'session-2025:03.08_abc',
+		});
+		expect(result).toEqual(['--print', '--resume', 'session-2025:03.08_abc']);
+	});
+
+	it('rejects session IDs with shell metacharacters', () => {
+		const agent = makeAgent({
+			resumeArgs: (sid: string) => ['--resume', sid],
+		});
+		for (const bad of ['id$(cmd)', 'id`cmd`', 'id|pipe', 'id&bg', 'id>file']) {
+			const result = buildAgentArgs(agent, {
+				baseArgs: [],
+				agentSessionId: bad,
+			});
+			expect(result).toEqual([]);
+		}
+	});
+
 	// -- combined --
 	it('combines multiple options together', () => {
 		const agent = makeAgent({
@@ -243,10 +297,11 @@ describe('buildAgentArgs', () => {
 			agentSessionId: 'abc',
 		});
 
+		// batchModeArgs (--skip-git) is omitted when readOnlyMode is true —
+		// batch mode args grant write/approval permissions that conflict with read-only
 		expect(result).toEqual([
 			'run',
 			'--print',
-			'--skip-git',
 			'--format',
 			'json',
 			'-C',
@@ -259,6 +314,97 @@ describe('buildAgentArgs', () => {
 			'--resume',
 			'abc',
 		]);
+	});
+
+	// -- readOnlyMode + batchModeArgs interaction (TASK-S05) --
+	it('skips batchModeArgs when readOnlyMode is true even with empty readOnlyArgs', () => {
+		// Gemini CLI scenario: readOnlyArgs is [] but -y should still be skipped
+		const agent = makeAgent({
+			batchModeArgs: ['-y'],
+			readOnlyArgs: [],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--output-format', 'stream-json'],
+			prompt: 'analyze this code',
+			readOnlyMode: true,
+		});
+		expect(result).not.toContain('-y');
+		expect(result).toEqual(['--output-format', 'stream-json']);
+	});
+
+	it('skips batchModeArgs when readOnlyMode is true and readOnlyArgs is undefined', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--json'],
+			prompt: 'review code',
+			readOnlyMode: true,
+		});
+		expect(result).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+		expect(result).not.toContain('--skip-git-repo-check');
+	});
+
+	it('includes batchModeArgs when readOnlyMode is false even with empty readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['-y'],
+			readOnlyArgs: [],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--output-format', 'stream-json'],
+			prompt: 'fix this bug',
+			readOnlyMode: false,
+		});
+		expect(result).toContain('-y');
+	});
+
+	it('logs warning when readOnlyMode requested and readOnlyCliEnforced is false', async () => {
+		const { logger } = await import('../../../main/utils/logger');
+		vi.mocked(logger.warn).mockClear();
+
+		const agent = makeAgent({
+			readOnlyArgs: [],
+			readOnlyCliEnforced: false,
+		});
+		buildAgentArgs(agent, {
+			baseArgs: [],
+			readOnlyMode: true,
+		});
+		expect(logger.warn).toHaveBeenCalledWith(
+			expect.stringContaining('read-only mode requested but no CLI-level enforcement'),
+			'AgentArgs',
+			{ agentId: 'test-agent' }
+		);
+	});
+
+	it('does not log warning when readOnlyCliEnforced is true', async () => {
+		const { logger } = await import('../../../main/utils/logger');
+		vi.mocked(logger.warn).mockClear();
+
+		const agent = makeAgent({
+			readOnlyArgs: ['--agent', 'plan'],
+			readOnlyCliEnforced: true,
+		});
+		buildAgentArgs(agent, {
+			baseArgs: [],
+			readOnlyMode: true,
+		});
+		expect(logger.warn).not.toHaveBeenCalled();
+	});
+
+	it('does not log warning when readOnlyCliEnforced is undefined', async () => {
+		const { logger } = await import('../../../main/utils/logger');
+		vi.mocked(logger.warn).mockClear();
+
+		const agent = makeAgent({
+			readOnlyArgs: ['--sandbox', 'read-only'],
+		});
+		buildAgentArgs(agent, {
+			baseArgs: [],
+			readOnlyMode: true,
+		});
+		// readOnlyCliEnforced is undefined (not explicitly false), so no warning
+		expect(logger.warn).not.toHaveBeenCalled();
 	});
 
 	it('does not mutate the original baseArgs array', () => {
@@ -524,6 +670,91 @@ describe('applyAgentConfigOverrides', () => {
 		});
 		applyAgentConfigOverrides(agent, baseArgs, {});
 		expect(baseArgs).toEqual(['--print']);
+	});
+});
+
+// ---------------------------------------------------------------------------
+// custom args denylist (TASK-S01)
+// ---------------------------------------------------------------------------
+describe('applyAgentConfigOverrides — denied custom args', () => {
+	it('strips --no-sandbox from custom args', () => {
+		const agent = makeAgent();
+		const result = applyAgentConfigOverrides(agent, ['--print'], {
+			sessionCustomArgs: '--no-sandbox --verbose',
+		});
+		expect(result.args).toContain('--verbose');
+		expect(result.args).not.toContain('--no-sandbox');
+	});
+
+	it('strips all denied flags from custom args', () => {
+		const agent = makeAgent();
+		const deniedFlags = [
+			'--no-sandbox',
+			'--include-directories',
+			'--dangerous-auto-approve',
+			'--dangerously-skip-permissions',
+			'--dangerously-bypass-approvals-and-sandbox',
+			'--approval-mode',
+			'-y',
+		];
+
+		const result = applyAgentConfigOverrides(agent, [], {
+			sessionCustomArgs: deniedFlags.join(' '),
+		});
+
+		for (const flag of deniedFlags) {
+			expect(result.args).not.toContain(flag);
+		}
+		// All args were denied, so source should be 'none'
+		expect(result.customArgsSource).toBe('none');
+	});
+
+	it('passes through clean custom args unchanged', () => {
+		const agent = makeAgent();
+		const result = applyAgentConfigOverrides(agent, [], {
+			sessionCustomArgs: '--model gemini-2.0 --verbose --temperature 0.5',
+		});
+		expect(result.args).toEqual(['--model', 'gemini-2.0', '--verbose', '--temperature', '0.5']);
+		expect(result.customArgsSource).toBe('session');
+	});
+
+	it('filters denied flags from mixed custom args', () => {
+		const agent = makeAgent();
+		const result = applyAgentConfigOverrides(agent, ['--base'], {
+			sessionCustomArgs: '--verbose --no-sandbox --output json -y --debug',
+		});
+		expect(result.args).toEqual(['--base', '--verbose', '--output', 'json', '--debug']);
+		expect(result.args).not.toContain('--no-sandbox');
+		expect(result.args).not.toContain('-y');
+		expect(result.customArgsSource).toBe('session');
+	});
+
+	it('logs a warning for each denied arg', async () => {
+		const { logger } = await import('../../../main/utils/logger');
+		vi.mocked(logger.warn).mockClear();
+
+		const agent = makeAgent();
+		applyAgentConfigOverrides(agent, [], {
+			sessionCustomArgs: '--no-sandbox -y --verbose',
+		});
+
+		expect(logger.warn).toHaveBeenCalledTimes(2);
+		expect(logger.warn).toHaveBeenCalledWith('Stripped denied custom arg', 'AgentArgs', {
+			arg: '--no-sandbox',
+		});
+		expect(logger.warn).toHaveBeenCalledWith('Stripped denied custom arg', 'AgentArgs', {
+			arg: '-y',
+		});
+	});
+
+	it('applies denylist to agent-level customArgs too', () => {
+		const agent = makeAgent();
+		const result = applyAgentConfigOverrides(agent, [], {
+			agentConfigValues: { customArgs: '--dangerously-skip-permissions --safe-flag' },
+		});
+		expect(result.args).toContain('--safe-flag');
+		expect(result.args).not.toContain('--dangerously-skip-permissions');
+		expect(result.customArgsSource).toBe('agent');
 	});
 });
 

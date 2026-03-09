@@ -83,6 +83,13 @@ export function extractDisplayTextFromChunk(chunk: string, agentType: ToolType):
 					textParts.push(msg.text);
 				}
 			}
+
+			// Gemini CLI stream-json format
+			else if (agentType === 'gemini-cli') {
+				if (msg.type === 'message' && msg.role === 'assistant' && msg.content) {
+					textParts.push(msg.content);
+				}
+			}
 		} catch {
 			// Ignore non-JSON lines or parse errors
 		}
@@ -539,6 +546,25 @@ function extractResultFromStreamJson(output: string, agentType: ToolType): strin
 	try {
 		const lines = output.split('\n');
 
+		// For Gemini CLI: concatenate all assistant message content
+		if (agentType === 'gemini-cli') {
+			const textParts: string[] = [];
+			for (const line of lines) {
+				if (!line.trim()) continue;
+				try {
+					const msg = JSON.parse(line);
+					if (msg.type === 'message' && msg.role === 'assistant' && msg.content) {
+						textParts.push(msg.content);
+					}
+				} catch {
+					// Ignore non-JSON lines
+				}
+			}
+			if (textParts.length > 0) {
+				return textParts.join('');
+			}
+		}
+
 		// For OpenCode: concatenate all text parts
 		if (agentType === 'opencode') {
 			const textParts: string[] = [];
@@ -607,7 +633,11 @@ function extractResultFromStreamJson(output: string, agentType: ToolType): strin
  * For document generation, the agent can write files directly to the Auto Run folder.
  * The prompt strictly enforces the write restriction to prevent writing elsewhere.
  */
-function buildArgsForAgent(agent: { id: string; args?: string[] }): string[] {
+function buildArgsForAgent(agent: {
+	id: string;
+	args?: string[];
+	batchModeArgs?: string[];
+}): string[] {
 	const agentId = agent.id;
 
 	switch (agentId) {
@@ -638,6 +668,23 @@ function buildArgsForAgent(agent: { id: string; args?: string[] }): string[] {
 			// batchModePrefix, jsonOutputArgs, and workingDirArgs automatically
 			// when a prompt is present.
 			return [...(agent.args || [])];
+		}
+
+		case 'gemini-cli': {
+			// Gemini CLI requires stream-json output for structured response parsing
+			const args = [...(agent.args || [])];
+
+			// Ensure stream-json output format for proper parsing
+			if (!args.includes('--output-format')) {
+				args.push('--output-format', 'stream-json');
+			}
+
+			// Add auto-approve for batch mode
+			if (agent.batchModeArgs) {
+				args.push(...agent.batchModeArgs);
+			}
+
+			return args;
 		}
 
 		default: {

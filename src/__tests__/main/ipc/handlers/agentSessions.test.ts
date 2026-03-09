@@ -7,8 +7,17 @@
 
 import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { ipcMain } from 'electron';
-import { registerAgentSessionsHandlers } from '../../../../main/ipc/handlers/agentSessions';
+import {
+	registerAgentSessionsHandlers,
+	getGeminiStatsStore,
+	parseGeminiSessionContent,
+} from '../../../../main/ipc/handlers/agentSessions';
 import * as agentSessionStorage from '../../../../main/agents';
+import { GEMINI_SESSION_STATS_DEFAULTS } from '../../../../main/stores/defaults';
+import type {
+	GeminiSessionStatsData,
+	GeminiSessionTokenStats,
+} from '../../../../main/stores/types';
 
 // Mock electron's ipcMain
 vi.mock('electron', () => ({
@@ -23,6 +32,14 @@ vi.mock('../../../../main/agents', () => ({
 	getSessionStorage: vi.fn(),
 	hasSessionStorage: vi.fn(),
 	getAllSessionStorages: vi.fn(),
+}));
+
+// Mock Sentry utilities
+const mockCaptureException = vi.fn();
+vi.mock('../../../../main/utils/sentry', () => ({
+	captureException: (...args: unknown[]) => mockCaptureException(...args),
+	captureMessage: vi.fn(),
+	addBreadcrumb: vi.fn(),
 }));
 
 // Mock the logger
@@ -67,6 +84,7 @@ describe('agentSessions IPC handlers', () => {
 				'agentSessions:deleteMessagePair',
 				'agentSessions:hasStorage',
 				'agentSessions:getAvailableStorages',
+				'agentSessions:getAllNamedSessions',
 			];
 
 			for (const channel of expectedChannels) {
@@ -464,6 +482,351 @@ describe('agentSessions IPC handlers', () => {
 			const result = await handler!({} as any);
 
 			expect(result).toEqual(['claude-code', 'opencode']);
+		});
+	});
+
+	describe('agentSessions:getAllNamedSessions', () => {
+		it('should aggregate named sessions from all storages that support getAllNamedSessions', async () => {
+			const mockGeminiStorage = {
+				agentId: 'gemini-cli',
+				getAllNamedSessions: vi.fn().mockResolvedValue([
+					{
+						agentSessionId: 'gem-1',
+						projectPath: '/project',
+						sessionName: 'Gemini Chat',
+						starred: true,
+					},
+				]),
+			};
+
+			const mockClaudeStorage = {
+				agentId: 'claude-code',
+				getAllNamedSessions: vi.fn().mockResolvedValue([
+					{ agentSessionId: 'claude-1', projectPath: '/project', sessionName: 'Claude Chat' },
+					{
+						agentSessionId: 'claude-2',
+						projectPath: '/other',
+						sessionName: 'Claude Debug',
+						starred: false,
+					},
+				]),
+			};
+
+			// A storage without getAllNamedSessions (e.g., terminal)
+			const mockTerminalStorage = {
+				agentId: 'terminal',
+			};
+
+			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue([
+				mockGeminiStorage,
+				mockClaudeStorage,
+				mockTerminalStorage,
+			] as unknown as agentSessionStorage.AgentSessionStorage[]);
+
+			const handler = handlers.get('agentSessions:getAllNamedSessions');
+			const result = await handler!({} as any);
+
+			// Should have 3 total (1 gemini + 2 claude), terminal excluded
+			expect(result).toHaveLength(3);
+
+			// Verify agentId is added to each session
+			expect(result).toEqual(
+				expect.arrayContaining([
+					expect.objectContaining({
+						agentId: 'gemini-cli',
+						agentSessionId: 'gem-1',
+						sessionName: 'Gemini Chat',
+						starred: true,
+					}),
+					expect.objectContaining({
+						agentId: 'claude-code',
+						agentSessionId: 'claude-1',
+						sessionName: 'Claude Chat',
+					}),
+					expect.objectContaining({
+						agentId: 'claude-code',
+						agentSessionId: 'claude-2',
+						sessionName: 'Claude Debug',
+						starred: false,
+					}),
+				])
+			);
+		});
+
+		it('should return empty array when no storages support getAllNamedSessions', async () => {
+			const mockStorage = {
+				agentId: 'terminal',
+				// No getAllNamedSessions method
+			};
+
+			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue([
+				mockStorage,
+			] as unknown as agentSessionStorage.AgentSessionStorage[]);
+
+			const handler = handlers.get('agentSessions:getAllNamedSessions');
+			const result = await handler!({} as any);
+
+			expect(result).toEqual([]);
+		});
+
+		it('should continue aggregating if one storage throws an error', async () => {
+			const mockFailingStorage = {
+				agentId: 'codex',
+				getAllNamedSessions: vi.fn().mockRejectedValue(new Error('Storage error')),
+			};
+
+			const mockWorkingStorage = {
+				agentId: 'gemini-cli',
+				getAllNamedSessions: vi
+					.fn()
+					.mockResolvedValue([
+						{ agentSessionId: 'gem-1', projectPath: '/project', sessionName: 'Gemini Session' },
+					]),
+			};
+
+			vi.mocked(agentSessionStorage.getAllSessionStorages).mockReturnValue([
+				mockFailingStorage,
+				mockWorkingStorage,
+			] as unknown as agentSessionStorage.AgentSessionStorage[]);
+
+			const handler = handlers.get('agentSessions:getAllNamedSessions');
+			const result = await handler!({} as any);
+
+			// Should still return the working storage's sessions
+			expect(result).toHaveLength(1);
+			expect(result[0].agentId).toBe('gemini-cli');
+			expect(result[0].agentSessionId).toBe('gem-1');
+		});
+	});
+
+	describe('gemini session stats store', () => {
+		it('should return undefined when no store is provided', () => {
+			// Default registration (no deps) should leave gemini stats store undefined
+			expect(getGeminiStatsStore()).toBeUndefined();
+		});
+
+		it('should store reference when geminiSessionStatsStore is provided via deps', () => {
+			const mockStore = {
+				get: vi.fn(),
+				set: vi.fn(),
+				store: { stats: {} },
+			};
+
+			// Re-register with the mock store
+			registerAgentSessionsHandlers({
+				getMainWindow: () => null,
+				geminiSessionStatsStore: mockStore as any,
+			});
+
+			expect(getGeminiStatsStore()).toBe(mockStore);
+		});
+
+		it('should have correct schema defaults with empty stats record', () => {
+			// Verify the store defaults match the expected GeminiSessionStatsData shape
+			expect(GEMINI_SESSION_STATS_DEFAULTS).toEqual({ stats: {} });
+			expect(GEMINI_SESSION_STATS_DEFAULTS.stats).toEqual({});
+		});
+
+		it('should accept GeminiSessionTokenStats entries keyed by session UUID', () => {
+			// Verify the store schema supports the expected data shape
+			const entry: GeminiSessionTokenStats = {
+				inputTokens: 100,
+				outputTokens: 50,
+				cacheReadTokens: 10,
+				reasoningTokens: 5,
+				lastUpdatedMs: Date.now(),
+			};
+			const storeData: GeminiSessionStatsData = {
+				stats: { 'gemini-uuid-abc': entry },
+			};
+			expect(storeData.stats['gemini-uuid-abc']).toMatchObject({
+				inputTokens: 100,
+				outputTokens: 50,
+				cacheReadTokens: 10,
+				reasoningTokens: 5,
+			});
+			expect(storeData.stats['gemini-uuid-abc'].lastUpdatedMs).toBeGreaterThan(0);
+		});
+	});
+
+	describe('parseGeminiSessionContent', () => {
+		it('should parse messages and return zeroed tokens when no token data in session', () => {
+			const content = JSON.stringify({
+				messages: [{ type: 'user' }, { type: 'gemini' }, { type: 'user' }, { type: 'gemini' }],
+			});
+			const result = parseGeminiSessionContent(content, 1024);
+			expect(result.messages).toBe(4);
+			expect(result.inputTokens).toBe(0);
+			expect(result.outputTokens).toBe(0);
+			expect(result.cachedInputTokens).toBe(0);
+			expect(result.sizeBytes).toBe(1024);
+		});
+
+		it('should fall back to persistedStats when message-level tokens are 0', () => {
+			const content = JSON.stringify({
+				messages: [{ type: 'user' }, { type: 'gemini' }],
+			});
+			const persistedStats = {
+				inputTokens: 500,
+				outputTokens: 1200,
+				cacheReadTokens: 100,
+				reasoningTokens: 50,
+			};
+			const result = parseGeminiSessionContent(content, 2048, persistedStats);
+			expect(result.messages).toBe(2);
+			expect(result.inputTokens).toBe(500);
+			expect(result.outputTokens).toBe(1200);
+			expect(result.cachedInputTokens).toBe(100);
+			expect(result.sizeBytes).toBe(2048);
+		});
+
+		it('should NOT fall back to persistedStats when message-level tokens are non-zero', () => {
+			// Hypothetical: if Gemini ever adds token data to messages
+			const content = JSON.stringify({
+				messages: [{ type: 'user', tokens: { input: 10, output: 20 } }],
+			});
+			const persistedStats = {
+				inputTokens: 500,
+				outputTokens: 1200,
+				cacheReadTokens: 100,
+				reasoningTokens: 50,
+			};
+			const result = parseGeminiSessionContent(content, 512, persistedStats);
+			// Should use the message-level data, not the persisted fallback
+			expect(result.inputTokens).toBe(10);
+			expect(result.outputTokens).toBe(20);
+		});
+
+		it('should handle empty/invalid JSON gracefully with persistedStats fallback', () => {
+			const persistedStats = {
+				inputTokens: 300,
+				outputTokens: 600,
+				cacheReadTokens: 50,
+				reasoningTokens: 0,
+			};
+			const result = parseGeminiSessionContent('not valid json', 100, persistedStats);
+			expect(result.messages).toBe(0);
+			// Parse failed, tokens are 0, so persisted stats should be used
+			expect(result.inputTokens).toBe(300);
+			expect(result.outputTokens).toBe(600);
+			expect(result.cachedInputTokens).toBe(50);
+		});
+
+		it('should report corrupted session JSON to Sentry', () => {
+			parseGeminiSessionContent('not valid json', 256);
+			expect(mockCaptureException).toHaveBeenCalledWith(expect.any(SyntaxError), {
+				context: 'parseGeminiSessionContent',
+				sizeBytes: 256,
+			});
+		});
+
+		it('should handle missing messages array', () => {
+			const content = JSON.stringify({ sessionId: 'abc-123' });
+			const result = parseGeminiSessionContent(content, 50);
+			expect(result.messages).toBe(0);
+			expect(result.inputTokens).toBe(0);
+			expect(result.outputTokens).toBe(0);
+		});
+
+		it('should not use persistedStats when undefined', () => {
+			const content = JSON.stringify({
+				messages: [{ type: 'user' }],
+			});
+			const result = parseGeminiSessionContent(content, 100);
+			expect(result.inputTokens).toBe(0);
+			expect(result.outputTokens).toBe(0);
+			expect(result.cachedInputTokens).toBe(0);
+		});
+
+		it('should sum mixed input and prompt token fields on the same object', () => {
+			const content = JSON.stringify({
+				messages: [{ type: 'user', tokens: { input: 10, prompt: 5, output: 3 } }],
+			});
+			const result = parseGeminiSessionContent(content, 256);
+			expect(result.inputTokens).toBe(15);
+			expect(result.outputTokens).toBe(3);
+		});
+	});
+
+	describe('sessionId extraction regex (used in getGlobalStats)', () => {
+		// This regex is used in getGlobalStats() to extract the sessionId from
+		// Gemini session JSON files and look up persisted token stats by UUID.
+		const SESSION_ID_REGEX = /"sessionId"\s*:\s*"([^"]+)"/;
+
+		it('should extract sessionId from a realistic Gemini session JSON', () => {
+			const content = JSON.stringify({
+				sessionId: 'a1b2c3d4-e5f6-7890-abcd-ef1234567890',
+				messages: [
+					{ type: 'user', content: 'Hello' },
+					{ type: 'gemini', content: 'Hi there' },
+				],
+				startTime: '2026-02-21T10:00:00Z',
+				lastUpdated: '2026-02-21T10:05:00Z',
+			});
+			const match = content.match(SESSION_ID_REGEX);
+			expect(match).not.toBeNull();
+			expect(match![1]).toBe('a1b2c3d4-e5f6-7890-abcd-ef1234567890');
+		});
+
+		it('should match the same UUID format emitted by init events', () => {
+			// The init event emits session_id (snake_case), parser maps to sessionId (camelCase).
+			// The session file stores sessionId (camelCase). Both should contain the same UUID.
+			const uuid = 'abc-123-def-456';
+			const sessionFile = JSON.stringify({ sessionId: uuid, messages: [] });
+			const match = sessionFile.match(SESSION_ID_REGEX);
+			expect(match).not.toBeNull();
+			expect(match![1]).toBe(uuid);
+		});
+
+		it('should not match when sessionId field is absent', () => {
+			const content = JSON.stringify({ messages: [{ type: 'user' }] });
+			const match = content.match(SESSION_ID_REGEX);
+			expect(match).toBeNull();
+		});
+
+		it('should handle whitespace variations in JSON formatting', () => {
+			// JSON.stringify uses no spaces, but manually-formatted JSON might
+			const content = '{"sessionId" : "spaced-uuid-123", "messages": []}';
+			const match = content.match(SESSION_ID_REGEX);
+			expect(match).not.toBeNull();
+			expect(match![1]).toBe('spaced-uuid-123');
+		});
+
+		it('should enable correct persisted stats lookup', () => {
+			// End-to-end: extract sessionId from file, look up in persisted stats, pass to parser
+			const uuid = 'live-session-uuid-789';
+			const sessionContent = JSON.stringify({
+				sessionId: uuid,
+				messages: [{ type: 'user' }, { type: 'gemini' }],
+			});
+
+			const allPersistedStats: Record<
+				string,
+				{
+					inputTokens: number;
+					outputTokens: number;
+					cacheReadTokens: number;
+					reasoningTokens: number;
+				}
+			> = {
+				[uuid]: {
+					inputTokens: 1000,
+					outputTokens: 2000,
+					cacheReadTokens: 300,
+					reasoningTokens: 100,
+				},
+				'other-uuid': { inputTokens: 50, outputTokens: 50, cacheReadTokens: 0, reasoningTokens: 0 },
+			};
+
+			// Extract sessionId (mirrors getGlobalStats logic)
+			const match = sessionContent.match(SESSION_ID_REGEX);
+			const persistedStats = match?.[1] ? allPersistedStats[match[1]] : undefined;
+
+			// Pass to parser (mirrors getGlobalStats logic)
+			const result = parseGeminiSessionContent(sessionContent, 512, persistedStats);
+			expect(result.inputTokens).toBe(1000);
+			expect(result.outputTokens).toBe(2000);
+			expect(result.cachedInputTokens).toBe(300);
 		});
 	});
 });

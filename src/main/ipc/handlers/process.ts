@@ -1,6 +1,7 @@
 import { ipcMain, BrowserWindow } from 'electron';
 import Store from 'electron-store';
 import * as os from 'os';
+import * as path from 'path';
 import { ProcessManager } from '../../process-manager';
 import { AgentDetector } from '../../agents';
 import { logger } from '../../utils/logger';
@@ -21,7 +22,10 @@ import {
 import { getSshRemoteConfig, createSshRemoteStoreAdapter } from '../../utils/ssh-remote-resolver';
 import { buildSshCommandWithStdin } from '../../utils/ssh-command-builder';
 import { buildStreamJsonMessage } from '../../process-manager/utils/streamJsonBuilder';
-import { getWindowsShellForAgentExecution } from '../../process-manager/utils/shellEscape';
+import {
+	getWindowsShellForAgentExecution,
+	canRunWithoutShell,
+} from '../../process-manager/utils/shellEscape';
 import { buildExpandedEnv } from '../../../shared/pathUtils';
 import type { SshRemoteConfig } from '../../../shared/types';
 import { powerManager } from '../../power-manager';
@@ -114,6 +118,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 				// Stats tracking options
 				querySource?: 'user' | 'auto'; // Whether this query is user-initiated or from Auto Run
 				tabId?: string; // Tab ID for multi-tab tracking
+				additionalWorkspaceDirs?: string[];
 			}) => {
 				const processManager = requireProcessManager(getProcessManager);
 				const agentDetector = requireDependency(getAgentDetector, 'Agent detector');
@@ -163,6 +168,22 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					yoloMode: config.yoloMode,
 					agentSessionId: config.agentSessionId,
 				});
+
+				// Append approved workspace directories for Gemini CLI sandbox
+				// Each directory gets its own --include-directories flag
+				if (config.additionalWorkspaceDirs?.length && agent?.workingDirArgs) {
+					for (const dir of config.additionalWorkspaceDirs) {
+						if (dir && dir.trim()) {
+							const resolved = path.resolve(config.cwd, dir.trim());
+							finalArgs = [...finalArgs, ...agent.workingDirArgs(resolved)];
+						}
+					}
+					logger.debug('Appending workspace directories', LOG_CONTEXT, {
+						sessionId: config.sessionId,
+						directories: config.additionalWorkspaceDirs,
+						toolType: config.toolType,
+					});
+				}
 
 				// ========================================================================
 				// Apply agent config options and session overrides
@@ -320,34 +341,52 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					});
 				}
 
-				// On Windows (except SSH), always use shell execution for agents
-				// This avoids cmd.exe command line length limits (~8191 chars) which can cause
-				// "Die Befehlszeile ist zu lang" errors with long prompts
+				// On Windows (except SSH), use shell execution for agents unless the
+				// command is a fully-resolved native executable (.exe) that can be
+				// spawned directly. Shell execution avoids cmd.exe command line length
+				// limits (~8191 chars) by preferring PowerShell, but shell: false is
+				// safer as it eliminates all shell metacharacter injection risks.
 				if (isWindows() && !config.sessionSshRemoteConfig?.enabled) {
-					// Use expanded environment with custom env vars to ensure PATH includes all binary locations
-					const expandedEnv = buildExpandedEnv(customEnvVarsToPass);
-					// Filter out undefined values to match Record<string, string> type
-					customEnvVarsToPass = Object.fromEntries(
-						Object.entries(expandedEnv).filter(([_, value]) => value !== undefined)
-					) as Record<string, string>;
+					if (canRunWithoutShell(commandToSpawn)) {
+						// Command is a fully-resolved .exe path — spawn directly without shell.
+						// This is the safest option: no shell metacharacter interpretation at all.
+						// Note: .cmd/.bat files (e.g., npm-installed CLIs like Gemini CLI)
+						// cannot use this path — they require shell interpretation.
+						useShell = false;
+						logger.info(`Using shell:false for resolved .exe on Windows`, LOG_CONTEXT, {
+							agentId: agent?.id,
+							command: commandToSpawn,
+						});
+					} else {
+						// Use expanded environment with custom env vars to ensure PATH includes all binary locations
+						const expandedEnv = buildExpandedEnv(customEnvVarsToPass);
+						// Filter out undefined values to match Record<string, string> type
+						customEnvVarsToPass = Object.fromEntries(
+							Object.entries(expandedEnv).filter(([_, value]) => value !== undefined)
+						) as Record<string, string>;
 
-					// Get the preferred shell for Windows (custom -> current -> PowerShell)
-					// PowerShell is preferred over cmd.exe to avoid command line length limits
-					const customShellPath = settingsStore.get('customShellPath', '') as string;
-					const shellConfig = getWindowsShellForAgentExecution({
-						customShellPath,
-						currentShell: shellToUse,
-					});
-					shellToUse = shellConfig.shell;
-					useShell = shellConfig.useShell;
+						// Get the preferred shell for Windows (custom -> current -> PowerShell)
+						// PowerShell is preferred over cmd.exe to avoid command line length limits
+						const customShellPath = settingsStore.get('customShellPath', '') as string;
+						const shellConfig = getWindowsShellForAgentExecution({
+							customShellPath,
+							currentShell: shellToUse,
+						});
+						shellToUse = shellConfig.shell;
+						useShell = shellConfig.useShell;
 
-					logger.info(`Forcing shell execution for agent on Windows for PATH access`, LOG_CONTEXT, {
-						agentId: agent?.id,
-						command: commandToSpawn,
-						args: argsToSpawn,
-						shell: shellToUse,
-						shellSource: shellConfig.source,
-					});
+						logger.info(
+							`Forcing shell execution for agent on Windows for PATH access`,
+							LOG_CONTEXT,
+							{
+								agentId: agent?.id,
+								command: commandToSpawn,
+								args: argsToSpawn,
+								shell: shellToUse,
+								shellSource: shellConfig.source,
+							}
+						);
+					}
 				}
 
 				// ========================================================================
@@ -516,7 +555,7 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 					// When using SSH, env vars are passed in the stdin script, not locally
 					customEnvVars: customEnvVarsToPass,
 					imageArgs: agent?.imageArgs, // Function to build image CLI args (for Codex, OpenCode)
-					promptArgs: agent?.promptArgs, // Function to build prompt args (e.g., ['-p', prompt] for OpenCode)
+					promptArgs: agent?.promptArgs,
 					noPromptSeparator: agent?.noPromptSeparator, // Some agents don't support '--' before prompt
 					// Stats tracking: use cwd as projectPath if not explicitly provided
 					projectPath: config.cwd,

@@ -10,6 +10,7 @@ export {
 	escapePowerShellArgs,
 	escapeArgsForShell,
 	isPowerShellShell,
+	canRunWithoutShell,
 	getWindowsShellForAgentExecution,
 	type WindowsShellConfig,
 	type WindowsShellResult,

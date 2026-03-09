@@ -47,7 +47,10 @@ vi.mock('../../../../main/parsers/error-patterns', () => ({
 
 // ── Imports (after mocks) ──────────────────────────────────────────────────
 
-import { StdoutHandler } from '../../../../main/process-manager/handlers/StdoutHandler';
+import {
+	StdoutHandler,
+	extractDeniedPath,
+} from '../../../../main/process-manager/handlers/StdoutHandler';
 import type { ManagedProcess } from '../../../../main/process-manager/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -407,11 +410,30 @@ describe('StdoutHandler', () => {
 					}
 					return { type: 'system' };
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'agent') {
+						return { type: 'result', text: parsed.text };
+					}
+					if (parsed.type === 'done') {
+						return {
+							type: 'usage',
+							usage: {
+								inputTokens: 100,
+								outputTokens: 50,
+								cacheReadTokens: 0,
+								cacheCreationTokens: 0,
+								contextWindow: 400000,
+							},
+						};
+					}
+					return { type: 'system' };
+				}),
 				extractUsage: vi.fn((event: any) => event.usage || null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result' && !!event.text),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 
 			const { handler, bufferManager, sessionId, proc } = createTestContext({
@@ -442,6 +464,244 @@ describe('StdoutHandler', () => {
 				sessionId,
 				'{"confidence":55,"ready":false,"message":"README.md"}'
 			);
+		});
+	});
+
+	// ── Gemini text routing ───────────────────────────────────────────────
+
+	describe('Gemini text routing', () => {
+		function createGeminiParser() {
+			return {
+				agentId: 'gemini-cli',
+				parseJsonLine: vi.fn((line: string) => {
+					try {
+						const parsed = JSON.parse(line);
+						if (parsed.type === 'message' && parsed.role === 'assistant') {
+							return {
+								type: 'text' as const,
+								text: parsed.content,
+								isPartial: parsed.delta === true,
+							};
+						}
+						return null;
+					} catch {
+						return null;
+					}
+				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'message' && parsed.role === 'assistant') {
+						return {
+							type: 'text' as const,
+							text: parsed.content,
+							isPartial: parsed.delta === true,
+						};
+					}
+					return null;
+				}),
+				extractUsage: vi.fn(() => null),
+				extractSessionId: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				isResultMessage: vi.fn(() => false),
+				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
+			};
+		}
+
+		it('should route non-partial Gemini text through data path for immediate display', () => {
+			const parser = createGeminiParser();
+			const { handler, emitter, bufferManager, sessionId, proc } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'gemini-cli',
+				outputParser: parser as any,
+			});
+
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			sendJsonLine(handler, sessionId, {
+				type: 'message',
+				role: 'assistant',
+				content: 'Hello from Gemini!',
+				// no delta field => isPartial = false
+			});
+
+			// Non-partial text should go through BOTH thinking-chunk AND data path
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Hello from Gemini!');
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'Hello from Gemini!');
+			// Non-partial text should NOT accumulate in streamedText
+			expect(proc.streamedText).toBe('');
+		});
+
+		it('should route partial/delta Gemini text through thinking-chunk only', () => {
+			const parser = createGeminiParser();
+			const { handler, emitter, bufferManager, sessionId, proc } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'gemini-cli',
+				outputParser: parser as any,
+			});
+
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			sendJsonLine(handler, sessionId, {
+				type: 'message',
+				role: 'assistant',
+				content: 'streaming...',
+				delta: true,
+			});
+
+			// Partial text should go through thinking-chunk only, NOT data
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'streaming...');
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+			// Should accumulate in streamedText for result-time emission
+			expect(proc.streamedText).toBe('streaming...');
+		});
+
+		it('should use accumulated streamedText as fallback in result event after partial streaming', () => {
+			// Parser that returns partial text events, then a result event
+			const parser = {
+				agentId: 'gemini-cli',
+				parseJsonLine: vi.fn((line: string) => {
+					try {
+						const parsed = JSON.parse(line);
+						if (parsed.type === 'result') {
+							return { type: 'result' as const, text: '' }; // empty text on result
+						}
+						if (parsed.type === 'message' && parsed.role === 'assistant') {
+							return {
+								type: 'text' as const,
+								text: parsed.content,
+								isPartial: parsed.delta === true,
+							};
+						}
+						return null;
+					} catch {
+						return null;
+					}
+				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'result') {
+						return { type: 'result' as const, text: '' }; // empty text on result
+					}
+					if (parsed.type === 'message' && parsed.role === 'assistant') {
+						return {
+							type: 'text' as const,
+							text: parsed.content,
+							isPartial: parsed.delta === true,
+						};
+					}
+					return null;
+				}),
+				extractUsage: vi.fn(() => null),
+				extractSessionId: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				isResultMessage: vi.fn((event: any) => event.type === 'result'),
+				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
+			};
+
+			const { handler, emitter, bufferManager, sessionId, proc } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'gemini-cli',
+				outputParser: parser as any,
+			});
+
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			// Send partial streaming chunks
+			sendJsonLine(handler, sessionId, {
+				type: 'message',
+				role: 'assistant',
+				content: 'Hello ',
+				delta: true,
+			});
+			sendJsonLine(handler, sessionId, {
+				type: 'message',
+				role: 'assistant',
+				content: 'from Gemini!',
+				delta: true,
+			});
+
+			// Verify partial chunks accumulated
+			expect(proc.streamedText).toBe('Hello from Gemini!');
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+
+			// Send result event with empty text — should fall back to streamedText
+			sendJsonLine(handler, sessionId, { type: 'result' });
+
+			expect(proc.resultEmitted).toBe(true);
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'Hello from Gemini!');
+		});
+
+		it('should not affect Claude Code partial text routing (non-Gemini agent unaffected)', () => {
+			const parser = {
+				agentId: 'claude-code',
+				parseJsonLine: vi.fn((line: string) => {
+					try {
+						const parsed = JSON.parse(line);
+						if (parsed.type === 'assistant' && parsed.content) {
+							return {
+								type: 'text' as const,
+								text: parsed.content,
+								isPartial: parsed.partial === true,
+							};
+						}
+						return null;
+					} catch {
+						return null;
+					}
+				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'assistant' && parsed.content) {
+						return {
+							type: 'text' as const,
+							text: parsed.content,
+							isPartial: parsed.partial === true,
+						};
+					}
+					return null;
+				}),
+				extractUsage: vi.fn(() => null),
+				extractSessionId: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				isResultMessage: vi.fn(() => false),
+				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
+			};
+
+			const { handler, emitter, bufferManager, sessionId, proc } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'claude-code',
+				outputParser: parser as any,
+			});
+
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			// Send partial text for Claude Code
+			sendJsonLine(handler, sessionId, {
+				type: 'assistant',
+				content: 'thinking about your question...',
+				partial: true,
+			});
+
+			// Partial text should still go through thinking-chunk and accumulate in streamedText
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'thinking about your question...');
+			expect(proc.streamedText).toBe('thinking about your question...');
+			// Partial text should NOT be emitted via data path
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+
+			// Send non-partial text for Claude Code
+			sendJsonLine(handler, sessionId, {
+				type: 'assistant',
+				content: 'Here is my answer.',
+				partial: false,
+			});
+
+			// Non-partial Claude text also goes through thinking-chunk AND data path
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Here is my answer.');
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'Here is my answer.');
 		});
 	});
 
@@ -481,11 +741,19 @@ describe('StdoutHandler', () => {
 						return null;
 					}
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					return {
+						type: parsed.type || 'message',
+						text: parsed.text,
+						isPartial: false,
+					};
+				}),
 				extractUsage: vi.fn(() => usageReturn),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn(() => false),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 		}
 
@@ -1160,6 +1428,92 @@ describe('StdoutHandler', () => {
 
 	// ── Edge cases ─────────────────────────────────────────────────────────
 
+	describe('Gemini CLI non-partial text events', () => {
+		function createGeminiParser() {
+			return {
+				agentId: 'gemini-cli',
+				parseJsonLine: vi.fn(() => null),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'message' && parsed.role === 'assistant') {
+						return {
+							type: 'text',
+							text: parsed.content,
+							isPartial: parsed.delta === true,
+							raw: parsed,
+						};
+					}
+					if (parsed.type === 'result') {
+						return { type: 'result', text: '', raw: parsed };
+					}
+					return null;
+				}),
+				extractUsage: vi.fn(() => null),
+				extractSessionId: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				isResultMessage: vi.fn((event: any) => event?.raw?.type === 'result'),
+				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
+				detectErrorFromExit: vi.fn(() => null),
+			};
+		}
+
+		it('should emit complete (delta:false) message events as data immediately', () => {
+			const parser = createGeminiParser();
+			const { handler, bufferManager, sessionId, proc, emitter } = createTestContext({
+				toolType: 'gemini-cli' as any,
+				isStreamJsonMode: true,
+				outputParser: parser as any,
+			});
+
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			// Gemini sends a complete message (delta: false or absent)
+			sendJsonLine(handler, sessionId, {
+				type: 'message',
+				role: 'assistant',
+				content: 'Hello! How can I help you?',
+			});
+
+			// Should be emitted immediately as data, not accumulated
+			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(
+				sessionId,
+				'Hello! How can I help you?'
+			);
+			// Should also emit thinking-chunk for live display
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Hello! How can I help you?');
+			// Should NOT be accumulated in streamedText
+			expect(proc.streamedText).toBe('');
+		});
+
+		it('should accumulate partial (delta:true) message events in streamedText', () => {
+			const parser = createGeminiParser();
+			const { handler, bufferManager, sessionId, proc, emitter } = createTestContext({
+				toolType: 'gemini-cli' as any,
+				isStreamJsonMode: true,
+				outputParser: parser as any,
+			});
+
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			// Gemini sends streaming delta
+			sendJsonLine(handler, sessionId, {
+				type: 'message',
+				role: 'assistant',
+				content: 'Hello',
+				delta: true,
+			});
+
+			// Should accumulate in streamedText
+			expect(proc.streamedText).toBe('Hello');
+			// Should emit thinking-chunk
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Hello');
+			// Should NOT emit via emitDataBuffered (deferred to result)
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+		});
+	});
+
 	describe('edge cases', () => {
 		it('should emit non-JSON lines via bufferManager in stream JSON mode', () => {
 			const { handler, bufferManager, sessionId } = createTestContext({
@@ -1250,11 +1604,27 @@ describe('StdoutHandler', () => {
 					}
 					return { type: 'system' };
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'step_start') {
+						return { type: 'init', sessionId: parsed.sessionID };
+					}
+					if (parsed.type === 'text') {
+						return { type: 'result', text: parsed.part?.text, sessionId: parsed.sessionID };
+					}
+					if (parsed.type === 'tool_use') {
+						return { type: 'tool_use', toolName: parsed.part?.tool, sessionId: parsed.sessionID };
+					}
+					if (parsed.type === 'step_finish') {
+						return { type: 'system', sessionId: parsed.sessionID };
+					}
+					return { type: 'system' };
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn((event: any) => event.sessionId || null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result'),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 		}
 
@@ -1355,11 +1725,17 @@ describe('StdoutHandler', () => {
 					if (parsed.type === 'text') return { type: 'result', text: parsed.text };
 					return { type: 'system' };
 				}),
+				parseJsonObject: vi.fn((parsed: any) => {
+					if (parsed.type === 'step_start') return { type: 'init', sessionId: 'x' };
+					if (parsed.type === 'text') return { type: 'result', text: parsed.text };
+					return { type: 'system' };
+				}),
 				extractUsage: vi.fn(() => null),
 				extractSessionId: vi.fn(() => null),
 				extractSlashCommands: vi.fn(() => null),
 				isResultMessage: vi.fn((event: any) => event.type === 'result'),
 				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
 			};
 
 			const { handler, proc, sessionId } = createTestContext({
@@ -1400,10 +1776,227 @@ function createMinimalOutputParser(usageReturn: {
 				return null;
 			}
 		}),
+		parseJsonObject: vi.fn((parsed: any) => {
+			return { type: parsed.type || 'message', text: parsed.text, isPartial: false };
+		}),
 		extractUsage: vi.fn(() => usageReturn),
 		extractSessionId: vi.fn(() => null),
 		extractSlashCommands: vi.fn(() => null),
 		isResultMessage: vi.fn(() => false),
 		detectErrorFromLine: vi.fn(() => null),
+		detectErrorFromParsed: vi.fn(() => null),
 	};
 }
+
+// ── extractDeniedPath tests ─────────────────────────────────────────────────
+
+describe('extractDeniedPath', () => {
+	it('extracts directory from path with single quotes and "not in workspace"', () => {
+		const result = extractDeniedPath("path '/home/user/project/src' not in workspace");
+		expect(result).toBe('/home/user/project/src');
+	});
+
+	it('extracts parent directory when path is a file', () => {
+		const result = extractDeniedPath("path '/home/user/project/src/main.ts' not in workspace");
+		expect(result).toBe('/home/user/project/src');
+	});
+
+	it('extracts directory from double-quoted path', () => {
+		const result = extractDeniedPath('path "/home/user/project" not in workspace');
+		expect(result).toBe('/home/user/project');
+	});
+
+	it('extracts directory from "is outside" pattern', () => {
+		const result = extractDeniedPath("'/tmp/data' is outside the allowed workspace");
+		expect(result).toBe('/tmp/data');
+	});
+
+	it('rejects system-critical paths (permission denied on /etc)', () => {
+		const result = extractDeniedPath("'/etc/config.json' permission denied");
+		expect(result).toBeNull(); // /etc is a system path
+	});
+
+	it('rejects system-critical paths (bare /usr/local/bin)', () => {
+		const result = extractDeniedPath('/usr/local/bin not in workspace');
+		expect(result).toBeNull(); // /usr is a system path
+	});
+
+	it('rejects system-critical paths (bare file under /usr)', () => {
+		const result = extractDeniedPath('/usr/local/bin/tool.py not in workspace');
+		expect(result).toBeNull(); // /usr is a system path
+	});
+
+	it('returns null when no path pattern matches', () => {
+		const result = extractDeniedPath('some random error message');
+		expect(result).toBeNull();
+	});
+
+	it('returns null for empty string', () => {
+		const result = extractDeniedPath('');
+		expect(result).toBeNull();
+	});
+
+	it('handles tilde paths', () => {
+		const result = extractDeniedPath("'~/projects/foo' not in workspace");
+		expect(result).toBe('~/projects/foo');
+	});
+
+	// Windows path patterns
+	it('extracts Windows quoted directory path', () => {
+		const result = extractDeniedPath("'C:\\Users\\dev\\project' not in workspace");
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts parent directory from Windows file path', () => {
+		const result = extractDeniedPath("'C:\\Users\\dev\\project\\main.ts' not in workspace");
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts Windows path with "is outside" pattern', () => {
+		const result = extractDeniedPath("'D:\\workspace\\data' is outside the allowed workspace");
+		expect(result).toBe('D:\\workspace\\data');
+	});
+
+	it('rejects Windows system path (C:\\Windows)', () => {
+		const result = extractDeniedPath("'C:\\Windows\\config.json' permission denied");
+		expect(result).toBeNull(); // C:\Windows is a system path
+	});
+
+	it('extracts bare Windows path without quotes', () => {
+		const result = extractDeniedPath('C:\\Users\\dev\\project not in workspace');
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts parent dir for bare Windows file path', () => {
+		const result = extractDeniedPath('C:\\Users\\dev\\project\\index.js not in workspace');
+		expect(result).toBe('C:\\Users\\dev\\project');
+	});
+
+	it('extracts Windows path with forward slashes', () => {
+		const result = extractDeniedPath("'C:/Users/dev/project' not in workspace");
+		expect(result).toBe('C:/Users/dev/project');
+	});
+
+	it('extracts Windows path from generic "path" prefix', () => {
+		const result = extractDeniedPath("path 'C:\\Users\\dev\\src' not in workspace");
+		expect(result).toBe('C:\\Users\\dev\\src');
+	});
+
+	// Tests with projectCwd normalization
+	it('normalizes relative traversal paths when projectCwd is provided', () => {
+		const result = extractDeniedPath("path '../../sibling' not in workspace", '/home/user/project');
+		expect(result).toBe('/home/sibling');
+	});
+
+	it('resolves tilde paths when projectCwd is provided', () => {
+		const result = extractDeniedPath("'~/projects/foo' not in workspace", '/tmp/cwd');
+		const os = require('os');
+		expect(result).toBe(`${os.homedir()}/projects/foo`);
+	});
+
+	it('rejects root path from traversal with projectCwd', () => {
+		const result = extractDeniedPath(
+			"path '../../../../..' not in workspace",
+			'/home/user/project'
+		);
+		expect(result).toBeNull(); // resolves to / which is a system path
+	});
+});
+
+// ── Performance: single JSON.parse per NDJSON line ──────────────────────
+
+describe('StdoutHandler — single JSON parse per line', () => {
+	it('parses JSON exactly once per NDJSON line (output parser path)', () => {
+		// Instrument JSON.parse to count calls
+		const originalParse = JSON.parse;
+		let parseCount = 0;
+		const countingParse = vi.fn((...args: Parameters<typeof JSON.parse>) => {
+			parseCount++;
+			return originalParse.apply(JSON, args);
+		});
+		JSON.parse = countingParse;
+
+		try {
+			const mockParser = {
+				agentId: 'gemini-cli',
+				parseJsonLine: vi.fn(() => ({
+					type: 'text' as const,
+					text: 'hello',
+					isPartial: true,
+					raw: {},
+				})),
+				parseJsonObject: vi.fn((parsed: unknown) => ({
+					type: 'text' as const,
+					text: 'hello',
+					isPartial: true,
+					raw: parsed,
+				})),
+				isResultMessage: vi.fn(() => false),
+				extractSessionId: vi.fn(() => null),
+				extractUsage: vi.fn(() => null),
+				extractSlashCommands: vi.fn(() => null),
+				detectErrorFromLine: vi.fn(() => null),
+				detectErrorFromParsed: vi.fn(() => null),
+				detectErrorFromExit: vi.fn(() => null),
+			};
+
+			const { handler, sessionId } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'gemini-cli' as any,
+				outputParser: mockParser as any,
+			});
+
+			// Send a valid JSON line
+			const jsonLine = JSON.stringify({
+				type: 'message',
+				role: 'assistant',
+				content: 'hi',
+				delta: true,
+			});
+			parseCount = 0; // reset after the stringify parse above
+
+			handler.handleData(sessionId, jsonLine + '\n');
+
+			// Should parse exactly once (in processLine), not 3× as before
+			expect(parseCount).toBe(1);
+
+			// parseJsonObject should be called with pre-parsed object (not parseJsonLine)
+			expect(mockParser.parseJsonObject).toHaveBeenCalledTimes(1);
+			expect(mockParser.parseJsonLine).not.toHaveBeenCalled();
+
+			// detectErrorFromParsed should be called (not detectErrorFromLine)
+			expect(mockParser.detectErrorFromParsed).toHaveBeenCalledTimes(1);
+			expect(mockParser.detectErrorFromLine).not.toHaveBeenCalled();
+		} finally {
+			JSON.parse = originalParse;
+		}
+	});
+
+	it('falls back to detectErrorFromLine for non-JSON lines', () => {
+		const mockParser = {
+			agentId: 'claude-code',
+			parseJsonLine: vi.fn(() => null),
+			parseJsonObject: vi.fn(() => null),
+			isResultMessage: vi.fn(() => false),
+			extractSessionId: vi.fn(() => null),
+			extractUsage: vi.fn(() => null),
+			extractSlashCommands: vi.fn(() => null),
+			detectErrorFromLine: vi.fn(() => null),
+			detectErrorFromParsed: vi.fn(() => null),
+			detectErrorFromExit: vi.fn(() => null),
+		};
+
+		const { handler, sessionId } = createTestContext({
+			isStreamJsonMode: true,
+			toolType: 'claude-code' as any,
+			outputParser: mockParser as any,
+		});
+
+		// Send a non-JSON line (e.g., stderr with embedded JSON)
+		handler.handleData(sessionId, 'Error streaming: 400 {"type":"error"}\n');
+
+		// Should fall back to line-based detection since JSON.parse fails
+		expect(mockParser.detectErrorFromLine).toHaveBeenCalledTimes(1);
+		expect(mockParser.detectErrorFromParsed).not.toHaveBeenCalled();
+	});
+});

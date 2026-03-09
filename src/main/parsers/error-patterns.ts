@@ -29,6 +29,7 @@ const VALID_TOOL_TYPES = new Set<string>([
 	'codex',
 	'terminal',
 	'factory-droid',
+	'gemini-cli',
 ]);
 
 /**
@@ -685,6 +686,123 @@ export const FACTORY_DROID_ERROR_PATTERNS: AgentErrorPatterns = {
 };
 
 // ============================================================================
+// Gemini CLI Error Patterns
+// ============================================================================
+
+export const GEMINI_ERROR_PATTERNS: AgentErrorPatterns = {
+	auth_expired: [
+		{
+			pattern: /credentials.*expired|oauth.*expired|authentication.*failed|login.*required/i,
+			message: 'Gemini authentication expired. Run: gemini login',
+			recoverable: true,
+		},
+		{
+			pattern: /GEMINI_API_KEY.*invalid|invalid.*api.?key/i,
+			message: 'Invalid Gemini API key. Check your GEMINI_API_KEY environment variable.',
+			recoverable: true,
+		},
+	],
+
+	rate_limited: [
+		{
+			// Capacity unavailable for a specific model — user should switch models
+			pattern: /no capacity available for model\s+(\S+)/i,
+			message: (match: RegExpMatchArray) =>
+				`No capacity available for model "${match[1]}". Try a different model (e.g., set model to "pro" or "flash" in agent settings).`,
+			recoverable: true,
+		},
+		{
+			// Retry exhaustion with model info — e.g., "Max attempts reached for model gemini-3-flash"
+			pattern: /max\s+attempts?\s+reached.*?model\s+(\S+)/i,
+			message: (match: RegExpMatchArray) =>
+				`Gemini API retry limit reached for model "${match[1]}". Try a different model in agent settings.`,
+			recoverable: true,
+		},
+		{
+			// Retry exhaustion without model info
+			pattern: /max\s+attempts?\s+reached/i,
+			message: 'Gemini API retry limit reached. Try a different model or wait before retrying.',
+			recoverable: true,
+		},
+		{
+			// RetryableQuotaError with model name
+			pattern: /RetryableQuotaError:.*?model\s+(\S+)/i,
+			message: (match: RegExpMatchArray) =>
+				`Gemini quota error for model "${match[1]}". Switch to a different model or wait for capacity.`,
+			recoverable: true,
+		},
+		{
+			// Generic rate limit / quota errors (no model info available)
+			pattern: /rate.?limit|too many requests|429|quota.*exceeded|resource.*exhausted/i,
+			message: 'Gemini API rate limit exceeded. Wait a moment and retry.',
+			recoverable: true,
+		},
+	],
+
+	token_exhaustion: [
+		{
+			pattern: /turn.*limit.*exceeded|FatalTurnLimitedError|Maximum session turns exceeded/i,
+			message: 'Gemini turn limit exceeded. Start a new session.',
+			recoverable: false,
+		},
+		{
+			pattern: /context.*length|token.*limit/i,
+			message: 'Gemini context length exceeded. Start a new session.',
+			recoverable: false,
+		},
+	],
+
+	network_error: [
+		{
+			pattern: /network.*error|ECONNREFUSED|ETIMEDOUT|ENOTFOUND|fetch.*failed/i,
+			message: 'Network error. Check your internet connection.',
+			recoverable: true,
+		},
+	],
+
+	permission_denied: [
+		{
+			pattern: /(?:path\s+)?['"]?([/~][\w/.~-]+)['"]?\s+(?:is\s+)?not\s+in\s+(?:the\s+)?workspace/i,
+			message: (match: RegExpMatchArray) =>
+				`Workspace sandbox: "${match[1]}" is outside the allowed workspace. Add the directory via --include-directories or agent settings.`,
+			recoverable: false,
+		},
+		{
+			pattern: /path.*not.*in.*workspace|permission.*denied.*sandbox|sandbox.*permission/i,
+			message: 'Permission denied. File is outside the workspace sandbox.',
+			recoverable: false,
+		},
+	],
+
+	agent_crashed: [
+		{
+			pattern: /FatalInputError|FatalConfigError|unhandled.*exception|SIGKILL|SIGTERM/i,
+			message: 'Gemini CLI crashed unexpectedly. Check logs for details.',
+			recoverable: false,
+		},
+		{
+			// Internal API error with model name — extract from URL path like "models/gemini-2.5-pro"
+			pattern: /(?:streamGenerateContent|cloudcode-pa\.googleapis\.com).*models\/([^/:?\s]+)/i,
+			message: (match: RegExpMatchArray) =>
+				`Gemini API error (model: ${match[1]}). Try a different model or retry.`,
+			recoverable: true,
+		},
+		{
+			// Internal API error without model info
+			pattern: /(?:streamGenerateContent|cloudcode-pa\.googleapis\.com).*error/i,
+			message: 'Gemini CLI internal API error. Try again or check your model/auth configuration.',
+			recoverable: true,
+		},
+		{
+			// Fallback for Axios dump patterns without model info
+			pattern: /\[Function: paramsSerializer\]/i,
+			message: 'Gemini CLI internal API error. Try again or check your model/auth configuration.',
+			recoverable: true,
+		},
+	],
+};
+
+// ============================================================================
 // SSH Error Patterns
 // ============================================================================
 
@@ -875,6 +993,7 @@ const patternRegistry = new Map<ToolType, AgentErrorPatterns>([
 	['opencode', OPENCODE_ERROR_PATTERNS],
 	['codex', CODEX_ERROR_PATTERNS],
 	['factory-droid', FACTORY_DROID_ERROR_PATTERNS],
+	['gemini-cli', GEMINI_ERROR_PATTERNS],
 ]);
 
 /**

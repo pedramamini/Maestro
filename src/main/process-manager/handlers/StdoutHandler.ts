@@ -5,8 +5,67 @@ import { logger } from '../../utils/logger';
 import { appendToBuffer } from '../utils/bufferUtils';
 import { aggregateModelUsage, type ModelStats } from '../../parsers/usage-aggregator';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
-import type { ManagedProcess, UsageStats, UsageTotals, AgentError } from '../types';
+import { normalizeApprovalPathSync, isSystemPath } from '../../utils/path-validation';
+import type {
+	ManagedProcess,
+	UsageStats,
+	UsageTotals,
+	AgentError,
+	GeminiSessionStatsEvent,
+} from '../types';
 import type { DataBufferManager } from './DataBufferManager';
+
+/**
+ * Extract the denied directory path from a Gemini CLI sandbox violation error message.
+ * Returns the parent directory if the path looks like a file, or the path as-is for directories.
+ * Returns null if no path can be extracted or if the path is a system-critical directory.
+ *
+ * When projectCwd is provided, paths are normalized (tilde-expanded, resolved relative to CWD).
+ */
+export function extractDeniedPath(errorMsg: string, projectCwd?: string): string | null {
+	const patterns = [
+		// path '/foo/bar' not in workspace
+		/path\s+['"]([^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside)/i,
+		// '/foo/bar' not in workspace
+		/['"]([\/~][^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside|permission\s+denied)/i,
+		// 'C:\Users\...' not in workspace (Windows quoted)
+		/['"]([A-Za-z]:[\\\/][^'"]+)['"]\s*(?:not\s+in\s+workspace|is\s+outside|permission\s+denied)/i,
+		// /foo/bar not in workspace (bare POSIX path)
+		/(\/[^\s:'"]+)\s*(?:not\s+in\s+workspace|is\s+outside)/i,
+		// C:\Users\... not in workspace (bare Windows path)
+		/([A-Za-z]:[\\\/][^\s'"]+)\s*(?:not\s+in\s+workspace|is\s+outside)/i,
+	];
+
+	for (const pattern of patterns) {
+		const match = errorMsg.match(pattern);
+		if (match) {
+			let extracted = match[1];
+			// Check if it looks like a file (has a dot-extension at the end)
+			if (/\.\w+$/.test(extracted)) {
+				// Return parent directory (handle both / and \ separators)
+				const lastSeparator = Math.max(extracted.lastIndexOf('/'), extracted.lastIndexOf('\\'));
+				extracted = lastSeparator > 0 ? extracted.substring(0, lastSeparator) : extracted;
+			}
+
+			// Normalize if CWD is available
+			if (projectCwd) {
+				extracted = normalizeApprovalPathSync(extracted, projectCwd);
+			}
+
+			// Reject system-critical paths
+			if (isSystemPath(extracted)) {
+				logger.warn('Rejected workspace approval for system-critical path', 'WorkspaceApproval', {
+					deniedPath: extracted,
+				});
+				return null;
+			}
+
+			return extracted;
+		}
+	}
+
+	return null;
+}
 
 interface StdoutHandlerDependencies {
 	processes: Map<string, ManagedProcess>;
@@ -154,9 +213,24 @@ export class StdoutHandler {
 	private processLine(sessionId: string, managedProcess: ManagedProcess, line: string): void {
 		const { outputParser, toolType } = managedProcess;
 
-		// Error detection from parser
+		// ── Single JSON parse for the entire line ──
+		// Previously JSON.parse was called up to 3× per line (detectErrorFromLine,
+		// outer parse, parseJsonLine). Now we parse once and pass the object downstream.
+		let parsed: unknown = null;
+		try {
+			parsed = JSON.parse(line);
+		} catch {
+			// Not valid JSON — handled in the else branch below
+		}
+
+		// ── Error detection from parser ──
 		if (outputParser && !managedProcess.errorEmitted) {
-			const agentError = outputParser.detectErrorFromLine(line);
+			// Use pre-parsed object when available; fall back to line-based detection
+			// for non-JSON lines (e.g., Claude embedded JSON in stderr)
+			const agentError =
+				parsed !== null
+					? outputParser.detectErrorFromParsed(parsed)
+					: outputParser.detectErrorFromLine(line);
 			if (agentError) {
 				managedProcess.errorEmitted = true;
 				agentError.sessionId = sessionId;
@@ -176,7 +250,7 @@ export class StdoutHandler {
 			}
 		}
 
-		// SSH error detection
+		// ── SSH error detection (line-based — SSH patterns are plain text) ──
 		if (!managedProcess.errorEmitted && managedProcess.sshRemoteId) {
 			const sshError = matchSshErrorPattern(line);
 			if (sshError) {
@@ -200,16 +274,28 @@ export class StdoutHandler {
 			}
 		}
 
-		// Parse JSON line
-		try {
-			const msg = JSON.parse(line);
-
+		// ── Process parsed data ──
+		if (parsed !== null) {
 			if (outputParser) {
-				this.handleParsedEvent(sessionId, managedProcess, line, outputParser);
+				this.handleParsedEvent(sessionId, managedProcess, parsed, outputParser);
 			} else {
-				this.handleLegacyMessage(sessionId, managedProcess, msg);
+				this.handleLegacyMessage(sessionId, managedProcess, parsed);
 			}
-		} catch {
+		} else {
+			// Not valid JSON — suppress Gemini CLI API dumps, otherwise emit as text
+			if (
+				toolType === 'gemini-cli' &&
+				(/\[Function: \w+\]/.test(line) ||
+					/paramsSerializer|validateStatus|errorRedactor/.test(line) ||
+					/streamGenerateContent/.test(line))
+			) {
+				logger.warn(
+					'[ProcessManager] Suppressing Gemini CLI API dump from stdout',
+					'ProcessManager',
+					{ sessionId, lineLength: line.length, preview: line.substring(0, 200) }
+				);
+				return;
+			}
 			this.bufferManager.emitDataBuffered(sessionId, line);
 		}
 	}
@@ -217,10 +303,10 @@ export class StdoutHandler {
 	private handleParsedEvent(
 		sessionId: string,
 		managedProcess: ManagedProcess,
-		line: string,
+		parsed: unknown,
 		outputParser: NonNullable<ManagedProcess['outputParser']>
 	): void {
-		const event = outputParser.parseJsonLine(line);
+		const event = outputParser.parseJsonObject(parsed);
 
 		logger.debug('[ProcessManager] Parsed event from output parser', 'ProcessManager', {
 			sessionId,
@@ -245,13 +331,6 @@ export class StdoutHandler {
 		// Extract usage
 		const usage = outputParser.extractUsage(event);
 		if (usage) {
-			// DEBUG: Log usage extracted from parser
-			console.log('[StdoutHandler] Usage from parser (line 255 path)', {
-				sessionId,
-				toolType: managedProcess.toolType,
-				parsedUsage: usage,
-			});
-
 			const usageStats = this.buildUsageStats(managedProcess, usage);
 			// Claude Code's modelUsage reports the ACTUAL context used for each API call:
 			// - inputTokens: new input for this turn
@@ -267,13 +346,19 @@ export class StdoutHandler {
 					? normalizeUsageToDelta(managedProcess, usageStats)
 					: usageStats;
 
-			// DEBUG: Log normalized stats being emitted
-			console.log('[StdoutHandler] Emitting usage (line 255 path)', {
-				sessionId,
-				normalizedUsageStats,
-			});
-
 			this.emitter.emit('usage', sessionId, normalizedUsageStats);
+
+			// Emit per-turn stats for Gemini sessions so the stats listener can accumulate them
+			if (managedProcess.toolType === 'gemini-cli') {
+				const geminiStats: GeminiSessionStatsEvent = {
+					sessionId,
+					inputTokens: usage.inputTokens,
+					outputTokens: usage.outputTokens,
+					cacheReadTokens: usage.cacheReadTokens || 0,
+					reasoningTokens: usage.reasoningTokens || 0,
+				};
+				this.emitter.emit('gemini-session-stats', sessionId, geminiStats);
+			}
 		}
 
 		// Extract session ID
@@ -294,26 +379,28 @@ export class StdoutHandler {
 			this.emitter.emit('slash-commands', sessionId, slashCommands);
 		}
 
-		// DEBUG: Log thinking-chunk emission conditions
-		if (event.type === 'text') {
-			logger.debug('[ProcessManager] Checking thinking-chunk conditions', 'ProcessManager', {
-				sessionId,
-				eventType: event.type,
-				isPartial: event.isPartial,
-				hasText: !!event.text,
-				textLength: event.text?.length,
-				textPreview: event.text?.substring(0, 100),
-			});
-		}
-
-		// Handle streaming text events (OpenCode, Codex reasoning)
-		if (event.type === 'text' && event.isPartial && event.text) {
-			logger.debug('[ProcessManager] Emitting thinking-chunk', 'ProcessManager', {
-				sessionId,
-				textLength: event.text.length,
-			});
-			this.emitter.emit('thinking-chunk', sessionId, event.text);
-			managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+		// Handle streaming text events (OpenCode, Codex reasoning, Gemini messages)
+		// Two paths based on partial flag:
+		//
+		// 1. Partial/delta events (isPartial === true):
+		//    Accumulate in streamedText for the result event to emit later.
+		//    Also emit as thinking-chunk for live streaming display (when showThinking is on).
+		//    Used by: Claude Code, OpenCode, Gemini CLI (delta: true).
+		//
+		// 2. Complete/non-delta events (isPartial === false):
+		//    Emit as thinking-chunk (for thinking display) AND as data via emitDataBuffered
+		//    (for immediate display). This applies to all agents including Gemini CLI,
+		//    so complete message blocks display immediately as regular output.
+		if (event.type === 'text' && event.text) {
+			if (event.isPartial) {
+				// Streaming delta: accumulate for result-time emission, emit thinking-chunk for live display
+				managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+				this.emitter.emit('thinking-chunk', sessionId, event.text);
+			} else {
+				// Complete/non-delta text: emit both thinking-chunk and data for immediate display
+				this.emitter.emit('thinking-chunk', sessionId, event.text);
+				this.bufferManager.emitDataBuffered(sessionId, event.text);
+			}
 		}
 
 		// Handle tool execution events (OpenCode, Codex)
@@ -323,6 +410,34 @@ export class StdoutHandler {
 				state: event.toolState,
 				timestamp: Date.now(),
 			});
+		}
+
+		// Detect Gemini CLI sandbox violations from tool_result error events
+		if (event.type === 'tool_use' && managedProcess.toolType === 'gemini-cli' && event.toolState) {
+			const errorMsg =
+				(event.toolState as Record<string, unknown>)?.error &&
+				typeof ((event.toolState as Record<string, unknown>).error as Record<string, unknown>)
+					?.message === 'string'
+					? (((event.toolState as Record<string, unknown>).error as Record<string, unknown>)
+							.message as string)
+					: typeof (event.toolState as Record<string, unknown>)?.error === 'string'
+						? ((event.toolState as Record<string, unknown>).error as string)
+						: null;
+
+			if (errorMsg && /path.*not.*in.*workspace|permission.*denied.*sandbox/i.test(errorMsg)) {
+				const deniedPath = extractDeniedPath(errorMsg, managedProcess.cwd);
+				if (deniedPath) {
+					logger.info('[ProcessManager] Gemini sandbox violation detected', 'WorkspaceApproval', {
+						sessionId,
+						deniedPath,
+						errorMessage: errorMsg,
+					});
+					this.emitter.emit('workspace-approval-request', sessionId, {
+						deniedPath,
+						timestamp: Date.now(),
+					});
+				}
+			}
 		}
 
 		// Handle tool_use blocks embedded in text events (Claude Code mixed content)
@@ -371,6 +486,10 @@ export class StdoutHandler {
 		}
 
 		// Handle result
+		// Emit text from the result event or from accumulated streamedText.
+		// Partial/delta text is accumulated in streamedText during streaming (emitted as
+		// thinking-chunks for live display) and deferred here for final data emission.
+		// Non-partial text was already emitted directly via emitDataBuffered above.
 		if (
 			managedProcess.toolType !== 'codex' &&
 			outputParser.isResultMessage(event) &&
@@ -443,25 +562,11 @@ export class StdoutHandler {
 		}
 
 		if (msgRecord.modelUsage || msgRecord.usage || msgRecord.total_cost_usd !== undefined) {
-			// DEBUG: Log raw usage data from Claude Code before aggregation
-			console.log('[StdoutHandler] Raw usage data from Claude Code', {
-				sessionId,
-				modelUsage: msgRecord.modelUsage,
-				usage: msgRecord.usage,
-				totalCostUsd: msgRecord.total_cost_usd,
-			});
-
 			const usageStats = aggregateModelUsage(
 				msgRecord.modelUsage as Record<string, ModelStats> | undefined,
 				(msgRecord.usage as Record<string, unknown>) || {},
 				(msgRecord.total_cost_usd as number) || 0
 			);
-
-			// DEBUG: Log aggregated result
-			console.log('[StdoutHandler] Aggregated usage stats', {
-				sessionId,
-				usageStats,
-			});
 
 			this.emitter.emit('usage', sessionId, usageStats);
 		}

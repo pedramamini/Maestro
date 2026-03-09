@@ -45,6 +45,7 @@ interface ProcessConfig {
 	// Windows command line length workaround
 	sendPromptViaStdin?: boolean; // If true, send the prompt via stdin as JSON instead of command line
 	sendPromptViaStdinRaw?: boolean; // If true, send the prompt via stdin as raw text instead of command line
+	additionalWorkspaceDirs?: string[];
 }
 
 interface AgentConfigOption {
@@ -88,6 +89,8 @@ interface AgentConfig {
 	args?: string[];
 	hidden?: boolean;
 	configOptions?: AgentConfigOption[];
+	yoloModeArgs?: string[];
+	readOnlyCliEnforced?: boolean;
 	capabilities?: AgentCapabilities;
 }
 
@@ -153,6 +156,7 @@ interface SessionMessagesResult {
 	}>;
 	total: number;
 	hasMore: boolean;
+	error?: string;
 }
 
 /** Shared return shape for group chat methods (mirrors GroupChat from shared/group-chat-types.ts) */
@@ -345,6 +349,9 @@ interface MaestroAPI {
 					parsedJson?: unknown;
 				}
 			) => void
+		) => () => void;
+		onWorkspaceApproval: (
+			callback: (sessionId: string, request: { deniedPath: string; timestamp: number }) => void
 		) => () => void;
 	};
 	agentError: {

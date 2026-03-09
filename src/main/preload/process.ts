@@ -39,6 +39,8 @@ export interface ProcessConfig {
 	// Stats tracking options
 	querySource?: 'user' | 'auto'; // Whether this query is user-initiated or from Auto Run
 	tabId?: string; // Tab ID for multi-tab tracking
+	/** Additional workspace directories for Gemini CLI (passed as --include-directories) */
+	additionalWorkspaceDirs?: string[];
 }
 
 /**
@@ -471,6 +473,19 @@ export function createProcessApi() {
 				callback(sessionId, error);
 			ipcRenderer.on('agent:error', handler);
 			return () => ipcRenderer.removeListener('agent:error', handler);
+		},
+
+		/** Subscribe to workspace approval requests (Gemini sandbox violations) */
+		onWorkspaceApproval: (
+			callback: (sessionId: string, request: { deniedPath: string; timestamp: number }) => void
+		): (() => void) => {
+			const handler = (
+				_: unknown,
+				sessionId: string,
+				request: { deniedPath: string; timestamp: number }
+			) => callback(sessionId, request);
+			ipcRenderer.on('process:workspace-approval', handler);
+			return () => ipcRenderer.removeListener('process:workspace-approval', handler);
 		},
 	};
 }

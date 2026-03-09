@@ -97,6 +97,34 @@ let getAgentConfigCallback: GetAgentConfigCallback | null = null;
 let sshStore: SshRemoteSettingsStore | null = null;
 
 /**
+ * Build additional --include-directories args for Gemini CLI in group chat.
+ * Gemini CLI has stricter sandbox enforcement than other agents and needs
+ * explicit directory approval for each path it accesses. In group chat,
+ * this means the project directories, the group chat shared folder, and
+ * the home directory all need to be included.
+ *
+ * For non-Gemini agents, returns an empty array (no-op).
+ */
+function buildGeminiWorkspaceDirArgs(
+	agent: { workingDirArgs?: (dir: string) => string[]; id?: string } | null | undefined,
+	agentId: string,
+	directories: string[]
+): string[] {
+	if (agentId !== 'gemini-cli' || !agent?.workingDirArgs) {
+		return [];
+	}
+	const args: string[] = [];
+	const seen = new Set<string>();
+	for (const dir of directories) {
+		if (dir && dir.trim() && !seen.has(dir)) {
+			seen.add(dir);
+			args.push(...agent.workingDirArgs(dir));
+		}
+	}
+	return args;
+}
+
+/**
  * Tracks pending participant responses for each group chat.
  * When all pending participants have responded, we spawn a moderator synthesis round.
  * Maps groupChatId -> Set<participantName>
@@ -261,31 +289,30 @@ export async function routeUserMessage(
 	readOnly?: boolean,
 	images?: string[]
 ): Promise<void> {
-	console.log(`[GroupChat:Debug] ========== ROUTE USER MESSAGE ==========`);
-	console.log(`[GroupChat:Debug] Group Chat ID: ${groupChatId}`);
-	console.log(`[GroupChat:Debug] Message length: ${message.length}`);
-	console.log(`[GroupChat:Debug] Read-only: ${readOnly ?? false}`);
-	console.log(`[GroupChat:Debug] Has processManager: ${!!processManager}`);
-	console.log(`[GroupChat:Debug] Has agentDetector: ${!!agentDetector}`);
+	logger.debug('Route user message', LOG_CONTEXT, {
+		groupChatId,
+		messageLength: message.length,
+		readOnly: readOnly ?? false,
+		hasProcessManager: !!processManager,
+		hasAgentDetector: !!agentDetector,
+	});
 
 	let chat = await loadGroupChat(groupChatId);
 	if (!chat) {
-		console.log(`[GroupChat:Debug] ERROR: Group chat not found!`);
+		logger.debug('Group chat not found', LOG_CONTEXT, { groupChatId });
 		throw new Error(`Group chat not found: ${groupChatId}`);
 	}
 
-	console.log(`[GroupChat:Debug] Chat loaded: "${chat.name}"`);
-	console.log(
-		`[GroupChat:Debug] Current participants: ${chat.participants.map((p) => p.name).join(', ') || '(none)'}`
-	);
-	console.log(`[GroupChat:Debug] Moderator Agent ID: ${chat.moderatorAgentId}`);
+	logger.debug('Chat loaded', LOG_CONTEXT, {
+		chatName: chat.name,
+		participantCount: chat.participants.length,
+		moderatorAgentId: chat.moderatorAgentId,
+	});
 
 	if (!isModeratorActive(groupChatId)) {
-		console.log(`[GroupChat:Debug] ERROR: Moderator is not active!`);
+		logger.debug('Moderator not active', LOG_CONTEXT, { groupChatId });
 		throw new Error(`Moderator is not active for group chat: ${groupChatId}`);
 	}
-
-	console.log(`[GroupChat:Debug] Moderator is active: true`);
 
 	// Auto-add participants mentioned by the user if they match available sessions
 	if (processManager && agentDetector && getSessionsCallback) {
@@ -311,9 +338,11 @@ export async function routeUserMessage(
 				try {
 					// Use the original session name as the participant name
 					const participantName = matchingSession.name;
-					console.log(
-						`[GroupChatRouter] Auto-adding participant @${participantName} from user mention @${mentionedName} (session ${matchingSession.id})`
-					);
+					logger.debug('Auto-adding participant from user mention', LOG_CONTEXT, {
+						participantName,
+						mentionedName,
+						sessionId: matchingSession.id,
+					});
 					// Get custom env vars for this agent type
 					const customEnvVars = getCustomEnvVarsCallback?.(matchingSession.toolType);
 					const agentConfigValues = getAgentConfigCallback?.(matchingSession.toolType) || {};
@@ -405,28 +434,31 @@ export async function routeUserMessage(
 	// Spawn a batch process for the moderator to handle this message
 	// The response will be captured via the process:data event handler in index.ts
 	if (processManager && agentDetector) {
-		console.log(`[GroupChat:Debug] Preparing to spawn moderator batch process...`);
+		logger.debug('Preparing to spawn moderator batch process', LOG_CONTEXT, { groupChatId });
 		const sessionIdPrefix = getModeratorSessionId(groupChatId);
-		console.log(`[GroupChat:Debug] Session ID prefix: ${sessionIdPrefix}`);
 
 		if (sessionIdPrefix) {
 			// Create a unique session ID for this message
 			const sessionId = `${sessionIdPrefix}-${Date.now()}`;
-			console.log(`[GroupChat:Debug] Generated full session ID: ${sessionId}`);
+			logger.debug('Generated moderator session ID', LOG_CONTEXT, { sessionId });
 
 			// Resolve the agent configuration to get the executable command
 			const agent = await agentDetector.getAgent(chat.moderatorAgentId);
-			console.log(`[GroupChat:Debug] Agent resolved: ${agent?.command || 'null'}`);
-			console.log(`[GroupChat:Debug] Agent available: ${agent?.available ?? false}`);
+			logger.debug('Agent resolved for moderator', LOG_CONTEXT, {
+				agentCommand: agent?.command || null,
+				available: agent?.available ?? false,
+			});
 
 			if (!agent || !agent.available) {
-				console.log(`[GroupChat:Debug] ERROR: Agent not available!`);
+				logger.debug('Agent not available for moderator', LOG_CONTEXT, {
+					agentId: chat.moderatorAgentId,
+				});
 				throw new Error(`Agent '${chat.moderatorAgentId}' is not available`);
 			}
 
 			// Use custom path from moderator config if set, otherwise use resolved path
 			const command = chat.moderatorConfig?.customPath || agent.path || agent.command;
-			console.log(`[GroupChat:Debug] Command to execute: ${command}`);
+			logger.debug('Moderator command resolved', LOG_CONTEXT, { command });
 
 			// Build participant context
 			// Use normalized names (spaces → hyphens) so moderator can @mention them properly
@@ -441,9 +473,9 @@ export async function routeUserMessage(
 			let availableSessionsContext = '';
 			if (getSessionsCallback) {
 				const sessions = getSessionsCallback();
-				console.log(
-					`[GroupChat:Debug] Available sessions from callback: ${sessions.map((s) => s.name).join(', ')}`
-				);
+				logger.debug('Available sessions for moderator', LOG_CONTEXT, {
+					sessionCount: sessions.length,
+				});
 				const participantNames = new Set(chat.participants.map((p) => p.name));
 				const availableSessions = sessions.filter(
 					(s) => s.toolType !== 'terminal' && !participantNames.has(s.name)
@@ -456,7 +488,9 @@ export async function routeUserMessage(
 
 			// Build the prompt with context
 			const chatHistory = await readLog(chat.logPath);
-			console.log(`[GroupChat:Debug] Chat history entries: ${chatHistory.length}`);
+			logger.debug('Chat history loaded for moderator', LOG_CONTEXT, {
+				historyEntries: chatHistory.length,
+			});
 
 			const historyContext = chatHistory
 				.slice(-20)
@@ -484,13 +518,22 @@ ${message}${imageContext}`;
 			// Get the base args from the agent configuration
 			const args = [...agent.args];
 			const agentConfigValues = getAgentConfigCallback?.(chat.moderatorAgentId) || {};
-			console.log(
-				`[GroupChat:Debug] agentConfigValues for ${chat.moderatorAgentId}: ${JSON.stringify(agentConfigValues)}`
-			);
+			logger.debug('Agent config for moderator', LOG_CONTEXT, {
+				agentId: chat.moderatorAgentId,
+				configKeyCount: Object.keys(agentConfigValues).length,
+			});
+
+			// For Gemini CLI: use the group chat folder as CWD instead of homedir.
+			// Gemini's workspace sandbox requires a concrete project directory as CWD;
+			// using homedir causes "path not in workspace" errors.
+			// Other agents keep homedir as CWD for backward compatibility.
+			const groupChatFolder = getGroupChatDir(groupChatId);
+			const moderatorCwd = chat.moderatorAgentId === 'gemini-cli' ? groupChatFolder : os.homedir();
+
 			const baseArgs = buildAgentArgs(agent, {
 				baseArgs: args,
 				prompt: fullPrompt,
-				cwd: os.homedir(),
+				cwd: moderatorCwd,
 				readOnlyMode: true,
 			});
 			const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -499,22 +542,28 @@ ${message}${imageContext}`;
 				sessionCustomArgs: chat.moderatorConfig?.customArgs,
 				sessionCustomEnvVars: chat.moderatorConfig?.customEnvVars,
 			});
-			const finalArgs = configResolution.args;
-			console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
-			console.log(`[GroupChat:Debug] Full prompt length: ${fullPrompt.length} chars`);
-			console.log(`[GroupChat:Debug] ========== SPAWNING MODERATOR PROCESS ==========`);
-			console.log(`[GroupChat:Debug] Session ID: ${sessionId}`);
-			console.log(`[GroupChat:Debug] Tool Type: ${chat.moderatorAgentId}`);
-			console.log(`[GroupChat:Debug] CWD: ${os.homedir()}`);
-			console.log(`[GroupChat:Debug] Command: ${command}`);
-			console.log(`[GroupChat:Debug] ReadOnly: true`);
+			// For Gemini CLI: only disable workspace sandbox when read-only mode is
+			// CLI-enforced. Without hard read-only enforcement, removing the sandbox
+			// would give the moderator unsandboxed write capability.
+			// The CWD is already set to the group chat folder to avoid "path not in workspace" errors.
+			const geminiCanBeUnsandboxed =
+				chat.moderatorAgentId === 'gemini-cli' && !!agent.readOnlyCliEnforced;
+			const geminiNoSandbox = geminiCanBeUnsandboxed ? ['--no-sandbox'] : [];
+			const finalArgs = [...configResolution.args, ...geminiNoSandbox];
+			logger.debug('Spawning moderator process', LOG_CONTEXT, {
+				sessionId,
+				agentType: chat.moderatorAgentId,
+				cwd: moderatorCwd,
+				argCount: finalArgs.length,
+				promptLengthChars: fullPrompt.length,
+			});
 
 			// Spawn the moderator process in batch mode
 			try {
 				// Emit state change to show moderator is thinking
 				groupChatEmitters.emitStateChange?.(groupChatId, 'moderator-thinking');
-				console.log(`[GroupChat:Debug] Emitted state change: moderator-thinking`);
+				logger.debug('Emitted state change: moderator-thinking', LOG_CONTEXT, { groupChatId });
 
 				// Add power block reason to prevent sleep during group chat activity
 				powerManager.addBlockReason(`groupchat:${groupChatId}`);
@@ -522,7 +571,7 @@ ${message}${imageContext}`;
 				// Prepare spawn config with potential SSH wrapping
 				let spawnCommand = command;
 				let spawnArgs = finalArgs;
-				let spawnCwd = os.homedir();
+				let spawnCwd = moderatorCwd;
 				let spawnPrompt: string | undefined = fullPrompt;
 				let spawnEnvVars =
 					configResolution.effectiveCustomEnvVars ??
@@ -532,12 +581,12 @@ ${message}${imageContext}`;
 
 				// Apply SSH wrapping if configured
 				if (sshStore && chat.moderatorConfig?.sshRemoteConfig) {
-					console.log(`[GroupChat:Debug] Applying SSH wrapping for moderator...`);
+					logger.debug('Applying SSH wrapping for moderator', LOG_CONTEXT, { groupChatId });
 					const sshWrapped = await wrapSpawnWithSsh(
 						{
 							command,
 							args: finalArgs,
-							cwd: os.homedir(),
+							cwd: moderatorCwd,
 							prompt: fullPrompt,
 							customEnvVars:
 								configResolution.effectiveCustomEnvVars ??
@@ -555,7 +604,9 @@ ${message}${imageContext}`;
 					spawnPrompt = sshWrapped.prompt;
 					spawnEnvVars = sshWrapped.customEnvVars;
 					if (sshWrapped.sshRemoteUsed) {
-						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
+						logger.debug('SSH remote used for moderator', LOG_CONTEXT, {
+							remoteName: sshWrapped.sshRemoteUsed.name,
+						});
 					}
 				}
 
@@ -567,10 +618,12 @@ ${message}${imageContext}`;
 				if (winConfig.shell) {
 					spawnShell = winConfig.shell;
 					spawnRunInShell = winConfig.runInShell;
-					console.log(`[GroupChat:Debug] Windows shell config: ${winConfig.shell}`);
+					logger.debug('Windows shell config for moderator', LOG_CONTEXT, {
+						shell: winConfig.shell,
+					});
 				}
 
-				const spawnResult = processManager.spawn({
+				processManager.spawn({
 					sessionId,
 					toolType: chat.moderatorAgentId,
 					cwd: spawnCwd,
@@ -588,11 +641,11 @@ ${message}${imageContext}`;
 					sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 				});
 
-				console.log(`[GroupChat:Debug] Spawn result: ${JSON.stringify(spawnResult)}`);
-				console.log(`[GroupChat:Debug] Moderator process spawned successfully`);
-				console.log(`[GroupChat:Debug] promptArgs: ${agent.promptArgs ? 'defined' : 'undefined'}`);
-				console.log(`[GroupChat:Debug] noPromptSeparator: ${agent.noPromptSeparator ?? false}`);
-				console.log(`[GroupChat:Debug] =================================================`);
+				logger.debug('Moderator process spawned successfully', LOG_CONTEXT, {
+					sessionId,
+					hasPromptArgs: !!agent.promptArgs,
+					noPromptSeparator: agent.noPromptSeparator ?? false,
+				});
 			} catch (error) {
 				logger.error(`Failed to spawn moderator for ${groupChatId}`, LOG_CONTEXT, { error });
 				captureException(error, { operation: 'groupChat:spawnModerator', groupChatId });
@@ -604,14 +657,15 @@ ${message}${imageContext}`;
 				);
 			}
 		} else {
-			console.log(`[GroupChat:Debug] WARNING: No session ID prefix found for moderator`);
+			logger.warn('No session ID prefix found for moderator', LOG_CONTEXT, { groupChatId });
 		}
 	} else if (processManager && !agentDetector) {
-		console.error(`[GroupChat:Debug] ERROR: AgentDetector not available!`);
-		console.error(`[GroupChatRouter] AgentDetector not available, cannot spawn moderator`);
+		logger.error('AgentDetector not available, cannot spawn moderator', LOG_CONTEXT, {
+			groupChatId,
+		});
 		throw new Error('AgentDetector not available');
 	} else {
-		console.log(`[GroupChat:Debug] WARNING: No processManager provided, skipping spawn`);
+		logger.warn('No processManager provided, skipping spawn', LOG_CONTEXT, { groupChatId });
 	}
 }
 
@@ -635,25 +689,22 @@ export async function routeModeratorResponse(
 	agentDetector?: AgentDetector,
 	readOnly?: boolean
 ): Promise<void> {
-	console.log(`[GroupChat:Debug] ========== ROUTE MODERATOR RESPONSE ==========`);
-	console.log(`[GroupChat:Debug] Group Chat ID: ${groupChatId}`);
-	console.log(`[GroupChat:Debug] Message length: ${message.length}`);
-	console.log(
-		`[GroupChat:Debug] Message preview: "${message.substring(0, 300)}${message.length > 300 ? '...' : ''}"`
-	);
-	console.log(`[GroupChat:Debug] Read-only: ${readOnly ?? false}`);
+	logger.debug('Route moderator response', LOG_CONTEXT, {
+		groupChatId,
+		messageLength: message.length,
+		readOnly: readOnly ?? false,
+	});
 
 	const chat = await loadGroupChat(groupChatId);
 	if (!chat) {
-		console.log(`[GroupChat:Debug] ERROR: Group chat not found!`);
+		logger.debug('Group chat not found', LOG_CONTEXT, { groupChatId });
 		throw new Error(`Group chat not found: ${groupChatId}`);
 	}
 
-	console.log(`[GroupChat:Debug] Chat loaded: "${chat.name}"`);
+	logger.debug('Chat loaded for moderator response', LOG_CONTEXT, { chatName: chat.name });
 
 	// Log the message as coming from moderator
 	await appendToLog(chat.logPath, 'moderator', message);
-	console.log(`[GroupChat:Debug] Message appended to log`);
 
 	// Emit message event to renderer so it shows immediately
 	const moderatorMessage: GroupChatMessage = {
@@ -662,7 +713,7 @@ export async function routeModeratorResponse(
 		content: message,
 	};
 	groupChatEmitters.emitMessage?.(groupChatId, moderatorMessage);
-	console.log(`[GroupChat:Debug] Emitted moderator message to renderer`);
+	logger.debug('Emitted moderator message to renderer', LOG_CONTEXT, { groupChatId });
 
 	// Add history entry for moderator response
 	try {
@@ -678,9 +729,10 @@ export async function routeModeratorResponse(
 
 		// Emit history entry event to renderer
 		groupChatEmitters.emitHistoryEntry?.(groupChatId, historyEntry);
-		console.log(
-			`[GroupChatRouter] Added history entry for Moderator: ${summary.substring(0, 50)}...`
-		);
+		logger.debug('Added history entry for Moderator', LOG_CONTEXT, {
+			groupChatId,
+			summaryLength: summary.length,
+		});
 	} catch (error) {
 		logger.error('Failed to add history entry for Moderator', LOG_CONTEXT, { error, groupChatId });
 		captureException(error, { operation: 'groupChat:addModeratorHistory', groupChatId });
@@ -689,19 +741,17 @@ export async function routeModeratorResponse(
 
 	// Extract ALL mentions from the message
 	const allMentions = extractAllMentions(message);
-	console.log(`[GroupChat:Debug] Extracted @mentions: ${allMentions.join(', ') || '(none)'}`);
+	logger.debug('Extracted mentions from moderator response', LOG_CONTEXT, {
+		mentionCount: allMentions.length,
+		participantCount: chat.participants.length,
+	});
 
 	const existingParticipantNames = new Set(chat.participants.map((p) => p.name));
-	console.log(
-		`[GroupChat:Debug] Existing participants: ${Array.from(existingParticipantNames).join(', ') || '(none)'}`
-	);
 
 	// Check for mentions that aren't already participants but match available sessions
 	if (processManager && getSessionsCallback) {
 		const sessions = getSessionsCallback();
-		console.log(
-			`[GroupChat:Debug] Available sessions for auto-add: ${sessions.map((s) => s.name).join(', ')}`
-		);
+		logger.debug('Available sessions for auto-add', LOG_CONTEXT, { sessionCount: sessions.length });
 
 		for (const mentionedName of allMentions) {
 			// Skip if already a participant (check both exact and normalized names)
@@ -721,9 +771,11 @@ export async function routeModeratorResponse(
 				try {
 					// Use the original session name as the participant name
 					const participantName = matchingSession.name;
-					console.log(
-						`[GroupChatRouter] Auto-adding participant @${participantName} from moderator mention @${mentionedName} (session ${matchingSession.id})`
-					);
+					logger.debug('Auto-adding participant from moderator mention', LOG_CONTEXT, {
+						participantName,
+						mentionedName,
+						sessionId: matchingSession.id,
+					});
 					// Get custom env vars for this agent type
 					const customEnvVars = getCustomEnvVarsCallback?.(matchingSession.toolType);
 					const agentConfigValues = getAgentConfigCallback?.(matchingSession.toolType) || {};
@@ -777,22 +829,22 @@ export async function routeModeratorResponse(
 	// Reload chat to get updated participants list
 	const updatedChat = await loadGroupChat(groupChatId);
 	if (!updatedChat) {
-		console.log(`[GroupChat:Debug] WARNING: Could not reload chat after participant updates`);
+		logger.warn('Could not reload chat after participant updates', LOG_CONTEXT, { groupChatId });
 		return;
 	}
 
 	const mentions = extractMentions(message, updatedChat.participants);
-	console.log(
-		`[GroupChat:Debug] Valid participant mentions found: ${mentions.join(', ') || '(none)'}`
-	);
+	logger.debug('Valid participant mentions found', LOG_CONTEXT, { mentionCount: mentions.length });
 
 	// Track participants that will need to respond for synthesis round
 	const participantsToRespond = new Set<string>();
 
 	// Spawn batch processes for each mentioned participant
 	if (processManager && agentDetector && mentions.length > 0) {
-		console.log(`[GroupChat:Debug] ========== SPAWNING PARTICIPANT AGENTS ==========`);
-		console.log(`[GroupChat:Debug] Will spawn ${mentions.length} participant agent(s)`);
+		logger.debug('Spawning participant agents', LOG_CONTEXT, {
+			groupChatId,
+			participantCount: mentions.length,
+		});
 
 		// Get available sessions for cwd lookup
 		const sessions = getSessionsCallback?.() || [];
@@ -807,36 +859,42 @@ export async function routeModeratorResponse(
 			.join('\n');
 
 		for (const participantName of mentions) {
-			console.log(`[GroupChat:Debug] --- Spawning participant: @${participantName} ---`);
+			logger.debug('Spawning participant', LOG_CONTEXT, { participantName });
 
 			// Find the participant info
 			const participant = updatedChat.participants.find((p) => p.name === participantName);
 			if (!participant) {
-				console.warn(
-					`[GroupChat:Debug] Participant ${participantName} not found in chat - skipping`
-				);
+				logger.warn('Participant not found in chat - skipping', LOG_CONTEXT, {
+					participantName,
+					groupChatId,
+				});
 				continue;
 			}
 
-			console.log(`[GroupChat:Debug] Participant agent ID: ${participant.agentId}`);
+			logger.debug('Participant agent resolved', LOG_CONTEXT, {
+				participantName,
+				agentId: participant.agentId,
+			});
 
 			// Find matching session to get cwd
 			const matchingSession = sessions.find(
 				(s) => mentionMatches(s.name, participantName) || s.name === participantName
 			);
 			const cwd = matchingSession?.cwd || os.homedir();
-			console.log(`[GroupChat:Debug] CWD for participant: ${cwd}`);
+			logger.debug('Participant CWD and agent', LOG_CONTEXT, {
+				participantName,
+				cwd,
+				agentId: participant.agentId,
+			});
 
 			// Resolve agent configuration
 			const agent = await agentDetector.getAgent(participant.agentId);
-			console.log(
-				`[GroupChat:Debug] Agent resolved: ${agent?.command || 'null'}, available: ${agent?.available ?? false}`
-			);
 
 			if (!agent || !agent.available) {
-				console.error(
-					`[GroupChat:Debug] ERROR: Agent '${participant.agentId}' not available for ${participantName}`
-				);
+				logger.warn('Agent not available for participant', LOG_CONTEXT, {
+					agentId: participant.agentId,
+					participantName,
+				});
 				continue;
 			}
 
@@ -865,7 +923,7 @@ export async function routeModeratorResponse(
 
 			// Create a unique session ID for this batch process
 			const sessionId = `group-chat-${groupChatId}-participant-${participantName}-${Date.now()}`;
-			console.log(`[GroupChat:Debug] Generated session ID: ${sessionId}`);
+			logger.debug('Generated participant session ID', LOG_CONTEXT, { participantName, sessionId });
 
 			const agentConfigValues = getAgentConfigCallback?.(participant.agentId) || {};
 			// Note: Don't pass modelId to buildAgentArgs - it will be handled by applyAgentConfigOverrides
@@ -884,26 +942,36 @@ export async function routeModeratorResponse(
 				sessionCustomEnvVars: matchingSession?.customEnvVars,
 			});
 
+			// For Gemini CLI: add --include-directories for project dir and group chat folder.
+			// When SSH is configured, skip local-only paths (groupChatFolder is a local
+			// Maestro config path, os.homedir() is the local home) since they won't
+			// resolve on the remote host. Only pass cwd which is the remote project path.
+			const isParticipantSsh = !!(sshStore && matchingSession?.sshRemoteConfig?.enabled);
+			const participantWorkspaceDirs = isParticipantSsh
+				? [cwd]
+				: [cwd, groupChatFolder, os.homedir()];
+			const geminiParticipantDirArgs = buildGeminiWorkspaceDirArgs(
+				agent,
+				participant.agentId,
+				participantWorkspaceDirs
+			);
+			const participantFinalArgs = [...configResolution.args, ...geminiParticipantDirArgs];
+
 			try {
 				// Emit participant state change to show this participant is working
 				groupChatEmitters.emitParticipantState?.(groupChatId, participantName, 'working');
-				console.log(`[GroupChat:Debug] Emitted participant state: working`);
+				logger.debug('Spawning participant process', LOG_CONTEXT, {
+					participantName,
+					sessionId,
+					agentType: participant.agentId,
+					argCount: participantFinalArgs.length,
+					promptLengthChars: participantPrompt.length,
+					modelSource: configResolution.modelSource || 'unknown',
+				});
 
 				// Log spawn details for debugging
 				const spawnCommand = agent.path || agent.command;
-				const spawnArgs = configResolution.args;
-				console.log(`[GroupChat:Debug] Spawn command: ${spawnCommand}`);
-				console.log(`[GroupChat:Debug] Spawn args: ${JSON.stringify(spawnArgs)}`);
-				console.log(
-					`[GroupChat:Debug] Session customModel: ${matchingSession?.customModel || '(none)'}`
-				);
-				console.log(
-					`[GroupChat:Debug] Config model source: ${configResolution.modelSource || 'unknown'}`
-				);
-				console.log(`[GroupChat:Debug] Prompt length: ${participantPrompt.length}`);
-				console.log(
-					`[GroupChat:Debug] CustomEnvVars: ${JSON.stringify(configResolution.effectiveCustomEnvVars || {})}`
-				);
+				const spawnArgs = participantFinalArgs;
 
 				// Prepare spawn config with potential SSH wrapping
 				let finalSpawnCommand = spawnCommand;
@@ -918,9 +986,7 @@ export async function routeModeratorResponse(
 
 				// Apply SSH wrapping if configured for this session
 				if (sshStore && matchingSession?.sshRemoteConfig) {
-					console.log(
-						`[GroupChat:Debug] Applying SSH wrapping for participant ${participantName}...`
-					);
+					logger.debug('Applying SSH wrapping for participant', LOG_CONTEXT, { participantName });
 					const sshWrapped = await wrapSpawnWithSsh(
 						{
 							command: spawnCommand,
@@ -943,7 +1009,10 @@ export async function routeModeratorResponse(
 					finalSpawnPrompt = sshWrapped.prompt;
 					finalSpawnEnvVars = sshWrapped.customEnvVars;
 					if (sshWrapped.sshRemoteUsed) {
-						console.log(`[GroupChat:Debug] SSH remote used: ${sshWrapped.sshRemoteUsed.name}`);
+						logger.debug('SSH remote used for participant', LOG_CONTEXT, {
+							participantName,
+							remoteName: sshWrapped.sshRemoteUsed.name,
+						});
 					}
 				}
 
@@ -955,12 +1024,13 @@ export async function routeModeratorResponse(
 				if (winConfig.shell) {
 					finalSpawnShell = winConfig.shell;
 					finalSpawnRunInShell = winConfig.runInShell;
-					console.log(
-						`[GroupChat:Debug] Windows shell config for ${participantName}: ${winConfig.shell}`
-					);
+					logger.debug('Windows shell config for participant', LOG_CONTEXT, {
+						participantName,
+						shell: winConfig.shell,
+					});
 				}
 
-				const spawnResult = processManager.spawn({
+				processManager.spawn({
 					sessionId,
 					toolType: participant.agentId,
 					cwd: finalSpawnCwd,
@@ -978,17 +1048,20 @@ export async function routeModeratorResponse(
 					sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 				});
 
-				console.log(
-					`[GroupChat:Debug] Spawn result for ${participantName}: ${JSON.stringify(spawnResult)}`
-				);
-				console.log(`[GroupChat:Debug] promptArgs: ${agent.promptArgs ? 'defined' : 'undefined'}`);
-				console.log(`[GroupChat:Debug] noPromptSeparator: ${agent.noPromptSeparator ?? false}`);
+				logger.debug('Participant process spawned', LOG_CONTEXT, {
+					participantName,
+					sessionId,
+					hasPromptArgs: !!agent.promptArgs,
+					noPromptSeparator: agent.noPromptSeparator ?? false,
+				});
 
 				// Track this participant as pending response
 				participantsToRespond.add(participantName);
-				console.log(
-					`[GroupChat:Debug] Spawned batch process for participant @${participantName} (session ${sessionId}, readOnly=${readOnly ?? false})`
-				);
+				logger.debug('Batch process spawned for participant', LOG_CONTEXT, {
+					participantName,
+					sessionId,
+					readOnly: readOnly ?? false,
+				});
 			} catch (error) {
 				logger.error(`Failed to spawn participant ${participantName}`, LOG_CONTEXT, {
 					error,
@@ -1002,12 +1075,13 @@ export async function routeModeratorResponse(
 				// Continue with other participants even if one fails
 			}
 		}
-		console.log(`[GroupChat:Debug] =================================================`);
 	} else if (mentions.length === 0) {
-		console.log(`[GroupChat:Debug] No participant @mentions found - moderator response is final`);
+		logger.debug('No participant mentions found - moderator response is final', LOG_CONTEXT, {
+			groupChatId,
+		});
 		// Set state back to idle since no agents are being spawned
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
-		console.log(`[GroupChat:Debug] Emitted state change: idle`);
+		logger.debug('Emitted state change: idle', LOG_CONTEXT, { groupChatId });
 		// Remove power block reason since round is complete
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 	}
@@ -1015,14 +1089,15 @@ export async function routeModeratorResponse(
 	// Store pending participants for synthesis tracking
 	if (participantsToRespond.size > 0) {
 		pendingParticipantResponses.set(groupChatId, participantsToRespond);
-		console.log(
-			`[GroupChat:Debug] Waiting for ${participantsToRespond.size} participant(s) to respond: ${[...participantsToRespond].join(', ')}`
-		);
+		logger.debug('Waiting for participants to respond', LOG_CONTEXT, {
+			groupChatId,
+			pendingCount: participantsToRespond.size,
+		});
 		// Set state to show agents are working
 		groupChatEmitters.emitStateChange?.(groupChatId, 'agent-working');
-		console.log(`[GroupChat:Debug] Emitted state change: agent-working`);
+		logger.debug('Emitted state change: agent-working', LOG_CONTEXT, { groupChatId });
 	}
-	console.log(`[GroupChat:Debug] ===================================================`);
+	logger.debug('Route moderator response complete', LOG_CONTEXT, { groupChatId });
 }
 
 /**
@@ -1042,34 +1117,32 @@ export async function routeAgentResponse(
 	message: string,
 	_processManager?: IProcessManager
 ): Promise<void> {
-	console.log(`[GroupChat:Debug] ========== ROUTE AGENT RESPONSE ==========`);
-	console.log(`[GroupChat:Debug] Group Chat ID: ${groupChatId}`);
-	console.log(`[GroupChat:Debug] Participant: ${participantName}`);
-	console.log(`[GroupChat:Debug] Message length: ${message.length}`);
-	console.log(
-		`[GroupChat:Debug] Message preview: "${message.substring(0, 200)}${message.length > 200 ? '...' : ''}"`
-	);
+	logger.debug('Route agent response', LOG_CONTEXT, {
+		groupChatId,
+		participantName,
+		messageLength: message.length,
+	});
 
 	const chat = await loadGroupChat(groupChatId);
 	if (!chat) {
-		console.log(`[GroupChat:Debug] ERROR: Group chat not found!`);
+		logger.debug('Group chat not found', LOG_CONTEXT, { groupChatId });
 		throw new Error(`Group chat not found: ${groupChatId}`);
 	}
 
 	// Verify participant exists
 	const participant = chat.participants.find((p) => p.name === participantName);
 	if (!participant) {
-		console.log(`[GroupChat:Debug] ERROR: Participant '${participantName}' not found!`);
+		logger.debug('Participant not found in chat', LOG_CONTEXT, { groupChatId, participantName });
 		throw new Error(`Participant '${participantName}' not found in group chat`);
 	}
 
-	console.log(
-		`[GroupChat:Debug] Participant verified: ${participantName} (agent: ${participant.agentId})`
-	);
+	logger.debug('Participant verified', LOG_CONTEXT, {
+		participantName,
+		agentId: participant.agentId,
+	});
 
 	// Log the message as coming from the participant
 	await appendToLog(chat.logPath, participantName, message);
-	console.log(`[GroupChat:Debug] Message appended to log`);
 
 	// Emit message event to renderer so it shows immediately
 	const agentMessage: GroupChatMessage = {
@@ -1124,9 +1197,10 @@ export async function routeAgentResponse(
 
 		// Emit history entry event to renderer
 		groupChatEmitters.emitHistoryEntry?.(groupChatId, historyEntry);
-		console.log(
-			`[GroupChatRouter] Added history entry for ${participantName}: ${summary.substring(0, 50)}...`
-		);
+		logger.debug('Added history entry for participant', LOG_CONTEXT, {
+			participantName,
+			summaryLength: summary.length,
+		});
 	} catch (error) {
 		logger.error(`Failed to add history entry for ${participantName}`, LOG_CONTEXT, {
 			error,
@@ -1158,9 +1232,7 @@ export async function spawnModeratorSynthesis(
 	processManager: IProcessManager,
 	agentDetector: AgentDetector
 ): Promise<void> {
-	console.log(`[GroupChat:Debug] ========== SPAWN MODERATOR SYNTHESIS ==========`);
-	console.log(`[GroupChat:Debug] Group Chat ID: ${groupChatId}`);
-	console.log(`[GroupChat:Debug] All participants have responded, starting synthesis round...`);
+	logger.debug('Starting moderator synthesis round', LOG_CONTEXT, { groupChatId });
 
 	const chat = await loadGroupChat(groupChatId);
 	if (!chat) {
@@ -1171,7 +1243,7 @@ export async function spawnModeratorSynthesis(
 		return;
 	}
 
-	console.log(`[GroupChat:Debug] Chat loaded: "${chat.name}"`);
+	logger.debug('Chat loaded for synthesis', LOG_CONTEXT, { chatName: chat.name });
 
 	if (!isModeratorActive(groupChatId)) {
 		logger.error(`Cannot spawn synthesis - moderator not active for: ${groupChatId}`, LOG_CONTEXT);
@@ -1182,7 +1254,7 @@ export async function spawnModeratorSynthesis(
 	}
 
 	const sessionIdPrefix = getModeratorSessionId(groupChatId);
-	console.log(`[GroupChat:Debug] Session ID prefix: ${sessionIdPrefix}`);
+	logger.debug('Synthesis session ID prefix', LOG_CONTEXT, { sessionIdPrefix });
 
 	if (!sessionIdPrefix) {
 		logger.error(
@@ -1200,13 +1272,14 @@ export async function spawnModeratorSynthesis(
 	// so the exit handler routes through routeModeratorResponse, which will
 	// check for @mentions - if present, route to agents; if not, it's the final response
 	const sessionId = `${sessionIdPrefix}-${Date.now()}`;
-	console.log(`[GroupChat:Debug] Generated synthesis session ID: ${sessionId}`);
+	logger.debug('Generated synthesis session ID', LOG_CONTEXT, { sessionId });
 
 	// Resolve the agent configuration
 	const agent = await agentDetector.getAgent(chat.moderatorAgentId);
-	console.log(
-		`[GroupChat:Debug] Agent resolved: ${agent?.command || 'null'}, available: ${agent?.available ?? false}`
-	);
+	logger.debug('Agent resolved for synthesis', LOG_CONTEXT, {
+		agentCommand: agent?.command || null,
+		available: agent?.available ?? false,
+	});
 
 	if (!agent || !agent.available) {
 		logger.error(`Agent '${chat.moderatorAgentId}' is not available for synthesis`, LOG_CONTEXT);
@@ -1218,12 +1291,14 @@ export async function spawnModeratorSynthesis(
 
 	// Use custom path from moderator config if set
 	const command = chat.moderatorConfig?.customPath || agent.path || agent.command;
-	console.log(`[GroupChat:Debug] Command: ${command}`);
+	logger.debug('Synthesis command resolved', LOG_CONTEXT, { command });
 
 	const args = [...agent.args];
 	// Build the synthesis prompt with recent chat history
 	const chatHistory = await readLog(chat.logPath);
-	console.log(`[GroupChat:Debug] Chat history entries for synthesis: ${chatHistory.length}`);
+	logger.debug('Chat history loaded for synthesis', LOG_CONTEXT, {
+		historyEntries: chatHistory.length,
+	});
 
 	const historyContext = chatHistory
 		.slice(-30)
@@ -1255,10 +1330,15 @@ Review the agent responses above. Either:
 2. @mention specific agents for follow-up if you need more information`;
 
 	const agentConfigValues = getAgentConfigCallback?.(chat.moderatorAgentId) || {};
+
+	// For Gemini CLI: use the group chat folder as CWD (same as moderator spawn)
+	const synthGroupChatFolder = getGroupChatDir(groupChatId);
+	const synthCwd = chat.moderatorAgentId === 'gemini-cli' ? synthGroupChatFolder : os.homedir();
+
 	const baseArgs = buildAgentArgs(agent, {
 		baseArgs: args,
 		prompt: synthesisPrompt,
-		cwd: os.homedir(),
+		cwd: synthCwd,
 		readOnlyMode: true,
 	});
 	const configResolution = applyAgentConfigOverrides(agent, baseArgs, {
@@ -1267,17 +1347,66 @@ Review the agent responses above. Either:
 		sessionCustomArgs: chat.moderatorConfig?.customArgs,
 		sessionCustomEnvVars: chat.moderatorConfig?.customEnvVars,
 	});
-	const finalArgs = configResolution.args;
-	console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
-	console.log(`[GroupChat:Debug] Synthesis prompt length: ${synthesisPrompt.length} chars`);
+	// For Gemini CLI: only disable workspace sandbox when read-only mode is
+	// CLI-enforced (same rationale as moderator spawn above)
+	const geminiCanBeUnsandboxed =
+		chat.moderatorAgentId === 'gemini-cli' && !!agent.readOnlyCliEnforced;
+	const geminiSynthNoSandbox = geminiCanBeUnsandboxed ? ['--no-sandbox'] : [];
+	const finalArgs = [...configResolution.args, ...geminiSynthNoSandbox];
+	logger.debug('Synthesis args built', LOG_CONTEXT, {
+		argCount: finalArgs.length,
+		promptLengthChars: synthesisPrompt.length,
+		agentType: chat.moderatorAgentId,
+	});
 
 	// Spawn the synthesis process
 	try {
-		console.log(`[GroupChat:Debug] Spawning synthesis moderator process...`);
+		logger.debug('Spawning synthesis moderator process', LOG_CONTEXT, { groupChatId, sessionId });
 		// Emit state change to show moderator is thinking (synthesizing)
 		groupChatEmitters.emitStateChange?.(groupChatId, 'moderator-thinking');
-		console.log(`[GroupChat:Debug] Emitted state change: moderator-thinking`);
+		logger.debug('Emitted state change: moderator-thinking (synthesis)', LOG_CONTEXT, {
+			groupChatId,
+		});
+
+		// Prepare spawn config with SSH wrapping support
+		let spawnCommand = command;
+		let spawnArgs = finalArgs;
+		let spawnCwdResolved = synthCwd;
+		let spawnPrompt: string | undefined = synthesisPrompt;
+		let spawnEnvVars =
+			configResolution.effectiveCustomEnvVars ?? getCustomEnvVarsCallback?.(chat.moderatorAgentId);
+
+		// Apply SSH wrapping if configured (matching moderator spawn in routeUserMessage)
+		if (sshStore && chat.moderatorConfig?.sshRemoteConfig) {
+			logger.debug('Applying SSH wrapping for synthesis moderator', LOG_CONTEXT, { groupChatId });
+			const sshWrapped = await wrapSpawnWithSsh(
+				{
+					command,
+					args: finalArgs,
+					cwd: synthCwd,
+					prompt: synthesisPrompt,
+					customEnvVars:
+						configResolution.effectiveCustomEnvVars ??
+						getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+					promptArgs: agent.promptArgs,
+					noPromptSeparator: agent.noPromptSeparator,
+					agentBinaryName: agent.binaryName,
+				},
+				chat.moderatorConfig.sshRemoteConfig,
+				sshStore
+			);
+			spawnCommand = sshWrapped.command;
+			spawnArgs = sshWrapped.args;
+			spawnCwdResolved = sshWrapped.cwd;
+			spawnPrompt = sshWrapped.prompt;
+			spawnEnvVars = sshWrapped.customEnvVars;
+			if (sshWrapped.sshRemoteUsed) {
+				logger.debug('SSH remote used for synthesis', LOG_CONTEXT, {
+					remoteName: sshWrapped.sshRemoteUsed.name,
+				});
+			}
+		}
 
 		// Get Windows-specific spawn config (shell, stdin mode) - handles SSH exclusion
 		const winConfig = getWindowsSpawnConfig(
@@ -1285,21 +1414,19 @@ Review the agent responses above. Either:
 			chat.moderatorConfig?.sshRemoteConfig
 		);
 		if (winConfig.shell) {
-			console.log(`[GroupChat:Debug] Windows shell config for synthesis: ${winConfig.shell}`);
+			logger.debug('Windows shell config for synthesis', LOG_CONTEXT, { shell: winConfig.shell });
 		}
 
-		const spawnResult = processManager.spawn({
+		processManager.spawn({
 			sessionId,
 			toolType: chat.moderatorAgentId,
-			cwd: os.homedir(),
-			command,
-			args: finalArgs,
+			cwd: spawnCwdResolved,
+			command: spawnCommand,
+			args: spawnArgs,
 			readOnlyMode: true,
-			prompt: synthesisPrompt,
+			prompt: spawnPrompt,
 			contextWindow: getContextWindowValue(agent, agentConfigValues),
-			customEnvVars:
-				configResolution.effectiveCustomEnvVars ??
-				getCustomEnvVarsCallback?.(chat.moderatorAgentId),
+			customEnvVars: spawnEnvVars,
 			promptArgs: agent.promptArgs,
 			noPromptSeparator: agent.noPromptSeparator,
 			shell: winConfig.shell,
@@ -1308,11 +1435,11 @@ Review the agent responses above. Either:
 			sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 		});
 
-		console.log(`[GroupChat:Debug] Synthesis spawn result: ${JSON.stringify(spawnResult)}`);
-		console.log(`[GroupChat:Debug] Synthesis moderator process spawned successfully`);
-		console.log(`[GroupChat:Debug] promptArgs: ${agent.promptArgs ? 'defined' : 'undefined'}`);
-		console.log(`[GroupChat:Debug] noPromptSeparator: ${agent.noPromptSeparator ?? false}`);
-		console.log(`[GroupChat:Debug] ================================================`);
+		logger.debug('Synthesis moderator process spawned successfully', LOG_CONTEXT, {
+			sessionId,
+			hasPromptArgs: !!agent.promptArgs,
+			noPromptSeparator: agent.noPromptSeparator ?? false,
+		});
 	} catch (error) {
 		logger.error(`Failed to spawn moderator synthesis for ${groupChatId}`, LOG_CONTEXT, { error });
 		captureException(error, { operation: 'groupChat:spawnSynthesis', groupChatId });
@@ -1340,9 +1467,7 @@ export async function respawnParticipantWithRecovery(
 	processManager: IProcessManager,
 	agentDetector: AgentDetector
 ): Promise<void> {
-	console.log(`[GroupChat:Debug] ========== RESPAWN WITH RECOVERY ==========`);
-	console.log(`[GroupChat:Debug] Group Chat: ${groupChatId}`);
-	console.log(`[GroupChat:Debug] Participant: ${participantName}`);
+	logger.debug('Respawn participant with recovery', LOG_CONTEXT, { groupChatId, participantName });
 
 	// Import buildRecoveryContext here to avoid circular dependencies
 	const { buildRecoveryContext } = await import('./session-recovery');
@@ -1366,7 +1491,9 @@ export async function respawnParticipantWithRecovery(
 
 	// Build recovery context with the agent's prior statements
 	const recoveryContext = await buildRecoveryContext(groupChatId, participantName, 30);
-	console.log(`[GroupChat:Debug] Recovery context length: ${recoveryContext.length}`);
+	logger.debug('Recovery context built', LOG_CONTEXT, {
+		recoveryContextLength: recoveryContext.length,
+	});
 
 	// Get the read-only state
 	const readOnly = getGroupChatReadOnlyState(groupChatId);
@@ -1412,11 +1539,11 @@ export async function respawnParticipantWithRecovery(
 
 	// Prepend recovery context
 	const fullPrompt = `${recoveryContext}\n\n${basePrompt}`;
-	console.log(`[GroupChat:Debug] Full recovery prompt length: ${fullPrompt.length}`);
+	logger.debug('Recovery prompt built', LOG_CONTEXT, { promptLengthChars: fullPrompt.length });
 
 	// Create a unique session ID for this recovery spawn
 	const sessionId = `group-chat-${groupChatId}-participant-${participantName}-recovery-${Date.now()}`;
-	console.log(`[GroupChat:Debug] Recovery session ID: ${sessionId}`);
+	logger.debug('Recovery session ID generated', LOG_CONTEXT, { sessionId, participantName });
 
 	// Build args - note: no agentSessionId since we're starting fresh
 	const agentConfigValues = getAgentConfigCallback?.(participant.agentId) || {};
@@ -1435,12 +1562,23 @@ export async function respawnParticipantWithRecovery(
 		sessionCustomEnvVars: matchingSession?.customEnvVars,
 	});
 
+	// For Gemini CLI: add --include-directories for group chat folder and home dir.
+	// When SSH is configured, skip local-only paths that won't resolve on the remote host.
+	const isRecoverySsh = !!(sshStore && matchingSession?.sshRemoteConfig?.enabled);
+	const recoveryWorkspaceDirs = isRecoverySsh ? [cwd] : [cwd, groupChatFolder, os.homedir()];
+	const geminiRecoveryDirArgs = buildGeminiWorkspaceDirArgs(
+		agent,
+		participant.agentId,
+		recoveryWorkspaceDirs
+	);
+	const recoveryFinalArgs = [...configResolution.args, ...geminiRecoveryDirArgs];
+
 	// Emit participant state change to show this participant is working
 	groupChatEmitters.emitParticipantState?.(groupChatId, participantName, 'working');
 
 	// Spawn the recovery process — with SSH wrapping if configured
 	let finalSpawnCommand = agent.path || agent.command;
-	let finalSpawnArgs = configResolution.args;
+	let finalSpawnArgs = recoveryFinalArgs;
 	let finalSpawnCwd = cwd;
 	let finalSpawnPrompt: string | undefined = fullPrompt;
 	let finalSpawnEnvVars =
@@ -1448,12 +1586,14 @@ export async function respawnParticipantWithRecovery(
 	let finalSpawnShell: string | undefined;
 	let finalSpawnRunInShell = false;
 
-	console.log(`[GroupChat:Debug] Recovery spawn command: ${finalSpawnCommand}`);
-	console.log(`[GroupChat:Debug] Recovery spawn args count: ${finalSpawnArgs.length}`);
+	logger.debug('Recovery spawn prepared', LOG_CONTEXT, {
+		command: finalSpawnCommand,
+		argCount: finalSpawnArgs.length,
+	});
 
 	// Apply SSH wrapping if configured for this session
 	if (sshStore && matchingSession?.sshRemoteConfig) {
-		console.log(`[GroupChat:Debug] Applying SSH wrapping for recovery of ${participantName}...`);
+		logger.debug('Applying SSH wrapping for recovery', LOG_CONTEXT, { participantName });
 		const sshWrapped = await wrapSpawnWithSsh(
 			{
 				command: finalSpawnCommand,
@@ -1474,9 +1614,10 @@ export async function respawnParticipantWithRecovery(
 		finalSpawnPrompt = sshWrapped.prompt;
 		finalSpawnEnvVars = sshWrapped.customEnvVars;
 		if (sshWrapped.sshRemoteUsed) {
-			console.log(
-				`[GroupChat:Debug] SSH remote used for recovery: ${sshWrapped.sshRemoteUsed.name}`
-			);
+			logger.debug('SSH remote used for recovery', LOG_CONTEXT, {
+				participantName,
+				remoteName: sshWrapped.sshRemoteUsed.name,
+			});
 		}
 	}
 
@@ -1485,10 +1626,10 @@ export async function respawnParticipantWithRecovery(
 	if (winConfig.shell) {
 		finalSpawnShell = winConfig.shell;
 		finalSpawnRunInShell = winConfig.runInShell;
-		console.log(`[GroupChat:Debug] Windows shell config for recovery: ${winConfig.shell}`);
+		logger.debug('Windows shell config for recovery', LOG_CONTEXT, { shell: winConfig.shell });
 	}
 
-	const spawnResult = processManager.spawn({
+	processManager.spawn({
 		sessionId,
 		toolType: participant.agentId,
 		cwd: finalSpawnCwd,
@@ -1506,7 +1647,9 @@ export async function respawnParticipantWithRecovery(
 		sendPromptViaStdinRaw: winConfig.sendPromptViaStdinRaw,
 	});
 
-	console.log(`[GroupChat:Debug] Recovery spawn result: ${JSON.stringify(spawnResult)}`);
-	console.log(`[GroupChat:Debug] promptArgs: ${agent.promptArgs ? 'defined' : 'undefined'}`);
-	console.log(`[GroupChat:Debug] =============================================`);
+	logger.debug('Recovery process spawned', LOG_CONTEXT, {
+		participantName,
+		sessionId,
+		hasPromptArgs: !!agent.promptArgs,
+	});
 }

@@ -37,7 +37,7 @@ export interface AgentTile {
 
 /**
  * Define the agents to display in the grid
- * Supported agents: Claude Code, Codex, OpenCode (shown first)
+ * Supported agents: Claude Code, Codex, OpenCode, Factory Droid, Gemini CLI
  * Unsupported agents: shown ghosted with "Coming soon" (at bottom)
  */
 export const AGENT_TILES: AgentTile[] = [
@@ -70,14 +70,14 @@ export const AGENT_TILES: AgentTile[] = [
 		description: "Factory's AI coding assistant",
 		brandColor: '#3B82F6', // Factory blue
 	},
-	// Coming soon agents at the bottom
 	{
 		id: 'gemini-cli',
 		name: 'Gemini CLI',
-		supported: false,
-		description: 'Coming soon',
+		supported: true,
+		description: "Google's AI coding assistant",
 		brandColor: '#4285F4', // Google blue
 	},
+	// Coming soon agents at the bottom
 	{
 		id: 'qwen3-coder',
 		name: 'Qwen3 Coder',
@@ -1326,11 +1326,12 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 										</span>
 									)}
 
-									{/* "Beta" badge for Codex, OpenCode, and Factory Droid */}
+									{/* "Beta" badge for Codex, OpenCode, Factory Droid, Gemini */}
 									{isSupported &&
 										(tile.id === 'codex' ||
 											tile.id === 'opencode' ||
-											tile.id === 'factory-droid') && (
+											tile.id === 'factory-droid' ||
+											tile.id === 'gemini-cli') && (
 											<span
 												className="absolute top-2 left-2 px-1.5 py-0.5 text-[9px] rounded font-bold uppercase"
 												style={{

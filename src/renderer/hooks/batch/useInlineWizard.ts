@@ -634,7 +634,12 @@ export function useInlineWizard(): UseInlineWizardReturn {
 
 				// Step 4: Initialize conversation session (only for 'new' or 'iterate' modes)
 				// Only allow wizard for agents that support structured output
-				const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
+				const supportedWizardAgents: ToolType[] = [
+					'claude-code',
+					'codex',
+					'opencode',
+					'gemini-cli',
+				];
 				if (
 					(mode === 'new' || mode === 'iterate') &&
 					agentType &&
@@ -680,7 +685,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 					setTabState(effectiveTabId, (prev) => ({
 						...prev,
 						isInitializing: false,
-						error: `The inline wizard is not supported for ${agentType}. Please use Claude, Claude Code, or Codex.`,
+						error: `The inline wizard is not supported for ${agentType}. Please use Claude Code, Codex, OpenCode, or Gemini CLI.`,
 					}));
 					return; // Don't update state with parsed results
 				}
@@ -760,7 +765,7 @@ export function useInlineWizard(): UseInlineWizardReturn {
 			callbacks?: ConversationCallbacks
 		): Promise<void> => {
 			// Only allow wizard for agents that support structured output
-			const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode'];
+			const supportedWizardAgents: ToolType[] = ['claude-code', 'codex', 'opencode', 'gemini-cli'];
 
 			// Get the tab ID from the current state, ensure currentTabId is set for visibility
 			const tabId = currentTabId || 'default';

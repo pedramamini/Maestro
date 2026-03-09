@@ -105,6 +105,8 @@ import { RenameGroupChatModal } from './RenameGroupChatModal';
 import { GroupChatInfoOverlay } from './GroupChatInfoOverlay';
 
 // Agent/Transfer Modal Components
+import { WorkspaceApprovalModal } from './WorkspaceApprovalModal';
+import type { WorkspaceApprovalModalData } from '../stores/modalStore';
 import { AgentErrorModal, type RecoveryAction } from './AgentErrorModal';
 import { MergeSessionModal, type MergeOptions } from './MergeSessionModal';
 import { SendToAgentModal, type SendToAgentOptions } from './SendToAgentModal';
@@ -488,9 +490,7 @@ export const AppSessionModals = memo(function AppSessionModals({
 }: AppSessionModalsProps) {
 	// Determine if the rename modal is for a terminal tab or an AI tab
 	const terminalTabs = activeSession?.terminalTabs ?? [];
-	const renamingTerminalTab = renameTabId
-		? terminalTabs.find((t) => t.id === renameTabId)
-		: null;
+	const renamingTerminalTab = renameTabId ? terminalTabs.find((t) => t.id === renameTabId) : null;
 	const renamingTerminalTabIndex = renamingTerminalTab
 		? terminalTabs.findIndex((t) => t.id === renameTabId)
 		: -1;
@@ -1657,6 +1657,11 @@ export interface AppAgentModalsProps {
 	sendToAgentModalOpen: boolean;
 	onCloseSendToAgent: () => void;
 	onSendToAgent: (targetSessionId: string, options: SendToAgentOptions) => Promise<MergeResult>;
+
+	// WorkspaceApprovalModal
+	workspaceApprovalData: WorkspaceApprovalModalData | undefined;
+	onApproveWorkspaceDir: (sessionId: string, directory: string) => void;
+	onDenyWorkspaceDir: () => void;
 }
 
 /**
@@ -1707,6 +1712,10 @@ export const AppAgentModals = memo(function AppAgentModals({
 	sendToAgentModalOpen,
 	onCloseSendToAgent,
 	onSendToAgent,
+	// WorkspaceApprovalModal
+	workspaceApprovalData,
+	onApproveWorkspaceDir,
+	onDenyWorkspaceDir,
 }: AppAgentModalsProps) {
 	return (
 		<>
@@ -1755,6 +1764,32 @@ export const AppAgentModals = memo(function AppAgentModals({
 					recoveryActions={groupChatRecoveryActions}
 					onDismiss={onClearGroupChatError}
 					dismissible={groupChatError.error.recoverable}
+				/>
+			)}
+
+			{/* --- WORKSPACE APPROVAL MODAL (Gemini sandbox) --- */}
+			{workspaceApprovalData && (
+				<WorkspaceApprovalModal
+					theme={theme}
+					deniedPath={workspaceApprovalData.deniedPath}
+					sessionName={
+						sessions.find((s) => s.id === workspaceApprovalData.sessionId)?.name || 'Gemini CLI'
+					}
+					sshRemoteId={(() => {
+						const s = sessions.find((s) => s.id === workspaceApprovalData.sessionId);
+						return (
+							s?.sshRemoteId ||
+							(s?.sessionSshRemoteConfig?.enabled
+								? s.sessionSshRemoteConfig.remoteId
+								: undefined) ||
+							undefined
+						);
+					})()}
+					projectCwd={sessions.find((s) => s.id === workspaceApprovalData.sessionId)?.projectRoot}
+					onApprove={(directory) =>
+						onApproveWorkspaceDir(workspaceApprovalData.sessionId, directory)
+					}
+					onDeny={onDenyWorkspaceDir}
 				/>
 			)}
 
@@ -2144,6 +2179,11 @@ export interface AppModalsProps {
 	onCompleteTransfer: () => void;
 	onCloseSendToAgent: () => void;
 	onSendToAgent: (targetSessionId: string, options: SendToAgentOptions) => Promise<MergeResult>;
+
+	// WorkspaceApprovalModal
+	workspaceApprovalData: WorkspaceApprovalModalData | undefined;
+	onApproveWorkspaceDir: (sessionId: string, directory: string) => void;
+	onDenyWorkspaceDir: () => void;
 }
 
 /**
@@ -2485,6 +2525,10 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 		onCompleteTransfer,
 		onCloseSendToAgent,
 		onSendToAgent,
+		// Workspace approval
+		workspaceApprovalData,
+		onApproveWorkspaceDir,
+		onDenyWorkspaceDir,
 	} = props;
 
 	const sourceSession = useMemo(
@@ -2819,6 +2863,9 @@ export const AppModals = memo(function AppModals(props: AppModalsProps) {
 				sendToAgentModalOpen={sendToAgentModalOpen}
 				onCloseSendToAgent={onCloseSendToAgent}
 				onSendToAgent={onSendToAgent}
+				workspaceApprovalData={workspaceApprovalData}
+				onApproveWorkspaceDir={onApproveWorkspaceDir}
+				onDenyWorkspaceDir={onDenyWorkspaceDir}
 			/>
 		</>
 	);

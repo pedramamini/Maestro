@@ -131,6 +131,7 @@ export function getProviderDisplayName(toolType: ToolType): string {
 		'claude-code': 'Claude Code',
 		opencode: 'OpenCode',
 		codex: 'Codex',
+		'gemini-cli': 'Gemini CLI',
 		'factory-droid': 'Factory Droid',
 		terminal: 'Terminal',
 	};

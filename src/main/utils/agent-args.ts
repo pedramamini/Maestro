@@ -1,4 +1,21 @@
 import type { AgentConfig } from '../agents';
+import { logger } from './logger';
+
+const LOG_CONTEXT = 'AgentArgs';
+
+/**
+ * Arguments that must never be passed through from user-supplied custom args.
+ * These flags can bypass security controls (sandboxing, approval gates, permissions).
+ */
+const DENIED_CUSTOM_ARGS = new Set([
+	'--no-sandbox',
+	'--include-directories',
+	'--dangerous-auto-approve',
+	'--dangerously-skip-permissions',
+	'--dangerously-bypass-approvals-and-sandbox',
+	'--approval-mode',
+	'-y',
+]);
 
 type BuildAgentArgsOptions = {
 	baseArgs: string[];
@@ -54,7 +71,13 @@ export function buildAgentArgs(
 	}
 
 	if (agent.batchModeArgs && options.prompt) {
-		finalArgs = [...finalArgs, ...agent.batchModeArgs];
+		// Skip batch mode args (e.g. -y, --dangerously-bypass-approvals-and-sandbox)
+		// when readOnlyMode is active. Batch mode args grant write/approval permissions
+		// that conflict with read-only intent, regardless of whether the agent has
+		// CLI-enforced read-only mode or prompt-only enforcement.
+		if (!options.readOnlyMode) {
+			finalArgs = [...finalArgs, ...agent.batchModeArgs];
+		}
 	}
 
 	if (agent.jsonOutputArgs && !finalArgs.some((arg) => agent.jsonOutputArgs!.includes(arg))) {
@@ -69,6 +92,14 @@ export function buildAgentArgs(
 		finalArgs = [...finalArgs, ...agent.readOnlyArgs];
 	}
 
+	if (options.readOnlyMode && agent.readOnlyCliEnforced === false) {
+		logger.warn(
+			`Agent ${agent.name}: read-only mode requested but no CLI-level enforcement available`,
+			LOG_CONTEXT,
+			{ agentId: agent.id }
+		);
+	}
+
 	if (options.modelId && agent.modelArgs) {
 		finalArgs = [...finalArgs, ...agent.modelArgs(options.modelId)];
 	}
@@ -78,7 +109,13 @@ export function buildAgentArgs(
 	}
 
 	if (options.agentSessionId && agent.resumeArgs) {
-		finalArgs = [...finalArgs, ...agent.resumeArgs(options.agentSessionId)];
+		if (/^[\w\-:.]+$/.test(options.agentSessionId)) {
+			finalArgs = [...finalArgs, ...agent.resumeArgs(options.agentSessionId)];
+		} else {
+			logger.warn('Invalid agentSessionId format, skipping resume args', LOG_CONTEXT, {
+				agentSessionId: options.agentSessionId,
+			});
+		}
 	}
 
 	// Deduplicate repeated flag-style arguments while preserving order.
@@ -147,8 +184,15 @@ export function applyAgentConfigOverrides(
 			: 'none';
 
 	const parsedCustomArgs = parseCustomArgs(effectiveCustomArgs);
-	if (parsedCustomArgs.length > 0) {
-		finalArgs = [...finalArgs, ...parsedCustomArgs];
+	const filteredCustomArgs = parsedCustomArgs.filter((arg) => {
+		if (DENIED_CUSTOM_ARGS.has(arg)) {
+			logger.warn('Stripped denied custom arg', LOG_CONTEXT, { arg });
+			return false;
+		}
+		return true;
+	});
+	if (filteredCustomArgs.length > 0) {
+		finalArgs = [...finalArgs, ...filteredCustomArgs];
 	} else {
 		customArgsSource = 'none';
 	}

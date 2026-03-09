@@ -3,8 +3,11 @@
 
 import { spawn, SpawnOptions } from 'child_process';
 import * as fs from 'fs';
+import * as path from 'path';
+import * as os from 'os';
 import type { ToolType, UsageStats } from '../../shared/types';
 import { CodexOutputParser } from '../../main/parsers/codex-output-parser';
+import { GeminiOutputParser } from '../../main/parsers/gemini-output-parser';
 import { aggregateModelUsage } from '../../main/parsers/usage-aggregator';
 import { getAgentCustomPath } from './storage';
 import { generateUUID } from '../../shared/uuid';
@@ -36,6 +39,13 @@ const CODEX_ARGS = [
 
 // Cached Codex path (resolved once at startup)
 let cachedCodexPath: string | null = null;
+
+// Gemini CLI default command and arguments
+const GEMINI_DEFAULT_COMMAND = 'gemini';
+const GEMINI_ARGS = ['-y', '--output-format', 'stream-json'];
+
+// Cached Gemini path (resolved once at startup)
+let cachedGeminiPath: string | null = null;
 
 // Result from spawning an agent
 export interface AgentResult {
@@ -134,6 +144,35 @@ async function findCodexInPath(): Promise<string | undefined> {
 }
 
 /**
+ * Find Gemini CLI in PATH using 'which' command
+ */
+async function findGeminiInPath(): Promise<string | undefined> {
+	return new Promise((resolve) => {
+		const env = { ...process.env, PATH: getExpandedPath() };
+		const command = process.platform === 'win32' ? 'where' : 'which';
+
+		const proc = spawn(command, [GEMINI_DEFAULT_COMMAND], { env });
+		let stdout = '';
+
+		proc.stdout?.on('data', (data) => {
+			stdout += data.toString();
+		});
+
+		proc.on('close', (code) => {
+			if (code === 0 && stdout.trim()) {
+				resolve(stdout.trim().split('\n')[0]);
+			} else {
+				resolve(undefined);
+			}
+		});
+
+		proc.on('error', () => {
+			resolve(undefined);
+		});
+	});
+}
+
+/**
  * Check if Claude Code is available
  * First checks for a custom path in settings, then falls back to PATH detection
  */
@@ -204,6 +243,39 @@ export async function detectCodex(): Promise<{
 }
 
 /**
+ * Check if Gemini CLI is available
+ * Prefers custom path from settings, otherwise falls back to PATH detection
+ */
+export async function detectGemini(): Promise<{
+	available: boolean;
+	path?: string;
+	source?: 'settings' | 'path';
+}> {
+	if (cachedGeminiPath) {
+		return { available: true, path: cachedGeminiPath, source: 'settings' };
+	}
+
+	const customPath = getAgentCustomPath('gemini-cli');
+	if (customPath) {
+		if (await isExecutable(customPath)) {
+			cachedGeminiPath = customPath;
+			return { available: true, path: customPath, source: 'settings' };
+		}
+		console.error(
+			`Warning: Custom Gemini CLI path "${customPath}" is not executable, falling back to PATH detection`
+		);
+	}
+
+	const pathResult = await findGeminiInPath();
+	if (pathResult) {
+		cachedGeminiPath = pathResult;
+		return { available: true, path: pathResult, source: 'path' };
+	}
+
+	return { available: false };
+}
+
+/**
  * Get the resolved Claude command/path for spawning
  * Uses cached path from detectClaude() or falls back to default command
  */
@@ -217,6 +289,13 @@ export function getClaudeCommand(): string {
  */
 export function getCodexCommand(): string {
 	return cachedCodexPath || CODEX_DEFAULT_COMMAND;
+}
+
+/**
+ * Get the resolved Gemini CLI command/path for spawning
+ */
+export function getGeminiCommand(): string {
+	return cachedGeminiPath || GEMINI_DEFAULT_COMMAND;
 }
 
 /**
@@ -506,6 +585,190 @@ async function spawnCodexAgent(
 	});
 }
 
+interface SpawnGeminiOptions {
+	prompt: string;
+	cwd: string;
+	model?: string;
+	resume?: string;
+	env?: Record<string, string>;
+	timeout?: number;
+}
+
+/** Pattern for valid model identifiers (alphanumeric, dots, hyphens, slashes) */
+const VALID_MODEL_PATTERN = /^[\w.\-\/]+$/;
+
+/** Pattern for valid session/resume IDs (alphanumeric, hyphens, colons, dots) */
+const VALID_SESSION_ID_PATTERN = /^[\w\-:.]+$/;
+
+/**
+ * Check if a Gemini session file exists for the given session ID.
+ * Looks in ~/.gemini/history/{project_basename}/ for matching files.
+ */
+async function geminiSessionFileExists(sessionId: string, cwd: string): Promise<boolean> {
+	const projectBasename = path.basename(cwd);
+	const historyDir = path.join(os.homedir(), '.gemini', 'history', projectBasename);
+
+	try {
+		const files = await fs.promises.readdir(historyDir);
+		// Match session-{timestamp}-{sessionId}.json
+		return files.some((file) => {
+			const match = file.match(/^session-[^-]+-(.+)\.json$/);
+			return match !== null && match[1] === sessionId;
+		});
+	} catch {
+		return false;
+	}
+}
+
+/**
+ * Spawn Gemini CLI with a prompt and return the result
+ */
+export async function spawnGeminiCli(options: SpawnGeminiOptions): Promise<AgentResult> {
+	const { prompt, cwd, model, resume, env: customEnv, timeout } = options;
+
+	if (model && !VALID_MODEL_PATTERN.test(model)) {
+		throw new Error(`Invalid model identifier: contains disallowed characters`);
+	}
+
+	if (resume && !VALID_SESSION_ID_PATTERN.test(resume)) {
+		throw new Error(`Invalid session ID for resume: contains disallowed characters`);
+	}
+
+	// Validate session file exists before attempting resume
+	let validatedResume = resume;
+	if (resume) {
+		const sessionExists = await geminiSessionFileExists(resume, cwd);
+		if (!sessionExists) {
+			console.warn(
+				`[Gemini CLI] Session file not found for resume ID "${resume}" — starting fresh session`
+			);
+			validatedResume = undefined;
+		}
+	}
+
+	return new Promise((resolve) => {
+		const env = buildExpandedEnv(customEnv);
+		const args = [...GEMINI_ARGS];
+
+		if (model) {
+			args.push('-m', model);
+		}
+
+		if (validatedResume) {
+			args.push('--resume', validatedResume);
+		}
+
+		args.push('-p', prompt);
+
+		const spawnOptions: SpawnOptions = {
+			cwd,
+			env,
+			stdio: ['pipe', 'pipe', 'pipe'],
+		};
+
+		if (typeof timeout === 'number') {
+			spawnOptions.timeout = timeout;
+		}
+
+		const child = spawn(getGeminiCommand(), args, spawnOptions);
+		const parser = new GeminiOutputParser();
+		let jsonBuffer = '';
+		let stdoutBuffer = '';
+		let stderr = '';
+		let response: string | undefined;
+		let pendingPartial = '';
+		let sessionId: string | undefined;
+		let usageStats: UsageStats | undefined;
+		let errorText: string | undefined;
+
+		child.stdout?.on('data', (data: Buffer) => {
+			const chunk = data.toString();
+			stdoutBuffer += chunk;
+			jsonBuffer += chunk;
+
+			const lines = jsonBuffer.split('\n');
+			jsonBuffer = lines.pop() || '';
+
+			for (const line of lines) {
+				if (!line.trim()) continue;
+				const event = parser.parseJsonLine(line);
+				if (!event) continue;
+
+				const parsedSession = parser.extractSessionId(event);
+				if (parsedSession && !sessionId) {
+					sessionId = parsedSession;
+				}
+
+				if (event.type === 'text' && event.text) {
+					if (event.isPartial) {
+						pendingPartial += event.text;
+					} else {
+						const text = pendingPartial ? pendingPartial + event.text : event.text;
+						pendingPartial = '';
+						response = response ? `${response}\n${text}` : text;
+					}
+				} else if (event.type === 'error' && event.text && !errorText) {
+					errorText = event.text;
+				}
+
+				const usage = parser.extractUsage(event);
+				if (usage) {
+					usageStats = mergeUsageStats(usageStats, {
+						inputTokens: usage.inputTokens || 0,
+						outputTokens: usage.outputTokens || 0,
+						cacheReadTokens: usage.cacheReadTokens,
+						cacheCreationTokens: usage.cacheCreationTokens,
+						contextWindow: usage.contextWindow,
+						reasoningTokens: usage.reasoningTokens,
+						costUsd: usage.costUsd,
+					});
+				}
+			}
+		});
+
+		child.stderr?.on('data', (data: Buffer) => {
+			stderr += data.toString();
+		});
+
+		child.stdin?.end();
+
+		child.on('close', (code) => {
+			if (pendingPartial) {
+				response = response ? `${response}\n${pendingPartial}` : pendingPartial;
+				pendingPartial = '';
+			}
+
+			if (code === 0 && !errorText) {
+				resolve({
+					success: true,
+					response,
+					agentSessionId: sessionId,
+					usageStats,
+				});
+				return;
+			}
+
+			const parserError = parser.detectErrorFromExit(code ?? 0, stderr, stdoutBuffer);
+			const finalError =
+				parserError?.message || errorText || stderr || `Process exited with code ${code}`;
+
+			resolve({
+				success: false,
+				error: finalError,
+				agentSessionId: sessionId,
+				usageStats,
+			});
+		});
+
+		child.on('error', (error) => {
+			resolve({
+				success: false,
+				error: `Failed to spawn Gemini CLI: ${error.message}`,
+			});
+		});
+	});
+}
+
 /**
  * Options for spawning an agent via CLI
  */
@@ -514,6 +777,8 @@ export interface SpawnAgentOptions {
 	agentSessionId?: string;
 	/** Run in read-only/plan mode (uses centralized agent definitions for provider-specific flags) */
 	readOnlyMode?: boolean;
+	/** Timeout in ms for batch-mode execution (default: 600000 = 10 min) */
+	timeout?: number;
 }
 
 /**
@@ -527,6 +792,10 @@ export async function spawnAgent(
 	options?: SpawnAgentOptions
 ): Promise<AgentResult> {
 	const readOnly = options?.readOnlyMode;
+
+	if (toolType === 'gemini-cli') {
+		return spawnGeminiCli({ prompt, cwd, resume: agentSessionId, timeout: options?.timeout });
+	}
 
 	if (toolType === 'codex') {
 		return spawnCodexAgent(cwd, prompt, agentSessionId, readOnly);

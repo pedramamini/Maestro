@@ -16,6 +16,7 @@ import {
 	addParticipantToChat,
 	removeParticipantFromChat,
 	getParticipant,
+	getGroupChatDir,
 } from './group-chat-storage';
 import { appendToLog } from './group-chat-log';
 import { IProcessManager, isModeratorActive } from './group-chat-moderator';
@@ -73,6 +74,30 @@ export interface SessionOverrides {
 		remoteId: string | null;
 		workingDirOverride?: string;
 	};
+}
+
+/**
+ * Build additional --include-directories args for Gemini CLI in group chat.
+ * Gemini CLI needs explicit directory approval for each path it accesses.
+ * For non-Gemini agents, returns an empty array (no-op).
+ */
+function buildGeminiWorkspaceDirArgs(
+	agent: { workingDirArgs?: (dir: string) => string[]; id?: string } | null | undefined,
+	agentId: string,
+	directories: string[]
+): string[] {
+	if (agentId !== 'gemini-cli' || !agent?.workingDirArgs) {
+		return [];
+	}
+	const args: string[] = [];
+	const seen = new Set<string>();
+	for (const dir of directories) {
+		if (dir && dir.trim() && !seen.has(dir)) {
+			seen.add(dir);
+			args.push(...agent.workingDirArgs(dir));
+		}
+	}
+	return args;
 }
 
 /**
@@ -168,8 +193,25 @@ export async function addParticipant(
 		sessionCustomEnvVars: effectiveEnvVars,
 	});
 
+	// For Gemini CLI: add --include-directories for group chat folder and home dir
+	// so the sandboxed agent can access shared files and participant workspaces.
+	// When SSH is configured, skip local-only paths (groupChatFolder is a local
+	// Maestro config path, os.homedir() is the local home) since they won't
+	// resolve on the remote host. Only pass cwd which is the remote project path.
+	const groupChatFolder = getGroupChatDir(groupChatId);
+	const isAddParticipantSsh = !!(sshStore && sessionOverrides?.sshRemoteConfig?.enabled);
+	const addParticipantWorkspaceDirs = isAddParticipantSsh
+		? [cwd]
+		: [cwd, groupChatFolder, os.homedir()];
+	const geminiDirArgs = buildGeminiWorkspaceDirArgs(
+		agentConfig,
+		agentId,
+		addParticipantWorkspaceDirs
+	);
+	const finalArgs = [...configResolution.args, ...geminiDirArgs];
+
 	console.log(`[GroupChat:Debug] Command: ${command}`);
-	console.log(`[GroupChat:Debug] Args: ${JSON.stringify(configResolution.args)}`);
+	console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
 	// Generate session ID for this participant
 	const sessionId = `group-chat-${groupChatId}-participant-${name}-${uuidv4()}`;
@@ -177,7 +219,7 @@ export async function addParticipant(
 
 	// Wrap spawn config with SSH if configured
 	let spawnCommand = command;
-	let spawnArgs = configResolution.args;
+	let spawnArgs = finalArgs;
 	let spawnCwd = cwd;
 	let spawnPrompt: string | undefined = prompt;
 	let spawnEnvVars = configResolution.effectiveCustomEnvVars ?? effectiveEnvVars;
@@ -190,7 +232,7 @@ export async function addParticipant(
 		const sshWrapped = await wrapSpawnWithSsh(
 			{
 				command,
-				args: configResolution.args,
+				args: finalArgs,
 				cwd,
 				prompt,
 				customEnvVars: configResolution.effectiveCustomEnvVars ?? effectiveEnvVars,
