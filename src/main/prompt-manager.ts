@@ -258,17 +258,17 @@ export async function resetPrompt(id: string): Promise<string> {
 	}
 
 	return withSerializedCustomizationMutation(async () => {
+		// Read bundled content first so reset does not delete customization if disk read fails.
+		const promptsPath = getBundledPromptsPath();
+		const filePath = path.join(promptsPath, def.filename);
+		const bundledContent = await fs.readFile(filePath, 'utf-8');
+
 		// Remove from customizations on disk
 		const customizations = await loadUserCustomizations();
 		if (customizations?.prompts?.[id]) {
 			delete customizations.prompts[id];
 			await saveUserCustomizations(customizations);
 		}
-
-		// Read bundled content
-		const promptsPath = getBundledPromptsPath();
-		const filePath = path.join(promptsPath, def.filename);
-		const bundledContent = await fs.readFile(filePath, 'utf-8');
 
 		// Update in-memory cache immediately
 		promptCache.set(id, { content: bundledContent, isModified: false });

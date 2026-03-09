@@ -26,7 +26,7 @@ beforeAll(async () => {
 			return { success: false, error: `Unknown prompt: ${id}` };
 		}),
 	};
-	await loadBatchPrompts();
+	await loadBatchPrompts(true);
 });
 
 // Mock LayerStackContext
@@ -982,6 +982,26 @@ describe('BatchRunnerModal', () => {
 
 			const saveButton = screen.getByRole('button', { name: /Save/ });
 			expect(saveButton).toBeDisabled();
+		});
+
+		it('allows saving when resetting a previously customized prompt to default', async () => {
+			const props = createDefaultProps();
+			props.initialPrompt = 'Previously customized prompt';
+			render(<BatchRunnerModal {...props} />);
+
+			const saveButton = screen.getByRole('button', { name: /Save/ });
+			expect(saveButton).toBeDisabled();
+
+			fireEvent.click(screen.getByTitle('Reset to default prompt'));
+
+			const textarea = screen.getByPlaceholderText('Enter the system prompt for auto-run...');
+			await waitFor(() => {
+				expect(textarea).toHaveValue(getDefaultBatchPrompt());
+			});
+
+			await waitFor(() => {
+				expect(saveButton).toBeEnabled();
+			});
 		});
 	});
 

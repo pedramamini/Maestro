@@ -759,6 +759,8 @@ async function saveDocument(
 export async function generateInlineDocuments(
 	config: DocumentGenerationConfig
 ): Promise<DocumentGenerationResult> {
+	await loadInlineWizardDocGenPrompts();
+
 	const { agentType, directoryPath, autoRunFolderPath, projectName, callbacks } = config;
 
 	callbacks?.onStart?.();

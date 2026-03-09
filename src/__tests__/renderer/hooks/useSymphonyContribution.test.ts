@@ -58,8 +58,9 @@ vi.mock('../../../renderer/stores/modalStore', async () => {
 	};
 });
 
-vi.mock('../../../renderer/components/BatchRunnerModal', () => ({
+vi.mock('../../../renderer/hooks/batch/batchUtils', () => ({
 	getDefaultBatchPrompt: vi.fn(() => 'mock-default-batch-prompt'),
+	loadBatchPrompts: vi.fn().mockResolvedValue(undefined),
 }));
 
 // ============================================================================
@@ -77,6 +78,7 @@ import { useModalStore, getModalActions } from '../../../renderer/stores/modalSt
 import { notifyToast } from '../../../renderer/stores/notificationStore';
 import { gitService } from '../../../renderer/services/git';
 import { validateNewSession } from '../../../renderer/utils/sessionValidation';
+import { loadBatchPrompts } from '../../../renderer/hooks/batch/batchUtils';
 import type { SymphonyContributionData } from '../../../renderer/components/SymphonyModal';
 import type { RegisteredRepository, SymphonyIssue } from '../../../shared/symphony-types';
 
@@ -186,6 +188,7 @@ beforeEach(() => {
 	(gitService.getBranches as ReturnType<typeof vi.fn>).mockResolvedValue(['main']);
 	(gitService.getTags as ReturnType<typeof vi.fn>).mockResolvedValue([]);
 	(validateNewSession as ReturnType<typeof vi.fn>).mockReturnValue({ valid: true, error: null });
+	(loadBatchPrompts as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 	(getModalActions as ReturnType<typeof vi.fn>).mockReturnValue({
 		setSymphonyModalOpen: vi.fn(),
 	});
@@ -1027,6 +1030,7 @@ describe('useSymphonyContribution', () => {
 			});
 
 			expect(startBatchRun).toHaveBeenCalledTimes(1);
+			expect(loadBatchPrompts).toHaveBeenCalledTimes(1);
 			vi.useRealTimers();
 		});
 
@@ -1129,6 +1133,7 @@ describe('useSymphonyContribution', () => {
 			});
 
 			expect(startBatchRun).not.toHaveBeenCalled();
+			expect(loadBatchPrompts).not.toHaveBeenCalled();
 			vi.useRealTimers();
 		});
 
@@ -1150,6 +1155,7 @@ describe('useSymphonyContribution', () => {
 			});
 
 			expect(startBatchRun).not.toHaveBeenCalled();
+			expect(loadBatchPrompts).not.toHaveBeenCalled();
 			vi.useRealTimers();
 		});
 

@@ -158,6 +158,40 @@ describe('prompt-manager', () => {
 		expect(getPrompt('wizard-system')).toBe('bundled default');
 	});
 
+	it('should not delete customization when bundled reset read fails', async () => {
+		let failBundledReadOnReset = false;
+
+		mockReadFile.mockImplementation((filePath: any) => {
+			const p = String(filePath);
+			if (p.includes('core-prompts-customizations.json')) {
+				return Promise.resolve(
+					JSON.stringify({
+						prompts: {
+							'wizard-system': { content: 'custom', isModified: true },
+						},
+					})
+				);
+			}
+			if (failBundledReadOnReset && p.endsWith('wizard-system.md')) {
+				return Promise.reject(new Error('EACCES: permission denied'));
+			}
+			return Promise.resolve('bundled default');
+		});
+		mockWriteFile.mockResolvedValue(undefined);
+
+		const { initializePrompts, resetPrompt, getPrompt } = await import('../../main/prompt-manager');
+
+		await initializePrompts();
+		expect(getPrompt('wizard-system')).toBe('custom');
+
+		failBundledReadOnReset = true;
+		await expect(resetPrompt('wizard-system')).rejects.toThrow('EACCES');
+
+		// Customization file should not be rewritten if bundled read fails.
+		expect(mockWriteFile).not.toHaveBeenCalled();
+		expect(getPrompt('wizard-system')).toBe('custom');
+	});
+
 	it('should return all prompts with metadata via getAllPrompts', async () => {
 		mockReadFile.mockImplementation((filePath: any) => {
 			const p = String(filePath);

@@ -51,6 +51,8 @@ vi.mock('../../../renderer/constants/app', () => ({
 
 vi.mock('../../../renderer/hooks/batch/batchUtils', () => ({
 	getAutorunSynopsisPrompt: vi.fn(() => 'Generate a synopsis of all work done.'),
+	getDefaultBatchPrompt: vi.fn(() => 'Run each task sequentially.'),
+	loadBatchPrompts: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../../shared/synopsis', () => ({
@@ -69,10 +71,6 @@ vi.mock('../../../renderer/components/Wizard', () => ({
 	AUTO_RUN_FOLDER_NAME: 'Auto Run Docs',
 }));
 
-vi.mock('../../../renderer/components/BatchRunnerModal', () => ({
-	getDefaultBatchPrompt: vi.fn(() => 'Run each task sequentially.'),
-}));
-
 import { useWizardHandlers } from '../../../renderer/hooks/wizard/useWizardHandlers';
 import type { UseWizardHandlersDeps } from '../../../renderer/hooks/wizard/useWizardHandlers';
 import { useSessionStore } from '../../../renderer/stores/sessionStore';
@@ -82,6 +80,7 @@ import { useModalStore, getModalActions } from '../../../renderer/stores/modalSt
 import { notifyToast } from '../../../renderer/stores/notificationStore';
 import { gitService } from '../../../renderer/services/git';
 import { validateNewSession } from '../../../renderer/utils/sessionValidation';
+import { loadBatchPrompts } from '../../../renderer/hooks/batch/batchUtils';
 import { parseSynopsis } from '../../../shared/synopsis';
 import type { Session, AITab } from '../../../renderer/types';
 
@@ -289,6 +288,7 @@ describe('useWizardHandlers', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
 		idCounter = 0;
+		(loadBatchPrompts as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
 		useSessionStore.setState({
 			sessions: [],
 			activeSessionId: null,

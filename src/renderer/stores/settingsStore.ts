@@ -47,6 +47,7 @@ let commitPromptLoaded = false;
  */
 export async function loadSettingsStorePrompts(force = false): Promise<void> {
 	if (commitPromptLoaded && !force) return;
+	const previousCommitPrompt = cachedCommitCommandPrompt;
 	const result = await window.maestro.prompts.get('commit-command');
 	if (!result.success || result.content === undefined) {
 		throw new Error(result.error || 'Failed to load prompt: commit-command');
@@ -55,7 +56,21 @@ export async function loadSettingsStorePrompts(force = false): Promise<void> {
 	commitPromptLoaded = true;
 
 	// Update the default AI commands with the loaded prompt
-	DEFAULT_AI_COMMANDS[0].prompt = cachedCommitCommandPrompt;
+	DEFAULT_AI_COMMANDS[0] = {
+		...DEFAULT_AI_COMMANDS[0],
+		prompt: cachedCommitCommandPrompt,
+	};
+
+	// Update already-initialized store state with a new array reference so subscribers refresh.
+	useSettingsStore.setState((state) => ({
+		customAICommands: state.customAICommands.map((command) =>
+			command.id === 'commit' &&
+			command.isBuiltIn &&
+			(command.prompt === '' || command.prompt === previousCommitPrompt)
+				? { ...command, prompt: cachedCommitCommandPrompt }
+				: command
+		),
+	}));
 }
 
 // ============================================================================

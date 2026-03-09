@@ -22,7 +22,7 @@ import { generateId } from '../../utils/ids';
 import { validateNewSession } from '../../utils/sessionValidation';
 import { gitService } from '../../services/git';
 import { notifyToast } from '../../stores/notificationStore';
-import { getDefaultBatchPrompt } from '../../components/BatchRunnerModal';
+import { getDefaultBatchPrompt, loadBatchPrompts } from '../batch/batchUtils';
 
 // ============================================================================
 // Dependencies interface
@@ -129,7 +129,7 @@ export function useSymphonyContribution(
 			};
 
 			// Create session with Symphony metadata
-			const newSession: Session = {
+				const newSession: Session = {
 				id: newId,
 				name: data.sessionName,
 				toolType: data.agentType as ToolType,
@@ -190,52 +190,12 @@ export function useSymphonyContribution(
 					documentPaths: data.issue.documentPaths.map((d) => d.path),
 					status: 'running',
 				},
-			};
+				};
 
-			setSessions((prev) => [...prev, newSession]);
-			setActiveSessionId(newId);
-			setSymphonyModalOpen(false);
-
-			// Register active contribution in Symphony persistent state
-			// This makes it show up in the Active tab of the Symphony modal
-			window.maestro.symphony
-				.registerActive({
-					contributionId: data.contributionId,
-					sessionId: newId,
-					repoSlug: data.repo.slug,
-					repoName: data.repo.name,
-					issueNumber: data.issue.number,
-					issueTitle: data.issue.title,
-					localPath: data.localPath,
-					branchName: data.branchName || '',
-					totalDocuments: data.issue.documentPaths.length,
-					agentType: data.agentType,
-					draftPrNumber: data.draftPrNumber,
-					draftPrUrl: data.draftPrUrl,
-				})
-				.catch((err: unknown) => {
-					console.error('[Symphony] Failed to register active contribution:', err);
-				});
-
-			// Track stats
-			window.maestro.stats.recordSessionCreated({
-				sessionId: newId,
-				agentType: data.agentType,
-				projectPath: data.localPath,
-				createdAt: Date.now(),
-				isRemote: false,
-			});
-
-			// Focus input
-			setActiveFocus('main');
-			setTimeout(() => inputRef.current?.focus(), 50);
-
-			// Switch to Auto Run tab so user sees the documents
-			setActiveRightTab('autorun');
-
-			// Auto-start batch run with all contribution documents
-			if (data.autoRunPath && data.issue.documentPaths.length > 0) {
-				const batchConfig: BatchRunConfig = {
+				let batchConfig: BatchRunConfig | null = null;
+				if (data.autoRunPath && data.issue.documentPaths.length > 0) {
+					await loadBatchPrompts();
+					batchConfig = {
 						documents: data.issue.documentPaths.map((doc) => ({
 							id: generateId(),
 							filename: doc.name.replace(/\.md$/, ''),
@@ -245,20 +205,64 @@ export function useSymphonyContribution(
 						prompt: getDefaultBatchPrompt(),
 						loopEnabled: false,
 					};
+				}
 
-				// Small delay to ensure session state is fully propagated
-				setTimeout(() => {
-					console.log(
-						'[Symphony] Auto-starting batch run with',
-						batchConfig.documents.length,
-						'documents'
-					);
-					startBatchRun(newId, batchConfig, data.autoRunPath!);
-				}, 500);
-			}
-		},
-		[sessions, defaultSaveToHistory, startBatchRun]
-	);
+				setSessions((prev) => [...prev, newSession]);
+				setActiveSessionId(newId);
+				setSymphonyModalOpen(false);
+
+				// Register active contribution in Symphony persistent state
+				// This makes it show up in the Active tab of the Symphony modal
+				window.maestro.symphony
+					.registerActive({
+						contributionId: data.contributionId,
+						sessionId: newId,
+						repoSlug: data.repo.slug,
+						repoName: data.repo.name,
+						issueNumber: data.issue.number,
+						issueTitle: data.issue.title,
+						localPath: data.localPath,
+						branchName: data.branchName || '',
+						totalDocuments: data.issue.documentPaths.length,
+						agentType: data.agentType,
+						draftPrNumber: data.draftPrNumber,
+						draftPrUrl: data.draftPrUrl,
+					})
+					.catch((err: unknown) => {
+						console.error('[Symphony] Failed to register active contribution:', err);
+					});
+
+				// Track stats
+				window.maestro.stats.recordSessionCreated({
+					sessionId: newId,
+					agentType: data.agentType,
+					projectPath: data.localPath,
+					createdAt: Date.now(),
+					isRemote: false,
+				});
+
+				// Focus input
+				setActiveFocus('main');
+				setTimeout(() => inputRef.current?.focus(), 50);
+
+				// Switch to Auto Run tab so user sees the documents
+				setActiveRightTab('autorun');
+
+				// Auto-start batch run with all contribution documents
+				if (batchConfig && data.autoRunPath) {
+					// Small delay to ensure session state is fully propagated
+					setTimeout(() => {
+						console.log(
+							'[Symphony] Auto-starting batch run with',
+							batchConfig.documents.length,
+							'documents'
+						);
+						startBatchRun(newId, batchConfig, data.autoRunPath!);
+					}, 500);
+				}
+			},
+			[sessions, defaultSaveToHistory, startBatchRun]
+		);
 
 	return { handleStartContribution };
 }

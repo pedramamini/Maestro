@@ -41,6 +41,7 @@ import {
 	getContextWindowValue,
 } from '../utils/agent-args';
 import { getPrompt } from '../prompt-manager';
+import { PROMPT_IDS } from '../../prompts';
 import { wrapSpawnWithSsh } from '../utils/ssh-spawn-wrapper';
 import type { SshRemoteSettingsStore } from '../utils/ssh-remote-resolver';
 import { setGetCustomShellPathCallback, getWindowsSpawnConfig } from './group-chat-config';
@@ -109,12 +110,10 @@ const pendingParticipantResponses = new Map<string, Set<string>>();
  */
 const groupChatReadOnlyState = new Map<string, boolean>();
 
+const PROMPT_TOKEN_PATTERN = /\{\{([A-Z_]+)\}\}/g;
+
 function applyPromptTemplate(prompt: string, replacements: Record<string, string>): string {
-	let rendered = prompt;
-	for (const [token, value] of Object.entries(replacements)) {
-		rendered = rendered.replace(new RegExp(`\\{\\{${token}\\}\\}`, 'g'), () => value);
-	}
-	return rendered;
+	return prompt.replace(PROMPT_TOKEN_PATTERN, (match, token: string) => replacements[token] ?? match);
 }
 
 /**
@@ -836,7 +835,7 @@ export async function routeModeratorResponse(
 			const groupChatFolder = getGroupChatDir(groupChatId);
 
 				const participantPrompt = applyPromptTemplate(
-					getPrompt('group-chat-participant-request'),
+					getPrompt(PROMPT_IDS.GROUP_CHAT_PARTICIPANT_REQUEST),
 					{
 						PARTICIPANT_NAME: participantName,
 						GROUP_CHAT_NAME: updatedChat.name,
@@ -1383,7 +1382,7 @@ export async function respawnParticipantWithRecovery(
 	const groupChatFolder = getGroupChatDir(groupChatId);
 
 	// Build the recovery prompt - includes standard prompt plus recovery context
-		const basePrompt = applyPromptTemplate(getPrompt('group-chat-participant-request'), {
+		const basePrompt = applyPromptTemplate(getPrompt(PROMPT_IDS.GROUP_CHAT_PARTICIPANT_REQUEST), {
 			PARTICIPANT_NAME: participantName,
 			GROUP_CHAT_NAME: chat.name,
 			READ_ONLY_NOTE: readOnlyNote,
