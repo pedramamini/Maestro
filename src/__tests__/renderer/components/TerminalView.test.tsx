@@ -265,9 +265,10 @@ describe('TerminalView — isVisible repaint behaviour', () => {
 });
 
 describe('TerminalView — auto-close on shell exit', () => {
-	it('calls closeTerminalTab when a tab transitions to exited state', async () => {
+	it('calls closeTerminalTab when a tab transitions to exited state after 2s', async () => {
 		vi.useFakeTimers();
-		const tab = makeTab({ pid: 1234, state: 'busy' });
+		// Tab created >2s ago — normal exit should auto-close
+		const tab = makeTab({ pid: 1234, state: 'busy', createdAt: Date.now() - 5000 });
 		const session = makeSession([tab]);
 
 		const { rerender } = render(
@@ -275,7 +276,12 @@ describe('TerminalView — auto-close on shell exit', () => {
 		);
 
 		// Transition tab state to 'exited'
-		const exitedTab = makeTab({ pid: 1234, state: 'exited', exitCode: 0 });
+		const exitedTab = makeTab({
+			pid: 1234,
+			state: 'exited',
+			exitCode: 0,
+			createdAt: Date.now() - 5000,
+		});
 		const exitedSession = makeSession([exitedTab]);
 
 		act(() => {
@@ -288,6 +294,33 @@ describe('TerminalView — auto-close on shell exit', () => {
 		});
 
 		expect(mockCloseTerminalTab).toHaveBeenCalledWith('tab-1');
+		vi.useRealTimers();
+	});
+
+	it('does NOT auto-close when shell exits within 2s of creation (startup failure)', async () => {
+		vi.useFakeTimers();
+		// Tab just created — exit within 2s is treated as startup failure
+		const tab = makeTab({ pid: 1234, state: 'busy', createdAt: Date.now() });
+		const session = makeSession([tab]);
+
+		const { rerender } = render(
+			<TerminalView {...defaultProps} session={session} isVisible={true} />
+		);
+
+		// Shell exits immediately
+		const exitedTab = makeTab({ pid: 1234, state: 'exited', exitCode: 1, createdAt: Date.now() });
+		const exitedSession = makeSession([exitedTab]);
+
+		act(() => {
+			rerender(<TerminalView {...defaultProps} session={exitedSession} isVisible={true} />);
+		});
+
+		act(() => {
+			vi.advanceTimersByTime(1);
+		});
+
+		// Tab should NOT be closed — error overlay shown instead
+		expect(mockCloseTerminalTab).not.toHaveBeenCalled();
 		vi.useRealTimers();
 	});
 });

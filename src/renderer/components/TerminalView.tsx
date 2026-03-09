@@ -234,15 +234,25 @@ export const TerminalView = memo(
 			return cleanup;
 		}, [session.id]);
 
-		// Auto-close terminal tabs when the shell process exits
+		// Auto-close terminal tabs when the shell process exits.
+		// Tabs that exit within 2 seconds of creation are treated as spawn failures —
+		// they keep the error overlay (Retry button) instead of silently vanishing.
 		useEffect(() => {
 			const terminalTabs = session.terminalTabs || [];
 			for (const tab of terminalTabs) {
 				const prev = prevTabStatesRef.current.get(tab.id);
 				if (prev !== undefined && prev !== 'exited' && tab.state === 'exited') {
-					const tabId = tab.id;
-					// Close on next tick to avoid mutating state mid-render
-					setTimeout(() => closeTerminalTab(tabId), 0);
+					const age = Date.now() - tab.createdAt;
+					if (age < 2000) {
+						// Startup failure — leave the tab visible with error overlay
+						console.warn(
+							`[TerminalView] Shell exited ${age}ms after creation (exit code: ${tab.exitCode ?? '?'}). Showing error overlay.`
+						);
+					} else {
+						const tabId = tab.id;
+						// Close on next tick to avoid mutating state mid-render
+						setTimeout(() => closeTerminalTab(tabId), 0);
+					}
 				}
 				prevTabStatesRef.current.set(tab.id, tab.state);
 			}
@@ -291,8 +301,9 @@ export const TerminalView = memo(
 				{terminalTabs.map((tab) => {
 					const isActive = tab.id === session.activeTerminalTabId;
 					const terminalSessionId = getTerminalSessionId(session.id, tab.id);
-					// Spawn failed: exited before getting a PID
-					const isSpawnFailed = tab.state === 'exited' && tab.pid === 0;
+					// Shell failed to start or exited immediately after startup
+					const isSpawnFailed =
+						tab.state === 'exited' && (tab.pid === 0 || Date.now() - tab.createdAt < 2000);
 
 					return (
 						<div
@@ -307,6 +318,11 @@ export const TerminalView = memo(
 									<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
 										Failed to start terminal
 									</span>
+									{tab.exitCode !== undefined && tab.exitCode !== 0 && (
+										<span className="text-xs font-mono" style={{ color: theme.colors.textDim }}>
+											Exit code: {tab.exitCode}
+										</span>
+									)}
 									<button
 										onClick={() => {
 											// Clear the loading-written guard so 'Starting terminal...' shows again on retry

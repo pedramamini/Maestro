@@ -478,7 +478,10 @@ function SessionListInner(props: SessionListProps) {
 		// When filtering unread, only show worktree children that are unread or busy
 		const worktreeChildren = showUnreadAgentsOnly
 			? allWorktreeChildren.filter(
-					(child) => child.aiTabs?.some((tab) => tab.hasUnread) || child.state === 'busy'
+					(child) =>
+						child.id === activeSessionId ||
+						child.aiTabs?.some((tab) => tab.hasUnread) ||
+						child.state === 'busy'
 				)
 			: allWorktreeChildren;
 		const hasWorktrees = worktreeChildren.length > 0;

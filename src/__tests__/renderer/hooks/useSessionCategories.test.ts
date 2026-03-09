@@ -293,6 +293,23 @@ describe('useSessionCategories', () => {
 			expect(names).toContain('Busy Agent');
 		});
 
+		it('keeps parent visible when active session is a worktree child without unread', () => {
+			const parent = makeSession({ name: 'Parent' });
+			const child = makeSession({
+				name: 'Worktree Child',
+				parentSessionId: parent.id,
+				aiTabs: [{ id: 't1', hasUnread: false } as any],
+			});
+			resetStore([parent, child]);
+
+			const { result } = renderHook(() =>
+				useSessionCategories('', [parent, child], true, child.id)
+			);
+
+			expect(result.current.sortedFilteredSessions).toHaveLength(1);
+			expect(result.current.sortedFilteredSessions[0].name).toBe('Parent');
+		});
+
 		it('combines unread filter with text filter', () => {
 			const s1 = makeSession({
 				name: 'Frontend',
