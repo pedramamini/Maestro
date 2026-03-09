@@ -131,6 +131,27 @@ describe('prompt-manager', () => {
 		expect(getPrompt('wizard-system')).toBe('new content');
 	});
 
+	it('should reject blank prompt customization content', async () => {
+		mockReadFile.mockImplementation((filePath: any) => {
+			const p = String(filePath);
+			if (p.includes('core-prompts-customizations.json')) {
+				return Promise.reject(new Error('ENOENT'));
+			}
+			return Promise.resolve('bundled content');
+		});
+		mockWriteFile.mockResolvedValue(undefined);
+
+		const { initializePrompts, savePrompt, getPrompt } = await import('../../main/prompt-manager');
+
+		await initializePrompts();
+		await expect(savePrompt('wizard-system', '   \n\t')).rejects.toThrow(
+			'Prompt content cannot be empty or whitespace'
+		);
+
+		expect(mockWriteFile).not.toHaveBeenCalled();
+		expect(getPrompt('wizard-system')).toBe('bundled content');
+	});
+
 	it('should reset prompt to bundled default', async () => {
 		// First init with a customization
 		mockReadFile.mockImplementation((filePath: any) => {

@@ -230,6 +230,9 @@ export async function savePrompt(id: string, content: string): Promise<void> {
 	if (!def) {
 		throw new Error(`Unknown prompt ID: ${id}`);
 	}
+	if (!content.trim()) {
+		throw new Error('Prompt content cannot be empty or whitespace');
+	}
 
 	await withSerializedCustomizationMutation(async () => {
 		const customizations = (await loadUserCustomizations()) || { prompts: {} };

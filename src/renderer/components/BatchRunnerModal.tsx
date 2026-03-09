@@ -159,15 +159,17 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	const initialMaxLoopsRef = useRef<number | null>(null);
 
 	// Prompt state
+	const hasInitialPromptRef = useRef(initialPrompt !== undefined);
+	const resolvedInitialPrompt = initialPrompt ?? initialDefaultBatchPrompt;
 	const [defaultBatchPrompt, setDefaultBatchPrompt] = useState(initialDefaultBatchPrompt);
-	const [prompt, setPrompt] = useState(initialPrompt || initialDefaultBatchPrompt);
+	const [prompt, setPrompt] = useState(resolvedInitialPrompt);
 	const [variablesExpanded, setVariablesExpanded] = useState(false);
-	const [savedPrompt, setSavedPrompt] = useState(initialPrompt || initialDefaultBatchPrompt);
+	const [savedPrompt, setSavedPrompt] = useState(resolvedInitialPrompt);
 	const [promptComposerOpen, setPromptComposerOpen] = useState(false);
 	const textareaRef = useRef<HTMLTextAreaElement>(null);
 
 	// Track initial prompt for dirty checking
-	const initialPromptRef = useRef(initialPrompt || initialDefaultBatchPrompt);
+	const initialPromptRef = useRef(resolvedInitialPrompt);
 
 	// Compute if there are unsaved configuration changes
 	// This checks if documents, loop settings, or prompt have changed from initial values
@@ -363,19 +365,27 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 
 		const loadDefaultPrompt = async () => {
 			try {
-				await loadBatchPrompts();
-				if (cancelled) return;
+					await loadBatchPrompts();
+					if (cancelled) return;
 
-				const loadedDefaultPrompt = getDefaultBatchPrompt();
-				setDefaultBatchPrompt(loadedDefaultPrompt);
-				setPrompt((existingPrompt) => (existingPrompt ? existingPrompt : loadedDefaultPrompt));
-				setSavedPrompt((existingPrompt) => (existingPrompt ? existingPrompt : loadedDefaultPrompt));
-				if (!initialPromptRef.current) {
-					initialPromptRef.current = loadedDefaultPrompt;
+					const loadedDefaultPrompt = getDefaultBatchPrompt();
+					setDefaultBatchPrompt(loadedDefaultPrompt);
+					setPrompt((existingPrompt) =>
+						!hasInitialPromptRef.current && existingPrompt === ''
+							? loadedDefaultPrompt
+							: existingPrompt
+					);
+					setSavedPrompt((existingPrompt) =>
+						!hasInitialPromptRef.current && existingPrompt === ''
+							? loadedDefaultPrompt
+							: existingPrompt
+					);
+					if (!hasInitialPromptRef.current && initialPromptRef.current === '') {
+						initialPromptRef.current = loadedDefaultPrompt;
+					}
+				} catch (error) {
+					console.error('[BatchRunnerModal] Failed to load default prompt:', error);
 				}
-			} catch (error) {
-				console.error('[BatchRunnerModal] Failed to load default prompt:', error);
-			}
 		};
 
 		loadDefaultPrompt();
@@ -441,7 +451,7 @@ export function BatchRunnerModal(props: BatchRunnerModalProps) {
 	};
 
 	const isModified = !!defaultBatchPrompt && prompt !== defaultBatchPrompt;
-	const persistedPrompt = savedPrompt || defaultBatchPrompt;
+	const persistedPrompt = savedPrompt;
 	const hasUnsavedChanges = prompt !== persistedPrompt;
 
 	return (

@@ -32,10 +32,10 @@ export async function loadInlineWizardDocGenPrompts(force = false): Promise<void
 		window.maestro.prompts.get('wizard-inline-iterate-generation'),
 	]);
 
-	if (!docGenResult.success || docGenResult.content === undefined) {
+	if (!docGenResult.success || !docGenResult.content?.trim()) {
 		throw new Error(docGenResult.error || 'Failed to load prompt: wizard-document-generation');
 	}
-	if (!iterateGenResult.success || iterateGenResult.content === undefined) {
+	if (!iterateGenResult.success || !iterateGenResult.content?.trim()) {
 		throw new Error(
 			iterateGenResult.error || 'Failed to load prompt: wizard-inline-iterate-generation'
 		);

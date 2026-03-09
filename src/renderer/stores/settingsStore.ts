@@ -49,7 +49,7 @@ export async function loadSettingsStorePrompts(force = false): Promise<void> {
 	if (commitPromptLoaded && !force) return;
 	const previousCommitPrompt = cachedCommitCommandPrompt;
 	const result = await window.maestro.prompts.get('commit-command');
-	if (!result.success || result.content === undefined) {
+	if (!result.success || !result.content?.trim()) {
 		throw new Error(result.error || 'Failed to load prompt: commit-command');
 	}
 	cachedCommitCommandPrompt = result.content;

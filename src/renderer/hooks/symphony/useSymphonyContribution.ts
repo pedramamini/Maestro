@@ -30,7 +30,11 @@ import { getDefaultBatchPrompt, loadBatchPrompts } from '../batch/batchUtils';
 
 export interface UseSymphonyContributionDeps {
 	/** Start a batch run for a session */
-	startBatchRun: (sessionId: string, config: BatchRunConfig, folderPath: string) => void;
+	startBatchRun: (
+		sessionId: string,
+		config: BatchRunConfig,
+		folderPath: string
+	) => Promise<void>;
 	/** Ref to input element for focus */
 	inputRef: React.RefObject<HTMLTextAreaElement | null>;
 }
@@ -257,7 +261,14 @@ export function useSymphonyContribution(
 							batchConfig.documents.length,
 							'documents'
 						);
-						startBatchRun(newId, batchConfig, data.autoRunPath!);
+						void startBatchRun(newId, batchConfig, data.autoRunPath).catch((error) => {
+							console.error('[Symphony] Failed to auto-start batch run:', error);
+							notifyToast({
+								type: 'error',
+								title: 'Symphony Error',
+								message: 'Failed to start Auto Run.',
+							});
+						});
 					}, 500);
 				}
 			},

@@ -984,6 +984,23 @@ describe('BatchRunnerModal', () => {
 			expect(saveButton).toBeDisabled();
 		});
 
+		it('preserves an explicitly empty saved prompt after default prompt loads', async () => {
+			const props = createDefaultProps();
+			props.initialPrompt = '';
+			render(<BatchRunnerModal {...props} />);
+
+			const resetButton = screen.getByTitle('Reset to default prompt');
+			await waitFor(() => {
+				expect(resetButton).toBeEnabled();
+			});
+
+			const textarea = screen.getByPlaceholderText('Enter the system prompt for auto-run...');
+			expect(textarea).toHaveValue('');
+
+			const saveButton = screen.getByRole('button', { name: /Save/ });
+			expect(saveButton).toBeDisabled();
+		});
+
 		it('allows saving when resetting a previously customized prompt to default', async () => {
 			const props = createDefaultProps();
 			props.initialPrompt = 'Previously customized prompt';

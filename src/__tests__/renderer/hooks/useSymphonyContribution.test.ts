@@ -163,7 +163,7 @@ function createDeps(
 	overrides: Partial<UseSymphonyContributionDeps> = {}
 ): UseSymphonyContributionDeps {
 	return {
-		startBatchRun: vi.fn(),
+		startBatchRun: vi.fn().mockResolvedValue(undefined),
 		inputRef: { current: { focus: vi.fn() } } as any,
 		...overrides,
 	};
@@ -1005,7 +1005,7 @@ describe('useSymphonyContribution', () => {
 	describe('batch run auto-start', () => {
 		it('calls startBatchRun when autoRunPath and documents are present', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const issue = createIssue({
 				documentPaths: [
@@ -1036,7 +1036,7 @@ describe('useSymphonyContribution', () => {
 
 		it('calls startBatchRun with the new session ID and autoRunPath', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const data = createContributionData({ autoRunPath: '/tmp/repo/docs' });
 
@@ -1061,7 +1061,7 @@ describe('useSymphonyContribution', () => {
 
 		it('calls startBatchRun with a BatchRunConfig containing documents from the issue', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const issue = createIssue({
 				documentPaths: [
@@ -1093,7 +1093,7 @@ describe('useSymphonyContribution', () => {
 
 		it('sets resetOnCompletion and isDuplicate to false for each document', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const issue = createIssue({
 				documentPaths: [{ name: 'task1.md', path: 'docs/task1.md', isExternal: false }],
@@ -1118,7 +1118,7 @@ describe('useSymphonyContribution', () => {
 
 		it('does not call startBatchRun when autoRunPath is undefined', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const data = createContributionData({ autoRunPath: undefined });
 
@@ -1139,7 +1139,7 @@ describe('useSymphonyContribution', () => {
 
 		it('does not call startBatchRun when documentPaths is empty', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const issue = createIssue({ documentPaths: [] });
 			const data = createContributionData({ autoRunPath: '/tmp/repo/docs', issue });
@@ -1161,7 +1161,7 @@ describe('useSymphonyContribution', () => {
 
 		it('does not call startBatchRun before 500ms delay', async () => {
 			vi.useFakeTimers();
-			const startBatchRun = vi.fn();
+			const startBatchRun = vi.fn().mockResolvedValue(undefined);
 			const deps = createDeps({ startBatchRun });
 			const data = createContributionData({ autoRunPath: '/tmp/repo/docs' });
 
@@ -1176,6 +1176,42 @@ describe('useSymphonyContribution', () => {
 			});
 
 			expect(startBatchRun).not.toHaveBeenCalled();
+			vi.useRealTimers();
+		});
+
+		it('handles auto-start batch run rejection without unhandled promise rejection', async () => {
+			vi.useFakeTimers();
+			const startBatchRun = vi.fn().mockRejectedValue(new Error('batch failed'));
+			const consoleError = vi.spyOn(console, 'error').mockImplementation(() => {});
+			const deps = createDeps({ startBatchRun });
+			const data = createContributionData({ autoRunPath: '/tmp/repo/docs' });
+
+			const { result } = renderHook(() => useSymphonyContribution(deps));
+
+			await act(async () => {
+				await result.current.handleStartContribution(data);
+			});
+
+			act(() => {
+				vi.advanceTimersByTime(500);
+			});
+
+			await act(async () => {
+				await Promise.resolve();
+			});
+
+			expect(startBatchRun).toHaveBeenCalledTimes(1);
+			expect(consoleError).toHaveBeenCalledWith(
+				'[Symphony] Failed to auto-start batch run:',
+				expect.any(Error)
+			);
+			expect(notifyToast).toHaveBeenCalledWith({
+				type: 'error',
+				title: 'Symphony Error',
+				message: 'Failed to start Auto Run.',
+			});
+
+			consoleError.mockRestore();
 			vi.useRealTimers();
 		});
 	});
