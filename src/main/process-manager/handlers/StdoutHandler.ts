@@ -173,6 +173,10 @@ export class StdoutHandler {
 					? outputParser.detectErrorFromParsed(parsed)
 					: outputParser.detectErrorFromLine(line);
 			if (agentError) {
+				// Ensure raw.errorLine is always populated for downstream consumers
+				if (!agentError.raw || !(agentError.raw as Record<string, unknown>).errorLine) {
+					agentError.raw = { ...(agentError.raw as Record<string, unknown>), errorLine: line };
+				}
 				managedProcess.errorEmitted = true;
 				agentError.sessionId = sessionId;
 
@@ -245,7 +249,12 @@ export class StdoutHandler {
 			resultEmitted: managedProcess.resultEmitted,
 		});
 
-		if (!event) return;
+		if (!event) {
+			// Parser returned null (valid JSON but not a recognized message format).
+			// Emit as buffered data so it isn't silently dropped.
+			this.bufferManager.emitDataBuffered(sessionId, JSON.stringify(parsed));
+			return;
+		}
 
 		// OpenCode emits multiple steps: step_start → text → tool_use → step_finish(tool-calls) → repeat
 		// Each step may have a text event. Only the final text (before reason:"stop") is the real result.

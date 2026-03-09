@@ -45,13 +45,25 @@ class MockParser implements AgentOutputParser {
 		return event.slashCommands || null;
 	}
 
+	parseJsonObject(parsed: unknown): ParsedEvent | null {
+		if (!parsed || typeof parsed !== 'object') return null;
+		const data = parsed as Record<string, unknown>;
+		return {
+			type: 'text',
+			text: (data.text as string) || '',
+			raw: data,
+		};
+	}
+
 	detectErrorFromLine(_line: string): null {
-		// Mock implementation - always returns null (no error detected)
+		return null;
+	}
+
+	detectErrorFromParsed(_parsed: unknown): null {
 		return null;
 	}
 
 	detectErrorFromExit(_exitCode: number, _stderr: string, _stdout: string): null {
-		// Mock implementation - always returns null (no error detected)
 		return null;
 	}
 }
@@ -138,11 +150,13 @@ describe('agent-output-parser', () => {
 			const parser2: AgentOutputParser = {
 				agentId: 'claude-code' as ToolType,
 				parseJsonLine: () => null,
+				parseJsonObject: () => null,
 				isResultMessage: () => false,
 				extractSessionId: () => null,
 				extractUsage: () => null,
 				extractSlashCommands: () => null,
 				detectErrorFromLine: () => null,
+				detectErrorFromParsed: () => null,
 				detectErrorFromExit: () => null,
 			};
 			registerOutputParser(parser2);
@@ -210,11 +224,13 @@ describe('agent-output-parser', () => {
 			const parser2: AgentOutputParser = {
 				agentId: 'claude-code' as ToolType,
 				parseJsonLine: () => null,
+				parseJsonObject: () => null,
 				isResultMessage: () => false,
 				extractSessionId: () => null,
 				extractUsage: () => null,
 				extractSlashCommands: () => null,
 				detectErrorFromLine: () => null,
+				detectErrorFromParsed: () => null,
 				detectErrorFromExit: () => null,
 			};
 			registerOutputParser(parser2);

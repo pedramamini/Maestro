@@ -115,17 +115,14 @@ export class OpenCodeOutputParser implements AgentOutputParser {
 	readonly agentId: ToolType = 'opencode';
 
 	/**
-	 * Parse a single JSON line from OpenCode output
+	 * Parse a single JSON line from OpenCode output.
+	 * Delegates to parseJsonObject after JSON.parse.
 	 *
 	 * OpenCode message types (verified 2025-12-16):
 	 * - { type: 'step_start', sessionID, part: { type: 'step-start' } }
 	 * - { type: 'text', sessionID, part: { text, type: 'text' } }
 	 * - { type: 'tool_use', sessionID, part: { tool, state: { status, input, output }, type: 'tool' } }
 	 * - { type: 'step_finish', sessionID, part: { reason, tokens, type: 'step-finish' } }
-	 */
-	/**
-	 * Parse a single JSON line from OpenCode output.
-	 * Delegates to parseJsonObject after JSON.parse.
 	 */
 	parseJsonLine(line: string): ParsedEvent | null {
 		if (!line.trim()) {
