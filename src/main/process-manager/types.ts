@@ -111,6 +111,26 @@ export interface CommandResult {
 }
 
 /**
+ * Security event emitted by LLM Guard for input/output scans
+ */
+export interface SecurityEventData {
+	sessionId: string;
+	tabId?: string;
+	eventType: 'input_scan' | 'output_scan' | 'blocked' | 'warning' | 'inter_agent_scan';
+	findingTypes: string[];
+	findingCount: number;
+	action: 'none' | 'sanitized' | 'blocked' | 'warned';
+	originalLength: number;
+	sanitizedLength: number;
+	/** Group Chat ID (for inter-agent events only) */
+	groupChatId?: string;
+	/** Source agent name (for inter-agent events only) */
+	sourceAgent?: string;
+	/** Target agent name (for inter-agent events only) */
+	targetAgent?: string;
+}
+
+/**
  * Events emitted by ProcessManager
  */
 export interface ProcessManagerEvents {
@@ -125,6 +145,7 @@ export interface ProcessManagerEvents {
 	'tool-execution': (sessionId: string, tool: ToolExecution) => void;
 	'slash-commands': (sessionId: string, commands: unknown[]) => void;
 	'query-complete': (sessionId: string, data: QueryCompleteData) => void;
+	'security-event': (event: SecurityEventData) => void;
 }
 
 export interface ToolExecution {
