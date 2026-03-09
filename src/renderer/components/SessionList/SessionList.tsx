@@ -125,7 +125,7 @@ function SessionListInner(props: SessionListProps) {
 	const contextWarningRedThreshold = useSettingsStore(
 		(s) => s.contextManagementSettings.contextWarningRedThreshold
 	);
-	const llmGuardEnabled = useSettingsStore((s) => s.llmGuardSettings.enabled);
+	const llmGuardEnabled = useSettingsStore((s) => s.encoreFeatures.llmGuard);
 	const activeBatchSessionIds = useBatchStore(useShallow(selectActiveBatchSessionIds));
 	const groupChats = useGroupChatStore((s) => s.groupChats);
 	const activeGroupChatId = useGroupChatStore((s) => s.activeGroupChatId);

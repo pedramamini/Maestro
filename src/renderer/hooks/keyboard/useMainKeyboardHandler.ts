@@ -441,14 +441,7 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.setDirectorNotesOpen?.(true);
 				trackShortcut('directorNotes');
-			} else if (ctx.isShortcut(e, 'toggleLlmGuard')) {
-				e.preventDefault();
-				// Toggle LLM Guard enabled state
-				const current = ctx.llmGuardSettings?.enabled ?? false;
-				ctx.updateLlmGuardSettings?.({ enabled: !current });
-				ctx.setFlashNotification?.(current ? 'LLM Guard Disabled' : 'LLM Guard Enabled');
-				trackShortcut('toggleLlmGuard');
-			} else if (ctx.isShortcut(e, 'goToSecurity')) {
+			} else if (ctx.isShortcut(e, 'goToSecurity') && ctx.encoreFeatures?.llmGuard) {
 				e.preventDefault();
 				ctx.setRightPanelOpen(true);
 				ctx.handleSetActiveRightTab('security');
