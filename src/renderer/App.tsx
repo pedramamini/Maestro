@@ -144,6 +144,8 @@ import {
 	useInputMode,
 	// Live mode management (Tier 3B)
 	useLiveMode,
+	// Security toasts for LLM Guard events
+	useSecurityToasts,
 } from './hooks';
 import { useMainPanelProps, useSessionListProps, useRightPanelProps } from './hooks/props';
 import { useAgentListeners } from './hooks/agent/useAgentListeners';
@@ -464,6 +466,8 @@ function MaestroConsoleInner() {
 		setAutoScrollAiMode,
 		setSuppressWindowsWarning,
 		encoreFeatures,
+		llmGuardSettings,
+		updateLlmGuardSettings,
 	} = settings;
 
 	// Reset modal-open flags when their Encore Feature toggle is disabled
@@ -1494,6 +1498,9 @@ function MaestroConsoleInner() {
 	// Auto Run achievement tracking (progress intervals, peak usage stats)
 	useAutoRunAchievements({ activeBatchSessionIds });
 
+	// Security toast notifications for LLM Guard events
+	useSecurityToasts();
+
 	// Handler for switching to autorun tab - shows setup modal if no folder configured
 	const handleSetActiveRightTab = useCallback(
 		(tab: RightPanelTab) => {
@@ -2347,6 +2354,11 @@ function MaestroConsoleInner() {
 
 		// Unread agents filter toggle
 		toggleShowUnreadAgentsOnly: useUIStore.getState().toggleShowUnreadAgentsOnly,
+
+		// LLM Guard settings for toggle shortcut
+		llmGuardSettings,
+		updateLlmGuardSettings,
+		setFlashNotification,
 	};
 
 	// NOTE: File explorer effects (flat file list, pending jump path, scroll, keyboard nav) are
@@ -3027,6 +3039,7 @@ function MaestroConsoleInner() {
 					}
 					promptEnterToSend={enterToSendAI}
 					onPromptToggleEnterToSend={handlePromptToggleEnterToSend}
+					promptLlmGuardEnabled={llmGuardSettings?.enabled ?? false}
 					onCloseQueueBrowser={handleCloseQueueBrowser}
 					onRemoveQueueItem={handleRemoveQueueItem}
 					onSwitchQueueSession={handleSwitchQueueSession}
