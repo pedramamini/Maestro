@@ -889,7 +889,7 @@ function FileExplorerPanelInner(props: FileExplorerPanelProps) {
 				}
 				seenNames.add(normalizedName);
 
-				const fullPath = currentPath ? `${currentPath}/${normalizedName}` : normalizedName;
+				const fullPath = currentPath ? `${currentPath}/${node.name}` : node.name;
 
 				// Guard: skip duplicate paths to prevent React key collisions
 				if (seenPaths.has(fullPath)) {

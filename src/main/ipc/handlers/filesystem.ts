@@ -105,30 +105,26 @@ export function registerFilesystemHandlers(): void {
 			// Map remote entries to match local format (isFile derived from !isDirectory && !isSymlink)
 			// Include full path for recursive directory scanning (e.g., document graph)
 			// Use POSIX path joining for remote paths (always forward slashes)
-			return result.data!.map((entry) => {
-				const name = entry.name.normalize('NFC');
-				return {
-					name,
-					isDirectory: entry.isDirectory,
-					isFile: !entry.isDirectory && !entry.isSymlink,
-					path: dirPath.endsWith('/') ? `${dirPath}${name}` : `${dirPath}/${name}`,
-				};
-			});
+			return result.data!.map((entry) => ({
+				name: entry.name.normalize('NFC'),
+				isDirectory: entry.isDirectory,
+				isFile: !entry.isDirectory && !entry.isSymlink,
+				// Preserve raw filesystem name in path for correct remote operations
+				path: dirPath.endsWith('/') ? `${dirPath}${entry.name}` : `${dirPath}/${entry.name}`,
+			}));
 		}
 
 		// Local: use standard fs operations
 		const entries = await fs.readdir(dirPath, { withFileTypes: true });
 		// Convert Dirent objects to plain objects for IPC serialization
 		// Include full path for recursive directory scanning (e.g., document graph)
-		return entries.map((entry: any) => {
-			const name = entry.name.normalize('NFC');
-			return {
-				name,
-				isDirectory: entry.isDirectory(),
-				isFile: entry.isFile(),
-				path: path.join(dirPath, name),
-			};
-		});
+		return entries.map((entry: any) => ({
+			name: entry.name.normalize('NFC'),
+			isDirectory: entry.isDirectory(),
+			isFile: entry.isFile(),
+			// Preserve raw filesystem name in path for correct local operations
+			path: path.join(dirPath, entry.name),
+		}));
 	});
 
 	// Read file contents (supports SSH remote, with image base64 encoding)
