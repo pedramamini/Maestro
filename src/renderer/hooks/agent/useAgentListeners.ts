@@ -1211,6 +1211,10 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 												...tab,
 												logs: [...tab.logs, errorLogEntry],
 												agentError: isSessionNotFound ? undefined : agentError,
+												// Clear stale agentSessionId so the next prompt
+												// starts a fresh session instead of trying to
+												// --resume the deleted one (infinite loop).
+												...(isSessionNotFound ? { agentSessionId: undefined } : {}),
 											}
 										: tab
 								)
@@ -1220,6 +1224,8 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							return {
 								...s,
 								aiTabs: updatedAiTabs,
+								// Also clear session-level agentSessionId
+								agentSessionId: undefined,
 							};
 						}
 

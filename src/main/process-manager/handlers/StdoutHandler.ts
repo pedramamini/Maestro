@@ -306,14 +306,34 @@ export class StdoutHandler {
 			});
 		}
 
-		// Handle streaming text events (OpenCode, Codex reasoning)
-		if (event.type === 'text' && event.isPartial && event.text) {
-			logger.debug('[ProcessManager] Emitting thinking-chunk', 'ProcessManager', {
-				sessionId,
-				textLength: event.text.length,
-			});
-			this.emitter.emit('thinking-chunk', sessionId, event.text);
-			managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+		// Handle text events from agents.
+		// Two paths based on the partial flag:
+		//
+		// 1. Partial/delta events (isPartial === true):
+		//    Accumulate in streamedText for the result event to emit later.
+		//    Also emit as thinking-chunk for live streaming display.
+		//    Used by: Claude Code, OpenCode, Gemini CLI (delta: true).
+		//
+		// 2. Complete/non-delta events (isPartial === false):
+		//    Emit immediately as data via emitDataBuffered. These are full message
+		//    blocks (e.g., Gemini CLI messages with delta: false) that should display
+		//    right away rather than waiting for a result event.
+		if (event.type === 'text' && event.text) {
+			if (event.isPartial) {
+				logger.debug('[ProcessManager] Emitting thinking-chunk (partial)', 'ProcessManager', {
+					sessionId,
+					textLength: event.text.length,
+				});
+				this.emitter.emit('thinking-chunk', sessionId, event.text);
+				managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+			} else {
+				// Complete message block — emit immediately as data
+				logger.debug('[ProcessManager] Emitting complete text event as data', 'ProcessManager', {
+					sessionId,
+					textLength: event.text.length,
+				});
+				this.bufferManager.emitDataBuffered(sessionId, event.text);
+			}
 		}
 
 		// Handle tool execution events (OpenCode, Codex)
