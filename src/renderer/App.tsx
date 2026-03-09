@@ -1045,6 +1045,16 @@ function MaestroConsoleInner() {
 		[activeSession?.inputMode, activeSession?.shellCwd, activeSession?.cwd]
 	);
 
+	// Auto-focus the AI input box when switching from terminal to AI mode
+	const prevInputModeRef = useRef(activeSession?.inputMode);
+	useEffect(() => {
+		const currentMode = activeSession?.inputMode;
+		if (prevInputModeRef.current === 'terminal' && currentMode === 'ai') {
+			setTimeout(() => inputRef.current?.focus(), 0);
+		}
+		prevInputModeRef.current = currentMode;
+	}, [activeSession?.inputMode]);
+
 	// PERF: Memoize sessions for NewInstanceModal validation (only recompute when modal is open)
 	// This prevents re-renders of the modal's validation logic on every session state change
 	const sessionsForValidation = useMemo(
