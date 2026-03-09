@@ -115,6 +115,11 @@
 				{
 					"from": "src/prompts/openspec",
 					"to": "prompts/openspec"
+				},
+				{
+					"from": "src/prompts",
+					"to": "prompts/core",
+					"filter": ["*.md"]
 				}
 			]
 		},
@@ -147,6 +152,11 @@
 				{
 					"from": "src/prompts/openspec",
 					"to": "prompts/openspec"
+				},
+				{
+					"from": "src/prompts",
+					"to": "prompts/core",
+					"filter": ["*.md"]
 				}
 			]
 		},
@@ -171,6 +181,11 @@
 				{
 					"from": "src/prompts/openspec",
 					"to": "prompts/openspec"
+				},
+				{
+					"from": "src/prompts",
+					"to": "prompts/core",
+					"filter": ["*.md"]
 				}
 			]
 		},
