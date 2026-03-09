@@ -1288,17 +1288,11 @@ export const TerminalOutput = memo(
 		}, [theme]);
 
 		// PERF: Memoize active tab lookup to avoid O(n) .find() on every render
-		const activeTab = useMemo(
-			() => getActiveTab(session),
-			[session.aiTabs, session.activeTabId]
-		);
+		const activeTab = useMemo(() => getActiveTab(session), [session.aiTabs, session.activeTabId]);
 
 		// PERF: Memoize activeLogs to provide stable reference for collapsedLogs dependency
 		// TerminalOutput only handles AI mode; terminal mode renders via TerminalView
-		const activeLogs = useMemo(
-			(): LogEntry[] => activeTab?.logs ?? [],
-			[activeTab?.logs]
-		);
+		const activeLogs = useMemo((): LogEntry[] => activeTab?.logs ?? [], [activeTab?.logs]);
 
 		// In AI mode, collapse consecutive non-user entries into single response blocks
 		// This provides a cleaner view where each user message gets one response
@@ -1413,8 +1407,6 @@ export const TerminalOutput = memo(
 		// Restore read state when switching tabs
 		useEffect(() => {
 			if (!activeTabId) {
-				setHasNewMessages(false);
-				setNewMessageCount(0);
 				setIsAtBottom(true);
 				lastLogCountRef.current = filteredLogs.length;
 				return;
@@ -1487,8 +1479,7 @@ export const TerminalOutput = memo(
 			if (!container) return;
 
 			const shouldAutoScroll = () =>
-				(autoScrollAiMode && !autoScrollPaused) ||
-				isAtBottomRef.current;
+				(autoScrollAiMode && !autoScrollPaused) || isAtBottomRef.current;
 
 			const scrollToBottom = () => {
 				if (!scrollContainerRef.current) return;
@@ -1740,78 +1731,18 @@ export const TerminalOutput = memo(
 					))}
 
 					{/* Queued items section - filtered to active tab */}
-					{session.executionQueue &&
-						session.executionQueue.length > 0 && (
-							<QueuedItemsList
-								executionQueue={session.executionQueue}
-								theme={theme}
-								onRemoveQueuedItem={onRemoveQueuedItem}
-								activeTabId={activeTabId || undefined}
-							/>
-						)}
+					{session.executionQueue && session.executionQueue.length > 0 && (
+						<QueuedItemsList
+							executionQueue={session.executionQueue}
+							theme={theme}
+							onRemoveQueuedItem={onRemoveQueuedItem}
+							activeTabId={activeTabId || undefined}
+						/>
+					)}
 
 					{/* End ref for scrolling - always rendered so Cmd+Shift+J works even when busy */}
 					<div ref={logsEndRef} />
 				</div>
-
-				{/* Auto-scroll toggle — positioned opposite AI response side (AI mode only) */}
-				{/* Visible when: has content AND (not at bottom (dimmed, click to pin) OR pinned at bottom (accent, click to unpin)) */}
-				{setAutoScrollAiMode &&
-					filteredLogs.length > 0 &&
-					(!isAtBottom || isAutoScrollActive) && (
-						<button
-							onClick={() => {
-								if (isAutoScrollActive && isAtBottom) {
-									// Currently pinned at bottom — unpin
-									setAutoScrollAiMode(false);
-								} else {
-									// Not pinned — jump to bottom and pin
-									setAutoScrollPaused(false);
-									setAutoScrollAiMode(true);
-									setHasNewMessages(false);
-									setNewMessageCount(0);
-									if (scrollContainerRef.current) {
-										scrollContainerRef.current.scrollTo({
-											top: scrollContainerRef.current.scrollHeight,
-											behavior: 'smooth',
-										});
-									}
-								}
-							}}
-							className={`absolute bottom-4 ${userMessageAlignment === 'right' ? 'left-6' : 'right-6'} flex items-center gap-2 px-3 py-2 rounded-full shadow-lg transition-all hover:scale-105 z-20 outline-none`}
-							style={{
-								backgroundColor: isAutoScrollActive
-									? theme.colors.accent
-									: hasNewMessages
-										? theme.colors.accent
-										: theme.colors.bgSidebar,
-								color: isAutoScrollActive
-									? theme.colors.accentForeground
-									: hasNewMessages
-										? theme.colors.accentForeground
-										: theme.colors.textDim,
-								border: `1px solid ${isAutoScrollActive || hasNewMessages ? 'transparent' : theme.colors.border}`,
-								animation:
-									hasNewMessages && !isAutoScrollActive
-										? 'pulse 2s cubic-bezier(0.4, 0, 0.6, 1) infinite'
-										: undefined,
-							}}
-							title={
-								isAutoScrollActive
-									? 'Auto-scroll ON (click to unpin)'
-									: hasNewMessages
-										? 'New messages (click to pin to bottom)'
-										: 'Scroll to bottom (click to pin)'
-							}
-						>
-							<ArrowDown className="w-4 h-4" />
-							{newMessageCount > 0 && !isAutoScrollActive && (
-								<span className="text-xs font-bold">
-									{newMessageCount > 99 ? '99+' : newMessageCount}
-								</span>
-							)}
-						</button>
-					)}
 
 				{/* Copied to Clipboard Notification */}
 				{showCopiedNotification && (

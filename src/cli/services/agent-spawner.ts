@@ -355,7 +355,7 @@ async function spawnJsonLineAgent(
 	cwd: string,
 	prompt: string,
 	agentSessionId?: string,
-	readOnlyMode?: boolean
+	_readOnlyMode?: boolean
 ): Promise<AgentResult> {
 	return new Promise((resolve) => {
 		const env = buildExpandedEnv();
@@ -490,7 +490,6 @@ export async function spawnAgent(
 	options?: SpawnAgentOptions
 ): Promise<AgentResult> {
 	const readOnly = options?.readOnlyMode;
-
 
 	if (toolType === 'claude-code') {
 		return spawnClaudeAgent(cwd, prompt, agentSessionId, readOnly);

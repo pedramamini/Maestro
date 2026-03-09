@@ -21,7 +21,12 @@ import { Eye, Edit, ChevronDown, ChevronRight, X, Loader2, FileText, Check } fro
 import type { Theme } from '../../types';
 import type { GeneratedDocument } from '../Wizard/WizardContext';
 import { AustinFactsDisplay } from './AustinFactsDisplay';
+import { MermaidRenderer } from '../MermaidRenderer';
 import { formatSize, formatElapsedTime } from '../../../shared/formatters';
+import { formatShortcutKeys } from '../../utils/shortcutFormatter';
+import { useClickOutside } from '../../hooks/ui/useClickOutside';
+
+const REMARK_PLUGINS = [remarkGfm];
 
 /**
  * Props for DocumentGenerationView

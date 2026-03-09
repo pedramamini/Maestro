@@ -6,8 +6,19 @@
  * Usage & Stats configuration (stats collection, time ranges, WakaTime integration).
  */
 
-import { useState, useEffect, useCallback } from 'react';
-import { Clapperboard, ChevronDown, Settings, Check, Database, Music, Lock, Plus, X, Zap, Timer, Key, Trash2 } from 'lucide-react';
+import { useState } from 'react';
+import {
+	Clapperboard,
+	ChevronDown,
+	Settings,
+	Check,
+	Database,
+	Music,
+	Lock,
+	Plus,
+	X,
+	Zap,
+} from 'lucide-react';
 import { useSettings } from '../../../hooks';
 import { useAgentConfiguration } from '../../../hooks/agent/useAgentConfiguration';
 import type { Theme, AgentConfig, ToolType } from '../../../types';
@@ -29,130 +40,11 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 		setDirectorNotesSettings,
 		symphonyRegistryUrls,
 		setSymphonyRegistryUrls,
-		// Stats
-		statsCollectionEnabled,
-		setStatsCollectionEnabled,
-		defaultStatsTimeRange,
-		setDefaultStatsTimeRange,
-		// WakaTime
-		wakatimeEnabled,
-		setWakatimeEnabled,
-		wakatimeApiKey,
-		setWakatimeApiKey,
-		wakatimeDetailedTracking,
-		setWakatimeDetailedTracking,
 	} = useSettings();
-
-	// Stats data management state
-	const [statsDbSize, setStatsDbSize] = useState<number | null>(null);
-	const [statsEarliestDate, setStatsEarliestDate] = useState<string | null>(null);
-	const [statsClearing, setStatsClearing] = useState(false);
-	const [statsClearResult, setStatsClearResult] = useState<{
-		success: boolean;
-		deletedQueryEvents: number;
-		deletedAutoRunSessions: number;
-		deletedAutoRunTasks: number;
-		error?: string;
-	} | null>(null);
-
-	// WakaTime CLI check and API key validation state
-	const [wakatimeCliStatus, setWakatimeCliStatus] = useState<{
-		available: boolean;
-		version?: string;
-	} | null>(null);
-	const [wakatimeKeyValid, setWakatimeKeyValid] = useState<boolean | null>(null);
-	const [wakatimeKeyValidating, setWakatimeKeyValidating] = useState(false);
-	const handleWakatimeApiKeyChange = useCallback(
-		(value: string) => {
-			setWakatimeApiKey(value);
-			setWakatimeKeyValid(null);
-		},
-		[setWakatimeApiKey]
-	);
 
 	// Symphony registry URL management
 	const [newRegistryUrl, setNewRegistryUrl] = useState('');
 	const [registryUrlError, setRegistryUrlError] = useState<string | null>(null);
-
-	// Check WakaTime CLI availability when section renders or toggle is enabled
-	useEffect(() => {
-		if (!isOpen || !wakatimeEnabled) return;
-		let cancelled = false;
-		let retryTimer: ReturnType<typeof setTimeout> | null = null;
-
-		window.maestro.wakatime
-			.checkCli()
-			.then((status) => {
-				if (cancelled) return;
-				setWakatimeCliStatus(status);
-				if (!status.available) {
-					retryTimer = setTimeout(() => {
-						if (!cancelled) {
-							window.maestro.wakatime
-								.checkCli()
-								.then((retryStatus) => {
-									if (!cancelled) setWakatimeCliStatus(retryStatus);
-								})
-								.catch(() => {
-									if (!cancelled) setWakatimeCliStatus({ available: false });
-								});
-						}
-					}, 3000);
-				}
-			})
-			.catch(() => {
-				if (cancelled) return;
-				setWakatimeCliStatus({ available: false });
-				retryTimer = setTimeout(() => {
-					if (!cancelled) {
-						window.maestro.wakatime
-							.checkCli()
-							.then((retryStatus) => {
-								if (!cancelled) setWakatimeCliStatus(retryStatus);
-							})
-							.catch(() => {
-								if (!cancelled) setWakatimeCliStatus({ available: false });
-							});
-					}
-				}, 3000);
-			});
-
-		return () => {
-			cancelled = true;
-			if (retryTimer) clearTimeout(retryTimer);
-		};
-	}, [isOpen, wakatimeEnabled]);
-
-	// Load stats database size and earliest timestamp when tab opens
-	useEffect(() => {
-		if (!isOpen) return;
-
-		window.maestro.stats
-			.getDatabaseSize()
-			.then((size) => {
-				setStatsDbSize(size);
-			})
-			.catch((err) => {
-				console.error('Failed to load stats database size:', err);
-			});
-
-		window.maestro.stats
-			.getEarliestTimestamp()
-			.then((timestamp) => {
-				if (timestamp) {
-					const date = new Date(timestamp);
-					const formatted = date.toISOString().split('T')[0];
-					setStatsEarliestDate(formatted);
-				} else {
-					setStatsEarliestDate(null);
-				}
-			})
-			.catch((err) => {
-				console.error('Failed to load earliest stats timestamp:', err);
-			});
-
-		setStatsClearResult(null);
-	}, [isOpen]);
 
 	const canonicalizeUrl = (raw: string): string => {
 		const u = new URL(raw.trim());
@@ -183,10 +75,16 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 				setRegistryUrlError('This is the default registry URL');
 				return;
 			}
-		} catch { /* default URL should always parse */ }
+		} catch {
+			/* default URL should always parse */
+		}
 		const existing = new Set(
 			symphonyRegistryUrls.map((u) => {
-				try { return canonicalizeUrl(u); } catch { return u.trim(); }
+				try {
+					return canonicalizeUrl(u);
+				} catch {
+					return u.trim();
+				}
 			})
 		);
 		if (existing.has(canonical)) {
@@ -259,9 +157,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.usageStats ? theme.colors.accent : theme.colors.border,
-					backgroundColor: encoreFeatures.usageStats
-						? `${theme.colors.accent}08`
-						: 'transparent',
+					backgroundColor: encoreFeatures.usageStats ? `${theme.colors.accent}08` : 'transparent',
 				}}
 			>
 				<button
@@ -300,9 +196,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 						<div
 							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
 							style={{
-								transform: encoreFeatures.usageStats
-									? 'translateX(22px)'
-									: 'translateX(2px)',
+								transform: encoreFeatures.usageStats ? 'translateX(22px)' : 'translateX(2px)',
 							}}
 						/>
 					</div>
@@ -319,8 +213,8 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 							</p>
 						</div>
 						<p className="text-xs" style={{ color: theme.colors.textDim }}>
-							Track queries and Auto Run sessions for the dashboard. Configure collection
-							and time range settings in the General tab.
+							Track queries and Auto Run sessions for the dashboard. Configure collection and time
+							range settings in the General tab.
 						</p>
 					</div>
 				)}
@@ -331,9 +225,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 				className="rounded-lg border"
 				style={{
 					borderColor: encoreFeatures.symphony ? theme.colors.accent : theme.colors.border,
-					backgroundColor: encoreFeatures.symphony
-						? `${theme.colors.accent}08`
-						: 'transparent',
+					backgroundColor: encoreFeatures.symphony ? `${theme.colors.accent}08` : 'transparent',
 				}}
 			>
 				<button
@@ -364,17 +256,13 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 					<div
 						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.symphony ? '' : 'opacity-50'}`}
 						style={{
-							backgroundColor: encoreFeatures.symphony
-								? theme.colors.accent
-								: theme.colors.border,
+							backgroundColor: encoreFeatures.symphony ? theme.colors.accent : theme.colors.border,
 						}}
 					>
 						<div
 							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
 							style={{
-								transform: encoreFeatures.symphony
-									? 'translateX(22px)'
-									: 'translateX(2px)',
+								transform: encoreFeatures.symphony ? 'translateX(22px)' : 'translateX(2px)',
 							}}
 						/>
 					</div>
@@ -393,8 +281,8 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 								Registry Sources
 							</label>
 							<p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
-								Repositories are loaded from all configured registry URLs. The default
-								registry cannot be removed.
+								Repositories are loaded from all configured registry URLs. The default registry
+								cannot be removed.
 							</p>
 
 							{/* Default URL (immutable) */}
@@ -405,14 +293,8 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 									border: `1px solid ${theme.colors.border}`,
 								}}
 							>
-								<Lock
-									className="w-3 h-3 flex-shrink-0"
-									style={{ color: theme.colors.textDim }}
-								/>
-								<span
-									className="truncate flex-1"
-									style={{ color: theme.colors.textMain }}
-								>
+								<Lock className="w-3 h-3 flex-shrink-0" style={{ color: theme.colors.textDim }} />
+								<span className="truncate flex-1" style={{ color: theme.colors.textMain }}>
 									{SYMPHONY_REGISTRY_URL}
 								</span>
 								<span
@@ -436,18 +318,13 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 										border: `1px solid ${theme.colors.border}`,
 									}}
 								>
-									<span
-										className="truncate flex-1"
-										style={{ color: theme.colors.textMain }}
-									>
+									<span className="truncate flex-1" style={{ color: theme.colors.textMain }}>
 										{url}
 									</span>
 									<button
 										type="button"
 										onClick={() =>
-											setSymphonyRegistryUrls(
-												symphonyRegistryUrls.filter((u) => u !== url)
-											)
+											setSymphonyRegistryUrls(symphonyRegistryUrls.filter((u) => u !== url))
 										}
 										className="p-0.5 rounded hover:bg-white/10 transition-colors flex-shrink-0"
 										style={{ color: theme.colors.error }}
@@ -478,9 +355,7 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 										className="w-full px-3 py-2 rounded text-sm font-mono outline-none"
 										style={{
 											backgroundColor: theme.colors.bgActivity,
-											borderColor: registryUrlError
-												? theme.colors.error
-												: theme.colors.border,
+											borderColor: registryUrlError ? theme.colors.error : theme.colors.border,
 											border: '1px solid',
 											color: theme.colors.textMain,
 										}}
@@ -553,23 +428,23 @@ export function EncoreTab({ theme, isOpen }: EncoreTabProps) {
 								</span>
 							</div>
 							<div className="text-xs mt-0.5" style={{ color: theme.colors.textDim }}>
-								Event-driven automation — trigger agent prompts on timers, file changes,
-								and agent completions
+								Event-driven automation — trigger agent prompts on timers, file changes, and agent
+								completions
 							</div>
 						</div>
 					</div>
 					<div
 						className={`relative w-10 h-5 rounded-full transition-colors ${encoreFeatures.maestroCue ? '' : 'opacity-50'}`}
 						style={{
-							backgroundColor: encoreFeatures.maestroCue ? theme.colors.accent : theme.colors.border,
+							backgroundColor: encoreFeatures.maestroCue
+								? theme.colors.accent
+								: theme.colors.border,
 						}}
 					>
 						<div
 							className="absolute top-0.5 w-4 h-4 rounded-full bg-white transition-transform"
 							style={{
-								transform: encoreFeatures.maestroCue
-									? 'translateX(22px)'
-									: 'translateX(2px)',
+								transform: encoreFeatures.maestroCue ? 'translateX(22px)' : 'translateX(2px)',
 							}}
 						/>
 					</div>

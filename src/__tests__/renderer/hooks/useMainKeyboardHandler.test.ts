@@ -469,7 +469,8 @@ describe('useMainKeyboardHandler', () => {
 			vi.useFakeTimers();
 			const { result } = renderHook(() => useMainKeyboardHandler());
 
-			const mockHandleOpenTerminalTab = vi.fn();			const mockActiveSession = {
+			const mockHandleOpenTerminalTab = vi.fn();
+			const mockActiveSession = {
 				id: 'test-session',
 				name: 'Test',
 				inputMode: 'ai',
@@ -485,7 +486,8 @@ describe('useMainKeyboardHandler', () => {
 				isShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'toggleMode',
 				activeSessionId: 'test-session',
 				activeSession: mockActiveSession,
-				handleOpenTerminalTab: mockHandleOpenTerminalTab,			});
+				handleOpenTerminalTab: mockHandleOpenTerminalTab,
+			});
 
 			act(() => {
 				window.dispatchEvent(
@@ -498,7 +500,8 @@ describe('useMainKeyboardHandler', () => {
 			});
 
 			// Cmd+J should open a new terminal tab even when file preview overlay is open
-			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();		});
+			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();
+		});
 
 		it('should allow tab cycle shortcut with brace characters when layers are open', () => {
 			// On macOS, Shift+[ produces '{' and Shift+] produces '}'
@@ -829,7 +832,8 @@ describe('useMainKeyboardHandler', () => {
 			vi.useFakeTimers();
 			const { result } = renderHook(() => useMainKeyboardHandler());
 
-			const mockHandleOpenTerminalTab = vi.fn();			const regularTab = {
+			const mockHandleOpenTerminalTab = vi.fn();
+			const regularTab = {
 				id: 'tab-1',
 				name: 'Regular Tab',
 				logs: [],
@@ -845,7 +849,8 @@ describe('useMainKeyboardHandler', () => {
 					inputMode: 'ai',
 				},
 				activeSessionId: 'session-1',
-				handleOpenTerminalTab: mockHandleOpenTerminalTab,			});
+				handleOpenTerminalTab: mockHandleOpenTerminalTab,
+			});
 
 			act(() => {
 				window.dispatchEvent(
@@ -858,13 +863,15 @@ describe('useMainKeyboardHandler', () => {
 			});
 
 			// handleOpenTerminalTab SHOULD be called for regular tabs
-			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();		});
+			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();
+		});
 
 		it('should allow toggleMode when wizardState exists but isActive is false', () => {
 			vi.useFakeTimers();
 			const { result } = renderHook(() => useMainKeyboardHandler());
 
-			const mockHandleOpenTerminalTab = vi.fn();			const completedWizardTab = {
+			const mockHandleOpenTerminalTab = vi.fn();
+			const completedWizardTab = {
 				id: 'tab-1',
 				name: 'Completed Wizard',
 				wizardState: { isActive: false }, // Wizard completed
@@ -880,7 +887,8 @@ describe('useMainKeyboardHandler', () => {
 					inputMode: 'ai',
 				},
 				activeSessionId: 'session-1',
-				handleOpenTerminalTab: mockHandleOpenTerminalTab,			});
+				handleOpenTerminalTab: mockHandleOpenTerminalTab,
+			});
 
 			act(() => {
 				window.dispatchEvent(
@@ -893,7 +901,8 @@ describe('useMainKeyboardHandler', () => {
 			});
 
 			// handleOpenTerminalTab SHOULD be called when wizard is not active
-			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();		});
+			expect(mockHandleOpenTerminalTab).toHaveBeenCalled();
+		});
 	});
 
 	describe('unified tab shortcuts - file tab vs AI tab context', () => {
@@ -1559,7 +1568,7 @@ describe('useMainKeyboardHandler', () => {
 		});
 
 		describe('tab shortcuts in terminal mode', () => {
-			it('Cmd+T creates a new AI tab even in terminal mode', () => {
+			it('Cmd+T does NOT create a new AI tab in terminal mode (AI mode only)', () => {
 				const { result } = renderHook(() => useMainKeyboardHandler());
 
 				const mockCreateTab = vi.fn();
@@ -1590,8 +1599,8 @@ describe('useMainKeyboardHandler', () => {
 					);
 				});
 
-				// Cmd+T creates a new AI tab from terminal mode
-				expect(mockCreateTab).toHaveBeenCalledTimes(1);
+				// Tab shortcuts (including Cmd+T) are gated to AI mode only
+				expect(mockCreateTab).not.toHaveBeenCalled();
 			});
 		});
 

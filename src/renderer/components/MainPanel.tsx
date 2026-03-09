@@ -26,7 +26,12 @@ import {
 } from 'lucide-react';
 import { LogViewer } from './LogViewer';
 import { TerminalOutput } from './TerminalOutput';
-import { TerminalView, TerminalViewHandle, createTabStateChangeHandler, createTabPidChangeHandler } from './TerminalView';
+import {
+	TerminalView,
+	TerminalViewHandle,
+	createTabStateChangeHandler,
+	createTabPidChangeHandler,
+} from './TerminalView';
 import { InputArea } from './InputArea';
 import { FilePreview, FilePreviewHandle } from './FilePreview';
 import { ErrorBoundary } from './ErrorBoundary';
@@ -429,7 +434,7 @@ export const MainPanel = React.memo(
 		const defaultShell = useSettingsStore((s) => s.defaultShell);
 		const fontSize = useSettingsStore((s) => s.fontSize);
 		const enterToSendAI = useSettingsStore((s) => s.enterToSendAI);
-const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
+		const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 		const autoScrollAiMode = useSettingsStore((s) => s.autoScrollAiMode);
 		const userMessageAlignment = useSettingsStore((s) => s.userMessageAlignment);
 		const shortcuts = useSettingsStore((s) => s.shortcuts);
@@ -497,7 +502,7 @@ const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 				mountedTerminalSessionsRef.current.delete(activeSession.id);
 				setMountedTerminalSessionIds((prev) => prev.filter((id) => id !== activeSession.id));
 			}
-		}, [activeSession?.id, activeSession?.terminalTabs?.length]); // eslint-disable-line react-hooks/exhaustive-deps
+		}, [activeSession?.id, activeSession?.terminalTabs?.length]);
 
 		// Evict sessions that were deleted entirely from the store.
 		useEffect(() => {
@@ -506,9 +511,9 @@ const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 				const filtered = prev.filter((id) => liveIds.has(id));
 				if (filtered.length !== prev.length) {
 					// Also clean up the snapshot ref.
-					prev.filter((id) => !liveIds.has(id)).forEach((id) =>
-						mountedTerminalSessionsRef.current.delete(id)
-					);
+					prev
+						.filter((id) => !liveIds.has(id))
+						.forEach((id) => mountedTerminalSessionsRef.current.delete(id));
 					return filtered;
 				}
 				return prev; // Same reference → no re-render
@@ -1638,322 +1643,327 @@ const chatRawTextMode = useSettingsStore((s) => s.chatRawTextMode);
 						     only the content area. Terminal sessions are mounted here regardless of whether
 						     file preview, AI output, or terminal is active. */}
 						<div className="flex-1 min-h-0 overflow-hidden relative flex flex-col">
-						{/* Skip rendering when loading remote file - loading state takes over entire main area */}
-						{activeSession.inputMode === 'ai' &&
-						((filePreviewLoading && !activeFileTabId) || activeFileTab?.isLoading) ? (
-							<div
-								className="flex-1 flex items-center justify-center"
-								style={{ backgroundColor: theme.colors.bgMain }}
-							>
-								<div className="flex flex-col items-center gap-3">
-									<Loader2
-										className="w-8 h-8 animate-spin"
-										style={{ color: theme.colors.accent }}
+							{/* Skip rendering when loading remote file - loading state takes over entire main area */}
+							{activeSession.inputMode === 'ai' &&
+							((filePreviewLoading && !activeFileTabId) || activeFileTab?.isLoading) ? (
+								<div
+									className="flex-1 flex items-center justify-center"
+									style={{ backgroundColor: theme.colors.bgMain }}
+								>
+									<div className="flex flex-col items-center gap-3">
+										<Loader2
+											className="w-8 h-8 animate-spin"
+											style={{ color: theme.colors.accent }}
+										/>
+										<div className="text-center">
+											<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
+												Loading{' '}
+												{activeFileTab
+													? `${activeFileTab.name}${activeFileTab.extension}`
+													: filePreviewLoading?.name}
+											</div>
+											<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
+												Fetching from remote server...
+											</div>
+										</div>
+									</div>
+								</div>
+							) : activeSession.inputMode === 'ai' &&
+							  activeFileTabId &&
+							  activeFileTab &&
+							  memoizedFilePreviewFile ? (
+								// New file tab system - FilePreview rendered as tab content (no close button, tab handles closing)
+								// Note: All props are memoized to prevent unnecessary re-renders that cause image flickering
+								<div
+									ref={filePreviewContainerRef}
+									tabIndex={-1}
+									className="flex-1 overflow-hidden outline-none"
+								>
+									<FilePreview
+										ref={filePreviewRef}
+										file={memoizedFilePreviewFile}
+										onClose={handleFilePreviewClose}
+										isTabMode={true}
+										theme={theme}
+										markdownEditMode={activeFileTab.editMode}
+										setMarkdownEditMode={handleFilePreviewEditModeChange}
+										onSave={handleFilePreviewSave}
+										shortcuts={shortcuts}
+										fileTree={props.fileTree}
+										cwd={filePreviewCwd}
+										onFileClick={props.onFileClick}
+										// Per-tab navigation history for breadcrumb navigation
+										canGoBack={props.canGoBack}
+										canGoForward={props.canGoForward}
+										onNavigateBack={props.onNavigateBack}
+										onNavigateForward={props.onNavigateForward}
+										backHistory={props.backHistory}
+										forwardHistory={props.forwardHistory}
+										currentHistoryIndex={props.currentHistoryIndex}
+										onNavigateToIndex={props.onNavigateToIndex}
+										onOpenFuzzySearch={props.onOpenFuzzySearch}
+										onShortcutUsed={props.onShortcutUsed}
+										ghCliAvailable={props.ghCliAvailable}
+										onPublishGist={props.onPublishGist}
+										hasGist={props.hasGist}
+										onOpenInGraph={props.onOpenInGraph}
+										sshRemoteId={filePreviewSshRemoteId}
+										// Pass external edit content for persistence across tab switches
+										externalEditContent={activeFileTab.editContent}
+										onEditContentChange={handleFilePreviewEditContentChange}
+										// Pass scroll position props for persistence across tab switches
+										initialScrollTop={activeFileTab.scrollTop}
+										onScrollPositionChange={handleFilePreviewScrollPositionChange}
+										// Pass search query props for persistence across tab switches
+										initialSearchQuery={activeFileTab.searchQuery}
+										onSearchQueryChange={handleFilePreviewSearchQueryChange}
+										// File change detection
+										lastModified={activeFileTab.lastModified}
+										onReloadFile={handleFilePreviewReload}
 									/>
-									<div className="text-center">
-										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Loading{' '}
-											{activeFileTab
-												? `${activeFileTab.name}${activeFileTab.extension}`
-												: filePreviewLoading?.name}
-										</div>
-										<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-											Fetching from remote server...
-										</div>
-									</div>
 								</div>
-							</div>
-						) : activeSession.inputMode === 'ai' &&
-						  activeFileTabId &&
-						  activeFileTab &&
-						  memoizedFilePreviewFile ? (
-							// New file tab system - FilePreview rendered as tab content (no close button, tab handles closing)
-							// Note: All props are memoized to prevent unnecessary re-renders that cause image flickering
-							<div
-								ref={filePreviewContainerRef}
-								tabIndex={-1}
-								className="flex-1 overflow-hidden outline-none"
-							>
-								<FilePreview
-									ref={filePreviewRef}
-									file={memoizedFilePreviewFile}
-									onClose={handleFilePreviewClose}
-									isTabMode={true}
-									theme={theme}
-									markdownEditMode={activeFileTab.editMode}
-									setMarkdownEditMode={handleFilePreviewEditModeChange}
-									onSave={handleFilePreviewSave}
-									shortcuts={shortcuts}
-									fileTree={props.fileTree}
-									cwd={filePreviewCwd}
-									onFileClick={props.onFileClick}
-									// Per-tab navigation history for breadcrumb navigation
-									canGoBack={props.canGoBack}
-									canGoForward={props.canGoForward}
-									onNavigateBack={props.onNavigateBack}
-									onNavigateForward={props.onNavigateForward}
-									backHistory={props.backHistory}
-									forwardHistory={props.forwardHistory}
-									currentHistoryIndex={props.currentHistoryIndex}
-									onNavigateToIndex={props.onNavigateToIndex}
-									onOpenFuzzySearch={props.onOpenFuzzySearch}
-									onShortcutUsed={props.onShortcutUsed}
-									ghCliAvailable={props.ghCliAvailable}
-									onPublishGist={props.onPublishGist}
-									hasGist={props.hasGist}
-									onOpenInGraph={props.onOpenInGraph}
-									sshRemoteId={filePreviewSshRemoteId}
-									// Pass external edit content for persistence across tab switches
-									externalEditContent={activeFileTab.editContent}
-									onEditContentChange={handleFilePreviewEditContentChange}
-									// Pass scroll position props for persistence across tab switches
-									initialScrollTop={activeFileTab.scrollTop}
-									onScrollPositionChange={handleFilePreviewScrollPositionChange}
-									// Pass search query props for persistence across tab switches
-									initialSearchQuery={activeFileTab.searchQuery}
-									onSearchQueryChange={handleFilePreviewSearchQueryChange}
-									// File change detection
-									lastModified={activeFileTab.lastModified}
-									onReloadFile={handleFilePreviewReload}
-								/>
-							</div>
-						) : (
-							<>
-								{/* Logs Area - Show DocumentGenerationView while generating OR when docs exist (waiting for user to click Exit Wizard), WizardConversationView when wizard is active, otherwise show TerminalOutput */}
-								{/* Note: wizardState is per-tab (stored on activeTab), not per-session */}
-								{/* User clicks "Exit Wizard" button in DocumentGenerationView which calls onWizardComplete to convert tab to normal session */}
-								<div className="flex-1 overflow-hidden flex flex-col relative" data-tour="main-terminal">
-									{activeSession.inputMode === 'ai' &&
-									(activeTab?.wizardState?.isGeneratingDocs ||
-										(activeTab?.wizardState?.generatedDocuments?.length ?? 0) > 0) ? (
-										<DocumentGenerationView
-											key={`wizard-gen-${activeSession.id}-${activeSession.activeTabId}`}
-											theme={theme}
-											documents={activeTab?.wizardState?.generatedDocuments ?? []}
-											currentDocumentIndex={activeTab?.wizardState?.currentDocumentIndex ?? 0}
-											isGenerating={activeTab?.wizardState?.isGeneratingDocs ?? false}
-											streamingContent={activeTab?.wizardState?.streamingContent}
-											onComplete={props.onWizardComplete || (() => {})}
-											onDocumentSelect={props.onWizardDocumentSelect || (() => {})}
-											folderPath={
-												activeTab?.wizardState?.subfolderPath ??
-												activeTab?.wizardState?.autoRunFolderPath
-											}
-											onContentChange={props.onWizardContentChange}
-											progressMessage={activeTab?.wizardState?.progressMessage}
-											currentGeneratingIndex={activeTab?.wizardState?.currentGeneratingIndex}
-											totalDocuments={activeTab?.wizardState?.totalDocuments}
-											onCancel={props.onWizardCancelGeneration}
-											subfolderName={activeTab?.wizardState?.subfolderName}
-										/>
-									) : activeSession.inputMode === 'ai' && activeTab?.wizardState?.isActive ? (
-										<WizardConversationView
-											key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
-											theme={theme}
-											conversationHistory={activeTab.wizardState.conversationHistory}
-											isLoading={activeTab.wizardState.isWaiting ?? false}
-											agentName={activeSession.name}
-											confidence={activeTab.wizardState.confidence}
-											ready={activeTab.wizardState.ready}
-											onLetsGo={props.onWizardLetsGo}
-											error={activeTab.wizardState.error}
-											onRetry={props.onWizardRetry}
-											onClearError={props.onWizardClearError}
-											showThinking={activeTab.wizardState.showWizardThinking ?? false}
-											thinkingContent={activeTab.wizardState.thinkingContent ?? ''}
-											toolExecutions={activeTab.wizardState.toolExecutions ?? []}
-											hasStartedGenerating={
-												activeTab.wizardState.isGeneratingDocs ||
-												(activeTab.wizardState.generatedDocuments?.length ?? 0) > 0
-											}
-											setLightboxImage={setLightboxImage}
-										/>
-									) : (
-										<TerminalOutput
-											key={`${activeSession.id}-${activeSession.activeTabId}`}
-											ref={terminalOutputRef}
-											session={activeSession}
-											theme={theme}
-											fontFamily={fontFamily}
-											activeFocus={activeFocus}
-											outputSearchOpen={outputSearchOpen}
-											outputSearchQuery={outputSearchQuery}
-											setOutputSearchOpen={useUIStore.getState().setOutputSearchOpen}
-											setOutputSearchQuery={useUIStore.getState().setOutputSearchQuery}
-											setActiveFocus={useUIStore.getState().setActiveFocus}
-											setLightboxImage={setLightboxImage}
-											inputRef={inputRef}
-											logsEndRef={logsEndRef}
-											maxOutputLines={maxOutputLines}
-											onDeleteLog={props.onDeleteLog}
-											onRemoveQueuedItem={onRemoveQueuedItem}
-											onInterrupt={handleInterrupt}
-											onScrollPositionChange={props.onScrollPositionChange}
-											onAtBottomChange={props.onAtBottomChange}
-											initialScrollTop={activeTab?.scrollTop}
-											markdownEditMode={chatRawTextMode}
-											setMarkdownEditMode={useSettingsStore.getState().setChatRawTextMode}
-											onReplayMessage={props.onReplayMessage}
-											fileTree={props.fileTree}
-											cwd={
-												activeSession.cwd.startsWith(activeSession.fullPath)
-													? activeSession.cwd.slice(activeSession.fullPath.length + 1)
-													: ''
-											}
-											projectRoot={activeSession.fullPath}
-											onFileClick={props.onFileClick}
-											onShowErrorDetails={props.onShowAgentErrorModal}
-											onFileSaved={
-												props.refreshFileTree
-													? () => props.refreshFileTree?.(activeSession.id)
-													: undefined
-											}
-											autoScrollAiMode={autoScrollAiMode}
-											userMessageAlignment={userMessageAlignment}
-											onOpenInTab={props.onOpenSavedFileInTab}
-										/>
-									)}
-
-
-								</div>
-
-								{/* Input Area (hidden in mobile landscape, during wizard doc generation, and in terminal mode — xterm.js handles its own input) */}
-								{!isMobileLandscape && !activeTab?.wizardState?.isGeneratingDocs && activeSession.inputMode !== 'terminal' && (
-									<div data-tour="input-area">
-										<InputArea
-											session={activeSession}
-											theme={theme}
-											inputValue={inputValue}
-											setInputValue={setInputValue}
-											enterToSend={enterToSendAI}
-											setEnterToSend={useSettingsStore.getState().setEnterToSendAI}
-											stagedImages={stagedImages}
-											setStagedImages={setStagedImages}
-											setLightboxImage={setLightboxImage}
-											commandHistoryOpen={commandHistoryOpen}
-											setCommandHistoryOpen={setCommandHistoryOpen}
-											commandHistoryFilter={commandHistoryFilter}
-											setCommandHistoryFilter={setCommandHistoryFilter}
-											commandHistorySelectedIndex={commandHistorySelectedIndex}
-											setCommandHistorySelectedIndex={setCommandHistorySelectedIndex}
-											slashCommandOpen={slashCommandOpen}
-											setSlashCommandOpen={setSlashCommandOpen}
-											slashCommands={slashCommands}
-											selectedSlashCommandIndex={selectedSlashCommandIndex}
-											setSelectedSlashCommandIndex={setSelectedSlashCommandIndex}
-											tabCompletionOpen={tabCompletionOpen}
-											setTabCompletionOpen={setTabCompletionOpen}
-											tabCompletionSuggestions={tabCompletionSuggestions}
-											selectedTabCompletionIndex={selectedTabCompletionIndex}
-											setSelectedTabCompletionIndex={setSelectedTabCompletionIndex}
-											tabCompletionFilter={tabCompletionFilter}
-											setTabCompletionFilter={setTabCompletionFilter}
-											atMentionOpen={atMentionOpen}
-											setAtMentionOpen={setAtMentionOpen}
-											atMentionFilter={atMentionFilter}
-											setAtMentionFilter={setAtMentionFilter}
-											atMentionStartIndex={atMentionStartIndex}
-											setAtMentionStartIndex={setAtMentionStartIndex}
-											atMentionSuggestions={atMentionSuggestions}
-											selectedAtMentionIndex={selectedAtMentionIndex}
-											setSelectedAtMentionIndex={setSelectedAtMentionIndex}
-											inputRef={inputRef}
-											handleInputKeyDown={handleInputKeyDown}
-											handlePaste={handlePaste}
-											handleDrop={handleDrop}
-											toggleInputMode={toggleInputMode}
-											processInput={processInput}
-											handleInterrupt={handleInterrupt}
-											onInputFocus={handleInputFocus}
-											onInputBlur={props.onInputBlur}
-											isAutoModeActive={isCurrentSessionAutoMode}
-											thinkingItems={thinkingItems}
-											onSessionClick={handleSessionClick}
-											autoRunState={currentSessionBatchState || undefined}
-											onStopAutoRun={() => onStopBatchRun?.(activeSession.id)}
-											onOpenQueueBrowser={onOpenQueueBrowser}
-											tabReadOnlyMode={activeTab?.readOnlyMode ?? false}
-											onToggleTabReadOnlyMode={props.onToggleTabReadOnlyMode}
-											tabSaveToHistory={activeTab?.saveToHistory ?? false}
-											onToggleTabSaveToHistory={props.onToggleTabSaveToHistory}
-											tabShowThinking={activeTab?.showThinking ?? 'off'}
-											onToggleTabShowThinking={props.onToggleTabShowThinking}
-											supportsThinking={hasCapability('supportsThinkingDisplay')}
-											onOpenPromptComposer={props.onOpenPromptComposer}
-											shortcuts={shortcuts}
-											showFlashNotification={showFlashNotification}
-											// Context warning sash props (Phase 6) - use tab-level context usage
-											contextUsage={activeTabContextUsage}
-											contextWarningsEnabled={contextWarningsEnabled}
-											contextWarningYellowThreshold={contextWarningYellowThreshold}
-											contextWarningRedThreshold={contextWarningRedThreshold}
-											onSummarizeAndContinue={
-												onSummarizeAndContinue
-													? () => onSummarizeAndContinue(activeSession.activeTabId)
-													: undefined
-											}
-											// Summarization progress props
-											summarizeProgress={summarizeProgress}
-											summarizeResult={summarizeResult}
-											summarizeStartTime={summarizeStartTime}
-											isSummarizing={isSummarizing}
-											onCancelSummarize={onCancelSummarize}
-											// Merge progress props
-											mergeProgress={mergeProgress}
-											mergeResult={mergeResult}
-											mergeStartTime={mergeStartTime}
-											isMerging={isMerging}
-											mergeSourceName={mergeSourceName}
-											mergeTargetName={mergeTargetName}
-											onCancelMerge={onCancelMerge}
-											// Inline wizard mode
-											onExitWizard={onExitWizard}
-											wizardShowThinking={activeTab?.wizardState?.showWizardThinking ?? false}
-											onToggleWizardShowThinking={props.onToggleWizardShowThinking}
-										/>
+							) : (
+								<>
+									{/* Logs Area - Show DocumentGenerationView while generating OR when docs exist (waiting for user to click Exit Wizard), WizardConversationView when wizard is active, otherwise show TerminalOutput */}
+									{/* Note: wizardState is per-tab (stored on activeTab), not per-session */}
+									{/* User clicks "Exit Wizard" button in DocumentGenerationView which calls onWizardComplete to convert tab to normal session */}
+									<div
+										className="flex-1 overflow-hidden flex flex-col relative"
+										data-tour="main-terminal"
+									>
+										{activeSession.inputMode === 'ai' &&
+										(activeTab?.wizardState?.isGeneratingDocs ||
+											(activeTab?.wizardState?.generatedDocuments?.length ?? 0) > 0) ? (
+											<DocumentGenerationView
+												key={`wizard-gen-${activeSession.id}-${activeSession.activeTabId}`}
+												theme={theme}
+												documents={activeTab?.wizardState?.generatedDocuments ?? []}
+												currentDocumentIndex={activeTab?.wizardState?.currentDocumentIndex ?? 0}
+												isGenerating={activeTab?.wizardState?.isGeneratingDocs ?? false}
+												streamingContent={activeTab?.wizardState?.streamingContent}
+												onComplete={props.onWizardComplete || (() => {})}
+												onDocumentSelect={props.onWizardDocumentSelect || (() => {})}
+												folderPath={
+													activeTab?.wizardState?.subfolderPath ??
+													activeTab?.wizardState?.autoRunFolderPath
+												}
+												onContentChange={props.onWizardContentChange}
+												progressMessage={activeTab?.wizardState?.progressMessage}
+												currentGeneratingIndex={activeTab?.wizardState?.currentGeneratingIndex}
+												totalDocuments={activeTab?.wizardState?.totalDocuments}
+												onCancel={props.onWizardCancelGeneration}
+												subfolderName={activeTab?.wizardState?.subfolderName}
+											/>
+										) : activeSession.inputMode === 'ai' && activeTab?.wizardState?.isActive ? (
+											<WizardConversationView
+												key={`wizard-${activeSession.id}-${activeSession.activeTabId}`}
+												theme={theme}
+												conversationHistory={activeTab.wizardState.conversationHistory}
+												isLoading={activeTab.wizardState.isWaiting ?? false}
+												agentName={activeSession.name}
+												confidence={activeTab.wizardState.confidence}
+												ready={activeTab.wizardState.ready}
+												onLetsGo={props.onWizardLetsGo}
+												error={activeTab.wizardState.error}
+												onRetry={props.onWizardRetry}
+												onClearError={props.onWizardClearError}
+												showThinking={activeTab.wizardState.showWizardThinking ?? false}
+												thinkingContent={activeTab.wizardState.thinkingContent ?? ''}
+												toolExecutions={activeTab.wizardState.toolExecutions ?? []}
+												hasStartedGenerating={
+													activeTab.wizardState.isGeneratingDocs ||
+													(activeTab.wizardState.generatedDocuments?.length ?? 0) > 0
+												}
+												setLightboxImage={setLightboxImage}
+											/>
+										) : (
+											<TerminalOutput
+												key={`${activeSession.id}-${activeSession.activeTabId}`}
+												ref={terminalOutputRef}
+												session={activeSession}
+												theme={theme}
+												fontFamily={fontFamily}
+												activeFocus={activeFocus}
+												outputSearchOpen={outputSearchOpen}
+												outputSearchQuery={outputSearchQuery}
+												setOutputSearchOpen={useUIStore.getState().setOutputSearchOpen}
+												setOutputSearchQuery={useUIStore.getState().setOutputSearchQuery}
+												setActiveFocus={useUIStore.getState().setActiveFocus}
+												setLightboxImage={setLightboxImage}
+												inputRef={inputRef}
+												logsEndRef={logsEndRef}
+												maxOutputLines={maxOutputLines}
+												onDeleteLog={props.onDeleteLog}
+												onRemoveQueuedItem={onRemoveQueuedItem}
+												onInterrupt={handleInterrupt}
+												onScrollPositionChange={props.onScrollPositionChange}
+												onAtBottomChange={props.onAtBottomChange}
+												initialScrollTop={activeTab?.scrollTop}
+												markdownEditMode={chatRawTextMode}
+												setMarkdownEditMode={useSettingsStore.getState().setChatRawTextMode}
+												onReplayMessage={props.onReplayMessage}
+												fileTree={props.fileTree}
+												cwd={
+													activeSession.cwd.startsWith(activeSession.fullPath)
+														? activeSession.cwd.slice(activeSession.fullPath.length + 1)
+														: ''
+												}
+												projectRoot={activeSession.fullPath}
+												onFileClick={props.onFileClick}
+												onShowErrorDetails={props.onShowAgentErrorModal}
+												onFileSaved={
+													props.refreshFileTree
+														? () => props.refreshFileTree?.(activeSession.id)
+														: undefined
+												}
+												autoScrollAiMode={autoScrollAiMode}
+												userMessageAlignment={userMessageAlignment}
+												onOpenInTab={props.onOpenSavedFileInTab}
+											/>
+										)}
 									</div>
-								)}
-							</>
-						)}
-						{/* TerminalView is kept alive for every session that has terminal tabs so that
+
+									{/* Input Area (hidden in mobile landscape, during wizard doc generation, and in terminal mode — xterm.js handles its own input) */}
+									{!isMobileLandscape &&
+										!activeTab?.wizardState?.isGeneratingDocs &&
+										activeSession.inputMode !== 'terminal' && (
+											<div data-tour="input-area">
+												<InputArea
+													session={activeSession}
+													theme={theme}
+													inputValue={inputValue}
+													setInputValue={setInputValue}
+													enterToSend={enterToSendAI}
+													setEnterToSend={useSettingsStore.getState().setEnterToSendAI}
+													stagedImages={stagedImages}
+													setStagedImages={setStagedImages}
+													setLightboxImage={setLightboxImage}
+													commandHistoryOpen={commandHistoryOpen}
+													setCommandHistoryOpen={setCommandHistoryOpen}
+													commandHistoryFilter={commandHistoryFilter}
+													setCommandHistoryFilter={setCommandHistoryFilter}
+													commandHistorySelectedIndex={commandHistorySelectedIndex}
+													setCommandHistorySelectedIndex={setCommandHistorySelectedIndex}
+													slashCommandOpen={slashCommandOpen}
+													setSlashCommandOpen={setSlashCommandOpen}
+													slashCommands={slashCommands}
+													selectedSlashCommandIndex={selectedSlashCommandIndex}
+													setSelectedSlashCommandIndex={setSelectedSlashCommandIndex}
+													tabCompletionOpen={tabCompletionOpen}
+													setTabCompletionOpen={setTabCompletionOpen}
+													tabCompletionSuggestions={tabCompletionSuggestions}
+													selectedTabCompletionIndex={selectedTabCompletionIndex}
+													setSelectedTabCompletionIndex={setSelectedTabCompletionIndex}
+													tabCompletionFilter={tabCompletionFilter}
+													setTabCompletionFilter={setTabCompletionFilter}
+													atMentionOpen={atMentionOpen}
+													setAtMentionOpen={setAtMentionOpen}
+													atMentionFilter={atMentionFilter}
+													setAtMentionFilter={setAtMentionFilter}
+													atMentionStartIndex={atMentionStartIndex}
+													setAtMentionStartIndex={setAtMentionStartIndex}
+													atMentionSuggestions={atMentionSuggestions}
+													selectedAtMentionIndex={selectedAtMentionIndex}
+													setSelectedAtMentionIndex={setSelectedAtMentionIndex}
+													inputRef={inputRef}
+													handleInputKeyDown={handleInputKeyDown}
+													handlePaste={handlePaste}
+													handleDrop={handleDrop}
+													toggleInputMode={toggleInputMode}
+													processInput={processInput}
+													handleInterrupt={handleInterrupt}
+													onInputFocus={handleInputFocus}
+													onInputBlur={props.onInputBlur}
+													isAutoModeActive={isCurrentSessionAutoMode}
+													thinkingItems={thinkingItems}
+													onSessionClick={handleSessionClick}
+													autoRunState={currentSessionBatchState || undefined}
+													onStopAutoRun={() => onStopBatchRun?.(activeSession.id)}
+													onOpenQueueBrowser={onOpenQueueBrowser}
+													tabReadOnlyMode={activeTab?.readOnlyMode ?? false}
+													onToggleTabReadOnlyMode={props.onToggleTabReadOnlyMode}
+													tabSaveToHistory={activeTab?.saveToHistory ?? false}
+													onToggleTabSaveToHistory={props.onToggleTabSaveToHistory}
+													tabShowThinking={activeTab?.showThinking ?? 'off'}
+													onToggleTabShowThinking={props.onToggleTabShowThinking}
+													supportsThinking={hasCapability('supportsThinkingDisplay')}
+													onOpenPromptComposer={props.onOpenPromptComposer}
+													shortcuts={shortcuts}
+													showFlashNotification={showFlashNotification}
+													// Context warning sash props (Phase 6) - use tab-level context usage
+													contextUsage={activeTabContextUsage}
+													contextWarningsEnabled={contextWarningsEnabled}
+													contextWarningYellowThreshold={contextWarningYellowThreshold}
+													contextWarningRedThreshold={contextWarningRedThreshold}
+													onSummarizeAndContinue={
+														onSummarizeAndContinue
+															? () => onSummarizeAndContinue(activeSession.activeTabId)
+															: undefined
+													}
+													// Summarization progress props
+													summarizeProgress={summarizeProgress}
+													summarizeResult={summarizeResult}
+													summarizeStartTime={summarizeStartTime}
+													isSummarizing={isSummarizing}
+													onCancelSummarize={onCancelSummarize}
+													// Merge progress props
+													mergeProgress={mergeProgress}
+													mergeResult={mergeResult}
+													mergeStartTime={mergeStartTime}
+													isMerging={isMerging}
+													mergeSourceName={mergeSourceName}
+													mergeTargetName={mergeTargetName}
+													onCancelMerge={onCancelMerge}
+													// Inline wizard mode
+													onExitWizard={onExitWizard}
+													wizardShowThinking={activeTab?.wizardState?.showWizardThinking ?? false}
+													onToggleWizardShowThinking={props.onToggleWizardShowThinking}
+												/>
+											</div>
+										)}
+								</>
+							)}
+							{/* TerminalView is kept alive for every session that has terminal tabs so that
 						     switching between sessions (or to AI mode) does not destroy the xterm.js
 						     scrollback buffer. visibility:hidden (not display:none) keeps the canvas
 						     at non-zero dimensions so the WebGL context is never lost or cleared. */}
-						{mountedTerminalSessionIds.map((sessionId) => {
-							const isCurrentSession = sessionId === activeSession.id;
-							const session = isCurrentSession
-								? activeSession
-								: mountedTerminalSessionsRef.current.get(sessionId);
-							if (!session) return null;
-							const isTerminalVisible = isCurrentSession && session.inputMode === 'terminal';
-							return (
-								<div
-									key={sessionId}
-									className="absolute inset-0 flex flex-col"
-									style={{
-										visibility: isTerminalVisible ? 'visible' : 'hidden',
-										pointerEvents: isTerminalVisible ? 'auto' : 'none',
-									}}
-								>
-									<TerminalView
-										ref={(handle) => {
-											if (handle) terminalViewRefs.current.set(sessionId, handle);
-											else terminalViewRefs.current.delete(sessionId);
+							{mountedTerminalSessionIds.map((sessionId) => {
+								const isCurrentSession = sessionId === activeSession.id;
+								const session = isCurrentSession
+									? activeSession
+									: mountedTerminalSessionsRef.current.get(sessionId);
+								if (!session) return null;
+								const isTerminalVisible = isCurrentSession && session.inputMode === 'terminal';
+								return (
+									<div
+										key={sessionId}
+										className="absolute inset-0 flex flex-col"
+										style={{
+											visibility: isTerminalVisible ? 'visible' : 'hidden',
+											pointerEvents: isTerminalVisible ? 'auto' : 'none',
 										}}
-										session={session}
-										theme={theme}
-										fontFamily={fontFamily}
-										fontSize={fontSize}
-										defaultShell={defaultShell}
-										onTabStateChange={createTabStateChangeHandler(sessionId)}
-										onTabPidChange={createTabPidChangeHandler(sessionId)}
-										searchOpen={isCurrentSession ? terminalSearchOpen : false}
-										onSearchClose={isCurrentSession ? () => setTerminalSearchOpen(false) : undefined}
-										isVisible={isTerminalVisible}
-									/>
-								</div>
-							);
-						})}
+									>
+										<TerminalView
+											ref={(handle) => {
+												if (handle) terminalViewRefs.current.set(sessionId, handle);
+												else terminalViewRefs.current.delete(sessionId);
+											}}
+											session={session}
+											theme={theme}
+											fontFamily={fontFamily}
+											fontSize={fontSize}
+											defaultShell={defaultShell}
+											onTabStateChange={createTabStateChangeHandler(sessionId)}
+											onTabPidChange={createTabPidChangeHandler(sessionId)}
+											searchOpen={isCurrentSession ? terminalSearchOpen : false}
+											onSearchClose={
+												isCurrentSession ? () => setTerminalSearchOpen(false) : undefined
+											}
+											isVisible={isTerminalVisible}
+										/>
+									</div>
+								);
+							})}
 						</div>
 					</div>
 				</ErrorBoundary>

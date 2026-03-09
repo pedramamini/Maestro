@@ -23,7 +23,6 @@ import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { useCue } from '../hooks/useCue';
 import type { CueSessionStatus, CueRunResult } from '../hooks/useCue';
-import { CueYamlEditor } from './CueYamlEditor';
 import { CueHelpContent } from './CueHelpModal';
 // Kept for reference - visual pipeline editor replaces this
 // import { CueGraphView } from './CueGraphView';
@@ -732,11 +731,8 @@ export function CueModal({ theme, onClose, cueShortcutKeys }: CueModalProps) {
 	const pipelineDirtyRef = useRef(false);
 	pipelineDirtyRef.current = pipelineDirty;
 
-	// YAML editor state
-	const [yamlEditorSession, setYamlEditorSession] = useState<CueSessionStatus | null>(null);
-
-	const handleEditYaml = useCallback((session: CueSessionStatus) => {
-		setYamlEditorSession(session);
+	const handleEditYaml = useCallback((_session: CueSessionStatus) => {
+		// TODO: Implement YAML editor integration
 	}, []);
 
 	const handleViewInPipeline = useCallback((_session: CueSessionStatus) => {

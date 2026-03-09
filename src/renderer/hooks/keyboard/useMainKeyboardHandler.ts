@@ -512,10 +512,6 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 				e.preventDefault();
 				ctx.rightPanelRef?.current?.toggleAutoRunExpanded();
 				trackShortcut('toggleAutoRunExpanded');
-			} else if (ctx.isShortcut(e, 'filterUnreadAgents')) {
-				e.preventDefault();
-				ctx.toggleShowUnreadAgentsOnly();
-				trackShortcut('filterUnreadAgents');
 			} else if (ctx.isShortcut(e, 'jumpToTerminal')) {
 				e.preventDefault();
 				if (ctx.activeSession && !ctx.activeGroupChatId) {
