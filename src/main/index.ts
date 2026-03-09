@@ -57,6 +57,7 @@ import {
 	registerDirectorNotesHandlers,
 	registerCueHandlers,
 	registerWakatimeHandlers,
+	registerSecurityHandlers,
 	setupLoggerEventForwarding,
 	cleanupAllGroomingSessions,
 	getActiveGroomingSessionCount,
@@ -71,6 +72,7 @@ import {
 	setGetAgentConfigCallback,
 	setSshStore,
 	setGetCustomShellPathCallback,
+	setGetLlmGuardSettingsCallback,
 	markParticipantResponded,
 	spawnModeratorSynthesis,
 	getGroupChatReadOnlyState,
@@ -761,6 +763,12 @@ function setupIpcHandlers() {
 	const getCustomShellPathFn = () => store.get('customShellPath', '') as string | undefined;
 	setGetCustomShellPathCallback(getCustomShellPathFn);
 
+	// Set up callback for group chat to get LLM Guard settings for inter-agent scanning
+	setGetLlmGuardSettingsCallback(() => {
+		const settings = store.get('llmGuardSettings', null);
+		return settings as Partial<import('./security/llm-guard/types').LlmGuardConfig> | null;
+	});
+
 	// Setup logger event forwarding to renderer
 	setupLoggerEventForwarding(() => mainWindow);
 
@@ -805,6 +813,9 @@ function setupIpcHandlers() {
 
 	// Register WakaTime handlers (CLI check, API key validation)
 	registerWakatimeHandlers(wakatimeManager);
+
+	// Register security event handlers (LLM Guard events)
+	registerSecurityHandlers();
 }
 
 // Handle process output streaming (set up after initialization)
