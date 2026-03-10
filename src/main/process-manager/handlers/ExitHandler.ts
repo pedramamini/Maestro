@@ -5,7 +5,7 @@ import { logger } from '../../utils/logger';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
 import { aggregateModelUsage } from '../../parsers/usage-aggregator';
 import { cleanupTempFiles } from '../utils/imageUtils';
-import type { ManagedProcess, AgentError } from '../types';
+import { getStreamedText, type ManagedProcess, type AgentError } from '../types';
 import type { DataBufferManager } from './DataBufferManager';
 
 interface ExitHandlerDependencies {
@@ -55,12 +55,13 @@ export class ExitHandler {
 
 		// Debug: Log exit details for synopsis sessions
 		if (sessionId.includes('-synopsis-')) {
+			const streamedText = getStreamedText(managedProcess);
 			logger.info('[ProcessManager] Synopsis session exit', 'ProcessManager', {
 				sessionId,
 				exitCode: code,
 				resultEmitted: managedProcess.resultEmitted,
-				streamedTextLength: managedProcess.streamedText?.length || 0,
-				streamedTextPreview: managedProcess.streamedText?.substring(0, 200) || '(empty)',
+				streamedTextLength: streamedText.length,
+				streamedTextPreview: streamedText.substring(0, 200) || '(empty)',
 				stdoutBufferLength: managedProcess.stdoutBuffer?.length || 0,
 				stderrBufferLength: managedProcess.stderrBuffer?.length || 0,
 				stderrPreview: managedProcess.stderrBuffer?.substring(0, 200) || '(empty)',
@@ -88,7 +89,7 @@ export class ExitHandler {
 				const event = outputParser.parseJsonLine(remainingLine);
 				if (event && outputParser.isResultMessage(event) && !managedProcess.resultEmitted) {
 					managedProcess.resultEmitted = true;
-					const resultText = event.text || managedProcess.streamedText || '';
+					const resultText = event.text || getStreamedText(managedProcess);
 					if (resultText) {
 						this.bufferManager.emitDataBuffered(sessionId, resultText);
 					}
@@ -101,17 +102,18 @@ export class ExitHandler {
 
 		// Handle stream-json mode: emit accumulated streamed text if no result was emitted
 		// Some agents (like Factory Droid) don't send explicit "done" events, they just exit
-		if (isStreamJsonMode && !managedProcess.resultEmitted && managedProcess.streamedText) {
+		const exitStreamedText = getStreamedText(managedProcess);
+		if (isStreamJsonMode && !managedProcess.resultEmitted && exitStreamedText) {
 			managedProcess.resultEmitted = true;
 			logger.debug(
 				'[ProcessManager] Emitting streamed text at exit (no result event)',
 				'ProcessManager',
 				{
 					sessionId,
-					streamedTextLength: managedProcess.streamedText.length,
+					streamedTextLength: exitStreamedText.length,
 				}
 			);
-			this.bufferManager.emitDataBuffered(sessionId, managedProcess.streamedText);
+			this.bufferManager.emitDataBuffered(sessionId, exitStreamedText);
 		}
 
 		// Check for errors using the parser (if not already emitted)
@@ -119,7 +121,7 @@ export class ExitHandler {
 			const agentError = outputParser.detectErrorFromExit(
 				code,
 				managedProcess.stderrBuffer || '',
-				managedProcess.stdoutBuffer || managedProcess.streamedText || ''
+				managedProcess.stdoutBuffer || exitStreamedText
 			);
 			if (agentError) {
 				managedProcess.errorEmitted = true;
@@ -142,7 +144,7 @@ export class ExitHandler {
 		) {
 			// SSH errors can appear in stdout OR stderr, so check both
 			const stderrToCheck = managedProcess.stderrBuffer || '';
-			const stdoutToCheck = managedProcess.stdoutBuffer || managedProcess.streamedText || '';
+			const stdoutToCheck = managedProcess.stdoutBuffer || exitStreamedText;
 			const combinedOutput = `${stdoutToCheck}\n${stderrToCheck}`;
 
 			// Log detailed info before SSH error check to help debug shell parse errors

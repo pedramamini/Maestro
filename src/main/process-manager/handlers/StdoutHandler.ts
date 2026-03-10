@@ -6,12 +6,13 @@ import { appendToBuffer } from '../utils/bufferUtils';
 import { aggregateModelUsage, type ModelStats } from '../../parsers/usage-aggregator';
 import { matchSshErrorPattern } from '../../parsers/error-patterns';
 import { normalizeApprovalPathSync, isSystemPath } from '../../utils/path-validation';
-import type {
-	ManagedProcess,
-	UsageStats,
-	UsageTotals,
-	AgentError,
-	GeminiSessionStatsEvent,
+import {
+	getStreamedText,
+	type ManagedProcess,
+	type UsageStats,
+	type UsageTotals,
+	type AgentError,
+	type GeminiSessionStatsEvent,
 } from '../types';
 import type { DataBufferManager } from './DataBufferManager';
 
@@ -66,6 +67,19 @@ export function extractDeniedPath(errorMsg: string, projectCwd?: string): string
 
 	return null;
 }
+
+/**
+ * Detects Gemini CLI Axios/API internal dumps in stdout.
+ * Hoisted to module scope to avoid regex recompilation per line.
+ */
+const GEMINI_STDOUT_DUMP =
+	/\[Function: \w+\]|paramsSerializer|validateStatus|errorRedactor|streamGenerateContent/;
+
+/** Maximum jsonBuffer size for stream-JSON mode (5 MB). Buffer holds partial NDJSON lines. */
+export const MAX_BUFFER_SIZE = 5 * 1024 * 1024;
+
+/** Maximum jsonBuffer size for batch mode (10 MB). Entire stdout is buffered until exit. */
+export const MAX_BATCH_BUFFER_SIZE = 10 * 1024 * 1024;
 
 interface StdoutHandlerDependencies {
 	processes: Map<string, ManagedProcess>;
@@ -181,10 +195,27 @@ export class StdoutHandler {
 		if (isStreamJsonMode) {
 			this.handleStreamJsonData(sessionId, managedProcess, output);
 		} else if (isBatchMode) {
-			managedProcess.jsonBuffer = (managedProcess.jsonBuffer || '') + output;
+			const currentLen = (managedProcess.jsonBuffer || '').length;
+			if (currentLen + output.length > MAX_BATCH_BUFFER_SIZE) {
+				logger.warn(
+					'[ProcessManager] Batch JSON buffer exceeded MAX_BATCH_BUFFER_SIZE, truncating',
+					'ProcessManager',
+					{
+						sessionId,
+						currentLength: currentLen,
+						incomingLength: output.length,
+						maxSize: MAX_BATCH_BUFFER_SIZE,
+					}
+				);
+				managedProcess.jsonBuffer =
+					(managedProcess.jsonBuffer || '') +
+					output.substring(0, MAX_BATCH_BUFFER_SIZE - currentLen);
+			} else {
+				managedProcess.jsonBuffer = (managedProcess.jsonBuffer || '') + output;
+			}
 			logger.debug('[ProcessManager] Accumulated JSON buffer', 'ProcessManager', {
 				sessionId,
-				bufferLength: managedProcess.jsonBuffer.length,
+				bufferLength: (managedProcess.jsonBuffer || '').length,
 			});
 		} else {
 			this.bufferManager.emitDataBuffered(sessionId, output);
@@ -196,7 +227,23 @@ export class StdoutHandler {
 		managedProcess: ManagedProcess,
 		output: string
 	): void {
-		managedProcess.jsonBuffer = (managedProcess.jsonBuffer || '') + output;
+		const currentLen = (managedProcess.jsonBuffer || '').length;
+		if (currentLen + output.length > MAX_BUFFER_SIZE) {
+			logger.warn(
+				'[ProcessManager] Stream-JSON buffer exceeded MAX_BUFFER_SIZE, clearing',
+				'ProcessManager',
+				{
+					sessionId,
+					currentLength: currentLen,
+					incomingLength: output.length,
+					maxSize: MAX_BUFFER_SIZE,
+				}
+			);
+			// Clear stale buffer and start fresh with incoming data
+			managedProcess.jsonBuffer = output;
+		} else {
+			managedProcess.jsonBuffer = (managedProcess.jsonBuffer || '') + output;
+		}
 
 		const lines = managedProcess.jsonBuffer.split('\n');
 		managedProcess.jsonBuffer = lines.pop() || '';
@@ -283,12 +330,7 @@ export class StdoutHandler {
 			}
 		} else {
 			// Not valid JSON — suppress Gemini CLI API dumps, otherwise emit as text
-			if (
-				toolType === 'gemini-cli' &&
-				(/\[Function: \w+\]/.test(line) ||
-					/paramsSerializer|validateStatus|errorRedactor/.test(line) ||
-					/streamGenerateContent/.test(line))
-			) {
+			if (toolType === 'gemini-cli' && GEMINI_STDOUT_DUMP.test(line)) {
 				logger.warn(
 					'[ProcessManager] Suppressing Gemini CLI API dump from stdout',
 					'ProcessManager',
@@ -325,7 +367,7 @@ export class StdoutHandler {
 		// Reset resultEmitted on each new step so the last text event wins instead of the first.
 		if (event.type === 'init' && managedProcess.toolType === 'opencode') {
 			managedProcess.resultEmitted = false;
-			managedProcess.streamedText = '';
+			managedProcess.streamedChunks = [];
 		}
 
 		// Extract usage
@@ -394,7 +436,8 @@ export class StdoutHandler {
 		if (event.type === 'text' && event.text) {
 			if (event.isPartial) {
 				// Streaming delta: accumulate for result-time emission, emit thinking-chunk for live display
-				managedProcess.streamedText = (managedProcess.streamedText || '') + event.text;
+				if (!managedProcess.streamedChunks) managedProcess.streamedChunks = [];
+				managedProcess.streamedChunks.push(event.text);
 				this.emitter.emit('thinking-chunk', sessionId, event.text);
 			} else {
 				// Complete/non-delta text: emit both thinking-chunk and data for immediate display
@@ -455,7 +498,7 @@ export class StdoutHandler {
 		// an interim "I'm checking..." message and then the final answer.
 		// Keep the latest result text and emit once at turn completion.
 		if (managedProcess.toolType === 'codex' && outputParser.isResultMessage(event) && event.text) {
-			managedProcess.streamedText = event.text;
+			managedProcess.streamedChunks = [event.text];
 		}
 
 		// For Codex, flush the latest captured result when the turn completes.
@@ -465,7 +508,7 @@ export class StdoutHandler {
 			event.type === 'usage' &&
 			!managedProcess.resultEmitted
 		) {
-			const resultText = managedProcess.streamedText || '';
+			const resultText = getStreamedText(managedProcess);
 			if (resultText) {
 				managedProcess.resultEmitted = true;
 				logger.debug(
@@ -496,7 +539,8 @@ export class StdoutHandler {
 			!managedProcess.resultEmitted
 		) {
 			managedProcess.resultEmitted = true;
-			const resultText = event.text || managedProcess.streamedText || '';
+			const streamedText = getStreamedText(managedProcess);
+			const resultText = event.text || streamedText;
 
 			// Log synopsis result processing (for debugging empty synopsis issue)
 			if (sessionId.includes('-synopsis-')) {
@@ -504,8 +548,8 @@ export class StdoutHandler {
 					sessionId,
 					eventText: event.text?.substring(0, 200) || '(empty)',
 					eventTextLength: event.text?.length || 0,
-					streamedText: managedProcess.streamedText?.substring(0, 200) || '(empty)',
-					streamedTextLength: managedProcess.streamedText?.length || 0,
+					streamedText: streamedText.substring(0, 200) || '(empty)',
+					streamedTextLength: streamedText.length,
 					resultTextLength: resultText.length,
 				});
 			}
@@ -515,7 +559,7 @@ export class StdoutHandler {
 					sessionId,
 					resultLength: resultText.length,
 					hasEventText: !!event.text,
-					hasStreamedText: !!managedProcess.streamedText,
+					hasStreamedText: !!streamedText,
 				});
 				this.bufferManager.emitDataBuffered(sessionId, resultText);
 			} else if (sessionId.includes('-synopsis-')) {

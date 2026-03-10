@@ -69,6 +69,8 @@ export interface ManagedProcess {
 	stderrBuffer?: string;
 	stdoutBuffer?: string;
 	streamedText?: string;
+	/** Chunks of streamed text — use getStreamedText() to join at read time */
+	streamedChunks?: string[];
 	contextWindow?: number;
 	tempImageFiles?: string[];
 	command?: string;
@@ -159,6 +161,17 @@ export interface QueryCompleteData {
 	duration: number;
 	projectPath?: string;
 	tabId?: string;
+}
+
+/**
+ * Join streamedChunks into a single string. Falls back to legacy streamedText field.
+ * Avoids O(n²) string concatenation during streaming by deferring the join to read time.
+ */
+export function getStreamedText(proc: ManagedProcess): string {
+	if (proc.streamedChunks && proc.streamedChunks.length > 0) {
+		return proc.streamedChunks.join('');
+	}
+	return proc.streamedText || '';
 }
 
 // Re-export for backwards compatibility

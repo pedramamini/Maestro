@@ -50,7 +50,10 @@ vi.mock('../../../../main/parsers/error-patterns', () => ({
 import {
 	StdoutHandler,
 	extractDeniedPath,
+	MAX_BUFFER_SIZE,
+	MAX_BATCH_BUFFER_SIZE,
 } from '../../../../main/process-manager/handlers/StdoutHandler';
+import { getStreamedText } from '../../../../main/process-manager/types';
 import type { ManagedProcess } from '../../../../main/process-manager/types';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
@@ -528,8 +531,8 @@ describe('StdoutHandler', () => {
 			// Non-partial text should go through BOTH thinking-chunk AND data path
 			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Hello from Gemini!');
 			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'Hello from Gemini!');
-			// Non-partial text should NOT accumulate in streamedText
-			expect(proc.streamedText).toBe('');
+			// Non-partial text should NOT accumulate in streamedChunks
+			expect(getStreamedText(proc)).toBe('');
 		});
 
 		it('should route partial/delta Gemini text through thinking-chunk only', () => {
@@ -553,8 +556,8 @@ describe('StdoutHandler', () => {
 			// Partial text should go through thinking-chunk only, NOT data
 			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'streaming...');
 			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
-			// Should accumulate in streamedText for result-time emission
-			expect(proc.streamedText).toBe('streaming...');
+			// Should accumulate in streamedChunks for result-time emission
+			expect(getStreamedText(proc)).toBe('streaming...');
 		});
 
 		it('should use accumulated streamedText as fallback in result event after partial streaming', () => {
@@ -624,10 +627,10 @@ describe('StdoutHandler', () => {
 			});
 
 			// Verify partial chunks accumulated
-			expect(proc.streamedText).toBe('Hello from Gemini!');
+			expect(getStreamedText(proc)).toBe('Hello from Gemini!');
 			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
 
-			// Send result event with empty text — should fall back to streamedText
+			// Send result event with empty text — should fall back to streamedChunks
 			sendJsonLine(handler, sessionId, { type: 'result' });
 
 			expect(proc.resultEmitted).toBe(true);
@@ -686,9 +689,9 @@ describe('StdoutHandler', () => {
 				partial: true,
 			});
 
-			// Partial text should still go through thinking-chunk and accumulate in streamedText
+			// Partial text should still go through thinking-chunk and accumulate in streamedChunks
 			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'thinking about your question...');
-			expect(proc.streamedText).toBe('thinking about your question...');
+			expect(getStreamedText(proc)).toBe('thinking about your question...');
 			// Partial text should NOT be emitted via data path
 			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
 
@@ -1482,11 +1485,11 @@ describe('StdoutHandler', () => {
 			);
 			// Should also emit thinking-chunk for live display
 			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Hello! How can I help you?');
-			// Should NOT be accumulated in streamedText
-			expect(proc.streamedText).toBe('');
+			// Should NOT be accumulated in streamedChunks
+			expect(getStreamedText(proc)).toBe('');
 		});
 
-		it('should accumulate partial (delta:true) message events in streamedText', () => {
+		it('should accumulate partial (delta:true) message events in streamedChunks', () => {
 			const parser = createGeminiParser();
 			const { handler, bufferManager, sessionId, proc, emitter } = createTestContext({
 				toolType: 'gemini-cli' as any,
@@ -1505,8 +1508,8 @@ describe('StdoutHandler', () => {
 				delta: true,
 			});
 
-			// Should accumulate in streamedText
-			expect(proc.streamedText).toBe('Hello');
+			// Should accumulate in streamedChunks
+			expect(getStreamedText(proc)).toBe('Hello');
 			// Should emit thinking-chunk
 			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Hello');
 			// Should NOT emit via emitDataBuffered (deferred to result)
@@ -1998,5 +2001,195 @@ describe('StdoutHandler — single JSON parse per line', () => {
 		// Should fall back to line-based detection since JSON.parse fails
 		expect(mockParser.detectErrorFromLine).toHaveBeenCalledTimes(1);
 		expect(mockParser.detectErrorFromParsed).not.toHaveBeenCalled();
+	});
+});
+
+// ── Buffer size guards ──────────────────────────────────────────────────
+
+describe('StdoutHandler — buffer size guards', () => {
+	it('should truncate batch mode jsonBuffer when it exceeds MAX_BATCH_BUFFER_SIZE', () => {
+		const { handler, sessionId, proc } = createTestContext({
+			isBatchMode: true,
+			isStreamJsonMode: false,
+		});
+
+		// Fill buffer close to limit
+		const bigChunk = 'x'.repeat(MAX_BATCH_BUFFER_SIZE - 100);
+		handler.handleData(sessionId, bigChunk);
+		expect(proc.jsonBuffer).toBe(bigChunk);
+
+		// Send more data that exceeds the limit
+		const overflow = 'y'.repeat(200);
+		handler.handleData(sessionId, overflow);
+
+		// Buffer should be capped at MAX_BATCH_BUFFER_SIZE
+		expect((proc.jsonBuffer || '').length).toBe(MAX_BATCH_BUFFER_SIZE);
+		// Overflow portion should be truncated
+		expect(proc.jsonBuffer!.endsWith('y'.repeat(100))).toBe(true);
+	});
+
+	it('should not truncate batch mode jsonBuffer within limits', () => {
+		const { handler, sessionId, proc } = createTestContext({
+			isBatchMode: true,
+			isStreamJsonMode: false,
+		});
+
+		const chunk = 'x'.repeat(1000);
+		handler.handleData(sessionId, chunk);
+		expect(proc.jsonBuffer).toBe(chunk);
+	});
+
+	it('should clear stream-JSON jsonBuffer when it exceeds MAX_BUFFER_SIZE', () => {
+		const { handler, sessionId, proc } = createTestContext({
+			isStreamJsonMode: true,
+		});
+
+		// Send a massive chunk without a newline (simulates stuck partial line)
+		const hugePartial = 'x'.repeat(MAX_BUFFER_SIZE + 100);
+		handler.handleData(sessionId, hugePartial);
+
+		// Buffer should be reset to incoming data (cleared old + fresh start)
+		// The buffer holds whatever remains after split('\n').pop()
+		expect((proc.jsonBuffer || '').length).toBe(hugePartial.length);
+	});
+
+	it('should clear stream-JSON buffer and keep incoming data functional', () => {
+		const { handler, bufferManager, sessionId, proc } = createTestContext({
+			isStreamJsonMode: true,
+		});
+
+		// Fill the buffer close to limit with a partial line
+		const nearLimit = 'x'.repeat(MAX_BUFFER_SIZE - 10);
+		handler.handleData(sessionId, nearLimit);
+		expect(proc.jsonBuffer).toBe(nearLimit);
+
+		// Now send data that pushes over the limit — buffer is cleared and replaced
+		const newData = '{"type":"result"}\n';
+		handler.handleData(sessionId, newData);
+
+		// After clear + split on newline, the complete JSON line should be processed
+		// and jsonBuffer should hold the remainder (empty after newline)
+		expect(proc.jsonBuffer).toBe('');
+	});
+});
+
+// ── streamedChunks array accumulation ────────────────────────────────────
+
+describe('StdoutHandler — streamedChunks accumulation', () => {
+	function createSimpleParser() {
+		return {
+			agentId: 'gemini-cli',
+			parseJsonLine: vi.fn((line: string) => {
+				const parsed = JSON.parse(line);
+				return {
+					type: parsed.type || 'text',
+					text: parsed.content || parsed.text,
+					isPartial: !!parsed.delta,
+				};
+			}),
+			parseJsonObject: vi.fn((parsed: any) => ({
+				type: parsed.type || 'text',
+				text: parsed.content || parsed.text,
+				isPartial: !!parsed.delta,
+			})),
+			extractUsage: vi.fn(() => null),
+			extractSessionId: vi.fn(() => null),
+			extractSlashCommands: vi.fn(() => null),
+			isResultMessage: vi.fn((event: any) => event.type === 'result'),
+			detectErrorFromLine: vi.fn(() => null),
+			detectErrorFromParsed: vi.fn(() => null),
+		};
+	}
+
+	it('should accumulate partial text in streamedChunks array (not string concatenation)', () => {
+		const parser = createSimpleParser();
+		const { handler, sessionId, proc } = createTestContext({
+			isStreamJsonMode: true,
+			toolType: 'gemini-cli',
+			outputParser: parser as any,
+		});
+
+		sendJsonLine(handler, sessionId, { type: 'text', content: 'Hello', delta: true });
+		sendJsonLine(handler, sessionId, { type: 'text', content: ' world', delta: true });
+		sendJsonLine(handler, sessionId, { type: 'text', content: '!', delta: true });
+
+		// Should be stored as separate chunks
+		expect(proc.streamedChunks).toEqual(['Hello', ' world', '!']);
+		// getStreamedText joins them
+		expect(getStreamedText(proc)).toBe('Hello world!');
+	});
+
+	it('should reset streamedChunks on OpenCode init event', () => {
+		const parser = createSimpleParser();
+		// Override parseJsonObject for init detection
+		parser.parseJsonObject = vi.fn((parsed: any) => {
+			if (parsed.type === 'init') return { type: 'init' };
+			return {
+				type: parsed.type || 'text',
+				text: parsed.content || parsed.text,
+				isPartial: !!parsed.delta,
+			};
+		});
+
+		const { handler, sessionId, proc } = createTestContext({
+			isStreamJsonMode: true,
+			toolType: 'opencode',
+			outputParser: parser as any,
+		});
+
+		// Accumulate some chunks
+		sendJsonLine(handler, sessionId, { type: 'text', content: 'old text', delta: true });
+		expect(proc.streamedChunks).toEqual(['old text']);
+
+		// Send init — should reset
+		sendJsonLine(handler, sessionId, { type: 'init' });
+		expect(proc.streamedChunks).toEqual([]);
+		expect(getStreamedText(proc)).toBe('');
+	});
+
+	it('should replace streamedChunks for Codex result messages', () => {
+		const parser = createSimpleParser();
+		parser.isResultMessage = vi.fn((event: any) => event.type === 'result');
+		parser.parseJsonObject = vi.fn((parsed: any) => ({
+			type: parsed.type || 'text',
+			text: parsed.content || parsed.text,
+			isPartial: false,
+		}));
+
+		const { handler, sessionId, proc } = createTestContext({
+			isStreamJsonMode: true,
+			toolType: 'codex',
+			outputParser: parser as any,
+		});
+
+		sendJsonLine(handler, sessionId, { type: 'result', content: 'Final answer' });
+
+		// Codex result should set chunks to single element
+		expect(proc.streamedChunks).toEqual(['Final answer']);
+		expect(getStreamedText(proc)).toBe('Final answer');
+	});
+
+	it('getStreamedText should fall back to legacy streamedText field', () => {
+		const proc = createMockProcess({
+			streamedText: 'legacy text',
+			streamedChunks: undefined,
+		});
+		expect(getStreamedText(proc)).toBe('legacy text');
+	});
+
+	it('getStreamedText should prefer streamedChunks over streamedText', () => {
+		const proc = createMockProcess({
+			streamedText: 'old legacy',
+			streamedChunks: ['new', ' chunks'],
+		});
+		expect(getStreamedText(proc)).toBe('new chunks');
+	});
+
+	it('getStreamedText should return empty string when both are empty', () => {
+		const proc = createMockProcess({
+			streamedText: '',
+			streamedChunks: [],
+		});
+		expect(getStreamedText(proc)).toBe('');
 	});
 });
