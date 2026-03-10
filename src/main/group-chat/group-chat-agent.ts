@@ -190,7 +190,8 @@ export async function addParticipant(
 	console.log(`[GroupChat:Debug] Args: ${JSON.stringify(finalArgs)}`);
 
 	// Generate session ID for this participant
-	const sessionId = `group-chat-${groupChatId}-participant-${name}-${uuidv4()}`;
+	const sanitizedName = name.replace(/[^a-zA-Z0-9_-]/g, '_');
+	const sessionId = `group-chat-${groupChatId}-participant-${sanitizedName}-${uuidv4()}`;
 	console.log(`[GroupChat:Debug] Generated session ID: ${sessionId}`);
 
 	// Wrap spawn config with SSH if configured

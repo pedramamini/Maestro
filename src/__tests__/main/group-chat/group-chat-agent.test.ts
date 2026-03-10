@@ -209,6 +209,22 @@ describe('group-chat-agent', () => {
 			).rejects.toThrow(/Failed to spawn participant/);
 		});
 
+		it('sanitizes special characters in participant name for session ID', async () => {
+			const chat = await createTestChatWithModerator('Sanitize Test');
+
+			const participant = await addParticipant(
+				chat.id,
+				'My Agent (v2.0)',
+				'claude-code',
+				mockProcessManager
+			);
+
+			// Session ID should contain sanitized name with special chars replaced by underscores
+			expect(participant.sessionId).toContain('participant-My_Agent__v2_0_-');
+			// Should NOT contain raw special characters
+			expect(participant.sessionId).not.toMatch(/[() .]/);
+		});
+
 		it('throws when moderator is not active', async () => {
 			const chat = await createTestChat('No Moderator Test');
 			// Don't spawn moderator
