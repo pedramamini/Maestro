@@ -49,6 +49,7 @@ import {
 	registerWebHandlers,
 	registerLeaderboardHandlers,
 	registerNotificationsHandlers,
+	registerPromptsHandlers,
 	registerSymphonyHandlers,
 	registerTabNamingHandlers,
 	registerAgentErrorHandlers,
@@ -379,6 +380,9 @@ app.whenReady().then(async () => {
 		app.quit();
 		return;
 	}
+
+	// Register core prompts IPC handlers (no dependencies, prompts already initialized above)
+	registerPromptsHandlers();
 
 	// Set up IPC handlers
 	logger.debug('Setting up IPC handlers', 'Startup');
