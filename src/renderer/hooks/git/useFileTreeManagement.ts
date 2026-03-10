@@ -14,6 +14,7 @@ import { fuzzyMatch } from '../../utils/search';
 import { gitService } from '../../services/git';
 import { logger } from '../../utils/logger';
 import { useFileExplorerStore } from '../../stores/fileExplorerStore';
+import { useSessionStore } from '../../stores/sessionStore';
 
 /**
  * Retry delay for file tree errors (20 seconds).
@@ -148,6 +149,16 @@ export function useFileTreeManagement(
 	} = deps;
 
 	const fileTreeFilter = useFileExplorerStore((s) => s.fileTreeFilter);
+
+	// Signal splash screen that the initial file tree load is done (success or error).
+	// Only fires once — subsequent loads (refresh, session switch) don't re-signal.
+	const initialFileTreeSignaled = useRef(false);
+	const signalInitialFileTreeReady = useCallback(() => {
+		if (!initialFileTreeSignaled.current) {
+			initialFileTreeSignaled.current = true;
+			useSessionStore.getState().setInitialFileTreeReady(true);
+		}
+	}, []);
 
 	// Per-session sequence counters to discard stale file tree loads.
 	// Keyed by sessionId so loads for different sessions don't cancel each other.
@@ -513,6 +524,8 @@ export function useFileTreeManagement(
 								: s
 						)
 					);
+
+					signalInitialFileTreeReady();
 				})
 				.catch((error) => {
 					// Ignore errors from stale loads — a newer load is in progress
@@ -546,6 +559,8 @@ export function useFileTreeManagement(
 								: s
 						)
 					);
+
+					signalInitialFileTreeReady();
 				});
 		}
 	}, [activeSessionId, sessions, setSessions, sshContextOptions, localOptions, nextSeq, isStale]);
