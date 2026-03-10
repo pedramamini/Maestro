@@ -410,7 +410,10 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 			};
 		} catch (error) {
 			logger.error(`Error reading Gemini session file: ${filePath}`, LOG_CONTEXT, error);
-			captureException(error, { operation: 'geminiStorage:readSessionFile', filePath });
+			captureException(error, {
+				operation: 'geminiStorage:readSessionFile',
+				fileName: path.basename(filePath),
+			});
 			return null;
 		}
 	}
@@ -1029,7 +1032,7 @@ export class GeminiSessionStorage implements AgentSessionStorage {
 			} catch (error) {
 				captureException(error, {
 					operation: 'geminiStorage:findSessionFile',
-					filePath,
+					fileName: path.basename(filePath),
 				});
 			}
 		}

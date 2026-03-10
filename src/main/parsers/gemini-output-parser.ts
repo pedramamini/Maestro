@@ -27,6 +27,25 @@ import { logger } from '../utils/logger';
 
 const LOG_CONTEXT = 'GeminiOutputParser';
 
+/**
+ * Redact sensitive patterns (API keys, tokens, paths with credentials) from stderr
+ * before including in user-visible error messages or Sentry reports.
+ */
+const SENSITIVE_PATTERNS = [
+	/(?:api[_-]?key|token|secret|password|credential|auth)[=:\s]+\S+/gi,
+	/AIza[0-9A-Za-z_-]{35}/g, // Google API keys
+	/sk-[a-zA-Z0-9]{20,}/g, // OpenAI-style keys
+	/Bearer\s+\S+/gi,
+];
+
+function sanitizeStderr(stderr: string): string {
+	let result = stderr;
+	for (const pattern of SENSITIVE_PATTERNS) {
+		result = result.replace(pattern, '[REDACTED]');
+	}
+	return result;
+}
+
 // ============================================================================
 // Gemini stream-json Event Interfaces
 // ============================================================================
@@ -433,11 +452,11 @@ export class GeminiOutputParser implements AgentOutputParser {
 			default:
 				return {
 					type: 'agent_crashed',
-					message: `Gemini CLI exited with code ${exitCode}. ${stderr.trim() ? stderr.trim().slice(0, 200) : 'No additional error info.'}`,
+					message: `Gemini CLI exited with code ${exitCode}. ${stderr.trim() ? sanitizeStderr(stderr.trim()).slice(0, 200) : 'No additional error info.'}`,
 					recoverable: false,
 					agentId: this.agentId,
 					timestamp: Date.now(),
-					raw: { exitCode, stderr },
+					raw: { exitCode, stderr: sanitizeStderr(stderr) },
 				};
 		}
 	}

@@ -373,7 +373,7 @@ export class StdoutHandler {
 			sessionId,
 			eventType: event?.type,
 			hasText: !!event?.text,
-			textPreview: event?.text?.substring(0, 100),
+			textLength: event?.text?.length,
 			isPartial: event?.isPartial,
 			isResultMessage: event ? outputParser.isResultMessage(event) : false,
 			resultEmitted: managedProcess.resultEmitted,
@@ -579,7 +579,10 @@ export class StdoutHandler {
 					'ProcessManager',
 					{
 						sessionId,
-						rawEvent: JSON.stringify(event).substring(0, 500),
+						eventType: event?.type,
+						hasText: !!event?.text,
+						textLength: event?.text?.length,
+						eventKeys: event ? Object.keys(event) : [],
 					}
 				);
 			}
