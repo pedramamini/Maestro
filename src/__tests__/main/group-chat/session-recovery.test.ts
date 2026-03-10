@@ -694,4 +694,122 @@ describe('group-chat/session-recovery', () => {
 			expect(result).toBe(false);
 		});
 	});
+
+	// ========================================================================
+	// Corrupted state scenarios
+	// ========================================================================
+
+	describe('corrupted state handling', () => {
+		it('buildRecoveryContext should propagate error when readLog throws (corrupted log)', async () => {
+			mockedLoadGroupChat.mockResolvedValue({
+				id: 'chat-1',
+				name: 'Test Chat',
+				logPath: '/tmp/corrupted.log',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				moderatorAgentId: 'claude-code',
+				moderatorSessionId: 'mod-session-1',
+				participants: [],
+				imagesDir: '/tmp/images',
+			});
+			mockedReadLog.mockRejectedValue(new Error('ENOENT: no such file or directory'));
+
+			await expect(buildRecoveryContext('chat-1', 'Alice')).rejects.toThrow('ENOENT');
+		});
+
+		it('buildRecoveryContext should throw when messages have undefined content (corrupted data)', async () => {
+			mockedLoadGroupChat.mockResolvedValue({
+				id: 'chat-1',
+				name: 'Test Chat',
+				logPath: '/tmp/chat.log',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				moderatorAgentId: 'claude-code',
+				moderatorSessionId: 'mod-session-1',
+				participants: [],
+				imagesDir: '/tmp/images',
+			});
+			// Simulate corrupted messages where content is undefined
+			mockedReadLog.mockResolvedValue([
+				{
+					timestamp: '2025-01-15T10:00:00.000Z',
+					from: 'Alice',
+					content: undefined as unknown as string,
+				},
+				{ timestamp: '2025-01-15T10:01:00.000Z', from: 'Bob', content: 'Normal message' },
+			]);
+
+			// substring() on undefined throws TypeError — corrupted data propagates
+			await expect(buildRecoveryContext('chat-1', 'Alice')).rejects.toThrow(TypeError);
+		});
+
+		it('buildRecoveryContext should handle messages with empty from field', async () => {
+			mockedLoadGroupChat.mockResolvedValue({
+				id: 'chat-1',
+				name: 'Test Chat',
+				logPath: '/tmp/chat.log',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				moderatorAgentId: 'claude-code',
+				moderatorSessionId: 'mod-session-1',
+				participants: [],
+				imagesDir: '/tmp/images',
+			});
+			mockedReadLog.mockResolvedValue([
+				{ timestamp: '2025-01-15T10:00:00.000Z', from: '', content: 'Orphaned message' },
+				{ timestamp: '2025-01-15T10:01:00.000Z', from: 'Alice', content: 'My message' },
+			]);
+
+			const result = await buildRecoveryContext('chat-1', 'Alice');
+			// Empty-from message should appear in history but not be categorized as Alice's
+			expect(result).toContain('Orphaned message');
+			expect(result).toContain('My message');
+			expect(result).toContain('**YOU (Alice):**');
+		});
+
+		it('buildRecoveryContext should handle invalid timestamps in messages', async () => {
+			mockedLoadGroupChat.mockResolvedValue({
+				id: 'chat-1',
+				name: 'Test Chat',
+				logPath: '/tmp/chat.log',
+				createdAt: Date.now(),
+				updatedAt: Date.now(),
+				moderatorAgentId: 'claude-code',
+				moderatorSessionId: 'mod-session-1',
+				participants: [],
+				imagesDir: '/tmp/images',
+			});
+			mockedReadLog.mockResolvedValue([
+				{ timestamp: 'not-a-date', from: 'Alice', content: 'Message with bad timestamp' },
+			]);
+
+			// Should not throw — new Date('not-a-date').toLocaleTimeString() returns 'Invalid Date'
+			const result = await buildRecoveryContext('chat-1', 'Alice');
+			expect(result).toContain('Message with bad timestamp');
+		});
+
+		it('initiateSessionRecovery should return false when storage is corrupted', async () => {
+			mockedUpdateParticipant.mockRejectedValue(new Error('Unexpected end of JSON input'));
+
+			const result = await initiateSessionRecovery('chat-1', 'Alice');
+			expect(result).toBe(false);
+		});
+
+		it('initiateSessionRecovery should return false when chat metadata file is missing', async () => {
+			mockedUpdateParticipant.mockRejectedValue(
+				new Error("ENOENT: no such file or directory, open '/tmp/gc/chat-1/metadata.json'")
+			);
+
+			const result = await initiateSessionRecovery('chat-1', 'Alice');
+			expect(result).toBe(false);
+		});
+
+		it('detectSessionNotFoundError should handle output with null bytes gracefully', () => {
+			mockedGetErrorPatterns.mockReturnValue({});
+			mockedMatchErrorPattern.mockReturnValue(null);
+
+			const output = 'Normal text\x00with null bytes\x00and session not found error';
+			expect(detectSessionNotFoundError(output)).toBe(true);
+		});
+	});
 });
