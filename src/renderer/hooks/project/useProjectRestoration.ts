@@ -29,9 +29,9 @@ const PERSISTENCE_DEBOUNCE_MS = 2000;
  * 1. Each group with sessions becomes a project (name from group, repoPath from first session).
  * 2. Ungrouped sessions are grouped by projectRoot/cwd into auto-created projects.
  * 3. All affected sessions get a projectId assignment.
- * 4. Migration flag is written so it never runs again.
  *
  * Returns null if migration was already completed.
+ * Caller is responsible for persisting projects and marking migration complete.
  */
 async function migrateGroupsToProjects(): Promise<{
 	projects: Project[];
@@ -95,9 +95,6 @@ async function migrateGroupsToProjects(): Promise<{
 		projectId: sessionUpdates.get(s.id) || s.projectId,
 	}));
 
-	// 4. Mark migration complete
-	await window.maestro.settings.set(MIGRATION_KEY, true);
-
 	return { projects, updatedSessions };
 }
 
@@ -107,6 +104,7 @@ async function migrateGroupsToProjects(): Promise<{
 
 export function useProjectRestoration() {
 	const hasRun = useRef(false);
+	const skipFirstPersist = useRef(true);
 	const initialLoadComplete = useSessionStore((s) => s.initialLoadComplete);
 
 	// Extract stable action references (Zustand actions are singletons)
@@ -144,6 +142,10 @@ export function useProjectRestoration() {
 				setProjects(migrationResult.projects);
 				setSessions(migrationResult.updatedSessions);
 				await window.maestro.projects.setAll(migrationResult.projects);
+				await window.maestro.sessions.setAll(migrationResult.updatedSessions);
+
+				// Mark migration complete only after data is safely on disk
+				await window.maestro.settings.set(MIGRATION_KEY, true);
 
 				// Set active project from active session or fall back to first
 				const activeSessionId = useSessionStore.getState().activeSessionId;
@@ -164,13 +166,21 @@ export function useProjectRestoration() {
 	}, [initialLoadComplete, setProjects, setActiveProjectId, setSessions]);
 
 	// --- Debounced persistence effect ---
+	// Skips the first change (initial load from disk) to avoid a redundant write.
 	const projects = useProjectStore((s) => s.projects);
 
 	useEffect(() => {
 		if (!initialLoadComplete) return;
 
+		if (skipFirstPersist.current) {
+			skipFirstPersist.current = false;
+			return;
+		}
+
 		const timer = setTimeout(() => {
-			window.maestro.projects.setAll(projects);
+			window.maestro.projects.setAll(projects).catch((err: unknown) => {
+				console.error('[useProjectRestoration] Failed to persist projects:', err);
+			});
 		}, PERSISTENCE_DEBOUNCE_MS);
 
 		return () => clearTimeout(timer);

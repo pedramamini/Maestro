@@ -29,6 +29,10 @@ const mockProjectsApi = {
 	setAll: vi.fn().mockResolvedValue(true),
 };
 
+const mockSessionsApi = {
+	setAll: vi.fn().mockResolvedValue(true),
+};
+
 const mockGroupsApi = {
 	getAll: vi.fn().mockResolvedValue([]),
 };
@@ -121,6 +125,7 @@ describe('useProjectRestoration', () => {
 		(window as any).maestro = {
 			...(window as any).maestro,
 			projects: mockProjectsApi,
+			sessions: { ...(window as any).maestro?.sessions, ...mockSessionsApi },
 			groups: mockGroupsApi,
 			settings: mockSettingsApi,
 		};
@@ -291,6 +296,9 @@ describe('useProjectRestoration', () => {
 
 			// Projects should have been persisted
 			expect(mockProjectsApi.setAll).toHaveBeenCalledWith(storeProjects);
+
+			// Sessions (with new projectId fields) should also have been persisted
+			expect(mockSessionsApi.setAll).toHaveBeenCalledWith(updatedSessions);
 		});
 
 		// ====================================================================
@@ -347,10 +355,25 @@ describe('useProjectRestoration', () => {
 		// ====================================================================
 		// 7. Marks migration complete
 		// ====================================================================
-		it('marks migration complete by writing settings flag', async () => {
+		it('marks migration complete AFTER persisting projects and sessions to disk', async () => {
 			mockProjectsApi.getAll.mockResolvedValue([]);
 			mockSettingsApi.get.mockResolvedValue(null);
 			mockGroupsApi.getAll.mockResolvedValue([]);
+
+			// Track call order to verify flag is set after data is on disk
+			const callOrder: string[] = [];
+			mockProjectsApi.setAll.mockImplementation(async () => {
+				callOrder.push('projects.setAll');
+				return true;
+			});
+			mockSessionsApi.setAll.mockImplementation(async () => {
+				callOrder.push('sessions.setAll');
+				return true;
+			});
+			mockSettingsApi.set.mockImplementation(async () => {
+				callOrder.push('settings.set');
+				return true;
+			});
 
 			useSessionStore.setState({
 				initialLoadComplete: true,
@@ -365,6 +388,15 @@ describe('useProjectRestoration', () => {
 			});
 
 			expect(mockSettingsApi.set).toHaveBeenCalledWith('projectMigrationComplete', true);
+
+			// Verify ordering: projects + sessions must be persisted before flag is written
+			const projectsSetAllIndex = callOrder.indexOf('projects.setAll');
+			const sessionsSetAllIndex = callOrder.indexOf('sessions.setAll');
+			const settingsSetIndex = callOrder.indexOf('settings.set');
+			expect(projectsSetAllIndex).toBeGreaterThanOrEqual(0);
+			expect(sessionsSetAllIndex).toBeGreaterThanOrEqual(0);
+			expect(settingsSetIndex).toBeGreaterThan(projectsSetAllIndex);
+			expect(settingsSetIndex).toBeGreaterThan(sessionsSetAllIndex);
 		});
 
 		// ====================================================================
@@ -442,15 +474,21 @@ describe('useProjectRestoration', () => {
 
 			renderHook(() => useProjectRestoration());
 
-			// Let the initial load complete
+			// Let the initial load complete (loads projects into store)
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(0);
 			});
 
-			// Clear the calls from initial load
+			// The first persistence cycle is skipped (initial load from disk)
+			// Advance past the would-be debounce to confirm no write
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
+			});
+
+			// Clear any calls from initial load
 			mockProjectsApi.setAll.mockClear();
 
-			// Simulate a project change by updating the store directly
+			// Now simulate a real user-driven project change
 			const updatedProjects = [
 				createMockProject({ id: 'p1', name: 'Updated Name' }),
 			];
@@ -482,13 +520,17 @@ describe('useProjectRestoration', () => {
 
 			renderHook(() => useProjectRestoration());
 
+			// Let initial load complete + exhaust first-render skip
 			await act(async () => {
 				await vi.advanceTimersByTimeAsync(0);
+			});
+			await act(async () => {
+				await vi.advanceTimersByTimeAsync(2000);
 			});
 
 			mockProjectsApi.setAll.mockClear();
 
-			// Rapid changes
+			// Rapid changes (each resets the debounce timer)
 			act(() => {
 				useProjectStore.getState().setProjects([
 					createMockProject({ id: 'p1', name: 'Change 1' }),
