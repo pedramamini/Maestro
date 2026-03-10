@@ -722,6 +722,57 @@ Some text with [x] in it that's not a checkbox
 		});
 	});
 
+	describe('binary detection timeout', () => {
+		beforeEach(() => {
+			vi.resetModules();
+			vi.useFakeTimers();
+		});
+
+		afterEach(() => {
+			vi.useRealTimers();
+		});
+
+		it('should return undefined when which command hangs past 5s timeout', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			// Mock spawn that never emits close (simulates a hung process)
+			const hangingChild = Object.assign(new EventEmitter(), {
+				stdin: { end: vi.fn() },
+				stdout: new EventEmitter(),
+				stderr: new EventEmitter(),
+			});
+			mockSpawn.mockReturnValue(hangingChild);
+
+			const { detectGemini } = await import('../../../cli/services/agent-spawner');
+			const resultPromise = detectGemini();
+
+			// Advance past the 5s timeout
+			await vi.advanceTimersByTimeAsync(5100);
+
+			const result = await resultPromise;
+			expect(result.available).toBe(false);
+			expect(result.path).toBeUndefined();
+		});
+
+		it('should resolve before timeout when which responds quickly', async () => {
+			mockGetAgentCustomPath.mockReturnValue(undefined);
+			mockSpawn.mockReturnValue(mockChild);
+
+			const { detectClaude: freshDetectClaude } =
+				await import('../../../cli/services/agent-spawner');
+			const resultPromise = freshDetectClaude();
+
+			// Simulate which finding claude immediately
+			await vi.advanceTimersByTimeAsync(0);
+			mockStdout.emit('data', Buffer.from('/usr/bin/claude\n'));
+			await vi.advanceTimersByTimeAsync(0);
+			mockChild.emit('close', 0);
+
+			const result = await resultPromise;
+			expect(result.available).toBe(true);
+			expect(result.path).toBe('/usr/bin/claude');
+		});
+	});
+
 	describe('spawnAgent', () => {
 		beforeEach(() => {
 			mockSpawn.mockReturnValue(mockChild);

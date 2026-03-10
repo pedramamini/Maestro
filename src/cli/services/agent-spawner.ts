@@ -85,15 +85,18 @@ async function isExecutable(filePath: string): Promise<boolean> {
 	}
 }
 
+/** Timeout for CLI binary detection via which/where (ms) */
+const BINARY_DETECTION_TIMEOUT_MS = 5000;
+
 /**
- * Find Claude in PATH using 'which' command
+ * Find a binary in PATH using 'which'/'where' command with timeout
  */
-async function findClaudeInPath(): Promise<string | undefined> {
-	return new Promise((resolve) => {
+async function findBinaryInPath(binaryName: string): Promise<string | undefined> {
+	const spawnPromise = new Promise<string | undefined>((resolve) => {
 		const env = { ...process.env, PATH: getExpandedPath() };
 		const command = getWhichCommand();
 
-		const proc = spawn(command, [CLAUDE_DEFAULT_COMMAND], { env });
+		const proc = spawn(command, [binaryName], { env });
 		let stdout = '';
 
 		proc.stdout?.on('data', (data) => {
@@ -112,64 +115,33 @@ async function findClaudeInPath(): Promise<string | undefined> {
 			resolve(undefined);
 		});
 	});
+
+	const timeoutPromise = new Promise<undefined>((resolve) => {
+		setTimeout(() => resolve(undefined), BINARY_DETECTION_TIMEOUT_MS);
+	});
+
+	return Promise.race([spawnPromise, timeoutPromise]);
+}
+
+/**
+ * Find Claude in PATH using 'which' command
+ */
+async function findClaudeInPath(): Promise<string | undefined> {
+	return findBinaryInPath(CLAUDE_DEFAULT_COMMAND);
 }
 
 /**
  * Find Codex in PATH using 'which' command
  */
 async function findCodexInPath(): Promise<string | undefined> {
-	return new Promise((resolve) => {
-		const env = { ...process.env, PATH: getExpandedPath() };
-		const command = getWhichCommand();
-
-		const proc = spawn(command, [CODEX_DEFAULT_COMMAND], { env });
-		let stdout = '';
-
-		proc.stdout?.on('data', (data) => {
-			stdout += data.toString();
-		});
-
-		proc.on('close', (code) => {
-			if (code === 0 && stdout.trim()) {
-				resolve(stdout.trim().split('\n')[0]); // First match
-			} else {
-				resolve(undefined);
-			}
-		});
-
-		proc.on('error', () => {
-			resolve(undefined);
-		});
-	});
+	return findBinaryInPath(CODEX_DEFAULT_COMMAND);
 }
 
 /**
  * Find Gemini CLI in PATH using 'which' command
  */
 async function findGeminiInPath(): Promise<string | undefined> {
-	return new Promise((resolve) => {
-		const env = { ...process.env, PATH: getExpandedPath() };
-		const command = process.platform === 'win32' ? 'where' : 'which';
-
-		const proc = spawn(command, [GEMINI_DEFAULT_COMMAND], { env });
-		let stdout = '';
-
-		proc.stdout?.on('data', (data) => {
-			stdout += data.toString();
-		});
-
-		proc.on('close', (code) => {
-			if (code === 0 && stdout.trim()) {
-				resolve(stdout.trim().split('\n')[0]);
-			} else {
-				resolve(undefined);
-			}
-		});
-
-		proc.on('error', () => {
-			resolve(undefined);
-		});
-	});
+	return findBinaryInPath(GEMINI_DEFAULT_COMMAND);
 }
 
 /**
