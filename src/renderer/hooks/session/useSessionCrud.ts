@@ -23,6 +23,7 @@ import { getModalActions } from '../../stores/modalStore';
 import { notifyToast } from '../../stores/notificationStore';
 import { generateId } from '../../utils/ids';
 import { validateNewSession } from '../../utils/sessionValidation';
+import { getTerminalSessionId } from '../../utils/terminalTabHelpers';
 import { gitService } from '../../services/git';
 import { AUTO_RUN_FOLDER_NAME } from '../../components/Wizard';
 
@@ -320,6 +321,16 @@ export function useSessionCrud(deps: UseSessionCrudDeps): UseSessionCrudReturn {
 							await (window as any).maestro.process.kill(`${session.id}-terminal`);
 						} catch (error) {
 							console.error('Failed to kill terminal process:', error);
+						}
+						// Kill terminal tab PTYs — each tab has its own PTY
+						for (const tab of session.terminalTabs || []) {
+							try {
+								await (window as any).maestro.process.kill(
+									getTerminalSessionId(session.id, tab.id)
+								);
+							} catch (error) {
+								console.error('Failed to kill terminal tab process:', error);
+							}
 						}
 						try {
 							await (window as any).maestro.playbooks.deleteAll(session.id);
