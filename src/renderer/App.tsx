@@ -744,6 +744,30 @@ function MaestroConsoleInner() {
 
 	// --- SESSION RESTORATION (extracted hook, Phase 2E) ---
 	const { initialLoadComplete } = useSessionRestoration();
+	// --- WIZARD RESUME CHECK (check for incomplete wizard on app startup) ---
+	useEffect(() => {
+		// Only check after initial session load is complete
+		if (!initialLoadComplete.current) return;
+
+		// Check for saved wizard resume state
+		const checkWizardResume = async () => {
+			try {
+				const saved = await window.maestro.settings.get('wizardResumeState');
+				if (saved && typeof saved === 'object' && saved.currentStep) {
+					// Only resume if past the first step and wizard is not already open
+					if (saved.currentStep !== 'agent-selection' && !wizardState.isOpen) {
+						const { setWizardResumeModalOpen, setWizardResumeState } = getModalActions();
+						setWizardResumeState(saved);
+						setWizardResumeModalOpen(true);
+					}
+				}
+			} catch (e) {
+				console.error('[App] Failed to check wizard resume state:', e);
+			}
+		};
+
+		checkWizardResume();
+	}, [initialLoadComplete.current, wizardState.isOpen]);
 
 	// --- TAB HANDLERS (extracted hook) ---
 	const {
