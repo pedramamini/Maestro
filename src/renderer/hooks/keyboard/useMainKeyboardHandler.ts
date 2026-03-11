@@ -623,10 +623,18 @@ export function useMainKeyboardHandler(): UseMainKeyboardHandlerReturn {
 						// File tab was already closed by handleCloseCurrentTab
 						trackShortcut('closeTab');
 					} else if (closeResult.type === 'ai' && closeResult.tabId) {
-						// AI tab - need to handle wizard confirmation
+						// AI tab - need to handle wizard, draft, or regular confirmation
 						if (closeResult.isWizardTab) {
 							useModalStore.getState().openModal('confirm', {
 								message: 'Close this wizard? Your progress will be lost and cannot be restored.',
+								onConfirm: () => {
+									ctx.performTabClose(closeResult.tabId);
+									trackShortcut('closeTab');
+								},
+							});
+						} else if (closeResult.hasDraft) {
+							useModalStore.getState().openModal('confirm', {
+								message: 'This tab has an unsent draft. Are you sure you want to close it?',
 								onConfirm: () => {
 									ctx.performTabClose(closeResult.tabId);
 									trackShortcut('closeTab');
