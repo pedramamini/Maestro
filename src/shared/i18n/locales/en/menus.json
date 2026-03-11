@@ -36,7 +36,20 @@
 	"context": {
 		"copy": "Copy",
 		"paste": "Paste",
-		"rename": "Rename"
+		"rename": "Rename",
+		"edit_agent": "Edit Agent...",
+		"duplicate": "Duplicate...",
+		"add_bookmark": "Add Bookmark",
+		"remove_bookmark": "Remove Bookmark",
+		"move_to_group": "Move to Group",
+		"ungrouped": "Ungrouped",
+		"current": "(current)",
+		"create_new_group": "Create New Group",
+		"create_worktree": "Create Worktree",
+		"configure_worktrees": "Configure Worktrees",
+		"create_pull_request": "Create Pull Request",
+		"remove_worktree": "Remove Worktree",
+		"remove_agent": "Remove Agent"
 	},
 	"commands": {
 		"search_placeholder": "Type a command or jump to agent...",
