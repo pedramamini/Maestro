@@ -1,9 +1,42 @@
 {
+	"modal": {
+		"aria_label": "Settings"
+	},
+	"tabs": {
+		"general": "General",
+		"display": "Display",
+		"llm": "LLM",
+		"shortcuts": "Shortcuts",
+		"themes": "Themes",
+		"notifications": "Notifications",
+		"notifications_short": "Notify",
+		"ai_commands": "AI Commands",
+		"ssh_hosts": "SSH Hosts",
+		"encore_features": "Encore Features"
+	},
 	"general": {
 		"title": "General",
 		"theme_label": "Theme",
 		"language_label": "Language",
 		"language_description": "Select your preferred display language"
+	},
+	"llm": {
+		"provider_label": "LLM Provider",
+		"provider_openrouter": "OpenRouter",
+		"provider_anthropic": "Anthropic",
+		"provider_ollama": "Ollama (Local)",
+		"model_slug_label": "Model Slug",
+		"api_key_label": "API Key",
+		"api_key_help": "Keys are stored locally in ~/.maestro/settings.json",
+		"test_connection_button": "Test Connection",
+		"testing_connection_button": "Testing Connection...",
+		"test_help": "Test sends a simple prompt to verify connectivity and configuration",
+		"api_key_required_error": "API key is required for {{provider}}",
+		"connection_success": "Successfully connected to {{provider}}!",
+		"api_error": "{{provider}} API error: {{status}}",
+		"ollama_api_error": "Ollama API error: {{status}}. Make sure Ollama is running locally.",
+		"invalid_response_error": "Invalid response from {{provider}}",
+		"connection_failed_error": "Connection failed"
 	},
 	"encore": {
 		"title": "Encore Features",
