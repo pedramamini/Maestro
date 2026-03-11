@@ -977,8 +977,12 @@ class PhaseGenerator {
 			});
 
 			// Start watching the folder for file changes
+			// Pass sshRemoteId for remote sessions (file watching disabled on remote, uses polling)
+			const sshRemoteId = config.sshRemoteConfig?.enabled
+				? (config.sshRemoteConfig.remoteId ?? undefined)
+				: undefined;
 			window.maestro.autorun
-				.watchFolder(autoRunPath)
+				.watchFolder(autoRunPath, sshRemoteId)
 				.then((result) => {
 					if (result.success) {
 						console.log('[PhaseGenerator] Started watching folder:', autoRunPath);
