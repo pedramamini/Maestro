@@ -434,13 +434,20 @@ app.whenReady().then(async () => {
 	// "Show Previous Tab" (Cmd+Shift+{) and "Show Next Tab" (Cmd+Shift+})
 	// menu items into the default Window menu. Without this, those keyboard
 	// events are intercepted at the NSMenu level and never reach the renderer.
+	//
+	// IMPORTANT: Do NOT include { role: 'close' } in the Window submenu.
+	// The 'close' role registers Cmd+W as a native accelerator, which intercepts
+	// the keystroke at the NSMenu level before it reaches the renderer. This
+	// breaks Cmd+W tab-close shortcuts in both AI and terminal modes. Window
+	// closing is handled by the app lifecycle (Cmd+Q quits, red traffic light
+	// hides) so the native Close menu item is unnecessary.
 	if (isMacOS()) {
 		const template: Electron.MenuItemConstructorOptions[] = [
 			{ role: 'appMenu' },
 			{ role: 'editMenu' },
 			{
 				label: 'Window',
-				submenu: [{ role: 'minimize' }, { role: 'zoom' }, { role: 'close' }],
+				submenu: [{ role: 'minimize' }, { role: 'zoom' }],
 			},
 		];
 		Menu.setApplicationMenu(Menu.buildFromTemplate(template));
