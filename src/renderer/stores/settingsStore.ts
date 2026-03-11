@@ -705,10 +705,15 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 		window.maestro.settings.set('language', value);
 		localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
 		i18n.changeLanguage(value);
+		// Direction attributes are applied reactively by DirectionProvider.
+		// We also set them here for immediate feedback before the next React render.
+		const rtl = RTL_LANGUAGES.includes(value as SupportedLanguage);
+		const dir = rtl ? 'rtl' : 'ltr';
 		document.documentElement.lang = value;
-		document.documentElement.dir = RTL_LANGUAGES.includes(value as SupportedLanguage)
-			? 'rtl'
-			: 'ltr';
+		document.documentElement.dir = dir;
+		document.documentElement.setAttribute('data-dir', dir);
+		document.documentElement.style.setProperty('--dir-start', rtl ? 'right' : 'left');
+		document.documentElement.style.setProperty('--dir-end', rtl ? 'left' : 'right');
 	},
 
 	setDocumentGraphShowExternalLinks: (value) => {

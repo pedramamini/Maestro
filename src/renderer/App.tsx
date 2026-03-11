@@ -21,6 +21,7 @@ import { TourOverlay } from './components/Wizard/tour';
 // CONDUCTOR_BADGES moved to useAutoRunAchievements hook
 import { EmptyStateView } from './components/EmptyStateView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
+import { DirectionProvider } from './components/shared/DirectionProvider';
 
 // Lazy-loaded components for performance (rarely-used heavy modals)
 // These are loaded on-demand when the user first opens them
@@ -3231,15 +3232,18 @@ function MaestroConsoleInner() {
  * MaestroConsole - Main application component with context providers
  *
  * Wraps MaestroConsoleInner with context providers for centralized state management.
+ * DirectionProvider - RTL/LTR direction based on active language
  * InputProvider - centralized input state management
  * InlineWizardProvider - inline /wizard command state management
  */
 export default function MaestroConsole() {
 	return (
-		<InlineWizardProvider>
-			<InputProvider>
-				<MaestroConsoleInner />
-			</InputProvider>
-		</InlineWizardProvider>
+		<DirectionProvider>
+			<InlineWizardProvider>
+				<InputProvider>
+					<MaestroConsoleInner />
+				</InputProvider>
+			</InlineWizardProvider>
+		</DirectionProvider>
 	);
 }

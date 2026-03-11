@@ -33,8 +33,6 @@ import {
 	selectIsLeaderboardRegistered,
 } from '../../stores/settingsStore';
 import type { DocumentGraphLayoutType } from '../../stores/settingsStore';
-import { RTL_LANGUAGES } from '../../../shared/i18n/config';
-import type { SupportedLanguage } from '../../../shared/i18n/config';
 
 export interface UseSettingsReturn {
 	// Loading state
@@ -345,15 +343,8 @@ export function useSettings(): UseSettingsReturn {
 		}
 	}, [store.fontSize, store.settingsLoaded]);
 
-	// Apply language attributes to HTML root element for i18n and RTL support
-	useEffect(() => {
-		if (store.settingsLoaded) {
-			document.documentElement.lang = store.language;
-			document.documentElement.dir = RTL_LANGUAGES.includes(store.language as SupportedLanguage)
-				? 'rtl'
-				: 'ltr';
-		}
-	}, [store.language, store.settingsLoaded]);
+	// Language direction attributes (dir, data-dir, lang, CSS custom properties)
+	// are now managed by DirectionProvider — see components/shared/DirectionProvider.tsx
 
 	return {
 		...store,
