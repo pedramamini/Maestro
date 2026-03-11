@@ -1977,7 +1977,7 @@ describe('SessionList', () => {
 			const { container } = render(<SessionList {...props} />);
 
 			// Click on palette container
-			const palette = container.querySelector('.ml-8.mr-3.mt-1.mb-2.flex');
+			const palette = container.querySelector('.ms-8.me-3.mt-1.mb-2.flex');
 			fireEvent.click(palette!);
 
 			expect(toggleGroup).toHaveBeenCalledWith('g1');
@@ -2716,7 +2716,7 @@ describe('SessionList', () => {
 			fireEvent.click(screen.getByText('Ungrouped Agents'));
 
 			// Find and click the palette container (not the indicator)
-			const paletteContainer = container.querySelector('.ml-8.mr-3.mt-1.mb-2.flex');
+			const paletteContainer = container.querySelector('.ms-8.me-3.mt-1.mb-2.flex');
 			if (paletteContainer) {
 				fireEvent.click(paletteContainer);
 

@@ -934,7 +934,7 @@ export const MainPanel = React.memo(
 														{...gitTooltip.contentHandlers}
 													/>
 													<div
-														className="absolute top-full left-0 pt-2 w-96 z-50 pointer-events-auto"
+														className="absolute top-full start-0 pt-2 w-96 z-50 pointer-events-auto"
 														{...gitTooltip.contentHandlers}
 													>
 														<div
@@ -964,7 +964,7 @@ export const MainPanel = React.memo(
 																	>
 																		{gitInfo.branch}
 																	</span>
-																	<div className="flex items-center gap-1.5 ml-auto shrink-0">
+																	<div className="flex items-center gap-1.5 ms-auto shrink-0">
 																		{gitInfo.ahead > 0 && (
 																			<span className="flex items-center gap-0.5 text-xs text-green-500">
 																				<ArrowUp className="w-3 h-3" />
@@ -1015,7 +1015,7 @@ export const MainPanel = React.memo(
 																				const url = remoteUrlToBrowserUrl(gitInfo.remote);
 																				if (url) window.maestro.shell.openExternal(url);
 																			}}
-																			className="text-xs font-mono truncate hover:underline text-left"
+																			className="text-xs font-mono truncate hover:underline text-start"
 																			style={{ color: theme.colors.textMain }}
 																			title={`Open ${gitInfo.remote}`}
 																		>
@@ -1028,7 +1028,7 @@ export const MainPanel = React.memo(
 																				e.stopPropagation();
 																				copyToClipboard(gitInfo.remote);
 																			}}
-																			className="p-1 rounded hover:bg-white/10 transition-colors ml-auto shrink-0"
+																			className="p-1 rounded hover:bg-white/10 transition-colors ms-auto shrink-0"
 																			title="Copy remote URL"
 																		>
 																			<Copy
@@ -1162,7 +1162,7 @@ export const MainPanel = React.memo(
 											<span
 												title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`}
 											>
-												<GitBranch className="w-3.5 h-3.5 ml-0.5" />
+												<GitBranch className="w-3.5 h-3.5 ms-0.5" />
 											</span>
 										)}
 									</button>
@@ -1218,7 +1218,7 @@ export const MainPanel = React.memo(
 										hasCapability('supportsUsageStats') &&
 										activeTabContextWindow > 0 && (
 											<div
-												className="header-context-widget flex flex-col items-end mr-2 relative cursor-pointer"
+												className="header-context-widget flex flex-col items-end me-2 relative cursor-pointer"
 												{...contextTooltip.triggerHandlers}
 											>
 												{/* Full label shown at wide widths, compact label shown at narrow widths via CSS */}
@@ -1259,7 +1259,7 @@ export const MainPanel = React.memo(
 															{...contextTooltip.contentHandlers}
 														/>
 														<div
-															className="absolute top-full right-0 pt-2 w-64 z-50 pointer-events-auto"
+															className="absolute top-full end-0 pt-2 w-64 z-50 pointer-events-auto"
 															{...contextTooltip.contentHandlers}
 														>
 															<div
@@ -1317,7 +1317,7 @@ export const MainPanel = React.memo(
 																				style={{ color: theme.colors.textDim }}
 																			>
 																				Reasoning Tokens
-																				<span className="ml-1 text-[10px] opacity-60">
+																				<span className="ms-1 text-[10px] opacity-60">
 																					(in output)
 																				</span>
 																			</span>

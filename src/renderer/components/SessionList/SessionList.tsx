@@ -498,10 +498,12 @@ function SessionListInner(props: SessionListProps) {
 				{/* Worktree children drawer (when expanded) */}
 				{hasWorktrees && worktreesExpanded && onToggleWorktreeExpanded && (
 					<div
-						className={`rounded-bl overflow-hidden ${needsWorktreeWrapper ? '' : 'ml-1'}`}
+						className={`rounded-es overflow-hidden ${needsWorktreeWrapper ? '' : 'ms-1'}`}
 						style={{
 							backgroundColor: theme.colors.accent + '10',
-							borderLeft: needsWorktreeWrapper ? 'none' : `1px solid ${theme.colors.accent}30`,
+							borderInlineStart: needsWorktreeWrapper
+								? 'none'
+								: `1px solid ${theme.colors.accent}30`,
 							borderBottom: `1px solid ${theme.colors.accent}30`,
 						}}
 					>
@@ -559,13 +561,13 @@ function SessionListInner(props: SessionListProps) {
 			</>
 		);
 
-		// Wrap in left-bordered container for flat/ungrouped sessions with worktrees
-		// Use ml-3 to align left edge, mr-3 minus the extra px-1 from ungrouped (px-4 vs px-3)
+		// Wrap in start-bordered container for flat/ungrouped sessions with worktrees
+		// Use ms-3 to align start edge, me-2 minus the extra px-1 from ungrouped (px-4 vs px-3)
 		if (needsWorktreeWrapper) {
 			return (
 				<div
 					key={`${options.keyPrefix}-${session.id}`}
-					className="border-l ml-3 mr-2 mb-1"
+					className="border-s ms-3 me-2 mb-1"
 					style={{ borderColor: theme.colors.accent + '50' }}
 				>
 					{content}
@@ -594,7 +596,7 @@ function SessionListInner(props: SessionListProps) {
 		<div
 			ref={sidebarContainerRef}
 			tabIndex={0}
-			className={`border-r flex flex-col shrink-0 ${sidebarTransitionClass} outline-none relative z-20 ${activeFocus === 'sidebar' && !activeGroupChatId ? 'ring-1 ring-inset' : ''}`}
+			className={`border-e flex flex-col shrink-0 ${sidebarTransitionClass} outline-none relative z-20 ${activeFocus === 'sidebar' && !activeGroupChatId ? 'ring-1 ring-inset' : ''}`}
 			style={
 				{
 					width: leftSidebarOpen ? `${leftSidebarWidthState}px` : '64px',
@@ -622,7 +624,7 @@ function SessionListInner(props: SessionListProps) {
 			{/* Resize Handle */}
 			{leftSidebarOpen && (
 				<div
-					className="absolute top-0 right-0 w-3 h-full cursor-col-resize border-r-4 border-transparent hover:border-blue-500 transition-colors z-20"
+					className="absolute top-0 end-0 w-3 h-full cursor-col-resize border-e-4 border-transparent hover:border-blue-500 transition-colors z-20"
 					onMouseDown={onSidebarResizeStart}
 				/>
 			)}
@@ -660,7 +662,7 @@ function SessionListInner(props: SessionListProps) {
 								</button>
 							)}
 							{/* Global LIVE Toggle */}
-							<div className="ml-2 relative z-10" ref={liveOverlayRef} data-tour="remote-control">
+							<div className="ms-2 relative z-10" ref={liveOverlayRef} data-tour="remote-control">
 								<button
 									onClick={() => {
 										if (!isLiveMode) {
@@ -726,7 +728,7 @@ function SessionListInner(props: SessionListProps) {
 							{/* Menu Overlay */}
 							{menuOpen && (
 								<div
-									className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin"
+									className="absolute top-full start-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin"
 									data-tour="hamburger-menu-contents"
 									style={{
 										backgroundColor: theme.colors.bgSidebar,
@@ -760,7 +762,7 @@ function SessionListInner(props: SessionListProps) {
 						{/* Menu Overlay for Collapsed Sidebar */}
 						{menuOpen && (
 							<div
-								className="absolute top-full left-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin"
+								className="absolute top-full start-0 mt-2 w-72 rounded-lg shadow-2xl z-50 overflow-y-auto scrollbar-thin"
 								style={{
 									backgroundColor: theme.colors.bgSidebar,
 									border: `1px solid ${theme.colors.border}`,
@@ -832,7 +834,7 @@ function SessionListInner(props: SessionListProps) {
 
 							{!bookmarksCollapsed ? (
 								<div
-									className="flex flex-col border-l ml-4"
+									className="flex flex-col border-s ms-4"
 									style={{ borderColor: theme.colors.accent }}
 								>
 									{sortedBookmarkedSessions.map((session) => {
@@ -846,7 +848,7 @@ function SessionListInner(props: SessionListProps) {
 							) : (
 								/* Collapsed Bookmarks Palette - uses subdivided pills for worktrees */
 								<div
-									className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
+									className="ms-8 me-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
 									onClick={() => setBookmarksCollapsed(false)}
 								>
 									{sortedBookmarkedParentSessions.map((s) => (
@@ -961,7 +963,7 @@ function SessionListInner(props: SessionListProps) {
 
 								{!group.collapsed ? (
 									<div
-										className="flex flex-col border-l ml-4"
+										className="flex flex-col border-s ms-4"
 										style={{ borderColor: theme.colors.border }}
 									>
 										{groupSessions.map((session) =>
@@ -975,7 +977,7 @@ function SessionListInner(props: SessionListProps) {
 								) : (
 									/* Collapsed Group Palette - uses subdivided pills for worktrees */
 									<div
-										className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
+										className="ms-8 me-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
 										onClick={() => toggleGroup(group.id)}
 									>
 										{groupSessions
@@ -1067,7 +1069,7 @@ function SessionListInner(props: SessionListProps) {
 
 							{!ungroupedCollapsed ? (
 								<div
-									className="flex flex-col border-l ml-4"
+									className="flex flex-col border-s ms-4"
 									style={{ borderColor: theme.colors.border }}
 								>
 									{sortedUngroupedSessions.map((session) =>
@@ -1077,7 +1079,7 @@ function SessionListInner(props: SessionListProps) {
 							) : (
 								/* Collapsed Ungrouped Palette - uses subdivided pills for worktrees */
 								<div
-									className="ml-8 mr-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
+									className="ms-8 me-3 mt-1 mb-2 flex gap-1 h-1.5 cursor-pointer"
 									onClick={() => setUngroupedCollapsed(false)}
 								>
 									{sortedUngroupedParentSessions.map((s) => (

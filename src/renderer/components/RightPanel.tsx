@@ -381,7 +381,7 @@ export const RightPanel = memo(
 			<div
 				ref={panelRef}
 				tabIndex={0}
-				className={`border-l flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
+				className={`border-s flex flex-col ${rightPanelTransitionClass} outline-none relative ${rightPanelOpen ? '' : 'w-0 overflow-hidden opacity-0'} ${activeFocus === 'right' ? 'ring-1 ring-inset z-10' : ''}`}
 				style={
 					{
 						width: rightPanelOpen ? `${rightPanelWidth}px` : '0',
@@ -396,7 +396,7 @@ export const RightPanel = memo(
 				{/* Resize Handle */}
 				{rightPanelOpen && (
 					<div
-						className="absolute top-0 left-0 w-3 h-full cursor-col-resize border-l-4 border-transparent hover:border-blue-500 transition-colors z-20"
+						className="absolute top-0 start-0 w-3 h-full cursor-col-resize border-s-4 border-transparent hover:border-blue-500 transition-colors z-20"
 						onMouseDown={onRightPanelResizeStart}
 					/>
 				)}
