@@ -1654,6 +1654,14 @@ export function EditAgentModal({
 								</option>
 							))}
 						</select>
+						{agent?.detectedVersion && (
+							<span
+								className="ml-2 text-xs font-normal"
+								style={{ color: theme.colors.textDim, opacity: 0.7 }}
+							>
+								v{agent.detectedVersion}
+							</span>
+						)}
 						{providerChanged && (
 							<div
 								className="mt-2 p-2 rounded border text-xs flex items-start gap-2"

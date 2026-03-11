@@ -78,6 +78,7 @@ export interface AgentConfig {
 	available: boolean;
 	path?: string;
 	customPath?: string; // User-specified custom path (shown in UI even if not available)
+	detectedVersion?: string; // Version string detected by running `<binary> --version`
 	requiresPty?: boolean; // Whether this agent needs a pseudo-terminal
 	configOptions?: AgentConfigOption[]; // Agent-specific configuration
 	hidden?: boolean; // If true, agent is hidden from UI (internal use only)
@@ -99,12 +100,13 @@ export interface AgentConfig {
 	defaultEnvVars?: Record<string, string>; // Default environment variables for this agent (merged with user customEnvVars)
 	readOnlyEnvOverrides?: Record<string, string>; // Env var overrides applied in read-only mode (replaces keys from defaultEnvVars)
 	readOnlyCliEnforced?: boolean; // Whether the agent's CLI enforces read-only mode (false = prompt-only enforcement)
+	versionArgs?: string[]; // Args to run for version detection (e.g., ['--version'])
 }
 
 /**
  * Agent definition without runtime detection state (used for static definitions)
  */
-export type AgentDefinition = Omit<AgentConfig, 'available' | 'path' | 'capabilities'>;
+export type AgentDefinition = Omit<AgentConfig, 'available' | 'path' | 'capabilities' | 'detectedVersion'>;
 
 // ============ Agent Definitions ============
 
@@ -139,6 +141,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		resumeArgs: (sessionId: string) => ['--resume', sessionId], // Resume with session ID
 		readOnlyArgs: ['--permission-mode', 'plan'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --permission-mode plan
+		versionArgs: ['--version'],
 	},
 	{
 		id: 'codex',
@@ -159,9 +162,10 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		readOnlyArgs: ['--sandbox', 'read-only'], // Read-only/plan mode
 		readOnlyCliEnforced: true, // CLI enforces read-only via --sandbox read-only
 		yoloModeArgs: ['--dangerously-bypass-approvals-and-sandbox'], // Full access mode
+		modelArgs: (modelId: string) => ['-m', modelId], // Model selection (e.g., '-m gpt-4o')
 		workingDirArgs: (dir: string) => ['-C', dir], // Set working directory
 		imageArgs: (imagePath: string) => ['-i', imagePath], // Image attachment: codex exec -i /path/to/image.png
-		modelArgs: (modelId: string) => ['-m', modelId], // Model selection: codex exec -m gpt-5.3-codex
+		versionArgs: ['--version'],
 		// Agent-specific configuration options shown in UI
 		configOptions: [
 			{
@@ -208,6 +212,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		imageArgs: undefined,
 		modelArgs: (modelId: string) => ['-m', modelId],
 		promptArgs: (prompt: string) => ['-p', prompt],
+		versionArgs: ['--version'],
 		configOptions: [
 			{
 				key: 'model',
@@ -245,6 +250,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		binaryName: 'qwen3-coder',
 		command: 'qwen3-coder',
 		args: [],
+		versionArgs: ['--version'],
 	},
 	{
 		id: 'opencode',
@@ -252,6 +258,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		binaryName: 'opencode',
 		command: 'opencode',
 		args: [], // Base args (none for OpenCode - batch mode uses 'run' subcommand)
+		versionArgs: ['--version'],
 		// OpenCode CLI argument builders
 		// Batch mode: opencode run --format json [--model provider/model] [--session <id>] [--agent plan] "prompt"
 		// YOLO mode (auto-approve all permissions) is enabled via OPENCODE_CONFIG_CONTENT env var.
@@ -314,6 +321,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		command: 'droid',
 		args: [], // Base args for interactive mode (none)
 		requiresPty: false, // Batch mode uses child process
+		versionArgs: ['--version'],
 
 		// Batch mode: droid exec [options] "prompt"
 		batchModePrefix: ['exec'],
@@ -398,6 +406,7 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		binaryName: 'aider',
 		command: 'aider',
 		args: [], // Base args (placeholder - to be configured when implemented)
+		versionArgs: ['--version'],
 	},
 ];
 

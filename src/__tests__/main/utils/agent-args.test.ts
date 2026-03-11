@@ -229,6 +229,51 @@ describe('buildAgentArgs', () => {
 		expect(result).toEqual(['--print']);
 	});
 
+	// -- skipBatchForReadOnly --
+	it('skips sandbox bypass from batchModeArgs when readOnlyMode is true and agent has readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModePrefix: ['exec'],
+			batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git'],
+			readOnlyArgs: ['--sandbox', 'read-only'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: [],
+			prompt: 'hello',
+			readOnlyMode: true,
+		});
+		expect(result).toContain('exec');
+		expect(result).toContain('--sandbox');
+		expect(result).not.toContain('--dangerously-bypass-approvals-and-sandbox');
+		expect(result).toContain('--skip-git');
+	});
+
+	it('includes batchModeArgs when readOnlyMode is true but agent has no readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--skip-git'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: ['--print'],
+			prompt: 'hello',
+			readOnlyMode: true,
+		});
+		expect(result).toContain('--skip-git');
+	});
+
+	it('includes batchModeArgs when readOnlyMode is false even with readOnlyArgs', () => {
+		const agent = makeAgent({
+			batchModeArgs: ['--dangerously-bypass', '--skip-git'],
+			readOnlyArgs: ['--sandbox', 'read-only'],
+		});
+		const result = buildAgentArgs(agent, {
+			baseArgs: [],
+			prompt: 'hello',
+			readOnlyMode: false,
+		});
+		expect(result).toContain('--dangerously-bypass');
+		expect(result).toContain('--skip-git');
+		expect(result).not.toContain('--sandbox');
+	});
+
 	// -- combined --
 	it('combines multiple options together', () => {
 		const agent = makeAgent({
@@ -252,11 +297,12 @@ describe('buildAgentArgs', () => {
 			agentSessionId: 'abc',
 		});
 
-		// batchModeArgs (--skip-git) is omitted when readOnlyMode is true —
-		// batch mode args grant write/approval permissions that conflict with read-only
+		// batchModeArgs (--skip-git) is preserved in read-only mode because it's not a
+		// sandbox-bypass flag. Only --dangerously-bypass-approvals-and-sandbox is filtered.
 		expect(result).toEqual([
 			'run',
 			'--print',
+			'--skip-git',
 			'--format',
 			'json',
 			'-C',
@@ -272,8 +318,9 @@ describe('buildAgentArgs', () => {
 	});
 
 	// -- readOnlyMode + batchModeArgs interaction (TASK-S05) --
-	it('skips batchModeArgs when readOnlyMode is true even with empty readOnlyArgs', () => {
-		// Gemini CLI scenario: readOnlyArgs is [] but -y should still be skipped
+	it('includes batchModeArgs when readOnlyMode is true but readOnlyArgs is empty', () => {
+		// When readOnlyArgs is [] (agent doesn't define CLI read-only support),
+		// batchModeArgs are still included because there's nothing to filter against
 		const agent = makeAgent({
 			batchModeArgs: ['-y'],
 			readOnlyArgs: [],
@@ -283,11 +330,12 @@ describe('buildAgentArgs', () => {
 			prompt: 'analyze this code',
 			readOnlyMode: true,
 		});
-		expect(result).not.toContain('-y');
-		expect(result).toEqual(['--output-format', 'stream-json']);
+		expect(result).toContain('-y');
 	});
 
-	it('skips batchModeArgs when readOnlyMode is true and readOnlyArgs is undefined', () => {
+	it('includes batchModeArgs when readOnlyMode is true and readOnlyArgs is undefined', () => {
+		// When readOnlyArgs is undefined (agent doesn't define CLI read-only support),
+		// batchModeArgs are still included because there's nothing to filter against
 		const agent = makeAgent({
 			batchModeArgs: ['--dangerously-bypass-approvals-and-sandbox', '--skip-git-repo-check'],
 		});
@@ -296,8 +344,8 @@ describe('buildAgentArgs', () => {
 			prompt: 'review code',
 			readOnlyMode: true,
 		});
-		expect(result).not.toContain('--dangerously-bypass-approvals-and-sandbox');
-		expect(result).not.toContain('--skip-git-repo-check');
+		expect(result).toContain('--dangerously-bypass-approvals-and-sandbox');
+		expect(result).toContain('--skip-git-repo-check');
 	});
 
 	it('includes batchModeArgs when readOnlyMode is false even with empty readOnlyArgs', () => {

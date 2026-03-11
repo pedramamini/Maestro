@@ -65,6 +65,7 @@ export interface ManagedProcess {
 	stderrBuffer?: string;
 	stdoutBuffer?: string;
 	streamedText?: string;
+	codexPendingResult?: string;
 	contextWindow?: number;
 	tempImageFiles?: string[];
 	command?: string;
