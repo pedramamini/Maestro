@@ -17,7 +17,8 @@ interface WorktreeConfigModalProps {
 
 /** Get parent directory from a path (works with both / and \ separators) */
 function getParentDir(path: string): string {
-	return path.replace(/[/\\][^/\\]+$/, '');
+	const parent = path.replace(/[/\\][^/\\]+$/, '');
+	return parent || path; // keep original if we're already at root
 }
 
 /**
@@ -63,7 +64,7 @@ export function WorktreeConfigModal({
 	const [isCreating, setIsCreating] = useState(false);
 	const [isValidating, setIsValidating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const canDisable = !!(session.worktreeConfig?.basePath || basePath.trim());
+	const canDisable = !!session.worktreeConfig?.basePath;
 
 	// gh CLI status
 	const [ghCliStatus, setGhCliStatus] = useState<GhCliStatus | null>(null);
@@ -98,7 +99,7 @@ export function WorktreeConfigModal({
 			setNewBranchName('');
 			setError(null);
 		}
-	}, [isOpen, session.worktreeConfig]);
+	}, [isOpen, session.worktreeConfig, session.cwd]);
 
 	const checkGhCli = async () => {
 		try {
