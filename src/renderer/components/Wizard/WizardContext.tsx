@@ -843,6 +843,7 @@ export function WizardProvider({ children }: WizardProviderProps) {
 				generatedDocuments: currentState.generatedDocuments,
 				editedPhase1Content: currentState.editedPhase1Content,
 				wantsTour: currentState.wantsTour,
+				sessionSshRemoteConfig: currentState.sessionSshRemoteConfig,
 			};
 			window.maestro.settings.set('wizardResumeState', serializableState);
 		}
