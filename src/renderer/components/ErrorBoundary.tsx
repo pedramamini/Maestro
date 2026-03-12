@@ -2,6 +2,7 @@ import React, { Component, ReactNode } from 'react';
 import { AlertTriangle, RefreshCw, Home } from 'lucide-react';
 import * as Sentry from '@sentry/electron/renderer';
 import { logger } from '../utils/logger';
+import i18n from '../../shared/i18n/config';
 
 interface Props {
 	children: ReactNode;
@@ -105,17 +106,18 @@ export class ErrorBoundary extends Component<Props, State> {
 								<AlertTriangle className="w-8 h-8 text-red-500" />
 							</div>
 							<div className="flex-1">
-								<h1 className="text-2xl font-bold mb-2 text-red-400">Something went wrong</h1>
-								<p className="text-gray-300">
-									An unexpected error occurred in the application. You can try to recover or reload
-									the app.
-								</p>
+								<h1 className="text-2xl font-bold mb-2 text-red-400">
+									{i18n.t('common:error_boundary.title')}
+								</h1>
+								<p className="text-gray-300">{i18n.t('common:error_boundary.description')}</p>
 							</div>
 						</div>
 
 						{this.state.error && (
 							<div className="mb-6">
-								<h2 className="text-sm font-semibold text-gray-400 mb-2">Error Details:</h2>
+								<h2 className="text-sm font-semibold text-gray-400 mb-2">
+									{i18n.t('common:error_boundary.error_details_label')}
+								</h2>
 								<div className="bg-gray-900 rounded p-4 overflow-auto max-h-40">
 									<pre className="text-xs text-red-300 font-mono whitespace-pre-wrap">
 										{this.state.error.toString()}
@@ -127,7 +129,7 @@ export class ErrorBoundary extends Component<Props, State> {
 						{this.state.errorInfo && (
 							<details className="mb-6">
 								<summary className="text-sm font-semibold text-gray-400 cursor-pointer hover:text-gray-300">
-									Component Stack Trace
+									{i18n.t('common:error_boundary.component_stack_label')}
 								</summary>
 								<div className="bg-gray-900 rounded p-4 overflow-auto max-h-60 mt-2">
 									<pre className="text-xs text-gray-400 font-mono whitespace-pre-wrap">
@@ -143,14 +145,14 @@ export class ErrorBoundary extends Component<Props, State> {
 								className="flex items-center gap-2 px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg transition-colors"
 							>
 								<RefreshCw className="w-4 h-4" />
-								Try Again
+								{i18n.t('common:error_boundary.try_again')}
 							</button>
 							<button
 								onClick={this.handleReload}
 								className="flex items-center gap-2 px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white rounded-lg transition-colors"
 							>
 								<Home className="w-4 h-4" />
-								Reload App
+								{i18n.t('common:error_boundary.reload_app')}
 							</button>
 						</div>
 					</div>

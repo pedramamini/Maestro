@@ -42,6 +42,7 @@ import { useAgentCapabilities, useHoverTooltip } from '../hooks';
 import { safeClipboardWrite } from '../utils/clipboard';
 import { useUIStore } from '../stores/uiStore';
 import { getActiveLocale } from '../utils/formatters';
+import { useTranslation } from 'react-i18next';
 import { useSettingsStore } from '../stores/settingsStore';
 import type {
 	Session,
@@ -437,6 +438,7 @@ export const MainPanel = React.memo(
 		const outputSearchQuery = useUIStore((s) => s.outputSearchQuery);
 		const rightPanelOpen = useUIStore((s) => s.rightPanelOpen);
 		const showUnreadOnly = useUIStore((s) => s.showUnreadOnly);
+		const { t } = useTranslation('common');
 
 		// isCurrentSessionAutoMode: THIS session has active batch run (for all UI indicators)
 		const isCurrentSessionAutoMode = currentSessionBatchState?.isRunning || false;
@@ -777,7 +779,7 @@ export const MainPanel = React.memo(
 			const ok = await safeClipboardWrite(text);
 			if (ok) {
 				// Show centered flash notification
-				setCopyNotification(message || 'Copied to Clipboard');
+				setCopyNotification(message || t('main_panel.copied_to_clipboard'));
 				setTimeout(() => setCopyNotification(null), 2000);
 			}
 		};
@@ -830,7 +832,7 @@ export const MainPanel = React.memo(
 				>
 					<Wand2 className="w-16 h-16 mb-4" style={{ color: theme.colors.textDim }} />
 					<p className="text-sm" style={{ color: theme.colors.textDim }}>
-						No agents. Create one to get started.
+						{t('main_panel.no_agents')}
 					</p>
 				</div>
 			);
@@ -882,7 +884,14 @@ export const MainPanel = React.memo(
 													className={`flex items-center gap-1 text-xs px-2 py-0.5 rounded-full border border-purple-500/30 text-purple-500 bg-purple-500/10 max-w-[120px] ${
 														activeSession.isGitRepo ? 'cursor-pointer hover:bg-purple-500/20' : ''
 													}`}
-													title={`SSH Remote: ${sshRemoteName}${activeSession.isGitRepo && gitInfo?.branch ? ` (${gitInfo.branch})` : ''}`}
+													title={
+														activeSession.isGitRepo && gitInfo?.branch
+															? t('main_panel.ssh_remote_tooltip_branch', {
+																	name: sshRemoteName,
+																	branch: gitInfo.branch,
+																})
+															: t('main_panel.ssh_remote_tooltip', { name: sshRemoteName })
+													}
 													onClick={(e) => {
 														e.stopPropagation();
 														if (activeSession.isGitRepo) {
@@ -917,11 +926,11 @@ export const MainPanel = React.memo(
 															<GitBranch className="w-3 h-3 shrink-0" />
 															{/* Hide branch name text at narrow widths via CSS container query */}
 															<span className="header-git-branch-text truncate">
-																{gitInfo?.branch || 'GIT'}
+																{gitInfo?.branch || t('main_panel.git_label')}
 															</span>
 														</>
 													) : (
-														'LOCAL'
+														t('main_panel.local_label')
 													)}
 												</span>
 											)}
@@ -955,7 +964,7 @@ export const MainPanel = React.memo(
 																		className="text-[10px] uppercase font-bold w-14 shrink-0"
 																		style={{ color: theme.colors.textDim }}
 																	>
-																		Branch
+																		{t('main_panel.git_branch_label')}
 																	</span>
 																	<GitBranch className="w-3.5 h-3.5 text-orange-500 shrink-0" />
 																	<span
@@ -982,11 +991,11 @@ export const MainPanel = React.memo(
 																				e.stopPropagation();
 																				copyToClipboard(
 																					gitInfo.branch,
-																					`"${gitInfo.branch}" copied to clipboard`
+																					t('main_panel.branch_copied', { branch: gitInfo.branch })
 																				);
 																			}}
 																			className="p-1 rounded hover:bg-white/10 transition-colors"
-																			title="Copy branch name"
+																			title={t('main_panel.copy_branch_name')}
 																		>
 																			<Copy
 																				className="w-3 h-3"
@@ -1003,7 +1012,7 @@ export const MainPanel = React.memo(
 																			className="text-[10px] uppercase font-bold w-14 shrink-0"
 																			style={{ color: theme.colors.textDim }}
 																		>
-																			Origin
+																			{t('main_panel.git_origin_label')}
 																		</span>
 																		<ExternalLink
 																			className="w-3 h-3 shrink-0"
@@ -1017,7 +1026,9 @@ export const MainPanel = React.memo(
 																			}}
 																			className="text-xs font-mono truncate hover:underline text-start"
 																			style={{ color: theme.colors.textMain }}
-																			title={`Open ${gitInfo.remote}`}
+																			title={t('main_panel.open_remote', {
+																				remote: gitInfo.remote,
+																			})}
 																		>
 																			{gitInfo.remote
 																				.replace(/^https?:\/\//, '')
@@ -1029,7 +1040,7 @@ export const MainPanel = React.memo(
 																				copyToClipboard(gitInfo.remote);
 																			}}
 																			className="p-1 rounded hover:bg-white/10 transition-colors ms-auto shrink-0"
-																			title="Copy remote URL"
+																			title={t('main_panel.copy_remote_url')}
 																		>
 																			<Copy
 																				className="w-3 h-3"
@@ -1045,7 +1056,7 @@ export const MainPanel = React.memo(
 																		className="text-[10px] uppercase font-bold w-14 shrink-0"
 																		style={{ color: theme.colors.textDim }}
 																	>
-																		Status
+																		{t('main_panel.git_status_label')}
 																	</span>
 																	{gitInfo.uncommittedChanges > 0 ? (
 																		<span
@@ -1053,12 +1064,13 @@ export const MainPanel = React.memo(
 																			style={{ color: theme.colors.textMain }}
 																		>
 																			<FileEdit className="w-3 h-3 text-orange-500" />
-																			{gitInfo.uncommittedChanges} uncommitted{' '}
-																			{gitInfo.uncommittedChanges === 1 ? 'change' : 'changes'}
+																			{t('main_panel.uncommitted_changes', {
+																				count: gitInfo.uncommittedChanges,
+																			})}
 																		</span>
 																	) : (
 																		<span className="flex items-center gap-1.5 text-xs text-green-500">
-																			Working tree clean
+																			{t('main_panel.working_tree_clean')}
 																		</span>
 																	)}
 																</div>
@@ -1081,7 +1093,7 @@ export const MainPanel = React.memo(
 																			className="w-3.5 h-3.5"
 																			style={{ color: theme.colors.textDim }}
 																		/>
-																		Configure Worktrees
+																		{t('main_panel.configure_worktrees')}
 																	</button>
 																)}
 																{/* Create PR - only for worktree children */}
@@ -1099,7 +1111,7 @@ export const MainPanel = React.memo(
 																			className="w-3.5 h-3.5"
 																			style={{ color: theme.colors.textDim }}
 																		/>
-																		Create Pull Request
+																		{t('main_panel.create_pull_request')}
 																	</button>
 																)}
 															</div>
@@ -1139,8 +1151,8 @@ export const MainPanel = React.memo(
 										}}
 										title={
 											isCurrentSessionStopping
-												? 'Stopping after current task...'
-												: 'Click to stop auto-run'
+												? t('main_panel.stopping_after_task')
+												: t('main_panel.click_to_stop_auto_run')
 										}
 									>
 										{isCurrentSessionStopping ? (
@@ -1149,7 +1161,9 @@ export const MainPanel = React.memo(
 											<Wand2 className="w-4 h-4" />
 										)}
 										<span className="uppercase tracking-wider">
-											{isCurrentSessionStopping ? 'Stopping' : 'Auto'}
+											{isCurrentSessionStopping
+												? t('main_panel.stopping_label')
+												: t('main_panel.auto_label')}
 										</span>
 										{/* Hide progress count when stopping - spinner is sufficient */}
 										{currentSessionBatchState && !isCurrentSessionStopping && (
@@ -1160,7 +1174,9 @@ export const MainPanel = React.memo(
 										)}
 										{currentSessionBatchState?.worktreeActive && (
 											<span
-												title={`Worktree: ${currentSessionBatchState.worktreeBranch || 'active'}`}
+												title={t('main_panel.worktree_tooltip', {
+													branch: currentSessionBatchState.worktreeBranch || 'active',
+												})}
 											>
 												<GitBranch className="w-3.5 h-3.5 ms-0.5" />
 											</span>
@@ -1184,14 +1200,19 @@ export const MainPanel = React.memo(
 												}}
 												title={
 													activeTab.name
-														? `${activeTab.name}\nClick to copy: ${activeTab.agentSessionId}`
-														: `Click to copy: ${activeTab.agentSessionId}`
+														? t('main_panel.click_to_copy_session_named', {
+																name: activeTab.name,
+																sessionId: activeTab.agentSessionId,
+															})
+														: t('main_panel.click_to_copy_session', {
+																sessionId: activeTab.agentSessionId,
+															})
 												}
 												onClick={(e) => {
 													e.stopPropagation();
 													copyToClipboard(
 														activeTab.agentSessionId!,
-														'Session ID Copied to Clipboard'
+														t('main_panel.session_id_copied')
 													);
 												}}
 											>
@@ -1226,14 +1247,14 @@ export const MainPanel = React.memo(
 													className="header-context-label-full text-[10px] font-bold uppercase"
 													style={{ color: theme.colors.textDim }}
 												>
-													Context Window
+													{t('main_panel.context_window_label')}
 												</span>
 												<span
 													className="header-context-label-compact text-[10px] font-bold uppercase hidden"
 													style={{ color: theme.colors.textDim }}
 													aria-hidden="true"
 												>
-													Context
+													{t('main_panel.context_label')}
 												</span>
 												{/* Gauge width controlled via CSS container query */}
 												<div
@@ -1273,7 +1294,7 @@ export const MainPanel = React.memo(
 																	className="text-[10px] uppercase font-bold mb-3"
 																	style={{ color: theme.colors.textDim }}
 																>
-																	Context Details
+																	{t('main_panel.context_details_label')}
 																</div>
 
 																<div className="space-y-2">
@@ -1282,14 +1303,14 @@ export const MainPanel = React.memo(
 																			className="text-xs"
 																			style={{ color: theme.colors.textDim }}
 																		>
-																			Input Tokens
+																			{t('main_panel.input_tokens_label')}
 																		</span>
 																		<span
 																			className="text-xs font-mono"
 																			style={{ color: theme.colors.textMain }}
 																		>
 																			{(activeTab?.usageStats?.inputTokens ?? 0).toLocaleString(
-																				'en-US'
+																				getActiveLocale()
 																			)}
 																		</span>
 																	</div>
@@ -1298,14 +1319,14 @@ export const MainPanel = React.memo(
 																			className="text-xs"
 																			style={{ color: theme.colors.textDim }}
 																		>
-																			Output Tokens
+																			{t('main_panel.output_tokens_label')}
 																		</span>
 																		<span
 																			className="text-xs font-mono"
 																			style={{ color: theme.colors.textMain }}
 																		>
 																			{(activeTab?.usageStats?.outputTokens ?? 0).toLocaleString(
-																				'en-US'
+																				getActiveLocale()
 																			)}
 																		</span>
 																	</div>
@@ -1316,9 +1337,9 @@ export const MainPanel = React.memo(
 																				className="text-xs"
 																				style={{ color: theme.colors.textDim }}
 																			>
-																				Reasoning Tokens
+																				{t('main_panel.reasoning_tokens_label')}
 																				<span className="ms-1 text-[10px] opacity-60">
-																					(in output)
+																					{t('main_panel.reasoning_tokens_suffix')}
 																				</span>
 																			</span>
 																			<span
@@ -1336,7 +1357,7 @@ export const MainPanel = React.memo(
 																			className="text-xs"
 																			style={{ color: theme.colors.textDim }}
 																		>
-																			Cache Read
+																			{t('main_panel.cache_read_label')}
 																		</span>
 																		<span
 																			className="text-xs font-mono"
@@ -1352,7 +1373,7 @@ export const MainPanel = React.memo(
 																			className="text-xs"
 																			style={{ color: theme.colors.textDim }}
 																		>
-																			Cache Write
+																			{t('main_panel.cache_write_label')}
 																		</span>
 																		<span
 																			className="text-xs font-mono"
@@ -1375,7 +1396,7 @@ export const MainPanel = React.memo(
 																					className="text-xs font-bold"
 																					style={{ color: theme.colors.textDim }}
 																				>
-																					Context Tokens
+																					{t('main_panel.context_tokens_label')}
 																				</span>
 																				<span
 																					className="text-xs font-mono font-bold"
@@ -1389,7 +1410,7 @@ export const MainPanel = React.memo(
 																					className="text-xs font-bold"
 																					style={{ color: theme.colors.textDim }}
 																				>
-																					Context Size
+																					{t('main_panel.context_size_label')}
 																				</span>
 																				<span
 																					className="text-xs font-mono font-bold"
@@ -1403,7 +1424,7 @@ export const MainPanel = React.memo(
 																					className="text-xs font-bold"
 																					style={{ color: theme.colors.textDim }}
 																				>
-																					Usage
+																					{t('main_panel.usage_label')}
 																				</span>
 																				<span
 																					className="text-xs font-mono font-bold"
@@ -1432,7 +1453,11 @@ export const MainPanel = React.memo(
 												setAgentSessionsOpen(true);
 											}}
 											className="p-2 rounded hover:bg-white/5"
-											title={`Agent Sessions (${shortcuts.agentSessions ? formatShortcutKeys(shortcuts.agentSessions.keys) : formatShortcutKeys(['Meta', 'Shift', 'l'])})`}
+											title={t('main_panel.agent_sessions_tooltip', {
+												shortcut: shortcuts.agentSessions
+													? formatShortcutKeys(shortcuts.agentSessions.keys)
+													: formatShortcutKeys(['Meta', 'Shift', 'l']),
+											})}
 											data-tour="agent-sessions-button"
 										>
 											<List className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -1443,7 +1468,9 @@ export const MainPanel = React.memo(
 										<button
 											onClick={() => useUIStore.getState().setRightPanelOpen(true)}
 											className="p-2 rounded hover:bg-white/5"
-											title={`Show right panel (${formatShortcutKeys(shortcuts.toggleRightPanel.keys)})`}
+											title={t('main_panel.show_right_panel', {
+												shortcut: formatShortcutKeys(shortcuts.toggleRightPanel.keys),
+											})}
 										>
 											<Columns className="w-4 h-4" />
 										</button>
@@ -1520,14 +1547,14 @@ export const MainPanel = React.memo(
 												color: '#ffffff',
 											}}
 										>
-											View Details
+											{t('main_panel.view_details')}
 										</button>
 									)}
 									{props.onClearAgentError && activeTabError.recoverable && (
 										<button
 											onClick={props.onClearAgentError}
 											className="p-1 rounded hover:bg-white/10 transition-colors"
-											title="Dismiss error"
+											title={t('main_panel.dismiss_error')}
 										>
 											<X className="w-4 h-4" style={{ color: theme.colors.error }} />
 										</button>
@@ -1551,13 +1578,14 @@ export const MainPanel = React.memo(
 									/>
 									<div className="text-center">
 										<div className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-											Loading{' '}
-											{activeFileTab
-												? `${activeFileTab.name}${activeFileTab.extension}`
-												: filePreviewLoading?.name}
+											{t('main_panel.loading_file', {
+												name: activeFileTab
+													? `${activeFileTab.name}${activeFileTab.extension}`
+													: filePreviewLoading?.name,
+											})}
 										</div>
 										<div className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-											Fetching from remote server...
+											{t('main_panel.fetching_from_remote')}
 										</div>
 									</div>
 								</div>

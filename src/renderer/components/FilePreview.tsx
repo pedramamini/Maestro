@@ -52,6 +52,7 @@ import remarkFrontmatter from 'remark-frontmatter';
 import { remarkFrontmatterTable } from '../utils/remarkFrontmatterTable';
 import type { FileNode } from '../types/fileTree';
 import { isImageFile } from '../../shared/gitUtils';
+import { useTranslation } from 'react-i18next';
 
 // Global cache for loaded images to prevent re-fetching and flickering
 // Maps resolved path -> { dataUrl, dimensions }
@@ -387,6 +388,7 @@ const MarkdownImage = React.memo(function MarkdownImage({
 	projectRoot?: string; // Project root path for resolving file tree paths
 	sshRemoteId?: string; // SSH remote ID for remote file operations
 }) {
+	const { t } = useTranslation('common');
 	const [dataUrl, setDataUrl] = useState<string | null>(null);
 	const [dimensions, setDimensions] = useState<{ width?: number; height?: number }>({});
 	const [error, setError] = useState<string | null>(null);
@@ -464,12 +466,12 @@ const MarkdownImage = React.memo(function MarkdownImage({
 					// Cache the result
 					imageCache.set(cacheKey, { dataUrl: result, loadedAt: Date.now() });
 				} else {
-					setError('Invalid image data');
+					setError(t('file_preview.invalid_image_data'));
 				}
 				setLoading(false);
 			})
 			.catch((err) => {
-				setError(`Failed to load image: ${err.message || 'Unknown error'}`);
+				setError(t('file_preview.failed_to_load_image', { error: err.message || 'Unknown error' }));
 				setLoading(false);
 			});
 	}, [src, cacheKey, showRemoteImages, isRemoteUrl, sshRemoteId]);
@@ -658,6 +660,7 @@ export const FilePreview = React.memo(
 		},
 		ref
 	) {
+		const { t } = useTranslation('common');
 		// Search state - use initialSearchQuery if provided, and notify parent of changes
 		const [internalSearchQuery, setInternalSearchQuery] = useState(initialSearchQuery ?? '');
 		// Wrapper to update state and notify parent
@@ -1112,12 +1115,12 @@ export const FilePreview = React.memo(
 			setIsSaving(true);
 			try {
 				await onSave(file.path, editContent);
-				setCopyNotificationMessage('File Saved');
+				setCopyNotificationMessage(t('file_preview.file_saved'));
 				setShowCopyNotification(true);
 				setTimeout(() => setShowCopyNotification(false), 2000);
 			} catch (err) {
 				console.error('Failed to save file:', err);
-				setCopyNotificationMessage('Save Failed');
+				setCopyNotificationMessage(t('file_preview.save_failed'));
 				setShowCopyNotification(true);
 				setTimeout(() => setShowCopyNotification(false), 2000);
 			} finally {
@@ -1231,7 +1234,7 @@ export const FilePreview = React.memo(
 				blocksLowerLayers: true,
 				capturesFocus: true,
 				focusTrap: 'lenient',
-				ariaLabel: 'File Preview',
+				ariaLabel: t('file_preview.aria_label'),
 				onEscape: handleEscapeRequest,
 				allowClickOutside: false,
 			});
@@ -1482,7 +1485,9 @@ export const FilePreview = React.memo(
 		const copyPathToClipboard = async () => {
 			if (!file) return;
 			const ok = await safeClipboardWrite(file.path);
-			setCopyNotificationMessage(ok ? 'File Path Copied to Clipboard' : 'Failed to Copy Path');
+			setCopyNotificationMessage(
+				ok ? t('file_preview.file_path_copied') : t('file_preview.failed_to_copy_path')
+			);
 			setShowCopyNotification(true);
 			setTimeout(() => setShowCopyNotification(false), 2000);
 		};
@@ -1496,12 +1501,14 @@ export const FilePreview = React.memo(
 					const blob = await response.blob();
 					const ok = await safeClipboardWriteBlob([new ClipboardItem({ [blob.type]: blob })]);
 					if (ok) {
-						setCopyNotificationMessage('Image Copied to Clipboard');
+						setCopyNotificationMessage(t('file_preview.image_copied'));
 					} else {
 						// Fallback: copy the data URL if image copy fails
 						const fallbackOk = await safeClipboardWrite(file.content);
 						setCopyNotificationMessage(
-							fallbackOk ? 'Image URL Copied to Clipboard' : 'Failed to Copy Image'
+							fallbackOk
+								? t('file_preview.image_url_copied')
+								: t('file_preview.failed_to_copy_image')
 						);
 					}
 				} catch (err) {
@@ -1509,13 +1516,15 @@ export const FilePreview = React.memo(
 					// Fallback: copy the data URL if fetch/blob fails
 					const fallbackOk = await safeClipboardWrite(file.content);
 					setCopyNotificationMessage(
-						fallbackOk ? 'Image URL Copied to Clipboard' : 'Failed to Copy Image'
+						fallbackOk ? t('file_preview.image_url_copied') : t('file_preview.failed_to_copy_image')
 					);
 				}
 			} else {
 				// For text files, copy the content
 				const ok = await safeClipboardWrite(file.content);
-				setCopyNotificationMessage(ok ? 'Content Copied to Clipboard' : 'Failed to Copy Content');
+				setCopyNotificationMessage(
+					ok ? t('file_preview.content_copied') : t('file_preview.failed_to_copy_content')
+				);
 			}
 			setShowCopyNotification(true);
 			setTimeout(() => setShowCopyNotification(false), 2000);
@@ -1851,8 +1860,10 @@ export const FilePreview = React.memo(
 										}}
 										title={
 											hasChanges
-												? `Save changes (${formatShortcutKeys(['Meta', 's'])})`
-												: 'No changes to save'
+												? t('file_preview.save_changes_tooltip', {
+														shortcut: formatShortcutKeys(['Meta', 's']),
+													})
+												: t('file_preview.no_changes_to_save')
 										}
 									>
 										{isSaving ? (
@@ -1860,7 +1871,7 @@ export const FilePreview = React.memo(
 										) : (
 											<Save className="w-3.5 h-3.5" />
 										)}
-										{isSaving ? 'Saving...' : 'Save'}
+										{isSaving ? t('file_preview.saving') : t('save')}
 									</button>
 								)}
 								{/* Show remote images toggle - only for markdown in preview mode */}
@@ -1869,7 +1880,11 @@ export const FilePreview = React.memo(
 										onClick={() => setShowRemoteImages(!showRemoteImages)}
 										className={headerBtnClass}
 										style={{ color: showRemoteImages ? theme.colors.accent : theme.colors.textDim }}
-										title={showRemoteImages ? 'Hide remote images' : 'Show remote images'}
+										title={
+											showRemoteImages
+												? t('file_preview.hide_remote_images')
+												: t('file_preview.show_remote_images')
+										}
 									>
 										<Globe className={headerIconClass} />
 									</button>
@@ -1880,7 +1895,14 @@ export const FilePreview = React.memo(
 										onClick={() => setMarkdownEditMode(!markdownEditMode)}
 										className={headerBtnClass}
 										style={{ color: markdownEditMode ? theme.colors.accent : theme.colors.textDim }}
-										title={`${markdownEditMode ? (isMarkdown ? 'Show preview' : 'View file') : 'Edit file'} (${formatShortcut('toggleMarkdownMode')})`}
+										title={t('file_preview.toggle_mode_tooltip', {
+											action: markdownEditMode
+												? isMarkdown
+													? t('file_preview.show_preview')
+													: t('file_preview.view_file')
+												: t('file_preview.edit_file'),
+											shortcut: formatShortcut('toggleMarkdownMode'),
+										})}
 									>
 										{markdownEditMode ? (
 											<Eye className={headerIconClass} />
@@ -1895,8 +1917,10 @@ export const FilePreview = React.memo(
 									style={{ color: theme.colors.textDim }}
 									title={
 										isImage
-											? `Copy image to clipboard (${formatShortcutKeys(['Meta', 'c'])})`
-											: 'Copy content to clipboard'
+											? t('file_preview.copy_image_tooltip', {
+													shortcut: formatShortcutKeys(['Meta', 'c']),
+												})
+											: t('file_preview.copy_content_tooltip')
 									}
 								>
 									<Clipboard className={headerIconClass} />
@@ -1907,7 +1931,11 @@ export const FilePreview = React.memo(
 										onClick={onPublishGist}
 										className={headerBtnClass}
 										style={{ color: hasGist ? theme.colors.accent : theme.colors.textDim }}
-										title={hasGist ? 'View published gist' : 'Publish as GitHub Gist'}
+										title={
+											hasGist
+												? t('file_preview.view_published_gist')
+												: t('file_preview.publish_as_gist')
+										}
 									>
 										<Share2 className={headerIconClass} />
 									</button>
@@ -1918,7 +1946,9 @@ export const FilePreview = React.memo(
 										onClick={onOpenInGraph}
 										className={headerBtnClass}
 										style={{ color: theme.colors.textDim }}
-										title={`View in Document Graph (${formatShortcutKeys(['Meta', 'Shift', 'g'])})`}
+										title={t('file_preview.view_in_graph', {
+											shortcut: formatShortcutKeys(['Meta', 'Shift', 'g']),
+										})}
 									>
 										<GitGraph className={headerIconClass} />
 									</button>
@@ -1928,7 +1958,7 @@ export const FilePreview = React.memo(
 										onClick={() => window.maestro?.shell?.openPath(file.path)}
 										className={headerBtnClass}
 										style={{ color: theme.colors.textDim }}
-										title="Open in Default App"
+										title={t('file_preview.open_in_default_app')}
 									>
 										<ExternalLink className={headerIconClass} />
 									</button>
@@ -1937,7 +1967,7 @@ export const FilePreview = React.memo(
 									onClick={copyPathToClipboard}
 									className={headerBtnClass}
 									style={{ color: theme.colors.textDim }}
-									title="Copy full path to clipboard"
+									title={t('file_preview.copy_full_path')}
 								>
 									<Copy className={headerIconClass} />
 								</button>
@@ -1963,7 +1993,7 @@ export const FilePreview = React.memo(
 							<div className="flex items-center gap-4">
 								{fileStats && (
 									<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
-										<span className="opacity-60">Size:</span>{' '}
+										<span className="opacity-60">{t('file_preview.size_label')}</span>{' '}
 										<span style={{ color: theme.colors.textMain }}>
 											{formatFileSize(fileStats.size)}
 										</span>
@@ -1971,7 +2001,7 @@ export const FilePreview = React.memo(
 								)}
 								{tokenCount !== null && (
 									<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
-										<span className="opacity-60">Tokens:</span>{' '}
+										<span className="opacity-60">{t('file_preview.tokens_label')}</span>{' '}
 										<span style={{ color: theme.colors.accent }}>
 											{formatTokenCount(tokenCount)}
 										</span>
@@ -1980,13 +2010,13 @@ export const FilePreview = React.memo(
 								{fileStats && (
 									<>
 										<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
-											<span className="opacity-60">Modified:</span>{' '}
+											<span className="opacity-60">{t('file_preview.modified_label')}</span>{' '}
 											<span style={{ color: theme.colors.textMain }}>
 												{formatDateTime(fileStats.modifiedAt)}
 											</span>
 										</div>
 										<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
-											<span className="opacity-60">Created:</span>{' '}
+											<span className="opacity-60">{t('file_preview.created_label')}</span>{' '}
 											<span style={{ color: theme.colors.textMain }}>
 												{formatDateTime(fileStats.createdAt)}
 											</span>
@@ -1995,7 +2025,7 @@ export const FilePreview = React.memo(
 								)}
 								{taskCounts && (
 									<div className="text-[10px]" style={{ color: theme.colors.textDim }}>
-										<span className="opacity-60">Tasks:</span>{' '}
+										<span className="opacity-60">{t('file_preview.tasks_label')}</span>{' '}
 										<span style={{ color: theme.colors.success }}>{taskCounts.closed}</span>
 										<span style={{ color: theme.colors.textMain }}>
 											{' '}
@@ -2028,7 +2058,9 @@ export const FilePreview = React.memo(
 											disabled={!canGoBack}
 											className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-default"
 											style={{ color: canGoBack ? theme.colors.textMain : theme.colors.textDim }}
-											title={`Go back (${formatShortcutKeys(['Meta', 'ArrowLeft'])})`}
+											title={t('file_preview.go_back', {
+												shortcut: formatShortcutKeys(['Meta', 'ArrowLeft']),
+											})}
 										>
 											<ChevronLeft className="w-4 h-4" />
 										</button>
@@ -2085,7 +2117,9 @@ export const FilePreview = React.memo(
 											disabled={!canGoForward}
 											className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-30 disabled:cursor-default"
 											style={{ color: canGoForward ? theme.colors.textMain : theme.colors.textDim }}
-											title={`Go forward (${formatShortcutKeys(['Meta', 'ArrowRight'])})`}
+											title={t('file_preview.go_forward', {
+												shortcut: formatShortcutKeys(['Meta', 'ArrowRight']),
+											})}
 										>
 											<ChevronRight className="w-4 h-4" />
 										</button>
@@ -2136,8 +2170,8 @@ export const FilePreview = React.memo(
 						<RefreshCw className="w-3.5 h-3.5 shrink-0" style={{ color: theme.colors.accent }} />
 						<span className="flex-1 text-xs" style={{ color: theme.colors.textMain }}>
 							{hasChanges
-								? 'File changed on disk. You have unsaved edits — reloading will discard them.'
-								: 'File changed on disk.'}
+								? t('file_preview.file_changed_with_edits')
+								: t('file_preview.file_changed')}
 						</span>
 						<div className="flex items-center gap-2 shrink-0">
 							<button
@@ -2148,12 +2182,12 @@ export const FilePreview = React.memo(
 									color: theme.colors.accentForeground ?? '#000',
 								}}
 							>
-								Reload
+								{t('file_preview.reload')}
 							</button>
 							<button
 								onClick={() => setFileChangedOnDisk(false)}
 								className="p-1 rounded hover:bg-white/10 transition-colors"
-								title="Dismiss"
+								title={t('file_preview.dismiss')}
 							>
 								<X className="w-3 h-3" style={{ color: theme.colors.textDim }} />
 							</button>
@@ -2192,7 +2226,7 @@ export const FilePreview = React.memo(
 											goToPrevMatch();
 										}
 									}}
-									placeholder="Search in file... (Enter: next, Shift+Enter: prev)"
+									placeholder={t('file_preview.search_placeholder')}
 									className="flex-1 px-3 py-2 rounded border bg-transparent outline-none text-sm"
 									style={{
 										borderColor: theme.colors.accent,
@@ -2207,14 +2241,19 @@ export const FilePreview = React.memo(
 											className="text-xs whitespace-nowrap"
 											style={{ color: theme.colors.textDim }}
 										>
-											{totalMatches > 0 ? `${currentMatchIndex + 1}/${totalMatches}` : 'No matches'}
+											{totalMatches > 0
+												? t('file_preview.match_counter', {
+														current: currentMatchIndex + 1,
+														total: totalMatches,
+													})
+												: t('file_preview.no_matches')}
 										</span>
 										<button
 											onClick={goToPrevMatch}
 											disabled={totalMatches === 0}
 											className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
 											style={{ color: theme.colors.textDim }}
-											title="Previous match (Shift+Enter)"
+											title={t('file_preview.previous_match')}
 										>
 											<ChevronUp className="w-4 h-4" />
 										</button>
@@ -2223,7 +2262,7 @@ export const FilePreview = React.memo(
 											disabled={totalMatches === 0}
 											className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-30"
 											style={{ color: theme.colors.textDim }}
-											title="Next match (Enter)"
+											title={t('file_preview.next_match')}
 										>
 											<ChevronDown className="w-4 h-4" />
 										</button>
@@ -2246,10 +2285,10 @@ export const FilePreview = React.memo(
 							<FileCode className="w-16 h-16" style={{ color: theme.colors.textDim }} />
 							<div className="text-center">
 								<p className="text-lg font-medium" style={{ color: theme.colors.textMain }}>
-									Binary File
+									{t('file_preview.binary_file')}
 								</p>
 								<p className="text-sm mt-1" style={{ color: theme.colors.textDim }}>
-									This file cannot be displayed as text.
+									{t('file_preview.binary_file_description')}
 								</p>
 								<button
 									onClick={() => window.maestro.shell.openPath(file.path)}
@@ -2259,7 +2298,7 @@ export const FilePreview = React.memo(
 										color: theme.colors.accentForeground,
 									}}
 								>
-									Open in Default App
+									{t('file_preview.open_in_default_app')}
 								</button>
 							</div>
 						</div>
@@ -2482,7 +2521,7 @@ export const FilePreview = React.memo(
 									color: showTocOverlay ? theme.colors.accentForeground : theme.colors.textMain,
 									border: `1px solid ${theme.colors.border}`,
 								}}
-								title="Table of Contents"
+								title={t('file_preview.table_of_contents')}
 							>
 								<List className="w-5 h-5" />
 							</button>
@@ -2510,10 +2549,10 @@ export const FilePreview = React.memo(
 											className="text-xs font-medium uppercase tracking-wide"
 											style={{ color: theme.colors.textDim }}
 										>
-											Contents
+											{t('file_preview.contents_label')}
 										</span>
 										<span className="text-[10px]" style={{ color: theme.colors.textDim }}>
-											{tocEntries.length} headings
+											{t('file_preview.headings_count', { count: tocEntries.length })}
 										</span>
 									</div>
 									{/* Top Navigation Sash */}
@@ -2528,10 +2567,10 @@ export const FilePreview = React.memo(
 											borderColor: theme.colors.border,
 											color: theme.colors.textMain,
 										}}
-										title="Jump to top"
+										title={t('file_preview.jump_to_top')}
 									>
 										<ChevronUp className="w-3 h-3" style={{ color: theme.colors.accent }} />
-										<span>Top</span>
+										<span>{t('file_preview.top_label')}</span>
 									</button>
 
 									{/* TOC Entries - scrollable middle section */}
@@ -2598,10 +2637,10 @@ export const FilePreview = React.memo(
 											borderColor: theme.colors.border,
 											color: theme.colors.textMain,
 										}}
-										title="Jump to bottom"
+										title={t('file_preview.jump_to_bottom')}
 									>
 										<ChevronDown className="w-3 h-3" style={{ color: theme.colors.accent }} />
-										<span>Bottom</span>
+										<span>{t('file_preview.bottom_label')}</span>
 									</button>
 								</div>
 							)}
@@ -2627,7 +2666,7 @@ export const FilePreview = React.memo(
 				{showUnsavedChangesModal && (
 					<Modal
 						theme={theme}
-						title="Unsaved Changes"
+						title={t('file_preview.unsaved_changes_title')}
 						priority={MODAL_PRIORITIES.CONFIRM}
 						onClose={() => setShowUnsavedChangesModal(false)}
 						width={450}
@@ -2644,15 +2683,15 @@ export const FilePreview = React.memo(
 									setShowUnsavedChangesModal(false);
 									onClose();
 								}}
-								cancelLabel="No, Stay"
-								confirmLabel="Yes, Discard"
+								cancelLabel={t('file_preview.cancel_stay')}
+								confirmLabel={t('file_preview.confirm_discard')}
 								destructive
 								cancelButtonRef={cancelButtonRef}
 							/>
 						}
 					>
 						<p className="text-sm leading-relaxed" style={{ color: theme.colors.textMain }}>
-							You have unsaved changes. Are you sure you want to close without saving?
+							{t('file_preview.unsaved_changes_message')}
 						</p>
 					</Modal>
 				)}
