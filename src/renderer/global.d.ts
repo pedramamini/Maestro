@@ -9,6 +9,24 @@ declare module '*.md?raw' {
 	export default content;
 }
 
+type CorePromptEntry = import('../main/preload/prompts').CorePromptEntry;
+
+type PromptGetResult =
+	| { success: true; content: string; error?: undefined }
+	| { success: false; content?: undefined; error: string };
+type PromptGetAllResult =
+	| { success: true; prompts: CorePromptEntry[]; error?: undefined }
+	| { success: false; prompts?: undefined; error: string };
+type PromptGetAllIdsResult =
+	| { success: true; ids: string[]; error?: undefined }
+	| { success: false; ids?: undefined; error: string };
+type PromptSaveResult =
+	| { success: true; error?: undefined }
+	| { success: false; error: string };
+type PromptResetResult =
+	| { success: true; content: string; error?: undefined }
+	| { success: false; content?: undefined; error: string };
+
 type AutoRunTreeNode = {
 	name: string;
 	type: 'file' | 'folder';
@@ -2119,37 +2137,11 @@ interface MaestroAPI {
 	};
 	// Core Prompts API (Maestro system prompts)
 	prompts: {
-		get: (id: string) => Promise<{
-			success: boolean;
-			content?: string;
-			error?: string;
-		}>;
-		getAll: () => Promise<{
-			success: boolean;
-			prompts?: Array<{
-				id: string;
-				filename: string;
-				description: string;
-				category: string;
-				content: string;
-				isModified: boolean;
-			}>;
-			error?: string;
-		}>;
-		getAllIds: () => Promise<{
-			success: boolean;
-			ids?: string[];
-			error?: string;
-		}>;
-		save: (id: string, content: string) => Promise<{
-			success: boolean;
-			error?: string;
-		}>;
-		reset: (id: string) => Promise<{
-			success: boolean;
-			content?: string;
-			error?: string;
-		}>;
+		get: (id: string) => Promise<PromptGetResult>;
+		getAll: () => Promise<PromptGetAllResult>;
+		getAllIds: () => Promise<PromptGetAllIdsResult>;
+		save: (id: string, content: string) => Promise<PromptSaveResult>;
+		reset: (id: string) => Promise<PromptResetResult>;
 	};
 	// Stats tracking API (global AI interaction statistics)
 	stats: {

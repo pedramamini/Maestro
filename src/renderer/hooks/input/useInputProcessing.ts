@@ -18,6 +18,7 @@ import { gitService } from '../../services/git';
 let cachedImageOnlyPrompt = '';
 let cachedMaestroSystemPrompt = '';
 let inputProcessingPromptsLoaded = false;
+let inputProcessingPromptsLoadPromise: Promise<void> | null = null;
 
 /**
  * Load prompts used by input processing from disk via IPC.
@@ -45,6 +46,16 @@ export async function loadInputProcessingPrompts(force = false): Promise<void> {
 	cachedImageOnlyPrompt = imageResult.content;
 	cachedMaestroSystemPrompt = systemResult.content;
 	inputProcessingPromptsLoaded = true;
+}
+
+export async function ensureInputProcessingPromptsLoaded(force = false): Promise<void> {
+	if (inputProcessingPromptsLoaded && !force) return;
+	if (!inputProcessingPromptsLoadPromise || force) {
+		inputProcessingPromptsLoadPromise = loadInputProcessingPrompts(force).finally(() => {
+			inputProcessingPromptsLoadPromise = null;
+		});
+	}
+	await inputProcessingPromptsLoadPromise;
 }
 
 /**
@@ -938,8 +949,16 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						// If user sends only an image without text, inject the default image-only prompt
 						const hasImages = capturedImages.length > 0;
 						const hasNoText = !capturedInputValue.trim();
-						let effectivePrompt =
-							hasImages && hasNoText ? getImageOnlyPrompt() : capturedInputValue;
+						const isImageOnlyMessage = hasImages && hasNoText;
+						const isNewSession = !tabAgentSessionId;
+
+						if (isImageOnlyMessage || isNewSession) {
+							await ensureInputProcessingPromptsLoaded();
+						}
+
+						let effectivePrompt = isImageOnlyMessage
+							? getImageOnlyPrompt()
+							: capturedInputValue;
 
 						// For read-only mode, append instruction to return plan in response instead of writing files
 						if (isReadOnly) {
@@ -977,9 +996,9 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 
 						// For NEW sessions (no agentSessionId), prepend Maestro system prompt
 						// This introduces Maestro and sets directory restrictions for the agent
-						const isNewSession = !tabAgentSessionId;
-						const currentMaestroSystemPrompt = getMaestroSystemPrompt();
-						if (isNewSession && currentMaestroSystemPrompt) {
+						if (isNewSession) {
+							const currentMaestroSystemPrompt = getMaestroSystemPrompt();
+
 							// Get git branch for template substitution
 							let gitBranch: string | undefined;
 							if (freshSession.isGitRepo) {
@@ -1015,12 +1034,15 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 								parentSessionId: freshSession.parentSessionId,
 								historyFilePath,
 							});
-							const substitutedSystemPrompt = substituteTemplateVariables(currentMaestroSystemPrompt, {
-								session: freshSession,
-								gitBranch,
-								historyFilePath,
-								conductorProfile,
-							});
+							const substitutedSystemPrompt = substituteTemplateVariables(
+								currentMaestroSystemPrompt,
+								{
+									session: freshSession,
+									gitBranch,
+									historyFilePath,
+									conductorProfile,
+								}
+							);
 
 							// Prepend system prompt to user's message
 							effectivePrompt = `${substitutedSystemPrompt}\n\n---\n\n# User Request\n\n${effectivePrompt}`;

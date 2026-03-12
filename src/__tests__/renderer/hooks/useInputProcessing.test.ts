@@ -996,6 +996,58 @@ beforeEach(async () => {
 			expect(spawnCall.prompt).not.toContain('read-only/plan mode');
 			expect(spawnCall.readOnlyMode).toBeFalsy();
 		});
+
+		it('does not require prompt initialization for existing sessions', async () => {
+			vi.resetModules();
+
+			window.maestro = {
+				...window.maestro,
+				process: {
+					...window.maestro?.process,
+					spawn: vi.fn().mockResolvedValue(undefined),
+					write: vi.fn().mockResolvedValue(undefined),
+					runCommand: vi.fn().mockResolvedValue(undefined),
+				},
+				agents: {
+					...window.maestro?.agents,
+					get: vi.fn().mockResolvedValue({
+						id: 'claude-code',
+						command: 'claude',
+						path: '/usr/local/bin/claude',
+						args: ['--print', '--verbose'],
+					}),
+				},
+				web: {
+					...window.maestro?.web,
+					broadcastUserInput: vi.fn().mockResolvedValue(undefined),
+				},
+			} as typeof window.maestro;
+
+			const { useInputProcessing: useFreshInputProcessing } = await import(
+				'../../../renderer/hooks/input/useInputProcessing'
+			);
+
+			const existingTab = createMockTab({ agentSessionId: 'existing-session-123' });
+			const session = createMockSession({
+				aiTabs: [existingTab],
+				activeTabId: existingTab.id,
+			});
+			const deps = createDeps({
+				activeSession: session,
+				sessionsRef: { current: [session] },
+				inputValue: 'follow up request',
+			});
+
+			const { result } = renderHook(() => useFreshInputProcessing(deps));
+
+			await act(async () => {
+				await result.current.processInput();
+			});
+
+			expect(window.maestro.process.spawn).toHaveBeenCalledTimes(1);
+			const spawnCall = (window.maestro.process.spawn as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			expect(spawnCall.prompt).toBe('follow up request');
+		});
 	});
 
 	describe('command history tracking', () => {

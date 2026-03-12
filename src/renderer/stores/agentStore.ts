@@ -28,7 +28,11 @@ import type {
 import { createTab, getActiveTab } from '../utils/tabHelpers';
 import { generateId } from '../utils/ids';
 import { useSessionStore } from './sessionStore';
-import { getImageOnlyPrompt, getMaestroSystemPrompt } from '../hooks/input/useInputProcessing';
+import {
+	ensureInputProcessingPromptsLoaded,
+	getImageOnlyPrompt,
+	getMaestroSystemPrompt,
+} from '../hooks/input/useInputProcessing';
 import { substituteTemplateVariables } from '../utils/templateVariables';
 import { gitService } from '../services/git';
 import { filterYoloArgs } from '../utils/agentArgs';
@@ -295,12 +299,15 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 
 			if (item.type === 'message' && (hasText || isImageOnlyMessage)) {
 				// Process a message - spawn agent with the message text
+				const isNewSession = !tabAgentSessionId;
+				if (isImageOnlyMessage || isNewSession) {
+					await ensureInputProcessingPromptsLoaded();
+				}
 				let effectivePrompt = isImageOnlyMessage ? getImageOnlyPrompt() : item.text!;
 
 				// For NEW sessions (no agentSessionId), prepend Maestro system prompt
-				const isNewSession = !tabAgentSessionId;
-				const currentMaestroSystemPrompt = getMaestroSystemPrompt();
-				if (isNewSession && currentMaestroSystemPrompt) {
+				if (isNewSession) {
+					const currentMaestroSystemPrompt = getMaestroSystemPrompt();
 					let gitBranch: string | undefined;
 					if (session.isGitRepo) {
 						try {
@@ -390,8 +397,9 @@ export const useAgentStore = create<AgentStore>()((set, get) => ({
 					// For NEW sessions, prepend Maestro system prompt
 					const isNewSessionForCommand = !tabAgentSessionId;
 					let promptForAgent = substitutedPrompt;
-					const systemPromptForCommand = getMaestroSystemPrompt();
-					if (isNewSessionForCommand && systemPromptForCommand) {
+					if (isNewSessionForCommand) {
+						await ensureInputProcessingPromptsLoaded();
+						const systemPromptForCommand = getMaestroSystemPrompt();
 						const substitutedSystemPrompt = substituteTemplateVariables(systemPromptForCommand, {
 							session,
 							gitBranch,

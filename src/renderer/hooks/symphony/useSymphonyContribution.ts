@@ -262,18 +262,19 @@ export function useSymphonyContribution(
 			setActiveRightTab('autorun');
 
 			// Auto-start batch run with all contribution documents
-			if (batchConfig && data.autoRunPath) {
-				// Small delay to ensure session state is fully propagated
-				setTimeout(() => {
-					console.log(
-						'[Symphony] Auto-starting batch run with',
-						batchConfig.documents.length,
-						'documents'
-					);
-					void startBatchRun(newId, batchConfig, data.autoRunPath).catch((error) => {
-						console.error('[Symphony] Failed to auto-start batch run:', error);
-						notifyToast({
-							type: 'error',
+				const autoRunPath = data.autoRunPath;
+				if (batchConfig && autoRunPath) {
+					// Small delay to ensure session state is fully propagated
+					setTimeout(() => {
+						console.log(
+							'[Symphony] Auto-starting batch run with',
+							batchConfig.documents.length,
+							'documents'
+						);
+						void startBatchRun(newId, batchConfig, autoRunPath).catch((error) => {
+							console.error('[Symphony] Failed to auto-start batch run:', error);
+							notifyToast({
+								type: 'error',
 							title: 'Symphony Error',
 							message: 'Failed to start Auto Run.',
 						});

@@ -116,6 +116,39 @@ function applyPromptTemplate(prompt: string, replacements: Record<string, string
 	return prompt.replace(PROMPT_TOKEN_PATTERN, (match, token: string) => replacements[token] ?? match);
 }
 
+type ParticipantRequestPromptParams = {
+	participantName: string;
+	groupChatName: string;
+	groupChatFolder: string;
+	historyContext: string;
+	message: string;
+	readOnlyNote: string;
+	readOnlyLabel: string;
+	readOnlyInstruction: string;
+};
+
+function buildParticipantRequestPrompt({
+	participantName,
+	groupChatName,
+	groupChatFolder,
+	historyContext,
+	message,
+	readOnlyNote,
+	readOnlyLabel,
+	readOnlyInstruction,
+}: ParticipantRequestPromptParams): string {
+	return applyPromptTemplate(getPrompt(PROMPT_IDS.GROUP_CHAT_PARTICIPANT_REQUEST), {
+		PARTICIPANT_NAME: participantName,
+		GROUP_CHAT_NAME: groupChatName,
+		READ_ONLY_NOTE: readOnlyNote,
+		GROUP_CHAT_FOLDER: groupChatFolder,
+		HISTORY_CONTEXT: historyContext,
+		READ_ONLY_LABEL: readOnlyLabel,
+		MESSAGE: message,
+		READ_ONLY_INSTRUCTION: readOnlyInstruction,
+	});
+}
+
 /**
  * Gets the current read-only state for a group chat.
  */
@@ -839,22 +872,19 @@ export async function routeModeratorResponse(
 				? ' Remember: READ-ONLY mode is active, do not modify any files.'
 				: ' If you need to perform any actions, do so and report your findings.';
 
-			// Get the group chat folder path for file access permissions
-			const groupChatFolder = getGroupChatDir(groupChatId);
+				// Get the group chat folder path for file access permissions
+				const groupChatFolder = getGroupChatDir(groupChatId);
 
-				const participantPrompt = applyPromptTemplate(
-					getPrompt(PROMPT_IDS.GROUP_CHAT_PARTICIPANT_REQUEST),
-					{
-						PARTICIPANT_NAME: participantName,
-						GROUP_CHAT_NAME: updatedChat.name,
-						READ_ONLY_NOTE: readOnlyNote,
-						GROUP_CHAT_FOLDER: groupChatFolder,
-						HISTORY_CONTEXT: historyContext,
-						READ_ONLY_LABEL: readOnlyLabel,
-						MESSAGE: message,
-						READ_ONLY_INSTRUCTION: readOnlyInstruction,
-					}
-				);
+				const participantPrompt = buildParticipantRequestPrompt({
+					participantName,
+					groupChatName: updatedChat.name,
+					groupChatFolder,
+					historyContext,
+					message,
+					readOnlyNote,
+					readOnlyLabel,
+					readOnlyInstruction,
+				});
 
 			// Create a unique session ID for this batch process
 			const sessionId = `group-chat-${groupChatId}-participant-${participantName}-${Date.now()}`;
@@ -1393,18 +1423,18 @@ export async function respawnParticipantWithRecovery(
 		? ' Remember: READ-ONLY mode is active, do not modify any files.'
 		: ' If you need to perform any actions, do so and report your findings.';
 
-	const groupChatFolder = getGroupChatDir(groupChatId);
+		const groupChatFolder = getGroupChatDir(groupChatId);
 
-	// Build the recovery prompt - includes standard prompt plus recovery context
-		const basePrompt = applyPromptTemplate(getPrompt(PROMPT_IDS.GROUP_CHAT_PARTICIPANT_REQUEST), {
-			PARTICIPANT_NAME: participantName,
-			GROUP_CHAT_NAME: chat.name,
-			READ_ONLY_NOTE: readOnlyNote,
-			GROUP_CHAT_FOLDER: groupChatFolder,
-			HISTORY_CONTEXT: historyContext,
-			READ_ONLY_LABEL: readOnlyLabel,
-			MESSAGE: 'Please continue from where you left off based on the recovery context below.',
-			READ_ONLY_INSTRUCTION: readOnlyInstruction,
+		// Build the recovery prompt - includes standard prompt plus recovery context
+		const basePrompt = buildParticipantRequestPrompt({
+			participantName,
+			groupChatName: chat.name,
+			groupChatFolder,
+			historyContext,
+			message: 'Please continue from where you left off based on the recovery context below.',
+			readOnlyNote,
+			readOnlyLabel,
+			readOnlyInstruction,
 		});
 
 	// Prepend recovery context

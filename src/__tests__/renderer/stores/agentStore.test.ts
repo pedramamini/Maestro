@@ -121,13 +121,28 @@ vi.mock('../../../prompts', async (importOriginal) => {
 	};
 });
 
+let inputProcessingPromptsLoaded = false;
+
 // Mock the input processing prompt getters (loaded from disk via IPC at runtime)
 vi.mock('../../../renderer/hooks/input/useInputProcessing', async (importOriginal) => {
 	const actual = await importOriginal<typeof import('../../../renderer/hooks/input/useInputProcessing')>();
 	return {
 		...actual,
-		getMaestroSystemPrompt: vi.fn(() => 'Mock system prompt for {{CWD}}'),
-		getImageOnlyPrompt: vi.fn(() => 'Describe this image'),
+		ensureInputProcessingPromptsLoaded: vi.fn(async () => {
+			inputProcessingPromptsLoaded = true;
+		}),
+		getMaestroSystemPrompt: vi.fn(() => {
+			if (!inputProcessingPromptsLoaded) {
+				throw new Error('Maestro system prompt not loaded');
+			}
+			return 'Mock system prompt for {{CWD}}';
+		}),
+		getImageOnlyPrompt: vi.fn(() => {
+			if (!inputProcessingPromptsLoaded) {
+				throw new Error('Image-only prompt not loaded');
+			}
+			return 'Describe this image';
+		}),
 	};
 });
 
@@ -153,6 +168,7 @@ function resetStores() {
 }
 
 beforeEach(() => {
+	inputProcessingPromptsLoaded = false;
 	resetStores();
 	vi.clearAllMocks();
 });

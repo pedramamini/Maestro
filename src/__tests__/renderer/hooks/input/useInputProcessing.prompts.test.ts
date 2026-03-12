@@ -42,4 +42,18 @@ describe('useInputProcessing prompt guards', () => {
 		expect(inputPrompts.getImageOnlyPrompt()).toBe('image prompt');
 		expect(inputPrompts.getMaestroSystemPrompt()).toBe('system prompt');
 	});
+
+	it('dedupes concurrent ensure calls and loads prompts once', async () => {
+		const inputPrompts = await import('../../../../renderer/hooks/input/useInputProcessing');
+		const promptsGet = (window as any).maestro.prompts.get as ReturnType<typeof vi.fn>;
+
+		await Promise.all([
+			inputPrompts.ensureInputProcessingPromptsLoaded(),
+			inputPrompts.ensureInputProcessingPromptsLoaded(),
+		]);
+
+		expect(promptsGet).toHaveBeenCalledTimes(2);
+		expect(inputPrompts.getImageOnlyPrompt()).toBe('image prompt');
+		expect(inputPrompts.getMaestroSystemPrompt()).toBe('system prompt');
+	});
 });
