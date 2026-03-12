@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, AgentConfig } from '../../../types';
 import type { SshRemoteConfig } from '../../../../shared/types';
 import { useWizard } from '../WizardContext';
@@ -28,6 +29,8 @@ interface DirectorySelectionScreenProps {
  * DirectorySelectionScreen - Project directory selection with Git detection
  */
 export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProps): JSX.Element {
+	const { t } = useTranslation('modals');
+
 	const {
 		state,
 		setDirectoryPath,
@@ -226,13 +229,13 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 				} catch (dirError) {
 					// Directory doesn't exist or can't be accessed
 					console.error('Directory does not exist:', dirError);
-					setDirectoryError('Directory not found. Please check the path exists.');
+					setDirectoryError(t('wizard.directory.error_not_found'));
 					setIsGitRepo(false);
 					setHasExistingAutoRunDocs(false, 0);
 
 					// Announce error
 					if (shouldAnnounce) {
-						setAnnouncement('Error: Directory not found. Please check the path exists.');
+						setAnnouncement(t('wizard.directory.announce_error_not_found'));
 						setAnnouncementKey((prev) => prev + 1);
 					}
 					setIsValidating(false);
@@ -253,22 +256,22 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 				// Announce validation result
 				if (shouldAnnounce) {
 					if (isRepo) {
-						setAnnouncement('Directory validated. Git repository detected.');
+						setAnnouncement(t('wizard.directory.announce_validated_git'));
 					} else {
-						setAnnouncement('Directory validated. Not a Git repository.');
+						setAnnouncement(t('wizard.directory.announce_validated'));
 					}
 					setAnnouncementKey((prev) => prev + 1);
 				}
 			} catch (error) {
 				// If git check fails, the directory might not exist or is inaccessible
 				console.error('Directory validation error:', error);
-				setDirectoryError('Unable to access this directory. Please check the path exists.');
+				setDirectoryError(t('wizard.directory.error_access'));
 				setIsGitRepo(false);
 				setHasExistingAutoRunDocs(false, 0);
 
 				// Announce error
 				if (shouldAnnounce) {
-					setAnnouncement('Error: Unable to access this directory. Please check the path exists.');
+					setAnnouncement(t('wizard.directory.announce_error_access'));
 					setAnnouncementKey((prev) => prev + 1);
 				}
 			}
@@ -282,6 +285,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 			checkForExistingDocs,
 			state.existingDocsChoice,
 			getSshRemoteId,
+			t,
 		]
 	);
 
@@ -348,11 +352,11 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 			}
 		} catch (error) {
 			console.error('Browse failed:', error);
-			setDirectoryError('Failed to open folder picker');
+			setDirectoryError(t('wizard.directory.error_browse'));
 		}
 
 		setIsBrowsing(false);
-	}, [setDirectoryPath, validateDirectory, setDirectoryError]);
+	}, [setDirectoryPath, validateDirectory, setDirectoryError, t]);
 
 	/**
 	 * Attempt to proceed to next step
@@ -475,7 +479,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 					style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
 				/>
 				<p className="text-sm" style={{ color: theme.colors.textDim }}>
-					Detecting project location...
+					{t('wizard.directory.detecting')}
 				</p>
 			</div>
 		);
@@ -503,26 +507,26 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 			<div className="text-center">
 				{/* Agent greeting - prominent at top */}
 				<h2 className="text-3xl font-bold mb-6" style={{ color: theme.colors.accent }}>
-					Howdy, I'm {state.agentName || 'your agent'}
+					{t('wizard.directory.greeting', { name: state.agentName || 'your agent' })}
 				</h2>
 				<h3 className="text-xl font-semibold mb-4" style={{ color: theme.colors.textMain }}>
-					Where Should We Work?
+					{t('wizard.directory.title')}
 				</h3>
 				<p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
-					Choose the folder where your project lives (or will live).
+					{t('wizard.directory.subtitle')}
 				</p>
 				<p
 					className="text-xs max-w-lg mx-auto"
 					style={{ color: theme.colors.textDim, opacity: 0.8 }}
 				>
-					Do note, as a matter of design I operate in{' '}
+					{t('wizard.directory.yolo_intro')}{' '}
 					<code
 						className="px-1.5 py-0.5 rounded text-xs"
 						style={{ backgroundColor: theme.colors.warning, color: theme.colors.bgMain }}
 					>
-						YOLO
+						{t('wizard.directory.yolo_label')}
 					</code>{' '}
-					mode, aka:
+					{t('wizard.directory.yolo_suffix')}
 				</p>
 				{getYoloFlag() && (
 					<div className="my-3 flex justify-center">
@@ -538,9 +542,9 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 					className="text-xs max-w-lg mx-auto"
 					style={{ color: theme.colors.textDim, opacity: 0.8 }}
 				>
-					I do my best to only make changes within this directory...
+					{t('wizard.directory.yolo_caveat_1')}
 					<br />
-					That said, Caveat Emptor.
+					{t('wizard.directory.yolo_caveat_2')}
 				</p>
 			</div>
 
@@ -557,7 +561,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 							className="block text-sm mb-2 font-medium"
 							style={{ color: theme.colors.textMain }}
 						>
-							Project Directory
+							{t('wizard.directory.label')}
 						</label>
 						<div className="flex gap-3">
 							<input
@@ -568,8 +572,10 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 								onChange={handlePathChange}
 								placeholder={
 									isRemoteSession
-										? `Enter path on ${sshRemoteHost || 'remote host'} (e.g., /home/user/project)`
-										: '/path/to/your/project'
+										? t('wizard.directory.placeholder_remote', {
+												host: sshRemoteHost || 'remote host',
+											})
+										: t('wizard.directory.placeholder')
 								}
 								className="flex-1 px-4 py-3 rounded-lg border text-base outline-none transition-all font-mono"
 								style={{
@@ -612,7 +618,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 													borderTopColor: 'transparent',
 												}}
 											/>
-											<span>Opening...</span>
+											<span>{t('wizard.directory.opening')}</span>
 										</>
 									) : (
 										<>
@@ -629,7 +635,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 													d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z"
 												/>
 											</svg>
-											<span>Browse</span>
+											<span>{t('wizard.directory.browse_button')}</span>
 										</>
 									)}
 								</button>
@@ -655,8 +661,9 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 										d="M21 12a9 9 0 01-9 9m9-9a9 9 0 00-9-9m9 9H3m9 9a9 9 0 01-9-9m9 9c1.657 0 3-4.03 3-9s-1.343-9-3-9m0 18c-1.657 0-3-4.03-3-9s1.343-9 3-9m-9 9a9 9 0 019-9"
 									/>
 								</svg>
-								Enter the full path on <strong>{sshRemoteHost || 'the remote host'}</strong> — path
-								will be validated as you type
+								{t('wizard.directory.remote_hint_prefix')}{' '}
+								<strong>{sshRemoteHost || 'the remote host'}</strong>{' '}
+								{t('wizard.directory.remote_hint_suffix')}
 							</p>
 						)}
 
@@ -713,11 +720,10 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 									</div>
 									<div>
 										<p className="font-medium" style={{ color: theme.colors.textMain }}>
-											Git Repository Detected
+											{t('wizard.directory.git_detected_title')}
 										</p>
 										<p className="text-xs" style={{ color: theme.colors.textDim }}>
-											Version control features like branch tracking, change detection, and worktrees
-											will be available.
+											{t('wizard.directory.git_detected_description')}
 										</p>
 									</div>
 								</>
@@ -743,10 +749,10 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 									</div>
 									<div>
 										<p className="font-medium" style={{ color: theme.colors.textMain }}>
-											Regular Directory
+											{t('wizard.directory.regular_dir_title')}
 										</p>
 										<p className="text-xs" style={{ color: theme.colors.textDim }}>
-											Not a Git repository. You can initialize one later if needed.
+											{t('wizard.directory.regular_dir_description')}
 										</p>
 									</div>
 								</>
@@ -757,8 +763,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 					{/* Git explanation - shown after directory status */}
 					{state.directoryPath.trim() && !state.directoryError && !isValidating && (
 						<p className="text-xs text-center mb-6" style={{ color: theme.colors.textDim }}>
-							Git repositories get extra features like branch tracking, change detection, and
-							worktrees. Regular folders work too!
+							{t('wizard.directory.git_explanation')}
 						</p>
 					)}
 
@@ -776,7 +781,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 								style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
 							/>
 							<p className="text-sm" style={{ color: theme.colors.textDim }}>
-								Validating directory...
+								{t('wizard.directory.validating')}
 							</p>
 						</div>
 					)}
@@ -805,7 +810,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 							['--tw-ring-offset-color' as any]: theme.colors.bgMain,
 						}}
 					>
-						Continue
+						{t('wizard.directory.continue_button')}
 					</button>
 				</div>
 			)}
@@ -822,7 +827,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 					>
 						Tab
 					</kbd>
-					Navigate
+					{t('wizard.directory.kbd_navigate')}
 				</span>
 				<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 					<kbd
@@ -831,7 +836,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 					>
 						Enter
 					</kbd>
-					Continue
+					{t('wizard.directory.kbd_continue')}
 				</span>
 				<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 					<kbd
@@ -840,7 +845,7 @@ export function DirectorySelectionScreen({ theme }: DirectorySelectionScreenProp
 					>
 						Esc
 					</kbd>
-					Exit Wizard
+					{t('wizard.directory.kbd_exit')}
 				</span>
 			</div>
 

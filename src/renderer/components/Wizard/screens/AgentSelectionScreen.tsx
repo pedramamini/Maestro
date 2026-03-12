@@ -13,6 +13,7 @@
  */
 
 import { useEffect, useRef, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Check, X, Settings, ArrowLeft, AlertTriangle, Info, Wand2 } from 'lucide-react';
 import type { Theme, AgentConfig } from '../../../types';
 import type { SshRemoteConfig, AgentSshRemoteConfig } from '../../../../shared/types';
@@ -286,6 +287,7 @@ export function AgentLogo({
  * AgentSelectionScreen - Agent selection with tiled grid view
  */
 export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const {
 		state,
 		setSelectedAgent,
@@ -298,6 +300,30 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 		nextStep,
 		canProceedToNext,
 	} = useWizard();
+
+	// Helper to get translated agent tile name and description
+	const getAgentTileName = (tileId: string, fallback: string): string => {
+		const keyMap: Record<string, string> = {
+			'claude-code': 'wizard.agent_selection.agents.claude_code_name',
+			codex: 'wizard.agent_selection.agents.codex_name',
+			opencode: 'wizard.agent_selection.agents.opencode_name',
+			'factory-droid': 'wizard.agent_selection.agents.factory_droid_name',
+			'gemini-cli': 'wizard.agent_selection.agents.gemini_cli_name',
+			'qwen3-coder': 'wizard.agent_selection.agents.qwen3_coder_name',
+		};
+		return keyMap[tileId] ? (t as any)(keyMap[tileId]) : fallback;
+	};
+	const getAgentTileDescription = (tileId: string, fallback: string): string => {
+		const keyMap: Record<string, string> = {
+			'claude-code': 'wizard.agent_selection.agents.claude_code_description',
+			codex: 'wizard.agent_selection.agents.codex_description',
+			opencode: 'wizard.agent_selection.agents.opencode_description',
+			'factory-droid': 'wizard.agent_selection.agents.factory_droid_description',
+			'gemini-cli': 'wizard.agent_selection.agents.gemini_cli_description',
+			'qwen3-coder': 'wizard.agent_selection.agents.qwen3_coder_description',
+		};
+		return keyMap[tileId] ? (t as any)(keyMap[tileId]) : fallback;
+	};
 
 	// Local state
 	const [focusedTileIndex, setFocusedTileIndex] = useState<number>(0);
@@ -406,7 +432,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						// Extract the first meaningful error message
 						const errorMsg = connectionErrors[0];
 						setSshConnectionError(errorMsg);
-						setAnnouncement(`Unable to connect to remote host: ${errorMsg}`);
+						setAnnouncement(t('wizard.agent_selection.announce_ssh_error', { error: errorMsg }));
 						setAnnouncementKey((prev) => prev + 1);
 						setIsDetecting(false);
 						return;
@@ -420,7 +446,9 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 					const totalCount = visibleAgents.length;
 
 					// Build announcement with SSH remote context
-					const remoteContext = sshRemoteConfig?.enabled ? ' on remote host' : '';
+					const remoteContext = sshRemoteConfig?.enabled
+						? t('wizard.agent_selection.announce_remote_context')
+						: '';
 
 					// Auto-select Claude Code if it's available and nothing is selected
 					// Use ref to get current value without adding to dependencies
@@ -432,18 +460,30 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 							setSelectedAgent('claude-code');
 							// Announce detection complete with auto-selection
 							setAnnouncement(
-								`Agent detection complete${remoteContext}. ${availableCount} of ${totalCount} agents available. Claude Code automatically selected.`
+								(t as any)('wizard.agent_selection.announce_detection_complete_auto', {
+									context: remoteContext,
+									available: availableCount,
+									total: totalCount,
+								})
 							);
 						} else {
 							// Announce detection complete without auto-selection
 							setAnnouncement(
-								`Agent detection complete${remoteContext}. ${availableCount} of ${totalCount} agents available.`
+								(t as any)('wizard.agent_selection.announce_detection_complete', {
+									context: remoteContext,
+									available: availableCount,
+									total: totalCount,
+								})
 							);
 						}
 					} else {
 						// Announce detection complete (agent already selected from restore)
 						setAnnouncement(
-							`Agent detection complete${remoteContext}. ${availableCount} of ${totalCount} agents available.`
+							(t as any)('wizard.agent_selection.announce_detection_complete', {
+								context: remoteContext,
+								available: availableCount,
+								total: totalCount,
+							})
 						);
 					}
 					setAnnouncementKey((prev) => prev + 1);
@@ -455,10 +495,12 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 				if (mounted) {
 					if (sshRemoteConfig?.enabled) {
 						setSshConnectionError(
-							error instanceof Error ? error.message : 'Unknown connection error'
+							error instanceof Error
+								? error.message
+								: t('wizard.agent_selection.unknown_connection_error')
 						);
 					}
-					setAnnouncement('Failed to detect available agents. Please try again.');
+					setAnnouncement(t('wizard.agent_selection.announce_detection_failed'));
 					setAnnouncementKey((prev) => prev + 1);
 					setIsDetecting(false);
 				}
@@ -672,7 +714,11 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 				setSelectedAgent(tile.id as any);
 				setFocusedTileIndex(index);
 				// Announce agent selection
-				setAnnouncement(`${tile.name} selected`);
+				setAnnouncement(
+					t('wizard.agent_selection.announce_agent_selected', {
+						name: getAgentTileName(tile.id, tile.name),
+					})
+				);
 				setAnnouncementKey((prev) => prev + 1);
 			}
 		},
@@ -738,7 +784,11 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 
 			// Announce opening config panel
 			const tile = AGENT_TILES.find((t) => t.id === agentId);
-			setAnnouncement(`Configuring ${tile?.name || agentId}`);
+			setAnnouncement(
+				t('wizard.agent_selection.announce_configuring', {
+					name: tile ? getAgentTileName(tile.id, tile.name) : agentId,
+				})
+			);
 			setAnnouncementKey((prev) => prev + 1);
 		},
 		[detectedAgents, setSelectedAgent, sshRemoteConfig]
@@ -774,7 +824,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 			}
 		}, 150);
 
-		setAnnouncement('Returned to agent selection');
+		setAnnouncement(t('wizard.agent_selection.announce_returned'));
 		setAnnouncementKey((prev) => prev + 1);
 	}, [configuringAgentId, sshRemoteConfig, setWizardSessionSshRemoteConfig]);
 
@@ -853,7 +903,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 					style={{ borderColor: theme.colors.accent, borderTopColor: 'transparent' }}
 				/>
 				<p className="text-sm" style={{ color: theme.colors.textDim }}>
-					Detecting available agents...
+					{t('wizard.agent_selection.detecting_agents')}
 				</p>
 			</div>
 		);
@@ -888,16 +938,20 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						}}
 					>
 						<ArrowLeft className="w-4 h-4" />
-						Back
+						{t('wizard.agent_selection.back_button')}
 					</button>
 					<div className="flex flex-col items-center gap-2">
 						<h3 className="text-xl font-semibold" style={{ color: theme.colors.textMain }}>
-							Configure {configuringTile.name}
+							{t('wizard.agent_selection.configure_title', {
+								name: getAgentTileName(configuringTile.id, configuringTile.name),
+							})}
 						</h3>
 						{/* SSH Remote Location Dropdown - only shown if remotes are configured */}
 						{sshRemotes.length > 0 && (
 							<div className="flex items-center gap-2 text-sm">
-								<span style={{ color: theme.colors.textDim }}>on</span>
+								<span style={{ color: theme.colors.textDim }}>
+									{t('wizard.agent_selection.on_label')}
+								</span>
 								<select
 									value={sshRemoteConfig?.enabled ? sshRemoteConfig.remoteId || '' : ''}
 									onChange={(e) => {
@@ -926,9 +980,9 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 										borderColor: theme.colors.border,
 										color: theme.colors.textMain,
 									}}
-									aria-label="Agent location"
+									aria-label={t('wizard.agent_selection.location_aria')}
 								>
-									<option value="">Local Machine</option>
+									<option value="">{t('wizard.agent_selection.local_machine')}</option>
 									{sshRemotes.map((remote) => (
 										<option key={remote.id} value={remote.id}>
 											{remote.name || remote.host}
@@ -951,7 +1005,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 							className="w-4 h-4 border-2 border-t-transparent rounded-full animate-spin"
 							style={{ borderColor: theme.colors.warning, borderTopColor: 'transparent' }}
 						/>
-						Detecting agent on remote host...
+						{t('wizard.agent_selection.detecting_remote')}
 					</div>
 				)}
 
@@ -1051,7 +1105,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 							['--tw-ring-offset-color' as any]: theme.colors.bgMain,
 						}}
 					>
-						Done
+						{t('wizard.agent_selection.done_button')}
 					</button>
 				</div>
 			</div>
@@ -1078,7 +1132,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 			{/* Section 1: Header + Name/Location Row */}
 			<div className="flex flex-col items-center gap-4">
 				<h3 className="text-2xl font-semibold" style={{ color: theme.colors.textMain }}>
-					Create a Maestro Agent
+					{t('wizard.agent_selection.title')}
 				</h3>
 
 				{/* Name + Location Row */}
@@ -1091,7 +1145,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						onChange={(e) => setAgentName(e.target.value)}
 						onFocus={() => setIsNameFieldFocused(true)}
 						onBlur={() => setIsNameFieldFocused(false)}
-						placeholder="Name your agent..."
+						placeholder={t('wizard.agent_selection.name_placeholder')}
 						className="w-64 px-4 py-2 rounded-lg border outline-none transition-all"
 						style={{
 							backgroundColor: theme.colors.bgMain,
@@ -1099,14 +1153,14 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 							color: theme.colors.textMain,
 							boxShadow: isNameFieldFocused ? `0 0 0 2px ${theme.colors.accent}40` : 'none',
 						}}
-						aria-label="Agent name"
+						aria-label={t('wizard.agent_selection.name_aria')}
 					/>
 
 					{/* SSH Remote Location Dropdown - only shown if remotes are configured */}
 					{sshRemotes.length > 0 && (
 						<div className="flex items-center gap-2">
 							<span className="text-sm" style={{ color: theme.colors.textDim }}>
-								on
+								{t('wizard.agent_selection.on_label')}
 							</span>
 							<select
 								value={sshRemoteConfig?.enabled ? sshRemoteConfig.remoteId || '' : ''}
@@ -1137,9 +1191,9 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 									color: theme.colors.textMain,
 									minWidth: '160px',
 								}}
-								aria-label="Agent location"
+								aria-label={t('wizard.agent_selection.location_aria')}
 							>
-								<option value="">Local Machine</option>
+								<option value="">{t('wizard.agent_selection.local_machine')}</option>
 								{sshRemotes.map((remote) => (
 									<option key={remote.id} value={remote.id}>
 										{remote.name || remote.host}
@@ -1163,21 +1217,22 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 					>
 						<Info className="w-4 h-4 flex-shrink-0 mt-0.5" style={{ color: theme.colors.accent }} />
 						<span style={{ color: theme.colors.textDim }}>
-							<strong style={{ color: theme.colors.textMain }}>Note:</strong> The new agent wizard
-							captures application inputs until complete. For a lighter touch, create a new agent
-							then run{' '}
+							<strong style={{ color: theme.colors.textMain }}>
+								{t('wizard.agent_selection.note_label')}
+							</strong>{' '}
+							{t('wizard.agent_selection.note_text_before_command')}{' '}
 							<code
 								className="px-1 py-0.5 rounded text-[11px]"
 								style={{ backgroundColor: theme.colors.border }}
 							>
-								/wizard
+								{t('wizard.agent_selection.note_command')}
 							</code>{' '}
-							or click the{' '}
+							{t('wizard.agent_selection.note_text_after_command')}{' '}
 							<Wand2
 								className="inline w-3.5 h-3.5 align-text-bottom"
 								style={{ color: theme.colors.accent }}
 							/>{' '}
-							button in the Auto Run panel. The in-tab wizard runs alongside your other work.
+							{t('wizard.agent_selection.note_text_end')}
 						</span>
 					</div>
 				</div>
@@ -1188,7 +1243,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 				/* SSH Connection Error State */
 				<div className="flex flex-col items-center gap-4">
 					<p className="text-sm" style={{ color: theme.colors.textDim }}>
-						Select the provider that will power your agent.
+						{t('wizard.agent_selection.select_provider')}
 					</p>
 					<div
 						className="flex flex-col items-center justify-center p-8 rounded-xl border-2 max-w-lg text-center"
@@ -1199,13 +1254,13 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 					>
 						<AlertTriangle className="w-12 h-12 mb-4" style={{ color: theme.colors.error }} />
 						<h4 className="text-lg font-semibold mb-2" style={{ color: theme.colors.textMain }}>
-							Unable to Connect
+							{t('wizard.agent_selection.unable_to_connect')}
 						</h4>
 						<p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
 							{sshConnectionError}
 						</p>
 						<p className="text-sm" style={{ color: theme.colors.textDim }}>
-							Please select a different remote host or switch to Local Machine.
+							{t('wizard.agent_selection.ssh_error_hint')}
 						</p>
 					</div>
 				</div>
@@ -1213,7 +1268,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 				/* Agent Grid */
 				<div className="flex flex-col items-center gap-4">
 					<p className="text-sm" style={{ color: theme.colors.textDim }}>
-						Select the provider that will power your agent.
+						{t('wizard.agent_selection.select_provider')}
 					</p>
 					<div className="grid grid-cols-3 gap-4 max-w-3xl">
 						{AGENT_TILES.map((tile, index) => {
@@ -1256,7 +1311,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 												? `0 0 0 2px ${theme.colors.accent}40`
 												: 'none',
 									}}
-									aria-label={`${tile.name}${canSelect ? '' : isSupported ? ' (not installed)' : ' (coming soon)'}`}
+									aria-label={`${getAgentTileName(tile.id, tile.name)}${canSelect ? '' : isSupported ? ' ' + t('wizard.agent_selection.aria_not_installed') : ' ' + t('wizard.agent_selection.aria_coming_soon')}`}
 									aria-pressed={isSelected}
 								>
 									{/* Selection indicator */}
@@ -1276,7 +1331,11 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 											style={{
 												backgroundColor: isDetected ? '#22c55e20' : '#ef444420',
 											}}
-											title={isDetected ? 'Installed' : 'Not found'}
+											title={
+												isDetected
+													? t('wizard.agent_selection.installed_tooltip')
+													: t('wizard.agent_selection.not_found_tooltip')
+											}
 										>
 											{isDetected ? (
 												<Check className="w-3 h-3" style={{ color: '#22c55e' }} />
@@ -1302,16 +1361,16 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 										className="text-base font-medium mb-0.5"
 										style={{ color: isSupported ? theme.colors.textMain : theme.colors.textDim }}
 									>
-										{tile.name}
+										{getAgentTileName(tile.id, tile.name)}
 									</h4>
 
 									{/* Description / Status */}
 									<p className="text-xs text-center" style={{ color: theme.colors.textDim }}>
 										{isSupported
 											? isDetected
-												? tile.description
-												: 'Not installed'
-											: 'Coming soon'}
+												? getAgentTileDescription(tile.id, tile.description)
+												: t('wizard.agent_selection.not_installed')
+											: t('wizard.agent_selection.coming_soon')}
 									</p>
 
 									{/* "Soon" badge for unsupported agents */}
@@ -1323,7 +1382,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 												color: theme.colors.textDim,
 											}}
 										>
-											Soon
+											{t('wizard.agent_selection.soon_badge')}
 										</span>
 									)}
 
@@ -1336,7 +1395,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 												color: theme.colors.warning,
 											}}
 										>
-											Beta
+											{t('wizard.agent_selection.beta_badge')}
 										</span>
 									)}
 
@@ -1357,11 +1416,11 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 											}}
 											className="absolute bottom-2 left-1/2 -translate-x-1/2 flex items-center gap-1 px-2 py-1 mt-2 rounded text-[10px] hover:bg-white/10 transition-colors cursor-pointer"
 											style={{ color: theme.colors.textDim }}
-											title="Customize agent settings"
+											title={t('wizard.agent_selection.customize_tooltip')}
 											tabIndex={-1}
 										>
 											<Settings className="w-3 h-3" />
-											Customize
+											{t('wizard.agent_selection.customize_button')}
 										</div>
 									)}
 								</button>
@@ -1386,7 +1445,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						['--tw-ring-offset-color' as any]: theme.colors.bgMain,
 					}}
 				>
-					Continue
+					{t('wizard.agent_selection.continue_button')}
 				</button>
 
 				{/* Keyboard hints */}
@@ -1398,7 +1457,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						>
 							← → ↑ ↓
 						</kbd>
-						Navigate
+						{t('wizard.agent_selection.kbd_navigate')}
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
@@ -1407,7 +1466,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						>
 							Tab
 						</kbd>
-						Fields
+						{t('wizard.agent_selection.kbd_fields')}
 					</span>
 					<span className="text-xs flex items-center gap-1" style={{ color: theme.colors.textDim }}>
 						<kbd
@@ -1416,7 +1475,7 @@ export function AgentSelectionScreen({ theme }: AgentSelectionScreenProps): JSX.
 						>
 							Enter
 						</kbd>
-						Continue
+						{t('wizard.agent_selection.kbd_continue')}
 					</span>
 				</div>
 			</div>

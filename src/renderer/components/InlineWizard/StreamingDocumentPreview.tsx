@@ -13,6 +13,7 @@
  */
 
 import { useState, useEffect, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import { FileText, Code2, AlignLeft } from 'lucide-react';
@@ -92,6 +93,7 @@ export function StreamingDocumentPreview({
 	currentPhase,
 	totalPhases,
 }: StreamingDocumentPreviewProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const containerRef = useRef<HTMLDivElement>(null);
 	const [viewMode, setViewMode] = useState<ViewMode>('raw');
 	const userScrolledRef = useRef(false);
@@ -169,7 +171,7 @@ export function StreamingDocumentPreview({
 				<div className="flex items-center gap-2">
 					<FileText className="w-4 h-4" style={{ color: theme.colors.accent }} />
 					<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-						{filename || 'Generating...'}
+						{filename || t('wizard.inline_streaming.generating')}
 					</span>
 				</div>
 
@@ -177,7 +179,10 @@ export function StreamingDocumentPreview({
 					{/* Progress indicator */}
 					{currentPhase !== undefined && totalPhases !== undefined && totalPhases > 1 && (
 						<span className="text-xs" style={{ color: theme.colors.textDim }}>
-							Generating Phase {currentPhase} of {totalPhases}...
+							{t('wizard.inline_streaming.phase_progress', {
+								current: currentPhase,
+								total: totalPhases,
+							})}
 						</span>
 					)}
 
@@ -195,10 +200,10 @@ export function StreamingDocumentPreview({
 								backgroundColor: viewMode === 'raw' ? theme.colors.bgSidebar : 'transparent',
 								color: viewMode === 'raw' ? theme.colors.textMain : theme.colors.textDim,
 							}}
-							title="Raw view (monospace)"
+							title={t('wizard.inline_streaming.raw_view_title')}
 						>
 							<Code2 className="w-3 h-3" />
-							Raw
+							{t('wizard.inline_streaming.raw_label')}
 						</button>
 						<button
 							onClick={() => setViewMode('markdown')}
@@ -213,12 +218,12 @@ export function StreamingDocumentPreview({
 							}}
 							title={
 								canPreviewMarkdown
-									? 'Markdown preview'
-									: 'Markdown preview unavailable (code block in progress)'
+									? t('wizard.inline_streaming.markdown_title')
+									: t('wizard.inline_streaming.markdown_unavailable')
 							}
 						>
 							<AlignLeft className="w-3 h-3" />
-							Preview
+							{t('wizard.inline_streaming.preview_label')}
 						</button>
 					</div>
 				</div>
@@ -282,7 +287,7 @@ export function StreamingDocumentPreview({
 							color: theme.colors.accentForeground,
 						}}
 					>
-						↓ Resume auto-scroll
+						{'↓ ' + t('wizard.inline_streaming.resume_scroll')}
 					</button>
 				</div>
 			)}

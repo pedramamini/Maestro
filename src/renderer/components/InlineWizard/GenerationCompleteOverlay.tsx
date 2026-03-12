@@ -7,6 +7,7 @@
  */
 
 import { useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import { triggerCelebration } from '../../utils/confetti';
 
@@ -40,6 +41,7 @@ export function GenerationCompleteOverlay({
 	onDone,
 	disableConfetti = false,
 }: GenerationCompleteOverlayProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const [isClosing, setIsClosing] = useState(false);
 
 	const handleDoneClick = useCallback(() => {
@@ -66,10 +68,10 @@ export function GenerationCompleteOverlay({
 			{/* Celebratory header */}
 			<div className="text-center mb-6">
 				<h2 className="text-2xl font-bold mb-2" style={{ color: theme.colors.textMain }}>
-					Your Playbook is ready!
+					{t('wizard.inline_complete.title')}
 				</h2>
 				<p className="text-sm" style={{ color: theme.colors.textDim }}>
-					{taskCount} {taskCount === 1 ? 'task' : 'tasks'} prepared and ready to run
+					{t('wizard.inline_complete.task_count', { count: taskCount })}
 				</p>
 			</div>
 
@@ -86,7 +88,9 @@ export function GenerationCompleteOverlay({
 					boxShadow: `0 4px 14px ${theme.colors.accent}40`,
 				}}
 			>
-				{isClosing ? 'Finishing...' : 'Done'}
+				{isClosing
+					? t('wizard.inline_complete.finishing_button')
+					: t('wizard.inline_complete.done_button')}
 			</button>
 		</div>
 	);

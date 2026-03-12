@@ -14,6 +14,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
 import type { Theme } from '../../types';
@@ -75,6 +76,7 @@ export const WizardMessageBubble = React.memo(function WizardMessageBubble({
 	providerName,
 	setLightboxImage,
 }: WizardMessageBubbleProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	const isUser = message.role === 'user';
 	const isSystem = message.role === 'system';
 
@@ -104,7 +106,9 @@ export const WizardMessageBubble = React.memo(function WizardMessageBubble({
 					>
 						<div className="flex items-center gap-2">
 							<span data-testid="message-sender">
-								{isSystem ? '🎼 System' : formatAgentName(agentName)}
+								{isSystem
+									? '🎼 ' + t('wizard.inline_message.system_sender')
+									: formatAgentName(agentName)}
 							</span>
 							{message.confidence !== undefined && (
 								<span
@@ -115,7 +119,7 @@ export const WizardMessageBubble = React.memo(function WizardMessageBubble({
 									}}
 									data-testid="confidence-badge"
 								>
-									{message.confidence}% confident
+									{t('wizard.inline_message.confident_badge', { confidence: message.confidence })}
 								</span>
 							)}
 						</div>

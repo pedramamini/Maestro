@@ -7,6 +7,7 @@
  */
 
 import React from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Shortcut } from '../../../types';
 import type { TourStepConfig, SpotlightInfo } from './useTour';
 import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
@@ -311,6 +312,7 @@ export function TourStep({
 	fromWizard = false,
 	shortcuts,
 }: TourStepProps): JSX.Element {
+	const { t } = useTranslation('modals');
 	// Use wizard-specific description if fromWizard, otherwise use generic (or fall back to description)
 	const rawDescription = fromWizard
 		? step.description
@@ -370,7 +372,7 @@ export function TourStep({
 						{stepNumber}
 					</div>
 					<span className="text-xs font-medium" style={{ color: theme.colors.textDim }}>
-						Step {stepNumber} of {totalSteps}
+						{t('tour.step_progress', { current: stepNumber, total: totalSteps })}
 					</span>
 				</div>
 
@@ -380,7 +382,7 @@ export function TourStep({
 					className="text-xs hover:underline transition-colors"
 					style={{ color: theme.colors.textDim }}
 				>
-					Skip Tour
+					{t('tour.skip_button')}
 				</button>
 			</div>
 
@@ -427,7 +429,7 @@ export function TourStep({
 										transform: isCurrent ? 'scale(1.2)' : 'scale(1)',
 										opacity: isPast ? 0.7 : 1,
 									}}
-									title={isPast ? `Go back to step ${i + 1}` : undefined}
+									title={isPast ? t('tour.go_back_to_step', { step: i + 1 }) : undefined}
 								/>
 							);
 						})}
@@ -442,7 +444,7 @@ export function TourStep({
 							color: theme.colors.accentForeground,
 						}}
 					>
-						{isLastStep ? 'Finish Tour' : 'Continue'}
+						{isLastStep ? t('tour.finish_button') : t('tour.continue_button')}
 					</button>
 				</div>
 			</div>
@@ -463,7 +465,7 @@ export function TourStep({
 					>
 						Enter
 					</kbd>{' '}
-					to continue
+					{t('tour.kbd_enter_continue')}
 					{' • '}
 					<kbd
 						className="px-1.5 py-0.5 rounded text-xs"
@@ -471,7 +473,7 @@ export function TourStep({
 					>
 						Esc
 					</kbd>{' '}
-					to skip
+					{t('tour.kbd_esc_skip')}
 				</span>
 			</div>
 		</div>

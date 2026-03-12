@@ -21,6 +21,7 @@
  */
 
 import React, { useEffect, useState, useCallback } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Terminal, Wand2, ImageIcon, ArrowUp, PenLine, X, Keyboard, Brain } from 'lucide-react';
 import type { Session, Theme } from '../../types';
 import { WizardPill } from './WizardPill';
@@ -124,6 +125,8 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 	showThinking = false,
 	onToggleShowThinking,
 }: WizardInputPanelProps) {
+	const { t } = useTranslation('modals');
+
 	// State for exit confirmation dialog
 	const [showExitConfirm, setShowExitConfirm] = useState(false);
 
@@ -241,7 +244,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 								ref={inputRef}
 								className="flex-1 bg-transparent text-sm outline-none px-3 pt-3 pr-3 resize-none min-h-[2.5rem] scrollbar-thin"
 								style={{ color: theme.colors.textMain, maxHeight: '7rem' }}
-								placeholder="Tell the wizard about your project..."
+								placeholder={t('wizard.inline_input.placeholder')}
 								value={inputValue}
 								onFocus={onInputFocus}
 								onBlur={onInputBlur}
@@ -269,7 +272,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 									<button
 										onClick={onOpenPromptComposer}
 										className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-										title="Open Prompt Composer"
+										title={t('wizard.inline_input.prompt_composer_title')}
 									>
 										<PenLine className="w-4 h-4" />
 									</button>
@@ -279,7 +282,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 									<button
 										onClick={() => document.getElementById('wizard-image-file-input')?.click()}
 										className="p-1 hover:bg-white/10 rounded opacity-50 hover:opacity-100"
-										title="Attach Image"
+										title={t('wizard.inline_input.attach_image_title')}
 									>
 										<ImageIcon className="w-4 h-4" />
 									</button>
@@ -299,7 +302,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 													const imageData = event.target.result as string;
 													setStagedImages((prev) => {
 														if (prev.includes(imageData)) {
-															showFlashNotification?.('Duplicate image ignored');
+															showFlashNotification?.(t('wizard.inline_input.duplicate_image'));
 															return prev;
 														}
 														return [...prev, imageData];
@@ -322,12 +325,14 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 											showThinking ? 'opacity-100' : 'opacity-50 hover:opacity-100'
 										}`}
 										title={
-											showThinking ? 'Hide AI thinking (show filler messages)' : 'Show AI thinking'
+											showThinking
+												? t('wizard.inline_input.hide_thinking_tooltip')
+												: t('wizard.inline_input.show_thinking_tooltip')
 										}
 										style={showThinking ? { color: theme.colors.accent } : undefined}
 									>
 										<Brain className="w-3 h-3" />
-										<span>{showThinking ? 'Thinking' : 'Thinking'}</span>
+										<span>{t('wizard.inline_input.thinking_label')}</span>
 									</button>
 								)}
 								<button
@@ -357,8 +362,10 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 						}}
 						title={
 							isBusy
-								? 'Cannot switch mode while wizard is processing'
-								: `Toggle Mode (${formatShortcutKeys(['Meta', 'j'])})`
+								? t('wizard.inline_input.mode_toggle_busy')
+								: t('wizard.inline_input.mode_toggle_title', {
+										shortcut: formatShortcutKeys(['Meta', 'j']),
+									})
 						}
 					>
 						{/* Show Wand2 icon in wizard mode instead of Terminal/Cpu */}
@@ -377,7 +384,7 @@ export const WizardInputPanel = React.memo(function WizardInputPanel({
 							backgroundColor: theme.colors.accent,
 							color: theme.colors.accentForeground,
 						}}
-						title="Send message"
+						title={t('wizard.inline_input.send_title')}
 					>
 						<ArrowUp className="w-4 h-4" />
 					</button>
