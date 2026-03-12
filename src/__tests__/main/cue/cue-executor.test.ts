@@ -912,6 +912,98 @@ describe('cue-executor', () => {
 			mockChild.emit('close', 0);
 			await resultPromise;
 		});
+
+		it('should populate task.pending event context correctly', async () => {
+			const event = createMockEvent({
+				type: 'task.pending',
+				triggerName: 'Task watcher',
+				payload: {
+					path: '/projects/test/TODO.md',
+					filename: 'TODO.md',
+					directory: '/projects/test',
+					taskCount: 3,
+					taskList: '- [ ] Fix login bug\n- [ ] Update docs\n- [ ] Add tests',
+					content: '# TODO\n- [ ] Fix login bug\n- [ ] Update docs\n- [ ] Add tests',
+				},
+			});
+
+			const templateContext = createMockTemplateContext();
+			const config = createExecutionConfig({ event, templateContext });
+
+			const resultPromise = executeCuePrompt(config);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(templateContext.cue?.taskFile).toBe('/projects/test/TODO.md');
+			expect(templateContext.cue?.taskFileName).toBe('TODO.md');
+			expect(templateContext.cue?.taskFileDir).toBe('/projects/test');
+			expect(templateContext.cue?.taskCount).toBe('3');
+			expect(templateContext.cue?.taskList).toBe(
+				'- [ ] Fix login bug\n- [ ] Update docs\n- [ ] Add tests'
+			);
+			expect(templateContext.cue?.taskContent).toBe(
+				'# TODO\n- [ ] Fix login bug\n- [ ] Update docs\n- [ ] Add tests'
+			);
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		it('should preserve base cue context alongside task fields', async () => {
+			const event = createMockEvent({
+				type: 'task.pending',
+				triggerName: 'Task watcher',
+				payload: {
+					path: '/projects/test/TODO.md',
+					filename: 'TODO.md',
+					directory: '/projects/test',
+					taskCount: 1,
+					taskList: '- [ ] Single task',
+					content: '- [ ] Single task',
+				},
+			});
+
+			const templateContext = createMockTemplateContext();
+			const config = createExecutionConfig({ event, templateContext });
+
+			const resultPromise = executeCuePrompt(config);
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Base cue fields should still be populated
+			expect(templateContext.cue?.eventType).toBe('task.pending');
+			expect(templateContext.cue?.triggerName).toBe('Watch config'); // from subscription.name
+			expect(templateContext.cue?.runId).toBeDefined();
+			expect(templateContext.cue?.eventTimestamp).toBeDefined();
+
+			// Task-specific fields coexist
+			expect(templateContext.cue?.taskCount).toBe('1');
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
+
+		it('should default task fields to empty/zero when payload is missing', async () => {
+			const event = createMockEvent({
+				type: 'task.pending',
+				triggerName: 'Task watcher',
+				payload: {},
+			});
+
+			const templateContext = createMockTemplateContext();
+			const config = createExecutionConfig({ event, templateContext });
+
+			const resultPromise = executeCuePrompt(config);
+			await vi.advanceTimersByTimeAsync(0);
+
+			expect(templateContext.cue?.taskFile).toBe('');
+			expect(templateContext.cue?.taskFileName).toBe('');
+			expect(templateContext.cue?.taskFileDir).toBe('');
+			expect(templateContext.cue?.taskCount).toBe('0');
+			expect(templateContext.cue?.taskList).toBe('');
+			expect(templateContext.cue?.taskContent).toBe('');
+
+			mockChild.emit('close', 0);
+			await resultPromise;
+		});
 	});
 
 	describe('stopCueRun', () => {

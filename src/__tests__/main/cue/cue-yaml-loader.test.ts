@@ -214,6 +214,65 @@ subscriptions:
 			expect(result!.subscriptions[0].prompt).toBe('Inline prompt text');
 		});
 
+		it('resolves output_prompt_file to output_prompt content', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				if (String(p).endsWith('.maestro/prompts/format-output.md')) {
+					return 'Format the output as markdown';
+				}
+				return `
+subscriptions:
+  - name: test-sub
+    event: time.heartbeat
+    prompt: Do the thing
+    output_prompt_file: .maestro/prompts/format-output.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].output_prompt).toBe('Format the output as markdown');
+			expect(result!.subscriptions[0].output_prompt_file).toBe('.maestro/prompts/format-output.md');
+		});
+
+		it('keeps inline output_prompt when both output_prompt and output_prompt_file exist', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: test-sub
+    event: time.heartbeat
+    prompt: Do the thing
+    output_prompt: Inline output prompt
+    output_prompt_file: .maestro/prompts/should-be-ignored.md
+    interval_minutes: 5
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result!.subscriptions[0].output_prompt).toBe('Inline output prompt');
+		});
+
+		it('sets output_prompt to undefined when output_prompt_file is missing', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockImplementation((p: string) => {
+				if (String(p).endsWith('.maestro/prompts/missing.md')) {
+					throw new Error('ENOENT: no such file or directory');
+				}
+				return `
+subscriptions:
+  - name: test-sub
+    event: time.heartbeat
+    prompt: Do the thing
+    output_prompt_file: .maestro/prompts/missing.md
+    interval_minutes: 5
+`;
+			});
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].output_prompt).toBeUndefined();
+		});
+
 		it('handles agent.completed with source_session array', () => {
 			mockExistsSync.mockReturnValue(true);
 			mockReadFileSync.mockReturnValue(`
