@@ -511,6 +511,10 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 		false;
 	const isAgentBusy = sessionState === 'busy' || sessionState === 'connecting';
 	const isAutoRunActive = batchRunState?.isRunning || false;
+	const isRunningRef = useRef(isAutoRunActive);
+	useEffect(() => {
+		isRunningRef.current = isAutoRunActive;
+	}, [isAutoRunActive]);
 	const isStopping = batchRunState?.isStopping || false;
 	// Error state (Phase 5.10)
 	const isErrorPaused = batchRunState?.errorPaused || false;
@@ -944,14 +948,14 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 	// Auto-focus the active element after mode change
 	useEffect(() => {
 		// Skip focus when auto-follow is driving changes during a batch run
-		if (autoFollowEnabled && batchRunState?.isRunning) return;
+		if (autoFollowEnabled && isRunningRef.current) return;
 
 		if (mode === 'edit' && textareaRef.current) {
 			textareaRef.current.focus();
 		} else if (mode === 'preview' && previewRef.current) {
 			previewRef.current.focus();
 		}
-	}, [mode, autoFollowEnabled, batchRunState?.isRunning]);
+	}, [mode, autoFollowEnabled]);
 
 	// Handle document selection change - focus the appropriate element
 	// Note: Content syncing and editing state reset is handled by the main sync effect above
@@ -965,7 +969,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 
 		if (isNewDocument) {
 			// Skip focus when auto-follow is driving changes during a batch run
-			if (autoFollowEnabled && batchRunState?.isRunning) return;
+			if (autoFollowEnabled && isRunningRef.current) return;
 
 			// Focus on document change
 			requestAnimationFrame(() => {
@@ -976,7 +980,7 @@ const AutoRunInner = forwardRef<AutoRunHandle, AutoRunProps>(function AutoRunInn
 				}
 			});
 		}
-	}, [selectedFile, mode, autoFollowEnabled, batchRunState?.isRunning]);
+	}, [selectedFile, mode, autoFollowEnabled]);
 
 	// Auto-follow: scroll to the first unchecked task when batch is running
 	useEffect(() => {
