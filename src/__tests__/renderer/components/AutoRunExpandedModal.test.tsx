@@ -106,6 +106,7 @@ vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 		return keys.map((k: string) => keyMap[k] || (k.length === 1 ? k.toUpperCase() : k)).join('+');
 	}),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 // Create a mock theme for testing

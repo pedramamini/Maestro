@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, Shortcut } from '../types';
-import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, getShortcutLabel } from '../utils/shortcutFormatter';
 
 interface ShortcutEditorProps {
 	theme: Theme;
@@ -9,6 +10,7 @@ interface ShortcutEditorProps {
 }
 
 export function ShortcutEditor({ theme, shortcuts, setShortcuts }: ShortcutEditorProps) {
+	const { t } = useTranslation('settings');
 	const [recordingId, setRecordingId] = useState<string | null>(null);
 
 	const handleRecord = (e: React.KeyboardEvent, actionId: string) => {
@@ -48,7 +50,7 @@ export function ShortcutEditor({ theme, shortcuts, setShortcuts }: ShortcutEdito
 					style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 				>
 					<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-						{sc.label}
+						{getShortcutLabel(sc.id, sc.label)}
 					</span>
 					<button
 						onClick={() => setRecordingId(sc.id)}
@@ -64,7 +66,7 @@ export function ShortcutEditor({ theme, shortcuts, setShortcuts }: ShortcutEdito
 							} as React.CSSProperties
 						}
 					>
-						{recordingId === sc.id ? 'Press keys...' : formatShortcutKeys(sc.keys)}
+						{recordingId === sc.id ? t('shortcuts.press_keys') : formatShortcutKeys(sc.keys)}
 					</button>
 				</div>
 			))}

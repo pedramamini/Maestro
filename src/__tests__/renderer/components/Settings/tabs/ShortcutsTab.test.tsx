@@ -19,6 +19,7 @@ import type { Theme, Shortcut } from '../../../../../renderer/types';
 // Mock formatShortcutKeys
 vi.mock('../../../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys: string[]) => keys.join('+')),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 import settingsEn from '../../../../../shared/i18n/locales/en/settings.json';

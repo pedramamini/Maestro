@@ -9,7 +9,7 @@
 import React, { useState, useRef, useEffect } from 'react';
 import { useTranslation } from 'react-i18next';
 import { useSettings } from '../../../hooks';
-import { formatShortcutKeys } from '../../../utils/shortcutFormatter';
+import { formatShortcutKeys, getShortcutLabel } from '../../../utils/shortcutFormatter';
 import type { Theme, Shortcut } from '../../../types';
 
 export interface ShortcutsTabProps {
@@ -94,7 +94,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 	];
 	const totalShortcuts = allShortcuts.length;
 	const filteredShortcuts = allShortcuts.filter((sc) =>
-		sc.label.toLowerCase().includes(shortcutsFilter.toLowerCase())
+		getShortcutLabel(sc.id, sc.label).toLowerCase().includes(shortcutsFilter.toLowerCase())
 	);
 	const filteredCount = filteredShortcuts.length;
 
@@ -109,7 +109,7 @@ export function ShortcutsTab({ theme, hasNoAgents, onRecordingChange }: Shortcut
 			style={{ borderColor: theme.colors.border, backgroundColor: theme.colors.bgMain }}
 		>
 			<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-				{sc.label}
+				{getShortcutLabel(sc.id, sc.label)}
 			</span>
 			<button
 				onClick={(e) => {

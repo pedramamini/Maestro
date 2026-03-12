@@ -121,6 +121,7 @@ vi.mock('../renderer/utils/shortcutFormatter', () => ({
 		enterToSend ? 'Switch to Ctrl+Enter to send' : 'Switch to Enter to send'
 	),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_shortcutId: string, fallbackLabel: string) => fallbackLabel),
 }));
 
 // Mock window.matchMedia for components that use media queries

@@ -39,6 +39,7 @@ vi.mock('../../../renderer/contexts/LayerStackContext', async () => {
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: (keys: string[]) => keys.join('+'),
 	isMacOS: () => false,
+	getShortcutLabel: (_id: string, fallback: string) => fallback,
 }));
 
 // Sample theme for testing

@@ -45,6 +45,7 @@ vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatEnterToSendTooltip: vi.fn((enterToSend: boolean) =>
 		enterToSend ? 'Switch to Ctrl+Enter to send' : 'Switch to Enter to send'
 	),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 // Mock AICommandsPanel

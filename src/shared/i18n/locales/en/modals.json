@@ -1,4 +1,14 @@
 {
+	"shortcuts_help": {
+		"title": "Keyboard Shortcuts",
+		"search_placeholder": "Search shortcuts...",
+		"no_agents_note": "Note: Most functionality is unavailable until you've created your first agent.",
+		"customizable_hint": "Many shortcuts can be customized from Settings \u2192 Shortcuts.",
+		"mastered_count": "{{used}} / {{total}} mastered ({{percentage}}%)",
+		"next_level_hint": "{{remaining}}% more to reach {{level}}",
+		"complete_mastery": "Keyboard Maestro - Complete Mastery!",
+		"no_results": "No shortcuts found"
+	},
 	"edit_agent": {
 		"title": "Edit Agent",
 		"name_label": "Agent Name",

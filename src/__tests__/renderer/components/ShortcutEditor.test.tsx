@@ -10,11 +10,47 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent } from '@testing-library/react';
 import { ShortcutEditor } from '../../../renderer/components/ShortcutEditor';
 import type { Theme, Shortcut } from '../../../renderer/types';
+import settingsEn from '../../../shared/i18n/locales/en/settings.json';
+
+// Mock react-i18next to resolve keys from actual English translations
+vi.mock('react-i18next', () => {
+	const resolve = (key: string): string => {
+		const bareKey = key.includes(':') ? key.split(':').slice(1).join(':') : key;
+		const parts = bareKey.split('.');
+		let value: unknown = settingsEn;
+		for (const part of parts) {
+			if (value && typeof value === 'object' && part in (value as Record<string, unknown>)) {
+				value = (value as Record<string, unknown>)[part];
+			} else {
+				return key;
+			}
+		}
+		return typeof value === 'string' ? value : key;
+	};
+
+	return {
+		useTranslation: () => ({
+			t: (key: string, opts?: Record<string, unknown>) => {
+				let result = resolve(key);
+				if (opts) {
+					for (const [k, v] of Object.entries(opts)) {
+						if (k === 'defaultValue') continue;
+						result = result.replace(new RegExp(`\\{\\{${k}\\}\\}`, 'g'), String(v));
+					}
+				}
+				return result;
+			},
+			i18n: { language: 'en' },
+			ready: true,
+		}),
+	};
+});
 
 // Mock the shortcutFormatter module
 vi.mock('../../../renderer/utils/shortcutFormatter', () => ({
 	formatShortcutKeys: vi.fn((keys: string[]) => keys.join('+')),
 	isMacOS: vi.fn(() => false),
+	getShortcutLabel: vi.fn((_id: string, fallback: string) => fallback),
 }));
 
 // Import after mock to get the mocked version

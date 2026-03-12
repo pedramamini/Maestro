@@ -1,10 +1,11 @@
 import { useState, useRef, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { X, Award, CheckCircle, Trophy } from 'lucide-react';
 import type { Theme, Shortcut, KeyboardMasteryStats } from '../types';
 import { fuzzyMatch } from '../utils/search';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
 import { FIXED_SHORTCUTS } from '../constants/shortcuts';
-import { formatShortcutKeys } from '../utils/shortcutFormatter';
+import { formatShortcutKeys, getShortcutLabel } from '../utils/shortcutFormatter';
 import { Modal } from './ui/Modal';
 import { KEYBOARD_MASTERY_LEVELS, getLevelForPercentage } from '../constants/keyboardMastery';
 
@@ -25,6 +26,7 @@ export function ShortcutsHelpModal({
 	hasNoAgents,
 	keyboardMasteryStats,
 }: ShortcutsHelpModalProps) {
+	const { t } = useTranslation('modals');
 	const [searchQuery, setSearchQuery] = useState('');
 	const searchInputRef = useRef<HTMLInputElement>(null);
 
@@ -52,8 +54,12 @@ export function ShortcutsHelpModal({
 	}, [masteryPercentage]);
 	const usedShortcutIds = new Set(keyboardMasteryStats?.usedShortcuts ?? []);
 	const filteredShortcuts = Object.values(allShortcuts)
-		.filter((sc) => fuzzyMatch(sc.label, searchQuery) || fuzzyMatch(sc.keys.join(' '), searchQuery))
-		.sort((a, b) => a.label.localeCompare(b.label));
+		.filter(
+			(sc) =>
+				fuzzyMatch(getShortcutLabel(sc.id, sc.label), searchQuery) ||
+				fuzzyMatch(sc.keys.join(' '), searchQuery)
+		)
+		.sort((a, b) => getShortcutLabel(a.id, a.label).localeCompare(getShortcutLabel(b.id, b.label)));
 	const filteredCount = filteredShortcuts.length;
 
 	// Custom header with title, badge, mastery progress, search input, and close button
@@ -62,7 +68,7 @@ export function ShortcutsHelpModal({
 			<div className="flex items-center justify-between mb-3">
 				<div className="flex items-center gap-2">
 					<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-						Keyboard Shortcuts
+						{t('shortcuts_help.title')}
 					</h2>
 					<span
 						className="text-xs px-2 py-0.5 rounded"
@@ -85,7 +91,7 @@ export function ShortcutsHelpModal({
 					className="text-xs mb-3 px-2 py-1.5 rounded"
 					style={{ backgroundColor: theme.colors.accent + '20', color: theme.colors.accent }}
 				>
-					Note: Most functionality is unavailable until you've created your first agent.
+					{t('shortcuts_help.no_agents_note')}
 				</p>
 			)}
 			<input
@@ -93,12 +99,12 @@ export function ShortcutsHelpModal({
 				type="text"
 				value={searchQuery}
 				onChange={(e) => setSearchQuery(e.target.value)}
-				placeholder="Search shortcuts..."
+				placeholder={t('shortcuts_help.search_placeholder')}
 				className="w-full px-3 py-2 rounded border bg-transparent outline-none text-sm"
 				style={{ borderColor: theme.colors.border, color: theme.colors.textMain }}
 			/>
 			<p className="text-xs mt-2" style={{ color: theme.colors.textDim }}>
-				Many shortcuts can be customized from Settings → Shortcuts.
+				{t('shortcuts_help.customizable_hint')}
 			</p>
 		</div>
 	);
@@ -116,7 +122,11 @@ export function ShortcutsHelpModal({
 						</span>
 					</div>
 					<span className="text-xs" style={{ color: theme.colors.textDim }}>
-						{usedShortcutsCount} / {totalShortcuts} mastered ({masteryPercentage}%)
+						{t('shortcuts_help.mastered_count', {
+							used: usedShortcutsCount,
+							total: totalShortcuts,
+							percentage: masteryPercentage,
+						})}
 					</span>
 				</div>
 				<div
@@ -134,7 +144,10 @@ export function ShortcutsHelpModal({
 				{/* Next level hint */}
 				{masteryPercentage < 100 && nextLevel && (
 					<p className="text-xs mt-1.5" style={{ color: theme.colors.textDim }}>
-						{nextLevel.threshold - masteryPercentage}% more to reach {nextLevel.name}
+						{t('shortcuts_help.next_level_hint', {
+							remaining: nextLevel.threshold - masteryPercentage,
+							level: nextLevel.name,
+						})}
 					</p>
 				)}
 			</div>
@@ -149,7 +162,7 @@ export function ShortcutsHelpModal({
 				>
 					<Trophy className="w-4 h-4" style={{ color: '#FFD700' }} />
 					<span className="text-xs font-medium" style={{ color: theme.colors.accent }}>
-						Keyboard Maestro - Complete Mastery!
+						{t('shortcuts_help.complete_mastery')}
 					</span>
 					<Trophy className="w-4 h-4" style={{ color: '#FFD700' }} />
 				</div>
@@ -160,7 +173,7 @@ export function ShortcutsHelpModal({
 	return (
 		<Modal
 			theme={theme}
-			title="Keyboard Shortcuts"
+			title={t('shortcuts_help.title')}
 			priority={MODAL_PRIORITIES.SHORTCUTS_HELP}
 			onClose={onClose}
 			customHeader={customHeader}
@@ -189,7 +202,7 @@ export function ShortcutsHelpModal({
 									className="truncate"
 									style={{ color: isUsed ? theme.colors.textMain : theme.colors.textDim }}
 								>
-									{sc.label}
+									{getShortcutLabel(sc.id, sc.label)}
 								</span>
 							</div>
 							<kbd
@@ -207,7 +220,7 @@ export function ShortcutsHelpModal({
 				})}
 				{filteredCount === 0 && (
 					<div className="text-center text-sm opacity-50" style={{ color: theme.colors.textDim }}>
-						No shortcuts found
+						{t('shortcuts_help.no_results')}
 					</div>
 				)}
 			</div>
