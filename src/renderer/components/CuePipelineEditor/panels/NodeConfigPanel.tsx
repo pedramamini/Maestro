@@ -736,24 +736,26 @@ export function NodeConfigPanel({
 					)}
 				</div>
 				<div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-					<button
-						onClick={() => setExpanded((v) => !v)}
-						style={{
-							display: 'flex',
-							alignItems: 'center',
-							padding: 4,
-							color: '#6b7280',
-							backgroundColor: 'transparent',
-							border: 'none',
-							borderRadius: 4,
-							cursor: 'pointer',
-						}}
-						onMouseEnter={(e) => (e.currentTarget.style.color = '#e4e4e7')}
-						onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
-						title={expanded ? 'Collapse panel' : 'Expand panel'}
-					>
-						<ExpandIcon size={14} />
-					</button>
+					{!isTrigger && (
+						<button
+							onClick={() => setExpanded((v) => !v)}
+							style={{
+								display: 'flex',
+								alignItems: 'center',
+								padding: 4,
+								color: '#6b7280',
+								backgroundColor: 'transparent',
+								border: 'none',
+								borderRadius: 4,
+								cursor: 'pointer',
+							}}
+							onMouseEnter={(e) => (e.currentTarget.style.color = '#e4e4e7')}
+							onMouseLeave={(e) => (e.currentTarget.style.color = '#6b7280')}
+							title={expanded ? 'Collapse panel' : 'Expand panel'}
+						>
+							<ExpandIcon size={14} />
+						</button>
+					)}
 					<button
 						onClick={() => onDeleteNode(selectedNode.id)}
 						style={{
