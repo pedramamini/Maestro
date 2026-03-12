@@ -22,6 +22,7 @@ import {
 	Send,
 	DownloadCloud,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, AutoRunStats, LeaderboardRegistration, KeyboardMasteryStats } from '../types';
 import { useLayerStack } from '../contexts/LayerStackContext';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -116,8 +117,8 @@ function generateClientToken(): string {
 	return generateId();
 }
 
-// Error message for lost auth token
-const AUTH_TOKEN_LOST_MESSAGE =
+// Error message for lost auth token - translated version set inside component via t()
+let AUTH_TOKEN_LOST_MESSAGE =
 	'Your email is confirmed but we seem to have lost your auth token. Click "Resend Confirmation" below to receive a new confirmation email with your auth token.';
 
 export function LeaderboardRegistrationModal({
@@ -130,11 +131,15 @@ export function LeaderboardRegistrationModal({
 	onOptOut,
 	onSyncStats,
 }: LeaderboardRegistrationModalProps) {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const layerIdRef = useRef<string>();
 	const containerRef = useRef<HTMLDivElement>(null);
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
+
+	// Set translated auth token lost message
+	AUTH_TOKEN_LOST_MESSAGE = t('leaderboard.auth_token_lost_message');
 
 	// Form state
 	const [displayName, setDisplayName] = useState(existingRegistration?.displayName || '');
@@ -175,7 +180,7 @@ export function LeaderboardRegistrationModal({
 	// Get current badge info
 	const currentBadge = getBadgeForTime(autoRunStats.cumulativeTimeMs);
 	const badgeLevel = currentBadge?.level || 0;
-	const badgeName = currentBadge?.name || 'No Badge Yet';
+	const badgeName = currentBadge?.name || t('leaderboard.no_badge_yet');
 
 	// Calculate keyboard mastery info (aligned with RunMaestro.ai server schema)
 	// Server expects 1-5, we store 0-4, so add 1 for display friendliness
@@ -236,13 +241,11 @@ export function LeaderboardRegistrationModal({
 					};
 					onSave(registration);
 					setSubmitState('success');
-					setSuccessMessage('Email confirmed! Your stats have been submitted to the leaderboard.');
+					setSuccessMessage(t('leaderboard.email_confirmed_message'));
 				} else if (result.status === 'expired') {
 					stopPolling();
 					setSubmitState('error');
-					setErrorMessage(
-						'Confirmation link expired. Please submit again to receive a new confirmation email.'
-					);
+					setErrorMessage(t('leaderboard.confirmation_expired_error'));
 				} else if (result.status === 'error') {
 					// Don't stop polling on transient errors, just log
 					console.warn('Polling error:', result.error);
@@ -356,15 +359,13 @@ export function LeaderboardRegistrationModal({
 
 				if (result.pendingEmailConfirmation) {
 					setSubmitState('awaiting_confirmation');
-					setSuccessMessage('Please check your email to confirm your registration.');
+					setSuccessMessage(t('leaderboard.check_email_message'));
 					// Start polling for confirmation
 					startPolling(clientToken);
 				} else {
 					setSubmitState('success');
 					// Profile submitted - stats sync via delta mode from Auto Runs or Pull Down
-					setSuccessMessage(
-						'Profile submitted! Stats are synced via Auto Runs. Use "Pull Down" to sync from other devices.'
-					);
+					setSuccessMessage(t('leaderboard.profile_submitted_message'));
 				}
 			} else if (result.authTokenRequired) {
 				// Email is confirmed but auth token is missing/invalid - try to recover it automatically
@@ -431,10 +432,12 @@ export function LeaderboardRegistrationModal({
 
 							if (retryResult.success) {
 								setSubmitState('success');
-								setSuccessMessage('Auth token recovered and stats submitted successfully!');
+								setSuccessMessage(t('leaderboard.auth_token_recovered_message'));
 								recovered = true;
 							} else {
-								setErrorMessage(retryResult.error || 'Submission failed after token recovery');
+								setErrorMessage(
+									retryResult.error || t('leaderboard.submission_failed_after_recovery_error')
+								);
 							}
 						}
 					} catch {
@@ -449,11 +452,11 @@ export function LeaderboardRegistrationModal({
 				}
 			} else {
 				setSubmitState('error');
-				setErrorMessage(result.error || result.message || 'Submission failed');
+				setErrorMessage(result.error || result.message || t('leaderboard.submission_failed_error'));
 			}
 		} catch (error) {
 			setSubmitState('error');
-			setErrorMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
+			setErrorMessage(error instanceof Error ? error.message : t('leaderboard.unexpected_error'));
 		}
 	}, [
 		isFormValid,
@@ -541,18 +544,16 @@ export function LeaderboardRegistrationModal({
 
 			if (result.success) {
 				setSubmitState('success');
-				setSuccessMessage(
-					'Your profile has been updated! Use "Pull Down" to sync stats from the server.'
-				);
+				setSuccessMessage(t('leaderboard.profile_updated_message'));
 			} else {
 				setSubmitState('error');
 				setErrorMessage(
-					result.error || result.message || 'Submission failed. Please check your auth token.'
+					result.error || result.message || t('leaderboard.submission_failed_check_token_error')
 				);
 			}
 		} catch (error) {
 			setSubmitState('error');
-			setErrorMessage(error instanceof Error ? error.message : 'An unexpected error occurred');
+			setErrorMessage(error instanceof Error ? error.message : t('leaderboard.unexpected_error'));
 		}
 	}, [
 		manualToken,
@@ -597,16 +598,13 @@ export function LeaderboardRegistrationModal({
 				// Start polling for the new confirmation
 				startPolling(clientToken);
 				setSubmitState('awaiting_confirmation');
-				setSuccessMessage(
-					result.message ||
-						'Confirmation email sent! Please check your inbox and click the link to get your auth token.'
-				);
+				setSuccessMessage(result.message || t('leaderboard.confirmation_email_sent_message'));
 			} else {
-				setErrorMessage(result.error || 'Failed to resend confirmation email. Please try again.');
+				setErrorMessage(result.error || t('leaderboard.resend_failed_error'));
 			}
 		} catch (error) {
 			setErrorMessage(
-				error instanceof Error ? error.message : 'Failed to resend confirmation email'
+				error instanceof Error ? error.message : t('leaderboard.resend_failed_error')
 			);
 		} finally {
 			setIsResending(false);
@@ -650,35 +648,38 @@ export function LeaderboardRegistrationModal({
 
 					const hours = Math.floor(serverTime / 3600000);
 					const minutes = Math.floor((serverTime % 3600000) / 60000);
+					const localHours = Math.floor(localTime / 3600000);
+					const localMinutes = Math.floor((localTime % 3600000) / 60000);
 					setSyncMessage(
-						`Synced! Updated to ${hours}h ${minutes}m from server (was ${Math.floor(localTime / 3600000)}h ${Math.floor((localTime % 3600000) / 60000)}m locally)`
+						t('leaderboard.synced_updated_message', {
+							serverHours: hours,
+							serverMinutes: minutes,
+							localHours,
+							localMinutes,
+						})
 					);
 				} else if (serverTime === localTime) {
-					setSyncMessage('Already in sync! Local and server stats match.');
+					setSyncMessage(t('leaderboard.already_in_sync_message'));
 				} else {
 					// Local has more data - no update needed
 					const hours = Math.floor(localTime / 3600000);
 					const minutes = Math.floor((localTime % 3600000) / 60000);
-					setSyncMessage(
-						`Local is ahead (${hours}h ${minutes}m). No sync needed - your next submission will update the server.`
-					);
+					setSyncMessage(t('leaderboard.local_ahead_message', { hours, minutes }));
 				}
 			} else if (result.success && !result.found) {
-				setSyncMessage('No server record found. Submit your first entry to create one!');
+				setSyncMessage(t('leaderboard.no_server_record_message'));
 			} else {
 				// Handle errors
 				if (result.errorCode === 'EMAIL_NOT_CONFIRMED') {
-					setErrorMessage(
-						'Email not yet confirmed. Please check your inbox for the confirmation email.'
-					);
+					setErrorMessage(t('leaderboard.email_not_confirmed_error'));
 				} else if (result.errorCode === 'INVALID_TOKEN') {
-					setErrorMessage('Invalid auth token. Please re-register to get a new token.');
+					setErrorMessage(t('leaderboard.invalid_token_error'));
 				} else {
-					setErrorMessage(result.error || 'Failed to sync from server');
+					setErrorMessage(result.error || t('leaderboard.sync_failed_error'));
 				}
 			}
 		} catch (error) {
-			setErrorMessage(error instanceof Error ? error.message : 'Failed to sync from server');
+			setErrorMessage(error instanceof Error ? error.message : t('leaderboard.sync_failed_error'));
 		} finally {
 			setIsSyncing(false);
 		}
@@ -712,7 +713,7 @@ export function LeaderboardRegistrationModal({
 						};
 						onSave(registration);
 						setSubmitState('success');
-						setSuccessMessage('Auth token recovered! Your registration is complete.');
+						setSuccessMessage(t('leaderboard.auth_token_recovered_complete_message'));
 					} else {
 						// Token not available from server, show manual entry
 						setShowManualTokenEntry(true);
@@ -732,8 +733,8 @@ export function LeaderboardRegistrationModal({
 	const handleOptOut = useCallback(() => {
 		onOptOut();
 		setSubmitState('opted_out');
-		setSuccessMessage('You have opted out of the leaderboard. Your local stats are preserved.');
-	}, [onOptOut]);
+		setSuccessMessage(t('leaderboard.opted_out_message'));
+	}, [onOptOut, t]);
 
 	// Register layer on mount
 	useEffect(() => {
@@ -791,8 +792,8 @@ export function LeaderboardRegistrationModal({
 						<Trophy className="w-5 h-5" style={{ color: '#FFD700' }} />
 						<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
 							{existingRegistration
-								? 'Update Leaderboard Registration'
-								: 'Register for Leaderboard'}
+								? t('leaderboard.update_title')
+								: t('leaderboard.register_title')}
 						</h2>
 					</div>
 					<button
@@ -808,7 +809,7 @@ export function LeaderboardRegistrationModal({
 				<div className="p-5 space-y-4 overflow-y-auto">
 					{/* Info text */}
 					<p className="text-sm" style={{ color: theme.colors.textDim }}>
-						Join the global Maestro leaderboard at{' '}
+						{t('leaderboard.join_description_before')}{' '}
 						<button
 							onClick={() => window.maestro.shell.openExternal('https://runmaestro.ai')}
 							className="inline-flex items-center gap-1 hover:underline"
@@ -817,7 +818,7 @@ export function LeaderboardRegistrationModal({
 							runmaestro.ai
 							<ExternalLink className="w-3 h-3" />
 						</button>
-						. Your cumulative AutoRun time and achievements will be displayed.
+						{t('leaderboard.join_description_after')}
 					</p>
 
 					{/* Current stats preview */}
@@ -831,18 +832,20 @@ export function LeaderboardRegistrationModal({
 						<div className="flex items-center gap-2 mb-2">
 							<Trophy className="w-4 h-4" style={{ color: '#FFD700' }} />
 							<span className="text-xs font-medium" style={{ color: theme.colors.textMain }}>
-								Your Current Stats
+								{t('leaderboard.your_current_stats_label')}
 							</span>
 						</div>
 						<div className="flex gap-2 text-xs">
 							<div className="flex-[3]">
-								<span style={{ color: theme.colors.textDim }}>Badge: </span>
+								<span style={{ color: theme.colors.textDim }}>{t('leaderboard.badge_label')} </span>
 								<span className="font-medium" style={{ color: theme.colors.accent }}>
 									{badgeName}
 								</span>
 							</div>
 							<div className="flex-[2]">
-								<span style={{ color: theme.colors.textDim }}>Total Runs: </span>
+								<span style={{ color: theme.colors.textDim }}>
+									{t('leaderboard.total_runs_label')}{' '}
+								</span>
 								<span className="font-medium" style={{ color: theme.colors.textMain }}>
 									{autoRunStats.totalRuns}
 								</span>
@@ -859,13 +862,14 @@ export function LeaderboardRegistrationModal({
 								style={{ color: theme.colors.textMain }}
 							>
 								<User className="w-3.5 h-3.5" />
-								Display Name <span style={{ color: theme.colors.error }}>*</span>
+								{t('leaderboard.display_name_label')}{' '}
+								<span style={{ color: theme.colors.error }}>*</span>
 							</label>
 							<input
 								type="text"
 								value={displayName}
 								onChange={(e) => setDisplayName(e.target.value)}
-								placeholder="ConductorPedram"
+								placeholder={t('leaderboard.display_name_placeholder')}
 								className="w-full px-3 py-2 text-sm rounded border outline-none focus:ring-1"
 								style={{
 									backgroundColor: theme.colors.bgActivity,
@@ -883,13 +887,14 @@ export function LeaderboardRegistrationModal({
 								style={{ color: theme.colors.textMain }}
 							>
 								<Mail className="w-3.5 h-3.5" />
-								Email Address <span style={{ color: theme.colors.error }}>*</span>
+								{t('leaderboard.email_address_label')}{' '}
+								<span style={{ color: theme.colors.error }}>*</span>
 							</label>
 							<input
 								type="email"
 								value={email}
 								onChange={(e) => setEmail(e.target.value)}
-								placeholder="conductor@maestro.ai"
+								placeholder={t('leaderboard.email_placeholder')}
 								className="w-full px-3 py-2 text-sm rounded border outline-none focus:ring-1"
 								style={{
 									backgroundColor: theme.colors.bgActivity,
@@ -901,18 +906,18 @@ export function LeaderboardRegistrationModal({
 							/>
 							{email && !isValidEmail(email) && (
 								<p className="text-xs mt-1" style={{ color: theme.colors.error }}>
-									Please enter a valid email address
+									{t('leaderboard.invalid_email_error')}
 								</p>
 							)}
 							<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-								Your email is kept private and will not be displayed on the leaderboard
+								{t('leaderboard.email_privacy_description')}
 							</p>
 						</div>
 
 						{/* Social handles - Optional */}
 						<div className="pt-2 border-t" style={{ borderColor: theme.colors.border }}>
 							<p className="text-xs font-medium mb-3" style={{ color: theme.colors.textDim }}>
-								Optional: Link your social profiles
+								{t('leaderboard.social_profiles_label')}
 							</p>
 
 							<div className="space-y-3">
@@ -1059,7 +1064,7 @@ export function LeaderboardRegistrationModal({
 								style={{ color: theme.colors.accent }}
 							/>
 							<p className="text-xs" style={{ color: theme.colors.textMain }}>
-								Checking for your auth token...
+								{t('leaderboard.checking_auth_token_message')}
 							</p>
 						</div>
 					)}
@@ -1079,11 +1084,10 @@ export function LeaderboardRegistrationModal({
 							/>
 							<div className="flex-1">
 								<p className="text-xs" style={{ color: theme.colors.textMain }}>
-									{successMessage || 'Waiting for email confirmation...'}
+									{successMessage || t('leaderboard.waiting_confirmation_message')}
 								</p>
 								<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-									Click the link in your email to complete registration. This will update
-									automatically.
+									{t('leaderboard.click_link_description')}
 								</p>
 							</div>
 						</div>
@@ -1126,12 +1130,10 @@ export function LeaderboardRegistrationModal({
 									/>
 									<div className="flex-1">
 										<p className="text-xs font-medium" style={{ color: theme.colors.textMain }}>
-											Resend Confirmation Email
+											{t('leaderboard.resend_confirmation_title')}
 										</p>
 										<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-											We'll send a new confirmation email to{' '}
-											<span className="font-medium">{email}</span>. Click the link to get your auth
-											token.
+											{t('leaderboard.resend_confirmation_description', { email })}
 										</p>
 									</div>
 								</div>
@@ -1147,12 +1149,12 @@ export function LeaderboardRegistrationModal({
 									{isResending ? (
 										<>
 											<Loader2 className="w-3.5 h-3.5 animate-spin" />
-											Sending...
+											{t('leaderboard.sending_button')}
 										</>
 									) : (
 										<>
 											<Mail className="w-3.5 h-3.5" />
-											Resend Confirmation Email
+											{t('leaderboard.resend_confirmation_button')}
 										</>
 									)}
 								</button>
@@ -1173,10 +1175,10 @@ export function LeaderboardRegistrationModal({
 									/>
 									<div>
 										<p className="text-xs font-medium" style={{ color: theme.colors.textMain }}>
-											Enter Auth Token
+											{t('leaderboard.enter_auth_token_title')}
 										</p>
 										<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-											Copy the token from your confirmation email or the confirmation page.
+											{t('leaderboard.enter_auth_token_description')}
 										</p>
 									</div>
 								</div>
@@ -1185,7 +1187,7 @@ export function LeaderboardRegistrationModal({
 										type="text"
 										value={manualToken}
 										onChange={(e) => setManualToken(e.target.value)}
-										placeholder="Paste your 64-character auth token"
+										placeholder={t('leaderboard.auth_token_placeholder')}
 										className="flex-1 px-3 py-2 text-xs rounded border outline-none focus:ring-1 font-mono"
 										style={{
 											backgroundColor: theme.colors.bgActivity,
@@ -1202,7 +1204,7 @@ export function LeaderboardRegistrationModal({
 											color: '#fff',
 										}}
 									>
-										Submit
+										{t('leaderboard.submit_button')}
 									</button>
 								</div>
 							</div>
@@ -1237,8 +1239,7 @@ export function LeaderboardRegistrationModal({
 							}}
 						>
 							<p className="text-xs mb-3" style={{ color: theme.colors.textMain }}>
-								Are you sure you want to remove yourself from the leaderboard? This will request
-								removal of your entry from runmaestro.ai.
+								{t('leaderboard.opt_out_confirm_message')}
 							</p>
 							<div className="flex gap-2 justify-end">
 								<button
@@ -1246,7 +1247,7 @@ export function LeaderboardRegistrationModal({
 									className="px-3 py-1.5 text-xs rounded hover:bg-white/10 transition-colors"
 									style={{ color: theme.colors.textDim }}
 								>
-									Keep Registration
+									{t('leaderboard.keep_registration_button')}
 								</button>
 								<button
 									onClick={handleOptOut}
@@ -1257,7 +1258,7 @@ export function LeaderboardRegistrationModal({
 									}}
 								>
 									<UserX className="w-3.5 h-3.5" />
-									Yes, Remove Me
+									{t('leaderboard.yes_remove_me_button')}
 								</button>
 							</div>
 						</div>
@@ -1306,12 +1307,12 @@ export function LeaderboardRegistrationModal({
 								{submitState === 'submitting' ? (
 									<>
 										<Loader2 className="w-4 h-4 animate-spin" />
-										Pushing...
+										{t('leaderboard.pushing_button')}
 									</>
 								) : (
 									<>
 										<Trophy className="w-4 h-4" />
-										Push Up
+										{t('leaderboard.push_up_button')}
 									</>
 								)}
 							</button>
@@ -1335,12 +1336,12 @@ export function LeaderboardRegistrationModal({
 								{isSyncing ? (
 									<>
 										<Loader2 className="w-4 h-4 animate-spin" />
-										Pulling...
+										{t('leaderboard.pulling_button')}
 									</>
 								) : (
 									<>
 										<DownloadCloud className="w-4 h-4" />
-										Pull Down
+										{t('leaderboard.pull_down_button')}
 									</>
 								)}
 							</button>
@@ -1360,7 +1361,7 @@ export function LeaderboardRegistrationModal({
 								}}
 							>
 								<UserX className="w-4 h-4" />
-								Opt Out
+								{t('leaderboard.opt_out_button')}
 							</button>
 						)}
 				</div>

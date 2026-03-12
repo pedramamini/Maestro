@@ -11,6 +11,7 @@
  */
 
 import React, { useState, useEffect, useRef, useCallback, useMemo } from 'react';
+import { useTranslation } from 'react-i18next';
 import { createPortal } from 'react-dom';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
@@ -112,14 +113,14 @@ const STATUS_COLORS: Record<string, string> = {
 // Helper Functions
 // ============================================================================
 
-function formatCacheAge(cacheAgeMs: number | null): string {
-	if (cacheAgeMs === null || cacheAgeMs === 0) return 'just now';
+function formatCacheAge(cacheAgeMs: number | null, t: (key: any, opts?: any) => string): string {
+	if (cacheAgeMs === null || cacheAgeMs === 0) return t('symphony.cache_just_now');
 	const seconds = Math.floor(cacheAgeMs / 1000);
 	const minutes = Math.floor(seconds / 60);
 	const hours = Math.floor(minutes / 60);
-	if (hours > 0) return `${hours}h ago`;
-	if (minutes > 0) return `${minutes}m ago`;
-	return 'just now';
+	if (hours > 0) return t('symphony.cache_hours_ago', { count: hours });
+	if (minutes > 0) return t('symphony.cache_minutes_ago', { count: minutes });
+	return t('symphony.cache_just_now');
 }
 
 function formatDurationMs(ms: number): string {
@@ -137,7 +138,10 @@ function formatDate(isoString: string): string {
 	});
 }
 
-function getStatusInfo(status: ContributionStatus): {
+function getStatusInfo(
+	status: ContributionStatus,
+	t: (key: any) => string
+): {
 	label: string;
 	color: string;
 	icon: React.ReactNode;
@@ -153,19 +157,19 @@ function getStatusInfo(status: ContributionStatus): {
 		failed: <AlertCircle className="w-3 h-3" />,
 		cancelled: <X className="w-3 h-3" />,
 	};
-	const labels: Record<string, string> = {
-		cloning: 'Cloning',
-		creating_pr: 'Creating PR',
-		running: 'Running',
-		paused: 'Paused',
-		completed: 'Completed',
-		completing: 'Completing',
-		ready_for_review: 'Ready for Review',
-		failed: 'Failed',
-		cancelled: 'Cancelled',
+	const labelKeys: Record<string, string> = {
+		cloning: 'symphony.status.cloning',
+		creating_pr: 'symphony.status.creating_pr',
+		running: 'symphony.status.running',
+		paused: 'symphony.status.paused',
+		completed: 'symphony.status.completed',
+		completing: 'symphony.status.completing',
+		ready_for_review: 'symphony.status.ready_for_review',
+		failed: 'symphony.status.failed',
+		cancelled: 'symphony.status.cancelled',
 	};
 	return {
-		label: labels[status] ?? status,
+		label: labelKeys[status] ? t(labelKeys[status]) : status,
 		color: STATUS_COLORS[status] ?? '#6b7280',
 		icon: icons[status] ?? null,
 	};
@@ -221,6 +225,7 @@ function RepositoryTile({
 	onSelect: () => void;
 	issueCount: number | null;
 }) {
+	const { t } = useTranslation('modals');
 	const tileRef = useRef<HTMLButtonElement>(null);
 	const categoryInfo = SYMPHONY_CATEGORIES[repo.category] ?? { label: repo.category, emoji: '📦' };
 	const hasNoIssues = issueCount !== null && issueCount === 0;
@@ -282,16 +287,16 @@ function RepositoryTile({
 				{issueCount === null ? (
 					<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
 						<Hash className="w-3 h-3" />
-						View Issues
+						{t('symphony.projects.view_issues')}
 					</span>
 				) : issueCount > 0 ? (
 					<span className="flex items-center gap-1" style={{ color: theme.colors.accent }}>
 						<Hash className="w-3 h-3" />
-						View {issueCount} {issueCount === 1 ? 'Issue' : 'Issues'}
+						{t('symphony.projects.view_issues_count', { count: issueCount })}
 					</span>
 				) : (
 					<span className="flex items-center gap-1" style={{ color: theme.colors.textDim }}>
-						No Issues
+						{t('symphony.projects.no_issues')}
 					</span>
 				)}
 			</div>
@@ -314,6 +319,7 @@ function IssueCard({
 	isSelected: boolean;
 	onSelect: () => void;
 }) {
+	const { t } = useTranslation('modals');
 	const isBlocked = issue.labels?.some(
 		(l) => l.name.toLowerCase() === SYMPHONY_BLOCKING_LABEL.toLowerCase()
 	);
@@ -370,7 +376,7 @@ function IssueCard({
 							}}
 						>
 							<Lock className="w-3 h-3" />
-							Blocked
+							{t('symphony.projects.blocked_label')}
 						</span>
 					)}
 					{isClaimed && (
@@ -382,7 +388,7 @@ function IssueCard({
 							}}
 						>
 							<GitPullRequest className="w-3 h-3" />
-							Claimed
+							{t('symphony.projects.claimed_label')}
 						</span>
 					)}
 				</div>
@@ -394,7 +400,7 @@ function IssueCard({
 			>
 				<span className="flex items-center gap-1">
 					<FileText className="w-3 h-3" />
-					{issue.documentPaths.length} {issue.documentPaths.length === 1 ? 'document' : 'documents'}
+					{t('symphony.projects.document_count', { count: issue.documentPaths.length })}
 				</span>
 				{isClaimed && issue.claimedByPr && (
 					<button
@@ -407,8 +413,15 @@ function IssueCard({
 						}}
 					>
 						<GitPullRequest className="w-3 h-3" />
-						{issue.claimedByPr.isDraft ? 'Draft ' : ''}PR #{issue.claimedByPr.number} by @
-						{issue.claimedByPr.author}
+						{issue.claimedByPr.isDraft
+							? t('symphony.projects.draft_pr_by', {
+									number: issue.claimedByPr.number,
+									author: issue.claimedByPr.author,
+								})
+							: t('symphony.projects.pr_by', {
+									number: issue.claimedByPr.number,
+									author: issue.claimedByPr.author,
+								})}
 						<ExternalLink className="w-2.5 h-2.5" />
 					</button>
 				)}
@@ -422,7 +435,7 @@ function IssueCard({
 						</div>
 					))}
 					{issue.documentPaths.length > 2 && (
-						<div>...and {issue.documentPaths.length - 2} more</div>
+						<div>{t('symphony.projects.and_more', { count: issue.documentPaths.length - 2 })}</div>
 					)}
 				</div>
 			)}
@@ -461,6 +474,7 @@ function RepositoryDetailView({
 	onStartContribution: () => void;
 	onPreviewDocument: (path: string, isExternal: boolean) => void;
 }) {
+	const { t } = useTranslation('modals');
 	const categoryInfo = SYMPHONY_CATEGORIES[repo.category] ?? { label: repo.category, emoji: '📦' };
 	const isIssueBlocked = (i: SymphonyIssue) =>
 		i.labels?.some((l) => l.name.toLowerCase() === SYMPHONY_BLOCKING_LABEL.toLowerCase());
@@ -566,14 +580,14 @@ function RepositoryDetailView({
 					<button
 						onClick={onBack}
 						className="p-1.5 rounded hover:bg-white/10 transition-colors"
-						title="Back (Esc)"
+						title={t('symphony.projects.back_tooltip')}
 					>
 						<ArrowLeft className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 					</button>
 					<div className="flex items-center gap-2">
 						<Music className="w-5 h-5" style={{ color: theme.colors.accent }} />
 						<h2 className="text-lg font-semibold" style={{ color: theme.colors.textMain }}>
-							Maestro Symphony: {repo.name}
+							{t('symphony.projects.detail_title', { name: repo.name })}
 						</h2>
 					</div>
 				</div>
@@ -588,7 +602,7 @@ function RepositoryDetailView({
 					<button
 						type="button"
 						className="p-1.5 rounded hover:bg-white/10 transition-colors"
-						title="View repository on GitHub"
+						title={t('symphony.projects.view_repo_tooltip')}
 						onClick={() => handleOpenExternal(repo.url)}
 					>
 						<ExternalLink className="w-5 h-5" style={{ color: theme.colors.textDim }} />
@@ -608,7 +622,7 @@ function RepositoryDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							About
+							{t('symphony.projects.about_label')}
 						</h4>
 						<p className="text-sm" style={{ color: theme.colors.textMain }}>
 							{repo.description}
@@ -620,7 +634,7 @@ function RepositoryDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							Maintainer
+							{t('symphony.projects.maintainer_label')}
 						</h4>
 						{repo.maintainer.url ? (
 							<button
@@ -645,7 +659,7 @@ function RepositoryDetailView({
 								className="text-xs font-semibold mb-1 uppercase tracking-wide"
 								style={{ color: theme.colors.textDim }}
 							>
-								Tags
+								{t('symphony.projects.tags_label')}
 							</h4>
 							<div className="flex flex-wrap gap-1">
 								{repo.tags.map((tag) => (
@@ -675,7 +689,7 @@ function RepositoryDetailView({
 						</div>
 					) : issues.length === 0 ? (
 						<p className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>
-							No issues with runmaestro.ai label
+							{t('symphony.projects.no_labeled_issues')}
 						</p>
 					) : (
 						<>
@@ -687,7 +701,9 @@ function RepositoryDetailView({
 										style={{ color: STATUS_COLORS.running }}
 									>
 										<GitPullRequest className="w-3 h-3" />
-										<span>In Progress ({inProgressIssues.length})</span>
+										<span>
+											{t('symphony.projects.in_progress_label', { count: inProgressIssues.length })}
+										</span>
 									</h4>
 									<div className="space-y-2">
 										{inProgressIssues.map((issue) => (
@@ -709,7 +725,11 @@ function RepositoryDetailView({
 									className="text-xs font-semibold mb-2 uppercase tracking-wide flex items-center justify-between"
 									style={{ color: theme.colors.textDim }}
 								>
-									<span>Available Issues ({availableIssues.length})</span>
+									<span>
+										{t('symphony.projects.available_issues_label', {
+											count: availableIssues.length,
+										})}
+									</span>
 									{isLoadingIssues && (
 										<Loader2
 											className="w-3 h-3 animate-spin"
@@ -719,7 +739,7 @@ function RepositoryDetailView({
 								</h4>
 								{availableIssues.length === 0 && blockedIssues.length === 0 ? (
 									<p className="text-sm text-center py-4" style={{ color: theme.colors.textDim }}>
-										All issues are currently being worked on
+										{t('symphony.projects.all_issues_in_progress')}
 									</p>
 								) : (
 									<div className="space-y-2">
@@ -744,7 +764,9 @@ function RepositoryDetailView({
 										style={{ color: STATUS_COLORS.cancelled }}
 									>
 										<Lock className="w-3 h-3" />
-										<span>Blocked ({blockedIssues.length})</span>
+										<span>
+											{t('symphony.projects.blocked_issues_label', { count: blockedIssues.length })}
+										</span>
 									</h4>
 									<div className="space-y-2">
 										{blockedIssues.map((issue) => (
@@ -785,9 +807,9 @@ function RepositoryDetailView({
 										className="text-xs hover:underline flex items-center gap-1"
 										style={{ color: theme.colors.accent }}
 										onClick={() => handleOpenExternal(selectedIssue.htmlUrl)}
-										title="View issue on GitHub"
+										title={t('symphony.projects.view_issue_tooltip')}
 									>
-										View Issue
+										{t('symphony.projects.view_issue_button')}
 										<ExternalLink className="w-3 h-3" />
 									</button>
 								</div>
@@ -796,7 +818,11 @@ function RepositoryDetailView({
 									style={{ color: theme.colors.textDim }}
 								>
 									<FileText className="w-3 h-3" />
-									<span>{selectedIssue.documentPaths.length} Auto Run documents to process</span>
+									<span>
+										{t('symphony.projects.documents_to_process', {
+											count: selectedIssue.documentPaths.length,
+										})}
+									</span>
 								</div>
 							</div>
 
@@ -816,7 +842,8 @@ function RepositoryDetailView({
 										}}
 									>
 										<span>
-											{selectedIssue.documentPaths[selectedDocIndex]?.name || 'Select document'}
+											{selectedIssue.documentPaths[selectedDocIndex]?.name ||
+												t('symphony.projects.select_document')}
 										</span>
 										<ChevronDown
 											className={`w-4 h-4 transition-transform ${showDocDropdown ? 'rotate-180' : ''}`}
@@ -878,7 +905,9 @@ function RepositoryDetailView({
 								) : (
 									<div className="flex flex-col items-center justify-center h-full">
 										<FileText className="w-12 h-12 mb-3" style={{ color: theme.colors.textDim }} />
-										<p style={{ color: theme.colors.textDim }}>Select a document to preview</p>
+										<p style={{ color: theme.colors.textDim }}>
+											{t('symphony.projects.select_document_preview')}
+										</p>
 									</div>
 								)}
 							</div>
@@ -896,10 +925,10 @@ function RepositoryDetailView({
 											style={{ color: theme.colors.textDim }}
 										/>
 										<p className="text-sm" style={{ color: theme.colors.textMain }}>
-											No outstanding work for this project
+											{t('symphony.projects.no_outstanding_work')}
 										</p>
 										<p className="text-xs mt-1" style={{ color: theme.colors.textDim }}>
-											There are no issues labeled with runmaestro.ai
+											{t('symphony.projects.no_labeled_issues')}
 										</p>
 									</>
 								) : (
@@ -908,7 +937,9 @@ function RepositoryDetailView({
 											className="w-12 h-12 mx-auto mb-3"
 											style={{ color: theme.colors.textDim }}
 										/>
-										<p style={{ color: theme.colors.textDim }}>Select an issue to see details</p>
+										<p style={{ color: theme.colors.textDim }}>
+											{t('symphony.projects.select_issue_details')}
+										</p>
 									</>
 								)}
 							</div>
@@ -927,14 +958,12 @@ function RepositoryDetailView({
 						{isIssueBlocked(selectedIssue) ? (
 							<>
 								<Lock className="w-4 h-4" />
-								<span>
-									Blocked by a dependency — the maintainer will unblock when prerequisites are met
-								</span>
+								<span>{t('symphony.projects.blocked_dependency_message')}</span>
 							</>
 						) : (
 							<>
 								<GitBranch className="w-4 h-4" />
-								<span>Will clone repo, create draft PR, and run all documents</span>
+								<span>{t('symphony.projects.will_clone_message')}</span>
 							</>
 						)}
 					</div>
@@ -947,12 +976,12 @@ function RepositoryDetailView({
 						{isStarting ? (
 							<>
 								<Loader2 className="w-4 h-4 animate-spin" />
-								Starting...
+								{t('symphony.projects.starting_button')}
 							</>
 						) : (
 							<>
 								<Play className="w-4 h-4" />
-								Start Symphony
+								{t('symphony.projects.start_symphony_button')}
 							</>
 						)}
 					</button>
@@ -983,7 +1012,8 @@ function ActiveContributionCard({
 	sessionName: string | null;
 	onNavigateToSession: () => void;
 }) {
-	const statusInfo = getStatusInfo(contribution.status);
+	const { t } = useTranslation('modals');
+	const statusInfo = getStatusInfo(contribution.status, t);
 	const docProgress =
 		contribution.progress.totalDocuments > 0
 			? Math.round(
@@ -1033,7 +1063,7 @@ function ActiveContributionCard({
 						onClick={onSync}
 						disabled={isSyncing}
 						className="p-1 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
-						title="Sync status with GitHub"
+						title={t('symphony.active.sync_tooltip')}
 					>
 						<RefreshCw
 							className={`w-3.5 h-3.5 ${isSyncing ? 'animate-spin' : ''}`}
@@ -1058,7 +1088,7 @@ function ActiveContributionCard({
 					onClick={() => handleOpenExternal(contribution.draftPrUrl!)}
 				>
 					<GitPullRequest className="w-3 h-3" />
-					Draft PR #{contribution.draftPrNumber}
+					{t('symphony.active.draft_pr', { number: contribution.draftPrNumber })}
 					<ExternalLink className="w-3 h-3" />
 				</button>
 			) : (
@@ -1067,15 +1097,17 @@ function ActiveContributionCard({
 					style={{ color: theme.colors.textDim }}
 				>
 					<GitBranch className="w-3 h-3" />
-					<span>PR will be created on first commit</span>
+					<span>{t('symphony.active.pr_on_first_commit')}</span>
 				</div>
 			)}
 
 			<div className="mb-2">
 				<div className="flex items-center justify-between text-xs mb-1">
 					<span style={{ color: theme.colors.textDim }}>
-						{contribution.progress.completedDocuments} / {contribution.progress.totalDocuments}{' '}
-						documents
+						{t('symphony.active.documents_progress', {
+							completed: contribution.progress.completedDocuments,
+							total: contribution.progress.totalDocuments,
+						})}
 					</span>
 					<span style={{ color: theme.colors.textDim }}>
 						<Clock className="w-3 h-3 inline mr-1" />
@@ -1093,7 +1125,9 @@ function ActiveContributionCard({
 				</div>
 				{contribution.progress.currentDocument && (
 					<p className="text-xs mt-1 truncate" style={{ color: theme.colors.textDim }}>
-						Current: {contribution.progress.currentDocument}
+						{t('symphony.active.current_document', {
+							document: contribution.progress.currentDocument,
+						})}
 					</p>
 				)}
 			</div>
@@ -1103,8 +1137,16 @@ function ActiveContributionCard({
 					className="flex items-center gap-4 text-xs mb-2"
 					style={{ color: theme.colors.textDim }}
 				>
-					<span>In: {Math.round(contribution.tokenUsage.inputTokens / 1000)}K</span>
-					<span>Out: {Math.round(contribution.tokenUsage.outputTokens / 1000)}K</span>
+					<span>
+						{t('symphony.active.tokens_in', {
+							count: Math.round(contribution.tokenUsage.inputTokens / 1000),
+						})}
+					</span>
+					<span>
+						{t('symphony.active.tokens_out', {
+							count: Math.round(contribution.tokenUsage.outputTokens / 1000),
+						})}
+					</span>
 					<span>${contribution.tokenUsage.estimatedCost.toFixed(2)}</span>
 				</div>
 			)}
@@ -1124,7 +1166,7 @@ function ActiveContributionCard({
 					className="w-full py-1.5 rounded text-xs flex items-center justify-center gap-1"
 					style={{ backgroundColor: theme.colors.accent, color: theme.colors.accentForeground }}
 				>
-					<GitPullRequest className="w-3 h-3" /> Finalize PR
+					<GitPullRequest className="w-3 h-3" /> {t('symphony.active.finalize_pr_button')}
 				</button>
 			)}
 		</div>
@@ -1142,6 +1184,7 @@ function CompletedContributionCard({
 	contribution: CompletedContribution;
 	theme: Theme;
 }) {
+	const { t } = useTranslation('modals');
 	const handleOpenPR = useCallback(() => {
 		window.maestro.shell.openExternal(contribution.prUrl);
 	}, [contribution.prUrl]);
@@ -1183,7 +1226,7 @@ function CompletedContributionCard({
 							color: STATUS_COLORS.ready_for_review,
 						}}
 					>
-						<GitMerge className="w-3 h-3" /> Merged
+						<GitMerge className="w-3 h-3" /> {t('symphony.history.merged_label')}
 					</span>
 				) : isClosed ? (
 					<span
@@ -1193,21 +1236,21 @@ function CompletedContributionCard({
 							color: STATUS_COLORS.cancelled,
 						}}
 					>
-						<X className="w-3 h-3" /> Closed
+						<X className="w-3 h-3" /> {t('symphony.history.closed_label')}
 					</span>
 				) : (
 					<span
 						className="flex items-center gap-1 px-1.5 py-0.5 rounded text-xs"
 						style={{ backgroundColor: `${STATUS_COLORS.running}20`, color: STATUS_COLORS.running }}
 					>
-						<GitPullRequest className="w-3 h-3" /> Open
+						<GitPullRequest className="w-3 h-3" /> {t('symphony.history.open_label')}
 					</span>
 				)}
 			</div>
 
 			<div className="flex items-center gap-3 text-xs mb-2">
 				<span style={{ color: theme.colors.textDim }}>
-					Completed {formatDate(contribution.completedAt)}
+					{t('symphony.history.completed_date', { date: formatDate(contribution.completedAt) })}
 				</span>
 				<button
 					onClick={handleOpenPR}
@@ -1215,26 +1258,28 @@ function CompletedContributionCard({
 					style={{ color: theme.colors.accent }}
 				>
 					<GitPullRequest className="w-3 h-3" />
-					PR #{contribution.prNumber}
+					{t('symphony.history.pr_number', { number: contribution.prNumber })}
 					<ExternalLink className="w-2.5 h-2.5" />
 				</button>
 			</div>
 
 			<div className="grid grid-cols-4 gap-2 text-xs">
 				<div>
-					<span style={{ color: theme.colors.textDim }}>Documents</span>
+					<span style={{ color: theme.colors.textDim }}>
+						{t('symphony.history.documents_label')}
+					</span>
 					<p style={{ color: theme.colors.textMain }}>{contribution.documentsProcessed}</p>
 				</div>
 				<div>
-					<span style={{ color: theme.colors.textDim }}>Tasks</span>
+					<span style={{ color: theme.colors.textDim }}>{t('symphony.history.tasks_label')}</span>
 					<p style={{ color: theme.colors.textMain }}>{contribution.tasksCompleted}</p>
 				</div>
 				<div>
-					<span style={{ color: theme.colors.textDim }}>Tokens</span>
+					<span style={{ color: theme.colors.textDim }}>{t('symphony.history.tokens_label')}</span>
 					<p style={{ color: theme.colors.textMain }}>{formattedTokens}</p>
 				</div>
 				<div>
-					<span style={{ color: theme.colors.textDim }}>Cost</span>
+					<span style={{ color: theme.colors.textDim }}>{t('symphony.history.cost_label')}</span>
 					<p style={{ color: theme.colors.accent }}>
 						${contribution.tokenUsage.totalCost.toFixed(2)}
 					</p>
@@ -1306,6 +1351,7 @@ export function SymphonyModal({
 	sessions,
 	onSelectSession,
 }: SymphonyModalProps) {
+	const { t } = useTranslation('modals');
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
@@ -1506,7 +1552,7 @@ export function SymphonyModal({
 	const handleCreateAgent = useCallback(
 		async (config: AgentCreationConfig): Promise<{ success: boolean; error?: string }> => {
 			if (!selectedRepo || !selectedIssue) {
-				return { success: false, error: 'No repository or issue selected' };
+				return { success: false, error: t('symphony.error.no_repo_or_issue') };
 			}
 
 			setIsStarting(true);
@@ -1544,7 +1590,7 @@ export function SymphonyModal({
 				return { success: true };
 			}
 
-			return { success: false, error: result.error ?? 'Failed to start contribution' };
+			return { success: false, error: result.error ?? t('symphony.error.failed_to_start') };
 		},
 		[selectedRepo, selectedIssue, startContribution, onStartContribution, handleBack]
 	);
@@ -1568,7 +1614,7 @@ export function SymphonyModal({
 			}
 		} catch (err) {
 			console.error('Failed to sync contribution:', err);
-			setPrStatusMessage('Sync failed');
+			setPrStatusMessage(t('symphony.active.sync_failed'));
 			setTimeout(() => setPrStatusMessage(null), 5000);
 		} finally {
 			setSyncingContributionId(null);
@@ -1583,23 +1629,23 @@ export function SymphonyModal({
 			const result = await window.maestro.symphony.checkPRStatuses();
 			const messages: string[] = [];
 			if ((result.merged ?? 0) > 0) {
-				messages.push(`${result.merged} PR${(result.merged ?? 0) > 1 ? 's' : ''} merged`);
+				messages.push(t('symphony.active.prs_merged', { count: result.merged ?? 0 }));
 			}
 			if ((result.closed ?? 0) > 0) {
-				messages.push(`${result.closed} PR${(result.closed ?? 0) > 1 ? 's' : ''} closed`);
+				messages.push(t('symphony.active.prs_closed', { count: result.closed ?? 0 }));
 			}
 			if (messages.length > 0) {
 				setPrStatusMessage(messages.join(', '));
 			} else if ((result.checked ?? 0) > 0) {
-				setPrStatusMessage('All PRs up to date');
+				setPrStatusMessage(t('symphony.active.all_prs_up_to_date'));
 			} else {
-				setPrStatusMessage('No PRs to check');
+				setPrStatusMessage(t('symphony.active.no_prs_to_check'));
 			}
 			// Clear message after 5 seconds
 			setTimeout(() => setPrStatusMessage(null), 5000);
 		} catch (err) {
 			console.error('Failed to check PR statuses:', err);
-			setPrStatusMessage('Failed to check statuses');
+			setPrStatusMessage(t('symphony.active.failed_to_check_statuses'));
 			setTimeout(() => setPrStatusMessage(null), 5000);
 		} finally {
 			setIsCheckingPRStatuses(false);
@@ -1752,7 +1798,7 @@ export function SymphonyModal({
 									className="text-lg font-semibold"
 									style={{ color: theme.colors.textMain }}
 								>
-									Maestro Symphony
+									{t('symphony.title')}
 								</h2>
 								{/* Help button */}
 								<div className="relative">
@@ -1760,7 +1806,7 @@ export function SymphonyModal({
 										ref={helpButtonRef}
 										onClick={() => setShowHelp(!showHelp)}
 										className="p-1 rounded hover:bg-white/10 transition-colors"
-										title="About Maestro Symphony"
+										title={t('symphony.help.about_tooltip')}
 										aria-label="Help"
 									>
 										<HelpCircle className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -1777,29 +1823,26 @@ export function SymphonyModal({
 												className="text-sm font-semibold mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												About Maestro Symphony
+												{t('symphony.help.about_title')}
 											</h3>
 											<p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
-												Symphony connects Maestro users with open source projects seeking
-												AI-assisted contributions. Browse projects, find issues labeled with{' '}
+												{t('symphony.help.about_description_part1')}{' '}
 												<code
 													className="px-1 py-0.5 rounded text-xs"
 													style={{ backgroundColor: theme.colors.bgActivity }}
 												>
 													runmaestro.ai
 												</code>
-												, and contribute by running Auto Run documents that maintainers have
-												prepared.
+												{t('symphony.help.about_description_part2')}
 											</p>
 											<h4
 												className="text-xs font-semibold mb-1"
 												style={{ color: theme.colors.textMain }}
 											>
-												Register Your Project
+												{t('symphony.help.register_project_title')}
 											</h4>
 											<p className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-												Want to receive Symphony contributions for your open source project? Add
-												your repository to the registry:
+												{t('symphony.help.register_project_description')}
 											</p>
 											<button
 												onClick={() => {
@@ -1820,7 +1863,7 @@ export function SymphonyModal({
 													className="text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors"
 													style={{ color: theme.colors.textDim }}
 												>
-													Close
+													{t('symphony.help.close_button')}
 												</button>
 											</div>
 										</div>
@@ -1832,24 +1875,26 @@ export function SymphonyModal({
 										window.maestro.shell.openExternal('https://docs.runmaestro.ai/symphony');
 									}}
 									className="px-2 py-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs"
-									title="Register your project for Symphony contributions"
+									title={t('symphony.help.register_project_tooltip')}
 									style={{ color: theme.colors.textDim }}
 								>
 									<Github className="w-3.5 h-3.5" />
-									<span>Register Your Project</span>
+									<span>{t('symphony.help.register_project_button')}</span>
 								</button>
 							</div>
 							<div className="flex items-center gap-3">
 								{activeTab === 'projects' && (
 									<span className="text-xs" style={{ color: theme.colors.textDim }}>
-										{fromCache ? `Cached ${formatCacheAge(cacheAge)}` : 'Live'}
+										{fromCache
+											? t('symphony.cache_status', { age: formatCacheAge(cacheAge, t) })
+											: t('symphony.live_status')}
 									</span>
 								)}
 								<button
 									onClick={() => refresh(true)}
 									disabled={isRefreshing}
 									className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
-									title="Refresh"
+									title={t('symphony.refresh_tooltip')}
 								>
 									<RefreshCw
 										className={`w-4 h-4 ${isRefreshing ? 'animate-spin' : ''}`}
@@ -1859,7 +1904,7 @@ export function SymphonyModal({
 								<button
 									onClick={onClose}
 									className="p-1.5 rounded hover:bg-white/10 transition-colors"
-									title="Close (Esc)"
+									title={t('symphony.close_tooltip')}
 								>
 									<X className="w-4 h-4" style={{ color: theme.colors.textDim }} />
 								</button>
@@ -1881,11 +1926,13 @@ export function SymphonyModal({
 										color: activeTab === tab ? theme.colors.accent : theme.colors.textDim,
 									}}
 								>
-									{tab === 'projects' && 'Projects'}
+									{tab === 'projects' && t('symphony.tabs.projects')}
 									{tab === 'active' &&
-										`Active${activeContributions.length > 0 ? ` (${activeContributions.length})` : ''}`}
-									{tab === 'history' && 'History'}
-									{tab === 'stats' && 'Stats'}
+										(activeContributions.length > 0
+											? t('symphony.tabs.active_count', { count: activeContributions.length })
+											: t('symphony.tabs.active'))}
+									{tab === 'history' && t('symphony.tabs.history')}
+									{tab === 'stats' && t('symphony.tabs.stats')}
 								</button>
 							))}
 						</div>
@@ -1914,7 +1961,7 @@ export function SymphonyModal({
 													type="text"
 													value={searchQuery}
 													onChange={(e) => handleSearchChange(e.target.value)}
-													placeholder="Search repositories..."
+													placeholder={t('symphony.projects.search_placeholder')}
 													className="w-full pl-9 pr-3 py-2 rounded border outline-none text-sm focus:ring-1"
 													style={{
 														borderColor: theme.colors.border,
@@ -1941,7 +1988,7 @@ export function SymphonyModal({
 																: '1px solid transparent',
 													}}
 												>
-													All
+													{t('symphony.projects.all_category')}
 												</button>
 												{categories.map((cat) => {
 													const info = SYMPHONY_CATEGORIES[cat];
@@ -2009,7 +2056,7 @@ export function SymphonyModal({
 														color: theme.colors.accentForeground,
 													}}
 												>
-													Retry
+													{t('symphony.projects.retry_button')}
 												</button>
 											</div>
 										) : filteredRepositories.length === 0 ? (
@@ -2017,8 +2064,8 @@ export function SymphonyModal({
 												<Music className="w-8 h-8 mb-2" style={{ color: theme.colors.textDim }} />
 												<p style={{ color: theme.colors.textDim }}>
 													{searchQuery
-														? 'No repositories match your search'
-														: 'No repositories available'}
+														? t('symphony.projects.no_search_results')
+														: t('symphony.projects.no_repositories')}
 												</p>
 											</div>
 										) : (
@@ -2049,10 +2096,14 @@ export function SymphonyModal({
 										style={{ borderColor: theme.colors.border, color: theme.colors.textDim }}
 									>
 										<span className="flex items-center gap-1">
-											{filteredRepositories.length} repositories • Contribute to open source with AI
+											{t('symphony.projects.footer_count', { count: filteredRepositories.length })}
 											{isLoadingIssueCounts && <Loader2 className="w-3 h-3 animate-spin ml-1" />}
 										</span>
-										<span>{`↑↓←→ navigate • Enter select • / search • ${formatShortcutKeys(['Meta', 'Shift'])}[] tabs`}</span>
+										<span>
+											{t('symphony.projects.footer_shortcuts', {
+												shortcutKeys: formatShortcutKeys(['Meta', 'Shift']),
+											})}
+										</span>
 									</div>
 								</>
 							)}
@@ -2066,8 +2117,9 @@ export function SymphonyModal({
 										style={{ borderColor: theme.colors.border }}
 									>
 										<span className="text-sm" style={{ color: theme.colors.textMain }}>
-											{activeContributions.length} active contribution
-											{activeContributions.length !== 1 ? 's' : ''}
+											{t('symphony.active.contribution_count', {
+												count: activeContributions.length,
+											})}
 										</span>
 										<div className="flex items-center gap-2">
 											{prStatusMessage && (
@@ -2083,12 +2135,12 @@ export function SymphonyModal({
 													backgroundColor: theme.colors.bgActivity,
 													color: theme.colors.textMain,
 												}}
-												title="Check for merged or closed PRs"
+												title={t('symphony.active.check_pr_tooltip')}
 											>
 												<RefreshCw
 													className={`w-3 h-3 ${isCheckingPRStatuses ? 'animate-spin' : ''}`}
 												/>
-												Check PR Status
+												{t('symphony.active.check_pr_button')}
 											</button>
 										</div>
 									</div>
@@ -2099,10 +2151,10 @@ export function SymphonyModal({
 											<div className="flex flex-col items-center justify-center h-64">
 												<Music className="w-12 h-12 mb-3" style={{ color: theme.colors.textDim }} />
 												<p className="text-sm mb-1" style={{ color: theme.colors.textMain }}>
-													No active contributions
+													{t('symphony.active.no_contributions_title')}
 												</p>
 												<p className="text-xs mb-4" style={{ color: theme.colors.textDim }}>
-													Start a contribution from the Projects tab
+													{t('symphony.active.no_contributions_description')}
 												</p>
 												<button
 													onClick={() => setActiveTab('projects')}
@@ -2112,7 +2164,7 @@ export function SymphonyModal({
 														color: theme.colors.accentForeground,
 													}}
 												>
-													Browse Projects
+													{t('symphony.active.browse_projects_button')}
 												</button>
 											</div>
 										) : (
@@ -2160,7 +2212,7 @@ export function SymphonyModal({
 													{stats.totalContributions}
 												</p>
 												<p className="text-xs" style={{ color: theme.colors.textDim }}>
-													PRs Created
+													{t('symphony.history.prs_created_label')}
 												</p>
 											</div>
 											<div className="text-center">
@@ -2171,7 +2223,7 @@ export function SymphonyModal({
 													{stats.totalMerged}
 												</p>
 												<p className="text-xs" style={{ color: theme.colors.textDim }}>
-													Merged
+													{t('symphony.history.merged_label')}
 												</p>
 											</div>
 											<div className="text-center">
@@ -2182,7 +2234,7 @@ export function SymphonyModal({
 													{stats.totalTasksCompleted}
 												</p>
 												<p className="text-xs" style={{ color: theme.colors.textDim }}>
-													Tasks
+													{t('symphony.history.tasks_label')}
 												</p>
 											</div>
 											<div className="text-center">
@@ -2193,7 +2245,7 @@ export function SymphonyModal({
 													{formattedTotalTokens}
 												</p>
 												<p className="text-xs" style={{ color: theme.colors.textDim }}>
-													Tokens
+													{t('symphony.history.tokens_label')}
 												</p>
 											</div>
 											<div className="text-center">
@@ -2204,7 +2256,7 @@ export function SymphonyModal({
 													{formattedTotalCost}
 												</p>
 												<p className="text-xs" style={{ color: theme.colors.textDim }}>
-													Value
+													{t('symphony.history.value_label')}
 												</p>
 											</div>
 										</div>
@@ -2216,10 +2268,10 @@ export function SymphonyModal({
 											<div className="flex flex-col items-center justify-center h-48">
 												<Music className="w-12 h-12 mb-3" style={{ color: theme.colors.textDim }} />
 												<p className="text-sm mb-1" style={{ color: theme.colors.textMain }}>
-													No completed contributions
+													{t('symphony.history.no_contributions_title')}
 												</p>
 												<p className="text-xs" style={{ color: theme.colors.textDim }}>
-													Your contribution history will appear here
+													{t('symphony.history.no_contributions_description')}
 												</p>
 											</div>
 										) : (
@@ -2255,7 +2307,7 @@ export function SymphonyModal({
 													className="text-sm font-medium"
 													style={{ color: theme.colors.textMain }}
 												>
-													Tokens Donated
+													{t('symphony.stats.tokens_donated_label')}
 												</span>
 											</div>
 											<p
@@ -2265,7 +2317,7 @@ export function SymphonyModal({
 												{formattedTotalTokens}
 											</p>
 											<p className="text-xs" style={{ color: theme.colors.textDim }}>
-												Worth {formattedTotalCost}
+												{t('symphony.stats.worth_label', { cost: formattedTotalCost })}
 											</p>
 										</div>
 
@@ -2282,7 +2334,7 @@ export function SymphonyModal({
 													className="text-sm font-medium"
 													style={{ color: theme.colors.textMain }}
 												>
-													Time Contributed
+													{t('symphony.stats.time_contributed_label')}
 												</span>
 											</div>
 											<p
@@ -2292,7 +2344,7 @@ export function SymphonyModal({
 												{formattedTotalTime}
 											</p>
 											<p className="text-xs" style={{ color: theme.colors.textDim }}>
-												{uniqueRepos} repositories
+												{t('symphony.stats.repositories_count', { count: uniqueRepos })}
 											</p>
 										</div>
 
@@ -2309,17 +2361,17 @@ export function SymphonyModal({
 													className="text-sm font-medium"
 													style={{ color: theme.colors.textMain }}
 												>
-													Streak
+													{t('symphony.stats.streak_label')}
 												</span>
 											</div>
 											<p
 												className="text-2xl font-semibold"
 												style={{ color: theme.colors.textMain }}
 											>
-												{currentStreakWeeks} weeks
+												{t('symphony.stats.weeks_count', { count: currentStreakWeeks })}
 											</p>
 											<p className="text-xs" style={{ color: theme.colors.textDim }}>
-												Best: {longestStreakWeeks} weeks
+												{t('symphony.stats.best_streak', { count: longestStreakWeeks })}
 											</p>
 										</div>
 									</div>
@@ -2331,7 +2383,7 @@ export function SymphonyModal({
 											style={{ color: theme.colors.textMain }}
 										>
 											<Trophy className="w-4 h-4" style={{ color: '#eab308' }} />
-											Achievements
+											{t('symphony.stats.achievements_title')}
 										</h3>
 										<div className="grid grid-cols-2 gap-3">
 											{achievements.map((achievement) => (
@@ -2381,7 +2433,7 @@ export function SymphonyModal({
 										style={{ color: theme.colors.textDim }}
 									/>
 									<span className="text-sm" style={{ color: theme.colors.textDim }}>
-										Checking prerequisites…
+										{t('symphony.preflight.checking')}
 									</span>
 								</div>
 							) : ghCliStatus && !ghCliStatus.installed ? (
@@ -2396,13 +2448,13 @@ export function SymphonyModal({
 												className="font-semibold text-base mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												GitHub CLI Required
+												{t('symphony.preflight.gh_required_title')}
 											</h3>
 											<p
 												className="text-sm leading-relaxed"
 												style={{ color: theme.colors.textDim }}
 											>
-												Symphony requires the GitHub CLI (
+												{t('symphony.preflight.gh_required_description_part1')}
 												<code
 													className="px-1 py-0.5 rounded text-xs"
 													style={{
@@ -2412,14 +2464,13 @@ export function SymphonyModal({
 												>
 													gh
 												</code>
-												) to create draft PRs and manage contributions. It is not currently
-												installed on your system.
+												{t('symphony.preflight.gh_required_description_part2')}
 											</p>
 											<p
 												className="text-sm leading-relaxed mt-2"
 												style={{ color: theme.colors.textDim }}
 											>
-												Install it from{' '}
+												{t('symphony.preflight.gh_install_part1')}{' '}
 												<a
 													href="https://cli.github.com/"
 													target="_blank"
@@ -2429,7 +2480,7 @@ export function SymphonyModal({
 												>
 													cli.github.com
 												</a>{' '}
-												and run{' '}
+												{t('symphony.preflight.gh_install_part2')}{' '}
 												<code
 													className="px-1 py-0.5 rounded text-xs"
 													style={{
@@ -2439,7 +2490,7 @@ export function SymphonyModal({
 												>
 													gh auth login
 												</code>{' '}
-												to authenticate.
+												{t('symphony.preflight.gh_install_part3')}
 											</p>
 										</div>
 									</div>
@@ -2452,7 +2503,7 @@ export function SymphonyModal({
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											Close
+											{t('symphony.preflight.close_button')}
 										</button>
 									</div>
 								</>
@@ -2468,13 +2519,13 @@ export function SymphonyModal({
 												className="font-semibold text-base mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												GitHub CLI Not Authenticated
+												{t('symphony.preflight.gh_not_authenticated_title')}
 											</h3>
 											<p
 												className="text-sm leading-relaxed"
 												style={{ color: theme.colors.textDim }}
 											>
-												The GitHub CLI (
+												{t('symphony.preflight.gh_not_auth_description_part1')}
 												<code
 													className="px-1 py-0.5 rounded text-xs"
 													style={{
@@ -2484,14 +2535,13 @@ export function SymphonyModal({
 												>
 													gh
 												</code>
-												) is installed but not authenticated. Symphony needs GitHub access to create
-												draft PRs and manage contributions.
+												{t('symphony.preflight.gh_not_auth_description_part2')}
 											</p>
 											<p
 												className="text-sm leading-relaxed mt-2"
 												style={{ color: theme.colors.textDim }}
 											>
-												Run{' '}
+												{t('symphony.preflight.gh_run_auth_part1')}{' '}
 												<code
 													className="px-1 py-0.5 rounded text-xs"
 													style={{
@@ -2501,7 +2551,7 @@ export function SymphonyModal({
 												>
 													gh auth login
 												</code>{' '}
-												in your terminal to authenticate.
+												{t('symphony.preflight.gh_run_auth_part2')}
 											</p>
 										</div>
 									</div>
@@ -2514,7 +2564,7 @@ export function SymphonyModal({
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											Close
+											{t('symphony.preflight.close_button')}
 										</button>
 									</div>
 								</>
@@ -2526,7 +2576,7 @@ export function SymphonyModal({
 											style={{ color: STATUS_COLORS.running }}
 										/>
 										<span className="text-sm" style={{ color: STATUS_COLORS.running }}>
-											GitHub CLI authenticated
+											{t('symphony.preflight.gh_authenticated')}
 										</span>
 									</div>
 									<div className="flex items-start gap-3 mb-4 mt-3">
@@ -2539,24 +2589,19 @@ export function SymphonyModal({
 												className="font-semibold text-base mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												Build Tools Required
+												{t('symphony.preflight.build_tools_title')}
 											</h3>
 											<p
 												className="text-sm leading-relaxed"
 												style={{ color: theme.colors.textDim }}
 											>
-												Symphony will clone this repository and run Auto Run documents that may
-												compile code, run tests, and make changes. Before proceeding, make sure you
-												have the project's build tools and dependencies installed on your machine
-												(e.g., Node.js, Python, Rust toolchain, etc.).
+												{t('symphony.preflight.build_tools_description')}
 											</p>
 											<p
 												className="text-sm leading-relaxed mt-2"
 												style={{ color: theme.colors.textDim }}
 											>
-												Consider cloning the project first and verifying you can build it
-												successfully. Without the right toolchain, the contribution is likely to
-												fail.
+												{t('symphony.preflight.build_tools_suggestion')}
 											</p>
 										</div>
 									</div>
@@ -2569,7 +2614,7 @@ export function SymphonyModal({
 												border: `1px solid ${theme.colors.border}`,
 											}}
 										>
-											Cancel
+											{t('symphony.preflight.cancel_button')}
 										</button>
 										<button
 											onClick={handleBuildWarningConfirm}
@@ -2579,7 +2624,7 @@ export function SymphonyModal({
 												color: theme.colors.accentForeground,
 											}}
 										>
-											I Have the Build Tools
+											{t('symphony.preflight.confirm_build_tools_button')}
 										</button>
 									</div>
 								</>

@@ -11,6 +11,7 @@ import {
 	Check,
 	BookOpen,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme, AutoRunStats, MaestroUsageStats, LeaderboardRegistration } from '../types';
 import type { GlobalAgentStats } from '../../shared/types';
 import { MODAL_PRIORITIES } from '../constants/modalPriorities';
@@ -41,6 +42,7 @@ export function AboutModal({
 	isLeaderboardRegistered,
 	leaderboardRegistration,
 }: AboutModalProps) {
+	const { t } = useTranslation('modals');
 	const [globalStats, setGlobalStats] = useState<GlobalAgentStats | null>(null);
 	const [loading, setLoading] = useState(true);
 	const [isStatsComplete, setIsStatsComplete] = useState(false);
@@ -123,12 +125,12 @@ export function AboutModal({
 		>
 			<div className="flex items-center gap-2">
 				<h2 className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-					About Maestro
+					{t('about.title')}
 				</h2>
 				<button
 					onClick={() => window.maestro.shell.openExternal('https://runmaestro.ai')}
 					className="p-1 rounded hover:bg-white/10 transition-colors"
-					title="Visit runmaestro.ai"
+					title={t('about.visit_website_tooltip')}
 					style={{ color: theme.colors.accent }}
 				>
 					<Globe className="w-4 h-4" />
@@ -136,7 +138,7 @@ export function AboutModal({
 				<button
 					onClick={() => window.maestro.shell.openExternal('https://runmaestro.ai/discord')}
 					className="p-1 rounded hover:bg-white/10 transition-colors"
-					title="Join our Discord"
+					title={t('about.join_discord_tooltip')}
 					style={{ color: theme.colors.accent }}
 				>
 					<svg className="w-4 h-4" viewBox="0 0 24 24" fill="currentColor">
@@ -146,7 +148,7 @@ export function AboutModal({
 				<button
 					onClick={() => window.maestro.shell.openExternal('https://docs.runmaestro.ai/')}
 					className="p-1 rounded hover:bg-white/10 transition-colors"
-					title="Documentation"
+					title={t('about.documentation_tooltip')}
 					style={{ color: theme.colors.accent }}
 				>
 					<BookOpen className="w-4 h-4" />
@@ -167,7 +169,7 @@ export function AboutModal({
 	return (
 		<Modal
 			theme={theme}
-			title="About Maestro"
+			title={t('about.title')}
 			priority={MODAL_PRIORITIES.ABOUT}
 			onClose={handleEscape}
 			width={450}
@@ -192,7 +194,7 @@ export function AboutModal({
 							</span>
 						</div>
 						<p className="text-xs opacity-70" style={{ color: theme.colors.textDim }}>
-							Agent Orchestration Command Center
+							{t('about.tagline')}
 						</p>
 					</div>
 				</div>
@@ -218,7 +220,7 @@ export function AboutModal({
 					<div className="flex items-center gap-2 mb-3">
 						<BarChart3 className="w-4 h-4" style={{ color: theme.colors.accent }} />
 						<span className="text-sm font-bold" style={{ color: theme.colors.textMain }}>
-							Global Statistics
+							{t('about.stats.title')}
 						</span>
 						{!isStatsComplete && (
 							<Loader2 className="w-3 h-3 animate-spin" style={{ color: theme.colors.textDim }} />
@@ -228,7 +230,7 @@ export function AboutModal({
 						<div className="flex items-center justify-center py-4 gap-2">
 							<Loader2 className="w-4 h-4 animate-spin" style={{ color: theme.colors.textDim }} />
 							<span className="text-xs" style={{ color: theme.colors.textDim }}>
-								Loading stats...
+								{t('about.stats.loading')}
 							</span>
 						</div>
 					) : globalStats ? (
@@ -237,13 +239,17 @@ export function AboutModal({
 							<div className="grid grid-cols-2 gap-3">
 								{/* Sessions & Messages */}
 								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Sessions</span>
+									<span style={{ color: theme.colors.textDim }}>
+										{t('about.stats.sessions_label')}
+									</span>
 									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
 										{formatTokensCompact(globalStats.totalSessions)}
 									</span>
 								</div>
 								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Messages</span>
+									<span style={{ color: theme.colors.textDim }}>
+										{t('about.stats.messages_label')}
+									</span>
 									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
 										{formatTokensCompact(globalStats.totalMessages)}
 									</span>
@@ -251,13 +257,17 @@ export function AboutModal({
 
 								{/* Tokens */}
 								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Input Tokens</span>
+									<span style={{ color: theme.colors.textDim }}>
+										{t('about.stats.input_tokens_label')}
+									</span>
 									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
 										{formatTokensCompact(globalStats.totalInputTokens)}
 									</span>
 								</div>
 								<div className="flex justify-between">
-									<span style={{ color: theme.colors.textDim }}>Output Tokens</span>
+									<span style={{ color: theme.colors.textDim }}>
+										{t('about.stats.output_tokens_label')}
+									</span>
 									<span className="font-mono font-bold" style={{ color: theme.colors.textMain }}>
 										{formatTokensCompact(globalStats.totalOutputTokens)}
 									</span>
@@ -268,7 +278,9 @@ export function AboutModal({
 									globalStats.totalCacheCreationTokens > 0) && (
 									<>
 										<div className="flex justify-between">
-											<span style={{ color: theme.colors.textDim }}>Cache Read</span>
+											<span style={{ color: theme.colors.textDim }}>
+												{t('about.stats.cache_read_label')}
+											</span>
 											<span
 												className="font-mono font-bold"
 												style={{ color: theme.colors.textMain }}
@@ -277,7 +289,9 @@ export function AboutModal({
 											</span>
 										</div>
 										<div className="flex justify-between">
-											<span style={{ color: theme.colors.textDim }}>Cache Creation</span>
+											<span style={{ color: theme.colors.textDim }}>
+												{t('about.stats.cache_creation_label')}
+											</span>
 											<span
 												className="font-mono font-bold"
 												style={{ color: theme.colors.textMain }}
@@ -296,11 +310,15 @@ export function AboutModal({
 									>
 										{handsOnTimeMs > 0 && (
 											<span style={{ color: theme.colors.textDim }}>
-												Hands-on Time: {formatDuration(handsOnTimeMs)}
+												{t('about.stats.hands_on_time', {
+													duration: formatDuration(handsOnTimeMs),
+												})}
 											</span>
 										)}
 										{!handsOnTimeMs && globalStats.hasCostData && (
-											<span style={{ color: theme.colors.textDim }}>Total Cost</span>
+											<span style={{ color: theme.colors.textDim }}>
+												{t('about.stats.total_cost_label')}
+											</span>
 										)}
 										{globalStats.hasCostData && (
 											<span
@@ -320,7 +338,7 @@ export function AboutModal({
 						</div>
 					) : (
 						<div className="text-xs text-center py-2" style={{ color: theme.colors.textDim }}>
-							No sessions found
+							{t('about.stats.no_sessions')}
 						</div>
 					)}
 				</div>
@@ -360,7 +378,9 @@ export function AboutModal({
 									style={{ color: isLeaderboardRegistered ? theme.colors.success : '#FFD700' }}
 								/>
 								<span className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-									{isLeaderboardRegistered ? 'Leaderboard' : 'Join Leaderboard'}
+									{isLeaderboardRegistered
+										? t('about.leaderboard_button')
+										: t('about.join_leaderboard_button')}
 								</span>
 							</div>
 							{isLeaderboardRegistered ? (
@@ -393,7 +413,7 @@ export function AboutModal({
 								Pedram Amini
 							</div>
 							<div className="text-xs opacity-70 mb-1" style={{ color: theme.colors.textDim }}>
-								Founder, Hacker, Investor, Advisor
+								{t('about.creator.role')}
 							</div>
 							<div className="flex items-center gap-2 text-xs">
 								<button
@@ -435,7 +455,7 @@ export function AboutModal({
 					{/* Right side - Made in Austin */}
 					<div className="flex flex-col items-center justify-center px-2">
 						<span className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-							Made in Austin, TX
+							{t('about.creator.location')}
 						</span>
 						{/* Texas Flag - Lone Star Flag */}
 						<button

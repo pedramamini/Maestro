@@ -24,6 +24,7 @@ import {
 	HelpCircle,
 	Github,
 } from 'lucide-react';
+import { useTranslation } from 'react-i18next';
 import type { Theme } from '../types';
 import type { MarketplacePlaybook } from '../../shared/marketplace-types';
 import { useLayerStack } from '../contexts/LayerStackContext';
@@ -133,6 +134,7 @@ function PlaybookTileSkeleton({ theme }: { theme: Theme }) {
 // ============================================================================
 
 function PlaybookTile({ playbook, theme, isSelected, onSelect }: PlaybookTileProps) {
+	const { t } = useTranslation('modals');
 	const tileRef = useRef<HTMLButtonElement>(null);
 
 	// Scroll into view when selected
@@ -182,9 +184,9 @@ function PlaybookTile({ playbook, theme, isSelected, onSelect }: PlaybookTilePro
 							backgroundColor: '#3b82f620',
 							color: '#3b82f6',
 						}}
-						title="Custom local playbook"
+						title={t('marketplace.custom_local_playbook_tooltip')}
 					>
-						Local
+						{t('marketplace.local_label')}
 					</span>
 				)}
 			</div>
@@ -209,7 +211,7 @@ function PlaybookTile({ playbook, theme, isSelected, onSelect }: PlaybookTilePro
 				style={{ color: theme.colors.textDim }}
 			>
 				<span>{playbook.author}</span>
-				<span>{playbook.documents.length} docs</span>
+				<span>{t('marketplace.docs_count', { count: playbook.documents.length })}</span>
 			</div>
 		</button>
 	);
@@ -235,6 +237,7 @@ function PlaybookDetailView({
 	onBrowseFolder,
 	onImport,
 }: PlaybookDetailViewProps) {
+	const { t } = useTranslation('modals');
 	const [showDocDropdown, setShowDocDropdown] = useState(false);
 	const dropdownRef = useRef<HTMLDivElement>(null);
 	const previewScrollRef = useRef<HTMLDivElement>(null);
@@ -336,7 +339,7 @@ function PlaybookDetailView({
 				<button
 					onClick={onBack}
 					className="p-1.5 rounded hover:bg-white/10 transition-colors"
-					title="Back to list (Esc)"
+					title={t('marketplace.back_to_list_tooltip')}
 				>
 					<ArrowLeft className="w-5 h-5" style={{ color: theme.colors.textDim }} />
 				</button>
@@ -362,9 +365,9 @@ function PlaybookDetailView({
 									backgroundColor: '#3b82f620',
 									color: '#3b82f6',
 								}}
-								title="Custom local playbook"
+								title={t('marketplace.custom_local_playbook_tooltip')}
 							>
-								Local
+								{t('marketplace.local_label')}
 							</span>
 						)}
 					</div>
@@ -387,7 +390,7 @@ function PlaybookDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							Description
+							{t('marketplace.description_label')}
 						</h4>
 						<p className="text-sm" style={{ color: theme.colors.textMain }}>
 							{playbook.description}{' '}
@@ -401,7 +404,7 @@ function PlaybookDetailView({
 										: 'transparent',
 								}}
 							>
-								Read more...
+								{t('marketplace.read_more_button')}
 							</button>
 						</p>
 					</div>
@@ -412,7 +415,7 @@ function PlaybookDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							Author
+							{t('marketplace.author_label')}
 						</h4>
 						{playbook.authorLink ? (
 							<button
@@ -438,7 +441,7 @@ function PlaybookDetailView({
 								className="text-xs font-semibold mb-1 uppercase tracking-wide"
 								style={{ color: theme.colors.textDim }}
 							>
-								Tags
+								{t('marketplace.tags_label')}
 							</h4>
 							<div className="flex flex-wrap gap-1.5">
 								{playbook.tags.map((tag) => (
@@ -464,7 +467,7 @@ function PlaybookDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							Documents ({playbook.documents.length})
+							{t('marketplace.documents_label', { count: playbook.documents.length })}
 						</h4>
 						<ul className="space-y-0.5">
 							{playbook.documents.map((doc, i) => {
@@ -494,15 +497,15 @@ function PlaybookDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							Settings
+							{t('marketplace.settings_label')}
 						</h4>
 						<p className="text-sm" style={{ color: theme.colors.textMain }}>
-							Loop:{' '}
+							{t('marketplace.loop_label')}{' '}
 							{playbook.loopEnabled
 								? playbook.maxLoops
-									? `Yes (max ${playbook.maxLoops})`
-									: 'Yes (unlimited)'
-								: 'No'}
+									? t('marketplace.loop_yes_max', { max: playbook.maxLoops })
+									: t('marketplace.loop_yes_unlimited')
+								: t('marketplace.loop_no')}
 						</p>
 					</div>
 
@@ -512,7 +515,7 @@ function PlaybookDetailView({
 							className="text-xs font-semibold mb-1 uppercase tracking-wide"
 							style={{ color: theme.colors.textDim }}
 						>
-							Last Updated
+							{t('marketplace.last_updated_label')}
 						</h4>
 						<p className="text-sm" style={{ color: theme.colors.textMain }}>
 							{playbook.lastUpdated}
@@ -526,7 +529,7 @@ function PlaybookDetailView({
 								className="text-xs font-semibold mb-1 uppercase tracking-wide"
 								style={{ color: theme.colors.textDim }}
 							>
-								Source
+								{t('marketplace.source_label')}
 							</h4>
 							<span
 								className="px-2 py-0.5 rounded text-xs font-medium inline-block"
@@ -534,9 +537,9 @@ function PlaybookDetailView({
 									backgroundColor: '#3b82f620',
 									color: '#3b82f6',
 								}}
-								title="Custom local playbook"
+								title={t('marketplace.custom_local_playbook_tooltip')}
 							>
-								Local
+								{t('marketplace.local_label')}
 							</span>
 						</div>
 					)}
@@ -629,8 +632,8 @@ function PlaybookDetailView({
 							<div className="prose prose-sm max-w-none" style={{ color: theme.colors.textMain }}>
 								<ReactMarkdown remarkPlugins={[remarkGfm]} components={markdownComponents}>
 									{selectedDocFilename
-										? documentContent || '*Document not found*'
-										: readmeContent || '*No README available*'}
+										? documentContent || t('marketplace.document_not_found')
+										: readmeContent || t('marketplace.no_readme_available')}
 								</ReactMarkdown>
 							</div>
 						)}
@@ -651,7 +654,7 @@ function PlaybookDetailView({
 							className="block text-xs mb-1"
 							style={{ color: theme.colors.textDim }}
 						>
-							Import to folder (relative to Auto Run folder or absolute path)
+							{t('marketplace.import_folder_label')}
 						</label>
 						<div className="flex items-center gap-2">
 							<input
@@ -665,7 +668,7 @@ function PlaybookDetailView({
 									color: theme.colors.textMain,
 									backgroundColor: theme.colors.bgActivity,
 								}}
-								placeholder="folder-name or /absolute/path"
+								placeholder={t('marketplace.folder_path_placeholder')}
 							/>
 							<button
 								onClick={onBrowseFolder}
@@ -676,8 +679,8 @@ function PlaybookDetailView({
 								style={{ borderColor: theme.colors.border }}
 								title={
 									isRemoteSession
-										? 'Browse is not available for remote sessions'
-										: 'Browse for folder'
+										? t('marketplace.browse_unavailable_remote_tooltip')
+										: t('marketplace.browse_folder_tooltip')
 								}
 							>
 								<FolderOpen className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -698,12 +701,12 @@ function PlaybookDetailView({
 						{isImporting ? (
 							<span className="flex items-center gap-2">
 								<Loader2 className="w-4 h-4 animate-spin" />
-								Importing...
+								{t('marketplace.importing_button')}
 							</span>
 						) : (
 							<span className="flex items-center gap-2">
 								<Download className="w-4 h-4" />
-								Import Playbook
+								{t('marketplace.import_playbook_button')}
 							</span>
 						)}
 					</button>
@@ -726,6 +729,7 @@ export function MarketplaceModal({
 	sshRemoteId,
 	onImportComplete,
 }: MarketplaceModalProps) {
+	const { t } = useTranslation('modals');
 	// Layer stack for escape handling
 	const { registerLayer, unregisterLayer } = useLayerStack();
 	const onCloseRef = useRef(onClose);
@@ -1134,7 +1138,7 @@ export function MarketplaceModal({
 									className="text-lg font-semibold"
 									style={{ color: theme.colors.textMain }}
 								>
-									Playbook Exchange
+									{t('marketplace.title')}
 								</h2>
 								{/* Help button */}
 								<div className="relative">
@@ -1142,7 +1146,7 @@ export function MarketplaceModal({
 										ref={helpButtonRef}
 										onClick={() => setShowHelp(!showHelp)}
 										className="p-1 rounded hover:bg-white/10 transition-colors"
-										title="About the Playbook Exchange"
+										title={t('marketplace.about_tooltip')}
 										aria-label="Help"
 									>
 										<HelpCircle className="w-4 h-4" style={{ color: theme.colors.textDim }} />
@@ -1159,22 +1163,19 @@ export function MarketplaceModal({
 												className="text-sm font-semibold mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												About the Playbook Exchange
+												{t('marketplace.about_title')}
 											</h3>
 											<p className="text-xs mb-3" style={{ color: theme.colors.textDim }}>
-												The Playbook Exchange is a curated collection of Auto Run playbooks for
-												common workflows. Browse, preview, and import playbooks directly into your
-												Auto Run folder.
+												{t('marketplace.about_description')}
 											</p>
 											<h4
 												className="text-xs font-semibold mb-1"
 												style={{ color: theme.colors.textMain }}
 											>
-												Submit Your Playbook
+												{t('marketplace.submit_playbook_title')}
 											</h4>
 											<p className="text-xs mb-2" style={{ color: theme.colors.textDim }}>
-												Want to share your playbook with the community? Submit a pull request to the
-												Maestro-Playbooks repository:
+												{t('marketplace.submit_playbook_description')}
 											</p>
 											<button
 												onClick={() => {
@@ -1197,7 +1198,7 @@ export function MarketplaceModal({
 													className="text-xs px-2 py-1 rounded hover:bg-white/10 transition-colors"
 													style={{ color: theme.colors.textDim }}
 												>
-													Close
+													{t('marketplace.close_button')}
 												</button>
 											</div>
 										</div>
@@ -1211,24 +1212,26 @@ export function MarketplaceModal({
 										);
 									}}
 									className="px-2 py-1 rounded hover:bg-white/10 transition-colors flex items-center gap-1.5 text-xs"
-									title="Submit your playbook to the community"
+									title={t('marketplace.submit_playbook_tooltip')}
 									style={{ color: theme.colors.textDim }}
 								>
 									<Github className="w-3.5 h-3.5" />
-									<span>Submit Playbook via GitHub</span>
+									<span>{t('marketplace.submit_via_github_button')}</span>
 								</button>
 							</div>
 							<div className="flex items-center gap-3">
 								{/* Cache status */}
 								<span className="text-xs" style={{ color: theme.colors.textDim }}>
-									{fromCache ? `Cached ${formatCacheAge(cacheAge)}` : 'Live'}
+									{fromCache
+										? t('marketplace.cached_status', { age: formatCacheAge(cacheAge) })
+										: t('marketplace.live_status')}
 								</span>
 								{/* Refresh button */}
 								<button
 									onClick={() => refresh()}
 									disabled={isRefreshing}
 									className="p-1.5 rounded hover:bg-white/10 transition-colors disabled:opacity-50"
-									title="Refresh marketplace data"
+									title={t('marketplace.refresh_tooltip')}
 									aria-label="Refresh marketplace"
 									aria-busy={isRefreshing}
 								>
@@ -1241,7 +1244,7 @@ export function MarketplaceModal({
 								<button
 									onClick={onClose}
 									className="p-1.5 rounded hover:bg-white/10 transition-colors"
-									title="Close (Esc)"
+									title={t('marketplace.close_tooltip')}
 									aria-label="Close marketplace"
 								>
 									<X className="w-5 h-5" style={{ color: theme.colors.textDim }} />
@@ -1305,7 +1308,7 @@ export function MarketplaceModal({
 											gridContainerRef.current?.focus();
 										}
 									}}
-									placeholder="Search playbooks..."
+									placeholder={t('marketplace.search_placeholder')}
 									className="w-full pl-10 pr-4 py-2 rounded border outline-none"
 									style={{
 										borderColor: theme.colors.border,
@@ -1337,7 +1340,7 @@ export function MarketplaceModal({
 										style={{ color: theme.colors.error, opacity: 0.7 }}
 									/>
 									<p className="text-lg font-medium mb-2" style={{ color: theme.colors.error }}>
-										Failed to load marketplace
+										{t('marketplace.load_failed_error')}
 									</p>
 									<p className="text-sm mb-4" style={{ color: theme.colors.textDim }}>
 										{error}
@@ -1350,7 +1353,7 @@ export function MarketplaceModal({
 											color: theme.colors.accentForeground,
 										}}
 									>
-										Try Again
+										{t('marketplace.try_again_button')}
 									</button>
 								</div>
 							) : filteredPlaybooks.length === 0 ? (
@@ -1365,10 +1368,10 @@ export function MarketplaceModal({
 												className="text-lg font-medium mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												No results found
+												{t('marketplace.no_results_title')}
 											</p>
 											<p className="text-sm" style={{ color: theme.colors.textDim }}>
-												Try adjusting your search or browse a different category
+												{t('marketplace.no_results_description')}
 											</p>
 										</>
 									) : (
@@ -1377,10 +1380,10 @@ export function MarketplaceModal({
 												className="text-lg font-medium mb-2"
 												style={{ color: theme.colors.textMain }}
 											>
-												No playbooks available
+												{t('marketplace.no_playbooks_title')}
 											</p>
 											<p className="text-sm" style={{ color: theme.colors.textDim }}>
-												Check back later for new playbooks
+												{t('marketplace.no_playbooks_description')}
 											</p>
 										</>
 									)}
@@ -1408,19 +1411,19 @@ export function MarketplaceModal({
 								color: theme.colors.textDim,
 							}}
 						>
-							<span>Use arrow keys to navigate, Enter to select</span>
+							<span>{t('marketplace.keyboard_nav_hint')}</span>
 							<span className="flex items-center gap-3">
 								<span>
 									<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">
 										{formatShortcutKeys(['Meta', 'f'])}
 									</kbd>{' '}
-									search
+									{t('marketplace.search_shortcut_label')}
 								</span>
 								<span>
 									<kbd className="px-1.5 py-0.5 rounded bg-white/10 font-mono text-[10px]">
 										{formatShortcutKeys(['Meta', 'Shift'])}+[/]
 									</kbd>{' '}
-									to switch tabs
+									{t('marketplace.switch_tabs_shortcut_label')}
 								</span>
 							</span>
 						</div>
