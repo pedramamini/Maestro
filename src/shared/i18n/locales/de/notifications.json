@@ -1,1 +1,150 @@
-{}
+{
+	"task": {
+		"completed_title": "Aufgabe abgeschlossen",
+		"completed_message": "{{agent}} wurde in {{duration}} fertig",
+		"failed_title": "Aufgabe fehlgeschlagen",
+		"failed_message": "{{agent}} hat einen Fehler festgestellt"
+	},
+	"connection": {
+		"lost_title": "Verbindung verloren",
+		"restored_title": "Verbindung wiederhergestellt"
+	},
+	"group_chat": {
+		"error_title": "Gruppenchat",
+		"create_failed_message": "Gruppenchat konnte nicht erstellt werden",
+		"create_failed_dynamic_message": "{{message}}"
+	},
+	"worktree": {
+		"discovered_title": "Worktrees entdeckt",
+		"discovered_message_one": "{{count}} Worktree-Unteragent gefunden",
+		"discovered_message_other": "{{count}} Worktree-Unteragenten gefunden",
+		"disabled_title": "Worktrees deaktiviert",
+		"disabled_message": "Worktree-Konfiguration für diesen Agenten gelöscht.",
+		"disabled_with_removed_message_one": "Worktree-Konfiguration für diesen Agenten gelöscht. {{count}} Worktree-Unteragent entfernt.",
+		"disabled_with_removed_message_other": "Worktree-Konfiguration für diesen Agenten gelöscht. {{count}} Worktree-Unteragenten entfernt.",
+		"no_directory_title": "Fehler",
+		"no_directory_message": "Kein Worktree-Verzeichnis konfiguriert",
+		"created_title": "Worktree erstellt",
+		"created_message": "{{branch}}",
+		"create_failed_title": "Worktree konnte nicht erstellt werden",
+		"create_failed_message": "{{message}}",
+		"new_discovered_title": "Neuer Worktree entdeckt",
+		"new_discovered_message": "{{name}}",
+		"agent_not_found_title": "Worktree-Agent nicht gefunden",
+		"agent_not_found_message": "Der ausgewählte Worktree-Agent wurde entfernt. Der Befehl wird stattdessen auf dem aktiven Agenten ausgeführt.",
+		"target_busy_title": "Ziel-Agent beschäftigt",
+		"target_busy_message": "Der Ziel-Agent ist beschäftigt. Bitte versuchen Sie es erneut.",
+		"error_title": "Worktree-Fehler",
+		"error_message": "{{message}}"
+	},
+	"autorun": {
+		"started_title": "Auto Run gestartet",
+		"started_message_one": "{{count}} Aufgabe über {{docCount}} Dokument",
+		"started_message_other": "{{count}} Aufgaben über {{docCount}} Dokumente",
+		"complete_title": "Auto Run abgeschlossen",
+		"complete_stopped_message": "Nach {{completed}} von {{total}} Aufgaben angehalten",
+		"complete_all_message_one": "Alle {{total}} Aufgabe erfolgreich abgeschlossen",
+		"complete_all_message_other": "Alle {{total}} Aufgaben erfolgreich abgeschlossen",
+		"complete_partial_message": "{{completed}} von {{total}} Aufgaben abgeschlossen",
+		"error_title": "Auto Run: {{errorTitle}}",
+		"error_message": "{{message}}"
+	},
+	"leaderboard": {
+		"updated_title": "Rangliste aktualisiert",
+		"updated_message": "{{message}}"
+	},
+	"symphony": {
+		"pr_ready_title": "Symphony: PR bereit zur Überprüfung",
+		"pr_ready_message": "PR erstellt: {{prUrl}}",
+		"manual_needed_title": "Symphony: Manuelle Finalisierung erforderlich",
+		"manual_needed_message": "{{message}}",
+		"manual_needed_default_message": "PR konnte nicht automatisch finalisiert werden. Öffnen Sie Symphony zum Finalisieren.",
+		"auto_finalize_failed_title": "Symphony: Automatische Finalisierung fehlgeschlagen",
+		"auto_finalize_failed_message": "PR bleibt als Entwurf bestehen. Öffnen Sie Symphony zur manuellen Finalisierung.",
+		"error_title": "Symphony-Fehler",
+		"agent_not_found_message": "Agent nicht gefunden: {{agentType}}"
+	},
+	"pr": {
+		"created_title": "PR erstellt",
+		"created_message": "{{message}}",
+		"created_default_message": "Pull Request erfolgreich erstellt",
+		"failed_title": "PR-Erstellung fehlgeschlagen",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Pull Request konnte nicht erstellt werden",
+		"app_created_title": "Pull Request erstellt",
+		"app_created_message": "{{title}}"
+	},
+	"merge": {
+		"session_merged_title": "Sitzung zusammengeführt",
+		"session_merged_message": "\"{{sessionName}}\" aus {{sourceInfo}}{{tokenInfo}} erstellt.{{savedInfo}}",
+		"context_merged_title": "Kontext zusammengeführt",
+		"context_merged_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}.{{savedInfo}}",
+		"context_transferred_title": "Kontext übertragen",
+		"context_transferred_message": "\"{{sessionName}}\" mit übertragenem Kontext erstellt",
+		"failed_title": "Zusammenführung fehlgeschlagen",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Kontexte konnten nicht zusammengeführt werden",
+		"context_sent_title": "Kontext gesendet",
+		"context_sent_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}"
+	},
+	"compact": {
+		"cannot_title": "Komprimierung nicht möglich",
+		"cannot_message": "Kontext zu klein. Mindestens {{percent}}% Auslastung, ~2k Token oder 8+ Nachrichten erforderlich.",
+		"success_title": "Kontext komprimiert",
+		"success_message": "Kontext um {{percent}}% reduziert. Klicken Sie, um den neuen Tab anzuzeigen.",
+		"failed_title": "Komprimierung fehlgeschlagen",
+		"failed_message": "Kontext konnte nicht komprimiert werden. Überprüfen Sie den Tab für Details.",
+		"failed_unexpected_message": "Unerwarteter Fehler bei der Komprimierung aufgetreten."
+	},
+	"agent": {
+		"creation_failed_title": "Agenten-Erstellung fehlgeschlagen",
+		"creation_failed_message": "{{message}}",
+		"creation_failed_default_message": "Doppelter Agent kann nicht erstellt werden"
+	},
+	"session": {
+		"group_removed_title": "Gruppe entfernt",
+		"group_removed_message_one": "\"{{name}}\" und {{count}} Agent entfernt",
+		"group_removed_message_other": "\"{{name}}\" und {{count}} Agenten entfernt",
+		"erase_failed_title": "Verzeichnis konnte nicht gelöscht werden",
+		"erase_failed_message": "{{message}}"
+	},
+	"export": {
+		"nothing_to_copy_title": "Nichts zum Kopieren",
+		"nothing_to_copy_message": "Keine Benutzer- oder Assistenten-Nachrichten zum Kopieren.",
+		"context_copied_title": "Kontext kopiert",
+		"context_copied_message": "Konversation in die Zwischenablage kopiert.",
+		"copy_failed_title": "Kopieren fehlgeschlagen",
+		"copy_failed_message": "Kontext konnte nicht in die Zwischenablage kopiert werden.",
+		"export_complete_title": "Export abgeschlossen",
+		"export_complete_message": "Konversation als HTML exportiert.",
+		"export_failed_title": "Export fehlgeschlagen",
+		"export_failed_message": "Konversation konnte nicht als HTML exportiert werden.",
+		"nothing_to_publish_title": "Nichts zum Veröffentlichen",
+		"nothing_to_publish_message": "Keine Benutzer- oder Assistenten-Nachrichten zum Veröffentlichen."
+	},
+	"stats": {
+		"database_title": "Statistik-Datenbank",
+		"database_message": "{{message}}"
+	},
+	"history": {
+		"entry_added_title": "Verlaufseintrag hinzugefügt",
+		"entry_added_message": "{{message}}"
+	},
+	"synopsis": {
+		"title": "Zusammenfassung",
+		"message": "{{message}}"
+	},
+	"playbook": {
+		"imported_title": "Playbook importiert",
+		"imported_message": "Playbook erfolgreich nach {{folder}} importiert"
+	},
+	"gist": {
+		"published_title": "Gist veröffentlicht",
+		"published_public_message": "Öffentlicher Gist erstellt! URL in die Zwischenablage kopiert.",
+		"published_secret_message": "Geheimer Gist erstellt! URL in die Zwischenablage kopiert."
+	},
+	"debug": {
+		"test_title": "Testbenachrichtigung",
+		"test_message": "Dies ist eine Test-Benachrichtigung aus der Konsole!"
+	}
+}
