@@ -323,5 +323,18 @@
 		"messages_sent": "Messages sent",
 		"last_activity": "Last activity",
 		"total_cost": "Total cost"
+	},
+	"announcements": {
+		"session_idle": "{{name}} is ready",
+		"session_busy": "{{name}} is thinking",
+		"session_error": "{{name}} encountered an error",
+		"session_connecting": "{{name}} is connecting",
+		"session_waiting_input": "{{name}} is waiting for input",
+		"session_switched": "Switched to {{name}}",
+		"autorun_progress": "Auto Run: task {{completed}} of {{total}} completed",
+		"autorun_complete": "Auto Run complete. {{completed}} of {{total}} tasks finished",
+		"autorun_stopped": "Auto Run stopped",
+		"provider_error": "{{agent}} error: {{message}}",
+		"provider_reconnecting": "Reconnecting to {{agent}}"
 	}
 }

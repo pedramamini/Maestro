@@ -22,6 +22,9 @@ import { TourOverlay } from './components/Wizard/tour';
 import { EmptyStateView } from './components/EmptyStateView';
 import { DeleteAgentConfirmModal } from './components/DeleteAgentConfirmModal';
 import { DirectionProvider } from './components/shared/DirectionProvider';
+import { LiveRegion } from './components/shared/LiveRegion';
+import { useSessionAnnouncements } from './hooks/useSessionAnnouncements';
+import { useBatchAnnouncements } from './hooks/useBatchAnnouncements';
 
 // Lazy-loaded components for performance (rarely-used heavy modals)
 // These are loaded on-demand when the user first opens them
@@ -187,6 +190,10 @@ import { useFileExplorerStore } from './stores/fileExplorerStore';
 function MaestroConsoleInner() {
 	// --- LAYER STACK (for blocking shortcuts when modals are open) ---
 	const { hasOpenLayers, hasOpenModal } = useLayerStack();
+
+	// --- SCREEN READER ANNOUNCEMENTS (WCAG 2.1 SC 4.1.3) ---
+	useSessionAnnouncements();
+	useBatchAnnouncements();
 
 	// --- MODAL STATE (from modalStore, replaces ModalContext) ---
 	const {
@@ -3247,6 +3254,7 @@ export default function MaestroConsole() {
 			<InlineWizardProvider>
 				<InputProvider>
 					<MaestroConsoleInner />
+					<LiveRegion />
 				</InputProvider>
 			</InlineWizardProvider>
 		</DirectionProvider>

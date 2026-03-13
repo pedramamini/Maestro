@@ -7,3 +7,4 @@ export { CodeText } from './CodeText';
 export type { CodeTextProps } from './CodeText';
 export { DirIcon } from './DirIcon';
 export type { DirIconProps } from './DirIcon';
+export { LiveRegion, useLiveAnnounce, useAnnouncementStore } from './LiveRegion';
