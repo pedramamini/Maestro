@@ -21,6 +21,10 @@ import type {
 	StarTabCallback,
 	ReorderTabCallback,
 	ToggleBookmarkCallback,
+	OpenFileTabCallback,
+	RefreshFileTreeCallback,
+	RefreshAutoRunDocsCallback,
+	ConfigureAutoRunCallback,
 	GetThemeCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
@@ -48,6 +52,10 @@ export interface WebServerCallbacks {
 	starTab: StarTabCallback | null;
 	reorderTab: ReorderTabCallback | null;
 	toggleBookmark: ToggleBookmarkCallback | null;
+	openFileTab: OpenFileTabCallback | null;
+	refreshFileTree: RefreshFileTreeCallback | null;
+	refreshAutoRunDocs: RefreshAutoRunDocsCallback | null;
+	configureAutoRun: ConfigureAutoRunCallback | null;
 	getHistory: GetHistoryCallback | null;
 }
 
@@ -69,6 +77,10 @@ export class CallbackRegistry {
 		starTab: null,
 		reorderTab: null,
 		toggleBookmark: null,
+		openFileTab: null,
+		refreshFileTree: null,
+		refreshAutoRunDocs: null,
+		configureAutoRun: null,
 		getHistory: null,
 	};
 
@@ -112,9 +124,9 @@ export class CallbackRegistry {
 		return this.callbacks.switchMode(sessionId, mode);
 	}
 
-	async selectSession(sessionId: string, tabId?: string): Promise<boolean> {
+	async selectSession(sessionId: string, tabId?: string, focus?: boolean): Promise<boolean> {
 		if (!this.callbacks.selectSession) return false;
-		return this.callbacks.selectSession(sessionId, tabId);
+		return this.callbacks.selectSession(sessionId, tabId, focus);
 	}
 
 	async selectTab(sessionId: string, tabId: string): Promise<boolean> {
@@ -150,6 +162,36 @@ export class CallbackRegistry {
 	async toggleBookmark(sessionId: string): Promise<boolean> {
 		if (!this.callbacks.toggleBookmark) return false;
 		return this.callbacks.toggleBookmark(sessionId);
+	}
+
+	async openFileTab(sessionId: string, filePath: string): Promise<boolean> {
+		if (!this.callbacks.openFileTab) return false;
+		return this.callbacks.openFileTab(sessionId, filePath);
+	}
+
+	async refreshFileTree(sessionId: string): Promise<boolean> {
+		if (!this.callbacks.refreshFileTree) return false;
+		return this.callbacks.refreshFileTree(sessionId);
+	}
+
+	async refreshAutoRunDocs(sessionId: string): Promise<boolean> {
+		if (!this.callbacks.refreshAutoRunDocs) return false;
+		return this.callbacks.refreshAutoRunDocs(sessionId);
+	}
+
+	async configureAutoRun(
+		sessionId: string,
+		config: {
+			documents: Array<{ filename: string; resetOnCompletion?: boolean }>;
+			prompt?: string;
+			loopEnabled?: boolean;
+			maxLoops?: number;
+			saveAsPlaybook?: string;
+			launch?: boolean;
+		}
+	): Promise<{ success: boolean; playbookId?: string; error?: string }> {
+		if (!this.callbacks.configureAutoRun) return { success: false, error: 'Not configured' };
+		return this.callbacks.configureAutoRun(sessionId, config);
 	}
 
 	getHistory(projectPath?: string, sessionId?: string): ReturnType<GetHistoryCallback> | [] {
@@ -226,6 +268,22 @@ export class CallbackRegistry {
 
 	setToggleBookmarkCallback(callback: ToggleBookmarkCallback): void {
 		this.callbacks.toggleBookmark = callback;
+	}
+
+	setOpenFileTabCallback(callback: OpenFileTabCallback): void {
+		this.callbacks.openFileTab = callback;
+	}
+
+	setRefreshFileTreeCallback(callback: RefreshFileTreeCallback): void {
+		this.callbacks.refreshFileTree = callback;
+	}
+
+	setRefreshAutoRunDocsCallback(callback: RefreshAutoRunDocsCallback): void {
+		this.callbacks.refreshAutoRunDocs = callback;
+	}
+
+	setConfigureAutoRunCallback(callback: ConfigureAutoRunCallback): void {
+		this.callbacks.configureAutoRun = callback;
 	}
 
 	setGetHistoryCallback(callback: GetHistoryCallback): void {

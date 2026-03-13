@@ -1746,6 +1746,185 @@ function MaestroConsoleInner() {
 		handleOpenFileTab,
 	});
 
+	// --- REMOTE EVENT LISTENERS (from useRemoteIntegration CustomEvents) ---
+
+	// Handle remote open file tab events from CLI/web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, filePath } = (e as CustomEvent).detail;
+			const session = sessionsRef.current.find((s) => s.id === sessionId);
+			if (!session) {
+				console.error('[Remote] Session not found for openFileTab:', sessionId);
+				return;
+			}
+			const sshRemoteId =
+				session.sshRemoteId || session.sessionSshRemoteConfig?.remoteId || undefined;
+			// Switch to the target session
+			setActiveSessionId(sessionId);
+			try {
+				const [content, stat] = await Promise.all([
+					window.maestro.fs.readFile(filePath, sshRemoteId),
+					window.maestro.fs.stat(filePath, sshRemoteId).catch(() => null),
+				]);
+				if (content !== null) {
+					const filename = filePath.split(/[\\/]/).pop() || filePath;
+					const lastModified = stat?.modifiedAt ? new Date(stat.modifiedAt).getTime() : undefined;
+					handleOpenFileTab(
+						{
+							path: filePath,
+							name: filename,
+							content,
+							lastModified,
+							sshRemoteId,
+						},
+						{ targetSessionId: sessionId }
+					);
+				}
+			} catch (error) {
+				console.error('[Remote] Failed to open file tab:', error);
+			}
+		};
+		window.addEventListener('maestro:openFileTab', handler);
+		return () => window.removeEventListener('maestro:openFileTab', handler);
+	}, [handleOpenFileTab, setActiveSessionId, sessionsRef]);
+
+	// Handle remote refresh file tree events from CLI/web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			refreshFileTree(sessionId);
+		};
+		window.addEventListener('maestro:refreshFileTree', handler);
+		return () => window.removeEventListener('maestro:refreshFileTree', handler);
+	}, [refreshFileTree]);
+
+	// Handle remote refresh auto-run docs events from CLI/web interface
+	useEffect(() => {
+		const handler = (e: Event) => {
+			const { sessionId } = (e as CustomEvent).detail;
+			const currentActiveId = useSessionStore.getState().activeSessionId;
+			if (sessionId === currentActiveId) {
+				// Already the active session - refresh immediately
+				handleAutoRunRefresh();
+			} else {
+				// Switch to the target session - the autoRunFolderPath useEffect
+				// will trigger handleAutoRunRefresh for the newly active session
+				setActiveSessionId(sessionId);
+			}
+		};
+		window.addEventListener('maestro:refreshAutoRunDocs', handler);
+		return () => window.removeEventListener('maestro:refreshAutoRunDocs', handler);
+	}, [handleAutoRunRefresh, setActiveSessionId]);
+
+	// Handle remote configure auto-run events from CLI/web interface
+	useEffect(() => {
+		const handler = async (e: Event) => {
+			const { sessionId, config, responseChannel } = (e as CustomEvent).detail;
+
+			try {
+				// Find the target session
+				const session = sessionsRef.current.find((s) => s.id === sessionId);
+				if (!session) {
+					window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+						success: false,
+						error: `Session ${sessionId} not found`,
+					});
+					return;
+				}
+
+				// Case 1: Save as playbook
+				if (config.saveAsPlaybook) {
+					const result = await window.maestro.playbooks.create(sessionId, {
+						name: config.saveAsPlaybook,
+						documents: config.documents || [],
+						loopEnabled: config.loopEnabled || false,
+						maxLoops: config.maxLoops,
+						prompt: config.prompt || '',
+					});
+					window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+						success: result.success,
+						playbookId: result.playbook?.id,
+						error: result.error,
+					});
+					return;
+				}
+
+				// Case 2: Launch auto-run immediately
+				if (config.launch) {
+					const folderPath = session.autoRunFolderPath;
+					if (!folderPath) {
+						window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+							success: false,
+							error: 'No Auto Run folder configured for this session',
+						});
+						return;
+					}
+
+					const documents = (config.documents || []).map(
+						(doc: { filename: string; resetOnCompletion?: boolean }) => {
+							// Extract just the basename without .md extension.
+							// CLI sends full absolute paths (e.g., "/path/to/Auto Run Docs/temp.md")
+							// but the batch processor expects just the stem (e.g., "temp").
+							let name = doc.filename;
+							const lastSlash = Math.max(name.lastIndexOf('/'), name.lastIndexOf('\\'));
+							if (lastSlash >= 0) {
+								name = name.substring(lastSlash + 1);
+							}
+							name = name.replace(/\.md$/, '');
+							return {
+								id: generateId(),
+								filename: name,
+								resetOnCompletion: doc.resetOnCompletion || false,
+								isDuplicate: false,
+							};
+						}
+					);
+
+					if (documents.length === 0) {
+						window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+							success: false,
+							error: 'No documents provided for auto-run',
+						});
+						return;
+					}
+
+					const batchConfig = {
+						documents,
+						prompt: config.prompt || '',
+						loopEnabled: config.loopEnabled || false,
+						maxLoops: config.maxLoops,
+					};
+
+					// Send success response immediately — startBatchRun is long-running
+					// and would exceed the IPC/CLI timeout if awaited.
+					window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+						success: true,
+					});
+					startBatchRun(sessionId, batchConfig, folderPath).catch((err) => {
+						console.error('[Remote] Failed to start auto-run:', err);
+					});
+					return;
+				}
+
+				// Case 3: Just configure (no launch, no save)
+				// Without --launch or --save-as, there is no persistent state to update.
+				// Return an error guiding the user to use one of those flags.
+				window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+					success: false,
+					error: 'Use --launch to start auto-run immediately, or --save-as to save as a playbook',
+				});
+			} catch (error) {
+				console.error('[Remote] Failed to configure auto-run:', error);
+				window.maestro.process.sendRemoteConfigureAutoRunResponse(responseChannel, {
+					success: false,
+					error: String(error),
+				});
+			}
+		};
+		window.addEventListener('maestro:configureAutoRun', handler);
+		return () => window.removeEventListener('maestro:configureAutoRun', handler);
+	}, [sessionsRef, startBatchRun]);
+
 	// --- GROUP MANAGEMENT ---
 	// Extracted hook for group CRUD operations (toggle, rename, create, drag-drop)
 	const {

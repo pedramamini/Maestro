@@ -85,7 +85,10 @@ export interface TabHandlersReturn {
 	handleToggleTabShowThinking: () => void;
 
 	// File Tab handlers
-	handleOpenFileTab: (file: FileTabOpenParams, options?: { openInNewTab?: boolean }) => void;
+	handleOpenFileTab: (
+		file: FileTabOpenParams,
+		options?: { openInNewTab?: boolean; targetSessionId?: string }
+	) => void;
 	handleSelectFileTab: (tabId: string) => Promise<void>;
 	handleCloseFileTab: (tabId: string) => void;
 	handleFileTabEditModeChange: (tabId: string, editMode: boolean) => void;
@@ -189,11 +192,14 @@ export function useTabHandlers(): TabHandlersReturn {
 			options?: {
 				/** If true, create new tab adjacent to current file tab. If false, replace current file tab content. Default: true (create new tab) */
 				openInNewTab?: boolean;
+				/** Override which session the tab is created in (defaults to current active session) */
+				targetSessionId?: string;
 			}
 		) => {
 			const openInNewTab = options?.openInNewTab ?? true;
 			const { setSessions } = useSessionStore.getState();
-			const activeSessionId = useSessionStore.getState().activeSessionId;
+			const activeSessionId =
+				options?.targetSessionId || useSessionStore.getState().activeSessionId;
 
 			setSessions((prev: Session[]) =>
 				prev.map((s) => {
