@@ -35,6 +35,8 @@ export interface CueGitHubPollerConfig {
 	onLog: (level: string, message: string) => void;
 	triggerName: string;
 	subscriptionId: string;
+	/** GitHub state filter: "open" (default), "closed", "merged" (PRs only), or "all" */
+	ghState?: string;
 }
 
 /**
@@ -42,8 +44,17 @@ export interface CueGitHubPollerConfig {
  * Returns a cleanup function to stop polling.
  */
 export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void {
-	const { eventType, pollMinutes, projectRoot, onEvent, onLog, triggerName, subscriptionId } =
-		config;
+	const {
+		eventType,
+		pollMinutes,
+		projectRoot,
+		onEvent,
+		onLog,
+		triggerName,
+		subscriptionId,
+		ghState,
+	} = config;
+	const stateFilter = ghState ?? 'open';
 
 	let stopped = false;
 	let initialTimeout: ReturnType<typeof setTimeout> | null = null;
@@ -83,6 +94,8 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 	}
 
 	async function pollPRs(repo: string): Promise<void> {
+		// For "merged" state, query closed PRs and filter by merge status client-side
+		const ghStateArg = stateFilter === 'merged' ? 'closed' : stateFilter;
 		const { stdout } = await execFileAsync(
 			'gh',
 			[
@@ -91,16 +104,22 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 				'--repo',
 				repo,
 				'--json',
-				'number,title,author,url,body,state,isDraft,labels,headRefName,baseRefName,createdAt,updatedAt',
+				'number,title,author,url,body,state,isDraft,labels,headRefName,baseRefName,createdAt,updatedAt,mergedAt',
 				'--state',
-				'open',
+				ghStateArg,
 				'--limit',
 				'50',
 			],
 			{ cwd: projectRoot, timeout: 30000 }
 		);
 
-		const items = JSON.parse(stdout);
+		let items = JSON.parse(stdout);
+
+		// For "merged" state, filter to only merged PRs (have a mergedAt timestamp)
+		if (stateFilter === 'merged') {
+			items = items.filter((item: { mergedAt?: string }) => !!item.mergedAt);
+		}
+
 		const isFirstRun = !hasAnyGitHubSeen(subscriptionId);
 
 		for (const item of items) {
@@ -126,7 +145,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 					author: item.author?.login ?? 'unknown',
 					url: item.url,
 					body: (item.body ?? '').slice(0, 5000),
-					state: item.state?.toLowerCase() ?? 'open',
+					state: item.mergedAt ? 'merged' : (item.state?.toLowerCase() ?? 'open'),
 					draft: item.isDraft ?? false,
 					labels: (item.labels ?? []).map((l: { name: string }) => l.name).join(','),
 					head_branch: item.headRefName ?? '',
@@ -134,6 +153,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 					repo,
 					created_at: item.createdAt ?? '',
 					updated_at: item.updatedAt ?? '',
+					merged_at: item.mergedAt ?? '',
 				},
 			};
 
@@ -157,7 +177,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 				'--json',
 				'number,title,author,url,body,state,labels,assignees,createdAt,updatedAt',
 				'--state',
-				'open',
+				stateFilter === 'merged' ? 'open' : stateFilter, // "merged" not valid for issues, fall back
 				'--limit',
 				'50',
 			],

@@ -13,8 +13,11 @@ import {
 	type CueSubscription,
 	type CueSettings,
 	type CueScheduleDay,
+	type CueGitHubState,
 	DEFAULT_CUE_SETTINGS,
 	CUE_SCHEDULE_DAYS,
+	CUE_EVENT_TYPES,
+	CUE_GITHUB_STATES,
 } from './cue-types';
 import { CUE_CONFIG_PATH, LEGACY_CUE_CONFIG_PATH } from '../../shared/maestro-paths';
 
@@ -130,6 +133,11 @@ export function loadCueConfig(projectRoot: string): CueConfig | null {
 					filter,
 					repo: typeof sub.repo === 'string' ? sub.repo : undefined,
 					poll_minutes: typeof sub.poll_minutes === 'number' ? sub.poll_minutes : undefined,
+					gh_state:
+						typeof sub.gh_state === 'string' &&
+						CUE_GITHUB_STATES.includes(sub.gh_state as CueGitHubState)
+							? (sub.gh_state as CueGitHubState)
+							: undefined,
 					agent_id: typeof sub.agent_id === 'string' ? sub.agent_id : undefined,
 				});
 			}
@@ -307,6 +315,27 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 						errors.push(`${prefix}: "poll_minutes" must be a number >= 1 for ${event} events`);
 					}
 				}
+				if (sub.gh_state !== undefined) {
+					if (
+						typeof sub.gh_state !== 'string' ||
+						!CUE_GITHUB_STATES.includes(sub.gh_state as CueGitHubState)
+					) {
+						errors.push(`${prefix}: "gh_state" must be one of: ${CUE_GITHUB_STATES.join(', ')}`);
+					}
+					if (sub.gh_state === 'merged' && event === 'github.issue') {
+						errors.push(
+							`${prefix}: "gh_state" value "merged" is only valid for github.pull_request events`
+						);
+					}
+				}
+			} else if (
+				sub.event &&
+				typeof sub.event === 'string' &&
+				!CUE_EVENT_TYPES.includes(event as any)
+			) {
+				errors.push(
+					`${prefix}: unknown event type "${event}". Valid types: ${CUE_EVENT_TYPES.join(', ')}`
+				);
 			}
 
 			// Validate filter field

@@ -1041,6 +1041,33 @@ describe('CueEngine', () => {
 			expect(gitHubPollerCleanup).toHaveBeenCalled();
 		});
 
+		it('passes gh_state to GitHub poller config', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'merged-prs',
+						event: 'github.pull_request',
+						enabled: true,
+						prompt: 'review merged PR',
+						gh_state: 'merged',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const engine = new CueEngine(createMockDeps());
+			engine.start();
+
+			expect(mockCreateCueGitHubPoller).toHaveBeenCalledWith(
+				expect.objectContaining({
+					eventType: 'github.pull_request',
+					ghState: 'merged',
+					triggerName: 'merged-prs',
+				})
+			);
+
+			engine.stop();
+		});
+
 		it('disabled github subscription is skipped', () => {
 			const config = createMockConfig({
 				subscriptions: [
@@ -2008,6 +2035,109 @@ describe('CueEngine', () => {
 			vi.advanceTimersByTime(60_000);
 
 			expect(deps.onCueRun).not.toHaveBeenCalled();
+
+			engine.stop();
+		});
+
+		it('does not double-fire when config is refreshed within the same minute', () => {
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'morning-check',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: 'Run morning check',
+						schedule_times: ['09:00'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const session = createMockSession();
+			const deps = createMockDeps({ getSessions: vi.fn(() => [session]) });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Advance to 09:00 — should fire once
+			vi.advanceTimersByTime(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// Simulate config refresh within the same minute (e.g., YAML hot reload)
+			engine.refreshSession(session.id, session.projectRoot);
+
+			// The new timer fires again in the same 09:00 minute — should NOT double-fire
+			vi.advanceTimersByTime(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			engine.stop();
+		});
+
+		it('fires again in a new minute after the guard key is evicted', async () => {
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'multi-time',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: 'Run',
+						schedule_times: ['09:00', '09:02'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Advance to 09:00 — fires
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// 09:01 — no match, stale key for 09:00 is evicted
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// 09:02 — fires for the second scheduled time
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+
+			engine.stop();
+		});
+
+		it('clears scheduled fired keys when engine is stopped and restarted', () => {
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'restart-test',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: 'Run',
+						schedule_times: ['09:00'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			// First start: fire at 09:00
+			engine.start();
+			vi.advanceTimersByTime(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// Stop and restart — keys should be cleared
+			engine.stop();
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+			engine.start();
+			vi.advanceTimersByTime(60_000);
+
+			// Should fire again because the engine was stopped (keys cleared)
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
 
 			engine.stop();
 		});

@@ -609,6 +609,83 @@ subscriptions:
 				expect.arrayContaining([expect.stringContaining('"filter" must be a plain object')])
 			);
 		});
+
+		it('rejects unknown event types with a helpful message', () => {
+			const result = validateCueConfig({
+				subscriptions: [{ name: 'typo', event: 'file.change', prompt: 'Do it', watch: 'src/**' }],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('unknown event type "file.change"')])
+			);
+			expect(result.errors[0]).toContain('Valid types:');
+		});
+
+		it('rejects completely bogus event types', () => {
+			const result = validateCueConfig({
+				subscriptions: [{ name: 'bogus', event: 'webhook.incoming', prompt: 'Run' }],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('unknown event type "webhook.incoming"')])
+			);
+		});
+
+		it('does not reject known event types as unknown', () => {
+			const knownTypes = [
+				{ event: 'time.heartbeat', interval_minutes: 5 },
+				{ event: 'time.scheduled', schedule_times: ['09:00'] },
+				{ event: 'file.changed', watch: '**/*.ts' },
+				{ event: 'agent.completed', source_session: 'agent-1' },
+				{ event: 'github.pull_request' },
+				{ event: 'github.issue' },
+				{ event: 'task.pending', watch: '*.md' },
+			];
+			for (const typeConfig of knownTypes) {
+				const result = validateCueConfig({
+					subscriptions: [{ name: 'test', prompt: 'Run', ...typeConfig }],
+				});
+				expect(result.errors.filter((e: string) => e.includes('unknown event type'))).toHaveLength(
+					0
+				);
+			}
+		});
+
+		it('rejects invalid gh_state values for GitHub triggers', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'test', event: 'github.pull_request', prompt: 'Run', gh_state: 'invalid' },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('"gh_state" must be one of')])
+			);
+		});
+
+		it('rejects gh_state "merged" for github.issue events', () => {
+			const result = validateCueConfig({
+				subscriptions: [{ name: 'test', event: 'github.issue', prompt: 'Run', gh_state: 'merged' }],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('"merged" is only valid for github.pull_request'),
+				])
+			);
+		});
+
+		it('accepts valid gh_state values for GitHub triggers', () => {
+			for (const ghState of ['open', 'closed', 'merged', 'all']) {
+				const result = validateCueConfig({
+					subscriptions: [
+						{ name: 'test', event: 'github.pull_request', prompt: 'Run', gh_state: ghState },
+					],
+				});
+				const ghStateErrors = result.errors.filter((e: string) => e.includes('gh_state'));
+				expect(ghStateErrors).toHaveLength(0);
+			}
+		});
 	});
 
 	describe('loadCueConfig with GitHub events', () => {
@@ -642,6 +719,50 @@ subscriptions:
 			expect(result).not.toBeNull();
 			expect(result!.subscriptions[0].poll_minutes).toBeUndefined();
 			expect(result!.subscriptions[0].repo).toBeUndefined();
+		});
+
+		it('parses gh_state from YAML', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: merged-prs
+    event: github.pull_request
+    prompt: Review merged PR
+    gh_state: merged
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].gh_state).toBe('merged');
+		});
+
+		it('ignores invalid gh_state values during parsing', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: bad-state
+    event: github.pull_request
+    prompt: Review
+    gh_state: invalid
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].gh_state).toBeUndefined();
+		});
+
+		it('defaults gh_state to undefined when not specified', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: pr-watch
+    event: github.pull_request
+    prompt: Review
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].gh_state).toBeUndefined();
 		});
 	});
 

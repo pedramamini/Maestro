@@ -192,6 +192,7 @@ export async function executeCuePrompt(config: CueExecutionConfig): Promise<CueR
 			ghBranch: String(event.payload.head_branch ?? ''),
 			ghBaseBranch: String(event.payload.base_branch ?? ''),
 			ghAssignees: String(event.payload.assignees ?? ''),
+			ghMergedAt: String(event.payload.merged_at ?? ''),
 		};
 	}
 

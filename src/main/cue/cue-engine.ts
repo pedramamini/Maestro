@@ -145,6 +145,8 @@ export class CueEngine {
 	private activeRunCount = new Map<string, number>();
 	private eventQueue = new Map<string, QueuedEvent[]>();
 	private manuallyStoppedRuns = new Set<string>();
+	/** Tracks "subName:HH:MM" keys that time.scheduled already fired, preventing double-fire on config refresh */
+	private scheduledFiredKeys = new Set<string>();
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
 	private deps: CueEngineDeps;
 
@@ -199,6 +201,7 @@ export class CueEngine {
 		this.eventQueue.clear();
 		this.activeRunCount.clear();
 		this.manuallyStoppedRuns.clear();
+		this.scheduledFiredKeys.clear();
 
 		// Stop heartbeat and close database
 		this.stopHeartbeat();
@@ -930,8 +933,21 @@ export class CueEngine {
 
 			// Check if current time matches any scheduled time
 			if (!times.includes(currentTime)) {
+				// Evict stale fired-keys from previous minutes
+				for (const key of this.scheduledFiredKeys) {
+					if (key.startsWith(`${sub.name}:`) && !key.endsWith(`:${currentTime}`)) {
+						this.scheduledFiredKeys.delete(key);
+					}
+				}
 				return;
 			}
+
+			// Guard against double-fire (e.g., config refresh within the same minute)
+			const firedKey = `${sub.name}:${currentTime}`;
+			if (this.scheduledFiredKeys.has(firedKey)) {
+				return;
+			}
+			this.scheduledFiredKeys.add(firedKey);
 
 			const event: CueEvent = {
 				id: crypto.randomUUID(),
@@ -1034,6 +1050,7 @@ export class CueEngine {
 			projectRoot: session.projectRoot,
 			triggerName: sub.name,
 			subscriptionId: `${session.id}:${sub.name}`,
+			ghState: sub.gh_state,
 			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
 			onEvent: (event) => {
 				if (!this.enabled) return;
