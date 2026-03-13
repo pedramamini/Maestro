@@ -177,7 +177,7 @@ The big changes in the v0.12.x line are the following three:
 
 ## Context Management Tools
 
-📖 Added context management options from tab right-click menu. You can now compress, merge, and transfer contexts between agents. You will received (configurable) warnings at 60% and 80% context consumption with a hint to compact.
+📖 Added context management options from tab right-click menu. You can now compress, merge, and transfer contexts between agents. You will receive (configurable) warnings at 60% and 80% context consumption with a hint to compact.
 
 ## Changes Specific to v0.12.3:
 
@@ -263,7 +263,7 @@ The big changes in the v0.12.x line are the following three:
 - Implemented fuzzy file search in quick actions for instant navigation 🔍
 - Added "clear" command support to clean terminal shell logs 🧹
 - Simplified search highlighting by integrating into markdown pipeline ✨
-- Enhanced update checker to filter prerelease tags like -rc, -beta 🚀
+- Enhanced update checker to filter pre-release tags like -rc, -beta 🚀
 - Fixed RPM package compatibility for OpenSUSE Tumbleweed 🐧 (H/T @JOduMonT)
 - Added libuuid1 support alongside standard libuuid dependency 📦
 - Introduced Cmd+Shift+U shortcut for tab unread toggle ⌨️
