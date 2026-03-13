@@ -302,6 +302,9 @@ describe('StdoutHandler', () => {
 				outputParser: parser,
 			});
 
+			// Seed stale tool IDs to verify they get cleared on corruption
+			proc.emittedToolCallIds = new Set(['stale_call_1']);
+
 			const oversizedPayload =
 				'{"type":"assistant.message","data":{"content":"' + 'x'.repeat(1024 * 1024 + 64);
 
@@ -310,6 +313,7 @@ describe('StdoutHandler', () => {
 			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
 			expect(proc.jsonBuffer).toBe('');
 			expect(proc.jsonBufferCorrupted).toBe(true);
+			expect(proc.emittedToolCallIds?.size).toBe(0);
 			expect(logger.warn).toHaveBeenCalledWith(
 				'[ProcessManager] Dropping oversized Copilot JSON buffer remainder',
 				'ProcessManager',
@@ -331,8 +335,9 @@ describe('StdoutHandler', () => {
 			const sessionIdSpy = vi.fn();
 			emitter.on('session-id', sessionIdSpy);
 
-			// Force corrupted state
+			// Force corrupted state with stale tool IDs
 			proc.jsonBufferCorrupted = true;
+			proc.emittedToolCallIds = new Set(['stale_call_2']);
 
 			// Send trailing garbage from old object, then a clean new object
 			const payload =
@@ -345,6 +350,7 @@ describe('StdoutHandler', () => {
 			handler.handleData(sessionId, payload);
 
 			expect(proc.jsonBufferCorrupted).toBe(false);
+			expect(proc.emittedToolCallIds?.size).toBe(0);
 			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'Recovered');
 			expect(proc.jsonBuffer).toBe('');
 		});

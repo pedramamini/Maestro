@@ -227,6 +227,7 @@ function resetOversizedCopilotJsonBuffer(sessionId: string, managedProcess: Mana
 	managedProcess.jsonBuffer = '';
 	// Mark corrupted so subsequent chunks discard until a clean resync point
 	managedProcess.jsonBufferCorrupted = true;
+	managedProcess.emittedToolCallIds?.clear();
 }
 
 /**
@@ -289,6 +290,7 @@ export class StdoutHandler {
 				}
 				managedProcess.jsonBuffer = managedProcess.jsonBuffer.slice(resyncIndex);
 				managedProcess.jsonBufferCorrupted = false;
+				managedProcess.emittedToolCallIds?.clear();
 			}
 
 			const firstNonWhitespaceIndex = managedProcess.jsonBuffer.search(/\S/);

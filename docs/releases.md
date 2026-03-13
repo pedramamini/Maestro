@@ -19,7 +19,7 @@ Maestro can update itself automatically! This feature was introduced in **v0.8.7
 
 ### Major 0.15.x Additions
 
-🎶 **Maestro Symphony** — Contribute to open source with AI assistance! Browse curated issues from projects with the `runmaestro.ai` label, clone repos with one click, and automatically process the relevant Auto Run playbooks. Track your contributions, streaks, and stats. You're contributing CPU and tokens towards your favorite open source projects and features.
+🎶 **Maestro Symphony** — Contribute to open source with AI assistance! Browse curated issues from projects with the `runmaestro.ai` label, clone repos with one click, and automatically process the relevant Auto Run playbooks. Track your contributions, streaks, and stats. You're contributing CPU and tokens towards your favorite open-source projects and features.
 
 🎬 **Director's Notes** — Aggregates history across all agents into a unified timeline with search, filters, and an activity graph. Includes an AI Overview tab that generates a structured synopsis of recent work. Off by default, gated behind a new "Encore Features" panel under settings. This is a precursor to an eventual plugin system, allowing for extensions and customizations without bloating the core app.
 
@@ -87,7 +87,7 @@ Changes in this point release include:
 
 - Desktop app performance improvements (more to come on this, we want Maestro blazing fast) 🐌
 - Added local manifest feature for custom playbooks 📖
-- Agents are now inherently aware of your activity history as seen in the history panel 📜 (this is built-in cross context memory!)
+- Agents are now inherently aware of your activity history as seen in the history panel 📜 (this is built-in cross-context memory!)
 - Added markdown rendering support for AI responses in mobile view 📱
 - Bugfix in tracking costs from JSONL files that were aged out 🏦
 - Added BlueSky social media handle for leaderboard 🦋
