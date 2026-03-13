@@ -50,10 +50,188 @@ import { parseSynopsis } from '../../../shared/synopsis';
 import { autorunSynopsisPrompt } from '../../../prompts';
 import type { RightPanelHandle } from '../../components/RightPanel';
 import { useGroupChatStore } from '../../stores/groupChatStore';
+import { buildHiddenProgressLogId } from '../../utils/hiddenProgress';
 
 // ============================================================================
 // Types
 // ============================================================================
+
+type HiddenProgressKind = 'thinking' | 'tool';
+type ToolProgressState = NonNullable<LogEntry['metadata']>['toolState'];
+
+function truncateProgressText(value: string, maxLength = 80): string {
+	const trimmed = value.trim().replace(/\s+/g, ' ');
+	if (!trimmed) return '';
+	return trimmed.length <= maxLength ? trimmed : `${trimmed.slice(0, maxLength - 3)}...`;
+}
+
+function safeProgressString(value: unknown, maxLength = 80): string | null {
+	return typeof value === 'string' && value.trim() ? truncateProgressText(value, maxLength) : null;
+}
+
+function summarizeTodoProgress(todos: unknown): string | null {
+	if (!Array.isArray(todos) || todos.length === 0) {
+		return null;
+	}
+
+	const total = todos.length;
+	const inProgress = todos.find(
+		(todo): todo is { activeForm?: string; content?: string; status?: string } =>
+			typeof todo === 'object' && todo !== null && 'status' in todo && todo.status === 'in_progress'
+	);
+
+	const label =
+		(typeof inProgress?.activeForm === 'string' && inProgress.activeForm.trim()) ||
+		(typeof inProgress?.content === 'string' && inProgress.content.trim()) ||
+		(typeof todos[0] === 'object' &&
+		todos[0] !== null &&
+		'content' in todos[0] &&
+		typeof todos[0].content === 'string'
+			? todos[0].content
+			: null);
+
+	return label
+		? `${truncateProgressText(label, 60)} (${total} todo${total === 1 ? '' : 's'})`
+		: null;
+}
+
+function extractToolProgressDetail(input: unknown): string | null {
+	if (!input || typeof input !== 'object') {
+		return null;
+	}
+
+	const toolInput = input as Record<string, unknown>;
+
+	return (
+		safeProgressString(toolInput.command, 90) ||
+		safeProgressString(toolInput.pattern, 70) ||
+		safeProgressString(toolInput.file_path, 70) ||
+		safeProgressString(toolInput.filePath, 70) ||
+		safeProgressString(toolInput.path, 70) ||
+		safeProgressString(toolInput.query, 70) ||
+		safeProgressString(toolInput.description, 70) ||
+		safeProgressString(toolInput.prompt, 70) ||
+		safeProgressString(toolInput.task_id, 70) ||
+		safeProgressString(toolInput.cmd, 90) ||
+		safeProgressString(toolInput.code, 90) ||
+		safeProgressString(toolInput.content, 90) ||
+		summarizeTodoProgress(toolInput.todos)
+	);
+}
+
+function formatToolProgressText(toolName: string, toolState?: ToolProgressState): string {
+	const normalizedToolName = toolName.trim() || 'tool';
+	const toolNameLower = normalizedToolName.toLowerCase();
+	const detail = extractToolProgressDetail(toolState?.input);
+	const status = toolState?.status;
+
+	const withDetail = (prefix: string, fallbackSuffix = '...') =>
+		detail ? `${prefix} ${detail}` : `${prefix}${fallbackSuffix}`;
+
+	if (status === 'failed') {
+		if (toolNameLower === 'bash' || toolNameLower === 'shell') {
+			return detail ? `Command failed: ${detail}` : 'Command failed';
+		}
+		return detail ? `${normalizedToolName} failed: ${detail}` : `${normalizedToolName} failed`;
+	}
+
+	if (status === 'completed') {
+		if (toolNameLower === 'view' || toolNameLower === 'read') {
+			return withDetail('Read', '');
+		}
+		if (
+			toolNameLower === 'rg' ||
+			toolNameLower === 'grep' ||
+			toolNameLower === 'glob' ||
+			toolNameLower === 'search'
+		) {
+			return withDetail('Searched', '');
+		}
+		if (toolNameLower === 'bash' || toolNameLower === 'shell') {
+			return withDetail('Ran', '');
+		}
+		if (
+			toolNameLower === 'write' ||
+			toolNameLower === 'edit' ||
+			toolNameLower === 'apply_patch' ||
+			toolNameLower === 'create'
+		) {
+			return withDetail('Updated', '');
+		}
+		return detail
+			? `Completed ${normalizedToolName}: ${detail}`
+			: `Completed ${normalizedToolName}`;
+	}
+
+	if (toolNameLower === 'view' || toolNameLower === 'read') {
+		return withDetail('Reading');
+	}
+	if (
+		toolNameLower === 'rg' ||
+		toolNameLower === 'grep' ||
+		toolNameLower === 'glob' ||
+		toolNameLower === 'search'
+	) {
+		return withDetail('Searching');
+	}
+	if (toolNameLower === 'bash' || toolNameLower === 'shell') {
+		return withDetail('Running');
+	}
+	if (
+		toolNameLower === 'write' ||
+		toolNameLower === 'edit' ||
+		toolNameLower === 'apply_patch' ||
+		toolNameLower === 'create'
+	) {
+		return withDetail('Editing');
+	}
+	if (toolNameLower === 'task') {
+		return withDetail('Delegating');
+	}
+	if (toolNameLower === 'todowrite') {
+		return withDetail('Updating');
+	}
+
+	return detail ? `Using ${normalizedToolName}: ${detail}` : `Using ${normalizedToolName}...`;
+}
+
+function upsertHiddenProgressLog(
+	logs: LogEntry[],
+	tabId: string,
+	text: string,
+	timestamp: number,
+	kind: HiddenProgressKind,
+	toolState?: ToolProgressState,
+	toolName?: string
+): LogEntry[] {
+	const hiddenLogId = buildHiddenProgressLogId(tabId);
+	const existingIndex = logs.findIndex((log) => log.id === hiddenLogId);
+	const hiddenLog: LogEntry = {
+		id: hiddenLogId,
+		timestamp,
+		source: 'system',
+		text,
+		metadata: {
+			toolState,
+			hiddenProgress: {
+				kind,
+				toolName,
+			},
+		},
+	};
+
+	if (existingIndex === -1) {
+		return [...logs, hiddenLog];
+	}
+
+	return logs.map((log, index) => (index === existingIndex ? hiddenLog : log));
+}
+
+function removeHiddenProgressLog(logs: LogEntry[], tabId: string): LogEntry[] {
+	const hiddenLogId = buildHiddenProgressLogId(tabId);
+	const updatedLogs = logs.filter((log) => log.id !== hiddenLogId);
+	return updatedLogs.length === logs.length ? logs : updatedLogs;
+}
 
 /** Batched updater interface (subset used by IPC listeners) */
 export interface BatchedUpdater {
@@ -197,10 +375,14 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 	// Internal refs — only used by IPC listeners, not needed outside this hook
 	const thinkingChunkBufferRef = useRef<Map<string, string>>(new Map());
 	const thinkingChunkRafIdRef = useRef<number | null>(null);
+	const activeHiddenToolRef = useRef<
+		Map<string, { toolName: string; toolState?: ToolProgressState }>
+	>(new Map());
 
 	useEffect(() => {
 		// Copy ref value to local variable for cleanup (React ESLint rule)
 		const thinkingChunkBuffer = thinkingChunkBufferRef.current;
+		const activeHiddenTools = activeHiddenToolRef.current;
 
 		// Stable references from stores (Zustand actions are referentially stable)
 		const setSessions = useSessionStore.getState().setSessions;
@@ -262,6 +444,23 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				);
 				return;
 			}
+
+			activeHiddenTools.delete(`${actualSessionId}:${targetTabId}`);
+
+			setSessions((prev) =>
+				prev.map((s) => {
+					if (s.id !== actualSessionId) return s;
+					let didChange = false;
+					const updatedTabs = s.aiTabs.map((tab) => {
+						if (tab.id !== targetTabId) return tab;
+						const updatedLogs = removeHiddenProgressLog(tab.logs, targetTabId);
+						if (updatedLogs === tab.logs) return tab;
+						didChange = true;
+						return { ...tab, logs: updatedLogs };
+					});
+					return didChange ? { ...s, aiTabs: updatedTabs } : s;
+				})
+			);
 
 			// Batch the log append, delivery mark, unread mark, and byte tracking
 			deps.batchedUpdater.appendLog(actualSessionId, targetTabId, true, data);
@@ -346,6 +545,10 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				} else {
 					actualSessionId = sessionId;
 					isFromAi = false;
+				}
+
+				if (isFromAi && tabIdFromSession) {
+					activeHiddenTools.delete(`${actualSessionId}:${tabIdFromSession}`);
 				}
 
 				// SAFETY CHECK: Verify the process is actually gone
@@ -546,6 +749,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 													return tab.id === tabIdFromSession
 														? {
 																...tab,
+																logs: removeHiddenProgressLog(tab.logs, tab.id),
 																state: 'idle' as const,
 																thinkingStartTime: undefined,
 															}
@@ -554,6 +758,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 													return tab.state === 'busy'
 														? {
 																...tab,
+																logs: removeHiddenProgressLog(tab.logs, tab.id),
 																state: 'idle' as const,
 																thinkingStartTime: undefined,
 															}
@@ -600,6 +805,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									if (tabIdFromSession && tab.id === tabIdFromSession) {
 										return {
 											...tab,
+											logs: removeHiddenProgressLog(tab.logs, tab.id),
 											state: 'idle' as const,
 										};
 									}
@@ -643,6 +849,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 												return tab.id === tabIdFromSession
 													? {
 															...tab,
+															logs: removeHiddenProgressLog(tab.logs, tab.id),
 															state: 'idle' as const,
 															thinkingStartTime: undefined,
 														}
@@ -651,6 +858,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 												return tab.state === 'busy'
 													? {
 															...tab,
+															logs: removeHiddenProgressLog(tab.logs, tab.id),
 															state: 'idle' as const,
 															thinkingStartTime: undefined,
 														}
@@ -1233,6 +1441,10 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 					agentError: isSessionNotFound ? undefined : agentError,
 				};
 
+				if (tabIdFromSession) {
+					activeHiddenTools.delete(`${actualSessionId}:${tabIdFromSession}`);
+				}
+
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== actualSessionId) return s;
@@ -1245,7 +1457,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									tab.id === targetTab.id
 										? {
 												...tab,
-												logs: [...tab.logs, errorLogEntry],
+												logs: [...removeHiddenProgressLog(tab.logs, tab.id), errorLogEntry],
 												agentError: isSessionNotFound ? undefined : agentError,
 											}
 										: tab
@@ -1383,7 +1595,28 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 									const targetTab = updatedTabs.find((t) => t.id === chunkTabId);
 									if (!targetTab) continue;
 
-									if (!targetTab.showThinking || targetTab.showThinking === 'off') continue;
+									if (!targetTab.showThinking || targetTab.showThinking === 'off') {
+										const activeTool = activeHiddenTools.get(key);
+										if (activeTool?.toolState?.status === 'running') {
+											continue;
+										}
+
+										updatedTabs = updatedTabs.map((tab) =>
+											tab.id === chunkTabId
+												? {
+														...tab,
+														logs: upsertHiddenProgressLog(
+															tab.logs,
+															chunkTabId,
+															'Thinking through the next step...',
+															Date.now(),
+															'thinking'
+														),
+													}
+												: tab
+										);
+										continue;
+									}
 
 									if (isLikelyConcatenatedToolNames(bufferedContent)) {
 										console.warn(
@@ -1545,7 +1778,42 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 						if (s.id !== actualSessionId) return s;
 
 						const targetTab = s.aiTabs.find((t) => t.id === tabId);
-						if (!targetTab?.showThinking || targetTab.showThinking === 'off') return s;
+						if (!targetTab) return s;
+
+						if (!targetTab.showThinking || targetTab.showThinking === 'off') {
+							const toolState = toolEvent.state as ToolProgressState | undefined;
+							const hiddenToolKey = `${actualSessionId}:${tabId}`;
+							const statusText = formatToolProgressText(toolEvent.toolName, toolState);
+
+							if (toolState?.status === 'running') {
+								activeHiddenTools.set(hiddenToolKey, {
+									toolName: toolEvent.toolName,
+									toolState,
+								});
+							} else {
+								activeHiddenTools.delete(hiddenToolKey);
+							}
+
+							return {
+								...s,
+								aiTabs: s.aiTabs.map((tab) =>
+									tab.id === tabId
+										? {
+												...tab,
+												logs: upsertHiddenProgressLog(
+													tab.logs,
+													tabId,
+													statusText,
+													toolEvent.timestamp,
+													'tool',
+													toolState,
+													toolEvent.toolName
+												),
+											}
+										: tab
+								),
+							};
+						}
 
 						const toolLog: LogEntry = {
 							id: `tool-${Date.now()}-${toolEvent.toolName}`,
@@ -1594,6 +1862,7 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 				thinkingChunkRafIdRef.current = null;
 			}
 			thinkingChunkBuffer.clear();
+			activeHiddenTools.clear();
 		};
 	}, []);
 }

@@ -76,6 +76,12 @@ describe('agent-definitions', () => {
 			expect(copilot).toBeDefined();
 			expect(copilot?.requiresPty).toBe(true);
 			expect(copilot?.jsonOutputArgs).toEqual(['--output-format', 'json']);
+			expect(copilot?.readOnlyArgs).toEqual([
+				'--allow-tool=read,url',
+				'--deny-tool=write,shell,memory,github',
+				'--no-ask-user',
+			]);
+			expect(copilot?.readOnlyCliEnforced).toBe(true);
 		});
 
 		it('should have opencode with default env vars for YOLO mode and disabled question tool', () => {
@@ -225,6 +231,18 @@ describe('agent-definitions', () => {
 
 			const args = opencode?.imageArgs?.('/path/to/image.png');
 			expect(args).toEqual(['-f', '/path/to/image.png']);
+		});
+
+		it('should embed Copilot images into prompts using @mentions', () => {
+			const copilot = getAgentDefinition('copilot');
+			expect(copilot?.imagePromptBuilder).toBeDefined();
+
+			const promptPrefix = copilot?.imagePromptBuilder?.([
+				'/tmp/screenshot-1.png',
+				'/tmp/screenshot-2.jpg',
+			]);
+			expect(promptPrefix).toContain('@/tmp/screenshot-1.png');
+			expect(promptPrefix).toContain('@/tmp/screenshot-2.jpg');
 		});
 	});
 

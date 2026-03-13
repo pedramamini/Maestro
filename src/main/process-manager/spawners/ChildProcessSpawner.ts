@@ -61,6 +61,7 @@ export class ChildProcessSpawner {
 			prompt,
 			images,
 			imageArgs,
+			imagePromptBuilder,
 			promptArgs,
 			contextWindow,
 			customEnvVars,
@@ -107,8 +108,9 @@ export class ChildProcessSpawner {
 				: [];
 			finalArgs = [...args, ...needsInputFormat];
 			// Prompt will be sent via stdin as stream-json with embedded images (not in CLI args)
-		} else if (hasImages && prompt && imageArgs) {
-			// For agents that use file-based image args (like Codex, OpenCode)
+		} else if (hasImages && prompt && (imageArgs || imagePromptBuilder)) {
+			// For agents that use file-based image args (like Codex, OpenCode) or
+			// prompt-embedded image mentions (like Copilot's @path syntax)
 			finalArgs = [...args];
 			tempImageFiles = [];
 			for (let i = 0; i < images.length; i++) {
@@ -120,10 +122,14 @@ export class ChildProcessSpawner {
 
 			const isResumeWithPromptEmbed =
 				capabilities.imageResumeMode === 'prompt-embed' && args.some((a) => a === 'resume');
+			const shouldEmbedImagesInPrompt = !!imagePromptBuilder || isResumeWithPromptEmbed;
 
-			if (isResumeWithPromptEmbed) {
-				// Resume mode: embed file paths in prompt text, don't use -i flag
-				const imagePrefix = buildImagePromptPrefix(tempImageFiles);
+			if (shouldEmbedImagesInPrompt) {
+				// Some agents consume images by mentioning temp file paths inside the prompt
+				// instead of accepting a dedicated CLI image flag.
+				const imagePrefix = imagePromptBuilder
+					? imagePromptBuilder(tempImageFiles)
+					: buildImagePromptPrefix(tempImageFiles);
 				effectivePrompt = imagePrefix + prompt;
 				if (!promptViaStdin) {
 					if (promptArgs) {
@@ -135,19 +141,19 @@ export class ChildProcessSpawner {
 					}
 					promptAddedToArgs = true;
 				}
-				logger.debug(
-					'[ProcessManager] Resume mode: embedded image paths in prompt',
-					'ProcessManager',
-					{
-						sessionId,
-						imageCount: images.length,
-						tempFiles: tempImageFiles,
-						promptViaStdin,
-					}
-				);
+				logger.debug('[ProcessManager] Embedded image paths in prompt', 'ProcessManager', {
+					sessionId,
+					imageCount: images.length,
+					tempFiles: tempImageFiles,
+					embedMode: imagePromptBuilder ? 'prompt-builder' : 'resume-prompt-embed',
+					promptViaStdin,
+				});
 			} else {
 				// Initial spawn: use -i flag as before
 				for (const tempPath of tempImageFiles) {
+					if (!imageArgs) {
+						continue;
+					}
 					finalArgs = [...finalArgs, ...imageArgs(tempPath)];
 				}
 				if (!promptViaStdin) {

@@ -19,6 +19,7 @@ export interface ProcessConfig {
 	shellEnvVars?: Record<string, string>;
 	images?: string[];
 	imageArgs?: (imagePath: string) => string[];
+	imagePromptBuilder?: (imagePaths: string[]) => string;
 	promptArgs?: (prompt: string) => string[];
 	contextWindow?: number;
 	customEnvVars?: Record<string, string>;

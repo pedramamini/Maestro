@@ -395,11 +395,11 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 	 */
 	copilot: {
 		supportsResume: true, // --continue, --resume[=sessionId]
-		supportsReadOnlyMode: false, // Interactive /plan exists, but no verified startup flag for batch mode
+		supportsReadOnlyMode: true, // Maestro enforces read-only via Copilot's CLI tool permission rules
 		supportsJsonOutput: true, // --output-format json (JSONL)
 		supportsSessionId: true, // result event includes sessionId
-		supportsImageInput: false, // Not verified in help output
-		supportsImageInputOnResume: false, // Not verified
+		supportsImageInput: true, // Copilot supports @file/@image mentions; Maestro maps uploads to temp-file mentions
+		supportsImageInputOnResume: true, // Prompt-based @image mentions work for resumed sessions as well
 		supportsSlashCommands: true, // Interactive mode supports slash commands
 		supportsSessionStorage: true, // ~/.copilot/session-state/<session-id>/
 		supportsCostTracking: false, // Not verified
@@ -410,7 +410,7 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsResultMessages: true, // assistant.message with phase=final_answer
 		supportsModelSelection: true, // --model <model>
 		supportsStreamJsonInput: false, // Not verified
-		supportsThinkingDisplay: false, // Reasoning events exist, but we do not render them separately yet
+		supportsThinkingDisplay: true, // assistant.reasoning events are rendered through Maestro's thinking-chunk pipeline
 		supportsContextMerge: false, // Not verified - PLACEHOLDER
 		supportsContextExport: false, // Not verified - PLACEHOLDER
 		supportsWizard: false, // PLACEHOLDER - not verified

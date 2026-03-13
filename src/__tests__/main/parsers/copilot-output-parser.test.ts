@@ -122,6 +122,44 @@ describe('CopilotOutputParser', () => {
 		);
 	});
 
+	it('parses assistant reasoning events as partial text events', () => {
+		const parser = new CopilotOutputParser();
+
+		const event = parser.parseJsonObject({
+			type: 'assistant.reasoning',
+			data: {
+				content: 'Thinking through the repository structure...',
+			},
+		});
+
+		expect(event).toEqual(
+			expect.objectContaining({
+				type: 'text',
+				text: 'Thinking through the repository structure...',
+				isPartial: true,
+			})
+		);
+	});
+
+	it('parses assistant reasoning delta events as partial text events', () => {
+		const parser = new CopilotOutputParser();
+
+		const event = parser.parseJsonObject({
+			type: 'assistant.reasoning_delta',
+			data: {
+				deltaContent: 'Thinking live...',
+			},
+		});
+
+		expect(event).toEqual(
+			expect.objectContaining({
+				type: 'text',
+				text: 'Thinking live...',
+				isPartial: true,
+			})
+		);
+	});
+
 	it('tracks tool execution start and completion by toolCallId', () => {
 		const parser = new CopilotOutputParser();
 

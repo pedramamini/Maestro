@@ -135,6 +135,23 @@ describe('agent-capabilities', () => {
 			expect(capabilities.supportsResultMessages).toBe(true);
 		});
 
+		it('should have verified capabilities for copilot', () => {
+			const capabilities = AGENT_CAPABILITIES['copilot'];
+			expect(capabilities).toBeDefined();
+			expect(capabilities.supportsResume).toBe(true);
+			expect(capabilities.supportsReadOnlyMode).toBe(true);
+			expect(capabilities.supportsJsonOutput).toBe(true);
+			expect(capabilities.supportsSessionId).toBe(true);
+			expect(capabilities.supportsImageInput).toBe(true);
+			expect(capabilities.supportsImageInputOnResume).toBe(true);
+			expect(capabilities.supportsSlashCommands).toBe(true);
+			expect(capabilities.supportsSessionStorage).toBe(true);
+			expect(capabilities.supportsBatchMode).toBe(true);
+			expect(capabilities.supportsStreaming).toBe(true);
+			expect(capabilities.supportsResultMessages).toBe(true);
+			expect(capabilities.supportsThinkingDisplay).toBe(true);
+		});
+
 		it('should define capabilities for all known agents', () => {
 			const knownAgents = [
 				'claude-code',
@@ -145,6 +162,7 @@ describe('agent-capabilities', () => {
 				'opencode',
 				'factory-droid',
 				'aider',
+				'copilot',
 			];
 
 			for (const agentId of knownAgents) {

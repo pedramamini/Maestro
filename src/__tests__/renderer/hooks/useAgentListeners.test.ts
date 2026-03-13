@@ -243,6 +243,7 @@ beforeEach(() => {
 
 afterEach(() => {
 	vi.restoreAllMocks();
+	vi.unstubAllGlobals();
 });
 
 // ============================================================================
@@ -890,6 +891,145 @@ describe('useAgentListeners', () => {
 	});
 
 	// ========================================================================
+	// onThinkingChunk handler
+	// ========================================================================
+
+	describe('onThinkingChunk', () => {
+		it('shows lightweight progress when thinking is hidden', async () => {
+			vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+				callback(0);
+				return 1;
+			});
+			vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+			const deps = createMockDeps();
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [createMockTab({ id: 'tab-1', showThinking: 'off' })],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onThinkingChunkHandler?.('sess-1-ai-tab-1', 'reasoning...');
+			await new Promise((r) => setTimeout(r, 0));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toHaveLength(1);
+			expect(updated?.aiTabs[0]?.logs[0]).toMatchObject({
+				source: 'system',
+				text: 'Thinking through the next step...',
+			});
+		});
+
+		it('keeps active tool progress visible while thinking stays hidden', async () => {
+			vi.stubGlobal('requestAnimationFrame', (callback: FrameRequestCallback) => {
+				callback(0);
+				return 1;
+			});
+			vi.stubGlobal('cancelAnimationFrame', vi.fn());
+
+			const deps = createMockDeps();
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [createMockTab({ id: 'tab-1', showThinking: 'off' })],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onToolExecutionHandler?.('sess-1-ai-tab-1', {
+				toolName: 'view',
+				state: { status: 'running', input: { path: 'src/App.tsx' } },
+				timestamp: 1700000000000,
+			});
+			onThinkingChunkHandler?.('sess-1-ai-tab-1', 'reasoning...');
+			await new Promise((r) => setTimeout(r, 0));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs[0]).toMatchObject({
+				text: 'Reading src/App.tsx',
+			});
+		});
+
+		it('removes hidden progress once visible output arrives', () => {
+			const deps = createMockDeps();
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				aiTabs: [
+					createMockTab({
+						id: 'tab-1',
+						showThinking: 'off',
+						logs: [
+							{
+								id: 'hidden-progress:tab-1',
+								timestamp: 1700000000000,
+								source: 'system',
+								text: 'Thinking through the next step...',
+							},
+						],
+					}),
+				],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onDataHandler?.('sess-1-ai-tab-1', 'Visible response');
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toEqual([]);
+		});
+	});
+
+	// ========================================================================
+	// onToolExecution handler
+	// ========================================================================
+
+	describe('onToolExecution', () => {
+		it('shows lightweight tool status when thinking is hidden', () => {
+			const deps = createMockDeps();
+			const session = createMockSession({
+				id: 'sess-1',
+				aiTabs: [createMockTab({ id: 'tab-1', showThinking: 'off' })],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			onToolExecutionHandler?.('sess-1-ai-tab-1', {
+				toolName: 'view',
+				state: { status: 'running', input: { path: 'src/renderer/App.tsx' } },
+				timestamp: 1700000000000,
+			});
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toHaveLength(1);
+			expect(updated?.aiTabs[0]?.logs[0]).toMatchObject({
+				source: 'system',
+				text: 'Reading src/renderer/App.tsx',
+			});
+		});
+	});
+
+	// ========================================================================
 	// onSshRemote handler
 	// ========================================================================
 
@@ -950,6 +1090,41 @@ describe('useAgentListeners', () => {
 
 			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
 			expect(updated?.state).toBe('idle');
+		});
+
+		it('clears hidden progress logs on AI exit', async () => {
+			const deps = createMockDeps();
+			const tab = createMockTab({
+				id: 'tab-1',
+				showThinking: 'off',
+				logs: [
+					{
+						id: 'hidden-progress:tab-1',
+						timestamp: 1700000000000,
+						source: 'system',
+						text: 'Reading src/renderer/App.tsx',
+					},
+				],
+			});
+			const session = createMockSession({
+				id: 'sess-1',
+				state: 'busy',
+				busySource: 'ai',
+				aiTabs: [tab],
+				activeTabId: 'tab-1',
+			});
+			useSessionStore.setState({
+				sessions: [session],
+				activeSessionId: 'sess-1',
+			});
+
+			renderHook(() => useAgentListeners(deps));
+
+			await onExitHandler?.('sess-1-ai-tab-1');
+			await new Promise((r) => setTimeout(r, 50));
+
+			const updated = useSessionStore.getState().sessions.find((s) => s.id === 'sess-1');
+			expect(updated?.aiTabs[0]?.logs).toEqual([]);
 		});
 
 		it('processes execution queue on exit', async () => {

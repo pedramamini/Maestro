@@ -10,6 +10,7 @@
  * - user.message
  * - assistant.turn_start / assistant.turn_end
  * - assistant.message
+ * - assistant.reasoning_delta
  * - assistant.reasoning
  * - tool.execution_start / tool.execution_complete
  * - result
@@ -51,6 +52,17 @@ interface CopilotRawMessage {
 		message?: string;
 	};
 	error?: string | { message?: string };
+}
+
+/** Extract non-empty text from strings or simple string arrays. */
+function extractTextValue(value: unknown): string {
+	if (typeof value === 'string') {
+		return value;
+	}
+	if (Array.isArray(value)) {
+		return value.filter((part): part is string => typeof part === 'string').join('');
+	}
+	return '';
 }
 
 /** Extract a human-readable error message from a string or { message } object. */
@@ -114,7 +126,9 @@ export class CopilotOutputParser implements AgentOutputParser {
 				return this.parseAssistantMessage(msg);
 			case 'assistant.message_delta':
 				return this.parseAssistantMessageDelta(msg);
+			case 'assistant.reasoning_delta':
 			case 'assistant.reasoning':
+				return this.parseAssistantReasoning(msg);
 			case 'assistant.turn_start':
 			case 'assistant.turn_end':
 			case 'session.tools_updated':
@@ -203,6 +217,25 @@ export class CopilotOutputParser implements AgentOutputParser {
 		return {
 			type: 'text',
 			text: deltaContent,
+			isPartial: true,
+			raw: msg,
+		};
+	}
+
+	/** Parse assistant.reasoning events as partial reasoning text for thinking-chunk UI. */
+	private parseAssistantReasoning(msg: CopilotRawMessage): ParsedEvent | null {
+		const reasoningText =
+			extractTextValue(msg.data?.deltaContent) ||
+			extractTextValue(msg.data?.content) ||
+			extractTextValue(msg.data?.message);
+
+		if (!reasoningText) {
+			return null;
+		}
+
+		return {
+			type: 'text',
+			text: reasoningText,
 			isPartial: true,
 			raw: msg,
 		};

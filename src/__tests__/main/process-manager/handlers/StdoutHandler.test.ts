@@ -479,6 +479,55 @@ describe('StdoutHandler', () => {
 			);
 		});
 
+		it('should emit Copilot reasoning events as thinking chunks', () => {
+			const parser = new CopilotOutputParser();
+			const { handler, emitter, sessionId } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'copilot',
+				outputParser: parser,
+			});
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			handler.handleData(
+				sessionId,
+				JSON.stringify({
+					type: 'assistant.reasoning',
+					data: {
+						content: 'Analyzing the codebase before making edits...',
+					},
+				})
+			);
+
+			expect(thinkingSpy).toHaveBeenCalledWith(
+				sessionId,
+				'Analyzing the codebase before making edits...'
+			);
+		});
+
+		it('should emit Copilot reasoning delta events as thinking chunks', () => {
+			const parser = new CopilotOutputParser();
+			const { handler, emitter, sessionId } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'copilot',
+				outputParser: parser,
+			});
+			const thinkingSpy = vi.fn();
+			emitter.on('thinking-chunk', thinkingSpy);
+
+			handler.handleData(
+				sessionId,
+				JSON.stringify({
+					type: 'assistant.reasoning_delta',
+					data: {
+						deltaContent: 'Live reasoning chunk...',
+					},
+				})
+			);
+
+			expect(thinkingSpy).toHaveBeenCalledWith(sessionId, 'Live reasoning chunk...');
+		});
+
 		it('should keep failed Copilot tool executions as tool events instead of agent errors', () => {
 			const parser = new CopilotOutputParser();
 			const { handler, emitter, sessionId } = createTestContext({

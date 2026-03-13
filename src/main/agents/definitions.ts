@@ -94,6 +94,7 @@ export interface AgentConfig {
 	yoloModeArgs?: string[]; // Args for YOLO/full-access mode (e.g., ['--dangerously-bypass-approvals-and-sandbox'])
 	workingDirArgs?: (dir: string) => string[]; // Function to build working directory args (e.g., ['-C', dir])
 	imageArgs?: (imagePath: string) => string[]; // Function to build image attachment args (e.g., ['-i', imagePath] for Codex)
+	imagePromptBuilder?: (imagePaths: string[]) => string; // Function to embed image references into the prompt (e.g., Copilot @mentions)
 	promptArgs?: (prompt: string) => string[]; // Function to build prompt args (e.g., ['-p', prompt] for OpenCode)
 	noPromptSeparator?: boolean; // If true, don't add '--' before the prompt in batch mode (OpenCode doesn't support it)
 	defaultEnvVars?: Record<string, string>; // Default environment variables for this agent (merged with user customEnvVars)
@@ -415,10 +416,18 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 		batchModeArgs: ['--allow-all-tools', '--silent'], // Non-interactive mode requires tool auto-approval
 		jsonOutputArgs: ['--output-format', 'json'], // JSONL output
 		resumeArgs: (sessionId: string) => [`--resume=${sessionId}`], // Resume with session ID (--continue or --resume=sessionId)
-		readOnlyArgs: [], // No verified startup flag for read-only mode (interactive /plan exists but no batch flag confirmed)
-		readOnlyCliEnforced: false, // No CLI-enforced read-only mode verified from help
+		readOnlyArgs: [
+			'--allow-tool=read,url',
+			'--deny-tool=write,shell,memory,github',
+			'--no-ask-user',
+		], // Enforce read-only by denying write/shell/memory/github actions at the Copilot CLI layer
+		readOnlyCliEnforced: true, // CLI-enforced via explicit tool permission rules
 		modelArgs: (modelId: string) => ['--model', modelId], // Model selection
 		yoloModeArgs: ['--allow-all-tools'], // Auto-approve all tools (--allow-all-tools or --allow-all)
+		imagePromptBuilder: (imagePaths: string[]) =>
+			imagePaths.length > 0
+				? `Use these attached images as context:\n${imagePaths.map((imagePath) => `@${imagePath}`).join('\n')}\n\n`
+				: '',
 		promptArgs: (prompt: string) => ['-p', prompt], // Batch mode prompt arg
 		// Agent-specific configuration options
 		configOptions: [
