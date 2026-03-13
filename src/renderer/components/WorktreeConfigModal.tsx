@@ -15,6 +15,12 @@ interface WorktreeConfigModalProps {
 	onDisableConfig: () => void;
 }
 
+/** Get parent directory from a path (works with both / and \ separators) */
+function getParentDir(path: string): string {
+	const parent = path.replace(/[/\\][^/\\]+$/, '');
+	return parent || path; // keep original if we're already at root
+}
+
 /**
  * Validates that a directory exists (works over SSH for remote sessions)
  */
@@ -49,14 +55,16 @@ export function WorktreeConfigModal({
 	const onCloseRef = useRef(onClose);
 	onCloseRef.current = onClose;
 
-	// Form state
-	const [basePath, setBasePath] = useState(session.worktreeConfig?.basePath || '');
+	// Form state — default base path to parent directory of the agent's cwd
+	const [basePath, setBasePath] = useState(
+		session.worktreeConfig?.basePath || getParentDir(session.cwd)
+	);
 	const [watchEnabled, setWatchEnabled] = useState(session.worktreeConfig?.watchEnabled ?? true);
 	const [newBranchName, setNewBranchName] = useState('');
 	const [isCreating, setIsCreating] = useState(false);
 	const [isValidating, setIsValidating] = useState(false);
 	const [error, setError] = useState<string | null>(null);
-	const canDisable = !!(session.worktreeConfig?.basePath || basePath.trim());
+	const canDisable = !!session.worktreeConfig?.basePath;
 
 	// gh CLI status
 	const [ghCliStatus, setGhCliStatus] = useState<GhCliStatus | null>(null);
@@ -86,12 +94,12 @@ export function WorktreeConfigModal({
 	useEffect(() => {
 		if (isOpen) {
 			checkGhCli();
-			setBasePath(session.worktreeConfig?.basePath || '');
+			setBasePath(session.worktreeConfig?.basePath || getParentDir(session.cwd));
 			setWatchEnabled(session.worktreeConfig?.watchEnabled ?? true);
 			setNewBranchName('');
 			setError(null);
 		}
-	}, [isOpen, session.worktreeConfig]);
+	}, [isOpen, session.worktreeConfig, session.cwd]);
 
 	const checkGhCli = async () => {
 		try {
