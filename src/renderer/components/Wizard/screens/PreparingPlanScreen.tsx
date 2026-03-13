@@ -778,7 +778,8 @@ export function PreparingPlanScreen({ theme }: PreparingPlanScreenProps): JSX.El
 									// Add file to the created files list as it's saved
 									addCreatedFile(file);
 								},
-								'Initiation' // Save in Initiation subfolder
+								'Initiation', // Save in Initiation subfolder
+								sshRemoteId
 							);
 
 							if (saveResult.success) {

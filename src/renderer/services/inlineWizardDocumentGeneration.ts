@@ -678,7 +678,7 @@ async function saveDocument(
 		autoRunFolderPath,
 		filename,
 		doc.content,
-		sshRemoteId || undefined
+		sshRemoteId
 	);
 
 	if (!result.success) {
@@ -721,7 +721,7 @@ export async function generateInlineDocuments(
 	// Create a date-prefixed subfolder name: "YYYY-MM-DD-Feature-Name" (with -2, -3, etc. if needed)
 	const baseFolderName = generateWizardFolderBaseName(projectName);
 	const sshRemoteId = config.sessionSshRemoteConfig?.enabled
-		? config.sessionSshRemoteConfig.remoteId
+		? (config.sessionSshRemoteConfig.remoteId ?? undefined)
 		: undefined;
 
 	// Only attempt to check existing folders if we're local OR if listDocs supports remote
@@ -843,7 +843,7 @@ export async function generateInlineDocuments(
 				// Set up file watcher for real-time document streaming
 				// The agent writes files directly, and we detect them here
 				window.maestro.autorun
-					.watchFolder(subfolderPath, sshRemoteId || undefined)
+					.watchFolder(subfolderPath, sshRemoteId)
 					.then((watchResult) => {
 						if (watchResult.success) {
 							console.log('[InlineWizardDocGen] Started watching folder:', subfolderPath);
@@ -1113,7 +1113,7 @@ export async function generateInlineDocuments(
 		const savedDocuments: InlineGeneratedDocument[] = [];
 		for (const doc of documents) {
 			try {
-				const savedDoc = await saveDocument(subfolderPath, doc, sshRemoteId || undefined);
+				const savedDoc = await saveDocument(subfolderPath, doc, sshRemoteId);
 				savedDocuments.push(savedDoc);
 				callbacks?.onDocumentComplete?.(savedDoc);
 			} catch (error) {
