@@ -50,6 +50,9 @@ interface ParsedCopilotSessionData {
 	firstAssistantMessage: string;
 	firstUserMessage: string;
 	stats: CopilotSessionStats;
+	parsedEventCount: number;
+	malformedEventCount: number;
+	hasMeaningfulContent: boolean;
 }
 
 interface CopilotEvent {
@@ -78,27 +81,65 @@ interface CopilotEvent {
 }
 
 function normalizeYamlScalar(value: string): string {
-	const trimmed = value.trim();
+	let trimmed = value.trim();
 	if (
 		(trimmed.startsWith('"') && trimmed.endsWith('"')) ||
 		(trimmed.startsWith("'") && trimmed.endsWith("'"))
 	) {
 		return trimmed.slice(1, -1);
 	}
+
+	const inlineCommentIndex = trimmed.search(/\s+#/);
+	if (inlineCommentIndex >= 0) {
+		trimmed = trimmed.slice(0, inlineCommentIndex).trim();
+	}
+
 	return trimmed;
 }
 
-function parseSimpleYaml(content: string): Record<string, string> {
-	const result: Record<string, string> = {};
+const WORKSPACE_METADATA_KEYS = new Set<keyof CopilotWorkspaceMetadata>([
+	'id',
+	'cwd',
+	'git_root',
+	'repository',
+	'branch',
+	'summary',
+	'created_at',
+	'updated_at',
+]);
 
-	for (const line of content.split('\n')) {
-		if (!line.trim()) continue;
-		const match = line.match(/^([a-z_]+):\s*(.*)$/);
+function normalizeWorkspaceMetadataKey(key: string): keyof CopilotWorkspaceMetadata | null {
+	const normalized = key
+		.trim()
+		.replace(/-/g, '_')
+		.replace(/([a-z0-9])([A-Z])/g, '$1_$2')
+		.toLowerCase();
+
+	return WORKSPACE_METADATA_KEYS.has(normalized as keyof CopilotWorkspaceMetadata)
+		? (normalized as keyof CopilotWorkspaceMetadata)
+		: null;
+}
+
+function parseWorkspaceMetadata(content: string, sessionId: string): CopilotWorkspaceMetadata {
+	const metadata: CopilotWorkspaceMetadata = { id: sessionId };
+
+	for (const rawLine of content.split(/\r?\n/)) {
+		const line = rawLine.trim();
+		if (!line || line.startsWith('#') || line === '---' || line === '...') continue;
+
+		const match = rawLine.match(/^\s*([A-Za-z0-9_-]+)\s*:\s*(.*)$/);
 		if (!match) continue;
-		result[match[1]] = normalizeYamlScalar(match[2]);
+
+		const key = normalizeWorkspaceMetadataKey(match[1]);
+		if (!key) continue;
+
+		const value = normalizeYamlScalar(match[2]);
+		if (!value) continue;
+
+		metadata[key] = value;
 	}
 
-	return result;
+	return metadata;
 }
 
 function normalizePath(value?: string): string | null {
@@ -134,6 +175,8 @@ function parseEvents(content: string): ParsedCopilotSessionData {
 	const messages: SessionMessage[] = [];
 	let firstAssistantMessage = '';
 	let firstUserMessage = '';
+	let parsedEventCount = 0;
+	let malformedEventCount = 0;
 	const stats: CopilotSessionStats = {
 		inputTokens: 0,
 		outputTokens: 0,
@@ -142,11 +185,12 @@ function parseEvents(content: string): ParsedCopilotSessionData {
 		durationSeconds: 0,
 	};
 
-	for (const line of content.split('\n')) {
+	for (const line of content.split(/\r?\n/)) {
 		if (!line.trim()) continue;
 
 		try {
 			const entry = JSON.parse(line) as CopilotEvent;
+			parsedEventCount += 1;
 
 			if (entry.type === 'user.message') {
 				const contentText = entry.data?.content || '';
@@ -198,15 +242,27 @@ function parseEvents(content: string): ParsedCopilotSessionData {
 				stats.durationSeconds = Math.max(0, Math.floor(entry.usage.sessionDurationMs / 1000));
 			}
 		} catch {
+			malformedEventCount += 1;
 			// Ignore malformed lines so a single bad event does not hide the whole session.
 		}
 	}
+
+	const hasMeaningfulContent =
+		messages.length > 0 ||
+		stats.inputTokens > 0 ||
+		stats.outputTokens > 0 ||
+		stats.cacheReadTokens > 0 ||
+		stats.cacheCreationTokens > 0 ||
+		stats.durationSeconds > 0;
 
 	return {
 		messages,
 		firstAssistantMessage,
 		firstUserMessage,
 		stats,
+		parsedEventCount,
+		malformedEventCount,
+		hasMeaningfulContent,
 	};
 }
 
@@ -360,24 +416,31 @@ export class CopilotSessionStorage extends BaseSessionStorage {
 				return null;
 			}
 
-			const parsed = parseSimpleYaml(workspaceContent);
-			const metadata: CopilotWorkspaceMetadata = {
-				id: parsed.id || sessionId,
-				cwd: parsed.cwd,
-				git_root: parsed.git_root,
-				repository: parsed.repository,
-				branch: parsed.branch,
-				summary: parsed.summary,
-				created_at: parsed.created_at,
-				updated_at: parsed.updated_at,
-			};
+			const metadata = parseWorkspaceMetadata(workspaceContent, sessionId);
 
 			if (!matchesProject(metadata, projectPath)) {
 				return null;
 			}
 
 			const eventsContent = await this.readEventsFile(sessionId, sshConfig);
-			const parsedEvents = eventsContent ? parseEvents(eventsContent) : null;
+			if (!eventsContent?.trim()) {
+				logger.debug(`Skipping Copilot session ${sessionId} with empty events log`, LOG_CONTEXT);
+				return null;
+			}
+
+			const parsedEvents = parseEvents(eventsContent);
+			if (!parsedEvents.hasMeaningfulContent) {
+				logger.debug(
+					`Skipping Copilot session ${sessionId} without meaningful event content`,
+					LOG_CONTEXT,
+					{
+						parsedEventCount: parsedEvents.parsedEventCount,
+						malformedEventCount: parsedEvents.malformedEventCount,
+					}
+				);
+				return null;
+			}
+
 			const sizeBytes = sshConfig
 				? await this.getRemoteDirectorySize(sessionDir, sshConfig)
 				: await getLocalDirectorySize(sessionDir);
@@ -385,8 +448,8 @@ export class CopilotSessionStorage extends BaseSessionStorage {
 			const timestamp = metadata.created_at || new Date().toISOString();
 			const modifiedAt = metadata.updated_at || timestamp;
 			const preview =
-				parsedEvents?.firstAssistantMessage ||
-				parsedEvents?.firstUserMessage ||
+				parsedEvents.firstAssistantMessage ||
+				parsedEvents.firstUserMessage ||
 				metadata.summary ||
 				'Copilot session';
 
@@ -396,13 +459,13 @@ export class CopilotSessionStorage extends BaseSessionStorage {
 				timestamp,
 				modifiedAt,
 				firstMessage: preview.slice(0, 200),
-				messageCount: parsedEvents?.messages.length || 0,
+				messageCount: parsedEvents.messages.length,
 				sizeBytes,
-				inputTokens: parsedEvents?.stats.inputTokens || 0,
-				outputTokens: parsedEvents?.stats.outputTokens || 0,
-				cacheReadTokens: parsedEvents?.stats.cacheReadTokens || 0,
-				cacheCreationTokens: parsedEvents?.stats.cacheCreationTokens || 0,
-				durationSeconds: parsedEvents?.stats.durationSeconds || 0,
+				inputTokens: parsedEvents.stats.inputTokens,
+				outputTokens: parsedEvents.stats.outputTokens,
+				cacheReadTokens: parsedEvents.stats.cacheReadTokens,
+				cacheCreationTokens: parsedEvents.stats.cacheCreationTokens,
+				durationSeconds: parsedEvents.stats.durationSeconds,
 			};
 		} catch (error) {
 			logger.debug(`Failed to load Copilot session metadata for ${sessionId}`, LOG_CONTEXT, {

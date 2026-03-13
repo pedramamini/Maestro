@@ -16,6 +16,8 @@ interface StdoutHandlerDependencies {
 	bufferManager: DataBufferManager;
 }
 
+const MAX_COPILOT_JSON_BUFFER_LENGTH = 1024 * 1024;
+
 /**
  * Normalize usage stats to handle cumulative vs per-turn usage reporting.
  *
@@ -207,6 +209,24 @@ function getEmittedToolCallIds(managedProcess: ManagedProcess): Set<string> {
 	return managedProcess.emittedToolCallIds;
 }
 
+function resetOversizedCopilotJsonBuffer(sessionId: string, managedProcess: ManagedProcess): void {
+	const bufferLength = managedProcess.jsonBuffer?.length || 0;
+	if (bufferLength <= MAX_COPILOT_JSON_BUFFER_LENGTH) {
+		return;
+	}
+
+	logger.warn(
+		'[ProcessManager] Dropping oversized Copilot JSON buffer remainder',
+		'ProcessManager',
+		{
+			sessionId,
+			bufferLength,
+			maxBufferLength: MAX_COPILOT_JSON_BUFFER_LENGTH,
+		}
+	);
+	managedProcess.jsonBuffer = '';
+}
+
 /**
  * Handles stdout data processing for child processes.
  * Extracts session IDs, usage stats, and result data from agent output.
@@ -283,6 +303,7 @@ export class StdoutHandler {
 
 			const { messages, remainder } = extractConcatenatedJsonObjects(managedProcess.jsonBuffer);
 			managedProcess.jsonBuffer = remainder;
+			resetOversizedCopilotJsonBuffer(sessionId, managedProcess);
 
 			for (const message of messages) {
 				managedProcess.stdoutBuffer = appendToBuffer(

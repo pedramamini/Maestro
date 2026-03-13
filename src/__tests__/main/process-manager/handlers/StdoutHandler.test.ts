@@ -52,6 +52,7 @@ vi.mock('../../../../main/parsers/error-patterns', () => ({
 import { StdoutHandler } from '../../../../main/process-manager/handlers/StdoutHandler';
 import { CopilotOutputParser } from '../../../../main/parsers/copilot-output-parser';
 import type { ManagedProcess } from '../../../../main/process-manager/types';
+import { logger } from '../../../../main/utils/logger';
 
 // ── Helpers ────────────────────────────────────────────────────────────────
 
@@ -291,6 +292,32 @@ describe('StdoutHandler', () => {
 			expect(bufferManager.emitDataBuffered).toHaveBeenCalledWith(sessionId, 'Final answer');
 			expect(sessionIdSpy).toHaveBeenCalledWith(sessionId, 'copilot-session-456');
 			expect(proc.jsonBuffer).toBe('');
+		});
+
+		it('should drop oversized incomplete Copilot JSON buffers', () => {
+			const parser = new CopilotOutputParser();
+			const { handler, bufferManager, sessionId, proc } = createTestContext({
+				isStreamJsonMode: true,
+				toolType: 'copilot',
+				outputParser: parser,
+			});
+
+			const oversizedPayload =
+				'{"type":"assistant.message","data":{"content":"' + 'x'.repeat(1024 * 1024 + 64);
+
+			handler.handleData(sessionId, oversizedPayload);
+
+			expect(bufferManager.emitDataBuffered).not.toHaveBeenCalled();
+			expect(proc.jsonBuffer).toBe('');
+			expect(logger.warn).toHaveBeenCalledWith(
+				'[ProcessManager] Dropping oversized Copilot JSON buffer remainder',
+				'ProcessManager',
+				expect.objectContaining({
+					sessionId,
+					bufferLength: oversizedPayload.length,
+					maxBufferLength: 1024 * 1024,
+				})
+			);
 		});
 
 		it('should discard Copilot preamble noise once JSON output begins', () => {
