@@ -2,6 +2,7 @@ import path from 'path';
 import os from 'os';
 import fs from 'fs/promises';
 import { logger } from '../utils/logger';
+import { captureException } from '../utils/sentry';
 import { readFileRemote, readDirRemote, directorySizeRemote } from '../utils/remote-fs';
 import type {
 	AgentSessionInfo,
@@ -148,10 +149,15 @@ function parseWorkspaceMetadata(content: string, sessionId: string): CopilotWork
 	return metadata;
 }
 
-/** Normalize a filesystem path for cross-platform comparison. */
+/** Normalize a filesystem path for cross-platform comparison. Case-folds Windows-style paths (drive letter prefix). */
 function normalizePath(value?: string): string | null {
 	if (!value) return null;
-	return value.replace(/\\/g, '/').replace(/\/+$/, '');
+	let normalized = value.replace(/\\/g, '/').replace(/\/+$/, '');
+	// Case-fold Windows-style paths (e.g., C:/Users) for case-insensitive comparison
+	if (/^[A-Za-z]:/.test(normalized)) {
+		normalized = normalized.toLowerCase();
+	}
+	return normalized;
 }
 
 /** Check whether session metadata matches the given project path. */
@@ -497,9 +503,15 @@ export class CopilotSessionStorage extends BaseSessionStorage {
 				durationSeconds: parsedEvents.stats.durationSeconds,
 			};
 		} catch (error) {
-			logger.debug(`Failed to load Copilot session metadata for ${sessionId}`, LOG_CONTEXT, {
-				error,
-			});
+			const code = (error as NodeJS.ErrnoException)?.code;
+			if (code === 'ENOENT' || code === 'EACCES' || code === 'EPERM') {
+				logger.debug(`Expected failure loading Copilot session ${sessionId}: ${code}`, LOG_CONTEXT);
+			} else {
+				logger.warn(`Unexpected failure loading Copilot session ${sessionId}`, LOG_CONTEXT, {
+					error,
+				});
+				captureException(error, { operation: 'copilotStorage:loadSessionInfo', sessionId });
+			}
 			return null;
 		}
 	}

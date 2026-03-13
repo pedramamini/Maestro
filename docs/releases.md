@@ -237,7 +237,7 @@ The big changes in the v0.12.x line are the following three:
 
 ### Changes
 
-- Add Sentry crashing reporting monitoring with opt-out 🐛
+- Added Sentry crash reporting with opt-out 🐛
 - Stability fixes on v0.9.0 along with all the changes it brought along, including...
   - Major refactor to enable supporting of multiple providers 👨‍👩‍👧‍👦
   - Added OpenAI Codex support 👨‍💻
