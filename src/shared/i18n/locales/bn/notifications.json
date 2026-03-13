@@ -1,1 +1,150 @@
-{}
+{
+	"task": {
+		"completed_title": "টাস্ক সম্পন্ন",
+		"completed_message": "{{agent}} {{duration}}-এ শেষ করেছে",
+		"failed_title": "টাস্ক ব্যর্থ",
+		"failed_message": "{{agent}}-এ একটি ত্রুটি হয়েছে"
+	},
+	"connection": {
+		"lost_title": "সংযোগ বিচ্ছিন্ন",
+		"restored_title": "সংযোগ পুনরুদ্ধার হয়েছে"
+	},
+	"group_chat": {
+		"error_title": "গ্রুপ চ্যাট",
+		"create_failed_message": "গ্রুপ চ্যাট তৈরি করতে ব্যর্থ",
+		"create_failed_dynamic_message": "{{message}}"
+	},
+	"worktree": {
+		"discovered_title": "ওয়ার্কট্রি আবিষ্কৃত",
+		"discovered_message_one": "{{count}}টি ওয়ার্কট্রি সাব-এজেন্ট পাওয়া গেছে",
+		"discovered_message_other": "{{count}}টি ওয়ার্কট্রি সাব-এজেন্ট পাওয়া গেছে",
+		"disabled_title": "ওয়ার্কট্রি নিষ্ক্রিয়",
+		"disabled_message": "এই এজেন্টের জন্য ওয়ার্কট্রি কনফিগারেশন সাফ করা হয়েছে।",
+		"disabled_with_removed_message_one": "এই এজেন্টের জন্য ওয়ার্কট্রি কনফিগারেশন সাফ করা হয়েছে। {{count}}টি ওয়ার্কট্রি সাব-এজেন্ট সরানো হয়েছে।",
+		"disabled_with_removed_message_other": "এই এজেন্টের জন্য ওয়ার্কট্রি কনফিগারেশন সাফ করা হয়েছে। {{count}}টি ওয়ার্কট্রি সাব-এজেন্ট সরানো হয়েছে।",
+		"no_directory_title": "ত্রুটি",
+		"no_directory_message": "কোনো ওয়ার্কট্রি ডিরেক্টরি কনফিগার করা হয়নি",
+		"created_title": "ওয়ার্কট্রি তৈরি হয়েছে",
+		"created_message": "{{branch}}",
+		"create_failed_title": "ওয়ার্কট্রি তৈরি করতে ব্যর্থ",
+		"create_failed_message": "{{message}}",
+		"new_discovered_title": "নতুন ওয়ার্কট্রি আবিষ্কৃত",
+		"new_discovered_message": "{{name}}",
+		"agent_not_found_title": "ওয়ার্কট্রি এজেন্ট পাওয়া যায়নি",
+		"agent_not_found_message": "নির্বাচিত ওয়ার্কট্রি এজেন্ট সরানো হয়েছে। পরিবর্তে সক্রিয় এজেন্টে চালানো হচ্ছে।",
+		"target_busy_title": "লক্ষ্য এজেন্ট ব্যস্ত",
+		"target_busy_message": "লক্ষ্য এজেন্ট ব্যস্ত আছে। অনুগ্রহ করে আবার চেষ্টা করুন।",
+		"error_title": "ওয়ার্কট্রি ত্রুটি",
+		"error_message": "{{message}}"
+	},
+	"autorun": {
+		"started_title": "Auto Run শুরু হয়েছে",
+		"started_message_one": "{{docCount}}টি ডকুমেন্টে {{count}}টি টাস্ক",
+		"started_message_other": "{{docCount}}টি ডকুমেন্টে {{count}}টি টাস্ক",
+		"complete_title": "Auto Run সম্পন্ন",
+		"complete_stopped_message": "{{total}}-এর মধ্যে {{completed}}টি টাস্ক সম্পন্ন করার পর থামানো হয়েছে",
+		"complete_all_message_one": "সকল {{total}}টি টাস্ক সফলভাবে সম্পন্ন হয়েছে",
+		"complete_all_message_other": "সকল {{total}}টি টাস্ক সফলভাবে সম্পন্ন হয়েছে",
+		"complete_partial_message": "{{total}}-এর মধ্যে {{completed}}টি টাস্ক সম্পন্ন হয়েছে",
+		"error_title": "Auto Run: {{errorTitle}}",
+		"error_message": "{{message}}"
+	},
+	"leaderboard": {
+		"updated_title": "লিডারবোর্ড আপডেট হয়েছে",
+		"updated_message": "{{message}}"
+	},
+	"symphony": {
+		"pr_ready_title": "Symphony: PR রিভিউর জন্য প্রস্তুত",
+		"pr_ready_message": "PR খোলা হয়েছে: {{prUrl}}",
+		"manual_needed_title": "Symphony: ম্যানুয়াল ফাইনালাইজেশন প্রয়োজন",
+		"manual_needed_message": "{{message}}",
+		"manual_needed_default_message": "PR স্বয়ংক্রিয়ভাবে ফাইনালাইজ করা যায়নি। ফাইনালাইজ করতে Symphony খুলুন।",
+		"auto_finalize_failed_title": "Symphony: স্বয়ংক্রিয় ফাইনালাইজ ব্যর্থ",
+		"auto_finalize_failed_message": "PR ড্রাফট হিসেবে রয়েছে। ম্যানুয়ালি ফাইনালাইজ করতে Symphony খুলুন।",
+		"error_title": "Symphony ত্রুটি",
+		"agent_not_found_message": "এজেন্ট পাওয়া যায়নি: {{agentType}}"
+	},
+	"pr": {
+		"created_title": "PR তৈরি হয়েছে",
+		"created_message": "{{message}}",
+		"created_default_message": "Pull request সফলভাবে তৈরি হয়েছে",
+		"failed_title": "PR তৈরি ব্যর্থ",
+		"failed_message": "{{message}}",
+		"failed_default_message": "Pull request তৈরি করতে ব্যর্থ",
+		"app_created_title": "Pull Request তৈরি হয়েছে",
+		"app_created_message": "{{title}}"
+	},
+	"merge": {
+		"session_merged_title": "সেশন মার্জ হয়েছে",
+		"session_merged_message": "{{sourceInfo}}{{tokenInfo}} থেকে \"{{sessionName}}\" তৈরি হয়েছে।{{savedInfo}}",
+		"context_merged_title": "কনটেক্সট মার্জ হয়েছে",
+		"context_merged_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}।{{savedInfo}}",
+		"context_transferred_title": "কনটেক্সট স্থানান্তরিত হয়েছে",
+		"context_transferred_message": "স্থানান্তরিত কনটেক্সট সহ \"{{sessionName}}\" তৈরি হয়েছে",
+		"failed_title": "মার্জ ব্যর্থ",
+		"failed_message": "{{message}}",
+		"failed_default_message": "কনটেক্সট মার্জ করতে ব্যর্থ",
+		"context_sent_title": "কনটেক্সট পাঠানো হয়েছে",
+		"context_sent_message": "\"{{source}}\" → \"{{target}}\"{{tokenInfo}}"
+	},
+	"compact": {
+		"cannot_title": "কম্প্যাক্ট করা যাচ্ছে না",
+		"cannot_message": "কনটেক্সট খুব ছোট। কম্প্যাক্ট করতে কমপক্ষে {{percent}}% ব্যবহার, ~2k টোকেন, বা 8+ বার্তা প্রয়োজন।",
+		"success_title": "কনটেক্সট কম্প্যাক্ট হয়েছে",
+		"success_message": "কনটেক্সট {{percent}}% কমানো হয়েছে। নতুন ট্যাব দেখতে ক্লিক করুন।",
+		"failed_title": "কম্প্যাকশন ব্যর্থ",
+		"failed_message": "কনটেক্সট কম্প্যাক্ট করতে ব্যর্থ। বিস্তারিত জানতে ট্যাব দেখুন।",
+		"failed_unexpected_message": "কম্প্যাকশনের সময় একটি অপ্রত্যাশিত ত্রুটি ঘটেছে।"
+	},
+	"agent": {
+		"creation_failed_title": "এজেন্ট তৈরি ব্যর্থ",
+		"creation_failed_message": "{{message}}",
+		"creation_failed_default_message": "ডুপ্লিকেট এজেন্ট তৈরি করা যায় না"
+	},
+	"session": {
+		"group_removed_title": "গ্রুপ সরানো হয়েছে",
+		"group_removed_message_one": "\"{{name}}\" ও {{count}}টি এজেন্ট সরানো হয়েছে",
+		"group_removed_message_other": "\"{{name}}\" ও {{count}}টি এজেন্ট সরানো হয়েছে",
+		"erase_failed_title": "ডিরেক্টরি মুছতে ব্যর্থ",
+		"erase_failed_message": "{{message}}"
+	},
+	"export": {
+		"nothing_to_copy_title": "কপি করার কিছু নেই",
+		"nothing_to_copy_message": "কপি করার জন্য কোনো ব্যবহারকারী বা সহকারী বার্তা নেই।",
+		"context_copied_title": "কনটেক্সট কপি হয়েছে",
+		"context_copied_message": "কথোপকথন ক্লিপবোর্ডে কপি করা হয়েছে।",
+		"copy_failed_title": "কপি ব্যর্থ",
+		"copy_failed_message": "কনটেক্সট ক্লিপবোর্ডে কপি করতে ব্যর্থ।",
+		"export_complete_title": "এক্সপোর্ট সম্পন্ন",
+		"export_complete_message": "কথোপকথন HTML হিসেবে এক্সপোর্ট করা হয়েছে।",
+		"export_failed_title": "এক্সপোর্ট ব্যর্থ",
+		"export_failed_message": "কথোপকথন HTML হিসেবে এক্সপোর্ট করতে ব্যর্থ।",
+		"nothing_to_publish_title": "প্রকাশ করার কিছু নেই",
+		"nothing_to_publish_message": "প্রকাশ করার জন্য কোনো ব্যবহারকারী বা সহকারী বার্তা নেই।"
+	},
+	"stats": {
+		"database_title": "পরিসংখ্যান ডেটাবেস",
+		"database_message": "{{message}}"
+	},
+	"history": {
+		"entry_added_title": "ইতিহাসে এন্ট্রি যোগ হয়েছে",
+		"entry_added_message": "{{message}}"
+	},
+	"synopsis": {
+		"title": "সারাংশ",
+		"message": "{{message}}"
+	},
+	"playbook": {
+		"imported_title": "Playbook আমদানি হয়েছে",
+		"imported_message": "Playbook সফলভাবে {{folder}}-এ আমদানি করা হয়েছে"
+	},
+	"gist": {
+		"published_title": "Gist প্রকাশিত",
+		"published_public_message": "পাবলিক gist তৈরি হয়েছে! URL ক্লিপবোর্ডে কপি করা হয়েছে।",
+		"published_secret_message": "সিক্রেট gist তৈরি হয়েছে! URL ক্লিপবোর্ডে কপি করা হয়েছে।"
+	},
+	"debug": {
+		"test_title": "পরীক্ষামূলক বিজ্ঞপ্তি",
+		"test_message": "এটি কনসোল থেকে একটি পরীক্ষামূলক টোস্ট বিজ্ঞপ্তি!"
+	}
+}
