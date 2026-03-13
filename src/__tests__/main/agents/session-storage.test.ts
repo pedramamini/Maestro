@@ -18,14 +18,17 @@ import {
 import type { ToolType } from '../../../shared/types';
 
 vi.mock('os', async () => {
-	const actual = await vi.importActual<typeof import('os')>('os');
-	const mocked = {
-		...actual,
-		homedir: vi.fn(() => '/tmp/maestro-session-storage-home'),
-	};
+	// Use dynamic require to get the real os module as a plain object,
+	// since vi.importActual/importOriginal return empty module namespaces
+	// for Node.js built-ins in Vitest's SSR mode.
+	// eslint-disable-next-line @typescript-eslint/no-require-imports
+	const realOs = await import('node:os');
+	const homedirMock = vi.fn(() => '/tmp/maestro-session-storage-home');
+	const overrides = { homedir: homedirMock };
 	return {
-		...mocked,
-		default: mocked,
+		...realOs,
+		...overrides,
+		default: { ...realOs, ...overrides },
 	};
 });
 
