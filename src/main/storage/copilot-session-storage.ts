@@ -480,7 +480,20 @@ export class CopilotSessionStorage extends BaseSessionStorage {
 				? await this.getRemoteDirectorySize(sessionDir, sshConfig)
 				: await getLocalDirectorySize(sessionDir);
 			const projectRoot = metadata.git_root || metadata.cwd || projectPath;
-			const timestamp = metadata.created_at || metadata.updated_at || new Date().toISOString();
+
+			// Prefer metadata timestamps; fall back to workspace file mtime (local only)
+			// before using current time as a last resort.
+			let fallbackTimestamp: string | undefined;
+			if (!metadata.created_at && !metadata.updated_at && !sshConfig) {
+				try {
+					const workspaceStat = await fs.stat(workspacePath);
+					fallbackTimestamp = new Date(workspaceStat.mtimeMs).toISOString();
+				} catch {
+					// stat failure is non-critical
+				}
+			}
+			const timestamp =
+				metadata.created_at || metadata.updated_at || fallbackTimestamp || new Date().toISOString();
 			const modifiedAt = metadata.updated_at || timestamp;
 			const preview =
 				parsedEvents.firstAssistantMessage ||
