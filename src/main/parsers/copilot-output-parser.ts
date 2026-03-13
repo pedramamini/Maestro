@@ -342,10 +342,7 @@ export class CopilotOutputParser implements AgentOutputParser {
 			return null;
 		}
 
-		const errorText =
-			extractErrorText(msg.error) ||
-			extractErrorText(msg.data?.error) ||
-			extractErrorText(msg.data?.message);
+		const errorText = extractErrorText(msg.error) || extractErrorText(msg.data?.error);
 
 		// Do NOT synthesize an error for bare non-zero exit codes.
 		// Returning null here lets detectErrorFromExit() run with full

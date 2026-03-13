@@ -273,6 +273,32 @@ describe('agent-definitions', () => {
 			expect(modelOption?.argBuilder?.('')).toEqual([]);
 			expect(modelOption?.argBuilder?.('  ')).toEqual([]);
 		});
+
+		it('should have Copilot-specific config options for supported CLI flags', () => {
+			const copilot = getAgentDefinition('copilot');
+			expect(copilot?.configOptions).toBeDefined();
+
+			const reasoningEffort = copilot?.configOptions?.find((opt) => opt.key === 'reasoningEffort');
+			expect(reasoningEffort?.type).toBe('select');
+			expect(reasoningEffort?.argBuilder?.('high')).toEqual(['--reasoning-effort', 'high']);
+
+			const autopilot = copilot?.configOptions?.find((opt) => opt.key === 'autopilot');
+			expect(autopilot?.type).toBe('checkbox');
+			expect(autopilot?.argBuilder?.(true)).toEqual(['--autopilot']);
+			expect(autopilot?.argBuilder?.(false)).toEqual([]);
+
+			const allowAllPaths = copilot?.configOptions?.find((opt) => opt.key === 'allowAllPaths');
+			expect(allowAllPaths?.argBuilder?.(true)).toEqual(['--allow-all-paths']);
+
+			const allowAllUrls = copilot?.configOptions?.find((opt) => opt.key === 'allowAllUrls');
+			expect(allowAllUrls?.argBuilder?.(true)).toEqual(['--allow-all-urls']);
+
+			const experimental = copilot?.configOptions?.find((opt) => opt.key === 'experimental');
+			expect(experimental?.argBuilder?.(true)).toEqual(['--experimental']);
+
+			const screenReader = copilot?.configOptions?.find((opt) => opt.key === 'screenReader');
+			expect(screenReader?.argBuilder?.(true)).toEqual(['--screen-reader']);
+		});
 	});
 
 	describe('Type definitions', () => {

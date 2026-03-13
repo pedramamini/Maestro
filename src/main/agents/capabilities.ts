@@ -411,10 +411,10 @@ export const AGENT_CAPABILITIES: Record<string, AgentCapabilities> = {
 		supportsModelSelection: true, // --model <model>
 		supportsStreamJsonInput: false, // Not verified
 		supportsThinkingDisplay: true, // assistant.reasoning events are rendered through Maestro's thinking-chunk pipeline
-		supportsContextMerge: false, // Not verified - PLACEHOLDER
-		supportsContextExport: false, // Not verified - PLACEHOLDER
-		supportsWizard: false, // PLACEHOLDER - not verified
-		supportsGroupChatModeration: false, // PLACEHOLDER - not verified
+		supportsContextMerge: true, // Can receive merged context via prompts
+		supportsContextExport: true, // Session storage supports context export
+		supportsWizard: true, // Wizard structured output works with Copilot JSON final_answer events
+		supportsGroupChatModeration: true, // Group chat moderation uses the standard batch-mode orchestration path
 		usesJsonLineOutput: true, // --output-format json produces JSONL
 		usesCombinedContextWindow: false, // Default Copilot model is Claude Sonnet; model-specific behavior varies
 	},

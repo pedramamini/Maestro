@@ -137,7 +137,7 @@ function formatToolProgressText(toolName: string, toolState?: ToolProgressState)
 
 	if (status === 'completed') {
 		if (toolNameLower === 'view' || toolNameLower === 'read') {
-			return withDetail('Read', '');
+			return detail ? `Read ${detail}` : 'Finished reading';
 		}
 		if (
 			toolNameLower === 'rg' ||
@@ -145,10 +145,10 @@ function formatToolProgressText(toolName: string, toolState?: ToolProgressState)
 			toolNameLower === 'glob' ||
 			toolNameLower === 'search'
 		) {
-			return withDetail('Searched', '');
+			return detail ? `Searched ${detail}` : 'Search complete';
 		}
 		if (toolNameLower === 'bash' || toolNameLower === 'shell') {
-			return withDetail('Ran', '');
+			return detail ? `Ran ${detail}` : 'Command completed';
 		}
 		if (
 			toolNameLower === 'write' ||
@@ -156,7 +156,7 @@ function formatToolProgressText(toolName: string, toolState?: ToolProgressState)
 			toolNameLower === 'apply_patch' ||
 			toolNameLower === 'create'
 		) {
-			return withDetail('Updated', '');
+			return detail ? `Updated ${detail}` : 'Update complete';
 		}
 		return detail
 			? `Completed ${normalizedToolName}: ${detail}`
@@ -1211,20 +1211,19 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 		);
 
 		// ================================================================
-		// onSlashCommands — Handle slash commands from Claude Code init
+		// onSlashCommands — Handle slash commands from agent init/discovery
 		// ================================================================
 		const unsubscribeSlashCommands = window.maestro.process.onSlashCommands(
 			(sessionId: string, slashCommands: string[]) => {
 				const actualSessionId = parseSessionId(sessionId).baseSessionId;
 
-				const commands = slashCommands.map((cmd) => ({
-					command: cmd.startsWith('/') ? cmd : `/${cmd}`,
-					description: getSlashCommandDescription(cmd),
-				}));
-
 				setSessions((prev) =>
 					prev.map((s) => {
 						if (s.id !== actualSessionId) return s;
+						const commands = slashCommands.map((cmd) => ({
+							command: cmd.startsWith('/') ? cmd : `/${cmd}`,
+							description: getSlashCommandDescription(cmd, s.toolType),
+						}));
 						return { ...s, agentCommands: commands };
 					})
 				);
@@ -1781,8 +1780,15 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 						if (!targetTab) return s;
 
 						if (!targetTab.showThinking || targetTab.showThinking === 'off') {
-							const toolState = toolEvent.state as ToolProgressState | undefined;
+							const incomingToolState = toolEvent.state as ToolProgressState | undefined;
 							const hiddenToolKey = `${actualSessionId}:${tabId}`;
+							const previousHiddenTool = activeHiddenTools.get(hiddenToolKey);
+							const toolState: ToolProgressState | undefined = incomingToolState
+								? {
+										...incomingToolState,
+										input: incomingToolState.input ?? previousHiddenTool?.toolState?.input,
+									}
+								: previousHiddenTool?.toolState;
 							const statusText = formatToolProgressText(toolEvent.toolName, toolState);
 
 							if (toolState?.status === 'running') {

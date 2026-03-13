@@ -1942,6 +1942,35 @@ describe('TerminalOutput', () => {
 			expect(screen.getByText('Reading src/renderer/App.tsx')).toBeInTheDocument();
 			expect(screen.queryByTestId('react-markdown')).not.toBeInTheDocument();
 		});
+
+		it('uses the standard failed icon treatment for hidden progress', () => {
+			const logs: LogEntry[] = [
+				createLogEntry({
+					id: 'hidden-progress:tab-1',
+					text: 'Command failed',
+					source: 'system',
+					metadata: {
+						toolState: {
+							status: 'failed',
+						},
+						hiddenProgress: {
+							kind: 'tool',
+							toolName: 'bash',
+						},
+					},
+				}),
+			];
+
+			const session = createDefaultSession({
+				tabs: [{ id: 'tab-1', agentSessionId: 'claude-123', logs, isUnread: false }],
+				activeTabId: 'tab-1',
+			});
+
+			render(<TerminalOutput {...createDefaultProps({ session })} />);
+
+			expect(screen.getByText('!')).toBeInTheDocument();
+			expect(screen.queryByText('×')).not.toBeInTheDocument();
+		});
 	});
 
 	describe('local filter functionality', () => {

@@ -453,6 +453,57 @@ export const AGENT_DEFINITIONS: AgentDefinition[] = [
 					'Maximum context window size in tokens. Required for context usage display. Varies by model.',
 				default: 200000, // Default for Claude/GPT-5 models
 			},
+			{
+				key: 'reasoningEffort',
+				type: 'select',
+				label: 'Reasoning Effort',
+				description: 'Control how much deliberate reasoning Copilot uses before responding.',
+				options: ['', 'low', 'medium', 'high', 'xhigh'],
+				default: '',
+				argBuilder: (value: string) =>
+					value && value.trim() ? ['--reasoning-effort', value.trim()] : [],
+			},
+			{
+				key: 'autopilot',
+				type: 'checkbox',
+				label: 'Autopilot',
+				description: 'Allow Copilot to continue with follow-up turns automatically in prompt mode.',
+				default: false,
+				argBuilder: (value: boolean) => (value ? ['--autopilot'] : []),
+			},
+			{
+				key: 'allowAllPaths',
+				type: 'checkbox',
+				label: 'Allow All Paths',
+				description:
+					'Disable file path verification and allow access to any path without prompting.',
+				default: false,
+				argBuilder: (value: boolean) => (value ? ['--allow-all-paths'] : []),
+			},
+			{
+				key: 'allowAllUrls',
+				type: 'checkbox',
+				label: 'Allow All URLs',
+				description: 'Allow network access to any URL without prompting.',
+				default: false,
+				argBuilder: (value: boolean) => (value ? ['--allow-all-urls'] : []),
+			},
+			{
+				key: 'experimental',
+				type: 'checkbox',
+				label: 'Experimental Features',
+				description: 'Enable Copilot CLI experimental features for this agent.',
+				default: false,
+				argBuilder: (value: boolean) => (value ? ['--experimental'] : []),
+			},
+			{
+				key: 'screenReader',
+				type: 'checkbox',
+				label: 'Screen Reader Mode',
+				description: 'Enable Copilot CLI screen reader optimizations.',
+				default: false,
+				argBuilder: (value: boolean) => (value ? ['--screen-reader'] : []),
+			},
 		],
 	},
 ];

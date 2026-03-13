@@ -274,6 +274,18 @@ describe('CopilotOutputParser', () => {
 		);
 	});
 
+	it('does not treat reasoning message content as an agent error', () => {
+		const parser = new CopilotOutputParser();
+		const error = parser.detectErrorFromParsed({
+			type: 'assistant.reasoning',
+			data: {
+				message: 'Thinking through the repository structure...',
+			},
+		});
+
+		expect(error).toBeNull();
+	});
+
 	it('maps no-tty interactive launch failures to a clearer crash message', () => {
 		const parser = new CopilotOutputParser();
 		const error = parser.detectErrorFromExit(

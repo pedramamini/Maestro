@@ -585,7 +585,7 @@ const LogItemComponent = memo(
 									</span>
 								) : log.metadata?.toolState?.status === 'failed' ? (
 									<span className="shrink-0 pt-0.5" style={{ color: theme.colors.error }}>
-										×
+										!
 									</span>
 								) : (
 									<span
