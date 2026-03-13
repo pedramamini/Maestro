@@ -586,6 +586,9 @@ class PhaseGenerator {
 			// For SSH remote sessions, skip the availability check since we're executing remotely
 			// The agent detector checks for binaries locally, but we need to execute on the remote host
 			const isRemoteSession = config.sshRemoteConfig?.enabled && config.sshRemoteConfig?.remoteId;
+			const sshRemoteId = config.sshRemoteConfig?.enabled
+				? (config.sshRemoteConfig.remoteId ?? undefined)
+				: undefined;
 
 			if (!agent) {
 				wizardDebugLogger.log('error', 'Agent configuration not found', {
@@ -706,7 +709,7 @@ class PhaseGenerator {
 			if (!hasValidParsedDocs) {
 				callbacks?.onProgress?.('Checking for documents on disk...');
 				wizardDebugLogger.log('info', 'Checking for documents on disk (parsed docs invalid)');
-				const diskDocs = await this.readDocumentsFromDisk(config.directoryPath);
+				const diskDocs = await this.readDocumentsFromDisk(config.directoryPath, sshRemoteId);
 				if (diskDocs.length > 0) {
 					console.log('[PhaseGenerator] Found documents on disk:', diskDocs.length);
 					wizardDebugLogger.log('info', 'Found documents on disk', {
@@ -976,9 +979,14 @@ class PhaseGenerator {
 				subfolder: config.subfolder,
 			});
 
+			// Extract sshRemoteId for remote sessions
+			const sshRemoteId = config.sshRemoteConfig?.enabled
+				? (config.sshRemoteConfig.remoteId ?? undefined)
+				: undefined;
+
 			// Start watching the folder for file changes
 			window.maestro.autorun
-				.watchFolder(autoRunPath)
+				.watchFolder(autoRunPath, sshRemoteId)
 				.then((result) => {
 					if (result.success) {
 						console.log('[PhaseGenerator] Started watching folder:', autoRunPath);
@@ -1017,7 +1025,7 @@ class PhaseGenerator {
 									const readWithRetry = async (retries = 3, delayMs = 200): Promise<void> => {
 										for (let attempt = 1; attempt <= retries; attempt++) {
 											try {
-												const content = await window.maestro.fs.readFile(fullPath);
+												const content = await window.maestro.fs.readFile(fullPath, sshRemoteId);
 												if (content && typeof content === 'string' && content.length > 0) {
 													console.log(
 														'[PhaseGenerator] File read successful:',
@@ -1152,13 +1160,16 @@ class PhaseGenerator {
 	 * This is a fallback for when the agent writes files directly
 	 * instead of outputting them with markers.
 	 */
-	private async readDocumentsFromDisk(directoryPath: string): Promise<ParsedDocument[]> {
+	private async readDocumentsFromDisk(
+		directoryPath: string,
+		sshRemoteId?: string
+	): Promise<ParsedDocument[]> {
 		const autoRunPath = `${directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
 		const documents: ParsedDocument[] = [];
 
 		try {
 			// List files in the Auto Run folder
-			const listResult = await window.maestro.autorun.listDocs(autoRunPath);
+			const listResult = await window.maestro.autorun.listDocs(autoRunPath, sshRemoteId);
 			if (!listResult.success || !listResult.files) {
 				return [];
 			}
@@ -1169,7 +1180,11 @@ class PhaseGenerator {
 			for (const fileBaseName of listResult.files) {
 				const filename = fileBaseName.endsWith('.md') ? fileBaseName : `${fileBaseName}.md`;
 
-				const readResult = await window.maestro.autorun.readDoc(autoRunPath, fileBaseName);
+				const readResult = await window.maestro.autorun.readDoc(
+					autoRunPath,
+					fileBaseName,
+					sshRemoteId
+				);
 				if (readResult.success && readResult.content) {
 					// Extract phase number from filename
 					const phaseMatch = filename.match(/Phase-(\d+)/i);
@@ -1225,7 +1240,8 @@ class PhaseGenerator {
 		directoryPath: string,
 		documents: GeneratedDocument[],
 		onFileCreated?: (file: CreatedFileInfo) => void,
-		subfolder?: string
+		subfolder?: string,
+		sshRemoteId?: string
 	): Promise<{ success: boolean; savedPaths: string[]; error?: string; subfolderPath?: string }> {
 		const baseAutoRunPath = `${directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
 		const autoRunPath = subfolder ? `${baseAutoRunPath}/${subfolder}` : baseAutoRunPath;
@@ -1242,7 +1258,12 @@ class PhaseGenerator {
 				console.log('[PhaseGenerator] Saving document:', filename);
 
 				// Write the document (autorun:writeDoc creates the folder if needed)
-				const result = await window.maestro.autorun.writeDoc(autoRunPath, filename, doc.content);
+				const result = await window.maestro.autorun.writeDoc(
+					autoRunPath,
+					filename,
+					doc.content,
+					sshRemoteId
+				);
 
 				if (result.success) {
 					const fullPath = `${autoRunPath}/${filename}`;
