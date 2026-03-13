@@ -960,17 +960,25 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 				)
 				.all(sessionId) as SqliteMessageRow[];
 
-			// Session exists in SQLite but has no messages yet — return empty result
 			if (messageRows.length === 0) {
-				return {
-					messages: [],
-					parts: new Map(),
-					totalInputTokens: 0,
-					totalOutputTokens: 0,
-					totalCacheReadTokens: 0,
-					totalCacheWriteTokens: 0,
-					totalCost: 0,
-				};
+				// Verify session actually exists in SQLite before blocking JSON fallback
+				if (tableExists(db, 'session')) {
+					const sessionExists = db
+						.prepare('SELECT 1 FROM session WHERE id = ? LIMIT 1')
+						.get(sessionId);
+					if (sessionExists) {
+						return {
+							messages: [],
+							parts: new Map(),
+							totalInputTokens: 0,
+							totalOutputTokens: 0,
+							totalCacheReadTokens: 0,
+							totalCacheWriteTokens: 0,
+							totalCost: 0,
+						};
+					}
+				}
+				return null;
 			}
 
 			const hasPartTable = tableExists(db, 'part');
