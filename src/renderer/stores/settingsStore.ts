@@ -705,6 +705,8 @@ export const useSettingsStore = create<SettingsStore>()((set, get) => ({
 		window.maestro.settings.set('language', value);
 		localStorage.setItem(LANGUAGE_STORAGE_KEY, value);
 		i18n.changeLanguage(value);
+		// Notify main process so it can update native menus if needed
+		window.maestro.locale?.set(value);
 		// Direction attributes are applied reactively by DirectionProvider.
 		// We also set them here for immediate feedback before the next React render.
 		const rtl = RTL_LANGUAGES.includes(value as SupportedLanguage);
@@ -1620,7 +1622,16 @@ export async function loadAllSettings(): Promise<void> {
 		if (allSettings['colorBlindMode'] !== undefined)
 			patch.colorBlindMode = allSettings['colorBlindMode'] as boolean;
 
-		if (allSettings['language'] !== undefined) patch.language = allSettings['language'] as string;
+		if (allSettings['language'] !== undefined) {
+			const lang = allSettings['language'] as string;
+			patch.language = lang;
+			// Sync electron-store language to i18n and localStorage so language
+			// survives app restart even if localStorage was cleared
+			localStorage.setItem(LANGUAGE_STORAGE_KEY, lang);
+			if (i18n.language !== lang) {
+				i18n.changeLanguage(lang);
+			}
+		}
 
 		// Document Graph settings (with validation)
 		if (allSettings['documentGraphShowExternalLinks'] !== undefined)

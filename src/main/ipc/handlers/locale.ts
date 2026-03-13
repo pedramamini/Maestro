@@ -80,6 +80,9 @@ export function registerLocaleHandlers(deps: LocaleHandlerDependencies): void {
 
 	/**
 	 * locale:set — Stores the user's language preference in the settings store.
+	 * Note: Maestro uses custom (non-native) menus, so no Electron Menu.setApplicationMenu()
+	 * update is needed here. If native menus are added in the future, rebuild them with
+	 * translated labels when this handler is called.
 	 */
 	ipcMain.handle('locale:set', async (_, language: string) => {
 		if (!(SUPPORTED_LANGUAGES as readonly string[]).includes(language)) {
