@@ -309,8 +309,8 @@ function getWindowsKnownPaths(binaryName: string): string[] {
 			...npmGlobal('opencode'),
 		],
 		copilot: [
-			// GitHub CLI installation (primary method)
-			path.join(programFiles, 'GitHub CLI', 'copilot.exe'),
+			// WinGet installation (primary method on Windows)
+			path.join(programFiles, 'GitHub Copilot CLI', 'copilot.exe'),
 			// npm global installation
 			...npmGlobal('copilot'),
 			// Scoop installation

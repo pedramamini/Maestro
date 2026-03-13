@@ -177,13 +177,14 @@ function matchesProject(metadata: CopilotWorkspaceMetadata, projectPath: string)
 /** Convert Copilot tool requests into a normalized tool-use structure. */
 function buildToolUse(toolRequests?: CopilotToolRequest[]): unknown {
 	if (!toolRequests?.length) return undefined;
-	return toolRequests
+	const toolUse = toolRequests
 		.filter((tool) => tool.name)
 		.map((tool) => ({
 			name: tool.name,
 			id: tool.toolCallId,
 			input: tool.arguments,
 		}));
+	return toolUse.length > 0 ? toolUse : undefined;
 }
 
 /** Parse events.jsonl content into messages, statistics, and content indicators. */
@@ -297,7 +298,12 @@ async function getLocalDirectorySize(sessionDir: string): Promise<number> {
 			}
 		}
 		return total;
-	} catch {
+	} catch (error) {
+		const code = (error as NodeJS.ErrnoException)?.code;
+		if (code === 'ENOENT' || code === 'EACCES' || code === 'EPERM') {
+			return 0;
+		}
+		captureException(error, { operation: 'copilotStorage:getLocalDirectorySize', sessionDir });
 		return 0;
 	}
 }
@@ -430,7 +436,12 @@ export class CopilotSessionStorage extends BaseSessionStorage {
 		try {
 			const entries = await fs.readdir(sessionStateDir, { withFileTypes: true });
 			return entries.filter((entry) => entry.isDirectory()).map((entry) => entry.name);
-		} catch {
+		} catch (error) {
+			const code = (error as NodeJS.ErrnoException)?.code;
+			if (code === 'ENOENT' || code === 'EACCES' || code === 'EPERM') {
+				return [];
+			}
+			captureException(error, { operation: 'copilotStorage:listSessionIds' });
 			return [];
 		}
 	}
