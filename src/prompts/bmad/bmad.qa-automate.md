@@ -83,7 +83,7 @@ For UI features, generate tests that:
 
 Execute tests to verify they pass (use project's test command).
 
-If failures occur, fix them immediately.
+If failures occur, report them clearly with likely causes and suggested fixes, but do not modify product code in this workflow.
 
 ### Step 5: Create Summary
 

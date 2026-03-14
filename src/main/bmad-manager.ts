@@ -100,6 +100,17 @@ interface StoredData {
 	prompts: Record<string, StoredPrompt>;
 }
 
+let customizationMutationQueue = Promise.resolve();
+
+function withCustomizationLock<T>(mutation: () => Promise<T>): Promise<T> {
+	const run = customizationMutationQueue.then(mutation, mutation);
+	customizationMutationQueue = run.then(
+		() => undefined,
+		() => undefined
+	);
+	return run;
+}
+
 /**
  * Get path to user's BMAD customizations file.
  */
@@ -260,40 +271,44 @@ export async function getBmadPrompts(): Promise<BmadCommand[]> {
  * Save user's edit to a BMAD prompt.
  */
 export async function saveBmadPrompt(id: string, content: string): Promise<void> {
-	const customizations = (await loadUserCustomizations()) ?? {
-		metadata: await getBundledMetadata(),
-		prompts: {},
-	};
+	return withCustomizationLock(async () => {
+		const customizations = (await loadUserCustomizations()) ?? {
+			metadata: await getBundledMetadata(),
+			prompts: {},
+		};
 
-	customizations.prompts[id] = {
-		content,
-		isModified: true,
-		modifiedAt: new Date().toISOString(),
-	};
+		customizations.prompts[id] = {
+			content,
+			isModified: true,
+			modifiedAt: new Date().toISOString(),
+		};
 
-	await saveUserCustomizations(customizations);
-	logger.info(`Saved customization for bmad.${id}`, LOG_CONTEXT);
+		await saveUserCustomizations(customizations);
+		logger.info(`Saved customization for bmad.${id}`, LOG_CONTEXT);
+	});
 }
 
 /**
  * Reset a BMAD prompt to its bundled default.
  */
 export async function resetBmadPrompt(id: string): Promise<string> {
-	const bundled = await getBundledPrompts();
-	const defaultPrompt = bundled[id];
+	return withCustomizationLock(async () => {
+		const bundled = await getBundledPrompts();
+		const defaultPrompt = bundled[id];
 
-	if (!defaultPrompt) {
-		throw new Error(`Unknown BMAD command: ${id}`);
-	}
+		if (!defaultPrompt) {
+			throw new Error(`Unknown BMAD command: ${id}`);
+		}
 
-	const customizations = await loadUserCustomizations();
-	if (customizations?.prompts?.[id]) {
-		delete customizations.prompts[id];
-		await saveUserCustomizations(customizations);
-		logger.info(`Reset bmad.${id} to bundled default`, LOG_CONTEXT);
-	}
+		const customizations = await loadUserCustomizations();
+		if (customizations?.prompts?.[id]) {
+			delete customizations.prompts[id];
+			await saveUserCustomizations(customizations);
+			logger.info(`Reset bmad.${id} to bundled default`, LOG_CONTEXT);
+		}
 
-	return defaultPrompt.prompt;
+		return defaultPrompt.prompt;
+	});
 }
 
 async function getLatestCommitSha(): Promise<string> {
@@ -335,57 +350,62 @@ async function getLatestVersion(): Promise<string> {
  * Fetch latest prompts from the BMAD GitHub repository.
  */
 export async function refreshBmadPrompts(): Promise<BmadMetadata> {
-	logger.info('Refreshing BMAD prompts from GitHub...', LOG_CONTEXT);
+	return withCustomizationLock(async () => {
+		logger.info('Refreshing BMAD prompts from GitHub...', LOG_CONTEXT);
 
-	const downloadedPrompts: Array<{ id: string; prompt: string }> = [];
+		const downloadedPrompts: Array<{ id: string; prompt: string }> = [];
 
-	for (const cmd of BMAD_COMMANDS) {
-		const response = await fetch(
-			`https://raw.githubusercontent.com/bmad-code-org/BMAD-METHOD/main/${cmd.sourcePath}`
-		);
-		if (!response.ok) {
-			throw new Error(`Failed to fetch ${cmd.sourcePath}: ${response.statusText}`);
+		for (const cmd of BMAD_COMMANDS) {
+			const response = await fetch(
+				`https://raw.githubusercontent.com/bmad-code-org/BMAD-METHOD/main/${cmd.sourcePath}`
+			);
+			if (!response.ok) {
+				throw new Error(`Failed to fetch ${cmd.sourcePath}: ${response.statusText}`);
+			}
+
+			const prompt = applyMaestroPromptFixes(cmd.id, await response.text());
+			downloadedPrompts.push({ id: cmd.id, prompt });
 		}
 
-		const prompt = applyMaestroPromptFixes(cmd.id, await response.text());
-		downloadedPrompts.push({ id: cmd.id, prompt });
-	}
+		const userPromptsDir = getUserPromptsPath();
+		await fs.mkdir(userPromptsDir, { recursive: true });
 
-	const userPromptsDir = getUserPromptsPath();
-	await fs.mkdir(userPromptsDir, { recursive: true });
+		for (const downloadedPrompt of downloadedPrompts) {
+			await fs.writeFile(
+				path.join(userPromptsDir, `bmad.${downloadedPrompt.id}.md`),
+				downloadedPrompt.prompt,
+				'utf-8'
+			);
+			logger.info(`Updated: bmad.${downloadedPrompt.id}.md`, LOG_CONTEXT);
+		}
 
-	for (const downloadedPrompt of downloadedPrompts) {
+		const [commitSha, sourceVersion] = await Promise.all([
+			getLatestCommitSha(),
+			getLatestVersion(),
+		]);
+		const newMetadata: BmadMetadata = {
+			lastRefreshed: new Date().toISOString(),
+			commitSha,
+			sourceVersion,
+			sourceUrl: BMAD_REPO_URL,
+		};
+
 		await fs.writeFile(
-			path.join(userPromptsDir, `bmad.${downloadedPrompt.id}.md`),
-			downloadedPrompt.prompt,
+			path.join(userPromptsDir, 'metadata.json'),
+			JSON.stringify(newMetadata, null, 2),
 			'utf-8'
 		);
-		logger.info(`Updated: bmad.${downloadedPrompt.id}.md`, LOG_CONTEXT);
-	}
 
-	const [commitSha, sourceVersion] = await Promise.all([getLatestCommitSha(), getLatestVersion()]);
-	const newMetadata: BmadMetadata = {
-		lastRefreshed: new Date().toISOString(),
-		commitSha,
-		sourceVersion,
-		sourceUrl: BMAD_REPO_URL,
-	};
+		const customizations = (await loadUserCustomizations()) ?? {
+			metadata: newMetadata,
+			prompts: {},
+		};
+		customizations.metadata = newMetadata;
+		await saveUserCustomizations(customizations);
 
-	await fs.writeFile(
-		path.join(userPromptsDir, 'metadata.json'),
-		JSON.stringify(newMetadata, null, 2),
-		'utf-8'
-	);
-
-	const customizations = (await loadUserCustomizations()) ?? {
-		metadata: newMetadata,
-		prompts: {},
-	};
-	customizations.metadata = newMetadata;
-	await saveUserCustomizations(customizations);
-
-	logger.info(`Refreshed BMAD prompts to ${sourceVersion}`, LOG_CONTEXT);
-	return newMetadata;
+		logger.info(`Refreshed BMAD prompts to ${sourceVersion}`, LOG_CONTEXT);
+		return newMetadata;
+	});
 }
 
 /**

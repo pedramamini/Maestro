@@ -118,6 +118,8 @@ development_status:
 
 - Check: `{story_location_absolute}/{story-key}.md` (e.g., `stories/1-1-user-authentication.md`)
 - If exists → upgrade status to at least `ready-for-dev`
+- If a story is upgraded to at least `ready-for-dev`, upgrade its parent epic to at least `in-progress`
+- Preserve `done` if the epic is already complete
 
 **Preservation rule:**
 

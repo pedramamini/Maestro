@@ -134,7 +134,7 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
   3. Else if any story status == ready-for-dev → recommend `dev-story`
   4. Else if any story status == backlog → recommend `create-story`
   5. Else if any retrospective status == optional → recommend `retrospective`
-  6. Else → All implementation items done; congratulate the user - you both did amazing work together!
+  6. Else → set `all_done = true`, clear `next_workflow_id`, `next_story_id`, and `next_agent`, then congratulate the user - you both did amazing work together!
   <action>Store selected recommendation as: next_story_id, next_workflow_id, next_agent (SM/DEV as appropriate)</action>
 </step>
 
@@ -150,7 +150,11 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
 
 **Epics:** backlog {{epic_backlog}}, in-progress {{epic_in_progress}}, done {{epic_done}}
 
+{{#if next_workflow_id}}
 **Next Recommendation:** /bmad:bmm:workflows:{{next_workflow_id}} ({{next_story_id}})
+{{else}}
+**Next Recommendation:** All implementation items are complete. Celebrate, archive your notes, and exit cleanly.
+{{/if}}
 
 {{#if risks}}
 **Risks:**
@@ -165,18 +169,20 @@ Enter corrections (e.g., "1=in-progress, 2=backlog") or "skip" to continue witho
 
 <step n="5" goal="Offer actions">
   <ask>Pick an option:
-1) Run recommended workflow now
+{{#if next_workflow_id}}1) Run recommended workflow now
 2) Show all stories grouped by status
 3) Show raw sprint-status.yaml
-4) Exit
+4) Exit{{else}}1) Show all stories grouped by status
+2) Show raw sprint-status.yaml
+3) Exit{{/if}}
 Choice:</ask>
 
-  <check if="choice == 1">
+  <check if="next_workflow_id and choice == 1">
     <output>Run `/bmad:bmm:workflows:{{next_workflow_id}}`.
 If the command targets a story, set `story_key={{next_story_id}}` when prompted.</output>
   </check>
 
-  <check if="choice == 2">
+  <check if="(next_workflow_id and choice == 2) or (not next_workflow_id and choice == 1)">
     <output>
 ### Stories by Status
 - In Progress: {{stories_in_progress}}
@@ -187,11 +193,11 @@ If the command targets a story, set `story_key={{next_story_id}}` when prompted.
     </output>
   </check>
 
-  <check if="choice == 3">
+  <check if="(next_workflow_id and choice == 3) or (not next_workflow_id and choice == 2)">
     <action>Display the full contents of {sprint_status_file}</action>
   </check>
 
-  <check if="choice == 4">
+  <check if="(next_workflow_id and choice == 4) or (not next_workflow_id and choice == 3)">
     <action>Exit workflow</action>
   </check>
 </step>
@@ -201,8 +207,10 @@ If the command targets a story, set `story_key={{next_story_id}}` when prompted.
 <!-- ========================= -->
 
 <step n="20" goal="Data mode output">
-  <action>Load and parse {sprint_status_file} same as Step 2</action>
-  <action>Compute recommendation same as Step 3</action>
+  <action>Load and parse {sprint_status_file} non-interactively. Do not prompt for corrections in data mode.</action>
+  <action>If {sprint_status_file} is missing or invalid, return explicit empty/default template outputs instead of asking the user for input.</action>
+  <action>Compute recommendation same as Step 3 using deterministic selection rules only</action>
+  <template-output>all_done = {{all_done}}</template-output>
   <template-output>next_workflow_id = {{next_workflow_id}}</template-output>
   <template-output>next_story_id = {{next_story_id}}</template-output>
   <template-output>count_backlog = {{count_backlog}}</template-output>
