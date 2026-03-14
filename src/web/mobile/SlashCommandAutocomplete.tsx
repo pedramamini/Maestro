@@ -173,8 +173,8 @@ export function SlashCommandAutocomplete({
 			style={{
 				position: 'absolute',
 				bottom: '100%',
-				left: '16px',
-				right: '16px',
+				insetInlineStart: '16px',
+				insetInlineEnd: '16px',
 				marginBottom: '8px',
 				backgroundColor: colors.bgSidebar,
 				border: `1px solid ${colors.border}`,

@@ -302,8 +302,8 @@ export function ConnectionStatusIndicator({
 			style={{
 				position: 'fixed',
 				top: 'max(56px, calc(56px + env(safe-area-inset-top)))', // Below header
-				left: '8px',
-				right: '8px',
+				insetInlineStart: '8px',
+				insetInlineEnd: '8px',
 				zIndex: 100,
 				backgroundColor: statusConfig.bgColor,
 				borderRadius: '12px',

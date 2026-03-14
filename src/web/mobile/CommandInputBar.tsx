@@ -491,8 +491,8 @@ export function CommandInputBar({
 			{...swipeUpHandlers}
 			style={{
 				position: 'fixed',
-				left: 0,
-				right: 0,
+				insetInlineStart: 0,
+				insetInlineEnd: 0,
 				bottom: keyboardOffset,
 				zIndex: 100,
 				// Safe area padding for notched devices
