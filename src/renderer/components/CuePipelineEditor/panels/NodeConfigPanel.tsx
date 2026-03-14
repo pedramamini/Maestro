@@ -515,9 +515,11 @@ function AgentConfig({
 								onChange={handleInputPromptChange}
 								rows={expanded ? undefined : 3}
 								placeholder={
-									hasIncomingAgentEdges
+									hasIncomingAgentEdges && data.includeUpstreamOutput !== false
 										? 'Instructions for this agent. Upstream output is auto-included via {{CUE_SOURCE_OUTPUT}}.'
-										: 'Prompt sent when this agent receives data from the pipeline...'
+										: hasIncomingAgentEdges
+											? 'Instructions for this agent. Use {{CUE_SOURCE_OUTPUT}} to include upstream output.'
+											: 'Prompt sent when this agent receives data from the pipeline...'
 								}
 								style={{
 									...inputStyle,

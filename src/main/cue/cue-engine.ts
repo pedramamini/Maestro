@@ -763,6 +763,7 @@ export class CueEngine {
 					timedOutSessions: timedOutSources,
 					sourceSession: completions.map((c) => c.sessionName).join(', '),
 					sourceOutput: completions.map((c) => c.output).join('\n---\n'),
+					outputTruncated: completions.some((c) => c.truncated),
 					partial: true,
 				},
 			};

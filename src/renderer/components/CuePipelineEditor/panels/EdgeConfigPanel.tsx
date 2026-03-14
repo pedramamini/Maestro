@@ -165,7 +165,6 @@ export function EdgeConfigPanel({
 									cursor: comingSoon ? 'default' : 'pointer',
 									transition: 'all 0.15s',
 									opacity: comingSoon ? 0.5 : 1,
-									pointerEvents: comingSoon ? 'none' : undefined,
 								}}
 								title={comingSoon ? 'Coming soon' : undefined}
 							>
