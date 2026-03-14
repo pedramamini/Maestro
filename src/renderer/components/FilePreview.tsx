@@ -1524,15 +1524,20 @@ export const FilePreview = React.memo(
 					while ((textNode = walker.nextNode())) {
 						const text = textNode.textContent || '';
 						const nodeMatches = getMatches(text, searchRegexForMarkdownSearch);
+						let foundTarget = false;
 						for (const _ of nodeMatches) {
 							if (matchCount === targetIndex) {
 								const parentElement = (textNode as Text).parentElement;
 								if (parentElement) {
 									parentElement.scrollIntoView({ behavior: 'smooth', block: 'center' });
 								}
-								return;
+								foundTarget = true;
+								break;
 							}
 							matchCount++;
+						}
+						if (foundTarget) {
+							break;
 						}
 					}
 				}

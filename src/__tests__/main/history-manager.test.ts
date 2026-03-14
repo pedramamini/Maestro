@@ -1091,6 +1091,36 @@ describe('HistoryManager', () => {
 			expect(written.entries[2].sessionName).toBe('other');
 		});
 
+		it('updates every matching session file, not just the first one', async () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReaddirSync.mockReturnValue([
+				'sess_a.json' as unknown as fs.Dirent,
+				'sess_b.json' as unknown as fs.Dirent,
+			]);
+
+			mockReadFileSync.mockImplementation((filePath: fs.PathOrFileDescriptor) => {
+				if (String(filePath).includes('sess_a.json')) {
+					return createHistoryFileData('sess_a', [
+						createMockEntry({ id: 'a1', agentSessionId: 'agent-123', sessionName: 'old-a' }),
+					]);
+				}
+
+				return createHistoryFileData('sess_b', [
+					createMockEntry({ id: 'b1', agentSessionId: 'agent-123', sessionName: 'old-b' }),
+				]);
+			});
+
+			const count = await manager.updateSessionNameByClaudeSessionId('agent-123', 'new-name');
+
+			expect(count).toBe(2);
+			expect(mockWriteFileSync).toHaveBeenCalledTimes(2);
+
+			const firstWrite = JSON.parse(mockWriteFileSync.mock.calls[0][1] as string);
+			const secondWrite = JSON.parse(mockWriteFileSync.mock.calls[1][1] as string);
+			expect(firstWrite.entries[0].sessionName).toBe('new-name');
+			expect(secondWrite.entries[0].sessionName).toBe('new-name');
+		});
+
 		it('should run async path', async () => {
 			mockExistsSync.mockReturnValue(true);
 			mockReaddirSync.mockReturnValue(['sess_a.json' as unknown as fs.Dirent]);

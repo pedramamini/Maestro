@@ -191,6 +191,15 @@ export const SessionListItem = memo(function SessionListItem({
 		<div
 			ref={isSelected ? (selectedItemRef as React.RefObject<HTMLDivElement>) : null}
 			onClick={() => onSessionClick(session)}
+			onKeyDown={(e) => {
+				if (e.key === 'Enter' || e.key === ' ') {
+					e.preventDefault();
+					onSessionClick(session);
+				}
+			}}
+			tabIndex={0}
+			role="button"
+			aria-selected={isActive}
 			className="w-full text-left px-6 py-4 flex items-start gap-4 hover:bg-white/5 transition-colors border-b group cursor-pointer"
 			style={styles.container}
 		>

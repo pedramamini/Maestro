@@ -502,8 +502,6 @@ export class HistoryManager {
 						sessionId: parsed.sessionId,
 					});
 				}
-
-				break;
 			}
 		}
 
