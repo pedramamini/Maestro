@@ -28,6 +28,7 @@ import { triggerHaptic, HAPTIC_PATTERNS } from './constants';
 import { webLogger } from '../utils/logger';
 import { stripAnsiCodes } from '../../shared/stringUtils';
 import { getActiveLocale } from '../../shared/formatters';
+import { useDirection, getDirectionalDelta } from '../utils/rtlCoordinates';
 
 /**
  * Represents a response item that can be navigated to
@@ -245,6 +246,7 @@ export function ResponseViewer({
 	const { t: tA } = useTranslation('accessibility');
 	const colors = useThemeColors();
 	const { isDark } = useTheme();
+	const dir = useDirection();
 	const contentRef = useRef<HTMLDivElement>(null);
 	// Vertical swipe state (for dismiss)
 	const [touchStartY, setTouchStartY] = useState<number | null>(null);
@@ -408,12 +410,14 @@ export function ResponseViewer({
 			if (touchStartX === null || touchStartY === null) return;
 
 			const touch = e.touches[0];
-			const deltaX = touch.clientX - touchStartX;
+			const rawDeltaX = touch.clientX - touchStartX;
 			const deltaY = touch.clientY - touchStartY;
+			// Directional delta: positive = "forward" swipe (right in LTR, left in RTL)
+			const dirDeltaX = getDirectionalDelta(touchStartX, touch.clientX, dir);
 
 			// Determine swipe direction if not already set
 			if (swipeDirection === null) {
-				const absX = Math.abs(deltaX);
+				const absX = Math.abs(rawDeltaX);
 				const absY = Math.abs(deltaY);
 
 				if (absX > DIRECTION_THRESHOLD || absY > DIRECTION_THRESHOLD) {
@@ -429,12 +433,14 @@ export function ResponseViewer({
 
 			// Handle horizontal swipe for navigation
 			if (swipeDirection === 'horizontal' && isDraggingX) {
-				// Limit swipe if can't go in that direction
-				let constrainedDeltaX = deltaX;
-				if (deltaX > 0 && !canGoLeft) {
-					constrainedDeltaX = Math.min(deltaX, 50); // Elastic resistance
-				} else if (deltaX < 0 && !canGoRight) {
-					constrainedDeltaX = Math.max(deltaX, -50); // Elastic resistance
+				// Use directional delta for logic, raw delta for visual transform
+				let constrainedDeltaX = rawDeltaX;
+				if (dirDeltaX > 0 && !canGoLeft) {
+					// Forward swipe but no previous response — elastic resistance
+					constrainedDeltaX = Math.sign(rawDeltaX) * Math.min(Math.abs(rawDeltaX), 50);
+				} else if (dirDeltaX < 0 && !canGoRight) {
+					// Backward swipe but no next response — elastic resistance
+					constrainedDeltaX = Math.sign(rawDeltaX) * Math.min(Math.abs(rawDeltaX), 50);
 				}
 				setTouchDeltaX(constrainedDeltaX);
 				e.preventDefault();
@@ -459,6 +465,7 @@ export function ResponseViewer({
 			initialPinchDistance,
 			initialZoomScale,
 			getTouchDistance,
+			dir,
 		]
 	);
 
@@ -485,14 +492,16 @@ export function ResponseViewer({
 			onClose();
 		}
 
-		// Handle horizontal swipe (navigation)
+		// Handle horizontal swipe (navigation) — use directional delta
+		// so forward swipe (right in LTR, left in RTL) always goes to previous
 		if (swipeDirection === 'horizontal' && canNavigate && onNavigate) {
-			if (touchDeltaX > NAVIGATE_THRESHOLD && canGoLeft) {
-				// Swipe right to go to previous response
+			const dirDeltaX = dir === 'rtl' ? -touchDeltaX : touchDeltaX;
+			if (dirDeltaX > NAVIGATE_THRESHOLD && canGoLeft) {
+				// Forward swipe → go to previous response
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 				onNavigate(currentIndex - 1);
-			} else if (touchDeltaX < -NAVIGATE_THRESHOLD && canGoRight) {
-				// Swipe left to go to next response
+			} else if (dirDeltaX < -NAVIGATE_THRESHOLD && canGoRight) {
+				// Backward swipe → go to next response
 				triggerHaptic(HAPTIC_PATTERNS.tap);
 				onNavigate(currentIndex + 1);
 			}
@@ -519,6 +528,7 @@ export function ResponseViewer({
 		isPinching,
 		zoomScale,
 		initialZoomScale,
+		dir,
 	]);
 
 	// Handle keyboard navigation (Escape to close, Arrow keys to navigate)
@@ -633,8 +643,8 @@ export function ResponseViewer({
 			style={{
 				position: 'fixed',
 				top: 0,
-				left: 0,
-				right: 0,
+				insetInlineStart: 0,
+				insetInlineEnd: 0,
 				bottom: 0,
 				zIndex: 1000,
 				display: 'flex',
@@ -723,7 +733,7 @@ export function ResponseViewer({
 						color: colors.textMain,
 						fontSize: '18px',
 						fontWeight: 500,
-						marginLeft: '12px',
+						marginInlineStart: '12px',
 						flexShrink: 0,
 					}}
 					aria-label={tA('mobile.close_response_viewer')}
