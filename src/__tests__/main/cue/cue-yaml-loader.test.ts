@@ -985,6 +985,55 @@ subscriptions:
 		});
 	});
 
+	describe('loadCueConfig with label', () => {
+		it('parses label field from YAML', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: morning-check
+    event: time.heartbeat
+    prompt: Do morning checks
+    interval_minutes: 60
+    label: Morning Check
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].label).toBe('Morning Check');
+		});
+
+		it('defaults label to undefined when not specified', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: no-label
+    event: time.heartbeat
+    prompt: Do stuff
+    interval_minutes: 5
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].label).toBeUndefined();
+		});
+
+		it('ignores non-string label values', () => {
+			mockExistsSync.mockReturnValue(true);
+			mockReadFileSync.mockReturnValue(`
+subscriptions:
+  - name: bad-label
+    event: time.heartbeat
+    prompt: Do stuff
+    interval_minutes: 5
+    label: 12345
+`);
+
+			const result = loadCueConfig('/projects/test');
+			expect(result).not.toBeNull();
+			expect(result!.subscriptions[0].label).toBeUndefined();
+		});
+	});
+
 	describe('loadCueConfig with filter', () => {
 		it('parses filter field from YAML', () => {
 			mockExistsSync.mockReturnValue(true);
@@ -1027,7 +1076,196 @@ subscriptions:
 				exitCode: 0,
 			});
 		});
+	});
 
+	describe('validateCueConfig — name validation', () => {
+		it('rejects empty string subscription name', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: '', event: 'time.heartbeat', prompt: 'Do it', interval_minutes: 5 },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('"name" is required and must be a non-empty string'),
+				])
+			);
+		});
+
+		it('rejects whitespace-only subscription name', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: '   ', event: 'time.heartbeat', prompt: 'Do it', interval_minutes: 5 },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([
+					expect.stringContaining('"name" is required and must be a non-empty string'),
+				])
+			);
+		});
+
+		it('rejects duplicate subscription names', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'dupe', event: 'time.heartbeat', prompt: 'First', interval_minutes: 5 },
+					{ name: 'dupe', event: 'file.changed', prompt: 'Second', watch: 'src/**' },
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('duplicate subscription name "dupe"')])
+			);
+		});
+
+		it('accepts unique subscription names', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{ name: 'sub-a', event: 'time.heartbeat', prompt: 'First', interval_minutes: 5 },
+					{ name: 'sub-b', event: 'file.changed', prompt: 'Second', watch: 'src/**' },
+				],
+			});
+			// Check no name-related errors
+			const nameErrors = result.errors.filter(
+				(e: string) => e.includes('duplicate') || e.includes('"name"')
+			);
+			expect(nameErrors).toHaveLength(0);
+		});
+	});
+
+	describe('validateCueConfig — schedule_times range validation', () => {
+		it('rejects schedule_times with hour out of range (25:00)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['25:00'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('invalid hour (0-23) or minute (0-59)')])
+			);
+		});
+
+		it('rejects schedule_times with minute out of range (12:60)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['12:60'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('invalid hour (0-23) or minute (0-59)')])
+			);
+		});
+
+		it('rejects schedule_times with both hour and minute out of range (99:99)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['99:99'],
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('invalid hour (0-23) or minute (0-59)')])
+			);
+		});
+
+		it('accepts schedule_times with valid boundary value 00:00', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['00:00'],
+					},
+				],
+			});
+			const timeErrors = result.errors.filter((e: string) => e.includes('invalid hour'));
+			expect(timeErrors).toHaveLength(0);
+		});
+
+		it('accepts schedule_times with valid boundary value 23:59', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.scheduled',
+						prompt: 'Do it',
+						schedule_times: ['23:59'],
+					},
+				],
+			});
+			const timeErrors = result.errors.filter((e: string) => e.includes('invalid hour'));
+			expect(timeErrors).toHaveLength(0);
+		});
+	});
+
+	describe('validateCueConfig — interval_minutes upper bound', () => {
+		it('rejects interval_minutes above 10080 (7 days)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: 10081,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(expect.arrayContaining([expect.stringContaining('10080')]));
+		});
+
+		it('accepts interval_minutes at upper bound (10080)', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: 10080,
+					},
+				],
+			});
+			const intervalErrors = result.errors.filter((e: string) => e.includes('interval_minutes'));
+			expect(intervalErrors).toHaveLength(0);
+		});
+
+		it('accepts normal interval_minutes value', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: 60,
+					},
+				],
+			});
+			const intervalErrors = result.errors.filter((e: string) => e.includes('interval_minutes'));
+			expect(intervalErrors).toHaveLength(0);
+		});
+	});
+
+	describe('loadCueConfig with filter (continued)', () => {
 		it('ignores filter with invalid nested values', () => {
 			mockExistsSync.mockReturnValue(true);
 			mockReadFileSync.mockReturnValue(`

@@ -139,6 +139,7 @@ export function loadCueConfig(projectRoot: string): CueConfig | null {
 							? (sub.gh_state as CueGitHubState)
 							: undefined,
 					agent_id: typeof sub.agent_id === 'string' ? sub.agent_id : undefined,
+					label: typeof sub.label === 'string' ? sub.label : undefined,
 				});
 			}
 		}
@@ -220,6 +221,7 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 	if (!Array.isArray(cfg.subscriptions)) {
 		errors.push('Config must have a "subscriptions" array');
 	} else {
+		const seenNames = new Set<string>();
 		for (let i = 0; i < cfg.subscriptions.length; i++) {
 			const sub = cfg.subscriptions[i] as Record<string, unknown>;
 			const prefix = `subscriptions[${i}]`;
@@ -229,8 +231,12 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 				continue;
 			}
 
-			if (!sub.name || typeof sub.name !== 'string') {
-				errors.push(`${prefix}: "name" is required and must be a string`);
+			if (!sub.name || typeof sub.name !== 'string' || !String(sub.name).trim()) {
+				errors.push(`${prefix}: "name" is required and must be a non-empty string`);
+			} else if (seenNames.has(sub.name as string)) {
+				errors.push(`${prefix}: duplicate subscription name "${sub.name}"`);
+			} else {
+				seenNames.add(sub.name as string);
 			}
 
 			if (!sub.event || typeof sub.event !== 'string') {
@@ -245,9 +251,13 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 
 			const event = sub.event as string;
 			if (event === 'time.heartbeat') {
-				if (typeof sub.interval_minutes !== 'number' || sub.interval_minutes <= 0) {
+				if (
+					typeof sub.interval_minutes !== 'number' ||
+					sub.interval_minutes <= 0 ||
+					sub.interval_minutes > 10080
+				) {
 					errors.push(
-						`${prefix}: "interval_minutes" is required and must be a positive number for time.heartbeat events`
+						`${prefix}: "interval_minutes" is required and must be a positive number no greater than 10080 (7 days) for time.heartbeat events`
 					);
 				}
 			} else if (event === 'time.scheduled') {
@@ -260,6 +270,13 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 					for (const t of sub.schedule_times as string[]) {
 						if (typeof t !== 'string' || !timeRegex.test(t)) {
 							errors.push(`${prefix}: schedule_times value "${t}" must be in HH:MM format`);
+						} else {
+							const [h, m] = t.split(':').map(Number);
+							if (h < 0 || h > 23 || m < 0 || m > 59) {
+								errors.push(
+									`${prefix}: schedule_times value "${t}" has invalid hour (0-23) or minute (0-59)`
+								);
+							}
 						}
 					}
 				}

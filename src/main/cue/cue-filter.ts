@@ -44,16 +44,24 @@ export function matchesFilter(
 			// String filter expression
 			if (filterValue.startsWith('>=')) {
 				const threshold = Number(filterValue.slice(2));
-				if (Number(payloadValue) < threshold) return false;
+				const numPayload = Number(payloadValue);
+				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				if (numPayload < threshold) return false;
 			} else if (filterValue.startsWith('<=')) {
 				const threshold = Number(filterValue.slice(2));
-				if (Number(payloadValue) > threshold) return false;
+				const numPayload = Number(payloadValue);
+				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				if (numPayload > threshold) return false;
 			} else if (filterValue.startsWith('>')) {
 				const threshold = Number(filterValue.slice(1));
-				if (Number(payloadValue) <= threshold) return false;
+				const numPayload = Number(payloadValue);
+				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				if (numPayload <= threshold) return false;
 			} else if (filterValue.startsWith('<')) {
 				const threshold = Number(filterValue.slice(1));
-				if (Number(payloadValue) >= threshold) return false;
+				const numPayload = Number(payloadValue);
+				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				if (numPayload >= threshold) return false;
 			} else if (filterValue.startsWith('!')) {
 				const remainder = filterValue.slice(1);
 				if (String(payloadValue) === remainder) return false;

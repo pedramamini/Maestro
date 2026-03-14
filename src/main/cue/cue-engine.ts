@@ -1017,6 +1017,7 @@ export class CueEngine {
 			projectRoot: session.projectRoot,
 			debounceMs: DEFAULT_FILE_DEBOUNCE_MS,
 			triggerName: sub.name,
+			onLog: (level, message) => this.deps.onLog(level as MainLogLevel, message),
 			onEvent: (event) => {
 				if (!this.enabled) return;
 

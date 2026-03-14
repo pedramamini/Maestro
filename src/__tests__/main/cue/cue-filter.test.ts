@@ -176,6 +176,51 @@ describe('cue-filter', () => {
 			});
 		});
 
+		describe('NaN handling in numeric comparisons', () => {
+			it('rejects non-numeric payload value with > filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '>5' })).toBe(false);
+			});
+
+			it('rejects non-numeric payload value with >= filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '>=5' })).toBe(false);
+			});
+
+			it('rejects non-numeric payload value with < filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '<5' })).toBe(false);
+			});
+
+			it('rejects non-numeric payload value with <= filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '<=5' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in >= filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '>=abc' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in > filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '>abc' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in < filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '<abc' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in <= filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '<=abc' })).toBe(false);
+			});
+
+			it('rejects empty string payload value with numeric filter', () => {
+				expect(matchesFilter({ size: '' }, { size: '>0' })).toBe(false);
+			});
+
+			it('handles boolean payload coercion with numeric filter', () => {
+				// Number(true) === 1, so true > 0 should pass
+				expect(matchesFilter({ active: true }, { active: '>0' })).toBe(true);
+				// Number(false) === 0, so false > 0 should fail
+				expect(matchesFilter({ active: false }, { active: '>0' })).toBe(false);
+			});
+		});
+
 		describe('empty filter', () => {
 			it('matches everything when filter is empty', () => {
 				expect(matchesFilter({ any: 'value' }, {})).toBe(true);
