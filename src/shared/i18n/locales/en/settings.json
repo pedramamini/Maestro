@@ -190,9 +190,10 @@
 	},
 	"themes": {
 		"picker_aria_label": "Theme picker",
-		"dark_mode": "dark Mode",
-		"light_mode": "light Mode",
-		"vibe_mode": "vibe Mode"
+		"dark_mode": "Dark Mode",
+		"light_mode": "Light Mode",
+		"vibe_mode": "Vibe Mode",
+		"custom_theme": "Custom Theme"
 	},
 	"shortcuts": {
 		"no_agents_note": "Note: Most functionality is unavailable until you've created your first agent.",

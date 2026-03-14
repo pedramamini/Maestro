@@ -192,7 +192,8 @@
 		"picker_aria_label": "Designauswahl",
 		"dark_mode": "Dunkler Modus",
 		"light_mode": "Heller Modus",
-		"vibe_mode": "Vibe-Modus"
+		"vibe_mode": "Vibe-Modus",
+		"custom_theme": "Benutzerdefiniertes Design"
 	},
 	"shortcuts": {
 		"no_agents_note": "Hinweis: Die meisten Funktionen sind erst verfügbar, nachdem Sie Ihren ersten Agenten erstellt haben.",

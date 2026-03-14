@@ -196,7 +196,8 @@
 		"picker_aria_label": "منتقي السمات",
 		"dark_mode": "الوضع الداكن",
 		"light_mode": "الوضع الفاتح",
-		"vibe_mode": "وضع الأجواء"
+		"vibe_mode": "وضع الأجواء",
+		"custom_theme": "سمة مخصصة"
 	},
 	"shortcuts": {
 		"no_agents_note": "ملاحظة: معظم الوظائف غير متاحة حتى تنشئ وكيلك الأول.",

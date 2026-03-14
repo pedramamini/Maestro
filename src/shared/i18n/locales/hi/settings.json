@@ -192,7 +192,8 @@
 		"picker_aria_label": "थीम चयनकर्ता",
 		"dark_mode": "डार्क मोड",
 		"light_mode": "लाइट मोड",
-		"vibe_mode": "वाइब मोड"
+		"vibe_mode": "वाइब मोड",
+		"custom_theme": "कस्टम थीम"
 	},
 	"shortcuts": {
 		"no_agents_note": "नोट: अपना पहला एजेंट बनाने तक अधिकांश कार्यक्षमता अनुपलब्ध है।",

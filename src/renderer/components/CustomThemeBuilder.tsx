@@ -1,4 +1,5 @@
 import React, { useState, useCallback, useRef } from 'react';
+import { useTranslation } from 'react-i18next';
 import { Palette, Download, Upload, RotateCcw, Check, ChevronDown } from 'lucide-react';
 import type { Theme, ThemeColors, ThemeId } from '../types';
 import { THEMES, DEFAULT_CUSTOM_THEME_COLORS } from '../constants/themes';
@@ -290,6 +291,7 @@ export function CustomThemeBuilder({
 	onImportError,
 	onImportSuccess,
 }: CustomThemeBuilderProps) {
+	const { t } = useTranslation('settings');
 	const [showBaseSelector, setShowBaseSelector] = useState(false);
 	const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -400,7 +402,7 @@ export function CustomThemeBuilder({
 				style={{ color: theme.colors.textDim }}
 			>
 				<Palette className="w-3 h-3" />
-				Custom Theme
+				{t('themes.custom_theme')}
 			</div>
 
 			{/* Theme Selection Button + Controls */}

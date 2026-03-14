@@ -192,7 +192,8 @@
 		"picker_aria_label": "Sélecteur de thèmes",
 		"dark_mode": "Mode sombre",
 		"light_mode": "Mode clair",
-		"vibe_mode": "Mode vibe"
+		"vibe_mode": "Mode vibe",
+		"custom_theme": "Thème personnalisé"
 	},
 	"shortcuts": {
 		"no_agents_note": "Remarque\u00A0: La plupart des fonctionnalités sont indisponibles tant que vous n'avez pas créé votre premier agent.",
