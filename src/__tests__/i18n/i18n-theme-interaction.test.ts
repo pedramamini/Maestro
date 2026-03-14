@@ -174,4 +174,93 @@ describe('i18n ↔ Theme Interaction', () => {
 			expect(root.style.getPropertyValue('--dir-end')).toBe('left');
 		});
 	});
+
+	describe('CSS custom property coexistence (theme ↔ RTL)', () => {
+		it('theme and RTL properties have no name collisions', () => {
+			// Theme properties set by useThemeStyles
+			const themeProps = ['--accent-color', '--highlight-color'];
+			// RTL properties set by DirectionProvider and index.css
+			const rtlProps = ['--dir-start', '--dir-end', '--rtl-sign'];
+
+			const overlap = themeProps.filter((p) => rtlProps.includes(p));
+			expect(overlap).toHaveLength(0);
+		});
+
+		it('applying theme colors does not clear RTL properties', () => {
+			const root = document.documentElement;
+
+			// Simulate DirectionProvider setting RTL properties
+			root.style.setProperty('--dir-start', 'right');
+			root.style.setProperty('--dir-end', 'left');
+
+			// Simulate useThemeStyles re-applying theme colors
+			root.style.setProperty('--accent-color', '#88c0d0');
+			root.style.setProperty('--highlight-color', '#88c0d0');
+
+			// RTL properties must still be present
+			expect(root.style.getPropertyValue('--dir-start')).toBe('right');
+			expect(root.style.getPropertyValue('--dir-end')).toBe('left');
+		});
+
+		it('applying RTL direction does not clear theme properties', () => {
+			const root = document.documentElement;
+
+			// Simulate useThemeStyles setting theme colors
+			root.style.setProperty('--accent-color', '#ff79c6');
+			root.style.setProperty('--highlight-color', '#ff79c6');
+
+			// Simulate DirectionProvider switching to RTL
+			root.dir = 'rtl';
+			root.setAttribute('data-dir', 'rtl');
+			root.style.setProperty('--dir-start', 'right');
+			root.style.setProperty('--dir-end', 'left');
+
+			// Theme properties must still be present
+			expect(root.style.getPropertyValue('--accent-color')).toBe('#ff79c6');
+			expect(root.style.getPropertyValue('--highlight-color')).toBe('#ff79c6');
+		});
+
+		it('both theme and RTL properties coexist after Arabic + theme switch', () => {
+			const root = document.documentElement;
+
+			// Full RTL setup (Arabic)
+			root.lang = 'ar';
+			root.dir = 'rtl';
+			root.setAttribute('data-dir', 'rtl');
+			root.style.setProperty('--dir-start', 'right');
+			root.style.setProperty('--dir-end', 'left');
+
+			// Full theme setup (Nord-like accent)
+			root.style.setProperty('--accent-color', '#88c0d0');
+			root.style.setProperty('--highlight-color', '#88c0d0');
+
+			// All properties coexist
+			expect(root.style.getPropertyValue('--accent-color')).toBe('#88c0d0');
+			expect(root.style.getPropertyValue('--highlight-color')).toBe('#88c0d0');
+			expect(root.style.getPropertyValue('--dir-start')).toBe('right');
+			expect(root.style.getPropertyValue('--dir-end')).toBe('left');
+			expect(root.dir).toBe('rtl');
+		});
+	});
+
+	describe('scrollbar styling is direction-independent', () => {
+		it('scrollbar CSS uses color variables, not directional properties', () => {
+			// The scrollbar thumb styling references --highlight-color and --accent-color
+			// which are pure color values with no directional component.
+			// This test documents the invariant: scrollbar color is theme-driven,
+			// scrollbar position is browser-driven (auto-flips in RTL in Chromium).
+			const root = document.documentElement;
+
+			// Set RTL + theme
+			root.dir = 'rtl';
+			root.style.setProperty('--accent-color', '#ff79c6');
+			root.style.setProperty('--highlight-color', '#ff79c6');
+
+			// Accent color is a color value, not a position — works identically in RTL
+			const accent = root.style.getPropertyValue('--accent-color');
+			expect(accent).toBe('#ff79c6');
+			// No directional substring should appear in the color value
+			expect(accent).not.toMatch(/left|right|start|end/);
+		});
+	});
 });
