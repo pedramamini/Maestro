@@ -9,6 +9,18 @@
 import picomatch from 'picomatch';
 
 /**
+ * Strict numeric coercion that rejects null, undefined, empty/whitespace
+ * strings, and non-finite values (NaN, Infinity).
+ * Returns the numeric value, or null if the operand is not a valid number.
+ */
+function toComparableNumber(value: unknown): number | null {
+	if (value === null || value === undefined) return null;
+	if (typeof value === 'string' && value.trim() === '') return null;
+	const num = Number(value);
+	return Number.isFinite(num) ? num : null;
+}
+
+/**
  * Resolve a dot-notation key to a value in a nested object.
  * e.g., "source.status" accesses payload.source.status
  */
@@ -43,24 +55,24 @@ export function matchesFilter(
 		} else {
 			// String filter expression
 			if (filterValue.startsWith('>=')) {
-				const threshold = Number(filterValue.slice(2));
-				const numPayload = Number(payloadValue);
-				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				const threshold = toComparableNumber(filterValue.slice(2));
+				const numPayload = toComparableNumber(payloadValue);
+				if (threshold === null || numPayload === null) return false;
 				if (numPayload < threshold) return false;
 			} else if (filterValue.startsWith('<=')) {
-				const threshold = Number(filterValue.slice(2));
-				const numPayload = Number(payloadValue);
-				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				const threshold = toComparableNumber(filterValue.slice(2));
+				const numPayload = toComparableNumber(payloadValue);
+				if (threshold === null || numPayload === null) return false;
 				if (numPayload > threshold) return false;
 			} else if (filterValue.startsWith('>')) {
-				const threshold = Number(filterValue.slice(1));
-				const numPayload = Number(payloadValue);
-				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				const threshold = toComparableNumber(filterValue.slice(1));
+				const numPayload = toComparableNumber(payloadValue);
+				if (threshold === null || numPayload === null) return false;
 				if (numPayload <= threshold) return false;
 			} else if (filterValue.startsWith('<')) {
-				const threshold = Number(filterValue.slice(1));
-				const numPayload = Number(payloadValue);
-				if (isNaN(threshold) || isNaN(numPayload)) return false;
+				const threshold = toComparableNumber(filterValue.slice(1));
+				const numPayload = toComparableNumber(payloadValue);
+				if (threshold === null || numPayload === null) return false;
 				if (numPayload >= threshold) return false;
 			} else if (filterValue.startsWith('!')) {
 				const remainder = filterValue.slice(1);

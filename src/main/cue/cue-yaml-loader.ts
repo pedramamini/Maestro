@@ -253,6 +253,7 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 			if (event === 'time.heartbeat') {
 				if (
 					typeof sub.interval_minutes !== 'number' ||
+					!Number.isFinite(sub.interval_minutes) ||
 					sub.interval_minutes <= 0 ||
 					sub.interval_minutes > 10080
 				) {

@@ -1249,6 +1249,40 @@ subscriptions:
 			expect(intervalErrors).toHaveLength(0);
 		});
 
+		it('rejects NaN interval_minutes', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: NaN,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('interval_minutes')])
+			);
+		});
+
+		it('rejects Infinity interval_minutes', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'test',
+						event: 'time.heartbeat',
+						prompt: 'Do it',
+						interval_minutes: Infinity,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors).toEqual(
+				expect.arrayContaining([expect.stringContaining('interval_minutes')])
+			);
+		});
+
 		it('accepts normal interval_minutes value', () => {
 			const result = validateCueConfig({
 				subscriptions: [
