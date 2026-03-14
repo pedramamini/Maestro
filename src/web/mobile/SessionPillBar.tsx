@@ -914,9 +914,17 @@ export function SessionPillBar({
 						`[data-group-id="${groupId}"]`
 					) as HTMLElement | null;
 					if (groupHeader) {
-						// Scroll to put the group header at the left edge (with a small margin)
+						// Use getBoundingClientRect for RTL-safe scroll targeting.
+						// In LTR, align header to left edge; in RTL, align to right edge.
+						const containerRect = container.getBoundingClientRect();
+						const headerRect = groupHeader.getBoundingClientRect();
+						const dir = document.documentElement.dir === 'rtl' ? 'rtl' : 'ltr';
+						const scrollTarget =
+							dir === 'rtl'
+								? container.scrollLeft + (headerRect.right - containerRect.right) + 8
+								: container.scrollLeft + (headerRect.left - containerRect.left) - 8;
 						container.scrollTo({
-							left: groupHeader.offsetLeft - 8,
+							left: scrollTarget,
 							behavior: 'smooth',
 						});
 					}
@@ -934,14 +942,16 @@ export function SessionPillBar({
 		const activeButton = container.querySelector(`[aria-pressed="true"]`) as HTMLElement | null;
 
 		if (activeButton) {
-			// Calculate the scroll position to center the active pill
-			const containerWidth = container.offsetWidth;
-			const buttonLeft = activeButton.offsetLeft;
-			const buttonWidth = activeButton.offsetWidth;
-			const scrollTarget = buttonLeft - containerWidth / 2 + buttonWidth / 2;
+			// Use getBoundingClientRect for RTL-safe scroll centering.
+			// Physical pixel deltas applied to scrollLeft work correctly
+			// regardless of layout direction.
+			const containerRect = container.getBoundingClientRect();
+			const buttonRect = activeButton.getBoundingClientRect();
+			const buttonCenter = buttonRect.left + buttonRect.width / 2;
+			const containerCenter = containerRect.left + containerRect.width / 2;
 
 			container.scrollTo({
-				left: Math.max(0, scrollTarget),
+				left: container.scrollLeft + (buttonCenter - containerCenter),
 				behavior: 'smooth',
 			});
 		}
@@ -990,8 +1000,8 @@ export function SessionPillBar({
 					<div
 						style={{
 							flexShrink: 0,
-							paddingLeft: '12px',
-							paddingRight: '4px',
+							paddingInlineStart: '12px',
+							paddingInlineEnd: '4px',
 							paddingTop: '10px',
 							paddingBottom: '10px',
 							display: 'flex',
@@ -1092,7 +1102,7 @@ export function SessionPillBar({
 						flex: 1,
 						gap: '8px',
 						padding: '10px 16px',
-						paddingLeft: onOpenAllSessions ? '8px' : '16px',
+						paddingInlineStart: onOpenAllSessions ? '8px' : '16px',
 						overflowX: 'auto',
 						overflowY: 'hidden',
 						WebkitOverflowScrolling: 'touch',

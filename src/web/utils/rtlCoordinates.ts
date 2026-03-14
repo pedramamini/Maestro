@@ -9,7 +9,7 @@
  * properties alone.
  */
 
-import { useMemo, useSyncExternalStore } from 'react';
+import { useSyncExternalStore } from 'react';
 
 type Direction = 'ltr' | 'rtl';
 
