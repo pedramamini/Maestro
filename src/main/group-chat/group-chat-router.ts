@@ -72,6 +72,8 @@ export interface SessionInfo {
 		remoteId: string | null;
 		workingDirOverride?: string;
 	};
+	/** Auto Run folder path for this session */
+	autoRunFolderPath?: string;
 }
 
 /**
@@ -84,6 +86,10 @@ export type GetSessionsCallback = () => SessionInfo[];
  */
 export type GetCustomEnvVarsCallback = (agentId: string) => Record<string, string> | undefined;
 export type GetAgentConfigCallback = (agentId: string) => Record<string, any> | undefined;
+export type GetModeratorSettingsCallback = () => {
+	standingInstructions: string;
+	conductorProfile: string;
+};
 
 // Module-level callback for session lookup
 let getSessionsCallback: GetSessionsCallback | null = null;
@@ -91,6 +97,9 @@ let getSessionsCallback: GetSessionsCallback | null = null;
 // Module-level callback for custom env vars lookup
 let getCustomEnvVarsCallback: GetCustomEnvVarsCallback | null = null;
 let getAgentConfigCallback: GetAgentConfigCallback | null = null;
+
+// Module-level callback for moderator settings (standing instructions + conductor profile)
+let getModeratorSettingsCallback: GetModeratorSettingsCallback | null = null;
 
 // Module-level SSH store for remote execution support
 let sshStore: SshRemoteSettingsStore | null = null;
@@ -101,6 +110,96 @@ let sshStore: SshRemoteSettingsStore | null = null;
  * Maps groupChatId -> Set<participantName>
  */
 const pendingParticipantResponses = new Map<string, Set<string>>();
+
+/**
+ * Tracks per-participant response timeout handles.
+ * Maps `${groupChatId}:${participantName}` -> NodeJS.Timeout
+ * Timeouts fire if a participant never responds (hung process, lost IPC, etc.)
+ */
+const participantTimeouts = new Map<string, ReturnType<typeof setTimeout>>();
+
+/** How long to wait for a participant before treating them as timed-out (10 minutes). */
+const PARTICIPANT_RESPONSE_TIMEOUT_MS = 10 * 60 * 1000;
+
+function getParticipantTimeoutKey(groupChatId: string, participantName: string): string {
+	return `${groupChatId}:${participantName}`;
+}
+
+/**
+ * Registers a response timeout for a participant.
+ * If the participant doesn't respond in PARTICIPANT_RESPONSE_TIMEOUT_MS, they are
+ * force-marked as responded so synthesis can proceed and the chat doesn't hang forever.
+ */
+function setParticipantResponseTimeout(
+	groupChatId: string,
+	participantName: string,
+	processManager: IProcessManager | undefined,
+	agentDetector: AgentDetector | undefined
+): void {
+	const key = getParticipantTimeoutKey(groupChatId, participantName);
+	// Clear any existing timeout for this participant
+	const existing = participantTimeouts.get(key);
+	if (existing) clearTimeout(existing);
+
+	const handle = setTimeout(async () => {
+		participantTimeouts.delete(key);
+		const pending = pendingParticipantResponses.get(groupChatId);
+		if (!pending?.has(participantName)) return; // Already responded
+
+		console.warn(
+			`[GroupChat:Debug] Participant ${participantName} timed out after ${PARTICIPANT_RESPONSE_TIMEOUT_MS / 1000}s — force-completing`
+		);
+		groupChatEmitters.emitMessage?.(groupChatId, {
+			timestamp: new Date().toISOString(),
+			from: 'system',
+			content: `⚠️ @${participantName} did not respond within ${PARTICIPANT_RESPONSE_TIMEOUT_MS / 60000} minutes and has been marked as timed out.`,
+		});
+
+		// Log a timeout response so the moderator knows what happened
+		try {
+			const { loadGroupChat } = await import('./group-chat-storage');
+			const { appendToLog } = await import('./group-chat-log');
+			const chat = await loadGroupChat(groupChatId);
+			if (chat) {
+				await appendToLog(
+					chat.logPath,
+					participantName,
+					`[Timed out — no response after ${PARTICIPANT_RESPONSE_TIMEOUT_MS / 60000} minutes]`
+				);
+			}
+		} catch {
+			// Non-critical — synthesize anyway
+		}
+
+		// Reset participant state and force-complete the batch so the AUTO badge
+		// and progress bar clear immediately — the batch loop may still be awaiting
+		// a process exit that will never come.
+		groupChatEmitters.emitParticipantState?.(groupChatId, participantName, 'idle');
+		groupChatEmitters.emitAutoRunBatchComplete?.(groupChatId, participantName);
+
+		const isLast = markParticipantResponded(groupChatId, participantName);
+		if (isLast && processManager && agentDetector) {
+			spawnModeratorSynthesis(groupChatId, processManager, agentDetector).catch((err) => {
+				console.error('[GroupChat:Debug] Synthesis after timeout failed:', err);
+				groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
+			});
+		}
+	}, PARTICIPANT_RESPONSE_TIMEOUT_MS);
+
+	participantTimeouts.set(key, handle);
+}
+
+/**
+ * Cancels the response timeout for a participant (called when they do respond).
+ */
+function clearParticipantResponseTimeout(groupChatId: string, participantName: string): void {
+	const key = getParticipantTimeoutKey(groupChatId, participantName);
+	const handle = participantTimeouts.get(key);
+	if (handle) {
+		clearTimeout(handle);
+		participantTimeouts.delete(key);
+	}
+}
 
 /**
  * Tracks read-only mode state for each group chat.
@@ -131,17 +230,26 @@ export function getPendingParticipants(groupChatId: string): Set<string> {
 }
 
 /**
- * Clears all pending participants for a group chat.
+ * Clears all pending participants for a group chat (and their timeouts).
  */
 export function clearPendingParticipants(groupChatId: string): void {
+	// Cancel all timeouts for this chat before clearing
+	const pending = pendingParticipantResponses.get(groupChatId);
+	if (pending) {
+		for (const name of pending) {
+			clearParticipantResponseTimeout(groupChatId, name);
+		}
+	}
 	pendingParticipantResponses.delete(groupChatId);
 }
 
 /**
- * Marks a participant as having responded (removes from pending).
+ * Marks a participant as having responded (removes from pending, cancels timeout).
  * Returns true if this was the last pending participant.
  */
 export function markParticipantResponded(groupChatId: string, participantName: string): boolean {
+	clearParticipantResponseTimeout(groupChatId, participantName);
+
 	const pending = pendingParticipantResponses.get(groupChatId);
 	if (!pending) return false;
 
@@ -172,6 +280,14 @@ export function setGetCustomEnvVarsCallback(callback: GetCustomEnvVarsCallback):
 
 export function setGetAgentConfigCallback(callback: GetAgentConfigCallback): void {
 	getAgentConfigCallback = callback;
+}
+
+/**
+ * Sets the callback for getting moderator settings (standing instructions + conductor profile).
+ * Called from index.ts during initialization.
+ */
+export function setGetModeratorSettingsCallback(callback: GetModeratorSettingsCallback): void {
+	getModeratorSettingsCallback = callback;
 }
 
 /**
@@ -238,6 +354,52 @@ export function extractAllMentions(text: string): string[] {
 	}
 
 	return mentions;
+}
+
+/**
+ * Extracts !autorun directives from moderator output.
+ * Matches `!autorun @AgentName` patterns.
+ *
+ * @param text - The moderator's message text
+ * @returns Object with autorun participant names and cleaned message text
+ */
+export interface AutoRunDirective {
+	participantName: string;
+	/** Specific filename to run, if specified (e.g. `!autorun @Agent:plan.md`). When present,
+	 *  only that document is executed instead of all docs in the folder. */
+	filename?: string;
+}
+
+export function extractAutoRunDirectives(text: string): {
+	autoRunDirectives: AutoRunDirective[];
+	/** @deprecated use autoRunDirectives */
+	autoRunParticipants: string[];
+	cleanedText: string;
+} {
+	const autoRunDirectives: AutoRunDirective[] = [];
+	// Matches: !autorun @AgentName  OR  !autorun @AgentName:filename.md
+	const autoRunPattern = /!autorun\s+@([^\s@:,;!?()\[\]{}'"<>]+)(?::([^\s,;!?()\[\]{}'"<>]+))?/g;
+	let match;
+
+	while ((match = autoRunPattern.exec(text)) !== null) {
+		const participantName = match[1];
+		const filename = match[2]; // undefined when no :filename suffix
+		if (!autoRunDirectives.some((d) => d.participantName === participantName)) {
+			autoRunDirectives.push({ participantName, filename });
+		}
+	}
+
+	// Remove !autorun lines from the message for display
+	const cleanedText = text
+		.replace(/^.*!autorun\s+@[^\s@:,;!?()\[\]{}'"<>]+.*$/gm, '')
+		.replace(/\n{3,}/g, '\n\n')
+		.trim();
+
+	return {
+		autoRunDirectives,
+		autoRunParticipants: autoRunDirectives.map((d) => d.participantName),
+		cleanedText,
+	};
 }
 
 /**
@@ -414,7 +576,9 @@ export async function routeUserMessage(
 			const participantContext =
 				chat.participants.length > 0
 					? chat.participants
-							.map((p) => `- @${normalizeMentionName(p.name)} (${p.agentId} session)`)
+							.map((p) => {
+								return `- @${normalizeMentionName(p.name)} (${p.agentId} session)`;
+							})
 							.join('\n')
 					: '(No agents currently in this group chat)';
 
@@ -444,7 +608,24 @@ export async function routeUserMessage(
 				.map((m) => `[${m.from}]: ${m.content}`)
 				.join('\n');
 
-			const fullPrompt = `${getModeratorSystemPrompt()}
+			// Get moderator settings for prompt customization
+			const moderatorSettings = getModeratorSettingsCallback?.() ?? {
+				standingInstructions: '',
+				conductorProfile: '',
+			};
+
+			// Substitute {{CONDUCTOR_PROFILE}} template variable
+			const baseSystemPrompt = getModeratorSystemPrompt().replace(
+				'{{CONDUCTOR_PROFILE}}',
+				moderatorSettings.conductorProfile || '(No conductor profile set)'
+			);
+
+			// Build standing instructions section if configured
+			const standingInstructionsSection = moderatorSettings.standingInstructions
+				? `\n\n## Standing Instructions\n\nThe following instructions apply to ALL group chat sessions. Follow them consistently:\n\n${moderatorSettings.standingInstructions}`
+				: '';
+
+			const fullPrompt = `${baseSystemPrompt}${standingInstructionsSection}
 
 ## Current Participants:
 ${participantContext}${availableSessionsContext}
@@ -633,29 +814,38 @@ export async function routeModeratorResponse(
 
 	console.log(`[GroupChat:Debug] Chat loaded: "${chat.name}"`);
 
-	// Log the message as coming from moderator
-	await appendToLog(chat.logPath, 'moderator', message);
+	// Strip internal !autorun directives from the message before logging/display.
+	// These are machine-to-machine commands; storing them in the chat log causes
+	// the synthesis moderator to see them in history and potentially re-trigger them.
+	const {
+		autoRunDirectives,
+		autoRunParticipants,
+		cleanedText: displayMessage,
+	} = extractAutoRunDirectives(message);
+
+	// Log the message as coming from moderator (cleaned of !autorun directives)
+	await appendToLog(chat.logPath, 'moderator', displayMessage);
 	console.log(`[GroupChat:Debug] Message appended to log`);
 
 	// Emit message event to renderer so it shows immediately
 	const moderatorMessage: GroupChatMessage = {
 		timestamp: new Date().toISOString(),
 		from: 'moderator',
-		content: message,
+		content: displayMessage,
 	};
 	groupChatEmitters.emitMessage?.(groupChatId, moderatorMessage);
 	console.log(`[GroupChat:Debug] Emitted moderator message to renderer`);
 
 	// Add history entry for moderator response
 	try {
-		const summary = extractFirstSentence(message);
+		const summary = extractFirstSentence(displayMessage);
 		const historyEntry = await addGroupChatHistoryEntry(groupChatId, {
 			timestamp: Date.now(),
 			summary,
 			participantName: 'Moderator',
 			participantColor: '#808080', // Gray for moderator
 			type: 'response',
-			fullResponse: message,
+			fullResponse: displayMessage,
 		});
 
 		// Emit history entry event to renderer
@@ -771,10 +961,71 @@ export async function routeModeratorResponse(
 	// Track participants that will need to respond for synthesis round
 	const participantsToRespond = new Set<string>();
 
-	// Spawn batch processes for each mentioned participant
-	if (processManager && agentDetector && mentions.length > 0) {
+	// Use the !autorun directives already extracted above (same `message` input)
+	if (autoRunDirectives.length > 0) {
+		console.log(
+			`[GroupChat:Debug] Found !autorun directives for: ${autoRunDirectives.map((d) => (d.filename ? `${d.participantName}:${d.filename}` : d.participantName)).join(', ')}`
+		);
+	}
+
+	// Trigger Auto Run for participants via the renderer's batch processor
+	// This delegates to the renderer so the full useBatchProcessor pipeline runs:
+	// progress indicators, multi-document sequencing, task checking, achievements, etc.
+	if (autoRunDirectives.length > 0) {
+		console.log(`[GroupChat:Debug] ========== TRIGGERING AUTORUN VIA RENDERER ==========`);
+		const sessions = getSessionsCallback?.() || [];
+
+		for (const directive of autoRunDirectives) {
+			const { participantName: autoRunName, filename: targetFilename } = directive;
+			const participant = updatedChat.participants.find((p) => mentionMatches(autoRunName, p.name));
+			if (!participant) {
+				console.warn(
+					`[GroupChat:Debug] Autorun participant ${autoRunName} not found in chat - skipping`
+				);
+				groupChatEmitters.emitMessage?.(groupChatId, {
+					timestamp: new Date().toISOString(),
+					from: 'system',
+					content: `⚠️ Could not find participant @${autoRunName} for !autorun. Make sure the agent is added to the group chat.`,
+				});
+				continue;
+			}
+
+			const matchingSession = sessions.find(
+				(s) => mentionMatches(s.name, participant.name) || s.name === participant.name
+			);
+
+			if (!matchingSession?.autoRunFolderPath) {
+				console.warn(
+					`[GroupChat:Debug] No autoRunFolderPath configured for ${participant.name} - skipping`
+				);
+				groupChatEmitters.emitMessage?.(groupChatId, {
+					timestamp: new Date().toISOString(),
+					from: 'system',
+					content: `⚠️ No Auto Run folder configured for @${participant.name}. Open the agent in Maestro, go to the Auto Run tab, and configure a folder first.`,
+				});
+				continue;
+			}
+
+			// Emit event to renderer — the renderer will call startBatchRun via useBatchProcessor.
+			// When the batch completes, the renderer calls groupChat:reportAutoRunComplete which
+			// invokes routeAgentResponse to trigger the synthesis round.
+			groupChatEmitters.emitParticipantState?.(groupChatId, participant.name, 'working');
+			groupChatEmitters.emitAutoRunTriggered?.(groupChatId, participant.name, targetFilename);
+			participantsToRespond.add(participant.name);
+			console.log(
+				`[GroupChat:Debug] Emitted autoRunTriggered for @${participant.name}${targetFilename ? `:${targetFilename}` : ''} in chat ${groupChatId}`
+			);
+		}
+		console.log(`[GroupChat:Debug] =================================================`);
+	}
+
+	// Spawn batch processes for each mentioned participant (exclude autorun participants)
+	const mentionsToSpawn = mentions.filter(
+		(name) => !autoRunParticipants.some((arName) => mentionMatches(arName, name))
+	);
+	if (processManager && agentDetector && mentionsToSpawn.length > 0) {
 		console.log(`[GroupChat:Debug] ========== SPAWNING PARTICIPANT AGENTS ==========`);
-		console.log(`[GroupChat:Debug] Will spawn ${mentions.length} participant agent(s)`);
+		console.log(`[GroupChat:Debug] Will spawn ${mentionsToSpawn.length} participant agent(s)`);
 
 		// Get available sessions for cwd lookup
 		const sessions = getSessionsCallback?.() || [];
@@ -788,7 +1039,7 @@ export async function routeModeratorResponse(
 			)
 			.join('\n');
 
-		for (const participantName of mentions) {
+		for (const participantName of mentionsToSpawn) {
 			console.log(`[GroupChat:Debug] --- Spawning participant: @${participantName} ---`);
 
 			// Find the participant info
@@ -985,8 +1236,10 @@ export async function routeModeratorResponse(
 			}
 		}
 		console.log(`[GroupChat:Debug] =================================================`);
-	} else if (mentions.length === 0) {
-		console.log(`[GroupChat:Debug] No participant @mentions found - moderator response is final`);
+	} else if (mentionsToSpawn.length === 0 && autoRunParticipants.length === 0) {
+		console.log(
+			`[GroupChat:Debug] No participant @mentions or autorun directives found - moderator response is final`
+		);
 		// Set state back to idle since no agents are being spawned
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		console.log(`[GroupChat:Debug] Emitted state change: idle`);
@@ -994,12 +1247,22 @@ export async function routeModeratorResponse(
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 	}
 
-	// Store pending participants for synthesis tracking
+	// Store pending participants for synthesis tracking and install response timeouts
 	if (participantsToRespond.size > 0) {
 		pendingParticipantResponses.set(groupChatId, participantsToRespond);
 		console.log(
 			`[GroupChat:Debug] Waiting for ${participantsToRespond.size} participant(s) to respond: ${[...participantsToRespond].join(', ')}`
 		);
+		// Install a per-participant timeout so a hung/unresponsive participant can't block
+		// synthesis indefinitely. The timeout fires after PARTICIPANT_RESPONSE_TIMEOUT_MS.
+		for (const participantName of participantsToRespond) {
+			setParticipantResponseTimeout(
+				groupChatId,
+				participantName,
+				processManager ?? undefined,
+				agentDetector ?? undefined
+			);
+		}
 		// Set state to show agents are working
 		groupChatEmitters.emitStateChange?.(groupChatId, 'agent-working');
 		console.log(`[GroupChat:Debug] Emitted state change: agent-working`);
@@ -1217,11 +1480,26 @@ export async function spawnModeratorSynthesis(
 	const participantContext =
 		chat.participants.length > 0
 			? chat.participants
-					.map((p) => `- @${normalizeMentionName(p.name)} (${p.agentId} session)`)
+					.map((p) => {
+						return `- @${normalizeMentionName(p.name)} (${p.agentId} session)`;
+					})
 					.join('\n')
 			: '(No agents currently in this group chat)';
 
-	const synthesisPrompt = `${getModeratorSystemPrompt()}
+	// Get moderator settings for prompt customization
+	const synthModeratorSettings = getModeratorSettingsCallback?.() ?? {
+		standingInstructions: '',
+		conductorProfile: '',
+	};
+	const synthBasePrompt = getModeratorSystemPrompt().replace(
+		'{{CONDUCTOR_PROFILE}}',
+		synthModeratorSettings.conductorProfile || '(No conductor profile set)'
+	);
+	const synthStandingInstructions = synthModeratorSettings.standingInstructions
+		? `\n\n## Standing Instructions\n\nThe following instructions apply to ALL group chat sessions. Follow them consistently:\n\n${synthModeratorSettings.standingInstructions}`
+		: '';
+
+	const synthesisPrompt = `${synthBasePrompt}${synthStandingInstructions}
 
 ${getModeratorSynthesisPrompt()}
 
@@ -1233,8 +1511,10 @@ ${historyContext}
 
 ## Your Task:
 Review the agent responses above. Either:
-1. Synthesize into a final answer for the user (NO @mentions) if the question is fully answered
-2. @mention specific agents for follow-up if you need more information`;
+1. Synthesize into a final answer for the user (NO @mentions, NO !autorun) if the question is fully answered
+2. @mention specific agents for follow-up if you need more information
+
+**IMPORTANT: Do NOT include any !autorun directives in this synthesis response.**`;
 
 	const agentConfigValues = getAgentConfigCallback?.(chat.moderatorAgentId) || {};
 	const baseArgs = buildAgentArgs(agent, {
