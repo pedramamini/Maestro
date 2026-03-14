@@ -176,6 +176,85 @@ describe('cue-filter', () => {
 			});
 		});
 
+		describe('NaN handling in numeric comparisons', () => {
+			it('rejects non-numeric payload value with > filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '>5' })).toBe(false);
+			});
+
+			it('rejects non-numeric payload value with >= filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '>=5' })).toBe(false);
+			});
+
+			it('rejects non-numeric payload value with < filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '<5' })).toBe(false);
+			});
+
+			it('rejects non-numeric payload value with <= filter', () => {
+				expect(matchesFilter({ size: 'abc' }, { size: '<=5' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in >= filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '>=abc' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in > filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '>abc' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in < filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '<abc' })).toBe(false);
+			});
+
+			it('rejects non-numeric threshold in <= filter', () => {
+				expect(matchesFilter({ size: 100 }, { size: '<=abc' })).toBe(false);
+			});
+
+			it('rejects empty string payload value with numeric filter', () => {
+				expect(matchesFilter({ size: '' }, { size: '>0' })).toBe(false);
+			});
+
+			it('rejects empty string payload that would coerce to 0 with >=0 filter', () => {
+				// Number('') === 0, but empty string is not a valid numeric operand
+				expect(matchesFilter({ size: '' }, { size: '>=0' })).toBe(false);
+			});
+
+			it('rejects null payload value with numeric filter', () => {
+				expect(matchesFilter({ size: null }, { size: '>=0' })).toBe(false);
+			});
+
+			it('rejects whitespace-only string with numeric filter', () => {
+				expect(matchesFilter({ size: '  ' }, { size: '>0' })).toBe(false);
+			});
+
+			it('rejects Infinity payload value with numeric filter', () => {
+				expect(matchesFilter({ size: Infinity }, { size: '>0' })).toBe(false);
+			});
+
+			it('rejects -Infinity payload value with numeric filter', () => {
+				expect(matchesFilter({ size: -Infinity }, { size: '>0' })).toBe(false);
+			});
+
+			it('rejects NaN payload value with numeric filter', () => {
+				expect(matchesFilter({ size: NaN }, { size: '>0' })).toBe(false);
+			});
+
+			it('rejects NaN threshold in filter expression', () => {
+				expect(matchesFilter({ size: 100 }, { size: '>NaN' })).toBe(false);
+			});
+
+			it('rejects empty threshold in filter expression', () => {
+				// filterValue '>=' sliced to '' → Number('') = 0, but should reject
+				expect(matchesFilter({ size: 5 }, { size: '>=' })).toBe(false);
+			});
+
+			it('handles boolean payload coercion with numeric filter', () => {
+				// Number(true) === 1, so true > 0 should pass
+				expect(matchesFilter({ active: true }, { active: '>0' })).toBe(true);
+				// Number(false) === 0, so false > 0 should fail
+				expect(matchesFilter({ active: false }, { active: '>0' })).toBe(false);
+			});
+		});
+
 		describe('empty filter', () => {
 			it('matches everything when filter is empty', () => {
 				expect(matchesFilter({ any: 'value' }, {})).toBe(true);

@@ -195,7 +195,7 @@ describe('cue-file-watcher', () => {
 		expect(mockClose).toHaveBeenCalled();
 	});
 
-	it('handles watcher errors gracefully', () => {
+	it('handles watcher errors gracefully with console.error fallback', () => {
 		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
 
 		createCueFileWatcher({
@@ -212,6 +212,31 @@ describe('cue-file-watcher', () => {
 		// Should not throw
 		errorHandler(new Error('Watch error'));
 		expect(consoleSpy).toHaveBeenCalled();
+
+		consoleSpy.mockRestore();
+	});
+
+	it('routes errors through onLog when provided', () => {
+		const onLog = vi.fn();
+		const consoleSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+
+		createCueFileWatcher({
+			watchGlob: '**/*.ts',
+			projectRoot: '/test',
+			debounceMs: 5000,
+			onEvent: vi.fn(),
+			triggerName: 'my-watcher',
+			onLog,
+		});
+
+		const errorHandler = mockOn.mock.calls.find((call) => call[0] === 'error')?.[1];
+		expect(errorHandler).toBeDefined();
+
+		errorHandler(new Error('Watch error'));
+
+		expect(onLog).toHaveBeenCalledWith('error', expect.stringContaining('my-watcher'));
+		expect(onLog).toHaveBeenCalledWith('error', expect.stringContaining('Watch error'));
+		expect(consoleSpy).not.toHaveBeenCalled();
 
 		consoleSpy.mockRestore();
 	});

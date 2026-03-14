@@ -30,6 +30,7 @@ const MODES: Array<{
 	label: string;
 	icon: typeof ArrowRight;
 	description: string;
+	comingSoon?: boolean;
 }> = [
 	{
 		mode: 'pass',
@@ -42,12 +43,14 @@ const MODES: Array<{
 		label: 'Debate',
 		icon: MessageCircle,
 		description: 'Multiple agents debate before passing result',
+		comingSoon: true,
 	},
 	{
 		mode: 'autorun',
 		label: 'Auto Run',
 		icon: FileText,
 		description: 'Agent creates auto-run documents for next agent',
+		comingSoon: true,
 	},
 ];
 
@@ -135,12 +138,13 @@ export function EdgeConfigPanel({
 			<div style={{ flex: 1, overflow: 'auto', padding: '12px 16px' }}>
 				{/* Mode selector */}
 				<div style={{ display: 'flex', gap: 8, marginBottom: 12 }}>
-					{MODES.map(({ mode, label, icon: Icon }) => {
+					{MODES.map(({ mode, label, icon: Icon, comingSoon }) => {
 						const isActive = currentMode === mode;
 						return (
 							<button
 								key={mode}
 								onClick={() => {
+									if (comingSoon) return;
 									const updates: Partial<PipelineEdge> = { mode };
 									if (mode === 'debate' && !selectedEdge.debateConfig) {
 										updates.debateConfig = { maxRounds: 3, timeoutPerRound: 10 };
@@ -158,12 +162,15 @@ export function EdgeConfigPanel({
 									backgroundColor: isActive ? `${pipelineColor}15` : 'transparent',
 									border: `1px solid ${isActive ? pipelineColor : '#444'}`,
 									borderRadius: 6,
-									cursor: 'pointer',
+									cursor: comingSoon ? 'default' : 'pointer',
 									transition: 'all 0.15s',
+									opacity: comingSoon ? 0.5 : 1,
 								}}
+								title={comingSoon ? 'Coming soon' : undefined}
 							>
 								<Icon size={13} />
 								{label}
+								{comingSoon && <span style={{ fontSize: 9, color: '#6b7280' }}>(Soon)</span>}
 							</button>
 						);
 					})}

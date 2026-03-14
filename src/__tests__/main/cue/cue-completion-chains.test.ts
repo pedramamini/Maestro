@@ -156,7 +156,7 @@ describe('CueEngine completion chains', () => {
 			engine.stop();
 		});
 
-		it('truncates sourceOutput to 5000 chars', () => {
+		it('truncates sourceOutput to 5000 chars and sets outputTruncated to true', () => {
 			const config = createMockConfig({
 				subscriptions: [
 					{
@@ -180,6 +180,34 @@ describe('CueEngine completion chains', () => {
 			const request = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
 			const event = request.event as CueEvent;
 			expect((event.payload.sourceOutput as string).length).toBe(5000);
+			expect(event.payload.outputTruncated).toBe(true);
+
+			engine.stop();
+		});
+
+		it('sets outputTruncated to false when output is under limit', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'on-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'follow up',
+						source_session: 'agent-a',
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			engine.notifyAgentCompleted('agent-a', { stdout: 'short output' });
+
+			const request = (deps.onCueRun as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			const event = request.event as CueEvent;
+			expect(event.payload.outputTruncated).toBe(false);
 
 			engine.stop();
 		});
@@ -451,6 +479,42 @@ describe('CueEngine completion chains', () => {
 			engine.stop();
 		});
 
+		it('sets outputTruncated in fan-in aggregate event when any source is truncated', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						source_session: ['agent-a', 'agent-b'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+
+			const longOutput = 'x'.repeat(10000);
+			engine.notifyAgentCompleted('agent-a', { sessionName: 'Agent A', stdout: longOutput });
+			engine.notifyAgentCompleted('agent-b', { sessionName: 'Agent B', stdout: 'short' });
+
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							outputTruncated: true,
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
 		it('logs waiting message during fan-in', () => {
 			const config = createMockConfig({
 				subscriptions: [
@@ -558,6 +622,49 @@ describe('CueEngine completion chains', () => {
 						payload: expect.objectContaining({
 							partial: true,
 							timedOutSessions: expect.arrayContaining(['agent-b']),
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
+
+		it('includes outputTruncated in continue-mode timeout payload', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						source_session: ['agent-a', 'agent-b'],
+					},
+				],
+				settings: {
+					timeout_minutes: 1,
+					timeout_on_fail: 'continue',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const longOutput = 'x'.repeat(10000);
+			engine.notifyAgentCompleted('agent-a', { stdout: longOutput });
+
+			vi.advanceTimersByTime(1 * 60 * 1000 + 100);
+
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							outputTruncated: true,
+							partial: true,
 						}),
 					}),
 				})

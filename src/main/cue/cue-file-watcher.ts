@@ -16,6 +16,7 @@ export interface CueFileWatcherConfig {
 	debounceMs: number;
 	onEvent: (event: CueEvent) => void;
 	triggerName: string;
+	onLog?: (level: string, message: string) => void;
 }
 
 /**
@@ -68,8 +69,12 @@ export function createCueFileWatcher(config: CueFileWatcherConfig): () => void {
 	watcher.on('unlink', handleEvent('unlink'));
 
 	watcher.on('error', (error) => {
-		// Log but don't crash — the parent engine will handle logging
-		console.error(`[CUE] File watcher error for "${triggerName}":`, error);
+		const message = `[CUE] File watcher error for "${triggerName}": ${error}`;
+		if (config.onLog) {
+			config.onLog('error', message);
+		} else {
+			console.error(message);
+		}
 	});
 
 	return () => {

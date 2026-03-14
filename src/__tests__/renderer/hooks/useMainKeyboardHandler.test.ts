@@ -1568,16 +1568,23 @@ describe('useMainKeyboardHandler', () => {
 		});
 
 		describe('tab shortcuts in terminal mode', () => {
-			it('Cmd+T does NOT create a new AI tab in terminal mode (AI mode only)', () => {
+			it('Cmd+T creates a new AI tab even when in terminal mode', () => {
+				vi.useFakeTimers();
 				const { result } = renderHook(() => useMainKeyboardHandler());
 
-				const mockCreateTab = vi.fn();
+				const mockCreateTab = vi.fn().mockReturnValue({
+					session: { id: 'session-1', aiTabs: [], activeTabId: 'new-tab' },
+				});
 				const mockSetSessions = vi.fn();
+				const mockSetActiveFocus = vi.fn();
+				const mockFocus = vi.fn();
 
 				result.current.keyboardHandlerRef.current = createUnifiedTabContext({
 					isTabShortcut: (_e: KeyboardEvent, actionId: string) => actionId === 'newTab',
 					createTab: mockCreateTab,
 					setSessions: mockSetSessions,
+					setActiveFocus: mockSetActiveFocus,
+					inputRef: { current: { focus: mockFocus } },
 					activeSession: {
 						id: 'session-1',
 						aiTabs: [{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] }],
@@ -1599,8 +1606,32 @@ describe('useMainKeyboardHandler', () => {
 					);
 				});
 
-				// Tab shortcuts (including Cmd+T) are gated to AI mode only
-				expect(mockCreateTab).not.toHaveBeenCalled();
+				// Cmd+T should work regardless of inputMode
+				expect(mockCreateTab).toHaveBeenCalled();
+
+				// setSessions should be called with the new session including inputMode: 'ai'
+				expect(mockSetSessions).toHaveBeenCalledTimes(1);
+				const updater = mockSetSessions.mock.calls[0][0];
+				const prev = [
+					{
+						id: 'session-1',
+						aiTabs: [{ id: 'ai-tab-1', name: 'AI Tab 1', logs: [] }],
+						inputMode: 'terminal',
+					},
+				];
+				const updated = updater(prev);
+				expect(updated[0].inputMode).toBe('ai');
+
+				// setActiveFocus should switch focus to main
+				expect(mockSetActiveFocus).toHaveBeenCalledWith('main');
+
+				// Input should be focused after the render delay
+				act(() => {
+					vi.advanceTimersByTime(50);
+				});
+				expect(mockFocus).toHaveBeenCalled();
+
+				vi.useRealTimers();
 			});
 		});
 
