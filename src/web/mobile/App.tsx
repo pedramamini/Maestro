@@ -1299,7 +1299,7 @@ export default function MobileApp() {
 					!activeSessionId
 						? 'Select a session first...'
 						: activeSession?.inputMode === 'ai'
-							? (typeof window !== 'undefined' ? window.innerWidth <= 480 : isSmallScreen)
+							? isSmallScreen
 								? 'Ask AI...'
 								: `Ask ${activeSession?.toolType === 'claude-code' ? 'Claude' : activeSession?.toolType || 'AI'} about ${activeSession?.name || 'this session'}...`
 							: 'Run shell command...'

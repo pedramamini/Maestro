@@ -14,6 +14,7 @@ import {
 	buildWrappedCommand,
 } from '../utils/pathResolver';
 import { isWindows } from '../../../shared/platformDetection';
+import { captureException } from '../../utils/sentry';
 import { stripControlSequences } from '../../utils/terminalFilter';
 
 /**
@@ -22,6 +23,18 @@ import { stripControlSequences } from '../../utils/terminalFilter';
  */
 export class LocalCommandRunner {
 	constructor(private emitter: EventEmitter) {}
+
+	private isRecoverablePtySpawnError(error: unknown): boolean {
+		const errorCode =
+			typeof error === 'object' && error !== null && 'code' in error ? String(error.code) : '';
+		const message = error instanceof Error ? error.message : String(error);
+
+		if (['ENOENT', 'EACCES', 'ENOTDIR'].includes(errorCode)) {
+			return true;
+		}
+
+		return /no such file|not found|not a directory|permission denied|cwd/i.test(message);
+	}
 
 	/**
 	 * Run a single command and capture stdout/stderr cleanly
@@ -113,6 +126,17 @@ export class LocalCommandRunner {
 						env: env as Record<string, string>,
 					});
 				} catch (error) {
+					if (!this.isRecoverablePtySpawnError(error)) {
+						captureException(error, {
+							operation: 'process-runner:pty-spawn',
+							sessionId,
+							shell: shellToUse,
+							shellPath,
+							cwd,
+						});
+						throw error;
+					}
+
 					const message = error instanceof Error ? error.message : String(error);
 					logger.error('[ProcessManager] runCommand PTY spawn error', 'ProcessManager', {
 						sessionId,
