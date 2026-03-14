@@ -809,7 +809,6 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 					} else {
 						SYNOPSIS_PROMPT = autorunSynopsisPrompt;
 					}
-					const startTime = Date.now();
 					const synopsisTime = Date.now();
 
 					deps.spawnBackgroundSynopsisRef
@@ -822,8 +821,6 @@ export function useAgentListeners(deps: UseAgentListenersDeps): void {
 							synopsisData.sessionConfig
 						)
 						.then((result) => {
-							const duration = Date.now() - startTime;
-
 							if (result.success && result.response && deps.addHistoryEntryRef.current) {
 								const parsed = parseSynopsis(result.response);
 
