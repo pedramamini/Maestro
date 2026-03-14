@@ -882,9 +882,10 @@ describe('AchievementCard', () => {
 			// Click first segment
 			fireEvent.click(segments[0]);
 
-			// Tooltip should have left: 0
+			// Tooltip should have inset-inline-start: 0 (logical property for RTL support)
 			const tooltip = container.querySelector('.absolute.bottom-full');
-			expect(tooltip).toHaveStyle({ left: '0px' });
+			const style = tooltip?.getAttribute('style') || '';
+			expect(style).toContain('inset-inline-start: 0');
 		});
 
 		it('positions tooltip center for middle badges', () => {
@@ -912,9 +913,10 @@ describe('AchievementCard', () => {
 			// Click last segment (index 10)
 			fireEvent.click(segments[10]);
 
-			// Tooltip should have right: 0
+			// Tooltip should have inset-inline-end: 0 (logical property for RTL support)
 			const tooltip = container.querySelector('.absolute.bottom-full');
-			expect(tooltip).toHaveStyle({ right: '0px' });
+			const style = tooltip?.getAttribute('style') || '';
+			expect(style).toContain('inset-inline-end: 0');
 		});
 	});
 
