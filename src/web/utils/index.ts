@@ -24,3 +24,11 @@ export {
 	pingServiceWorker,
 } from './serviceWorker';
 export type { ServiceWorkerConfig } from './serviceWorker';
+
+export {
+	getDirectionalDelta,
+	getDirectionalTranslateX,
+	getDirectionalOffsetLeft,
+	getLogicalSide,
+	useDirection,
+} from './rtlCoordinates';
