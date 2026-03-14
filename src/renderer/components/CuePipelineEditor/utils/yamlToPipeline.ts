@@ -350,9 +350,13 @@ export function subscriptionsToPipelines(
 				if (sub.prompt) {
 					// Strip auto-injected {{CUE_SOURCE_OUTPUT}} prefix to prevent accumulation on round-trip
 					const AUTO_PREFIX = '{{CUE_SOURCE_OUTPUT}}\n\n';
-					const strippedPrompt = sub.prompt.startsWith(AUTO_PREFIX)
-						? sub.prompt.slice(AUTO_PREFIX.length)
-						: sub.prompt;
+					const BARE_TOKEN = '{{CUE_SOURCE_OUTPUT}}';
+					let strippedPrompt = sub.prompt;
+					if (strippedPrompt.startsWith(AUTO_PREFIX)) {
+						strippedPrompt = strippedPrompt.slice(AUTO_PREFIX.length);
+					} else if (strippedPrompt === BARE_TOKEN) {
+						strippedPrompt = '';
+					}
 					(targetNode.data as AgentNodeData).inputPrompt = strippedPrompt || undefined;
 				}
 				if (sub.output_prompt) {

@@ -629,6 +629,49 @@ describe('CueEngine completion chains', () => {
 
 			engine.stop();
 		});
+
+		it('includes outputTruncated in continue-mode timeout payload', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'all-done',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'aggregate',
+						source_session: ['agent-a', 'agent-b'],
+					},
+				],
+				settings: {
+					timeout_minutes: 1,
+					timeout_on_fail: 'continue',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			vi.clearAllMocks();
+			const longOutput = 'x'.repeat(10000);
+			engine.notifyAgentCompleted('agent-a', { stdout: longOutput });
+
+			vi.advanceTimersByTime(1 * 60 * 1000 + 100);
+
+			expect(deps.onCueRun).toHaveBeenCalledWith(
+				expect.objectContaining({
+					event: expect.objectContaining({
+						payload: expect.objectContaining({
+							outputTruncated: true,
+							partial: true,
+						}),
+					}),
+				})
+			);
+
+			engine.stop();
+		});
 	});
 
 	describe('hasCompletionSubscribers', () => {

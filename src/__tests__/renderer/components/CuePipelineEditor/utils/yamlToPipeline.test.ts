@@ -740,4 +740,35 @@ describe('auto-injected source output prefix stripping', () => {
 		);
 		expect((testerNode!.data as { inputPrompt?: string }).inputPrompt).toBeUndefined();
 	});
+
+	it('strips bare {{CUE_SOURCE_OUTPUT}} token without trailing newlines', () => {
+		const subs: CueSubscription[] = [
+			{
+				name: 'pipe',
+				event: 'file.changed',
+				enabled: true,
+				watch: '**/*',
+				prompt: 'Build',
+				agent_id: 's1',
+			},
+			{
+				name: 'pipe-chain-1',
+				event: 'agent.completed',
+				enabled: true,
+				source_session: 'builder',
+				prompt: '{{CUE_SOURCE_OUTPUT}}',
+				agent_id: 's2',
+			},
+		];
+		const sessions: SessionInfo[] = [
+			{ id: 's1', name: 'builder', toolType: 'claude-code', workingDirectory: '' },
+			{ id: 's2', name: 'tester', toolType: 'claude-code', workingDirectory: '' },
+		];
+
+		const pipelines = subscriptionsToPipelines(subs, sessions);
+		const testerNode = pipelines[0].nodes.find(
+			(n) => n.type === 'agent' && (n.data as { sessionName: string }).sessionName === 'tester'
+		);
+		expect((testerNode!.data as { inputPrompt?: string }).inputPrompt).toBeUndefined();
+	});
 });
