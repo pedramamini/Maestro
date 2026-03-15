@@ -914,6 +914,16 @@ export function registerProcessHandlers(deps: ProcessHandlerDependencies): void 
 		)
 	);
 
+	// Check if a process has emitted its result (for race condition guard)
+	ipcMain.handle(
+		'process:hasResultEmitted',
+		withIpcErrorLogging(handlerOpts('hasResultEmitted'), async (sessionId: string) => {
+			const processManager = requireProcessManager(getProcessManager);
+			const process = processManager.get(sessionId);
+			return process?.resultEmitted === true;
+		})
+	);
+
 	// Run a single command and capture only stdout/stderr (no PTY echo/prompts)
 	// Supports SSH remote execution when sessionSshRemoteConfig is provided
 	// TODO: Remove this handler once all callers migrate to process:spawnTerminalTab for persistent PTY sessions

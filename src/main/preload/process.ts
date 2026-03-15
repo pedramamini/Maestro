@@ -212,6 +212,12 @@ export function createProcessApi() {
 			ipcRenderer.invoke('process:runCommand', config),
 
 		/**
+		 * Check if a running process has already emitted its result
+		 */
+		hasResultEmitted: (sessionId: string): Promise<boolean> =>
+			ipcRenderer.invoke('process:hasResultEmitted', sessionId),
+
+		/**
 		 * Get all active processes from ProcessManager
 		 */
 		getActiveProcesses: (): Promise<ActiveProcess[]> =>

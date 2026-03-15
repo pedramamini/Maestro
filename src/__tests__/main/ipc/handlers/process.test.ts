@@ -289,6 +289,7 @@ describe('process IPC handlers', () => {
 				'process:interrupt',
 				'process:kill',
 				'process:resize',
+				'process:hasResultEmitted',
 				'process:getActiveProcesses',
 				'process:spawnTerminalTab',
 				'process:runCommand',

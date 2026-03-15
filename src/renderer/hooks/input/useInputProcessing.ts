@@ -15,6 +15,7 @@ import { filterYoloArgs } from '../../utils/agentArgs';
 import { hasCapabilityCached } from '../agent/useAgentCapabilities';
 import { gitService } from '../../services/git';
 import { imageOnlyDefaultPrompt, maestroSystemPrompt } from '../../../prompts';
+import { buildContinuationPrompt } from '../../utils/continuationPrompt';
 
 /**
  * Default prompt used when user sends only an image without text.
@@ -386,15 +387,20 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 			// send directly to the running process via stdin (bypass queue)
 			if (currentMode === 'ai' && activeSession.state === 'busy') {
 				const activeTab = getActiveTab(activeSession);
+				if (!activeTab) return;
+				const processSessionId = `${activeSession.id}-ai-${activeTab.id}`;
 				const agentSupportsMidTurn = hasCapabilityCached(
 					activeSession.toolType,
 					'supportsMidTurnInput'
 				);
 
-				if (agentSupportsMidTurn && activeTab?.state === 'busy') {
-					// Build session ID for the running process
-					const processSessionId = `${activeSession.id}-ai-${activeTab.id}`;
-
+				// Race condition guard: if agent already finished, queue as next message instead
+				const resultEmitted = await window.maestro.process.hasResultEmitted(processSessionId);
+				if (resultEmitted) {
+					// Agent already done — no return here, intentionally falls through
+					// to the normal queue logic below this outer if block
+					console.log('[processInput] Agent already finished, queueing instead of interjecting');
+				} else if (agentSupportsMidTurn && activeTab?.state === 'busy') {
 					// Capture staged images before clearing
 					const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
 
@@ -461,6 +467,101 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 						.catch((error) => {
 							console.error('[processInput] Interjection failed:', error);
 						});
+
+					// Clear input
+					setInputValue('');
+					setStagedImages([]);
+					syncAiInputToSession('');
+					if (inputRef.current) inputRef.current.style.height = 'auto';
+					return;
+				} else if (activeTab?.state === 'busy') {
+					// Interrupt-and-continue: agent doesn't support mid-turn stdin,
+					// so interrupt the current turn and respawn with combined context
+
+					// Capture partial output from CURRENT TURN only (not all historical logs)
+					// Find the last non-interjection user message to mark the start of the current turn
+					let lastUserMsgIndex = -1;
+					for (let i = activeTab.logs.length - 1; i >= 0; i--) {
+						if (activeTab.logs[i].source === 'user' && !activeTab.logs[i].interjection) {
+							lastUserMsgIndex = i;
+							break;
+						}
+					}
+					const currentTurnLogs = activeTab.logs
+						.slice(lastUserMsgIndex + 1)
+						.filter((log) => log.source === 'ai' || log.source === 'stdout')
+						.map((log) => log.text)
+						.join('');
+
+					const continuationPrompt = buildContinuationPrompt(
+						currentTurnLogs,
+						effectiveInputValue
+					);
+
+					// Add system log entry to indicate interruption
+					const systemEntry: LogEntry = {
+						id: generateId(),
+						timestamp: Date.now(),
+						source: 'system',
+						text: 'Interrupting agent to incorporate your input...',
+					};
+
+					// Add the user's interjection log entry
+					const interjectionEntry: LogEntry = {
+						id: generateId(),
+						timestamp: Date.now(),
+						source: 'user',
+						text: effectiveInputValue,
+						images: [...stagedImages],
+						interjection: true,
+					};
+
+					if (flushBatchedUpdates) flushBatchedUpdates();
+
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionId) return s;
+							return {
+								...s,
+								aiTabs: s.aiTabs.map((tab) => {
+									if (tab.id !== activeTab.id) return tab;
+									return {
+										...tab,
+										logs: [...tab.logs, systemEntry, interjectionEntry],
+									};
+								}),
+							};
+						})
+					);
+
+					// Interrupt the running process
+					window.maestro.process.interrupt(processSessionId).catch((error) => {
+						console.error('[processInput] Interrupt failed:', error);
+					});
+
+					// Queue the continuation prompt at the FRONT of the queue.
+					// It must run before any older queued work for this session so the
+					// interrupted turn resumes immediately after exit.
+					const continuationItem: QueuedItem = {
+						id: generateId(),
+						timestamp: Date.now(),
+						tabId: activeTab.id,
+						type: 'message',
+						text: continuationPrompt,
+						images: [...stagedImages],
+						tabName: activeTab.name || 'New',
+						readOnlyMode: activeTab.readOnlyMode === true,
+					};
+
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionId) return s;
+							return {
+								...s,
+								executionQueue: [continuationItem, ...s.executionQueue],
+							};
+						})
+					);
 
 					// Clear input
 					setInputValue('');
