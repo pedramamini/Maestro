@@ -48,6 +48,8 @@ vi.mock('../../../main/utils/ssh-spawn-wrapper', () => ({
 
 import {
 	extractMentions,
+	extractAllMentions,
+	extractAutoRunDirectives,
 	routeUserMessage,
 	routeModeratorResponse,
 	routeAgentResponse,
@@ -312,6 +314,99 @@ describe('group-chat-router', () => {
 			// @Cli shouldn't match Client, @ServerX shouldn't match Server
 			const mentions = extractMentions('@Cli and @ServerX and @Client', participants);
 			expect(mentions).toEqual(['Client']);
+		});
+	});
+
+	// ===========================================================================
+	// Test 5.2b: Markdown-formatted mentions
+	// AI moderators often wrap mentions in bold/italic/code markdown.
+	// ===========================================================================
+	describe('extractMentions - markdown formatting', () => {
+		const participants: GroupChatParticipant[] = [
+			{ name: 'controlplane', agentId: 'claude-code', sessionId: '1', addedAt: 0 },
+			{ name: 'dataplane', agentId: 'claude-code', sessionId: '2', addedAt: 0 },
+			{ name: 'Client', agentId: 'claude-code', sessionId: '3', addedAt: 0 },
+		];
+
+		it('handles bold markdown **@name**', () => {
+			const mentions = extractMentions(
+				'**@controlplane** — Please execute your plan.',
+				participants
+			);
+			expect(mentions).toEqual(['controlplane']);
+		});
+
+		it('handles italic markdown _@name_', () => {
+			const mentions = extractMentions('_@Client_ should review this', participants);
+			expect(mentions).toEqual(['Client']);
+		});
+
+		it('handles bold+italic markdown ***@name***', () => {
+			const mentions = extractMentions('***@dataplane*** is ready', participants);
+			expect(mentions).toEqual(['dataplane']);
+		});
+
+		it('handles backtick markdown `@name`', () => {
+			const mentions = extractMentions('`@controlplane` run the task', participants);
+			expect(mentions).toEqual(['controlplane']);
+		});
+
+		it('handles strikethrough markdown ~~@name~~', () => {
+			const mentions = extractMentions('~~@Client~~ was reassigned', participants);
+			expect(mentions).toEqual(['Client']);
+		});
+
+		it('handles multiple markdown-formatted mentions in one message', () => {
+			const mentions = extractMentions(
+				'- **@controlplane** — execute plan\n- **@dataplane** — verify results',
+				participants
+			);
+			expect(mentions).toEqual(['controlplane', 'dataplane']);
+		});
+
+		it('handles mixed formatted and plain mentions', () => {
+			const mentions = extractMentions(
+				'**@controlplane** and @dataplane should coordinate',
+				participants
+			);
+			expect(mentions).toEqual(['controlplane', 'dataplane']);
+		});
+	});
+
+	// ===========================================================================
+	// Test 5.2c: extractAllMentions with markdown formatting
+	// ===========================================================================
+	describe('extractAllMentions - markdown formatting', () => {
+		it('strips markdown from extracted mention names', () => {
+			const mentions = extractAllMentions('**@controlplane** and _@dataplane_');
+			expect(mentions).toEqual(['controlplane', 'dataplane']);
+		});
+
+		it('handles backtick-wrapped mentions', () => {
+			const mentions = extractAllMentions('`@myAgent` should handle this');
+			expect(mentions).toEqual(['myAgent']);
+		});
+
+		it('does not produce empty mentions from bare @**', () => {
+			const mentions = extractAllMentions('@** is not a real mention');
+			expect(mentions).toEqual([]);
+		});
+	});
+
+	// ===========================================================================
+	// Test 5.2d: extractAutoRunDirectives with markdown formatting
+	// ===========================================================================
+	describe('extractAutoRunDirectives - markdown formatting', () => {
+		it('strips markdown from autorun directive participant names', () => {
+			const result = extractAutoRunDirectives('!autorun @**controlplane**');
+			expect(result.autoRunParticipants).toEqual(['controlplane']);
+		});
+
+		it('handles autorun with filename and markdown', () => {
+			const result = extractAutoRunDirectives('!autorun @*controlplane*:plan.md');
+			expect(result.autoRunDirectives).toEqual([
+				{ participantName: 'controlplane', filename: 'plan.md' },
+			]);
 		});
 	});
 

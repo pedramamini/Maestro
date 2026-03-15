@@ -340,8 +340,19 @@ export function setSshStore(store: SshRemoteSettingsStore): void {
 }
 
 /**
+ * Strips leading/trailing markdown formatting characters from a mention name.
+ * AI moderators often wrap mentions in bold/italic/code/strikethrough markdown
+ * (e.g. `**@name**`, `_@name_`, `` `@name` ``), which leaves formatting chars
+ * attached to the extracted name and breaks participant matching.
+ */
+function stripMarkdownFormatting(name: string): string {
+	return name.replace(/^[*_`~]+|[*_`~]+$/g, '');
+}
+
+/**
  * Extracts @mentions from text that match known participants.
  * Supports hyphenated names matching participants with spaces.
+ * Handles markdown-formatted mentions (e.g. **@name**, _@name_).
  *
  * @param text - The text to search for mentions
  * @param participants - List of valid participants
@@ -359,7 +370,8 @@ export function extractMentions(text: string, participants: GroupChatParticipant
 	let match;
 
 	while ((match = mentionPattern.exec(text)) !== null) {
-		const mentionedName = match[1];
+		const mentionedName = stripMarkdownFormatting(match[1]);
+		if (!mentionedName) continue;
 		// Find participant that matches (either exact or normalized)
 		const matchingParticipant = participants.find((p) => mentionMatches(mentionedName, p.name));
 		if (matchingParticipant && !mentions.includes(matchingParticipant.name)) {
@@ -372,6 +384,7 @@ export function extractMentions(text: string, participants: GroupChatParticipant
 
 /**
  * Extracts ALL @mentions from text (regardless of whether they're participants).
+ * Handles markdown-formatted mentions (e.g. **@name**, _@name_).
  *
  * @param text - The text to search for mentions
  * @returns Array of unique names that were mentioned (without @ prefix)
@@ -388,7 +401,8 @@ export function extractAllMentions(text: string): string[] {
 	let match;
 
 	while ((match = mentionPattern.exec(text)) !== null) {
-		const name = match[1];
+		const name = stripMarkdownFormatting(match[1]);
+		if (!name) continue;
 		if (!mentions.includes(name)) {
 			mentions.push(name);
 		}
@@ -423,7 +437,8 @@ export function extractAutoRunDirectives(text: string): {
 	let match;
 
 	while ((match = autoRunPattern.exec(text)) !== null) {
-		const participantName = match[1];
+		const participantName = stripMarkdownFormatting(match[1]);
+		if (!participantName) continue;
 		const filename = match[2]; // undefined when no :filename suffix
 		if (!autoRunDirectives.some((d) => d.participantName === participantName)) {
 			autoRunDirectives.push({ participantName, filename });
@@ -1300,6 +1315,27 @@ export async function routeModeratorResponse(
 		console.log(
 			`[GroupChat:Debug] No actionable participant work started - moderator response is final`
 		);
+
+		// Notify the user if the moderator's message contained @mentions that didn't resolve
+		// to any actionable participant work — this is the most common silent-failure scenario
+		// (e.g. markdown-formatted mentions that couldn't be parsed, or all directives were skipped).
+		if (allMentions.length > 0 || autoRunDirectives.length > 0) {
+			const unresolvedNames = allMentions.filter(
+				(name) =>
+					!updatedChat.participants.some((p) => mentionMatches(name, p.name)) ||
+					!mentions.includes(
+						updatedChat.participants.find((p) => mentionMatches(name, p.name))?.name ?? ''
+					)
+			);
+			if (unresolvedNames.length > 0 || (autoRunDirectives.length > 0 && mentions.length === 0)) {
+				groupChatEmitters.emitMessage?.(groupChatId, {
+					timestamp: new Date().toISOString(),
+					from: 'system',
+					content: `⚠️ The moderator mentioned participants but none could be activated. ${unresolvedNames.length > 0 ? `Unresolved mentions: ${unresolvedNames.map((n) => `@${n}`).join(', ')}.` : 'All !autorun directives were skipped.'} You may need to send another message to retry.`,
+				});
+			}
+		}
+
 		groupChatEmitters.emitStateChange?.(groupChatId, 'idle');
 		console.log(`[GroupChat:Debug] Emitted state change: idle`);
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
