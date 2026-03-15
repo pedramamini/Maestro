@@ -1076,13 +1076,29 @@ export async function routeModeratorResponse(
 			// When the batch completes, the renderer calls groupChat:reportAutoRunComplete which
 			// invokes routeAgentResponse to trigger the synthesis round.
 			groupChatEmitters.emitParticipantState?.(groupChatId, participant.name, 'working');
-			groupChatEmitters.emitAutoRunTriggered?.(groupChatId, participant.name, targetFilename);
+			// Register in the global pending map BEFORE emitting the trigger event to the renderer.
+			// The renderer's batch processor could complete and call reportAutoRunComplete
+			// before the post-loop registration — this prevents that race.
 			participantsToRespond.add(participant.name);
+			pendingParticipantResponses.set(groupChatId, participantsToRespond);
+			setParticipantResponseTimeout(
+				groupChatId,
+				participant.name,
+				processManager ?? undefined,
+				agentDetector ?? undefined
+			);
 			// Track as autorun so timeout path only emits batch-complete for autorun participants
 			if (!autoRunParticipantTracker.has(groupChatId)) {
 				autoRunParticipantTracker.set(groupChatId, new Set());
 			}
 			autoRunParticipantTracker.get(groupChatId)!.add(participant.name);
+			// Emit 'agent-working' on first participant so UI indicators activate immediately
+			if (participantsToRespond.size === 1) {
+				groupChatEmitters.emitStateChange?.(groupChatId, 'agent-working');
+				console.log(`[GroupChat:Debug] Emitted state change: agent-working`);
+			}
+			// Now emit the trigger — renderer will start the batch run
+			groupChatEmitters.emitAutoRunTriggered?.(groupChatId, participant.name, targetFilename);
 			console.log(
 				`[GroupChat:Debug] Emitted autoRunTriggered for @${participant.name}${targetFilename ? `:${targetFilename}` : ''} in chat ${groupChatId}`
 			);
@@ -1288,8 +1304,23 @@ export async function routeModeratorResponse(
 				console.log(`[GroupChat:Debug] promptArgs: ${agent.promptArgs ? 'defined' : 'undefined'}`);
 				console.log(`[GroupChat:Debug] noPromptSeparator: ${agent.noPromptSeparator ?? false}`);
 
-				// Track this participant as pending response
+				// Register this participant in the global pending map IMMEDIATELY after spawn.
+				// This prevents a race condition where the process exits before the post-loop
+				// registration (the exit listener would call markParticipantResponded which checks
+				// this map — if the participant isn't registered yet, synthesis never triggers).
 				participantsToRespond.add(participantName);
+				pendingParticipantResponses.set(groupChatId, participantsToRespond);
+				setParticipantResponseTimeout(
+					groupChatId,
+					participantName,
+					processManager ?? undefined,
+					agentDetector ?? undefined
+				);
+				// Emit 'agent-working' on first spawn so sidebar and chat indicators update immediately
+				if (participantsToRespond.size === 1) {
+					groupChatEmitters.emitStateChange?.(groupChatId, 'agent-working');
+					console.log(`[GroupChat:Debug] Emitted state change: agent-working`);
+				}
 				console.log(
 					`[GroupChat:Debug] Spawned batch process for participant @${participantName} (session ${sessionId}, readOnly=${readOnly ?? false})`
 				);
@@ -1341,25 +1372,11 @@ export async function routeModeratorResponse(
 		powerManager.removeBlockReason(`groupchat:${groupChatId}`);
 	}
 
-	// Store pending participants for synthesis tracking and install response timeouts
+	// Log final pending state (registration now happens incrementally per-participant above)
 	if (participantsToRespond.size > 0) {
-		pendingParticipantResponses.set(groupChatId, participantsToRespond);
 		console.log(
 			`[GroupChat:Debug] Waiting for ${participantsToRespond.size} participant(s) to respond: ${[...participantsToRespond].join(', ')}`
 		);
-		// Install a per-participant timeout so a hung/unresponsive participant can't block
-		// synthesis indefinitely. The timeout fires after PARTICIPANT_RESPONSE_TIMEOUT_MS.
-		for (const participantName of participantsToRespond) {
-			setParticipantResponseTimeout(
-				groupChatId,
-				participantName,
-				processManager ?? undefined,
-				agentDetector ?? undefined
-			);
-		}
-		// Set state to show agents are working
-		groupChatEmitters.emitStateChange?.(groupChatId, 'agent-working');
-		console.log(`[GroupChat:Debug] Emitted state change: agent-working`);
 	}
 	console.log(`[GroupChat:Debug] ===================================================`);
 }
