@@ -278,7 +278,7 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 	}, [isResumingSession, hasCapability]);
 
 	// PERF: Memoize mode-related derived state
-	const { isReadOnlyMode, showQueueingBorder } = useMemo(() => {
+	const { isReadOnlyMode, showQueueingBorder, showBusyBorder } = useMemo(() => {
 		// Check if we're in read-only mode (manual toggle only - Claude will be in plan mode)
 		// NOTE: Auto Run no longer forces read-only mode. Instead:
 		// - Yellow border shows during Auto Run to indicate queuing will happen for write messages
@@ -289,11 +289,14 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 		// Check if Auto Run is active - used for yellow border indication (queuing will happen for write messages)
 		const autoRunActive = isAutoModeActive && session.inputMode === 'ai';
 		// Show yellow border when: read-only mode is on OR Auto Run is active (both indicate special input handling)
+		// Show subtle busy border when agent is busy in AI mode (interjection hint)
+		const busyInAI = session.state === 'busy' && session.inputMode === 'ai' && !readOnly && !autoRunActive;
 		return {
 			isReadOnlyMode: readOnly,
 			showQueueingBorder: readOnly || autoRunActive,
+			showBusyBorder: busyInAI,
 		};
-	}, [tabReadOnlyMode, isAutoModeActive, session.inputMode]);
+	}, [tabReadOnlyMode, isAutoModeActive, session.inputMode, session.state]);
 
 	// Filter slash commands based on input and current mode
 	const isTerminalMode = session.inputMode === 'terminal';
@@ -844,10 +847,16 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 					<div
 						className="flex-1 relative border rounded-lg bg-opacity-50 flex flex-col"
 						style={{
-							borderColor: showQueueingBorder ? theme.colors.warning : theme.colors.border,
+							borderColor: showQueueingBorder
+								? theme.colors.warning
+								: showBusyBorder
+									? theme.colors.warning + '60'
+									: theme.colors.border,
 							backgroundColor: showQueueingBorder
 								? `${theme.colors.warning}15`
-								: theme.colors.bgMain,
+								: showBusyBorder
+									? `${theme.colors.warning}10`
+									: theme.colors.bgMain,
 						}}
 					>
 						<div className="flex items-start">
@@ -867,7 +876,9 @@ export const InputArea = React.memo(function InputArea(props: InputAreaProps) {
 								placeholder={
 									isTerminalMode
 										? 'Run shell command...'
-										: `Talking to ${session.name} powered by ${getProviderDisplayName(session.toolType)}`
+										: session.state === 'busy'
+											? 'Send guidance to active agent...'
+											: `Talking to ${session.name} powered by ${getProviderDisplayName(session.toolType)}`
 								}
 								value={inputValue}
 								onFocus={onInputFocus}

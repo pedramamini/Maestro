@@ -402,6 +402,7 @@ const LogItemComponent = memo(
 				: htmlContent;
 
 		const isUserMessage = log.source === 'user';
+		const isInterjection = isUserMessage && log.interjection === true;
 		const isReversed = isUserMessage
 			? userMessageAlignment === 'left'
 			: userMessageAlignment === 'right';
@@ -442,20 +443,24 @@ const LogItemComponent = memo(
 					className={`flex-1 min-w-0 p-4 pb-10 rounded-xl border ${isReversed ? 'rounded-tr-none' : 'rounded-tl-none'} relative overflow-hidden`}
 					style={{
 						backgroundColor: isUserMessage
-							? isAIMode
-								? `color-mix(in srgb, ${theme.colors.accent} 20%, ${theme.colors.bgSidebar})`
-								: `color-mix(in srgb, ${theme.colors.accent} 15%, ${theme.colors.bgActivity})`
+							? isInterjection
+								? `color-mix(in srgb, ${theme.colors.warning} 15%, ${theme.colors.bgSidebar})`
+								: isAIMode
+									? `color-mix(in srgb, ${theme.colors.accent} 20%, ${theme.colors.bgSidebar})`
+									: `color-mix(in srgb, ${theme.colors.accent} 15%, ${theme.colors.bgActivity})`
 							: log.source === 'stderr' || log.source === 'error'
 								? `color-mix(in srgb, ${theme.colors.error} 8%, ${theme.colors.bgActivity})`
 								: isAIMode
 									? theme.colors.bgActivity
 									: 'transparent',
 						borderColor:
-							isUserMessage && isAIMode
-								? theme.colors.accent + '40'
-								: log.source === 'stderr' || log.source === 'error'
-									? theme.colors.error
-									: theme.colors.border,
+							isUserMessage && isInterjection
+								? theme.colors.warning + '40'
+								: isUserMessage && isAIMode
+									? theme.colors.accent + '40'
+									: log.source === 'stderr' || log.source === 'error'
+										? theme.colors.error
+										: theme.colors.border,
 					}}
 				>
 					{/* Local filter icon for system output only */}
@@ -496,6 +501,14 @@ const LogItemComponent = memo(
 								</button>
 							))}
 						</div>
+					)}
+					{isInterjection && (
+						<span
+							className="text-[10px] font-medium uppercase tracking-wider mb-1 block"
+							style={{ color: theme.colors.warning, opacity: 0.8 }}
+						>
+							interjection
+						</span>
 					)}
 					{log.source === 'stderr' && (
 						<div className="mb-2">

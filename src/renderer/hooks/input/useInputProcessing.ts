@@ -382,6 +382,95 @@ export function useInputProcessing(deps: UseInputProcessingDeps): UseInputProces
 				return;
 			}
 
+			// Mid-turn interjection: if agent is busy and supports mid-turn input,
+			// send directly to the running process via stdin (bypass queue)
+			if (currentMode === 'ai' && activeSession.state === 'busy') {
+				const activeTab = getActiveTab(activeSession);
+				const agentSupportsMidTurn = hasCapabilityCached(
+					activeSession.toolType,
+					'supportsMidTurnInput'
+				);
+
+				if (agentSupportsMidTurn && activeTab?.state === 'busy') {
+					// Build session ID for the running process
+					const processSessionId = `${activeSession.id}-ai-${activeTab.id}`;
+
+					// Capture staged images before clearing
+					const imagesToSend = stagedImages.length > 0 ? [...stagedImages] : undefined;
+
+					// Add interjection log entry immediately (delivered: false until confirmed)
+					const interjectionEntryId = generateId();
+					const interjectionEntry: LogEntry = {
+						id: interjectionEntryId,
+						timestamp: Date.now(),
+						source: 'user',
+						text: effectiveInputValue,
+						images: [...stagedImages],
+						interjection: true,
+						delivered: false,
+					};
+
+					// Flush any pending batched updates so interjection appears in order
+					if (flushBatchedUpdates) flushBatchedUpdates();
+
+					setSessions((prev) =>
+						prev.map((s) => {
+							if (s.id !== activeSessionId) return s;
+							return {
+								...s,
+								aiTabs: s.aiTabs.map((tab) => {
+									if (tab.id !== activeTab.id) return tab;
+									return {
+										...tab,
+										logs: [...tab.logs, interjectionEntry],
+									};
+								}),
+							};
+						})
+					);
+
+					// Send interjection via IPC (formats stream-json in main process)
+					window.maestro.process
+						.writeInterjection(processSessionId, effectiveInputValue, imagesToSend)
+						.then((success) => {
+							if (success) {
+								// Mark the log entry as delivered
+								setSessions((prev) =>
+									prev.map((s) => {
+										if (s.id !== activeSessionId) return s;
+										return {
+											...s,
+											aiTabs: s.aiTabs.map((tab) => {
+												if (tab.id !== activeTab.id) return tab;
+												return {
+													...tab,
+													logs: tab.logs.map((log) =>
+														log.id === interjectionEntryId
+															? { ...log, delivered: true }
+															: log
+													),
+												};
+											}),
+										};
+									})
+								);
+							} else {
+								console.warn('[processInput] Interjection write failed');
+							}
+						})
+						.catch((error) => {
+							console.error('[processInput] Interjection failed:', error);
+						});
+
+					// Clear input
+					setInputValue('');
+					setStagedImages([]);
+					syncAiInputToSession('');
+					if (inputRef.current) inputRef.current.style.height = 'auto';
+					return;
+				}
+			}
+
 			// Queue messages when AI is busy (only in AI mode)
 			// For read-only mode tabs: only queue if THIS TAB is busy (allows parallel execution)
 			// For write mode tabs: queue if ANY tab in session is busy (prevents conflicts)
