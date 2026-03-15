@@ -1529,7 +1529,7 @@ export const MainPanel = React.memo(
 										<LlmGuardIndicator
 											theme={theme}
 											enabled={llmGuardEnabled}
-											sessionId={activeTab?.agentSessionId ?? undefined}
+											sessionId={activeSession.id}
 										/>
 									)}
 
