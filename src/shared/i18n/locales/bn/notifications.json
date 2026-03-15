@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "পরীক্ষামূলক বিজ্ঞপ্তি",
 		"test_message": "এটি কনসোল থেকে একটি পরীক্ষামূলক টোস্ট বিজ্ঞপ্তি!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "sessionId বা কমান্ড অনুপস্থিত",
+			"missing_session_or_mode": "sessionId বা মোড অনুপস্থিত",
+			"missing_session": "sessionId অনুপস্থিত",
+			"missing_session_or_tab": "sessionId বা tabId অনুপস্থিত",
+			"missing_reorder_params": "sessionId, fromIndex, বা toIndex অনুপস্থিত",
+			"session_not_found": "সেশন পাওয়া যায়নি",
+			"session_busy": "সেশন ব্যস্ত - বর্তমান অপারেশন সম্পূর্ণ হওয়া পর্যন্ত অপেক্ষা করুন",
+			"command_not_configured": "কমান্ড এক্সিকিউশন কনফিগার করা হয়নি",
+			"mode_switch_not_configured": "মোড সুইচিং কনফিগার করা হয়নি",
+			"session_select_not_configured": "সেশন নির্বাচন কনফিগার করা হয়নি",
+			"tab_select_not_configured": "ট্যাব নির্বাচন কনফিগার করা হয়নি",
+			"tab_create_not_configured": "ট্যাব তৈরি কনফিগার করা হয়নি",
+			"tab_close_not_configured": "ট্যাব বন্ধ করা কনফিগার করা হয়নি",
+			"tab_rename_not_configured": "ট্যাব পুনঃনামকরণ কনফিগার করা হয়নি",
+			"tab_star_not_configured": "ট্যাব তারকা চিহ্নিত করা কনফিগার করা হয়নি",
+			"tab_reorder_not_configured": "ট্যাব পুনর্বিন্যাস কনফিগার করা হয়নি",
+			"bookmark_not_configured": "বুকমার্ক টগলিং কনফিগার করা হয়নি",
+			"command_failed": "কমান্ড কার্যকর করতে ব্যর্থ: {{message}}",
+			"mode_switch_failed": "মোড পরিবর্তন করতে ব্যর্থ: {{message}}",
+			"session_select_failed": "সেশন নির্বাচন করতে ব্যর্থ: {{message}}",
+			"tab_select_failed": "ট্যাব নির্বাচন করতে ব্যর্থ: {{message}}",
+			"tab_create_failed": "ট্যাব তৈরি করতে ব্যর্থ: {{message}}",
+			"tab_close_failed": "ট্যাব বন্ধ করতে ব্যর্থ: {{message}}",
+			"tab_rename_failed": "ট্যাব পুনঃনামকরণ করতে ব্যর্থ: {{message}}",
+			"tab_star_failed": "ট্যাব তারকা চিহ্নিত করতে ব্যর্থ: {{message}}",
+			"tab_reorder_failed": "ট্যাব পুনর্বিন্যাস করতে ব্যর্থ: {{message}}",
+			"bookmark_failed": "বুকমার্ক টগল করতে ব্যর্থ: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "এজেন্ট {{agentType}} উপলব্ধ নেই",
+			"cancelled": "ব্যবহারকারী কর্তৃক গ্রুমিং বাতিল করা হয়েছে",
+			"error": "গ্রুমিং ত্রুটি: {{message}}",
+			"spawn_failed": "{{agentType}}-এর জন্য গ্রুমিং প্রক্রিয়া শুরু করতে ব্যর্থ",
+			"timeout": "কোনো প্রতিক্রিয়া ছাড়াই গ্রুমিং সময়সীমা অতিক্রম করেছে"
+		}
 	}
 }

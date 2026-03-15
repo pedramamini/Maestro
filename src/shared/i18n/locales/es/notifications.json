@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "Notificacion de prueba",
 		"test_message": "Esta es una notificacion de prueba desde la consola."
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "Falta sessionId o comando",
+			"missing_session_or_mode": "Falta sessionId o modo",
+			"missing_session": "Falta sessionId",
+			"missing_session_or_tab": "Falta sessionId o tabId",
+			"missing_reorder_params": "Falta sessionId, fromIndex o toIndex",
+			"session_not_found": "Sesion no encontrada",
+			"session_busy": "La sesion esta ocupada - espere a que la operacion actual termine",
+			"command_not_configured": "La ejecucion de comandos no esta configurada",
+			"mode_switch_not_configured": "El cambio de modo no esta configurado",
+			"session_select_not_configured": "La seleccion de sesion no esta configurada",
+			"tab_select_not_configured": "La seleccion de pestana no esta configurada",
+			"tab_create_not_configured": "La creacion de pestana no esta configurada",
+			"tab_close_not_configured": "El cierre de pestana no esta configurado",
+			"tab_rename_not_configured": "El renombrado de pestana no esta configurado",
+			"tab_star_not_configured": "El destacado de pestana no esta configurado",
+			"tab_reorder_not_configured": "La reordenacion de pestanas no esta configurada",
+			"bookmark_not_configured": "La alternancia de marcadores no esta configurada",
+			"command_failed": "Error al ejecutar comando: {{message}}",
+			"mode_switch_failed": "Error al cambiar modo: {{message}}",
+			"session_select_failed": "Error al seleccionar sesion: {{message}}",
+			"tab_select_failed": "Error al seleccionar pestana: {{message}}",
+			"tab_create_failed": "Error al crear pestana: {{message}}",
+			"tab_close_failed": "Error al cerrar pestana: {{message}}",
+			"tab_rename_failed": "Error al renombrar pestana: {{message}}",
+			"tab_star_failed": "Error al destacar pestana: {{message}}",
+			"tab_reorder_failed": "Error al reordenar pestana: {{message}}",
+			"bookmark_failed": "Error al alternar marcador: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "El agente {{agentType}} no esta disponible",
+			"cancelled": "Preparacion cancelada por el usuario",
+			"error": "Error de preparacion: {{message}}",
+			"spawn_failed": "Error al iniciar proceso de preparacion para {{agentType}}",
+			"timeout": "La preparacion expiro sin respuesta"
+		}
 	}
 }

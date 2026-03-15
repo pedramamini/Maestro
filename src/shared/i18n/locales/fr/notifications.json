@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "Notification de test",
 		"test_message": "Ceci est une notification de test depuis la console\u00A0!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "sessionId ou commande manquant",
+			"missing_session_or_mode": "sessionId ou mode manquant",
+			"missing_session": "sessionId manquant",
+			"missing_session_or_tab": "sessionId ou tabId manquant",
+			"missing_reorder_params": "sessionId, fromIndex ou toIndex manquant",
+			"session_not_found": "Session introuvable",
+			"session_busy": "La session est occupée - veuillez attendre la fin de l'opération en cours",
+			"command_not_configured": "L'exécution de commandes n'est pas configurée",
+			"mode_switch_not_configured": "Le changement de mode n'est pas configuré",
+			"session_select_not_configured": "La sélection de session n'est pas configurée",
+			"tab_select_not_configured": "La sélection d'onglet n'est pas configurée",
+			"tab_create_not_configured": "La création d'onglet n'est pas configurée",
+			"tab_close_not_configured": "La fermeture d'onglet n'est pas configurée",
+			"tab_rename_not_configured": "Le renommage d'onglet n'est pas configuré",
+			"tab_star_not_configured": "Le marquage d'onglet n'est pas configuré",
+			"tab_reorder_not_configured": "La réorganisation d'onglets n'est pas configurée",
+			"bookmark_not_configured": "Le basculement de signet n'est pas configuré",
+			"command_failed": "Échec de l'exécution de la commande\u00A0: {{message}}",
+			"mode_switch_failed": "Échec du changement de mode\u00A0: {{message}}",
+			"session_select_failed": "Échec de la sélection de session\u00A0: {{message}}",
+			"tab_select_failed": "Échec de la sélection d'onglet\u00A0: {{message}}",
+			"tab_create_failed": "Échec de la création d'onglet\u00A0: {{message}}",
+			"tab_close_failed": "Échec de la fermeture d'onglet\u00A0: {{message}}",
+			"tab_rename_failed": "Échec du renommage d'onglet\u00A0: {{message}}",
+			"tab_star_failed": "Échec du marquage d'onglet\u00A0: {{message}}",
+			"tab_reorder_failed": "Échec de la réorganisation d'onglet\u00A0: {{message}}",
+			"bookmark_failed": "Échec du basculement de signet\u00A0: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "L'agent {{agentType}} n'est pas disponible",
+			"cancelled": "Préparation annulée par l'utilisateur",
+			"error": "Erreur de préparation\u00A0: {{message}}",
+			"spawn_failed": "Échec du lancement du processus de préparation pour {{agentType}}",
+			"timeout": "Délai de préparation dépassé sans réponse"
+		}
 	}
 }

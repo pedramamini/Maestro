@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "Test Notification",
 		"test_message": "This is a test toast notification from the console!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "Missing sessionId or command",
+			"missing_session_or_mode": "Missing sessionId or mode",
+			"missing_session": "Missing sessionId",
+			"missing_session_or_tab": "Missing sessionId or tabId",
+			"missing_reorder_params": "Missing sessionId, fromIndex, or toIndex",
+			"session_not_found": "Session not found",
+			"session_busy": "Session is busy - please wait for the current operation to complete",
+			"command_not_configured": "Command execution not configured",
+			"mode_switch_not_configured": "Mode switching not configured",
+			"session_select_not_configured": "Session selection not configured",
+			"tab_select_not_configured": "Tab selection not configured",
+			"tab_create_not_configured": "Tab creation not configured",
+			"tab_close_not_configured": "Tab closing not configured",
+			"tab_rename_not_configured": "Tab renaming not configured",
+			"tab_star_not_configured": "Tab starring not configured",
+			"tab_reorder_not_configured": "Tab reordering not configured",
+			"bookmark_not_configured": "Bookmark toggling not configured",
+			"command_failed": "Failed to execute command: {{message}}",
+			"mode_switch_failed": "Failed to switch mode: {{message}}",
+			"session_select_failed": "Failed to select session: {{message}}",
+			"tab_select_failed": "Failed to select tab: {{message}}",
+			"tab_create_failed": "Failed to create tab: {{message}}",
+			"tab_close_failed": "Failed to close tab: {{message}}",
+			"tab_rename_failed": "Failed to rename tab: {{message}}",
+			"tab_star_failed": "Failed to star tab: {{message}}",
+			"tab_reorder_failed": "Failed to reorder tab: {{message}}",
+			"bookmark_failed": "Failed to toggle bookmark: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "Agent {{agentType}} is not available",
+			"cancelled": "Grooming cancelled by user",
+			"error": "Grooming error: {{message}}",
+			"spawn_failed": "Failed to spawn grooming process for {{agentType}}",
+			"timeout": "Grooming timed out with no response"
+		}
 	}
 }

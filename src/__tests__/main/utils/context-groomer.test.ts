@@ -40,6 +40,27 @@ vi.mock('../../../main/utils/logger', () => ({
 	},
 }));
 
+// Mock mainT to return English translations
+vi.mock('../../../main/i18n', () => ({
+	mainT: vi.fn((key: string, options?: Record<string, unknown>) => {
+		const translations: Record<string, string> = {
+			'notifications:error.grooming.agent_not_available': 'Agent {{agentType}} is not available',
+			'notifications:error.grooming.cancelled': 'Grooming cancelled by user',
+			'notifications:error.grooming.error': 'Grooming error: {{message}}',
+			'notifications:error.grooming.spawn_failed':
+				'Failed to spawn grooming process for {{agentType}}',
+			'notifications:error.grooming.timeout': 'Grooming timed out with no response',
+		};
+		let result = translations[key] ?? key;
+		if (options) {
+			for (const [k, v] of Object.entries(options)) {
+				result = result.replace(`{{${k}}}`, String(v));
+			}
+		}
+		return result;
+	}),
+}));
+
 import { buildAgentArgs, applyAgentConfigOverrides } from '../../../main/utils/agent-args';
 
 function makeAgent(overrides: Partial<AgentConfig> = {}): AgentConfig {

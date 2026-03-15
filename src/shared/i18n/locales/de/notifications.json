@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "Testbenachrichtigung",
 		"test_message": "Dies ist eine Test-Benachrichtigung aus der Konsole!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "sessionId oder Befehl fehlt",
+			"missing_session_or_mode": "sessionId oder Modus fehlt",
+			"missing_session": "sessionId fehlt",
+			"missing_session_or_tab": "sessionId oder tabId fehlt",
+			"missing_reorder_params": "sessionId, fromIndex oder toIndex fehlt",
+			"session_not_found": "Sitzung nicht gefunden",
+			"session_busy": "Sitzung ist beschäftigt - bitte warten Sie, bis die aktuelle Operation abgeschlossen ist",
+			"command_not_configured": "Befehlsausführung nicht konfiguriert",
+			"mode_switch_not_configured": "Moduswechsel nicht konfiguriert",
+			"session_select_not_configured": "Sitzungsauswahl nicht konfiguriert",
+			"tab_select_not_configured": "Tab-Auswahl nicht konfiguriert",
+			"tab_create_not_configured": "Tab-Erstellung nicht konfiguriert",
+			"tab_close_not_configured": "Tab-Schließen nicht konfiguriert",
+			"tab_rename_not_configured": "Tab-Umbenennung nicht konfiguriert",
+			"tab_star_not_configured": "Tab-Markierung nicht konfiguriert",
+			"tab_reorder_not_configured": "Tab-Umordnung nicht konfiguriert",
+			"bookmark_not_configured": "Lesezeichen-Umschaltung nicht konfiguriert",
+			"command_failed": "Befehlsausführung fehlgeschlagen: {{message}}",
+			"mode_switch_failed": "Moduswechsel fehlgeschlagen: {{message}}",
+			"session_select_failed": "Sitzungsauswahl fehlgeschlagen: {{message}}",
+			"tab_select_failed": "Tab-Auswahl fehlgeschlagen: {{message}}",
+			"tab_create_failed": "Tab-Erstellung fehlgeschlagen: {{message}}",
+			"tab_close_failed": "Tab-Schließen fehlgeschlagen: {{message}}",
+			"tab_rename_failed": "Tab-Umbenennung fehlgeschlagen: {{message}}",
+			"tab_star_failed": "Tab-Markierung fehlgeschlagen: {{message}}",
+			"tab_reorder_failed": "Tab-Umordnung fehlgeschlagen: {{message}}",
+			"bookmark_failed": "Lesezeichen-Umschaltung fehlgeschlagen: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "Agent {{agentType}} ist nicht verfügbar",
+			"cancelled": "Aufbereitung vom Benutzer abgebrochen",
+			"error": "Aufbereitungsfehler: {{message}}",
+			"spawn_failed": "Fehler beim Starten des Aufbereitungsprozesses für {{agentType}}",
+			"timeout": "Aufbereitung ohne Antwort abgelaufen"
+		}
 	}
 }

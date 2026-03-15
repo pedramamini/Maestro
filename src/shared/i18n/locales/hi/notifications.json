@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "परीक्षण सूचना",
 		"test_message": "यह कंसोल से एक परीक्षण टोस्ट सूचना है!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "sessionId या कमांड गायब है",
+			"missing_session_or_mode": "sessionId या मोड गायब है",
+			"missing_session": "sessionId गायब है",
+			"missing_session_or_tab": "sessionId या tabId गायब है",
+			"missing_reorder_params": "sessionId, fromIndex, या toIndex गायब है",
+			"session_not_found": "सत्र नहीं मिला",
+			"session_busy": "सत्र व्यस्त है - कृपया वर्तमान ऑपरेशन पूरा होने तक प्रतीक्षा करें",
+			"command_not_configured": "कमांड निष्पादन कॉन्फ़िगर नहीं है",
+			"mode_switch_not_configured": "मोड स्विचिंग कॉन्फ़िगर नहीं है",
+			"session_select_not_configured": "सत्र चयन कॉन्फ़िगर नहीं है",
+			"tab_select_not_configured": "Tab चयन कॉन्फ़िगर नहीं है",
+			"tab_create_not_configured": "Tab निर्माण कॉन्फ़िगर नहीं है",
+			"tab_close_not_configured": "Tab बंद करना कॉन्फ़िगर नहीं है",
+			"tab_rename_not_configured": "Tab का नाम बदलना कॉन्फ़िगर नहीं है",
+			"tab_star_not_configured": "Tab स्टार करना कॉन्फ़िगर नहीं है",
+			"tab_reorder_not_configured": "Tab पुनर्क्रमण कॉन्फ़िगर नहीं है",
+			"bookmark_not_configured": "बुकमार्क टॉगलिंग कॉन्फ़िगर नहीं है",
+			"command_failed": "कमांड निष्पादित करने में विफल: {{message}}",
+			"mode_switch_failed": "मोड बदलने में विफल: {{message}}",
+			"session_select_failed": "सत्र चुनने में विफल: {{message}}",
+			"tab_select_failed": "Tab चुनने में विफल: {{message}}",
+			"tab_create_failed": "Tab बनाने में विफल: {{message}}",
+			"tab_close_failed": "Tab बंद करने में विफल: {{message}}",
+			"tab_rename_failed": "Tab का नाम बदलने में विफल: {{message}}",
+			"tab_star_failed": "Tab स्टार करने में विफल: {{message}}",
+			"tab_reorder_failed": "Tab पुनर्क्रमित करने में विफल: {{message}}",
+			"bookmark_failed": "बुकमार्क टॉगल करने में विफल: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "Agent {{agentType}} उपलब्ध नहीं है",
+			"cancelled": "उपयोगकर्ता द्वारा ग्रूमिंग रद्द की गई",
+			"error": "ग्रूमिंग त्रुटि: {{message}}",
+			"spawn_failed": "{{agentType}} के लिए ग्रूमिंग प्रक्रिया शुरू करने में विफल",
+			"timeout": "ग्रूमिंग बिना प्रतिक्रिया के समय सीमा पार कर गई"
+		}
 	}
 }

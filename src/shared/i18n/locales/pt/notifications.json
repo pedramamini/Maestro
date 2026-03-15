@@ -146,5 +146,43 @@
 	"debug": {
 		"test_title": "Notificação de Teste",
 		"test_message": "Esta é uma notificação de teste do console!"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "sessionId ou comando ausente",
+			"missing_session_or_mode": "sessionId ou modo ausente",
+			"missing_session": "sessionId ausente",
+			"missing_session_or_tab": "sessionId ou tabId ausente",
+			"missing_reorder_params": "sessionId, fromIndex ou toIndex ausente",
+			"session_not_found": "Sessão não encontrada",
+			"session_busy": "A sessão está ocupada - aguarde a conclusão da operação atual",
+			"command_not_configured": "Execução de comando não configurada",
+			"mode_switch_not_configured": "Alternância de modo não configurada",
+			"session_select_not_configured": "Seleção de sessão não configurada",
+			"tab_select_not_configured": "Seleção de aba não configurada",
+			"tab_create_not_configured": "Criação de aba não configurada",
+			"tab_close_not_configured": "Fechamento de aba não configurado",
+			"tab_rename_not_configured": "Renomeação de aba não configurada",
+			"tab_star_not_configured": "Marcação de aba não configurada",
+			"tab_reorder_not_configured": "Reordenação de abas não configurada",
+			"bookmark_not_configured": "Alternância de favoritos não configurada",
+			"command_failed": "Falha ao executar comando: {{message}}",
+			"mode_switch_failed": "Falha ao alternar modo: {{message}}",
+			"session_select_failed": "Falha ao selecionar sessão: {{message}}",
+			"tab_select_failed": "Falha ao selecionar aba: {{message}}",
+			"tab_create_failed": "Falha ao criar aba: {{message}}",
+			"tab_close_failed": "Falha ao fechar aba: {{message}}",
+			"tab_rename_failed": "Falha ao renomear aba: {{message}}",
+			"tab_star_failed": "Falha ao marcar aba: {{message}}",
+			"tab_reorder_failed": "Falha ao reordenar aba: {{message}}",
+			"bookmark_failed": "Falha ao alternar favorito: {{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "Agente {{agentType}} não está disponível",
+			"cancelled": "Preparação cancelada pelo usuário",
+			"error": "Erro de preparação: {{message}}",
+			"spawn_failed": "Falha ao iniciar processo de preparação para {{agentType}}",
+			"timeout": "Preparação expirou sem resposta"
+		}
 	}
 }

@@ -1,1 +1,188 @@
-{}
+{
+	"task": {
+		"completed_title": "任务完成",
+		"completed_message": "{{agent}} 在 {{duration}} 内完成",
+		"failed_title": "任务失败",
+		"failed_message": "{{agent}} 遇到错误"
+	},
+	"connection": {
+		"lost_title": "连接已断开",
+		"restored_title": "连接已恢复"
+	},
+	"group_chat": {
+		"error_title": "群聊",
+		"create_failed_message": "创建群聊失败",
+		"create_failed_dynamic_message": "{{message}}"
+	},
+	"worktree": {
+		"discovered_title": "已发现 Worktree",
+		"discovered_message_one": "发现 {{count}} 个 Worktree 子 Agent",
+		"discovered_message_other": "发现 {{count}} 个 Worktree 子 Agent",
+		"disabled_title": "Worktree 已禁用",
+		"disabled_message": "已清除此 Agent 的 Worktree 配置。",
+		"disabled_with_removed_message_one": "已清除此 Agent 的 Worktree 配置。已移除 {{count}} 个 Worktree 子 Agent。",
+		"disabled_with_removed_message_other": "已清除此 Agent 的 Worktree 配置。已移除 {{count}} 个 Worktree 子 Agent。",
+		"no_directory_title": "错误",
+		"no_directory_message": "未配置 Worktree 目录",
+		"created_title": "Worktree 已创建",
+		"created_message": "{{branch}}",
+		"create_failed_title": "创建 Worktree 失败",
+		"create_failed_message": "{{message}}",
+		"new_discovered_title": "发现新的 Worktree",
+		"new_discovered_message": "{{name}}",
+		"agent_not_found_title": "未找到 Worktree Agent",
+		"agent_not_found_message": "所选的 Worktree Agent 已被移除，将在当前活跃的 Agent 上运行。",
+		"target_busy_title": "目标 Agent 忙碌中",
+		"target_busy_message": "目标 Agent 正忙，请稍后重试。",
+		"error_title": "Worktree 错误",
+		"error_message": "{{message}}"
+	},
+	"autorun": {
+		"started_title": "Auto Run 已启动",
+		"started_message_one": "{{count}} 项任务，涉及 {{docCount}} 个文档",
+		"started_message_other": "{{count}} 项任务，涉及 {{docCount}} 个文档",
+		"complete_title": "Auto Run 已完成",
+		"complete_stopped_message": "在完成 {{total}} 项任务中的 {{completed}} 项后停止",
+		"complete_all_message_one": "全部 {{total}} 项任务已成功完成",
+		"complete_all_message_other": "全部 {{total}} 项任务已成功完成",
+		"complete_partial_message": "已完成 {{total}} 项任务中的 {{completed}} 项",
+		"error_title": "Auto Run：{{errorTitle}}",
+		"error_message": "{{message}}"
+	},
+	"leaderboard": {
+		"updated_title": "排行榜已更新",
+		"updated_message": "{{message}}"
+	},
+	"symphony": {
+		"pr_ready_title": "Symphony：PR 已准备好审查",
+		"pr_ready_message": "PR 已打开：{{prUrl}}",
+		"manual_needed_title": "Symphony：需要手动完成",
+		"manual_needed_message": "{{message}}",
+		"manual_needed_default_message": "无法自动完成 PR，请打开 Symphony 手动完成。",
+		"auto_finalize_failed_title": "Symphony：自动完成失败",
+		"auto_finalize_failed_message": "PR 仍为草稿状态，请打开 Symphony 手动完成。",
+		"error_title": "Symphony 错误",
+		"agent_not_found_message": "未找到 Agent：{{agentType}}"
+	},
+	"pr": {
+		"created_title": "PR 已创建",
+		"created_message": "{{message}}",
+		"created_default_message": "Pull Request 创建成功",
+		"failed_title": "PR 创建失败",
+		"failed_message": "{{message}}",
+		"failed_default_message": "无法创建 Pull Request",
+		"app_created_title": "Pull Request 已创建",
+		"app_created_message": "{{title}}"
+	},
+	"merge": {
+		"session_merged_title": "会话已合并",
+		"session_merged_message": "已从 {{sourceInfo}}{{tokenInfo}} 创建「{{sessionName}}」。{{savedInfo}}",
+		"context_merged_title": "上下文已合并",
+		"context_merged_message": "「{{source}}」→「{{target}}」{{tokenInfo}}。{{savedInfo}}",
+		"context_transferred_title": "上下文已转移",
+		"context_transferred_message": "已创建「{{sessionName}}」并转移上下文",
+		"failed_title": "合并失败",
+		"failed_message": "{{message}}",
+		"failed_default_message": "无法合并上下文",
+		"context_sent_title": "上下文已发送",
+		"context_sent_message": "「{{source}}」→「{{target}}」{{tokenInfo}}"
+	},
+	"compact": {
+		"cannot_title": "无法压缩",
+		"cannot_message": "上下文太小。至少需要 {{percent}}% 的使用率、约 2000 个 Token 或 8 条以上消息才能压缩。",
+		"success_title": "上下文已压缩",
+		"success_message": "上下文已减少 {{percent}}%。点击查看新标签页。",
+		"failed_title": "压缩失败",
+		"failed_message": "无法压缩上下文，请查看标签页了解详情。",
+		"failed_unexpected_message": "压缩过程中发生意外错误。"
+	},
+	"agent": {
+		"creation_failed_title": "Agent 创建失败",
+		"creation_failed_message": "{{message}}",
+		"creation_failed_default_message": "无法创建重复的 Agent"
+	},
+	"session": {
+		"group_removed_title": "分组已移除",
+		"group_removed_message_one": "已移除「{{name}}」及 {{count}} 个 Agent",
+		"group_removed_message_other": "已移除「{{name}}」及 {{count}} 个 Agent",
+		"erase_failed_title": "删除目录失败",
+		"erase_failed_message": "{{message}}"
+	},
+	"export": {
+		"nothing_to_copy_title": "无内容可复制",
+		"nothing_to_copy_message": "没有用户或助手消息可复制。",
+		"context_copied_title": "上下文已复制",
+		"context_copied_message": "对话已复制到剪贴板。",
+		"copy_failed_title": "复制失败",
+		"copy_failed_message": "无法将上下文复制到剪贴板。",
+		"export_complete_title": "导出完成",
+		"export_complete_message": "对话已导出为 HTML。",
+		"export_failed_title": "导出失败",
+		"export_failed_message": "无法将对话导出为 HTML。",
+		"nothing_to_publish_title": "无内容可发布",
+		"nothing_to_publish_message": "没有用户或助手消息可发布。"
+	},
+	"stats": {
+		"database_title": "统计数据库",
+		"database_message": "{{message}}"
+	},
+	"history": {
+		"entry_added_title": "历史记录已添加",
+		"entry_added_message": "{{message}}"
+	},
+	"synopsis": {
+		"title": "概要",
+		"message": "{{message}}"
+	},
+	"playbook": {
+		"imported_title": "Playbook 已导入",
+		"imported_message": "Playbook 已成功导入到 {{folder}}"
+	},
+	"gist": {
+		"published_title": "Gist 已发布",
+		"published_public_message": "公开 Gist 已创建！URL 已复制到剪贴板。",
+		"published_secret_message": "私密 Gist 已创建！URL 已复制到剪贴板。"
+	},
+	"debug": {
+		"test_title": "测试通知",
+		"test_message": "这是一条来自控制台的测试通知！"
+	},
+	"error": {
+		"web": {
+			"missing_session_or_command": "缺少 sessionId 或命令",
+			"missing_session_or_mode": "缺少 sessionId 或模式",
+			"missing_session": "缺少 sessionId",
+			"missing_session_or_tab": "缺少 sessionId 或 tabId",
+			"missing_reorder_params": "缺少 sessionId、fromIndex 或 toIndex",
+			"session_not_found": "未找到会话",
+			"session_busy": "会话正忙 - 请等待当前操作完成",
+			"command_not_configured": "命令执行未配置",
+			"mode_switch_not_configured": "模式切换未配置",
+			"session_select_not_configured": "会话选择未配置",
+			"tab_select_not_configured": "标签页选择未配置",
+			"tab_create_not_configured": "标签页创建未配置",
+			"tab_close_not_configured": "标签页关闭未配置",
+			"tab_rename_not_configured": "标签页重命名未配置",
+			"tab_star_not_configured": "标签页收藏未配置",
+			"tab_reorder_not_configured": "标签页重排序未配置",
+			"bookmark_not_configured": "书签切换未配置",
+			"command_failed": "执行命令失败：{{message}}",
+			"mode_switch_failed": "切换模式失败：{{message}}",
+			"session_select_failed": "选择会话失败：{{message}}",
+			"tab_select_failed": "选择标签页失败：{{message}}",
+			"tab_create_failed": "创建标签页失败：{{message}}",
+			"tab_close_failed": "关闭标签页失败：{{message}}",
+			"tab_rename_failed": "重命名标签页失败：{{message}}",
+			"tab_star_failed": "收藏标签页失败：{{message}}",
+			"tab_reorder_failed": "重排序标签页失败：{{message}}",
+			"bookmark_failed": "切换书签失败：{{message}}"
+		},
+		"grooming": {
+			"agent_not_available": "Agent {{agentType}} 不可用",
+			"cancelled": "用户已取消上下文整理",
+			"error": "上下文整理错误：{{message}}",
+			"spawn_failed": "为 {{agentType}} 启动整理进程失败",
+			"timeout": "上下文整理超时且无响应"
+		}
+	}
+}
