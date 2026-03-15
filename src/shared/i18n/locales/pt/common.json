@@ -265,6 +265,25 @@
 		"try_again": "Tentar Novamente",
 		"reload_app": "Recarregar App"
 	},
+	"wizard_errors": {
+		"timeout_title": "Tempo de Resposta Esgotado",
+		"timeout_description": "O agente parou de produzir saída por um período prolongado. Isso geralmente significa que o processo do agente travou ou perdeu a conexão com o provedor de IA. Tente novamente — se o problema persistir, verifique sua chave de API e conexão de rede.",
+		"not_available_title": "Agente Não Disponível",
+		"not_available_description": "O agente de IA não pôde ser iniciado. Verifique se está corretamente instalado e configurado.",
+		"session_error_title": "Erro de Sessão",
+		"session_error_description": "A sessão do assistente não está mais ativa. Reinicie o assistente.",
+		"spawn_failed_title": "Falha ao Iniciar o Agente",
+		"spawn_failed_description": "Não foi possível iniciar o agente de IA. Verifique sua configuração e tente novamente.",
+		"agent_error_title": "Erro do Agente",
+		"agent_error_description": "O agente de IA encontrou um erro e parou inesperadamente.",
+		"parse_error_title": "Erro de Resposta",
+		"parse_error_description": "Não foi possível entender a resposta da IA. Tente reformular sua mensagem.",
+		"generic_title": "Algo Deu Errado",
+		"generic_description": "Ocorreu um erro inesperado. Tente novamente.",
+		"try_again": "Tentar Novamente",
+		"dismiss": "Dispensar",
+		"technical_details": "Detalhes técnicos"
+	},
 	"right_panel": {
 		"tab_files": "Arquivos",
 		"tab_history": "Histórico",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "Transformou a música clássica americana, lendária gestão na Filarmônica de NY, educador e compositor icônico"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "Mapa de calor de atividade",
+		"show_label": "Mostrar:",
+		"count": "Contagem",
+		"duration": "Duração",
+		"less": "Menos",
+		"more": "Mais",
+		"query_one": "{{count}} consulta",
+		"query_other": "{{count}} consultas",
+		"at_hour": "às {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "Conquista Ovação de Pé",

@@ -17,6 +17,7 @@ import { WizardMessageBubble, type WizardMessageBubbleMessage } from './WizardMe
 import { getNextFillerPhrase } from '../Wizard/services/fillerPhrases';
 import { TypingIndicator } from '../Wizard/shared/TypingIndicator';
 import { formatAgentName, getToolDetail } from '../Wizard/shared/wizardHelpers';
+import i18n from '../../../shared/i18n/config';
 
 /**
  * Ready confidence threshold for "Let's Go" button (matches READY_CONFIDENCE_THRESHOLD)
@@ -226,6 +227,7 @@ function StreamingResponse({
 /**
  * Get a user-friendly error message from a raw error string.
  * Maps technical errors to helpful messages.
+ * Uses i18n.t() directly (not useTranslation hook) since this is a plain function.
  */
 function getUserFriendlyErrorMessage(error: string): { title: string; description: string } {
 	const lowerError = error.toLowerCase();
@@ -233,18 +235,16 @@ function getUserFriendlyErrorMessage(error: string): { title: string; descriptio
 	// Network/timeout errors
 	if (lowerError.includes('timeout') || lowerError.includes('timed out')) {
 		return {
-			title: 'Response Timeout',
-			description:
-				'The agent stopped producing output for an extended period. This usually means the agent process crashed or lost its connection to the AI provider. Try again — if the issue persists, check your API key and network connection.',
+			title: i18n.t('common:wizard_errors.timeout_title'),
+			description: i18n.t('common:wizard_errors.timeout_description'),
 		};
 	}
 
 	// Agent not available errors
 	if (lowerError.includes('not available') || lowerError.includes('not found')) {
 		return {
-			title: 'Agent Not Available',
-			description:
-				'The AI agent could not be started. Please check that it is properly installed and configured.',
+			title: i18n.t('common:wizard_errors.not_available_title'),
+			description: i18n.t('common:wizard_errors.not_available_description'),
 		};
 	}
 
@@ -254,40 +254,39 @@ function getUserFriendlyErrorMessage(error: string): { title: string; descriptio
 		(lowerError.includes('not active') || lowerError.includes('no active'))
 	) {
 		return {
-			title: 'Session Error',
-			description: 'The wizard session is no longer active. Please restart the wizard.',
+			title: i18n.t('common:wizard_errors.session_error_title'),
+			description: i18n.t('common:wizard_errors.session_error_description'),
 		};
 	}
 
 	// Failed to spawn errors
 	if (lowerError.includes('failed to spawn')) {
 		return {
-			title: 'Failed to Start Agent',
-			description: 'Could not start the AI agent. Please check your configuration and try again.',
+			title: i18n.t('common:wizard_errors.spawn_failed_title'),
+			description: i18n.t('common:wizard_errors.spawn_failed_description'),
 		};
 	}
 
 	// Exit code errors
 	if (lowerError.includes('exited with code')) {
 		return {
-			title: 'Agent Error',
-			description: 'The AI agent encountered an error and stopped unexpectedly.',
+			title: i18n.t('common:wizard_errors.agent_error_title'),
+			description: i18n.t('common:wizard_errors.agent_error_description'),
 		};
 	}
 
 	// Parse errors
 	if (lowerError.includes('parse') || lowerError.includes('failed to parse')) {
 		return {
-			title: 'Response Error',
-			description:
-				'Could not understand the response from the AI. Please try rephrasing your message.',
+			title: i18n.t('common:wizard_errors.parse_error_title'),
+			description: i18n.t('common:wizard_errors.parse_error_description'),
 		};
 	}
 
 	// Default generic error
 	return {
-		title: 'Something Went Wrong',
-		description: error || 'An unexpected error occurred. Please try again.',
+		title: i18n.t('common:wizard_errors.generic_title'),
+		description: error || i18n.t('common:wizard_errors.generic_description'),
 	};
 }
 
@@ -352,7 +351,7 @@ function ErrorDisplay({
 									}}
 									data-testid="error-retry-button"
 								>
-									Try Again
+									{i18n.t('common:wizard_errors.try_again')}
 								</button>
 							)}
 							{onDismiss && (
@@ -366,7 +365,7 @@ function ErrorDisplay({
 									}}
 									data-testid="error-dismiss-button"
 								>
-									Dismiss
+									{i18n.t('common:wizard_errors.dismiss')}
 								</button>
 							)}
 						</div>
@@ -379,7 +378,7 @@ function ErrorDisplay({
 						className="text-[10px] cursor-pointer select-none"
 						style={{ color: theme.colors.textDim }}
 					>
-						Technical details
+						{i18n.t('common:wizard_errors.technical_details')}
 					</summary>
 					<pre
 						className="mt-2 text-[10px] p-2 rounded overflow-x-auto whitespace-pre-wrap"

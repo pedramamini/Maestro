@@ -20,6 +20,7 @@ import { useTranslation } from 'react-i18next';
 import type { Theme } from '../../types';
 import type { StatsTimeRange, StatsAggregation } from '../../hooks/stats/useStats';
 import { COLORBLIND_HEATMAP_SCALE } from '../../constants/colorblindPalettes';
+import { getActiveLocale } from '../../utils/formatters';
 
 // Metric display mode
 type MetricMode = 'count' | 'duration';
@@ -131,8 +132,42 @@ function shouldUse4HourBlockMode(timeRange: StatsTimeRange): boolean {
 	return timeRange === 'month' || timeRange === 'quarter';
 }
 
-// Time block labels for 4-hour chunks
-const TIME_BLOCK_LABELS = ['12a-4a', '4a-8a', '8a-12p', '12p-4p', '4p-8p', '8p-12a'];
+/**
+ * Generate locale-aware 4-hour time block labels using Intl.DateTimeFormat.
+ * E.g., English: "12 AM\u20134 AM", German: "0\u20134", French: "00\u201304".
+ */
+function getLocalizedTimeBlockLabels(locale: string): string[] {
+	const fmt = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
+	const blockStarts = [0, 4, 8, 12, 16, 20];
+	return blockStarts.map((h) => {
+		const endH = (h + 4) % 24;
+		return `${fmt.format(new Date(2025, 0, 1, h))}\u2013${fmt.format(new Date(2025, 0, 1, endH))}`;
+	});
+}
+
+/**
+ * Generate locale-aware abbreviated day-of-week labels (Sun\u2013Sat).
+ */
+function getLocalizedDayOfWeekLabels(locale: string): string[] {
+	const fmt = new Intl.DateTimeFormat(locale, { weekday: 'short' });
+	// Jan 5, 2025 is a Sunday
+	return Array.from({ length: 7 }, (_, i) => fmt.format(new Date(2025, 0, 5 + i)));
+}
+
+/**
+ * Generate locale-aware hour labels (0\u201323).
+ */
+function getLocalizedHourLabels(locale: string): string[] {
+	const fmt = new Intl.DateTimeFormat(locale, { hour: 'numeric' });
+	return Array.from({ length: 24 }, (_, i) => fmt.format(new Date(2025, 0, 1, i)));
+}
+
+/**
+ * Format a date using Intl.DateTimeFormat for locale-correct display.
+ */
+function formatLocalDate(date: Date, locale: string, options: Intl.DateTimeFormatOptions): string {
+	return new Intl.DateTimeFormat(locale, options).format(date);
+}
 
 /**
  * Build day columns with 4-hour time blocks for month view
@@ -140,12 +175,15 @@ const TIME_BLOCK_LABELS = ['12a-4a', '4a-8a', '8a-12p', '12p-4p', '4p-8p', '8p-1
 function build4HourBlockGrid(
 	numDays: number,
 	dayDataMap: Map<string, { count: number; duration: number }>,
-	metricMode: MetricMode
+	metricMode: MetricMode,
+	locale: string,
+	timeBlockLabels: string[]
 ): { dayColumns: DayColumnWithBlocks[]; maxCount: number; maxDuration: number } {
 	const today = new Date();
 	const columns: DayColumnWithBlocks[] = [];
 	let maxCount = 0;
 	let maxDuration = 0;
+	const dayFmt = new Intl.DateTimeFormat(locale, { day: 'numeric' });
 
 	// Generate days from (numDays-1) days ago to today
 	for (let dayOffset = numDays - 1; dayOffset >= 0; dayOffset--) {
@@ -154,7 +192,7 @@ function build4HourBlockGrid(
 		const dayStats = dayDataMap.get(dateString) || { count: 0, duration: 0 };
 
 		// Create 6 time blocks per day
-		const blocks: TimeBlockCell[] = TIME_BLOCK_LABELS.map((label, blockIndex) => {
+		const blocks: TimeBlockCell[] = timeBlockLabels.map((label, blockIndex) => {
 			// Distribute data across blocks with weighting for typical work hours
 			// Blocks 2-4 (8am-8pm) get more weight
 			let weight = 1;
@@ -184,7 +222,7 @@ function build4HourBlockGrid(
 		columns.push({
 			date,
 			dateString,
-			dayLabel: format(date, 'd'),
+			dayLabel: dayFmt.format(date),
 			blocks,
 		});
 	}
@@ -241,7 +279,8 @@ function calculateIntensity(value: number, maxValue: number): number {
 function buildGitHubGrid(
 	numDays: number,
 	dayDataMap: Map<string, { count: number; duration: number }>,
-	metricMode: MetricMode
+	metricMode: MetricMode,
+	locale: string
 ): { weeks: WeekColumn[]; monthLabels: MonthLabel[]; maxCount: number; maxDuration: number } {
 	const today = new Date();
 	const startDate = subDays(today, numDays - 1);
@@ -253,6 +292,7 @@ function buildGitHubGrid(
 	const monthLabels: MonthLabel[] = [];
 	let maxCount = 0;
 	let maxDuration = 0;
+	const monthFmt = new Intl.DateTimeFormat(locale, { month: 'short' });
 
 	let currentDate = gridStart;
 	let currentWeek: DayCell[] = [];
@@ -267,7 +307,7 @@ function buildGitHubGrid(
 		const isAfterEnd = currentDate > today;
 
 		// Track month changes for labels
-		const monthStr = format(currentDate, 'MMM');
+		const monthStr = monthFmt.format(currentDate);
 		if (monthStr !== lastMonth && !isBeforeStart && !isAfterEnd) {
 			// Start of a new month
 			if (lastMonth !== '') {
@@ -427,12 +467,18 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 	colorBlindMode = false,
 }: ActivityHeatmapProps) {
 	const { t: tA } = useTranslation('accessibility');
+	const { t } = useTranslation('common');
+	const locale = getActiveLocale();
 	const [metricMode, setMetricMode] = useState<MetricMode>('count');
 	const [hoveredCell, setHoveredCell] = useState<HourData | DayCell | TimeBlockCell | null>(null);
 	const [cellRect, setCellRect] = useState<DOMRect | null>(null);
 
 	const useGitHubLayout = shouldUseSingleDayMode(timeRange);
 	const use4HourBlockLayout = shouldUse4HourBlockMode(timeRange);
+
+	// Locale-aware labels for chart axes
+	const timeBlockLabels = useMemo(() => getLocalizedTimeBlockLabels(locale), [locale]);
+	const dayOfWeekLabels = useMemo(() => getLocalizedDayOfWeekLabels(locale), [locale]);
 
 	// Convert byDay data to a lookup map
 	const dayDataMap = useMemo(() => {
@@ -447,15 +493,15 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 	const gitHubGrid = useMemo(() => {
 		if (!useGitHubLayout) return null;
 		const numDays = getDaysForRange(timeRange);
-		return buildGitHubGrid(numDays, dayDataMap, metricMode);
-	}, [useGitHubLayout, timeRange, dayDataMap, metricMode]);
+		return buildGitHubGrid(numDays, dayDataMap, metricMode, locale);
+	}, [useGitHubLayout, timeRange, dayDataMap, metricMode, locale]);
 
 	// 4-hour block grid data for month view
 	const blockGrid = useMemo(() => {
 		if (!use4HourBlockLayout) return null;
 		const numDays = getDaysForRange(timeRange);
-		return build4HourBlockGrid(numDays, dayDataMap, metricMode);
-	}, [use4HourBlockLayout, timeRange, dayDataMap, metricMode]);
+		return build4HourBlockGrid(numDays, dayDataMap, metricMode, locale, timeBlockLabels);
+	}, [use4HourBlockLayout, timeRange, dayDataMap, metricMode, locale, timeBlockLabels]);
 
 	// Generate hour-based data for the heatmap (day/week views)
 	const { dayColumns, hourLabels } = useMemo(() => {
@@ -469,32 +515,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 
 		// Determine hour rows based on mode
 		const hours = Array.from({ length: 24 }, (_, i) => i);
-		const labels = [
-			'12a',
-			'1a',
-			'2a',
-			'3a',
-			'4a',
-			'5a',
-			'6a',
-			'7a',
-			'8a',
-			'9a',
-			'10a',
-			'11a',
-			'12p',
-			'1p',
-			'2p',
-			'3p',
-			'4p',
-			'5p',
-			'6p',
-			'7p',
-			'8p',
-			'9p',
-			'10p',
-			'11p',
-		];
+		const labels = getLocalizedHourLabels(locale);
 
 		// Track max values for intensity calculation
 		let maxCount = 0;
@@ -533,7 +554,10 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 			columns.push({
 				date,
 				dateString,
-				dayLabel: format(date, numDays <= 7 ? 'EEE' : 'd'),
+				dayLabel:
+					numDays <= 7
+						? formatLocalDate(date, locale, { weekday: 'short' })
+						: formatLocalDate(date, locale, { day: 'numeric' }),
 				hours: hourData,
 			});
 		}
@@ -551,7 +575,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 			dayColumns: columns,
 			hourLabels: labels,
 		};
-	}, [dayDataMap, metricMode, timeRange, useGitHubLayout]);
+	}, [dayDataMap, metricMode, timeRange, useGitHubLayout, locale]);
 
 	// Handle mouse events for tooltip (HourData for day/week, DayCell for month+)
 	// Track cell element position for tooltip placement below the cell
@@ -586,9 +610,6 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 		setCellRect(null);
 	}, []);
 
-	// Day of week labels for GitHub layout (Sun-Sat)
-	const dayOfWeekLabels = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
-
 	return (
 		<div
 			className="p-4 rounded-lg"
@@ -605,11 +626,11 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 			{/* Header with title and metric toggle */}
 			<div className="flex items-center justify-between mb-4">
 				<h3 className="text-sm font-medium" style={{ color: theme.colors.textMain }}>
-					Activity Heatmap
+					{t('chart.activity_heatmap_title')}
 				</h3>
 				<div className="flex items-center gap-2">
 					<span className="text-xs" style={{ color: theme.colors.textDim }}>
-						Show:
+						{t('chart.show_label')}
 					</span>
 					<div
 						className="flex rounded overflow-hidden border"
@@ -626,7 +647,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 							aria-pressed={metricMode === 'count'}
 							aria-label={tA('dashboard.show_query_count')}
 						>
-							Count
+							{t('chart.count')}
 						</button>
 						<button
 							onClick={() => setMetricMode('duration')}
@@ -640,7 +661,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 							aria-pressed={metricMode === 'duration'}
 							aria-label={tA('dashboard.show_total_duration')}
 						>
-							Duration
+							{t('chart.duration')}
 						</button>
 					</div>
 				</div>
@@ -720,7 +741,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 											aria-label={
 												day.isPlaceholder
 													? ''
-													: `${format(day.date, 'MMM d, yyyy')}: ${day.count} ${day.count === 1 ? 'query' : 'queries'}${day.duration > 0 ? `, ${formatDuration(day.duration)}` : ''}`
+													: `${formatLocalDate(day.date, locale, { month: 'short', day: 'numeric', year: 'numeric' })}: ${t('chart.query', { count: day.count })}${day.duration > 0 ? `, ${formatDuration(day.duration)}` : ''}`
 											}
 											tabIndex={day.isPlaceholder ? -1 : 0}
 										/>
@@ -737,7 +758,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 				<div className="flex gap-2">
 					{/* Time block labels (Y-axis) */}
 					<div className="flex flex-col flex-shrink-0" style={{ width: 52, paddingTop: 22 }}>
-						{TIME_BLOCK_LABELS.map((label, idx) => (
+						{timeBlockLabels.map((label, idx) => (
 							<div
 								key={idx}
 								className="text-xs text-right flex items-center justify-end pr-2"
@@ -772,9 +793,15 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 												fontSize: 10,
 												fontWeight: isFirstOfMonth ? 600 : 400,
 											}}
-											title={format(col.date, 'EEEE, MMM d')}
+											title={formatLocalDate(col.date, locale, {
+												weekday: 'long',
+												month: 'short',
+												day: 'numeric',
+											})}
 										>
-											{showMonthLabel && isFirstOfMonth ? format(col.date, 'MMM') : col.dayLabel}
+											{showMonthLabel && isFirstOfMonth
+												? formatLocalDate(col.date, locale, { month: 'short' })
+												: col.dayLabel}
 										</div>
 										{/* Time block cells */}
 										{col.blocks.map((block) => (
@@ -799,7 +826,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 												onMouseEnter={(e) => handleMouseEnterBlock(block, e)}
 												onMouseLeave={handleMouseLeave}
 												role="gridcell"
-												aria-label={`${format(block.date, 'MMM d')} ${block.blockLabel}: ${block.count} ${block.count === 1 ? 'query' : 'queries'}${block.duration > 0 ? `, ${formatDuration(block.duration)}` : ''}`}
+												aria-label={`${formatLocalDate(block.date, locale, { month: 'short', day: 'numeric' })} ${block.blockLabel}: ${t('chart.query', { count: block.count })}${block.duration > 0 ? `, ${formatDuration(block.duration)}` : ''}`}
 												tabIndex={0}
 											/>
 										))}
@@ -844,7 +871,11 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 									<div
 										className="text-xs text-center truncate h-[16px] flex items-center justify-center"
 										style={{ color: theme.colors.textDim }}
-										title={format(col.date, 'EEEE, MMM d')}
+										title={formatLocalDate(col.date, locale, {
+											weekday: 'long',
+											month: 'short',
+											day: 'numeric',
+										})}
 									>
 										{col.dayLabel}
 									</div>
@@ -872,7 +903,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 											onMouseEnter={(e) => handleMouseEnterHour(hourData, e)}
 											onMouseLeave={handleMouseLeave}
 											role="gridcell"
-											aria-label={`${format(hourData.date, 'MMM d')} ${hourData.hour}:00: ${hourData.count} ${hourData.count === 1 ? 'query' : 'queries'}${hourData.duration > 0 ? `, ${formatDuration(hourData.duration)}` : ''}`}
+											aria-label={`${formatLocalDate(hourData.date, locale, { month: 'short', day: 'numeric' })} ${hourData.hour}:00: ${t('chart.query', { count: hourData.count })}${hourData.duration > 0 ? `, ${formatDuration(hourData.duration)}` : ''}`}
 											tabIndex={0}
 										/>
 									))}
@@ -890,7 +921,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 				aria-label={tA('dashboard.activity_scale')}
 			>
 				<span className="text-xs" style={{ color: theme.colors.textDim }} aria-hidden="true">
-					Less
+					{t('chart.less')}
 				</span>
 				{[0, 1, 2, 3, 4].map((level) => (
 					<div
@@ -906,7 +937,7 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 					/>
 				))}
 				<span className="text-xs" style={{ color: theme.colors.textDim }} aria-hidden="true">
-					More
+					{t('chart.more')}
 				</span>
 			</div>
 
@@ -965,12 +996,18 @@ export const ActivityHeatmap = memo(function ActivityHeatmap({
 							}}
 						>
 							<div className="font-medium mb-0.5">
-								{format(hoveredCell.date, 'EEEE, MMM d, yyyy')}
-								{isHourCell && ` at ${(hoveredCell as HourData).hour}:00`}
+								{formatLocalDate(hoveredCell.date, locale, {
+									weekday: 'long',
+									month: 'short',
+									day: 'numeric',
+									year: 'numeric',
+								})}
+								{isHourCell &&
+									` ${t('chart.at_hour', { hour: `${(hoveredCell as HourData).hour}:00` })}`}
 								{isBlockCell && ` (${(hoveredCell as TimeBlockCell).blockLabel})`}
 							</div>
 							<div style={{ color: theme.colors.textDim }}>
-								{hoveredCell.count} {hoveredCell.count === 1 ? 'query' : 'queries'}
+								{t('chart.query', { count: hoveredCell.count })}
 								{hoveredCell.duration > 0 && <span> • {formatDuration(hoveredCell.duration)}</span>}
 							</div>
 						</div>

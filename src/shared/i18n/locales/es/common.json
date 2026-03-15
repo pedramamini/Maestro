@@ -265,6 +265,25 @@
 		"try_again": "Intentar de nuevo",
 		"reload_app": "Recargar aplicacion"
 	},
+	"wizard_errors": {
+		"timeout_title": "Tiempo de respuesta agotado",
+		"timeout_description": "El agente dejo de producir salida durante un periodo prolongado. Esto generalmente significa que el proceso del agente fallo o perdio la conexion con el proveedor de IA. Intente de nuevo; si el problema persiste, verifique su clave API y conexion de red.",
+		"not_available_title": "Agente no disponible",
+		"not_available_description": "No se pudo iniciar el agente de IA. Verifique que este correctamente instalado y configurado.",
+		"session_error_title": "Error de sesion",
+		"session_error_description": "La sesion del asistente ya no esta activa. Reinicie el asistente.",
+		"spawn_failed_title": "Error al iniciar el agente",
+		"spawn_failed_description": "No se pudo iniciar el agente de IA. Verifique su configuracion e intente de nuevo.",
+		"agent_error_title": "Error del agente",
+		"agent_error_description": "El agente de IA encontro un error y se detuvo inesperadamente.",
+		"parse_error_title": "Error de respuesta",
+		"parse_error_description": "No se pudo entender la respuesta de la IA. Intente reformular su mensaje.",
+		"generic_title": "Algo salio mal",
+		"generic_description": "Ocurrio un error inesperado. Intente de nuevo.",
+		"try_again": "Intentar de nuevo",
+		"dismiss": "Descartar",
+		"technical_details": "Detalles tecnicos"
+	},
 	"right_panel": {
 		"tab_files": "Archivos",
 		"tab_history": "Historial",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "Transformo la musica clasica estadounidense, legendaria direccion de la Filarmonica de Nueva York, iconico educador y compositor"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "Mapa de calor de actividad",
+		"show_label": "Mostrar:",
+		"count": "Cantidad",
+		"duration": "Duración",
+		"less": "Menos",
+		"more": "Más",
+		"query_one": "{{count}} consulta",
+		"query_other": "{{count}} consultas",
+		"at_hour": "a las {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "Logro de ovacion de pie",

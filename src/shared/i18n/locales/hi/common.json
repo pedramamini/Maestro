@@ -265,6 +265,25 @@
 		"try_again": "पुनः प्रयास करें",
 		"reload_app": "ऐप पुनः लोड करें"
 	},
+	"wizard_errors": {
+		"timeout_title": "प्रतिक्रिया समय समाप्त",
+		"timeout_description": "एजेंट ने लंबे समय तक कोई आउटपुट नहीं दिया। इसका आमतौर पर मतलब है कि एजेंट प्रक्रिया क्रैश हो गई या AI प्रदाता से कनेक्शन टूट गया। पुनः प्रयास करें — यदि समस्या बनी रहती है, तो अपनी API कुंजी और नेटवर्क कनेक्शन जाँचें।",
+		"not_available_title": "एजेंट उपलब्ध नहीं",
+		"not_available_description": "AI एजेंट शुरू नहीं किया जा सका। कृपया जाँचें कि यह सही ढंग से स्थापित और कॉन्फ़िगर किया गया है।",
+		"session_error_title": "सत्र त्रुटि",
+		"session_error_description": "विज़ार्ड सत्र अब सक्रिय नहीं है। कृपया विज़ार्ड पुनः प्रारंभ करें।",
+		"spawn_failed_title": "एजेंट प्रारंभ करने में विफल",
+		"spawn_failed_description": "AI एजेंट शुरू नहीं किया जा सका। कृपया अपनी कॉन्फ़िगरेशन जाँचें और पुनः प्रयास करें।",
+		"agent_error_title": "एजेंट त्रुटि",
+		"agent_error_description": "AI एजेंट को एक त्रुटि मिली और वह अप्रत्याशित रूप से बंद हो गया।",
+		"parse_error_title": "प्रतिक्रिया त्रुटि",
+		"parse_error_description": "AI की प्रतिक्रिया समझ में नहीं आई। कृपया अपना संदेश दोबारा लिखें।",
+		"generic_title": "कुछ गलत हो गया",
+		"generic_description": "एक अप्रत्याशित त्रुटि हुई। कृपया पुनः प्रयास करें।",
+		"try_again": "पुनः प्रयास करें",
+		"dismiss": "खारिज करें",
+		"technical_details": "तकनीकी विवरण"
+	},
 	"right_panel": {
 		"tab_files": "फ़ाइलें",
 		"tab_history": "इतिहास",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "अमेरिकी शास्त्रीय संगीत को रूपांतरित किया, NY Philharmonic में महान कार्यकाल, प्रतिष्ठित शिक्षक और संगीतकार"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "गतिविधि हीटमैप",
+		"show_label": "दिखाएँ:",
+		"count": "गणना",
+		"duration": "अवधि",
+		"less": "कम",
+		"more": "अधिक",
+		"query_one": "{{count}} क्वेरी",
+		"query_other": "{{count}} क्वेरी",
+		"at_hour": "{{hour}} पर"
 	},
 	"standing_ovation": {
 		"aria_label": "Standing Ovation उपलब्धि",

@@ -265,6 +265,25 @@
 		"try_again": "Try Again",
 		"reload_app": "Reload App"
 	},
+	"wizard_errors": {
+		"timeout_title": "Response Timeout",
+		"timeout_description": "The agent stopped producing output for an extended period. This usually means the agent process crashed or lost its connection to the AI provider. Try again — if the issue persists, check your API key and network connection.",
+		"not_available_title": "Agent Not Available",
+		"not_available_description": "The AI agent could not be started. Please check that it is properly installed and configured.",
+		"session_error_title": "Session Error",
+		"session_error_description": "The wizard session is no longer active. Please restart the wizard.",
+		"spawn_failed_title": "Failed to Start Agent",
+		"spawn_failed_description": "Could not start the AI agent. Please check your configuration and try again.",
+		"agent_error_title": "Agent Error",
+		"agent_error_description": "The AI agent encountered an error and stopped unexpectedly.",
+		"parse_error_title": "Response Error",
+		"parse_error_description": "Could not understand the response from the AI. Please try rephrasing your message.",
+		"generic_title": "Something Went Wrong",
+		"generic_description": "An unexpected error occurred. Please try again.",
+		"try_again": "Try Again",
+		"dismiss": "Dismiss",
+		"technical_details": "Technical details"
+	},
 	"right_panel": {
 		"tab_files": "Files",
 		"tab_history": "History",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "Transformed American classical music, legendary NY Philharmonic tenure, iconic educator and composer"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "Activity Heatmap",
+		"show_label": "Show:",
+		"count": "Count",
+		"duration": "Duration",
+		"less": "Less",
+		"more": "More",
+		"query_one": "{{count}} query",
+		"query_other": "{{count}} queries",
+		"at_hour": "at {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "Standing Ovation Achievement",

@@ -265,6 +265,25 @@
 		"try_again": "Réessayer",
 		"reload_app": "Recharger l'application"
 	},
+	"wizard_errors": {
+		"timeout_title": "Délai de réponse dépassé",
+		"timeout_description": "L'agent a cessé de produire des résultats pendant une période prolongée. Cela signifie généralement que le processus de l'agent a planté ou a perdu sa connexion avec le fournisseur d'IA. Réessayez — si le problème persiste, vérifiez votre clé API et votre connexion réseau.",
+		"not_available_title": "Agent non disponible",
+		"not_available_description": "L'agent IA n'a pas pu être démarré. Veuillez vérifier qu'il est correctement installé et configuré.",
+		"session_error_title": "Erreur de session",
+		"session_error_description": "La session de l'assistant n'est plus active. Veuillez redémarrer l'assistant.",
+		"spawn_failed_title": "Échec du démarrage de l'agent",
+		"spawn_failed_description": "Impossible de démarrer l'agent IA. Veuillez vérifier votre configuration et réessayer.",
+		"agent_error_title": "Erreur de l'agent",
+		"agent_error_description": "L'agent IA a rencontré une erreur et s'est arrêté de manière inattendue.",
+		"parse_error_title": "Erreur de réponse",
+		"parse_error_description": "Impossible de comprendre la réponse de l'IA. Veuillez reformuler votre message.",
+		"generic_title": "Une erreur est survenue",
+		"generic_description": "Une erreur inattendue s'est produite. Veuillez réessayer.",
+		"try_again": "Réessayer",
+		"dismiss": "Fermer",
+		"technical_details": "Détails techniques"
+	},
 	"right_panel": {
 		"tab_files": "Fichiers",
 		"tab_history": "Historique",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "A transformé la musique classique américaine, direction légendaire du NY Philharmonic, éducateur et compositeur emblématique"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "Carte thermique d'activité",
+		"show_label": "Afficher :",
+		"count": "Nombre",
+		"duration": "Durée",
+		"less": "Moins",
+		"more": "Plus",
+		"query_one": "{{count}} requête",
+		"query_other": "{{count}} requêtes",
+		"at_hour": "à {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "Succès Standing Ovation",

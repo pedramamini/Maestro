@@ -265,6 +265,25 @@
 		"try_again": "Erneut versuchen",
 		"reload_app": "App neu laden"
 	},
+	"wizard_errors": {
+		"timeout_title": "Zeitüberschreitung der Antwort",
+		"timeout_description": "Der Agent hat über einen längeren Zeitraum keine Ausgabe mehr erzeugt. Dies bedeutet normalerweise, dass der Agentenprozess abgestürzt ist oder die Verbindung zum KI-Anbieter verloren hat. Versuchen Sie es erneut — falls das Problem weiterhin besteht, überprüfen Sie Ihren API-Schlüssel und die Netzwerkverbindung.",
+		"not_available_title": "Agent nicht verfügbar",
+		"not_available_description": "Der KI-Agent konnte nicht gestartet werden. Bitte überprüfen Sie, ob er korrekt installiert und konfiguriert ist.",
+		"session_error_title": "Sitzungsfehler",
+		"session_error_description": "Die Assistenten-Sitzung ist nicht mehr aktiv. Bitte starten Sie den Assistenten neu.",
+		"spawn_failed_title": "Agent konnte nicht gestartet werden",
+		"spawn_failed_description": "Der KI-Agent konnte nicht gestartet werden. Bitte überprüfen Sie Ihre Konfiguration und versuchen Sie es erneut.",
+		"agent_error_title": "Agentenfehler",
+		"agent_error_description": "Der KI-Agent ist auf einen Fehler gestoßen und wurde unerwartet beendet.",
+		"parse_error_title": "Antwortfehler",
+		"parse_error_description": "Die Antwort der KI konnte nicht verstanden werden. Bitte formulieren Sie Ihre Nachricht um.",
+		"generic_title": "Etwas ist schiefgelaufen",
+		"generic_description": "Ein unerwarteter Fehler ist aufgetreten. Bitte versuchen Sie es erneut.",
+		"try_again": "Erneut versuchen",
+		"dismiss": "Schließen",
+		"technical_details": "Technische Details"
+	},
 	"right_panel": {
 		"tab_files": "Dateien",
 		"tab_history": "Verlauf",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "Hat die amerikanische klassische Musik grundlegend verändert, legendäre Amtszeit bei der NY Philharmonic, ikonischer Pädagoge und Komponist"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "Aktivitäts-Heatmap",
+		"show_label": "Anzeigen:",
+		"count": "Anzahl",
+		"duration": "Dauer",
+		"less": "Weniger",
+		"more": "Mehr",
+		"query_one": "{{count}} Abfrage",
+		"query_other": "{{count}} Abfragen",
+		"at_hour": "um {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "Stehende Ovation – Errungenschaft",

@@ -265,6 +265,25 @@
 		"try_again": "重试",
 		"reload_app": "重新加载应用"
 	},
+	"wizard_errors": {
+		"timeout_title": "响应超时",
+		"timeout_description": "代理长时间未产生输出。这通常意味着代理进程崩溃或与AI提供商的连接丢失。请重试——如果问题持续存在，请检查您的API密钥和网络连接。",
+		"not_available_title": "代理不可用",
+		"not_available_description": "无法启动AI代理。请检查它是否已正确安装和配置。",
+		"session_error_title": "会话错误",
+		"session_error_description": "向导会话已不再活跃。请重新启动向导。",
+		"spawn_failed_title": "启动代理失败",
+		"spawn_failed_description": "无法启动AI代理。请检查您的配置并重试。",
+		"agent_error_title": "代理错误",
+		"agent_error_description": "AI代理遇到错误并意外停止。",
+		"parse_error_title": "响应错误",
+		"parse_error_description": "无法理解AI的响应。请尝试重新表述您的消息。",
+		"generic_title": "出错了",
+		"generic_description": "发生了意外错误。请重试。",
+		"try_again": "重试",
+		"dismiss": "关闭",
+		"technical_details": "技术详情"
+	},
 	"right_panel": {
 		"tab_files": "文件",
 		"tab_history": "历史",
@@ -399,6 +418,17 @@
 			"example_era": "1943-1990",
 			"example_achievement": "改变了美国古典音乐，在纽约爱乐乐团的传奇任期，标志性的教育家和作曲家"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "活动热力图",
+		"show_label": "显示：",
+		"count": "数量",
+		"duration": "时长",
+		"less": "少",
+		"more": "多",
+		"query_one": "{{count}} 次查询",
+		"query_other": "{{count}} 次查询",
+		"at_hour": "在 {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "全场起立鼓掌成就",

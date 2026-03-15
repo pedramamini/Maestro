@@ -277,6 +277,25 @@
 		"try_again": "المحاولة مجددًا",
 		"reload_app": "إعادة تحميل التطبيق"
 	},
+	"wizard_errors": {
+		"timeout_title": "انتهت مهلة الاستجابة",
+		"timeout_description": "توقف الوكيل عن إنتاج المخرجات لفترة طويلة. يعني هذا عادةً أن عملية الوكيل تعطلت أو فقدت اتصالها بمزود الذكاء الاصطناعي. حاول مرة أخرى — إذا استمرت المشكلة، تحقق من مفتاح API واتصال الشبكة.",
+		"not_available_title": "الوكيل غير متاح",
+		"not_available_description": "تعذر بدء وكيل الذكاء الاصطناعي. يرجى التحقق من أنه مثبت ومهيأ بشكل صحيح.",
+		"session_error_title": "خطأ في الجلسة",
+		"session_error_description": "جلسة المعالج لم تعد نشطة. يرجى إعادة تشغيل المعالج.",
+		"spawn_failed_title": "فشل في بدء الوكيل",
+		"spawn_failed_description": "تعذر بدء وكيل الذكاء الاصطناعي. يرجى التحقق من إعداداتك والمحاولة مرة أخرى.",
+		"agent_error_title": "خطأ في الوكيل",
+		"agent_error_description": "واجه وكيل الذكاء الاصطناعي خطأ وتوقف بشكل غير متوقع.",
+		"parse_error_title": "خطأ في الاستجابة",
+		"parse_error_description": "تعذر فهم استجابة الذكاء الاصطناعي. يرجى إعادة صياغة رسالتك.",
+		"generic_title": "حدث خطأ ما",
+		"generic_description": "حدث خطأ غير متوقع. يرجى المحاولة مرة أخرى.",
+		"try_again": "المحاولة مجددًا",
+		"dismiss": "تجاهل",
+		"technical_details": "التفاصيل التقنية"
+	},
 	"right_panel": {
 		"tab_files": "الملفات",
 		"tab_history": "السجل",
@@ -411,6 +430,21 @@
 			"example_era": "1943-1990",
 			"example_achievement": "حوّل الموسيقى الكلاسيكية الأمريكية، فترة أسطورية في فيلهارمونية نيويورك، معلّم وملحّن أيقوني"
 		}
+	},
+	"chart": {
+		"activity_heatmap_title": "خريطة النشاط الحراري",
+		"show_label": "عرض:",
+		"count": "العدد",
+		"duration": "المدة",
+		"less": "أقل",
+		"more": "أكثر",
+		"query_zero": "لا استعلامات",
+		"query_one": "استعلام {{count}}",
+		"query_two": "استعلامان ({{count}})",
+		"query_few": "{{count}} استعلامات",
+		"query_many": "{{count}} استعلامًا",
+		"query_other": "{{count}} استعلام",
+		"at_hour": "في {{hour}}"
 	},
 	"standing_ovation": {
 		"aria_label": "إنجاز التصفيق الحار",

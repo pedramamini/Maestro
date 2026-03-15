@@ -111,14 +111,9 @@ export const ActivityGraph: React.FC<ActivityGraphProps> = ({
 
 		// Format based on lookback period
 		if (lookbackHours !== null && lookbackHours <= 72) {
-			// For short periods, show time of day
-			const formatHour = (date: Date) => {
-				const hour = date.getHours();
-				const ampm = hour >= 12 ? 'PM' : 'AM';
-				const hour12 = hour % 12 || 12;
-				return `${hour12}${ampm}`;
-			};
-			return `${formatHour(bucketStart)} - ${formatHour(bucketEnd)}`;
+			// For short periods, show time of day using locale-aware formatting
+			const hourFmt = new Intl.DateTimeFormat(getActiveLocale(), { hour: 'numeric' });
+			return `${hourFmt.format(bucketStart)} - ${hourFmt.format(bucketEnd)}`;
 		} else {
 			// For longer periods, show dates
 			const formatDate = (date: Date) => {
