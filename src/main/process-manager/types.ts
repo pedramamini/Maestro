@@ -40,6 +40,8 @@ export interface ProcessConfig {
 	cols?: number;
 	/** PTY terminal height in rows (default 24) */
 	rows?: number;
+	/** If true, don't close stdin after initial prompt - enables mid-turn writes */
+	keepStdinOpen?: boolean;
 }
 
 /**

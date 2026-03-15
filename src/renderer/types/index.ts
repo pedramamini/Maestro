@@ -192,6 +192,8 @@ export interface LogEntry {
 	delivered?: boolean;
 	// For user messages - tracks if message was sent in read-only mode
 	readOnly?: boolean;
+	// For user messages — tracks if message was sent as a mid-turn interjection
+	interjection?: boolean;
 	// For error entries - stores the full AgentError for "View Details" functionality
 	agentError?: AgentError;
 	// For tool execution entries - stores tool state and details
@@ -761,6 +763,7 @@ export interface AgentCapabilities {
 	supportsResultMessages: boolean;
 	supportsModelSelection?: boolean;
 	supportsStreamJsonInput?: boolean;
+	supportsMidTurnInput?: boolean;
 	supportsThinkingDisplay?: boolean;
 	supportsContextMerge?: boolean;
 	supportsContextExport?: boolean;
