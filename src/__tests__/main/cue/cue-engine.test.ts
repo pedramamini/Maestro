@@ -2142,4 +2142,603 @@ describe('CueEngine', () => {
 			engine.stop();
 		});
 	});
+
+	describe('output prompt separate runId (Fix 5)', () => {
+		it('output prompt uses a different runId from main run', async () => {
+			const mainResult: CueRunResult = {
+				runId: 'run-main',
+				sessionId: 'session-1',
+				sessionName: 'Test Session',
+				subscriptionName: 'timer',
+				event: {} as CueEvent,
+				status: 'completed',
+				stdout: 'main output',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 100,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			};
+			const outputResult: CueRunResult = {
+				...mainResult,
+				runId: 'run-output',
+				stdout: 'formatted output',
+			};
+			const onCueRun = vi
+				.fn()
+				.mockResolvedValueOnce(mainResult)
+				.mockResolvedValueOnce(outputResult);
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'do work',
+						output_prompt: 'format results',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps({ onCueRun });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(onCueRun).toHaveBeenCalledTimes(2);
+			const firstRunId = onCueRun.mock.calls[0][0].runId;
+			const secondRunId = onCueRun.mock.calls[1][0].runId;
+			expect(firstRunId).not.toBe(secondRunId);
+
+			engine.stop();
+		});
+
+		it('output prompt timeout falls back to main output', async () => {
+			const mainResult: CueRunResult = {
+				runId: 'run-main',
+				sessionId: 'session-1',
+				sessionName: 'Test Session',
+				subscriptionName: 'timer',
+				event: {} as CueEvent,
+				status: 'completed',
+				stdout: 'main-output',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 100,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			};
+			const timeoutResult: CueRunResult = {
+				...mainResult,
+				runId: 'run-output',
+				status: 'timeout',
+				stdout: '',
+			};
+			const onCueRun = vi
+				.fn()
+				.mockResolvedValueOnce(mainResult)
+				.mockResolvedValueOnce(timeoutResult);
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'do work',
+						output_prompt: 'format results',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps({ onCueRun });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			await vi.advanceTimersByTimeAsync(100);
+
+			// Activity log entry should have the main output (fallback)
+			const log = engine.getActivityLog();
+			expect(log[0].stdout).toBe('main-output');
+
+			engine.stop();
+		});
+
+		it('output prompt event includes outputPromptPhase: true', async () => {
+			const mainResult: CueRunResult = {
+				runId: 'run-main',
+				sessionId: 'session-1',
+				sessionName: 'Test Session',
+				subscriptionName: 'timer',
+				event: {} as CueEvent,
+				status: 'completed',
+				stdout: 'main output',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 100,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			};
+			const outputResult: CueRunResult = {
+				...mainResult,
+				runId: 'run-output',
+				stdout: 'formatted',
+			};
+			const onCueRun = vi
+				.fn()
+				.mockResolvedValueOnce(mainResult)
+				.mockResolvedValueOnce(outputResult);
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'timer',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'do work',
+						output_prompt: 'format results',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps({ onCueRun });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			await vi.advanceTimersByTimeAsync(100);
+
+			expect(onCueRun).toHaveBeenCalledTimes(2);
+			const secondCallEvent = onCueRun.mock.calls[1][0].event;
+			expect(secondCallEvent.payload.outputPromptPhase).toBe(true);
+
+			engine.stop();
+		});
+
+		it('completion chain receives output prompt stdout when successful', async () => {
+			// Session A has heartbeat + output_prompt; Session B watches session A via agent.completed
+			const sessionA = createMockSession({
+				id: 'session-a',
+				name: 'Agent A',
+				projectRoot: '/proj/a',
+			});
+			const sessionB = createMockSession({
+				id: 'session-b',
+				name: 'Agent B',
+				projectRoot: '/proj/b',
+			});
+
+			const configA = createMockConfig({
+				subscriptions: [
+					{
+						name: 'heartbeat-a',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'do work',
+						output_prompt: 'format nicely',
+						interval_minutes: 60,
+					},
+				],
+			});
+			const configB = createMockConfig({
+				subscriptions: [
+					{
+						name: 'chain-b',
+						event: 'agent.completed',
+						enabled: true,
+						prompt: 'react to A',
+						source_session: 'Agent A',
+					},
+				],
+			});
+
+			mockLoadCueConfig.mockImplementation((root: string) => {
+				if (root === '/proj/a') return configA;
+				if (root === '/proj/b') return configB;
+				return null;
+			});
+
+			let runCount = 0;
+			const onCueRun = vi.fn(async (request: Parameters<CueEngineDeps['onCueRun']>[0]) => {
+				runCount++;
+				const result: CueRunResult = {
+					runId: `run-${runCount}`,
+					sessionId: request.sessionId,
+					sessionName: request.sessionId === 'session-a' ? 'Agent A' : 'Agent B',
+					subscriptionName: request.subscriptionName,
+					event: request.event,
+					status: 'completed' as const,
+					stdout: runCount === 1 ? 'raw' : runCount === 2 ? 'formatted' : 'chain-output',
+					stderr: '',
+					exitCode: 0,
+					durationMs: 100,
+					startedAt: new Date().toISOString(),
+					endedAt: new Date().toISOString(),
+				};
+				return result;
+			});
+
+			const deps = createMockDeps({
+				getSessions: vi.fn(() => [sessionA, sessionB]),
+				onCueRun,
+			});
+
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Let the heartbeat fire (immediate) + output prompt + completion chain
+			await vi.advanceTimersByTimeAsync(100);
+
+			// Session B's agent.completed event should have sourceOutput from the output prompt (formatted)
+			const chainCall = (onCueRun as ReturnType<typeof vi.fn>).mock.calls.find(
+				(call: unknown[]) =>
+					(call[0] as { subscriptionName: string }).subscriptionName === 'chain-b'
+			);
+			expect(chainCall).toBeDefined();
+			expect((chainCall![0] as { event: CueEvent }).event.payload.sourceOutput).toContain(
+				'formatted'
+			);
+
+			engine.stop();
+		});
+	});
+
+	describe('configuration hotloading', () => {
+		it('new subscription fires after hot reload', async () => {
+			const config1 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'heartbeat-1',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'first',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config1);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+
+			// Capture the watchCueYaml onChange callback
+			let capturedOnChange: (() => void) | undefined;
+			mockWatchCueYaml.mockImplementation((_root: string, cb: () => void) => {
+				capturedOnChange = cb;
+				return vi.fn();
+			});
+
+			engine.start();
+			await vi.advanceTimersByTimeAsync(0);
+			vi.clearAllMocks();
+
+			// Update config to have 2 subscriptions
+			const config2 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'heartbeat-1',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'first',
+						interval_minutes: 60,
+					},
+					{
+						name: 'heartbeat-2',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'second',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config2);
+
+			// Invoke onChange to trigger hot reload
+			expect(capturedOnChange).toBeDefined();
+			capturedOnChange!();
+
+			// Both heartbeats fire immediately on setup
+			await vi.advanceTimersByTimeAsync(0);
+			expect(deps.onCueRun).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'second' }));
+
+			engine.stop();
+		});
+
+		it('removed subscription stops after hot reload', async () => {
+			const config1 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'heartbeat-1',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'first',
+						interval_minutes: 5,
+					},
+					{
+						name: 'heartbeat-2',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'second',
+						interval_minutes: 10,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config1);
+			const deps = createMockDeps();
+
+			let capturedOnChange: (() => void) | undefined;
+			mockWatchCueYaml.mockImplementation((_root: string, cb: () => void) => {
+				capturedOnChange = cb;
+				return vi.fn();
+			});
+
+			const engine = new CueEngine(deps);
+			engine.start();
+			await vi.advanceTimersByTimeAsync(0);
+			vi.clearAllMocks();
+
+			// Reload with only heartbeat-1
+			const config2 = createMockConfig({
+				subscriptions: [
+					{
+						name: 'heartbeat-1',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'first',
+						interval_minutes: 5,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config2);
+			capturedOnChange!();
+
+			await vi.advanceTimersByTimeAsync(0);
+			vi.clearAllMocks();
+
+			// Advance 5 minutes — only heartbeat-1 should fire
+			await vi.advanceTimersByTimeAsync(5 * 60 * 1000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+			expect(deps.onCueRun).toHaveBeenCalledWith(expect.objectContaining({ prompt: 'first' }));
+
+			engine.stop();
+		});
+
+		it('YAML deletion tears down session', async () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'heartbeat',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 60,
+					},
+				],
+			});
+
+			let capturedOnChange: (() => void) | undefined;
+			mockWatchCueYaml.mockImplementation((_root: string, cb: () => void) => {
+				capturedOnChange = cb;
+				return vi.fn();
+			});
+
+			mockLoadCueConfig.mockReturnValueOnce(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Reload returns null (YAML deleted)
+			mockLoadCueConfig.mockReturnValue(null);
+			capturedOnChange!();
+
+			// Session state should be removed
+			expect(engine.getStatus()).toHaveLength(0);
+			// Should log config removed
+			expect(deps.onLog).toHaveBeenCalledWith(
+				'cue',
+				expect.stringContaining('Config removed'),
+				expect.objectContaining({ type: 'configRemoved' })
+			);
+
+			engine.stop();
+		});
+
+		it('scheduledFiredKeys are cleaned on refresh', async () => {
+			// Start at 08:59 — 1 minute before the scheduled time
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'schedule-test',
+						event: 'time.scheduled',
+						enabled: true,
+						prompt: 'scheduled task',
+						schedule_times: ['09:00'],
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+
+			let capturedOnChange: (() => void) | undefined;
+			mockWatchCueYaml.mockImplementation((_root: string, cb: () => void) => {
+				capturedOnChange = cb;
+				return vi.fn();
+			});
+
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// Advance to 09:00 — should fire
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(1);
+
+			// Refresh session — scheduledFiredKeys are cleared in teardownSession
+			capturedOnChange!();
+
+			// Reset system time to 08:59 so the next 60s advance lands at 09:00 again
+			vi.setSystemTime(new Date('2026-03-09T08:59:00'));
+			await vi.advanceTimersByTimeAsync(60_000);
+			expect(deps.onCueRun).toHaveBeenCalledTimes(2);
+
+			engine.stop();
+		});
+
+		it('changed max_concurrent applies to next drain', async () => {
+			const config1 = createMockConfig({
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 1,
+					queue_size: 10,
+				},
+				subscriptions: [
+					{
+						name: 'heartbeat',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 1,
+					},
+				],
+			});
+
+			let capturedOnChange: (() => void) | undefined;
+			mockWatchCueYaml.mockImplementation((_root: string, cb: () => void) => {
+				capturedOnChange = cb;
+				return vi.fn();
+			});
+
+			// First run never resolves to keep the slot occupied
+			let resolveFirstRun: ((result: CueRunResult) => void) | undefined;
+			const firstRunPromise = new Promise<CueRunResult>((resolve) => {
+				resolveFirstRun = resolve;
+			});
+			const subsequentResult: CueRunResult = {
+				runId: 'run-sub',
+				sessionId: 'session-1',
+				sessionName: 'Test Session',
+				subscriptionName: 'heartbeat',
+				event: {} as CueEvent,
+				status: 'completed',
+				stdout: 'output',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 100,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			};
+			const onCueRun = vi
+				.fn()
+				.mockReturnValueOnce(firstRunPromise)
+				.mockResolvedValue(subsequentResult);
+
+			mockLoadCueConfig.mockReturnValue(config1);
+			const deps = createMockDeps({ onCueRun });
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			// First heartbeat fires immediately, occupying the single slot
+			await vi.advanceTimersByTimeAsync(0);
+			expect(onCueRun).toHaveBeenCalledTimes(1);
+
+			// Advance 1 minute — second heartbeat queued (max_concurrent=1, slot occupied)
+			await vi.advanceTimersByTimeAsync(60_000);
+
+			// Reload with max_concurrent=2
+			const config2 = createMockConfig({
+				settings: {
+					timeout_minutes: 30,
+					timeout_on_fail: 'break',
+					max_concurrent: 2,
+					queue_size: 10,
+				},
+				subscriptions: [
+					{
+						name: 'heartbeat',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'test',
+						interval_minutes: 1,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config2);
+			capturedOnChange!();
+
+			// The config reload tears down and reinitializes — the immediate heartbeat fires again
+			// With max_concurrent=2, the new heartbeat can dispatch immediately
+			await vi.advanceTimersByTimeAsync(0);
+
+			// Resolve the first run to free the slot
+			resolveFirstRun!({
+				...subsequentResult,
+				runId: 'run-1',
+			});
+			await vi.advanceTimersByTimeAsync(0);
+
+			// After reload with max_concurrent=2, at least one additional run should have dispatched
+			expect(onCueRun.mock.calls.length).toBeGreaterThanOrEqual(2);
+
+			engine.stop();
+		});
+	});
+
+	describe('prompt file existence warning (Fix 7)', () => {
+		it('logs warning when prompt_file is set but prompt is empty', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'missing-file-sub',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: '',
+						prompt_file: 'missing.md',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			expect(deps.onLog).toHaveBeenCalledWith('warn', expect.stringContaining('prompt_file'));
+			expect(deps.onLog).toHaveBeenCalledWith('warn', expect.stringContaining('missing.md'));
+
+			engine.stop();
+		});
+
+		it('does not warn when prompt_file is set and prompt is populated', () => {
+			const config = createMockConfig({
+				subscriptions: [
+					{
+						name: 'valid-file-sub',
+						event: 'time.heartbeat',
+						enabled: true,
+						prompt: 'content from file',
+						prompt_file: 'exists.md',
+						interval_minutes: 60,
+					},
+				],
+			});
+			mockLoadCueConfig.mockReturnValue(config);
+			const deps = createMockDeps();
+			const engine = new CueEngine(deps);
+			engine.start();
+
+			const warnCalls = (deps.onLog as ReturnType<typeof vi.fn>).mock.calls.filter(
+				(call: unknown[]) =>
+					call[0] === 'warn' && typeof call[1] === 'string' && call[1].includes('prompt_file')
+			);
+			expect(warnCalls).toHaveLength(0);
+
+			engine.stop();
+		});
+	});
 });

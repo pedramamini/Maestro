@@ -47,6 +47,7 @@ const SOURCE_OUTPUT_MAX_CHARS = 5000;
 const HEARTBEAT_INTERVAL_MS = 30_000; // 30 seconds
 const SLEEP_THRESHOLD_MS = 120_000; // 2 minutes
 const EVENT_PRUNE_AGE_MS = 7 * 24 * 60 * 60 * 1000; // 7 days
+const MAX_CHAIN_DEPTH = 10;
 
 const DAY_NAMES = ['sun', 'mon', 'tue', 'wed', 'thu', 'fri', 'sat'] as const;
 
@@ -149,6 +150,8 @@ export class CueEngine {
 	/** Tracks "subName:HH:MM" keys that time.scheduled already fired, preventing double-fire on config refresh */
 	private scheduledFiredKeys = new Set<string>();
 	private heartbeatInterval: ReturnType<typeof setInterval> | null = null;
+	/** Tracks recursive chain depth to prevent infinite loops (A triggers B triggers A) */
+	private chainDepth = 0;
 	private deps: CueEngineDeps;
 
 	constructor(deps: CueEngineDeps) {
@@ -511,6 +514,26 @@ export class CueEngine {
 	notifyAgentCompleted(sessionId: string, completionData?: AgentCompletionData): void {
 		if (!this.enabled) return;
 
+		// Guard against infinite chain loops (A triggers B triggers A)
+		this.chainDepth++;
+		if (this.chainDepth > MAX_CHAIN_DEPTH) {
+			this.deps.onLog(
+				'error',
+				`[CUE] Max chain depth (${MAX_CHAIN_DEPTH}) exceeded — aborting to prevent infinite loop`
+			);
+			this.chainDepth--;
+			return;
+		}
+
+		try {
+			this.notifyAgentCompletedInner(sessionId, completionData);
+		} finally {
+			this.chainDepth--;
+		}
+	}
+
+	/** Inner implementation of notifyAgentCompleted (separated for chain depth tracking) */
+	private notifyAgentCompletedInner(sessionId: string, completionData?: AgentCompletionData): void {
 		// Resolve the completing session's name for matching
 		const allSessions = this.deps.getSessions();
 		const completingSession = allSessions.find((s) => s.id === sessionId);
@@ -800,6 +823,24 @@ export class CueEngine {
 		state.yamlWatcher = watchCueYaml(session.projectRoot, () => {
 			this.refreshSession(session.id, session.projectRoot);
 		});
+
+		// Warn about missing prompt files at setup time (not just at execution time)
+		for (const sub of config.subscriptions) {
+			if (sub.enabled === false) continue;
+			if (sub.agent_id && sub.agent_id !== session.id) continue;
+			if (sub.prompt_file && !sub.prompt) {
+				this.deps.onLog(
+					'warn',
+					`[CUE] "${sub.name}" has prompt_file "${sub.prompt_file}" but the file was not found — subscription will fail on trigger`
+				);
+			}
+			if (sub.output_prompt_file && !sub.output_prompt) {
+				this.deps.onLog(
+					'warn',
+					`[CUE] "${sub.name}" has output_prompt_file "${sub.output_prompt_file}" but the file was not found`
+				);
+			}
+		}
 
 		// Set up subscriptions
 		for (const sub of config.subscriptions) {
@@ -1262,6 +1303,7 @@ export class CueEngine {
 					`[CUE] "${subscriptionName}" executing output prompt for downstream handoff`
 				);
 
+				const outputRunId = crypto.randomUUID();
 				const outputEvent: CueEvent = {
 					...event,
 					id: crypto.randomUUID(),
@@ -1272,16 +1314,37 @@ export class CueEngine {
 					},
 				};
 
+				try {
+					recordCueEvent({
+						id: outputRunId,
+						type: event.type,
+						triggerName: event.triggerName,
+						sessionId,
+						subscriptionName: `${subscriptionName}:output`,
+						status: 'running',
+						payload: JSON.stringify(outputEvent.payload),
+					});
+				} catch {
+					// Non-fatal if DB is unavailable
+				}
+
 				const contextPrompt = `${outputPrompt}\n\n---\n\nContext from completed task:\n${result.stdout.substring(0, SOURCE_OUTPUT_MAX_CHARS)}`;
 				const outputResult = await this.deps.onCueRun({
-					runId,
+					runId: outputRunId,
 					sessionId,
 					prompt: contextPrompt,
-					subscriptionName,
+					subscriptionName: `${subscriptionName}:output`,
 					event: outputEvent,
 					timeoutMs,
 				});
-				if (this.manuallyStoppedRuns.has(runId)) {
+
+				try {
+					updateCueEventStatus(outputRunId, outputResult.status);
+				} catch {
+					// Non-fatal if DB is unavailable
+				}
+
+				if (this.manuallyStoppedRuns.has(runId) || this.manuallyStoppedRuns.has(outputRunId)) {
 					return;
 				}
 
@@ -1417,6 +1480,18 @@ export class CueEngine {
 
 		// Clean up fan-in trackers and timers for this session
 		this.clearFanInState(sessionId);
+
+		// Clean up queued events for this session (prevents stale events after config reload)
+		this.clearQueue(sessionId);
+
+		// Clean up scheduledFiredKeys for this session's subscriptions
+		for (const sub of state.config.subscriptions) {
+			for (const key of this.scheduledFiredKeys) {
+				if (key.startsWith(`${sub.name}:`)) {
+					this.scheduledFiredKeys.delete(key);
+				}
+			}
+		}
 	}
 
 	// --- Heartbeat & Sleep Detection ---

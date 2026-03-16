@@ -601,6 +601,89 @@ describe('cue-github-poller', () => {
 		expect(eventCallCount).toBe(1);
 	});
 
+	describe('first poll error resilience (Fix 3)', () => {
+		it('places seed marker when first poll fails', async () => {
+			const config = makeConfig();
+
+			// First call (--version) succeeds, but pr list fails
+			let callCount = 0;
+			mockExecFile.mockImplementation(
+				(
+					cmd: string,
+					args: string[],
+					_opts: unknown,
+					cb: (err: Error | null, stdout: string, stderr: string) => void
+				) => {
+					const key = `${cmd} ${args.join(' ')}`;
+					if (key.includes('--version')) {
+						cb(null, '2.0.0', '');
+					} else if (key.includes('pr list')) {
+						callCount++;
+						cb(new Error('Network timeout'), '', '');
+					} else {
+						cb(new Error('not found'), '', '');
+					}
+				}
+			);
+
+			const cleanup = createCueGitHubPoller(config);
+			await vi.advanceTimersByTimeAsync(2000);
+
+			expect(mockMarkGitHubItemSeen).toHaveBeenCalledWith('session-1:test-sub', '__seed_marker__');
+			expect(config.onLog).toHaveBeenCalledWith('info', expect.stringContaining('seed marker set'));
+
+			cleanup();
+		});
+
+		it('second poll after first-poll error fires events for new items', async () => {
+			const config = makeConfig({ pollMinutes: 1 });
+
+			// First poll: pr list fails
+			// Second poll: pr list succeeds
+			let prListCallCount = 0;
+			mockExecFile.mockImplementation(
+				(
+					cmd: string,
+					args: string[],
+					_opts: unknown,
+					cb: (err: Error | null, stdout: string, stderr: string) => void
+				) => {
+					const key = `${cmd} ${args.join(' ')}`;
+					if (key.includes('--version')) {
+						cb(null, '2.0.0', '');
+					} else if (key.includes('pr list')) {
+						prListCallCount++;
+						if (prListCallCount === 1) {
+							cb(new Error('Network timeout'), '', '');
+						} else {
+							cb(null, JSON.stringify([samplePRs[0]]), '');
+						}
+					} else {
+						cb(new Error('not found'), '', '');
+					}
+				}
+			);
+
+			// After first poll error, seed marker is placed, so hasAnyGitHubSeen returns true
+			// This means second poll treats items as NOT first-run and fires events
+			mockHasAnyGitHubSeen.mockReturnValue(true);
+
+			const cleanup = createCueGitHubPoller(config);
+
+			// First poll at 2s — fails, seed marker placed
+			await vi.advanceTimersByTimeAsync(2000);
+			expect(config.onEvent).not.toHaveBeenCalled();
+
+			// Second poll at 2s + 1min — succeeds, fires events
+			await vi.advanceTimersByTimeAsync(60000);
+			expect(config.onEvent).toHaveBeenCalledTimes(1);
+			const event = (config.onEvent as ReturnType<typeof vi.fn>).mock.calls[0][0];
+			expect(event.payload.number).toBe(1);
+
+			cleanup();
+		});
+	});
+
 	describe('ghState parameter', () => {
 		it('passes "closed" state to gh pr list when ghState is "closed"', async () => {
 			const config = makeConfig({ ghState: 'closed' });

@@ -64,6 +64,8 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 	// Cached state
 	let ghAvailable: boolean | null = null;
 	let resolvedRepo: string | null = config.repo ?? null;
+	/** Tracks whether a poll has been attempted (success or failure) to prevent event flooding on recovery */
+	let firstPollAttempted = false;
 
 	async function checkGhAvailable(): Promise<boolean> {
 		if (ghAvailable !== null) return ghAvailable;
@@ -245,6 +247,23 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 		} catch (err) {
 			const message = err instanceof Error ? err.message : String(err);
 			onLog('error', `[CUE] GitHub poll error for "${triggerName}": ${message}`);
+
+			// If the first poll ever fails, place a seed marker so the next successful
+			// poll doesn't treat ALL existing items as new (which would swallow items
+			// created during the outage by seeding them as "already seen")
+			if (!firstPollAttempted) {
+				try {
+					markGitHubItemSeen(subscriptionId, '__seed_marker__');
+					onLog(
+						'info',
+						`[CUE] First poll for "${triggerName}" failed — seed marker set to prevent event flooding on recovery`
+					);
+				} catch {
+					// Non-fatal: DB may not be available
+				}
+			}
+		} finally {
+			firstPollAttempted = true;
 		}
 	}
 

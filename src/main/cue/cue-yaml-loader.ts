@@ -8,6 +8,7 @@ import * as fs from 'fs';
 import * as path from 'path';
 import * as yaml from 'js-yaml';
 import * as chokidar from 'chokidar';
+import picomatch from 'picomatch';
 import {
 	type CueConfig,
 	type CueSubscription,
@@ -302,6 +303,14 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 					errors.push(
 						`${prefix}: "watch" is required and must be a non-empty string for file.changed events`
 					);
+				} else {
+					try {
+						picomatch(sub.watch as string);
+					} catch (e) {
+						errors.push(
+							`${prefix}: "watch" value "${sub.watch}" is not a valid glob pattern: ${e instanceof Error ? e.message : String(e)}`
+						);
+					}
 				}
 			} else if (event === 'agent.completed') {
 				if (!sub.source_session) {
@@ -316,6 +325,14 @@ export function validateCueConfig(config: unknown): { valid: boolean; errors: st
 					errors.push(
 						`${prefix}: "watch" is required and must be a non-empty glob string for task.pending events`
 					);
+				} else {
+					try {
+						picomatch(sub.watch as string);
+					} catch (e) {
+						errors.push(
+							`${prefix}: "watch" value "${sub.watch}" is not a valid glob pattern: ${e instanceof Error ? e.message : String(e)}`
+						);
+					}
 				}
 				if (sub.poll_minutes !== undefined) {
 					if (typeof sub.poll_minutes !== 'number' || sub.poll_minutes < 1) {

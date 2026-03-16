@@ -562,6 +562,55 @@ describe('CueModal', () => {
 		});
 	});
 
+	describe('edge cases', () => {
+		it('renders without crash when status has many sessions', async () => {
+			const manySessions = Array.from({ length: 20 }, (_, i) => ({
+				...mockSession,
+				sessionId: `sess-${i}`,
+				sessionName: `Session ${i}`,
+				subscriptionCount: i + 1,
+				activeRuns: i % 3,
+			}));
+
+			mockUseCueReturn = {
+				...defaultUseCueReturn,
+				sessions: manySessions,
+			};
+
+			const { container } = render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
+			fireEvent.click(screen.getByText('Dashboard'));
+
+			// All 20 sessions should be rendered
+			for (let i = 0; i < 20; i++) {
+				expect(screen.getByText(`Session ${i}`)).toBeInTheDocument();
+			}
+			expect(container).toBeTruthy();
+		});
+
+		it('renders activity log entries with long names', async () => {
+			const longName = 'A'.repeat(200);
+			const longSubName = 'B'.repeat(200);
+			const longNameRun = {
+				...mockCompletedRun,
+				runId: 'run-long',
+				sessionName: longName,
+				subscriptionName: longSubName,
+			};
+
+			mockUseCueReturn = {
+				...defaultUseCueReturn,
+				activityLog: [longNameRun],
+			};
+
+			const { container } = render(<CueModal theme={mockTheme} onClose={mockOnClose} />);
+			fireEvent.click(screen.getByText('Dashboard'));
+
+			// Should render without crashing
+			expect(container).toBeTruthy();
+			expect(screen.getByText(/completed in 5s/)).toBeInTheDocument();
+		});
+	});
+
 	describe('help view escape behavior', () => {
 		it('should navigate to help view when help button is clicked', () => {
 			render(<CueModal theme={mockTheme} onClose={mockOnClose} />);

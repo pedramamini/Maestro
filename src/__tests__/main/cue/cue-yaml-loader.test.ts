@@ -1312,6 +1312,116 @@ subscriptions:
 		});
 	});
 
+	describe('watch glob validation (Fix 6)', () => {
+		it('accepts valid glob pattern for file.changed', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'good-glob',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: '**/*.ts',
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it('accepts valid glob pattern for task.pending', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'good-task-glob',
+						event: 'task.pending',
+						prompt: 'test',
+						watch: 'docs/**/*.md',
+					},
+				],
+			});
+			expect(result.valid).toBe(true);
+		});
+
+		it('rejects empty watch string for file.changed', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'empty-glob',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: '',
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e: string) => e.includes('watch'))).toBe(true);
+		});
+
+		it('rejects empty watch string for task.pending', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'empty-task-glob',
+						event: 'task.pending',
+						prompt: 'test',
+						watch: '',
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e: string) => e.includes('watch'))).toBe(true);
+		});
+
+		it('picomatch accepts unbalanced bracket pattern without throwing', () => {
+			// picomatch treats [*.ts as a literal — it does NOT throw
+			// so the try/catch validation passes it as valid
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'unbalanced-bracket',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: '[*.ts',
+					},
+				],
+			});
+			// picomatch does not throw on this pattern, so validation passes
+			expect(result.valid).toBe(true);
+		});
+
+		it('accepts complex valid glob patterns', () => {
+			const patterns = ['src/**/*.{ts,tsx}', '*.md', 'docs/**/README.md', '!node_modules/**'];
+			for (const watch of patterns) {
+				const result = validateCueConfig({
+					subscriptions: [
+						{
+							name: `glob-${watch.replace(/[^a-z]/gi, '')}`,
+							event: 'file.changed',
+							prompt: 'test',
+							watch,
+						},
+					],
+				});
+				const watchErrors = result.errors.filter((e: string) => e.includes('glob pattern'));
+				expect(watchErrors).toHaveLength(0);
+			}
+		});
+
+		it('rejects non-string watch value for file.changed', () => {
+			const result = validateCueConfig({
+				subscriptions: [
+					{
+						name: 'non-string-watch',
+						event: 'file.changed',
+						prompt: 'test',
+						watch: 123 as unknown as string,
+					},
+				],
+			});
+			expect(result.valid).toBe(false);
+			expect(result.errors.some((e: string) => e.includes('watch'))).toBe(true);
+		});
+	});
+
 	describe('loadCueConfig with filter (continued)', () => {
 		it('ignores filter with invalid nested values', () => {
 			mockExistsSync.mockReturnValue(true);

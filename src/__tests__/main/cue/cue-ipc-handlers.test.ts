@@ -357,6 +357,65 @@ describe('Cue IPC Handlers', () => {
 		});
 	});
 
+	describe('edge cases', () => {
+		it('cue:getStatus returns empty array when engine not started', async () => {
+			// Engine exists but getStatus returns empty (no sessions registered)
+			mockEngine.getStatus.mockReturnValue([]);
+
+			const handler = registerAndGetHandler('cue:getStatus');
+			const result = await handler(null);
+			expect(result).toEqual([]);
+			expect(mockEngine.getStatus).toHaveBeenCalledOnce();
+		});
+
+		it('cue:getActivityLog with limit returns bounded results', async () => {
+			const manyEntries = Array.from({ length: 10 }, (_, i) => ({
+				runId: `r${i}`,
+				sessionId: 's1',
+				sessionName: 'Test',
+				subscriptionName: 'timer',
+				event: {
+					id: `e${i}`,
+					type: 'time.heartbeat',
+					timestamp: new Date().toISOString(),
+					triggerName: 'timer',
+					payload: {},
+				},
+				status: 'completed',
+				stdout: '',
+				stderr: '',
+				exitCode: 0,
+				durationMs: 100,
+				startedAt: new Date().toISOString(),
+				endedAt: new Date().toISOString(),
+			}));
+
+			// Simulate engine returning only the last 2 entries (bounded by limit)
+			mockEngine.getActivityLog.mockReturnValue(manyEntries.slice(-2));
+
+			const handler = registerAndGetHandler('cue:getActivityLog');
+			const result = await handler(null, { limit: 2 });
+
+			expect(result).toHaveLength(2);
+			expect(mockEngine.getActivityLog).toHaveBeenCalledWith(2);
+		});
+
+		it('cue:validateYaml handles empty content', async () => {
+			// Empty string: yaml.load returns undefined/null for empty input
+			vi.mocked(yaml.load).mockReturnValue(undefined);
+			vi.mocked(validateCueConfig).mockReturnValue({
+				valid: false,
+				errors: ['Config must have a "subscriptions" array'],
+			});
+
+			const handler = registerAndGetHandler('cue:validateYaml');
+			const result = (await handler(null, { content: '' })) as { valid: boolean; errors: string[] };
+
+			expect(result.valid).toBe(false);
+			expect(result.errors.length).toBeGreaterThan(0);
+		});
+	});
+
 	describe('cue:savePipelineLayout', () => {
 		it('should write layout to JSON file', async () => {
 			const layout = {
