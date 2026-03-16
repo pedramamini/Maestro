@@ -315,6 +315,19 @@
 			"view_history": "Verlauf anzeigen"
 		}
 	},
+	"queued_items": {
+		"separator": "WARTESCHLANGE ({{count}})",
+		"show_less": "Weniger anzeigen",
+		"show_all": "Alle anzeigen ({{lines}} Zeilen)",
+		"images_attached_one": "{{count}} Bild angehangt",
+		"images_attached_other": "{{count}} Bilder angehangt",
+		"remove_title": "Nachricht aus Warteschlange entfernen?",
+		"remove_message": "Diese Nachricht wird aus der Warteschlange entfernt und nicht gesendet.",
+		"remove_button": "Entfernen"
+	},
+	"toast": {
+		"completed_in": "Abgeschlossen in {{duration}}"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "Teilnehmer",
 		"tab_history": "Verlauf",

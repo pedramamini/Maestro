@@ -315,6 +315,19 @@
 			"view_history": "Voir l'historique"
 		}
 	},
+	"queued_items": {
+		"separator": "EN FILE ({{count}})",
+		"show_less": "Afficher moins",
+		"show_all": "Afficher tout ({{lines}} lignes)",
+		"images_attached_one": "{{count}} image jointe",
+		"images_attached_other": "{{count}} images jointes",
+		"remove_title": "Supprimer le message en file ?",
+		"remove_message": "Ce message sera supprime de la file et ne sera pas envoye.",
+		"remove_button": "Supprimer"
+	},
+	"toast": {
+		"completed_in": "Termine en {{duration}}"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "Participants",
 		"tab_history": "Historique",

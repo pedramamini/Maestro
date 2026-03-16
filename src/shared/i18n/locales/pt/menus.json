@@ -33,7 +33,12 @@
 		"about_desc": "Versão, Créditos, Estatísticas",
 		"language": "Idioma",
 		"language_desc": "Alterar idioma de exibição",
-		"quit": "Sair do Maestro"
+		"quit": "Sair do Maestro",
+		"menu": "Menu"
+	},
+	"empty_state": {
+		"new_agent": "Novo Agente",
+		"wizard": "Assistente"
 	},
 	"context": {
 		"copy": "Copiar",

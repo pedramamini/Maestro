@@ -315,6 +315,19 @@
 			"view_history": "Ver histórico"
 		}
 	},
+	"queued_items": {
+		"separator": "NA FILA ({{count}})",
+		"show_less": "Mostrar menos",
+		"show_all": "Mostrar tudo ({{lines}} linhas)",
+		"images_attached_one": "{{count}} imagem anexada",
+		"images_attached_other": "{{count}} imagens anexadas",
+		"remove_title": "Remover mensagem da fila?",
+		"remove_message": "Esta mensagem sera removida da fila e nao sera enviada.",
+		"remove_button": "Remover"
+	},
+	"toast": {
+		"completed_in": "Concluido em {{duration}}"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "Participantes",
 		"tab_history": "Histórico",

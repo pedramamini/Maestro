@@ -33,7 +33,12 @@
 		"about_desc": "Version, Mitwirkende, Statistiken",
 		"language": "Sprache",
 		"language_desc": "Anzeigesprache ändern",
-		"quit": "Maestro beenden"
+		"quit": "Maestro beenden",
+		"menu": "Menü"
+	},
+	"empty_state": {
+		"new_agent": "Neuer Agent",
+		"wizard": "Assistent"
 	},
 	"context": {
 		"copy": "Kopieren",

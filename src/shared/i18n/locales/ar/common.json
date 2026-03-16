@@ -327,6 +327,19 @@
 			"view_history": "عرض السجل"
 		}
 	},
+	"queued_items": {
+		"separator": "في الانتظار ({{count}})",
+		"show_less": "عرض أقل",
+		"show_all": "عرض الكل ({{lines}} سطر)",
+		"images_attached_one": "صورة واحدة مرفقة",
+		"images_attached_other": "{{count}} صور مرفقة",
+		"remove_title": "إزالة الرسالة من قائمة الانتظار؟",
+		"remove_message": "ستتم إزالة هذه الرسالة من قائمة الانتظار ولن يتم إرسالها.",
+		"remove_button": "إزالة"
+	},
+	"toast": {
+		"completed_in": "اكتمل في {{duration}}"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "المشاركون",
 		"tab_history": "السجل",

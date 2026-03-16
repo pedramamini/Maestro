@@ -33,7 +33,12 @@
 		"about_desc": "সংস্করণ, কৃতিত্ব, পরিসংখ্যান",
 		"language": "ভাষা",
 		"language_desc": "প্রদর্শন ভাষা পরিবর্তন করুন",
-		"quit": "Maestro বন্ধ করুন"
+		"quit": "Maestro বন্ধ করুন",
+		"menu": "মেনু"
+	},
+	"empty_state": {
+		"new_agent": "নতুন এজেন্ট",
+		"wizard": "উইজার্ড"
 	},
 	"context": {
 		"copy": "কপি করুন",

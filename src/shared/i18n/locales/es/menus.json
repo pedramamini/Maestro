@@ -33,7 +33,12 @@
 		"about_desc": "Version, creditos, estadisticas",
 		"language": "Idioma",
 		"language_desc": "Cambiar idioma de la interfaz",
-		"quit": "Salir de Maestro"
+		"quit": "Salir de Maestro",
+		"menu": "Menú"
+	},
+	"empty_state": {
+		"new_agent": "Nuevo Agente",
+		"wizard": "Asistente"
 	},
 	"context": {
 		"copy": "Copiar",

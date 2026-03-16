@@ -33,7 +33,12 @@
 		"about_desc": "الإصدار، الاعتمادات، الإحصائيات",
 		"language": "اللغة",
 		"language_desc": "تغيير لغة العرض",
-		"quit": "إنهاء \u200FMaestro\u200E"
+		"quit": "إنهاء \u200FMaestro\u200E",
+		"menu": "القائمة"
+	},
+	"empty_state": {
+		"new_agent": "وكيل جديد",
+		"wizard": "المعالج"
 	},
 	"context": {
 		"copy": "نسخ",

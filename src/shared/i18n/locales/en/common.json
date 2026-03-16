@@ -315,6 +315,19 @@
 			"view_history": "View history"
 		}
 	},
+	"queued_items": {
+		"separator": "QUEUED ({{count}})",
+		"show_less": "Show less",
+		"show_all": "Show all ({{lines}} lines)",
+		"images_attached_one": "{{count}} image attached",
+		"images_attached_other": "{{count}} images attached",
+		"remove_title": "Remove Queued Message?",
+		"remove_message": "This message will be removed from the queue and will not be sent.",
+		"remove_button": "Remove"
+	},
+	"toast": {
+		"completed_in": "Completed in {{duration}}"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "Participants",
 		"tab_history": "History",

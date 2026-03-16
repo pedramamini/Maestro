@@ -33,7 +33,12 @@
 		"about_desc": "Version, cr\u00e9dits, statistiques",
 		"language": "Langue",
 		"language_desc": "Changer la langue d\u2019affichage",
-		"quit": "Quitter Maestro"
+		"quit": "Quitter Maestro",
+		"menu": "Menu"
+	},
+	"empty_state": {
+		"new_agent": "Nouvel Agent",
+		"wizard": "Assistant"
 	},
 	"context": {
 		"copy": "Copier",

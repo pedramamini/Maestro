@@ -33,7 +33,12 @@
 		"about_desc": "版本、致谢、统计",
 		"language": "语言",
 		"language_desc": "更改显示语言",
-		"quit": "退出 Maestro"
+		"quit": "退出 Maestro",
+		"menu": "菜单"
+	},
+	"empty_state": {
+		"new_agent": "新建代理",
+		"wizard": "向导"
 	},
 	"context": {
 		"copy": "复制",

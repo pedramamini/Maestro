@@ -315,6 +315,19 @@
 			"view_history": "इतिहास देखें"
 		}
 	},
+	"queued_items": {
+		"separator": "कतार में ({{count}})",
+		"show_less": "कम दिखाएं",
+		"show_all": "सभी दिखाएं ({{lines}} पंक्तियाँ)",
+		"images_attached_one": "{{count}} छवि संलग्न",
+		"images_attached_other": "{{count}} छवियाँ संलग्न",
+		"remove_title": "कतारबद्ध संदेश हटाएं?",
+		"remove_message": "यह संदेश कतार से हटा दिया जाएगा और नहीं भेजा जाएगा।",
+		"remove_button": "हटाएं"
+	},
+	"toast": {
+		"completed_in": "{{duration}} में पूर्ण"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "प्रतिभागी",
 		"tab_history": "इतिहास",

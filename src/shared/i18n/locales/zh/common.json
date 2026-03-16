@@ -315,6 +315,19 @@
 			"view_history": "查看历史"
 		}
 	},
+	"queued_items": {
+		"separator": "队列中 ({{count}})",
+		"show_less": "收起",
+		"show_all": "展开全部 ({{lines}} 行)",
+		"images_attached_one": "{{count}} 张图片已附加",
+		"images_attached_other": "{{count}} 张图片已附加",
+		"remove_title": "移除队列中的消息？",
+		"remove_message": "此消息将从队列中移除且不会被发送。",
+		"remove_button": "移除"
+	},
+	"toast": {
+		"completed_in": "耗时 {{duration}}"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "参与者",
 		"tab_history": "历史",

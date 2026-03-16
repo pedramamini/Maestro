@@ -315,6 +315,19 @@
 			"view_history": "ইতিহাস দেখুন"
 		}
 	},
+	"queued_items": {
+		"separator": "সারিবদ্ধ ({{count}})",
+		"show_less": "কম দেখান",
+		"show_all": "সব দেখান ({{lines}} লাইন)",
+		"images_attached_one": "{{count}}টি ছবি সংযুক্ত",
+		"images_attached_other": "{{count}}টি ছবি সংযুক্ত",
+		"remove_title": "সারিবদ্ধ বার্তা সরান?",
+		"remove_message": "এই বার্তাটি সারি থেকে সরানো হবে এবং পাঠানো হবে না।",
+		"remove_button": "সরান"
+	},
+	"toast": {
+		"completed_in": "{{duration}}-এ সম্পন্ন"
+	},
 	"group_chat_right_panel": {
 		"tab_participants": "অংশগ্রহণকারী",
 		"tab_history": "ইতিহাস",

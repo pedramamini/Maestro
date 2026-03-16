@@ -33,7 +33,12 @@
 		"about_desc": "संस्करण, श्रेय, आँकड़े",
 		"language": "भाषा",
 		"language_desc": "प्रदर्शन भाषा बदलें",
-		"quit": "Maestro बंद करें"
+		"quit": "Maestro बंद करें",
+		"menu": "मेनू"
+	},
+	"empty_state": {
+		"new_agent": "नया एजेंट",
+		"wizard": "विज़ार्ड"
 	},
 	"context": {
 		"copy": "कॉपी करें",
