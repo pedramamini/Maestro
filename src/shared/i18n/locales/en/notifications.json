@@ -183,6 +183,11 @@
 			"error": "Grooming error: {{message}}",
 			"spawn_failed": "Failed to spawn grooming process for {{agentType}}",
 			"timeout": "Grooming timed out with no response"
+		},
+		"notification": {
+			"queue_full": "Notification queue is full (max {{max}} items). Please wait for current items to complete.",
+			"not_supported": "Notifications not supported",
+			"no_active_process": "No active notification process with that ID"
 		}
 	}
 }

@@ -183,6 +183,11 @@
 			"error": "Aufbereitungsfehler: {{message}}",
 			"spawn_failed": "Fehler beim Starten des Aufbereitungsprozesses für {{agentType}}",
 			"timeout": "Aufbereitung ohne Antwort abgelaufen"
+		},
+		"notification": {
+			"queue_full": "Benachrichtigungswarteschlange ist voll (maximal {{max}} Einträge). Bitte warten Sie, bis die aktuellen Einträge abgeschlossen sind.",
+			"not_supported": "Benachrichtigungen werden nicht unterstützt",
+			"no_active_process": "Kein aktiver Benachrichtigungsprozess mit dieser ID"
 		}
 	}
 }

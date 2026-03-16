@@ -183,6 +183,11 @@
 			"error": "Erreur de préparation\u00A0: {{message}}",
 			"spawn_failed": "Échec du lancement du processus de préparation pour {{agentType}}",
 			"timeout": "Délai de préparation dépassé sans réponse"
+		},
+		"notification": {
+			"queue_full": "La file de notifications est pleine (maximum {{max}} éléments). Veuillez attendre que les éléments en cours se terminent.",
+			"not_supported": "Les notifications ne sont pas prises en charge",
+			"no_active_process": "Aucun processus de notification actif avec cet identifiant"
 		}
 	}
 }

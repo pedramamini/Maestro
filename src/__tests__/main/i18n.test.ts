@@ -231,6 +231,51 @@ describe('Main process i18n', () => {
 		});
 	});
 
+	describe('notification error translations', () => {
+		const NOTIFICATION_ERROR_KEYS = [
+			'notifications:error.notification.queue_full',
+			'notifications:error.notification.not_supported',
+			'notifications:error.notification.no_active_process',
+		];
+
+		it('resolves English notification error messages', async () => {
+			await initMainI18n('en');
+			expect(mainT('notifications:error.notification.queue_full', { max: 10 })).toBe(
+				'Notification queue is full (max 10 items). Please wait for current items to complete.'
+			);
+			expect(mainT('notifications:error.notification.not_supported')).toBe(
+				'Notifications not supported'
+			);
+			expect(mainT('notifications:error.notification.no_active_process')).toBe(
+				'No active notification process with that ID'
+			);
+		});
+
+		it('resolves Spanish notification error messages', async () => {
+			await initMainI18n('es');
+			expect(mainT('notifications:error.notification.not_supported')).toBe(
+				'Las notificaciones no son compatibles'
+			);
+		});
+
+		it('notification error keys exist in all supported languages', async () => {
+			for (const lang of SUPPORTED_LANGUAGES) {
+				await changeMainLanguage(lang);
+				for (const key of NOTIFICATION_ERROR_KEYS) {
+					const value = mainT(key, { max: 10 });
+					// Should not return the raw key path
+					expect(value, `${key} should resolve in ${lang}`).not.toBe(key.split(':')[1]);
+				}
+			}
+		});
+
+		it('queue_full message interpolates max value correctly', async () => {
+			await initMainI18n('en');
+			const msg = mainT('notifications:error.notification.queue_full', { max: 25 });
+			expect(msg).toContain('25');
+		});
+	});
+
 	describe('non-Latin script languages', () => {
 		it('Arabic translations contain Arabic script', async () => {
 			await initMainI18n('ar');

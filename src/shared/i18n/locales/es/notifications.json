@@ -183,6 +183,11 @@
 			"error": "Error de preparacion: {{message}}",
 			"spawn_failed": "Error al iniciar proceso de preparacion para {{agentType}}",
 			"timeout": "La preparacion expiro sin respuesta"
+		},
+		"notification": {
+			"queue_full": "La cola de notificaciones esta llena (maximo {{max}} elementos). Espere a que los elementos actuales se completen.",
+			"not_supported": "Las notificaciones no son compatibles",
+			"no_active_process": "No hay proceso de notificacion activo con ese ID"
 		}
 	}
 }

@@ -14,6 +14,7 @@ import { ipcMain, Notification, BrowserWindow } from 'electron';
 import { spawn, type ChildProcess } from 'child_process';
 import { logger } from '../../utils/logger';
 import { isWebContentsAvailable } from '../../utils/safe-send';
+import { mainT } from '../../i18n';
 
 // ==========================================================================
 // Constants
@@ -349,7 +350,7 @@ export function registerNotificationsHandlers(): void {
 					return { success: true };
 				} else {
 					logger.warn('OS notifications not supported on this platform', 'Notification');
-					return { success: false, error: 'Notifications not supported' };
+					return { success: false, error: mainT('notifications:error.notification.not_supported') };
 				}
 			} catch (error) {
 				logger.error('Error showing notification', 'Notification', error);
@@ -379,7 +380,9 @@ export function registerNotificationsHandlers(): void {
 				});
 				return {
 					success: false,
-					error: `Notification queue is full (max ${NOTIFICATION_MAX_QUEUE_SIZE} items). Please wait for current items to complete.`,
+					error: mainT('notifications:error.notification.queue_full', {
+						max: NOTIFICATION_MAX_QUEUE_SIZE,
+					}),
 				};
 			}
 
@@ -404,7 +407,10 @@ export function registerNotificationsHandlers(): void {
 			const notificationProcess = activeNotificationProcesses.get(notificationId);
 			if (!notificationProcess) {
 				logger.debug('Notification no active process found', 'Notification', { notificationId });
-				return { success: false, error: 'No active notification process with that ID' };
+				return {
+					success: false,
+					error: mainT('notifications:error.notification.no_active_process'),
+				};
 			}
 
 			try {

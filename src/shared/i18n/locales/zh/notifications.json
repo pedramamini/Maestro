@@ -183,6 +183,11 @@
 			"error": "上下文整理错误：{{message}}",
 			"spawn_failed": "为 {{agentType}} 启动整理进程失败",
 			"timeout": "上下文整理超时且无响应"
+		},
+		"notification": {
+			"queue_full": "通知队列已满（最多 {{max}} 项）。请等待当前项目完成。",
+			"not_supported": "不支持通知功能",
+			"no_active_process": "没有具有该 ID 的活跃通知进程"
 		}
 	}
 }
