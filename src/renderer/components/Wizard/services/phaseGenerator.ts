@@ -718,7 +718,11 @@ class PhaseGenerator {
 			if (!hasValidParsedDocs) {
 				callbacks?.onProgress?.('Checking for documents on disk...');
 				wizardDebugLogger.log('info', 'Checking for documents on disk (parsed docs invalid)');
-				const diskDocs = await this.readDocumentsFromDisk(config.directoryPath, sshRemoteId);
+				// Build the correct path including subfolder if specified
+				const autoRunPath = config.subfolder
+					? `${config.directoryPath}/${AUTO_RUN_FOLDER_NAME}/${config.subfolder}`
+					: `${config.directoryPath}/${AUTO_RUN_FOLDER_NAME}`;
+				const diskDocs = await this.readDocumentsFromDisk(autoRunPath, sshRemoteId);
 				if (diskDocs.length > 0) {
 					console.log('[PhaseGenerator] Found documents on disk:', diskDocs.length);
 					wizardDebugLogger.log('info', 'Found documents on disk', {
