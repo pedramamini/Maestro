@@ -225,11 +225,6 @@ export default function AgentInbox({
 		(e: React.KeyboardEvent) => {
 			if (viewMode === 'focus') {
 				switch (e.key) {
-					case 'Escape':
-						e.preventDefault();
-						e.stopPropagation();
-						handleExitFocus();
-						return;
 					case 'Backspace':
 					case 'b':
 					case 'B':

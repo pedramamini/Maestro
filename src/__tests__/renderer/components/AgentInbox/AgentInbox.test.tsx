@@ -7,11 +7,19 @@ import type { InboxItem } from '../../../../renderer/types/agent-inbox';
 // Mocks — must be declared before component imports
 // ---------------------------------------------------------------------------
 
+let registeredLayerEscape: (() => void) | null = null;
+const mockRegisterLayer = vi.fn((layer: { onEscape?: () => void }) => {
+	registeredLayerEscape = layer.onEscape ?? null;
+	return 'layer-inbox';
+});
+
 vi.mock('../../../../renderer/contexts/LayerStackContext', () => ({
 	useLayerStack: () => ({
-		registerLayer: vi.fn(() => 'layer-inbox'),
+		registerLayer: mockRegisterLayer,
 		unregisterLayer: vi.fn(),
-		updateLayerHandler: vi.fn(),
+		updateLayerHandler: vi.fn((_: string, onEscape: () => void) => {
+			registeredLayerEscape = onEscape;
+		}),
 	}),
 }));
 
@@ -171,6 +179,7 @@ const createDefaultProps = (overrides: Record<string, unknown> = {}) => ({
 describe('AgentInbox', () => {
 	beforeEach(() => {
 		vi.clearAllMocks();
+		registeredLayerEscape = null;
 		// Mock requestAnimationFrame for auto-focus
 		vi.spyOn(window, 'requestAnimationFrame').mockImplementation((cb) => {
 			cb(0);
@@ -459,8 +468,10 @@ describe('AgentInbox', () => {
 			fireEvent.keyDown(dialog, { key: 'f' });
 			expect(screen.queryByLabelText('Reply to agent')).toBeInTheDocument();
 
-			// Press Escape — should go back to list mode, not close
-			fireEvent.keyDown(dialog, { key: 'Escape' });
+			// Simulate the layer stack invoking the registered Escape handler
+			act(() => {
+				registeredLayerEscape?.();
+			});
 
 			// Listbox should be back
 			const listbox = screen.queryByRole('listbox');
