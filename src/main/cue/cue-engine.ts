@@ -1340,7 +1340,7 @@ export class CueEngine {
 					// Non-fatal if DB is unavailable
 				}
 
-				if (this.manuallyStoppedRuns.has(runId) || this.manuallyStoppedRuns.has(outputRunId)) {
+				if (this.manuallyStoppedRuns.has(runId)) {
 					return;
 				}
 

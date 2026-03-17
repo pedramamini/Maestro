@@ -256,7 +256,7 @@ export function createCueGitHubPoller(config: CueGitHubPollerConfig): () => void
 					markGitHubItemSeen(subscriptionId, '__seed_marker__');
 					onLog(
 						'info',
-						`[CUE] First poll for "${triggerName}" failed — seed marker set to prevent event flooding on recovery`
+						`[CUE] First poll for "${triggerName}" failed — seed marker set to prevent silent event loss on recovery`
 					);
 				} catch {
 					// Non-fatal: DB may not be available
