@@ -224,6 +224,7 @@ export function PromptComposerModal({
 			}
 			const newValue = prefix + insertion;
 			setValue(newValue);
+			// Persist the draft so the mention survives an abrupt modal close
 			onSubmitRef.current(newValue);
 			setShowMentions(false);
 			textareaRef.current?.focus();
@@ -283,12 +284,6 @@ export function PromptComposerModal({
 			if (e.key === 'Tab' || (e.key === 'Enter' && !e.shiftKey && !e.metaKey && !e.ctrlKey)) {
 				e.preventDefault();
 				insertMention(filteredMentions[selectedMentionIndex]);
-				return;
-			}
-			if (e.key === 'Escape') {
-				e.preventDefault();
-				e.stopPropagation();
-				setShowMentions(false);
 				return;
 			}
 		}
@@ -513,12 +508,12 @@ export function PromptComposerModal({
 				)}
 
 				{/* Textarea */}
-				<div className="flex-1 p-4 overflow-hidden relative">
+				<div className="flex-1 p-4 overflow-hidden relative flex flex-col">
 					{/* Mention dropdown (positioned above textarea) */}
 					{showMentions && filteredMentions.length > 0 && (
 						<div
 							ref={mentionListRef}
-							className="absolute top-2 left-4 right-4 z-10 rounded-lg border p-1 max-h-48 overflow-y-auto"
+							className="rounded-lg border p-1 max-h-48 overflow-y-auto mb-2 shrink-0"
 							style={{
 								backgroundColor: theme.colors.bgSidebar,
 								borderColor: theme.colors.border,

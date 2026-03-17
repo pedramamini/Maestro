@@ -2847,6 +2847,43 @@ export function Component() {
 			});
 		});
 
+		it('should proceed without enriched PATH when getShellPath rejects', async () => {
+			// Force getShellPath to reject
+			const shellPathModule = await import('../../../../main/runtime/getShellPath');
+			vi.mocked(shellPathModule.getShellPath).mockRejectedValueOnce(
+				new Error('Shell exited with code 1')
+			);
+
+			vi.mocked(execFile.execFileNoThrow)
+				.mockResolvedValueOnce({
+					// git push -u origin HEAD
+					stdout: 'Everything up-to-date',
+					stderr: '',
+					exitCode: 0,
+				})
+				.mockResolvedValueOnce({
+					// gh pr create
+					stdout: 'https://github.com/user/repo/pull/789',
+					stderr: '',
+					exitCode: 0,
+				});
+
+			const handler = handlers.get('git:createPR');
+			const result = await handler!({} as any, '/worktree/path', 'main', 'Title', 'Body');
+
+			// Both subprocess calls should proceed with undefined env (default)
+			expect(execFile.execFileNoThrow).toHaveBeenCalledWith(
+				'git',
+				['push', '-u', 'origin', 'HEAD'],
+				'/worktree/path',
+				undefined
+			);
+			expect(result).toEqual({
+				success: true,
+				prUrl: 'https://github.com/user/repo/pull/789',
+			});
+		});
+
 		it('should return fallback error when gh fails without stderr', async () => {
 			vi.mocked(execFile.execFileNoThrow)
 				.mockResolvedValueOnce({

@@ -691,7 +691,7 @@ export const RightPanel = memo(
 						{/* Overall completed count with loop info */}
 						<div className="mt-2 flex items-start justify-between gap-2">
 							<span
-								className="text-[10px]"
+								className="text-[10px] min-w-0 flex-1 truncate"
 								style={{
 									color: currentSessionBatchState.errorPaused
 										? theme.colors.error

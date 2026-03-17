@@ -13,6 +13,7 @@ import {
 } from '../../utils/ipcHandler';
 import { resolveGhPath, getCachedGhStatus, setCachedGhStatus } from '../../utils/cliDetection';
 import { getShellPath } from '../../runtime/getShellPath';
+import { captureMessage } from '../../utils/sentry';
 import {
 	parseGitBranches,
 	parseGitTags,
@@ -829,8 +830,11 @@ export function registerGitHandlers(deps: GitHandlerDependencies): void {
 					if (shellPath) {
 						shellEnv = { ...process.env, PATH: shellPath };
 					}
-				} catch {
-					// Fall through with default env if shell PATH unavailable
+				} catch (error) {
+					captureMessage(
+						`git:createPR falling back to default PATH: ${error instanceof Error ? error.message : String(error)}`,
+						'warning'
+					);
 				}
 
 				// First, push the current branch to origin
