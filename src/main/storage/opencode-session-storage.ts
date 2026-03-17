@@ -239,6 +239,32 @@ function openOpenCodeDb(dbPath: string = OPENCODE_DB_PATH): Database.Database | 
 }
 
 /**
+ * Open the DB, run a callback, close the DB.
+ * Returns null if the database file doesn't exist.
+ */
+function withOpenCodeDb<T>(fn: (db: Database.Database) => T): T | null {
+	const db = openOpenCodeDb();
+	if (!db) return null;
+	try {
+		return fn(db);
+	} finally {
+		db.close();
+	}
+}
+
+/**
+ * Check if a session exists in the SQLite database (lightweight check).
+ */
+function sessionExistsInSqlite(sessionId: string): boolean {
+	return (
+		withOpenCodeDb((db) => {
+			if (!tableExists(db, 'session')) return false;
+			return !!db.prepare('SELECT 1 FROM session WHERE id = ? LIMIT 1').get(sessionId);
+		}) ?? false
+	);
+}
+
+/**
  * Safely parse a JSON string, returning null on failure
  */
 function safeJsonParse<T>(json: string): T | null {
@@ -265,9 +291,7 @@ function tableExists(db: Database.Database, tableName: string): boolean {
  */
 function isExpectedSqliteError(error: unknown): boolean {
 	const message = error instanceof Error ? error.message : String(error);
-	return /no such table|no such column|SQLITE_ERROR|database is locked|database disk image is malformed/.test(
-		message
-	);
+	return /no such table|no such column|SQLITE_ERROR|database is locked/.test(message);
 }
 
 // ─── Shared helpers ──────────────────────────────────────────────────────────
@@ -849,7 +873,8 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 	}
 
 	/**
-	 * Convert SQLite session rows to AgentSessionInfo array, loading message stats
+	 * Convert SQLite session rows to AgentSessionInfo array, loading message stats.
+	 * Uses batch queries (2 total) instead of per-session/per-message queries.
 	 */
 	private convertSqliteSessionRows(
 		rows: SqliteSessionRow[],
@@ -858,10 +883,69 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 	): AgentSessionInfo[] {
 		const hasMessageTable = tableExists(db, 'message');
 		const hasPartTable = tableExists(db, 'part');
-		const sessions: AgentSessionInfo[] = [];
 
+		if (!hasMessageTable) {
+			return rows.map((row) => this.sqliteRowToSessionInfo(row, projectPath));
+		}
+
+		const sessionIds = rows.map((r) => r.id);
+		const placeholders = sessionIds.map(() => '?').join(',');
+
+		// Batch query 1: all messages for all sessions
+		const allMessages = db
+			.prepare(
+				`SELECT id, session_id, data, time_created FROM message WHERE session_id IN (${placeholders}) ORDER BY time_created ASC`
+			)
+			.all(...sessionIds) as Array<{
+			id: string;
+			session_id: string;
+			data: string;
+			time_created: number;
+		}>;
+
+		// Group messages by session
+		const messagesBySession = new Map<
+			string,
+			Array<{ id: string; data: string; time_created: number }>
+		>();
+		const allMessageIds: string[] = [];
+		for (const msg of allMessages) {
+			let list = messagesBySession.get(msg.session_id);
+			if (!list) {
+				list = [];
+				messagesBySession.set(msg.session_id, list);
+			}
+			list.push(msg);
+			allMessageIds.push(msg.id);
+		}
+
+		// Batch query 2: all parts for all messages (for preview text extraction)
+		const partsByMessageId = new Map<string, Array<{ data: string }>>();
+		if (hasPartTable && allMessageIds.length > 0) {
+			// SQLite has a variable limit; batch in chunks of 500
+			const CHUNK_SIZE = 500;
+			for (let i = 0; i < allMessageIds.length; i += CHUNK_SIZE) {
+				const chunk = allMessageIds.slice(i, i + CHUNK_SIZE);
+				const partPlaceholders = chunk.map(() => '?').join(',');
+				const partRows = db
+					.prepare(
+						`SELECT message_id, data FROM part WHERE message_id IN (${partPlaceholders}) ORDER BY time_created ASC`
+					)
+					.all(...chunk) as Array<{ message_id: string; data: string }>;
+				for (const part of partRows) {
+					let list = partsByMessageId.get(part.message_id);
+					if (!list) {
+						list = [];
+						partsByMessageId.set(part.message_id, list);
+					}
+					list.push({ data: part.data });
+				}
+			}
+		}
+
+		const sessions: AgentSessionInfo[] = [];
 		for (const row of rows) {
-			let messageCount = 0;
+			const messages = messagesBySession.get(row.id) || [];
 			let totalInputTokens = 0;
 			let totalOutputTokens = 0;
 			let totalCacheReadTokens = 0;
@@ -870,74 +954,56 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 			let firstMessage = row.title || '';
 			let durationSeconds = 0;
 
-			if (hasMessageTable) {
-				const messages = db
-					.prepare(
-						'SELECT id, data, time_created FROM message WHERE session_id = ? ORDER BY time_created ASC'
-					)
-					.all(row.id) as Array<{ id: string; data: string; time_created: number }>;
+			if (messages.length >= 2) {
+				const first = messages[0].time_created;
+				const last = messages[messages.length - 1].time_created;
+				if (first && last) {
+					durationSeconds = Math.max(0, Math.floor((last - first) / 1000));
+				}
+			}
 
-				messageCount = messages.length;
+			let foundPreview = false;
+			let candidateUserPreview: string | undefined;
+			for (const msg of messages) {
+				const data = safeJsonParse<SqliteMessageData>(msg.data);
+				if (!data) continue;
 
-				if (messages.length >= 2) {
-					const first = messages[0].time_created;
-					const last = messages[messages.length - 1].time_created;
-					if (first && last) {
-						durationSeconds = Math.max(0, Math.floor((last - first) / 1000));
-					}
+				if (data.tokens) {
+					totalInputTokens += data.tokens.input || 0;
+					totalOutputTokens += data.tokens.output || 0;
+					totalCacheReadTokens += data.tokens.cache?.read || 0;
+					totalCacheWriteTokens += data.tokens.cache?.write || 0;
+				}
+				if (data.cost) {
+					totalCost += data.cost;
 				}
 
-				// Aggregate stats and find preview message
-				let foundPreview = false;
-				let candidateUserPreview: string | undefined;
-				for (const msg of messages) {
-					const data = safeJsonParse<SqliteMessageData>(msg.data);
-					if (!data) continue;
-
-					if (data.tokens) {
-						totalInputTokens += data.tokens.input || 0;
-						totalOutputTokens += data.tokens.output || 0;
-						totalCacheReadTokens += data.tokens.cache?.read || 0;
-						totalCacheWriteTokens += data.tokens.cache?.write || 0;
-					}
-					if (data.cost) {
-						totalCost += data.cost;
-					}
-
-					// Get preview from first assistant message with text (preferred)
-					if (!foundPreview && data.role === 'assistant' && hasPartTable) {
-						const parts = db
-							.prepare('SELECT data FROM part WHERE message_id = ? ORDER BY time_created ASC')
-							.all(msg.id) as Array<{ data: string }>;
-						for (const part of parts) {
-							const partData = safeJsonParse<SqlitePartData>(part.data);
-							if (partData?.type === 'text' && partData.text?.trim()) {
-								firstMessage = partData.text;
-								foundPreview = true;
-								break;
-							}
-						}
-					}
-
-					// Collect first user message as fallback candidate (don't set foundPreview)
-					if (!candidateUserPreview && data.role === 'user' && hasPartTable) {
-						const parts = db
-							.prepare('SELECT data FROM part WHERE message_id = ? ORDER BY time_created ASC')
-							.all(msg.id) as Array<{ data: string }>;
-						for (const part of parts) {
-							const partData = safeJsonParse<SqlitePartData>(part.data);
-							if (partData?.type === 'text' && partData.text?.trim()) {
-								candidateUserPreview = partData.text;
-								break;
-							}
+				if (!foundPreview && data.role === 'assistant') {
+					const parts = partsByMessageId.get(msg.id) || [];
+					for (const part of parts) {
+						const partData = safeJsonParse<SqlitePartData>(part.data);
+						if (partData?.type === 'text' && partData.text?.trim()) {
+							firstMessage = partData.text;
+							foundPreview = true;
+							break;
 						}
 					}
 				}
 
-				// Fall back to user preview if no assistant text was found
-				if (!foundPreview && candidateUserPreview) {
-					firstMessage = candidateUserPreview;
+				if (!candidateUserPreview && data.role === 'user') {
+					const parts = partsByMessageId.get(msg.id) || [];
+					for (const part of parts) {
+						const partData = safeJsonParse<SqlitePartData>(part.data);
+						if (partData?.type === 'text' && partData.text?.trim()) {
+							candidateUserPreview = partData.text;
+							break;
+						}
+					}
 				}
+			}
+
+			if (!foundPreview && candidateUserPreview) {
+				firstMessage = candidateUserPreview;
 			}
 
 			const createdAt = row.time_created
@@ -951,7 +1017,7 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 				timestamp: createdAt,
 				modifiedAt: updatedAt,
 				firstMessage: firstMessage.slice(0, 200),
-				messageCount,
+				messageCount: messages.length,
 				sizeBytes: 0,
 				costUsd: totalCost,
 				inputTokens: totalInputTokens,
@@ -966,10 +1032,39 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 	}
 
 	/**
+	 * Convert a single SQLite session row to AgentSessionInfo (no message data)
+	 */
+	private sqliteRowToSessionInfo(row: SqliteSessionRow, projectPath: string): AgentSessionInfo {
+		const createdAt = row.time_created
+			? new Date(row.time_created).toISOString()
+			: new Date().toISOString();
+		const updatedAt = row.time_updated ? new Date(row.time_updated).toISOString() : createdAt;
+		return {
+			sessionId: row.id,
+			projectPath,
+			timestamp: createdAt,
+			modifiedAt: updatedAt,
+			firstMessage: (row.title || '').slice(0, 200),
+			messageCount: 0,
+			sizeBytes: 0,
+			costUsd: 0,
+			inputTokens: 0,
+			outputTokens: 0,
+			cacheReadTokens: 0,
+			cacheCreationTokens: 0,
+			durationSeconds: 0,
+		};
+	}
+
+	/**
 	 * Load messages for a session from SQLite.
 	 * Returns null if the database doesn't exist or lacks the expected schema.
+	 * Accepts an optional db handle to avoid re-opening the database.
 	 */
-	private loadSessionMessagesSqlite(sessionId: string): {
+	private loadSessionMessagesSqlite(
+		sessionId: string,
+		existingDb?: Database.Database
+	): {
 		messages: OpenCodeMessage[];
 		parts: Map<string, OpenCodePart[]>;
 		totalInputTokens: number;
@@ -978,7 +1073,8 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 		totalCacheWriteTokens: number;
 		totalCost: number;
 	} | null {
-		const db = openOpenCodeDb();
+		const ownsDb = !existingDb;
+		const db = existingDb ?? openOpenCodeDb();
 		if (!db) return null;
 
 		try {
@@ -1086,8 +1182,25 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 			captureException(error instanceof Error ? error : new Error(String(error)));
 			throw error;
 		} finally {
-			db.close();
+			if (ownsDb) db.close();
 		}
+	}
+
+	/**
+	 * Load messages for a local session, trying SQLite first then JSON fallback.
+	 */
+	private async loadMessagesLocal(sessionId: string): Promise<{
+		messages: OpenCodeMessage[];
+		parts: Map<string, OpenCodePart[]>;
+		totalInputTokens: number;
+		totalOutputTokens: number;
+		totalCacheReadTokens: number;
+		totalCacheWriteTokens: number;
+		totalCost: number;
+	}> {
+		const sqliteResult = this.loadSessionMessagesSqlite(sessionId);
+		if (sqliteResult) return sqliteResult;
+		return this.loadSessionMessages(sessionId);
 	}
 
 	// ─── Merged listing (SQLite + JSON) ─────────────────────────────────────
@@ -1386,22 +1499,9 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 		options?: SessionReadOptions,
 		sshConfig?: SshRemoteConfig
 	): Promise<SessionMessagesResult> {
-		// Try SQLite first for local sessions, fall back to JSON
-		let loaded: {
-			messages: OpenCodeMessage[];
-			parts: Map<string, OpenCodePart[]>;
-		} | null = null;
-
-		if (sshConfig) {
-			loaded = await this.loadSessionMessagesRemote(sessionId, sshConfig);
-		} else {
-			loaded = this.loadSessionMessagesSqlite(sessionId);
-			if (!loaded) {
-				loaded = await this.loadSessionMessages(sessionId);
-			}
-		}
-
-		const { messages, parts } = loaded;
+		const { messages, parts } = sshConfig
+			? await this.loadSessionMessagesRemote(sessionId, sshConfig)
+			: await this.loadMessagesLocal(sessionId);
 
 		const sessionMessages: SessionMessage[] = [];
 
@@ -1438,22 +1538,9 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 		_projectPath: string,
 		sshConfig?: SshRemoteConfig
 	): Promise<SearchableMessage[]> {
-		// Try SQLite first for local sessions, fall back to JSON
-		let loaded: {
-			messages: OpenCodeMessage[];
-			parts: Map<string, OpenCodePart[]>;
-		} | null = null;
-
-		if (sshConfig) {
-			loaded = await this.loadSessionMessagesRemote(sessionId, sshConfig);
-		} else {
-			loaded = this.loadSessionMessagesSqlite(sessionId);
-			if (!loaded) {
-				loaded = await this.loadSessionMessages(sessionId);
-			}
-		}
-
-		const { messages, parts } = loaded;
+		const { messages, parts } = sshConfig
+			? await this.loadSessionMessagesRemote(sessionId, sshConfig)
+			: await this.loadMessagesLocal(sessionId);
 
 		return messages
 			.filter((msg) => msg.role === 'user' || msg.role === 'assistant')
@@ -1472,21 +1559,9 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 		if (sshConfig) {
 			return this.getRemoteMessageDir(sessionId);
 		}
-		// Check if session exists in SQLite before returning DB path
-		if (fsSync.existsSync(OPENCODE_DB_PATH)) {
-			const db = openOpenCodeDb();
-			if (db) {
-				try {
-					const exists = tableExists(db, 'session')
-						? db.prepare('SELECT 1 FROM session WHERE id = ? LIMIT 1').get(sessionId)
-						: null;
-					if (exists) return OPENCODE_DB_PATH;
-				} finally {
-					db.close();
-				}
-			}
+		if (sessionExistsInSqlite(sessionId)) {
+			return OPENCODE_DB_PATH;
 		}
-		// Fallback to JSON message directory
 		return this.getMessageDir(sessionId);
 	}
 
@@ -1504,10 +1579,8 @@ export class OpenCodeSessionStorage extends BaseSessionStorage {
 		}
 
 		try {
-			// Check if this session exists in SQLite — deletion not supported for SQLite sessions
-			// (we open the DB read-only and shouldn't modify OpenCode's database)
-			const sqliteResult = this.loadSessionMessagesSqlite(sessionId);
-			if (sqliteResult) {
+			// Deletion not supported for SQLite sessions (DB opened read-only)
+			if (sessionExistsInSqlite(sessionId)) {
 				logger.warn(
 					'Delete message pair not supported for SQLite-backed OpenCode sessions',
 					LOG_CONTEXT
