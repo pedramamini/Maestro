@@ -28,6 +28,10 @@ import type {
 	GetThemeCallback,
 	GetCustomCommandsCallback,
 	GetHistoryCallback,
+	GetAutoRunDocsCallback,
+	GetAutoRunDocContentCallback,
+	SaveAutoRunDocCallback,
+	StopAutoRunCallback,
 } from '../types';
 
 const LOG_CONTEXT = 'CallbackRegistry';
@@ -57,6 +61,10 @@ export interface WebServerCallbacks {
 	refreshAutoRunDocs: RefreshAutoRunDocsCallback | null;
 	configureAutoRun: ConfigureAutoRunCallback | null;
 	getHistory: GetHistoryCallback | null;
+	getAutoRunDocs: GetAutoRunDocsCallback | null;
+	getAutoRunDocContent: GetAutoRunDocContentCallback | null;
+	saveAutoRunDoc: SaveAutoRunDocCallback | null;
+	stopAutoRun: StopAutoRunCallback | null;
 }
 
 export class CallbackRegistry {
@@ -82,6 +90,10 @@ export class CallbackRegistry {
 		refreshAutoRunDocs: null,
 		configureAutoRun: null,
 		getHistory: null,
+		getAutoRunDocs: null,
+		getAutoRunDocContent: null,
+		saveAutoRunDoc: null,
+		stopAutoRun: null,
 	};
 
 	// ============ Getter Methods ============
@@ -198,6 +210,26 @@ export class CallbackRegistry {
 		return this.callbacks.getHistory?.(projectPath, sessionId) ?? [];
 	}
 
+	async getAutoRunDocs(sessionId: string): Promise<import('../types').AutoRunDocument[]> {
+		if (!this.callbacks.getAutoRunDocs) return [];
+		return this.callbacks.getAutoRunDocs(sessionId);
+	}
+
+	async getAutoRunDocContent(sessionId: string, filename: string): Promise<string> {
+		if (!this.callbacks.getAutoRunDocContent) return '';
+		return this.callbacks.getAutoRunDocContent(sessionId, filename);
+	}
+
+	async saveAutoRunDoc(sessionId: string, filename: string, content: string): Promise<boolean> {
+		if (!this.callbacks.saveAutoRunDoc) return false;
+		return this.callbacks.saveAutoRunDoc(sessionId, filename, content);
+	}
+
+	async stopAutoRun(sessionId: string): Promise<boolean> {
+		if (!this.callbacks.stopAutoRun) return false;
+		return this.callbacks.stopAutoRun(sessionId);
+	}
+
 	// ============ Setter Methods ============
 
 	setGetSessionsCallback(callback: GetSessionsCallback): void {
@@ -288,6 +320,22 @@ export class CallbackRegistry {
 
 	setGetHistoryCallback(callback: GetHistoryCallback): void {
 		this.callbacks.getHistory = callback;
+	}
+
+	setGetAutoRunDocsCallback(callback: GetAutoRunDocsCallback): void {
+		this.callbacks.getAutoRunDocs = callback;
+	}
+
+	setGetAutoRunDocContentCallback(callback: GetAutoRunDocContentCallback): void {
+		this.callbacks.getAutoRunDocContent = callback;
+	}
+
+	setSaveAutoRunDocCallback(callback: SaveAutoRunDocCallback): void {
+		this.callbacks.saveAutoRunDoc = callback;
+	}
+
+	setStopAutoRunCallback(callback: StopAutoRunCallback): void {
+		this.callbacks.stopAutoRun = callback;
 	}
 
 	// ============ Check Methods ============
